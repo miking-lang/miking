@@ -30,5 +30,18 @@ let distExtMap =
         ty = tyarrows_ [otylabel_ "a" tyfloat_, otylabel_ "b" tyfloat_, tyfloat_],
         libraries = ["owl"]
       }
+    ]),
+    ("externalGaussianLogPdf", [
+      { ident = "Owl_stats.gaussian_logpdf",
+        ty = tyarrows_ [tyfloat_, otylabel_ "mu" tyfloat_, otylabel_ "sigma" tyfloat_, tyfloat_],
+        libraries = ["owl"]
+      }
+    ]),
+    ("externalGaussianSample", [
+      { ident = "Owl_stats.gaussian_rvs",
+        ty = tyarrows_ [otylabel_ "mu" tyfloat_, otylabel_ "sigma" tyfloat_, tyfloat_],
+        libraries = ["owl"]
+      }
     ])
   ]
+

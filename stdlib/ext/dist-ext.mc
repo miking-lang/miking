@@ -19,6 +19,13 @@ let betaPdf = lam a:Float. lam b:Float. lam x:Float. exp (externalBetaLogPdf x a
 let betaLogPdf = lam a:Float. lam b:Float. lam x:Float. externalBetaLogPdf x a b
 let betaSample = lam a:Float. lam b:Float. externalBetaSample a b
 
+-- Gaussian
+external externalGaussianLogPdf : Float -> Float -> Float -> Float
+external externalGaussianSample ! : Float -> Float -> Float
+let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float. exp (externalGaussianLogPdf x mu sigma)
+let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float. externalGaussianLogPdf x mu sigma
+let gaussianSample = lam mu:Float. lam sigma:Float. externalGaussianSample mu sigma
+
 
 mexpr
 
@@ -47,6 +54,12 @@ utest bernoulliSample 0.6 with 0 using intRange 0 1 in
 utest betaPdf 2. 2. 0.5 with 1.5 using _eqf in
 utest exp (betaLogPdf 2. 5. 0.2) with 2.4576 using _eqf in
 utest betaSample 2. 2. with 0. using floatRange 0. 1. in
+
+
+-- Testing Gaussian
+utest gaussianPdf 0. 0.4472 0. with 0.892089178 using _eqf in
+utest exp (gaussianLogPdf 2. 1. 2.) with 0.398942280401 using _eqf in
+utest gaussianSample 0. 0.2 with 0. using lam. lam. true in
 
 
 ()
