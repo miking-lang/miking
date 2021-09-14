@@ -358,7 +358,7 @@ with 9
 
 -- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
 -- accumulator and `t` is the i'th slice of `t1`.
-let tensorFoldlSlice : (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+let tensorFoldlSlice : (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. tensorFoldliSlice (lam acc. lam. f acc)
 
 utest
@@ -383,7 +383,7 @@ with 6
 
 -- Folds `f idx acc el` over all elements `el` of `t` in row-major order, where
 -- `acc` is the accumulator and `idx` is the index of the element.
-let tensorFoldi : ([Int] -> a -> b) -> b -> Tensor[a] -> b =
+let tensorFoldi : (b -> [Int] -> a -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t.
   let shape = tensorShape t in
   let t = tensorReshapeExn t [tensorSize t] in
