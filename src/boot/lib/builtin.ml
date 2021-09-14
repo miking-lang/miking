@@ -117,6 +117,7 @@ let builtin =
   ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapSize", f CmapSize)
+  ; ("mapIsEmpty", f CmapIsEmpty)
   ; ("mapGetCmpFun", f CmapGetCmpFun)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapRemove", f (CmapRemove None))

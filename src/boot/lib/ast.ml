@@ -152,6 +152,7 @@ and const =
   | CMap of tm * (tm, tm) Mmap.t
   | CmapEmpty
   | CmapSize
+  | CmapIsEmpty
   | CmapGetCmpFun
   | CmapInsert of tm option * tm option
   | CmapRemove of tm option
@@ -601,6 +602,7 @@ let const_has_side_effect = function
   | CMap _
   | CmapEmpty
   | CmapSize
+  | CmapIsEmpty
   | CmapGetCmpFun
   | CmapInsert _
   | CmapRemove _

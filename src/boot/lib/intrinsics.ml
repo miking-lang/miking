@@ -657,6 +657,10 @@ module Mmap = struct
     let open (val m) in
     cardinal theMap
 
+  let is_empty (type k v) (m : (k, v) t) : bool =
+    let open (val m) in
+    is_empty theMap
+
   let mem (type k v) (k : k) (m : (k, v) t) : bool =
     let open (val m) in
     mem k theMap
@@ -700,37 +704,40 @@ module Mmap = struct
     let open (val m2) in
     let binds2 : (k * v) Seq.t = to_seq theMap in
     let rec work b1 b2 =
-      match b1, b2 with
-      | (Seq.Nil, Seq.Nil) -> true
-      | (Seq.Cons _, Seq.Nil) | (Seq.Nil, Seq.Cons _) -> false
-      | (Seq.Cons ((k1, v1), b1), Seq.Cons ((k2, v2), b2)) ->
-         if cmp k1 k2 = 0 then
-           if veq v1 v2 then
-             work (b1 ()) (b2 ())
-           else false
-         else false
-    in work (binds1 ()) (binds2 ())
+      match (b1, b2) with
+      | Seq.Nil, Seq.Nil ->
+          true
+      | Seq.Cons _, Seq.Nil | Seq.Nil, Seq.Cons _ ->
+          false
+      | Seq.Cons ((k1, v1), b1), Seq.Cons ((k2, v2), b2) ->
+          if cmp k1 k2 = 0 then
+            if veq v1 v2 then work (b1 ()) (b2 ()) else false
+          else false
+    in
+    work (binds1 ()) (binds2 ())
 
   let cmp (type k v) (vcmp : v -> v -> int) (m1 : (k, v) t) (m2 : (k, v) t) :
-    int =
+      int =
     let open (val m1) in
     let binds1 : (k * v) Seq.t = to_seq theMap in
     let open (val m2) in
     let binds2 : (k * v) Seq.t = to_seq theMap in
     let rec work b1 b2 =
-      match b1, b2 with
-      | (Seq.Nil, Seq.Nil) -> 0
-      | (Seq.Nil, Seq.Cons _) -> -1
-      | (Seq.Cons _, Seq.Nil) -> 1
-      | (Cons ((k1, v1), b1), Cons ((k2, v2), b2)) ->
-        let key_diff = cmp k1 k2 in
-        if key_diff = 0 then
-          let val_diff = vcmp v1 v2 in
-          if val_diff = 0 then
-            work (b1 ()) (b2 ())
-          else val_diff
-        else key_diff
-    in work (binds1 ()) (binds2 ())
+      match (b1, b2) with
+      | Seq.Nil, Seq.Nil ->
+          0
+      | Seq.Nil, Seq.Cons _ ->
+          -1
+      | Seq.Cons _, Seq.Nil ->
+          1
+      | Cons ((k1, v1), b1), Cons ((k2, v2), b2) ->
+          let key_diff = cmp k1 k2 in
+          if key_diff = 0 then
+            let val_diff = vcmp v1 v2 in
+            if val_diff = 0 then work (b1 ()) (b2 ()) else val_diff
+          else key_diff
+    in
+    work (binds1 ()) (binds2 ())
 
   let key_cmp (type k v) (m : (k, v) t) (k1 : k) (k2 : k) : int =
     let open (val m) in

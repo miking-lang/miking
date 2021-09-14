@@ -754,6 +754,7 @@ lang MapAst = ConstAst
   | CMapFindApplyOrElse {}
   | CMapBindings {}
   | CMapSize {}
+  | CMapIsEmpty {}
   | CMapMem {}
   | CMapAny {}
   | CMapMap {}

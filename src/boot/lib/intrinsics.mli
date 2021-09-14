@@ -396,6 +396,8 @@ module Mmap : sig
 
   val size : ('a, 'b) t -> int
 
+  val is_empty : ('a, 'b) t -> bool
+
   val mem : 'a -> ('a, 'b) t -> bool
 
   val any : ('a -> 'b -> bool) -> ('a, 'b) t -> bool

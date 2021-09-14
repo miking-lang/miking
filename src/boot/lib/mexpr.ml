@@ -301,6 +301,8 @@ let arity = function
       1
   | CmapSize ->
       1
+  | CmapIsEmpty ->
+      1
   | CmapGetCmpFun ->
       1
   | CmapInsert (None, None) ->
@@ -1014,6 +1016,10 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CmapSize, TmConst (_, CMap (_, m)) ->
       TmConst (fi, CInt (Mmap.size m))
   | CmapSize, _ ->
+      fail_constapp fi
+  | CmapIsEmpty, TmConst (_, CMap (_, m)) ->
+      TmConst (fi, CBool (Mmap.is_empty m))
+  | CmapIsEmpty, _ ->
       fail_constapp fi
   | CmapGetCmpFun, TmConst (_, CMap (cmp, _)) ->
       cmp

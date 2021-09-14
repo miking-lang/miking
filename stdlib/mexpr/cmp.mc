@@ -421,6 +421,7 @@ lang MapCmp = Cmp + MapAst
   | (CMapFindApplyOrElse _, CMapFindApplyOrElse _) -> 0
   | (CMapBindings _, CMapBindings _) -> 0
   | (CMapSize _, CMapSize _) -> 0
+  | (CMapIsEmpty _, CMapIsEmpty _) -> 0
   | (CMapMem _, CMapMem _) -> 0
   | (CMapAny _, CMapAny _) -> 0
   | (CMapMap _, CMapMap _) -> 0
@@ -894,6 +895,7 @@ utest cmpConst (CMapFindOrElse {}) (CMapFindOrElse {}) with 0 in
 utest cmpConst (CMapFindApplyOrElse {}) (CMapFindApplyOrElse {}) with 0 in
 utest cmpConst (CMapBindings {}) (CMapBindings {}) with 0 in
 utest cmpConst (CMapSize {}) (CMapSize {}) with 0 in
+utest cmpConst (CMapIsEmpty {}) (CMapIsEmpty {}) with 0 in
 utest cmpConst (CMapMem {}) (CMapMem {}) with 0 in
 utest cmpConst (CMapAny {}) (CMapAny {}) with 0 in
 utest cmpConst (CMapMap {}) (CMapMap {}) with 0 in

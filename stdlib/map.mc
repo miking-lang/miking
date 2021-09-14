@@ -17,8 +17,6 @@ let mapLookupApplyOrElse : (v1 -> v2) -> (Unit -> v2) -> k -> Map k v1 -> v2 =
   lam f1. lam f2. lam k. lam m.
   mapFindApplyOrElse f1 f2 k m
 
-let mapIsEmpty : Map k v -> Bool = lam m. eqi (mapSize m) 0
-
 let mapLookup : k -> Map k v -> Option v =
   lam k. lam m.
     mapFindApplyOrElse (lam v. Some v) (lam. None ()) k m
@@ -69,7 +67,6 @@ let m = mapEmpty subi in
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
-utest mapIsEmpty m with true in
 
 utest mapLookup 1 m with None () using optionEq eqString in
 

@@ -454,6 +454,8 @@ let rec print_const fmt = function
       fprintf fmt "mapEmpty"
   | CmapSize ->
       fprintf fmt "mapSize"
+  | CmapIsEmpty ->
+      fprintf fmt "mapIsEmpty"
   | CmapGetCmpFun ->
       fprintf fmt "mapGetCmpFun"
   | CmapInsert _ ->

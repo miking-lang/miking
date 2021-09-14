@@ -98,6 +98,7 @@ let builtin = use MExprAst in
   -- Maps
   , ("mapEmpty", CMapEmpty ())
   , ("mapSize", CMapSize ())
+  , ("mapIsEmpty", CMapIsEmpty ())
   , ("mapGetCmpFun", CMapGetCmpFun ())
   , ("mapInsert", CMapInsert ())
   , ("mapRemove", CMapRemove ())

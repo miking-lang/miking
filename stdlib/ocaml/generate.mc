@@ -1676,6 +1676,21 @@ let mapSizeEmptyTest = bindall_
 utest ocamlEvalInt (generateEmptyEnv mapSizeEmptyTest)
 with int_ 0 using eqExpr in
 
+let mapIsEmptyEmptyTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
+  , mapIsEmpty_ (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapIsEmptyEmptyTest)
+with true_ using eqExpr in
+
+let mapIsEmptyNonEmptyTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapIsEmpty_ (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapIsEmptyNonEmptyTest)
+with false_ using eqExpr in
+
 let mapSizeTest = bindall_
   [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))

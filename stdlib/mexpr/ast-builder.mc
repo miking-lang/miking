@@ -1118,6 +1118,10 @@ let mapSize_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapSize ())) m
 
+let mapIsEmpty_ = use MExprAst in
+  lam m.
+  appf1_ (uconst_ (CMapIsEmpty ())) m
+
 let mapMem_ = use MExprAst in
   lam k. lam m.
   appf2_ (uconst_ (CMapMem ())) k m

@@ -13,6 +13,7 @@ let m = mapEmpty subi in
 utest (mapGetCmpFun m) 2 1 with 1 in
 
 utest mapSize m with 0 in
+utest mapIsEmpty m with true in
 
 let m = mapInsert 1 '1' m in
 let m = mapInsert 2 '2' m in
@@ -21,6 +22,7 @@ let m = mapInsert 4 '4' m in
 let m = mapInsert 4 '5' m in
 
 utest mapSize m with 4 in
+utest mapIsEmpty m with false in
 
 utest mapFindWithExn 1 m with '1' in
 utest mapFindWithExn 2 m with '2' in

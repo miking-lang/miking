@@ -1101,6 +1101,11 @@ lang MapEval =
       TmConst {val = CInt {val = mapSize m}, ty = TyInt {info = NoInfo ()},
                info = NoInfo ()}
     else error "Argument of mapSize not a map"
+  | CMapIsEmpty _ ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      TmConst {val = CBool {val = mapIsEmpty m}, ty = TyInt {info = NoInfo ()},
+               info = NoInfo ()}
+    else error "Argument of mapIsEmpty not a map"
   | CMapMem _ ->
     TmConst {val = CMapMem2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
@@ -2494,7 +2499,9 @@ utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m1) with int_ 2 using eqEx
 utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m2) with int_ 4 using eqExpr in
 
 utest eval (mapSize_ m1) with int_ 0 using eqExpr in
+utest eval (mapIsEmpty_ m1) with true_ using eqExpr in
 utest eval (mapSize_ m2) with int_ 1 using eqExpr in
+utest eval (mapIsEmpty_ m2) with false_ using eqExpr in
 utest eval (mapSize_ m3) with int_ 2 using eqExpr in
 utest eval (mapSize_ m4) with int_ 1 using eqExpr in
 utest eval (mapSize_ m5) with int_ 2 using eqExpr in
