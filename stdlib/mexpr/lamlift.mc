@@ -1,3 +1,6 @@
+-- Defines lambda lifting of MExpr AST nodes in quadratic time in the size of
+-- the program.
+
 include "digraph.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
