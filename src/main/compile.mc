@@ -105,7 +105,6 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
 
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
-    let ast = liftLambdas ast in
     let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
 
