@@ -3,7 +3,6 @@
 
 include "options.mc"
 include "mexpr/boot-parser.mc"
-include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/remove-ascription.mc"
@@ -21,8 +20,7 @@ lang MCoreCompile =
   MExprHoles +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
-  OCamlGenerateExternalNaive +
-  MExprLambdaLift
+  OCamlGenerateExternalNaive
 end
 
 let pprintMcore = lam ast.

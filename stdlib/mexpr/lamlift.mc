@@ -405,12 +405,6 @@ lang MExprLambdaLift =
   | t ->
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
---    iter
---      (lam sol : (Name, Set Name).
---        let sym = optionGetOrElse (lam. never) (nameGetSym sol.0) in
---        printLn (join [nameGetStr sol.0, "'", int2string (sym2hash sym), ": ",
---                       strJoin "," (map nameGetStr (setToSeq sol.1))]))
---      (mapBindings state.sols);
     let t = insertFreeVariables state.sols t in
     liftGlobal t
 end
