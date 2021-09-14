@@ -47,6 +47,20 @@ build() {
     fi
 }
 
+# As build(), but skips the third bootstrapping step
+lite() {
+    if [ -e build/$MI_NAME ]
+    then
+        echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
+    else
+        echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc
+        echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
+        time ./$MI_LITE_NAME 1 src/main/mi.mc
+        mv -f $MI_NAME build/$MI_NAME
+        rm -f $MI_LITE_NAME
+    fi
+}
 
 
 # Install the boot interpreter locally for the current user
@@ -99,6 +113,9 @@ run_test() {
 case $1 in
     boot)
         build_boot
+        ;;
+    lite)
+        lite
         ;;
     run-test)
         run_test "$2"

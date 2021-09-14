@@ -14,6 +14,7 @@
   test\
   install\
   install-boot\
+  lite\
   lint\
   fix\
   clean\
@@ -37,6 +38,9 @@ boot:
 
 build/mi: boot
 	@./make
+
+lite: boot
+	@./make lite
 
 test: test-boot-base
 
