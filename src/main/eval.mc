@@ -55,7 +55,7 @@ let eval = lam files. lam options : Options. lam args.
     (if options.debugParse then printLn (expr2str ast) else ());
 
     let ast =
-      if options.debugProfiling then
+      if options.debugProfile then
         instrumentProfiling (symbolize ast)
       else ast
     in
