@@ -3,6 +3,7 @@
 
 include "options.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/remove-ascription.mc"
@@ -18,7 +19,7 @@ include "ocaml/sys.mc"
 lang MCoreCompile =
   BootParser +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
   OCamlGenerateExternalNaive
 end
@@ -99,6 +100,12 @@ let ocamlCompile =
 
 let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
+
+  let mexprAst =
+    if options.debugProfile then
+      instrumentProfiling (symbolize mexprAst)
+    else mexprAst
+  in
 
   -- If option --test, then generate utest runner calls. Otherwise strip away
   -- all utest nodes from the AST.
