@@ -26,6 +26,13 @@ let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float. exp (externalGauss
 let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float. externalGaussianLogPdf x mu sigma
 let gaussianSample = lam mu:Float. lam sigma:Float. externalGaussianSample mu sigma
 
+-- Uniform (continuous)
+external uniformSample ! : Unit -> Float
+
+-- Random (discrete)
+external externalRandomSample ! : Int -> Int -> Int
+let randomSample = lam a:Int. lam b:Int. externalRandomSample a b
+
 
 mexpr
 
@@ -55,11 +62,15 @@ utest betaPdf 2. 2. 0.5 with 1.5 using _eqf in
 utest exp (betaLogPdf 2. 5. 0.2) with 2.4576 using _eqf in
 utest betaSample 2. 2. with 0. using floatRange 0. 1. in
 
-
 -- Testing Gaussian
 utest gaussianPdf 0. 0.4472 0. with 0.892089178 using _eqf in
 utest exp (gaussianLogPdf 2. 1. 2.) with 0.398942280401 using _eqf in
 utest gaussianSample 0. 0.2 with 0. using lam. lam. true in
 
+-- Testing Uniform
+utest uniformSample () with 0. using floatRange 0. 1. in
+
+-- Testing Random
+utest randomSample 3 8 with 3 using intRange 3 8 in
 
 ()

@@ -42,6 +42,18 @@ let distExtMap =
         ty = tyarrows_ [otylabel_ "mu" tyfloat_, otylabel_ "sigma" tyfloat_, tyfloat_],
         libraries = ["owl"]
       }
+    ]),
+    ("uniformSample", [
+      { ident = "Owl_stats.std_uniform_rvs",
+        ty = tyarrows_ [tyunit_, tyfloat_],
+        libraries = ["owl"]
+      }
+    ]),
+    ("externalRandomSample", [
+      { ident = "Owl_stats.uniform_int_rvs",
+        ty = tyarrows_ [tyint_, tyint_, tyint_],
+        libraries = ["owl"]
+      }
     ])
   ]
 
