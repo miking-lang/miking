@@ -84,7 +84,6 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
       else fv
     else fv
   | TmLam t -> findFreeVariablesInBody state fv t.body
-  | TmLet (t & {tyBody = TyArrow _}) -> findFreeVariablesInBody state fv t.inexpr
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
@@ -164,8 +163,8 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
       else
         {state with vars = setInsert t.ident state.vars}
     in
-    let inexprState = findFreeVariables state t.body in
-    findFreeVariables inexprState t.inexpr
+    let state = findFreeVariables state t.body in
+    findFreeVariables state t.inexpr
   | TmRecLets t ->
     recursive let propagateFunNames : LambdaLiftState -> Digraph Name Int
                                    -> [[Name]] -> LambdaLiftState =
@@ -703,5 +702,18 @@ let expected = preprocess (bindall_ [
       (appf2_ (var_ "g") (var_ "y") (var_ "x"))
       (int_ 0)))]) in
 utest liftLambdas boundInMatchPat with expected using eqExpr in
+
+let nestedFreeVar = preprocess (bindall_ [
+  ulet_ "f" (ulam_ "x" (bindall_ [
+    ulet_ "g" (ulam_ "y" (bindall_ [
+      ulet_ "h" (ulam_ "z" (addi_ (var_ "x") (var_ "z"))),
+      app_ (var_ "h") (var_ "y")])),
+    app_ (var_ "g") (var_ "x")]))]) in
+let expected = preprocess (bindall_ [
+  ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "x") (var_ "z")))),
+  ulet_ "g" (ulam_ "x" (ulam_ "y" (appf2_ (var_ "h") (var_ "x") (var_ "y")))),
+  ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (var_ "x")))
+]) in
+utest liftLambdas nestedFreeVar with expected using eqExpr in
 
 ()
