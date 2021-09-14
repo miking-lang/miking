@@ -2,7 +2,8 @@ include "digraph.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
-include "mexpr/pprint.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-annot.mc"
 
 type LambdaLiftState = {
   -- Variables in the current scope that can occur as free variables in the
@@ -52,10 +53,24 @@ lang LambdaLiftNameAnonymous = MExprAst
   | t -> smap_Expr_Expr nameAnonymousLambdas t
 end
 
+lang LambdaLiftFindFreeVariablesPat = MExprAst
+  sem getFreeVariablePatName (state : LambdaLiftState) =
+  | PName id -> {state with vars = setInsert id state.vars}
+  | PWildcard _ -> state
+
+  sem findFreeVariablesPat (state : LambdaLiftState) =
+  | PatNamed t -> getFreeVariablePatName state t.ident
+  | PatSeqEdge t ->
+    let state = foldl findFreeVariablesPat state t.prefix in
+    let state = getFreeVariablePatName state t.middle in
+    foldl findFreeVariablesPat state t.postfix
+  | p -> sfold_Pat_Pat findFreeVariablesPat state p
+end
+
 -- Finds the set of free variables of all functions. For recursive
 -- let-expressions, this requires solving a system of set equations (as the
 -- free variables within bindings may affect each other).
-lang LambdaLiftFindFreeVariables = MExprAst
+lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   sem findFreeVariablesInBody (state : LambdaLiftState) (fv : Set Name) =
   | TmVar t ->
     if setMem t.ident state.vars then
@@ -69,7 +84,7 @@ lang LambdaLiftFindFreeVariables = MExprAst
       else fv
     else fv
   | TmLam t -> findFreeVariablesInBody state fv t.body
-  | TmLet (t & {body = TmLam _}) -> findFreeVariablesInBody state fv t.inexpr
+  | TmLet (t & {tyBody = TyArrow _}) -> findFreeVariablesInBody state fv t.inexpr
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
@@ -79,7 +94,7 @@ lang LambdaLiftFindFreeVariables = MExprAst
   sem findFreeVariablesReclet (state : LambdaLiftState) =
   | TmLet t ->
     let state =
-      match t.body with TmLam _ then
+      match t.tyBody with TyArrow _ then
         let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -99,7 +114,7 @@ lang LambdaLiftFindFreeVariables = MExprAst
   sem addGraphVertices (g : Digraph Name Int) =
   | TmLet t ->
     let g =
-      match t.body with TmLam _ then digraphAddVertex t.ident g
+      match t.tyBody with TyArrow _ then digraphAddVertex t.ident g
       else g
     in
     let g = addGraphVertices g t.body in
@@ -123,7 +138,7 @@ lang LambdaLiftFindFreeVariables = MExprAst
       digraphMaybeAddEdge src t.ident 0 g
     else g
   | TmLet t ->
-    let letSrc = match t.body with TmLam _ then t.ident else src in
+    let letSrc = match t.tyBody with TyArrow _ then t.ident else src in
     let g = addGraphCallEdges letSrc g t.body in
     addGraphCallEdges src g t.inexpr
   | TmRecLets t ->
@@ -142,14 +157,14 @@ lang LambdaLiftFindFreeVariables = MExprAst
     findFreeVariables state t.body
   | TmLet t ->
     let state =
-      match t.body with TmLam _ then
+      match t.tyBody with TyArrow _ then
         let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
-      else state
+      else
+        {state with vars = setInsert t.ident state.vars}
     in
-    let state : LambdaLiftState = findFreeVariables state t.body in
-    let inexprState = {state with vars = setInsert t.ident state.vars} in
+    let inexprState = findFreeVariables state t.body in
     findFreeVariables inexprState t.inexpr
   | TmRecLets t ->
     recursive let propagateFunNames : LambdaLiftState -> Digraph Name Int
@@ -188,6 +203,14 @@ lang LambdaLiftFindFreeVariables = MExprAst
     let state = propagateFunNames state g (reverse sccs) in
     let state = foldl findFreeVariablesBinding state t.bindings in
     findFreeVariables state t.inexpr
+  | TmMatch t ->
+    let state = findFreeVariables state t.target in
+    let state = findFreeVariablesPat state t.pat in
+    let state = findFreeVariables state t.thn in
+    findFreeVariables state t.els
+  | TmExt t ->
+    let state = {state with vars = setInsert t.ident state.vars} in
+    findFreeVariables state t.inexpr
   | t -> sfold_Expr_Expr findFreeVariables state t
 end
 
@@ -198,7 +221,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     match mapLookup t.ident subMap with Some subExpr then
       (subMap, subExpr t.info)
     else (subMap, TmVar t)
-  | TmLet (t & {body = TmLam _}) ->
+  | TmLet (t & {tyBody = TyArrow _}) ->
     match mapLookup t.ident solutions with Some freeVars then
       let fv = setToSeq freeVars in
       let info = infoTm t.body in
@@ -286,7 +309,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
     match liftRecursiveBindingH bindings t.body with (bindings, body) then
-      match body with TmLam _ then
+      match t.tyBody with TyArrow _ then
         let bind : RecLetBinding =
           {ident = t.ident, tyBody = t.tyBody, body = t.body, ty = t.ty,
            info = t.info} in
@@ -318,12 +341,13 @@ lang LambdaLiftLiftGlobal = MExprAst
       else never
     in
     let bindings = foldl liftBinding [] t.bindings in
-    TmRecLets {t with bindings = bindings}
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = unit_}
 
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
     match liftGlobalH lifted t.body with (lifted, body) then
-      match body with TmLam _ then
+      match t.tyBody with TyArrow _ then
         let lifted = snoc lifted (TmLet {{t with body = body}
                                             with inexpr = unit_}) in
         liftGlobalH lifted t.inexpr
@@ -334,7 +358,7 @@ lang LambdaLiftLiftGlobal = MExprAst
     else never
   | TmRecLets t ->
     let lifted = snoc lifted (liftRecursiveBinding (TmRecLets t)) in
-    liftGlobalH lifted t.inexpr
+    (lifted, t.inexpr)
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
 
   sem liftGlobal =
@@ -345,7 +369,11 @@ lang LambdaLiftLiftGlobal = MExprAst
         (TmLet {{t with body = body}
                    with inexpr = liftGlobal t.inexpr})
     else never
-  | TmRecLets t -> liftRecursiveBinding (TmRecLets t)
+  | TmRecLets t ->
+    let lifted = [liftRecursiveBinding (TmRecLets t)] in
+    _bindIfNonEmpty
+      lifted
+      (liftGlobal t.inexpr)
   | TmType t -> TmType {t with inexpr = liftGlobal t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = liftGlobal t.inexpr}
   | TmUtest t ->
@@ -375,39 +403,47 @@ lang MExprLambdaLift =
   | t ->
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
+--    iter
+--      (lam sol : (Name, Set Name).
+--        let sym = optionGetOrElse (lam. never) (nameGetSym sol.0) in
+--        printLn (join [nameGetStr sol.0, "'", int2string (sym2hash sym), ": ",
+--                       strJoin "," (map nameGetStr (setToSeq sol.1))]))
+--      (mapBindings state.sols);
     let t = insertFreeVariables state.sols t in
     liftGlobal t
 end
 
-lang TestLang = MExprLambdaLift + MExprEq + MExprPrettyPrint
+lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
 
 mexpr
 
 use TestLang in
 
+let preprocess = lam t. typeAnnot (symbolize t) in
+
 let noLambdas = bind_ (ulet_ "x" (int_ 2)) unit_ in
 utest liftLambdas noLambdas with noLambdas using eqExpr in
 
-let innerFunction = symbolize (bindall_ [
+let innerFunction = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x"
     (bind_
       (ulet_ "g" (ulam_ "y" (addi_ (var_ "y") (int_ 2))))
       (muli_ (app_ (var_ "g") (var_ "x")) (int_ 2)))),
   app_ (var_ "f") (int_ 1)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "g" (ulam_ "y" (addi_ (var_ "y") (int_ 2))),
   ulet_ "f" (ulam_ "x" (muli_ (app_ (var_ "g") (var_ "x")) (int_ 2))),
   app_ (var_ "f") (int_ 1)]) in
 utest liftLambdas innerFunction with expected using eqExpr in
 
-let factorial = symbolize (ureclets_ [
+let factorial = preprocess (ureclets_ [
   ("fact", ulam_ "n" (
     if_ (eqi_ (var_ "n") (int_ 0))
       (int_ 1)
       (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))]) in
 utest liftLambdas factorial with factorial using eqExpr in
 
-let factorialWithHelper = symbolize (bindall_ [
+let factorialWithHelper = preprocess (bindall_ [
   ulet_ "fact" (ulam_ "n" (bindall_ [
     ureclets_ [
       ("work", ulam_ "acc" (ulam_ "n" (
@@ -418,7 +454,7 @@ let factorialWithHelper = symbolize (bindall_ [
             (subi_ (var_ "n") (int_ 1))))))],
     appf2_ (var_ "work") (int_ 1) (var_ "n")])),
   app_ (var_ "fact") (int_ 4)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ureclets_ [
     ("work", ulam_ "acc" (ulam_ "n" (
       if_ (eqi_ (var_ "n") (int_ 0))
@@ -430,18 +466,18 @@ let expected = symbolize (bindall_ [
   app_ (var_ "fact") (int_ 4)]) in
 utest liftLambdas factorialWithHelper with expected using eqExpr in
 
-let liftFreeVars = symbolize (bindall_ [
+let liftFreeVars = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (bindall_ [
     ulet_ "g" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))),
     app_ (var_ "g") (int_ 2)])),
   app_ (var_ "f") (int_ 3)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "g" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (int_ 2))),
   app_ (var_ "f") (int_ 3)]) in
 utest liftLambdas liftFreeVars with expected using eqExpr in
 
-let deepNesting = symbolize (bindall_ [
+let deepNesting = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (bindall_ [
     ulet_ "g" (ulam_ "y" (bindall_ [
       ulet_ "h" (ulam_ "z" (
@@ -449,20 +485,20 @@ let deepNesting = symbolize (bindall_ [
       app_ (var_ "h") (int_ 2)])),
     app_ (var_ "g") (var_ "x")])),
   app_ (var_ "f") (int_ 1)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "h" (ulam_ "y" (ulam_ "z" (addi_ (var_ "y") (var_ "z")))),
   ulet_ "g" (ulam_ "y" (appf2_ (var_ "h") (var_ "y") (int_ 2))),
   ulet_ "f" (ulam_ "x" (app_ (var_ "g") (var_ "x"))),
   app_ (var_ "f") (int_ 1)]) in
 utest liftLambdas deepNesting with expected using eqExpr in
 
-let multipleInnerLets = symbolize (bindall_ [
+let multipleInnerLets = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (bindall_ [
     ulet_ "g" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))),
     ulet_ "h" (ulam_ "z" (addi_ (var_ "z") (var_ "x"))),
     addi_ (app_ (var_ "g") (int_ 1)) (app_ (var_ "h") (int_ 2))])),
   app_ (var_ "f") (int_ 1)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "g" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "z") (var_ "x")))),
   ulet_ "f" (ulam_ "x" (
@@ -471,7 +507,7 @@ let expected = symbolize (bindall_ [
   app_ (var_ "f") (int_ 1)]) in
 utest liftLambdas multipleInnerLets with expected using eqExpr in
 
-let letInReclet = symbolize (bindall_ [
+let letInReclet = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (bindall_ [
     ureclets_ [
       ("g", ulam_ "y" (bindall_ [
@@ -481,7 +517,7 @@ let letInReclet = symbolize (bindall_ [
     app_ (var_ "g") (int_ 1)
   ])),
   app_ (var_ "f") (int_ 4)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ureclets_ [
     ("h", ulam_ "z" (addi_ (var_ "z") (int_ 1))),
     ("g", ulam_ "x" (ulam_ "y" (
@@ -490,7 +526,7 @@ let expected = symbolize (bindall_ [
   app_ (var_ "f") (int_ 4)]) in
 utest liftLambdas letInReclet with expected using eqExpr in
 
-let deepNestedRecursiveDefs = symbolize (ureclets_ [
+let deepNestedRecursiveDefs = preprocess (ureclets_ [
   ("f1", ulam_ "x" (bindall_ [
     ulet_ "f2" (bindall_ [
       ureclets_ [("f3", ulam_ "x1" (addi_ (var_ "x1") (int_ 1)))],
@@ -503,7 +539,7 @@ let deepNestedRecursiveDefs = symbolize (ureclets_ [
       addi_ (app_ (var_ "f3") (var_ "x"))
             (app_ (var_ "f4") (int_ 2))]),
     var_ "f2"]))]) in
-let expected = symbolize (ureclets_ [
+let expected = preprocess (ureclets_ [
   ("f3", ulam_ "x1" (addi_ (var_ "x1") (int_ 1))),
   ("k", ulam_ "x" (ulam_ "x2" (appf2_ (var_ "f5") (var_ "x") (var_ "x2")))),
   ("f4", ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "k") (var_ "x") (var_ "x")) (var_ "y")))),
@@ -517,12 +553,12 @@ utest liftLambdas deepNestedRecursiveDefs with expected using eqExpr in
 let fdef = ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))) in
 let fapp = bind_ fdef (app_ (var_ "f") (int_ 1)) in
 
-let liftUtest = symbolize (
+let liftUtest = preprocess (
   utest_
     (int_ 0)
     fapp
     unit_) in
-let expected = symbolize (
+let expected = preprocess (
   bind_
     fdef
     (utest_
@@ -531,13 +567,13 @@ let expected = symbolize (
       unit_)) in
 utest liftLambdas liftUtest with expected using eqExpr in
 
-let liftApp = symbolize (bindall_ [
+let liftApp = preprocess (bindall_ [
   app_
     (bind_
       (ulet_ "g" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))))
       (app_ (var_ "g") (int_ 2)))
     fapp]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "g" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   fdef,
   app_
@@ -545,89 +581,89 @@ let expected = symbolize (bindall_ [
     (app_ (var_ "f") (int_ 1))]) in
 utest liftLambdas liftApp with expected using eqExpr in
 
-let liftSeq = symbolize (seq_ [fapp]) in
-let expected = symbolize (bindall_ [fdef, seq_ [app_ (var_ "f") (int_ 1)]]) in
+let liftSeq = preprocess (seq_ [fapp]) in
+let expected = preprocess (bindall_ [fdef, seq_ [app_ (var_ "f") (int_ 1)]]) in
 utest liftLambdas liftSeq with expected using eqExpr in
 
-let liftRecord = symbolize (urecord_ [("a", fapp), ("b", int_ 2)]) in
-let expected = symbolize (bindall_ [
+let liftRecord = preprocess (urecord_ [("a", fapp), ("b", int_ 2)]) in
+let expected = preprocess (bindall_ [
   fdef,
   urecord_ [
     ("a", app_ (var_ "f") (int_ 1)),
     ("b", int_ 2)]]) in
 utest liftLambdas liftRecord with expected using eqExpr in
 
-let liftRecordUpdate = symbolize (bindall_ [
+let liftRecordUpdate = preprocess (bindall_ [
   ulet_ "r" (urecord_ [("a", float_ 2.5), ("b", int_ 0)]),
   recordupdate_ (var_ "r") "b" fapp
   ]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "r" (urecord_ [("a", float_ 2.5), ("b", int_ 0)]),
   fdef,
   recordupdate_ (var_ "r") "b" (app_ (var_ "f") (int_ 1))]) in
 utest liftLambdas liftRecordUpdate with expected using eqExpr in
 
-let liftMatchTarget = symbolize (
+let liftMatchTarget = preprocess (
   match_ fapp (pint_ 0)
     (int_ 1)
     (int_ 2)) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   fdef,
   match_ (app_ (var_ "f") (int_ 1)) (pint_ 0)
     (int_ 1)
     (int_ 2)]) in
 utest liftLambdas liftMatchTarget with expected using eqExpr in
 
-let liftMatchThn = symbolize (
+let liftMatchThn = preprocess (
   match_ (int_ 3) (pint_ 3)
     fapp
     (int_ 0)) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   fdef,
   match_ (int_ 3) (pint_ 3)
     (app_ (var_ "f") (int_ 1))
     (int_ 0)]) in
 utest liftLambdas liftMatchThn with expected using eqExpr in
 
-let liftMatchEls = symbolize (
+let liftMatchEls = preprocess (
   match_ (int_ 3) (pint_ 3)
     (int_ 0)
     fapp) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   fdef,
   match_ (int_ 3) (pint_ 3)
     (int_ 0)
     (app_ (var_ "f") (int_ 1))]) in
 utest liftLambdas liftMatchEls with expected using eqExpr in
 
-let conAppLift = symbolize (bindall_ [
+let conAppLift = preprocess (bindall_ [
   condef_ "Leaf" (tyarrow_ tyint_ (tyvar_ "Tree")),
   conapp_ "Leaf" fapp
 ]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   condef_ "Leaf" (tyarrow_ tyint_ (tyvar_ "Tree")),
   fdef,
   conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in
 utest liftLambdas conAppLift with expected using eqExpr in
 
-let anonymousFunctionLift = symbolize (bindall_ [
+let anonymousFunctionLift = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (
     app_ (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) (int_ 4))),
   app_ (var_ "f") (int_ 2)]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "t" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   ulet_ "f" (ulam_ "x" (appf2_ (var_ "t") (var_ "x") (int_ 4))),
   app_ (var_ "f") (int_ 2)]) in
 utest liftLambdas anonymousFunctionLift with expected using eqExpr in
 
-let anonymousMapLift = symbolize (
+let anonymousMapLift = preprocess (
   map_ (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (seq_ [int_ 0, int_ 7])) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "t" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   map_ (var_ "t") (seq_ [int_ 0, int_ 7])]) in
 utest liftLambdas anonymousMapLift with expected using eqExpr in
 
-let recursiveSystem = symbolize (bindall_ [
+let recursiveSystem = preprocess (bindall_ [
   ulet_ "a" (int_ 1),
   ulet_ "b" (int_ 2),
   ulet_ "c" (int_ 5),
@@ -636,7 +672,7 @@ let recursiveSystem = symbolize (bindall_ [
     ("g", ulam_ "y" (addi_ (app_ (var_ "h") (var_ "y")) (var_ "b"))),
     ("h", ulam_ "z" (addi_ (app_ (var_ "f") (var_ "z")) (var_ "c")))],
   unit_]) in
-let expected = symbolize (bindall_ [
+let expected = preprocess (bindall_ [
   ulet_ "a" (int_ 1),
   ulet_ "b" (int_ 2),
   ulet_ "c" (int_ 5),
@@ -652,5 +688,20 @@ let expected = symbolize (bindall_ [
             (var_ "c")))],
   unit_]) in
 utest liftLambdas recursiveSystem with expected using eqExpr in
+
+let boundInMatchPat = preprocess (bindall_ [
+  ulet_ "f" (ulam_ "x" (
+    match_ (var_ "x") (pvar_ "y")
+      (bind_
+        (ulet_ "g" (ulam_ "z" (addi_ (var_ "y") (var_ "z"))))
+        (app_ (var_ "g") (var_ "x")))
+      (int_ 0)))]) in
+let expected = preprocess (bindall_ [
+  ulet_ "g" (ulam_ "y" (ulam_ "z" (addi_ (var_ "y") (var_ "z")))),
+  ulet_ "f" (ulam_ "x" (
+    match_ (var_ "x") (pvar_ "y")
+      (appf2_ (var_ "g") (var_ "y") (var_ "x"))
+      (int_ 0)))]) in
+utest liftLambdas boundInMatchPat with expected using eqExpr in
 
 ()
