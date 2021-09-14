@@ -82,9 +82,9 @@ let handle_command str =
   | ":q" ->
       save_history_and_exit ()
   | ":h" ->
-      print_endline help_message ; true
+      print_endline help_message ; Some ()
   | _ ->
-      false
+      None
 
 (* Read and parse a toplevel or mexpr expression. Continues to read input
    until a valid expression is formed. Raises Parse_error if the expression
@@ -115,17 +115,19 @@ let read_multiline first_line =
     Some (parse_prog_or_mexpr "REPL" lines)
   else None
 
-let default_delayed d = function Some x -> x | None -> d ()
-
 (* Read input from the user and respond accordingly depending on if it is a
    command, the beginning of a multiline statement or a normal expression *)
 let rec read_user_input () =
   let first_line = read_input initial_prompt in
-  if handle_command first_line then read_user_input ()
-  else
-    default_delayed
-      (fun _ -> read_until_complete false first_line)
-      (read_multiline first_line)
+  match handle_command first_line with
+  | Some () ->
+      read_user_input ()
+  | _ -> (
+    match read_multiline first_line with
+    | Some x ->
+        x
+    | _ ->
+        read_until_complete false first_line )
 
 (* Evaluate a term given existing environments.
    Returns updated environments along with evaluation result.
@@ -183,7 +185,7 @@ let repl_format tm =
 (* Autocompletion *)
 let begins_at str pos =
   let nonword_characters = Str.regexp "[][/\\\\(),={} \n\r\x0c\t]" in
-  try Str.search_backward nonword_characters str (pos - 1) + 1
+  try Str.search_backward nonword_characters str (max (pos - 1) 0) + 1
   with Not_found -> 0
 
 let keywords = List.map fst Lexer.reserved_strings
@@ -191,19 +193,9 @@ let keywords = List.map fst Lexer.reserved_strings
 module USSet = Set.Make (Ustring)
 
 let keywords_and_identifiers () =
-  let extract_name id =
-    let sid =
-      match id with
-      | IdVar s ->
-          s
-      | IdCon s ->
-          s
-      | IdType s ->
-          s
-      | IdLabel s ->
-          s
-    in
-    ustring_of_sid sid
+  let extract_name = function
+    | IdVar s | IdCon s | IdType s | IdLabel s ->
+        ustring_of_sid s
   in
   let _, nss, name2sym, _ = !repl_envs in
   let names_without_langs =
@@ -231,8 +223,7 @@ let get_matches prefix words = List.filter (starts_with prefix) words
 
 let get_completions str pos =
   let start_pos = begins_at str pos in
-  let len = min (String.length str) (pos - start_pos + 1) in
-  let word_to_complete = String.sub str start_pos len in
+  let word_to_complete = String.sub str start_pos (pos - start_pos) in
   (start_pos, get_matches word_to_complete (keywords_and_identifiers ()))
 
 let completion_callback line_so_far ln_completions =
