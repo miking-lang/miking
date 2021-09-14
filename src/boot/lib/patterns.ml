@@ -39,12 +39,18 @@ module SimpleConOrd = struct
    * since ustring has internal mutation that would be visible to it, but
    * shouldn't affect the result *)
   let con_idx = function
-    | IntCon _ -> 0
-    | CharCon _ -> 1
-    | BoolCon _ -> 2
-    | ConCon _ -> 3
-    | RecCon -> 4
-    | SeqCon -> 5
+    | IntCon _ ->
+        0
+    | CharCon _ ->
+        1
+    | BoolCon _ ->
+        2
+    | ConCon _ ->
+        3
+    | RecCon ->
+        4
+    | SeqCon ->
+        5
 
   let compare a b =
     match (a, b) with
@@ -56,7 +62,8 @@ module SimpleConOrd = struct
         Bool.compare a b
     | ConCon a, ConCon b ->
         Ustring.compare a b
-    | _ -> Int.compare (con_idx a) (con_idx b)
+    | _ ->
+        Int.compare (con_idx a) (con_idx b)
 end
 
 module ConSet = Set.Make (SimpleConOrd)
@@ -68,11 +75,10 @@ type snpat =
   | NPatCon of ustring * npat
   | NPatRecord of npat Record.t * UstringSet.t (* The set is disallowed labels *)
   | NPatSeqTot of npat list
-  | NPatSeqEdge of npat list * IntSet.t (* The set of disallowed lengths *) * npat list
+  | NPatSeqEdge of
+      npat list * IntSet.t (* The set of disallowed lengths *) * npat list
 
-and npat =
-  | SNPat of snpat
-  | NPatNot of ConSet.t
+and npat = SNPat of snpat | NPatNot of ConSet.t
 
 (* The disallowed simple constructors *)
 
@@ -98,17 +104,22 @@ module NPatOrd = struct
   type t = npat
 
   let snpat_idx = function
-    | NPatInt _ -> 0
-    | NPatChar _ -> 1
-    | NPatBool _ -> 2
-    | NPatCon _ -> 3
-    | NPatRecord _ -> 4
-    | NPatSeqTot _ -> 5
-    | NPatSeqEdge _ -> 6
+    | NPatInt _ ->
+        0
+    | NPatChar _ ->
+        1
+    | NPatBool _ ->
+        2
+    | NPatCon _ ->
+        3
+    | NPatRecord _ ->
+        4
+    | NPatSeqTot _ ->
+        5
+    | NPatSeqEdge _ ->
+        6
 
-  let npat_idx = function
-    | SNPat _ -> 0
-    | NPatNot _ -> 1
+  let npat_idx = function SNPat _ -> 0 | NPatNot _ -> 1
 
   let rec compare_list a b =
     match (a, b) with
@@ -140,11 +151,12 @@ module NPatOrd = struct
         compare_list a b
     | NPatSeqEdge (pre1, len1, post1), NPatSeqEdge (pre2, len2, post2) ->
         let pre_res = compare_list pre1 pre2 in
-        if pre_res <> 0 then pre_res else
-        let mid_res = IntSet.compare len1 len2 in
-        if mid_res <> 0 then mid_res else
-        compare_list post1 post2
-    | _ -> Int.compare (snpat_idx a) (snpat_idx b)
+        if pre_res <> 0 then pre_res
+        else
+          let mid_res = IntSet.compare len1 len2 in
+          if mid_res <> 0 then mid_res else compare_list post1 post2
+    | _ ->
+        Int.compare (snpat_idx a) (snpat_idx b)
 
   and compare a b =
     match (a, b) with
@@ -152,7 +164,8 @@ module NPatOrd = struct
         compare_snpat a b
     | NPatNot cons1, NPatNot cons2 ->
         ConSet.compare cons1 cons2
-    | _ -> Int.compare (npat_idx a) (npat_idx b)
+    | _ ->
+        Int.compare (npat_idx a) (npat_idx b)
 end
 
 module NPatSet = Set.Make (NPatOrd)
@@ -264,11 +277,12 @@ let rec list_complement (constr : npat list -> npat) (l : npat list) : normpat
          [!a, _, _]
        | [_, !b, _]
        | [_, _, !c]
-     *)
-    List.init len
-      (fun target ->
-        let f i p = if i = target then NPatSet.elements (npat_complement p) else [wildpat] in
-        List.mapi f l)
+    *)
+    List.init len (fun target ->
+        let f i p =
+          if i = target then NPatSet.elements (npat_complement p) else [wildpat]
+        in
+        List.mapi f l )
     (* NOTE(vipa, 2021-08-18): `npat_complement` produces a normpat, which
        we here treat as a list of patterns that are unioned together. This
        means that we presently have something like this:
@@ -304,7 +318,8 @@ and npat_complement : npat -> normpat = function
       let with_forbidden_labels =
         UstringSet.elements neg_labels
         |> List.map (fun label ->
-               SNPat (NPatRecord (Record.add label wildpat pats, UstringSet.empty)))
+               SNPat
+                 (NPatRecord (Record.add label wildpat pats, UstringSet.empty)) )
         |> NPatSet.of_list
       in
       let labels, pats = Record.bindings pats |> List.split in
@@ -325,7 +340,8 @@ and npat_complement : npat -> normpat = function
       |> NPatSet.union with_forbidden_labels
   | SNPat (NPatSeqTot pats) ->
       list_complement (fun pats -> SNPat (NPatSeqTot pats)) pats
-      |> NPatSet.add (SNPat (NPatSeqEdge ([], List.length pats |> IntSet.singleton, [])))
+      |> NPatSet.add
+           (SNPat (NPatSeqEdge ([], List.length pats |> IntSet.singleton, [])))
   | SNPat (NPatSeqEdge (pre, lens, post)) ->
       let lenPre, lenPost = (List.length pre, List.length post) in
       let complemented_product =
@@ -336,8 +352,9 @@ and npat_complement : npat -> normpat = function
           (pre @ post)
       in
       let allowed_lengths =
-        List.init (lenPre + lenPost)
-          (fun n -> if IntSet.mem n lens then None else Some (SNPat (NPatSeqTot (repeat n wildpat))))
+        List.init (lenPre + lenPost) (fun n ->
+            if IntSet.mem n lens then None
+            else Some (SNPat (NPatSeqTot (repeat n wildpat))) )
         |> List.filter_map (fun x -> x)
         |> NPatSet.of_list
       in
@@ -357,15 +374,14 @@ and npat_complement : npat -> normpat = function
            | SeqCon ->
                SNPat (NPatSeqEdge ([], IntSet.empty, []))
            | RecCon ->
-               SNPat (NPatRecord (Record.empty, UstringSet.empty)))
+               SNPat (NPatRecord (Record.empty, UstringSet.empty)) )
       |> NPatSet.of_list
 
 and npat_intersect (a : npat) (b : npat) : normpat =
   match (a, b) with
   | NPatNot cons1, NPatNot cons2 ->
       NPatSet.singleton (NPatNot (ConSet.union cons1 cons2))
-  | NPatNot cons, (SNPat sp as pat) | (SNPat sp as pat), NPatNot cons
-    ->
+  | NPatNot cons, (SNPat sp as pat) | (SNPat sp as pat), NPatNot cons ->
       if ConSet.mem (simple_con_of_simple_pat sp) cons then NPatSet.empty
       else NPatSet.singleton pat
   | SNPat p1, SNPat p2 -> (
@@ -422,9 +438,9 @@ and npat_intersect (a : npat) (b : npat) : normpat =
           |> NPatSet.of_list
         in
         (* NOTE(vipa, 2021-08-23): We need to consider when the
-          opposite ends of the two patterns overlap, e.g.,
-          `([1] ++ _) & (_ ++ [1])` should match the list `[1]`,
-          i.e., `[1] ++ _ ++ [1]` is not enough. *)
+           opposite ends of the two patterns overlap, e.g.,
+           `([1] ++ _) & (_ ++ [1])` should match the list `[1]`,
+           i.e., `[1] ++ _ ++ [1]` is not enough. *)
         let overlapping =
           match (pre, rev_post) with
           | ( (Some (pre_dir, pre_extras), pre)
@@ -448,8 +464,8 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         let len_pre, len_post, len_pats =
           (List.length pre, List.length post, List.length pats)
         in
-        if IntSet.mem len_pats lens then NPatSet.empty else
-        if len_pre + len_post > len_pats then NPatSet.empty
+        if IntSet.mem len_pats lens then NPatSet.empty
+        else if len_pre + len_post > len_pats then NPatSet.empty
         else
           pre @ repeat (len_pats - len_pre - len_post) wildpat @ post
           |> List.map2 npat_intersect pats
@@ -457,9 +473,13 @@ and npat_intersect (a : npat) (b : npat) : normpat =
           |> List.map (fun pats -> SNPat (NPatSeqTot pats))
           |> NPatSet.of_list
     | _ ->
-        if SimpleConOrd.compare (simple_con_of_simple_pat p1) (simple_con_of_simple_pat p2) <> 0 then
-          NPatSet.empty
-        else Msg.raise_error NoInfo "Impossible")
+        if
+          SimpleConOrd.compare
+            (simple_con_of_simple_pat p1)
+            (simple_con_of_simple_pat p2)
+          <> 0
+        then NPatSet.empty
+        else Msg.raise_error NoInfo "Impossible" )
 
 and normpat_complement (np : normpat) : normpat =
   NPatSet.elements np |> List.map npat_complement
@@ -499,8 +519,8 @@ let rec pat_to_normpat = function
              pat_to_normpat p |> NPatSet.elements |> List.map (fun p -> (k, p)) )
       |> List.map (fun bindings ->
              SNPat
-              (NPatRecord
-                (List.to_seq bindings |> Record.of_seq, UstringSet.empty)) )
+               (NPatRecord
+                  (List.to_seq bindings |> Record.of_seq, UstringSet.empty) ) )
       |> NPatSet.of_list
   | PatCon (_, c, _, p) ->
       pat_to_normpat p |> NPatSet.map (fun p -> SNPat (NPatCon (c, p)))
@@ -548,14 +568,19 @@ let pat_example normpat =
         PatSeqTot (NoInfo, List.map npat_to_pat nps |> Mseq.Helpers.of_list)
     | SNPat (NPatSeqEdge (pre, lens, post)) ->
         let rem_len acc len =
-          PatAnd (NoInfo, acc, PatSeqTot (NoInfo, repeat len wildpat |> Mseq.Helpers.of_list))
+          PatAnd
+            ( NoInfo
+            , acc
+            , PatSeqTot (NoInfo, repeat len wildpat |> Mseq.Helpers.of_list) )
         in
-        let base = PatSeqEdge
-          ( NoInfo
-          , List.map npat_to_pat pre |> Mseq.Helpers.of_list
-          , NameWildcard
-          , List.map npat_to_pat post |> Mseq.Helpers.of_list )
-        in List.fold_left rem_len base (IntSet.elements lens)
+        let base =
+          PatSeqEdge
+            ( NoInfo
+            , List.map npat_to_pat pre |> Mseq.Helpers.of_list
+            , NameWildcard
+            , List.map npat_to_pat post |> Mseq.Helpers.of_list )
+        in
+        List.fold_left rem_len base (IntSet.elements lens)
     | NPatNot cons -> (
         let cons =
           ConSet.elements cons

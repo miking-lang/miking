@@ -1,5 +1,4 @@
 
-compile_files =
 compile_files += test/mexpr/letlamif.mc
 compile_files += test/mexpr/fix.mc
 compile_files += test/mexpr/ident-test.mc
@@ -125,7 +124,9 @@ compile_files += src/main/mi-lite.mc
 compile_files += stdlib/ext/math-ext.mc
 compile_files += stdlib/ext/ext-test.mc
 
-all: ${compile_files}
+.PHONY: all $(compile_files)
 
-${compile_files}::
+all: $(compile_files)
+
+$(compile_files):
 	-@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"

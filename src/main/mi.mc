@@ -36,6 +36,7 @@ Options:
   --disable-optimizations Disables optimizations to decrease compilation time
   -- <args>               If the run or eval commands are used, then the texts
                           following -- are arguments to the executed program
+  --help                  Display this list of options
 "
 in
 
@@ -48,10 +49,22 @@ let commandsMap = [
 ("tune", tune)
 ] in
 
+-- Print the usage message and exit.
+let usage = lam.
+  print menu;
+  exit 0
+in
+
+-- Check the program options, and print help if the user requested it.
+let maybePrintHelp = lam o : Options.
+  if o.printHelp then usage () else ()
+in
+
+
 -- Main: find and run the correct command. See commandsMap above.
 
 -- Does the command line include at least a file or a command?
-if lti (length argv) 2 then print menu else
+if lti (length argv) 2 then usage () else
 
   let cmdString = get argv 1 in
   let rest = tail (tail argv) in
@@ -61,15 +74,25 @@ if lti (length argv) 2 then print menu else
     -- Yes, split into program arguments (after stand alone '--')
     let split = splitDashDash rest in
     let argvp = partition (isPrefix eqc "--") split.first in
+    let options = parseOptions argvp.0 in
+    maybePrintHelp options;
     -- Invoke the selected command
-    cmd argvp.1 (parseOptions argvp.0) (cons "mi" split.last)
+    cmd argvp.1 options (cons "mi" split.last)
   else
     -- No, not a well known command
-    -- Is it a .mc file instead of a command
-    if isSuffix eqChar ".mc" cmdString then
-       -- Yes, run the 'run' command with arguments and default options
-       run [cmdString] options (cons "mi" rest)
+    -- Parse options as far as possible. Does user require help?
+    let split = splitOptionPrefix (tail argv) in
+    let options = parseOptions split.first in
+    maybePrintHelp options;
+    -- No help requested. Did user give a filename?
+    match split.last with [file] ++ programArgv then
+      if isSuffix eqChar ".mc" file then
+        -- Yes, run the 'run' command with arguments and supplied options
+        run [file] options (cons "mi" programArgv)
+      else
+        -- No, print error
+        printLn (join ["Unknown command '", file, "'"]);
+        exit 1
     else
-       -- No, print error
-       printLn (join ["Unknown command '", get argv 1, "'"]);
-       exit 1
+      -- No command or filename. Print help message.
+      usage ()

@@ -3,7 +3,8 @@ include "sys.mc"
 
 type CompileOptions = {
   optimize : Bool,
-  libraries : [String]
+  libraries : [String],
+  cLibraries : [String]
 }
 
 type Program = String -> [String] -> ExecResult
@@ -15,7 +16,8 @@ type CompileResult = {
 
 let defaultCompileOptions : CompileOptions = {
   optimize = true,
-  libraries = []
+  libraries = [],
+  cLibraries = []
 }
 
 let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
@@ -23,15 +25,21 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   let libstr =
     strJoin " " (distinct eqString (cons "boot" options.libraries))
   in
+  let flagstr =
+    let clibstr =
+      strJoin " "(map (concat "-cclib -l") (distinct eqString options.cLibraries))
+    in
+    concat ":standard -w -a " clibstr
+  in
   let dunefile =
    join [
    "(env
       (dev
-        (flags (:standard -w -a))
+        (flags (", flagstr ,"))
         (ocamlc_flags (-without-runtime))
         (ocamlopt_flags (-linscan -inline 1)))
       (opt
-        (flags (:standard -w -a))
+        (flags (", flagstr ,"))
         (ocamlc_flags (-without-runtime))
         (ocamlopt_flags (-O3))))
     (executable (name program) (libraries ", libstr , "))"] in

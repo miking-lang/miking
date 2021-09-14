@@ -13,14 +13,18 @@ let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
-let eqSeq = lam eq : (a -> a -> Bool).
-  recursive let work = lam as. lam bs.
-    let pair = (as, bs) in
-    match pair with ([], []) then true else
-    match pair with ([a] ++ as, [b] ++ bs) then
-      if eq a b then work as bs else false
-    else false
-  in work
+let eqSeq = lam eq : (a -> a -> Bool). lam s1. lam s2.
+  recursive let work = lam s1. lam s2.
+    match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
+      if eq h1 h2 then work t1 t2
+      else false
+    else true
+  in
+  let n1 = length s1 in
+  let n2 = length s2 in
+  let ndiff = subi n1 n2 in
+  if eqi ndiff 0 then work s1 s2
+  else false
 
 utest eqSeq eqi [] [] with true
 utest eqSeq eqi [1] [] with false
