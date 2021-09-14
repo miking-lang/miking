@@ -12,52 +12,79 @@
 # Forces the script to exit on error
 set -e
 
-export BOOT_NAME=boot
-export MI_NAME=mi
+BOOT_NAME=boot
+MI_NAME=mi
+MI_TMP_NAME=mi-tmp
+
+BIN_PATH=$HOME/.local/bin
+LIB_PATH=$HOME/.local/lib/mcore
 
 # Setup environment variable to find standard library
-cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
+export MCORE_STDLIB=`pwd`/stdlib
 
 # Compile and build the boot interpreter
 build_boot(){
-    mkdir -p build
     dune build
-    cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
+    mkdir -p build
+    cp -f _build/install/default/bin/boot build/$BOOT_NAME
+}
+
+install_boot(){
     dune install > /dev/null 2>&1
 }
 
+# Bootstrap the Miking compiler
+bootstrap_mi() {
+    time build/$BOOT_NAME eval src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
+    mv -f $MI_NAME build/$MI_NAME
+}
 
-# General function for building the project
+# Compile a new version of the compiler using the current one
+build_mi() {
+    if [ -e build/$MI_NAME ]
+    then
+        time build/$MI_NAME compile src/main/mi.mc
+        mv -f $MI_NAME build/$MI_TMP_NAME
+    else
+        echo "No existing compiler binary was found."
+        echo "Try running the bootstrapping phase first!"
+    fi
+}
+
+# Build the Miking compiler
 build() {
-    build_boot
-    dune install > /dev/null 2>&1
     if [ -e build/$MI_NAME ]
     then
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
+        bootstrap_mi
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_NAME compile src/main/mi.mc
-        mv -f $MI_NAME build/$MI_NAME
-        rm -f mi
+        build_mi
+        mv -f build/$MI_TMP_NAME build/$MI_NAME
     fi
 }
 
-
-
-# Install the boot interpreter locally for the current user
+# Install the Miking compiler
 install() {
-    bin_path=$HOME/.local/bin/
-    lib_path=$HOME/.local/lib/mcore/stdlib
-    mkdir -p $bin_path $lib_path
-    if [ -e build/$BOOT_NAME ]; then
-      cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
-    fi
     if [ -e build/$MI_NAME ]; then
-      cp -f build/$MI_NAME $bin_path/$MI_NAME; chmod +x $bin_path/$MI_NAME
+        set +e; rm -rf $LIB_PATH/stdlib; set -e
+        mkdir -p $BIN_PATH $LIB_PATH
+        cp -rf stdlib $LIB_PATH
+        cp -f build/$MI_NAME $BIN_PATH
+    else
+        echo "No existing compiler binary was found."
+        echo "Try compiling the project first!"
     fi
-    rm -rf $lib_path; cp -rf stdlib $lib_path
+}
+
+# Uninstall the Miking bootstrap interpreter and compiler
+uninstall() {
+    set +e
+    dune uninstall > /dev/null 2>&1
+    rm -f $BIN_PATH/$MI_NAME
+    rm -rf $LIB_PATH/stdlib
+    set -e
 }
 
 # Lint ocaml source code
@@ -97,6 +124,12 @@ case $1 in
     boot)
         build_boot
         ;;
+    install-boot)
+        install_boot
+        ;;
+    build-mi)
+        build_mi
+        ;;
     run-test)
         run_test "$2"
         ;;
@@ -111,6 +144,9 @@ case $1 in
         ;;
     install)
         install
+        ;;
+    uninstall)
+        uninstall
         ;;
     clean)
         rm -rf _build
