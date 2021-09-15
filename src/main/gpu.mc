@@ -9,6 +9,7 @@ include "futhark/record-inline.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
+include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
@@ -28,11 +29,11 @@ lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprParallelKeywordMaker +
   MExprANF + MExprRewrite + MExprTailRecursion + MExprParallelPattern +
-  MExprCSE + PMExprRecursionElimination + PMExprExtractAccelerate +
-  PMExprReplaceAccelerate + FutharkGenerate + FutharkFunctionRestrictions +
-  FutharkRecordInline + FutharkDeadcodeElimination +
-  FutharkLengthParameterize + FutharkCWrapper + OCamlCExternals +
-  OCamlGenerate + OCamlTypeDeclGenerate
+  MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
+  PMExprExtractAccelerate + PMExprReplaceAccelerate + FutharkGenerate +
+  FutharkFunctionRestrictions + FutharkRecordInline +
+  FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
+  OCamlCExternals + OCamlGenerate + OCamlTypeDeclGenerate
 end
 
 -- Pretty-printing of PMExpr terms. This is just used for debugging purposes.
@@ -43,8 +44,6 @@ lang PMExprPrettyPrint = MExprPrettyPrint + MExprParallelKeywordMaker
   | TmParallelMap2 _ -> false
   | TmParallelFlatMap _ -> false
   | TmParallelReduce _ -> false
-  | TmParallelScan _ -> false
-  | TmParallelFilter _ -> false
 
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmAccelerate t ->
@@ -79,17 +78,13 @@ lang PMExprPrettyPrint = MExprPrettyPrint + MExprParallelKeywordMaker
         else never
       else never
     else never
-  | TmParallelScan t -> never
-  | TmParallelFilter t -> never
 end
 
 let parallelKeywords = [
   "accelerate",
   "parallelMap",
   "parallelMap2",
-  "parallelReduce",
-  "parallelScan",
-  "parallelFilter"
+  "parallelReduce"
 ]
 
 let keywordsSymEnv =
@@ -205,17 +200,20 @@ gpu.c gpu.h: gpu.fut
 let compileGPU : String -> Unit = lam file.
   use PMExprCompile in
   let ast = parseMCoreFile parallelKeywords file in
+  let ast = makeKeywords [] ast in
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = utestStrip ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
-  let ast = makeKeywords [] ast in
-  match extractAccelerate ast with (accelerated, accelerateAst) then
-    let entryPoints : Set Name = mapMap (lam v. ()) accelerated in
+  match addIdentifierToAccelerateTerms ast with (accelerated, ast) then
+    let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+    let ast = liftLambdas ast in
+    let accelerateAst = extractAccelerateTerms accelerateIds ast in
+    printLn (pprintPMExprAst accelerateAst);
 
     -- Generate Futhark code
     let pmexprAst = patternTransformation accelerateAst in
-    let futharkAst = futharkTranslation entryPoints pmexprAst in
+    let futharkAst = futharkTranslation accelerateIds pmexprAst in
     let futharkProg = pprintFutharkAst futharkAst in
 
     -- Generate C wrapper code

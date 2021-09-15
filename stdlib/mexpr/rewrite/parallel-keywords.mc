@@ -6,7 +6,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 
 lang MExprParallelKeywordMaker =
-  KeywordMaker + MExprAst + MExprEq + MExprANF
+  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
@@ -93,8 +93,13 @@ lang MExprParallelKeywordMaker =
   sem typeAnnotExpr (env : TypeEnv) =
   | TmAccelerate t ->
     let e = typeAnnotExpr env t.e in
+    let ty =
+      optionGetOrElse
+        (lam. ty e)
+        (compatibleType env.tyEnv (ty e) t.ty)
+    in
     TmAccelerate {{t with e = e}
-                     with ty = ty e}
+                     with ty = ty}
   | TmParallelMap t ->
     let f = typeAnnotExpr env t.f in
     let elemTy =

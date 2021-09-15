@@ -828,13 +828,14 @@ lang FutharkCWrapper =
       cons fstDeclStmt (generateExtraParamDecl remainingArgs)
     else [fstDeclStmt]
 
-  sem generateBytecodeWrapper (functionName : Name) =
-  | nargs /- : Int -/ ->
+  sem generateBytecodeWrapper =
+  | data /- : AcceleratedData -/ ->
     let valueTy = CTyVar {id = _getIdentExn "value"} in
-    let bytecodeStr = concat (nameGetStr functionName) "_bytecode" in
-    let bytecodeFunctionName = nameNoSym bytecodeStr in
+    let bytecodeStr = nameGetStr data.bytecodeWrapperId in
+    let bytecodeFunctionName = nameSym bytecodeStr in
     let args = nameSym "args" in
     let argc = nameSym "argc" in
+    let nargs = length data.params in
     let functionArgs =
       map
         (lam i. CEBinOp {
@@ -848,23 +849,22 @@ lang FutharkCWrapper =
       id = bytecodeFunctionName,
       params = [(CTyPtr {ty = valueTy}, args), (CTyInt (), argc)],
       body = [CSExpr {expr = CEApp {
-        fun = functionName,
+        fun = data.identifier,
         args = functionArgs
-      }}]
-    }
+      }}]}
 
-  sem generateWrapperFunctionCode (functionName : Name) (returnType : Type) =
-  | args /- : [(Name, Type)] -/ ->
-    let toArgData = lam arg : (Name, Type).
+  sem generateWrapperFunctionCode =
+  | data /- : AcceleratedData -/ ->
+    let toArgData = lam arg : (Name, Info, Type).
       {{defaultArgData with ident = arg.0}
-                       with ty = arg.1}
+                       with ty = arg.2}
     in
-    let bytecodeWrapper = generateBytecodeWrapper functionName (length args) in
+    let bytecodeWrapper = generateBytecodeWrapper data in
     let returnIdent = nameSym "out" in
-    let returnArg = (returnIdent, returnType) in
-    let env = {{{emptyWrapperEnv with arguments = map toArgData args}
+    let returnArg = (returnIdent, NoInfo (), data.returnType) in
+    let env = {{{emptyWrapperEnv with arguments = map toArgData data.params}
                                  with return = toArgData returnArg}
-                                 with functionIdent = functionName}
+                                 with functionIdent = data.identifier}
     in
     let camlParamStmts = generateCAMLparamDeclarations env.arguments in
     let camlLocalStmt = CSExpr {expr = CEApp {
@@ -881,13 +881,13 @@ lang FutharkCWrapper =
           match generateFutharkToCWrapper env with (env, stmt4) then
             match generateCToOCamlWrapper env with (env, stmt5) then
               let value = _getIdentExn "value" in
-              let withValueType = lam arg : (Name, Type).
+              let withValueType = lam arg : (Name, Info, Type).
                 (CTyVar {id = value}, arg.0)
               in
               [ CTFun {
                   ret = CTyVar {id = value},
-                  id = functionName,
-                  params = map withValueType args,
+                  id = data.identifier,
+                  params = map withValueType data.params,
                   body = join [camlParamStmts, [camlLocalStmt], stmt1, stmt2,
                                stmt3, stmt4, stmt5, [camlReturnStmt]]},
                 bytecodeWrapper ]
@@ -897,22 +897,10 @@ lang FutharkCWrapper =
       else never
     else never
 
-  sem _getArgumentAndReturnTypes (acc : [Type]) =
-  | TyArrow {from = from, to = to} ->
-    _getArgumentAndReturnTypes (snoc acc from) to
-  | ty -> (acc, ty)
-
   sem generateWrapperCode =
-  | accelerated /- Map Name Type -/ ->
+  | accelerated /- Map Name AccelerateData -/ ->
     let entryPointWrappers =
-      map
-        (lam entry : (Name, Type).
-          match _getArgumentAndReturnTypes [] entry.1 with (argTypes, retType) then
-            let identWithType = lam ty. (nameSym "a", ty) in
-            let args : [(Name, Type)] = map identWithType argTypes in
-            generateWrapperFunctionCode entry.0 retType args
-          else never)
-        (mapBindings accelerated)
+      map generateWrapperFunctionCode (mapValues accelerated)
     in
     -- NOTE(larshum, 2021-08-27): According to
     -- https://ocaml.org/manual/intfc.html CAML_NAME_SPACE should be defined
