@@ -45,7 +45,7 @@ let collectlibraries : ExternalNameMap -> ([String], [String])
   with (libs, clibs) then (setToSeq libs, setToSeq clibs)
   else never
 
-let ocamlCompile : Options -> [String] -> [String] -> String -> String -> Unit =
+let ocamlCompile : Options -> [String] -> [String] -> String -> String -> String =
   lam options. lam libs. lam clibs. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
     let opts = {{
@@ -61,7 +61,8 @@ let ocamlCompile : Options -> [String] -> [String] -> String -> String -> Unit =
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
-  p.cleanup ()
+  p.cleanup ();
+  destinationFile
 
 let ocamlCompileAst =
   lam options : Options. lam sourcePath. lam ast. lam debugTypeAnnotHook.
