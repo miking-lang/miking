@@ -313,8 +313,7 @@ lang LambdaLiftLiftGlobal = MExprAst
     match liftRecursiveBindingH bindings t.body with (bindings, body) then
       match t.tyBody with TyArrow _ then
         let bind : RecLetBinding =
-          {ident = t.ident, tyBody = t.tyBody, body = t.body, ty = t.ty,
-           info = t.info} in
+          {ident = t.ident, tyBody = t.tyBody, body = t.body, info = t.info} in
         let bindings = snoc bindings bind in
         liftRecursiveBindingH bindings t.inexpr
       else match liftRecursiveBindingH bindings t.inexpr
