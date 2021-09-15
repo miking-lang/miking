@@ -29,19 +29,35 @@ your system. When using the Miking system, you need to use the `4.12.0+domains`
 switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
 always takes you back to the correct switch.
 
-To compile and run the test suite, go back to the Miking repository and execute:
+To compile the project, go back to the Miking repository and execute:
+
+```
+make
+```
+
+This creates two binaries in the `build` directory: `build/boot` and
+`build/mi`. `build/boot` is the bootstrap interpreter, and `build/mi`
+is the main Miking executable, containing both an interpreter and a
+compiler. You will mainly be using `mi`, but `boot` provides a few
+features not yet available in the main executable, such as a REPL.
+
+To run tests checking that everything has been installed correctly,
+use
 
 ```
 make test
 ```
 
-The Miking executable is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
+Alternatively, you can use `make test-all` to run the full test suite.
+Beware that this may take some time.
+
+To run a hello world program, create a file `hello.mc` with the following code,
 
 ```
-mexpr print "Hello world!"
+mexpr print "Hello world!\n"
 ```
 
-and then run it using command:
+and then run it using the command:
 
 ```
 build/mi hello.mc
@@ -53,18 +69,25 @@ for example by running the following:
 
     cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-To install the interpreter along with the standard library for the current
+To install the compiler along with the standard library for the current
 user, issue:
 
 ```
 make install
 ```
 
-This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
+This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location.
 
-The Miking boot interpreter also features a simple REPL.
-The REPL allows interactively executing fragments of MCore code.
-Both toplevel definitions and expressions can be evaluated.
+Conversely, to uninstall, issue:
+
+```
+make uninstall
+```
+
+### The REPL
+The Miking bootstrap interpreter features a simple REPL, which lets
+you interactively execute fragments of MCore code. Both toplevel
+definitions and expressions can be evaluated.
 
 To start the REPL (assuming that the interpreter is installed in the path), run
 
@@ -117,13 +140,14 @@ One design objective of MExpr is to make the concrete syntax very close to the a
 
 Nevertheless, to understand the Miking system, it is a good idea to learn to write basic programs directly as MCore expressions.
 
-An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
+In the end, an MCore file `.mc` is always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
 
 ### Unit Test Expressions
 
 When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
 
 ```
+mexpr
 utest addi 1 2 with 3 in
 ()
 ```
@@ -136,30 +160,32 @@ mi run program.mc --test
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
+In the rest of this document, we omit the `mexpr` keyword for brevity, and just write the MExpr itself. Remember to add it as appropriate when trying the various examples.
+
 ### Intrinsics
 
 MCore contains a number of built-in values (intrinsics) and
 predefined functions and constants (part of the standard library).
-For instance
+For instance,
+
 ```
-mexpr
-print "Hello"
+print "Hello\n"
 ```
 
-uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
+uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type.
 
 The current documentation of intrinsics is implicit via code
 containing `utest` expressions. Please see the following files:
 
-* [Boolean intrinsics](test/mexpr/bool.mc)
+* [Boolean intrinsics](test/mexpr/bool-test.mc)
 
-* [Integer intrinsics](test/mexpr/int.mc)
+* [Integer intrinsics](test/mexpr/int-test.mc)
 
-* [Floating-point number intrinsics](test/mexpr/float.mc)
+* [Floating-point number intrinsics](test/mexpr/float-test.mc)
 
-* [Strings intrinsics ](test/mexpr/string.mc)
+* [Strings intrinsics ](test/mexpr/string-test.mc)
 
-* [Sequences intrinsics ](test/mexpr/seq.mc)
+* [Sequences intrinsics ](test/mexpr/seq-test.mc)
 
 * [Side effect (printing, I/O, debugging etc.) intrinsics](test/mexpr/effects.mc)
 
@@ -167,7 +193,7 @@ containing `utest` expressions. Please see the following files:
 
 * [Reference intrinsics](test/mexpr/references.mc)
 
-* [Random number generation intrinsics](test/mexpr/random.mc)
+* [Random number generation intrinsics](test/mexpr/random-test.mc)
 
 * [Time intrinsics](test/mexpr/time.mc)
 
@@ -265,7 +291,7 @@ utest answer with "yes" in
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
 
-Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, expression
+Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, the expression
 
 ```
 if x then e1 else e2
@@ -353,6 +379,7 @@ To project out a value, a dot notation may be used.
 ```
 utest r1.age with 42 in
 utest r1.name with "foobar" in
+()
 ```
 
 A record type is not just a general product type in MCore, it is the only
@@ -364,7 +391,7 @@ record.
 
 
 ```
-utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in
+utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in ()
 ```
 
 
@@ -380,7 +407,7 @@ con Leaf : (Int) -> Tree in
 
 introduces a new data type `Tree` and defines two new constructors `Node` and `Leaf`. Constructor `Leaf` takes just one argument (an integer value for the leaf) and returns a tree, whereas the `Node` constructor takes a tuple with two trees as input and constructs a new tree node.
 
-For instance, expression
+For instance, the expression
 
 ```
 let tree = Node(Node(Leaf 4, Leaf 2), Leaf 3) in
@@ -420,7 +447,7 @@ we can check that the function computes the result as intended.
 
 In the previous match example, the `match` construct matched against
 the constructor, but not against the actual data content. MExpr is
-designed to be simple with few language construct, at the right level
+designed to be simple with few language constructs, at the right level
 of abstraction. If the abstraction level is too low, it is hard to
 perform useful static analysis and code generation. As a consequence,
 MExpr support *patterns* in `match` expressions. The `count` function
@@ -487,7 +514,7 @@ match (opt1, opt2) with
 | (_, _) -> 1
 ```
 
-is order-dependent; any change in pattern order changes which match-arm is executed. To express this in an order-independent manner we `&` every pattern with the inverse (`!`) of the union (`|`) of the previous patterns. If we pretent for a moment that OCaml supports `&` and `!` in patterns they could then be written as:
+is order-dependent; any change in pattern order changes which match-arm is executed. To express this in an order-independent manner we `&` every pattern with the inverse (`!`) of the union (`|`) of the previous patterns. If we pretend for a moment that OCaml supports `&` and `!` in patterns they could then be written as:
 
 ```ocaml
 match (opt1, opt2) with
@@ -571,7 +598,7 @@ argument and returning the element at that index.
 
 We can construct a zero-order tensor with value `'a'` as
 ```
-let t0 = tensorCreateDense [] (lam _. 'a') in
+let t0 = tensorCreateDense [] (lam. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
 ```
@@ -580,10 +607,16 @@ We can access and mutate elements in a tensor using
 ```
 utest tensorSetExn t0 [] 'b' with () in
 utest tensorGetExn t0 [] with 'b' in
+()
 ```
 
-We can construct a rank 1 tensor (i.e. vector) as
+The file [tensor.mc](stdlib/tensor.mc) contains a wide variety of useful tensor
+functions. We can import it into a program using the `include`
+keyword (more on this [later](#MLang)). We can construct a rank 1
+tensor (i.e. vector) as
 ```
+include "tensor.mc"
+mexpr
 let t1 = tensorCreateDense [9] (lam i. addi (get i 0) 1) in
 utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
 ```
@@ -596,7 +629,7 @@ let t2 = tensorReshapeExn t1 [3, 3] in
 
 Reshape does no copying and the data is shared between `t1` and `t2`
 ```
-let _ = tensorSetExn t2 [0, 0] 2 in
+tensorSetExn t2 [0, 0] 2;
 utest tensorGetExn t1 [0] with 2 in
 ```
 
@@ -620,16 +653,17 @@ utest tensorRank e with 0 in
 
 A slice shares data with the original tensor and no copying of data is done.
 ```
-let _ = tensorFill r2 0 in
+tensorMapInplace (lam. 0) r2;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
 ```
-where we use `tensorFill` from `tensor.mc`.
+where we use `tensorMapInplace` from `tensor.mc`.
 
 We can get a subset of the rows of t2 by restricting its 0th dimension.
 ```
 let s1 = tensorSubExn t2 1 2 in
 utest tensorShape s1 with [2, 3] in
 utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
+()
 ```
 
 ### References
@@ -655,7 +689,7 @@ The value that a reference points to can be modified using the `modref` operator
 
 ```
 let r = ref 3 in
-let _ = modref r 4 in
+modref r 4;
 utest deref r with 4 in ()
 ```
 
@@ -667,152 +701,12 @@ variables to the same reference. As an example, in the program
 ```
 let r1 = ref "A" in
 let r2 = r1 in
-let _ = modref r2 "B" in
+modref r2 "B";
 utest deref r1 with "B" in ()
 ```
 
 the change made to the referenced value via the variable `r2` is visible when
 dereferencing the reference via the variable `r1`.
-
-### Parallel Programming
-Miking has support for shared-memory parallelism using atomic operations and
-threads running on multiple cores.
-
-The parallel programming primitives consist of atomic references and functions
-for creating and synchronizing threads. In addition to the examples below, more
-documentation can be found in the [multicore test
-suite](test/multicore/multicore.mc).
-
-#### Atomic References
-
-Atomic references are similar to ordinary references, except that operations
-performed on them are *atomic*, which means that no other execution thread can
-interfere with the result. In other words, they are safe to use in
-multi-threaded execution.
-
-`atomicMake` creates a new atomic reference and gives it an initial value. The
-value of the atomic reference can be read by `atomicGet`:
-
-```
-let a = atomicMake 0 in
-utest atomicGet a with 0 in
-```
-
-`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
-updates the value of `a` to `newVal` if the current value is identical to
-`oldVal`, and then returns a Boolean representing if the update was successful
-or not:
-
-```
-utest atomicCAS a 0 1 with true in
-utest atomicCAS a 42 3 with false in
-utest atomicGet a with 1 in
-```
-
-The compare-and-set operation is currently supported for integer atomic
-references only.
-
-To unconditionally set the value of an atomic reference, we can use
-`atomicExchange`, which also returns the old value of the reference:
-
-```
-utest atomicExchange a 2 with 1 in
-```
-
-Finally, for integer references, we can use `atomicFetchAndAdd` to increase or
-decrease the value of the reference. The function returns the old value of the
-reference:
-
-```
-utest atomicFetchAndAdd a 1 with 2 in
--- Current value is now 3
-utest atomicFetchAndAdd a (subi 0 45) with 3 in
--- Current value is now -42
-```
-
-#### Multi-Threaded Execution
-
-The following example program spawns 10 threads that compete for printing their
-IDs:
-
-```
-include "string.mc"
-mexpr
-let place = atomicMake 1 in
-let threads = create 10 (lam. threadSpawn (lam.
-  printLn (join
-    [int2string (atomicFetchAndAdd place 1)
-    , ": thread ID "
-    , int2string (threadID2int (threadSelf ()))
-    ]))
-) in
-map threadJoin threads
-```
-
-where `threadSpawn` takes a function of type `Unit -> a` as argument,
-`threadSelf` returns the ID of the current thread, and `threadID2int` converts a
-thread ID to a unique integer. Note that `threadJoin` must be called once for
-each call to `threadSpawn`. The output of the above program might be:
-
-```
-1: thread ID 1
-2: thread ID 2
-3: thread ID 129
-4: thread ID 130
-5: thread ID 3
-6: thread ID 257
-7: thread ID 258
-8: thread ID 131
-9: thread ID 385
-10: thread ID 386
-```
-
-However, the values and order of the thread IDs might be different over
-different runs.
-
-To control the execution order of threads, some form of thread synchronization
-is necessary. This can be done either using atomic references, or using the
-functions `threadCriticalSection`, `threadWait` and `threadNotify`, or both.
-In the following example:
-
-```
-let inCriticalSection = atomicMake false in
-let afterWait = atomicMake false in
-
-let t = threadSpawn (lam.
-  threadCriticalSection (
-    lam.
-      atomicExchange inCriticalSection true;
-      threadWait ();
-      atomicExchange afterWait true
-  )
-) in
-```
-
-the thread `t` enters a critical section, where it first atomically sets the
-`inCriticalSection` flag to true, before calling `threadWait`, which will block
-the execution until another thread calls `threadNotify`. In the following, the
-main thread first waits for `t` to set the `inCriticalSection` flag, before
-making a call to `threadNotify`:
-
-```
-recursive let waitForFlag = lam flag.
-  match atomicGet flag with true then ()
-  else waitForFlag flag
-in
-waitForFlag inCriticalSection;
-threadNotify (threadGetID t);
-```
-
-The `threadNotify` will block the execution of the main thread until `t` has
-finished its critical section, which means that we know that the flag
-`afterWait` must now be true:
-
-```
-utest atomicGet afterWait with true in
--- Don't forget to clean up!
-threadJoin t;
-```
 
 ## MLang
 
@@ -1074,54 +968,16 @@ interpreters to achieve the same thing.
     an overriding case for that interpreter.
 
 
-
 ## Externals (builtin)
 
 As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
 Miking that does not need these external dependencies.
 
-### Sundials
-One of the external dependencies is Sundials, a numerical library for
-solving differential equations.  To build the project with sundials
-integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) library on
-your system.
-
-This involves installing the C library. On `ubuntu 20.04` you can issue:
-
-```
-sudo apt-get install libsundials-dev
-```
-
-On `macOS`, using Homebrew, you can install Sundials using command:
-
-```
-brew install sundials
-```
-
-
-Then install the ocaml bindings
-[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
-
-```
-opam install sundialsml
-```
-
-`mi` will automatically be compiled with sundials support when the `sundialsml` package is installed.
-To run the sundials-specific test suite, use the command:
-
-```
-make test-sundials
-```
-
-To install for the current user, run `make install` as usual. The sundials
-interface can only be used in compiled code.
-
 ### Python
-Another optional feature is Python intrinsics, which allow calling Python code
-from MCore. To build the project with Python integration you need to have
-[Python 3](https://www.python.org) installed on your system. You will also need to install any Python libraries you want to use (for example using pip).
+Python intrinsics, which allow calling Python code from MCore, are offered as an optional feature for the `boot` bootstrap interpreter.
+To build the project with Python integration you need to have [Python 3](https://www.python.org) installed on your system.
+You will also need to install any Python libraries you want to use (for example using pip).
 
 In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml Python bindings, available via `opam`:
 
@@ -1129,7 +985,7 @@ In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml
 opam install pyml
 ```
 
-`mi` will automatically be compiled with Python support when the `pyml` package is installed.
+`boot` will automatically be compiled with Python support when the `pyml` package is installed.
 
 NOTE: Currently, there seems to be a problem with the current OPAM bindings with the multicore switch. If the above command fails, try to run the following and then install `pyml` again:
 
@@ -1137,10 +993,10 @@ NOTE: Currently, there seems to be a problem with the current OPAM bindings with
 opam pin stdcompat 15
 ```
 
-To run the Python-specific test suite, set the `MI_TEST_PYTHON` variable before running `make test`:
+To run the Python-specific test suite:
 
 ```
-MI_TEST_PYTHON=1 make test
+make test-boot-py
 ```
 
 To install for the current user, run `make install` as usual.
@@ -1243,35 +1099,30 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | Tuple       | Tuple (Record)  |
 | other       | N/A             |
 
-## Compiling to OCaml
-The standard library contains functions for compiling and running `mexpr`
-programs targeting OCaml. See the implementation in
-[stdlib/ocaml](stdlib/ocaml). This library requires the python intrinsics and
-that the `boot` package is installed globally for your user. To do the latter,
-run
-
-```
-dune install
-```
-
-after building miking with python intrinsics support.
-
 ## Externals
-Externals are currently only compiled.
 
-As example of how you define an external see
-[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) and
-[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc).
+Externals allows you to interact with code in the compilation target language
+from miking. Currently, externals are only available in compiled code and are
+in an early stage of development. The example below only covers the case where
+OCaml is the target language.
 
-[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) defines the MLang part
-of the definition, e.g.
+You can find an example of externals definitions in
+[stdlib/ext/math-ext.mc](stdlib/ext/math-ext.mc) and
+[stdlib/ext/math-ext.ext-ocaml.mc](stdlib/ext/math-ext.ext-ocaml.mc).
+
+For the sake of this example, lets say we want to define the exponential
+function and that miking targeting OCaml should use `Float.exp` from OCaml's
+standard library for its implementation.
+
+We first define the external in a file under [stdlib/ext](stdlib/ext), let's
+say [stdlib/ext/math-ext.mc](stdlib/ext/math-ext.mc), as
 
 ```
-external batteriesZero : Int
+external externalExp : Float -> Float
 ```
 
-which makes an external value `batteriesZero` of type `Int` available at the
-top-level. The corresponding MCore syntax is:
+which makes an external value `externalExp` of type `Float -> Float` available
+at the top-level. The corresponding MCore syntax is:
 
 ```
 external ident : Type in expr
@@ -1281,43 +1132,345 @@ If the external has side-effects it should be annotated with a `!` after the
 identifier, e.g.
 
 ```
-external print ! : String -> () in expr
+external print ! : String -> ()
 ```
 
 Each external identifier can only be defined once and externals cannot be
 partially applied.
 
-[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc)
-defines the OCaml part of the external definition:
+
+As a temporary solution, the next step is to supply a list of implementation for
+our external in the language we target for compilation (in this case OCaml). We
+do this by creating a file
+[stdlib/ext/math-ext.ext-ocaml.mc](stdlib/ext/math-ext.ext-ocaml.mc)
+and in it we define a map from external
+identifiers to a list of implementations as follows:
 
 ```
+include "map.mc"
 include "ocaml/ast.mc"
 
-let batteries =
+let mathExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
-    ("batteriesZero", [
-      { ident = "BatInt.zero", ty = tyint_, libraries = ["batteries"] }
+    ("externalExp", [
+      { 
+        ident = "Float.exp", 
+        ty = tyarrow_ tyfloat_ tyfloat_ , 
+        libraries = [], 
+        cLibraries = [] 
+      }
     ])
   ]
 ```
 
-As a temporary solution, this definition is written as an MLang program and
-should define a map from external identifiers to a list of records defining
-implementations associated with this external identifier. The record field
-`ident` defines an OCaml identifier, the field `ty` defines the OCaml type of
-this identifier (see [./stdlib/ocaml/ast.mc](./stdlib/ocaml/ast.mc)), and the
-field `libraries` defines a sequence of libraries this external depends on.
+This map associates the `externalExp` external to a list of implementations,
+which here only has one element, namely the function `Float.exp` from OCaml's
+standard library. The field `ty` encode the OCaml type of this value (see
+[stdlib/ocaml/ast.mc](stdlib/ocaml/ast.mc)), which is needed to convert values
+between miking and OCaml. In the case where you have multiple implementations,
+the compiler will try to pick the implementation which gives the least amount of
+overhead when converting to and from OCaml values. The `libraries` field list
+OCaml libraries that are needed to call this function, and `cLibraries` lists c
+libraries that are needed during linking. In this case none are needed since it
+is part of the standard library. If let's say we wanted to use `Float.exp` from
+a library `foo`, then we should instead have the field `libraries =
+["foo"]`. Finally, we need to add `mathExtMap` to `globalExternalImplsMap` in
+[stdlib/ocaml/external-includes.mc](stdlib/ocaml/external-includes.mc).
 
-Programs defining externals should be placed under [./stdlib/ext](./stdlib/ext)
-and follow the above naming convention to avoid failing test for the
-interpreter. Additionally, the implementation map, in this case `batteries`,
-should be added to `globalExternalImplsMap` in
-[./stdlib/ocaml/external-includes.mc](./stdlib/ocaml/external-includes.mc).
+### Conversion between values
+Conversion between Miking values and OCaml values is defined in
+[stdlib/ocaml/external.mc](stdlib/ocaml/external.mc). Since externals are in an
+early stage of development these conversions are not complete and subject to
+change. 
 
-Morever, depending on the type of the external you might have to extend the
-definition in [./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
+The following Basic types are converted without any computational overhead:
+
+| **Miking type** | **OCaml type** |
+|:----------------|:---------------|
+| `Int`           | `int`          |
+| `Float`         | `float`        |
+| `Bool`          | `bool`         |
+
+The overhead of converting sequences to OCaml data-structures is proportional to
+the length of the sequence times the conversion cost for the type of the
+elements. Strings in Miking is a special case of sequences.
+
+| **Miking type**      | **OCaml type** | **Comment**                                                                                 |
+|:---------------------|:---------------|:--------------------------------------------------------------------------------------------|
+| `[A]`                | `'a list`      |                                                                                             |
+| `[A]`                | `'a array`     | A copy is made, mutating the OCaml array does not mutate the sequence.                      |
+| `[Char]` or `String` | `string`       | The Miking string is converted to, and the OCaml string is assumed to be, encoded in UTF-8. |
+    
+Tensors are passed by reference to OCaml, i.e. mutating the corresponding
+data-structure in OCaml will mutate the tensor. As a temporary solution the
+conversion depends on the underlying implementation of the tensor, which is
+controlled by the tensor create functions `tensorCreateDense`,
+`tensorCreateCArrayInt`, and `tensorCreateCArrayFloat`. The main purpose of the
+latter two is to allow data-sharing with C libraries via OCaml bindings.
+
+| **Miking type** | **OCaml type**                                   | **Comment**                                                         |
+|:----------------|:-------------------------------------------------|:--------------------------------------------------------------------|
+| `Tensor[Int]`   | `Bigarray.((int, int_elt, c_layout) genarray.t)` | Must use `tensorCreateCArrayInt`, otherwise a runtime error occurs. |
+| `Tensor[Float]` | `Bigarray.((float, float64_elt, c_layout) genarray.t)` | Must use `tensorCreateCArrayFloat`, otherwise a runtime error occurs. |
+| `Tensor[Int]` of rank 1   | `Bigarray.((int, int_elt, c_layout) Array1.t)` | Must use `tensorCreateCArrayInt`, otherwise a runtime error occurs. |
+| `Tensor[Float]` of rank 1 | `Bigarray.((float, float64_elt, c_layout) Array1.t)` | Must use `tensorCreateCArrayFloat`, otherwise a runtime error occurs. |
+
+Tuples are converted without overhead if the conversion of their elements are
+without overhead. The same is true for arrow types. The fields in Miking records
+are un-ordered while they are ordered in OCaml so there is some overhead
+involved when converting records as each field of the Miking records needs to be
+projected to form an new OCaml records, and vice versa. The fields of the Miking
+record are associated with the fields of the OCaml record syntactically by
+position when defining the external. As an example, if the external
+```
+external myRecord : {a : Int, b: Float}
+```
+has an OCaml implementation with type `{c : int; d : float}` then the field `a` is
+associated with the field `c` and the field `b` with the field `d`.
+
+If the Miking type is abstract, i.e. we define it as 
+```
+type MyType
+```
+then no conversion is performed to and from this type.
+
+Please consult [stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
+[stdlib/ext/ext-test.ext-ocaml.mc](stdlib/ext/ext-test.ext-ocaml.mc), for more
+examples.
+
+### Sundials
+
+A more involved example on the use of externals is an interface to the
+[Sundials](https://computing.llnl.gov/projects/sundials) numerical DAE solver.
+You find the implementation in
+[stdlib/sundials/sundials.mc](stdlib/sundials/sundials.mc) and
+[stdlib/sundials/sundials.ext-ocaml.mc](stdlib/sundials/sundials.ext-ocaml.mc).
+Note that these externals depends on the library `sundialsml`.
+
+
+Installing this library involves first installing the Sundials C library. On
+`ubuntu 20.04` you can do this by:
+
+```
+sudo apt-get install libsundials-dev
+```
+
+On `macOS`, using Homebrew, you instead do:
+
+```
+brew install sundials
+```
+
+Then install the ocaml bindings
+[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+opam install sundialsml
+```
+
+Currently, this library cannot be installed on the multi-core switch but you
+instead have to use another opam switch, e.g.
+
+```
+opam switch 4.12.0
+```
+
+After this you have to rebuild the compiler, e.g.
+
+```
+make clean
+make
+```
+
+To run the sundials-specific test suite, use the command:
+
+```
+make test-sundials
+```
+
+To install for the current user, run `make install` as usual.
+
+### Parallel Programming
+Miking offers a set of externals for shared-memory parallelism using
+atomic operations and threads running on multiple cores.
+
+The parallel programming primitives consist of atomic references and functions
+for creating and synchronizing threads. In addition to the examples below, more
+documentation can be found in the standard library at
+[stdlib/multicore](stdlib/multicore/).
+
+To use the parallel programming externals, ensure that you are on the
+`4.12.0+domains`
+[switch](https://github.com/ocaml-multicore/ocaml-multicore/tree/4.12+domains).
+
+#### Atomic References
+
+Atomic references are similar to ordinary references, except that operations
+performed on them are *atomic*, which means that no other execution thread can
+interfere with the result. In other words, they are safe to use in
+multi-threaded execution. Atomic references are provided in
+[multicore/atomic.mc](stdlib/multicore/atomic.mc).
+
+`atomicMake` creates a new atomic reference and gives it an initial value. The
+value of the atomic reference can be read by `atomicGet`:
+
+```
+include "multicore/atomic.mc"
+mexpr
+let a = atomicMake 0 in
+utest atomicGet a with 0 in
+```
+
+`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
+updates the value of `a` to `newVal` if the current value is identical to
+`oldVal`, and then returns a Boolean representing if the update was successful
+or not:
+
+```
+utest atomicCAS a 0 1 with true in
+utest atomicCAS a 42 3 with false in
+utest atomicGet a with 1 in
+```
+
+The compare-and-set operation is currently supported for integer atomic
+references only.
+
+To unconditionally set the value of an atomic reference, we can use
+`atomicExchange`, which also returns the old value of the reference:
+
+```
+utest atomicExchange a 2 with 1 in
+```
+
+Finally, for integer references, we can use `atomicFetchAndAdd` to increase or
+decrease the value of the reference. The function returns the old value of the
+reference:
+
+```
+utest atomicFetchAndAdd a 1 with 2 in
+-- Current value is now 3
+utest atomicFetchAndAdd a (subi 0 45) with 3 in
+-- Current value is now -42
+```
+
+#### Multi-Threaded Execution
+
+Functions for handling threads are provided in
+[multicore/threads.mc](stdlib/multicore/threads.mc).
+The following example program spawns 10 threads that compete for printing their
+IDs:
+
+```
+include "string.mc"
+include "multicore/thread.mc"
+mexpr
+let place = atomicMake 1 in
+let threads = create 10 (lam. threadSpawn (lam.
+  print (join
+    [int2string (atomicFetchAndAdd place 1)
+    , ": thread ID "
+    , int2string (threadSelf ())
+    , "\n"
+    ]))
+) in
+map threadJoin threads
+```
+
+where `threadSpawn` takes a function of type `Unit -> a` as argument
+and `threadSelf` returns the ID of the current thread. Note that
+`threadJoin` must be called once for each call to `threadSpawn`. The
+output of the above program might be:
+
+```
+1: thread ID 1
+2: thread ID 2
+3: thread ID 129
+4: thread ID 130
+5: thread ID 3
+6: thread ID 257
+7: thread ID 258
+8: thread ID 131
+9: thread ID 385
+10: thread ID 386
+```
+
+However, the values and order of the thread IDs might be different over
+different runs.
+
+## Profiling
+
+Profiling of an MExpr program can be enabled using the `--debug-profile` flag
+when compiling or evaluating a program. While this flag also exists in the boot
+interpreter, it produces a subset of profiling information than the profiling
+approach used in `mi` (which is what is detailed below).
+
+### Profiling output
+
+The profiling results are stored in a file `mexpr.prof` in the current working
+directory. If such a file already exists, it will be overwritten. This file
+is created when:
+* The execution of a compiled program, which had been compiled with the
+  `--debug-profile` flag enabled, terminates.
+* The interpreter of a program terminates, and the `--debug-profile` flag was
+  enabled.
+
+Note that no profiling information is generated during the compilation step,
+because the profiling code is instrumented into the produced binary.
+
+#### Output format
+
+The profiling output contains one line per top-level function in the program,
+excluding those that are never used during an execution of the program. The
+order of the lines is based on the order in which the functions have been
+defined in the program. Functions defined in included files will also be listed
+in the profiling output, given that they are used.
+
+Each line of output consists of five space-separated columns:
+1. A string, denoting the name of the file and the position within the file,
+   encoded as [<start row>:<start col>-<end row>:<end col>], where the function
+   is defined.
+2. A string, denoting the name of the function.
+3. An integer, denoting the number of calls made to the function. The counter
+   includes self-recursive calls.
+4. A floating-point number, denoting the exclusive time spent in the function.
+   This is the time spent in a call, except the time spent in calls to other
+   top-level functions (including itself).
+5. A floating-point number, denoting the inclusive time spent in the function.
+   This is the total time spent in all calls to the function, including that
+   spent in calls to other top-level functions. As this includes self-recursive
+   calls, this value may be greater than the total runtime.
+
+#### Postprocessing
+
+The output format was chosen to be easily sorted using external tools, such as
+the `sort` command in Unix. Below we provide two examples of how the output can
+be sorted. These assume that the profiling output is stored in `mexpr.prof` and
+that the sorted profiling output should be stored in `sorted.prof`.
+
+To sort the functions by the number of times they were called, with the most
+frequently called function at the top:
+```
+cat mexpr.prof | sort -k3 -r -n > sorted.prof
+```
+
+To sort the functions by the exclusive time spent within them, placing the
+function with the highest exclusive time at the top:
+```
+cat mexpr.prof | sort -k4 -r -g > sorted.prof
+```
+
+### Notes
+
+This instrumentation is currently only performed on functions defined on the
+top-level in a program. The runtime of local functions and intrinsic functions
+is instead added to the top-level function in which they are used. In addition,
+partially applied functions are not profiled.
+
+Importantly, this profiling works by instrumenting the code with extra calls.
+The runtime overhead when enabling this flag is significant, especially when
+using the evaluator.
 
 ## Contributing
 
@@ -1374,7 +1527,7 @@ for documentation on the `--ignore-revs-file` option.
 ## MIT License
 Miking is licensed under the MIT license.
 
-Copyright 2017-2019 David Broman
+Copyright 2017-2021 David Broman
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

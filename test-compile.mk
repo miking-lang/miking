@@ -1,5 +1,4 @@
 
-compile_files =
 compile_files += test/mexpr/letlamif.mc
 compile_files += test/mexpr/fix.mc
 compile_files += test/mexpr/ident-test.mc
@@ -128,7 +127,9 @@ compile_files += stdlib/futhark/ast-builder.mc
 compile_files += stdlib/futhark/generate.mc
 compile_files += stdlib/futhark/pprint.mc
 
-all: ${compile_files}
+.PHONY: all $(compile_files)
 
-${compile_files}::
+all: $(compile_files)
+
+$(compile_files):
 	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"

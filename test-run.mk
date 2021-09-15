@@ -1,5 +1,4 @@
 
-run_files =
 run_files += test/mexpr/letlamif.mc
 run_files += test/mexpr/fix.mc
 run_files += test/mexpr/ident-test.mc
@@ -127,7 +126,9 @@ run_files += stdlib/futhark/ast.mc
 #run_files += stdlib/futhark/generate.mc
 #run_files += stdlib/futhark/pprint.mc
 
-all: ${run_files}
+.PHONY: all $(run_files)
 
-${run_files}::
+all: $(run_files)
+
+$(run_files):
 	-@./make run-test $@

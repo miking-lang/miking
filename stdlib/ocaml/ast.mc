@@ -148,6 +148,17 @@ lang OCamlLabel
   | OTmLabel t -> OTmLabel { t with arg = f t.arg }
 end
 
+lang OCamlLam
+  syn Expr =
+  | OTmLam {label : Option String, ident : Name, body : Expr}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmLam t -> f acc t.body
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmLam t -> OTmLam { t with body = f t.body }
+end
+
 lang OCamlTypeAst =
   BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst +
   FunTypeAst + OCamlLabel
@@ -165,6 +176,7 @@ lang OCamlTypeAst =
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
   | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
+  | OTyString {info: Info}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -179,13 +191,14 @@ lang OCamlTypeAst =
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
   | OTyRecord r -> r.info
+  | OTyString r -> r.info
 end
 
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
   OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlCExternalDecl +
-  OCamlRecord + OCamlLabel +
+  OCamlRecord + OCamlLabel + OCamlLam +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +
@@ -252,6 +265,9 @@ let otylabel_ = use OCamlAst in
 let otyrecord_ = use OCamlAst in
   lam tyident. lam fields.
     OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
+
+let otystring_ = use OCamlAst in
+  OTyString {info = NoInfo ()}
 
 let otyopaque_ = otyvarext_ "opaque" []
 

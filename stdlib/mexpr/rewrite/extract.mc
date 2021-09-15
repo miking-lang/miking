@@ -6,15 +6,71 @@ include "map.mc"
 include "name.mc"
 include "set.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
-type ExtractAccelerateEnv = Map Name (Info, Type)
+type AcceleratedFunctionData = {
+  identifier : Name,
+  bytecodeWrapperId : Name,
+  params : [(Name, Info, Type)],
+  returnType : Type,
+  info : Info
+}
 
-lang PMExprExtractAccelerate = MExprParallelKeywordMaker
+type ExtractAccelerateEnv = {
+  functions : Map Expr AcceleratedFunctionData,
+  used : Map Name (Info, Type),
+  programIdentifiers : Set SID
+}
+
+-- Generates a random ASCII letter or digit character.
+let _randAlphanum : Unit -> Char = lam.
+  -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
+  -- (lower- and upper-case) is 10 + 26 + 26 = 62.
+  let r = randIntU 0 62 in
+  if lti r 10 then int2char (addi r 48)
+  else if lti r 36 then int2char (addi r 55)
+  else int2char (addi r 61)
+
+lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprCmp
+  sem collectProgramIdentifiers (env : ExtractAccelerateEnv) =
+  | TmVar t ->
+    let sid = stringToSid (nameGetStr t.ident) in
+    {env with programIdentifiers = setInsert sid env.programIdentifiers}
+  | t -> sfold_Expr_Expr collectProgramIdentifiers env t
+
+  sem getUniqueIdentifier =
+  | programIdentifiers /- : Set SID -> Name -/ ->
+    recursive let genstr = lam acc. lam n.
+      if eqi n 0 then acc
+      else
+        let nextchr = _randAlphanum () in
+        genstr (snoc acc nextchr) (subi n 1)
+    in
+    let str = genstr "v" 10 in
+    if setMem (stringToSid str) programIdentifiers then
+      getUniqueIdentifier programIdentifiers
+    else nameSym str
+
+  sem freeVariablesInAccelerateTermH (freeVars : Map Name (Info, Type)) =
+  | TmVar t ->
+    if mapMem t.ident freeVars then freeVars
+    else mapInsert t.ident (t.info, t.ty) freeVars
+  | TmUtest t ->
+    infoErrorExit t.info "Cannot accelerate utest terms"
+  | TmExt t ->
+    infoErrorExit t.info "Cannot accelerate external functions"
+  | TmAccelerate t ->
+    infoErrorExit t.info "Nested accelerate terms are not supported"
+  | t -> sfold_Expr_Expr freeVariablesInAccelerateTermH freeVars t
+
+  sem freeVariablesInAccelerateTerm =
+  | t -> freeVariablesInAccelerateTermH (mapEmpty nameCmp) t
+
   sem collectAccelerate (env : ExtractAccelerateEnv) =
   | TmAccelerate t ->
     let isArrowType = lam expr.
@@ -22,92 +78,107 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker
       else false
     in
     if isArrowType t.e then
-      let info = infoTm t.e in
-      infoErrorExit info "Cannot accelerate partially applied function"
+      infoErrorExit (infoTm t.e) "Cannot accelerate partially applied function"
     else
-      let appArgs = collectAppArguments t.e in
-      match appArgs with (TmVar v, args) then
-        if null args then
-          infoErrorExit v.info "Cannot accelerate non-application term"
-        else
-          match find isArrowType args with Some arg then
-            infoErrorExit
-              (infoTm arg)
-              "Cannot accelerate higher-order function argument"
-          else mapInsert v.ident (infoTm t.e, v.ty) env
-      else infoErrorExit t.info "Cannot accelerate anonymous function"
+      let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
+      let bytecodeWrapperIdent = getUniqueIdentifier env.programIdentifiers in
+
+      -- NOTE(larshum, 2021-09-09): The parameters of the accelerate function
+      -- are the free variables, that are not of an arrow type, within the
+      -- accelerated expression.
+      let freeVars = freeVariablesInAccelerateTerm t.e in
+      let params =
+        mapFoldWithKey
+          (lam acc. lam id. lam freeVar : (Info, Type).
+            match freeVar.1 with TyArrow _ then acc
+            else snoc acc (id, freeVar.0, freeVar.1))
+          []
+          freeVars
+      in
+      let info = infoTm t.e in
+      let entry = {
+        identifier = accelerateIdent,
+        bytecodeWrapperId = bytecodeWrapperIdent,
+        params = params,
+        info = info,
+        returnType = ty t.e
+      } in
+
+      -- NOTE(larshum, 2021-09-09): The free variables of arrow-type must be
+      -- included in the accelerated AST, as they cannot be passed through C.
+      let used =
+        mapFoldWithKey
+          (lam acc. lam paramId. lam paramData : (Info, Type).
+            let paramType = paramData.1 in
+            match paramType with TyArrow _ then
+              mapInsert paramId paramData acc
+            else acc)
+          env.used
+          freeVars
+      in
+      {{env with functions = mapInsert t.e entry env.functions}
+            with used = used}
   | t -> sfold_Expr_Expr collectAccelerate env t
 
-  sem collectIdentifiersExpr (used : Map Name (Info, Type)) =
-  | TmVar t -> mapInsert t.ident (t.info, t.ty) used
-  | t -> sfold_Expr_Expr collectIdentifiersExpr used t
-
-  sem collectIdentifiersType (used : Map Name (Info, Type)) =
-  | TyVar t -> mapInsert t.ident (t.info, tyunknown_) used
-  | t -> sfold_Type_Type collectIdentifiersType used t
-
-  sem extractAccelerateAst (used : Map Name (Info, Type)) =
+  sem extractAccelerateAst (env : ExtractAccelerateEnv) =
   | TmLet t ->
-    match extractAccelerateAst used t.inexpr with (used, inexpr) then
-      if mapMem t.ident used then
-        let used = sfold_Type_Type collectIdentifiersType used t.tyBody in
-        let used = sfold_Expr_Expr collectIdentifiersExpr used t.body in
-        (used, TmLet {t with inexpr = inexpr})
-      else (used, inexpr)
-    else never
+    let inexpr = extractAccelerateAst env t.inexpr in
+    if mapMem t.ident env.used then
+      TmLet {t with inexpr = inexpr}
+    else inexpr
   | TmRecLets t ->
-    let extractBinding : (Set Name, [RecLetBinding]) -> RecLetBinding
-                      -> (Set Name, [RecLetBinding]) =
-      lam acc. lam binding.
-      if mapMem binding.ident used then
-        let used = sfold_Type_Type collectIdentifiersType used binding.tyBody in
-        let used = sfold_Expr_Expr collectIdentifiersExpr acc.0 binding.body in
-        (used, snoc acc.1 binding)
-      else acc
+    let inexpr = extractAccelerateAst env t.inexpr in
+    let bindings =
+      foldl
+        (lam acc. lam bind : RecLetBinding.
+          if mapMem bind.ident env.used then snoc acc bind
+          else acc)
+        []
+        t.bindings
     in
-    match extractAccelerateAst used t.inexpr with (used, inexpr) then
-      match foldl extractBinding (used, []) t.bindings with (used, bindings) then
-        if null bindings then (used, inexpr)
-        else
-          (used, TmRecLets {{t with bindings = bindings}
-                               with inexpr = inexpr})
-      else never
-    else never
-  | TmType t ->
-    match extractAccelerateAst used t.inexpr with (used, inexpr) then
-      if mapMem t.ident used then
-        let used = collectIdentifiersType used t.tyIdent in
-        (used, TmType {t with inexpr = inexpr})
-      else (used, inexpr)
-    else never
-  | TmConDef t ->
-    match extractAccelerateAst used t.inexpr with (used, inexpr) then
-      if mapMem t.ident used then
-        let used = collectIdentifiersType used t.tyIdent in
-        (used, TmConDef {t with inexpr = inexpr})
-      else (used, inexpr)
-    else never
-  | TmExt t ->
-    match extractAccelerateAst used t.inexpr with (used, inexpr) then
-      match mapLookup t.ident used with Some (info, _) then
-        infoErrorExit info "Cannot accelerate external function use"
-      else (used, inexpr)
-    else never
-  | t -> (used, unit_)
+    if null bindings then inexpr
+    else TmRecLets {{t with bindings = bindings}
+                       with inexpr = inexpr}
+  | t -> smap_Expr_Expr (extractAccelerateAst env) t
+
+  -- Inserts the accelerated functions at the bottom of the accelerated AST.
+  -- This is fine because they are independent of each other, and all their
+  -- individual dependencies are in the earlier parts of the AST.
+  sem insertAccelerateFunctions (env : ExtractAccelerateEnv) =
+  | t /- : Expr -/ ->
+    mapFoldWithKey
+      (lam acc. lam expr. lam data : AcceleratedFunctionData.
+        let functionType =
+          foldr
+            (lam param : (Name, Info, Type). lam tyAcc : Type.
+              TyArrow {from = param.2, to = tyAcc, info = param.1})
+            data.returnType
+            data.params
+        in
+        let accelerateFunction =
+          TmLet {ident = data.identifier, tyBody = functionType, body = expr,
+                 inexpr = unit_, ty = tyunit_, info = data.info}
+        in
+        bind_ acc accelerateFunction)
+      t
+      env.functions
 
   sem extractAccelerate =
   | t ->
-    let accelerated = collectAccelerate (mapEmpty nameCmp) t in
-    match extractAccelerateAst accelerated t with (_, t) then
-      let accelerated = mapMap (lam p : (Info, Type). p.1) accelerated in
-      (accelerated, t)
-    else never
+    let emptyEnv = {functions = mapEmpty cmpExpr, used = mapEmpty nameCmp,
+                    programIdentifiers = setEmpty cmpSID} in
+    let env = collectProgramIdentifiers emptyEnv t in
+    let env = collectAccelerate env t in
+    let acceleratedAst = extractAccelerateAst env t in
+    let acceleratedAst = insertAccelerateFunctions env acceleratedAst in
+    (env.functions, acceleratedAst)
 end
 
 lang TestLang = PMExprExtractAccelerate + MExprEq + MExprTypeAnnot
 
 mexpr
 
+use MExprPrettyPrint in
 use TestLang in
 
 let preprocess = lam t.
@@ -167,7 +238,7 @@ let extracted = preprocess (bindall_ [
   unit_
 ]) in
 let x : (Map Name Type, Expr) = extractAccelerate multipleCallsToSame in
-utest mapSize x.0 with 1 in
+utest mapSize x.0 with 2 in
 utest x.1 with extracted using eqExpr in
 
 let distinctCalls = preprocess (bindall_ [
@@ -201,6 +272,7 @@ let extracted = preprocess (bindall_ [
 ]) in
 let x : (Map Name Type, Expr) = extractAccelerate inRecursiveBinding in
 utest mapSize x.0 with 1 in
-utest x.1 with extracted using eqExpr in
+printLn (expr2str x.1);
+-- utest x.1 with extracted using eqExpr in
 
 ()

@@ -15,18 +15,12 @@ open Builtin
    and evaluation. Does not perform any type checking *)
 let evalprog filename =
   (* Make sure the filename is an absolute path, otherwise the duplicate file detection won't work *)
-  let filename =
-    if Filename.is_relative filename then
-      Filename.concat (Sys.getcwd ()) filename
-    else filename
-  in
+  let filename = Utils.normalize_path filename in
   if !utest then printf "%s: " filename ;
   utest_fail_local := 0 ;
   ( try
-      let parsed = local_parse_mcore_file filename in
-      parsed
-      |> merge_includes (Filename.dirname filename) [filename]
-      |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang
+      filename |> parse_mcore_file |> Mlang.flatten
+      |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> raise_parse_error_on_non_unique_external_id
       |> Symbolize.symbolize builtin_name2sym
       |> debug_after_symbolize
@@ -43,8 +37,7 @@ let evalprog filename =
         utest_fail_local := !utest_fail_local + 1 )
       else fprintf stderr "%s\n" error_string ;
       exit 1 ) ;
-  parsed_files := [] ;
-  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n" ;
+  if !utest && !utest_fail_local = 0 then printf " OK\n";
   if !enable_debug_profiling then
     let bindings =
       Hashtbl.fold (fun k v acc -> (k, v) :: acc) runtimes []

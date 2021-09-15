@@ -81,15 +81,24 @@ utest isWhitespace '\r' with true
 utest isWhitespace '\'' with false
 
 let isLowerAlpha = lam c.
-  and (leqi (char2int 'a') (char2int c)) (leqi (char2int c) (char2int 'z'))
+  let i = char2int c in
+  if leqi (char2int 'a') i then
+    leqi i (char2int 'z')
+  else false
 
 let isUpperAlpha = lam c.
-  and (leqi (char2int 'A') (char2int c)) (leqi (char2int c) (char2int 'Z'))
+  let i = char2int c in
+  if leqi (char2int 'A') i then
+    leqi i (char2int 'Z')
+  else false
 
-let isAlpha = lam c. or (isLowerAlpha c) (isUpperAlpha c)
+let isAlpha = lam c.
+  if isLowerAlpha c then true
+  else isUpperAlpha c
 
 let isLowerAlphaOrUnderscore = lam c.
-  or (isLowerAlpha c) (eqChar c '_')
+  if isLowerAlpha c then true
+  else eqChar c '_'
 
 let isAlphaOrUnderscore = lam c.
   if isAlpha c then true
@@ -113,7 +122,10 @@ utest isAlpha '@' with false
 utest isAlpha '[' with false
 
 let isDigit = lam c.
-  and (leqi (char2int '0') (char2int c)) (leqi (char2int c) (char2int '9'))
+  let i = char2int c in
+  if leqi (char2int '0') i then
+    leqi i (char2int '9')
+  else false
 
 utest isDigit '0' with true
 utest isDigit '5' with true
@@ -122,7 +134,8 @@ utest isDigit '/' with false
 utest isDigit ':' with false
 
 let isAlphanum = lam c.
-  or (isAlpha c) (isDigit c)
+  if isAlpha c then true
+  else isDigit c
 
 utest isAlphanum '0' with true
 utest isAlphanum '9' with true

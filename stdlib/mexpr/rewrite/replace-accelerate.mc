@@ -37,6 +37,8 @@ lang PMExprReplaceAccelerate = MExprParallelKeywordMaker + OCamlGenerateExternal
 
   sem replaceAccelerateH (externals : Map Name Name) =
   | TmAccelerate t ->
+    -- TODO(larshum, 2021-09-09): Call the external function using the
+    -- (non-arrow typed) free variables as parameters.
     match useExternalIdentifier externals t.e with (externals, e) then
       let ty = ty e in
       let ocamlTy = _mexprToOCamlType ty in
