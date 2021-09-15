@@ -14,6 +14,7 @@ set -e
 
 BOOT_NAME=boot
 MI_NAME=mi
+MI_LITE_NAME=mi-lite
 MI_TMP_NAME=mi-tmp
 
 BIN_PATH=$HOME/.local/bin
@@ -31,12 +32,6 @@ build_boot(){
 
 install_boot(){
     dune install > /dev/null 2>&1
-}
-
-# Bootstrap the Miking compiler
-bootstrap_mi() {
-    time build/$BOOT_NAME eval src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
-    mv -f $MI_NAME build/$MI_NAME
 }
 
 # Compile a new version of the compiler using the current one
@@ -58,12 +53,31 @@ build() {
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        bootstrap_mi
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        build_mi
-        mv -f build/$MI_TMP_NAME build/$MI_NAME
+        time ./$MI_LITE_NAME 1 src/main/mi.mc
+        echo "Bootstrapping the Miking compiler (3rd round, might take some more time)"
+        time ./$MI_NAME compile src/main/mi.mc
+        mv -f $MI_NAME build/$MI_NAME
+        rm -f $MI_LITE_NAME
     fi
 }
+
+# As build(), but skips the third bootstrapping step
+lite() {
+    if [ -e build/$MI_NAME ]
+    then
+        echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
+    else
+        echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc
+        echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
+        time ./$MI_LITE_NAME 1 src/main/mi.mc
+        mv -f $MI_NAME build/$MI_NAME
+        rm -f $MI_LITE_NAME
+    fi
+}
+
 
 # Install the Miking compiler
 install() {
@@ -133,6 +147,9 @@ run_test() {
 case $1 in
     boot)
         build_boot
+        ;;
+    lite)
+        lite
         ;;
     install-boot)
         install_boot

@@ -15,6 +15,7 @@
   build\
   build-mi\
   install\
+  lite\
   lint\
   fix\
   clean\
@@ -38,6 +39,11 @@ boot:
 
 install-boot: boot
 	@./make install-boot
+
+lite: install-boot
+	@./make lite
+
+test: test-boot-base
 
 build: install-boot
 # Run the complete bootstrapping process to compile `mi`.
