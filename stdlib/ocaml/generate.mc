@@ -144,6 +144,29 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
              mapInsert pc.ident [(pc.subpat, t.thn)] acc
          else never) t
 
+  sem generateTops (env : GenerateEnv) =
+  | t ->
+    match generateTopsAndExpr env t with (tops, expr) then
+      snoc tops (OTopExpr { expr = expr })
+    else never
+
+  sem generateTopsAndExpr (env : GenerateEnv) =
+  | TmLet t ->
+    let here = OTopLet { ident = t.ident, tyBody = t.tyBody, body = generate env t.body } in
+    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    (cons here later.0, later.1)
+  | TmRecLets t ->
+    let f = lam binding : RecLetBinding.
+      { ident = binding.ident
+      , tyBody = binding.tyBody
+      , body = generate env binding.body
+      } in
+    let here = OTopRecLets { bindings = map f t.bindings } in
+    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    (cons here later.0, later.1)
+  | t ->
+    ([], generate env t)
+
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
@@ -594,23 +617,23 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     else never
 end
 
-let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
+let _makeTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv.
   use MExprAst in
-  use OCamlTypeDeclAst in
+  use OCamlTopAst in
   let f = lam acc. lam name. lam ty.
-    match acc with (t, recordFieldsToName) then
+    match acc with (tops, recordFieldsToName) then
       match ty with TyRecord tr then
         let fieldTypes = ocamlTypedFields tr.fields in
         match mapLookup fieldTypes recordFieldsToName with Some _ then
-          (t, recordFieldsToName)
+          (tops, recordFieldsToName)
         else
           let recordFieldsToName = mapInsert fieldTypes name recordFieldsToName in
           let recordTy = TyRecord {tr with fields = fieldTypes} in
-          (OTmVariantTypeDecl {
+          let decl = OTopVariantTypeDecl {
             ident = nameSym "record",
-            constrs = mapInsert name recordTy (mapEmpty nameCmp),
-            inexpr = t
-          }, recordFieldsToName)
+            constrs = mapInsert name recordTy (mapEmpty nameCmp)
+          } in
+          (snoc tops decl, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
         let fixConstrType = lam ty.
           let ty = typeUnwrapAlias typeLiftEnvMap ty in
@@ -618,17 +641,17 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             TyRecord {tr with fields = ocamlTypedFields tr.fields}
           else tyunknown_ in
         let constrs = mapMap fixConstrType constrs in
-        if mapIsEmpty constrs then (t, recordFieldsToName)
+        if mapIsEmpty constrs then (tops, recordFieldsToName)
         else
-          (OTmVariantTypeDecl {
+          let decl = OTopVariantTypeDecl {
             ident = name,
-            constrs = constrs,
-            inexpr = t
-          }, recordFieldsToName)
-      else (t, recordFieldsToName)
+            constrs = constrs
+          } in
+          (snoc tops decl, recordFieldsToName)
+      else (tops, recordFieldsToName)
     else never
   in
-  let init = use MExprCmp in (t, mapEmpty (mapCmp cmpType)) in
+  let init = use MExprCmp in ([], mapEmpty (mapCmp cmpType)) in
   assocSeqFold f init typeLiftEnv
 
 let _typeLiftEnvToGenerateEnv = use MExprAst in
@@ -650,14 +673,15 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
 
 
 lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecordsCmpClosed
-  sem generateTypeDecl (env : AssocSeq Name Type) =
-  | expr ->
+  sem generateTypeDecls =
+  | env ->
+    let env : AssocSeq Name Type = env in
     let typeLiftEnvMap = mapFromSeq nameCmp env in
-    let exprDecls = _addTypeDeclarations typeLiftEnvMap env expr in
-    match exprDecls with (expr, recordFieldsToName) then
+    let topDecls = _makeTypeDeclarations typeLiftEnvMap env in
+    match topDecls with (tops, recordFieldsToName) then
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
                                                   env recordFieldsToName in
-      (generateEnv, expr)
+      (generateEnv, tops)
     else never
 end
 
@@ -689,9 +713,10 @@ in
 
 -- Evaluates OCaml expressions [strConvert] given as string, applied
 -- to [p], and parses it as a mexpr expression.
-let ocamlEval = lam ast.
+let ocamlEval = lam ast: ([Top], Expr).
   let compileOptions = {defaultCompileOptions with optimize = false} in
-  let prog = ocamlCompileWithConfig compileOptions (expr2str ast) in
+  let tops = snoc ast.0 (OTopExpr { expr = ast.1 }) in
+  let prog = ocamlCompileWithConfig compileOptions (pprintOcamlTops tops) in
   let res = prog.run "" [] in
   let out = res.stdout in
   (if neqi res.returncode 0 then printLn ""; printLn res.stderr else ());
@@ -708,11 +733,9 @@ in
 
 -- Wraps the OCaml AST in a print term, but makes sure to place it after all
 -- type declarations as that would result in a type errror.
-recursive let wrapOCamlAstInPrint = lam ast. lam printTerm.
+recursive let wrapOCamlAstInPrint = lam ast: ([Top], Expr). lam printTerm.
   use OCamlAst in
-  match ast with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = wrapOCamlAstInPrint t.inexpr printTerm}
-  else app_ printTerm (objMagic ast)
+  (ast.0, app_ printTerm (objMagic ast.1))
 in
 
 let printf = lam fmt.
@@ -742,13 +765,13 @@ let ocamlEvalChar = lam ast.
   else never
 in
 
-utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
-utest ocamlEvalFloat (float_ 1.) with float_ 1. using eqExpr in
-utest ocamlEvalBool true_ with true_ using eqExpr in
-utest ocamlEvalChar (char_ '1') with char_ '1' using eqExpr in
+utest ocamlEvalInt ([], int_ 1) with int_ 1 using eqExpr in
+utest ocamlEvalFloat ([], float_ 1.) with float_ 1. using eqExpr in
+utest ocamlEvalBool ([], true_) with true_ using eqExpr in
+utest ocamlEvalChar ([], char_ '1') with char_ '1' using eqExpr in
 
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
--- [ocamlAst] as a OCaml expression.
+-- [ocamlAst] as a sequence of OCaml topdecls and one OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
   let mexprVal =
     use MExprEval in
@@ -780,14 +803,16 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
 in
 
 let generateEmptyEnv = lam t.
-  generate emptyGenerateEnv t
+  generateTopsAndExpr emptyGenerateEnv t
 in
 
 let generateTypeAnnotated = lam t.
   match typeLift (typeAnnot t) with (env, t) then
     match removeTypeAscription t with t then
-      match generateTypeDecl env t with (env, t) then
-        generate env t
+      match generateTypeDecls env with (env, typeTops) then
+        match generateTopsAndExpr env t with (exprTops, expr) then
+          (concat typeTops exprTops, expr)
+        else never
       else never
     else never
   else never
@@ -2122,9 +2147,11 @@ with char_ '1' using eqExpr in
 
 let generateWithExternals = lam ast.
   match typeLift ast with (env, ast) then
-    match generateTypeDecl env ast with (env, ast) then
+    match generateTypeDecls env with (env, typeTops) then
       let env = chooseExternalImpls globalExternalImplsMap env ast in
-      generate env ast
+      match generateTopsAndExpr env ast with (exprTops, expr) then
+        (concat typeTops exprTops, expr)
+      else never
     else never
   else never
 in

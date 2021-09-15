@@ -75,15 +75,15 @@ let ocamlCompileAst =
 
   -- Translate the MExpr AST into an OCaml AST
   match typeLift ast with (env, ast) then
-    match generateTypeDecl env ast with (env, ast) then
+    match generateTypeDecls env with (env, typeTops) then
       let env : GenerateEnv =
         chooseExternalImpls globalExternalImplsMap env ast
       in
-      let ast = generate env ast in
+      let exprTops = generateTops env ast in
 
       -- Collect external library dependencies
       match collectlibraries env.exts with (libs, clibs) then
-        let ocamlProg = expr2str ast in
+        let ocamlProg = pprintOcamlTops (concat typeTops exprTops) in
 
         -- Print the AST after code generation
         debugGenerateHook ocamlProg;
