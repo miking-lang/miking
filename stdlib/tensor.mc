@@ -432,22 +432,37 @@ let tensorIter : (a -> Unit) -> Tensor[a] -> Unit =
 
 
 -- The maximum element in `t` as defined by `cmp`.
-let tensorMax : (a -> a -> Int) -> Tensor[a] -> a =
+let tensorMax : (a -> a -> Int) -> Tensor[a] -> Option a =
   lam cmp. lam t.
-    if eqi (tensorRank t) 0 then tensorGetExn t []
+    if eqi (tensorRank t) 0 then Some (tensorGetExn t [])
+    else if eqi (tensorSize t) 0 then None ()
     else
       let t = tensorReshapeExn t [tensorSize t] in
-      tensorFoldlSlice
-        (lam max. lam t.
-          let x = tensorGetExn t [] in
-          if gti (cmp x max) 0 then x else max)
-        (tensorGetExn t [0])
-        t
+      let max =
+        tensorFoldlSlice
+          (lam max. lam t.
+            let x = tensorGetExn t [] in
+            if gti (cmp x max) 0 then x else max)
+          (tensorGetExn t [0])
+          t
+      in
+      Some max
+
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [] [1] in
+  tensorMax subi t
+with Some 1
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [0] [] in
+  tensorMax subi t
+with None ()
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
   tensorMax subi t
-with 3
+with Some 3
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [2, 3]
@@ -455,17 +470,17 @@ utest
     ,4, 5, 6]
   in
   tensorMax subi t
-with 6
+with Some 6
 
 
 -- The minimum element in `t` as defined by `cmp`.
-let tensorMin : (a -> a -> Int) -> Tensor[a] -> a =
+let tensorMin : (a -> a -> Int) -> Tensor[a] -> Option a =
   lam cmp. lam t. tensorMax (lam x. lam y. cmp y x) t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
   tensorMin subi t
-with 1
+with Some 1
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [2, 3]
@@ -473,7 +488,7 @@ utest
     ,4, 5, 6]
   in
   tensorMin subi t
-with 1
+with Some 1
 
 
 -- Finds element and index `Some (el, i)` in `t` satisfying predicate `p`. If
