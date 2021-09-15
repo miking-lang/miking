@@ -756,6 +756,11 @@ lang TimePrettyPrint = TimeAst + ConstPrettyPrint
   | CSleepMs _ -> "sleepMs"
 end
 
+lang ConTagPrettyPrint = ConTagAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CConstructorTag _ -> "constructorTag"
+end
+
 lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CRef _ -> "ref"
@@ -1117,7 +1122,7 @@ lang MExprPrettyPrint =
   FloatStringConversionPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint +
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
-  RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
+  ConTagPrettyPrint + RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
   BootParserPrettyPrint +
 
   -- Patterns
