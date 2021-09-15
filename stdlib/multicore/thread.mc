@@ -63,7 +63,7 @@ let nSpawns = 8 in
 let threads = create nSpawns (lam. threadSpawn (lam. work incr nIncr)) in
 work decr nDecr;
 
-iter threadJoin threads;
+iter (lam t. threadJoin t; ()) threads;
 
 utest atomicGet a with subi (muli nIncr nSpawns) nDecr in
 
