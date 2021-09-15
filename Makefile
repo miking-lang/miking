@@ -11,39 +11,44 @@
 .PHONY :\
   all\
   boot\
-  test\
-  install\
   install-boot\
+  build\
+  build-mi\
+  install\
   lint\
   fix\
   clean\
-  old\
-  test-compile\
-  test-run\
+  uninstall\
+  test\
   test-all\
+  test-boot-compile\
   test-compile\
   test-run\
   test-boot\
   test-boot-base\
-  test-sundials\
-  test-par\
   test-boot-py\
-  test-boot-ocaml
+  test-boot-ocaml\
+  test-sundials\
+  test-par
 
-all: build/mi
+all: build
 
 boot:
 	@./make boot
 
-build/mi: boot
+install-boot: boot
+	@./make install-boot
+
+build: install-boot
+# Run the complete bootstrapping process to compile `mi`.
 	@./make
 
-test: test-boot-base
+build-mi:
+# Build `mi` using the current version in `build`, skipping bootstrapping.
+# The result is named `build/mi-tmp`.
+	@./make build-mi
 
-install: build/mi boot
-	@./make install
-
-install-boot: boot
+install: build
 	@./make install
 
 lint:
@@ -55,8 +60,10 @@ fix:
 clean:
 	@./make clean
 
-old:
-	@./make old
+uninstall:
+	@./make uninstall
+
+test: test-boot-base
 
 test-all:\
   test-boot-compile\
@@ -65,20 +72,14 @@ test-all:\
   test-par\
   test-boot
 
-test-boot-compile: build/mi
-	@$(MAKE) -s -f test-boot-compile.mk all
+test-boot-compile: boot
+	@$(MAKE) -s -f test-boot-compile.mk
 
-test-compile: build/mi
-	@$(MAKE) -s -f test-compile.mk all
+test-compile: build
+	@$(MAKE) -s -f test-compile.mk
 
-test-sundials: build/mi
-	@$(MAKE) -s -f test-sundials.mk all
-
-test-par: build/mi
-	@$(MAKE) -s -f test-par.mk all
-
-test-run: build/mi
-	@$(MAKE) -s -f test-run.mk all
+test-run: build
+	@$(MAKE) -s -f test-run.mk
 
 test-boot:\
   test-boot-base\
@@ -93,3 +94,9 @@ test-boot-py: boot
 
 test-boot-ocaml: boot
 	@$(MAKE) -s -f test-boot.mk ocaml
+
+test-sundials: build
+	@$(MAKE) -s -f test-sundials.mk
+
+test-par: build
+	@$(MAKE) -s -f test-par.mk

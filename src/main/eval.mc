@@ -9,6 +9,7 @@ include "name.mc"
 
 include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
@@ -21,7 +22,8 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans + MExprEval
+  BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans +
+  MExprProfileInstrument + MExprEval
 
   sem updateArgv (args : [String]) =
   | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
@@ -51,6 +53,12 @@ let eval = lam files. lam options : Options. lam args.
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
+
+    let ast =
+      if options.debugProfile then
+        instrumentProfiling (symbolize ast)
+      else ast
+    in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
