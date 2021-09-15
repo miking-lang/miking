@@ -342,6 +342,12 @@ lang CharEq = CharAst
     match lhs with CChar {val = v1} then eqChar v1 v2 else false
 end
 
+lang IntCharConversionEq = IntCharConversionAst
+  sem eqConst (lhs : Const) =
+  | CChar2Int {} -> match lhs with CChar2Int _ then true else false
+  | CInt2Char {} -> match lhs with CInt2Char _ then true else false
+end
+
 lang SymbEq = SymbAst
   sem eqConst (lhs : Const) =
   | CSymb {val = v2} ->
@@ -677,7 +683,7 @@ lang MExprEq =
 
   -- Constants
   + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
+  CharEq + IntCharConversionEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
