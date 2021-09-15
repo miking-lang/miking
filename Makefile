@@ -30,7 +30,8 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
-  test-par
+  test-par\
+	test-tune
 
 all: build
 
@@ -106,3 +107,6 @@ test-sundials: build
 
 test-par: build
 	@$(MAKE) -s -f test-par.mk
+
+test-tune: build
+	@$(MAKE) -s -f test-tune.mk
