@@ -14,6 +14,7 @@ include "dualnum-helpers.mc"
 include "bool.mc"
 include "math.mc"
 include "tensor.mc"
+include "common.mc"
 
 -------------
 -- ALIASES --
@@ -102,10 +103,10 @@ utest muln dnum012 dnum134 with dnum1 dnum036 dnum048 using dualnumEq eqf
 
 
 ----------------------------
--- DEEP PRIAMAL OPERATOR  --
+-- DEEP PRIMAL OPERATOR  --
 ----------------------------
 
--- Real part of arbritrary nested dual number p.
+-- Real part of arbitrary nested dual number p.
 recursive
 let dualnumPrimalDeep : DualNum -> DualNum =
 lam p.
@@ -137,7 +138,7 @@ lam cmp.
 let _liftBool = dualnumLiftBoolFun2
 
 
--- Real part of arbritrary nested dual number p as string.
+-- Real part of arbitrary nested dual number p as string.
 let dualnum2string : DualNum -> String =
 lam p. float2string (_unpack (dualnumPrimalDeep p))
 
@@ -197,7 +198,7 @@ utest nder 0 (lam x. muln x x) (num2) with num4
 utest nder 1 (lam x. muln x x) (num4) with num8
 utest nder 2 (lam x. muln x x) (num4) with num2
 
--- Inplace computation of the i'th component of df_j/dx_i.
+-- Inplace computation of the i'th component of the Jacobian df_j/dx_i.
 let jaci
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
   -> Int
@@ -211,14 +212,14 @@ lam f. lam i. lam x. lam r.
   tensorMapInplace (_pertubation e) r;
   tensorSetExn x [i] (_primal e (tensorGetExn x [i]))
 
--- Inplace of Jacobian df_j/dx_i, where j index columns and i index rows, of `f`
--- at `x` stored in `m`.
+-- Inplace computation of Jacobian df_j/dx_i, where j index columns and i index
+-- rows, of `f` at `x` stored in `m`.
 let jacT
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
   -> Tensor[DualNum]
   -> Tensor[DualNum]
   -> () =
-lam f. lam x. lam m. tensorIterSlice (lam i. lam r. jaci f i x r) m
+lam f. lam x. lam j. tensorIterSlice (lam i. lam r. jaci f i x r) j
 
 utest
   let f = lam t. lam r.
@@ -233,8 +234,107 @@ utest
   jacT f x m;
   map _unpack (tensorToSeqExn (tensorReshapeExn m [4]))
 with
-[1., 24.
-,2., 12.]
+[
+  1., 24.,
+  2., 12.
+]
+
+utest
+  let f = lam x. lam r.
+    let x0 = tensorGetExn x [0] in
+    let x1 = tensorGetExn x [1] in
+    let x2 = tensorGetExn x [2] in
+    let x3 = tensorGetExn x [3] in
+    tensorSetExn r [0] (muln x0 (muln x1 (muln x2 x3)));
+    tensorSetExn r [1] (addn (muln x0 x0) (addn (muln x1 x1)
+                                          (addn (muln x2 x2) (muln x3 x3))));
+    ()
+  in
+  let x =
+    tensorOfSeqExn tensorCreateDense [4] [_num 1., _num 5., num 5., num 1.]
+  in
+  let m = tensorCreateDense [4, 2] (lam. _num 0.) in
+  jacT f x m;
+  map _unpack (tensorToSeqExn (tensorReshapeExn m [8]))
+with
+[
+  25., 2.,
+  5., 10.,
+  5., 10.,
+  25., 2.
+]
+
+-- Inplace computation of gradient df/dx_i of `f` at `x` stored in `g`.
+let grad
+  : (Tensor[DualNum] -> DualNum)
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam x. lam g.
+  tensorIteri
+    (lam idx. lam xi.
+      let e = genEpsilon () in
+      tensorSetExn x idx (_dnum e xi (_num 1.));
+      tensorSetExn g idx (_pertubation e (f x));
+      tensorSetExn x idx xi)
+    x
+
+utest
+  let f = lam x.
+    let x1 = tensorGetExn x [0] in
+    let x2 = tensorGetExn x [1] in
+    muln x1 x2
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
+  let g = tensorCreateDense [2] (lam. _num 0.) in
+  grad f x g;
+  map _unpack (tensorToSeqExn g)
+with [3., 2.]
+
+-- Computes the ij'th component of the Hessian d2f/(dx_i)(dx_j) of `f` at `x`,
+-- where `idxi` and `idxj` are tensor indices.
+let hessij
+  : (Tensor[DualNum] -> DualNum)
+  -> [Int]
+  -> [Int]
+  -> Tensor[DualNum]
+  -> DualNum =
+lam f. lam idxi. lam idxj. lam x.
+  let ei = genEpsilon () in
+  let ej = genEpsilon () in
+  let xi = tensorGetExn x idxi in
+  tensorSetExn x idxi (_dnum ei xi (_num 1.));
+  let xj = tensorGetExn x idxj in
+  tensorSetExn x idxj (_dnum ej xj (_num 1.));
+  let hij = _pertubation ei (_pertubation ej (f x)) in
+  tensorSetExn x idxj xj;
+  tensorSetExn x idxi xi;
+  hij
+
+-- Inplace computation of Hessian d2f/(dx_i)(dx_j) of `f` at `x` stored in `h`.
+let hess
+  : (Tensor[DualNum] -> DualNum)
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam x. lam h.
+  tensorIterSlice (lam i. lam hi. tensorMapiInplace (lam j. lam. hessij f [i] j x) hi) h
+
+utest
+  let f = lam x.
+    let x1 = tensorGetExn x [0] in
+    let x2 = tensorGetExn x [1] in
+    muln (muln x1 x1) (muln x2 x2)
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
+  let h = tensorCreateDense [2, 2] (lam. _num 0.) in
+  hess f x h;
+  map _unpack (tensorToSeqExn (tensorReshapeExn h [4]))
+with
+[
+  18., 24.,
+  24., 8.
+]
 
 ----------------
 -- CONSTANTS  --
@@ -244,7 +344,7 @@ let epsn = _num 1.e-15
 
 
 -----------------------
--- BOLEAN OPERATORS  --
+-- BOOLEAN OPERATORS  --
 -----------------------
 
 let eqn = _liftBool eqf -- lifted ==
@@ -317,7 +417,7 @@ using dualnumEq eqf
 
 utest der negn num1 with negn num1 using dualnumEq eqf
 
--- lifted substraction
+-- lifted subtraction
 let subn = lam p1. lam p2.
   _lift2
     (_float2num2 subf)
@@ -340,7 +440,7 @@ with dnum0 num1 (_num (negf 1.)) using dualnumEq eqf
 let absn = lam p. if ltn p num0 then negn p else p
 
 
--- lifted approximate comapre function
+-- lifted approximate compare function
 let eqnEps = lam l. lam r.
   ltn (absn (subn l r)) epsn
 
