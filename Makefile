@@ -73,6 +73,7 @@ uninstall:
 test: test-boot-base
 
 test-all:\
+	lint\
   test-boot-compile\
   test-compile\
   test-run\
