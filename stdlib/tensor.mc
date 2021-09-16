@@ -179,14 +179,15 @@ utest tensorSize (tensorCreateDense [0] (lam. 0)) with 0
 -- Map the elements of `t1` to the elements of `t2` via the function `f`,
 -- where `t1` and `t2` has to have the same shape.
 let tensorMapOrElse
-  : (Unit -> Unit) -> (a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+  : (Unit -> Unit) -> (a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
   if eqSeq eqi (tensorShape t1) (tensorShape t2) then
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 =  tensorReshapeExn t2 [n] in
     tensorIterSlice
-      (lam i. lam e. tensorSetExn v2 [i] (g (tensorGetExn e [])))
+      (lam i. lam e.
+        tensorSetExn v2 [i] (g (tensorGetExn e []) (tensorGetExn v2 [i])))
       v1
   else f ()
 
@@ -196,33 +197,40 @@ let tensorMapExn =
 utest
   let t1 = tensorCreateDense [0] (lam. []) in
   let t2 = tensorCreateDense [0] (lam. []) in
-  tensorMapExn (lam x. [x]) t1 t2;
+  tensorMapExn (lam x. lam. [x]) t1 t2;
   tensorToSeqExn t2
 with []
 
 utest
   let t1 = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
   let t2 = tensorCreateDense [4] (lam. []) in
-  tensorMapExn (lam x. [x]) t1 t2;
+  tensorMapExn (lam x. lam. [x]) t1 t2;
   tensorToSeqExn t2
 with [[1], [2], [3], [4]]
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
-  tensorMapExn (addi 1) t t;
+  tensorMapExn addi t t;
   tensorToSeqExn t
-with [2, 3, 4, 5]
+with [2, 4, 6, 8]
 
 utest
-  let t = tensorDenseRepeat [] 0 in
-  tensorMapExn (addi 1) t t;
+  let t1 = tensorOfSeqExn tensorCreateDense [4] [5, 6, 7, 8] in
+  let t2 = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
+  tensorMapExn subi t1 t2;
+  tensorToSeqExn t2
+with [4, 4, 4, 4]
+
+utest
+  let t = tensorDenseRepeat [] 1 in
+  tensorMapExn addi t t;
   tensorGetExn t []
-with 1
+with 2
 
 
 -- Applies function `f` to the elements of `t`.
 let tensorMapInplace : (a -> a) -> Tensor[a] -> Unit =
-  lam f. lam t. tensorMapExn f t t
+  lam f. lam t. tensorMapExn (lam. f) t t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
@@ -235,7 +243,7 @@ with [2, 3, 4, 5]
 let tensorMapCopy : (a -> a) -> Tensor[a] -> Tensor[a] =
   lam f. lam t.
     let r = tensorCopy t in
-    tensorMapExn f t r; r
+    tensorMapExn (lam. f) t r; r
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
@@ -246,7 +254,7 @@ with [2, 3, 4, 5]
 -- Map the index and elements of `t1` to the elements of `t2` via the function
 -- `f`, where `t1` and `t2` has to have the same shape.
 let tensorMapiOrElse
-  : (Unit -> Unit) -> ([Int] -> a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+  : (Unit -> Unit) -> ([Int] -> a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
   let shape = tensorShape t1 in
   if eqSeq eqi shape (tensorShape t2) then
@@ -255,10 +263,11 @@ lam f. lam g. lam t1. lam t2.
     let v2 =  tensorReshapeExn t2 [n] in
     tensorIterSlice
       (lam i. lam e.
+        let idx = linearToCartesianIndex shape i in
         tensorSetExn
           v2
           [i]
-          (g (linearToCartesianIndex shape i) (tensorGetExn e [])))
+          (g idx (tensorGetExn e []) (tensorGetExn v2 [i])))
       v1
   else f ()
 
@@ -271,17 +280,17 @@ utest
     ,3, 4]
   in
   let t2 = tensorCreateDense [2, 2] (lam. ([], 0)) in
-  tensorMapiExn (lam idx. lam x. (idx, x)) t1 t2;
+  tensorMapiExn (lam idx. lam x1. lam x2 : ([a], Int). (idx, cons x1 x2.0)) t1 t2;
   tensorToSeqExn (tensorReshapeExn t2 [tensorSize t2])
-with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
+with [([0, 0], [1]), ([0, 1], [2]), ([1, 0], [3]), ([1, 1], [4])]
 
 let tensorMapiInplace : ([Int] -> a -> a) -> Tensor[a] -> Unit =
-  lam f. lam t. tensorMapiExn f t t
+  lam f. lam t. tensorMapiExn (lam idx. lam x. lam. f idx x) t t
 
-let tensorMapiCopy : (a -> a) -> Tensor[a] -> Tensor[a] =
+let tensorMapiCopy : ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
   lam f. lam t.
     let r = tensorCopy t in
-    tensorMapiExn f t r; r
+    tensorMapiExn (lam idx. lam x. lam. f idx x) t r; r
 
 
 -- Element-wise equality of tensor `t1` and `t2` using `eq`

@@ -47,12 +47,12 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       let jacGd = tensorCreate [nx, ng] (lam. num 0.) in
       -- Computes f(x)
       let evalF = lam x.
-        tensorMapExn num x xd;
+        tensorMapExn (lam x. lam. num x) x xd;
         unpack (arg.f xd)
       in
       -- Computes g(x)
       let evalG = lam x. lam r.
-        tensorMapExn num x xd;
+        tensorMapExn (lam x. lam. num x) x xd;
         iteri (lam i. lam g. tset r [i] (unpack (g xd))) arg.gs;
         ()
       in
@@ -62,9 +62,9 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       in
       -- Computes 𝛁f(x)
       let evalGradF = lam x. lam gradF.
-        tensorMapExn num x xd;
+        tensorMapExn (lam x. lam. num x) x xd;
         grad arg.f xd gradFd;
-        tensorMapExn unpack gradFd gradF;
+        tensorMapExn (lam x. lam. unpack x) gradFd gradF;
         ()
       in
       -- jacT gives us the transpose of the Jacobian.
@@ -72,9 +72,9 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       let nJacG = muli ng nx in
       -- Computes 𝛁g(x)
       let evalJacG = lam x. lam jacG.
-        tensorMapExn num x xd;
+        tensorMapExn (lam x. lam. num x) x xd;
         jacT evalGd xd jacGd;
-        tensorMapExn unpack (tensorReshapeExn jacGd [nJacG]) jacG;
+        tensorMapExn (lam x. lam. unpack x) (tensorReshapeExn jacGd [nJacG]) jacG;
         ()
       in
       -- The Hessian of the Lagrangian is symmetric so we only need the lower
@@ -90,7 +90,7 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       in
       -- Computes σ𝛁^2f(x_k) + Σ_i[λ_i𝛁^2g_i(x_k)]
       let evalH = lam sigma. lam x. lam lambda. lam h.
-        tensorMapExn num x xd;
+        tensorMapExn (lam x. lam. num x) x xd;
         iteri
           (lam k : Int. lam ij : (Int, Int).
             match ij with (i, j) then
