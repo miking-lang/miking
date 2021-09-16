@@ -339,6 +339,23 @@ let tensorMapiCopy : ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
     tensorMapiExn (lam idx. lam x. lam. f idx x) t r; r
 
 
+-- Copies the content of `t1` to `t2`. Gives an error if `t1` and `t2` does no
+-- have the same shape.
+let tensorBlitExn : Tensor[a] -> Tensor[a] -> () =
+lam t1. lam t2.
+  if tensorHasSameShape t1 t2 then tensorMapExn (lam x. lam. x) t1 t2
+  else error "Invalid Argument: tensor.tensorBlitExn"
+
+let test =
+  let t1 = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  let t2 = tensorCreateDense [3] (lam. 0) in
+  utest
+    tensorBlitExn t1 t2;
+    t2
+  with t1 using tensorEq eqi in
+  ()
+
+
 -- Left folds `f acc idx t` over the zero'th dimension of `t1`, where `acc` is
 -- the accumulator, `idx` is the index of the slice, and `t` is the i'th slice
 -- of `t1`.
