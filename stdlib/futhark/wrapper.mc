@@ -6,6 +6,7 @@ include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "mexpr/rewrite/extract.mc"
 
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
@@ -830,6 +831,7 @@ lang FutharkCWrapper =
 
   sem generateBytecodeWrapper =
   | data /- : AcceleratedData -/ ->
+    let data : AcceleratedData = data in
     let valueTy = CTyVar {id = _getIdentExn "value"} in
     let bytecodeStr = nameGetStr data.bytecodeWrapperId in
     let bytecodeFunctionName = nameSym bytecodeStr in
@@ -855,6 +857,7 @@ lang FutharkCWrapper =
 
   sem generateWrapperFunctionCode =
   | data /- : AcceleratedData -/ ->
+    let data : AcceleratedData = data in
     let toArgData = lam arg : (Name, Info, Type).
       {{defaultArgData with ident = arg.0}
                        with ty = arg.2}
@@ -927,10 +930,14 @@ mexpr
 use Test in
 
 let functionIdent = nameSym "f" in
-let functionType = tyarrows_ [
-  tyseq_ tyint_, tyseq_ tyint_
-] in
-let accelerated = mapFromSeq nameCmp [(functionIdent, functionType)] in
+let dataEntry : AcceleratedData = {
+  identifier = functionIdent,
+  bytecodeWrapperId = nameSym "fbyte",
+  params = [(nameSym "s", NoInfo (), tyseq_ tyint_)],
+  returnType = tyseq_ tyint_,
+  info = NoInfo ()
+} in
+let accelerated = mapFromSeq nameCmp [(functionIdent, dataEntry)] in
 
 let wrapperCode = generateWrapperCode accelerated in
 -- print (printCProg [] wrapperCode);
