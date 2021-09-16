@@ -103,6 +103,52 @@ utest optionIndexFoldRMM
 with None () using optionEq (eqSeq (eqSeq eqi))
 
 
+---------------------------
+-- SHAPE AND RANK CHECKS --
+---------------------------
+
+let tensorHasRank : Tensor[a] -> Int -> Bool =
+  lam t. lam rank. eqi (tensorRank t) rank
+
+utest
+  let t = tensorCreateDense [2, 2] (lam. 0) in
+  tensorHasRank t 2
+with true
+
+utest
+  let t = tensorCreateDense [2, 2] (lam. 0) in
+  tensorHasRank t 1
+with false
+
+let tensorHasShape : Tensor[a] -> [Int] -> Bool =
+  lam t. lam shape. eqSeq eqi (tensorShape t) shape
+
+utest
+  let t = tensorCreateDense [4, 1] (lam. 0) in
+  tensorHasShape t [4, 1]
+with true
+
+utest
+  let t = tensorCreateDense [4, 1] (lam. 0) in
+  tensorHasShape t [4, 2]
+with false
+
+
+let tensorHasSameShape : Tensor[a] -> Tensor[b] -> Bool =
+lam t1. lam t2. eqSeq eqi (tensorShape t1) (tensorShape t2)
+
+utest
+  let t1 = tensorCreateDense [4, 1] (lam. 0) in
+  let t2 = tensorCreateDense [4, 1] (lam. 0) in
+  tensorHasSameShape t1 t2
+with true
+
+utest
+  let t1 = tensorCreateDense [4, 1] (lam. 0) in
+  let t2 = tensorCreateDense [4, 2] (lam. 0) in
+  tensorHasSameShape t1 t2
+with false
+
 ------------------------------
 -- GENERAL TENSOR FUNCTIONS --
 ------------------------------
@@ -181,7 +227,7 @@ utest tensorSize (tensorCreateDense [0] (lam. 0)) with 0
 let tensorMapOrElse
   : (Unit -> Unit) -> (a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
-  if eqSeq eqi (tensorShape t1) (tensorShape t2) then
+  if tensorHasSameShape t1 t2 then
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 =  tensorReshapeExn t2 [n] in
@@ -257,7 +303,7 @@ let tensorMapiOrElse
   : (Unit -> Unit) -> ([Int] -> a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
   let shape = tensorShape t1 in
-  if eqSeq eqi shape (tensorShape t2) then
+  if tensorHasShape t2 shape then
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 =  tensorReshapeExn t2 [n] in
@@ -296,11 +342,10 @@ let tensorMapiCopy : ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
 -- Element-wise equality of tensor `t1` and `t2` using `eq`
 let eqTensor : (a -> b -> Bool) -> Tensor[a] -> Tensor[b] -> Bool =
 lam eq. lam t1. lam t2.
-  if eqSeq eqi (tensorShape t1) (tensorShape t2) then
+  if tensorHasSameShape t1 t2 then
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 = tensorReshapeExn t2 [n] in
-
     recursive let work = lam i.
       if lti i n then
         if eq (tensorGetExn v1 [i]) (tensorGetExn v2 [i]) then
@@ -308,9 +353,7 @@ lam eq. lam t1. lam t2.
         else false
       else true
     in
-
     work 0
-
   else false
 
 utest
@@ -686,7 +729,7 @@ with [[1, 0], [1, 1], [1, 2]]
 
 let tensorCumsumiExn : Tensor[Int] -> Tensor[Int] -> Unit =
   lam t. lam r.
-    if eqSeq eqi (tensorShape t) (tensorShape r) then
+    if tensorHasSameShape t r then
       tensorFoldi
         (lam acc. lam idx. lam x.
           let acc = addi acc x in
@@ -718,27 +761,6 @@ utest
   tensorToSeqExn (tensorCumsumiCopy t)
 with [1, 3, 6]
 
-
----------------------------
--- SHAPE AND RANK CHECKS --
----------------------------
-
-let tensorHasRank : Tensor[a] -> Int -> Bool =
-  lam t. lam rank. eqi (tensorRank t) rank
-
-utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
-  tensorHasRank t 2
-with true
-
-
-let tensorHasShape : Tensor[a] -> [Int] -> Bool =
-  lam t. lam shape. eqSeq eqi (tensorShape t) shape
-
-utest
-  let t = tensorOfSeqExn tensorCreateDense [4, 1] [1, 2, 3, 4] in
-  tensorHasShape t [4, 1]
-with true
 
 mexpr
 
