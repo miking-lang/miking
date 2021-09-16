@@ -18,8 +18,9 @@ type LambdaLiftState = {
   funs : Set Name,
 
   -- Contains the solutions of the functions found in funs. The solution of a
-  -- function is a set of identifiers corresponding to its free variables.
-  sols : Map Name (Set Name)
+  -- function is a map from the identifiers of its free variables to their
+  -- corresponding types.
+  sols : Map Name (Map Name Type)
 }
 
 let emptyLambdaLiftState = {
@@ -70,20 +71,18 @@ lang LambdaLiftFindFreeVariablesPat = MExprAst
   | p -> sfold_Pat_Pat findFreeVariablesPat state p
 end
 
--- Finds the set of free variables of all functions. For recursive
--- let-expressions, this requires solving a system of set equations (as the
--- free variables within bindings may affect each other).
+-- Finds the map of free variables of all functions, mapped to their
+-- corresponding types. For recursive let-expressions, this requires solving a
+-- system of set equations (as the free variables within bindings may affect
+-- each other).
 lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
-  sem findFreeVariablesInBody (state : LambdaLiftState) (fv : Set Name) =
+  sem findFreeVariablesInBody (state : LambdaLiftState) (fv : Map Name Type) =
   | TmVar t ->
     if setMem t.ident state.vars then
-      setInsert t.ident fv
+      mapInsert t.ident t.ty fv
     else if setMem t.ident state.funs then
       match mapLookup t.ident state.sols with Some funFreeVars then
-        mapFoldWithKey
-          (lam acc. lam id. lam. setInsert id acc)
-          fv
-          funFreeVars
+        mapUnion fv funFreeVars
       else fv
     else fv
   | TmLam t -> findFreeVariablesInBody state fv t.body
@@ -97,7 +96,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   | TmLet t ->
     let state =
       match t.tyBody with TyArrow _ then
-        let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
+        let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
       else state
@@ -105,7 +104,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
     findFreeVariablesReclet state t.inexpr
   | TmRecLets t ->
     let findBinding = lam state : LambdaLiftState. lam bind : RecLetBinding.
-      let fv = findFreeVariablesInBody state (setEmpty nameCmp) bind.body in
+      let fv = findFreeVariablesInBody state (mapEmpty nameCmp) bind.body in
       {{state with funs = setInsert bind.ident state.funs}
               with sols = mapInsert bind.ident fv state.sols}
     in
@@ -160,7 +159,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   | TmLet t ->
     let state =
       match t.tyBody with TyArrow _ then
-        let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
+        let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
       else
@@ -177,9 +176,9 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
           foldl
             (lam acc. lam id.
               match mapLookup id state.sols with Some fv then
-                setUnion acc fv
+                mapUnion acc fv
               else acc)
-            (setEmpty nameCmp) h in
+            (mapEmpty nameCmp) h in
         let state =
           foldl
             (lam state : LambdaLiftState. lam id.
@@ -216,8 +215,8 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   | t -> sfold_Expr_Expr findFreeVariables state t
 end
 
-lang LambdaLiftInsertFreeVariables = MExprAst
-  sem insertFreeVariablesH (solutions : Map Name (Set Name))
+lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
+  sem insertFreeVariablesH (solutions : Map Name (Map Name Type))
                            (subMap : Map Name (Info -> Expr)) =
   | TmVar t ->
     match mapLookup t.ident subMap with Some subExpr then
@@ -225,29 +224,40 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     else (subMap, TmVar t)
   | TmLet (t & {tyBody = TyArrow _}) ->
     match mapLookup t.ident solutions with Some freeVars then
-      let fv = setToSeq freeVars in
+      let fv = mapBindings freeVars in
       let info = infoTm t.body in
       let body =
         foldr
-          (lam freeVarId. lam body.
-            TmLam {ident = freeVarId, tyIdent = TyUnknown {info = info},
+          (lam freeVar : (Name, Type). lam body.
+            TmLam {ident = freeVar.0, tyIdent = freeVar.1,
                    body = body, ty = ty body, info = info})
           t.body
           fv in
       let subExpr = lam info.
         foldr
-          (lam freeVarId. lam acc.
-            let x = TmVar {ident = freeVarId, ty = TyUnknown {info = info},
-                           info = info} in
-            TmApp {lhs = acc, rhs = x, ty = TyUnknown {info = info}, info = info})
+          (lam freeVar : (Name, Type). lam acc.
+            let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info} in
+            -- NOTE(larshum, 2021-09-16): We use type annot here to avoid
+            -- reimplementing the type inference of applications.
+            typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
           (TmVar {ident = t.ident, ty = t.tyBody, info = info})
+          fv in
+
+      -- Update the annotated type of the function to include the types of the
+      -- added parameters.
+      let tyBody =
+        foldr
+          (lam freeVar : (Name, Type). lam accTy.
+            TyArrow {from = freeVar.1, to = accTy, info = infoTy accTy})
+          t.tyBody
           fv in
       match insertFreeVariablesH solutions subMap body with (subMap, body) then
         let subMap = mapInsert t.ident subExpr subMap in
         match insertFreeVariablesH solutions subMap t.inexpr
         with (subMap, inexpr) then
-          (subMap, TmLet {{t with body = body}
-                             with inexpr = inexpr})
+          (subMap, TmLet {{{t with tyBody = tyBody}
+                              with body = body}
+                              with inexpr = inexpr})
         else never
       else never
     else error (join ["Found no free variable solution for ",
@@ -258,12 +268,12 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       match mapLookup bind.ident solutions with Some freeVars then
         let subExpr = lam info.
           foldr
-            (lam freeVarId. lam acc.
-              let x = TmVar {ident = freeVarId, ty = TyUnknown {info = info},
+            (lam freeVar : (Name, Type). lam acc.
+              let x = TmVar {ident = freeVar.0, ty = freeVar.1,
                              info = info} in
-              TmApp {lhs = acc, rhs = x, ty = TyUnknown {info = info}, info = info})
+              typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
             (TmVar {ident = bind.ident, ty = bind.tyBody, info = info})
-            (reverse (setToSeq freeVars)) in
+            (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
       else error (join ["Lambda lifting error: No solution found for binding ",
                         nameGetStr bind.ident])
@@ -271,16 +281,23 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     let insertFreeVarsBinding =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
       match mapLookup bind.ident solutions with Some freeVars then
+        let fv = mapBindings freeVars in
         let body =
           foldr
-            (lam freeVarId. lam body.
+            (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVarId, tyIdent = TyUnknown {info = info},
+              TmLam {ident = freeVar.0, tyIdent = freeVar.1,
                      body = body, ty = ty body, info = info})
-            bind.body
-            (setToSeq freeVars) in
+            bind.body fv in
+        -- Update the annotated type of the function to include the types of the
+        -- added parameters.
+        let tyBody =
+          foldr
+            (lam freeVar : (Name, Type). lam accTy.
+              TyArrow {from = freeVar.1, to = accTy, info = infoTy accTy})
+            bind.tyBody fv in
         match insertFreeVariablesH solutions subMap body with (subMap, body) then
-          (subMap, {bind with body = body})
+          (subMap, {{bind with tyBody = tyBody} with body = body})
         else never
       else error (join ["Lambda lifting error: No solution found for binding ",
                         nameGetStr bind.ident])
@@ -295,7 +312,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     else never
   | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
 
-  sem insertFreeVariables (solutions : Map Name (Set Name)) =
+  sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
   | t ->
     match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) then
       t
