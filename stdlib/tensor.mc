@@ -709,20 +709,6 @@ utest
   tensorToSeqExn (tensorCumsumiCopy t)
 with [1, 3, 6]
 
-let tensorRangei
-  : ([Int] -> ([Int] -> Int) -> Tensor[Int])
-  -> [Int]
-  -> Int
-  -> Tensor[Int] =
-  lam tcreate. lam shape. lam start.
-    let t = tcreate [_prod shape] (lam idx. addi (get idx 0) start) in
-    tensorReshapeExn t shape
-
-utest
-  let t = tensorRangei tensorCreateDense [3] 1 in
-  tensorToSeqExn t
-with [1, 2, 3]
-
 
 ---------------------------
 -- SHAPE AND RANK CHECKS --
