@@ -15,6 +15,7 @@
   build\
   build-mi\
   install\
+  lite\
   lint\
   fix\
   clean\
@@ -29,6 +30,7 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
+	test-ipopt\
   test-par
 
 all: build
@@ -38,6 +40,11 @@ boot:
 
 install-boot: boot
 	@./make install-boot
+
+lite: install-boot
+	@./make lite
+
+test: test-boot-base
 
 build: install-boot
 # Run the complete bootstrapping process to compile `mi`.
@@ -66,6 +73,7 @@ uninstall:
 test: test-boot-base
 
 test-all:\
+	lint\
   test-boot-compile\
   test-compile\
   test-run\
@@ -97,6 +105,9 @@ test-boot-ocaml: boot
 
 test-sundials: build
 	@$(MAKE) -s -f test-sundials.mk
+
+test-ipopt: build/mi
+	@$(MAKE) -s -f test-ipopt.mk all
 
 test-par: build
 	@$(MAKE) -s -f test-par.mk

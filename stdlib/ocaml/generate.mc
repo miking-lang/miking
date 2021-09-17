@@ -388,7 +388,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
         }
       else never
     else
-      infoErrorExit (join ["No implementation for external ", nameGetStr ident])
+      infoErrorExit info (join ["No implementation for external ", nameGetStr ident])
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/

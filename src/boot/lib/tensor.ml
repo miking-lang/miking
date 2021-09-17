@@ -260,10 +260,11 @@ module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t = struct
         done ;
         us "[" ^. !elems ^. us "]" )
       else
+        let n = (T.shape t).(0) in
         let newindent = indent ^. us "\t" in
         let elems = ref (us "") in
-        for i = 0 to rank - 1 do
-          let e = if i < rank - 1 then us ",\n" ^. newindent else us "" in
+        for i = 0 to n - 1 do
+          let e = if i < n - 1 then us ",\n" ^. newindent else us "" in
           elems := !elems ^. recur newindent (T.slice_exn t [|i|]) ^. e
         done ;
         us "\n[\n" ^. newindent ^. !elems ^. us "\n" ^. indent ^. us "]\n"

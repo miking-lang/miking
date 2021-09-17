@@ -358,7 +358,7 @@ with 9
 
 -- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
 -- accumulator and `t` is the i'th slice of `t1`.
-let tensorFoldlSlice : (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+let tensorFoldlSlice : (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. tensorFoldliSlice (lam acc. lam. f acc)
 
 utest
@@ -383,7 +383,7 @@ with 6
 
 -- Folds `f idx acc el` over all elements `el` of `t` in row-major order, where
 -- `acc` is the accumulator and `idx` is the index of the element.
-let tensorFoldi : ([Int] -> a -> b) -> b -> Tensor[a] -> b =
+let tensorFoldi : (b -> [Int] -> a -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t.
   let shape = tensorShape t in
   let t = tensorReshapeExn t [tensorSize t] in
@@ -707,6 +707,28 @@ utest
   let t = tensorRangei tensorCreateDense [3] 1 in
   tensorToSeqExn t
 with [1, 2, 3]
+
+
+---------------------------
+-- SHAPE AND RANK CHECKS --
+---------------------------
+
+let tensorHasRank : Tensor[a] -> Int -> Bool =
+  lam t. lam rank. eqi (tensorRank t) rank
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  tensorHasRank t 2
+with true
+
+
+let tensorHasShape : Tensor[a] -> [Int] -> Bool =
+  lam t. lam shape. eqSeq eqi (tensorShape t) shape
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [4, 1] [1, 2, 3, 4] in
+  tensorHasShape t [4, 1]
+with true
 
 mexpr
 

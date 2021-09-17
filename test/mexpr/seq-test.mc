@@ -131,7 +131,7 @@ utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi in
 
 -- 'iter f s' applies 'f' to every element in 's'
 -- (a -> Unit) -> [a] -> Unit
-utest iter (lam x. addi x 1) [1, 2, 3]
+utest iter (lam x. addi x 1; ()) [1, 2, 3]
 with () in
 
 utest
@@ -140,15 +140,29 @@ utest
   deref r
 with 10 in
 
+utest
+  let r = ref 0 in
+  let s = splitAt [11, 11, 11, 11, 1, 2, 3, 4] 4 in
+  iter (lam x. modref r (addi x (deref r))) s.1;
+  deref r
+with 10 in
+
 -- 'iteri f s' is like 'iter' but 'f' takes the index of the element as its
 -- first argument and the element as its second argument.
 -- (Int -> a -> Unit) -> [a] -> Unit
-utest iteri (lam i. lam x. addi x i) [1, 2, 3]
+utest iteri (lam i. lam x. addi x i; ()) [1, 2, 3]
 with () in
 
 utest
   let r = ref 0 in
   iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) [1, 2, 3, 4];
+  deref r
+with 16 in
+
+utest
+  let r = ref 0 in
+  let s = splitAt [17, 17, 17, 17, 1, 2, 3, 4] 4 in
+  iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) s.1;
   deref r
 with 16 in
 
