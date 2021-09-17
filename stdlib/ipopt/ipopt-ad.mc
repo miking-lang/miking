@@ -15,7 +15,7 @@ type IpoptAdCreateNLPArg = {
   f : Vector -> Dualnum,
 
   -- Constraint functions g_i(x).
-  gs : [Vector -> Dualnum],
+  g : Vector -> Vector,
 
   -- Lower bounds on the variables xL_k.
   lb : [Float],
@@ -40,90 +40,86 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
   let ng = length arg.constraintsLb in
   if and (eqi (length arg.ub) nx) (eqi (length arg.constraintsUb) ng)
   then
-  if eqi (length arg.gs) ng then
-      -- Pre-allocate some memory.
-      let xd = tensorCreate [nx] (lam. num 0.) in
-      let gradFd = tensorCreate [nx] (lam. num 0.) in
-      let jacGd = tensorCreate [nx, ng] (lam. num 0.) in
-      -- Computes f(x)
-      let evalF = lam x.
-        tensorMapExn (lam x. lam. num x) x xd;
-        unpack (arg.f xd)
-      in
-      -- Computes g(x)
-      let evalG = lam x. lam r.
-        tensorMapExn (lam x. lam. num x) x xd;
-        iteri (lam i. lam g. tset r [i] (unpack (g xd))) arg.gs;
-        ()
-      in
-      -- We use this function to compute the Jacobian.
-      let evalGd = lam x. lam r.
-        iteri (lam i. lam g. tset r [i] (g x)) arg.gs
-      in
-      -- Computes 𝛁f(x)
-      let evalGradF = lam x. lam gradF.
-        tensorMapExn (lam x. lam. num x) x xd;
-        grad arg.f xd gradFd;
-        tensorMapExn (lam x. lam. unpack x) gradFd gradF;
-        ()
-      in
-      -- jacT gives us the transpose of the Jacobian.
-      let jacGStructure = join (create nx (lam i. create ng (lam j. (j, i)))) in
-      let nJacG = muli ng nx in
-      -- Computes 𝛁g(x)
-      let evalJacG = lam x. lam jacG.
-        tensorMapExn (lam x. lam. num x) x xd;
-        jacT evalGd xd jacGd;
-        tensorMapExn (lam x. lam. unpack x) (tensorReshapeExn jacGd [nJacG]) jacG;
-        ()
-      in
-      -- The Hessian of the Lagrangian is symmetric so we only need the lower
-      -- triangular part.
-      let hStructure =
-        join
-          (create
-            nx
-            (lam i.
-              unfoldr
-                (lam j. if gti j i then None () else Some ((i, j), succ j))
-                0))
-      in
-      -- Computes σ𝛁^2f(x_k) + Σ_i[λ_i𝛁^2g_i(x_k)]
-      let evalH = lam sigma. lam x. lam lambda. lam h.
-        tensorMapExn (lam x. lam. num x) x xd;
-        iteri
-          (lam k : Int. lam ij : (Int, Int).
-            match ij with (i, j) then
-              tset h [k] (mulf sigma (unpack (hessij arg.f [i] [j] xd)));
-              iteri
-                (lam l. lam g.
-                  let hk = tget h [k] in
-                  let ll = tget lambda [l] in
-                  let gij = unpack (hessij g [i] [j] xd) in
-                  tset h [k] (addf hk (mulf ll gij)))
-                arg.gs
-            else never)
-          hStructure;
-        ()
-      in
-      let lb = tensorOfSeqExn tcreate [nx] arg.lb in
-      let ub = tensorOfSeqExn tcreate [nx] arg.ub in
-      let constraintsLb = tensorOfSeqExn tcreate [ng] arg.constraintsLb in
-      let constraintsUb = tensorOfSeqExn tcreate [ng] arg.constraintsUb in
-      ipoptCreateNLP {
-        evalF = evalF,
-        evalGradF = evalGradF,
-        evalG = evalG,
-        jacGStructure = jacGStructure,
-        evalJacG = evalJacG,
-        hStructure = hStructure,
-        evalH = evalH,
-        lb = lb,
-        ub = ub,
-        constraintsLb = constraintsLb,
-        constraintsUb = constraintsUb
-      }
-    else error "ipoptAdCreateNLP: Shape mismatch between constraints"
+    -- Pre-allocate some memory.
+    let xd = tensorCreate [nx] (lam. num 0.) in
+    let gd = tensorCreate [ng] (lam. num 0.) in
+    let gradFd = tensorCreate [nx] (lam. num 0.) in
+    let jacGd = tensorCreate [nx, ng] (lam. num 0.) in
+    let hij = tensorCreate [ng] (lam. 0.) in
+    let hijd = tensorCreate [ng] (lam. num 0.) in
+    -- Computes f(x)
+    let evalF = lam x.
+      tensorMapExn (lam x. lam. num x) x xd;
+      unpack (arg.f xd)
+    in
+    -- Computes g(x)
+    let evalG = lam x. lam g.
+      tensorMapExn (lam x. lam. num x) x xd;
+      arg.g xd gd;
+      tensorMapExn (lam x. lam. unpack x) gd g;
+      ()
+    in
+    -- Computes 𝛁f(x)
+    let evalGradF = lam x. lam gradF.
+      tensorMapExn (lam x. lam. num x) x xd;
+      grad arg.f xd gradFd;
+      tensorMapExn (lam x. lam. unpack x) gradFd gradF;
+      ()
+    in
+    -- jacT gives us the transpose of the Jacobian.
+    let jacGStructure = join (create nx (lam i. create ng (lam j. (j, i)))) in
+    let nJacG = muli ng nx in
+    -- Computes 𝛁g(x)
+    let evalJacG = lam x. lam jacG.
+      tensorMapExn (lam x. lam. num x) x xd;
+      jacT arg.g xd jacGd;
+      tensorMapExn (lam x. lam. unpack x) (tensorReshapeExn jacGd [nJacG]) jacG;
+      ()
+    in
+    -- The Hessian of the Lagrangian is symmetric so we only need the lower
+    -- triangular part.
+    let hStructure =
+      join
+        (create
+          nx
+          (lam i.
+            unfoldr
+              (lam j. if gti j i then None () else Some ((i, j), succ j))
+              0))
+    in
+    -- Computes σ𝛁^2f(x_k) + Σ_i[λ_i𝛁^2g_i(x_k)]
+    let evalH = lam sigma. lam x. lam lambda. lam h.
+      tensorMapExn (lam x. lam. num x) x xd;
+      iteri
+        (lam k : Int. lam ij : (Int, Int).
+          match ij with (i, j) then
+            tset h [k] (mulf sigma (unpack (hessij arg.f i j xd)));
+            hessijs arg.g i j xd hijd;
+            tensorMapExn (lam x. lam. unpack x) hijd hij;
+            tensorMapExn mulf lambda hij;
+            tset h [k] (tensorFold addf (tget h [k]) hij);
+            ()
+          else never)
+        hStructure;
+      ()
+    in
+    let lb = tensorOfSeqExn tcreate [nx] arg.lb in
+    let ub = tensorOfSeqExn tcreate [nx] arg.ub in
+    let constraintsLb = tensorOfSeqExn tcreate [ng] arg.constraintsLb in
+    let constraintsUb = tensorOfSeqExn tcreate [ng] arg.constraintsUb in
+    ipoptCreateNLP {
+      evalF = evalF,
+      evalGradF = evalGradF,
+      evalG = evalG,
+      jacGStructure = jacGStructure,
+      evalJacG = evalJacG,
+      hStructure = hStructure,
+      evalH = evalH,
+      lb = lb,
+      ub = ub,
+      constraintsLb = constraintsLb,
+      constraintsUb = constraintsUb
+    }
   else error "ipoptAdCreateNLP: Shape mismatch between lower and upper bounds"
 
 mexpr
@@ -143,24 +139,16 @@ let f = lam x.
   addn (muln x0 (muln x3 (addn x0 (addn x1 x2)))) x2
 in
 
-let g0 = lam x.
+let g = lam x. lam r.
   let x0 = tget x [0] in
   let x1 = tget x [1] in
   let x2 = tget x [2] in
   let x3 = tget x [3] in
-  muln x0 (muln x1 (muln x2 x3))
+  tset r [0] (muln x0 (muln x1 (muln x2 x3)));
+  tset r [1] (addn (muln x0 x0) (addn (muln x1 x1)
+                                (addn (muln x2 x2) (muln x3 x3))));
+  ()
 in
-
-let g1 = lam x.
-  let x0 = tget x [0] in
-  let x1 = tget x [1] in
-  let x2 = tget x [2] in
-  let x3 = tget x [3] in
-  addn (muln x0 x0) (addn (muln x1 x1)
-                    (addn (muln x2 x2) (muln x3 x3)))
-in
-
-let gs = [g0, g1] in
 
 let lb = [1., 1., 1., 1.] in
 let ub = [5., 5., 5., 5.] in
@@ -169,7 +157,7 @@ let constraintsUb = [inf, 40.] in
 
 let p = ipoptAdCreateNLP {
   f = f,
-  gs = gs,
+  g = g,
   lb = lb,
   ub = ub,
   constraintsLb = constraintsLb,
