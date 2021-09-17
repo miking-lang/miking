@@ -1,8 +1,8 @@
-include "mexpr/rewrite/pattern-match.mc"
-include "mexpr/rewrite/parallel-patterns.mc"
-include "mexpr/rewrite/promote.mc"
+include "pmexpr/pattern-match.mc"
+include "pmexpr/parallel-patterns.mc"
+include "pmexpr/promote.mc"
 
-lang MExprParallelPattern = MExprParallelKeywordMaker + PMExprPromote
+lang PMExprParallelPattern = PMExprAst + PMExprPromote
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
     let binding : RecLetBinding = t in
@@ -115,8 +115,8 @@ lang MExprParallelPattern = MExprParallelKeywordMaker + PMExprPromote
 end
 
 lang TestLang =
-  MExprANF + MExprRewrite + MExprParallelKeywordMaker + MExprTailRecursion +
-  MExprPrettyPrint + MExprParallelPattern
+  MExprANF + PMExprRewrite + PMExprAst + PMExprTailRecursion + MExprPrettyPrint +
+  PMExprParallelPattern
 
   sem isAtomic =
   | TmParallelMap _ -> false

@@ -5,8 +5,7 @@ include "mexpr/keyword-maker.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 
-lang MExprParallelKeywordMaker =
-  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
+lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
@@ -196,29 +195,29 @@ lang MExprParallelKeywordMaker =
 end
 
 let accelerate_ = lam e.
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   TmAccelerate {e = e, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
 
 let parallelMap_ = lam f. lam as.
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   TmParallelMap {f = f, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
 let parallelMap2_ = lam f. lam as. lam bs.
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   TmParallelMap2 {f = f, as = as, bs = bs, ty = TyUnknown {info = NoInfo ()},
                   info = NoInfo ()}
 let parallelFlatMap_ = lam f. lam as.
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   TmParallelFlatMap {f = f, as = as, ty = TyUnknown {info = NoInfo ()},
                      info = NoInfo ()}
 let parallelReduce_ = lam f. lam ne. lam as.
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
                     info = NoInfo ()}
 
 mexpr
 
-use MExprParallelKeywordMaker in
+use PMExprAst in
 
 let id_ = ulam_ "x" (var_ "x") in
 let singleton_ = ulam_ "x" (seq_ [var_ "x"]) in

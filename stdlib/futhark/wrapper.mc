@@ -6,7 +6,7 @@ include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
-include "mexpr/rewrite/extract.mc"
+include "pmexpr/extract.mc"
 
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
@@ -933,7 +933,7 @@ let functionIdent = nameSym "f" in
 let dataEntry : AcceleratedData = {
   identifier = functionIdent,
   bytecodeWrapperId = nameSym "fbyte",
-  params = [(nameSym "s", NoInfo (), tyseq_ tyint_)],
+  params = [(nameSym "s", tyseq_ tyint_)],
   returnType = tyseq_ tyint_,
   info = NoInfo ()
 } in

@@ -2,10 +2,10 @@
 -- verified to follow certain properties.
 
 include "mexpr/ast-builder.mc"
-include "mexpr/rewrite/function-properties.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
+include "pmexpr/function-properties.mc"
+include "pmexpr/ast.mc"
 
-lang PMExprPromote = MExprParallelKeywordMaker + PMExprFunctionProperties
+lang PMExprPromote = PMExprAst + PMExprFunctionProperties
   sem getInnerFunction =
   | TmLam t -> getInnerFunction t.body
   | TmApp t -> getInnerFunction t.lhs

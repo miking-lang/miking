@@ -1,7 +1,7 @@
 include "mexpr/ast.mc"
-include "mexpr/rewrite/function-properties.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/function-properties.mc"
+include "pmexpr/utils.mc"
 
 type VarPattern
 con PatternIndex : Int -> VarPattern
@@ -169,7 +169,7 @@ let getMatchExpr
   else never
 
 let eliminateUnusedLetExpressions : Expr -> Expr =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam e.
   recursive let collectVariables = lam acc. lam expr.
     match expr with TmVar {ident = ident} then
@@ -199,7 +199,7 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
 -- is a singleton sequence in the 'parallelMap' case.
 let mapPatRef : Ref (Option Pattern) = ref (None ())
 let mapPattern : () -> Pattern =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam.
   let s = nameSym "s" in
   let acc = nameSym "acc" in
@@ -257,7 +257,7 @@ let getMapPattern = lam.
 -- Definition of the 'parallelMap2' pattern
 let map2PatRef : Ref (Option Pattern) = ref (None ())
 let map2Pattern : () -> Pattern =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam.
   let s1 = nameSym "s1" in
   let s2 = nameSym "s2" in

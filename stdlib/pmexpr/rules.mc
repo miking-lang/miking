@@ -3,9 +3,9 @@ include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/utils.mc"
 
-lang MExprRewrite = MExprAst + MExprEq + MExprConstType
+lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
   sem rewriteTerm =
   -- cons e seq -> concat [e] seq
   | TmApp ({lhs = TmApp ({lhs = TmConst ({val = CCons _} & cons),
@@ -102,7 +102,7 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
   | t -> smap_Expr_Expr rewriteTerm t
 end
 
-lang TestLang = MExprRewrite + MExprTypeAnnot + MExprEq + MExprPrettyPrint
+lang TestLang = PMExprRewrite + MExprTypeAnnot + MExprEq + MExprPrettyPrint
 
 mexpr
 

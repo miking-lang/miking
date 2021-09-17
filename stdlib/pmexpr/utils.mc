@@ -4,11 +4,11 @@ include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
+include "pmexpr/ast.mc"
 
 -- Gets the return type of the body of a function.
 recursive let functionBodyReturnType : Expr -> Type =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam expr.
   match expr with TmLam {body = body} then
     functionBodyReturnType body
@@ -18,7 +18,7 @@ end
 -- Replaces the body of a functiion body, excluding its top-level parameters,
 -- with a new expression.
 recursive let replaceFunctionBody : Expr -> Expr -> Expr =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam funcExpr. lam newExpr.
   match funcExpr with TmLam t then
     let body = replaceFunctionBody t.body newExpr in
@@ -30,7 +30,7 @@ end
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.
 let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam e. lam nameMap.
   recursive let work = lam e.
     match e with TmVar {ident = id, info = info} then

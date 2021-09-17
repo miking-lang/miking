@@ -8,9 +8,9 @@ include "mexpr/ast.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
+include "pmexpr/ast.mc"
 
-lang PMExprFunctionProperties = MExprParallelKeywordMaker + MExprCmp
+lang PMExprFunctionProperties = PMExprAst + MExprCmp
   sem isAssociative =
   | t -> isAssociativeH (setEmpty cmpExpr) t
 

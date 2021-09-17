@@ -13,9 +13,9 @@
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/rewrite/function-properties.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/function-properties.mc"
+include "pmexpr/utils.mc"
 
 type TailRecursiveEnv = {
   binop : Expr,
@@ -81,7 +81,7 @@ let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
       (lam. Some {binop = binop, side = side})
   else None ()
 
-lang MExprTailRecursion = MExprParallelKeywordMaker + PMExprFunctionProperties
+lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
   -- Attempts to construct a tail-recursion rewrite environment from the given
   -- recursive binding. If this succeeds, this environment can be used to rewrite
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
@@ -297,7 +297,7 @@ lang MExprTailRecursion = MExprParallelKeywordMaker + PMExprFunctionProperties
 end
 
 lang TestLang =
-  MExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
+  PMExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
 
 mexpr
 

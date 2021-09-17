@@ -1,10 +1,9 @@
-include "mexpr/anf.mc"
-include "mexpr/rewrite/parallel-patterns.mc"
-include "mexpr/rewrite/rules.mc"
-include "mexpr/rewrite/tailrecursion.mc"
-include "mexpr/rewrite/utils.mc"
-
 include "set.mc"
+include "mexpr/anf.mc"
+include "pmexpr/parallel-patterns.mc"
+include "pmexpr/rules.mc"
+include "pmexpr/tailrecursion.mc"
+include "pmexpr/utils.mc"
 
 type PatternMatchState = {
   -- A sequence of indices of the active patterns. These are patterns whose
@@ -53,13 +52,13 @@ let isFinalState : PatternMatchState -> Bool = lam state.
 -- the name, assuming that the given expression is always a variable. If this
 -- assumption does not hold, it returns None.
 let getVariableIdentifier : Expr -> Option Name =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam varExpr.
   match varExpr with TmVar {ident = ident} then Some ident
   else None ()
 
 let findVariableDependencies : PatternMatchState -> Expr -> Set Int =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam state. lam expr.
   recursive let work : Set Int -> Expr -> Set Int = lam acc. lam expr.
     match expr with TmVar {ident = ident} then
@@ -83,7 +82,7 @@ let updateVariableDependencies : PatternMatchState -> Name -> Expr
     mapInsert ident bodyDependencies state.variableDependencies}
 
 let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam state. lam boundVar. lam expr. lam patIndex.
   match mapLookup patIndex state.pattern.atomicPatternMap with Some pat then
     let active =
@@ -136,7 +135,7 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
 
 let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
                         -> Option PatternMatchState =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam expr. lam state. lam varPat.
   match expr with TmVar {ident = ident} then
     match varPat with PatternIndex index then
@@ -161,7 +160,7 @@ let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
 recursive
   let matchAtomicPattern : Name -> [(Name, Type, Info)] -> Expr
                         -> PatternMatchState -> Int -> Option PatternMatchState =
-    use MExprParallelKeywordMaker in
+    use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state. lam patIdx.
     let checkVarPatterns : [VarPattern] -> [Expr] -> State -> Option State =
       lam patterns. lam exprs. lam state.
@@ -305,7 +304,7 @@ recursive
 
   let matchAtomicPatterns : Name -> [(Name, Type, Info)] -> Expr
                          -> PatternMatchState -> Option PatternMatchState =
-    use MExprParallelKeywordMaker in
+    use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state.
     match expr with TmLet {ident = ident, body = body, inexpr = inexpr} then
       let updatedState =
@@ -353,7 +352,7 @@ let constructLookup : PatternMatchState -> Map VarPattern Expr = lam state.
     lookup state.nameMatches
 
 let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
-  use MExprParallelKeywordMaker in
+  use PMExprAst in
   lam binding. lam pattern.
   let initState =
     {{emptyPatternMatchState pattern
@@ -370,8 +369,7 @@ let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
   else never
 
 lang TestLang =
-  MExprANF + MExprRewrite + MExprParallelKeywordMaker + MExprTailRecursion +
-  MExprPrettyPrint
+  MExprANF + PMExprRewrite + PMExprAst + PMExprTailRecursion + MExprPrettyPrint
 
 mexpr
 

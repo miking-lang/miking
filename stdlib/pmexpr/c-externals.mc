@@ -1,5 +1,6 @@
-include "mexpr/rewrite/extract.mc"
+include "mexpr/ast.mc"
 include "ocaml/ast.mc"
+include "pmexpr/extract.mc"
 
 lang OCamlCExternals = MExprAst + OCamlAst
   sem insertExternalCDeclarations (accelerated : Map Name AccelerateData) =

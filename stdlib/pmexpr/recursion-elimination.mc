@@ -4,10 +4,10 @@
 
 include "digraph.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/utils.mc"
 
-lang PMExprRecursionElimination = MExprParallelKeywordMaker
+lang PMExprRecursionElimination = PMExprAst
   -- Adds an edge from the vertex given by the index of the given indexed binding
   -- to every vertex of the bindings that it contains a call to.
   sem addCallsToGraph (bindingIdentToIndex : Map Name Int) (bindingIndex : Int)

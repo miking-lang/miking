@@ -3,12 +3,12 @@
 -- result, and all its arguments, are wrapped in calls to convertAccelerateParameters to ensure
 -- they have a valid OCaml type.
 
-include "mexpr/rewrite/extract.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
 include "ocaml/external.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/extract.mc"
+include "pmexpr/utils.mc"
 
-lang PMExprReplaceAccelerate = MExprParallelKeywordMaker + OCamlGenerateExternal
+lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal
   sem _mexprToOCamlType =
   | TySeq t -> OTyArray {info = t.info, ty = _mexprToOCamlType t.ty}
   | t -> t

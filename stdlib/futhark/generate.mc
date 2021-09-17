@@ -9,8 +9,8 @@ include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/utils.mc"
 
 type FutharkGenerateEnv = {
   entryPoints : Set Name,
@@ -369,7 +369,7 @@ end
 
 lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                            FutharkMatchGenerate + FutharkAppGenerate +
-                           MExprParallelKeywordMaker
+                           PMExprAst
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmVar t ->
     FEVar {ident = t.ident, ty = generateType env t.ty, info = t.info}

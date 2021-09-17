@@ -13,22 +13,22 @@ include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
-include "mexpr/rewrite/extract.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/parallel-rewrite.mc"
-include "mexpr/rewrite/recursion-elimination.mc"
-include "mexpr/rewrite/replace-accelerate.mc"
-include "mexpr/rewrite/rules.mc"
-include "mexpr/rewrite/tailrecursion.mc"
-include "ocaml/c-externals.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "ocaml/sys.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/c-externals.mc"
+include "pmexpr/extract.mc"
+include "pmexpr/parallel-rewrite.mc"
+include "pmexpr/recursion-elimination.mc"
+include "pmexpr/replace-accelerate.mc"
+include "pmexpr/rules.mc"
+include "pmexpr/tailrecursion.mc"
 
 lang PMExprCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprParallelKeywordMaker +
-  MExprANF + MExprRewrite + MExprTailRecursion + MExprParallelPattern +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
+  MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprReplaceAccelerate + FutharkGenerate +
   FutharkFunctionRestrictions + FutharkRecordInline +
@@ -37,7 +37,7 @@ lang PMExprCompile =
 end
 
 -- Pretty-printing of PMExpr terms. This is just used for debugging purposes.
-lang PMExprPrettyPrint = MExprPrettyPrint + MExprParallelKeywordMaker
+lang PMExprPrettyPrint = MExprPrettyPrint + PMExprAst
   sem isAtomic =
   | TmAccelerate _ -> false
   | TmParallelMap _ -> false

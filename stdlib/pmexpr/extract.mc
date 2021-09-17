@@ -11,8 +11,8 @@ include "mexpr/eq.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
-include "mexpr/rewrite/parallel-keywords.mc"
-include "mexpr/rewrite/utils.mc"
+include "pmexpr/ast.mc"
+include "pmexpr/utils.mc"
 
 type AccelerateData = {
   identifier : Name,
@@ -36,7 +36,7 @@ let _randAlphanum : Unit -> Char = lam.
   else if lti r 36 then int2char (addi r 55)
   else int2char (addi r 61)
 
-lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
+lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
   sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
@@ -340,8 +340,7 @@ let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
     ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x")))),
-    ("h", ulam_ "x" (app_ (var_ "t") (var_ "x")))],
+    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
   unit_
 ]) in
 let x : (Map Name Type, Expr) = extractAccelerate inRecursiveBinding in
