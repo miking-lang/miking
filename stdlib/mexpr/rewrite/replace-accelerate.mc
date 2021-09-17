@@ -42,10 +42,16 @@ lang PMExprReplaceAccelerate = MExprParallelKeywordMaker + OCamlGenerateExternal
   -- let-expressions involving an accelerate term and updates calls to such
   -- terms to properly convert types of parameters and the return value.
   sem replaceAccelerate (accelerated : Map Name AccelerateData) =
-  | t & (TmApp _) ->
-    match collectAppArguments t with (TmVar {ident = id}, _) then
-      match mapLookup id accelerated with Some _ then
-        convertAccelerateParameters t
+  | t & (TmApp {lhs = lhs, ty = appTy}) ->
+    let appArgs = collectAppArguments t in
+    match appArgs with (TmVar {ident = id}, args) then
+      if mapMem id accelerated then
+        -- NOTE(larshum, 2021-09-17): Remove the dummy parameter if it is not
+        -- the only parameter.
+        match args with _ ++ [TmConst {val = CInt {val = 0}}] then
+          let lhs = withType appTy lhs in
+          convertAccelerateParameters lhs
+        else convertAccelerateParameters t
       else t
     else t
   | TmLet t ->

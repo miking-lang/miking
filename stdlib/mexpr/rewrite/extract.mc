@@ -22,7 +22,7 @@ type AccelerateData = {
   info : Info
 }
 
-type ExtractAccelerateEnv = {
+type AddIdentifierAccelerateEnv = {
   functions : Map Expr AccelerateData,
   programIdentifiers : Set SID
 }
@@ -37,7 +37,7 @@ let _randAlphanum : Unit -> Char = lam.
   else int2char (addi r 61)
 
 lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
-  sem collectProgramIdentifiers (env : ExtractAccelerateEnv) =
+  sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
     {env with programIdentifiers = setInsert sid env.programIdentifiers}
@@ -72,11 +72,11 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
     } in
     let env = collectProgramIdentifiers env t in
     match addIdentifierToAccelerateTermsH env t with (env, t) then
-      let env : ExtractAccelerateEnv = env in
+      let env : AddIdentifierAccelerateEnv = env in
       (env.functions, t)
     else never
 
-  sem addIdentifierToAccelerateTermsH (env : ExtractAccelerateEnv) =
+  sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
   | TmAccelerate t ->
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
@@ -91,21 +91,34 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
       returnType = retType,
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
+    let funcType = TyArrow {from = paramTy, to = retType, info = info} in
     let accelerateLet =
       TmLet {
         ident = accelerateIdent,
-        tyBody = TyArrow {from = paramTy, to = retType, info = info},
+        tyBody = funcType,
         body = TmLam {ident = paramId, tyIdent = paramTy,
                       body = t.e, ty = retType, info = info},
-        inexpr = TmVar {ident = accelerateIdent, ty = retType, info = info},
+        inexpr = TmApp {
+          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info},
+          rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
+          ty = retType,
+          info = info},
         ty = retType, info = info}
     in
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
+  sem collectIdentifiersH (bound : Set Name) (used : Set Name) =
+  | TmVar t ->
+    if setMem t.ident bound then used
+    else setInsert t.ident used
+  | TmLam t ->
+    let bound = setInsert t.ident bound in
+    collectIdentifiersH bound used t.body
+  | t -> sfold_Expr_Expr (collectIdentifiersH bound) used t
+
   sem collectIdentifiers (used : Set Name) =
-  | TmVar t -> setInsert t.ident used
-  | t -> sfold_Expr_Expr collectIdentifiers used t
+  | t -> collectIdentifiersH (setEmpty nameCmp) used t
 
   -- Construct an extracted AST from the given AST, containing all terms that
   -- are used by the accelerate terms.
@@ -159,7 +172,7 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
           visited bindingIdents in
       let usedBinds =
         filter
-          (lam bind : RecLetBinding. setMem bind.ident visited)
+          (lam bind : RecLetBinding. setMem bind.ident usedIdents)
           t.bindings in
       let used = foldl collectBindIdents used usedBinds in
       if null usedBinds then (used, inexpr)
@@ -184,7 +197,9 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
       mapMapWithKey
         (lam accId : Name. lam accData : AccelerateData.
           match mapLookup accId solutions with Some fv then
-            {accData with params = mapBindings fv}
+            if gti (mapSize fv) 0 then
+              {accData with params = mapBindings fv}
+            else accData
           else accData)
         accelerated in
     (accelerated, ast)

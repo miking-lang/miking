@@ -11,20 +11,26 @@ include "string.mc"
 
 let transposeSq : [[Int]] -> [[Int]] = lam m.
   let n = length m in
-  create n (lam i. create n (lam j. get (get m j) i))
+  create n
+    (lam i : Int.
+      let inner : [Int] = create n (lam j : Int. get (get m j) i) in
+      inner)
 
 let addProd : [Int] -> [Int] -> Int = lam row. lam col.
   recursive let work = lam row. lam col.
     if null row then []
     else if null col then []
-    else
-      cons (muli (head row) (head col)) (work (tail row) (tail col))
+    else cons (muli (head row) (head col)) (work (tail row) (tail col))
   in
   foldl addi 0 (work row col)
 
 let matMulSq : [[Int]] -> [[Int]] -> [[Int]] = lam a. lam b.
   let b = transposeSq b in
-  map (lam aRow. map (addProd aRow) b) a
+  map
+    (lam aRow : [Int].
+      let row : [Int] = map (addProd aRow) b in
+      row)
+    a
 
 let matSumSq : [[Int]] -> Int = lam m.
   foldl addi 0 (map (foldl addi 0) m)
