@@ -241,7 +241,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
             -- reimplementing the type inference of applications.
             typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
           (TmVar {ident = t.ident, ty = t.tyBody, info = info})
-          fv in
+          (reverse fv) in
 
       -- Update the annotated type of the function to include the types of the
       -- added parameters.
@@ -731,8 +731,21 @@ let nestedFreeVar = preprocess (bindall_ [
 let expected = preprocess (bindall_ [
   ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "x") (var_ "z")))),
   ulet_ "g" (ulam_ "x" (ulam_ "y" (appf2_ (var_ "h") (var_ "x") (var_ "y")))),
-  ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (var_ "x")))
-]) in
+  ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (var_ "x")))]) in
 utest liftLambdas nestedFreeVar with expected using eqExpr in
+
+let letMultiParam = preprocess (bindall_ [
+  ulet_ "a" (int_ 2),
+  ulet_ "b" (int_ 6),
+  ulet_ "f" (ulam_ "x" (
+    addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))),
+  app_ (var_ "f") (int_ 7)]) in 
+let expected = preprocess (bindall_ [
+  ulet_ "a" (int_ 2),
+  ulet_ "b" (int_ 6),
+  ulet_ "f" (ulam_ "a" (ulam_ "b" (ulam_ "x" (
+    addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))))),
+  appf3_ (var_ "f") (var_ "a") (var_ "b") (int_ 7)]) in
+utest liftLambdas letMultiParam with expected using eqExpr in
 
 ()
