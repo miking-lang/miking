@@ -77,7 +77,8 @@ test-all:\
   test-compile\
   test-run\
   test-par\
-  test-boot
+  test-boot\
+	test-tune
 
 test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk
