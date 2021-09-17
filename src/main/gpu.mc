@@ -183,6 +183,8 @@ gpu.c gpu.h: gpu.fut
   writeFile (tempfile "dune") dunefile;
   writeFile (tempfile "Makefile") makefile;
 
+  -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
+  -- it for convenience because dune cannot set environment variables.
   let command = ["make"] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
