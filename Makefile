@@ -30,8 +30,9 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
+	test-ipopt\
   test-par\
-	test-tune
+  test-tune
 
 all: build
 
@@ -73,6 +74,7 @@ uninstall:
 test: test-boot-base
 
 test-all:\
+	lint\
   test-boot-compile\
   test-compile\
   test-run\
@@ -105,6 +107,9 @@ test-boot-ocaml: boot
 
 test-sundials: build
 	@$(MAKE) -s -f test-sundials.mk
+
+test-ipopt: build/mi
+	@$(MAKE) -s -f test-ipopt.mk all
 
 test-par: build
 	@$(MAKE) -s -f test-par.mk

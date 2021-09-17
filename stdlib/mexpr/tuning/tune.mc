@@ -252,7 +252,7 @@ let tuneEntry =
 
     -- Do warmup runs
     use TuneBase in
-    iter (lam. map (time table run tuneFile) options.input)
+    iter (lam. map (time table run tuneFile) options.input; ())
       (range 0 options.warmups 1);
 
     -- Choose search method
