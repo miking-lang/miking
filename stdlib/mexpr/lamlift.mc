@@ -419,10 +419,16 @@ lang MExprLambdaLift =
 
   sem liftLambdas =
   | t ->
+    match liftLambdasWithSolutions t with (_, t) then
+      t
+    else never
+
+  sem liftLambdasWithSolutions =
+  | t ->
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
-    liftGlobal t
+    (state.sols, liftGlobal t)
 end
 
 lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot

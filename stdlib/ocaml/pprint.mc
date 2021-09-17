@@ -326,9 +326,12 @@ lang OCamlPrettyPrint =
     match pprintVarName env t.ident with (env, ident) then
       match getTypeStringCode indent env t.ty with (env, ty) then
         match pprintCode indent env t.inexpr with (env, inexpr) then
+          -- NOTE(larshum, 2021-09-17): We use the string of the names
+          -- directly, as we know it is unique and we do not want it to be
+          -- escaped.
           (env, join ["external ", ident, " : ", ty, " = ",
-                      "\"", t.bytecodeIdent, "\" ",
-                      "\"", t.nativeIdent, "\";;",
+                      "\"", nameGetStr t.bytecodeIdent, "\" ",
+                      "\"", nameGetStr t.nativeIdent, "\";;",
                       pprintNewline indent, inexpr])
         else never
       else never

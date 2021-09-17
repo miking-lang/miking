@@ -1,13 +1,18 @@
+include "mexpr/rewrite/extract.mc"
 include "ocaml/ast.mc"
 
 lang OCamlCExternals = MExprAst + OCamlAst
-  sem insertExternalCDeclarations (externals : Map Name (Name, Type)) =
-  | ast /- : Expr -/ ->
+  sem insertExternalCDeclarations (accelerated : Map Name AccelerateData) =
+  | ast /- : Expr -> Expr -/ ->
     mapFoldWithKey
-      (lam acc : Expr. lam k : Name. lam v : (Name, Type).
-        OTmCExternalDecl {ident = k, ty = v.1,
-                          bytecodeIdent = concat (nameGetStr v.0) "_bytecode",
-                          nativeIdent = nameGetStr v.0, inexpr = acc})
-      ast
-      externals
+      (lam acc : Expr. lam k : Name. lam v : AccelerateData.
+        let ty =
+          foldr
+            (lam param : (Name, Type). lam acc : Type.
+              TyArrow {from = param.1, to = acc, info = infoTy acc})
+            v.returnType v.params in
+        OTmCExternalDecl {
+          ident = k, ty = ty, bytecodeIdent = v.bytecodeWrapperId,
+          nativeIdent = k, inexpr = acc})
+      ast accelerated
 end

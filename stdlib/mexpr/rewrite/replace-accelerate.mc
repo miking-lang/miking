@@ -1,8 +1,9 @@
 -- Replaces all TmAccelerate terms with a function call referring to an
 -- external function (which is added to the generated OCaml code). The function
--- result, and all its arguments, are wrapped in calls to convertData to ensure
+-- result, and all its arguments, are wrapped in calls to convertAccelerateParameters to ensure
 -- they have a valid OCaml type.
 
+include "mexpr/rewrite/extract.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 include "ocaml/external.mc"
@@ -20,42 +21,37 @@ lang PMExprReplaceAccelerate = MExprParallelKeywordMaker + OCamlGenerateExternal
       e
     else never
 
-  sem useExternalIdentifier (externals : Map Name Name) =
+  sem convertAccelerateParametersH =
   | TmApp t ->
-    match useExternalIdentifier externals t.lhs with (externals, lhs) then
-      let rhs = wrapInConvertData t.rhs in
-      (externals, TmApp {{t with lhs = lhs} with rhs = rhs})
-    else never
-  | TmVar t ->
-    match mapLookup t.ident externals with Some extIdent then
-      (externals, TmVar {t with ident = extIdent})
-    else
-      let extIdent = nameSym (concat (nameGetStr t.ident) "_ext") in
-      let externals = mapInsert t.ident extIdent externals in
-      (externals, TmVar {t with ident = extIdent})
-  | t -> infoErrorExit (infoTm t) "Accelerated term must be an application"
+    let lhs = convertAccelerateParametersH t.lhs in
+    let rhs = wrapInConvertData t.rhs in
+    TmApp {{t with lhs = lhs} with rhs = rhs}
+  | t -> t
 
-  sem replaceAccelerateH (externals : Map Name Name) =
-  | TmAccelerate t ->
-    -- TODO(larshum, 2021-09-09): Call the external function using the
-    -- (non-arrow typed) free variables as parameters.
-    match useExternalIdentifier externals t.e with (externals, e) then
-      let ty = ty e in
-      let ocamlTy = _mexprToOCamlType ty in
-      match convertData (infoTm e) emptyGenerateEnv e ocamlTy ty with (_, e) then
-        (externals, e)
-      else never
-    else never
-  | t -> smapAccumL_Expr_Expr replaceAccelerateH externals t
-
-  sem replaceAccelerate (accelerated : Map Name Type) =
+  sem convertAccelerateParameters =
   | ast ->
-    let externals = mapEmpty nameCmp in
-    match replaceAccelerateH externals ast with (externals, ast) then
-      let externalAccelerated =
-        mapFromSeq nameCmp
-          (zip (mapValues externals) (mapBindings accelerated))
-      in
-      (externalAccelerated, ast)
+    let ast = convertAccelerateParametersH ast in
+    let ty = ty ast in
+    let ocamlTy = _mexprToOCamlType ty in
+    match convertData (infoTm ast) emptyGenerateEnv ast ocamlTy ty
+    with (_, ast) then
+      ast
     else never
+
+  -- We replace the auxilliary acceleration terms in the AST, by removing any
+  -- let-expressions involving an accelerate term and updates calls to such
+  -- terms to properly convert types of parameters and the return value.
+  sem replaceAccelerate (accelerated : Map Name AccelerateData) =
+  | t & (TmApp _) ->
+    match collectAppArguments t with (TmVar {ident = id}, _) then
+      match mapLookup id accelerated with Some _ then
+        convertAccelerateParameters t
+      else t
+    else t
+  | TmLet t ->
+    if mapMem t.ident accelerated then
+      replaceAccelerate accelerated t.inexpr
+    else TmLet {{t with body = replaceAccelerate accelerated t.body}
+                   with inexpr = replaceAccelerate accelerated t.inexpr}
+  | t -> smap_Expr_Expr (replaceAccelerate accelerated) t
 end

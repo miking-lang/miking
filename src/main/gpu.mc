@@ -205,29 +205,49 @@ let compileGPU : String -> Unit = lam file.
   let ast = utestStrip ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
+
+  -- Translate accelerate terms into functions with one dummy parameter, so
+  -- that we can accelerate terms without free variables and so that it is
+  -- lambda lifted.
   match addIdentifierToAccelerateTerms ast with (accelerated, ast) then
-    let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-    let ast = liftLambdas ast in
-    let accelerateAst = extractAccelerateTerms accelerateIds ast in
-    printLn (pprintPMExprAst accelerateAst);
 
-    -- Generate Futhark code
-    let pmexprAst = patternTransformation accelerateAst in
-    let futharkAst = futharkTranslation accelerateIds pmexprAst in
-    let futharkProg = pprintFutharkAst futharkAst in
+    -- Perform lambda lifting and return the free variable solutions
+    match liftLambdasWithSolutions ast with (solutions, ast) then
+      let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+      let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
-    -- Generate C wrapper code
-    let cAst = generateWrapperCode accelerated in
-    let cProg = pprintCAst cAst in
+      -- Eliminate the dummy parameter in functions of accelerate terms with at
+      -- least one free variable parameter.
+      match eliminateDummyParameter solutions accelerated accelerateAst
+      with (accelerated, accelerateAst) then
 
-    -- Generate OCaml code
-    match typeLift ast with (env, ast) then
-      match generateTypeDecl env ast with (env, ast) then
-        match replaceAccelerate accelerated ast with (externals, ast) then
-          let ast = generate env ast in
-          let ast = insertExternalCDeclarations externals ast in
-          let ocamlProg = pprintOCamlAst ast in
-          compileAccelerated file ocamlProg cProg futharkProg
+        -- Generate Futhark code
+        let pmexprAst = patternTransformation accelerateAst in
+        let futharkAst = futharkTranslation accelerateIds pmexprAst in
+        let futharkProg = pprintFutharkAst futharkAst in
+
+        -- Generate C wrapper code
+        let cAst = generateWrapperCode accelerated in
+        let cProg = pprintCAst cAst in
+
+        -- Generate OCaml code
+        match typeLift ast with (env, ast) then
+          match generateTypeDecl env ast with (env, ast) then
+            -- Replace auxilliary accelerate terms in the AST by eliminating
+            -- the let-expressions (only used in the accelerate AST) and adding
+            -- data conversion of parameters and result.
+            let ast = replaceAccelerate accelerated ast in
+
+            -- Generate the OCaml AST
+            let ast = generate env ast in
+
+            -- Add an external declaration of a C function in the OCaml AST,
+            -- for each accelerate term.
+            let ast = insertExternalCDeclarations accelerated ast in
+
+            let ocamlProg = pprintOCamlAst ast in
+            compileAccelerated file ocamlProg cProg futharkProg
+          else never
         else never
       else never
     else never

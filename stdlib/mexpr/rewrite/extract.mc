@@ -14,10 +14,10 @@ include "mexpr/type-annot.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
-type AcceleratedData = {
+type AccelerateData = {
   identifier : Name,
   bytecodeWrapperId : Name,
-  params : [(Name, Info, Type)],
+  params : [(Name, Type)],
   returnType : Type,
   info : Info
 }
@@ -87,7 +87,7 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
     let functionData : AccelerateData = {
       identifier = accelerateIdent,
       bytecodeWrapperId = bytecodeIdent,
-      params = [(paramId, info, paramTy)],
+      params = [(paramId, paramTy)],
       returnType = retType,
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
@@ -171,6 +171,48 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker + MExprLambdaLift
   | TmUtest t -> extractAccelerateTermsH used t.next
   | TmExt t -> extractAccelerateTermsH used t.inexpr
   | t -> (used, unit_)
+
+  -- NOTE(larshum, 2021-09-17): All accelerated terms are given a dummy
+  -- parameter, so that expressions without free variables can also be
+  -- accelerated (also for lambda lifting). Here we remove this dummy parameter
+  -- for all accelerate terms with at least one free variable parameter.
+  sem eliminateDummyParameter (solutions : Map Name Type)
+                              (accelerated : Map Name AccelerateData) =
+  | ast ->
+    let ast = eliminateDummyParameterH solutions accelerated ast in
+    let accelerated =
+      mapMapWithKey
+        (lam accId : Name. lam accData : AccelerateData.
+          match mapLookup accId solutions with Some fv then
+            {accData with params = mapBindings fv}
+          else accData)
+        accelerated in
+    (accelerated, ast)
+
+  sem eliminateDummyParameterH (solutions : Map Name (Map Name Type))
+                               (accelerated : Map Name AccelerateData) =
+  | TmLet t ->
+    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+    if mapMem t.ident accelerated then
+      match mapLookup t.ident solutions with Some idSols then
+        if gti (mapSize idSols) 0 then
+          TmLet {{{t with tyBody = eliminateInnermostParameterType t.tyBody}
+                     with body = eliminateInnermostLambda t.body}
+                     with inexpr = inexpr}
+        else TmLet {t with inexpr = inexpr}
+      else TmLet {t with inexpr = inexpr}
+    else TmLet {t with inexpr = inexpr}
+  | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
+
+  sem eliminateInnermostParameterType =
+  | TyArrow {from = TyInt _, to = to & !(TyArrow _)} -> to
+  | TyArrow t -> TyArrow {t with to = eliminateInnermostParameterType t.to}
+  | t -> infoErrorExit (infoTy t) "Unexpected type of accelerate function body"
+
+  sem eliminateInnermostLambda =
+  | TmLam {body = body & !(TmLam _)} -> body
+  | TmLam t -> TmLam {t with body = eliminateInnermostLambda t.body}
+  | t -> infoErrorExit (infoTm t) "Unexpected structure of accelerate body"
 end
 
 lang TestLang =

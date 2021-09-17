@@ -830,8 +830,8 @@ lang FutharkCWrapper =
     else [fstDeclStmt]
 
   sem generateBytecodeWrapper =
-  | data /- : AcceleratedData -/ ->
-    let data : AcceleratedData = data in
+  | data /- : AccelerateData -/ ->
+    let data : AccelerateData = data in
     let valueTy = CTyVar {id = _getIdentExn "value"} in
     let bytecodeStr = nameGetStr data.bytecodeWrapperId in
     let bytecodeFunctionName = nameSym bytecodeStr in
@@ -856,15 +856,15 @@ lang FutharkCWrapper =
       }}]}
 
   sem generateWrapperFunctionCode =
-  | data /- : AcceleratedData -/ ->
-    let data : AcceleratedData = data in
-    let toArgData = lam arg : (Name, Info, Type).
+  | data /- : AccelerateData -/ ->
+    let data : AccelerateData = data in
+    let toArgData = lam arg : (Name, Type).
       {{defaultArgData with ident = arg.0}
-                       with ty = arg.2}
+                       with ty = arg.1}
     in
     let bytecodeWrapper = generateBytecodeWrapper data in
     let returnIdent = nameSym "out" in
-    let returnArg = (returnIdent, NoInfo (), data.returnType) in
+    let returnArg = (returnIdent, data.returnType) in
     let env = {{{emptyWrapperEnv with arguments = map toArgData data.params}
                                  with return = toArgData returnArg}
                                  with functionIdent = data.identifier}

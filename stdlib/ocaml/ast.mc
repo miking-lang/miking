@@ -14,8 +14,8 @@ end
 
 lang OCamlCExternalDecl
   syn Expr =
-  | OTmCExternalDecl {ident : Name, ty : Type, bytecodeIdent : String,
-                      nativeIdent : String, inexpr : Expr}
+  | OTmCExternalDecl {ident : Name, ty : Type, bytecodeIdent : Name,
+                      nativeIdent : Name, inexpr : Expr}
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | OTmCExternalDecl t ->
