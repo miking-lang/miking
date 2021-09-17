@@ -147,20 +147,24 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let compileAccelerated : String -> String -> String -> String -> Unit =
-  lam sourcePath. lam ocamlProg. lam cProg. lam futharkProg.
+let compileAccelerated : Options -> String -> String -> String -> String -> Unit =
+  lam options. lam sourcePath. lam ocamlProg. lam cProg. lam futharkProg.
   let dunefile = "
-    (env
-        (dev
-          (flags (:standard -w -a))
-          (ocamlc_flags (-without-runtime))))
-    (executable
-      (name program)
-      (libraries boot)
-      (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)
-      (foreign_stubs (language c) (names gpu wrap)))
-  " in
-  let makefile = "
+(env
+    (dev
+      (flags (:standard -w -a))
+      (ocamlc_flags (-without-runtime))))
+(executable
+  (name program)
+  (libraries boot)
+  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)
+  (foreign_stubs (language c) (names gpu wrap)))" in
+  let futharkCompileCommand =
+    if options.cpuOnly then
+      "futhark multicore --library $^"
+    else
+      "futhark cuda --library $^" in
+  let makefile = concat "
 export LIBRARY_PATH=/usr/local/cuda/lib64
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64
 export CPATH=/usr/local/cuda/include
@@ -169,8 +173,7 @@ program: program.ml wrap.c gpu.c
 	dune build $@.exe
 
 gpu.c gpu.h: gpu.fut
-	futhark cuda --library $^
-  " in
+	" futharkCompileCommand in
 
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
@@ -199,7 +202,7 @@ gpu.c gpu.h: gpu.fut
   sysTempDirDelete td ();
   ()
 
-let compileGPU : String -> Unit = lam file.
+let compileGPU : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
   let ast = parseMCoreFile parallelKeywords file in
   let ast = makeKeywords [] ast in
@@ -248,7 +251,7 @@ let compileGPU : String -> Unit = lam file.
             let ast = insertExternalCDeclarations accelerated ast in
 
             let ocamlProg = pprintOCamlAst ast in
-            compileAccelerated file ocamlProg cProg futharkProg
+            compileAccelerated options file ocamlProg cProg futharkProg
           else never
         else never
       else never
@@ -256,4 +259,4 @@ let compileGPU : String -> Unit = lam file.
   else never
 
 let gpu = lam files. lam options : Options. lam args.
-  iter compileGPU files
+  iter (compileGPU options) files
