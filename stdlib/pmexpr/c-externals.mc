@@ -2,7 +2,7 @@ include "mexpr/ast.mc"
 include "ocaml/ast.mc"
 include "pmexpr/extract.mc"
 
-lang OCamlCExternals = MExprAst + OCamlAst
+lang PMExprCExternals = MExprAst + OCamlAst
   sem insertExternalCDeclarations (accelerated : Map Name AccelerateData) =
   | ast /- : Expr -> Expr -/ ->
     mapFoldWithKey

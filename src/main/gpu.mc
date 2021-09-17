@@ -29,11 +29,11 @@ lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
   MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
-  MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
+  PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprReplaceAccelerate + FutharkGenerate +
   FutharkFunctionRestrictions + FutharkRecordInline +
   FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
-  OCamlCExternals + OCamlGenerate + OCamlTypeDeclGenerate
+  OCamlGenerate + OCamlTypeDeclGenerate
 end
 
 -- Pretty-printing of PMExpr terms. This is just used for debugging purposes.
