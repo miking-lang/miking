@@ -336,6 +336,44 @@ with
   24., 8.
 ]
 
+-- Computes the ij'th component of the Hessian d2f_k/(dx_i)(dx_j) simultaneously
+-- for each component k of vector valued function `f` at `x`, storing the result
+-- in `hij`.
+let hessijs
+  : (Tensor[DualNum] -> Tensor[DualNum] -> ())
+  -> Int
+  -> Int
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam i. lam j. lam x. lam hij.
+  let ei = genEpsilon () in
+  let ej = genEpsilon () in
+  let xi = tensorGetExn x [i] in
+  tensorSetExn x [i] (_dnum ei xi (_num 1.));
+  let xj = tensorGetExn x [j] in
+  tensorSetExn x [j] (_dnum ej xj (_num 1.));
+  f x hij;
+  tensorMapInplace (lam h. _pertubation ei (_pertubation ej h)) hij;
+  tensorSetExn x [j] xj;
+  tensorSetExn x [i] xi;
+  ()
+
+utest
+  let f = lam x. lam r.
+    let x1 = tensorGetExn x [0] in
+    let x2 = tensorGetExn x [1] in
+    tensorSetExn r [0] (muln (muln x1 x1) (muln x2 x2));
+    tensorSetExn r [1] (addn (muln x1 x2) (muln x1 x2));
+    ()
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
+  let hij = tensorCreateDense [2] (lam. _num 0.) in
+  hessijs f 0 1 x hij;
+  map _unpack (tensorToSeqExn (hij))
+with [24., 2.]
+
+
 ----------------
 -- CONSTANTS  --
 ----------------
