@@ -66,6 +66,13 @@ let compile = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
 
+    -- If option --debug-profile, insert instrumented profiling expressions
+    -- in AST
+    let ast =
+      if options.debugProfile then instrumentProfiling (symbolize ast)
+      else ast
+    in
+
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     match generateTests ast options.runTests with (symEnv, ast) then
