@@ -215,7 +215,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   | t -> sfold_Expr_Expr findFreeVariables state t
 end
 
-lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
+lang LambdaLiftInsertFreeVariables = MExprAst
   sem insertFreeVariablesH (solutions : Map Name (Map Name Type))
                            (subMap : Map Name (Info -> Expr)) =
   | TmVar t ->
@@ -237,9 +237,14 @@ lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
         foldr
           (lam freeVar : (Name, Type). lam acc.
             let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info} in
-            -- NOTE(larshum, 2021-09-16): We use type annot here to avoid
-            -- reimplementing the type inference of applications.
-            typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
+            -- NOTE(larshum, 2021-09-19): We assume that the application
+            -- argument has the correct type.
+            let appType =
+              match ty acc with TyArrow {to = to} then
+                to
+              else TyUnknown {info = info}
+            in
+            TmApp {lhs = acc, rhs = x, ty = appType, info = info})
           (TmVar {ident = t.ident, ty = t.tyBody, info = info})
           (reverse fv) in
 
@@ -271,7 +276,14 @@ lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
             (lam freeVar : (Name, Type). lam acc.
               let x = TmVar {ident = freeVar.0, ty = freeVar.1,
                              info = info} in
-              typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
+              -- NOTE(larshum, 2021-09-19): We assume that the application
+              -- argument has the correct type.
+              let appType =
+                match ty acc with TyArrow {to = to} then
+                  to
+                else TyUnknown {info = info}
+              in
+              TmApp {lhs = acc, rhs = x, ty = appType, info = info})
             (TmVar {ident = bind.ident, ty = bind.tyBody, info = info})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
