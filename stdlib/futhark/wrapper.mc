@@ -2,10 +2,9 @@ include "map.mc"
 include "string.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
-include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/pprint.mc"
+include "ocaml/pprint.mc"
 include "pmexpr/extract.mc"
 
 let cWrapperNamesRef = ref (None ())
@@ -432,7 +431,7 @@ lang CToFutharkWrapper = CWrapperBase
     else never
 end
 
-lang FutharkCallWrapper = CWrapperBase
+lang FutharkCallWrapper = CWrapperBase + FutharkIdentifierPrettyPrint
   sem generateFutharkCall =
   | env ->
     let env : CWrapperEnv = env in
@@ -449,7 +448,7 @@ lang FutharkCallWrapper = CWrapperBase
     } in
     -- TODO(larshum, 2021-09-03): This only works under the assumption that the
     -- function name (i.e. the string) is unique.
-    let functionStr = escapeFutharkVarString (nameGetStr env.functionIdent) in
+    let functionStr = escapeVarString (nameGetStr env.functionIdent) in
     let funcId = nameSym (concat "futhark_entry_" functionStr) in
     let returnCodeIdent = nameSym "v" in
     let returnCodeDeclStmt = CSDef {
