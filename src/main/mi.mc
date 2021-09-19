@@ -33,6 +33,8 @@ In such case, options need to be written before the file name.
 Options:
   --debug-parse           Print the AST after parsing
   --debug-generate        Print the AST after code generation
+  --debug-type-annot      Print the AST after adding type annotations
+  --debug-profile         Instrument profiling expressions to AST
   --exit-before           Exit before evaluation or compilation
   --test                  Generate utest code
   --disable-optimizations Disables optimizations to decrease compilation time
