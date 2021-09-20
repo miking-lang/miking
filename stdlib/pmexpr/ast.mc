@@ -48,6 +48,13 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelFlatMap t -> t.ty
   | TmParallelReduce t -> t.ty
 
+  sem infoTm =
+  | TmAccelerate t -> t.info
+  | TmParallelMap t -> t.info
+  | TmParallelMap2 t -> t.info
+  | TmParallelFlatMap t -> t.info
+  | TmParallelReduce t -> t.info
+
   sem withType (ty : Type) =
   | TmAccelerate t -> TmAccelerate {t with ty = ty}
   | TmParallelMap t -> TmParallelMap {t with ty = ty}
@@ -111,7 +118,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelMap2 t ->
     let f = typeAnnotExpr env t.f in
     let elemTy =
-      match ty f with TyArrow {to = to} then to
+      match ty f with TyArrow {to = TyArrow {to = to}} then to
       else tyunknown_
     in
     TmParallelMap2 {{{{t with f = f}

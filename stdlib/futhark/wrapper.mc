@@ -2,9 +2,9 @@ include "map.mc"
 include "string.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
+include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "ocaml/pprint.mc"
 include "pmexpr/extract.mc"
 
 let cWrapperNamesRef = ref (None ())
@@ -448,7 +448,11 @@ lang FutharkCallWrapper = CWrapperBase + FutharkIdentifierPrettyPrint
     } in
     -- TODO(larshum, 2021-09-03): This only works under the assumption that the
     -- function name (i.e. the string) is unique.
-    let functionStr = escapeVarString (nameGetStr env.functionIdent) in
+    let functionStr =
+      match pprintVarName pprintEnvEmpty env.functionIdent with (_, ident) then
+        ident
+      else never
+    in
     let funcId = nameSym (concat "futhark_entry_" functionStr) in
     let returnCodeIdent = nameSym "v" in
     let returnCodeDeclStmt = CSDef {
@@ -545,8 +549,8 @@ lang FutharkToCWrapper = CWrapperBase
     
     -- Find dimensions of result value through 'futhark_shape_*'
     let futReturnTypeString = getMExprSeqFutharkTypeString ty in
-    let futharkShapeString = join ["futhark_shape_", futReturnTypeString] in
-    let futharkShapeIdent = nameSym futharkShapeString in
+    let futharkShapeString = concat "futhark_shape_" futReturnTypeString in
+    let futharkShapeIdent = _getIdentOrInitNew futharkShapeString in
     let dimIdent = nameSym "dim" in
     -- NOTE(larshum, 2021-09-02): We cast away the const because the current C
     -- AST implementation does not support const types.
