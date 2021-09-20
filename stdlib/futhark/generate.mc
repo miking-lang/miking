@@ -376,6 +376,10 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmRecord t ->
     FERecord {fields = mapMap (generateExpr env) t.bindings,
               ty = generateType env t.ty, info = t.info}
+  | TmRecordUpdate t ->
+    FERecordUpdate {rec = generateExpr env t.rec, key = t.key,
+                    value = generateExpr env t.value,
+                    ty = generateType env t.ty, info = t.info}
   | TmSeq t ->
     FEArray {tms = map (generateExpr env) t.tms, ty = generateType env t.ty,
              info = t.info}

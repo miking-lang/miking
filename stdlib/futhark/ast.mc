@@ -156,6 +156,8 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEVar { ident : Name, ty : FutType, info : Info }
   | FERecord { fields : Map SID FutExpr, ty : FutType, info : Info }
   | FERecordProj { rec : FutExpr, key : SID, ty : FutType, info : Info }
+  | FERecordUpdate { rec : FutExpr, key : SID, value : FutExpr, ty : FutType,
+                     info : Info }
   | FEArray { tms : [FutExpr], ty : FutType, info : Info }
   | FEArrayAccess { array : FutExpr, index : FutExpr, ty : FutType,
                     info : Info }
@@ -179,6 +181,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEVar t -> t.info
   | FERecord t -> t.info
   | FERecordProj t -> t.info
+  | FERecordUpdate t -> t.info
   | FEArray t -> t.info
   | FEArrayAccess t -> t.info
   | FEArrayUpdate t -> t.info
@@ -195,6 +198,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEVar t -> FEVar {t with info = info}
   | FERecord t -> FERecord {t with info = info}
   | FERecordProj t -> FERecordProj {t with info = info}
+  | FERecordUpdate t -> FERecordUpdate {t with info = info}
   | FEArray t -> FEArray {t with info = info}
   | FEArrayAccess t -> FEArrayAccess {t with info = info}
   | FEArrayUpdate t -> FEArrayUpdate {t with info = info}
@@ -211,6 +215,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEVar t -> t.ty
   | FERecord t -> t.ty
   | FERecordProj t -> t.ty
+  | FERecordUpdate t -> t.ty
   | FEArray t -> t.ty
   | FEArrayAccess t -> t.ty
   | FEArrayUpdate t -> t.ty
@@ -227,6 +232,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEVar t -> FEVar {t with ty = ty}
   | FERecord t -> FERecord {t with ty = ty}
   | FERecordProj t -> FERecordProj {t with ty = ty}
+  | FERecordUpdate t -> FERecordUpdate {t with ty = ty}
   | FEArray t -> FEArray {t with ty = ty}
   | FEArrayAccess t -> FEArrayAccess {t with ty = ty}
   | FEArrayUpdate t -> FEArrayUpdate {t with ty = ty}
@@ -247,6 +253,12 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FERecordProj t ->
     match f acc t.rec with (acc, rec) then
       (acc, FERecordProj {t with rec = rec})
+    else never
+  | FERecordUpdate t ->
+    match f acc t.rec with (acc, rec) then
+      match f acc t.value with (acc, value) then
+        (acc, FERecordUpdate {{t with rec = rec} with value = value})
+      else never
     else never
   | FEArray t ->
     match mapAccumL f acc t.tms with (acc, tms) then

@@ -1,6 +1,6 @@
 include "ast-builder.mc"
 include "common.mc"
-include "mexpr/pprint.mc"
+include "ocaml/pprint.mc"
 
 -- Converts a given float to a string that uses a valid representation in
 -- Futhark. This is needed because the 'float2string' intrinsic emits the
@@ -157,6 +157,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   sem isAtomic =
   | FEVar _ -> true
   | FERecord _ -> true
+  | FERecordUpdate _ -> true
   | FERecordProj _ -> false
   | FEArray _ -> true
   | FEArrayAccess _ -> false
@@ -200,6 +201,13 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     match pprintParen indent env rec with (env, rec) then
       let str = pprintLabelString key in
       (env, join [rec, ".", str])
+    else never
+  | FERecordUpdate {rec = rec, key = key, value = value} ->
+    match pprintParen indent env rec with (env, rec) then
+      let key = pprintLabelString key in
+      match pprintExpr indent env value with (env, value) then
+        (env, join [rec, " with ", key, " = ", value])
+      else never
     else never
   | FEArray {tms = tms} ->
     match mapAccumL (pprintExpr indent) env tms with (env, tms) then
