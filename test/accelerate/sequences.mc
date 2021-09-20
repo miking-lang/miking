@@ -20,6 +20,6 @@ printLn (int2string cpuSum);
 let gpuSum = accelerate (sum2d s) in
 printLn (int2string gpuSum);
 if eqi cpuSum gpuSum then
-  printLn "CPU and GPU agreed on the sum"
+  printLn "OCaml and accelerated agreed on the sum"
 else
-  printLn "CPU and GPU found different sums"
+  printLn "OCaml and accelerated found different sums"

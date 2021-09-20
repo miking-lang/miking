@@ -8,10 +8,10 @@ let _sum : [Int] -> Int = lam s.
 
 let sum : [Int] -> Int = lam s.
   if geqi (length s) 1000 then
-    printLn "Computing sum on GPU...";
+    printLn "Computing sum (accelerated)...";
     accelerate (_sum s)
   else
-    printLn "Computing sum on CPU...";
+    printLn "Computing sum...";
     _sum s
 
 mexpr

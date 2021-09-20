@@ -1,10 +1,11 @@
--- Runs a naive implementation of matrix multiplication on both CPU and GPU, to
--- compare their performance and also to ensure they get the same results.
+-- Runs a naive implementation of matrix multiplication using both the default
+-- OCaml generation and the accelerated generation, to compare their
+-- performance and also to ensure they get the same results.
 --
 -- We use matrices of integers because the addition of floating-point values is
 -- technically not an associative operation, so the compiler cannot parallelize
 -- folds over such operations. This results in significant improvements over
--- the CPU-only version.
+-- the default version.
 
 include "common.mc"
 include "string.mc"
@@ -47,11 +48,11 @@ let t1 = wallTimeMs () in
 let c2 : [[Int]] = accelerate (matMulSq a b) in
 let gpu : Int = accelerate (matSumSq c2) in
 let t2 = wallTimeMs () in
-printLn (join ["CPU time: ", float2string (divf (subf t1 t0) 1000.0)]);
-printLn (join ["GPU time: ", float2string (divf (subf t2 t1) 1000.0)]);
+printLn (join ["OCaml time: ", float2string (divf (subf t1 t0) 1000.0)]);
+printLn (join ["Accelerated time: ", float2string (divf (subf t2 t1) 1000.0)]);
 if eqi cpu gpu then
-  printLn "CPU and GPU found the same result"
+  ()
 else
-  printLn "CPU and GPU got different results";
-  printLn (join ["CPU result: ", int2string cpu]);
-  printLn (join ["GPU result: ", int2string gpu])
+  printLn "OCaml and accelerated code got different results";
+  printLn (join ["OCaml result: ", int2string cpu]);
+  printLn (join ["Accelerated result: ", int2string gpu])
