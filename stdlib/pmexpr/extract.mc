@@ -108,17 +108,21 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
-  sem collectIdentifiersH (bound : Set Name) (used : Set Name) =
+  sem collectIdentifiersExprH (bound : Set Name) (used : Set Name) =
   | TmVar t ->
     if setMem t.ident bound then used
     else setInsert t.ident used
   | TmLam t ->
     let bound = setInsert t.ident bound in
-    collectIdentifiersH bound used t.body
-  | t -> sfold_Expr_Expr (collectIdentifiersH bound) used t
+    collectIdentifiersExprH bound used t.body
+  | t -> sfold_Expr_Expr (collectIdentifiersExprH bound) used t
 
-  sem collectIdentifiers (used : Set Name) =
-  | t -> collectIdentifiersH (setEmpty nameCmp) used t
+  sem collectIdentifiersExpr (used : Set Name) =
+  | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
+
+  sem collectIdentifiersType (used : Set Name) =
+  | TyVar t -> setInsert t.ident used
+  | t -> sfold_Type_Type collectIdentifiersType used t
 
   -- Construct an extracted AST from the given AST, containing all terms that
   -- are used by the accelerate terms.
@@ -132,7 +136,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
   | TmLet t ->
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
       if setMem t.ident used then
-        let used = collectIdentifiers used t.body in
+        let used = collectIdentifiersType used t.tyBody in
+        let used = collectIdentifiersExpr used t.body in
         (used, TmLet {t with inexpr = inexpr})
       else
         (used, inexpr)
@@ -150,7 +155,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
           (digraphSuccessors ident g)
     in
     let collectBindIdents = lam used. lam bind : RecLetBinding.
-      collectIdentifiers used bind.body
+      let used = collectIdentifiersType used bind.tyBody in
+      collectIdentifiersExpr used bind.body
     in
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
       -- Construct a call graph, reusing functions from lambda lifting. By
@@ -179,7 +185,11 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
       else (used, TmRecLets {{t with bindings = usedBinds}
                                 with inexpr = inexpr})
     else never
-  | TmType t -> extractAccelerateTermsH used t.inexpr
+  | TmType t ->
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
+      if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
+      else (used, inexpr)
+    else never
   | TmConDef t -> extractAccelerateTermsH used t.inexpr
   | TmUtest t -> extractAccelerateTermsH used t.next
   | TmExt t -> extractAccelerateTermsH used t.inexpr
