@@ -1,5 +1,4 @@
-include "common.mc"
-
+include "common.mc" -- printLn
 mexpr
 let addOne : Float -> Float = lam x. addf x 1.0 in
 
