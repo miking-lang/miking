@@ -421,6 +421,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                                         (generateExpr env t.as)))
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
+  | t -> infoErrorExit (infoTm t) "Expression cannot be translated into Futhark"
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
