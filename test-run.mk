@@ -121,10 +121,6 @@ run_files += stdlib/char.mc
 # run_files += src/main/mi.mc
 # run_files += src/main/compile.mc
 # run_files += src/main/run.mc
-run_files += stdlib/futhark/ast.mc
-#run_files += stdlib/futhark/ast-builder.mc
-#run_files += stdlib/futhark/generate.mc
-#run_files += stdlib/futhark/pprint.mc
 
 .PHONY: all $(run_files)
 
