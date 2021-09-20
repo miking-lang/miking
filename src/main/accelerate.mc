@@ -202,7 +202,7 @@ gpu.c gpu.h: gpu.fut
   sysTempDirDelete td ();
   ()
 
-let compileGPU : Options -> String -> Unit = lam options. lam file.
+let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
   let ast = parseMCoreFile parallelKeywords file in
   let ast = makeKeywords [] ast in
@@ -258,5 +258,5 @@ let compileGPU : Options -> String -> Unit = lam options. lam file.
     else never
   else never
 
-let gpu = lam files. lam options : Options. lam args.
-  iter (compileGPU options) files
+let accelerate = lam files. lam options : Options. lam args.
+  iter (compileAccelerated options) files
