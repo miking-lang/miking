@@ -1504,6 +1504,105 @@ Importantly, this profiling works by instrumenting the code with extra calls.
 The runtime overhead when enabling this flag is significant, especially when
 using the evaluator.
 
+## Acceleration
+
+When using the `mi accelerate` command, parts of the program can be marked for
+accelerated execution. While the main part of the program will be compiled to
+OCaml, the marked parts will be executed in an accelerated mode. By using
+compiler flags, the user can control which accelerated mode should be used.
+Acceleration requires `futhark` to be installed
+([installation instructions](https://futhark.readthedocs.io/en/stable/installation.html)).
+
+The current acceleration implementation lacks support for most features of the
+default compiler, such as unit tests, external functions and tuning. In the
+future, this will be added.
+
+### Accelerated modes
+
+The default acceleration mode translates the accelerated parts of the code to
+CUDA GPU code. This mode requires an NVidia GPU. The compiler assumes that CUDA
+has been installed at `/usr/local/cuda`.
+
+If the `--cpu-only` flag is set, the accelerated parts will instead be
+translated to multicore CPU code. This mode does not require any additional
+installations.
+
+### Usage
+
+The accelerated compiler `mi accelerate` recognizes additional keywords that
+are not available when using the default `mi` compiler. The most important
+keyword is `accelerate`, which takes one argument - an expression that is to
+be accelerated. There are many significant limitations on what kinds of
+expressions may be used, which are explained in a later section.
+
+For example, assume that we have a program that adds one to a given a
+floating-point number and then prints it with a newline:
+```
+include "common.mc" -- printLn
+mexpr
+let addOne : Float -> Float = lam x. addf x 1.0 in
+printLn (float2string (addOne 25.0));
+```
+
+To accelerate the computation of `addOne`, we pass the application as the
+argument to the `accelerate` keyword as `accelerate (addOne 25.0)`. If this
+program is compiled, it will produce an executable where the evaluation of
+`addOne 25.0` is performed in the accelerated mode.
+
+Note that the acceleration has significant overheads as data has to be copied.
+This overhead is much larger for GPU code. Because of this overhead, the
+example program above will become slower after adding the `accelerate` keyword.
+For this example as well as more complicated examples, see the
+`test/accelerate` directory.
+
+#### Parallel patterns
+
+The accelerated compiler also provides keywords for parallel patterns. These
+can be explicitly used, but the compiler is also able to identify certain
+patterns in programs and convert these to the appropriate parallel patterns.
+
+The current set of supported keywords can be found in `stdlib/pmexpr/ast.mc`.
+
+### Limitations
+
+There are significant limitations on what expressions can be placed in an
+`accelerate` term. These limitations also apply to any code that is referred to
+by an accelerated expression, as this code will also be part of the
+acceleration. Most limitations are checked at compile-time, and will result in
+a compile-time error clearly stating what the problem is.
+
+The current implementation has the following limitations:
+* Side-effects are not allowed in the accelerated code. This is because
+  Futhark, which is used as the intermediate language, is side-effect free. As
+  shown by the earlier example, however, side-effects can still be used in the
+  OCaml part of the program.
+* Multi-dimensional sequences must contain inner sequences of exactly the same
+  size, in accelerated code. This is because in Futhark, arrays are typed by
+  their element and their size. As the size of a sequence is not known
+  statically in MExpr, violating this limitation will result in a runtime
+  error.
+* Recursive functions are not supported in Futhark and thus not in accelerated
+  code. The compiler has limited support for rewriting recursive bindings
+  written in a certain way into parallel patterns. But if it fails to rewrite
+  all recursive bindings, the compilation will fail.
+* Dynamic allocations within a repeated operation (in the function of a fold)
+  may result in a compile-time error when the target is a GPU. This is due to a
+  known compiler limitation of Futhark.
+* Records and tuples may not be passed as an input argument or be the result of
+  an accelerate expression. This is primarily because of difficulties of
+  translating them back and forth to Futhark via C. However, using records and
+  tuples within the accelerated code works.
+* Algebraic data types are not supported in accelerated code.
+* Map intrinsics cannot be accelerated as there is no equivalent data structure
+  in Futhark.
+* Matching on sequences within accelerated code is limited to patterns of the
+  form `[h] ++ t`.
+
+In addition, the accelerated AST must be properly annotated with types. The
+types are needed in the Futhark AST, and they are also needed to generate the
+correct data conversion from and to the C wrapper. Failing to do so may result
+in runtime errors.
+
 ## Contributing
 
 1. Before making a pull request please make sure that all tests pass. Run
