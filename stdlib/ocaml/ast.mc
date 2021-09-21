@@ -1,16 +1,18 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
-lang OCamlTypeDeclAst
-  syn Expr =
-  | OTmVariantTypeDecl { ident : Name, constrs : Map Name Type, inexpr : Expr }
+type OCamlTopBinding =
+  { ident : Name
+    , tyBody : Type
+    , body : Expr
+  }
 
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmVariantTypeDecl t ->
-    OTmVariantTypeDecl {t with inexpr = f t.inexpr}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmVariantTypeDecl t -> f acc t.inexpr
+lang OCamlTopAst
+  syn Top =
+  | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
+  | OTopLet { ident : Name, tyBody: Type, body : Expr }
+  | OTopRecLets { bindings : [OCamlTopBinding] }
+  | OTopExpr { expr : Expr }
 end
 
 lang OCamlRecord
@@ -184,9 +186,12 @@ lang OCamlTypeAst =
 end
 
 lang OCamlAst =
+  -- Tops
+  OCamlTopAst +
+
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlLabel +
+  OCamlArray + OCamlData + OCamlRecord + OCamlLabel +
   OCamlLam +
 
   -- Constants
