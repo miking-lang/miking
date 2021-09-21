@@ -35,7 +35,7 @@
 
 all: build
 
-boot: lint
+boot:
 	@./make boot
 
 install-boot: boot
@@ -73,42 +73,41 @@ uninstall:
 test: test-boot-base
 
 test-all:\
-  lint\
   test-boot-compile\
   test-compile\
   test-run\
   test-par\
   test-boot
+	@./make lint
 
-test-boot-compile: boot lint
+test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk
 
-test-compile: build lint
+test-compile: build
 	@$(MAKE) -s -f test-compile.mk
 
-test-run: build lint
+test-run: build
 	@$(MAKE) -s -f test-run.mk
 
 test-boot:\
   test-boot-base\
   test-boot-py\
-  test-boot-ocaml\
-  lint
+  test-boot-ocaml
 
 test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
 
-test-boot-py: boot lint
+test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-ocaml: boot lint
+test-boot-ocaml: boot
 	@$(MAKE) -s -f test-boot.mk ocaml
 
-test-sundials: build lint
+test-sundials: build
 	@$(MAKE) -s -f test-sundials.mk
 
-test-ipopt: build/mi lint
+test-ipopt: build/mi
 	@$(MAKE) -s -f test-ipopt.mk all
 
-test-par: build lint
+test-par: build
 	@$(MAKE) -s -f test-par.mk
