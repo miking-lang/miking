@@ -95,7 +95,7 @@ test-boot:\
   test-boot-ocaml\
   lint
 
-test-boot-base: boot lint
+test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
 
 test-boot-py: boot lint
