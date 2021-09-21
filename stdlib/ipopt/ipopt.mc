@@ -158,7 +158,8 @@ type IpoptCreateNLPArg = {
 
 -- Creates a constrained NLP:
 -- min_x[f(x)] s.t. xL_k ≤ x_k ≤ xU_k and gL_i ≤ g_i(x) ≤ gU_i.
-let ipoptCreateNLP : IpoptCreateNLPArg -> IpoptNLP = lam arg.
+let ipoptCreateNLP : IpoptCreateNLPArg -> IpoptNLP =
+lam arg.
   if
     all
       (flip tensorHasRank 1)
@@ -239,6 +240,21 @@ mexpr
 let tget = tensorGetExn in
 let tset = tensorSetExn in
 let tcreate = tensorCreateCArrayFloat in
+
+let testSolve = lam p. lam x.
+  utest
+    match ipoptSolve p x with (SolveSucceeded _, obj) then
+      print "\nObjective: ";
+      printLn (float2string obj);
+      printLn "Solution:";
+      printLn (tensor2string float2string x);
+      printLn "";
+      true
+    else false
+  with true
+  in
+  ()
+in
 
 -- Example problem from https://coin-or.github.io/Ipopt/
 -- min_x f(x), where f(x) = x[0]x[3](x[0] + x[1] + x[2]) + x[2],
@@ -372,10 +388,211 @@ ipoptAddStrOption p "mu_strategy" "adaptive";
 
 let x = tensorOfSeqExn tcreate [4] [1., 5., 5., 1.] in
 
-utest
-  match ipoptSolve p x with (SolveSucceeded _, _) then true
-  else false
-with true
+testSolve p x;
+
+-- Find consistent initial values for a pendulum model expressed in Carteisan
+-- coordinates.
+-- the DAE is as follows:
+-- f1 = x1'' - x1 x3
+-- f2 = x2'' - x2 x3 + 1
+-- f3 = x1^2 + x2^2 - 1^2.
+--
+-- We augment this DAE with the last equation, the algebraic constraint,
+-- differentiated twice:
+-- f3' = 2x1'x2 + 2x'2x1
+-- f3'' = 2x1''x2 + 2x''2x1 + 2x1'x2' + 2x'2x1'.
+--
+-- From this we form the objective function
+-- f(x) = f1^2 + f2^2 + f3^2 + f3'^2 + f3''^2.
+--
+-- We add the following constraints:
+-- x1 = sin(pi/4) and x2 ≤ 0
+
+-- helper functions to more easily reuse output from mathematica
+let plus = foldl1 addf in
+let times = foldl1 mulf in
+let power = lam arg.
+  match arg with [base, exp] then pow base exp
+  else never
 in
+let rational = foldl1 divf in
+
+let evalF = lam v.
+  let x = tget v [0] in
+  let dx = tget v [1] in
+  let ddx = tget v [2] in
+  let y = tget v [3] in
+  let dy = tget v [4] in
+  let ddy = tget v [5] in
+  let z = tget v [6] in
+  plus [power [plus [times [2., power [dx, 2.]], times[2., power [dy, 2.]], times [2., ddx, x], times [2., ddy, y]], 2.], power [plus [times [2., dx, x], times [2., dy, y]], 2.], power [plus [negf 1., power [x, 2.], power [y, 2.]], 2.], power [plus [ddx, times [negf 1., x, z]], 2.], power [plus [1., ddy, times [negf 1., y, z]], 2.]]
+in
+
+let evalGradF = lam v. lam gradF.
+  let x = tget v [0] in
+  let dx = tget v [1] in
+  let ddx = tget v [2] in
+  let y = tget v [3] in
+  let dy = tget v [4] in
+  let ddy = tget v [5] in
+  let z = tget v [6] in
+  tset gradF [0] (plus [times [8., ddx, plus [power [dx, 2.], power [dy, 2.], times [ddx, x], times [ddy, y]]], times [8., dx, plus [times [dx, x], times [dy, y]]], times [4., x, plus [negf 1., power [x, 2.], power [y, 2.]]], times [2., z, plus [times [negf 1., ddx], times [x, z]]]]);
+  tset gradF [1] (times [8., plus [times [2., power [dx, 3.]], times [dy, x, y], times [dx, plus [times [2., power [dy, 2.]], times [2., ddx, x], power [x, 2.], times [2., ddy, y]]]]]);
+  tset gradF [2] (times [2., plus [ddx, times [4., x, plus [power [dx, 2.], power [dy, 2.], times [ddx, x], times [ddy, y]]], times [negf 1., x, z]]]);
+  tset gradF [3] (plus [times [8., ddy, plus [power [dx, 2.], power [dy, 2.], times [ddx, x], times [ddy, y]]], times [8., dy, plus [times [dx, x], times [dy, y]]], times [4., y, plus [negf 1., power [x, 2.], power [y, 2.]]], times [negf 2., z, plus [1., ddy, times [negf 1., y, z]]]]);
+  tset gradF [4] (times [8., plus [times [2., power [dx, 2.], dy], times [dx, x, y], times [dy, plus [times [2., power [dy, 2.]], times [2., ddx, x], times [2., ddy, y], power [y, 2.]]]]]);
+  tset gradF [5] (times [2., plus [1., ddy, times [4., y, plus [power [dx, 2.], power [dy, 2.], times [ddx, x], times [ddy, y]]], times [negf 1., y, z]]]);
+  tset gradF [6] (plus [times [2., x, plus [times [negf 1., ddx], times [x, z]]], times [negf 2., y, plus [1., ddy, times [negf 1., y, z]]]]);
+  ()
+in
+
+let evalG = lam v. lam g.
+  let x = tget v [0] in
+  let dx = tget v [1] in
+  let ddx = tget v [2] in
+  let y = tget v [3] in
+  let dy = tget v [4] in
+  let ddy = tget v [5] in
+  let z = tget v [6] in
+  tset g [0] (plus [times [negf 1., power [2., rational [negf 1., 2.]]], x]);
+  tset g [1] y;
+  ()
+in
+
+let jacGStructure =
+  [(0, 0), (1, 3)]
+in
+
+let evalJacG = lam. lam jacG.
+  tset jacG [0] 1.;
+  tset jacG [1] 1.;
+  ()
+in
+
+let hStructure =
+[
+  (0, 0),
+  (1, 0),
+  (2, 0),
+  (3, 0),
+  (4, 0),
+  (5, 0),
+  (6, 0),
+  (1, 1),
+  (2, 1),
+  (3, 1),
+  (4, 1),
+  (5, 1),
+  -- (6, 1) is zero
+  (2, 2),
+  (3, 2),
+  (4, 2),
+  (5, 2),
+  (6, 2),
+  (3, 3),
+  (4, 3),
+  (5, 3),
+  (6, 3),
+  (4, 4),
+  (5, 4),
+  -- (6, 4) is zero
+  (5, 5),
+  (6, 5),
+  (6, 6)
+]
+in
+
+let evalH = lam sigma. lam v. lam. lam h.
+  let x = tget v [0] in
+  let dx = tget v [1] in
+  let ddx = tget v [2] in
+  let y = tget v [3] in
+  let dy = tget v [4] in
+  let ddy = tget v [5] in
+  let z = tget v [6] in
+  -- (0, 0)
+  tset h [0] (times [2., plus [negf 2., times [4., power [ddx, 2.]], times [4., power [dx, 2.]], times [6., power [x, 2.]], times [2., power [y, 2.]], power [z, 2.]]]);
+  -- (1, 0)
+  tset h [1] (times [8., plus [times [2., ddx, dx], times [2., dx, x], times [dy, y]]]);
+  -- (2, 0)
+  tset h [2] (plus [times [8., power [dx, 2.]], times [8., power [dy, 2.]], times [16., ddx, x], times [8., ddy, y], times [negf 2., z]]);
+  -- (3, 0)
+  tset h [3] (times [8., plus [times [ddx, ddy], times [dx, dy], times [x, y]]]);
+  -- (4, 0)
+  tset h [4] (times [8., plus [times [2., ddx, dy], times [dx, y]]]);
+  -- (5, 0)
+  tset h [5] (times [8., ddx, y]);
+  -- (6, 0)
+  tset h [6] (plus [times [negf 2., ddx], times [4., x, z]]);
+  -- (1, 1)
+  tset h [7] (times [8., plus [times [6., power [dx, 2.]], times [2., power [dy, 2.]], times [2., ddx, x], power [x, 2.], times [2., ddy, y]]]);
+  -- (2, 1)
+  tset h [8] (times [16., dx, x]);
+  -- (3, 1)
+  tset h [9] (times [8., plus [times [2., ddy, dx], times [dy, x]]]);
+  -- (4, 1)
+  tset h [10] (times [8., plus [times [4., dx, dy], times [x, y]]]);
+  -- (5, 1)
+  tset h [11] (times [16., dx, y]);
+  -- (6, 1) is zero
+  -- (2, 2)
+  tset h [12] (plus [2., times [8., power [x, 2.]]]);
+  -- (3, 2)
+  tset h [13] (times [8., ddy, x]);
+  -- (4, 2)
+  tset h [14] (times [16., dy, x]);
+  -- (5, 2)
+  tset h [15] (times [8., x, y]);
+  -- (6, 2)
+  tset h [16] (times [negf 2., x]);
+  -- (3, 3)
+  tset h [17] (times [2., plus [negf 2., times [4., power [ddy, 2.]], times [4., power [dy, 2.]], times [2., power [x, 2.]], times [6., power [y, 2.]], power [z, 2.]]]);
+  -- (4, 3)
+  tset h [18] (times [8., plus [times [2., ddy, dy], times [dx, x], times [2., dy, y]]]);
+  -- (5, 3)
+  tset h [19] (plus [times [8., power [dx, 2.]], times [8., power [dy, 2.]], times [8., ddx, x], times [16., ddy, y], times [negf 2., z]]);
+  -- (6, 3)
+  tset h [20] (times [negf 2., plus [1., ddy, times [negf 2., y, z]]]);
+  -- (4, 4)
+  tset h [21] (times [8., plus [times [2., power [dx, 2.]], times [6., power [dy, 2.]], times [2., ddx, x], times [2., ddy, y], power [y, 2.]]]);
+  -- (5, 4)
+  tset h [22] (times [16., dy, y]);
+  -- (6, 4) is zero
+  -- (5, 5)
+  tset h [23] (plus [2., times [8., power [y, 2.]]]);
+  -- (6, 5)
+  tset h [24] (times [negf 2.,  y]);
+  -- (6, 6)
+  tset h [25] (times [2., plus [power [x, 2.], power [y, 2.]]]);
+  tensorMapInplace (mulf sigma) h;
+  ()
+in
+
+let lb = tcreate [7] (lam. negf inf) in
+let ub = tcreate [7] (lam. inf) in
+let constraintsLb = tensorOfSeqExn tcreate [2] [0., negf inf] in
+let constraintsUb = tensorOfSeqExn tcreate [2] [0., 0.] in
+
+let p = ipoptCreateNLP {
+  evalF = evalF,
+  evalGradF = evalGradF,
+  evalG = evalG,
+  jacGStructure = jacGStructure,
+  evalJacG = evalJacG,
+  hStructure = hStructure,
+  evalH = evalH,
+  lb = lb,
+  ub = ub,
+  constraintsLb = constraintsLb,
+  constraintsUb = constraintsUb
+} in
+
+ipoptAddNumOption p "tol" 3.82e-6;
+ipoptAddStrOption p "mu_strategy" "adaptive";
+
+let x = tcreate [7] (lam. 0.) in
+tset x [0] (sin (divf pi 4.));
+tset x [3] (mulf (negf 1.) (cos (divf pi 4.)));
+testSolve p x;
 
 ()

@@ -129,6 +129,21 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
 
 mexpr
 
+let testSolve = lam p. lam x.
+  utest
+    match ipoptSolve p x with (SolveSucceeded _, obj) then
+      print "\nObjective: ";
+      printLn (float2string obj);
+      printLn "Solution:";
+      printLn (tensor2string float2string x);
+      printLn "";
+      true
+    else false
+  with true
+  in
+  ()
+in
+
 -- Example problem from https://coin-or.github.io/Ipopt/
 -- min_x f(x), where f(x) = x[0]x[3](x[0] + x[1] + x[2]) + x[2],
 -- s.t.
@@ -173,18 +188,7 @@ ipoptAddNumOption p "tol" 3.82e-6;
 ipoptAddStrOption p "mu_strategy" "adaptive";
 
 let x = tensorOfSeqExn tcreate [4] [1., 5., 5., 1.] in
-
-utest
-  match ipoptSolve p x with (SolveSucceeded _, obj) then
-    print "\nObjective: ";
-    printLn (float2string obj);
-    printLn "Solution:";
-    printLn (tensor2string float2string x);
-    printLn "";
-    true
-  else false
-with true
-in
+testSolve p x;
 
 -- Find consistent initial values for a pendulum model expressed in Carteisan
 -- coordinates.
@@ -213,7 +217,7 @@ let f = lam x.
   let ddx2 = tget x [5] in
   let x3 = tget x [6] in
   let f1 = subn ddx1 (muln x1 x3) in
-  let f2 = addn (subn ddx1 (muln x1 x3)) (num 1.) in
+  let f2 = addn (subn ddx2 (muln x2 x3)) (num 1.) in
   let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (num 1.) in
   let df3 = muln (num 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
   let ddf3 =
@@ -252,17 +256,6 @@ ipoptAddStrOption p "mu_strategy" "adaptive";
 let x = tcreate [7] (lam. 0.) in
 tset x [0] (sin (divf pi 4.));
 tset x [3] (mulf (negf 1.) (cos (divf pi 4.)));
-
-utest
-  match ipoptSolve p x with (SolveSucceeded _, obj) then
-    print "\nObjective: ";
-    printLn (float2string obj);
-    printLn "Solution:";
-    printLn (tensor2string float2string x);
-    printLn "";
-    true
-  else false
-with true
-in
+testSolve p x;
 
 ()
