@@ -159,19 +159,41 @@ type IpoptCreateNLPArg = {
 -- Creates a constrained NLP:
 -- min_x[f(x)] s.t. xL_k ≤ x_k ≤ xU_k and gL_i ≤ g_i(x) ≤ gU_i.
 let ipoptCreateNLP : IpoptCreateNLPArg -> IpoptNLP = lam arg.
-  externalIpoptCreateNLP
-    arg.evalF
-    arg.evalGradF
-    arg.evalG
-    arg.jacGStructure
-    arg.evalJacG
-    arg.hStructure
-    arg.evalH
-    arg.lb
-    arg.ub
-    arg.constraintsLb
-    arg.constraintsUb
-
+  if
+    all
+      (flip tensorHasRank 1)
+      [arg.lb, arg.ub, arg.constraintsLb, arg.constraintsUb]
+  then
+    let nx = tensorSize arg.lb in
+    let ng = tensorSize arg.constraintsLb in
+    if
+      and
+        (tensorHasSameShape arg.lb arg.ub)
+        (tensorHasSameShape arg.constraintsLb arg.constraintsUb)
+    then
+      -- copy over constraints to carrays
+      let lb = tensorCreateCArrayFloat [nx] (tensorGetExn arg.lb) in
+      let ub = tensorCreateCArrayFloat [nx] (tensorGetExn arg.ub) in
+      let constraintsLb =
+        tensorCreateCArrayFloat [ng] (tensorGetExn arg.constraintsLb)
+      in
+      let constraintsUb =
+        tensorCreateCArrayFloat [ng] (tensorGetExn arg.constraintsUb)
+      in
+      externalIpoptCreateNLP
+        arg.evalF
+        arg.evalGradF
+        arg.evalG
+        arg.jacGStructure
+        arg.evalJacG
+        arg.hStructure
+        arg.evalH
+        lb
+        ub
+        constraintsLb
+        constraintsUb
+    else error "Invalid Argument: ipoptCreateNLP"
+  else error "Invalid Argument: ipoptCreateNLP"
 
 external externalIpoptAddStrOption ! : IpoptNLP -> String -> String -> ()
 
