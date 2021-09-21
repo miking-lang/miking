@@ -47,12 +47,12 @@ lite: install-boot
 test: test-boot-base
 
 build: install-boot
-	# Run the complete bootstrapping process to compile `mi`.
+# Run the complete bootstrapping process to compile `mi`.
 	@./make
 
 build-mi:
-	# Build `mi` using the current version in `build`, skipping bootstrapping.
-	# The result is named `build/mi-tmp`.
+# Build `mi` using the current version in `build`, skipping bootstrapping.
+# The result is named `build/mi-tmp`.
 	@./make build-mi
 
 install: build
