@@ -188,10 +188,10 @@ utest der (lam x. muln x x) (num2) with num4
 -- As well as scalar higher order derivatives
 recursive
 let nder : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
-  lam n. lam f. lam x.
+  lam n. lam f.
     if lti n 0 then error "Negative derivative order"
-    else if eqi n 0 then f x
-    else nder (subi n 1) (der f) x
+    else if eqi n 0 then f
+    else nder (subi n 1) (der f)
 end
 
 utest nder 0 (lam x. muln x x) (num2) with num4
