@@ -15,27 +15,18 @@ lang Cmp = Ast
   sem cmpExprH =
   -- Default case when expressions are not the same
   | (lhs, rhs) /- (Expr, Expr) -/ ->
-    let res = subi (exprIndex lhs) (exprIndex rhs) in
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
       error "Missing case in cmpExprH for expressions with equal indices."
     else res
-
-  sem exprIndex =
-  | t /- : Expr -/ -> constructorTag t
 
   sem cmpConst (lhs: Const) =
   | rhs /- : Const -/ -> cmpConstH (lhs, rhs)
 
   sem cmpConstH =
-  -- Default case when constants are not the same
+  -- Default case for constants that contain no data
   | (lhs, rhs) /- (Const, Const) -/ ->
-    let res = subi (constIndex lhs) (constIndex rhs) in
-    if eqi res 0 then
-      error "Missing case in cmpConstH for constants with equal indices."
-    else res
-
-  sem constIndex =
-  | c /- : Const -/ -> constructorTag c
+    subi (constructorTag lhs) (constructorTag rhs)
 
   sem cmpPat (lhs: Pat) =
   | rhs /- : Pat -/ -> cmpPatH (lhs, rhs)
@@ -43,13 +34,10 @@ lang Cmp = Ast
   sem cmpPatH =
   -- Default case when patterns are not the same
   | (lhs, rhs) /- (Pat, Pat) -/ ->
-    let res = subi (patIndex lhs) (patIndex rhs) in
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
       error "Missing case in cmpPatH for patterns with equal indices."
     else res
-
-  sem patIndex =
-  | p /- : Pat -/ -> constructorTag p
 
   sem cmpType (lhs: Type) =
   | rhs /- : Type -/ -> cmpTypeH (lhs, rhs)
@@ -57,14 +45,10 @@ lang Cmp = Ast
   sem cmpTypeH =
   -- Default case when types are not the same
   | (lhs, rhs) /- (Type, Type) -/ ->
-    let res = subi (typeIndex lhs) (typeIndex rhs) in
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
       error "Missing case in cmpTypeH for types with equal indices."
     else res
-
-  sem typeIndex =
-  | ty /- : Type -/ -> constructorTag ty
-
 end
 
 -----------
@@ -237,23 +221,6 @@ lang IntCmp = Cmp + IntAst
   | (CInt l, CInt r) -> subi l.val r.val
 end
 
-lang ArithIntCmp = Cmp + ArithIntAst
-  sem cmpConstH =
-  | (CAddi _, CAddi _) -> 0
-  | (CSubi _, CSubi _) -> 0
-  | (CMuli _, CMuli _) -> 0
-  | (CDivi _, CDivi _) -> 0
-  | (CNegi _, CNegi _) -> 0
-  | (CModi _, CModi _) -> 0
-end
-
-lang ShiftIntCmp = Cmp + ShiftIntAst
-  sem cmpConstH =
-  | (CSlli _, CSlli _) -> 0
-  | (CSrli _, CSrli _) -> 0
-  | (CSrai _, CSrai _) -> 0
-end
-
 lang FloatCmp = Cmp + FloatAst
   sem cmpConstH =
   | (CFloat l, CFloat r) ->
@@ -261,23 +228,6 @@ lang FloatCmp = Cmp + FloatAst
     if gtf x 0.0 then 1
     else if ltf x 0.0 then negi 1
     else 0
-end
-
-lang ArithFloatCmp = Cmp + ArithFloatAst
-  sem cmpConstH =
-  | (CAddf _, CAddf _) -> 0
-  | (CSubf _, CSubf _) -> 0
-  | (CMulf _, CMulf _) -> 0
-  | (CDivf _, CDivf _) -> 0
-  | (CNegf _, CNegf _) -> 0
-end
-
-lang FloatIntConversionCmp = Cmp + FloatIntConversionAst
-  sem cmpConstH =
-  | (CFloorfi _, CFloorfi _) -> 0
-  | (CCeilfi _, CCeilfi _) -> 0
-  | (CRoundfi _, CRoundfi _) -> 0
-  | (CInt2float _, CInt2float _) -> 0
 end
 
 lang BoolCmp = Cmp + BoolAst
@@ -288,182 +238,14 @@ lang BoolCmp = Cmp + BoolAst
     subi lval rval
 end
 
-lang CmpIntCmp = Cmp + CmpIntAst
-  sem cmpConstH =
-  | (CEqi _, CEqi _) -> 0
-  | (CNeqi _, CNeqi _) -> 0
-  | (CLti _, CLti _) -> 0
-  | (CGti _, CGti _) -> 0
-  | (CLeqi _, CLeqi _) -> 0
-  | (CGeqi _, CGeqi _) -> 0
-end
-
-lang CmpFloatCmp = Cmp + CmpFloatAst
-  sem cmpConstH =
-  | (CEqf _, CEqf _) -> 0
-  | (CLtf _, CLtf _) -> 0
-  | (CLeqf _, CLeqf _) -> 0
-  | (CGtf _, CGtf _) -> 0
-  | (CGeqf _, CGeqf _) -> 0
-  | (CNeqf _, CNeqf _) -> 0
-end
-
 lang CharCmp = Cmp + CharAst
   sem cmpConstH =
   | (CChar l, CChar r) -> subi (char2int l.val) (char2int r.val)
 end
 
-lang CmpCharCmp = Cmp + CmpCharAst
-  sem cmpConstH =
-  | (CEqc _, CEqc _) -> 0
-end
-
-lang IntCharConversionCmp = Cmp + IntCharConversionAst
-  sem cmpConstH =
-  | (CInt2Char _, CInt2Char _) -> 0
-  | (CChar2Int _, CChar2Int _) -> 0
-end
-
-lang FloatStringConversionCmp = Cmp + FloatStringConversionAst
-  sem cmpConstH =
-  | (CString2float _, CString2float _) -> 0
-  | (CFloat2string _, CFloat2string _) -> 0
-end
-
 lang SymbCmp = Cmp + SymbAst
   sem cmpConstH =
   | (CSymb l, CSymb r) -> subi (sym2hash l.val) (sym2hash r.val)
-  | (CGensym _, CGensym _) -> 0
-  | (CSym2hash _, CSym2hash _) -> 0
-end
-
-lang CmpSymbCmp = Cmp + CmpSymbAst
-  sem cmpConstH =
-  | (CEqsym _, CEqsym _) -> 0
-end
-
-lang SeqOpCmp = Cmp + SeqOpAst
-  sem cmpConstH =
-  | (CSet _, CSet _) -> 0
-  | (CGet _, CGet _) -> 0
-  | (CCons _, CCons _) -> 0
-  | (CSnoc _, CSnoc _) -> 0
-  | (CConcat _, CConcat _) -> 0
-  | (CLength _, CLength _) -> 0
-  | (CReverse _, CReverse _) -> 0
-  | (CHead _, CHead _) -> 0
-  | (CTail _, CTail _) -> 0
-  | (CNull _, CNull _) -> 0
-  | (CMap _, CMap _) -> 0
-  | (CMapi _, CMapi _) -> 0
-  | (CIter _, CIter _) -> 0
-  | (CIteri _, CIteri _) -> 0
-  | (CFoldl _, CFoldl _) -> 0
-  | (CFoldr _, CFoldr _) -> 0
-  | (CCreate _, CCreate _) -> 0
-  | (CCreateList _, CCreateList _) -> 0
-  | (CCreateRope _, CCreateRope _) -> 0
-  | (CSplitAt _, CSplitAt _) -> 0
-  | (CSubsequence _, CSubsequence _) -> 0
-end
-
-lang FileOpCmp = Cmp + FileOpAst
-  sem cmpConstH =
-  | (CFileRead _, CFileRead _) -> 0
-  | (CFileWrite _, CFileWrite _) -> 0
-  | (CFileExists _, CFileExists _) -> 0
-  | (CFileDelete _, CFileDelete _) -> 0
-end
-
-lang IOCmp = Cmp + IOAst
-  sem cmpConstH =
-  | (CPrint _, CPrint _) -> 0
-  | (CDPrint _, CDPrint _) -> 0
-  | (CFlushStdout _, CFlushStdout _) -> 0
-  | (CReadLine _, CReadLine _) -> 0
-  | (CReadBytesAsString _, CReadBytesAsString _) -> 0
-end
-
-lang RandomNumberGeneratorCmp = Cmp + RandomNumberGeneratorAst
-  sem cmpConstH =
-  | (CRandIntU _, CRandIntU _) -> 0
-  | (CRandSetSeed _, CRandSetSeed _) -> 0
-end
-
-lang SysCmp = Cmp + SysAst
-  sem cmpConstH =
-  | (CExit _, CExit _) -> 0
-  | (CError _, CError _) -> 0
-  | (CArgv _, CArgv _) -> 0
-  | (CCommand _, CCommand _) -> 0
-end
-
-lang TimeCmp = Cmp + TimeAst
-  sem cmpConstH =
-  | (CWallTimeMs _, CWallTimeMs _) -> 0
-  | (CSleepMs _, CSleepMs _) -> 0
-end
-
-lang RefOpCmp = Cmp + RefOpAst
-  sem cmpConstH =
-  | (CRef _, CRef _) -> 0
-  | (CModRef _, CModRef _) -> 0
-  | (CDeRef _, CDeRef _) -> 0
-end
-
-lang MapCmp = Cmp + MapAst
-  sem cmpConstH =
-  | (CMapEmpty _, CMapEmpty _) -> 0
-  | (CMapInsert _, CMapInsert _) -> 0
-  | (CMapRemove _, CMapRemove _) -> 0
-  | (CMapFindWithExn _, CMapFindWithExn _) -> 0
-  | (CMapFindOrElse _, CMapFindOrElse _) -> 0
-  | (CMapFindApplyOrElse _, CMapFindApplyOrElse _) -> 0
-  | (CMapBindings _, CMapBindings _) -> 0
-  | (CMapSize _, CMapSize _) -> 0
-  | (CMapMem _, CMapMem _) -> 0
-  | (CMapAny _, CMapAny _) -> 0
-  | (CMapMap _, CMapMap _) -> 0
-  | (CMapMapWithKey _, CMapMapWithKey _) -> 0
-  | (CMapFoldWithKey _, CMapFoldWithKey _) -> 0
-  | (CMapEq _, CMapEq _) -> 0
-  | (CMapCmp _, CMapCmp _) -> 0
-  | (CMapGetCmpFun _, CMapGetCmpFun _) -> 0
-end
-
-lang TensorOpCmp = Cmp + TensorOpAst
-  sem cmpConstH =
-  | (CTensorCreateInt _, CTensorCreateInt _) -> 0
-  | (CTensorCreateFloat _, CTensorCreateFloat _) -> 0
-  | (CTensorCreate _, CTensorCreate _) -> 0
-  | (CTensorGetExn _, CTensorGetExn _) -> 0
-  | (CTensorSetExn _, CTensorSetExn _) -> 0
-  | (CTensorRank _, CTensorRank _) -> 0
-  | (CTensorShape _, CTensorShape _) -> 0
-  | (CTensorReshapeExn _, CTensorReshapeExn _) -> 0
-  | (CTensorCopy _, CTensorCopy _) -> 0
-  | (CTensorTransposeExn _, CTensorTransposeExn _) -> 0
-  | (CTensorSliceExn _, CTensorSliceExn _) -> 0
-  | (CTensorSubExn _, CTensorSubExn _) -> 0
-  | (CTensorIterSlice _, CTensorIterSlice _) -> 0
-  | (CTensorEq _, CTensorEq _) -> 0
-  | (CTensorToString _, CTensorToString _) -> 0
-end
-
-lang BootParserCmp = Cmp + BootParserAst
-  sem cmpConstH =
-  | (CBootParserParseMExprString _, CBootParserParseMExprString _) -> 0
-  | (CBootParserParseMCoreFile _, CBootParserParseMCoreFile _) -> 0
-  | (CBootParserGetId _, CBootParserGetId _) -> 0
-  | (CBootParserGetTerm _, CBootParserGetTerm _) -> 0
-  | (CBootParserGetType _, CBootParserGetType _) -> 0
-  | (CBootParserGetString _, CBootParserGetString _) -> 0
-  | (CBootParserGetInt _, CBootParserGetInt _) -> 0
-  | (CBootParserGetFloat _, CBootParserGetFloat _) -> 0
-  | (CBootParserGetListLength _, CBootParserGetListLength _) -> 0
-  | (CBootParserGetConst _, CBootParserGetConst _) -> 0
-  | (CBootParserGetPat _, CBootParserGetPat _) -> 0
-  | (CBootParserGetInfo _, CBootParserGetInfo _) -> 0
 end
 
 --------------
@@ -634,12 +416,7 @@ lang MExprCmp =
   ConstCmp + DataCmp + MatchCmp + UtestCmp + SeqCmp + NeverCmp + ExtCmp +
 
   -- Constants
-  IntCmp + ArithIntCmp + ShiftIntCmp + FloatCmp + ArithFloatCmp + BoolCmp +
-  CmpIntCmp + IntCharConversionCmp + CmpFloatCmp + CharCmp + CmpCharCmp +
-  SymbCmp + CmpSymbCmp + SeqOpCmp + FileOpCmp + IOCmp +
-  RandomNumberGeneratorCmp + SysCmp + FloatIntConversionCmp +
-  FloatStringConversionCmp + TimeCmp + RefOpCmp + MapCmp + TensorOpCmp +
-  BootParserCmp +
+  IntCmp + FloatCmp + BoolCmp + CharCmp + SymbCmp +
 
   -- Patterns
   NamedPatCmp + SeqTotPatCmp + SeqEdgePatCmp + RecordPatCmp + DataPatCmp +
@@ -654,9 +431,11 @@ lang MExprCmp =
 -- TESTS --
 -----------
 
+lang TestLang = MExprCmp + MExprAst
+
 mexpr
 
-use MExprCmp in
+use TestLang in
 
 -- Expressions
 utest cmpExpr (var_ "a") (var_ "a") with 0 in
