@@ -782,6 +782,13 @@ lang TensorOpAst = ConstAst
   | CTensorToString {}
 end
 
+lang CollOpAst = ConstAst
+  syn Const =
+  | CEmpty {}
+  | CInsert {}
+  | CFold {}
+end
+
 lang BootParserAst = ConstAst
   syn Const =
   | CBootParserParseMExprString {}
@@ -1260,7 +1267,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst +
+  CollOpAst + TensorOpAst + BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

@@ -183,6 +183,11 @@ and const =
   | CtensorIterSlice of tm option
   | CtensorEq of tm option * tm T.t option
   | Ctensor2string of tm option
+  (* MCore intrinsics: Collections *)
+  | CColl of tm Mseq.t
+  | Cempty
+  | Cinsert of tm option
+  | Cfold of (tm -> tm -> tm) option * tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
@@ -653,6 +658,9 @@ let const_has_side_effect = function
   | CtensorEq _
   | Ctensor2string _ ->
       true
+  (* MCore intrinsics: Collections *)
+  | CColl _ | Cempty | Cinsert _ | Cfold _ ->
+      false
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _
   | CbootParserParseMExprString _

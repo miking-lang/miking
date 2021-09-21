@@ -698,6 +698,10 @@ utest cmpConst (CTensorIterSlice {}) (CTensorIterSlice {}) with 0 in
 utest cmpConst (CTensorEq {}) (CTensorEq {}) with 0 in
 utest cmpConst (CTensorToString {}) (CTensorToString {}) with 0 in
 
+utest cmpConst (CEmpty {}) (CEmpty {}) with 0 in
+utest cmpConst (CInsert {}) (CInsert {}) with 0 in
+utest cmpConst (CFold {}) (CFold {}) with 0 in
+
 utest cmpConst (CBootParserParseMExprString {})
                (CBootParserParseMExprString {}) with 0 in
 utest cmpConst (CBootParserParseMCoreFile {})

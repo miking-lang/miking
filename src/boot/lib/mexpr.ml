@@ -430,6 +430,21 @@ let arity = function
       2
   | Ctensor2string (Some _) ->
       1
+  (* MCore intrinsics: Collections *)
+  | CColl _ ->
+      0
+  | Cempty ->
+      0
+  | Cinsert None ->
+      2
+  | Cinsert (Some _) ->
+      1
+  | Cfold (None, None) ->
+      3
+  | Cfold (Some _, None) ->
+      2
+  | Cfold (_, Some _) ->
+      1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
@@ -1386,6 +1401,30 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
           let eq = eq Fun.id float_ in
           bool_ (Tensor.Bop_generic_barray.equal eq t1' t2') )
   | CtensorEq _, _ ->
+      fail_constapp fi
+  (* MCore intrinsics: Collections *)
+  | CColl _, _ ->
+      fail_constapp fi
+  | Cempty, _ ->
+      fail_constapp fi
+  | Cinsert None, tm ->
+      TmConst (fi, Cinsert (Some tm))
+  | Cinsert (Some tm), TmConst (_, CColl seq) ->
+      TmConst (fi, CColl (Mseq.cons tm seq))
+  | Cinsert (Some tm), TmConst (_, Cempty) ->
+      TmConst (fi, CColl (Mseq.cons tm Mseq.empty))
+  | Cinsert _, _ ->
+      fail_constapp fi
+  | Cfold (None, None), f ->
+      let f x a = apply_args f [x; a] in
+      TmConst (fi, Cfold (Some f, None))
+  | Cfold (Some f, None), tm ->
+      TmConst (fi, Cfold (Some f, Some tm))
+  | Cfold (Some f, Some tm), TmConst (_, CColl seq) ->
+      Mseq.Helpers.fold_right f tm seq
+  | Cfold (Some _, Some tm), TmConst (_, Cempty) ->
+      tm
+  | Cfold _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->

@@ -128,6 +128,10 @@ let builtin = use MExprAst in
   , ("tensorIterSlice", CTensorIterSlice ())
   , ("tensorEq", CTensorEq ())
   , ("tensor2string", CTensorToString ())
+  -- Collections
+  , ("empty", CEmpty ())
+  , ("insert", CInsert ())
+  , ("fold", CFold ())
   -- Boot parser
   , ("bootParserParseMExprString", CBootParserParseMExprString ())
   , ("bootParserParseMCoreFile", CBootParserParseMCoreFile ())

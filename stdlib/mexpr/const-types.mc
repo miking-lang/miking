@@ -250,6 +250,18 @@ lang TensorOpTypeAst = TensorOpAst
   | CTensorToString _ -> tytensortostring_ (tygeneric_ "a")
 end
 
+lang CollOpTypeAst = CollOpAst
+  sem tyConst =
+  | CEmpty _ -> tyapp_ (tycoll_ (propvar_ "p")) (tygeneric_ "a")
+  | CInsert _ -> tyarrows_ [tygeneric_ "a",
+                            tyapp_ (tycoll_ (propvar_ "p")) (tygeneric_ "a"),
+                            tyapp_ (tycoll_ (propvar_ "p")) (tygeneric_ "a")]
+  | CFold _ -> tyarrows_ [tyarrows_ [tygeneric_ "a", tygeneric_ "b", tygeneric_ "b"],
+                          tygeneric_ "b",
+                          tyapp_ (tycoll_ (propvar_ "p")) (tygeneric_ "a"),
+                          tygeneric_ "b"]
+end
+
 lang BootParserTypeAst = BootParserAst
   sem tyConst =
   | CBootParserParseMExprString _ -> tyarrow_ tystr_ tybootparsetree_
@@ -273,5 +285,5 @@ lang MExprConstType =
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
-  MapTypeAst + TensorOpTypeAst + BootParserTypeAst
+  MapTypeAst + TensorOpTypeAst + CollOpTypeAst + BootParserTypeAst
 end

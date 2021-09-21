@@ -1497,6 +1497,39 @@ lang TensorOpEval =
     uconst_ val
 end
 
+lang CollOpEval = CollOpAst + ConstEval
+
+  syn Const =
+  | CCollVal [Expr]
+  | CInsert2 Expr
+  | CFold2 (Expr -> Expr -> Expr)
+  | CFold3 (Expr -> Expr -> Expr, Expr)
+
+  sem delta (arg : Expr) =
+  | CInsert _ ->
+    uconst_ (CInsert2 arg)
+  | CInsert2 tm ->
+    match arg with TmConst ({val = CCollVal seq}) then
+      uconst_ (CCollVal (cons tm seq))
+    else match arg with TmConst ({val = CEmpty _}) then
+      uconst_ (CCollVal ([tm]))
+    else error "Second argument of insert not a coll"
+  | CFold _ ->
+    uconst_ (CFold2 arg)
+  | CFold2 f ->
+    uconst_ (CFold3 (f, arg))
+  | CFold3 (f, z) ->
+    match arg with TmConst ({val = CCollVal seq}) then
+      let fold_op = lam h. lam t.
+        apply {env = mapEmpty nameCmp} t
+          (apply {env = mapEmpty nameCmp} h f)
+      in
+      foldr fold_op z seq
+    else match arg with TmConst ({val = CEmpty _}) then
+      z
+    else error "Third argument of fold not a coll"
+end
+
 lang BootParserEval =
   BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
   FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst
@@ -1801,7 +1834,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval + BootParserEval
+  ConTagEval + MapEval + TensorOpEval + CollOpEval + BootParserEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

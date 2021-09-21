@@ -812,6 +812,13 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorToString _ -> "tensor2string"
 end
 
+lang CollOpPrettyPrint = CollOpAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CEmpty _ -> "empty"
+  | CInsert _ -> "insert"
+  | CFold _ -> "fold"
+end
+
 lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CBootParserParseMExprString _ -> "bootParserParseMExprString"
@@ -1048,11 +1055,13 @@ lang CollTypePrettyPrint = CollTypeAst
   | PropVar v ->
     pprintEnvGetStr env v.ident
   | PropSet {info=info, props={nonseq=ns, unique=uq}} ->
-    match      (ns, uq) with (false, false) then "{}"
-    else match (ns, uq) with (true , false) then "{NS}"
-    else match (ns, uq) with (false, true ) then "{UQ}"
-    else match (ns, uq) with (true , true ) then "{NS, UQ}"
-    else never
+    let content_string =
+      match      (ns, uq) with (false, false) then ""
+      else match (ns, uq) with (true , false) then "NS"
+      else match (ns, uq) with (false, true ) then "UQ"
+      else match (ns, uq) with (true , true ) then "NS, UQ"
+      else never
+    in (env, join ["{", content_string, "}"])
 end
 
 lang TensorTypePrettyPrint = TensorTypeAst
@@ -1142,7 +1151,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint +
+  CollOpPrettyPrint + BootParserPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

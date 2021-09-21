@@ -805,7 +805,7 @@ let set_ = use MExprAst in
   lam s. lam i. lam v.
   appf3_ (uconst_ (CSet ())) s i v
 
-let empty_ = use MExprAst in
+let nil_ = use MExprAst in
   seq_ []
 
 let cons_ = use MExprAst in
@@ -1168,6 +1168,18 @@ let mapCmp_ = use MExprAst in
 let mapGetCmpFun_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapGetCmpFun ())) m
+
+-- Collections
+let empty_ = use MExprAst in
+  uconst_ (CEmpty ())
+
+let insert_ = use MExprAst in
+  lam v. lam c.
+  appf2_ (uconst_ (CInsert ())) v c
+
+let fold_ = use MExprAst in
+  lam f. lam z. lam c.
+  appf3_ (uconst_ (CFold ())) f z c
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2

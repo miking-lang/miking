@@ -157,6 +157,12 @@ lang TensorCompatibleType = CompatibleType + TensorTypeAst
     else None ()
 end
 
+lang CollCompatibleType = CompatibleType + CollTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyColl _ & ty, TyColl _) ->
+    Some ty
+end
+
 lang RecordCompatibleType = CompatibleType + RecordTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyRecord t1, TyRecord t2) ->
@@ -635,8 +641,8 @@ lang MExprTypeAnnot =
   UnknownCompatibleType + VarCompatibleType + BoolCompatibleType +
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
-  RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType +
+  CollCompatibleType + RecordCompatibleType + VariantCompatibleType +
+  AppCompatibleType + PropagateArrowLambda + PropagateLetType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
