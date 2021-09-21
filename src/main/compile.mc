@@ -74,9 +74,10 @@ let compile = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
 
       ocamlCompileAst options file ast
-        (lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ())
-        (lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ())
-        (lam. if options.exitBefore then exit 0 else ())
+        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+        , exitBefore = lam. if options.exitBefore then exit 0 else ()
+        }
     else never
 
     -- Compile MExpr AST
