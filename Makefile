@@ -30,12 +30,12 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
-	test-ipopt\
+  test-ipopt\
   test-par
 
 all: build
 
-boot:
+boot: lint
 	@./make boot
 
 install-boot: boot
@@ -47,12 +47,12 @@ lite: install-boot
 test: test-boot-base
 
 build: install-boot
-# Run the complete bootstrapping process to compile `mi`.
+	# Run the complete bootstrapping process to compile `mi`.
 	@./make
 
 build-mi:
-# Build `mi` using the current version in `build`, skipping bootstrapping.
-# The result is named `build/mi-tmp`.
+	# Build `mi` using the current version in `build`, skipping bootstrapping.
+	# The result is named `build/mi-tmp`.
 	@./make build-mi
 
 install: build
@@ -73,41 +73,42 @@ uninstall:
 test: test-boot-base
 
 test-all:\
-	lint\
+  lint\
   test-boot-compile\
   test-compile\
   test-run\
   test-par\
   test-boot
 
-test-boot-compile: boot
+test-boot-compile: boot lint
 	@$(MAKE) -s -f test-boot-compile.mk
 
-test-compile: build
+test-compile: build lint
 	@$(MAKE) -s -f test-compile.mk
 
-test-run: build
+test-run: build lint
 	@$(MAKE) -s -f test-run.mk
 
 test-boot:\
   test-boot-base\
   test-boot-py\
-  test-boot-ocaml
+  test-boot-ocaml\
+  lint
 
-test-boot-base: boot
+test-boot-base: boot lint
 	@$(MAKE) -s -f test-boot.mk base
 
-test-boot-py: boot
+test-boot-py: boot lint
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-ocaml: boot
+test-boot-ocaml: boot lint
 	@$(MAKE) -s -f test-boot.mk ocaml
 
-test-sundials: build
+test-sundials: build lint
 	@$(MAKE) -s -f test-sundials.mk
 
-test-ipopt: build/mi
+test-ipopt: build/mi lint
 	@$(MAKE) -s -f test-ipopt.mk all
 
-test-par: build
+test-par: build lint
 	@$(MAKE) -s -f test-par.mk
