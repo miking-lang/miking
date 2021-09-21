@@ -15,28 +15,12 @@ let _symbolizeVarName = lam env : SymEnv. lam ident.
 lang OCamlSym =
   VarSym + AppAst + LamSym + LetSym + RecLetsSym + RecordAst + ConstAst
   + NamedPatSym + IntPat + CharPat + BoolPat + RecordAst
-  + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData
+  + OCamlMatch + OCamlTuple + OCamlData
   + UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
   + RecordTypeAst + VarTypeSym + OCamlExternal
   + OCamlString + OCamlRecord + OCamlLabel
 
   sem symbolizeExpr (env : SymEnv) =
-  | OTmVariantTypeDecl t ->
-    let f = lam env. lam constr.
-      match constr with (ident, ty) then
-        match _symbolizeVarName env ident with (env, ident) then
-          (env, (ident, symbolizeType env ty))
-        else never
-      else never
-    in
-    match _symbolizeVarName env t.ident with (env, ident) then
-      let inexpr = symbolizeExpr env t.inexpr in
-      match mapAccumL f env t.constrs with (env, constrs) then
-        OTmVariantTypeDecl {{{t with ident = ident}
-                                with constrs = constrs}
-                                with inexpr = inexpr}
-      else never
-    else never
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm. match arm with (pat, expr) then
       match symbolizePat env (mapEmpty cmpString) pat with (patEnv, pat) then

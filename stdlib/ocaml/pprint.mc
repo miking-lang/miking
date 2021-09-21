@@ -112,6 +112,13 @@ lang OCamlPrettyPrint =
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
 
+  sem pprintOcamlTops =
+  | tops ->
+    let env = collectTopNames tops in
+    match mapAccumL pprintTop env tops with (_, tops) then
+      strJoin "\n" tops
+    else never
+
   sem _nameSymString (esc : Name -> Name) =
   | name ->
     join [ nameGetStr (esc name)
@@ -135,7 +142,8 @@ lang OCamlPrettyPrint =
   sem pprintVarName (env : PprintEnv) =
   | name ->
     (env,
-     if nameHasSym name then
+     match mapLookup name env.nameMap with Some n then n
+     else if nameHasSym name then
        _nameSymString escapeName name
      else
        _nameNoSymString noSymVarPrefix escapeName name)
@@ -154,7 +162,6 @@ lang OCamlPrettyPrint =
   | OTmTuple _ -> true
   | OTmConApp {args = []} -> true
   | OTmConApp _ -> false
-  | OTmVariantTypeDecl _ -> false
   | OTmVarExt _ -> true
   | OTmConAppExt _ -> false
   | OTmString _ -> true
@@ -298,8 +305,32 @@ lang OCamlPrettyPrint =
   | CBootParserGetPat _ -> intrinsicOpBootparser "getPat"
   | CBootParserGetInfo _ -> intrinsicOpBootparser "getInfo"
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
-  | OTmVariantTypeDecl t ->
+  sem collectTopNames =
+  | tops ->
+    let maybeAdd = lam name. lam str. lam env: PprintEnv.
+      match mapLookup str env.strings with Some _ then
+        env
+      else
+        {{env with nameMap = mapInsert name str env.nameMap}
+              with strings = mapInsert str 1 env.strings}
+    in
+    let f = lam top. lam env.
+      switch top
+      case OTopLet t then
+        maybeAdd t.ident (escapeVarString t.ident.0) env
+      case OTopRecLets t then
+        let f = lam binding : OCamlTopBinding. lam env.
+          maybeAdd binding.ident (escapeVarString binding.ident.0) env
+        in foldr f env t.bindings
+      case top then
+        env
+      end
+    in
+    foldr f pprintEnvEmpty tops
+
+  sem pprintTop (env : PprintEnv) =
+  | OTopVariantTypeDecl t ->
+    let indent = 0 in
     let f = lam env. lam ident. lam ty.
       match pprintConName env ident with (env, ident) then
         let isUnit = match ty with TyRecord {fields = fields} then
@@ -313,29 +344,61 @@ lang OCamlPrettyPrint =
     in
     match pprintVarName env t.ident with (env, ident) then
       match mapMapAccum f env t.constrs with (env, constrs) then
-        match pprintCode indent env t.inexpr with (env, inexpr) then
-          let constrs = strJoin (pprintNewline (pprintIncr indent))
-                                (mapValues constrs) in
-          (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
-                      constrs, ";;", pprintNewline indent,
-                      inexpr])
-        else never
+        let constrs = strJoin (pprintNewline (pprintIncr indent))
+                              (mapValues constrs) in
+        (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
+                    constrs, ";;"])
       else never
     else never
-  | OTmCExternalDecl t ->
+  | OTopCExternalDecl t ->
     match pprintVarName env t.ident with (env, ident) then
-      match getTypeStringCode indent env t.ty with (env, ty) then
-        match pprintCode indent env t.inexpr with (env, inexpr) then
-          -- NOTE(larshum, 2021-09-17): We use the string of the names
-          -- directly, as we know it is unique and we do not want it to be
-          -- escaped.
-          (env, join ["external ", ident, " : ", ty, " = ",
-                      "\"", nameGetStr t.bytecodeIdent, "\" ",
-                      "\"", nameGetStr t.nativeIdent, "\";;",
-                      pprintNewline indent, inexpr])
-        else never
+      match getTypeStringCode 0 env t.ty with (env, ty) then
+        -- NOTE(larshum, 2021-09-17): We use the string of the names
+        -- directly, as we know it is unique and we do not want it to be
+        -- escaped.
+        (env, join ["external ", ident, " : ", ty, " = ",
+                    "\"", nameGetStr t.bytecodeIdent, "\" ",
+                    "\"", nameGetStr t.nativeIdent, "\";;"])
       else never
     else never
+  | OTopLet t ->
+    let indent = 0 in
+    match pprintVarName env t.ident with (env, ident) then
+      match pprintCode (pprintIncr indent) env t.body with (env, body) then
+        (env, join ["let ", ident, " =", pprintNewline (pprintIncr indent),
+                    body, ";;"])
+      else never
+    else never
+  | OTopRecLets {bindings = bindings} ->
+    let indent = 0 in
+    let lname = lam env. lam bind : OCamlTopBinding.
+      match pprintVarName env bind.ident with (env,str) then
+        (env, str)
+      else never in
+    let lbody = lam env. lam bind : OCamlTopBinding.
+      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
+      with (env,str) then (env, str)
+      else never in
+    match mapAccumL lname env bindings with (env,idents) then
+      match mapAccumL lbody env bindings with (env,bodies) then
+        match bodies with [] then (env,"") else
+          let fzip = lam ident. lam body.
+            join [ident, " =",
+                  pprintNewline (pprintIncr (pprintIncr indent)),
+                  body]
+          in
+          (env,join ["let rec ",
+                     strJoin (join [pprintNewline indent, "and "])
+                     (zipWith fzip idents bodies), ";;"])
+      else never
+    else never
+  | OTopExpr {expr = expr} ->
+    let indent = 0 in
+    match pprintCode indent env expr with (env, code) then
+      (env, concat code ";;")
+    else never
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->

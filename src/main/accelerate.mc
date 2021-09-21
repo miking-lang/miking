@@ -36,50 +36,6 @@ lang PMExprCompile =
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
--- Pretty-printing of PMExpr terms. This is just used for debugging purposes.
-lang PMExprPrettyPrint = MExprPrettyPrint + PMExprAst
-  sem isAtomic =
-  | TmAccelerate _ -> false
-  | TmParallelMap _ -> false
-  | TmParallelMap2 _ -> false
-  | TmParallelFlatMap _ -> false
-  | TmParallelReduce _ -> false
-
-  sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmAccelerate t ->
-    match printParen indent env t.e with (env, e) then
-      (env, join ["accelerate ", e])
-    else never
-  | TmParallelMap t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelMap (", f, ") (", as, ")"])
-      else never
-    else never
-  | TmParallelMap2 t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        match pprintCode indent env t.bs with (env, bs) then
-          (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
-        else never
-      else never
-    else never
-  | TmParallelFlatMap t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelFlatMap (", f, ") (", as, ")"])
-      else never
-    else never
-  | TmParallelReduce t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.ne with (env, ne) then
-        match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelReduce (", f, ") (", ne, ") (", as, ")"])
-        else never
-      else never
-    else never
-end
-
 let parallelKeywords = [
   "accelerate",
   "parallelMap",
@@ -99,17 +55,9 @@ let parallelPatterns = [
   getReducePattern ()
 ]
 
-let pprintMExprAst : Expr -> String = lam ast.
-  use MExprPrettyPrint in
-  expr2str ast
-
-let pprintPMExprAst : Expr -> String = lam ast.
-  use PMExprPrettyPrint in
-  expr2str ast
-
-let pprintOCamlAst : Expr -> String = lam ast.
+let pprintOCamlTops : [Top] -> String = lam tops.
   use OCamlPrettyPrint in
-  expr2str ast
+  pprintOcamlTops tops
 
 let pprintFutharkAst : FutProg -> String = lam ast.
   use FutharkPrettyPrint in
@@ -240,20 +188,21 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
 
         -- Generate OCaml code
         match typeLift ast with (env, ast) then
-          match generateTypeDecl env ast with (env, ast) then
+          match generateTypeDecls env with (env, typeTops) then
             -- Replace auxilliary accelerate terms in the AST by eliminating
             -- the let-expressions (only used in the accelerate AST) and adding
             -- data conversion of parameters and result.
             let ast = replaceAccelerate accelerated ast in
 
             -- Generate the OCaml AST
-            let ast = generate env ast in
+            let exprTops = generateTops env ast in
 
             -- Add an external declaration of a C function in the OCaml AST,
             -- for each accelerate term.
-            let ast = insertExternalCDeclarations accelerated ast in
+            let externalTops = getExternalCDeclarations accelerated in
 
-            let ocamlProg = pprintOCamlAst ast in
+            let ocamlTops = join [externalTops, typeTops, exprTops] in
+            let ocamlProg = pprintOCamlTops ocamlTops in
             compileAccelerated options file ocamlProg cProg futharkProg
           else never
         else never

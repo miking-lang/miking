@@ -1,27 +1,20 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
-lang OCamlTypeDeclAst
-  syn Expr =
-  | OTmVariantTypeDecl { ident : Name, constrs : Map Name Type, inexpr : Expr }
+type OCamlTopBinding =
+  { ident : Name
+    , tyBody : Type
+    , body : Expr
+  }
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
-  | OTmVariantTypeDecl t ->
-    match f acc t.inexpr with (acc, inexpr) then
-      (acc, OTmVariantTypeDecl {t with inexpr = inexpr})
-    else never
-end
-
-lang OCamlCExternalDecl
-  syn Expr =
-  | OTmCExternalDecl {ident : Name, ty : Type, bytecodeIdent : Name,
-                      nativeIdent : Name, inexpr : Expr}
-
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
-  | OTmCExternalDecl t ->
-    match f acc t.inexpr with (acc, inexpr) then
-      (acc, OTmCExternalDecl {t with inexpr = inexpr})
-    else never
+lang OCamlTopAst
+  syn Top =
+  | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
+  | OTopCExternalDecl { ident : Name, ty : Type, bytecodeIdent : Name,
+                        nativeIdent : Name }
+  | OTopLet { ident : Name, tyBody: Type, body : Expr }
+  | OTopRecLets { bindings : [OCamlTopBinding] }
+  | OTopExpr { expr : Expr }
 end
 
 lang OCamlRecord
@@ -195,10 +188,12 @@ lang OCamlTypeAst =
 end
 
 lang OCamlAst =
+  -- Tops
+  OCamlTopAst +
+
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlCExternalDecl +
-  OCamlRecord + OCamlLabel + OCamlLam +
+  OCamlArray + OCamlData + OCamlRecord + OCamlLabel + OCamlLam +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +

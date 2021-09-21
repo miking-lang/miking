@@ -30,7 +30,7 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
-	test-ipopt\
+  test-ipopt\
   test-par
 
 all: build
@@ -73,12 +73,12 @@ uninstall:
 test: test-boot-base
 
 test-all:\
-	lint\
   test-boot-compile\
   test-compile\
   test-run\
   test-par\
   test-boot
+	@./make lint
 
 test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk
