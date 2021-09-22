@@ -41,7 +41,7 @@ let tune = lam files. lam options : Options. lam args.
       let result = tuneEntry binary args tempFile env table in
 
       -- Write the best found values to filename.tune
-      tuneFileDumpTable file result;
+      tuneFileDumpTable (tuneFileName file) env result;
 
       -- Clean up temporary files used during tuning
       cleanup ()
