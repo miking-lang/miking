@@ -4,6 +4,7 @@ run_files += test/mexpr/fix.mc
 run_files += test/mexpr/ident-test.mc
 # run_files += test/mexpr/map.mc
 run_files += test/mexpr/tensor.mc
+run_files += test/mexpr/coll.mc
 # run_files += test/mexpr/match.mc
 run_files += test/mexpr/reclets.mc
 run_files += test/mexpr/comments.mc

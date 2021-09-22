@@ -4,6 +4,7 @@ compile_files += test/mexpr/fix.mc
 compile_files += test/mexpr/ident-test.mc
 compile_files += test/mexpr/map.mc
 compile_files += test/mexpr/tensor.mc
+compile_files += test/mexpr/coll.mc
 compile_files += test/mexpr/match.mc
 compile_files += test/mexpr/reclets.mc
 compile_files += test/mexpr/comments.mc
