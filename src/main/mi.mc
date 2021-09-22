@@ -4,6 +4,7 @@
 -- File miking.mi is the main file of the Miking tool chain.
 
 include "compile.mc"
+include "accelerate.mc"
 include "seq.mc"
 include "string.mc"
 include "eval.mc"
@@ -19,10 +20,11 @@ let menu =
 "Usage: mi <command> [<options>] file [<options>]
 
 Commands:
-  eval      Evaluates a .mc file using an internal interpreter
-  compile   Compiles a .mc file into an executable with the same name
-  run       Combines eval and compile, to run the program as fast as possible
-  tune      Tunes a program with decision points
+  eval       Evaluates a .mc file using an internal interpreter
+  compile    Compiles a .mc file into an executable with the same name
+  accelerate Compiles a .mc file into an accelerated executable with the same name
+  run        Combines eval and compile, to run the program as fast as possible
+  tune       Tunes a program with decision points
 
 If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
@@ -31,6 +33,8 @@ In such case, options need to be written before the file name.
 Options:
   --debug-parse           Print the AST after parsing
   --debug-generate        Print the AST after code generation
+  --debug-type-annot      Print the AST after adding type annotations
+  --debug-profile         Instrument profiling expressions to AST
   --exit-before           Exit before evaluation or compilation
   --test                  Generate utest code
   --disable-optimizations Disables optimizations to decrease compilation time
@@ -46,6 +50,7 @@ let commandsMap = [
 ("run", run),
 ("eval", eval),
 ("compile", compile),
+("accelerate", accelerate),
 ("tune", tune)
 ] in
 

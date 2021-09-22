@@ -325,18 +325,27 @@ lang CmpIntEq = CmpIntAst
   sem eqConst (lhs : Const) =
   | CEqi {} -> match lhs with CEqi _ then true else false
   | CLti {} -> match lhs with CLti _ then true else false
+  | CLeqi {} -> match lhs with CLeqi _ then true else false
+  | CGti {} -> match lhs with CGti _ then true else false
 end
 
 lang CmpFloatEq = CmpFloatAst
   sem eqConst (lhs : Const) =
   | CEqf {} -> match lhs with CEqf _ then true else false
   | CLtf {} -> match lhs with CLtf _ then true else false
+  | CGtf {} -> match lhs with CGtf _ then true else false
 end
 
 lang CharEq = CharAst
   sem eqConst (lhs : Const) =
   | CChar {val = v2} ->
     match lhs with CChar {val = v1} then eqChar v1 v2 else false
+end
+
+lang IntCharConversionEq = IntCharConversionAst
+  sem eqConst (lhs : Const) =
+  | CChar2Int {} -> match lhs with CChar2Int _ then true else false
+  | CInt2Char {} -> match lhs with CInt2Char _ then true else false
 end
 
 lang SymbEq = SymbAst
@@ -368,6 +377,8 @@ lang SeqOpEq = SeqOpAst
   | CMapi {} -> match lhs with CMapi _ then true else false
   | CIter {} -> match lhs with CIter _ then true else false
   | CIteri {} -> match lhs with CIteri _ then true else false
+  | CFoldl {} -> match lhs with CFoldl _ then true else false
+  | CFoldr {} -> match lhs with CFoldr _ then true else false
   | CCreateList {} -> match lhs with CCreateList _ then true else false
   | CCreateRope {} -> match lhs with CCreateRope _ then true else false
   | CSubsequence {} -> match lhs with CSubsequence _ then true else false
@@ -672,7 +683,7 @@ lang MExprEq =
 
   -- Constants
   + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
+  CharEq + IntCharConversionEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +

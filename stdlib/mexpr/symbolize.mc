@@ -183,9 +183,8 @@ lang RecLetsSym = Sym + RecLetsAst
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam bind : RecLetBinding.
-        {{{bind with body = symbolizeExpr env bind.body}
-                with tyBody = symbolizeType env bind.tyBody}
-                with ty = symbolizeType env bind.ty})
+        {{bind with body = symbolizeExpr env bind.body}
+               with tyBody = symbolizeType env bind.tyBody})
         bindings in
 
     TmRecLets {{t with bindings = bindings}

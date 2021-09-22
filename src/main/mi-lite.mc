@@ -64,33 +64,44 @@ let ocamlCompile : Options -> [String] -> [String] -> String -> String -> String
   p.cleanup ();
   destinationFile
 
+type Hooks =
+  { debugTypeAnnot : Expr -> ()
+  , debugGenerate : String -> ()
+  , exitBefore : () -> ()
+  }
+
+let emptyHooks: Hooks =
+  { debugTypeAnnot = lam. ()
+  , debugGenerate = lam. ()
+  , exitBefore = lam. ()
+  }
+
 let ocamlCompileAst =
-  lam options : Options. lam sourcePath. lam ast. lam debugTypeAnnotHook.
-  lam debugGenerateHook. lam exitBeforeHook.
+  lam options : Options. lam sourcePath. lam ast. lam hooks: Hooks.
   use MCoreLiteCompile in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
 
   -- If option --debug-type-annot, then pretty-print the AST
-  debugTypeAnnotHook ast;
+  hooks.debugTypeAnnot ast;
 
   -- Translate the MExpr AST into an OCaml AST
   match typeLift ast with (env, ast) then
-    match generateTypeDecl env ast with (env, ast) then
+    match generateTypeDecls env with (env, typeTops) then
       let env : GenerateEnv =
         chooseExternalImpls globalExternalImplsMap env ast
       in
-      let ast = generate env ast in
+      let exprTops = generateTops env ast in
 
       -- Collect external library dependencies
       match collectlibraries env.exts with (libs, clibs) then
-        let ocamlProg = expr2str ast in
+        let ocamlProg = pprintOcamlTops (concat typeTops exprTops) in
 
         -- Print the AST after code generation
-        debugGenerateHook ocamlProg;
+        hooks.debugGenerate ocamlProg;
 
         -- If option --exit-before, exit the program here
-        exitBeforeHook ();
+        hooks.exitBefore ();
 
         -- Compile OCamlAst
         ocamlCompile options libs clibs sourcePath ocamlProg
@@ -103,7 +114,7 @@ let compile : Options -> String -> Unit = lam options. lam file.
   let ast = parseMCoreFile [] file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  ocamlCompileAst options file ast (lam. ()) (lam. ()) (lam. ())
+  ocamlCompileAst options file ast emptyHooks
 
 mexpr
 

@@ -322,7 +322,6 @@ let nreclets_ = use MExprAst in
     { ident = t.0
     , tyBody = t.1
     , body = t.2
-    , ty = tyunknown_
     , info = NoInfo ()
     }
   in
@@ -364,7 +363,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, tyBody = ty, body = body, ty = tyunknown_, info = NoInfo ()} in
+    let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     error "reclets is not a TmRecLets construct"
@@ -447,6 +446,10 @@ let nulam_ = use MExprAst in
 let ulam_ = use MExprAst in
   lam s. lam body.
   lam_ s tyunknown_ body
+
+let nlams_ = use MExprAst in
+  lam params. lam body.
+  foldr (lam p : (Name, Type). lam acc. nlam_ p.0 p.1 acc) body params
 
 let lams_ = use MExprAst in
   lam params. lam body.

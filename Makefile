@@ -74,13 +74,14 @@ uninstall:
 test: test-boot-base
 
 test-all:\
-	lint\
   test-boot-compile\
   test-compile\
   test-run\
   test-par\
-  test-boot\
-	test-tune
+	test-tune\
+  test-boot
+	@./make lint
+
 
 test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk

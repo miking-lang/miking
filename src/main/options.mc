@@ -12,6 +12,7 @@ type Options = {
   runTests : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
+  cpuOnly : Bool,
   printHelp : Bool
 }
 
@@ -25,6 +26,7 @@ let options = {
   runTests = false,
   disableOptimizations = false,
   useTuned = false,
+  cpuOnly = false,
   printHelp = false
 }
 
@@ -38,6 +40,7 @@ let optionsMap = [
 ("--test", lam o : Options. {o with runTests = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
 ("--use-tuned", lam o : Options. {o with useTuned = true}),
+("--cpu-only", lam o : Options. {o with cpuOnly = true}),
 ("--help", lam o: Options. {o with printHelp = true})
 ]
 

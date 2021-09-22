@@ -53,18 +53,26 @@ let insertTunedOrDefaults = lam ast. lam file.
 
 let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
-  -- If option --test, then generate utest runner calls. Otherwise strip away
-  -- all utest nodes from the AST.
-  match generateTests ast options.runTests with (symEnv, ast) then
+    -- If option --debug-profile, insert instrumented profiling expressions
+    -- in AST
+    let ast =
+      if options.debugProfile then instrumentProfiling (symbolize ast)
+      else ast
+    in
 
-    -- Re-symbolize the MExpr AST and re-annotate it with types
-    let ast = symbolizeExpr symEnv ast in
+    -- If option --test, then generate utest runner calls. Otherwise strip away
+    -- all utest nodes from the AST.
+    match generateTests ast options.runTests with (symEnv, ast) then
 
-    ocamlCompileAst options sourcePath ast
-      (lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ())
-      (lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ())
-      (lam. if options.exitBefore then exit 0 else ())
-  else never
+      -- Re-symbolize the MExpr AST and re-annotate it with types
+      let ast = symbolizeExpr symEnv ast in
+
+      ocamlCompileAst options file ast
+        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+        , exitBefore = lam. if options.exitBefore then exit 0 else ()
+        }
+    else never
 
 -- Main function for compiling a program
 -- files: a list of files
