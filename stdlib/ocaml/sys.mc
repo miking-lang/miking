@@ -73,3 +73,9 @@ let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
 let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
     match sysTimeCommand cmd stdin cwd with (_, res) then res else never
+
+let sysCommandExists : String -> Bool = lam cmd.
+  let res = sysRunCommand ["which", cmd] "" "." in
+  eqi 0 res.returncode
+
+utest sysCommandExists "ls" with true

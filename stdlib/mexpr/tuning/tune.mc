@@ -552,6 +552,13 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
+let _timeoutCmd = lam options : TuneOptions. lam timeoutMs : Float.
+  if options.exitEarly then
+    if sysCommandExists "timeout" then
+      ["timeout", "-k", float2string _killAfter, float2string (_ms2s timeoutMs)]
+    else []
+  else []
+
 -- Entry point for tuning
 let tuneEntry =
   lam binary : String.
@@ -568,12 +575,10 @@ let tuneEntry =
     -- Runs the program with a given command-line input
     let run =
       let cmd = lam timeoutMs : Float.
-        if options.exitEarly then
-          ["timeout", "-k", float2string _killAfter, float2string (_ms2s timeoutMs), concat "./" binary]
-        else [binary]
+        concat (_timeoutCmd options timeoutMs) [concat "./" binary]
       in
-      lam input : [String]. lam timeout : Float.
-        sysTimeCommand (concat (cmd timeout) input) "" "."
+      lam input : [String]. lam timeoutMs : Float.
+        sysTimeCommand (concat (cmd timeoutMs) input) "" "."
     in
 
     -- Choose search method

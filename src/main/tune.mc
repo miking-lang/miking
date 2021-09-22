@@ -41,10 +41,17 @@ let tune = lam files. lam options : Options. lam args.
       let result = tuneEntry binary args tempFile env table in
 
       -- Write the best found values to filename.tune
-      tuneFileDumpTable (tuneFileName file) env result;
+      tuneFileDumpTable (tuneFileName file) (Some env) result;
 
       -- Clean up temporary files used during tuning
       cleanup ()
     else never
   in
-  iter tuneFile files
+  iter tuneFile files;
+
+  -- If option --compile is given, then compile the program using the
+  -- tuned values
+  if options.compileAfterTune then
+    compile files {options with useTuned = true} args
+  else ()
+

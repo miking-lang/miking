@@ -794,12 +794,12 @@ let _table = nameSym "table"
 let _argv = nameSym "argv"
 
 type Flattened =
-{ ast : Expr           -- The flattened ast
-, table : LookupTable  -- The initial lookup table
-, tempDir : String     -- The temporary directory
-, tempFile : String    -- The file from which decision point values are read
-, cleanup : () -> ()   -- Removes all temporary files from the disk
-, env : CallCtxEnv     -- Call context environment
+{ ast : Expr             -- The flattened ast
+, table : LookupTable    -- The initial lookup table
+, tempDir : String       -- The temporary directory
+, tempFile : String      -- The file from which decision point values are read
+, cleanup : Unit -> Unit -- Removes all temporary files from the disk
+, env : CallCtxEnv       -- Call context environment
 }
 
 -- Fragment for transforming a program with decision points.
@@ -820,7 +820,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       , table = _initAssignments env
       , tempDir = tempDir
       , tempFile = tuneFile
-      , cleanup = lam. sysTempDirDelete tempDir
+      , cleanup = sysTempDirDelete tempDir
       , env = env
       }
     else never
