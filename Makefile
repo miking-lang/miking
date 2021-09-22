@@ -82,7 +82,6 @@ test-all:\
   test-boot
 	@./make lint
 
-
 test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk
 
