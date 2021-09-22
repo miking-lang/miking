@@ -355,105 +355,6 @@ lang TuneSemiExhaustive = TuneLocalSearch
                      (use MExprPrettyPrint in expr2str) prev])
 end
 
-
-lang TuneLayered = TuneLocalSearch
---   -- TODO
---   -- base = 0..nbrBaseholes
---   -- depth = 0..empty subsets
---   -- subsets = 0..nbrSubsets
---   -- nested iterator?
-
---   syn MetaState =
---   | Layered { baseIterator : Iterator Int Int
---             , depth : Int
---             , subsetIterator : Iterator a b
---             , prev : Option Expr
---             , subsetFun : Int -> Int -> [[Int]]}
-
---   sem initMeta =
---   | startState ->
---     let startState : SearchState = startState in
---     let a = startState.cur.assignment in
---     let hole2idx = switch a
---       case Table {hole2idx = hole2idx} then hole2idx
---       end
---     in
---     let trees = map (lam pathMap : Map [NameInfo] Int.
---       match unzip (mapBindings pathMap) with (paths, ids) then
---         let empty = treeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
---         treeInsertMany nameInfoCmp empty ids (map reverse paths)
---       else never
---     ) (mapValues hole2idx)
---     in
---     let subset = lam i. lam depth.
---       let tree = get trees i in
---       treeIdsOfDepth depth tree
---     in
---     Layered { baseIterator = iteratorRange 0 (mapSize hole2idx)
---             , depth = 0
---             , subsetIterator = iteratorFromSeq (subset 0 0)
---             , prev = None ()
---             , subsetFun = subset
---             }
-
---   sem step (searchState : SearchState) =
---   | Layered ({ baseIterator = baseIterator
---              , depth = depth
---              , subsetIterator = subsetIterator
---              , prev = prev
---              , subsetFun = subsetFun
---              } & state) ->
---     match searchState.cur.assignment with Table ({holes = holes, table = table} & t) then
---       let stepSize = t.options.stepSize in
-
---       let itAndVal =
---         switch iteratorGet subsetIterator
---         case None () then
---           -- First iteration
---           let it = iteratorStep subsetIterator in
---           let subset = optionGetOrElse (lam. "empty subsets") (iteratorGet it) in
---           (it, subset)
---         case Some subset then (subsetIterator, subset)
---         end
---       in
-
---       let subsetIterator = itAndVal.0 in
---       let subset = itAndVal.1 in
-
---       match subset with [] then error "empty subset"
---       else
---         print "index = "; dprintLn (head subset);
---         let h = get holes (head subset) in
---         let nextVal = next prev stepSize h in
---         switch nextVal
---         case None () then error "hole exhausted"
---         case Some v then
---           -- Set the holes in the subset to the next value
---           let newTable = foldl (lam table. lam i. set table i v) table subset in
---           let assignment = Table {t with table = newTable} in
---           let score = searchState.cost assignment in
---           ( Some {assignment = assignment, cost = score}
---           , Layered {state with subsetIterator = iteratorStep subsetIterator}
---           )
---         end
---     else never
-
---   sem debugMeta =
---   | Layered {baseIterator = bit, depth = d, subsetIterator = sit, prev = prev, subsetFun = subsetFun} ->
---     let subset = iteratorGet sit in
---     let subset2str = lam subset.
---       match subset with None () then "(none)"
---       else match subset with Some subset then
---         strJoin " " (map int2string subset)
---       else never
---     in
---     printLn (
---       join
---       [ "current subset: ", subset2str subset
---       ]
---     )
-end
-
 lang TuneOneRandomNeighbour = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
@@ -683,7 +584,6 @@ let tuneEntry =
      case TabuSearch {} then use TuneTabuSearch in tune
      case Exhaustive {} then use TuneExhaustive in tune
      case SemiExhaustive {} then use TuneSemiExhaustive in tune
-     case Layered {} then use TuneLayered in tune
      case BinarySearch {} then use TuneBinarySearch in tune
      end)
      options run holes hole2idx tuneFile table

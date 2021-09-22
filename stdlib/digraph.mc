@@ -118,17 +118,12 @@ let digraphPredeccessors = lam v. lam g : Digraph v l.
   distinct (lam v1. lam v2. eqi (digraphCmpv g v1 v2) 0)
     (map (lam tup : DigraphEdge v l. tup.0) (digraphEdgesTo v g))
 
-let digraphIsSuccessorTime = ref 0.0
-
 -- Check whether vertex v1 is a successor of vertex v2 in graph g.
 let digraphIsSuccessor = lam v1. lam v2. lam g : Digraph v l.
-  let t1 = wallTimeMs () in
   let outgoing = mapLookupOrElse (lam. error "Lookup failed") v2 g.adj in
   let successors = map (lam t : (v, l). t.0) outgoing in
   let successors = setOfSeq (digraphCmpv g) successors in
   let res = setMem v1 successors in
-  let t2 = wallTimeMs () in
-  modref digraphIsSuccessorTime (addf (deref digraphIsSuccessorTime) (subf t2 t1));
   res
 
 -- Add vertex v to graph g if it doesn't already exist in g.

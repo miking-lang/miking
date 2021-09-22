@@ -23,7 +23,6 @@ con TabuSearch         : Unit -> SearchMethod
 con RandomWalk         : Unit -> SearchMethod
 con Exhaustive         : Unit -> SearchMethod
 con SemiExhaustive     : Unit -> SearchMethod
-con Layered            : Unit -> SearchMethod
 con BinarySearch       : Unit -> SearchMethod
 
 let string2SearchMethod : String -> SearchMethod = lam s.
@@ -32,7 +31,6 @@ let string2SearchMethod : String -> SearchMethod = lam s.
   else match s with "random-walk" then RandomWalk {}
   else match s with "exhaustive" then Exhaustive {}
   else match s with "semi-exhaustive" then SemiExhaustive {}
-  else match s with "layered" then Layered {}
   else match s with "binary-search" then BinarySearch {}
   else error (concat "Unknown search method: " s)
 

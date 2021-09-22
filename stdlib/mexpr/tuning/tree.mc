@@ -42,11 +42,7 @@ let treeInsertMany = lam cmp. lam tree. lam ids. lam paths.
   in
   utest zip [1,2,3] [4,5,6] with [(1,4),(2,5),(3,6)] in
 
-  let t1 = wallTimeMs () in
   let z = zip ids paths in
-  let t2 = wallTimeMs () in
-  print "zip = "; dprintLn (subf t2 t1); flushStdout ();
-
   foldl (lam acc. lam idPath : (Int, a). treeInsert cmp acc idPath.0 idPath.1) tree z
 
 let treeGetIds = lam tree.

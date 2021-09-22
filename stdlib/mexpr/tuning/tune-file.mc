@@ -124,7 +124,6 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
   else never
 
 let tuneFileDumpTable = lam file : String. lam env : Option CallCtxEnv. lam table : LookupTable.
-  print "dumping to"; printLn file;
   let str =
   join
   [ int2string (length table)
@@ -136,7 +135,6 @@ let tuneFileDumpTable = lam file : String. lam env : Option CallCtxEnv. lam tabl
   , match env with Some env then tuneFileDump env table (CSV ()) else ""
   , "\n"
   ] in writeFile file str
-
 
 let tuneFileReadTable : String -> LookupTable = lam file.
   use BootParser in

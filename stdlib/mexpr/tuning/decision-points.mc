@@ -115,21 +115,9 @@ lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   | arg ->
     let gempty = digraphAddVertex _callGraphTop
       (digraphEmpty nameInfoCmp nameInfoEq) in
-    let t1 = wallTimeMs () in
     let g = digraphAddVertices (_findVertices arg) gempty in
-    let t2 = wallTimeMs () in
-    print "findVertices: "; dprint (subf t2 t1); flushStdout ();
-
-    let t1 = wallTimeMs () in
     let infoMap = mapFromSeq nameCmp (digraphVertices g) in
-    let t2 = wallTimeMs () in
-    print "infoMap: "; dprint (subf t2 t1); flushStdout ();
-
-    let t1 = wallTimeMs () in
     let edges = _findEdges g _callGraphTop infoMap arg in
-    let t2 = wallTimeMs () in
-    print "findEdges: "; dprint (subf t2 t1); flushStdout ();
-
     digraphAddEdges edges g
 
   sem _findVertices =
@@ -480,14 +468,10 @@ let _findLetBinding : Name -> Expr -> Option Expr = use MExprAst in
 -- Compute the initial call context environment for a program.
 let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
   lam publicFns. lam callGraph. lam tm.
-    let t1 = wallTimeMs () in
     let fun2inc =
       _nameMapInit (callGraphNames callGraph) identity _incVarFromName
     in
-    let t2 = wallTimeMs () in
-    print "fun2inc: "; dprint (subf t2 t1); flushStdout ();
 
-    let t1 = wallTimeMs () in
     let lbl2inc =
       _nameMapInit (callGraphEdgeNames callGraph)
         (lam e. match e with (_, _, lbl) then lbl else never)
@@ -496,15 +480,9 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
              mapFindWithExn from fun2inc
            else never)
     in
-    let t2 = wallTimeMs () in
-    print "lbl2inc: "; dprint (subf t2 t1); flushStdout ();
 
-    let t1 = wallTimeMs () in
     let callGraphRev = digraphReverse callGraph in
-    let t2 = wallTimeMs () in
-    print "callGraphRev: "; dprint (subf t2 t1); flushStdout ();
 
-    let t1 = wallTimeMs () in
     let lbl2count =
       foldl (lam acc. lam funName.
                let incomingEdges =
@@ -524,8 +502,6 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
             (digraphVertices callGraph)
 
     in
-    let t2 = wallTimeMs () in
-    print "lbl2count: "; dprint (subf t2 t1); flushStdout ();
 
     let threadPoolInfo =
       use MExprAst in
@@ -772,11 +748,8 @@ let _lookupCallCtx
 
     let tree = treeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
 
-    let t1 = wallTimeMs () in
     let dummyIds = create (length paths) (lam i. i) in
     let tree = treeInsertMany nameInfoCmp tree dummyIds (map reverse paths) in
-    let t2 = wallTimeMs () in
-    print "tree: "; dprint (subf t2 t1); flushStdout ();
 
     recursive let work : NameInfo -> [Tree] -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
@@ -879,22 +852,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       _nameMapInit (map (lam t : NameInfo. t.0) publicFns)
         identity _privFunFromName
     in
-    let t1 = wallTimeMs () in
     let tm = _replacePublic pub2priv t in
-    let t2 = wallTimeMs () in
-    print "replacePublic: "; dprint (subf t2 t1); flushStdout ();
 
     -- Compute the call graph
-    let t1 = wallTimeMs () in
     let g = toCallGraph tm in
-    let t2 = wallTimeMs () in
-    print "toCallGraph: "; dprint (subf t2 t1); flushStdout ();
 
     -- Prune the call graph
-    let t1 = wallTimeMs () in
     let eqPathsAssoc = _eqPaths g publicFns _callGraphTop tm in
-    let t2 = wallTimeMs () in
-    print "eqPaths: "; dprint (subf t2 t1); flushStdout ();
     let eqPathsMap : Map NameInfo [Path] = mapFromSeq nameInfoCmp eqPathsAssoc in
     let keepEdges : [Edge] =
       foldl (lam acc. lam path : (NameInfo, [[(NameInfo,NameInfo,NameInfo)]]).
@@ -907,7 +871,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     in
     let keepEdges = setToSeq (setOfSeq edgeCmp keepEdges) in
 
-    let t1 = wallTimeMs () in
     let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
       match e with (from, to, lbl) then
         digraphAddEdge from to lbl
@@ -915,17 +878,11 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       else never)
       (digraphEmpty nameInfoCmp nameInfoEq)
       keepEdges in
-    let t2 = wallTimeMs () in
-    print "pruning: "; dprint (subf t2 t1); flushStdout ();
 
-    let t1 = wallTimeMs () in
     -- Initialize environment
     let env = callCtxInit publicFns pruned tm in
-    let t2 = wallTimeMs () in
-    print "callCtxInit: "; dprint (subf t2 t1); flushStdout ();
 
     -- Declare the incoming variables
-    let t1 = wallTimeMs () in
     let incVars =
       let exprs =
         callCtxDeclareIncomingVars _incUndef env in
@@ -933,15 +890,9 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       else bindall_ exprs
     in
     let tm = bind_ incVars tm in
-    let t2 = wallTimeMs () in
-    print "incVars: "; dprint (subf t2 t1); flushStdout ();
 
     -- Transform program to maintain the call history when needed
-    let t1 = wallTimeMs () in
     let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
-    let t2 = wallTimeMs () in
-    print "maintainCallCtx: "; dprint (subf t2 t1); flushStdout ();
-    print "digraphIsSuccessorTime: "; dprint (deref digraphIsSuccessorTime);
     (prog, env)
 
   -- Compute the equivalence paths of each decision point
@@ -1067,10 +1018,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         let iv = callCtxFun2Inc cur.0 env in
         let lblPaths = map (lam p. map (lam e : Edge. e.2) p) paths in
 
-        let t1 = wallTimeMs () in
         let res = _lookupCallCtx lookup (ident, t.info) iv env lblPaths in
-        let t2 = wallTimeMs () in
-        print "lookupCallCtx: "; dprint (subf t2 t1); flushStdout ();
         res
     in
     TmLet {{t with body = lookupCode}
