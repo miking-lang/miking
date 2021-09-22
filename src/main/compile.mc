@@ -11,6 +11,7 @@ include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
+include "mexpr/tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
@@ -44,7 +45,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   if options.useTuned then
     let tuneFile = tuneFileName file in
     if fileExists tuneFile then
-      let table = tuneReadTable tuneFile in
+      let table = tuneFileReadTable tuneFile in
       let ast = symbolize ast in
       let ast = normalizeTerm ast in
       insert [] table ast

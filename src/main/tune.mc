@@ -38,10 +38,10 @@ let tune = lam files. lam options : Options. lam args.
         sysRunCommand (cons (join ["./", binary]) args) "" "."
       in
       -- Do the tuning
-      let result = tuneEntry args run env tempFile table in
+      let result = tuneEntry binary args tempFile env table in
 
       -- Write the best found values to filename.tune
-      tuneDumpTable file result;
+      tuneFileDumpTable file result;
 
       -- Clean up temporary files used during tuning
       cleanup ()
