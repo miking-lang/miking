@@ -215,7 +215,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   | t -> sfold_Expr_Expr findFreeVariables state t
 end
 
-lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
+lang LambdaLiftInsertFreeVariables = MExprAst
   sem insertFreeVariablesH (solutions : Map Name (Map Name Type))
                            (subMap : Map Name (Info -> Expr)) =
   | TmVar t ->
@@ -237,11 +237,16 @@ lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
         foldr
           (lam freeVar : (Name, Type). lam acc.
             let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info} in
-            -- NOTE(larshum, 2021-09-16): We use type annot here to avoid
-            -- reimplementing the type inference of applications.
-            typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
+            -- NOTE(larshum, 2021-09-19): We assume that the application
+            -- argument has the correct type.
+            let appType =
+              match ty acc with TyArrow {to = to} then
+                to
+              else TyUnknown {info = info}
+            in
+            TmApp {lhs = acc, rhs = x, ty = appType, info = info})
           (TmVar {ident = t.ident, ty = t.tyBody, info = info})
-          fv in
+          (reverse fv) in
 
       -- Update the annotated type of the function to include the types of the
       -- added parameters.
@@ -271,7 +276,14 @@ lang LambdaLiftInsertFreeVariables = MExprAst + MExprTypeAnnot
             (lam freeVar : (Name, Type). lam acc.
               let x = TmVar {ident = freeVar.0, ty = freeVar.1,
                              info = info} in
-              typeAnnot (TmApp {lhs = acc, rhs = x, ty = tyunknown_, info = info}))
+              -- NOTE(larshum, 2021-09-19): We assume that the application
+              -- argument has the correct type.
+              let appType =
+                match ty acc with TyArrow {to = to} then
+                  to
+                else TyUnknown {info = info}
+              in
+              TmApp {lhs = acc, rhs = x, ty = appType, info = info})
             (TmVar {ident = bind.ident, ty = bind.tyBody, info = info})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
@@ -330,8 +342,7 @@ lang LambdaLiftLiftGlobal = MExprAst
     match liftRecursiveBindingH bindings t.body with (bindings, body) then
       match t.tyBody with TyArrow _ then
         let bind : RecLetBinding =
-          {ident = t.ident, tyBody = t.tyBody, body = t.body, ty = t.ty,
-           info = t.info} in
+          {ident = t.ident, tyBody = t.tyBody, body = t.body, info = t.info} in
         let bindings = snoc bindings bind in
         liftRecursiveBindingH bindings t.inexpr
       else match liftRecursiveBindingH bindings t.inexpr
@@ -420,10 +431,16 @@ lang MExprLambdaLift =
 
   sem liftLambdas =
   | t ->
+    match liftLambdasWithSolutions t with (_, t) then
+      t
+    else never
+
+  sem liftLambdasWithSolutions =
+  | t ->
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
-    liftGlobal t
+    (state.sols, liftGlobal t)
 end
 
 lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
@@ -726,8 +743,21 @@ let nestedFreeVar = preprocess (bindall_ [
 let expected = preprocess (bindall_ [
   ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "x") (var_ "z")))),
   ulet_ "g" (ulam_ "x" (ulam_ "y" (appf2_ (var_ "h") (var_ "x") (var_ "y")))),
-  ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (var_ "x")))
-]) in
+  ulet_ "f" (ulam_ "x" (appf2_ (var_ "g") (var_ "x") (var_ "x")))]) in
 utest liftLambdas nestedFreeVar with expected using eqExpr in
+
+let letMultiParam = preprocess (bindall_ [
+  ulet_ "a" (int_ 2),
+  ulet_ "b" (int_ 6),
+  ulet_ "f" (ulam_ "x" (
+    addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))),
+  app_ (var_ "f") (int_ 7)]) in 
+let expected = preprocess (bindall_ [
+  ulet_ "a" (int_ 2),
+  ulet_ "b" (int_ 6),
+  ulet_ "f" (ulam_ "a" (ulam_ "b" (ulam_ "x" (
+    addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))))),
+  appf3_ (var_ "f") (var_ "a") (var_ "b") (int_ 7)]) in
+utest liftLambdas letMultiParam with expected using eqExpr in
 
 ()

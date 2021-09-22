@@ -350,6 +350,17 @@ lang OCamlPrettyPrint =
                     constrs, ";;"])
       else never
     else never
+  | OTopCExternalDecl t ->
+    match pprintVarName env t.ident with (env, ident) then
+      match getTypeStringCode 0 env t.ty with (env, ty) then
+        -- NOTE(larshum, 2021-09-17): We use the string of the names
+        -- directly, as we know it is unique and we do not want it to be
+        -- escaped.
+        (env, join ["external ", ident, " : ", ty, " = ",
+                    "\"", nameGetStr t.bytecodeIdent, "\" ",
+                    "\"", nameGetStr t.nativeIdent, "\";;"])
+      else never
+    else never
   | OTopLet t ->
     let indent = 0 in
     match pprintVarName env t.ident with (env, ident) then
