@@ -13,8 +13,7 @@ include "digraph.mc"
 include "string.mc"
 include "eq-paths.mc"
 include "name.mc"
-include "common.mc"
-include "tree.mc"
+include "prefix-tree.mc"
 
 -- This file contains implementations related to decision points.
 
@@ -236,12 +235,6 @@ lang HoleAst = IntAst + ANF + KeywordMaker
 
   sem hsample =
 
-  sem isIntRange =
-  | TmHole {inner = inner} ->
-    hisIntRange inner
-
-  sem hisIntRange =
-
   sem normalize (k : Expr -> Expr) =
   | TmHole ({default = default} & t) ->
     k (TmHole {t with default = normalizeTerm t.default})
@@ -275,9 +268,6 @@ end
 lang HoleBoolAst = BoolAst + HoleAst
   syn Hole =
   | BoolHole {}
-
-  sem isIntRange =
-  | BoolHole _ -> None ()
 
   sem hsample =
   | BoolHole {} ->
@@ -318,9 +308,6 @@ lang HoleIntRangeAst = IntAst + HoleAst
   | HIntRange {min : Int,
               max : Int}
 
-  sem isIntRange =
-  | HIntRange r -> Some (r.min, r.max)
-
   sem hsample =
   | HIntRange {min = min, max = max} ->
     int_ (randIntU min (addi max 1))
@@ -336,7 +323,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
         utest geqi next min with true in
         if leqi next max then Some (int_ next)
         else None ()
-    else dprintLn last; never
+    else never
 
   sem matchKeywordString (info : Info) =
   | "IntRange" ->
@@ -746,12 +733,12 @@ let _lookupCallCtx
   -> CallCtxEnv -> [[NameInfo]] -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
 
-    let tree = treeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
+    let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
 
     let dummyIds = create (length paths) (lam i. i) in
-    let tree = treeInsertMany nameInfoCmp tree dummyIds (map reverse paths) in
+    let tree = prefixTreeInsertMany nameInfoCmp tree dummyIds (map reverse paths) in
 
-    recursive let work : NameInfo -> [Tree] -> [NameInfo] -> Expr =
+    recursive let work : NameInfo -> [PTree] -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
         match children with [] then never_

@@ -2,6 +2,8 @@
 include "decision-points.mc"
 include "string.mc"
 
+-- Defines helpers for writing to and reading from a tune file.
+
 type TuneFileFormat
 con CSV : () -> TuneFileFormat
 con TOML : () -> TuneFileFormat
@@ -13,25 +15,25 @@ let _delim = "\n"
 
 let _sepLength = 20
 
-let indexStr = "index"
-let typeStr = "type"
-let valueStr = "value"
-let holeNameStr = "hole_name"
-let holeInfoStr = "hole_info"
-let funNameStr = "function_name"
-let funInfoStr = "function_info"
-let pathNameStr = "call_path_functions"
-let pathInfoStr = "call_path_infos"
+let tuneFileIndexStr = "index"
+let tuneFileTypeStr = "type"
+let tuneFileValueStr = "value"
+let tuneFileHoleNameStr = "hole_name"
+let tuneFileHoleInfoStr = "hole_info"
+let tuneFileFunNameStr = "function_name"
+let tuneFileFunInfoStr = "function_info"
+let tuneFilePathNameStr = "call_path_functions"
+let tuneFilePathInfoStr = "call_path_infos"
 
-let indexIdx = 0
-let typeIdx = 1
-let valueIdx = 2
-let holeNameIdx = 3
-let holeInfoIdx = 4
-let funNameIdx = 5
-let funInfoIdx = 6
-let pathNameIdx = 7
-let pathInfoIdx = 8
+let tuneFileIndexIdx = 0
+let tuneFileTypeIdx = 1
+let tuneFileValueIdx = 2
+let tuneFileHoleNameIdx = 3
+let tuneFileHoleInfoIdx = 4
+let tuneFileFunNameIdx = 5
+let tuneFileFunInfoIdx = 6
+let tuneFilePathNameIdx = 7
+let tuneFilePathInfoIdx = 8
 
 let boolTypeValue = 0
 let intTypeValue = 1
@@ -93,15 +95,15 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
       strJoin "," values
     else match format with TOML _ then
       strJoin "\n" (zipWith (lam x. lam y. join [x, " = ", y])
-        [ indexStr
-        , typeStr
-        , valueStr
-        , holeNameStr
-        , holeInfoStr
-        , funNameStr
-        , funInfoStr
-        , pathNameStr
-        , pathInfoStr
+        [ tuneFileIndexStr
+        , tuneFileTypeStr
+        , tuneFileValueStr
+        , tuneFileHoleNameStr
+        , tuneFileHoleInfoStr
+        , tuneFileFunNameStr
+        , tuneFileFunInfoStr
+        , tuneFilePathNameStr
+        , tuneFilePathInfoStr
         ]
         values)
     else never

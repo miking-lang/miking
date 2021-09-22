@@ -6,7 +6,6 @@ include "decision-points.mc"
 include "tune-options.mc"
 include "common.mc"
 include "tune-file.mc"
-include "tree.mc"
 
 -- Performs tuning of a flattened program with decision points.
 
