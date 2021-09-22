@@ -1534,6 +1534,4 @@ then
 
   cleanup ()
 
-()
-
 else never
