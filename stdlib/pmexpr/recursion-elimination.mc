@@ -10,17 +10,18 @@ include "pmexpr/utils.mc"
 lang PMExprRecursionElimination = PMExprAst
   -- Finds all outgoing edges, representing the indices of the bindings that
   -- are called from the given binding body.
-  sem findCallEdges (bindingIdentToIndex : Map Name Int) =
-  | t -> findCallEdgesH bindingIdentToIndex (setEmpty subi) t
+  sem _recurElimFindCallEdges (bindingIdentToIndex : Map Name Int) =
+  | t -> _recurElimFindCallEdgesH bindingIdentToIndex (setEmpty subi) t
 
-  sem findCallEdgesH (bindingIdentToIndex : Map Name Int) (edgesTo : Set Int) =
+  sem _recurElimFindCallEdgesH (bindingIdentToIndex : Map Name Int)
+                               (edgesTo : Set Int) =
   | (TmApp _) & t ->
     match collectAppArguments t with (TmVar {ident = id}, _) then
       match mapLookup id bindingIdentToIndex with Some calledIndex then
         setInsert calledIndex edgesTo
       else edgesTo
-    else sfold_Expr_Expr (findCallEdgesH bindingIdentToIndex) edgesTo t
-  | t -> sfold_Expr_Expr (findCallEdgesH bindingIdentToIndex) edgesTo t
+    else sfold_Expr_Expr (_recurElimFindCallEdgesH bindingIdentToIndex) edgesTo t
+  | t -> sfold_Expr_Expr (_recurElimFindCallEdgesH bindingIdentToIndex) edgesTo t
 
   -- Attempts to find a reverse topological ordering of the given recursive
   -- bindings, according to their dependency graph. On success, a permutation of
@@ -49,7 +50,7 @@ lang PMExprRecursionElimination = PMExprAst
         (lam g. lam p : (Int, RecLetBinding).
           let idx = p.0 in
           let binding = p.1 in
-          let outEdges = findCallEdges bindingIdentToIndex binding.body in
+          let outEdges = _recurElimFindCallEdges bindingIdentToIndex binding.body in
           mapFoldWithKey
             (lam g : Digraph Int Int. lam edgeEnd : Int. lam.
               digraphAddEdge idx edgeEnd 0 g)
