@@ -31,7 +31,7 @@ let tune = lam files. lam options : Options. lam args.
         tempFile = tempFile, cleanup = cleanup }
     then
       -- Compile the program
-      let binary = ocamlCompileAst options file ast in
+      let binary = ocamlCompileAstWithUtests options file ast in
 
       -- Runs the program with a given input
       let run = lam args : String.

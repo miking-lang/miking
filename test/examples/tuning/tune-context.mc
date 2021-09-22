@@ -4,9 +4,6 @@ include "common.mc"
 let foo = lam n.
   let h1 = hole (Boolean {default = true, depth = 1}) in
   let h2 = hole (Boolean {default = true, depth = 1}) in
-  printLn (join ["Value of h1 ", if h1 then "true" else "false", "\n"]);
-  printLn (join ["Value of h2 ", if h2 then "true" else "false", "\n"]);
-  printLn (join ["Value of n ", int2string n, "\n"]);
   if eqi n 0 then
     sleepMs (if and h1 h2 then 1000 else
              if and h1 (not h2) then 500 else

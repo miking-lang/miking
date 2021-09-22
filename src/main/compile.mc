@@ -51,6 +51,29 @@ let insertTunedOrDefaults = lam ast. lam file.
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
+let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
+  use MCoreCompile in
+    -- If option --debug-profile, insert instrumented profiling expressions
+    -- in AST
+    let ast =
+      if options.debugProfile then instrumentProfiling (symbolize ast)
+      else ast
+    in
+
+    -- If option --test, then generate utest runner calls. Otherwise strip away
+    -- all utest nodes from the AST.
+    match generateTests ast options.runTests with (symEnv, ast) then
+
+      -- Re-symbolize the MExpr AST and re-annotate it with types
+      let ast = symbolizeExpr symEnv ast in
+
+      ocamlCompileAst options sourcePath ast
+        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+        , exitBefore = lam. if options.exitBefore then exit 0 else ()
+        }
+    else never
+
 -- Main function for compiling a program
 -- files: a list of files
 -- options: the options structure to the main program
@@ -66,28 +89,6 @@ let compile = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
 
-    -- If option --debug-profile, insert instrumented profiling expressions
-    -- in AST
-    let ast =
-      if options.debugProfile then instrumentProfiling (symbolize ast)
-      else ast
-    in
-
-    -- If option --test, then generate utest runner calls. Otherwise strip away
-    -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) then
-
-      -- Re-symbolize the MExpr AST and re-annotate it with types
-      let ast = symbolizeExpr symEnv ast in
-
-      ocamlCompileAst options file ast
-        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
-        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
-        , exitBefore = lam. if options.exitBefore then exit 0 else ()
-        }
-    else never
-
-    -- Compile MExpr AST
-    ocamlCompileAst options file ast
+    ocamlCompileAstWithUtests options file ast; ()
   in
   iter compileFile files
