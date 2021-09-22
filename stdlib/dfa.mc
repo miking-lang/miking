@@ -41,10 +41,11 @@ let checkDuplicateLabels = lam trans. lam eqv. lam eql.
 end
 
 -- constructor for the DFA
-let dfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
+let dfaConstr = lam s. lam trans. lam startS. lam accS. lam cmpv. lam eql.
+  let eqv = lam v1. lam v2. eqi (cmpv v1 v2) 0 in
 	let err = checkDuplicateLabels trans eqv eql in
-	if(err.0) then error "There are duplicate labels for same state outgoing transition at"
-	else nfaConstr s trans startS accS eqv eql
+	if (err.0) then error "There are duplicate labels for same state outgoing transition at"
+	else nfaConstr s trans startS accS cmpv eql
 
 -- Creat a DFA from a Digraph
 let dfaFromDigraph = nfaFromDigraph
@@ -54,7 +55,7 @@ let states = [0,1,2] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newDfa = dfaConstr states transitions startState acceptStates eqi eqChar in
+let newDfa = dfaConstr states transitions startState acceptStates subi eqChar in
 utest eqi startState newDfa.startState with true in
 utest eqsetEqual eqi acceptStates newDfa.acceptStates with true in
 utest (digraphHasVertices states newDfa.graph) with true in

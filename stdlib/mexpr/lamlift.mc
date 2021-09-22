@@ -136,7 +136,8 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
   sem addGraphCallEdges (src : Name) (g : Digraph Name Int) =
   | TmVar t ->
     if digraphHasVertex t.ident g then
-      digraphMaybeAddEdge src t.ident 0 g
+      --digraphMaybeAddEdge src t.ident 0 g
+      digraphAddEdge src t.ident 0 g
     else g
   | TmLet t ->
     let letSrc = match t.tyBody with TyArrow _ then t.ident else src in
@@ -193,7 +194,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
       findFreeVariables state bind.body
     in
     let state = findFreeVariablesReclet state (TmRecLets t) in
-    let g : Digraph Name Int = digraphEmpty nameEq eqi in
+    let g : Digraph Name Int = digraphEmpty nameCmp eqi in
     let g = addGraphVertices g (TmRecLets t) in
     let g =
       foldl

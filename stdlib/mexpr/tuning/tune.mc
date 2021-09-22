@@ -245,10 +245,11 @@ lang MExprTune = MExpr + TuneBase
 let tuneEntry =
   lam args : [String].
   lam run : Runner.
-  lam holes : [Expr].
+  lam env : CallCtxEnv.
   lam tuneFile : String.
   lam table : LookupTable.
     let options = parseTuneOptions tuneOptionsDefault args in
+    let holes = deref env.idx2hole in
 
     -- Do warmup runs
     use TuneBase in

@@ -15,7 +15,8 @@ lang PMExprRecursionElimination = PMExprAst
   | (TmApp _) & t ->
     match collectAppArguments t with (TmVar {ident = id}, _) then
       match mapLookup id bindingIdentToIndex with Some calledIndex then
-        digraphMaybeAddEdge bindingIndex calledIndex 0 g
+        --digraphMaybeAddEdge bindingIndex calledIndex 0 g
+        digraphAddEdge bindingIndex calledIndex 0 g
       else g
     else sfold_Expr_Expr (addCallsToGraph bindingIdentToIndex bindingIndex) g t
   | t -> sfold_Expr_Expr (addCallsToGraph bindingIdentToIndex bindingIndex) g t
@@ -33,7 +34,7 @@ lang PMExprRecursionElimination = PMExprAst
     let g =
       foldl
         (lam g. lam index. digraphAddVertex index g)
-        (digraphEmpty eqi eqi)
+        (digraphEmpty subi eqi)
         bindingIndices in
 
     -- Add edges from vertices of recursive bindings to vertices of bindings they

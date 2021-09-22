@@ -251,7 +251,7 @@ let _es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
            ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
            ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)]
 
-let _tspGraph = digraphAddEdges _es (digraphAddVertices _vs (digraphEmpty eqString eqi))
+let _tspGraph = digraphAddEdges _es (digraphAddVertices _vs (digraphEmpty cmpString eqi))
 
 -- Define initial solution
 let _initTour = [("Uppsala", "Kiruna", 10),
@@ -264,16 +264,13 @@ let _toursEq = lam t1. lam t2.
 
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
 -- Hamiltonian circuit.
-let _tspNeighbours = lam g. lam state : SearchState TspTour Int.
-  let curSol : Solution TspTour Int = state.cur in
-  let tour = curSol.assignment in
-
+let _tspNeighbours = lam g. lam tour : [TspEdge].
   let tourHasEdge = lam v1. lam v2.
-    any (lam e : TspTourEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
+    any (lam e : TspEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
                                  (and (eqString v1 e.1) (eqString v2 e.0))) tour in
 
   -- Find replacing edges for 'e12' and 'e34'
-  let exchange = lam e12 : TspTourEdge. lam e34 : TspTourEdge.
+  let exchange = lam e12 : TspEdge. lam e34 : TspEdge.
     let v1 = e12.0 in
     let v2 = e12.1 in
     let v3 = e34.0 in
@@ -315,7 +312,7 @@ lang _testTsp = LocalSearchBase
   | TspTour {tour : [TspEdge]}
 
   syn Cost =
-  | TspCost {cost : Float}
+  | TspCost {cost : Int}
 
   sem neighbourhood =
   | searchState ->
@@ -399,7 +396,7 @@ use _testTsp in
 let startState = initSearchState
   (lam tour : Assignment.
      match tour with TspTour {tour = tour}
-     then TspCost {cost = _tspCost tour}
+     then TspCost {cost = foldl (lam acc. lam e : TspEdge. addi acc e.2) 0 tour}
      else never)
   (TspTour {tour = _initTour}) in
 

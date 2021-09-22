@@ -25,6 +25,10 @@ let graphEmpty = digraphEmpty
 -- Access vertices and edges
 let graphVertices = digraphVertices
 
+-- Get comparison function for vertices.
+let graphCmpv = lam g : Graph v l.
+  mapGetCmpFun g.adj
+
 let graphEdgeEq = lam g. lam e1. lam e2.
   and (or (and (g.eqv e1.0 e2.0) (g.eqv e1.1 e2.1))
           (and (g.eqv e1.1 e2.0) (g.eqv e1.0 e2.1)))
@@ -58,15 +62,9 @@ let graphMaybeAddVertex = digraphMaybeAddVertex
 let graphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdge v1 v2 l (digraphAddEdge v2 v1 l g)
 
-let graphMaybeAddEdge = lam v1. lam v2. lam l. lam g.
-    digraphMaybeAddEdge v2 v1 l (digraphMaybeAddEdge v1 v2 l g)
-
--- Union of two graphs
-let graphUnion = digraphUnion
-
 mexpr
 
-let empty = graphEmpty eqi eqsym in
+let empty = graphEmpty subi eqsym in
 
 utest graphEdges empty with [] in
 utest graphVertices empty with [] in
@@ -112,19 +110,6 @@ let g2 = graphAddEdge 3 2 l3 g1 in
 utest graphIsAdjecent 2 3 g2 with true in
 utest graphIsAdjecent 3 2 g2 with true in
 utest any (eqsym l3) (graphLabels 3 2 g2) with true in
-
-let l2 = gensym () in
-let g3 = graphUnion (graphAddVertex 1 empty) (graphAddVertex 2 empty) in
-utest graphCountVertices g3 with 2 in
-utest graphCountEdges g3 with 0 in
-let g4 = graphUnion (graphAddEdge 1 2 l1 g3) (graphAddEdge 1 2 l2 g3) in
-utest graphCountVertices g4 with 2 in
-utest graphCountEdges g4 with 2 in
-let g5 = graphUnion g4 g4 in
-utest graphCountVertices g5 with 2 in
-utest graphCountEdges g5 with 2 in
-let g6 = graphUnion empty empty in
-utest graphCountVertices g6 with 0 in
 
 let compsEq = eqsetEqual (eqsetEqual eqi) in
 
