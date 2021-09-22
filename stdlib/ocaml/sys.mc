@@ -46,7 +46,6 @@ let sysTempDirDelete = lam td. lam.
 
 let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
   lam cmd. lam stdin. lam cwd.
-
     let tempDir = sysTempDirMake () in
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
     let tempStderr = sysJoinPath tempDir "stderr.txt" in
