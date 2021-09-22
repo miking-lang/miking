@@ -133,24 +133,28 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
     addGraphVertices g t.inexpr
   | t -> sfold_Expr_Expr addGraphVertices g t
 
-  sem addGraphCallEdges (src : Name) (g : Digraph Name Int) =
+  sem findCallEdges (src : Name) (g : Digraph Name Int)
+                    (edges : Map Name (Set Name)) =
   | TmVar t ->
     if digraphHasVertex t.ident g then
-      digraphMaybeAddEdge src t.ident 0 g
-    else g
+      let outEdges =
+        match mapLookup t.ident edges with Some outEdges then
+          setInsert t.ident outEdges
+        else setOfSeq nameCmp [t.ident] in
+      mapInsert src outEdges edges
+    else edges
   | TmLet t ->
     let letSrc = match t.tyBody with TyArrow _ then t.ident else src in
-    let g = addGraphCallEdges letSrc g t.body in
-    addGraphCallEdges src g t.inexpr
+    let edges = findCallEdges letSrc g edges t.body in
+    findCallEdges src g edges t.inexpr
   | TmRecLets t ->
-    let g =
+    let edges =
       foldl
-        (lam g. lam bind : RecLetBinding.
-          addGraphCallEdges bind.ident g bind.body)
-        g
-        t.bindings in
-    addGraphCallEdges src g t.inexpr
-  | t -> sfold_Expr_Expr (addGraphCallEdges src) g t
+        (lam edges : Map Name Name. lam bind : RecLetBinding.
+          findCallEdges bind.ident g edges bind.body)
+        edges t.bindings in
+    findCallEdges src g edges t.inexpr
+  | t -> sfold_Expr_Expr (findCallEdges src g) edges t
 
   sem findFreeVariables (state : LambdaLiftState) =
   | TmLam t ->
@@ -195,11 +199,19 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
     let state = findFreeVariablesReclet state (TmRecLets t) in
     let g : Digraph Name Int = digraphEmpty nameEq eqi in
     let g = addGraphVertices g (TmRecLets t) in
-    let g =
+    let edges =
       foldl
-        (lam g. lam bind : RecLetBinding.
-          addGraphCallEdges bind.ident g bind.body)
-        g t.bindings in
+        (lam edges. lam bind : RecLetBinding.
+          findCallEdges bind.ident g edges bind.body)
+        (mapEmpty nameCmp) t.bindings in
+    let g =
+      mapFoldWithKey
+        (lam g : Digraph Name Int. lam edgeSrc : Name. lam edgeDsts : Set Name.
+          mapFoldWithKey
+            (lam g : Digraph Name Int. lam edgeDst : Name. lam.
+              digraphAddEdge edgeSrc edgeDst 0 g)
+            g edgeDsts)
+        g edges in
     let sccs = digraphTarjan g in
     let state = propagateFunNames state g (reverse sccs) in
     let state = foldl findFreeVariablesBinding state t.bindings in
