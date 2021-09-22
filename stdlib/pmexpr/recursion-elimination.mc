@@ -8,17 +8,19 @@ include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprRecursionElimination = PMExprAst
-  -- Adds an edge from the vertex given by the index of the given indexed binding
-  -- to every vertex of the bindings that it contains a call to.
-  sem addCallsToGraph (bindingIdentToIndex : Map Name Int) (bindingIndex : Int)
-                      (g : Digraph Int Int) =
+  -- Finds all outgoing edges, representing the indices of the bindings that
+  -- are called from the given binding body.
+  sem findCallEdges (bindingIdentToIndex : Map Name Int) =
+  | t -> findCallEdgesH bindingIdentToIndex (setEmpty subi) t
+
+  sem findCallEdgesH (bindingIdentToIndex : Map Name Int) (edgesTo : Set Int) =
   | (TmApp _) & t ->
     match collectAppArguments t with (TmVar {ident = id}, _) then
       match mapLookup id bindingIdentToIndex with Some calledIndex then
-        digraphMaybeAddEdge bindingIndex calledIndex 0 g
-      else g
-    else sfold_Expr_Expr (addCallsToGraph bindingIdentToIndex bindingIndex) g t
-  | t -> sfold_Expr_Expr (addCallsToGraph bindingIdentToIndex bindingIndex) g t
+        setInsert calledIndex edgesTo
+      else edgesTo
+    else sfold_Expr_Expr (findCallEdgesH bindingIdentToIndex) edgesTo t
+  | t -> sfold_Expr_Expr (findCallEdgesH bindingIdentToIndex) edgesTo t
 
   -- Attempts to find a reverse topological ordering of the given recursive
   -- bindings, according to their dependency graph. On success, a permutation of
@@ -47,9 +49,12 @@ lang PMExprRecursionElimination = PMExprAst
         (lam g. lam p : (Int, RecLetBinding).
           let idx = p.0 in
           let binding = p.1 in
-          addCallsToGraph bindingIdentToIndex idx g binding.body)
-        g
-        (zip bindingIndices bindings) in
+          let outEdges = findCallEdges bindingIdentToIndex binding.body in
+          mapFoldWithKey
+            (lam g : Digraph Int Int. lam edgeEnd : Int. lam.
+              digraphAddEdge idx edgeEnd 0 g)
+            g outEdges)
+        g (zip bindingIndices bindings) in
 
     -- If all SCCs have size 1, then Tarjan's SCC algorithm guarantees that the
     -- components will be ordered in reverse topological order. In addition, if
