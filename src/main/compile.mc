@@ -67,7 +67,7 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
 
-      ocamlCompileAst options file ast
+      ocamlCompileAst options sourcePath ast
         { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
         , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
