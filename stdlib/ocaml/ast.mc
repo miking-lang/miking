@@ -10,6 +10,8 @@ type OCamlTopBinding =
 lang OCamlTopAst
   syn Top =
   | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
+  | OTopCExternalDecl { ident : Name, ty : Type, bytecodeIdent : Name,
+                        nativeIdent : Name }
   | OTopLet { ident : Name, tyBody: Type, body : Expr }
   | OTopRecLets { bindings : [OCamlTopBinding] }
   | OTopExpr { expr : Expr }
@@ -191,8 +193,7 @@ lang OCamlAst =
 
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlRecord + OCamlLabel +
-  OCamlLam +
+  OCamlArray + OCamlData + OCamlRecord + OCamlLabel + OCamlLam +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +

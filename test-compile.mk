@@ -123,6 +123,28 @@ compile_files += src/main/run.mc
 compile_files += src/main/mi-lite.mc
 compile_files += stdlib/ext/math-ext.mc
 compile_files += stdlib/ext/ext-test.mc
+compile_files += stdlib/futhark/ast.mc
+compile_files += stdlib/futhark/ast-builder.mc
+compile_files += stdlib/futhark/deadcode.mc
+compile_files += stdlib/futhark/function-restrictions.mc
+compile_files += stdlib/futhark/generate.mc
+compile_files += stdlib/futhark/length-parameterize.mc
+compile_files += stdlib/futhark/pprint.mc
+compile_files += stdlib/futhark/record-inline.mc
+compile_files += stdlib/futhark/wrapper.mc
+compile_files += stdlib/pmexpr/ast.mc
+compile_files += stdlib/pmexpr/c-externals.mc
+compile_files += stdlib/pmexpr/extract.mc
+compile_files += stdlib/pmexpr/function-properties.mc
+compile_files += stdlib/pmexpr/parallel-patterns.mc
+compile_files += stdlib/pmexpr/parallel-rewrite.mc
+compile_files += stdlib/pmexpr/pattern-match.mc
+compile_files += stdlib/pmexpr/promote.mc
+compile_files += stdlib/pmexpr/recursion-elimination.mc
+compile_files += stdlib/pmexpr/replace-accelerate.mc
+compile_files += stdlib/pmexpr/rules.mc
+compile_files += stdlib/pmexpr/tailrecursion.mc
+compile_files += stdlib/pmexpr/utils.mc
 
 .PHONY: all $(compile_files)
 

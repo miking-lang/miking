@@ -418,7 +418,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let f = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) then
         match pprintCode iii env bind.body with (env,body) then
-          match getTypeStringCode indent env bind.ty with (env, ty) then
+          match getTypeStringCode indent env bind.tyBody with (env, ty) then
             let ty = if eqString ty "Unknown" then "" else concat ": " ty in
             (env, join ["let ", str, ty, " =", pprintNewline iii, body])
           else never

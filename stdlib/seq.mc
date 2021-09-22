@@ -63,7 +63,6 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- Folds
-
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 utest foldl addi 0 [1,2,3,4,5] with 15
@@ -204,6 +203,18 @@ end
 
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
+
+recursive
+  let findMap : (a -> Option b) -> [a] -> Option b = lam f. lam seq.
+    match seq with [h] ++ t then
+      match f h with Some x then Some x else findMap f t
+    else None ()
+end
+
+utest findMap (lam x. if geqi x 3 then Some (muli x 2) else None ()) [1,2,3]
+with Some 6 using optionEq eqi
+utest findMap (lam x. if eqi x 0 then Some x else None ()) [1,2,3]
+with None () using optionEq eqi
 
 let partition = lam p. lam seq.
   recursive let work = lam l. lam r. lam seq.
@@ -406,3 +417,20 @@ utest randElem [1] with Some 1 using optionEq eqi
 utest
   match randElem [1,2] with Some (1 | 2) then true else false
   with true
+
+-- Permute the order of elements according to a sequence of integers, which is
+-- assumed to represent the target position of the elements in the permuted
+-- sequence.
+let permute : [a] -> [Int] -> [a] = lam elems. lam permutation.
+  if eqi (length elems) (length permutation) then
+    let ordered = sort (lam x : (a, Int). lam y : (a, Int). subi x.1 y.1)
+                       (zip elems permutation) in
+    match unzip ordered with (orderedElems, _) then
+      orderedElems
+    else never
+  else error "Expected sequences of equal length"
+
+utest permute "abc" [1, 2, 0] with "cab"
+utest permute "xy" [0, 1] with "xy"
+utest permute "abcd" [0, 3, 1, 2] with "acdb"
+utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
