@@ -291,8 +291,8 @@ lang BootParser = MExprAst + ConstTransformer
                ident = gname t 0}
   | 601 /-PropSet-/ ->
       PropSet {info = ginfo t 0,
-               props = {nonseq = eqi 0 (gint t 0),
-                        unique = eqi 0 (gint t 1)}}
+               props = {nonseq = neqi 0 (gint t 0),
+                        unique = neqi 0 (gint t 1)}}
 
   sem strToPatName =
   | "" ->  PWildcard ()
