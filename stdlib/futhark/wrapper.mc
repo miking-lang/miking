@@ -5,6 +5,7 @@ include "c/pprint.mc"
 include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
 include "pmexpr/extract.mc"
 
 let cWrapperNamesRef = ref (None ())
@@ -145,7 +146,10 @@ lang CWrapperBase = MExprAst + CAst
   | ty & (CTyVar {id = id}) ->
     if nameEq id (_getIdentExn "int64_t") then
       "i64"
-    else error "Unsupported C type"
+    else
+      let tyStr = use MExprPrettyPrint in type2str ty in
+      infoErrorExit (infoTy ty) (join ["Terms of type '", tyStr,
+                                       "' cannot be accelerated"])
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
 
@@ -158,7 +162,13 @@ lang CWrapperBase = MExprAst + CAst
   | TySeq {ty = elemTy & !(TySeq _)} ->
     map (lam ty. CTyPtr {ty = ty}) (mexprToCTypes elemTy)
   | TySeq t -> mexprToCTypes t.ty
-  | TyRecord _ -> error "Records cannot be translated to C yet"
+  | TyRecord t ->
+    infoErrorExit t.info (join ["Records cannot be a free variable in, or ",
+                                "returned from, an accelerated term"])
+  | ty ->
+    let tyStr = use MExprPrettyPrint in type2str ty in
+    infoErrorExit (infoTy ty) (join ["Terms of type '", tyStr,
+                                     "' cannot be accelerated"])
 end
 
 lang OCamlToCWrapper = CWrapperBase

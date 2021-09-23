@@ -7,6 +7,7 @@ include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
+include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "pmexpr/ast.mc"
@@ -142,7 +143,11 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
   | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
-  | t -> infoErrorExit (infoTy t) "Unsupported type"
+  | TyVariant t -> infoErrorExit t.info "Variant types cannot be accelerated"
+  | t ->
+    let tyStr = use MExprPrettyPrint in type2str t in
+    infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
+                                    "' cannot be accelerated"])
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
@@ -165,7 +170,11 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     match targetTy with TyRecord {fields = fields} then
       FPRecord {bindings = mergeBindings t.bindings fields,
                 ty = generateType env t.ty, info = t.info}
-    else infoErrorExit t.info "Cannot match non-record type on record pattern"
+    else
+      let tyStr = use MExprPrettyPrint in type2str targetTy in
+      infoErrorExit t.info (join ["Term of non-record type '", tyStr,
+                                  "' cannot be matched with record pattern"])
+  | p -> infoErrorExit (infoPat p) "Pattern cannot be accelerated"
 end
 
 let _collectParams = use FutharkTypeGenerate in
@@ -181,7 +190,9 @@ let _collectParams = use FutharkTypeGenerate in
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                             FutharkTypeGenerate + FutharkTypePrettyPrint
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
-  | TmMatch t -> infoErrorExit t.info "Unsupported match expression"
+  | TmMatch t ->
+    infoErrorExit t.info (join ["Acceleration is not supported for this kind ",
+                                "of match expression"])
 
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmMatch ({pat = PatBool {val = true}} & t) ->
@@ -240,7 +251,10 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info},
         ty = generateType env (ty t.thn),
         info = t.info}
-    else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
+    else
+      let tyStr = use MExprPrettyPrint in type2str targetTy in
+      infoErrorExit t.info (join ["Term of non-sequence type '", tyStr,
+                                  "' cannot be matched on sequence pattern"])
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
@@ -425,7 +439,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                                         (generateExpr env t.as)))
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
-  | t -> infoErrorExit (infoTm t) "Expression cannot be translated into Futhark"
+  | t -> infoErrorExit (infoTm t) "Term cannot be translated into Futhark"
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
@@ -486,13 +500,13 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     in
     cons decl (generateToplevel env t.inexpr)
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions are not supported in Futhark"
+    infoErrorExit t.info "Recursive functions cannot be accelerated"
   | TmExt t ->
-    infoErrorExit t.info "External functions are not supported in Futhark"
+    infoErrorExit t.info "External functions cannot be accelerated"
   | TmUtest t ->
-    infoErrorExit t.info "Utests are not supported in Futhark"
+    infoErrorExit t.info "Utests cannot be accelerated"
   | TmConDef t ->
-    infoErrorExit t.info "Constructor definitions are not supported in Futhark"
+    infoErrorExit t.info "Constructor definitions cannot be accelerated"
   | _ -> []
 end
 
