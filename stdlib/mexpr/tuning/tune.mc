@@ -5,66 +5,80 @@ include "map.mc"
 include "decision-points.mc"
 include "tune-options.mc"
 include "common.mc"
+include "tune-file.mc"
 
--- Performs tuning of a program with decision points.
+-- Performs tuning of a flattened program with decision points.
+
+-- Start time of search.
+let tuneSearchStart = ref 0.
 
 -- Default input if program takes no input data
 let _inputEmpty = [""]
 
-----------------------------------
--- Reading/writing tuned values --
-----------------------------------
+-- Return code for timeout
+let _returnCodeTimeout = 124
 
-let tuneFileExtension = ".tune"
+-- Maximum timeout (5 years in ms)
+let _timeoutInf = 157680000000.
 
-let tuneFileName = lam file.
-  let withoutExtension =
-    match strLastIndex '.' file with Some idx then
-      subsequence file 0 idx
-    else file
-  in concat withoutExtension tuneFileExtension
+-- Send kill signal after this time (needs to be greater than zero)
+let _killAfter = 0.01
 
-let _tuneTable2str = lam table : LookupTable.
-  use MExprPrettyPrint in
-  strJoin " " (map expr2str table)
+-- Convert from ms to s
+let _ms2s = lam ms. divf ms 1000.
 
-let tuneDumpTable = lam file : String. lam table : LookupTable.
-  let destinationFile = tuneFileName file in
-  -- NOTE(Linnea, 2021-05-27): add whitespace as workaround for bug #145
-  writeFile destinationFile (concat (_tuneTable2str table) " ")
+-- Filter out duplicates
+let _distinct = lam cmp. lam seq.
+  setToSeq (setOfSeq cmp seq)
 
-let tuneReadTable = lam file : String.
-  use BootParser in
-  let str = readFile file in
-  map (parseMExprString []) (strSplit " " (strTrim str))
+utest _distinct subi [1,2,1] with [1,2]
 
 ------------------------------
 -- Base fragment for tuning --
 ------------------------------
-type Runner = String -> ExecResult
+type Runner = String -> Float -> (Float, ExecResult)
+
+type TimingResult
+con Success : {ms : Float} -> TimingResult
+con Error : {msg : String, returncode : Int} -> TimingResult
+con Timeout : {ms : Float} -> TimingResult
+
+let _timingResult2str : TimingResult -> String = lam t.
+  switch t
+  case Success {ms = ms} then float2string ms
+  case Error {msg = msg, returncode = returncode} then
+    join [msg, "\n", concat "returncode: " (int2string returncode)]
+  case Timeout {ms = ms} then join ["Timeout at ", float2string ms, " ms"]
+  end
 
 lang TuneBase = Holes
   sem tune (options : TuneOptions) (run : Runner) (holes : Expr)
-           (file : String) =
+           (file : String) (hole2idx : Map NameInfo (Map [NameInfo] Int)) =
   -- Intentionally left blank
 
-  sem time (table : LookupTable) (runner : Runner) (file : String) =
+  sem time (table : LookupTable) (runner : Runner) (file : String)
+           (options : TuneOptions) (timeout : Float) =
   | args ->
-    tuneDumpTable file table;
-    let t1 = wallTimeMs () in
-    let res : ExecResult = runner args in
-    let t2 = wallTimeMs () in
-    --print "Result: "; dprintLn res;
-    match res.returncode with 0 then
-      subf t2 t1
-    else
-      let msg = strJoin " "
-      [ "Program returned non-zero exit code during tuning\n"
-      , "decision point values:", _tuneTable2str table, "\n"
-      , "command line arguments:", strJoin " " args, "\n"
-      , "stdout:", res.stdout, "\n"
-      , "stderr:", res.stderr, "\n"
-      ] in error msg
+    tuneFileDumpTable file (None ()) table;
+    match runner args timeout with (ms, res) then
+      let res : ExecResult = res in
+      let rcode = res.returncode in
+      match rcode with 0 then
+        Success {ms = ms}
+      else if eqi rcode _returnCodeTimeout then
+        Timeout {ms = ms}
+      else
+        let msg = strJoin " "
+        [ "Program returned non-zero exit code during tuning\n"
+        , "decision point values:\n", _tuneTable2str table, "\n"
+        , "command line arguments:", strJoin " " args, "\n"
+        , "stdout:", res.stdout, "\n"
+        , "stderr:", res.stderr
+        ] in
+        if options.ignoreErrors then
+          Error {msg = msg, returncode = res.returncode}
+        else error msg
+    else never
 end
 
 --------------------------
@@ -74,29 +88,13 @@ end
 lang TuneLocalSearch = TuneBase + LocalSearchBase
   syn Assignment =
   | Table {table : LookupTable,
+           start : LookupTable,
            holes : [Expr],
-           options : TuneOptions}
+           options : TuneOptions,
+           hole2idx : Map NameInfo (Map [NameInfo] Int)}
 
   syn Cost =
-  | Runtime {time : Float}
-
-  sem neighbourhood =
-  | searchState ->
-    let searchState : SearchState = searchState in
-    match searchState
-    with {cur =
-           {assignment =
-             Table {holes = holes, table = table, options = options}}}
-    then
-      let table = map (lam h.
-        match h with TmHole {inner = h} then sample h
-        else dprintLn h; error "Expected a decision point") holes
-      in [Table {table = table, holes = holes, options = options}]
-    else never
-
-  sem compare =
-  | (Runtime {time = t1}, Runtime {time = t2}) ->
-    roundfi (mulf 1000.0 (subf t1 t2))
+  | Runtime {time : TimingResult}
 
   sem initMeta =
 
@@ -113,39 +111,95 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       use MExprPrettyPrint in
       let incValues = map expr2str inc in
       let curValues = map expr2str cur in
+      let elapsed = subf (wallTimeMs ()) (deref tuneSearchStart) in
       printLn (join ["Iter: ", int2string iter, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
-                     "Current time: ", float2string curTime, "\n",
-                     "Best time: ", float2string incTime, "\n",
-                     "Best table: ", strJoin ", " incValues])
+                     "Current time: ", _timingResult2str curTime, "\n",
+                     "Best time: ", _timingResult2str incTime, "\n",
+                     "Best table: ", strJoin ", " incValues, "\n",
+                     "Elapsed ms: ", float2string elapsed
+                    ])
 
     else never
 
   sem tune (options : TuneOptions) (runner : Runner) (holes : [Expr])
-           (file : String) =
+           (hole2idx : Map NameInfo (Map [NameInfo] Int)) (file : String) =
   | table ->
     let input =
-      match options.input with [] then _inputEmpty else options.input in
-    -- cost function = sum of execution times over all inputs
-    let costF = lam lookup : Assignment.
-      match lookup with Table {table = table} then
-        Runtime {time = foldr1 addf (map (time table runner file) input)}
-      else never in
+      match options.input with [] then _inputEmpty else options.input
+    in
 
-    -- Set up initial search state
-    let startState =
-      initSearchState costF (Table {table = table
-                                   , holes = holes
-                                   , options = options}) in
+    -- cost function = sum of execution times over all inputs
+    let costF : Option Solution -> Assignment -> Cost =
+      lam inc : Option Solution. lam lookup : Assignment.
+        let timeoutVal =
+          match inc with Some sol then
+            let sol : Solution = sol in
+            match sol with {cost = Runtime {time = time}} then
+              switch time
+              case Success {ms = ms} then ms
+              case Error _ then _timeoutInf
+              case Timeout _ then error "impossible"
+              end
+            else never
+          else _timeoutInf
+        in
+        match lookup with Table {table = table} then
+          let f = lam t1. lam t2.
+            switch (t1, t2)
+            case (Success {ms = ms1}, Success {ms = ms2}) then addf ms1 ms2
+            case ((Error e, _) | (_, Error e)) then Error e
+            end
+          in
+          Runtime {time = foldr1 f (map (time table runner file options timeoutVal) input)}
+        else error "impossible" in
+
+    -- Comparing costs: negative if 't1' is better than 't2'
+    let cmpF : Cost -> Cost -> Int = lam t1. lam t2.
+      match (t1, t2) with (Runtime {time = t1}, Runtime {time = t2}) then
+        switch (t1, t2)
+        case (Success {ms = ms1}, Success {ms = ms2}) then
+          let diff = subf ms1 ms2 in
+          if geqf (absf diff) options.epsilonMs then roundfi diff
+          else 0
+        case (Success {ms = ms}, Error _ | Timeout _) then roundfi (subf 0. ms)
+        case (Error _, Error _) then 0
+        case (Error _, Success {ms = ms}) then roundfi ms
+        case (Error _, Timeout _) then 0
+        case (Timeout _, Timeout _) then 0
+        case (Timeout _, Error _) then 0
+        case (Timeout _, Success {ms = ms}) then roundfi ms
+        end
+      else error "impossible" in
+
+    -- Set up initial search state. Repeat the computation n times, where n is
+    -- the number of warmup runs, because the cost function is applied once per
+    -- setup.
+    let mkStartState = lam.
+      initSearchState costF cmpF
+        (Table { table = table
+               , start = table
+               , holes = holes
+               , options = options
+               , hole2idx = hole2idx
+               })
+    in
+    iter mkStartState (make options.warmups ());
+    let startState = mkStartState () in
 
     -- When to stop the search
-    let stop = lam state : SearchState.
-      or state.stuck (geqi state.iter options.iters) in
+    let stopCond = lam niters. lam state : SearchState.
+      or state.stuck (geqi state.iter niters) in
+
+    let normalStop = stopCond options.iters in
+
+    let warmupStop = stopCond options.warmups in
 
     recursive let search =
       lam stop.
       lam searchState.
       lam metaState.
+      lam iter.
         (if options.debug then
           printLn "-----------------------";
           debugSearch searchState;
@@ -158,12 +212,23 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
         else
           match minimize searchState metaState with (searchState, metaState)
           then
-            search stop searchState metaState
+            search stop searchState metaState (addi iter 1)
           else never
     in
 
+    -- Do warmup runs and throw away results
+    modref tuneSearchStart (wallTimeMs ());
+    (if options.debug then
+       printLn "----------------------- WARMUP RUNS -----------------------"
+       else ());
+    search warmupStop startState (initMeta startState) 0;
+    (if options.debug then
+       printLn "-----------------------------------------------------------"
+       else ());
+
     -- Do the search!
-    match search stop startState (initMeta startState)
+    modref tuneSearchStart (wallTimeMs ());
+    match search normalStop startState (initMeta startState) 0
     with (searchState, _) then
       let searchState : SearchState = searchState in
       match searchState with {inc = {assignment = Table {table = table}}}
@@ -172,7 +237,156 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     else never
 end
 
+-- Explore the search space exhaustively, i.e. try all combinations of all
+-- decision points. The decision points are explored from left to right.
+lang TuneExhaustive = TuneLocalSearch
+  syn MetaState =
+  | Exhaustive {prev : [Option Expr], exhausted : Bool}
+
+  sem step (searchState : SearchState) =
+  | Exhaustive ({prev = prev, exhausted = exhausted} & x) ->
+    if exhausted then
+      (None (), Exhaustive x)
+    else match searchState with
+      {cur =
+         {assignment = Table ({table = table, holes = holes} & t)},
+       cost = cost,
+       inc = inc}
+    then
+      let exhausted = ref false in
+      let options : TuneOptions = t.options in
+      let stepSize = options.stepSize in
+
+      recursive let nextConfig = lam prev. lam holes.
+        match holes with [] then []
+        else match holes with [h] then
+          match next (head prev) stepSize h with Some v then
+            [Some v]
+          else
+            modref exhausted true; []
+        else match holes with [h] ++ holes then
+          match next (head prev) stepSize h with Some v then
+            cons (Some v) (tail prev)
+          else
+            cons (next (None ()) stepSize h) (nextConfig (tail prev) holes)
+        else never
+      in
+
+      let newTable =
+        Table {t with table = map (optionGetOrElse (lam. "impossible")) prev}
+      in
+      let newPrev = nextConfig prev holes in
+      ( Some {assignment = newTable, cost = cost (Some inc) newTable},
+        Exhaustive {prev = newPrev, exhausted = deref exhausted})
+    else never
+
+  sem initMeta =
+  | initState ->
+    let initState : SearchState = initState in
+    match initState with {cur = {assignment = Table {holes = holes}}} then
+      let initVals = map (next (None ()) 1) holes in
+      utest all optionIsSome initVals with true in
+      Exhaustive {prev = initVals, exhausted = false}
+    else never
+end
+
+-- Explore the values of each decision point one by one, from left to right,
+-- while keeping the rest fixed (to their tuned values, or their defaults if
+-- they have note yet been tuned). Hence, it assumes a total independence of the
+-- decision points.
+lang TuneSemiExhaustive = TuneLocalSearch
+  syn MetaState =
+  | SemiExhaustive {curIdx : Int, lastImproved : Int, prev : Option Expr}
+
+  sem step (searchState : SearchState) =
+  | SemiExhaustive ({curIdx = i, prev = prev, lastImproved = lastImproved} & state) ->
+    match searchState
+    with {inc = {assignment = Table ({table = table, start = start, holes = holes} & t),
+                 cost = incCost},
+          cost = cost, cmp = cmp}
+    then
+      let options : TuneOptions = t.options in
+      let stepSize = options.stepSize in
+
+      let return = lam i. lam prev.
+        let assignment = Table {t with table = set table i prev} in
+        let score = cost (Some searchState.inc) assignment in
+        let lastImproved =
+          if lti (cmp score incCost) 0 then i else lastImproved in
+        ( Some {assignment = assignment, cost = score},
+          SemiExhaustive {curIdx = i, prev = Some prev, lastImproved = lastImproved} )
+      in
+
+      recursive let nextSkipStart = lam prev. lam i.
+        if eqi i (length holes) then
+          -- Finished the search
+          (None (), SemiExhaustive state)
+        else
+          let prev = next prev stepSize (get holes i) in
+          match prev with Some v then
+          -- Skip start value, already explored
+          if (use MExprEq in eqExpr v (get start i)) then
+            nextSkipStart prev i
+          else
+            return i v
+        else match prev with None () then
+          -- Current hole is exhausted, move to the next
+          nextSkipStart (None ()) (addi i 1)
+        else never
+      in
+      nextSkipStart prev i
+
+    else never
+
+  sem initMeta =
+  | _ -> SemiExhaustive
+    { curIdx = 0
+    , lastImproved = subi 0 1
+    , prev = None ()
+    }
+
+  sem debugMeta =
+  | SemiExhaustive {curIdx = i, lastImproved = j, prev = prev} ->
+    printLn (join ["Exploring index: ", int2string i, "\n",
+                   "Last improved at: ", int2string j, "\n",
+                   "Prev: ",
+                   optionMapOrElse (lam. "None")
+                     (use MExprPrettyPrint in expr2str) prev])
+end
+
+lang TuneOneRandomNeighbour = TuneLocalSearch
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+             Table ({holes = holes, table = table} & t)}}
+    then
+      let table = map (lam h. sample h) holes in
+      iteratorFromSeq [Table {t with table = table}]
+    else never
+end
+
+lang TuneManyRandomNeighbours = TuneLocalSearch
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+           Table ({holes = holes, table = table} & t)}}
+    then
+      let step = lam.
+        let table = map (lam h. sample h) holes in
+        Some (Table {t with table = table})
+      in
+      iteratorInit step identity
+    else never
+end
+
 lang TuneRandomWalk = TuneLocalSearch
+                    + TuneOneRandomNeighbour
                     + LocalSearchSelectRandomUniform
   syn MetaState =
   | Empty {}
@@ -186,6 +400,7 @@ lang TuneRandomWalk = TuneLocalSearch
 end
 
 lang TuneSimulatedAnnealing = TuneLocalSearch
+                            + TuneOneRandomNeighbour
                             + LocalSearchSimulatedAnnealing
                             + LocalSearchSelectRandomUniform
   sem decay (searchState : SearchState) =
@@ -209,8 +424,9 @@ lang TuneSimulatedAnnealing = TuneLocalSearch
 end
 
 lang TuneTabuSearch = TuneLocalSearch
+                    + TuneManyRandomNeighbours
                     + LocalSearchTabuSearch
-                    + LocalSearchSelectRandomUniform
+                    + LocalSearchSelectFirst
   syn TabuSet =
   | Tabu {tabu : [LookupTable]}
 
@@ -239,27 +455,139 @@ lang TuneTabuSearch = TuneLocalSearch
     printLn (join ["Tabu size: ", int2string (length tabu)])
 end
 
+-- Binary search two neighbours (at most): (min + cur)/2 and (max + cur)/2
+-- consider one hole at a time (from left to right?) compare min, cur and max.
+-- Select the one that is best. When stopping at cur, go to next hole.
+
+-- finish a binary search for a certain index before moving to the next hole
+
+let _binarySearch = lam lower : Int. lam mid : Int. lam upper : Int. lam curCost : a. lam cost : Int -> a. lam cmp : a -> a -> Int.
+  -- Avoid applying cost function on the same value twice
+  let memoized = mapInsert mid curCost (mapEmpty subi) in
+
+  recursive let work = lam mem : Map Int a. lam lower : Int. lam mid : Int. lam upper : Int. lam curCost : a.
+    -- print "lower: "; dprintLn lower;
+    -- print "upper: "; dprintLn upper;
+    if eqi lower upper then (curCost, mid)
+    else
+      let lowPoint = divi (addi lower mid) 2 in
+      let highPoint = ceilfi (divf (int2float (addi upper mid)) 2.) in
+
+      match
+        if eqi lowPoint mid then (curCost, mem)
+        else match mapLookup lowPoint mem with Some v then (v, mem)
+        else
+          let c = cost lowPoint in
+          (c, mapInsert lowPoint c mem)
+      with (lowCost, mem) then match
+        if eqi highPoint mid then (curCost, mem)
+        else match mapLookup highPoint mem with Some v then (v, mem)
+        else
+          let c = cost highPoint in
+          (c, mapInsert highPoint c mem)
+      with (highCost, mem) then
+        -- print "lowPoint: "; dprintLn lowPoint;
+        -- print "highPoint: "; dprintLn highPoint;
+        -- print "lowCost: "; dprintLn lowCost;
+        -- print "highCost: "; dprintLn highCost;
+
+        -- lower is better, recurse
+        if lti (cmp lowCost curCost) 0 then
+          work mem lower lowPoint mid lowCost
+        -- higher is better, recurse
+        else if lti (cmp highCost curCost) 0 then
+          work mem mid highPoint upper highCost
+        -- none is better, end
+          else (curCost, mid)
+      else never else never
+  in work memoized lower mid upper curCost
+
+utest _binarySearch 1 1 1 0 (lam x. x) subi with (0, 1)
+utest _binarySearch 1 2 3 2 (lam x. x) subi with (1, 1)
+utest _binarySearch 1 2 3 (negi 2) (lam x. negi x) subi with (negi 3, 3)
+utest _binarySearch 1 1 2 1 (lam x. x) subi with (1, 1)
+utest _binarySearch 1 3 10 9 (lam x. muli x x) subi with (1, 1)
+
+lang TuneBinarySearch = TuneLocalSearch
+   syn MetaState =
+   | BS {curIdx : Int}
+
+   sem initMeta =
+   | _ ->
+     BS {curIdx = 0}
+
+   sem step (searchState : SearchState) =
+   | BS ({curIdx = curIdx} & t) ->
+     match searchState with {cur = {assignment = Table ({table = table, holes = holes} & a), cost = curCost}, cost = costF, cmp = cmpF, inc = inc}
+     then
+       if eqi curIdx (length holes) then (None (), BS t) else
+       let h = get holes curIdx in
+       let lowerUpper = use MExprHoles in
+                        match h with TmHole {inner = HIntRange {min = min, max = max}}
+                        then (min, max)
+                        else dprintLn h; error "Binary search only supported for IntRange"
+       in
+       let curExpr = get table curIdx in
+       let curVal = match curExpr with TmConst {val = CInt {val = i}} then i else error "impossible" in
+
+       let assignmentWithVal = lam v : Int.
+         Table {a with table = set a.table curIdx (int_ v)}
+       in
+       let costFromVal = lam v : Int.
+         costF (Some inc) (assignmentWithVal v)
+       in
+
+       match _binarySearch lowerUpper.0 curVal lowerUpper.1 curCost costFromVal cmpF
+       with (bestCost, bestVal)
+       then (Some {assignment = assignmentWithVal bestVal, cost = bestCost},
+             BS {t with curIdx = addi curIdx 1})
+       else never
+     else never
+
+  sem debugMeta =
+  | BS {curIdx = i} ->
+    printLn (join ["Next index to explore: ", int2string i, "\n"])
+
+end
+
 lang MExprTune = MExpr + TuneBase
+
+let _timeoutCmd = lam options : TuneOptions. lam timeoutMs : Float.
+  if options.exitEarly then
+    if sysCommandExists "timeout" then
+      ["timeout", "-k", float2string _killAfter, float2string (_ms2s timeoutMs)]
+    else []
+  else []
 
 -- Entry point for tuning
 let tuneEntry =
+  lam binary : String.
   lam args : [String].
-  lam run : Runner.
-  lam holes : [Expr].
   lam tuneFile : String.
+  lam env : CallCtxEnv.
   lam table : LookupTable.
-    let options = parseTuneOptions tuneOptionsDefault args in
+    let options = parseTuneOptions tuneOptionsDefault
+      (filter (lam a. not (eqString "mi" a)) args) in
 
-    -- Do warmup runs
-    use TuneBase in
-    iter (lam. map (time table run tuneFile) options.input; ())
-      (range 0 options.warmups 1);
+    let holes : [Expr] = deref env.idx2hole in
+    let hole2idx : Map NameInfo (Map [NameInfo] Int) = deref env.hole2idx in
+
+    -- Runs the program with a given command-line input
+    let run =
+      let cmd = lam timeoutMs : Float.
+        concat (_timeoutCmd options timeoutMs) [concat "./" binary]
+      in
+      lam input : [String]. lam timeoutMs : Float.
+        sysTimeCommand (concat (cmd timeoutMs) input) "" "."
+    in
 
     -- Choose search method
-    match options.method with RandomWalk {} then
-      use TuneRandomWalk in tune options run holes tuneFile table
-    else match options.method with SimulatedAnnealing {} then
-      use TuneSimulatedAnnealing in tune options run holes tuneFile table
-    else match options.method with TabuSearch {} then
-      use TuneTabuSearch in tune options run holes tuneFile table
-    else never
+    (switch options.method
+     case RandomWalk {} then use TuneRandomWalk in tune
+     case SimulatedAnnealing {} then use TuneSimulatedAnnealing in tune
+     case TabuSearch {} then use TuneTabuSearch in tune
+     case Exhaustive {} then use TuneExhaustive in tune
+     case SemiExhaustive {} then use TuneSemiExhaustive in tune
+     case BinarySearch {} then use TuneBinarySearch in tune
+     end)
+     options run holes hole2idx tuneFile table

@@ -1,6 +1,5 @@
 include "ast.mc"
 include "ast-builder.mc"
-include "digraph.mc"
 include "pprint.mc"
 
 include "set.mc"

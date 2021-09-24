@@ -161,13 +161,9 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
       -- Construct a call graph, reusing functions from lambda lifting. By
       -- using DFS on this graph, we find the bindings that are used.
-      let g : Digraph Name Int = digraphEmpty nameEq eqi in
+      let g : Digraph Name Int = digraphEmpty nameCmp eqi in
       let g = addGraphVertices g (TmRecLets t) in
-      let g =
-        foldl
-          (lam g. lam bind : RecLetBinding.
-            addGraphCallEdges bind.ident g bind.body)
-          g t.bindings in
+      let g = addGraphCallEdges g t.bindings in
       let visited = setEmpty nameCmp in
       let usedIdents =
         foldl

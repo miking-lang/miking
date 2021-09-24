@@ -13,32 +13,41 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
   lam g. lam endNode. lam depth. lam startNodes.
     -- Reverse graph for forward search (more efficient for adjacency map)
     let gRev = digraphReverse g in
+    let eqv = lam v1. lam v2. eqi (digraphCmpv g v1 v2) 0 in
 
     recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
       lam g. lam v. lam curPath. lam visited. lam d.
         let fromEdges = digraphEdgesFrom v g in
-        if or (or (eqi d 0) (eqsetMem (digraphEqv g) v visited))
-              (null fromEdges) then
-          [curPath]
+        if eqi d 0 then [curPath]
+        else if null fromEdges then [curPath]
+        else if eqsetMem eqv v visited then [curPath]
         else
           let paths =
             map (lam edge : DigraphEdge v l.
-                   traverse g edge.1 (cons edge.2 curPath) (cons v visited) (subi d 1))
+                   traverse g edge.1 (cons edge curPath) (cons v visited) (subi d 1))
                 fromEdges in
           -- If current node is a start node, the current path is a valid path
           let paths =
-            if eqsetMem (digraphEqv g) v startNodes then cons [curPath] paths
+            if eqsetMem eqv v startNodes then cons [curPath] paths
             else paths in
           foldl concat [] paths
     in
-    traverse gRev endNode [] [] depth
+    let res = traverse gRev endNode [] [] depth in
+    map (lam p. map (lam e : (Unknown, Unknown, Unknown). (e.1, e.0, e.2)) p) res
+
+let eqPathsToLbls : [[DigraphEdge v l]] -> [[l]] = lam paths.
+  map (lam p. map (lam e : DigraphEdge v l. e.2) p) paths
 
 mexpr
 -- To construct test graphs
-let empty = digraphEmpty eqi eqChar in
+let empty = digraphEmpty subi eqChar in
 let fromList = lam vs. foldl (lam g. lam v. digraphAddVertex v g) empty vs in
 let addEdges = lam g. lam es.
   foldl (lam acc. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 acc) g es
+in
+
+let eqPaths = lam g. lam endNode. lam depth. lam startNodes.
+  eqPathsToLbls (eqPaths g endNode depth startNodes)
 in
 
 -- Create some labels
