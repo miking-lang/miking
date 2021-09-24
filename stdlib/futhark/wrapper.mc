@@ -165,9 +165,9 @@ lang CWrapperBase = MExprAst + CAst
   | TyRecord t ->
     infoErrorExit t.info (join ["Records cannot be a free variable in, or ",
                                 "returned from, an accelerated term"])
-  | ty ->
-    let tyStr = use MExprPrettyPrint in type2str ty in
-    infoErrorExit (infoTy ty) (join ["Terms of type '", tyStr,
+  | t ->
+    let tyStr = use MExprPrettyPrint in type2str t in
+    infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
                                      "' cannot be accelerated"])
 end
 
