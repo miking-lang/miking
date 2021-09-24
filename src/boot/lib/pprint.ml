@@ -530,15 +530,6 @@ let rec print_const fmt = function
       fprintf fmt "tensorEq"
   | Ctensor2string _ ->
       fprintf fmt "tensor2string"
-  (* MCore intrinsics: Collections *)
-  | CColl _ ->
-      fprintf fmt "coll"
-  | Cempty ->
-      fprintf fmt "empty"
-  | Cinsert _ ->
-      fprintf fmt "insert"
-  | Cfold _ ->
-      fprintf fmt "fold"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"
