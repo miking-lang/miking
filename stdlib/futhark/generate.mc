@@ -87,15 +87,17 @@ let _usePassedParameters = use MExprAst in
   work body
 
 lang FutharkConstGenerate = MExprAst + FutharkAst
-  sem generateConst =
+  sem generateConst (info : Info) =
   | CInt n -> FCInt {val = n.val}
   | CFloat f -> FCFloat {val = f.val}
+  | CBool b -> FCBool {val = b.val}
+  | CChar c -> FCInt {val = char2int c.val}
   | CAddi _ | CAddf _ -> FCAdd ()
   | CSubi _ | CSubf _ -> FCSub ()
   | CMuli _ | CMulf _ -> FCMul ()
   | CDivi _ | CDivf _ -> FCDiv ()
   | CModi _ -> FCRem ()
-  | CEqi _ | CEqf _ -> FCEq ()
+  | CEqi _ | CEqf _ | CEqc _ -> FCEq ()
   | CNeqi _ | CNeqf _ -> FCNeq ()
   | CGti _ | CGtf _ -> FCGt ()
   | CLti _ | CLtf _ -> FCLt ()
@@ -110,6 +112,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
   | CFoldl _ -> FCFoldl ()
+  | c -> infoErrorExit info "Constant cannot be accelerated"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
@@ -135,6 +138,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyInt t -> FTyInt {info = t.info}
   | TyFloat t -> FTyFloat {info = t.info}
   | TyBool t -> FTyBool {info = t.info}
+  | TyChar t -> FTyInt {info = t.info}
   | TySeq t ->
     FTyArray {elem = generateType env t.ty, dim = None (), info = t.info}
   | TyRecord t ->
@@ -158,6 +162,8 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     FPInt {val = t.val, ty = generateType env t.ty, info = t.info}
   | PatBool t ->
     FPBool {val = t.val, ty = generateType env t.ty, info = t.info}
+  | PatChar t ->
+    FPInt {val = char2int t.val, ty = generateType env t.ty, info = t.info}
   | PatRecord t ->
     let mergeBindings = lam bindings : Map SID Pat. lam fields : Map SID Type.
       mapMapWithKey
@@ -205,6 +211,12 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info}
   | TmMatch ({pat = PatInt {val = i}} & t) ->
     let cond = generateExpr env (withInfo (infoTm t.target) (eqi_ (int_ i) t.target)) in
+    FEIf {cond = cond, thn = generateExpr env t.thn,
+          els = generateExpr env t.els, ty = generateType env t.ty,
+          info = t.info}
+  | TmMatch ({pat = PatChar {val = c}} & t) ->
+    let cond = generateExpr env (withInfo (infoTm t.target)
+                            (eqi_ (int_ (char2int c)) t.target)) in
     FEIf {cond = cond, thn = generateExpr env t.thn,
           els = generateExpr env t.els, ty = generateType env t.ty,
           info = t.info}
@@ -398,7 +410,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FEArray {tms = map (generateExpr env) t.tms, ty = generateType env t.ty,
              info = t.info}
   | TmConst t ->
-    FEConst {val = generateConst t.val, ty = generateType env t.ty,
+    FEConst {val = generateConst t.info t.val, ty = generateType env t.ty,
              info = t.info}
   | TmLam t ->
     FELam {ident = t.ident, body = generateExpr env t.body,
@@ -529,6 +541,30 @@ end
 mexpr
 
 use TestLang in
+
+let f = nameSym "f" in
+let c = nameSym "c" in
+let chars = bindall_ [
+  nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
+    match_ (nvar_ c) (pchar_ 'a')
+      true_
+      false_)),
+  app_ (nvar_ f) (char_ 'x')] in
+
+let charsExpected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(c, futIntTy_)], ret = futBoolTy_,
+    body =
+      futIf_
+        (futAppSeq_ (futConst_ (FCEq ())) [futInt_ (char2int 'a'), nFutVar_ c])
+        (futConst_ (FCBool {val = true}))
+        (futConst_ (FCBool {val = false})),
+    info = NoInfo ()}]} in
+
+let entryPoints = setOfSeq nameCmp [] in
+utest printFutProg (generateProgram entryPoints chars)
+with printFutProg charsExpected using eqSeq eqc in
 
 let intseq = nameSym "intseq" in
 let n = nameSym "n" in
