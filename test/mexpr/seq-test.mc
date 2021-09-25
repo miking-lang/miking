@@ -166,6 +166,13 @@ utest
   deref r
 with 16 in
 
+utest
+ let r = ref [] in
+ let x = concat (concat (concat [] [0]) [1]) [2] in
+ iteri (lam i. lam x. modref r (snoc (deref r) (i, x))) x;
+ deref r
+with [(0, 0), (1, 1), (2, 2)] in
+
 -- The rest of the file contains various test computions with sequences
 
 -- map
