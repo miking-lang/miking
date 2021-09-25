@@ -179,7 +179,7 @@ lang BootParser = MExprAst + ConstTransformer
            ident = gname t 0}
   | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
-           contents = ref (Unbound {ident = gname t 0, level = 0})}
+           contents = ref (Unbound {ident = gname t 0, level = noLevel})}
   | 211 /-TyApp-/ ->
     TyApp {info = ginfo t 0,
            lhs = gtype t 0,

@@ -1201,6 +1201,7 @@ lang ConTypeAst = Ast
 end
 
 type Level = Int
+let noLevel = negi 1
 
 lang VarTypeAst = Ast
   syn TVar =

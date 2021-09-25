@@ -5,7 +5,8 @@
 -- with low syntactic overhead.
 --
 -- The implementation uses efficient side-effecting unification,
--- as described in [2].
+-- as described in [2]. The current implementation corresponds to
+-- the sound but eager version described.
 --
 -- [1]: https://dl.acm.org/doi/abs/10.1145/3385412.3386003
 -- [2]: http://okmij.org/ftp/ML/generalization.html.
@@ -13,27 +14,25 @@
 include "ast.mc"
 include "ast-builder.mc"
 include "eq.mc"
+include "math.mc"
 include "pprint.mc"
 
-
-type TypeEnv = {
-  varEnv: Map Name Type
+type TCEnv = {
+  varEnv: Map Name Type,
+  currentLvl: Level
 }
 
-let _typeEnvEmpty = {
-  varEnv = mapEmpty nameCmp
+let _tcEnvEmpty = {
+  varEnv = mapEmpty nameCmp,
+  currentLvl = 1
 }
 
-let _lookupVar = lam name. lam tyenv : TypeEnv.
-  match tyenv with {varEnv=varEnv} then
-    mapLookup name varEnv
-  else never
+let _lookupVar = lam name. lam tyenv : TCEnv.
+  mapLookup name tyenv.varEnv
 
-let _insertVar = lam name. lam ty. lam tyenv : TypeEnv.
-  match tyenv with {varEnv=varEnv} then
-    let varEnvNew = mapInsert name ty varEnv in
-    {varEnv = varEnvNew}
-  else never
+let _insertVar = lam name. lam ty. lam tyenv : TCEnv.
+  let varEnvNew = mapInsert name ty tyenv.varEnv in
+  {tyenv with varEnv = varEnvNew}
 
 
 let _pprintType = use MExprPrettyPrint in
@@ -86,8 +85,12 @@ lang VarTypeUnify = Unify + VarTypeAst
     else
       match deref r with Link ty then
         occurs tv ty
-      else
-        ()
+      else match deref r with Unbound {ident = n, level = k} then
+        let minLevel =
+          match tv with Unbound {ident = _, level = l} then mini k l else k
+        in
+        modref r (Unbound {ident = n, level = minLevel})
+      else never
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -106,44 +109,63 @@ end
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
 
-let newvarNamed = use VarTypeAst in
-  lam name. TyVar {info = NoInfo (),
-                   contents = ref (Unbound {ident = name, level = 0})}
-
-let newvar = lam. newvarNamed (nameSym "v")
+let newvar = use VarTypeAst in
+  lam level.
+  TyVar {info = NoInfo (),
+         contents = ref (Unbound {ident = nameSym "a", level = level})}
 
 lang Generalize
-  sem inst =
+  sem inst (lvl : Level) =
+  | ty ->
+    match instBase lvl (mapEmpty nameCmp) ty with (_, ty) then ty
+    else never
+
+  sem instBase (lvl : Level) (subst : Map Name TVar) =
   -- Intentionally left empty
-  sem gen =
+
+  sem gen (lvl : Level) =
   -- Intentionally left empty
 end
 
 lang VarTypeGeneralize = Generalize + VarTypeAst
-  sem inst =
+  sem instBase (lvl : Level) (subst : Map Name TVar) =
   | TyVar t & ty1 ->
     match deref t.contents with Link ty2 then
-      inst ty2
-    else ty1
-  | TyQVar {ident = n} -> newvarNamed n
+      instBase lvl subst ty2
+    else
+      (subst, ty1)
+  | TyQVar {ident = n} ->
+    match mapLookup n subst with Some tv then
+      (subst, tv)
+    else
+      let tv = newvar lvl in
+      let substNew = mapInsert n tv subst in
+      (substNew, tv)
 
-  sem gen =
+  sem gen (lvl : Level) =
   | TyVar t ->
     match deref t.contents with Link ty then
-      gen ty
-    else match deref t.contents with Unbound {ident = n} then
-      TyQVar {ident = n}
+      gen lvl ty
+    else match deref t.contents with Unbound {ident = n, level = k} then
+      if gti k lvl then
+        TyQVar {ident = n}
+      else
+        TyVar t
     else never
 end
 
 lang FunTypeGeneralize = Generalize + FunTypeAst
-  sem inst =
+  sem instBase (lvl : Level) (subst : Map Name TVar) =
   | TyArrow r ->
-    TyArrow {{r with from = inst r.from} with to = inst r.to}
+    match instBase lvl subst r.from with (subst1, fromNew) then
+      match instBase lvl subst1 r.to with (subst2, toNew) then
+        (subst2, TyArrow {{r with from = fromNew} with to = toNew})
+      else never
+    else never
 
-  sem gen =
+  sem gen (lvl : Level) =
   | TyArrow r ->
-    TyArrow {{r with from = gen r.from} with to = gen r.to}
+    TyArrow {{r with from = gen lvl r.from} with to = gen lvl r.to}
 end
 
 -------------------
@@ -152,9 +174,9 @@ end
 
 lang TypeCheck = Unify + Generalize
   sem typeOf =
-  | t -> typeOfBase _typeEnvEmpty t
+  | t -> typeOfBase _tcEnvEmpty t
 
-  sem typeOfBase (env : TypeEnv) =
+  sem typeOfBase (env : TCEnv) =
   | t ->
     let msg = join [
       "Type check failed: type checking not supported for term\n",
@@ -164,10 +186,10 @@ lang TypeCheck = Unify + Generalize
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeOfBase (env : TypeEnv) =
+  sem typeOfBase (env : TCEnv) =
   | TmVar t ->
     match _lookupVar t.ident env with Some ty then
-      inst ty
+      inst env.currentLvl ty
     else
       let msg = join [
         "Type check failed: reference to unbound variable\n",
@@ -177,28 +199,29 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang LamTypeCheck = TypeCheck + LamAst
-  sem typeOfBase (env : TypeEnv) =
+  sem typeOfBase (env : TCEnv) =
   | TmLam t ->
-    let tyX = newvar () in
+    let tyX = newvar env.currentLvl in
     let tyE = typeOfBase (_insertVar t.ident tyX env) t.body in
     ityarrow_ t.info tyX tyE
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeOfBase (env : TypeEnv) =
+  sem typeOfBase (env : TCEnv) =
   | TmApp t ->
     let tyFun = typeOfBase env t.lhs in
     let tyArg = typeOfBase env t.rhs in
-    let tyRes = newvar () in
+    let tyRes = newvar env.currentLvl in
     unify (tyFun, tyarrow_ tyArg tyRes);
     tyRes
 end
 
 lang LetTypeCheck = TypeCheck + LetAst
-  sem typeOfBase (env : TypeEnv) =
+  sem typeOfBase (env : TCEnv) =
   | TmLet t ->
-    let tyE = typeOfBase env t.body in
-    typeOfBase (_insertVar t.ident (gen tyE) env) t.inexpr
+    let lvl = env.currentLvl in
+    let tyE = typeOfBase {env with currentLvl = addi 1 lvl} t.body in
+    typeOfBase (_insertVar t.ident (gen lvl tyE) env) t.inexpr
 end
 
 lang MExprTypeCheck =
