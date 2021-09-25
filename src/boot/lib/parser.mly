@@ -563,7 +563,7 @@ ty_atom:
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
-    { TyVar($1.i,$1.v,Symb.Helpers.nosym) }
+    { TyCon($1.i,$1.v,Symb.Helpers.nosym) }
 
 ty_list:
   | ty COMMA ty_list

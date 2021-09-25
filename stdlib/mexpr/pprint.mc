@@ -1084,9 +1084,9 @@ lang VariantTypePrettyPrint = VariantTypeAst
     else error "Printing of non-empty variant types not yet supported"
 end
 
-lang VarTypePrettyPrint = VarTypeAst
+lang ConTypePrettyPrint = ConTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyVar t ->
+  | TyCon t ->
     match pprintEnvGetStr env t.ident with (env,str)
     then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
 end
@@ -1135,7 +1135,7 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
+  ConTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
@@ -1274,7 +1274,7 @@ in
 --         false
 let func_isconb =
     ulet_ "isconb" (
-        lam_ "c" (tyvar_ "myConBType") (
+        lam_ "c" (tycon_ "myConBType") (
             match_ (var_ "c")
                    (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
                    (true_)
@@ -1310,7 +1310,7 @@ in
 --   match o with !(None ()) & Some _ then true else false
 let func_pedanticIsSome =
   ulet_ "pedanticIsSome" (
-    lam_ "s" (tyapp_ (tyvar_ "Option") (tyvar_ "a")) (
+    lam_ "s" (tyapp_ (tycon_ "Option") (tycon_ "a")) (
       match_ (var_ "o")
              (pand_
                (pnot_ (pcon_ "None" punit_))

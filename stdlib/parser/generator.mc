@@ -56,8 +56,8 @@ let matchP = g.prod
     , g.nonsyntax "arms"
       (seqType
         (tupleType
-          [ targetableType (tyvar_ "Pat")
-          , targetableType (tyvar_ "Expr")
+          [ targetableType (tycon_ "Pat")
+          , targetableType (tycon_ "Expr")
           ]))
       (seq_ [])
     , tyField]
@@ -398,7 +398,7 @@ let generatorProd
           match sym with GeneratorNonSyntax {field = name, fieldType = ty} then
             Some (name, ty) else
           match sym with GeneratorNt {field = Some name, nt = nt} then
-            Some (name, targetableType (tyvar_ nt))
+            Some (name, targetableType (tycon_ nt))
           else None ()
       in
       let constructorName = nameSym constructorStr in
@@ -423,7 +423,7 @@ let generatorProd
         { name = constructorName
         , synType = stringToSynType nonTerminal
         , carried = recordType
-          (cons ("info", untargetableType (ntyvar_ _infoTypeName))
+          (cons ("info", untargetableType (ntycon_ _infoTypeName))
             (mapOption symbolToConstructorField wrappedSyntax))
         } in
 
@@ -586,7 +586,7 @@ let generatorGrammar
         { namePrefix = langName
         , constructors = mapOption (lam x: GeneratorProduction. x.constructor) productions
         , requestedSFunctions = map
-          (lam x: (String, String). (stringToSynType x.0, tyvar_ x.1))
+          (lam x: (String, String). (stringToSynType x.0, tycon_ x.1))
           sfunctions
         , composedName = Some composedName
         } in
@@ -779,7 +779,7 @@ let unknownTyP: GeneratorProduction = g.prod
 -- but not at present.
 match unknownTyP with {constructor = Some x} then
 let unknownTyConstructorName = let x: Constructor = x in x.name in
-let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (var_ "tyunknown_") in
+let tyField = g.nonsyntax "ty" (untargetableType (tycon_ "Type")) (var_ "tyunknown_") in
 
 let varP = g.prod
   { constructorName = "TmVar"
@@ -830,8 +830,8 @@ let matchP = g.prod
     , g.nonsyntax "arms"
       (seqType
         (tupleType
-          [ targetableType (tyvar_ "Pat")
-          , targetableType (tyvar_ "Expr")
+          [ targetableType (tycon_ "Pat")
+          , targetableType (tycon_ "Expr")
           ]))
       (seq_ [])
     , tyField]

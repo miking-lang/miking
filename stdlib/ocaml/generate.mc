@@ -77,7 +77,7 @@ let lookupRecordFields = use MExprAst in
   lam ty. lam constrs.
   match ty with TyRecord {fields = fields} then
     Some fields
-  else match ty with TyVar {ident = ident} then
+  else match ty with TyCon {ident = ident} then
     match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
       Some fields
     else None ()
@@ -290,7 +290,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     if mapIsEmpty t.bindings then TmRecord t
     else
       let ty = typeUnwrapAlias env.aliases t.ty in
-      match ty with TyVar {ident = ident} then
+      match ty with TyCon {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some id then
@@ -304,7 +304,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       else never
   | TmRecordUpdate t ->
     let ty = typeUnwrapAlias env.aliases t.ty in
-    match ty with TyVar {ident = ident} then
+    match ty with TyCon {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes env.records with Some id then
@@ -327,7 +327,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
         let msg = join ["Record update was annotated with an invalid type."] in
         infoErrorExit t.info msg
     else
-      let msg = join ["Expected type to be a TyVar. ",
+      let msg = join ["Expected type to be a TyCon. ",
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->
@@ -1036,7 +1036,7 @@ let matchSeqEdge7 = symbolize
 utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
 
 let intEither = nameSym "IntEither" in
-let intEitherTy = ntyvar_ intEither in
+let intEitherTy = ntycon_ intEither in
 let left = nameSym "Left" in
 let right = nameSym "Right" in
 let nested = nameSym "Nested" in
@@ -1201,7 +1201,7 @@ utest stripTypeDecls matchNestedRecord3 with generateTypeAnnotated matchNestedRe
 using sameSemantics in
 
 let tree = nameSym "Tree" in
-let tyTree = ntyvar_ tree in
+let tyTree = ntycon_ tree in
 let branch = nameSym "Branch" in
 let tyBranch = tyrecord_ [("lhs", tyTree), ("rhs", tyTree)] in
 let leaf = nameSym "Leaf" in
@@ -1305,7 +1305,7 @@ utest recordWithLam with generateTypeAnnotated recordWithLam
 using sameSemantics in
 
 let foo = nameSym "Foo" in
-let tyFoo = ntyvar_ foo in
+let tyFoo = ntycon_ foo in
 let fooCon = nameSym "FooCon" in
 let tyFooCon = tyrecord_ [("foo", tyarrow_ tyunknown_ tyunknown_)] in
 let conWithRecArrowTy = symbolize (bindall_
@@ -2176,9 +2176,9 @@ let extListMapTest = symbolize (
 bind_
   (ext_ "extTestListMap"
         false
-        (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                    tyseq_ (tyvar_ "a"),
-                    tyseq_ (tyvar_ "b")]))
+        (tyarrows_ [tyarrow_ (tycon_ "a") (tycon_ "b"),
+                    tyseq_ (tycon_ "a"),
+                    tyseq_ (tycon_ "b")]))
   (get_
     (appSeq_
       (var_ "extTestListMap")
@@ -2193,9 +2193,9 @@ let extListConcatMapTest = symbolize (
 bind_
   (ext_ "extTestListConcatMap"
         false
-        (tyarrows_ [tyarrow_ (tyvar_ "a") (tyseq_ (tyvar_ "b")),
-                    tyseq_ (tyvar_ "a"),
-                    tyseq_ (tyvar_ "b")]))
+        (tyarrows_ [tyarrow_ (tycon_ "a") (tyseq_ (tycon_ "b")),
+                    tyseq_ (tycon_ "a"),
+                    tyseq_ (tycon_ "b")]))
   (get_
     (appSeq_
       (var_ "extTestListConcatMap")

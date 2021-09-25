@@ -346,8 +346,8 @@ and ty =
   | TyRecord of info * ty Record.t * ustring list
   (* Variant type *)
   | TyVariant of info * (ustring * Symb.t) list
-  (* Type variables *)
-  | TyVar of info * ustring * Symb.t
+  (* Type constructors *)
+  | TyCon of info * ustring * Symb.t
   (* Type application, currently only used for documenation purposes *)
   | TyApp of info * ty * ty
 
@@ -492,7 +492,7 @@ let ty_info = function
   | TyTensor (fi, _)
   | TyRecord (fi, _, _)
   | TyVariant (fi, _)
-  | TyVar (fi, _, _)
+  | TyCon (fi, _, _)
   | TyApp (fi, _, _) ->
       fi
 

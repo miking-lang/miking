@@ -75,7 +75,7 @@ let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
 
 let unwrapType = use MExprAst in
   lam typeEnv. lam ty.
-  match ty with TyVar {ident = id} then
+  match ty with TyCon {ident = id} then
     assocSeqLookup {eq=nameEq} id typeEnv
   else Some ty
 
@@ -559,14 +559,14 @@ lang VariantTypeEq = Eq + VariantTypeAst
     else false
 end
 
-lang VarTypeEq = Eq + VarTypeAst
+lang ConTypeEq = Eq + ConTypeAst
   sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
-  | rhs & TyVar r ->
+  | rhs & TyCon r ->
     match unwrapType typeEnv lhs with Some lty then
       match unwrapType typeEnv rhs with Some rty then
         eqType typeEnv lty rty
       else false
-    else match lhs with TyVar l then
+    else match lhs with TyCon l then
       nameEq l.ident r.ident
     else false
 end
@@ -602,7 +602,7 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq + AppTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + AppTypeEq
   + TensorTypeEq
 end
 
@@ -997,16 +997,16 @@ utest eqType [] tyrec1 tyrec2 with false in
 
 let tyEnv1 = [(t, tyint_)] in
 let tyEnv2 = [(t, tybool_)] in
-utest eqType [] (ntyvar_ t) tyint_ with false in
-utest eqType [] tyint_ (ntyvar_ t) with false in
-utest ntyvar_ t with tyint_ using eqType tyEnv1 in
-utest tyint_ with ntyvar_ t using eqType tyEnv1 in
-utest eqType tyEnv1 (ntyvar_ t) tybool_ with false in
-utest ntyvar_ t with tybool_ using eqType tyEnv2 in
+utest eqType [] (ntycon_ t) tyint_ with false in
+utest eqType [] tyint_ (ntycon_ t) with false in
+utest ntycon_ t with tyint_ using eqType tyEnv1 in
+utest tyint_ with ntycon_ t using eqType tyEnv1 in
+utest eqType tyEnv1 (ntycon_ t) tybool_ with false in
+utest ntycon_ t with tybool_ using eqType tyEnv2 in
 
 let tyApp1 = tyapp_ tyint_ tyint_ in
-let tyApp2 = tyapp_ (ntyvar_ t) tyint_ in
-let tyApp3 = tyapp_ tyint_ (ntyvar_ t) in
+let tyApp2 = tyapp_ (ntycon_ t) tyint_ in
+let tyApp3 = tyapp_ tyint_ (ntycon_ t) in
 utest tyApp1 with tyApp1 using eqType [] in
 utest tyApp2 with tyApp2 using eqType [] in
 utest tyApp3 with tyApp3 using eqType [] in

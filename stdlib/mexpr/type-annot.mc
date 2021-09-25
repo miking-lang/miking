@@ -85,16 +85,16 @@ lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
 end
 
-lang VarCompatibleType = CompatibleType + VarTypeAst
+lang IdentCompatibleType = CompatibleType + ConTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
-  | (TyVar t1 & ty1, TyVar t2) ->
+  | (TyCon t1 & ty1, TyCon t2) ->
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
   sem reduceType (tyEnv : TypeEnv) =
-  | TyVar {info = info, ident = id} ->
+  | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      infoErrorExit info (concat "Unbound TyVar in reduceType: " (nameGetStr id))
+      infoErrorExit info (concat "Unbound TyCon in reduceType: " (nameGetStr id))
 
 end
 
@@ -431,7 +431,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
         match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = to} then
             recursive let tyvar = lam ty.
-              match ty with TyVar _ then ty
+              match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
               else (ityunknown_ t.info)
             in
@@ -574,7 +574,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
     else never
 end
 
-lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
+lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
                         FunTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
@@ -632,7 +632,7 @@ end
 lang MExprTypeAnnot =
 
   -- Type compatibility
-  UnknownCompatibleType + VarCompatibleType + BoolCompatibleType +
+  UnknownCompatibleType + IdentCompatibleType + BoolCompatibleType +
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
@@ -761,10 +761,10 @@ utest ty (typeAnnot typeDecl) with tyunit_ using eqTypeEmptyEnv in
 
 let conApp = bindall_ [
   ntype_ n tyunknown_,
-  ncondef_ x (tyarrow_ tyint_ (ntyvar_ n)),
+  ncondef_ x (tyarrow_ tyint_ (ntycon_ n)),
   nconapp_ x (int_ 4)
 ] in
-utest ty (typeAnnot conApp) with ntyvar_ n using eqTypeEmptyEnv in
+utest ty (typeAnnot conApp) with ntycon_ n using eqTypeEmptyEnv in
 
 let matchInteger = typeAnnot (bindall_ [
   nulet_ x (int_ 0),
@@ -813,8 +813,8 @@ utest ty (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqTypeEmptyEn
 
 let matchTree = bindall_ [
   type_ "Tree" tyunknown_,
-  condef_ "Branch" (tyarrow_ (tytuple_ [tyvar_ "Tree", tyvar_ "Tree"]) (tyvar_ "Tree")),
-  condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tyvar_ "Tree")),
+  condef_ "Branch" (tyarrow_ (tytuple_ [tycon_ "Tree", tycon_ "Tree"]) (tycon_ "Tree")),
+  condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tycon_ "Tree")),
   ulet_ "t" (conapp_ "Branch" (utuple_ [
     conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
     conapp_ "Branch" (utuple_ [

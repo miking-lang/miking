@@ -174,8 +174,8 @@ lang BootParser = MExprAst + ConstTransformer
       TyVariant {info = ginfo t 0,
                  constrs = mapEmpty nameCmp}
     else error "Parsing of non-empty variant types not yet supported"
-  | 209 /-TyVar-/ ->
-    TyVar {info = ginfo t 0,
+  | 209 /-TyCon-/ ->
+    TyCon {info = ginfo t 0,
            ident = gname t 0}
   | 210 /-TyApp-/ ->
     TyApp {info = ginfo t 0,
@@ -623,7 +623,7 @@ let s = "let y:<> = lam x.x in y" in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 8 in
 
--- TyVar
+-- TyIdent
 let s = "let y:_asd = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()

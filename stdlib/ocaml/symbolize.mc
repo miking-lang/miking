@@ -17,7 +17,7 @@ lang OCamlSym =
   + NamedPatSym + IntPat + CharPat + BoolPat + RecordAst
   + OCamlMatch + OCamlTuple + OCamlData
   + UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
-  + RecordTypeAst + VarTypeSym + OCamlExternal
+  + RecordTypeAst + ConTypeSym + OCamlExternal
   + OCamlString + OCamlRecord + OCamlLabel
 
   sem symbolizeExpr (env : SymEnv) =

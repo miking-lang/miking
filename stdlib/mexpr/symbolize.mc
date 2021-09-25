@@ -255,15 +255,15 @@ lang VariantTypeSym = VariantTypeAst
     else error "Symbolizing non-empty variant types not yet supported"
 end
 
-lang VarTypeSym = VarTypeAst + UnknownTypeAst
+lang ConTypeSym = ConTypeAst + UnknownTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyVar t & ty ->
+  | TyCon t & ty ->
     match env with {tyEnv = tyEnv} then
       if nameHasSym t.ident then ty
       else
         let str = nameGetStr t.ident in
         match mapLookup str tyEnv with Some ident then
-          TyVar {t with ident = ident}
+          TyCon {t with ident = ident}
         else
           -- NOTE(larshum, 2021-03-24): Unknown type variables are symbolized
           -- as TyUnknown for now.
@@ -361,7 +361,7 @@ lang MExprSym =
   MatchSym +
 
   -- Non-default implementations (Types)
-  VariantTypeSym + VarTypeSym +
+  VariantTypeSym + ConTypeSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
@@ -388,8 +388,8 @@ let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
 
 let lettypein = bindall_ [
   type_ "Type" tystr_,
-  type_ "Type" (tyvar_ "Type"),
-  lam_ "Type" (tyvar_ "Type") (var_ "Type")
+  type_ "Type" (tycon_ "Type"),
+  lam_ "Type" (tycon_ "Type") (var_ "Type")
 ] in
 
 let rlets =

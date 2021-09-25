@@ -186,7 +186,7 @@ let rec ustring_of_ty = function
       us "<>"
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
-  | TyVar (_, x, s) ->
+  | TyCon (_, x, s) ->
       ustring_of_type x s
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"

@@ -388,14 +388,14 @@ utest cse t with t using eqExpr in
 
 let t = preprocess (bindall_ [
   type_ "Num" tyunknown_,
-  condef_ "CInt" (tyarrow_ tyint_ (tyvar_ "Num")),
+  condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "y" (conapp_ "CInt" (var_ "x")),
   ulet_ "z" (conapp_ "CInt" (var_ "x")),
   var_ "y"]) in
 let expected = preprocess (bindall_ [
   type_ "Num" tyunknown_,
-  condef_ "CInt" (tyarrow_ tyint_ (tyvar_ "Num")),
+  condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "t" (conapp_ "CInt" (var_ "x")),
   ulet_ "y" (var_ "t"),

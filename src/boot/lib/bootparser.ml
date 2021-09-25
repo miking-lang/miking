@@ -60,7 +60,7 @@ let idTyRecord = 207
 
 let idTyVariant = 208
 
-let idTyVar = 209
+let idTyCon = 209
 
 let idTyApp = 210
 
@@ -257,8 +257,8 @@ let getData = function
       let strs = List.map (fun (x, _) -> x) lst in
       let len = List.length lst in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyVar (fi, x, _)) ->
-      (idTyVar, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyCon (fi, x, _)) ->
+      (idTyCon, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
       (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   (* Const *)

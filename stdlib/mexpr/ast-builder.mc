@@ -79,12 +79,12 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
-let ntyvar_ = use VarTypeAst in
+let ntycon_ = use ConTypeAst in
   lam n.
-  TyVar {ident = n, info = NoInfo ()}
+  TyCon {ident = n, info = NoInfo ()}
 
-let tyvar_ = lam s.
-  ntyvar_ (nameNoSym s)
+let tycon_ = lam s.
+  ntycon_ (nameNoSym s)
 
 -- Tensor OP types
 let tytensorcreateint_ =

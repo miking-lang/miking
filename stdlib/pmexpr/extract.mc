@@ -121,7 +121,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
   | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
 
   sem collectIdentifiersType (used : Set Name) =
-  | TyVar t -> setInsert t.ident used
+  | TyCon t -> setInsert t.ident used
   | t -> sfold_Type_Type collectIdentifiersType used t
 
   -- Construct an extracted AST from the given AST, containing all terms that

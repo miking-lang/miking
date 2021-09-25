@@ -76,11 +76,11 @@ let _addRecordToEnv =
   lam env : TypeLiftEnv. lam name : Option Name. lam ty : Type.
   match ty with TyRecord {fields = fields, labels = labels, info = info} then
     match name with Some name then
-      let tyvar = TyVar {ident = name, info = info} in
+      let tyvar = TyCon {ident = name, info = info} in
       (env, tyvar)
     else match name with None _ then
       let name = nameSym "Rec" in
-      let tyvar = TyVar {ident = name, info = info} in
+      let tyvar = TyCon {ident = name, info = info} in
       let env = {{{env
                     with records = mapInsert fields name env.records}
                     with labels = setInsert labels env.labels}
@@ -151,7 +151,7 @@ lang TypeLift = Cmp
   -- and their corresponding types, together with a modified version of the
   -- expression `e` where:
   -- * `TmType`s and `TmConDef`s have been removed.
-  -- * `TyRecord`s have been replaced with a `TyVar` whose name is
+  -- * `TyRecord`s have been replaced with a `TyCon` whose name is
   --   contained in the resulting environment.
   -- * The constructor names and argument types have been added to the
   --   `TyVariant`s.
@@ -203,11 +203,11 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
     else never
 end
 
-lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
+lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmConDef t ->
     recursive let unwrapTypeVarIdent = lam ty : Type.
-      match ty with TyVar t then Some t.ident
+      match ty with TyCon t then Some t.ident
       else match ty with TyApp t then unwrapTypeVarIdent t.lhs
       else None ()
     in
@@ -287,7 +287,7 @@ lang MExprTypeLift =
 
   -- Default implementations (Types)
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  FunTypeAst + SeqTypeAst + TensorTypeAst + VariantTypeAst + VarTypeAst +
+  FunTypeAst + SeqTypeAst + TensorTypeAst + VariantTypeAst + ConTypeAst +
   VariantNameTypeAst +
 
   -- Non-default implementations (Terms)
@@ -358,9 +358,9 @@ let leafName = nameSym "Leaf" in
 let variant = typeAnnot (symbolize (bindall_ [
   ntype_ treeName tyunknown_,
   ncondef_ branchName (tyarrow_ (tytuple_ [
-    ntyvar_ treeName,
-    ntyvar_ treeName]) (ntyvar_ treeName)),
-  ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
+    ntycon_ treeName,
+    ntycon_ treeName]) (ntycon_ treeName)),
+  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
   uunit_
 ])) in
 (match typeLift variant with (_, t) then
@@ -375,19 +375,19 @@ let lastTerm = nconapp_ branchName (urecord_ [
 let variantWithRecords = typeAnnot (symbolize (bindall_ [
   ntype_ treeName (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tyrecord_ [
-    ("lhs", ntyvar_ treeName),
-    ("rhs", ntyvar_ treeName)]) (ntyvar_ treeName)),
-  ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
+    ("lhs", ntycon_ treeName),
+    ("rhs", ntycon_ treeName)]) (ntycon_ treeName)),
+  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
   lastTerm
 ])) in
 (match typeLift variantWithRecords with (env, t) then
   let recid = fst (get env 0) in
   let expectedEnv = [
     (recid, tyrecord_ [
-      ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
+      ("lhs", ntycon_ treeName), ("rhs", ntycon_ treeName)
     ]),
     (treeName, tyvariant_ [
-      (branchName, ntyvar_ recid),
+      (branchName, ntycon_ recid),
       (leafName, tyint_)
     ])
   ] in
@@ -412,7 +412,7 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   let sndid = fst (get env 1) in
   let expectedEnv = [
     (fstid, tyrecord_ [
-      ("a", ntyvar_ sndid),
+      ("a", ntycon_ sndid),
       ("b", tyint_)
     ]),
     (sndid, tyrecord_ [
@@ -463,7 +463,7 @@ let record = typeAnnot (symbolize (urecord_ [
   ("b", float_ 1.5)
 ])) in
 (match typeLift record with (env, t) then
-  match ty t with TyVar {ident = ident} then
+  match ty t with TyCon {ident = ident} then
     match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
       utest recordTy with ty record using eqType [] in
       ()
@@ -477,7 +477,7 @@ let recordUpdate = typeAnnot (symbolize (bindall_ [
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 (match typeLift recordUpdate with (env, t) then
-  match t with TmLet {tyBody = TyVar {ident = ident}} then
+  match t with TmLet {tyBody = TyCon {ident = ident}} then
     match assocSeqLookup {eq=nameEq} ident env with Some ty then
       utest ty with recordType using eqType [] in
       ()
@@ -489,8 +489,8 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   type_ "GlobalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
   type_ "LocalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
   type_ "Env" (tyrecord_ [
-    ("global", tyvar_ "GlobalEnv"),
-    ("local", tyvar_ "LocalEnv")
+    ("global", tycon_ "GlobalEnv"),
+    ("local", tycon_ "LocalEnv")
   ]),
   ulet_ "env" (urecord_ [
     ("global", seq_ [utuple_ [str_ "x", int_ 4]]),
@@ -511,16 +511,16 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   let trdRecordId = get ids 0 in -- type Rec3 = {global : [Rec1], local : [Rec1]}
   let expectedEnv = [
     (trdRecordId, tyrecord_ [
-      ("local", tyseq_ (ntyvar_ fstRecordId)),
-      ("global", tyseq_ (ntyvar_ fstRecordId))
+      ("local", tyseq_ (ntycon_ fstRecordId)),
+      ("global", tyseq_ (ntycon_ fstRecordId))
     ]),
-    (envId, ntyvar_ sndRecordId),
+    (envId, ntycon_ sndRecordId),
     (sndRecordId, tyrecord_ [
-      ("local", ntyvar_ localEnvId),
-      ("global", ntyvar_ globalEnvId)
+      ("local", ntycon_ localEnvId),
+      ("global", ntycon_ globalEnvId)
     ]),
-    (localEnvId, tyseq_ (ntyvar_ fstRecordId)),
-    (globalEnvId, tyseq_ (ntyvar_ fstRecordId)),
+    (localEnvId, tyseq_ (ntycon_ fstRecordId)),
+    (globalEnvId, tyseq_ (ntycon_ fstRecordId)),
     (fstRecordId, tytuple_ [tystr_, tyint_])
   ] in
   utest env with expectedEnv using eqEnv in

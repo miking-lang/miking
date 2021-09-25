@@ -392,9 +392,9 @@ lang VariantTypeCmp = Cmp + VariantTypeAst
   | (TyVariant t1, TyVariant t2) -> mapCmp cmpType t1.constrs t2.constrs
 end
 
-lang VarTypeCmp = Cmp + VarTypeAst
+lang ConTypeCmp = Cmp + ConTypeAst
   sem cmpTypeH =
-  | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
+  | (TyCon t1, TyCon t2) -> nameCmp t1.ident t2.ident
 end
 
 lang AppTypeCmp = Cmp + AppTypeAst
@@ -425,7 +425,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  VarTypeCmp + AppTypeCmp
+  ConTypeCmp + AppTypeCmp
 
 -----------
 -- TESTS --
@@ -784,8 +784,8 @@ using neqi in
 
 utest cmpType (tyvariant_ []) (tyvariant_ []) with 0 in
 
-utest cmpType (tyvar_ "t") (tyvar_ "t") with 0 in
-utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
+utest cmpType (tycon_ "t") (tycon_ "t") with 0 in
+utest cmpType (tycon_ "a") (tycon_ "b") with 0 using neqi in
 
 utest cmpType (tyapp_ tybool_ tybool_) (tyapp_ tybool_ tybool_) with 0 in
 utest cmpType (tyapp_ tybool_ tybool_) (tyapp_ tyfloat_ tybool_) with 0

@@ -192,7 +192,7 @@ let getUniquePprintAndEqualityNames = lam.
 let collectKnownProgramTypes = use MExprAst in
   lam expr.
   recursive let unwrapTypeVarIdent = lam ty.
-    match ty with TyVar {ident = ident} then Some ident
+    match ty with TyCon {ident = ident} then Some ident
     else match ty with TyApp t then unwrapTypeVarIdent t.lhs
     else None ()
   in
@@ -288,7 +288,7 @@ let collectKnownProgramTypes = use MExprAst in
 
 let _unwrapAlias = use MExprAst in
   lam aliases : Map Name Type. lam ty : Type.
-  match ty with TyVar t then
+  match ty with TyCon t then
     match mapLookup t.ident aliases with Some aliasedTy then
       aliasedTy
     else ty
@@ -484,7 +484,7 @@ let typeHasDefaultEquality = use MExprAst in
       work visited t.ty
     else match ty with TyRecord t then
       mapAll (lam ty. work visited ty) t.fields
-    else match ty with TyVar t then
+    else match ty with TyCon t then
       -- If we have already visited a type variable, we stop here to avoid
       -- infinite recursion.
       if mapMem t.ident visited then true
@@ -527,16 +527,16 @@ let getTypeFunctions =
   else match ty with TyRecord {fields = fields} then
     ( _pprintRecord env ty fields
     , Some (_equalRecord env ty fields))
-  else match ty with TyVar {ident = ident} then
+  else match ty with TyCon {ident = ident} then
     match mapLookup ident env.variants with Some constrs then
-      let annotTy = ntyvar_ ident in
+      let annotTy = ntycon_ ident in
       if all (lam ty. typeHasDefaultEquality env ty) (mapValues constrs) then
         ( _pprintVariant env annotTy constrs
         , Some (_equalVariant env annotTy constrs))
       else
         (_pprintVariant env annotTy constrs, None ())
     else match mapLookup ident env.aliases with Some ty then
-      let aliasVar = ntyvar_ ident in
+      let aliasVar = ntycon_ ident in
       let aliasedTypePprintName = getPprintFuncName env ty in
       let aliasedTypeEqualName = getEqualFuncName env ty in
       ( _pprintAlias env aliasVar aliasedTypePprintName

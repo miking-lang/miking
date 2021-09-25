@@ -92,12 +92,14 @@ let rec symbolize_type env ty =
       ty
   | TyVariant _ ->
       failwith "Symbolizing non-empty variant types not yet supported"
-  | TyVar (fi, x, s) ->
+  | TyCon (fi, x, s) ->
+     (* TODO(aathn,2021-09-25): This should not be needed anymore, since
+        the unbound type variables are now TyVar and this is TyCon *)
       (* NOTE(dlunde,2020-11-24): Currently, unbound type variables are heavily
          used for documentation purposes. Hence, we simply ignore these for
          now. *)
       let s = try findsym fi (IdType (sid_of_ustring x)) env with _ -> s in
-      TyVar (fi, x, s)
+      TyCon (fi, x, s)
   | TyApp (fi, ty1, ty2) ->
       TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
 

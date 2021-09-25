@@ -709,7 +709,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow (NoInfo, ty, TyVar (NoInfo, ty_name, Symb.Helpers.nosym))
+          , TyArrow (NoInfo, ty, TyCon (NoInfo, ty_name, Symb.Helpers.nosym))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
