@@ -190,8 +190,8 @@ let parseMCoreFile keywords filename =
 
 let getData = function
   (* Terms *)
-  | PTreeTm (TmVar (fi, x, _)) ->
-      (idTmVar, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTm (TmVar (fi, x, _, frozen)) ->
+      (idTmVar, [fi], [], [], [], [x], [if frozen then 1 else 0], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->

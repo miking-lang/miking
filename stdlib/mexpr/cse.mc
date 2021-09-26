@@ -87,7 +87,7 @@ lang CSE = MExprCmp
   sem cseReplace (env : CSEApplyEnv) =
   | t ->
     match mapLookup t env.exprIdent with Some ident then
-      (env, TmVar {ident = ident, ty = ty t, info = infoTm t})
+      (env, TmVar {ident = ident, ty = ty t, info = infoTm t, frozen = false})
     else smapAccumL_Expr_Expr cseApply env t
 
   sem cseApplyH (env : CSEApplyEnv) =

@@ -239,9 +239,10 @@ lang VarPrettyPrint = PrettyPrint + VarAst
   | TmVar _ -> true
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmVar {ident = ident} ->
+  | TmVar {ident = ident, frozen = frozen} ->
+    let freezeStr = if frozen then "`" else "" in
     match pprintVarName env ident with (env, str)
-    then (env,str) else never
+    then (env, concat freezeStr str) else never
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst

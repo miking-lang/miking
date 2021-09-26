@@ -41,7 +41,7 @@ lang LambdaLiftNameAnonymous = MExprAst
   | TmLam t ->
     let lambdaName = nameSym "t" in
     TmLet {ident = lambdaName, tyBody = t.ty, body = TmLam t,
-           inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info},
+           inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info, frozen = false},
            ty = t.ty, info = t.info}
   | TmLet t ->
     TmLet {{t with body = nameAnonymousLambdasInBody t.body}
@@ -251,7 +251,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let subExpr = lam info.
         foldr
           (lam freeVar : (Name, Type). lam acc.
-            let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info} in
+            let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info, frozen = false} in
             -- NOTE(larshum, 2021-09-19): We assume that the application
             -- argument has the correct type.
             let appType =
@@ -260,7 +260,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
               else TyUnknown {info = info}
             in
             TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-          (TmVar {ident = t.ident, ty = t.tyBody, info = info})
+          (TmVar {ident = t.ident, ty = t.tyBody, info = info, frozen = false})
           (reverse fv) in
 
       -- Update the annotated type of the function to include the types of the
@@ -290,7 +290,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam acc.
               let x = TmVar {ident = freeVar.0, ty = freeVar.1,
-                             info = info} in
+                             info = info, frozen = false} in
               -- NOTE(larshum, 2021-09-19): We assume that the application
               -- argument has the correct type.
               let appType =
@@ -299,7 +299,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                 else TyUnknown {info = info}
               in
               TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-            (TmVar {ident = bind.ident, ty = bind.tyBody, info = info})
+            (TmVar {ident = bind.ident, ty = bind.tyBody, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
       else error (join ["Lambda lifting error: No solution found for binding ",

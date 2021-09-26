@@ -34,7 +34,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       TmVar {
         ident = ident,
         ty = TyUnknown { info = info },
-        info = info
+        info = info,
+        frozen = false
       }
     in
     match convertData info env var ty1 ty2 with (cost, body) then
@@ -108,7 +109,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
                 TmVar {
                   ident = ident,
                   ty = TyUnknown { info = info },
-                  info = info
+                  info = info,
+                  frozen = false
                 }
               in
               convertData info env var (getTy1 ty1 ty2) (getTy2 ty1 ty2)
@@ -143,7 +145,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
       let ident = nameSym "x" in
-      let arg = TmVar { ident = ident, ty = ty21, info = info } in
+      let arg = TmVar { ident = ident, ty = ty21, info = info, frozen = false } in
       match (
         match ty11 with OTyLabel {label = label, ty = ty11} then
           match convertData info env arg ty21 ty11 with (cost1, arg) then
@@ -313,7 +315,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
                         TmVar {
                           ident = ident,
                           ty = TyUnknown { info = info },
-                          info = info
+                          info = info,
+                          frozen = false
                         }
                       in
                       convertData info env (objMagic var) ty1 ty2

@@ -187,8 +187,8 @@ let rec symbolize (env : sym_env) (t : tm) =
         (patEnv, PatNot (fi, p))
   in
   match t with
-  | TmVar (fi, x, _) ->
-      TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env)
+  | TmVar (fi, x, _, frozen) ->
+      TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env, frozen)
   | TmLam (fi, x, _, ty, t1) ->
       let s = Symb.gensym () in
       TmLam

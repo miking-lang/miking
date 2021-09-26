@@ -100,7 +100,8 @@ lang VarAst = Ast
   syn Expr =
   | TmVar {ident : Name,
            ty: Type,
-           info: Info}
+           info: Info,
+           frozen: Bool}
 
   sem infoTm =
   | TmVar r -> r.info

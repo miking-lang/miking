@@ -248,7 +248,7 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t
+  | TmVar of info * ustring * Symb.t * bool
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
@@ -446,7 +446,7 @@ let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
 
 (* Returns the info field from a term *)
 let tm_info = function
-  | TmVar (fi, _, _)
+  | TmVar (fi, _, _, _)
   | TmApp (fi, _, _)
   | TmLam (fi, _, _, _, _)
   | TmLet (fi, _, _, _, _, _)

@@ -99,7 +99,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
         body = TmLam {ident = paramId, tyIdent = paramTy,
                       body = t.e, ty = retType, info = info},
         inexpr = TmApp {
-          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info},
+          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
           rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
           ty = retType,
           info = info},

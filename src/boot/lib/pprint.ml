@@ -594,10 +594,11 @@ and print_tm' fmt t =
     if tystr = "Unknown" then "" else ":" ^ tystr
   in
   match t with
-  | TmVar (_, x, s) ->
-      let print = string_of_ustring (ustring_of_var x s) in
+  | TmVar (_, x, s, frozen) ->
+     let var_str = string_of_ustring (ustring_of_var x s) in
+     let print = if frozen then "`" ^ var_str else var_str in
       (*  fprintf fmt "%s#%d" print s *)
-      fprintf fmt "%s" print
+     fprintf fmt "%s" print
   | TmLam (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in

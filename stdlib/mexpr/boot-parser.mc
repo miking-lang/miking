@@ -45,7 +45,8 @@ lang BootParser = MExprAst + ConstTransformer
   | 100 /-TmVar-/ ->
     TmVar {ident = gname t 0,
            ty = TyUnknown { info = ginfo t 0 },
-           info = ginfo t 0}
+           info = ginfo t 0,
+           frozen = neqi (gint t 0) 0}
   | 101 /-TmApp-/ ->
     TmApp {lhs = gterm t 0,
            rhs = gterm t 1,

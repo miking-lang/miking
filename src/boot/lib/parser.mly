@@ -103,6 +103,7 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> BACKTICK      /* "`"   */
 
 %start main
 %start main_mexpr
@@ -368,7 +369,7 @@ left:
 swcases:
   | CASE pat THEN mexpr swcases
       { let fi = mkinfo $1.i (tm_info $5) in
-        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym) in
+        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym, false) in
         TmMatch(fi,id,$2,$4,$5) }
   | END
       { TmNever($1.i) }
@@ -378,14 +379,15 @@ atom:
       { let fi = mkinfo (tm_info $1) (fst $3) in
         let id = unique_ident in
         TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,Symb.Helpers.nosym)))),
-                                TmVar(fi,id,Symb.Helpers.nosym), TmNever(fi)) }
+                                TmVar(fi,id,Symb.Helpers.nosym,false), TmNever(fi)) }
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | var_ident                { TmVar($1.i,$1.v,Symb.Helpers.nosym) }
+  | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false) }
+  | BACKTICK var_ident   { TmVar($2.i,$2.v,Symb.Helpers.nosym, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
