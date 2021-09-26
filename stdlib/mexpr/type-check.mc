@@ -13,6 +13,7 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "const-types.mc"
 include "eq.mc"
 include "math.mc"
 include "pprint.mc"
@@ -105,6 +106,12 @@ lang FunTypeUnify = Unify + FunTypeAst
     occurs tv to
 end
 
+lang BaseTypeUnify = Unify + BaseTypeAst
+  sem unifyBase = -- Intentionally left empty
+  sem occurs (tv : TVar) =
+  | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ -> ()
+end
+
 ------------------------------------
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
@@ -168,6 +175,14 @@ lang FunTypeGeneralize = Generalize + FunTypeAst
     TyArrow {{r with from = gen lvl r.from} with to = gen lvl r.to}
 end
 
+lang BaseTypeGeneralize = Generalize + BaseTypeAst
+  sem instBase (lvl : Level) (subst : Map Name TVar) =
+  | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> (subst, ty)
+  sem gen (lvl : Level) =
+  | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> ty
+end
+
+
 -------------------
 -- TYPE CHECKING --
 -------------------
@@ -224,15 +239,23 @@ lang LetTypeCheck = TypeCheck + LetAst
     typeOfBase (_insertVar t.ident (gen lvl tyE) env) t.inexpr
 end
 
+lang ConstTypeCheck = TypeCheck + MExprConstType
+  sem typeOfBase (env : TCEnv) =
+  | TmConst t ->
+    recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
+    f (tyConst t.val)
+end
+
 lang MExprTypeCheck =
 
   -- Type unification
-  VarTypeUnify + FunTypeUnify +
+  VarTypeUnify + FunTypeUnify + BaseTypeUnify +
 
   -- Type generalization
-  VarTypeGeneralize + FunTypeGeneralize +
+  VarTypeGeneralize + FunTypeGeneralize + BaseTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck
+  + ConstTypeCheck
 
 end

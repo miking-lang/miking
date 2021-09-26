@@ -1094,6 +1094,11 @@ lang CharTypeAst = Ast
   | TyChar r -> r.info
 end
 
+lang BaseTypeAst =
+  UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
+end
+
+
 lang FunTypeAst = Ast
   syn Type =
   | TyArrow {info : Info,
