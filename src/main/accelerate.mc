@@ -19,6 +19,7 @@ include "ocaml/sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
 include "pmexpr/extract.mc"
+include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
 include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
@@ -30,8 +31,8 @@ lang PMExprCompile =
   MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
   MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprReplaceAccelerate + FutharkGenerate +
-  FutharkFunctionRestrictions + FutharkRecordInline +
+  PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
+  FutharkGenerate + FutharkFunctionRestrictions + FutharkRecordInline +
   FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
@@ -178,7 +179,17 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
       with (accelerated, accelerateAst) then
 
         -- Generate Futhark code
+
+        -- Detect patterns in the accelerate AST to eliminate recursion. The
+        -- result is a PMExpr AST.
         let pmexprAst = patternTransformation accelerateAst in
+
+        -- Report errors if there are nested accelerate terms within the PMExpr
+        -- AST.
+        reportNestedAccelerate accelerateIds pmexprAst;
+
+        -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
+        -- the result.
         let futharkAst = futharkTranslation accelerateIds pmexprAst in
         let futharkProg = pprintFutharkAst futharkAst in
 
