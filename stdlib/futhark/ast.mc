@@ -51,6 +51,7 @@ lang FutharkConstAst
   | FCTake ()
   | FCReplicate ()
   | FCTabulate ()
+  | FCCopy ()
 end
 
 lang FutharkTypeAst = FutharkTypeParamAst

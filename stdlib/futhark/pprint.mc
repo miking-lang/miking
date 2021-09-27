@@ -67,6 +67,7 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCTake () -> "take"
   | FCReplicate () -> "replicate"
   | FCTabulate () -> "tabulate"
+  | FCCopy () -> "copy"
 end
 
 lang FutharkPatPrettyPrint = FutharkAst + PatNamePrettyPrint

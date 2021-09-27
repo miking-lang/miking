@@ -290,9 +290,21 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
+    let arrayTy = generateType env t.ty in
+    -- NOTE(larshum, 2021-09-27): In-place updates in Futhark require that the
+    -- array is not aliased. As MExpr performs no alias analysis, we instead
+    -- add an explicit copy of the target array.
+    let arrayCopy = FEApp {
+      lhs = FEConst {
+        val = FCCopy (),
+        ty = FTyArrow {from = arrayTy, to = arrayTy, info = t.info},
+        info = t.info},
+      rhs = generateExpr env arg1,
+      ty = arrayTy,
+      info = t.info} in
     FEArrayUpdate {
-      array = generateExpr env arg1, index = generateExpr env arg2,
-      value = generateExpr env arg3, ty = generateType env t.ty, info = t.info}
+      array = arrayCopy, index = generateExpr env arg2,
+      value = generateExpr env arg3, ty = arrayTy, info = t.info}
   | TmApp ({lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
             rhs = arg2} & t) ->
     let tryLookupExpr = lam e.
@@ -338,9 +350,6 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
-    -- NOTE(larshum, 2021-06-16): The generated code constructs a slice, which
-    -- is a reference rather than a copy. This could result in compilation
-    -- errors on Futhark's side.
     let startIdx = generateExpr env arg2 in
     let offset = generateExpr env arg3 in
     let info = mergeInfo (infoFutTm startIdx) (infoFutTm offset) in
