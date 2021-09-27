@@ -90,7 +90,7 @@ let digraphHasVertex = lam v. lam g : Digraph v l.
 
 -- Check whether g has all the vertices vs.
 let digraphHasVertices = lam vs. lam g.
-  all (lam v. digraphHasVertex v g) vs
+  forAll (lam v. digraphHasVertex v g) vs
 
 -- Check whether edges e1 and e2 are equal in graph g.
 let digraphEdgeEq =
@@ -105,7 +105,7 @@ let digraphHasEdge = lam e. lam g.
 
 -- Check whether graph g has all the edges in es.
 let digraphHasEdges = lam es. lam g.
-  all (lam e. digraphHasEdge e g) es
+  forAll (lam e. digraphHasEdge e g) es
 
 -- Get successor nodes of v.
 let digraphSuccessors = lam v. lam g : Digraph v l.

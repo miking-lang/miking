@@ -57,7 +57,7 @@ let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
 recursive let prefixTreeEq = lam cmp. lam t1. lam t2.
   match (t1, t2) with (Leaf i1, Leaf i2) then eqi i1 i2
   else match (t1, t2) with (Node n1, Node n2) then
-    all (lam x. x)
+    forAll (lam x. x)
       [ eqi 0 (cmp n1.root n2.root)
       , eqSeq eqi n1.ids n2.ids
       , eqSeq (prefixTreeEq cmp) (mapValues n1.children) (mapValues n2.children)

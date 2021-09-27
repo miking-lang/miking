@@ -246,7 +246,7 @@ recursive
             else false
           else false
         in
-        if all dependenciesContainsVarPat t.vars then
+        if forAll dependenciesContainsVarPat t.vars then
           Some state
         else None ()
       else match pat with BranchPattern t then

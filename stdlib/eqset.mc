@@ -14,7 +14,7 @@ let eqsetMem = lam eq. lam x. lam seq.
 -- True if seq1 is a subset or equal to seq2 as defined by eq. Otherwise false.
 let setIsSubsetEq = lam eq. lam seq1. lam seq2.
   if gti (length seq1) (length seq1) then false
-  else all (lam x. eqsetMem eq x seq2) seq1
+  else forAll (lam x. eqsetMem eq x seq2) seq1
 
 -- True if the seq1 and seq2 are of the same length and contains the same
 -- elements as defined by eq. Otherwise false.

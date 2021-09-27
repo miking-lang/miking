@@ -137,7 +137,7 @@ let record2tuple
   -> Option [a]
   = lam bindings.
     let keys = map sidToString (mapKeys bindings) in
-    match all stringIsInt keys with false then None () else
+    match forAll stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
     -- Check if keys are a sequence 0..(n-1)
@@ -1051,7 +1051,7 @@ lang RecordTypePrettyPrint = RecordTypeAst
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
         let seq = map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings t.fields) in
-        if all (lam t : (a,b). stringIsInt t.0) seq then
+        if forAll (lam t : (a,b). stringIsInt t.0) seq then
           let seq = map (lam t : (a,b). (string2int t.0, t.1)) seq in
           let seq : [(a,b)] = sort (lam l : (a,b). lam r : (a,b). subi l.0 r.0) seq in
           let fst = lam x: (a, b). x.0 in

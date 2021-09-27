@@ -73,10 +73,10 @@ let eqSeq = lam eq : (Unknown -> Unknown -> Bool).
 in
 
 recursive
-  let all = lam p. lam seq.
+  let forAll = lam p. lam seq.
     if null seq
     then true
-    else if p (head seq) then all p (tail seq)
+    else if p (head seq) then forAll p (tail seq)
     else false
 in
 
@@ -429,7 +429,7 @@ let _equalRecord = use MExprAst in
   let equalFuncs = mapFoldWithKey fieldEquals [] fields in
   let allEqual =
     if mapIsEmpty fields then true_
-    else appf2_ (var_ "all") (ulam_ "b" (var_ "b")) (seq_ equalFuncs)
+    else appf2_ (var_ "forAll") (ulam_ "b" (var_ "b")) (seq_ equalFuncs)
   in
   lam_ "a" ty (lam_ "b" ty
     (match_ (utuple_ [var_ "a", var_ "b"])
@@ -530,7 +530,7 @@ let getTypeFunctions =
   else match ty with TyCon {ident = ident} then
     match mapLookup ident env.variants with Some constrs then
       let annotTy = ntycon_ ident in
-      if all (lam ty. typeHasDefaultEquality env ty) (mapValues constrs) then
+      if forAll (lam ty. typeHasDefaultEquality env ty) (mapValues constrs) then
         ( _pprintVariant env annotTy constrs
         , Some (_equalVariant env annotTy constrs))
       else

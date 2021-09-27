@@ -608,7 +608,7 @@ with false
 let tensorDimsEqual = lam t.
   let shape = tensorShape t in
   if null shape then true
-  else all (eqi (head shape)) (tail shape)
+  else forAll (eqi (head shape)) (tail shape)
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [2, 2]
