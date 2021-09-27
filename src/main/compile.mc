@@ -11,6 +11,7 @@ include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
+include "mexpr/tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
@@ -39,33 +40,20 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
-let insertTunedOrDefaults = lam ast. lam file.
+let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   use MCoreCompile in
   if options.useTuned then
     let tuneFile = tuneFileName file in
     if fileExists tuneFile then
-      let table = tuneReadTable tuneFile in
+      let table = tuneFileReadTable tuneFile in
       let ast = symbolize ast in
       let ast = normalizeTerm ast in
       insert [] table ast
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
--- Main function for compiling a program
--- files: a list of files
--- options: the options structure to the main program
--- args: the program arguments to the executed program, if any
-let compile = lam files. lam options : Options. lam args.
+let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
-  let compileFile = lam file.
-    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
-
-    -- Insert tuned values, or use default values if no .tune file present
-    let ast = insertTunedOrDefaults ast file in
-
-    -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (pprintMcore ast) else ());
-
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
     let ast =
@@ -80,14 +68,28 @@ let compile = lam files. lam options : Options. lam args.
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
 
-      ocamlCompileAst options file ast
+      ocamlCompileAst options sourcePath ast
         { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
         , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
         }
     else never
 
-    -- Compile MExpr AST
-    ocamlCompileAst options file ast
+-- Main function for compiling a program
+-- files: a list of files
+-- options: the options structure to the main program
+-- args: the program arguments to the executed program, if any
+let compile = lam files. lam options : Options. lam args.
+  use MCoreCompile in
+  let compileFile = lam file.
+    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
+
+    -- Insert tuned values, or use default values if no .tune file present
+    let ast = insertTunedOrDefaults options ast file in
+
+    -- If option --debug-parse, then pretty print the AST
+    (if options.debugParse then printLn (pprintMcore ast) else ());
+
+    ocamlCompileAstWithUtests options file ast; ()
   in
   iter compileFile files

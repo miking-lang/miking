@@ -129,7 +129,7 @@ compile_test () {
         rm $binary
     fi
   else
-      echo "ERROR: compilation of $1 exited with $exit_code"
+      echo "ERROR: command '$2 $1 2>&1' exited with $exit_code"
   fi
   echo "$output\n"
   set -e

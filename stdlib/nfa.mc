@@ -22,7 +22,11 @@ type NFA = {
 
 -- get equality function for states
 let nfaGetEqv = lam dfa.
-  dfa.graph.eqv
+  digraphEqv dfa.graph
+
+-- get comparison function for states
+let nfaGetCmp = lam dfa.
+  digraphCmpv dfa.graph
 
 -- get equality functions for labels
 let nfaGetEql = lam dfa.
@@ -84,7 +88,7 @@ let nfaAddTransition = lam nfa. lam trans.
 
 -- returns true if state s is an accepted state in the nfa
 let nfaIsAcceptedState = lam s. lam nfa.
-  eqsetMem nfa.graph.eqv s nfa.acceptStates
+  eqsetMem (digraphEqv nfa.graph) s nfa.acceptStates
 
 -- check if there is a transition with label lbl from state s
 let nfaStateHasTransition = lam s. lam trans. lam lbl.
@@ -136,9 +140,10 @@ let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
 end
 
 -- constructor for the NFA
-let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
+let nfaConstr = lam s. lam trans. lam startS. lam accS. lam cmpv. lam eql.
+  let eqv = lam v1. lam v2. eqi (cmpv v1 v2) 0 in
   if nfaCheckValues trans s eqv eql accS startS then
-  let emptyDigraph = digraphEmpty eqv eql in
+  let emptyDigraph = digraphEmpty cmpv eql in
   let initNfa = {
     graph = emptyDigraph,
     startState = startS,
@@ -149,7 +154,7 @@ let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
 
 -- Create an NFA from a Digraph
 let nfaFromDigraph = lam g. lam startS. lam accS.
-  nfaConstr (digraphVertices g) (digraphEdges g) startS accS (digraphEqv g) (digraphEql g)
+  nfaConstr (digraphVertices g) (digraphEdges g) startS accS (digraphCmpv g) (digraphEql g)
 
 mexpr
 let states = [0,1,2] in
@@ -158,9 +163,9 @@ let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let transitions2 = [(0,1,'1'),(1,3,'1'),(1,2,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newNfa = nfaConstr states transitions startState acceptStates eqi eqChar in
-let newNfa2 = nfaConstr states2 transitions2 startState acceptStates eqi eqChar in
-let newNfa3 = nfaConstr states2 transitions2 startState [3] eqi eqChar in
+let newNfa = nfaConstr states transitions startState acceptStates subi eqChar in
+let newNfa2 = nfaConstr states2 transitions2 startState acceptStates subi eqChar in
+let newNfa3 = nfaConstr states2 transitions2 startState [3] subi eqChar in
 utest eqi startState newNfa.startState with true in
 utest eqsetEqual eqi acceptStates newNfa.acceptStates with true in
 utest (digraphHasVertices states newNfa.graph) with true in

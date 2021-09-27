@@ -2,7 +2,7 @@
 compile_files += stdlib/multicore/atomic.mc
 compile_files += stdlib/multicore/thread.mc
 
-.PHONY: all $(compile-files)
+.PHONY: all $(compile_files)
 
 all: $(compile_files)
 

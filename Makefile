@@ -30,8 +30,9 @@
   test-boot-py\
   test-boot-ocaml\
   test-sundials\
-  test-ipopt\
-  test-par
+	test-ipopt\
+  test-par\
+  test-tune
 
 all: build
 
@@ -77,6 +78,7 @@ test-all:\
   test-compile\
   test-run\
   test-par\
+	test-tune\
   test-boot
 	@./make lint
 
@@ -111,3 +113,6 @@ test-ipopt: build/mi
 
 test-par: build
 	@$(MAKE) -s -f test-par.mk
+
+test-tune: build
+	@$(MAKE) -s -f test-tune.mk

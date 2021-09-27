@@ -17,18 +17,20 @@
 include "common.mc"
 include "string.mc"
 include "digraph.mc"
+include "iterator.mc"
 
 -- A local search solution: an assignment with a cost.
 type Solution = {assignment : Assignment, cost : Cost}
 
 -- Search state.
 type SearchState = {
-  cur : Solution,              -- current solution
-  inc : Solution,              -- incumbent (best solution thus far)
-  iter : Int,                  -- number of iterations thus far
-  stuck : Bool,                -- whether the search is stuck
-                               -- (no local moves possible)
-  cost : Assignment -> Cost    -- cost of an assignment
+  cur : Solution,                               -- current solution
+  inc : Solution,                               -- incumbent (best solution thus far)
+  iter : Int,                                   -- number of iterations thus far
+  stuck : Bool,                                 -- whether the search is stuck
+                                                -- (no local moves possible)
+  cost : Option Solution -> Assignment -> Cost, -- cost of an assignment
+  cmp : Cost -> Cost -> Int                     -- comparison of costs
 }
 
 ----------------------------
@@ -48,22 +50,18 @@ lang LocalSearchBase
 
   -- Initialize the search state from an initial assignment.
   -- : (Assignment -> Cost) -> Assignment -> SearchState
-  sem initSearchState (cost : Assignment -> Cost) =
+  sem initSearchState (cost : Option Solution -> Assignment -> Cost) (cmp : Cost -> Cost -> Int) =
   | a ->
-    let sol = {assignment = a, cost = cost a} in
-    {cur = sol, inc = sol, iter = 0, stuck = false, cost = cost}
+    let sol = {assignment = a, cost = cost (None ()) a} in
+    {cur = sol, inc = sol, iter = 0, stuck = false, cost = cost, cmp = cmp}
 
   -- The neighbouring assignments from a search state.
-  -- : SearchState -> [Assignment]
+  -- : SearchState -> (Iterator Assignment)
   sem neighbourhood =
 
   -- Select a solution among the neighbours.
-  -- : [Assignment] -> SearchState -> Option Solution
-  sem select (assignments : [Assignment]) =
-
-  -- Comparison function for costs.
-  -- : (Cost, Cost) -> Int
-  sem compare =
+  -- : Iterator Assignment -> SearchState -> Option Solution
+  sem select (assignments : Iterator Assignment) =
 
   -- Take one step, return both the next solution (if there is one), and the
   -- resulting meta state.
@@ -77,7 +75,7 @@ lang LocalSearchBase
   | metaState ->
     match searchState with {stuck = true} then
       (searchState, metaState)
-    else match searchState with {inc = inc} then
+    else match searchState with {inc = inc, cmp = cmp} then
       let searchState = {searchState with iter = addi searchState.iter 1} in
       let next = step searchState metaState in
       match next with (None (), _) then
@@ -85,10 +83,10 @@ lang LocalSearchBase
       else match next with (Some cur, metaState) then
         let cur : Solution = cur in
         let inc : Solution = inc in
-        let inc = if lti (compare (cur.cost, inc.cost)) 0 then cur else inc in
+        let inc = if lti (cmp cur.cost inc.cost) 0 then cur else inc in
         let searchState = {{searchState with cur = cur} with inc = inc} in
         (searchState, metaState)
-      else dprintLn next; never
+      else never
     else never
 
   -- Debug a meta state.
@@ -108,12 +106,12 @@ end
 
 -- Select a solution among the neighbours uniformly at random.
 lang LocalSearchSelectRandomUniform = LocalSearchBase
-  sem select (assignments : [Assignment]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cost = cost} then
-      match randElem assignments with Some a then
-        Some {assignment = a, cost = cost a}
+    match searchState with {cost = cost, inc = inc} then
+      match randElem (iteratorToSeq assignments) with Some a then
+        Some {assignment = a, cost = cost (Some inc) a}
       else
         None ()
     else never
@@ -121,10 +119,11 @@ end
 
 -- Select a random best neighbour.
 lang LocalSearchSelectRandomBest = LocalSearchBase
-  sem select (assignments : [Assignment]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cost = cost} then
+    match searchState with {cost = cost, cmp = cmp, inc = inc} then
+      let assignments = iteratorToSeq assignments in
       match assignments with [] then None () else
 
       -- Find minimum and filter out other elements in one pass.
@@ -143,33 +142,43 @@ lang LocalSearchSelectRandomBest = LocalSearchBase
       in
       utest filterMin 1000 [] subi [42,1,1,3] with [1,1] in
 
-      let sols = map (lam a. {assignment = a, cost = cost a}) assignments in
+      let sols = map (lam a. {assignment = a, cost = cost (Some inc) a}) assignments in
       let s = head sols in
       let minSols =
         filterMin s [s] (lam s1 : Solution. lam s2 : Solution.
-                           compare (s1.cost, s2.cost)) sols in
+                           cmp s1.cost s2.cost) sols in
       randElem minSols
     else never
 end
 
 -- Select the first improving neighbour.
 lang LocalSearchSelectFirstImproving = LocalSearchBase
-  sem select (assignments : [Assignments v]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cur = cur, cost = cost} then
+    match searchState with {cur = cur, cost = cost, cmp = cmp, inc = inc} then
       let cur : Solution = cur in
       let curCost = cur.cost in
-      recursive let firstImproving = lam as : [Assignment].
-        match as with [] then None ()
-        else match as with [a] ++ as then
-          let acost = cost a in
-          if lti acost curCost then
+      recursive let firstImproving = lam as : Iterator Assignment.
+        match iteratorNext as with (as, Some a) then
+          let acost = cost (Some inc) a in
+          if lti (cmp acost curCost) 0 then
             Some {assignment = a, cost = acost}
           else firstImproving as
-        else never
+        else None ()
       in
       firstImproving assignments
+    else never
+end
+
+lang LocalSearchSelectFirst = LocalSearchBase
+  sem select (assignments : Iterator Assignment) =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState with {cost = cost, inc = inc} then
+      match iteratorNext assignments with (_, Some a) then
+        Some {assignment = a, cost = cost (Some inc) a}
+      else None ()
     else never
 end
 
@@ -192,14 +201,15 @@ lang LocalSearchSimulatedAnnealing = LocalSearchBase
       let decayed = decay searchState (SimulatedAnnealing t) in
       let cur : Solution = searchState.cur in
       -- Metropolis condition
-      if leqi (compare (proposal.cost, cur.cost)) 0 then
+      if leqi (searchState.cmp proposal.cost cur.cost) 0 then
         -- Improving solution: accept.
         (Some proposal, decayed)
       else
         -- Worsening solution: accept with probability depending on temperature.
         let accept =
           let pAccept =
-            exp (divf (int2float (compare (proposal.cost, cur.cost))) t.temp) in
+            exp (divf
+              (int2float (searchState.cmp proposal.cost cur.cost)) t.temp) in
           let rnd = int2float (randIntU 0 100) in
           geqf (mulf pAccept 100.0) rnd
         in
@@ -223,11 +233,12 @@ lang LocalSearchTabuSearch = LocalSearchBase
 
   sem step (searchState : SearchState) =
   | TabuSearch ({tabu = tabu} & t) ->
-    let ns = neighbourhood searchState in
-    let nonTabus = filter (lam n. not (isTabu (n, tabu))) ns in
+    let nonTabus =
+      iteratorFilter (lam n. not (isTabu (n, tabu))) (neighbourhood searchState)
+    in
     match select nonTabus searchState with Some choice then
       let choice : Solution = choice in
-      (Some choice, TabuSearch {tabu = tabuUpdate (choice.assignment, tabu)})
+      (Some choice, TabuSearch {t with tabu = tabuUpdate (choice.assignment, tabu)})
     else
       (None (), TabuSearch t)
 end
@@ -251,7 +262,7 @@ let _es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
            ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
            ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)]
 
-let _tspGraph = digraphAddEdges _es (digraphAddVertices _vs (digraphEmpty eqString eqi))
+let _tspGraph = digraphAddEdges _es (digraphAddVertices _vs (digraphEmpty cmpString eqi))
 
 -- Define initial solution
 let _initTour = [("Uppsala", "Kiruna", 10),
@@ -264,16 +275,13 @@ let _toursEq = lam t1. lam t2.
 
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
 -- Hamiltonian circuit.
-let _tspNeighbours = lam g. lam state : SearchState TspTour Int.
-  let curSol : Solution TspTour Int = state.cur in
-  let tour = curSol.assignment in
-
+let _tspNeighbours = lam g. lam tour : [TspEdge].
   let tourHasEdge = lam v1. lam v2.
-    any (lam e : TspTourEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
+    any (lam e : TspEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
                                  (and (eqString v1 e.1) (eqString v2 e.0))) tour in
 
   -- Find replacing edges for 'e12' and 'e34'
-  let exchange = lam e12 : TspTourEdge. lam e34 : TspTourEdge.
+  let exchange = lam e12 : TspEdge. lam e34 : TspEdge.
     let v1 = e12.0 in
     let v2 = e12.1 in
     let v3 = e34.0 in
@@ -315,15 +323,18 @@ lang _testTsp = LocalSearchBase
   | TspTour {tour : [TspEdge]}
 
   syn Cost =
-  | TspCost {cost : Float}
+  | TspCost {cost : Int}
 
   sem neighbourhood =
   | searchState ->
-    let searchState : SearchState = searchState in
-    match searchState with {cur = {assignment = TspTour {tour = tour}}} then
-      map (lam tour. TspTour {tour = tour})
-          (_tspNeighbours _tspGraph tour)
-    else never
+    let ns =
+      let searchState : SearchState = searchState in
+      match searchState with {cur = {assignment = TspTour {tour = tour}}} then
+        map (lam tour. TspTour {tour = tour})
+            (_tspNeighbours _tspGraph tour)
+      else never
+    in
+    iteratorFromSeq ns
 
   sem compare =
   | (TspCost {cost = v1}, TspCost {cost = v2}) ->
@@ -397,9 +408,13 @@ recursive let loop =
 use _testTsp in
 
 let startState = initSearchState
-  (lam tour : Assignment.
-     match tour with TspTour {tour = tour}
-     then TspCost {cost = _tspCost tour}
+  (lam. lam tour : Assignment.
+     match tour with TspTour {tour = tour} then
+       TspCost {cost = foldl (lam acc. lam e : TspEdge. addi acc e.2) 0 tour}
+     else never)
+  (lam c1. lam c2.
+     match (c1, c2) with (TspCost {cost = v1}, TspCost {cost = v2}) then
+       subi v1 v2
      else never)
   (TspTour {tour = _initTour}) in
 

@@ -86,6 +86,14 @@ let unwrapType = use MExprAst in
 -- Convenience fragment containing the function eqExpr. Should be included in
 -- all fragments below.
 lang Eq
+  sem eqConst (lhs : Const) =
+  | rhs /- : Const -/ -> eqConstH (lhs, rhs)
+
+  sem eqConstH =
+  -- Default case for constants that contain no data
+  | (lhs, rhs) /- (Const, Const) -/ ->
+    eqi (constructorTag lhs) (constructorTag rhs)
+
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
 
@@ -195,9 +203,6 @@ lang RecLetsEq = Eq + RecLetsAst
 end
 
 lang ConstEq = Eq + ConstAst
-  sem eqConst (lhs : Const) =
-  -- Intentionally left blank
-
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmConst {val = v2} ->
     match lhs with TmConst {val = v1} then
@@ -289,121 +294,28 @@ end
 ---------------
 
 lang IntEq = IntAst
-  sem eqConst (lhs : Const) =
-  | CInt {val = v2} -> match lhs with CInt {val = v1} then eqi v1 v2 else false
-end
-
-lang ArithEq = ArithIntAst
-  sem eqConst (lhs : Const) =
-  | CAddi {} -> match lhs with CAddi _ then true else false
-  | CSubi {} -> match lhs with CSubi _ then true else false
-  | CMuli {} -> match lhs with CMuli _ then true else false
+  sem eqConstH =
+  | (CInt l, CInt r) -> eqi l.val r.val
 end
 
 lang FloatEq = FloatAst
-  sem eqConst (lhs : Const) =
-  | CFloat {val = v2} ->
-    match lhs with CFloat {val = v1} then eqf v1 v2 else false
-end
-
-lang ArithFloatEq = ArithFloatAst
-  sem eqConst (lhs : Const) =
-  | CAddf {} -> match lhs with CAddf _ then true else false
-  | CSubf {} -> match lhs with CSubf _ then true else false
-  | CMulf {} -> match lhs with CMulf _ then true else false
-  | CDivf {} -> match lhs with CDivf _ then true else false
-  | CNegf {} -> match lhs with CNegf _ then true else false
+  sem eqConstH =
+  | (CFloat l, CFloat r) -> eqf l.val r.val
 end
 
 lang BoolEq = BoolAst
-  sem eqConst (lhs : Const) =
-  | CBool {val = v2} ->
-    match lhs with CBool {val = v1} then eqBool v1 v2 else false
-end
-
-lang CmpIntEq = CmpIntAst
-  sem eqConst (lhs : Const) =
-  | CEqi {} -> match lhs with CEqi _ then true else false
-  | CLti {} -> match lhs with CLti _ then true else false
-  | CLeqi {} -> match lhs with CLeqi _ then true else false
-  | CGti {} -> match lhs with CGti _ then true else false
-end
-
-lang CmpFloatEq = CmpFloatAst
-  sem eqConst (lhs : Const) =
-  | CEqf {} -> match lhs with CEqf _ then true else false
-  | CLtf {} -> match lhs with CLtf _ then true else false
-  | CGtf {} -> match lhs with CGtf _ then true else false
+  sem eqConstH =
+  | (CBool l, CBool r) -> eqBool l.val r.val
 end
 
 lang CharEq = CharAst
-  sem eqConst (lhs : Const) =
-  | CChar {val = v2} ->
-    match lhs with CChar {val = v1} then eqChar v1 v2 else false
-end
-
-lang IntCharConversionEq = IntCharConversionAst
-  sem eqConst (lhs : Const) =
-  | CChar2Int {} -> match lhs with CChar2Int _ then true else false
-  | CInt2Char {} -> match lhs with CInt2Char _ then true else false
+  sem eqConstH =
+  | (CChar l, CChar r) -> eqChar l.val r.val
 end
 
 lang SymbEq = SymbAst
-  sem eqConst (lhs : Const) =
-  | CSymb {val = v2} ->
-    match lhs with CSymb {val = v1} then eqsym v1 v2 else false
-end
-
-lang CmpSymbEq = CmpSymbAst
-  sem eqConst (lhs : Const) =
-  | CEqsym {} -> match lhs with CEqsym _ then true else false
-end
-
-lang SeqOpEq = SeqOpAst
-  sem eqConst (lhs : Const) =
-  | CGet {} -> match lhs with CGet _ then true else false
-  | CSet {} -> match lhs with CSet _ then true else false
-  | CCreate {} -> match lhs with CCreate _ then true else false
-  | CCons {} -> match lhs with CCons _ then true else false
-  | CSnoc {} -> match lhs with CSnoc _ then true else false
-  | CConcat {} -> match lhs with CConcat _ then true else false
-  | CLength {} -> match lhs with CLength _ then true else false
-  | CReverse {} -> match lhs with CReverse _ then true else false
-  | CHead {} -> match lhs with CHead _ then true else false
-  | CTail {} -> match lhs with CTail _ then true else false
-  | CNull {} -> match lhs with CNull _ then true else false
-  | CSplitAt {} -> match lhs with CSplitAt _ then true else false
-  | CMap {} -> match lhs with CMap _ then true else false
-  | CMapi {} -> match lhs with CMapi _ then true else false
-  | CIter {} -> match lhs with CIter _ then true else false
-  | CIteri {} -> match lhs with CIteri _ then true else false
-  | CFoldl {} -> match lhs with CFoldl _ then true else false
-  | CFoldr {} -> match lhs with CFoldr _ then true else false
-  | CCreateList {} -> match lhs with CCreateList _ then true else false
-  | CCreateRope {} -> match lhs with CCreateRope _ then true else false
-  | CSubsequence {} -> match lhs with CSubsequence _ then true else false
-end
-
-lang TensorOpEq = TensorOpAst
-  sem eqConst (lhs : Const) =
-  | CTensorCreateInt {} ->
-    match lhs with CTensorCreateInt _ then true else false
-  | CTensorCreateFloat {} ->
-    match lhs with CTensorCreateFloat _ then true else false
-  | CTensorCreate {} -> match lhs with CTensorCreate _ then true else false
-  | CTensorGetExn {} -> match lhs with CTensorGetExn _ then true else false
-  | CTensorSetExn {} -> match lhs with CTensorSetExn _ then true else false
-  | CTensorRank {} -> match lhs with CTensorRank _ then true else false
-  | CTensorShape {} -> match lhs with CTensorShape _ then true else false
-  | CTensorReshapeExn {} -> match lhs with CTensorReshapeExn _
-    then true else false
-  | CTensorCopy {} -> match lhs with CTensorCopy _ then true else false
-  | CTensorTransposeExn {} -> match lhs with CTensorTransposeExn _ then true else false
-  | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
-  | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
-  | CTensorIterSlice {} -> match lhs with CTensorIterSlice _ then true else false
-  | CTensorEq {} -> match lhs with CTensorEq _ then true else false
-  | CTensorToString {} -> match lhs with CTensorToString _ then true else false  
+  sem eqConstH =
+  | (CSymb l, CSymb r) -> eqsym l.val r.val
 end
 
 --------------
@@ -682,8 +594,7 @@ lang MExprEq =
   MatchEq + UtestEq + SeqEq + NeverEq
 
   -- Constants
-  + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + IntCharConversionEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
+  + IntEq + FloatEq + BoolEq + CharEq + SymbEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
