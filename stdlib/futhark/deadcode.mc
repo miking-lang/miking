@@ -76,7 +76,7 @@ let t = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 0),
   nuFutLet_ y (futArray_ [futInt_ 2, futInt_ 7]),
   futForEach_
-    (nFutVar_ x)
+    (nFutPvar_ x, nFutVar_ x)
     i
     (nFutVar_ y)
     (futBindall_ [
@@ -87,7 +87,7 @@ let expected = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 0),
   nuFutLet_ y (futArray_ [futInt_ 2, futInt_ 7]),
   futForEach_
-    (nFutVar_ x)
+    (nFutPvar_ x, nFutVar_ x)
     i
     (nFutVar_ y)
     (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i])]) in

@@ -173,8 +173,8 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
             ty : FutType, info : Info }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr, ty : FutType,
            info : Info }
-  | FEForEach { param : FutExpr, loopVar : Name, seq : FutExpr, body : FutExpr,
-                ty : FutType, info : Info }
+  | FEForEach { param : (FutPat, FutExpr), loopVar : Name, seq : FutExpr,
+                body : FutExpr, ty : FutType, info : Info }
   | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)], ty : FutType,
               info : Info }
 
@@ -316,10 +316,10 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
       else never
     else never
   | FEForEach t ->
-    match f acc t.param with (acc, param) then
+    match f acc t.param.1 with (acc, paramExpr) then
       match f acc t.seq with (acc, seq) then
         match f acc t.body with (acc, body) then
-          (acc, FEForEach {{{t with param = param}
+          (acc, FEForEach {{{t with param = (t.param.0, paramExpr)}
                                with seq = seq}
                                with body = body})
         else never

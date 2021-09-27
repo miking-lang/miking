@@ -45,7 +45,7 @@ lang FutharkFunctionRestrictions = FutharkAst
       cons (FunctionFromIf (infoFutTm t)) errors
     else errors
   | (FEForEach {param = param}) & t ->
-    if containsFunctionType false (tyFutTm param) then
+    if containsFunctionType false (tyFutTm param.1) then
       cons (FunctionLoopParameter (infoFutTm t)) errors
     else errors
   | t -> sfold_FExpr_FExpr findFutharkFunctionViolationsExpr errors t
@@ -97,9 +97,10 @@ utest findFutharkFunctionViolations t with [FunctionFromIf (NoInfo ())] in
 
 let t = futProgram [futFun (
   futForEach_
-    (FELam {ident = x, body = nFutVar_ x,
-            ty = FTyArrow {from = futIntTy_, to = futIntTy_, info = NoInfo ()},
-            info = NoInfo ()})
+    (nFutPvar_ x, FELam {
+      ident = x, body = nFutVar_ x,
+      ty = FTyArrow {from = futIntTy_, to = futIntTy_, info = NoInfo ()},
+      info = NoInfo ()})
     x
     (futUnsizedArrayTy_ [])
     (futUnit_ ()))] in
@@ -125,9 +126,10 @@ let combined = futProgram [
         ty = futArrowTy_ futIntTy_ futIntTy_,
         info = NoInfo ()}),
     futForEach_
-      (FELam {ident = y, body = nFutVar_ x,
-              ty = FTyArrow {from = futIntTy_, to = futIntTy_, info = NoInfo ()},
-              info = NoInfo ()})
+      (nFutPvar_ x, FELam {
+        ident = y, body = nFutVar_ x,
+        ty = FTyArrow {from = futIntTy_, to = futIntTy_, info = NoInfo ()},
+        info = NoInfo ()})
       z
       (futArray_ [])
       (futUnit_ ())])

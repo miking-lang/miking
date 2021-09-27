@@ -160,7 +160,7 @@ let futIf_ = use FutharkAst in
   FEIf {cond = cond, thn = thn, els = els, ty = futUnknownTy_, info = NoInfo ()}
 
 let futForEach_ = use FutharkAst in
-  lam param. lam loopVar. lam seq. lam body.
+  lam param : (FutPat, FutExpr). lam loopVar. lam seq. lam body.
   FEForEach {param = param, loopVar = loopVar, seq = seq, body = body,
              ty = futUnknownTy_, info = NoInfo ()}
 

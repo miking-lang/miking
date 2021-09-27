@@ -111,7 +111,6 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CTail _ -> FCTail ()
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
-  | CFoldl _ -> FCFoldl ()
   | c -> infoErrorExit info "Constant cannot be accelerated"
 end
 
@@ -387,18 +386,35 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       ty = FTyInt {info = info},
       info = info}
   | TmApp ({
-      rhs = s,
       lhs = TmApp {
-        rhs = ne,
         lhs = TmApp {
           lhs = TmConst {val = CFoldl _},
-          rhs = TmLam {ident = acc, body = TmLam {ident = x, body = body}}}}
-    } & t) ->
-    let subMap = mapFromSeq nameCmp [(acc, lam info. ne)] in
-    let body = substituteVariables body subMap in
+          rhs = f},
+        rhs = ne},
+      rhs = s} & t) ->
+    let acc = nameSym "acc" in
+    let x = nameSym "x" in
+    let funcTy = generateType env (ty f) in
+    let accTy = generateType env t.ty in
+    let seqTy = generateType env (ty s) in
+    let elemTy =
+      match funcTy with FTyArrow {from = FTyArrow {to = elemTy}} then
+        elemTy
+      else FTyUnknown {info = t.info} in
+    let param : (FutPat, FutExpr) =
+      ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
+        generateExpr env ne ) in
+    let forBody = FEApp {
+      lhs = FEApp {
+        lhs = generateExpr env f,
+        rhs = FEVar {ident = acc, ty = accTy, info = t.info},
+        ty = FTyArrow {from = elemTy, to = accTy, info = t.info},
+        info = t.info},
+      rhs = FEVar {ident = x, ty = elemTy, info = t.info},
+      ty = accTy, info = t.info} in
     FEForEach {
-      param = generateExpr env ne, loopVar = x, seq = generateExpr env s,
-      body = generateExpr env body, ty = generateType env t.ty, info = t.info}
+      param = param, loopVar = x, seq = generateExpr env s,
+      body = forBody, ty = accTy, info = t.info}
   | (TmApp _) & t -> defaultGenerateApp env t
 end
 
