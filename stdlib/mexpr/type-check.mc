@@ -136,6 +136,16 @@ lang BaseTypeUnify = Unify + BaseTypeAst
   | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ -> ()
 end
 
+lang SeqTypeUnify = Unify + SeqTypeAst
+  sem unifyBase (names : BiNameMap) =
+  | (TySeq t1, TySeq t2) ->
+    unifyWithNames names (t1.ty, t2.ty)
+
+  sem occurs (tv : TVar) =
+  | TySeq t ->
+    occurs tv t.ty
+end
+
 ------------------------------------
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
@@ -235,6 +245,17 @@ lang BaseTypeGeneralize = Generalize + BaseTypeAst
   | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> ([], ty)
 end
 
+lang SeqTypeGeneralize = Generalize + SeqTypeAst
+  sem instBase (subst : Map Name Type) =
+  | TySeq t ->
+    TySeq {t with ty = instBase subst t.ty}
+
+  sem genBase (lvl : Level) =
+  | TySeq t ->
+    match genBase lvl t.ty with (vars, ty) then
+      (vars, TySeq {t with ty = ty})
+    else never
+end
 
 -------------------
 -- TYPE CHECKING --
@@ -311,17 +332,59 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
     TmConst {t with ty = ty}
 end
 
+lang SeqTypeCheck = TypeCheck + SeqAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmSeq t ->
+    let elemTy = newvar env.currentLvl in
+    let tms = map (typeCheckBase env) t.tms in
+    iter (lam tm. unify (elemTy, ty tm)) tms;
+    TmSeq {{t with tms = tms}
+              with ty = ityseq_ t.info elemTy}
+end
+
+lang UtestTypeCheck = TypeCheck + UtestAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmUtest t ->
+    let test = typeCheckBase env t.test in
+    let expected = typeCheckBase env t.expected in
+    let next = typeCheckBase env t.next in
+    let tusing = optionMap (typeCheckBase env) t.tusing in
+    TmUtest {{{{{t with test = test}
+                   with expected = expected}
+                   with next = next}
+                   with tusing = tusing}
+                   with ty = ty next}
+end
+
+lang NeverTypeCheck = TypeCheck + NeverAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmNever t -> TmNever {t with ty = ityunknown_ t.info}
+end
+
+lang ExtTypeCheck = TypeCheck + ExtAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmExt t ->
+    let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
+    let inexpr = typeCheckBase env t.inexpr in
+    TmExt {{t with inexpr = inexpr}
+              with ty = ty inexpr}
+end
+
+
 lang MExprTypeCheck =
 
   -- Type unification
   VarTypeUnify + FunTypeUnify + AllTypeUnify + BaseTypeUnify +
+  SeqTypeUnify +
 
   -- Type generalization
-  VarTypeGeneralize + FunTypeGeneralize + AllTypeGeneralize + BaseTypeGeneralize +
+  VarTypeGeneralize + FunTypeGeneralize + AllTypeGeneralize +
+  BaseTypeGeneralize + SeqTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck
-  + ConstTypeCheck
+  + ConstTypeCheck + SeqTypeCheck + UtestTypeCheck + NeverTypeCheck
+  + ExtTypeCheck
 
 end
 
