@@ -243,6 +243,7 @@ lang OCamlPrettyPrint =
   | CFoldr _ -> intrinsicOpSeq "Helpers.fold_right"
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
+  | CPrintError _ -> intrinsicOpIO "print_error"
   | CDPrint _ -> intrinsicOpIO "dprint"
   | CFlushStdout _ -> intrinsicOpIO "flush_stdout"
   | CReadLine _ -> intrinsicOpIO "read_line"

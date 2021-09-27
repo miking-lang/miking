@@ -158,6 +158,7 @@ end
 lang IOTypeAst = IOAst
   sem tyConst =
   | CPrint _ -> tyarrow_ tystr_ tyunit_
+  | CPrintError _ -> tyarrow_ tystr_ tyunit_
   | CDPrint _ -> tyarrow_ tystr_ tyunit_
   | CFlushStdout _ -> tyarrow_ tyunit_ tyunit_
   | CReadLine _ -> tyarrow_ tyunit_ tystr_

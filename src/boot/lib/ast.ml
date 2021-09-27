@@ -126,6 +126,7 @@ and const =
   | CsleepMs
   (* MCore intrinsics: Debug and I/O *)
   | Cprint
+  | CprintError
   | Cdprint
   | CreadLine
   | CreadBytesAsString
@@ -576,6 +577,7 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: Debug and I/O *)
   | Cprint
+  | CprintError
   | Cdprint
   | CreadLine
   | CreadBytesAsString
