@@ -150,7 +150,7 @@ tops:
     { [] }
 
 type_params:
-  | type_ident type_params
+  | var_ident type_params
     { $1 :: $2 }
   |
     { [] }
@@ -564,6 +564,8 @@ ty_atom:
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
     { TyCon($1.i,$1.v,Symb.Helpers.nosym) }
+  | var_ident
+    { TyVar($1.i,$1.v)}
 
 ty_list:
   | ty COMMA ty_list
@@ -593,7 +595,7 @@ con_ident:
   | CON_IDENT {$1}
 
 type_ident:
-  | ident {$1}
+  | UC_IDENT {$1}
   | TYPE_IDENT {$1}
 
 label_ident:

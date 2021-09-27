@@ -177,11 +177,14 @@ lang BootParser = MExprAst + ConstTransformer
   | 209 /-TyCon-/ ->
     TyCon {info = ginfo t 0,
            ident = gname t 0}
-  | 210 /-TyApp-/ ->
+  | 210 /-TyVar-/ ->
+    TyVar {info = ginfo t 0,
+           ident = gname t 0}
+  | 211 /-TyApp-/ ->
     TyApp {info = ginfo t 0,
            lhs = gtype t 0,
            rhs = gtype t 1}
-  | 211 /-TyTensor-/ ->
+  | 212 /-TyTensor-/ ->
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
 
@@ -623,7 +626,7 @@ let s = "let y:<> = lam x.x in y" in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 8 in
 
--- TyIdent
+-- TyVar
 let s = "let y:_asd = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()

@@ -397,6 +397,17 @@ lang ConTypeCmp = Cmp + ConTypeAst
   | (TyCon t1, TyCon t2) -> nameCmp t1.ident t2.ident
 end
 
+lang VarTypeCmp = Cmp + VarTypeAst
+  sem cmpTVar =
+  | (Unbound {ident= n}, Unbound {ident = m}) -> nameCmp n m
+  | (Unbound _ & tv, Link ty) -> cmpType (TyVar (ref tv)) ty
+  | (Link ty, Unbound _ & tv) -> cmpType ty (TyVar (ref tv))
+  | (Link ty1, Link ty2) -> cmpType ty1 ty2
+
+  sem cmpTypeH =
+  | (TyVar t1, TyVar t2) -> cmpTVar (deref t1.contents, deref t2.contents)
+end
+
 lang AppTypeCmp = Cmp + AppTypeAst
   sem cmpTypeH =
   | (TyApp t1, TyApp t2) ->
@@ -425,7 +436,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + AppTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp
 
 -----------
 -- TESTS --

@@ -1091,6 +1091,14 @@ lang ConTypePrettyPrint = ConTypeAst
     then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
 end
 
+lang VarTypePrettyPrint = VarTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyVar t ->
+    match pprintEnvGetStr env t.ident with (env,str)
+    then (env, str) else never
+end
+
+
 lang AppTypePrettyPrint = AppTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyApp t ->
@@ -1135,7 +1143,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
+  TensorTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

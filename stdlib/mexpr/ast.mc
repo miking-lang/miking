@@ -1200,6 +1200,19 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+lang VarTypeAst = Ast
+  syn Type =
+  | TyVar {info   : Info,
+           ident  : Name}
+
+  sem tyWithInfo (info : Info) =
+  | TyVar t -> TyVar {t with info = info}
+
+  sem infoTy =
+  | TyVar r -> r.info
+end
+
+
 lang AppTypeAst = Ast
   syn Type =
   | TyApp {info : Info,
@@ -1246,4 +1259,5 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  AppTypeAst + TensorTypeAst
+  VarTypeAst + AppTypeAst + TensorTypeAst
+

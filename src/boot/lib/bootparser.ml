@@ -62,9 +62,11 @@ let idTyVariant = 208
 
 let idTyCon = 209
 
-let idTyApp = 210
+let idTyVar = 210
 
-let idTyTensor = 211
+let idTyApp = 211
+
+let idTyTensor = 212
 
 (* Const literals *)
 let idCBool = 300
@@ -259,6 +261,8 @@ let getData = function
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
   | PTreeTy (TyCon (fi, x, _)) ->
       (idTyCon, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyVar (fi, x)) ->
+      (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
       (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   (* Const *)

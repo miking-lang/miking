@@ -77,7 +77,7 @@ let merge_sym_envs_pick_left l r =
 
 let rec symbolize_type env ty =
   match ty with
-  | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ ->
+  | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ | TyVar _ ->
       ty
   | TyArrow (fi, ty1, ty2) ->
       TyArrow (fi, symbolize_type env ty1, symbolize_type env ty2)

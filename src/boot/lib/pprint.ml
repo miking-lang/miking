@@ -188,6 +188,7 @@ let rec ustring_of_ty = function
       failwith "Printing of non-empty variant types not yet supported"
   | TyCon (_, x, s) ->
       ustring_of_type x s
+  | TyVar (_, x) -> x
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 

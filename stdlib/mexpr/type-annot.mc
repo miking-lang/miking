@@ -98,6 +98,15 @@ lang IdentCompatibleType = CompatibleType + ConTypeAst
 
 end
 
+lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
+  -- NOTE(aathn, 2021-09-26): As a temporary hack, type variables are made
+  -- compatible with everything.
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyVar _ & ty, TyVar _) -> Some ty
+  | (TyVar _, ! (TyVar _ | TyUnknown _) & ty) -> Some ty
+  | (! (TyVar _ | TyUnknown _) & ty, TyVar _) -> Some ty
+end
+
 lang AppCompatibleType = CompatibleType + AppTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
@@ -636,7 +645,7 @@ lang MExprTypeAnnot =
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType +
+  PropagateArrowLambda + PropagateLetType + VarCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
