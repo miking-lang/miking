@@ -1102,7 +1102,7 @@ lang VarTypePrettyPrint = VarTypeAst
     else never
   | TyQVar t ->
     match pprintEnvGetStr env t.ident with (env, str)
-    then (env, concat str "#bound") else never
+    then (env, concat "'" str) else never
 end
 
 lang AllTypePrettyPrint = AllTypeAst

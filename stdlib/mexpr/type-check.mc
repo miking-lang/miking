@@ -17,6 +17,7 @@ include "const-types.mc"
 include "eq.mc"
 include "math.mc"
 include "pprint.mc"
+include "seq.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -57,6 +58,10 @@ lang Unify = MExprEq
 
   sem unifyBase =
   | (ty1, ty2) ->
+    unificationError (ty1, ty2)
+
+  sem unificationError =
+  | (ty1, ty2) ->
     let msg = join [
       "Type check failed: unification failure\n",
       "LHS: ", _pprintType ty1, "\n",
@@ -77,6 +82,7 @@ lang VarTypeUnify = Unify + VarTypeAst
     else match deref r with Link ty2 then
       unify (ty1, ty2)
     else never
+  -- No case needed for TyQVar
 
   sem occurs (tv : TVar) =
   | TyVar {info = info, contents = r} ->
@@ -92,6 +98,8 @@ lang VarTypeUnify = Unify + VarTypeAst
         in
         modref r (Unbound {ident = n, level = minLevel})
       else never
+  | TyQVar _ ->
+    ()
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -104,6 +112,15 @@ lang FunTypeUnify = Unify + FunTypeAst
   | TyArrow {from = from, to = to} ->
     occurs tv from;
     occurs tv to
+end
+
+lang AllTypeUnify = Unify + AllTypeAst
+  -- sem unifyBase =
+  -- | (TyAll t1, TyAll t2) -> ...
+
+  sem occurs (tv : TVar) =
+  | TyAll t ->
+    occurs tv t.ty
 end
 
 lang BaseTypeUnify = Unify + BaseTypeAst
@@ -121,65 +138,94 @@ let newvar = use VarTypeAst in
   TyVar {info = NoInfo (),
          contents = ref (Unbound {ident = nameSym "a", level = level})}
 
-lang Generalize
+lang Generalize = AllTypeAst
   sem inst (lvl : Level) =
   | ty ->
-    match instBase lvl (mapEmpty nameCmp) ty with (_, ty) then ty
+    match instMakeSubst lvl (mapEmpty nameCmp) ty with (subst, ty) then
+      instBase subst ty
     else never
 
-  sem instBase (lvl : Level) (subst : Map Name TVar) =
+  sem instMakeSubst (lvl : Level) (subst : Map Name TVar) =
+  | TyAll t ->
+    let tv = newvar lvl in
+    instMakeSubst lvl (mapInsert t.ident tv subst) t.ty
+  | ty ->
+    (subst, ty)
+
+  sem instBase (subst : Map Name TVar) =
   -- Intentionally left empty
 
   sem gen (lvl : Level) =
-  -- Intentionally left empty
+  | ty ->
+    match genBase lvl ty with (vars, genTy) then
+      let fi = infoTy genTy in
+      let vars = distinct nameEq vars in
+      foldr (lam v. lam ty. TyAll {info = fi, ident = v, ty = ty}) genTy vars
+    else never
+
+  sem genBase (lvl : Level) =
+  | ty ->
+    print (_pprintType ty);
+    error "No matching case for function genBase" -- Intentionally left empty
 end
 
 lang VarTypeGeneralize = Generalize + VarTypeAst
-  sem instBase (lvl : Level) (subst : Map Name TVar) =
+  sem instBase (subst : Map Name Type) =
   | TyVar t & ty1 ->
     match deref t.contents with Link ty2 then
-      instBase lvl subst ty2
+      instBase subst ty2
     else
-      (subst, ty1)
-  | TyQVar {ident = n} ->
-    match mapLookup n subst with Some tv then
-      (subst, tv)
-    else
-      let tv = newvar lvl in
-      let substNew = mapInsert n tv subst in
-      (substNew, tv)
+      ty1
+  | TyQVar {ident = n} & ty ->
+    match mapLookup n subst with Some tyvar then tyvar
+    else ty
 
-  sem gen (lvl : Level) =
+  sem genBase (lvl : Level) =
   | TyVar t ->
     match deref t.contents with Link ty then
-      gen lvl ty
+      genBase lvl ty
     else match deref t.contents with Unbound {ident = n, level = k} then
       if gti k lvl then
-        TyQVar {ident = n}
+        ([n], TyQVar {ident = n})
       else
-        TyVar t
+        ([], TyVar t)
     else never
+  | TyQVar _ & ty ->
+    ([], ty)
 end
 
 lang FunTypeGeneralize = Generalize + FunTypeAst
-  sem instBase (lvl : Level) (subst : Map Name TVar) =
+  sem instBase (subst : Map Name Type) =
   | TyArrow r ->
-    match instBase lvl subst r.from with (subst1, fromNew) then
-      match instBase lvl subst1 r.to with (subst2, toNew) then
-        (subst2, TyArrow {{r with from = fromNew} with to = toNew})
+    TyArrow {{r with from = instBase subst r.from}
+                with to = instBase subst r.to}
+
+  sem genBase (lvl : Level) =
+  | TyArrow r ->
+    match genBase lvl r.from with (vars1, fromNew) then
+      match genBase lvl r.to with (vars2, toNew) then
+        (concat vars1 vars2, TyArrow {{r with from = fromNew} with to = toNew})
       else never
     else never
+end
 
-  sem gen (lvl : Level) =
-  | TyArrow r ->
-    TyArrow {{r with from = gen lvl r.from} with to = gen lvl r.to}
+lang AllTypeGeneralize = Generalize
+  sem instBase (subst : Map Name Type) =
+  | TyAll t ->
+    TyAll {t with ty = instBase subst t.ty}
+
+  sem genBase (lvl : Level) =
+  | TyAll t ->
+    match genBase lvl t.ty with (vars, ty) then
+      (vars, TyAll {t with ty = ty})
+    else never
 end
 
 lang BaseTypeGeneralize = Generalize + BaseTypeAst
-  sem instBase (lvl : Level) (subst : Map Name TVar) =
-  | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> (subst, ty)
-  sem gen (lvl : Level) =
+  sem instBase (subst : Map Name Type) =
   | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> ty
+  sem genBase (lvl : Level) =
+  | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> ([], ty)
 end
 
 
@@ -204,7 +250,10 @@ lang VarTypeCheck = TypeCheck + VarAst
   sem typeOfBase (env : TCEnv) =
   | TmVar t ->
     match _lookupVar t.ident env with Some ty then
-      inst env.currentLvl ty
+      if t.frozen then
+        ty
+      else
+        inst env.currentLvl ty
     else
       let msg = join [
         "Type check failed: reference to unbound variable\n",
@@ -249,13 +298,20 @@ end
 lang MExprTypeCheck =
 
   -- Type unification
-  VarTypeUnify + FunTypeUnify + BaseTypeUnify +
+  VarTypeUnify + FunTypeUnify + AllTypeUnify + BaseTypeUnify +
 
   -- Type generalization
-  VarTypeGeneralize + FunTypeGeneralize + BaseTypeGeneralize +
+  VarTypeGeneralize + FunTypeGeneralize + AllTypeGeneralize + BaseTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck
   + ConstTypeCheck
 
 end
+
+-- TODO(aathn, 2021-09-28): Proper error reporting and propagation
+-- Report a "stack trace" when encountering a unification failure
+
+-- TODO(aathn, 2021-09-28): Test cases
+
+-- TODO(aathn, 2021-09-28): Annotate terms instead of just returning their type
