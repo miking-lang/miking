@@ -51,6 +51,7 @@ lang Unify = MExprEq
   sem unify =
   | (ty1, ty2) ->
     -- OPT(aathn, 2021-09-27): This equality check traverses the types unnecessarily.
+    -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
     if eqType [] ty1 ty2 then
       ()
     else
@@ -86,6 +87,7 @@ lang VarTypeUnify = Unify + VarTypeAst
 
   sem occurs (tv : TVar) =
   | TyVar {info = info, contents = r} ->
+    -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
     if eqTVar [] (deref r, tv) then
       let msg = "Type check failed: occurs check\n" in
       infoErrorExit info msg
@@ -234,26 +236,27 @@ end
 -------------------
 
 lang TypeCheck = Unify + Generalize
-  sem typeOf =
-  | t -> typeOfBase _tcEnvEmpty t
+  sem typeCheck =
+  | tm -> typeCheckBase _tcEnvEmpty tm
 
-  sem typeOfBase (env : TCEnv) =
-  | t ->
+  sem typeCheckBase (env : TCEnv) =
+  | tm ->
     let msg = join [
       "Type check failed: type checking not supported for term\n",
-      use MExprPrettyPrint in expr2str t
+      use MExprPrettyPrint in expr2str tm
     ] in
-    infoErrorExit (infoTm t) msg
+    infoErrorExit (infoTm tm) msg
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeOfBase (env : TCEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmVar t ->
     match _lookupVar t.ident env with Some ty then
-      if t.frozen then
-        ty
-      else
-        inst env.currentLvl ty
+      let ty =
+        if t.frozen then ty
+        else inst env.currentLvl ty
+      in
+      TmVar {t with ty = ty}
     else
       let msg = join [
         "Type check failed: reference to unbound variable\n",
@@ -263,36 +266,44 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang LamTypeCheck = TypeCheck + LamAst
-  sem typeOfBase (env : TCEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmLam t ->
     let tyX = newvar env.currentLvl in
-    let tyE = typeOfBase (_insertVar t.ident tyX env) t.body in
-    ityarrow_ t.info tyX tyE
+    let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
+    let tyLam = ityarrow_ t.info tyX (ty body) in
+    TmLam {{t with body = body}
+              with ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeOfBase (env : TCEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmApp t ->
-    let tyFun = typeOfBase env t.lhs in
-    let tyArg = typeOfBase env t.rhs in
-    let tyRes = newvar env.currentLvl in
-    unify (tyFun, tyarrow_ tyArg tyRes);
-    tyRes
+    let lhs = typeCheckBase env t.lhs in
+    let rhs = typeCheckBase env t.rhs in
+    let tyRes  = newvar env.currentLvl in
+    unify (ty lhs, tyarrow_ (ty rhs) tyRes);
+    TmApp {{{t with lhs = lhs}
+               with rhs = rhs}
+               with ty = tyRes}
 end
 
 lang LetTypeCheck = TypeCheck + LetAst
-  sem typeOfBase (env : TCEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmLet t ->
     let lvl = env.currentLvl in
-    let tyE = typeOfBase {env with currentLvl = addi 1 lvl} t.body in
-    typeOfBase (_insertVar t.ident (gen lvl tyE) env) t.inexpr
+    let body = typeCheckBase {env with currentLvl = addi 1 lvl} t.body in
+    let inexpr = typeCheckBase (_insertVar t.ident (gen lvl (ty body)) env) t.inexpr in
+    TmLet {{{t with body = body}
+               with inexpr = inexpr}
+               with ty = ty inexpr}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
-  sem typeOfBase (env : TCEnv) =
+  sem typeCheckBase (env : TCEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    f (tyConst t.val)
+    let ty = f (tyConst t.val) in
+    TmConst {t with ty = ty}
 end
 
 lang MExprTypeCheck =
@@ -314,4 +325,4 @@ end
 
 -- TODO(aathn, 2021-09-28): Test cases
 
--- TODO(aathn, 2021-09-28): Annotate terms instead of just returning their type
+-- TODO(aathn, 2021-09-28): Value restriction
