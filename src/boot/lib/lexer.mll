@@ -74,6 +74,8 @@ let reserved_strings = [
   ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
   ("`",             fun(i) -> Parser.BACKTICK{i=i;v=()});
+  ("$",             fun(i) -> Parser.DOLLAR{i=i;v=()});
+  ("@",             fun(i) -> Parser.AT{i=i;v=()});
 ]
 
 (* Info handling *)
@@ -167,7 +169,7 @@ let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++" | "`"
+              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++" | "`" | "@"
 
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+

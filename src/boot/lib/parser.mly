@@ -104,6 +104,8 @@
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
 %token <unit Ast.tokendata> BACKTICK      /* "`"   */
+%token <unit Ast.tokendata> DOLLAR        /* "$"   */
+%token <unit Ast.tokendata> AT            /* "@"   */
 
 %start main
 %start main_mexpr
@@ -388,6 +390,16 @@ atom:
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false) }
   | BACKTICK var_ident   { TmVar($2.i,$2.v,Symb.Helpers.nosym, true) }
+  | DOLLAR LBRACKET mexpr ty_op RBRACKET
+    { let fi = mkinfo $1.i $5.i in
+      let v = us"_x" in
+      TmLet(fi, v, Symb.Helpers.nosym, $4 fi, $3,
+            TmVar(fi, v, Symb.Helpers.nosym, true)) }
+  | LBRACKET mexpr RBRACKET AT
+    { let fi = mkinfo $1.i $4.i in
+      let v = us"_x" in
+      TmLet(fi, v, Symb.Helpers.nosym, TyUnknown(fi), $2,
+            TmVar(fi, v, Symb.Helpers.nosym, false)) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
