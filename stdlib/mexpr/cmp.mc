@@ -408,6 +408,14 @@ lang VarTypeCmp = Cmp + VarTypeAst
   | (TyVar t1, TyVar t2) -> cmpTVar (deref t1.contents, deref t2.contents)
 end
 
+lang AllTypeCmp = Cmp + AllTypeAst
+  sem cmpTypeH =
+  | (TyAll t1, TyAll t2) ->
+    let identDiff = nameCmp t1.ident t2.ident in
+    if eqi identDiff 0 then cmpType t1.ty t2.ty
+    else identDiff
+end
+
 lang AppTypeCmp = Cmp + AppTypeAst
   sem cmpTypeH =
   | (TyApp t1, TyApp t2) ->
@@ -436,7 +444,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
 
 -----------
 -- TESTS --

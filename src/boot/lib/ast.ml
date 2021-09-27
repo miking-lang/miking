@@ -338,6 +338,8 @@ and ty =
   | TyChar of info
   (* Function type *)
   | TyArrow of info * ty * ty
+  (* Forall quantifier *)
+  | TyAll of info * ustring * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)
@@ -490,6 +492,7 @@ let ty_info = function
   | TyFloat fi
   | TyChar fi
   | TyArrow (fi, _, _)
+  | TyAll (fi, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
   | TyRecord (fi, _, _)

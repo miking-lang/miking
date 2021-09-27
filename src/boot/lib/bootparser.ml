@@ -68,6 +68,8 @@ let idTyApp = 211
 
 let idTyTensor = 212
 
+let idTyAll = 213
+
 (* Const literals *)
 let idCBool = 300
 
@@ -246,7 +248,9 @@ let getData = function
   | PTreeTy (TyChar fi) ->
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
-      (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+     (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+  | PTreeTy (TyAll (fi, var, ty)) ->
+     (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->

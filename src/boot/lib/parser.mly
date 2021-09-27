@@ -72,6 +72,8 @@
 %token <unit Ast.tokendata> EXTERNAL
 %token <unit Ast.tokendata> SWITCH
 %token <unit Ast.tokendata> CASE
+%token <unit Ast.tokendata> ALL
+
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -536,6 +538,9 @@ ty:
   | ty_left ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
+  | ALL var_ident DOT ty
+      { let fi = mkinfo $1.i (ty_info $4) in
+        TyAll(fi, $2.v, $4) }
 
 ty_left:
   | ty_atom

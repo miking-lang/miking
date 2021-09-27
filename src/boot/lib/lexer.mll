@@ -42,6 +42,8 @@ let reserved_strings = [
   ("external",      fun(i) -> Parser.EXTERNAL{i=i;v=()});
   ("switch",        fun(i) -> Parser.SWITCH{i=i;v=()});
   ("case",          fun(i) -> Parser.CASE{i=i;v=()});
+  ("all",           fun(i) -> Parser.ALL{i=i;v=()});
+
 
   (* Types *)
   ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});

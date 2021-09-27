@@ -107,6 +107,11 @@ lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
   | (! (TyVar _ | TyUnknown _) & ty, TyVar _) -> Some ty
 end
 
+lang AllCompatibleType = CompatibleType + AllTypeAst
+  sem reduceType (tyEnv : TypeEnv) =
+  | TyAll t -> Some t.ty
+end
+
 lang AppCompatibleType = CompatibleType + AppTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
@@ -646,6 +651,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
+  AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

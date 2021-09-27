@@ -1105,6 +1105,15 @@ lang VarTypePrettyPrint = VarTypeAst
     then (env, concat str "#bound") else never
 end
 
+lang AllTypePrettyPrint = AllTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyAll t ->
+    match pprintEnvGetStr env t.ident with (env, var) then
+      match getTypeStringCode indent env t.ty with (env, str) then
+        (env, join ["all ", var, ". ", str])
+      else never
+    else never
+end
 
 lang AppTypePrettyPrint = AppTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
@@ -1151,7 +1160,7 @@ lang MExprPrettyPrint =
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
   ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
-  TensorTypePrettyPrint
+  TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
