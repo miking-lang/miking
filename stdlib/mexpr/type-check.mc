@@ -74,10 +74,11 @@ lang Unify = MExprEq
   -- Intentionally left empty
 end
 
-lang VarTypeUnify = Unify + VarTypeAst
+lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
   sem unifyBase =
-  | (TyVar {contents = r}, ty1)
-  | (ty1, TyVar {contents = r}) ->
+  -- We don't unify variables with TyUnknown
+  | (TyVar {contents = r}, !TyUnknown _ & ty1)
+  | (!TyUnknown _ & ty1, TyVar {contents = r}) ->
     match deref r with Unbound _ & tv then
       occurs tv ty1; modref r (Link ty1)
     else match deref r with Link ty2 then
@@ -126,7 +127,11 @@ lang AllTypeUnify = Unify + AllTypeAst
 end
 
 lang BaseTypeUnify = Unify + BaseTypeAst
-  sem unifyBase = -- Intentionally left empty
+  sem unifyBase =
+  | (TyUnknown _, _)
+  | (_, TyUnknown _) ->
+    ()
+
   sem occurs (tv : TVar) =
   | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ -> ()
 end
