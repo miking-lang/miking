@@ -1200,16 +1200,24 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+type Level = Int
+
 lang VarTypeAst = Ast
+  syn TVar =
+  | Unbound {ident: Name,
+             level: Level}
+  | Link Type
+
   syn Type =
-  | TyVar {info   : Info,
-           ident  : Name}
+  | TyVar {info     : Info,
+           contents : Ref TVar}
+  | TyQVar {ident    : Name}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
 
   sem infoTy =
-  | TyVar r -> r.info
+  | TyVar t -> t.info
 end
 
 

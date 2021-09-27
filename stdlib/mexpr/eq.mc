@@ -571,6 +571,22 @@ lang ConTypeEq = Eq + ConTypeAst
     else false
 end
 
+lang VarTypeEq = Eq + VarTypeAst
+  sem eqTVar (typeEnv : EqTypeEnv) =
+  | (Unbound {ident = n1}, Unbound {ident = n2}) ->
+    nameEq n1 n2
+  | (Link ty1, Link ty2) ->
+    eqType typeEnv ty1 ty2
+  | (tv1, tv2) ->
+    false
+
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  | TyVar t1 ->
+    match unwrapType typeEnv lhs with Some (TyVar t2) then
+      eqTVar typeEnv (deref t1.contents, deref t2.contents)
+    else false
+end
+
 lang AppTypeEq = Eq + AppTypeAst
   sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyApp r ->
@@ -602,8 +618,8 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + AppTypeEq
-  + TensorTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
+  AppTypeEq + TensorTypeEq
 end
 
 -----------

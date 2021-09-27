@@ -1094,8 +1094,15 @@ end
 lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
-    match pprintEnvGetStr env t.ident with (env,str)
-    then (env, str) else never
+    match deref t.contents with Unbound t then
+      match pprintEnvGetStr env t.ident with (env, str)
+      then (env, concat str "#t") else never
+    else match deref t.contents with Link ty then
+      getTypeStringCode indent env ty
+    else never
+  | TyQVar t ->
+    match pprintEnvGetStr env t.ident with (env, str)
+    then (env, concat str "#q") else never
 end
 
 
