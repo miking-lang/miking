@@ -80,7 +80,8 @@ lang PMExprRecursionElimination = PMExprAst
     with Some permutation then
       let orderedBindings = permute t.bindings permutation in
       foldl toLetBinding t.inexpr orderedBindings
-    else TmRecLets t
+    else infoErrorExit t.info (join ["Cannot accelerate recursive bindings ",
+                                     "with cyclic references"])
   | t -> smap_Expr_Expr eliminateRecursion t
 end
 

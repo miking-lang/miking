@@ -60,10 +60,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
 
   -- Adds identifiers to accelerate terms and collects information on the
   -- accelerated terms. An accelerate term 'accelerate e' is rewritten as
-  -- 'let t = lam x : Int. accelerate e x in t 0', where t is a name containing
-  -- a globally unique string within the AST. This format makes accelerate work
-  -- even when there are no free variables, and it ensures that the term will
-  -- be lambda lifted to the top of the program.
+  -- 'let t = lam x : Int. e x in t 0', where t is a name containing a globally
+  -- unique string within the AST. This format makes accelerate work even when
+  -- there are no free variables, and it ensures that the term will be lambda
+  -- lifted to the top of the program.
   sem addIdentifierToAccelerateTerms =
   | t ->
     let env = {

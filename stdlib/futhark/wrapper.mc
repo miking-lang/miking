@@ -101,14 +101,17 @@ let emptyWrapperEnv = {
 
 let getMExprSeqFutharkTypeString : Type -> String = use MExprAst in
   lam ty.
-  recursive let work = lam dim. lam ty.
-    match ty with TySeq {ty = innerTy} then
+  recursive let work = lam dim. lam typ.
+    match typ with TySeq {ty = innerTy} then
       work (addi dim 1) innerTy
-    else match ty with TyInt _ | TyChar _ then
+    else match typ with TyInt _ | TyChar _ then
       (dim, "i64")
-    else match ty with TyFloat _ then
+    else match typ with TyFloat _ then
       (dim, "f64")
-    else never
+    else
+      let tyStr = use MExprPrettyPrint in type2str typ in
+      infoErrorExit (infoTy typ) (join ["Cannot accelerate sequences with ",
+                                        "elements of type ", tyStr])
   in
   match work 0 ty with (dim, elemTyStr) then
     if eqi dim 0 then
