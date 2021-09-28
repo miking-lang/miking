@@ -200,7 +200,7 @@ lang CarriedTypeBase
   sem carriedSMapAccumL (f : Expr -> Expr -> Expr) (targetTy : Type) /- : CarriedType -> Option (Name -> Name -> Expr) -/ =
 end
 
-let _equalTypes = use MExprEq in eqType assocEmpty
+let _equalTypes = use MExprEq in eqType
 let _typeToString = use MExprPrettyPrint in lam ty. (getTypeStringCode 0 pprintEnvEmpty ty).1
 let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
   { ident = n

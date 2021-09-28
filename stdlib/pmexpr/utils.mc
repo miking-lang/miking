@@ -79,8 +79,6 @@ mexpr
 
 use TestLang in
 
-let eqType = eqType assocEmpty in
-
 let t = typeAnnot (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
 utest functionBodyReturnType t with tychar_ using eqType in
 let t = typeAnnot (symbolize (lam_ "x" tyint_ (uconst_ (CAddi ())))) in

@@ -45,7 +45,7 @@ lang VariantNameTypeAst = Eq
   syn Type =
   | TyVariantName {ident : Name}
 
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : TypeEnv) (lhs : Type) =
   | TyVariantName {ident = rid} ->
     match lhs with TyVariantName {ident = lid} then
       nameEq lid rid
@@ -323,7 +323,7 @@ let eqEnv = lam lenv : EqTypeEnv. lam renv : EqTypeEnv.
   use MExprEq in
   let elemCmp = lam l : (Name, Type). lam r : (Name, Type).
     and (nameEq l.0 r.0)
-        (eqType [] l.1 r.1)
+        (eqType l.1 r.1)
   in
   if eqi (length lenv) (length renv) then
     eqSeq elemCmp lenv renv
@@ -465,7 +465,7 @@ let record = typeAnnot (symbolize (urecord_ [
 (match typeLift record with (env, t) then
   match ty t with TyCon {ident = ident} then
     match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
-      utest recordTy with ty record using eqType [] in
+      utest recordTy with ty record using eqType in
       ()
     else never
   else never
@@ -479,7 +479,7 @@ let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 (match typeLift recordUpdate with (env, t) then
   match t with TmLet {tyBody = TyCon {ident = ident}} then
     match assocSeqLookup {eq=nameEq} ident env with Some ty then
-      utest ty with recordType using eqType [] in
+      utest ty with recordType using eqType in
       ()
     else never
   else never

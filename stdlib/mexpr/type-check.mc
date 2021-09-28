@@ -60,7 +60,7 @@ lang Unify = MExprEq
   | (ty1, ty2) ->
     -- OPT(aathn, 2021-09-27): This equality check traverses the types unnecessarily.
     -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
-    if eqType [] ty1 ty2 then
+    if eqType ty1 ty2 then
       ()
     else
       unifyBase names (ty1, ty2)
