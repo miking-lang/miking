@@ -51,7 +51,7 @@ let compile : Options -> String -> Unit = lam options. lam file.
   let hooks = {emptyHooks with compileOcaml =
     lam libs. lam clibs. lam ocamlProg.
       ocamlCompile options libs clibs file ocamlProg} in
-  compileMCore file ast hooks
+  compileMCore ast hooks
 
 mexpr
 

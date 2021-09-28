@@ -36,8 +36,8 @@ let collectLibraries : ExternalNameMap -> ([String], [String])
   with (libs, clibs) then (setToSeq libs, setToSeq clibs)
   else never
 
-let compileMCore : String -> Expr -> Hooks -> String =
-  lam file. lam ast. lam hooks.
+let compileMCore : Expr -> Hooks -> String =
+  lam ast. lam hooks.
   use MCoreCompileLang in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
