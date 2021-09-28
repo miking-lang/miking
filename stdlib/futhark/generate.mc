@@ -516,10 +516,13 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
       cons decl (generateToplevel env t.inexpr)
     else never
   | TmLet t ->
-    recursive let findReturnType = lam ty : Type.
-      match ty with TyArrow t then
-        findReturnType t.to
-      else ty
+    recursive let findReturnType = lam params. lam ty : Type.
+      if null params then ty
+      else match ty with TyArrow t then
+        findReturnType (tail params) t.to
+      else
+        infoErrorExit t.info (join ["Function takes more parameters than ",
+                                    "specified in return type"])
     in
     let decl =
       match _collectParams env t.body with (params, body) then
@@ -527,7 +530,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
           FDeclConst {ident = t.ident, ty = generateType env t.tyBody,
                       val = generateExpr env body, info = t.info}
         else
-          let retTy = findReturnType t.tyBody in
+          let retTy = findReturnType params t.tyBody in
           let entry = setMem t.ident env.entryPoints in
           FDeclFun {ident = t.ident, entry = entry, typeParams = [],
                     params = params, ret = generateType env retTy,
