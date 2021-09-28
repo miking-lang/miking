@@ -1553,7 +1553,7 @@ Note that the acceleration has significant overheads as data has to be copied.
 This overhead is much larger for GPU code. Because of this overhead, the
 example program above will become slower after adding the `accelerate` keyword.
 For this example as well as more complicated examples, see the
-`test/accelerate` directory.
+`test/examples/accelerate` directory.
 
 #### Parallel patterns
 
