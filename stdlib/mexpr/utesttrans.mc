@@ -766,7 +766,7 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
   let typeNames = mapFoldWithKey (lam acc. lam id. lam.
     mapInsert (nameGetStr id) id) typeNames env.aliases in
    {{symEnvEmpty with conEnv = constructorNames}
-                 with tyEnv = typeNames}
+                 with tyConEnv = typeNames}
 
 let withUtestRunner = lam utestFunctions. lam term.
   bindall_ [utestRunner (), utestFunctions, term]

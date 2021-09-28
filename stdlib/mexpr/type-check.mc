@@ -49,15 +49,18 @@ let _pprintType = use MExprPrettyPrint in
 
 lang Unify = MExprEq
   sem unify =
+  | (ty1, ty2) -> unifyWithNames biEmpty (ty1, ty2)
+
+  sem unifyWithNames (names : BiNameMap) =
   | (ty1, ty2) ->
     -- OPT(aathn, 2021-09-27): This equality check traverses the types unnecessarily.
     -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
     if eqType [] ty1 ty2 then
       ()
     else
-      unifyBase (ty1, ty2)
+      unifyBase names (ty1, ty2)
 
-  sem unifyBase =
+  sem unifyBase (names : BiNameMap) =
   | (ty1, ty2) ->
     unificationError (ty1, ty2)
 
@@ -75,19 +78,24 @@ lang Unify = MExprEq
 end
 
 lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
-  sem unifyBase =
+  sem unifyBase (names : BiNameMap) =
   -- We don't unify variables with TyUnknown
-  | (TyVar {contents = r}, !TyUnknown _ & ty1)
-  | (!TyUnknown _ & ty1, TyVar {contents = r}) ->
+  | (TyFlex {contents = r}, !TyUnknown _ & ty1)
+  | (!TyUnknown _ & ty1, TyFlex {contents = r}) ->
     match deref r with Unbound _ & tv then
       occurs tv ty1; modref r (Link ty1)
     else match deref r with Link ty2 then
-      unify (ty1, ty2)
+      unifyWithNames names (ty1, ty2)
     else never
-  -- No case needed for TyQVar
+  | (TyVar t1 & ty1, TyVar t2 & ty2) ->
+    if not (nameEq t1.ident t2.ident) then
+      match biLookup (t1.ident, t2.ident) names with None () then
+        unificationError (ty1, ty2)
+      else ()
+    else ()
 
   sem occurs (tv : TVar) =
-  | TyVar {info = info, contents = r} ->
+  | TyFlex {info = info, contents = r} ->
     -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
     if eqTVar [] (deref r, tv) then
       let msg = "Type check failed: occurs check\n" in
@@ -95,21 +103,21 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
     else
       match deref r with Link ty then
         occurs tv ty
-      else match deref r with Unbound {ident = n, level = k} then
+      else match deref r with Unbound ({level = k} & t) then
         let minLevel =
-          match tv with Unbound {ident = _, level = l} then mini k l else k
+          match tv with Unbound {level = l} then mini k l else k
         in
-        modref r (Unbound {ident = n, level = minLevel})
+        modref r (Unbound {t with level = minLevel})
       else never
-  | TyQVar _ ->
+  | TyVar _ ->
     ()
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
-  sem unifyBase =
+  sem unifyBase (names : BiNameMap) =
   | (TyArrow {from = from1, to = to1}, TyArrow {from = from2, to = to2}) ->
-    unify (from1, from2);
-    unify (to1, to2)
+    unifyWithNames names (from1, from2);
+    unifyWithNames names (to1, to2)
 
   sem occurs (tv : TVar) =
   | TyArrow {from = from, to = to} ->
@@ -118,16 +126,24 @@ lang FunTypeUnify = Unify + FunTypeAst
 end
 
 lang AllTypeUnify = Unify + AllTypeAst
-  -- sem unifyBase =
-  -- | (TyAll t1, TyAll t2) -> ...
+  sem unifyBase (names : BiNameMap) =
+  | (TyAll t1, TyAll t2) ->
+    unifyWithNames (biInsert (t1.ident, t2.ident) names) (t1.ty, t2.ty)
 
   sem occurs (tv : TVar) =
   | TyAll t ->
-    occurs tv t.ty
+    match tv with Unbound {weak = true} then
+      let msg = join [
+        "Type check failed: unification failure\n",
+        "Attempted to unify monomorphic type variable with polymorphic type!\n"
+      ] in
+      infoErrorExit t.info msg
+    else
+      occurs tv t.ty
 end
 
 lang BaseTypeUnify = Unify + BaseTypeAst
-  sem unifyBase =
+  sem unifyBase (names : BiNameMap) =
   | (TyUnknown _, _)
   | (_, TyUnknown _) ->
     ()
@@ -150,24 +166,21 @@ end
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
 
-let newvar = use VarTypeAst in
-  lam level.
-  TyVar {info = NoInfo (),
-         contents = ref (Unbound {ident = nameSym "a", level = level})}
+let newflexvar = use VarTypeAst in
+  lam weak. lam level.
+  TyFlex {info = NoInfo (),
+          contents = ref (Unbound {ident = nameSym "a", level = level, weak = weak})}
+
+let newvarWeak = newflexvar true
+let newvar = newflexvar false
 
 lang Generalize = AllTypeAst
   sem inst (lvl : Level) =
   | ty ->
-    match instMakeSubst lvl (mapEmpty nameCmp) ty with (subst, ty) then
+    match stripTyAll ty with (vars, ty) then
+      let subst = foldr (lam v. mapInsert v (newvar lvl)) (mapEmpty nameCmp) vars in
       instBase subst ty
     else never
-
-  sem instMakeSubst (lvl : Level) (subst : Map Name TVar) =
-  | TyAll t ->
-    let tv = newvar lvl in
-    instMakeSubst lvl (mapInsert t.ident tv subst) t.ty
-  | ty ->
-    (subst, ty)
 
   sem instBase (subst : Map Name TVar) =
   -- Intentionally left empty
@@ -181,33 +194,31 @@ lang Generalize = AllTypeAst
     else never
 
   sem genBase (lvl : Level) =
-  | ty ->
-    print (_pprintType ty);
-    error "No matching case for function genBase" -- Intentionally left empty
+  -- Intentionally left empty
 end
 
 lang VarTypeGeneralize = Generalize + VarTypeAst
   sem instBase (subst : Map Name Type) =
-  | TyVar t & ty1 ->
+  | TyFlex t & ty1 ->
     match deref t.contents with Link ty2 then
       instBase subst ty2
     else
       ty1
-  | TyQVar {ident = n} & ty ->
+  | TyVar {ident = n} & ty ->
     match mapLookup n subst with Some tyvar then tyvar
     else ty
 
   sem genBase (lvl : Level) =
-  | TyVar t ->
+  | TyFlex t ->
     match deref t.contents with Link ty then
       genBase lvl ty
     else match deref t.contents with Unbound {ident = n, level = k} then
       if gti k lvl then
-        ([n], TyQVar {ident = n})
+        ([n], TyVar {info = t.info, ident = n})
       else
-        ([], TyVar t)
+        ([], TyFlex t)
     else never
-  | TyQVar _ & ty ->
+  | TyVar _ & ty ->
     ([], ty)
 end
 
@@ -294,7 +305,12 @@ end
 lang LamTypeCheck = TypeCheck + LamAst
   sem typeCheckBase (env : TCEnv) =
   | TmLam t ->
-    let tyX = newvar env.currentLvl in
+    let tyX =
+      match t.tyIdent with TyUnknown _ then
+        newvarWeak env.currentLvl
+      else
+        t.tyIdent
+    in
     let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
     let tyLam = ityarrow_ t.info tyX (ty body) in
     TmLam {{t with body = body}
@@ -318,7 +334,16 @@ lang LetTypeCheck = TypeCheck + LetAst
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = typeCheckBase {env with currentLvl = addi 1 lvl} t.body in
-    let inexpr = typeCheckBase (_insertVar t.ident (gen lvl (ty body)) env) t.inexpr in
+    let inexpr =
+      match t.tyBody with TyUnknown _ then
+        let genBody = gen lvl (ty body) in
+        typeCheckBase (_insertVar t.ident genBody env) t.inexpr
+      else
+        match stripTyAll t.tyBody with (_, tyAnnot) then
+          unify (tyAnnot, ty body);
+          typeCheckBase (_insertVar t.ident t.tyBody env) t.inexpr
+        else never
+    in
     TmLet {{{t with body = body}
                with inexpr = inexpr}
                with ty = ty inexpr}
@@ -394,3 +419,5 @@ end
 -- TODO(aathn, 2021-09-28): Test cases
 
 -- TODO(aathn, 2021-09-28): Value restriction
+
+-- TODO(aathn, 2021-09-28): Type check remaining terms

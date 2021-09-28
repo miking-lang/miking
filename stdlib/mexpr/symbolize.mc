@@ -22,11 +22,15 @@ include "pprint.mc"
 type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
-  tyEnv: Map String Name
+  tyVarEnv: Map String Name,
+  tyConEnv: Map String Name
 }
 
 let symEnvEmpty =
-  {varEnv = mapEmpty cmpString, conEnv = mapEmpty cmpString, tyEnv = mapEmpty cmpString}
+  {varEnv = mapEmpty cmpString,
+   conEnv = mapEmpty cmpString,
+   tyVarEnv = mapEmpty cmpString,
+   tyConEnv = mapEmpty cmpString}
 
 -----------
 -- TERMS --
@@ -94,13 +98,18 @@ lang LamSym = Sym + LamAst + VarSym
     else never
 end
 
-lang LetSym = Sym + LetAst
+lang LetSym = Sym + LetAst + AllTypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv} then
       let tyBody = symbolizeType env t.tyBody in
       let ty = symbolizeType env t.ty in
-      let body = symbolizeExpr env t.body in
+      let body =
+        match stripTyAll tyBody with (vars, _) then
+          let tyVarEnv = foldr (lam v. mapInsert (nameGetStr v) v) env.tyVarEnv vars in
+          symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
+        else never
+      in
       if nameHasSym t.ident then
         TmLet {{{{t with tyBody = tyBody}
                     with body = body}
@@ -141,7 +150,7 @@ end
 lang TypeSym = Sym + TypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmType t ->
-    match env with {tyEnv = tyEnv} then
+    match env with {tyConEnv = tyConEnv} then
       let tyIdent = symbolizeType env t.tyIdent in
       let ty = symbolizeType env t.ty in
       if nameHasSym t.ident then
@@ -151,8 +160,8 @@ lang TypeSym = Sym + TypeAst
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
-        let tyEnv = mapInsert str ident tyEnv in
-        let env = {env with tyEnv = tyEnv} in
+        let tyConEnv = mapInsert str ident tyConEnv in
+        let env = {env with tyConEnv = tyConEnv} in
         TmType {{{{t with ident = ident}
                      with tyIdent = tyIdent}
                      with inexpr = symbolizeExpr env t.inexpr}
@@ -258,17 +267,43 @@ end
 lang ConTypeSym = ConTypeAst + UnknownTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyCon t & ty ->
-    match env with {tyEnv = tyEnv} then
+    match env with {tyConEnv = tyConEnv} then
       if nameHasSym t.ident then ty
       else
         let str = nameGetStr t.ident in
-        match mapLookup str tyEnv with Some ident then
+        match mapLookup str tyConEnv with Some ident then
           TyCon {t with ident = ident}
         else
           -- NOTE(larshum, 2021-03-24): Unknown type variables are symbolized
           -- as TyUnknown for now.
           TyUnknown {info = t.info}
     else never
+end
+
+lang VarTypeSym = VarTypeAst + UnknownTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyVar t & ty ->
+    if nameHasSym t.ident then ty
+    else
+      let str = nameGetStr t.ident in
+      match mapLookup str env.tyVarEnv with Some ident then
+        TyVar {t with ident = ident}
+      else
+        -- NOTE(aathn, 2021-09-29): Unknown type variables are symbolized
+        -- as TyUnknown for now.
+        TyUnknown {info = t.info}
+end
+
+lang AllTypeSym = AllTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyAll t & ty ->
+    if nameHasSym t.ident then ty
+    else
+      let str = nameGetStr t.ident in
+      let ident = nameSetNewSym t.ident in
+      let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
+      TyAll {{t with ident = ident}
+                with ty = symbolizeType env t.ty}
 end
 
 --------------
@@ -361,7 +396,7 @@ lang MExprSym =
   MatchSym +
 
   -- Non-default implementations (Types)
-  VariantTypeSym + ConTypeSym +
+  VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym

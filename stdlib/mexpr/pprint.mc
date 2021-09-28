@@ -1095,14 +1095,16 @@ end
 lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
+    pprintEnvGetStr env t.ident
+  | TyFlex t ->
     match deref t.contents with Unbound t then
-      pprintEnvGetStr env t.ident
+      match pprintEnvGetStr env t.ident with (env, str) then
+        let prefix = if t.weak then "_" else "" in
+        (env, concat prefix str)
+      else never
     else match deref t.contents with Link ty then
       getTypeStringCode indent env ty
     else never
-  | TyQVar t ->
-    match pprintEnvGetStr env t.ident with (env, str)
-    then (env, concat "'" str) else never
 end
 
 lang AllTypePrettyPrint = AllTypeAst

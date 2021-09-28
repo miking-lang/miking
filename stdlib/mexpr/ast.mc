@@ -1211,20 +1211,26 @@ let noLevel = negi 1
 
 lang VarTypeAst = Ast
   syn TVar =
-  | Unbound {ident: Name,
-             level: Level}
+  | Unbound {ident : Name,
+             weak  : Bool,
+             level : Level}
   | Link Type
 
   syn Type =
-  | TyVar {info     : Info,
-           contents : Ref TVar}
-  | TyQVar {ident    : Name}
+  -- Rigid type variable
+  | TyVar  {info     : Info,
+            ident    : Name}
+  -- Flexible type variable
+  | TyFlex {info     : Info,
+            contents : Ref TVar}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
+  | TyFlex t -> TyFlex {t with info = info}
 
   sem infoTy =
   | TyVar t -> t.info
+  | TyFlex t -> t.info
 end
 
 lang AllTypeAst = Ast
@@ -1238,6 +1244,13 @@ lang AllTypeAst = Ast
 
   sem infoTy =
   | TyAll t -> t.info
+
+  sem stripTyAll =
+  | ty -> stripTyAllBase [] ty
+
+  sem stripTyAllBase (vars : [Name]) =
+  | TyAll t -> stripTyAllBase (snoc vars t.ident) t.ty
+  | ty -> (vars, ty)
 end
 
 lang AppTypeAst = Ast

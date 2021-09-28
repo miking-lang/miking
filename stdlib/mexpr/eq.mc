@@ -581,9 +581,13 @@ lang VarTypeEq = Eq + VarTypeAst
     false
 
   sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  -- TODO(aathn, 2021-09-27): Implement correct alpha equivalence
   | TyVar t1 ->
-    -- TODO(aathn, 2021-09-27): Implement correct alpha equivalence
-    match unwrapType typeEnv lhs with Some (TyVar t2) then
+    match lhs with Some (TyVar t2) then
+      nameEq t1.ident t2.ident
+    else false
+  | TyFlex t1 ->
+    match lhs with Some (TyFlex t2) then
       eqTVar typeEnv (deref t1.contents, deref t2.contents)
     else false
 end
@@ -593,8 +597,7 @@ lang AllTypeEq = Eq + AllTypeAst
   | TyAll t1 ->
     -- TODO(aathn, 2021-09-27): Implement correct alpha equivalence
     match unwrapType typeEnv lhs with Some (TyAll t2) then
-      let identDiff = nameCmp t1.ident t2.ident in
-      if eqi identDiff 0 then
+      if nameEq t1.ident t2.ident then
         eqType typeEnv t1.ty t2.ty
       else
         false
