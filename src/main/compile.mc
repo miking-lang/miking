@@ -70,9 +70,7 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
         { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
         , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
-        , compileOcaml =
-            lam libs. lam clibs. lam ocamlProg.
-              ocamlCompile options libs clibs sourcePath ocamlProg
+        , compileOcaml = ocamlCompile options sourcePath
         }
     else never
 

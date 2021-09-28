@@ -24,8 +24,8 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile : Options -> [String] -> [String] -> String -> String -> String =
-  lam options. lam libs. lam clibs. lam sourcePath. lam ocamlProg.
+let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String =
+  lam options. lam sourcePath. lam libs. lam clibs. lam ocamlProg.
   let compileOptions : CompileOptions =
     let opts = {{
         defaultCompileOptions
@@ -48,9 +48,7 @@ let compile : Options -> String -> Unit = lam options. lam file.
   let ast = parseMCoreFile [] file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  let hooks = {emptyHooks with compileOcaml =
-    lam libs. lam clibs. lam ocamlProg.
-      ocamlCompile options libs clibs file ocamlProg} in
+  let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in
   compileMCore ast hooks
 
 mexpr
