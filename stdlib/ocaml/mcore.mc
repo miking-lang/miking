@@ -65,3 +65,17 @@ let compileMCore : Expr -> Hooks -> String =
       else never
     else never
   else never
+
+-- Compiles and runs the given MCore AST, using the given standard in and
+-- program arguments. The return value is the output written to standard out
+-- when running the program.
+let compileRunMCore : String -> [String] -> Expr -> String =
+  lam stdin. lam args. lam ast.
+  let compileOcaml = lam libs. lam clibs. lam ocamlProg.
+    let options = {optimize = true, libraries = libs, cLibraries = clibs} in
+    let cunit : CompileResult = ocamlCompileWithConfig options ocamlProg in
+    let res = cunit.run stdin args in
+    cunit.cleanup ();
+    res.stdout
+  in
+  compileMCore ast {emptyHooks with compileOcaml = compileOcaml}
