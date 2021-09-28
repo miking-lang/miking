@@ -1,7 +1,10 @@
+-- Defines functions for compiling (and running) an MCore program.
+
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "ocaml/sys.mc"
 
 lang MCoreCompileLang =
   MExprTypeAnnot + MExprTypeLift +
@@ -67,15 +70,19 @@ let compileMCore : Expr -> Hooks -> String =
   else never
 
 -- Compiles and runs the given MCore AST, using the given standard in and
--- program arguments. The return value is the output written to standard out
--- when running the program.
-let compileRunMCore : String -> [String] -> Expr -> String =
+-- program arguments. The return value is a record containing the return code,
+-- the standard out and the standard error, based on the result of running the
+-- program.
+--
+-- If the compilation fails, the compile error will be printed and the program
+-- will exit.
+let compileRunMCore : String -> [String] -> Expr -> ExecResult =
   lam stdin. lam args. lam ast.
   let compileOcaml = lam libs. lam clibs. lam ocamlProg.
     let options = {optimize = true, libraries = libs, cLibraries = clibs} in
     let cunit : CompileResult = ocamlCompileWithConfig options ocamlProg in
     let res = cunit.run stdin args in
     cunit.cleanup ();
-    res.stdout
+    res
   in
   compileMCore ast {emptyHooks with compileOcaml = compileOcaml}
