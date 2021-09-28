@@ -1095,11 +1095,6 @@ lang CharTypeAst = Ast
   | TyChar r -> r.info
 end
 
-lang BaseTypeAst =
-  UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
-end
-
-
 lang FunTypeAst = Ast
   syn Type =
   | TyArrow {info : Info,
@@ -1207,7 +1202,6 @@ lang ConTypeAst = Ast
 end
 
 type Level = Int
-let noLevel = negi 1
 
 lang VarTypeAst = Ast
   syn TVar =
@@ -1231,6 +1225,13 @@ lang VarTypeAst = Ast
   sem infoTy =
   | TyVar t -> t.info
   | TyFlex t -> t.info
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyFlex t & ty1 ->
+    match deref t.contents with Link ty2 then
+      smapAccumL_Type_Type f acc ty2
+    else
+      (acc, ty1)
 end
 
 lang AllTypeAst = Ast
@@ -1244,6 +1245,12 @@ lang AllTypeAst = Ast
 
   sem infoTy =
   | TyAll t -> t.info
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyAll t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, TyAll {t with ty = ty})
+    else never
 
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty

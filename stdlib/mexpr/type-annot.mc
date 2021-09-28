@@ -85,7 +85,7 @@ lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
 end
 
-lang IdentCompatibleType = CompatibleType + ConTypeAst
+lang ConCompatibleType = CompatibleType + ConTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyCon t1 & ty1, TyCon t2) ->
@@ -646,7 +646,7 @@ end
 lang MExprTypeAnnot =
 
   -- Type compatibility
-  UnknownCompatibleType + IdentCompatibleType + BoolCompatibleType +
+  UnknownCompatibleType + ConCompatibleType + BoolCompatibleType +
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +

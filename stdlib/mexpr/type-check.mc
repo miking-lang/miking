@@ -43,11 +43,16 @@ let _pprintType = use MExprPrettyPrint in
     tyStr
   else never
 
+lang ConstTypeAst =
+  UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
+end
+
 ----------------------
 -- TYPE UNIFICATION --
 ----------------------
 
 lang Unify = MExprEq
+  -- Unify the types `ty1' and `ty2'. Modifies the types in place.
   sem unify =
   | (ty1, ty2) -> unifyWithNames biEmpty (ty1, ty2)
 
@@ -142,14 +147,15 @@ lang AllTypeUnify = Unify + AllTypeAst
       occurs tv t.ty
 end
 
-lang BaseTypeUnify = Unify + BaseTypeAst
+lang ConstTypeUnify = Unify + ConstTypeAst
   sem unifyBase (names : BiNameMap) =
   | (TyUnknown _, _)
   | (_, TyUnknown _) ->
     ()
 
   sem occurs (tv : TVar) =
-  | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ -> ()
+  | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ ->
+    ()
 end
 
 lang SeqTypeUnify = Unify + SeqTypeAst
@@ -175,6 +181,7 @@ let newvarWeak = newflexvar true
 let newvar = newflexvar false
 
 lang Generalize = AllTypeAst
+  -- Instantiate the top-level type variables of `ty'.
   sem inst (lvl : Level) =
   | ty ->
     match stripTyAll ty with (vars, ty) then
@@ -185,6 +192,7 @@ lang Generalize = AllTypeAst
   sem instBase (subst : Map Name TVar) =
   -- Intentionally left empty
 
+  -- Generalize all flexible (schematic) type variables in `ty'.
   sem gen (lvl : Level) =
   | ty ->
     match genBase lvl ty with (vars, genTy) then
@@ -249,7 +257,7 @@ lang AllTypeGeneralize = Generalize
     else never
 end
 
-lang BaseTypeGeneralize = Generalize + BaseTypeAst
+lang ConstTypeGeneralize = Generalize + ConstTypeAst
   sem instBase (subst : Map Name Type) =
   | (TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _) & ty -> ty
   sem genBase (lvl : Level) =
@@ -273,6 +281,7 @@ end
 -------------------
 
 lang TypeCheck = Unify + Generalize
+  -- Type check `tm', with FreezeML-style type inference.
   sem typeCheck =
   | tm -> typeCheckBase _tcEnvEmpty tm
 
@@ -307,8 +316,10 @@ lang LamTypeCheck = TypeCheck + LamAst
   | TmLam t ->
     let tyX =
       match t.tyIdent with TyUnknown _ then
+        -- No type annotation: assign a monomorphic type variable to x.
         newvarWeak env.currentLvl
       else
+        -- Type annotation: assign x its annotated type.
         t.tyIdent
     in
     let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
@@ -336,9 +347,11 @@ lang LetTypeCheck = TypeCheck + LetAst
     let body = typeCheckBase {env with currentLvl = addi 1 lvl} t.body in
     let inexpr =
       match t.tyBody with TyUnknown _ then
+        -- No type annotation: generalize the inferred type
         let genBody = gen lvl (ty body) in
         typeCheckBase (_insertVar t.ident genBody env) t.inexpr
       else
+        -- Type annotation: unify the annotated type with the inferred one
         match stripTyAll t.tyBody with (_, tyAnnot) then
           unify (tyAnnot, ty body);
           typeCheckBase (_insertVar t.ident t.tyBody env) t.inexpr
@@ -399,12 +412,12 @@ end
 lang MExprTypeCheck =
 
   -- Type unification
-  VarTypeUnify + FunTypeUnify + AllTypeUnify + BaseTypeUnify +
+  VarTypeUnify + FunTypeUnify + AllTypeUnify + ConstTypeUnify +
   SeqTypeUnify +
 
   -- Type generalization
   VarTypeGeneralize + FunTypeGeneralize + AllTypeGeneralize +
-  BaseTypeGeneralize + SeqTypeGeneralize +
+  ConstTypeGeneralize + SeqTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck
