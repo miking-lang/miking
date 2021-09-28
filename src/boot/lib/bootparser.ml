@@ -193,7 +193,7 @@ let parseMCoreFile keywords filename =
 let getData = function
   (* Terms *)
   | PTreeTm (TmVar (fi, x, _, frozen)) ->
-      (idTmVar, [fi], [], [], [], [x], [if frozen then 1 else 0], [], [], [])
+      (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
@@ -248,9 +248,9 @@ let getData = function
   | PTreeTy (TyChar fi) ->
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
-     (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+      (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   | PTreeTy (TyAll (fi, var, ty)) ->
-     (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
+      (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->

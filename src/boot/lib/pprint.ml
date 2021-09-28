@@ -165,9 +165,9 @@ let rec ustring_of_ty = function
   | TyChar _ ->
       us "Char"
   | TyArrow (_, ty1, ty2) ->
-     us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
+      us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
   | TyAll (_, var, ty) ->
-     us "all " ^. var ^. us ". " ^. ustring_of_ty ty
+      us "all " ^. var ^. us ". " ^. ustring_of_ty ty
   | TySeq (_, ty1) -> (
     match ty1 with
     | TyChar _ ->
@@ -190,7 +190,8 @@ let rec ustring_of_ty = function
       failwith "Printing of non-empty variant types not yet supported"
   | TyCon (_, x, s) ->
       ustring_of_type x s
-  | TyVar (_, x) -> x
+  | TyVar (_, x) ->
+      x
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -597,10 +598,10 @@ and print_tm' fmt t =
   in
   match t with
   | TmVar (_, x, s, frozen) ->
-     let var_str = string_of_ustring (ustring_of_var x s) in
-     let print = if frozen then "`" ^ var_str else var_str in
+      let var_str = string_of_ustring (ustring_of_var x s) in
+      let print = if frozen then "`" ^ var_str else var_str in
       (*  fprintf fmt "%s#%d" print s *)
-     fprintf fmt "%s" print
+      fprintf fmt "%s" print
   | TmLam (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
