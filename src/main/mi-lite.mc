@@ -8,18 +8,10 @@
 include "options.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
-include "ocaml/compile.mc"
-include "ocaml/generate.mc"
-include "ocaml/pprint.mc"
+include "ocaml/mcore.mc"
 
-lang MCoreLiteCompile =
-  BootParser +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
-  OCamlGenerateExternalNaive
-end
+lang MCoreLiteCompile = BootParser + MExprSym + MExprUtestTrans
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
@@ -31,19 +23,6 @@ let filenameWithoutExtension = lam filename.
   match strLastIndex '.' filename with Some idx then
     subsequence filename 0 idx
   else filename
-
-let collectlibraries : ExternalNameMap -> ([String], [String])
-= lam extNameMap.
-  let f = lam s. lam str. setInsert str s in
-  let g = lam acc : (Set String, Set String). lam impl :  ExternalImpl.
-    match acc with (libs, clibs) then
-      (foldl f libs impl.libraries, foldl f clibs impl.cLibraries)
-    else never
-  in
-  let h = lam acc. lam. lam impls. foldl g acc impls in
-  match mapFoldWithKey h (setEmpty cmpString, setEmpty cmpString) extNameMap
-  with (libs, clibs) then (setToSeq libs, setToSeq clibs)
-  else never
 
 let ocamlCompile : Options -> [String] -> [String] -> String -> String -> String =
   lam options. lam libs. lam clibs. lam sourcePath. lam ocamlProg.
@@ -64,57 +43,15 @@ let ocamlCompile : Options -> [String] -> [String] -> String -> String -> String
   p.cleanup ();
   destinationFile
 
-type Hooks =
-  { debugTypeAnnot : Expr -> ()
-  , debugGenerate : String -> ()
-  , exitBefore : () -> ()
-  }
-
-let emptyHooks: Hooks =
-  { debugTypeAnnot = lam. ()
-  , debugGenerate = lam. ()
-  , exitBefore = lam. ()
-  }
-
-let ocamlCompileAst =
-  lam options : Options. lam sourcePath. lam ast. lam hooks: Hooks.
-  use MCoreLiteCompile in
-  let ast = typeAnnot ast in
-  let ast = removeTypeAscription ast in
-
-  -- If option --debug-type-annot, then pretty-print the AST
-  hooks.debugTypeAnnot ast;
-
-  -- Translate the MExpr AST into an OCaml AST
-  match typeLift ast with (env, ast) then
-    match generateTypeDecls env with (env, typeTops) then
-      let env : GenerateEnv =
-        chooseExternalImpls globalExternalImplsMap env ast
-      in
-      let exprTops = generateTops env ast in
-
-      -- Collect external library dependencies
-      match collectlibraries env.exts with (libs, clibs) then
-        let ocamlProg = pprintOcamlTops (concat typeTops exprTops) in
-
-        -- Print the AST after code generation
-        hooks.debugGenerate ocamlProg;
-
-        -- If option --exit-before, exit the program here
-        hooks.exitBefore ();
-
-        -- Compile OCamlAst
-        ocamlCompile options libs clibs sourcePath ocamlProg
-      else never
-    else never
-  else never
-
 let compile : Options -> String -> Unit = lam options. lam file.
   use MCoreLiteCompile in
   let ast = parseMCoreFile [] file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  ocamlCompileAst options file ast emptyHooks
+  let hooks = {emptyHooks with compileOcaml =
+    lam libs. lam clibs. lam ocamlProg.
+      ocamlCompile options libs clibs file ocamlProg} in
+  compileMCore file ast hooks
 
 mexpr
 

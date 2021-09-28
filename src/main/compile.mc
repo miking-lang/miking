@@ -13,16 +13,14 @@ include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
 include "mexpr/tuning/tune-file.mc"
 include "ocaml/ast.mc"
-include "ocaml/generate.mc"
-include "ocaml/pprint.mc"
+include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument +
-  OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
+  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument
 end
 
 let pprintMcore = lam ast.
@@ -68,10 +66,13 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
 
-      ocamlCompileAst options sourcePath ast
+      compileMCore sourcePath ast
         { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
         , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
+        , compileOcaml =
+            lam libs. lam clibs. lam ocamlProg.
+              ocamlCompile options libs clibs sourcePath ocamlProg
         }
     else never
 
