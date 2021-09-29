@@ -188,10 +188,10 @@ utest der (lam x. muln x x) (num2) with num4
 -- As well as scalar higher order derivatives
 recursive
 let nder : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
-  lam n. lam f. lam x.
+  lam n. lam f.
     if lti n 0 then error "Negative derivative order"
-    else if eqi n 0 then f x
-    else nder (subi n 1) (der f) x
+    else if eqi n 0 then f
+    else nder (subi n 1) (der f)
 end
 
 utest nder 0 (lam x. muln x x) (num2) with num4
@@ -271,13 +271,15 @@ let grad
   -> Tensor[DualNum]
   -> () =
 lam f. lam x. lam g.
-  tensorIteri
-    (lam idx. lam xi.
-      let e = genEpsilon () in
-      tensorSetExn x idx (_dnum e xi (_num 1.));
-      tensorSetExn g idx (_pertubation e (f x));
-      tensorSetExn x idx xi)
-    x
+  if and (tensorHasRank x 1) (tensorHasRank g 1) then
+    tensorIteri
+      (lam idx. lam xi.
+        let e = genEpsilon () in
+        tensorSetExn x idx (_dnum e xi (_num 1.));
+        tensorSetExn g idx (_pertubation e (f x));
+        tensorSetExn x idx xi)
+      x
+   else error "Invalid Input: grad"
 
 utest
   let f = lam x.
@@ -291,24 +293,23 @@ utest
   map _unpack (tensorToSeqExn g)
 with [3., 2.]
 
--- Computes the ij'th component of the Hessian d2f/(dx_i)(dx_j) of `f` at `x`,
--- where `idxi` and `idxj` are tensor indices.
+-- Computes the ij'th component of the Hessian d2f/(dx_i)(dx_j) of `f` at `x`.
 let hessij
   : (Tensor[DualNum] -> DualNum)
-  -> [Int]
-  -> [Int]
+  -> Int
+  -> Int
   -> Tensor[DualNum]
   -> DualNum =
-lam f. lam idxi. lam idxj. lam x.
+lam f. lam i. lam j. lam x.
   let ei = genEpsilon () in
   let ej = genEpsilon () in
-  let xi = tensorGetExn x idxi in
-  tensorSetExn x idxi (_dnum ei xi (_num 1.));
-  let xj = tensorGetExn x idxj in
-  tensorSetExn x idxj (_dnum ej xj (_num 1.));
+  let xi = tensorGetExn x [i] in
+  tensorSetExn x [i] (_dnum ei xi (_num 1.));
+  let xj = tensorGetExn x [j] in
+  tensorSetExn x [j] (_dnum ej xj (_num 1.));
   let hij = _pertubation ei (_pertubation ej (f x)) in
-  tensorSetExn x idxj xj;
-  tensorSetExn x idxi xi;
+  tensorSetExn x [j] xj;
+  tensorSetExn x [i] xi;
   hij
 
 -- Inplace computation of Hessian d2f/(dx_i)(dx_j) of `f` at `x` stored in `h`.
@@ -318,7 +319,10 @@ let hess
   -> Tensor[DualNum]
   -> () =
 lam f. lam x. lam h.
-  tensorIterSlice (lam i. lam hi. tensorMapiInplace (lam j. lam. hessij f [i] j x) hi) h
+  if and (tensorHasRank x 1) (tensorHasRank h 2) then
+    tensorIterSlice
+      (lam i. lam hi. tensorMapiInplace (lam idxj. lam. hessij f i (head idxj) x) hi) h
+  else error "Invalid Input: hess"
 
 utest
   let f = lam x.
@@ -335,6 +339,44 @@ with
   18., 24.,
   24., 8.
 ]
+
+-- Computes the ij'th component of the Hessian d2f_k/(dx_i)(dx_j) simultaneously
+-- for each component k of vector valued function `f` at `x`, storing the result
+-- in `hij`.
+let hessijs
+  : (Tensor[DualNum] -> Tensor[DualNum] -> ())
+  -> Int
+  -> Int
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam i. lam j. lam x. lam hij.
+  let ei = genEpsilon () in
+  let ej = genEpsilon () in
+  let xi = tensorGetExn x [i] in
+  tensorSetExn x [i] (_dnum ei xi (_num 1.));
+  let xj = tensorGetExn x [j] in
+  tensorSetExn x [j] (_dnum ej xj (_num 1.));
+  f x hij;
+  tensorMapInplace (lam h. _pertubation ei (_pertubation ej h)) hij;
+  tensorSetExn x [j] xj;
+  tensorSetExn x [i] xi;
+  ()
+
+utest
+  let f = lam x. lam r.
+    let x1 = tensorGetExn x [0] in
+    let x2 = tensorGetExn x [1] in
+    tensorSetExn r [0] (muln (muln x1 x1) (muln x2 x2));
+    tensorSetExn r [1] (addn (muln x1 x2) (muln x1 x2));
+    ()
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
+  let hij = tensorCreateDense [2] (lam. _num 0.) in
+  hessijs f 0 1 x hij;
+  map _unpack (tensorToSeqExn (hij))
+with [24., 2.]
+
 
 ----------------
 -- CONSTANTS  --

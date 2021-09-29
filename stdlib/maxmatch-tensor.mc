@@ -37,7 +37,12 @@ let maxmatchHungarian = lam w : Tensor[Int].
 
     -- We assign these feasable labels, e. g. lu[u] + lv[v] => w[u][v] for all
     -- v in V, u in U
-    tensorMapiInplace (lam i. lam. tensorMax subi (tensorSliceExn w i)) lus;
+    tensorMapiInplace
+      (lam i. lam.
+        optionGetOrElse
+          (lam. error "maxmatchHungarian: Invalid input")
+          (tensorMax subi (tensorSliceExn w i)))
+      lus;
 
     -- labels for V
     let lvs : Tensor[Int] = tcreate [n] (lam. 0) in
