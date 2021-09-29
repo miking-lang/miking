@@ -86,6 +86,26 @@ let ntycon_ = use ConTypeAst in
 let tycon_ = lam s.
   ntycon_ (nameNoSym s)
 
+let ntyvar_ = use VarTypeAst in
+  lam n.
+  TyVar {ident = n, info = NoInfo ()}
+
+let tyvar_ =
+  lam s.
+  ntyvar_ (nameNoSym s)
+
+let ntyall_ = use AllTypeAst in
+  lam n. lam ty.
+  TyAll {ident = n, info = NoInfo (), ty = ty}
+
+let tyall_ =
+  lam s.
+  ntyall_ (nameNoSym s)
+
+let tyalls_ =
+  lam strs. lam ty.
+  foldr1 tyall_ ty strs
+
 -- Tensor OP types
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_
@@ -404,6 +424,11 @@ let nvar_ = use MExprAst in
 let var_ = use MExprAst in
   lam s.
   nvar_ (nameNoSym s)
+
+let freeze_ = use MExprAst in
+  lam var.
+  match var with TmVar t then TmVar {t with frozen = true}
+  else error "var is not a TmVar construct"
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
