@@ -105,13 +105,20 @@ let sundialsExtMap =
     ]),
     ("externalIdaSSTolerances", [
       impl {
-        expr = "Boot.Sundials_wrapper.ida_ss_tolerances",
+        expr = "fun rtol atol -> Ida.SStolerances (rtol, atol)",
         ty = tyarrows_ [tyfloat_, tyfloat_, otyopaque_]
       }
     ]),
     ("externalIdaRetcode", [
       impl {
-        expr = "Boot.Sundials_wrapper.ida_retcode",
+        expr =
+"function
+  | Ida.Success ->
+      0
+  | Ida.StopTimeReached ->
+      1
+  | Ida.RootsFound ->
+      2",
         ty = tyarrow_ otyopaque_ tyint_
       }
     ]),
