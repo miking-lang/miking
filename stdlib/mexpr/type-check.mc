@@ -180,8 +180,8 @@ end
 ------------------------------------
 
 let newflexvar = use VarTypeAst in
-  lam weak. lam level.
-  TyFlex {info = NoInfo (),
+  lam weak. lam level. lam info.
+  TyFlex {info = info,
           contents = ref (Unbound {ident = nameSym "a", level = level, weak = weak})}
 
 let newvarWeak = newflexvar true
@@ -192,8 +192,12 @@ lang Generalize = AllTypeAst
   sem inst (lvl : Level) =
   | ty ->
     match stripTyAll ty with (vars, ty) then
-      let subst = foldr (lam v. mapInsert v (newvar lvl)) (mapEmpty nameCmp) vars in
-      instBase subst ty
+      let fi = infoTy ty in
+      let subst = foldr (lam v. mapInsert v (newvar lvl fi)) (mapEmpty nameCmp) vars in
+      if gti (length vars) 0 then
+        instBase subst ty
+      else
+        ty
     else never
 
   sem instBase (subst : Map Name TVar) =
@@ -326,7 +330,7 @@ lang LamTypeCheck = TypeCheck + LamAst
     let tyIdent =
       match t.tyIdent with TyUnknown _ then
         -- No type annotation: assign a monomorphic type variable to x.
-        newvarWeak env.currentLvl
+        newvarWeak env.currentLvl t.info
       else
         -- Type annotation: assign x its annotated type.
         t.tyIdent
@@ -343,7 +347,7 @@ lang AppTypeCheck = TypeCheck + AppAst
   | TmApp t ->
     let lhs = typeCheckBase env t.lhs in
     let rhs = typeCheckBase env t.rhs in
-    let tyRes  = newvar env.currentLvl in
+    let tyRes = newvar env.currentLvl t.info in
     unify (ty lhs, tyarrow_ (ty rhs) tyRes);
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
@@ -384,7 +388,7 @@ end
 lang SeqTypeCheck = TypeCheck + SeqAst
   sem typeCheckBase (env : TCEnv) =
   | TmSeq t ->
-    let elemTy = newvar env.currentLvl in
+    let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckBase env) t.tms in
     iter (lam tm. unify (elemTy, ty tm)) tms;
     TmSeq {{t with tms = tms}
@@ -398,6 +402,10 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let expected = typeCheckBase env t.expected in
     let next = typeCheckBase env t.next in
     let tusing = optionMap (typeCheckBase env) t.tusing in
+    (match tusing with Some tu then
+       unify (ty tu) (tyarrows_ [ty test, ty expected, tybool_])
+     else
+       unify (ty test) (ty expected));
     TmUtest {{{{{t with test = test}
                    with expected = expected}
                    with next = next}
@@ -407,7 +415,7 @@ end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
   sem typeCheckBase (env : TCEnv) =
-  | TmNever t -> TmNever {t with ty = ityunknown_ t.info}
+  | TmNever t -> TmNever {t with ty = newvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst
