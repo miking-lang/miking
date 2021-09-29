@@ -705,6 +705,7 @@ end
 lang IOAst = ConstAst
   syn Const =
   | CPrint {}
+  | CPrintError {}
   | CDPrint {}
   | CFlushStdout {}
   | CReadLine {}

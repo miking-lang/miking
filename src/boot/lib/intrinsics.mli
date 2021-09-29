@@ -352,6 +352,8 @@ end
 module IO : sig
   val print : int Mseq.t -> unit
 
+  val print_error : int Mseq.t -> unit
+
   val dprint : 'a -> unit
 
   val flush_stdout : unit -> unit
