@@ -8,7 +8,7 @@ include "multicore/thread.ext-ocaml.mc"
 include "ipopt/ipopt.ext-ocaml.mc"
 
 type ExternalImpl = {
-  ident : String,
+  expr : String,
   ty : Type,
   libraries : [String],
   cLibraries : [String]

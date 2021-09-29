@@ -163,6 +163,7 @@ lang OCamlPrettyPrint =
   | OTmConApp {args = []} -> true
   | OTmConApp _ -> false
   | OTmVarExt _ -> true
+  | OTmExprExt _ -> false
   | OTmConAppExt _ -> false
   | OTmString _ -> true
   | OTmLabel _ -> true
@@ -401,6 +402,7 @@ lang OCamlPrettyPrint =
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVarExt {ident = ident} -> (env, ident)
+  | OTmExprExt {expr = expr} -> (env, expr)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
