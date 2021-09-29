@@ -398,15 +398,18 @@ lang ConTypeCmp = Cmp + ConTypeAst
 end
 
 lang VarTypeCmp = Cmp + VarTypeAst
-  sem cmpTVar =
-  | (Unbound {ident = n}, Unbound {ident = m}) -> nameCmp n m
-  | (Link ty1, Link ty2) -> cmpType ty1 ty2
-  | (tv1, tv2) ->
-    subi (constructorTag tv1) (constructorTag tv2)
-
   sem cmpTypeH =
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
-  | (TyFlex t1, TyFlex t2) -> cmpTVar (deref t1.contents, deref t2.contents)
+  | (TyFlex _ & ty1, ty2)
+  | (ty1, TyFlex _ & ty2) ->
+    match (resolveLink ty1, resolveLink ty2) with (ty1, ty2) then
+      match (ty1, ty2) with (TyFlex t1, TyFlex t2) then
+        match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) then
+          nameCmp n1.ident n2.ident
+        else never
+      else match (ty1, ty2) with (! TyFlex _, ! TyFlex _) then cmpType ty1 ty2
+      else subi (constructorTag ty1) (constructorTag ty2)
+    else never
 end
 
 lang AllTypeCmp = Cmp + AllTypeAst

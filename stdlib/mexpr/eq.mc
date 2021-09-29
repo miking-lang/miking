@@ -590,16 +590,22 @@ lang VarTypeEq = Eq + VarTypeAst
 
   sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyVar t1 ->
-    match lhs with Some (TyVar t2) then
+    match lhs with TyVar t2 then
       if nameEq t1.ident t2.ident then true
       else
         match biLookup (t1.ident, t2.ident) typeEnv.tyVarEnv with Some _ then true
         else false
     else false
-  | TyFlex t1 ->
-    match lhs with Some (TyFlex t2) then
-      eqTVar typeEnv (deref t1.contents, deref t2.contents)
-    else false
+  | TyFlex _ & rhs ->
+    match (resolveLink lhs, resolveLink rhs) with (ty1, ty2) then
+      match (ty1, ty2) with (TyFlex t1, TyFlex t2) then
+        match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) then
+          nameEq n1.ident n2.ident
+        else never
+      else match (ty1, ty2) with (! TyFlex _, ! TyFlex _) then
+        eqTypeH typeEnv ty1 ty2
+      else false
+    else never
 end
 
 lang AllTypeEq = Eq + AllTypeAst

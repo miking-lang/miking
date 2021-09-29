@@ -1218,13 +1218,31 @@ lang VarTypeAst = Ast
   | TyFlex {info     : Info,
             contents : Ref TVar}
 
+  -- Recursively follow links, producing something guaranteed not to be a link.
+  sem resolveLink =
+  | TyFlex t & ty ->
+    match deref t.contents with Link ty then
+      resolveLink ty
+    else
+      ty
+  | ty ->
+    ty
+
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
-  | TyFlex t -> TyFlex {t with info = info}
+  | TyFlex t ->
+    match deref t.contents with Link ty then
+      tyWithInfo ty
+    else
+      TyFlex {t with info = info}
 
   sem infoTy =
   | TyVar t -> t.info
-  | TyFlex t -> t.info
+  | TyFlex t ->
+    match deref t.contents with Link ty then
+      infoTy ty
+    else
+      t.info
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyFlex t & ty1 ->
