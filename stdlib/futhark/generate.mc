@@ -403,17 +403,33 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     let param : (FutPat, FutExpr) =
       ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
         generateExpr env ne ) in
-    let forBody = FEApp {
-      lhs = FEApp {
-        lhs = generateExpr env f,
-        rhs = FEVar {ident = acc, ty = accTy, info = t.info},
-        ty = FTyArrow {from = elemTy, to = accTy, info = t.info},
-        info = t.info},
-      rhs = FEVar {ident = x, ty = elemTy, info = t.info},
-      ty = accTy, info = t.info} in
-    FEForEach {
-      param = param, loopVar = x, seq = generateExpr env s,
-      body = forBody, ty = accTy, info = t.info}
+    let constructForEach : FutExpr -> Name -> FutExpr = lam body. lam x.
+      FEForEach {
+        param = param, loopVar = x, seq = generateExpr env s, body = body,
+        ty = accTy, info = t.info}
+    in
+    -- NOTE(larshum, 2021-09-29): If the body consists of lambdas, eliminate
+    -- them by substitution. This can only happen because of a pattern
+    -- transformation, as lambda lifting would have eliminated it otherwise.
+    match f with TmLam {ident = accLam, body = TmLam {ident = x, body = body}} then
+      -- Substitute 'acc' with 'ne' in the function body, and use the 'x' bound
+      -- in the lambda.
+      let subMap = mapFromSeq nameCmp [
+        (accLam, lam info. TmVar {ident = acc, ty = t.ty, info = info})] in
+      let body = substituteVariables body subMap in
+      let futBody = generateExpr env body in
+      constructForEach futBody x
+    else
+      let forBody =
+        FEApp {
+          lhs = FEApp {
+            lhs = generateExpr env f,
+            rhs = FEVar {ident = acc, ty = accTy, info = t.info},
+            ty = FTyArrow {from = elemTy, to = accTy, info = t.info},
+            info = t.info},
+          rhs = FEVar {ident = x, ty = elemTy, info = t.info},
+          ty = accTy, info = t.info} in
+      constructForEach forBody x
   | (TmApp _) & t -> defaultGenerateApp env t
 end
 
@@ -657,14 +673,13 @@ let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [],
     params = [(a2, futIntTy_), (b2, futIntTy_)], ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ a2, nFutVar_ b2],
+    body = futAdd_ (nFutVar_ a2) (nFutVar_ b2),
     info = NoInfo ()},
   FDeclFun {
     ident = g, entry = true, typeParams = [],
     params = [(r, floatSeqType), (f2, futFloatTy_)], ret = futFloatTy_,
     body =
-      futAppSeq_ (futConst_ (FCAdd ()))
-        [nFutVar_ f2, futArrayAccess_ (nFutVar_ r) (futInt_ 0)],
+      futAdd_ (nFutVar_ f2) (futArrayAccess_ (nFutVar_ r) (futInt_ 0)),
     info = NoInfo ()},
   FDeclFun {
     ident = min, entry = true, typeParams = [],
@@ -684,5 +699,27 @@ let expected = FProg {decls = [
 let entryPoints = setOfSeq nameCmp [f, g, min] in
 utest printFutProg (generateProgram entryPoints t) with printFutProg expected
 using eqSeq eqc in
+
+let acc = nameSym "acc" in
+let x = nameSym "x" in
+let y = nameSym "y" in
+let foldlToFor =
+  nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
+    nlam_ s (tyseq_ tyint_) (
+      foldl_
+        (nlam_ acc tyint_ (nlam_ y tyint_ (
+          addi_ (nvar_ acc) (nvar_ y))))
+        (int_ 0) (nvar_ s))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = true, typeParams = [],
+    params = [(s, futUnsizedArrayTy_ futIntTy_)], ret = futIntTy_,
+    body =
+      futForEach_
+        (nFutPvar_ acc, futInt_ 0)
+        y (nFutVar_ s) (futAdd_ (nFutVar_ acc) (nFutVar_ y))}]} in
+let entryPoints = setOfSeq nameCmp [f] in
+utest printFutProg (generateProgram entryPoints foldlToFor)
+with printFutProg expected using eqSeq eqc in
 
 ()
