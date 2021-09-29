@@ -56,6 +56,8 @@ lang Unify = MExprEq
   sem unify =
   | (ty1, ty2) -> unifyWithNames biEmpty (ty1, ty2)
 
+  -- Unify the types `ty1' and `ty2', assuming that any pair of type variables in
+  -- `names' are equal.
   sem unifyWithNames (names : BiNameMap) =
   | (ty1, ty2) ->
     -- OPT(aathn, 2021-09-27): This equality check traverses the types unnecessarily.
@@ -78,7 +80,12 @@ lang Unify = MExprEq
     ] in
     infoErrorExit (infoTy ty1) msg
 
-  sem occurs (tv : TVar) =
+  -- checkBeforeUnify is called before a variable `tv' is unified with another type.
+  -- Performs three tasks in one traversal:
+  -- - Occurs check
+  -- - Update level fields of TVars
+  -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
+  sem checkBeforeUnify (tv : TVar) =
   -- Intentionally left empty
 end
 
@@ -88,7 +95,7 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
   | (TyFlex {contents = r}, !TyUnknown _ & ty1)
   | (!TyUnknown _ & ty1, TyFlex {contents = r}) ->
     match deref r with Unbound _ & tv then
-      occurs tv ty1; modref r (Link ty1)
+      checkBeforeUnify tv ty1; modref r (Link ty1)
     else match deref r with Link ty2 then
       unifyWithNames names (ty1, ty2)
     else never
@@ -99,7 +106,7 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
       else ()
     else ()
 
-  sem occurs (tv : TVar) =
+  sem checkBeforeUnify (tv : TVar) =
   | TyFlex {info = info, contents = r} ->
     -- TODO(aathn, 2021-09-28): This equality check uses empty type environment.
     if eqTVar [] (deref r, tv) then
@@ -107,7 +114,7 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
       infoErrorExit info msg
     else
       match deref r with Link ty then
-        occurs tv ty
+        checkBeforeUnify tv ty
       else match deref r with Unbound ({level = k} & t) then
         let minLevel =
           match tv with Unbound {level = l} then mini k l else k
@@ -124,10 +131,10 @@ lang FunTypeUnify = Unify + FunTypeAst
     unifyWithNames names (from1, from2);
     unifyWithNames names (to1, to2)
 
-  sem occurs (tv : TVar) =
+  sem checkBeforeUnify (tv : TVar) =
   | TyArrow {from = from, to = to} ->
-    occurs tv from;
-    occurs tv to
+    checkBeforeUnify tv from;
+    checkBeforeUnify tv to
 end
 
 lang AllTypeUnify = Unify + AllTypeAst
@@ -135,7 +142,7 @@ lang AllTypeUnify = Unify + AllTypeAst
   | (TyAll t1, TyAll t2) ->
     unifyWithNames (biInsert (t1.ident, t2.ident) names) (t1.ty, t2.ty)
 
-  sem occurs (tv : TVar) =
+  sem checkBeforeUnify (tv : TVar) =
   | TyAll t ->
     match tv with Unbound {weak = true} then
       let msg = join [
@@ -144,7 +151,7 @@ lang AllTypeUnify = Unify + AllTypeAst
       ] in
       infoErrorExit t.info msg
     else
-      occurs tv t.ty
+      checkBeforeUnify tv t.ty
 end
 
 lang ConstTypeUnify = Unify + ConstTypeAst
@@ -153,7 +160,7 @@ lang ConstTypeUnify = Unify + ConstTypeAst
   | (_, TyUnknown _) ->
     ()
 
-  sem occurs (tv : TVar) =
+  sem checkBeforeUnify (tv : TVar) =
   | TyUnknown _ | TyInt _ | TyBool _ | TyFloat _ | TyChar _ ->
     ()
 end
@@ -163,9 +170,9 @@ lang SeqTypeUnify = Unify + SeqTypeAst
   | (TySeq t1, TySeq t2) ->
     unifyWithNames names (t1.ty, t2.ty)
 
-  sem occurs (tv : TVar) =
+  sem checkBeforeUnify (tv : TVar) =
   | TySeq t ->
-    occurs tv t.ty
+    checkBeforeUnify tv t.ty
 end
 
 ------------------------------------
@@ -181,7 +188,7 @@ let newvarWeak = newflexvar true
 let newvar = newflexvar false
 
 lang Generalize = AllTypeAst
-  -- Instantiate the top-level type variables of `ty'.
+  -- Instantiate the top-level type variables of `ty' with fresh schematic variables.
   sem inst (lvl : Level) =
   | ty ->
     match stripTyAll ty with (vars, ty) then
@@ -222,8 +229,10 @@ lang VarTypeGeneralize = Generalize + VarTypeAst
       genBase lvl ty
     else match deref t.contents with Unbound {ident = n, level = k} then
       if gti k lvl then
+        -- Var is free, generalize
         ([n], TyVar {info = t.info, ident = n})
       else
+        -- Var is bound in previous let, don't generalize
         ([], TyFlex t)
     else never
   | TyVar _ & ty ->
