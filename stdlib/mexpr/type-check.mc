@@ -323,7 +323,7 @@ end
 lang LamTypeCheck = TypeCheck + LamAst
   sem typeCheckBase (env : TCEnv) =
   | TmLam t ->
-    let tyX =
+    let tyIdent =
       match t.tyIdent with TyUnknown _ then
         -- No type annotation: assign a monomorphic type variable to x.
         newvarWeak env.currentLvl
@@ -331,10 +331,11 @@ lang LamTypeCheck = TypeCheck + LamAst
         -- Type annotation: assign x its annotated type.
         t.tyIdent
     in
-    let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
-    let tyLam = ityarrow_ t.info tyX (ty body) in
-    TmLam {{t with body = body}
-              with ty = tyLam}
+    let body = typeCheckBase (_insertVar t.ident tyIdent env) t.body in
+    let tyLam = ityarrow_ t.info tyIdent (ty body) in
+    TmLam {{{t with body = body}
+               with tyIdent = tyIdent}
+               with ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -354,21 +355,22 @@ lang LetTypeCheck = TypeCheck + LetAst
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = typeCheckBase {env with currentLvl = addi 1 lvl} t.body in
-    let inexpr =
+    let tyBody =
       match t.tyBody with TyUnknown _ then
         -- No type annotation: generalize the inferred type
-        let genBody = gen lvl (ty body) in
-        typeCheckBase (_insertVar t.ident genBody env) t.inexpr
+        gen lvl (ty body)
       else
         -- Type annotation: unify the annotated type with the inferred one
         match stripTyAll t.tyBody with (_, tyAnnot) then
           unify (tyAnnot, ty body);
-          typeCheckBase (_insertVar t.ident t.tyBody env) t.inexpr
+          t.tyBody
         else never
     in
-    TmLet {{{t with body = body}
-               with inexpr = inexpr}
-               with ty = ty inexpr}
+    let inexpr = typeCheckBase (_insertVar t.ident tyBody env) t.inexpr in
+    TmLet {{{{t with body = body}
+                with tyBody = tyBody}
+                with inexpr = inexpr}
+                with ty = ty inexpr}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
