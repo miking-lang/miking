@@ -115,12 +115,14 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
     else
       match deref r with Link ty then
         checkBeforeUnify tv ty
-      else match deref r with Unbound ({level = k} & t) then
-        let minLevel =
-          match tv with Unbound {level = l} then mini k l else k
-        in
-        modref r (Unbound {t with level = minLevel})
-      else never
+      else
+        match deref r with Unbound ({level = k, weak = v} & t) then
+          match tv with Unbound {level = l, weak = w} then
+            let updated = Unbound {{t with level = mini k l}
+                                      with weak  = or v w} in
+            modref r updated
+          else ()
+        else never
   | TyVar _ ->
     ()
 end
