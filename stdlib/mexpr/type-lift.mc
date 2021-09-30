@@ -45,11 +45,11 @@ lang VariantNameTypeAst = Eq
   syn Type =
   | TyVariantName {ident : Name}
 
-  sem eqTypeH (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : TypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyVariantName {ident = rid} ->
     match lhs with TyVariantName {ident = lid} then
-      nameEq lid rid
-    else false
+      if nameEq lid rid then Some free else None ()
+    else None ()
 
 end
 

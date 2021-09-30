@@ -97,21 +97,29 @@ lang Eq
   | (lhs, rhs) /- (Const, Const) -/ ->
     eqi (constructorTag lhs) (constructorTag rhs)
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  -- Intentionally left blank
-
   sem eqType (lhs : Type) =
   | rhs ->
     let empty = {tyVarEnv = biEmpty, tyConEnv = assocEmpty} in
-    eqTypeH empty lhs rhs
+    match eqTypeH empty biEmpty lhs rhs with Some _ then true else false
 
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  -- eqTypeH env free ty1 ty2 compares ty1 and ty2, returning
+  -- + None () if ty1 and ty2 are not alpha equivalent, and
+  -- + Some free' if ty1 and ty2 are alpha equivalent, where free' is an
+  --   updated bijection between free variables.
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   -- Intentionally left blank
 
   sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
     match eqExprH empty empty e1 e2 with Some _ then true else false
+
+  -- eqExprH env free lhs rhs compares lhs and rhs, returning
+  -- + None () if lhs and rhs are not alpha equivalent, and
+  -- + Some free' if lhs and rhs are alpha equivalent, where free' is an
+  --   updated bijection between free variables.
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  -- Intentionally left blank
 end
 
 lang VarEq = Eq + VarAst
@@ -488,143 +496,143 @@ end
 -----------
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyUnknown _ ->
-    match unwrapType typeEnv lhs with Some (TyUnknown _) then true else false
+    match unwrapType typeEnv lhs with Some (TyUnknown _) then Some free
+    else None ()
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyBool _ ->
-    match unwrapType typeEnv lhs with Some (TyBool _) then true else false
+    match unwrapType typeEnv lhs with Some (TyBool _) then Some free
+    else None ()
 end
 
 lang IntTypeEq = Eq + IntTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyInt _ ->
-    match unwrapType typeEnv lhs with Some (TyInt _) then true else false
+    match unwrapType typeEnv lhs with Some (TyInt _) then Some free
+    else None ()
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyFloat _ ->
-    match unwrapType typeEnv lhs with Some (TyFloat _) then true else false
+    match unwrapType typeEnv lhs with Some (TyFloat _) then Some free
+    else None ()
 end
 
 lang CharTypeEq = Eq + CharTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyChar _ ->
-    match unwrapType typeEnv lhs with Some (TyChar _) then true else false
+    match unwrapType typeEnv lhs with Some (TyChar _) then Some free
+    else None ()
 end
 
 lang FunTypeEq = Eq + FunTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyArrow r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyArrow l then
-        and (eqTypeH typeEnv l.from r.from) (eqTypeH typeEnv l.to r.to)
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyArrow l) then
+      match eqTypeH typeEnv free l.from r.from with Some free then
+        eqTypeH typeEnv free l.to r.to
+      else None ()
+    else None ()
 end
 
 lang SeqTypeEq = Eq + SeqTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TySeq r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TySeq l then
-        eqTypeH typeEnv l.ty r.ty
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TySeq l) then
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
 end
 
 lang TensorTypeEq = Eq + TensorTypeAst
-  sem eqTypeH (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : TypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyTensor r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyTensor l then
-        eqTypeH typeEnv l.ty r.ty
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyTensor l) then
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
 end
 
 lang RecordTypeEq = Eq + RecordTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyRecord r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyRecord l then
-        mapEq (eqTypeH typeEnv) l.fields r.fields
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyRecord l) then
+      if eqi (mapLength l.fields) (mapLength r.fields) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.fields with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.fields
+      else None ()
+    else None ()
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyVariant r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyVariant l then
-        mapEq (eqTypeH typeEnv) l.constrs r.constrs
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyVariant l) then
+      if eqi (mapLength l.constrs) (mapLength r.constrs) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.constrs with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.constrs
+      else None ()
+    else None ()
 end
 
 lang ConTypeEq = Eq + ConTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | rhs & TyCon r ->
     match unwrapType typeEnv lhs with Some lty then
       match unwrapType typeEnv rhs with Some rty then
-        eqTypeH typeEnv lty rty
-      else false
+        eqTypeH typeEnv free lty rty
+      else None ()
     else match lhs with TyCon l then
-      nameEq l.ident r.ident
-    else false
+      if nameEq l.ident r.ident then Some free else None ()
+    else None ()
 end
 
 lang VarTypeEq = Eq + VarTypeAst
-  sem eqTVar (typeEnv : EqTypeEnv) =
-  | (Unbound {ident = n1}, Unbound {ident = n2}) ->
-    nameEq n1 n2
-  | (Link ty1, Link ty2) ->
-    eqTypeH typeEnv ty1 ty2
-  | (tv1, tv2) ->
-    false
-
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyVar t1 ->
     match lhs with TyVar t2 then
-      if nameEq t1.ident t2.ident then true
-      else
-        match biLookup (t1.ident, t2.ident) typeEnv.tyVarEnv with Some _ then true
-        else false
-    else false
+      _eqCheck t1.ident t2.ident typeEnv.tyVarEnv free
+    else None ()
   | TyFlex _ & rhs ->
     match (resolveLink lhs, resolveLink rhs) with (ty1, ty2) then
       match (ty1, ty2) with (TyFlex t1, TyFlex t2) then
         match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) then
-          nameEq n1.ident n2.ident
+          if nameEq n1.ident n2.ident then Some free else None ()
         else never
       else match (ty1, ty2) with (! TyFlex _, ! TyFlex _) then
-        eqTypeH typeEnv ty1 ty2
-      else false
+        eqTypeH typeEnv free ty1 ty2
+      else None ()
     else never
 end
 
 lang AllTypeEq = Eq + AllTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyAll t1 ->
     match unwrapType typeEnv lhs with Some (TyAll t2) then
       let tyVarEnv = biInsert (t1.ident, t2.ident) typeEnv.tyVarEnv in
-      eqTypeH {typeEnv with tyVarEnv = tyVarEnv} t1.ty t2.ty
-    else false
+      eqTypeH {typeEnv with tyVarEnv = tyVarEnv} free t1.ty t2.ty
+    else None ()
 end
 
 lang AppTypeEq = Eq + AppTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : BiNameMap) (lhs : Type) =
   | TyApp r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyApp l then
-        and (eqTypeH typeEnv l.lhs r.lhs) (eqTypeH typeEnv l.rhs r.rhs)
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyApp l) then
+      match eqTypeH typeEnv free l.lhs r.lhs with Some free then
+        eqTypeH typeEnv free l.rhs r.rhs
+      else None ()
+    else None ()
 end
 
 -----------------------------
