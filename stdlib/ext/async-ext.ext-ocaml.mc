@@ -19,5 +19,13 @@ let asyncExtMap =
         libraries = ["lwt.unix"],
         cLibraries = []
       }
+    ]),
+    ("externalAsyncBind", [
+      { ident = "Lwt.bind",
+        ty = tyarrows_ [otyvarext_ "'a Lwt.t",
+                (tyarrows_ [otyvarext_ "'a", otyvarext_ "'b Lwt.t"]), otyvarext_ "'b Lwt.t"],
+        libraries = ["lwt.unix"],
+        cLibraries = []
+      }
     ])
   ]
