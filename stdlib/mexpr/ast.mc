@@ -1202,12 +1202,13 @@ lang ConTypeAst = Ast
 end
 
 type Level = Int
+type TVarRec = {ident : Name,
+                weak  : Bool,
+                level : Level}
 
 lang VarTypeAst = Ast
   syn TVar =
-  | Unbound {ident : Name,
-             weak  : Bool,
-             level : Level}
+  | Unbound TVarRec
   | Link Type
 
   syn Type =
