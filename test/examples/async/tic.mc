@@ -2,10 +2,10 @@
 
 include "ext/async-ext.mc"
 
-recursive let tic = lam text. lam time.
-  asyncBind (asyncPrint text) (lam.
+recursive let tic = lam str. lam time.
+  asyncBind (asyncPrint str) (lam.
   asyncBind (asyncSleep time) (lam.
-  tic text time
+  tic str time
   ))
 
 end
