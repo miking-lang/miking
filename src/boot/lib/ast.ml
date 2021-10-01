@@ -45,6 +45,8 @@ let utest_fail_local = ref 0 (* Counts local failed tests for one file *)
 
 type side_effect = bool
 
+type frozen = bool
+
 (* Map type for record implementation *)
 module Record = Map.Make (Ustring)
 
@@ -248,7 +250,7 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t * bool
+  | TmVar of info * ustring * Symb.t * frozen
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
