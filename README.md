@@ -1156,7 +1156,7 @@ let mathExtMap =
   [
     ("externalExp", [
       { 
-        ident = "Float.exp", 
+        expr = "Float.exp", 
         ty = tyarrow_ tyfloat_ tyfloat_ , 
         libraries = [], 
         cLibraries = [] 
@@ -1165,18 +1165,19 @@ let mathExtMap =
   ]
 ```
 
-This map associates the `externalExp` external to a list of implementations,
-which here only has one element, namely the function `Float.exp` from OCaml's
-standard library. The field `ty` encode the OCaml type of this value (see
-[stdlib/ocaml/ast.mc](stdlib/ocaml/ast.mc)), which is needed to convert values
-between miking and OCaml. In the case where you have multiple implementations,
-the compiler will try to pick the implementation which gives the least amount of
-overhead when converting to and from OCaml values. The `libraries` field list
-OCaml libraries that are needed to call this function, and `cLibraries` lists c
-libraries that are needed during linking. In this case none are needed since it
-is part of the standard library. If let's say we wanted to use `Float.exp` from
-a library `foo`, then we should instead have the field `libraries =
-["foo"]`. Finally, we need to add `mathExtMap` to `globalExternalImplsMap` in
+This map associates the `externalExp` external to a list of expressions in the
+target language, which here only has one element, namely the function
+`Float.exp` from OCaml's standard library. The field `ty` encode the OCaml type
+of this value (see [stdlib/ocaml/ast.mc](stdlib/ocaml/ast.mc)), which is needed
+to convert values between miking and OCaml. In the case where you have multiple
+implementations, the compiler will try to pick the implementation which gives
+the least amount of overhead when converting to and from OCaml values. The
+`libraries` field list OCaml libraries that are needed to call this function,
+and `cLibraries` lists c libraries that are needed during linking. In this case
+none are needed since it is part of the standard library. If let's say we wanted
+to use `Float.exp` from a library `foo`, then we should instead have the field
+`libraries = ["foo"]`. Finally, we need to add `mathExtMap` to
+`globalExternalImplsMap` in
 [stdlib/ocaml/external-includes.mc](stdlib/ocaml/external-includes.mc).
 
 ### Conversion between values
