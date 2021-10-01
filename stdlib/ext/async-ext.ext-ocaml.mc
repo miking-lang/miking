@@ -27,5 +27,12 @@ let asyncExtMap =
         libraries = ["lwt.unix"],
         cLibraries = []
       }
+    ]),
+    ("asyncPrint", [
+      { ident = "Lwt_io.print",
+        ty = tyarrows_ [otystring_ , otyvarext_ "unit Lwt.t"],
+        libraries = ["lwt.unix"],
+        cLibraries = []
+      }
     ])
   ]
