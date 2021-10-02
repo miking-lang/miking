@@ -1,11 +1,11 @@
 include "map.mc"
 include "ocaml/ast.mc"
 
-let implWithLibs = lam arg : { ident : String, ty : Type, libraries : [String] }.
-  { ident = arg.ident, ty = arg.ty, libraries = arg.libraries, cLibraries = [] }
+let implWithLibs = lam arg : { expr : String, ty : Type, libraries : [String] }.
+  { expr = arg.expr, ty = arg.ty, libraries = arg.libraries, cLibraries = [] }
 
-let impl = lam arg : { ident : String, ty : Type }.
-  implWithLibs { ident = arg.ident, ty = arg.ty, libraries = [] }
+let impl = lam arg : { expr : String, ty : Type }.
+  implWithLibs { expr = arg.expr, ty = arg.ty, libraries = [] }
 
 let extTestMap =
   use OCamlTypeAst in
@@ -14,35 +14,35 @@ let extTestMap =
     ("extTestListOfLists", [
       impl
       {
-        ident = "Boot.Exttest.list_of_lists",
+        expr = "Boot.Exttest.list_of_lists",
         ty = otylist_ (otylist_ tyint_)
       }
     ]),
     ("extTestListHeadHead", [
       impl
       {
-        ident = "Boot.Exttest.list_hd_hd",
+        expr = "Boot.Exttest.list_hd_hd",
         ty = tyarrow_ (otylist_ (otylist_ (otyparam_ "a"))) (otyparam_ "a")
       }
     ]),
     ("extTestArrayOfArrays", [
       impl
       {
-        ident = "Boot.Exttest.array_of_arrays",
+        expr = "Boot.Exttest.array_of_arrays",
         ty = otyarray_ (otyarray_ tyint_)
       }
     ]),
     ("extTestArrayHeadHead", [
       impl
       {
-        ident = "Boot.Exttest.array_hd_hd",
+        expr = "Boot.Exttest.array_hd_hd",
         ty = tyarrow_ (otyarray_ (otyarray_ (otyparam_ "a"))) (otyparam_ "a")
       }
     ]),
     ("extTestFlip", [
       impl
       {
-        ident = "Fun.flip",
+        expr = "Fun.flip",
         ty = tyarrows_ [tyarrows_ [(otyparam_ "a"),
                                    (otyparam_ "b"),
                                    (otyparam_ "c")],
@@ -55,49 +55,49 @@ let extTestMap =
     ("extTestUnit1", [
       impl
       {
-        ident = "Boot.Exttest.unit1",
+        expr = "Boot.Exttest.unit1",
         ty = tyarrow_ tyint_ (otytuple_ [])
       }
     ]),
     ("extTestUnit2", [
       impl
       {
-        ident = "Boot.Exttest.unit2",
+        expr = "Boot.Exttest.unit2",
         ty = tyarrow_ (otytuple_ []) tyint_
       }
     ]),
     ("extTestTuple1", [
       impl
       {
-        ident = "Boot.Exttest.tuple1",
+        expr = "Boot.Exttest.tuple1",
         ty = otytuple_ [tyint_, tyfloat_]
       }
     ]),
     ("extTestTuple2", [
       impl
       {
-        ident = "Boot.Exttest.tuple2",
+        expr = "Boot.Exttest.tuple2",
         ty = otytuple_ [otylist_ tyint_, tyint_]
       }
     ]),
     ("extTestTuple10th", [
       impl
       {
-        ident = "Boot.Exttest.tuple1_0th",
+        expr = "Boot.Exttest.tuple1_0th",
         ty = tyarrow_ (otytuple_ [tyint_, tyfloat_]) tyint_
       }
     ]),
     ("extTestTuple20th", [
       impl
       {
-        ident = "Boot.Exttest.tuple2_0th",
+        expr = "Boot.Exttest.tuple2_0th",
         ty = tyarrow_ (otytuple_ [otylist_ tyint_, tyint_]) (otylist_ tyint_)
       }
     ]),
     ("extTestRecord1", [
       impl
       {
-        ident = "Boot.Exttest.myrec1",
+        expr = "Boot.Exttest.myrec1",
         ty = otyrecord_
               (otyvarext_ "Boot.Exttest.myrec1_t" [])
               [("a", tyint_), ("b", tyfloat_)]
@@ -106,7 +106,7 @@ let extTestMap =
     ("extTestRecord1A", [
       impl
       {
-        ident = "Boot.Exttest.myrec1_a",
+        expr = "Boot.Exttest.myrec1_a",
         ty = tyarrow_ (otyrecord_
                         (otyvarext_ "Boot.Exttest.myrec1_t" [])
                         [("a", tyint_), ("b", tyfloat_)])
@@ -116,7 +116,7 @@ let extTestMap =
     ("extTestRecord2", [
       impl
       {
-        ident = "Boot.Exttest.myrec2",
+        expr = "Boot.Exttest.myrec2",
         ty = otyrecord_
               (otyvarext_ "Boot.Exttest.myrec2_t" [])
               [("a", otylist_ tyint_), ("b", tyint_)]
@@ -125,7 +125,7 @@ let extTestMap =
     ("extTestRecord2A", [
       impl
       {
-        ident = "Boot.Exttest.myrec2_a",
+        expr = "Boot.Exttest.myrec2_a",
         ty = tyarrow_ (otyrecord_
                         (otyvarext_ "Boot.Exttest.myrec2_t" [])
                         [("a", otylist_ tyint_), ("b", tyint_)])
@@ -135,7 +135,7 @@ let extTestMap =
     ("extTestRecord3", [
       impl
       {
-        ident = "Boot.Exttest.myrec3",
+        expr = "Boot.Exttest.myrec3",
         ty = otyrecord_
               (otyvarext_ "Boot.Exttest.myrec3_t" [])
               [
@@ -153,7 +153,7 @@ let extTestMap =
     ("extTestRecord3BA", [
       impl
       {
-        ident = "Boot.Exttest.myrec3_b_a",
+        expr = "Boot.Exttest.myrec3_b_a",
         ty =
           tyarrow_
             (otyrecord_
@@ -174,28 +174,28 @@ let extTestMap =
     ("extTestArgLabel", [
       impl
       {
-        ident = "Boot.Exttest.arg_label",
+        expr = "Boot.Exttest.arg_label",
         ty = tyarrows_ [otylabel_ "b" tyint_, otylabel_ "a" tyint_, tyint_]
       }
     ]),
     ("extTestGenarrIntNumDims", [
       impl
       {
-        ident = "Bigarray.Genarray.num_dims",
+        expr = "Bigarray.Genarray.num_dims",
         ty = tyarrow_ otygenarrayclayoutint_ tyint_
       }
     ]),
     ("extTestGenarrFloatNumDims", [
       impl
       {
-        ident = "Bigarray.Genarray.num_dims",
+        expr = "Bigarray.Genarray.num_dims",
         ty = tyarrow_ otygenarrayclayoutfloat_ tyint_
       }
     ]),
     ("extTestGenarrIntSliceLeft", [
       impl
       {
-        ident = "Bigarray.Genarray.slice_left",
+        expr = "Bigarray.Genarray.slice_left",
         ty = tyarrows_ [otygenarrayclayoutint_,
                         otyarray_ tyint_,
                         otygenarrayclayoutint_]
@@ -204,7 +204,7 @@ let extTestMap =
     ("extTestGenarrFloatSliceLeft", [
       impl
       {
-        ident = "Bigarray.Genarray.slice_left",
+        expr = "Bigarray.Genarray.slice_left",
         ty = tyarrows_ [otygenarrayclayoutfloat_,
                         otyarray_ tyint_,
                         otygenarrayclayoutfloat_]
@@ -213,7 +213,7 @@ let extTestMap =
     ("extTestArray2IntSliceLeft", [
       impl
       {
-        ident = "Bigarray.Array2.slice_left",
+        expr = "Bigarray.Array2.slice_left",
         ty = tyarrows_ [otybaarrayclayoutint_ 2,
                          tyint_,
                          otybaarrayclayoutint_ 1]
@@ -222,7 +222,7 @@ let extTestMap =
     ("extTestArray2FloatSliceLeft", [
       impl
       {
-        ident = "Bigarray.Array2.slice_left",
+        expr = "Bigarray.Array2.slice_left",
         ty = tyarrows_ [otybaarrayclayoutfloat_ 2,
                         tyint_,
                         otybaarrayclayoutfloat_ 1]
@@ -231,27 +231,27 @@ let extTestMap =
     ("extTestArray2IntOfGenarr", [
       impl
       {
-        ident = "Bigarray.array2_of_genarray",
+        expr = "Bigarray.array2_of_genarray",
         ty = tyarrow_ otygenarrayclayoutint_ (otybaarrayclayoutint_ 2)
       }
     ]),
     ("extTestArray2FloatOfGenarr", [
       impl
       {
-        ident = "Bigarray.array2_of_genarray",
+        expr = "Bigarray.array2_of_genarray",
         ty = tyarrow_ otygenarrayclayoutfloat_ (otybaarrayclayoutfloat_ 2)
       }
     ]),
     ("extTestZero", [
-      impl { ident = "Float.zero", ty = tyfloat_ }
+      impl { expr = "Float.zero", ty = tyfloat_ }
     ]),
     ("extTestExp", [
-      impl { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ }
+      impl { expr = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("extTestListMap", [
       impl
       {
-        ident = "List.map",
+        expr = "List.map",
         ty = tyarrows_ [tyarrow_ (otyparam_ "a") (otyparam_ "b"),
                         otylist_ (otyparam_ "a"),
                         otylist_ (otyparam_ "b")]
@@ -260,13 +260,13 @@ let extTestMap =
     ("extTestListConcatMap", [
       impl
       {
-        ident = "List.concat_map",
+        expr = "List.concat_map",
         ty = tyarrows_ [tyarrow_ (otyparam_ "a") (otylist_ (otyparam_ "b")),
                         otylist_ (otyparam_ "a"),
                         otylist_ (otyparam_ "b")]
       }
     ]),
     ("extTestNonExistant", [
-      implWithLibs { ident = "none", ty = tyint_, libraries = ["no-lib"] }
+      implWithLibs { expr = "none", ty = tyint_, libraries = ["no-lib"] }
     ])
   ]

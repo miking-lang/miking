@@ -960,6 +960,9 @@ let deleteFile_ = use MExprAst in
 let print_ = use MExprAst in
   lam s. app_ (uconst_ (CPrint ())) s
 
+let printError_ = use MExprAst in
+  lam s. app_ (uconst_ (CPrintError ())) s
+
 let dprint_ = use MExprAst in
   lam s. app_ (uconst_ (CDPrint ())) s
 

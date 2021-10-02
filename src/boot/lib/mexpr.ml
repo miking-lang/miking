@@ -247,6 +247,8 @@ let arity = function
   (* MCore intrinsics: Debug and I/O *)
   | Cprint ->
       1
+  | CprintError ->
+      1
   | Cdprint ->
       1
   | CreadLine ->
@@ -904,6 +906,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       !program_output (tmseq2ustring fi lst) ;
       tm_unit
   | Cprint, _ ->
+      raise_error fi "The argument to print must be a string"
+  | CprintError, TmSeq (fi, lst) ->
+      tmseq2seq_of_int fi lst |> Intrinsics.IO.print_error ;
+      tm_unit
+  | CprintError, _ ->
       raise_error fi "The argument to print must be a string"
   | Cdprint, t ->
       !program_output (ustring_of_tm t) ;

@@ -67,9 +67,9 @@ module Generic : GENERIC
 
 module Barray : BARRAY
 
-module Uop : functor (T : TENSOR) -> UOP with type ('a, 'b) t = ('a, 'b) T.t
+module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t
 
-module Bop : functor (T1 : TENSOR) (T2 : TENSOR) ->
+module Bop (T1 : TENSOR) (T2 : TENSOR) :
   BOP
     with type ('a, 'b) t1 = ('a, 'b) T1.t
      and type ('c, 'd) t2 = ('c, 'd) T2.t

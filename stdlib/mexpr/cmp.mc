@@ -668,6 +668,7 @@ utest cmpConst (CFileExists {}) (CFileExists {}) with 0 in
 utest cmpConst (CFileDelete {}) (CFileDelete {}) with 0 in
 
 utest cmpConst (CPrint {}) (CPrint {}) with 0 in
+utest cmpConst (CPrintError {}) (CPrintError {}) with 0 in
 utest cmpConst (CDPrint {}) (CDPrint {}) with 0 in
 utest cmpConst (CFlushStdout {}) (CFlushStdout {}) with 0 in
 utest cmpConst (CReadLine {}) (CReadLine {}) with 0 in

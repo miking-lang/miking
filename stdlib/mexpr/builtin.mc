@@ -73,6 +73,7 @@ let builtin = use MExprAst in
   , ("sleepMs", CSleepMs ())
   -- MCore intrinsics: Debug and I/O
   , ("print", CPrint ())
+  , ("printError", CPrintError ())
   , ("dprint", CDPrint ())
   , ("flushStdout", CFlushStdout ())
   , ("readLine", CReadLine ())
