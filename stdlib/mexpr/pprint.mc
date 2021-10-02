@@ -1333,17 +1333,18 @@ let func_beginsWithBinaryDigit =
   )
 in
 
--- let pedanticIsSome : Option a -> Bool = lam o : Option a.
+-- let pedanticIsSome : all a. Option a -> Bool = lam o : Option a.
 --   match o with !(None ()) & Some _ then true else false
 let func_pedanticIsSome =
-  ulet_ "pedanticIsSome" (
-    lam_ "s" (tyapp_ (tycon_ "Option") (tycon_ "a")) (
-      match_ (var_ "o")
-             (pand_
-               (pnot_ (pcon_ "None" punit_))
-               (pcon_ "Some" pvarw_))
-             (true_)
-             (false_)
+  let_ "pedanticIsSome"
+    (tyall_ "a" (tyarrow_ (tyapp_ (tycon_ "Option") (tyvar_ "a")) tybool_)) (
+      lam_ "s" (tyapp_ (tycon_ "Option") (tyvar_ "a")) (
+        match_ (var_ "o")
+               (pand_
+                 (pnot_ (pcon_ "None" punit_))
+                 (pcon_ "Some" pvarw_))
+               (true_)
+               (false_)
     )
   )
 in

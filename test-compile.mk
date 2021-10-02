@@ -58,6 +58,7 @@ compile_files += stdlib/mexpr/builtin.mc
 compile_files += stdlib/mexpr/info.mc
 compile_files += stdlib/mexpr/anf.mc
 compile_files += stdlib/mexpr/type-annot.mc
+compile_files += stdlib/mexpr/type-check.mc
 compile_files += stdlib/mexpr/mexpr.mc
 compile_files += stdlib/mexpr/infix.mc
 compile_files += stdlib/mexpr/ast-builder.mc

@@ -638,6 +638,24 @@ utest lsideClosed s with rside s in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 10 in
 
+-- TyAll
+let s = "let y:all x.x = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 13 in
+
+-- Nested TyAll
+let s = "let y:all x.(all y.all z.z)->(all w.w) = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 37 in
+
+-- TyCon
+let s = "let y:Foo = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 9 in
+
 -- TyApp
 let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in
 utest lsideClosed s with rside s in

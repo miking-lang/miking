@@ -36,7 +36,6 @@ let _insertVar = lam name. lam ty. lam tyenv : TCEnv.
   let varEnvNew = mapInsert name ty tyenv.varEnv in
   {tyenv with varEnv = varEnvNew}
 
-
 let _pprintType = use MExprPrettyPrint in
   lam ty.
   match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
@@ -159,10 +158,9 @@ end
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
 
-let newflexvar = use VarTypeAst in
+let newflexvar =
   lam weak. lam level. lam info.
-  TyFlex {info = info,
-          contents = ref (Unbound {ident = nameSym "a", level = level, weak = weak})}
+  tyFlexUnbound info (nameSym "a") level weak
 
 let newvarWeak = newflexvar true
 let newvar = newflexvar false
@@ -380,10 +378,176 @@ lang MExprTypeCheck =
 
 end
 
+lang TestLang = MExprTypeCheck + MExprEq end
+
+mexpr
+
+use TestLang in
+
+let gen_  = lam tm. bind_ (ulet_ "x" tm) (freeze_ (var_ "x")) in
+let inst_ = lam tm. bind_ (ulet_ "x" tm) (var_ "x") in
+
+let a = tyvar_ "a" in
+let b = tyvar_ "b" in
+let fa = tyflexunbound_ "a" in
+let fb = tyflexunbound_ "b" in
+
+let tychoose_ = tyall_ "a" (tyarrows_ [a, a, a]) in
+let choose_ = ("choose", tychoose_) in
+
+let idbody_ = ulam_ "y" (var_ "y") in
+let tyid_ = tyall_ "a" (tyarrow_ a a) in
+let id_ = ("id", tyid_) in
+
+let idsbody_ = bind_ id_ (seq_ [freeze_ (var_ "id")]) in
+let tyids_ = tyseq_ tyid_ in
+let ids_ = ("ids", tyids_) in
+
+let autobody_ = lam_ "x" tyid_ (app_ (var_ "x") (freeze_ (var_ "x"))) in
+let tyauto_ = tyarrow_ tyid_ tyid_ in
+let auto_ = ("auto", tyauto_) in
+
+let auto1body_ = lam_ "x" tyid_ (app_ (var_ "x") (var_ "x")) in
+let tyauto1_ = tyall_ "b" (tyarrows_ [tyid_, b, b]) in
+let auto1_ = ("auto1", tyauto1_) in
+
+let polybody_ = lam_ "f" tyid_ (utuple_ [app_ (var_ "f") (int_ 1), app_ (var_ "f") true_]) in
+let typoly_ = tyarrow_ tyid_ (tytuple_ [tyint_, tybool_]) in
+let poly_ = ("poly", typoly_) in
+
+type TypeTest = {
+  -- Name of the test case, for documentation purposes
+  name : String,
+  -- The term to typecheck
+  tm : Expr,
+  -- Its expected type
+  ty : Type,
+  -- Environment assigning types to functions like id, choose, et.c.
+  env : [(String, Type)]
+}
+in
+
+let typeOf = lam test : TypeTest.
+  let env = foldr (lam n : (String, Type).
+    mapInsert (nameNoSym n.0) n.1) (mapEmpty nameCmp) test.env in
+  ty (typeCheckBase {_tcEnvEmpty with varEnv = env} test.tm)
+in
+
+let runTest =
+  lam test : TypeTest.
+  -- Make sure to print the test name if the test fails.
+  let eqTypeTest = lam a : Type. lam b : Type.
+    if eqType a b then true
+    else print (join ["\n ** Type test FAILED: ", test.name, " **"]); false
+  in
+  utest typeOf test with test.ty using eqTypeTest in ()
+in
+
+let tests = [
+
+  -- A : Polymorphic Instantiation
+  {name = "A1",
+   tm = ulam_ "x" idbody_,
+   ty = tyarrows_ [fa, fb, fb],
+   env = []},
+
+  {name = "A1o",
+   tm = gen_ (ulam_ "x" idbody_),
+   ty = tyalls_ ["a", "b"] (tyarrows_ [a, b, b]),
+   env = []},
+
+  {name = "A2",
+   tm = app_ (var_ "choose") (var_ "id"),
+   ty = tyarrows_ [tyarrow_ fa fa, fa, fa],
+   env = [choose_, id_]},
+
+  {name = "A2o",
+   tm = app_ (var_ "choose") (freeze_ (var_ "id")),
+   ty = tyauto_,
+   env = [choose_, id_]},
+
+  {name = "A3",
+   tm = appf2_ (var_ "choose") empty_ (var_ "ids"),
+   ty = tyids_,
+   env = [choose_, ids_]},
+
+  {name = "A4",
+   tm = auto1body_,
+   ty = tyarrows_ [tyid_, fb, fb],
+   env = []},
+
+  {name = "A4o",
+   tm = autobody_,
+   ty = tyauto_,
+   env = []},
+
+  {name = "A5",
+   tm = app_ (var_ "id") (var_ "auto"),
+   ty = tyauto_,
+   env = [id_, auto_]},
+
+  {name = "A6",
+   tm = app_ (var_ "id") (var_ "auto1"),
+   ty = tyarrows_ [tyid_, fb, fb],
+   env = [id_, auto1_]},
+
+  {name = "A6o",
+   tm = app_ (var_ "id") (freeze_ (var_ "auto1")),
+   ty = tyauto1_,
+   env = [id_, auto1_]},
+
+  {name = "A7",
+   tm = appf2_ (var_ "choose") (var_ "id") (var_ "auto"),
+   ty = tyauto_,
+   env = [choose_, id_, auto_]},
+
+  -- We can't handle negative tests yet, since the type checker errors on failure
+  -- {name = "A8",
+  --  tm = appf2_ (var_ "choose") (var_ "id") (var_ "auto1"),
+  --  ty = fails,
+  --  env = [choose_, id_, auto1_]}
+
+  {name = "A9*",
+   tm = appf2_ (var_ "f") (app_ (var_ "choose") (freeze_ (var_ "id"))) (var_ "ids"),
+   ty = tyid_,
+   env = [
+     choose_,
+     id_,
+     ids_,
+     ("f", tyall_ "a" (tyarrows_ [tyarrow_ a a, tyseq_ a, a]))
+   ]},
+
+  {name = "A10*",
+   tm = app_ (var_ "poly") (freeze_ (var_ "id")),
+   ty = tytuple_ [tyint_, tybool_],
+   env = [poly_, id_]},
+
+  {name = "A11*",
+   tm = app_ (var_ "poly") (gen_ idbody_),
+   ty = tytuple_ [tyint_, tybool_],
+   env = [poly_]},
+
+  {name = "A12*",
+   tm = appf2_ (var_ "id") (var_ "poly") (gen_ idbody_),
+   ty = tytuple_ [tyint_, tybool_],
+   env = [poly_, id_]}
+
+  -- TODO(aathn, 2021-10-02): Add remaining tests from the paper
+  -- B : Inference with Polymorphic Arguments
+  -- C : Functions on Polymorphic Lists
+  -- D : Application Functions
+  -- E : Eta-Expansion
+  -- F : FreezeML Programs
+
+]
+in
+
+iter runTest tests;
+
+()
+
 -- TODO(aathn, 2021-09-28): Proper error reporting and propagation
 -- Report a "stack trace" when encountering a unification failure
-
--- TODO(aathn, 2021-09-28): Test cases
 
 -- TODO(aathn, 2021-09-28): Value restriction
 

@@ -817,4 +817,16 @@ using neqi in
 utest cmpType (tytensor_ tybool_) (tytensor_ tybool_) with 0 in
 utest cmpType (tytensor_ tybool_) (tytensor_ tyint_) with 0 using neqi in
 
+utest cmpType (tyvar_ "a") (tyvar_ "a") with 0 in
+utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
+
+utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tybool_) with 0 in
+utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tyfloat_) with 0 using neqi in
+utest cmpType (tyall_ "a" tybool_) (tyall_ "b" tybool_) with 0 using neqi in
+
+utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "a") with 0 in
+utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "b") with 0 using neqi in
+utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "a") with 0 in
+utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "b") with 0 using neqi in
+
 ()

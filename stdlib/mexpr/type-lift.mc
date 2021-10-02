@@ -76,17 +76,17 @@ let _addRecordToEnv =
   lam env : TypeLiftEnv. lam name : Option Name. lam ty : Type.
   match ty with TyRecord {fields = fields, labels = labels, info = info} then
     match name with Some name then
-      let tyvar = TyCon {ident = name, info = info} in
-      (env, tyvar)
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
     else match name with None _ then
       let name = nameSym "Rec" in
-      let tyvar = TyCon {ident = name, info = info} in
+      let tycon = TyCon {ident = name, info = info} in
       let env = {{{env
                     with records = mapInsert fields name env.records}
                     with labels = setInsert labels env.labels}
                     with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
-      (env, tyvar)
+      (env, tycon)
     else never
   else error "Expected record type"
 

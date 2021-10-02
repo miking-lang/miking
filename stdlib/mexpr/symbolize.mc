@@ -472,6 +472,9 @@ let matchnot = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (
 
 let matchoredge = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
 
+let lettyvar = let_ "f" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
+                        (lam_ "x" (tyvar_ "a") (var_ "x")) in
+
 let debug = false in
 
 let debugPrint = lam i. lam t.
@@ -505,7 +508,8 @@ mapi debugPrint [
     matchand,
     matchor,
     matchnot,
-    matchoredge
+    matchoredge,
+    lettyvar
   ];
 
 

@@ -104,7 +104,21 @@ let tyall_ =
 
 let tyalls_ =
   lam strs. lam ty.
-  foldr1 tyall_ ty strs
+  foldr tyall_ ty strs
+
+let tyFlexUnbound = use VarTypeAst in
+  lam info. lam ident. lam level. lam weak.
+  TyFlex {info = info,
+          contents = ref (Unbound {ident = ident, level = level, weak = weak})}
+
+let tyflexunbound_ =
+  lam s.
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 false
+
+let tyflexlink_ = use VarTypeAst in
+  lam ty.
+  TyFlex {info = NoInfo (),
+          contents = ref (Link ty)}
 
 -- Tensor OP types
 let tytensorcreateint_ =

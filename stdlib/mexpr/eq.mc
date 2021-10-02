@@ -1065,10 +1065,10 @@ let tyEnv1 = {tyVarEnv = biEmpty, tyConEnv = [(t, tyint_)]} in
 let tyEnv2 = {tyVarEnv = biEmpty, tyConEnv = [(t, tybool_)]} in
 utest eqType (ntycon_ t) tyint_ with false in
 utest eqType tyint_ (ntycon_ t) with false in
-utest ntycon_ t with tyint_ using eqType tyEnv1 in
-utest tyint_ with ntycon_ t using eqType tyEnv1 in
-utest eqType tyEnv1 (ntycon_ t) tybool_ with false in
-utest ntycon_ t with tybool_ using eqType tyEnv2 in
+utest ntycon_ t with tyint_ using eqType_Env tyEnv1 in
+utest tyint_ with ntycon_ t using eqType_Env tyEnv1 in
+utest eqType_Env tyEnv1 (ntycon_ t) tybool_ with false in
+utest ntycon_ t with tybool_ using eqType_Env tyEnv2 in
 
 let tyApp1 = tyapp_ tyint_ tyint_ in
 let tyApp2 = tyapp_ (ntycon_ t) tyint_ in
@@ -1076,11 +1076,42 @@ let tyApp3 = tyapp_ tyint_ (ntycon_ t) in
 utest tyApp1 with tyApp1 using eqType in
 utest tyApp2 with tyApp2 using eqType in
 utest tyApp3 with tyApp3 using eqType in
-utest tyApp1 with tyApp2 using eqType tyEnv1 in
-utest tyApp2 with tyApp3 using eqType tyEnv1 in
-utest eqType tyEnv2 tyApp1 tyApp2 with false in
-utest eqType tyEnv2 tyApp2 tyApp3 with false in
-utest eqType tyEnv2 tyApp1 tyApp3 with false in
+utest tyApp1 with tyApp2 using eqType_Env tyEnv1 in
+utest tyApp2 with tyApp3 using eqType_Env tyEnv1 in
+utest eqType_Env tyEnv2 tyApp1 tyApp2 with false in
+utest eqType_Env tyEnv2 tyApp2 tyApp3 with false in
+utest eqType_Env tyEnv2 tyApp1 tyApp3 with false in
+
+let tyVar1 = tyarrow_ (tyvar_ "a") (tyvar_ "a") in
+let tyVar2 = tyarrow_ (tyvar_ "b") (tyvar_ "b") in
+let tyVar3 = tyarrow_ (tyvar_ "a") (tyvar_ "b") in
+let tyVar4 = tyarrow_ (tyvar_ "a") (tyvar_ "c") in
+let tyAll1 = tyall_ "a" tyVar1 in
+let tyAll2 = tyall_ "b" tyVar1 in
+let tyAll3 = tyall_ "b" tyVar2 in
+let tyAll4 = tyall_ "a" tyVar3 in
+let tyAll5 = tyall_ "a" tyVar4 in
+let tyAll6 = tyall_ "b" tyVar3 in
+let tyAll7 = tyall_ "c" tyVar4 in
+utest tyVar1 with tyVar2 using eqType in
+utest tyVar3 with tyVar4 using eqType in
+utest tyAll1 with tyAll3 using eqType in
+utest tyAll4 with tyAll5 using eqType in
+utest tyAll6 with tyAll7 using eqType in
+utest eqType tyVar1 tyVar3 with false in
+utest eqType tyAll1 tyAll2 with false in
+utest eqType tyAll1 tyAll4 with false in
+utest eqType tyAll2 tyAll4 with false in
+utest eqType tyAll4 tyAll6 with false in
+
+let tyFlex1 = tyarrow_ (tyflexunbound_ "a") (tyflexunbound_ "b") in
+let tyFlex2 = tyarrow_ (tyflexunbound_ "b") (tyflexunbound_ "a") in
+let tyFlex3 = tyflexlink_ tyVar1 in
+utest tyFlex1 with tyFlex1 using eqType in
+utest tyFlex1 with tyFlex2 using eqType in
+utest tyFlex3 with tyVar1 using eqType in
+utest eqType tyFlex1 tyFlex3 with false in
+utest eqType tyFlex3 tyVar3 with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
