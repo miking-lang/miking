@@ -45,7 +45,7 @@ lang VariantNameTypeAst = Eq
   syn Type =
   | TyVariantName {ident : Name}
 
-  sem eqTypeH (typeEnv : TypeEnv) (free : BiNameMap) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariantName {ident = rid} ->
     match lhs with TyVariantName {ident = lid} then
       if nameEq lid rid then Some free else None ()
@@ -314,12 +314,7 @@ use TestLang in
 
 let fst = lam x: (a, b). x.0 in
 
-let eqType : EqTypeEnv -> Type -> Type -> Bool =
-  lam env. lam l : Type. lam r : Type.
-  eqType env l r
-in
-
-let eqEnv = lam lenv : EqTypeEnv. lam renv : EqTypeEnv.
+let eqEnv = lam lenv. lam renv.
   use MExprEq in
   let elemCmp = lam l : (Name, Type). lam r : (Name, Type).
     and (nameEq l.0 r.0)
