@@ -12,7 +12,7 @@ recursive let functionBodyReturnType : Expr -> Type =
   lam expr.
   match expr with TmLam {body = body} then
     functionBodyReturnType body
-  else ty expr
+  else tyTm expr
 end
 
 -- Replaces the body of a functiion body, excluding its top-level parameters,
@@ -22,7 +22,7 @@ recursive let replaceFunctionBody : Expr -> Expr -> Expr =
   lam funcExpr. lam newExpr.
   match funcExpr with TmLam t then
     let body = replaceFunctionBody t.body newExpr in
-    let ty = TyArrow {from = t.tyIdent, to = ty body, info = infoTy t.ty} in
+    let ty = TyArrow {from = t.tyIdent, to = tyTm body, info = infoTy t.ty} in
     TmLam {{t with body = body} with ty = ty}
   else newExpr
 end
@@ -92,7 +92,7 @@ let t = typeAnnot (nlam_ x tyint_ (char_ 'c')) in
 let newBody = typeAnnot (nlam_ y tyint_ (addi_ (nvar_ x) (nvar_ y))) in
 let b = replaceFunctionBody t newBody in
 utest b with nulam_ x newBody using eqExpr in
-utest ty b with tyarrows_ [tyint_, tyint_, tyint_] using eqType in
+utest tyTm b with tyarrows_ [tyint_, tyint_, tyint_] using eqType in
 
 let names = mapFromSeq nameCmp [
   (x, lam info. TmConst {val = CInt {val = 2}, ty = TyInt {info = info},

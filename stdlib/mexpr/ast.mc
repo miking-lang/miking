@@ -26,7 +26,7 @@ lang Ast
   sem infoTm =
   -- Intentionally left blank
 
-  sem ty =
+  sem tyTm =
   -- Intentionally left blank
 
   sem withType (ty : Type) =
@@ -105,7 +105,7 @@ lang VarAst = Ast
   sem infoTm =
   | TmVar r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmVar t -> t.ty
 
   sem withInfo (info : Info) =
@@ -127,7 +127,7 @@ lang AppAst = Ast
   sem infoTm =
   | TmApp r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmApp t -> t.ty
 
   sem withInfo (info : Info) =
@@ -158,7 +158,7 @@ lang LamAst = Ast + VarAst + AppAst
   sem infoTm =
   | TmLam r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmLam t -> t.ty
 
   sem withInfo (info : Info) =
@@ -194,7 +194,7 @@ lang LetAst = Ast + VarAst
   sem infoTm =
   | TmLet r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmLet t -> t.ty
 
   sem withInfo (info : Info) =
@@ -236,7 +236,7 @@ lang RecLetsAst = Ast + VarAst
   sem infoTm =
   | TmRecLets r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmRecLets t -> t.ty
 
   sem withInfo (info : Info) =
@@ -271,7 +271,7 @@ lang ConstAst = Ast
   sem infoTm =
   | TmConst r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmConst t -> t.ty
 
   sem withInfo (info : Info) =
@@ -291,7 +291,7 @@ lang SeqAst = Ast
   sem infoTm =
   | TmSeq r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmSeq t -> t.ty
 
   sem withInfo (info : Info) =
@@ -324,7 +324,7 @@ lang RecordAst = Ast
   | TmRecord r -> r.info
   | TmRecordUpdate r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmRecord t -> t.ty
   | TmRecordUpdate t -> t.ty
 
@@ -361,7 +361,7 @@ lang TypeAst = Ast
   sem infoTm =
   | TmType r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmType t -> t.ty
 
   sem withInfo (info : Info) =
@@ -400,7 +400,7 @@ lang DataAst = Ast
   | TmConDef r -> r.info
   | TmConApp r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmConDef t -> t.ty
   | TmConApp t -> t.ty
 
@@ -445,7 +445,7 @@ lang MatchAst = Ast
   sem infoTm =
   | TmMatch r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmMatch t -> t.ty
 
   sem withInfo (info : Info) =
@@ -479,7 +479,7 @@ lang UtestAst = Ast
   sem infoTm =
   | TmUtest r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmUtest t -> t.ty
 
   sem withInfo (info : Info) =
@@ -517,7 +517,7 @@ lang NeverAst = Ast
   sem infoTm =
   | TmNever r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmNever t -> t.ty
 
   sem withInfo (info : Info) =
@@ -540,7 +540,7 @@ lang ExtAst = Ast + VarAst
   sem infoTm =
   | TmExt r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmExt t -> t.ty
 
   sem withInfo (info : Info) =

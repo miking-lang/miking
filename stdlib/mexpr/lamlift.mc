@@ -245,7 +245,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         foldr
           (lam freeVar : (Name, Type). lam body.
             TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                   body = body, ty = ty body, info = info})
+                   body = body, ty = tyTm body, info = info})
           t.body
           fv in
       let subExpr = lam info.
@@ -255,7 +255,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             -- NOTE(larshum, 2021-09-19): We assume that the application
             -- argument has the correct type.
             let appType =
-              match ty acc with TyArrow {to = to} then
+              match tyTm acc with TyArrow {to = to} then
                 to
               else TyUnknown {info = info}
             in
@@ -294,7 +294,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
               -- NOTE(larshum, 2021-09-19): We assume that the application
               -- argument has the correct type.
               let appType =
-                match ty acc with TyArrow {to = to} then
+                match tyTm acc with TyArrow {to = to} then
                   to
                 else TyUnknown {info = info}
               in
@@ -314,7 +314,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
               TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                     body = body, ty = ty body, info = info})
+                     body = body, ty = tyTm body, info = info})
             bind.body fv in
         -- Update the annotated type of the function to include the types of the
         -- added parameters.

@@ -263,11 +263,11 @@ let collectKnownProgramTypes = use MExprAst in
         else expectedArrowType (infoTm expr) t.tyIdent
       else expectedArrowType (infoTm expr) t.tyIdent
     else match expr with TmUtest t then
-      let acc = collectType acc (ty t.test) in
-      let acc = collectType acc (ty t.expected) in
+      let acc = collectType acc (tyTm t.test) in
+      let acc = collectType acc (tyTm t.expected) in
       let acc =
         match t.tusing with Some t then
-          match ty t with TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}} then
+          match tyTm t with TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}} then
             collectType (collectType acc lhs) rhs
           else
             let msg = join [
@@ -600,7 +600,7 @@ lang UtestViaMatch = Ast + PrettyPrint
       else never
     in
     let name = nameSym "x" in
-    let ty = ty t in
+    let ty = tyTm t in
     let equalName = getEqualFuncName env ty in
     if typeHasDefaultEquality env ty then
       ([appf2_ (nvar_ equalName) (nvar_ name) t], npvar_ name)
@@ -686,9 +686,9 @@ let _generateUtest = use MExprTypeAnnot in
   -- possible to compare different types using a custom equality function, but
   -- this function has to be annotated with explicit types.
   match t.tusing with Some eqFunc then
-    match ty eqFunc with TyArrow {from = lty, to = TyArrow {from = rty, to = TyBool _}} then
-      match compatibleType env.aliases (ty t.test) lty with Some lty then
-        match compatibleType env.aliases (ty t.expected) rty with Some rty then
+    match tyTm eqFunc with TyArrow {from = lty, to = TyArrow {from = rty, to = TyBool _}} then
+      match compatibleType env.aliases (tyTm t.test) lty with Some lty then
+        match compatibleType env.aliases (tyTm t.expected) rty with Some rty then
           let lhsPprintName = getPprintFuncName env lty in
           let rhsPprintName = getPprintFuncName env rty in
           let lhsPprintFunc = nvar_ lhsPprintName in
@@ -703,23 +703,23 @@ let _generateUtest = use MExprTypeAnnot in
           let msg = join [
             "Custom equality function expected right-hand side of type ",
             pprintTy rty, ", got argument of incompatible type ",
-            pprintTy (ty t.expected)
+            pprintTy (tyTm t.expected)
           ] in
           infoErrorExit t.info msg
       else
         let msg = join [
           "Custom equality function expected left-hand side of type ",
           pprintTy lty, ", got argument of incompatible type ",
-          pprintTy (ty t.test)
+          pprintTy (tyTm t.test)
         ] in
         infoErrorExit t.info msg
     else
       let msg = join [
         "Equality function was found to have incorrect type.\n",
-        "Type was inferred to be ", pprintTy (ty eqFunc)
+        "Type was inferred to be ", pprintTy (tyTm eqFunc)
       ] in
       infoErrorExit t.info msg
-  else match compatibleType env.aliases (ty t.test) (ty t.expected) with Some eTy then
+  else match compatibleType env.aliases (tyTm t.test) (tyTm t.expected) with Some eTy then
     let pprintName = getPprintFuncName env eTy in
     let pprintFunc = nvar_ pprintName in
     use MExprUtestViaMatch in
@@ -751,7 +751,7 @@ let _generateUtest = use MExprTypeAnnot in
   else
     let msg = join [
       "Arguments to utest have incompatible types\n",
-      "LHS: ", pprintTy (ty t.test), "\nRHS: ", pprintTy (ty t.expected)
+      "LHS: ", pprintTy (tyTm t.test), "\nRHS: ", pprintTy (tyTm t.expected)
     ] in
     infoErrorExit t.info msg
 
