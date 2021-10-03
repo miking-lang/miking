@@ -59,7 +59,7 @@ lang MExprCallGraph = MExprAst
   | TmVar t ->
     if digraphHasVertex t.ident g then
       let outEdges =
-        match mapLookup t.ident edges with Some outEdges then
+        match mapLookup src edges with Some outEdges then
           setInsert t.ident outEdges
         else setOfSeq nameCmp [t.ident] in
       mapInsert src outEdges edges
@@ -73,7 +73,7 @@ lang MExprCallGraph = MExprAst
       foldl
         (lam edges : Map Name (Set Name). lam bind : RecLetBinding.
           _findCallEdges bind.ident g edges bind.body)
-        (mapEmpty nameCmp) t.bindings in
+        edges t.bindings in
     _findCallEdges src g edges t.inexpr
   | t -> sfold_Expr_Expr (_findCallEdges src g) edges t
 end
