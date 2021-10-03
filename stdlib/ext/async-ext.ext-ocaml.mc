@@ -20,7 +20,7 @@ let asyncExtMap =
         cLibraries = []
       }
     ]),
-    ("externalAsyncBind", [
+    ("asyncBind", [
       { ident = "Lwt.bind",
         ty = tyarrows_ [otyvarext_ "'a Lwt.t",
                 (tyarrows_ [otyvarext_ "'a", otyvarext_ "'b Lwt.t"]), otyvarext_ "'b Lwt.t"],
@@ -31,6 +31,13 @@ let asyncExtMap =
     ("asyncPrint", [
       { ident = "Lwt_io.print",
         ty = tyarrows_ [otystring_ , otyvarext_ "unit Lwt.t"],
+        libraries = ["lwt.unix"],
+        cLibraries = []
+      }
+    ]),
+    ("asyncReturn", [
+      { ident = "Lwt.return",
+        ty = tyarrows_ [otyvarext_ "'a", otyvarext_ "'a Lwt.t"],
         libraries = ["lwt.unix"],
         cLibraries = []
       }
