@@ -138,6 +138,7 @@ and const =
   | Cerror
   | Cexit
   | CflushStdout
+  | CflushStderr
   (* MCore intrinsics: Symbols *)
   | CSymb of Symb.t
   | Cgensym
@@ -588,7 +589,8 @@ let const_has_side_effect = function
   | Ccommand
   | Cerror
   | Cexit
-  | CflushStdout ->
+  | CflushStdout
+  | CflushStderr ->
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
