@@ -74,13 +74,22 @@ recursive
     _lift2
       (_float2num2 pow)
       (lam x1. lam x2. muln x2 (pown x1 (subn x2 (_num 1.))))
-      (lam x1. lam x2. muln (pown x1 x2) (logn x1))
+      (lam x1. lam x2.
+        if eqn x1 (_num 0.) then
+          if gtn x2 (_num 0.) then _num 0.
+          else _num nan
+        else
+          muln (pown x1 x2) (logn x1))
       p1 p2
 end
 
-utest pown num3 num2 with num 9. using eqnEps
+utest pown num3 num2 with _num 9. using eqnEps
 utest der (lam x. pown x num2) num3 with num6 using eqnEps
-utest der (lam x. pown (expn num1) x) num2 with expn num2 using eqnEps
+utest der (pown (expn num1)) num2 with expn num2 using eqnEps
+utest der (pow num0) num2 with num0 using eqnEps
+utest der (pow num1) num0 with num0 using eqnEps
+utest der (pow num1) num1 with num0 using eqnEps
+
 
 -- Square root
 recursive
