@@ -17,7 +17,6 @@ include "math.mc"
 -------------
 
 let _num = dualnumNum
-let _dnum = dualnumDNum
 let _lift1 = dualnumLift1
 let _lift2 = dualnumLift2
 let _float2num1 = dualnumFloat2num1
@@ -61,7 +60,7 @@ utest expn num0 with num1 using eqnEps
 utest der expn num1 with expn num1 using eqnEps
 
 -- Natural logarithm
-let logn = lam p. _lift1 (_float2num1 log) (lam x. divn (num 1.) x) p
+let logn = lam p. _lift1 (_float2num1 log) (lam x. divn (_num 1.) x) p
 
 utest logn num1 with num0 using eqnEps
 utest logn (expn num3) with num3 using eqnEps
@@ -96,9 +95,9 @@ recursive
   let sqrtn = lam p.
     _lift1
       (_float2num1 sqrt)
-      (lam x. divn (num 1.) (muln (num 2.) (sqrtn x)))
+      (lam x. divn (_num 1.) (muln (_num 2.) (sqrtn x)))
       p
 end
 
-utest sqrtn (num 9.) with num3 using eqnEps
-utest der sqrtn (num 9.) with divn num1 num6 using eqnEps
+utest sqrtn (_num 9.) with num3 using eqnEps
+utest der sqrtn (_num 9.) with divn num1 num6 using eqnEps
