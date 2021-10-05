@@ -261,7 +261,7 @@ end
 lang LamTypeCheck = TypeCheck + LamAst
   sem typeCheckBase (env : TCEnv) =
   | TmLam t ->
-    let tyIdent =
+    let tyX =
       match t.tyIdent with TyUnknown _ then
         -- No type annotation: assign a monomorphic type variable to x.
         newvarWeak env.currentLvl t.info
@@ -269,11 +269,10 @@ lang LamTypeCheck = TypeCheck + LamAst
         -- Type annotation: assign x its annotated type.
         t.tyIdent
     in
-    let body = typeCheckBase (_insertVar t.ident tyIdent env) t.body in
-    let tyLam = ityarrow_ t.info tyIdent (ty body) in
-    TmLam {{{t with body = body}
-               with tyIdent = tyIdent}
-               with ty = tyLam}
+    let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
+    let tyLam = ityarrow_ t.info tyX (ty body) in
+    TmLam {{t with body = body}
+              with ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -305,10 +304,9 @@ lang LetTypeCheck = TypeCheck + LetAst
         else never
     in
     let inexpr = typeCheckBase (_insertVar t.ident tyBody env) t.inexpr in
-    TmLet {{{{t with body = body}
-                with tyBody = tyBody}
-                with inexpr = inexpr}
-                with ty = ty inexpr}
+    TmLet {{{t with body = body}
+               with inexpr = inexpr}
+               with ty = ty inexpr}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
