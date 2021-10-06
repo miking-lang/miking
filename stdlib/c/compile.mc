@@ -8,9 +8,8 @@
 -- a list of C statements. Usually, these statements should be
 -- put in a C `main` function or similar.
 --
--- TODO(dlunde,2021-08-16)
--- * Compile sequences to structs containing length and an array (requires
--- changes to type lift)
+-- TODO Add an explicit TmString to Expr (transform in separate pass) to make pattern matching easier in this compilation
+
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -47,7 +46,7 @@ recursive let _unwrapType = use ConTypeAst in
     match ty with TyCon { ident = ident } then
       match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
         _unwrapType tyEnv ty
-      else error "TyCon not defined in environment"
+      else infoErrorExit (infoTy ty) "TyCon not defined in environment"
     else ty
 end
 
@@ -58,8 +57,8 @@ recursive let _unwrapTypeAlias = use ConTypeAst in
       let res = assocSeqLookup { eq = nameEq } ident tyEnv in
       match res with Some ((TyCon _) & ty) then _unwrapTypeAlias tyEnv ty
       else match res with Some _ then ty
-      else error "TyCon not defined in environment"
-    else error "Not a tyVar in _unwrapTypeAlias"
+      else infoErrorExit (infoTy ty) "TyCon not defined in environment"
+    else infoErrorExit (infoTy ty) "Not a tyVar in _unwrapTypeAlias"
 end
 
 -- C assignment shorthand
@@ -100,7 +99,10 @@ let cCompilerNames: [Name] = concat [
   _printf
 ] externalNames
 
+-- Various names used when defining C structs
 let _constrKey = nameNoSym "constr"
+let _seqKey = nameNoSym "seq"
+let _seqLenKey = nameNoSym "len"
 
 -- Used in compileStmt and compileStmts
 type Result
@@ -149,7 +151,7 @@ lang MExprCCompile = MExprAst + CAst
   | prog ->
 
     let structTypes: [Name] = foldl (lam acc. lam t: (Name,Type).
-      if isPtrType t.1 then snoc acc t.0 else acc
+      if isStructType t.1 then snoc acc t.0 else acc
     ) [] typeEnv in
 
     let externals = collectExternals (mapEmpty nameCmp) prog in
@@ -188,7 +190,7 @@ lang MExprCCompile = MExprAst + CAst
     else infoErrorExit (t.info) "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
 
-  sem isPtrType =
+  sem isStructType =
   | TyVariant _ -> true
   | TyRecord _ -> true
   | _ -> false
@@ -208,12 +210,24 @@ lang MExprCCompile = MExprAst + CAst
   sem genTyDefs (env: CompileCEnv) (acc: [CTop]) (name: Name) =
   | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
   | TyRecord { fields = fields } ->
-    let fieldsLs: [(CType,String)] =
+    let fieldsLs: [(CType,Name)] =
       mapFoldWithKey (lam acc. lam k. lam ty.
         let ty = compileType env ty in
         snoc acc (ty, Some (nameNoSym (sidToString k)))) [] fields in
     let def = CTDef {
       ty = CTyStruct { id = Some name, mem = Some fieldsLs },
+      id = None (),
+      init = None ()
+    } in
+    cons def acc
+  | TySeq { ty = ty } ->
+    let ty = compileType env ty in
+    let fields = [
+      (ty, _seqKey),
+      (CTyInt {}, _seqLenKey)
+    ] in
+    let def = CTDef {
+      ty = CTyStruct { id = Some name, mem = fields },
       id = None (),
       init = None ()
     } in
@@ -299,7 +313,6 @@ lang MExprCCompile = MExprAst + CAst
       CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } }
     else CTyVar { id = ident }
 
-  -- | TyUnknown _ -> CTyChar {}
   | TyUnknown _ & ty -> infoErrorExit (infoTy ty) "Unknown type in compileType"
 
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
@@ -308,7 +321,10 @@ lang MExprCCompile = MExprAst + CAst
     infoErrorExit (infoTy ty)
       "TyVariant should not occur in compileType. Did you run type lift?"
 
-  | TySeq _
+  | TySeq _ & ty ->
+    infoErrorExit (infoTy ty)
+      "TySeq should not occur in compileType. Did you run type lift?"
+
   | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
 
 
@@ -328,7 +344,7 @@ lang MExprCCompile = MExprAst + CAst
           match ty with TyArrow { from = fromTy } then
             if _isUnitTy fromTy then detachParams acc rest
             else detachParams (snoc acc ident) rest
-          else error "Incorrect type in compileFun"
+          else infoErrorExit (infoTy ty) "Incorrect type in compileFun"
         else (acc, rest)
     in
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
@@ -341,7 +357,7 @@ lang MExprCCompile = MExprAst + CAst
     match detachParams [] fun with (params, body) then
       match funTypes [] ty with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
-          error "Number of parameters in compileFun does not match."
+          infoErrorExit (infoTy ty) "Number of parameters in compileFun does not match."
         else
           match map (compileType env) paramTypes with paramTypes then
             let params = zipWith (lam t. lam id. (t, id)) paramTypes params in
@@ -355,7 +371,7 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else never
 
-  | _ -> error "Non-lambda supplied to compileFun"
+  | t -> infoErrorExit (infoTm t) "Non-lambda supplied to compileFun"
 
 
   ----------------------
@@ -436,6 +452,7 @@ lang MExprCCompile = MExprAst + CAst
   -- C ALLOCATIONS --
   -------------------
 
+  -- Compiles allocation/definition and initialization of composite data types
   sem compileAlloc (env: CompileCEnv) (name: Option Name) =
 
   | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
@@ -459,7 +476,7 @@ lang MExprCCompile = MExprAst + CAst
   -- which case it is compiled to the integer 0)
   | TmRecord { ty = ty, bindings = bindings } & t ->
     if mapIsEmpty bindings then
-      error "Empty bindings in TmRecord in compileAlloc"
+      infoErrorExit (infoTm t) "Empty bindings in TmRecord in compileAlloc"
     else
       let n = match name with Some name then name else nameSym "alloc" in
       let def = alloc n (compileType env ty) in
@@ -473,6 +490,9 @@ lang MExprCCompile = MExprAst + CAst
         }
       ) bindings in
       (env, def, mapValues init, n)
+
+  -- | TmSeq {tms : [Expr], ty: Type, info: Info} ->
+  | TmSeq {tms = tms, ty = ty} ->
 
   -----------------
   -- C TOP-LEVEL --
@@ -545,6 +565,7 @@ lang MExprCCompile = MExprAst + CAst
   -- C STATEMENTS --
   ------------------
 
+  -- Compile a single C statement, and take action according to res.
   sem compileStmt (env: CompileCEnv) (res: Result) =
 
   -- TmMatch: Compile to if-statement
@@ -581,64 +602,59 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else never
 
-  -- TmSeq: allocate and create a new array. Special handling of strings for now.
   | TmSeq { tms = tms } & t ->
     let toChar = lam expr.
       match expr with TmConst { val = CChar { val = val } } then Some val
       else None ()
     in
+
+    -- Special case of TmSeq: String literals
     match optionMapM toChar tms with Some str then
-    let str = CEString { s = str } in
-    (
-      env,
-      [
-        match res with Ident id then
-          CSExpr { expr =_assign (CEVar { id = id }) str }
-        else match res with Return _ then CSRet { val = str }
-        else
-          infoErrorExit (t.info) "Type error, should have been caught previously"
-      ]
-    )
+      let str = CEString { s = str } in
+      (
+        env,
+        [
+          match res with Ident id then
+            CSExpr { expr =_assign (CEVar { id = id }) str }
+          else match res with Return _ then CSRet { val = str }
+          else
+            infoErrorExit (t.info) "Type error, should have been caught previously"
+        ]
+      )
+
+    -- General TmSeqs
     else error "TODO: TmSeq"
 
-  -- TmConApp: allocate and create a new struct.
   | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
-    let id =
-      match res with Ident id then id
-      else match res with Return _ then
-        infoErrorExit (t.info) "Returning TmConApp is not allowed"
-      else
-        infoErrorExit (t.info) "Type error, should have been caught previously"
-    in
-    match compileAlloc env (None ()) t with (env, def, init, n) then
-      (env, join [
-        map (lam d. CSDef d) def,
-        init,
-        [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
-      ])
-    else never
+    match res with Ident id then
+      -- TODO: This is WRONG. We MUST collect all allocations and put them on top of it's function somehow (should be easy)
+      -- We can optimize this case and ignore the alloc, since what we are
+      -- returning to (Ident id) has already been allocated
+      match compileAlloc env (Some id) t with (env, _, init, n) then
+        (env, init)
+      else never
+    else match res with Return _ then
+      infoErrorExit (t.info) "Returning TmConApp is not allowed"
+    else
+      infoErrorExit (t.info) "Type error, should have been caught previously"
 
   | TmRecord { ty = ty, bindings = bindings } & t ->
     if mapIsEmpty bindings then
       match res with None _ | Return _ then (env, [CSNop {}])
       else infoErrorExit (t.info) "Binding of unit type is not allowed"
     else
-      let id =
-        match res with Ident id then id
-        else match res with Return _ then
-          infoErrorExit (t.info) "Returning TmRecord is not allowed"
-        else
-          infoErrorExit (t.info) "Type error, should have been caught previously"
-      in
-      match compileAlloc env (None ()) t with (env, def, init, n) then
-        (env, join [
-          map (lam d. CSDef d) def,
-          init,
-          [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
-        ])
-      else never
+      match res with Ident id then
+        -- TODO: This is WRONG
+        -- We can optimize this case and ignore the alloc, since what we are
+        -- returning to (Ident id) has already been allocated
+        match compileAlloc env (Some id) t with (env, _, init, n) then
+          (env, init)
+        else never
+      else match res with Return _ then
+        infoErrorExit (t.info) "Returning TmRecord is not allowed"
+      else
+        infoErrorExit (t.info) "Type error, should have been caught previously"
 
-  -- TmRecordUpdate: allocate and create new struct.
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
@@ -706,7 +722,7 @@ lang MExprCCompile = MExprAst + CAst
   -------------------
 
   -- Only a subset of constants can be compiled
-  sem compileOp (args: [CExpr]) =
+  sem compileOp (t: Expr) (args: [CExpr]) =
 
   -- Binary operators
   | CAddi _
@@ -730,12 +746,16 @@ lang MExprCCompile = MExprAst + CAst
   | CNeqf _ -> CEBinOp { op = CONeq {}, lhs = head args, rhs = last args }
 
   -- Unary operators
-  | CNegf _ -> CEUnOp { op = CONeg {}, arg = head args }
+  | CNegf _
+  | CNegi _ -> CEUnOp { op = CONeg {}, arg = head args }
 
   -- Not directly mapped to C operators
   | CPrint _ ->
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
   | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
+  | CFloorfi _ -> CECast { ty = CTyInt {}, rhs = head args }
+
+  | c -> dprint c; infoErrorExit (infoTm t) "Unsupported intrinsic in compileOp"
 
 
   sem compileExpr (env: CompileCEnv) =
@@ -766,7 +786,7 @@ lang MExprCCompile = MExprAst + CAst
       -- Intrinsics
       else match fun with TmConst { val = val } then
         let args = map (compileExpr env) args in
-        compileOp args val
+        compileOp fun args val
 
       else error "Unsupported application in compileExpr"
     else never
@@ -810,7 +830,6 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
   -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
   sem alloc (name: Name) =
   | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } & ptrTy ->
-    let allocName = nameSym "alloc" in
     [
       -- Define name as pointer to allocated struct
       { ty = CTyArray { ty = ty, size = Some (CEInt { i = 1 }) }
@@ -879,11 +898,8 @@ let printCompiledCProg = use CProgPrettyPrint in
 
 lang Test =
   MExprCCompileGCC + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords +
-
-  -- Whenever MExprCmp, or any fragment including it, will be used, a typeIndex
-  -- function must be provided (here through MExprCmp)
-  MExprTypeLift + MExprCmp
+  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
+  + SeqTypeNoStringTypeLift
 
 mexpr
 use Test in
@@ -1286,5 +1302,46 @@ utest testCompile trees with strJoin "\n" [
   "  return 0;",
   "}"
 ] using eqString in
+
+-- let leaf = match tree with node then leftnode else
+let indirectAlloc = bindall_ [
+
+  ulet_ "rec" (match_ (bool_ true) (pbool_ true) (urecord_ [("a",int_ 1)]) (urecord_ [("a",int_ 2)])),
+
+  int_ 0
+
+] in
+
+-- TODO: This is WRONG, rec is never allocated
+utest testCompile indirectAlloc with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "struct Rec {int a;};",
+  "struct Rec (*rec);",
+  "int main(int argc, char (*argv[])) {",
+  "  if ((1 == 1)) {",
+  "    ((rec->a) = 1);",
+  "  } else {",
+  "    ((rec->a) = 2);",
+  "  }",
+  "  return 0;",
+  "}"
+] using eqString in
+
+-- let leaf = match tree with node then leftnode else
+let seqs = bindall_ [
+
+  -- Define nested sequence, and see how it is handled
+  ulet_ "seq" (seq_ [seq_ [int_ 1], seq_ [int_ 2]]),
+
+  -- Use "length" and "get" functions
+
+  int_ 0
+
+] in
+
+printLn (testCompile seqs);
+-- utest testCompile indirectAlloc with strJoin "\n" [
+-- ] using eqString in
 
 ()
