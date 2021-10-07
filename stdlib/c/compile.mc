@@ -706,9 +706,9 @@ lang MExprCCompile = MExprAst + CAst
         ])
       else never
     else match res with RReturn _ then
-      infoErrorExit (t.info) "Returning TmSeq is not allowed"
+      infoErrorExit (infoTm t) "Returning TmSeq is not allowed"
     else
-      infoErrorExit (t.info) "Type error, should have been caught previously"
+      infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
   -- TODO(dlunde,2021-10-07): Lots of code duplication here ...
   | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
@@ -722,15 +722,15 @@ lang MExprCCompile = MExprAst + CAst
         ])
       else never
     else match res with RReturn _ then
-      infoErrorExit (t.info) "Returning TmConApp is not allowed"
+      infoErrorExit (infoTm t) "Returning TmConApp is not allowed"
     else
-      infoErrorExit (t.info) "Type error, should have been caught previously"
+      infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
   -- TODO(dlunde,2021-10-07): ... and here
   | TmRecord { ty = ty, bindings = bindings } & t ->
     if mapIsEmpty bindings then
-      match res with None _ | RReturn _ then (env, [CSNop {}])
-      else infoErrorExit (t.info) "Binding of unit type is not allowed"
+      match res with RNone _ | RReturn _ then (env, [CSNop {}])
+      else infoErrorExit (infoTm t) "Binding of unit type is not allowed"
     else
       match res with RIdent id then
         match compileAlloc env (None ()) t with (env, def, init, n) then
@@ -743,9 +743,9 @@ lang MExprCCompile = MExprAst + CAst
         else never
       else match res with RReturn _ then
         -- TODO(dlunde,2021-10-07) We can return non-pointer records here
-        infoErrorExit (t.info) "Returning TmRecord containing pointers is not allowed"
+        infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
       else
-        infoErrorExit (t.info) "Type error, should have been caught previously"
+        infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
 
@@ -761,7 +761,7 @@ lang MExprCCompile = MExprAst + CAst
         else (env, [CSExpr { expr = compileExpr env expr }])
       else (env, [CSRet { val = Some (compileExpr env expr) }])
 
-    else match res with None _ then
+    else match res with RNone _ then
       if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
@@ -934,12 +934,9 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
       , init = None ()
       }
     ]
-  | CTyArray { ty = ty, size = Some len } ->
+  | CTyArray _ & ty->
     [
-      { ty = CTyArray { ty = ty, size = Some len }
-      , id = Some name
-      , init = None ()
-      }
+      { ty = ty , id = Some name , init = None () }
     ]
   | ty -> print "\n\n"; dprint ty; error "Incorrect type in alloc"
 
