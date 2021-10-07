@@ -61,14 +61,18 @@ let _assign: CExpr -> CExpr -> CExpr = use CAst in
 
 type ExtInfo = { ident: String, header: String }
 
+-- Collect all maps of externals. Should be done automatically at some point,
+-- but for now these files must be manually included and added to this map.
 let externalsMap: Map String ExtInfo = foldl1 mapUnion [
   mathExtMap
 ]
 
+-- Retrieve names used for externals. Used for making sure these names are printed without modification during C code generation.
 let externalNames =
   map nameNoSym
     (mapFoldWithKey (lam acc. lam. lam v. cons v.ident acc) [] externalsMap)
 
+-- Collect all includes for C externals.
 let externalIncludes =
   setToSeq
     (mapFoldWithKey (lam acc. lam. lam v. setInsert v.header acc)
@@ -92,7 +96,8 @@ let _constrKey = nameNoSym "constr"
 let _seqKey = nameNoSym "seq"
 let _seqLenKey = nameNoSym "len"
 
--- Used in compileStmt and compileStmts
+-- Used in compileStmt and compileStmts for deciding what action to take in
+-- tail position
 type Result
 con RIdent : Name -> Res
 con RReturn : () -> Res
@@ -123,6 +128,7 @@ type CompileCEnv = {
   allocs: [CStmt]
 }
 
+-- Empty environment
 let compileCEnvEmpty =
   { ptrTypes = [], typeEnv = [], externals = mapEmpty nameCmp, allocs = [] }
 
@@ -132,9 +138,11 @@ let compileCEnvEmpty =
 
 lang MExprCCompile = MExprAst + CAst
 
-  sem alloc (ty: Type) =
+  -- Function that is called when allocation of data is needed. Must be implemented by a concrete C compiler.
+  sem alloc (name: Name) =
   -- Intentionally left blank
 
+  -- Function that is called to free allocated data. Should be implemented by a concrete C compiler. NOTE(dlunde,2021-09-30): Currently unused
   sem free =
   -- Intentionally left blank
 
@@ -142,34 +150,45 @@ lang MExprCCompile = MExprAst + CAst
   sem compile (typeEnv: [(Name,Type)]) =
   | prog ->
 
-    let ptrTypes: [Name] = foldr (lam t: (Name,Type). lam acc. 
+    -- Find all type names which translates to C structs
+    let ptrTypes: [Name] = foldr (lam t: (Name,Type). lam acc.
       if isPtrType acc t.1 then snoc acc t.0 else acc
     ) [] typeEnv in
 
-    let externals = collectExternals (mapEmpty nameCmp) prog in
+    -- Construct a map from MCore external names to C names
+    let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
 
+    -- Set up initial environment
     let env = {{{ compileCEnvEmpty
       with ptrTypes = ptrTypes }
       with typeEnv = typeEnv }
       with externals = externals }
     in
 
+    -- Compute type declarations
     let decls: [CTop] = foldl (lam acc. lam t: (Name,Type).
       genTyDecls acc t.0 t.1
     ) [] typeEnv in
 
+    -- Compute type definitions
     let defs: [CTop] = foldl (lam acc. lam t: (Name,Type).
       genTyDefs env acc t.0 t.1
     ) [] typeEnv in
 
+    -- Compute type definitions that must occur after the above definitions
     let postDefs: [CTop] = foldl (lam acc. lam t: (Name,Type).
       genTyPostDefs env acc t.0 t.1
     ) [] typeEnv in
 
+    -- Run compiler
     match compileTops env [] [] prog with (tops, inits) then
 
+    -- Compute return type
     let retTy: CType = compileType env (tyTm prog) in
 
+    -- Return final compiler environment, types, top-level definitions,
+    -- initialization code (e.g., to put in a main function), and the return
+    -- type
     (env, join [decls, defs, postDefs], tops, inits, retTy)
 
     else never
