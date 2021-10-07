@@ -81,7 +81,9 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       let evalJacG = lam x. lam jacG.
         tensorMapExn (lam x. lam. num x) x xd;
         jacT arg.g xd jacGd;
-        tensorMapExn (lam x. lam. unpack x) (tensorReshapeExn jacGd [nJacG]) jacG;
+        tensorMapExn
+          (lam x. lam. primalDeep x)
+          (tensorReshapeExn jacGd [nJacG]) jacG;
         ()
       in
       -- The Hessian of the Lagrangian is symmetric so we only need the lower
@@ -186,6 +188,7 @@ let p = ipoptAdCreateNLP {
 
 ipoptAddNumOption p "tol" 3.82e-6;
 ipoptAddStrOption p "mu_strategy" "adaptive";
+ipoptAddStrOption p "derivative_test" "second-order";
 
 let x = tensorOfSeqExn tcreate [4] [1., 5., 5., 1.] in
 testSolve p x;
@@ -252,6 +255,7 @@ let p = ipoptAdCreateNLP {
 
 ipoptAddNumOption p "tol" 3.82e-6;
 ipoptAddStrOption p "mu_strategy" "adaptive";
+ipoptAddStrOption p "derivative_test" "second-order";
 
 let x = tcreate [7] (lam. 0.) in
 tset x [0] (sin (divf pi 4.));
