@@ -886,6 +886,12 @@ lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst
       print s;
       uunit_
     else error "string to print is not a string"
+  | CPrintError _ ->
+    match arg with TmSeq s then
+      let s = _seqOfCharsToString s.tms in
+      printError s;
+      uunit_
+    else error "string to print is not a string"
   | CDPrint _ -> uunit_
   | CFlushStdout _ ->
     match arg with TmRecord {bindings = bindings} then
@@ -1003,7 +1009,7 @@ lang MapEval =
   | CMapRemove2 Expr
   | CMapFindWithExn2 Expr
   | CMapFindOrElse2 (Expr -> Expr)
-  | CMapFindOrElse3 (Expr -> Expr, Expr) 
+  | CMapFindOrElse3 (Expr -> Expr, Expr)
   | CMapFindApplyOrElse2 (Expr -> Expr)
   | CMapFindApplyOrElse3 (Expr -> Expr, Expr -> Expr)
   | CMapFindApplyOrElse4 (Expr -> Expr, Expr -> Expr, Expr)
@@ -1017,7 +1023,7 @@ lang MapEval =
   | CMapEq3 (Expr -> Expr -> Expr, Map K V)
   | CMapCmp2 (Expr -> Expr -> Expr)
   | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
-  
+
   sem delta (arg : Expr) =
   | CMapEmpty _ ->
     let cmp = lam x. lam y.

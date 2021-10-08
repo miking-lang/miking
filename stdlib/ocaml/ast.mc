@@ -138,6 +138,7 @@ lang OCamlExternal
   syn Expr =
   | OTmVarExt { ident : String }
   | OTmConAppExt { ident : String, args : [Expr] }
+  | OTmExprExt { expr : String }
 
   syn Pat =
   | OPatConExt { ident : String, args : [Pat] }

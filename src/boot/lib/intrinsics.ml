@@ -507,6 +507,9 @@ end
 module IO = struct
   let print s = s |> Mseq.Helpers.to_ustring |> uprint_string
 
+  let print_error s =
+    s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Printf.eprintf "%s"
+
   let dprint v =
     let v = Obj.repr v in
     let string_of_tag t =

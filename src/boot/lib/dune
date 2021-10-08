@@ -26,9 +26,4 @@
    pypprint.ml
    from
    (pyml -> pypprint.py.ml)
-   (-> pypprint.py-skel.ml))
-  (select
-   sundials_wrapper.ml
-   from
-   (sundialsml -> sundials_wrapper.sd.ml)
-   (-> sundials_wrapper.sd-skel.ml))))
+   (-> pypprint.py-skel.ml))))

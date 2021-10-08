@@ -730,6 +730,7 @@ end
 lang IOPrettyPrint = IOAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CPrint _ -> "print"
+  | CPrintError _ -> "printError"
   | CDPrint _ -> "dprint"
   | CFlushStdout _ -> "flushStdout"
   | CReadLine _ -> "readLine"

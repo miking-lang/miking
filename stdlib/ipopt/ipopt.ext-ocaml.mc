@@ -1,9 +1,9 @@
 include "map.mc"
 include "ocaml/ast.mc"
 
-let impl = lam arg : { ident : String, ty : Type }.
+let impl = lam arg : { expr : String, ty : Type }.
   {
-    ident = arg.ident,
+    expr = arg.expr,
     ty = arg.ty,
     libraries = ["ipoptml"],
     cLibraries = ["ipopt"]
@@ -28,13 +28,13 @@ let ipoptExtMap =
   [
     ("externalIpoptApplicationReturnStatusRetcode", [
       impl {
-        ident = "Ipoptml.application_return_status_retcode",
+        expr = "Ipoptml.application_return_status_retcode",
         ty = tyarrow_ otyopaque_ tyint_
       }
     ]),
     ("externalIpoptCreateNLP", [
       impl {
-        ident = "Ipoptml.create_nlp",
+        expr = "Ipoptml.create_nlp",
         ty = tyarrows_ [
           otylabel_ "eval_f" tyevalf,
           otylabel_ "eval_grad_f" tyevalgradf,
@@ -53,25 +53,25 @@ let ipoptExtMap =
     ]),
     ("externalIpoptAddStrOption", [
       impl {
-        ident = "Ipoptml.add_str_option",
+        expr = "Ipoptml.add_str_option",
         ty = tyarrows_ [otyopaque_, otystring_, otystring_, otyunit_]
       }
     ]),
     ("externalIpoptAddNumOption", [
       impl {
-        ident = "Ipoptml.add_num_option",
+        expr = "Ipoptml.add_num_option",
         ty = tyarrows_ [otyopaque_, otystring_, tyfloat_, otyunit_]
       }
     ]),
     ("externalIpoptAddIntOption", [
       impl {
-        ident = "Ipoptml.add_int_option",
+        expr = "Ipoptml.add_int_option",
         ty = tyarrows_ [otyopaque_, otystring_, tyint_, otyunit_]
       }
     ]),
     ("externalIpoptSolve", [
       impl {
-        ident = "Ipoptml.solve",
+        expr = "Ipoptml.solve",
         ty = tyarrows_ [otyopaque_, tyvec, otyopaque_]
       }
     ])

@@ -18,6 +18,7 @@ let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
 let setToSeq : Set a -> [a] = lam s. mapKeys s
+let setEq : Set a -> Set a -> Bool = mapEq (lam. lam. true)
 
 mexpr
 
@@ -48,5 +49,8 @@ utest setSize s4 with 3 in
 utest setMem 1 s4 with true in
 utest setMem 2 s4 with true in
 utest setMem 3 s4 with true in
+
+utest setEq s4 s4 with true in
+utest setEq s4 s3 with false in
 
 ()

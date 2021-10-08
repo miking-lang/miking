@@ -19,7 +19,6 @@ include "option.mc"
 include "seq.mc"
 include "map.mc"
 include "eqset.mc"
-include "assoc.mc"
 include "set.mc"
 
 type DigraphEdge v l = (v, v, l)
@@ -198,45 +197,44 @@ let digraphBFS : Digraph v l -> v -> Map v Int = lam source. lam g.
 
 type Successors v l = {
   i : Int,
-  number : AssocMap v l,
-  lowlink : AssocMap v l,
-  stack : AssocMap v l,
+  number : Map v l,
+  lowlink : Map v l,
+  stack : [v],
   comps : [[v]]
 }
 
 -- Strongly connected components of g.
 -- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
 -- https://doi.org/10.1137/0201010
-let digraphTarjan = lam g : Digraph v l.
-  let eqv = lam v1. lam v2. eqi (digraphCmpv g v1 v2) 0 in
-  let mapMem = assocMem {eq=eqv} in
-  let mapLookup = assocLookupOrElse {eq=eqv} (lam. error "Lookup failed") in
-  let mapInsert = assocInsert {eq=eqv} in
-  let eqsetMem = eqsetMem eqv in
+let digraphTarjan : Digraph v l -> [[v]] =
+lam g.
+  let cmpv = digraphCmpv g in
+  let eqv = lam x. lam y. eqi (cmpv x y) 0 in
+  let mapFind = mapFindWithExn in
+  let and = lam x. lam y. if not x then false else y in
 
   recursive let strongConnect = lam s : Successors v l. lam v.
     let traverseSuccessors = lam s : Successors v l. lam w.
       if not (mapMem w s.number) then
         let s : Successors v l = strongConnect s w in
-        let n = mini (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
+        let n = mini (mapFind v s.lowlink) (mapFind w s.lowlink) in
         {s with lowlink = mapInsert v n s.lowlink}
-      else if lti (mapLookup w s.number) (mapLookup v s.number) then
-        if eqsetMem w s.stack then
-          let n = mini (mapLookup v s.lowlink) (mapLookup w s.number) in
+      else if lti (mapFind w s.number) (mapFind v s.number) then
+        if any (eqv w) s.stack then
+          let n = mini (mapFind v s.lowlink) (mapFind w s.number) in
           {s with lowlink = mapInsert v n s.lowlink}
         else s
       else s
     in
 
     let popStackIntoComp = lam s : Successors v l.
-      let vn = mapLookup v s.number in
-
+      let vn = mapFind v s.number in
       recursive let work = lam comp. lam stack.
-        if null stack then (comp,stack)
-        else
-          let w = head stack in
-          if lti (mapLookup w s.number) vn then (comp,stack)
-          else work (snoc comp w) (tail stack)
+        match stack with [] then (comp, stack)
+        else match stack with [w] ++ ws then
+          if lti (mapFind w s.number) vn then (comp, stack)
+          else work (snoc comp w) ws
+        else never
       in
       let t = work [] s.stack in
       {{s with comps = snoc s.comps t.0}
@@ -249,17 +247,26 @@ let digraphTarjan = lam g : Digraph v l.
                   with i = addi s.i 1}
     in
 
-    let s : Successors v l = foldl traverseSuccessors s (digraphSuccessors v g) in
+    let s : Successors v l =
+      foldl traverseSuccessors s (digraphSuccessors v g)
+    in
 
-    if eqi (mapLookup v s.lowlink) (mapLookup v s.number)
+    if eqi (mapFind v s.lowlink) (mapFind v s.number)
     then popStackIntoComp s else s
   in
 
   let s : Successors v l =
-    foldl (lam s : Successors v l. lam v. if not (mapMem v s.number)
-                                          then strongConnect s v else s)
-          {i = 0, number = [], lowlink = [], stack = [], comps = []}
-          (digraphVertices g)
+    foldl
+      (lam s : Successors v l. lam v.
+        if not (mapMem v s.number) then strongConnect s v else s)
+      {
+        i = 0,
+        number = mapEmpty cmpv,
+        lowlink = mapEmpty cmpv,
+        stack = [],
+        comps = []
+      }
+      (digraphVertices g)
   in s.comps
 
 -- Strongly connected components of g.

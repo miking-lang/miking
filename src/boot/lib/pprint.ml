@@ -406,6 +406,8 @@ let rec print_const fmt = function
   (* MCore intrinsics: Debug and I/O *)
   | Cprint ->
       fprintf fmt "print"
+  | CprintError ->
+      fprintf fmt "printError"
   | Cdprint ->
       fprintf fmt "dprint"
   | CreadLine ->

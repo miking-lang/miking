@@ -161,9 +161,8 @@ let iteri_array (f : int -> 'a -> unit) (s : 'a t) : unit =
         done ;
         len
     | Concat {lhs; rhs; _} ->
-        let n1 = iteri off lhs in
-        let n2 = iteri (off + n1) rhs in
-        n1 + n2
+        let n = iteri off lhs in
+        n + iteri (off + n) rhs
   in
   iteri 0 !s |> ignore
 

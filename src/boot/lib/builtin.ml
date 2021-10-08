@@ -88,6 +88,7 @@ let builtin =
   ; ("wallTimeMs", f CwallTimeMs)
   ; ("sleepMs", f CsleepMs) (* MCore intrinsics: Debug and I/O *)
   ; ("print", f Cprint)
+  ; ("printError", f CprintError)
   ; ("dprint", f Cdprint)
   ; ("readLine", f CreadLine)
   ; ("readBytesAsString", f CreadBytesAsString)
