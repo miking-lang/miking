@@ -485,6 +485,7 @@ lang MExprCCompile = MExprAst + CAst
         --   size = Some (CEInt { i = addi 1 len })
         -- } in
 
+    -- General sequences
     else match uTy with TySeq { ty = iTy } then
       -- Define the array
       let iTy = CTyArray {
@@ -922,7 +923,7 @@ end
 -- COMPILATION FOR GCC --
 -------------------------
 
-lang MExprCCompileGCC = MExprCCompile + CProgAst
+lang MExprCCompileAlloc = MExprCCompile
 
   -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
   sem alloc (name: Name) =
@@ -954,6 +955,8 @@ let cGccCompilerNames = concat cCompilerNames [
   _argv,
   _main
 ]
+
+lang MExprCCompileGCC = MExprCCompileAlloc + CProgAst
 
 let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
@@ -998,7 +1001,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 -----------
 
 lang Test =
-  MExprCCompileGCC + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
+  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
   MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
   + SeqTypeNoStringTypeLift
 
