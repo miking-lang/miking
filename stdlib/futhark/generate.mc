@@ -717,7 +717,8 @@ let expected = FProg {decls = [
     body =
       futForEach_
         (nFutPvar_ acc, futInt_ 0)
-        y (nFutVar_ s) (futAdd_ (nFutVar_ acc) (nFutVar_ y))}]} in
+        y (nFutVar_ s) (futAdd_ (nFutVar_ acc) (nFutVar_ y)),
+    info = NoInfo ()}]} in
 let entryPoints = setOfSeq nameCmp [f] in
 utest printFutProg (generateProgram entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
