@@ -9,6 +9,10 @@ let mathExtMap: ExtMap =
 
     ( "externalLog"
     , { ident = "log", header = "<math.h>" }
+    ),
+
+    ( "externalPow"
+    , { ident = "pow", header = "<math.h>" }
     )
 
   ]

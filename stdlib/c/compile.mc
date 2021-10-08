@@ -201,7 +201,8 @@ lang MExprCCompile = MExprAst + CAst
   | TmExt t ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
-      mapInsert t.ident (nameNoSym e.ident) acc
+      let acc = mapInsert t.ident (nameNoSym e.ident) acc in
+      sfold_Expr_Expr collectExternals acc t.inexpr
     else infoErrorExit (t.info) "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
 
@@ -507,8 +508,9 @@ lang MExprCCompile = MExprAst + CAst
         }
       ) tms in
       -- Define and initialize the sequence struct
+      let def = snoc def
+        { ty = compileType env ty, id = Some n, init = None () } in
       let initSeq = [
-        CSDef { ty = compileType env ty, id = Some n, init = None () },
         -- Set ptr
         CSExpr {
           expr = _assign (CEMember { lhs = CEVar { id = n }, id = _seqKey })
@@ -852,6 +854,12 @@ lang MExprCCompile = MExprAst + CAst
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
   | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
   | CFloorfi _ -> CECast { ty = CTyInt {}, rhs = head args }
+
+  -- List operators
+  | CGet _ ->
+    let lhs = CEMember { lhs = head args, id = _seqKey } in
+    CEBinOp { op = COSubScript {}, lhs = lhs, rhs = last args }
+  | CLength _ -> CEMember { lhs = head args, id = _seqLenKey }
 
   | c -> infoErrorExit (infoTm t) "Unsupported intrinsic in compileOp"
 
