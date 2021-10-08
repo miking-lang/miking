@@ -95,6 +95,8 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CSubi _ | CSubf _ -> FCSub ()
   | CMuli _ | CMulf _ -> FCMul ()
   | CDivi _ | CDivf _ -> FCDiv ()
+  | CNegi _ -> FCNegi ()
+  | CNegf _ -> FCNegf ()
   | CModi _ -> FCRem ()
   | CEqi _ | CEqf _ | CEqc _ -> FCEq ()
   | CNeqi _ | CNeqf _ -> FCNeq ()
@@ -721,6 +723,23 @@ let expected = FProg {decls = [
     info = NoInfo ()}]} in
 let entryPoints = setOfSeq nameCmp [f] in
 utest printFutProg (generateProgram entryPoints foldlToFor)
+with printFutProg expected using eqSeq eqc in
+
+let negation =
+  nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]]) (
+    nlam_ a tyint_ (nlam_ b tyfloat_ (
+      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))]))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(a, futIntTy_), (b, futFloatTy_)],
+    ret = futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)],
+    body = futRecord_ [
+      ("a", futApp_ (futConst_ (FCNegi ())) (nFutVar_ a)),
+      ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))]}]} in
+let entryPoints = setOfSeq nameCmp [] in
+printLn (printFutProg (generateProgram entryPoints negation));
+utest printFutProg (generateProgram entryPoints negation)
 with printFutProg expected using eqSeq eqc in
 
 ()

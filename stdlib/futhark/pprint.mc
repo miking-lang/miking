@@ -42,6 +42,8 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCSub () -> "(-)"
   | FCMul () -> "(*)"
   | FCDiv () -> "(/)"
+  | FCNegi () -> "(i64.neg)"
+  | FCNegf () -> "(f64.neg)"
   | FCRem () -> "(%)"
   | FCFloatFloor () -> "f64.floor"
   | FCFloat2Int () -> "i64.f64"

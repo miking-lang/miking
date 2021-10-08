@@ -23,6 +23,8 @@ lang FutharkConstAst
   | FCSub ()
   | FCMul ()
   | FCDiv ()
+  | FCNegi ()
+  | FCNegf ()
   | FCRem ()
   | FCFloatFloor ()
   | FCFloat2Int ()
