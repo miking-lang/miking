@@ -82,7 +82,6 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   use PMExprCompile in
   let ast = generateProgram entryPoints ast in
   reportFutharkFunctionViolations ast;
-  let ast = inlineRecords ast in
   let ast = deadcodeElimination ast in
   parameterizeLength ast
 
