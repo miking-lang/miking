@@ -198,8 +198,8 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
-    FELet {ident = n, tyBody = ty t.target, body = generateExpr env t.target,
-           inexpr = generateExpr env t.thn, ty = generateType env (ty t.thn),
+    FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
+           inexpr = generateExpr env t.thn, ty = generateType env (tyTm t.thn),
            info = infoTm t.target}
   | TmMatch ({pat = PatRecord {bindings = bindings},
               thn = TmVar {ident = exprName}, els = TmNever _} & t) ->
@@ -214,7 +214,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                                 middle = PName tail, postfix = []},
               els = TmNever _} & t) ->
     let target = generateExpr env t.target in
-    let targetTy = generateType env (ty t.target) in
+    let targetTy = generateType env (tyTm t.target) in
     match targetTy with FTyArray {elem = elemTy} then
       FELet {
         ident = head,
@@ -235,15 +235,15 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
               info = t.info},
             rhs = target, ty = targetTy, info = t.info},
           inexpr = generateExpr env t.thn,
-          ty = generateType env (ty t.thn),
+          ty = generateType env (tyTm t.thn),
           info = t.info},
-        ty = generateType env (ty t.thn),
+        ty = generateType env (tyTm t.thn),
         info = t.info}
     else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
-      cases = [(generatePattern env (ty t.target) pat, generateExpr env t.thn)],
+      cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
       ty = generateType env t.ty,
       info = t.info}
   | (TmMatch _) & t -> defaultGenerateMatch env t
@@ -296,7 +296,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = TmConst {val = CInt {val = 0}}},
             rhs = arg3} & t) ->
-    let arrayType = generateType env (ty arg1) in
+    let arrayType = generateType env (tyTm arg1) in
     let takeConst = FEConst {
       val = FCTake (),
       ty = FTyArrow {

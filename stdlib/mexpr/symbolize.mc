@@ -40,7 +40,7 @@ lang Sym = Ast
   sem symbolizeExpr (env : SymEnv) =
   | t ->
     let t = smap_Expr_Expr (symbolizeExpr env) t in
-    withType (symbolizeType env (ty t)) t
+    withType (symbolizeType env (tyTm t)) t
 
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader

@@ -230,7 +230,7 @@ let mapPattern : () -> Pattern =
       let x = nameSym "x" in
       let subMap = mapFromSeq nameCmp [
         (headPair.0, lam info.
-          TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
+          TmVar {ident = x, ty = tyWithInfo info (tyTm headPair.1), info = info})
       ] in
       let els = substituteVariables els subMap in
       match fPair.1 with TmSeq {tms = [fResultVar]} then
@@ -301,9 +301,9 @@ let map2Pattern : () -> Pattern =
         let y = nameSym "y" in
         let subMap = mapFromSeq nameCmp [
           (headFst.0, lam info.
-            TmVar {ident = x, ty = tyWithInfo info (ty headFst.1), info = info}),
+            TmVar {ident = x, ty = tyWithInfo info (tyTm headFst.1), info = info}),
           (headSnd.0, lam info.
-            TmVar {ident = y, ty = tyWithInfo info (ty headSnd.1), info = info})
+            TmVar {ident = y, ty = tyWithInfo info (tyTm headSnd.1), info = info})
         ] in
         let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
@@ -376,9 +376,9 @@ let reducePattern : () -> Pattern =
       let y = nameSym "y" in
       let subMap = mapFromSeq nameCmp [
         (accPair.0, lam info.
-          TmVar {ident = x, ty = tyWithInfo info (ty accPair.1), info = info}),
+          TmVar {ident = x, ty = tyWithInfo info (tyTm accPair.1), info = info}),
         (headPair.0, lam info.
-          TmVar {ident = y, ty = tyWithInfo info (ty headPair.1), info = info})
+          TmVar {ident = y, ty = tyWithInfo info (tyTm headPair.1), info = info})
       ] in
       let els = substituteVariables els subMap in
       let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultPair.0)) in

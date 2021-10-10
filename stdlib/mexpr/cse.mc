@@ -56,8 +56,8 @@ lang CSE = MExprCmp
           foldl
             (lam acc. lam namedExpr : (Name, Expr).
               match namedExpr with (id, e) then
-                TmLet {ident = id, tyBody = ty e, body = e, inexpr = acc,
-                       ty = ty acc, info = infoTm e}
+                TmLet {ident = id, tyBody = tyTm e, body = e, inexpr = acc,
+                       ty = tyTm acc, info = infoTm e}
               else never)
             t
             exprs)
@@ -87,7 +87,7 @@ lang CSE = MExprCmp
   sem cseReplace (env : CSEApplyEnv) =
   | t ->
     match mapLookup t env.exprIdent with Some ident then
-      (env, TmVar {ident = ident, ty = ty t, info = infoTm t})
+      (env, TmVar {ident = ident, ty = tyTm t, info = infoTm t})
     else smapAccumL_Expr_Expr cseApply env t
 
   sem cseApplyH (env : CSEApplyEnv) =

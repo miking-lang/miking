@@ -174,7 +174,7 @@ lang MExprCCompile = MExprAst + CAst
 
     match compileTops env [] [] prog with (tops, inits) then
 
-    let retTy: CType = compileType env (ty prog) in
+    let retTy: CType = compileType env (tyTm prog) in
 
     (env, join [decls, defs, postDefs], tops, inits, retTy)
 
@@ -558,7 +558,7 @@ lang MExprCCompile = MExprAst + CAst
 
         -- Generate conditions corresponding to pat, and add pattern bindings
         -- to start of thn
-        match compilePat env [] [] [] ctarget (ty target) pat
+        match compilePat env [] [] [] ctarget (tyTm target) pat
         with (pres, conds, defs) then
 
           let thn = concat defs thn in
@@ -645,13 +645,13 @@ lang MExprCCompile = MExprAst + CAst
   | expr ->
 
     match res with Return _ then
-      if _isUnitTy (ty expr) then
+      if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
       else (env, [CSRet { val = Some (compileExpr env expr) }])
 
     else match res with None _ then
-      if _isUnitTy (ty expr) then
+      if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
       else infoErrorExit (infoTm expr)
@@ -750,7 +750,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
-        if _isUnitTy (ty rhs) then rec acc lhs
+        if _isUnitTy (tyTm rhs) then rec acc lhs
         else rec (cons rhs acc) lhs
       else (t, acc)
     in
