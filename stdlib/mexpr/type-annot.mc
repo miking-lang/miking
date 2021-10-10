@@ -777,7 +777,7 @@ let conApp = bindall_ [
   ncondef_ x (tyarrow_ tyint_ (ntycon_ n)),
   nconapp_ x (int_ 4)
 ] in
-utest tyTm (typeAnnot conApp) with ntyvar_ n using eqType in
+utest tyTm (typeAnnot conApp) with ntycon_ n using eqType in
 
 let matchInteger = typeAnnot (bindall_ [
   nulet_ x (int_ 0),

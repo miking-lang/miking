@@ -270,7 +270,7 @@ lang LamTypeCheck = TypeCheck + LamAst
         t.tyIdent
     in
     let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
-    let tyLam = ityarrow_ t.info tyX (ty body) in
+    let tyLam = ityarrow_ t.info tyX (tyTm body) in
     TmLam {{t with body = body}
               with ty = tyLam}
 end
@@ -281,7 +281,7 @@ lang AppTypeCheck = TypeCheck + AppAst
     let lhs = typeCheckBase env t.lhs in
     let rhs = typeCheckBase env t.rhs in
     let tyRes = newvar env.currentLvl t.info in
-    unify (ty lhs, tyarrow_ (ty rhs) tyRes);
+    unify (tyTm lhs, tyarrow_ (tyTm rhs) tyRes);
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
                with ty = tyRes}
@@ -295,18 +295,18 @@ lang LetTypeCheck = TypeCheck + LetAst
     let tyBody =
       match t.tyBody with TyUnknown _ then
         -- No type annotation: generalize the inferred type
-        gen lvl (ty body)
+        gen lvl (tyTm body)
       else
         -- Type annotation: unify the annotated type with the inferred one
         match stripTyAll t.tyBody with (_, tyAnnot) then
-          unify (tyAnnot, ty body);
+          unify (tyAnnot, tyTm body);
           t.tyBody
         else never
     in
     let inexpr = typeCheckBase (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {{{t with body = body}
                with inexpr = inexpr}
-               with ty = ty inexpr}
+               with ty = tyTm inexpr}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
@@ -322,7 +322,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckBase env) t.tms in
-    iter (lam tm. unify (elemTy, ty tm)) tms;
+    iter (lam tm. unify (elemTy, tyTm tm)) tms;
     TmSeq {{t with tms = tms}
               with ty = ityseq_ t.info elemTy}
 end
@@ -335,14 +335,14 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckBase env t.next in
     let tusing = optionMap (typeCheckBase env) t.tusing in
     (match tusing with Some tu then
-       unify (ty tu) (tyarrows_ [ty test, ty expected, tybool_])
+       unify (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
      else
-       unify (ty test) (ty expected));
+       unify (tyTm test) (tyTm expected));
     TmUtest {{{{{t with test = test}
                    with expected = expected}
                    with next = next}
                    with tusing = tusing}
-                   with ty = ty next}
+                   with ty = tyTm next}
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
@@ -356,7 +356,7 @@ lang ExtTypeCheck = TypeCheck + ExtAst
     let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
     let inexpr = typeCheckBase env t.inexpr in
     TmExt {{t with inexpr = inexpr}
-              with ty = ty inexpr}
+              with ty = tyTm inexpr}
 end
 
 
@@ -428,7 +428,7 @@ in
 let typeOf = lam test : TypeTest.
   let env = foldr (lam n : (String, Type).
     mapInsert (nameNoSym n.0) n.1) (mapEmpty nameCmp) test.env in
-  ty (typeCheckBase {_tcEnvEmpty with varEnv = env} test.tm)
+  tyTm (typeCheckBase {_tcEnvEmpty with varEnv = env} test.tm)
 in
 
 let runTest =
