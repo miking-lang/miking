@@ -904,6 +904,13 @@ lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst
         uunit_
       else error "Argument to flushStdout is not unit"
     else error "Argument to flushStdout is not unit"
+  | CFlushStderr _ ->
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        flushStderr ();
+        uunit_
+      else error "Argument to flushStderr is not unit"
+    else error "Argument to flushStderr is not unit"
   | CReadLine _ ->
     match arg with TmRecord {bindings = bindings} then
       if mapIsEmpty bindings then

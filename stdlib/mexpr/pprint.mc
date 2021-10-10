@@ -734,6 +734,7 @@ lang IOPrettyPrint = IOAst + ConstPrettyPrint
   | CPrintError _ -> "printError"
   | CDPrint _ -> "dprint"
   | CFlushStdout _ -> "flushStdout"
+  | CFlushStderr _ -> "flushStderr"
   | CReadLine _ -> "readLine"
   | CReadBytesAsString _ -> "readBytesAsString"
 end

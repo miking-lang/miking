@@ -361,7 +361,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
             let pat = OPatRecord {bindings = fieldPatterns} in
             let reconstructedRecord = TmRecord {
               bindings = mapMap (lam n. nvar_ n) fieldNames,
-              ty = ty t.body,
+              ty = tyTm t.body,
               info = infoTm t.body
             } in
             _omatch_ (objMagic (generate env t.body))

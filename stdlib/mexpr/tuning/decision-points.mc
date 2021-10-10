@@ -186,7 +186,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             info : Info,
             inner : Hole}
 
-  sem ty =
+  sem tyTm =
   | TmHole {ty = ty} -> ty
 
   sem symbolizeExpr (env : SymEnv) =
@@ -584,7 +584,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
       modref idx2hole (concat (deref idx2hole) (create n (lam. h)));
       modref hole2idx (mapInsert name m (deref hole2idx));
       modref hole2fun (mapInsert name funName (deref hole2fun));
-      modref hole2ty (mapInsert name (use HoleAst in ty h) (deref hole2ty));
+      modref hole2ty (mapInsert name (use HoleAst in tyTm h) (deref hole2ty));
       modref verbosePath verbose;
       env
     else never

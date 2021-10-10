@@ -129,7 +129,7 @@ lang TypeLift = Cmp
       -- Lift the contained types
       match smapAccumL_Expr_Type typeLiftType env t with (env, t) then
         -- Lift the annotated type
-        match typeLiftType env (ty t) with (env, ty) then
+        match typeLiftType env (tyTm t) with (env, ty) then
           (env, withType ty t)
         else never
       else never
@@ -458,9 +458,9 @@ let record = typeAnnot (symbolize (urecord_ [
   ("b", float_ 1.5)
 ])) in
 (match typeLift record with (env, t) then
-  match ty t with TyCon {ident = ident} then
+  match tyTm t with TyCon {ident = ident} then
     match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
-      utest recordTy with ty record using eqType in
+      utest recordTy with tyTm record using eqType in
       ()
     else never
   else never

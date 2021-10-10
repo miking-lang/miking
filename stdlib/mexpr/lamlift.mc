@@ -4,6 +4,7 @@
 include "digraph.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/call-graph.mc"
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
@@ -75,7 +76,9 @@ end
 -- corresponding types. For recursive let-expressions, this requires solving a
 -- system of set equations (as the free variables within bindings may affect
 -- each other).
-lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
+lang LambdaLiftFindFreeVariables =
+  MExprAst + MExprCallGraph + LambdaLiftFindFreeVariablesPat
+
   sem findFreeVariablesInBody (state : LambdaLiftState) (fv : Map Name Type) =
   | TmVar t ->
     if setMem t.ident state.vars then
@@ -111,65 +114,6 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
     let state = foldl findBinding state t.bindings in
     findFreeVariablesReclet state t.inexpr
   | t -> sfold_Expr_Expr findFreeVariablesReclet state t
-
-  sem addGraphVertices (g : Digraph Name Int) =
-  | TmLet t ->
-    let g =
-      match t.tyBody with TyArrow _ then digraphAddVertex t.ident g
-      else g
-    in
-    let g = addGraphVertices g t.body in
-    addGraphVertices g t.inexpr
-  | TmRecLets t ->
-    let g =
-      foldl
-        (lam g. lam bind : RecLetBinding. digraphAddVertex bind.ident g)
-        g t.bindings in
-    let g =
-      foldl
-        (lam g. lam bind : RecLetBinding.
-          addGraphVertices g bind.body)
-        g t.bindings in
-    addGraphVertices g t.inexpr
-  | t -> sfold_Expr_Expr addGraphVertices g t
-
-  sem addGraphCallEdges (g : Digraph Name Int) =
-  | bindings /- : [RecLetBinding] -/ ->
-    let edges =
-      foldl
-        (lam edges. lam bind : RecLetBinding.
-          _lamliftFindCallEdges bind.ident g edges bind.body)
-        (mapEmpty nameCmp) bindings in
-    mapFoldWithKey
-      (lam g : Digraph Name Int. lam edgeSrc : Name. lam edgeDsts : Set Name.
-        mapFoldWithKey
-          (lam g : Digraph Name Int. lam edgeDst : Name. lam.
-            digraphAddEdge edgeSrc edgeDst 0 g)
-          g edgeDsts)
-      g edges
-
-  sem _lamliftFindCallEdges (src : Name) (g : Digraph Name Int)
-                            (edges : Map Name (Set Name)) =
-  | TmVar t ->
-    if digraphHasVertex t.ident g then
-      let outEdges =
-        match mapLookup t.ident edges with Some outEdges then
-          setInsert t.ident outEdges
-        else setOfSeq nameCmp [t.ident] in
-      mapInsert src outEdges edges
-    else edges
-  | TmLet t ->
-    let letSrc = match t.tyBody with TyArrow _ then t.ident else src in
-    let edges = _lamliftFindCallEdges letSrc g edges t.body in
-    _lamliftFindCallEdges src g edges t.inexpr
-  | TmRecLets t ->
-    let edges =
-      foldl
-        (lam edges : Map Name (Set Name). lam bind : RecLetBinding.
-          _lamliftFindCallEdges bind.ident g edges bind.body)
-        (mapEmpty nameCmp) t.bindings in
-    _lamliftFindCallEdges src g edges t.inexpr
-  | t -> sfold_Expr_Expr (_lamliftFindCallEdges src g) edges t
 
   sem findFreeVariables (state : LambdaLiftState) =
   | TmLam t ->
@@ -212,9 +156,7 @@ lang LambdaLiftFindFreeVariables = MExprAst + LambdaLiftFindFreeVariablesPat
       findFreeVariables state bind.body
     in
     let state = findFreeVariablesReclet state (TmRecLets t) in
-    let g : Digraph Name Int = digraphEmpty nameCmp eqi in
-    let g = addGraphVertices g (TmRecLets t) in
-    let g = addGraphCallEdges g t.bindings in
+    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
     let sccs = digraphTarjan g in
     let state = propagateFunNames state g (reverse sccs) in
     let state = foldl findFreeVariablesBinding state t.bindings in
@@ -245,7 +187,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         foldr
           (lam freeVar : (Name, Type). lam body.
             TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                   body = body, ty = ty body, info = info})
+                   body = body, ty = tyTm body, info = info})
           t.body
           fv in
       let subExpr = lam info.
@@ -255,7 +197,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             -- NOTE(larshum, 2021-09-19): We assume that the application
             -- argument has the correct type.
             let appType =
-              match ty acc with TyArrow {to = to} then
+              match tyTm acc with TyArrow {to = to} then
                 to
               else TyUnknown {info = info}
             in
@@ -294,7 +236,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
               -- NOTE(larshum, 2021-09-19): We assume that the application
               -- argument has the correct type.
               let appType =
-                match ty acc with TyArrow {to = to} then
+                match tyTm acc with TyArrow {to = to} then
                   to
                 else TyUnknown {info = info}
               in
@@ -314,7 +256,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
               TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                     body = body, ty = ty body, info = info})
+                     body = body, ty = tyTm body, info = info})
             bind.body fv in
         -- Update the annotated type of the function to include the types of the
         -- added parameters.

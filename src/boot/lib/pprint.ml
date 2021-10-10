@@ -434,6 +434,8 @@ let rec print_const fmt = function
       fprintf fmt "exit"
   | CflushStdout ->
       fprintf fmt "flushStdout"
+  | CflushStderr ->
+      fprintf fmt "flushStderr"
   (* MCore intrinsics: Symbols *)
   | CSymb id ->
       fprintf fmt "symb(%s)" (Symb.Helpers.string_of_sym id)

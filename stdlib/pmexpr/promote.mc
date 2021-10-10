@@ -29,7 +29,7 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
           match fBody with TmConst {val = CConcat ()} then
             app
           else
-            TmParallelReduce {f = arg1, ne = ne, as = s, ty = ty app,
+            TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
                               info = infoTm app}
         else app
       else app

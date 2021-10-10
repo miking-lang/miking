@@ -2,6 +2,7 @@ include "ext/math-ext.mc"
 
 -- Float stuff
 let inf = divf 1.0 0.0
+let nan = mulf 0. inf
 let minf = lam r. lam l. if ltf r l then r else l
 
 utest minf 0. 0. with 0. using eqf

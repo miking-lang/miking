@@ -96,7 +96,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
                       ident = name,
                       tyIdent = TyUnknown {info = NoInfo ()},
                       body = e,
-                      ty = ty e,
+                      ty = tyTm e,
                       info = NoInfo ()})
                   expr
                   extraNames in

@@ -13,7 +13,7 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
     let concat = TmConst {cons with val = CConcat ()} in
     let elemSeq = TmSeq {
       tms = [arg1],
-      ty = TySeq {ty = ty arg1, info = infoTm arg1},
+      ty = TySeq {ty = tyTm arg1, info = infoTm arg1},
       info = infoTm arg1
     } in
     TmApp {t with lhs = TmApp {{innerApp with lhs = concat}
@@ -24,7 +24,7 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
     let concat = TmConst {snoc with val = CConcat ()} in
     let elemSeq = TmSeq {
       tms = [arg2],
-      ty = TySeq {ty = ty arg2, info = infoTm arg2},
+      ty = TySeq {ty = tyTm arg2, info = infoTm arg2},
       info = infoTm arg2
     } in
     TmApp {{t with lhs = TmApp {innerApp with lhs = concat}}
@@ -88,16 +88,16 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
                info = info}
     in
     let elemTy =
-      match ty matchTm.target with TySeq {ty = elemTy} then
+      match tyTm matchTm.target with TySeq {ty = elemTy} then
         elemTy
-      else TyUnknown {info = infoTy (ty matchTm.target)} in
+      else TyUnknown {info = infoTy (tyTm matchTm.target)} in
     let nameMap = mapFromSeq nameCmp [
       (h, lam info. TmApp {
         lhs = makeConstTerm (CHead ()) info,
         rhs = matchTm.target, ty = elemTy, info = info}),
       (t, lam info. TmApp {
         lhs = makeConstTerm (CTail ()) info,
-        rhs = matchTm.target, ty = ty matchTm.target, info = info})] in
+        rhs = matchTm.target, ty = tyTm matchTm.target, info = info})] in
     rewriteTerm (substituteVariables matchTm.thn nameMap)
   | t -> smap_Expr_Expr rewriteTerm t
 end
