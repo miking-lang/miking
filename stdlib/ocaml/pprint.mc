@@ -247,6 +247,7 @@ lang OCamlPrettyPrint =
   | CPrintError _ -> intrinsicOpIO "print_error"
   | CDPrint _ -> intrinsicOpIO "dprint"
   | CFlushStdout _ -> intrinsicOpIO "flush_stdout"
+  | CFlushStderr _ -> intrinsicOpIO "flush_stderr"
   | CReadLine _ -> intrinsicOpIO "read_line"
   | CArgv _ -> intrinsicOpSys "argv"
   | CFileRead _ -> intrinsicOpFile "read"

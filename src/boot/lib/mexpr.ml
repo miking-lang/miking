@@ -273,6 +273,8 @@ let arity = function
       1
   | CflushStdout ->
       1
+  | CflushStderr ->
+      1
   (* MCore intrinsics: Symbols *)
   | CSymb _ ->
       0
@@ -976,6 +978,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       Intrinsics.IO.flush_stdout () ;
       tm_unit
   | CflushStdout, _ ->
+      fail_constapp fi
+  | CflushStderr, TmRecord (_, x) when Record.is_empty x ->
+      Intrinsics.IO.flush_stderr () ;
+      tm_unit
+  | CflushStderr, _ ->
       fail_constapp fi
   (* MCore intrinsics: Symbols *)
   | CSymb _, _ ->

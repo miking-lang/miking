@@ -76,6 +76,7 @@ let builtin = use MExprAst in
   , ("printError", CPrintError ())
   , ("dprint", CDPrint ())
   , ("flushStdout", CFlushStdout ())
+  , ("flushStderr", CFlushStderr ())
   , ("readLine", CReadLine ())
   , ("readBytesAsString", CReadBytesAsString ())
   , ("argv", CArgv ())

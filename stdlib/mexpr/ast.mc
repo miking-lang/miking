@@ -708,6 +708,7 @@ lang IOAst = ConstAst
   | CPrintError {}
   | CDPrint {}
   | CFlushStdout {}
+  | CFlushStderr {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
