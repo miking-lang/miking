@@ -9,7 +9,8 @@
 
 
 
-include "dualnum-tree.mc"
+-- include "dualnum-tree.mc"
+include "dualnum-alist.mc"
 include "dualnum-helpers.mc"
 include "bool.mc"
 include "math.mc"
@@ -27,10 +28,8 @@ let _ltE = dualnumLtE
 let _isDualNum = dualnumIsDualNum
 let _epsilon = dualnumEpsilon
 let _primal = dualnumPrimal
+let _primalDeep = dualnumPrimalDeep
 let _pertubation = dualnumPertubation
-let _unpack = dualnumUnpackNum
-let _float2num2 = dualnumFloat2num2
-let _float2num1 = dualnumFloat2num1
 
 
 ----------------------------------
@@ -38,6 +37,7 @@ let _float2num1 = dualnumFloat2num1
 ----------------------------------
 
 type DualNumFun2 = DualNum -> DualNum -> DualNum
+type FloatFun2 = Float -> Float -> Float
 
 recursive
   -- lifts binary real operator to nested dual-numbers
@@ -45,7 +45,7 @@ recursive
   -- dfdx1 : lifted first partial derivative of f
   -- dfdx2 : lifted second partial derivative of f
   let dualnumLift2
-  : DualNumFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
+  : FloatFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
   lam f. lam dfdx1. lam dfdx2.
     recursive let self = lam p1. lam p2.
       if or (_isDualNum p1)
@@ -64,23 +64,23 @@ recursive
                    (muln (dfdx2 (_primal e p1) (_primal e p2))
                          (_pertubation e p2)))
       else
-        f p1 p2
+        _num (f (_primalDeep p1) (_primalDeep p2))
     in self
 
     -- lifted addition
     let addn = lam p1. lam p2.
       dualnumLift2
-        (_float2num2 addf)
-        (lam x1. lam x2. (_num 1.))
-        (lam x1. lam x2. (_num 1.))
+        addf
+        (lam. lam. (_num 1.))
+        (lam. lam. (_num 1.))
         p1 p2
 
     -- lifted multiplication
     let muln = lam p1. lam p2.
       dualnumLift2
-        (_float2num2 mulf)
-        (lam x1. lam x2. x2)
-        (lam x1. lam x2. x1)
+        mulf
+        (lam. lam x2. x2)
+        (lam x1. lam. x1)
         p1 p2
 end
 
@@ -101,24 +101,6 @@ utest muln dnum012 dnum034 with dnum0 num3 num10 using dualnumEq eqf
 utest muln dnum012 dnum134 with dnum1 dnum036 dnum048 using dualnumEq eqf
 
 
-
-----------------------------
--- DEEP PRIMAL OPERATOR  --
-----------------------------
-
--- Real part of arbitrary nested dual number p.
-recursive
-let dualnumPrimalDeep : DualNum -> DualNum =
-lam p.
-   if not (_isDualNum p) then p
-   else dualnumPrimalDeep (_primal (_epsilon p) p)
-end
-
-utest dualnumPrimalDeep num0 with num0 using dualnumEq eqf
-utest dualnumPrimalDeep dnum134 with num3 using dualnumEq eqf
-utest dualnumPrimalDeep (dnum1 dnum036 dnum048) with num3 using dualnumEq eqf
-
-
 ----------------------------------
 -- LIFTING OF BINARY OPERATORS  --
 ----------------------------------
@@ -130,17 +112,14 @@ type Cmp2 = Float -> Float -> Bool
 -- deepest element in the nested dual-number y+(e1)y'.
 -- cmp : real compare function
 let dualnumLiftBoolFun2 : Cmp2 -> (DualNum -> DualNum -> Bool) =
-lam cmp.
-  let self = lam p1. lam p2.
-    cmp (_unpack (dualnumPrimalDeep p1)) (_unpack (dualnumPrimalDeep p2))
-  in self
+lam cmp. lam p1. lam p2. cmp (_primalDeep p1) (_primalDeep p2)
 
 let _liftBool = dualnumLiftBoolFun2
 
 
 -- Real part of arbitrary nested dual number p as string.
 let dualnum2string : DualNum -> String =
-lam p. float2string (_unpack (dualnumPrimalDeep p))
+lam p. float2string (dualnumPrimalDeep p)
 
 utest dualnum2string num0 with "0."
 utest dualnum2string dnum134 with "3."
@@ -152,6 +131,7 @@ utest dualnum2string (dnum1 dnum036 dnum048) with "3."
 ---------------------------------
 
 type DualNumFun1 = DualNum -> DualNum
+type FloatFun = Float -> Float
 
 -- lifts unary real operator to nested dual-numbers
 -- f : real operator
@@ -161,12 +141,15 @@ lam f. lam dfdx.
   recursive let self = lam p.
     if _isDualNum p then
       let e = _epsilon p in
-      _dnum e
-           (self (_primal e p))
-                 (muln (dfdx (_primal e p))
-                       (_pertubation e p))
+      _dnum
+        e
+        (self
+          (_primal e p))
+          (muln
+            (dfdx (_primal e p))
+            (_pertubation e p))
     else
-      f p
+      _num (f (_primalDeep p))
   in self
 
 let _lift1 = dualnumLift1
@@ -232,7 +215,7 @@ utest
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 1., _num 2.] in
   let m = tensorCreateDense [2, 2] (lam. _num 0.) in
   jacT f x m;
-  map _unpack (tensorToSeqExn (tensorReshapeExn m [4]))
+  map _primalDeep (tensorToSeqExn (tensorReshapeExn m [4]))
 with
 [
   1., 24.,
@@ -255,7 +238,7 @@ utest
   in
   let m = tensorCreateDense [4, 2] (lam. _num 0.) in
   jacT f x m;
-  map _unpack (tensorToSeqExn (tensorReshapeExn m [8]))
+  map _primalDeep (tensorToSeqExn (tensorReshapeExn m [8]))
 with
 [
   25., 2.,
@@ -272,9 +255,9 @@ let grad
   -> () =
 lam f. lam x. lam g.
   if and (tensorHasRank x 1) (tensorHasRank g 1) then
+    let e = genEpsilon () in
     tensorIteri
       (lam idx. lam xi.
-        let e = genEpsilon () in
         tensorSetExn x idx (_dnum e xi (_num 1.));
         tensorSetExn g idx (_pertubation e (f x));
         tensorSetExn x idx xi)
@@ -290,7 +273,7 @@ utest
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
   let g = tensorCreateDense [2] (lam. _num 0.) in
   grad f x g;
-  map _unpack (tensorToSeqExn g)
+  map _primalDeep (tensorToSeqExn g)
 with [3., 2.]
 
 -- Computes the ij'th component of the Hessian d2f/(dx_i)(dx_j) of `f` at `x`.
@@ -333,7 +316,7 @@ utest
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
   let h = tensorCreateDense [2, 2] (lam. _num 0.) in
   hess f x h;
-  map _unpack (tensorToSeqExn (tensorReshapeExn h [4]))
+  map _primalDeep (tensorToSeqExn (tensorReshapeExn h [4]))
 with
 [
   18., 24.,
@@ -374,7 +357,7 @@ utest
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
   let hij = tensorCreateDense [2] (lam. _num 0.) in
   hessijs f 0 1 x hij;
-  map _unpack (tensorToSeqExn (hij))
+  map _primalDeep (tensorToSeqExn (hij))
 with [24., 2.]
 
 
@@ -450,9 +433,10 @@ utest geqn num2 (_dnum e2 dnum112 num3) with true
 ---------------------------
 
 -- lifted negation
-let negn = lam p. _lift1 (_float2num1 negf) (lam x. _num (negf 1.)) p
+let negn = lam p. _lift1 negf (lam. _num (negf 1.)) p
 
 utest negn num1 with _num (negf 1.) using dualnumEq eqf
+utest negn num0 with _num (negf 0.) using dualnumEq eqf
 utest negn dnum010 with dnum0 (_num (negf 1.)) num0 using dualnumEq eqf
 utest negn dnum012 with dnum0 (_num (negf 1.)) (_num (negf 2.))
 using dualnumEq eqf
@@ -462,9 +446,9 @@ utest der negn num1 with negn num1 using dualnumEq eqf
 -- lifted subtraction
 let subn = lam p1. lam p2.
   _lift2
-    (_float2num2 subf)
-    (lam x1. lam x2. (_num 1.))
-    (lam x1. lam x2. negn (_num 1.))
+    subf
+    (lam. lam. (_num 1.))
+    (lam. lam. negn (_num 1.))
     p1 p2
 
 utest subn num2 num1 with num1 using dualnumEq eqf
@@ -491,8 +475,8 @@ recursive
   -- lifted division
   let divn = lam p1. lam p2.
     _lift2
-      (_float2num2 divf)
-      (lam x1. lam x2. divn (_num 1.) x2)
+      divf
+      (lam. lam x2. divn (_num 1.) x2)
       (lam x1. lam x2. divn (negn x1) (muln x2 x2))
       p1 p2
 end

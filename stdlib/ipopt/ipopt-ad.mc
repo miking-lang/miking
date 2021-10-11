@@ -3,7 +3,7 @@ include "ipopt.mc"
 
 -- for brevity
 let num = dualnumNum
-let unpack = compose dualnumPrimalDeep dualnumUnpackNum
+let primalDeep = dualnumPrimalDeep
 let tset = tensorSetExn
 let tget = tensorGetExn
 let tcreate = tensorCreateCArrayFloat
@@ -58,20 +58,20 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       -- Computes f(x)
       let evalF = lam x.
         tensorMapExn (lam x. lam. num x) x xd;
-        unpack (arg.f xd)
+        primalDeep (arg.f xd)
       in
       -- Computes g(x)
       let evalG = lam x. lam g.
         tensorMapExn (lam x. lam. num x) x xd;
         arg.g xd gd;
-        tensorMapExn (lam x. lam. unpack x) gd g;
+        tensorMapExn (lam x. lam. primalDeep x) gd g;
         ()
       in
       -- Computes 𝛁f(x)
       let evalGradF = lam x. lam gradF.
         tensorMapExn (lam x. lam. num x) x xd;
         grad arg.f xd gradFd;
-        tensorMapExn (lam x. lam. unpack x) gradFd gradF;
+        tensorMapExn (lam x. lam. primalDeep x) gradFd gradF;
         ()
       in
       -- jacT gives us the transpose of the Jacobian.
@@ -103,9 +103,9 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
         iteri
           (lam k : Int. lam ij : (Int, Int).
             match ij with (i, j) then
-              tset h [k] (mulf sigma (unpack (hessij arg.f i j xd)));
+              tset h [k] (mulf sigma (primalDeep (hessij arg.f i j xd)));
               hessijs arg.g i j xd hijd;
-              tensorMapExn (lam x. lam. unpack x) hijd hij;
+              tensorMapExn (lam x. lam. primalDeep x) hijd hij;
               tensorMapExn mulf lambda hij;
               tset h [k] (tensorFold addf (tget h [k]) hij);
               ()
