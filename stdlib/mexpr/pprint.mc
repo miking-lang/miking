@@ -137,7 +137,7 @@ let record2tuple
   -> Option [a]
   = lam bindings.
     let keys = map sidToString (mapKeys bindings) in
-    match all stringIsInt keys with false then None () else
+    match forAll stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
     -- Check if keys are a sequence 0..(n-1)
@@ -239,9 +239,10 @@ lang VarPrettyPrint = PrettyPrint + VarAst
   | TmVar _ -> true
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmVar {ident = ident} ->
+  | TmVar {ident = ident, frozen = frozen} ->
+    let freezeStr = if frozen then "`" else "" in
     match pprintVarName env ident with (env, str)
-    then (env,str) else never
+    then (env, concat freezeStr str) else never
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst
@@ -1052,7 +1053,7 @@ lang RecordTypePrettyPrint = RecordTypeAst
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
         let seq = map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings t.fields) in
-        if all (lam t : (a,b). stringIsInt t.0) seq then
+        if forAll (lam t : (a,b). stringIsInt t.0) seq then
           let seq = map (lam t : (a,b). (string2int t.0, t.1)) seq in
           let seq : [(a,b)] = sort (lam l : (a,b). lam r : (a,b). subi l.0 r.0) seq in
           let fst = lam x: (a, b). x.0 in
@@ -1086,11 +1087,36 @@ lang VariantTypePrettyPrint = VariantTypeAst
     else error "Printing of non-empty variant types not yet supported"
 end
 
+lang ConTypePrettyPrint = ConTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyCon t ->
+    match pprintEnvGetStr env t.ident with (env,str)
+    then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
+end
+
 lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
-    match pprintEnvGetStr env t.ident with (env,str)
-    then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
+    pprintEnvGetStr env t.ident
+  | TyFlex t ->
+    match deref t.contents with Unbound t then
+      match pprintEnvGetStr env t.ident with (env, str) then
+        let prefix = if t.weak then "_" else "" in
+        (env, concat prefix str)
+      else never
+    else match deref t.contents with Link ty then
+      getTypeStringCode indent env ty
+    else never
+end
+
+lang AllTypePrettyPrint = AllTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyAll t ->
+    match pprintEnvGetStr env t.ident with (env, var) then
+      match getTypeStringCode indent env t.ty with (env, str) then
+        (env, join ["all ", var, ". ", str])
+      else never
+    else never
 end
 
 lang AppTypePrettyPrint = AppTypeAst
@@ -1137,7 +1163,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
+  TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
@@ -1276,7 +1303,7 @@ in
 --         false
 let func_isconb =
     ulet_ "isconb" (
-        lam_ "c" (tyvar_ "myConBType") (
+        lam_ "c" (tycon_ "myConBType") (
             match_ (var_ "c")
                    (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
                    (true_)
@@ -1308,17 +1335,18 @@ let func_beginsWithBinaryDigit =
   )
 in
 
--- let pedanticIsSome : Option a -> Bool = lam o : Option a.
+-- let pedanticIsSome : all a. Option a -> Bool = lam o : Option a.
 --   match o with !(None ()) & Some _ then true else false
 let func_pedanticIsSome =
-  ulet_ "pedanticIsSome" (
-    lam_ "s" (tyapp_ (tyvar_ "Option") (tyvar_ "a")) (
-      match_ (var_ "o")
-             (pand_
-               (pnot_ (pcon_ "None" punit_))
-               (pcon_ "Some" pvarw_))
-             (true_)
-             (false_)
+  let_ "pedanticIsSome"
+    (tyall_ "a" (tyarrow_ (tyapp_ (tycon_ "Option") (tyvar_ "a")) tybool_)) (
+      lam_ "s" (tyapp_ (tycon_ "Option") (tyvar_ "a")) (
+        match_ (var_ "o")
+               (pand_
+                 (pnot_ (pcon_ "None" punit_))
+                 (pcon_ "Some" pvarw_))
+               (true_)
+               (false_)
     )
   )
 in

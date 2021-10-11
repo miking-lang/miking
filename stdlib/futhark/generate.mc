@@ -114,7 +114,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
   | t ->
     let aliasIdent =
-      match t with TyVar {ident = ident} then
+      match t with TyCon {ident = ident} then
         Some ident
       else match mapLookup t env.typeAliases with Some ident then
         Some ident
@@ -140,7 +140,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyArrow t ->
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
-  | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
+  | TyCon t -> FTyIdent {ident = t.ident, info = t.info}
   | t -> infoErrorExit (infoTy t) "Unsupported type"
 end
 
@@ -538,21 +538,21 @@ let s = nameSym "s" in
 let t = bindall_ [
   ntype_ intseq (tyseq_ tyint_),
   ntype_ floatseq (tyseq_ tyfloat_),
-  nlet_ a (ntyvar_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
-  nlet_ b (ntyvar_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
+  nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
+  nlet_ b (ntycon_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
   nlet_ c (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
            (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
                     [("a", int_ 3), ("b", float_ 2.0)]),
   nlet_ f (tyarrows_ [tyint_, tyint_, tyint_])
            (nlam_ a2 tyint_ (nlam_ b2 tyint_ (addi_ (nvar_ a2) (nvar_ b2)))),
-  nlet_ g (tyarrows_ [ntyvar_ floatseq, tyfloat_, tyfloat_])
-            (nlam_ r (ntyvar_ floatseq)
+  nlet_ g (tyarrows_ [ntycon_ floatseq, tyfloat_, tyfloat_])
+            (nlam_ r (ntycon_ floatseq)
               (nlam_ f2 tyfloat_ (addf_ (nvar_ f2) (get_ (nvar_ r) (int_ 0))))),
   nlet_ min (tyarrows_ [tyint_, tyint_, tyint_])
              (nlam_ a3 tyint_ (nlam_ b3 tyint_ (
                if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
-  nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntyvar_ intseq, ntyvar_ intseq])
-             (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntyvar_ intseq)
+  nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
+             (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
                (parallelMap_ (nvar_ f3) (nvar_ s)))),
   unit_
 ] in

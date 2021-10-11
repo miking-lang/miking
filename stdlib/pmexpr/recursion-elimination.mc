@@ -64,7 +64,7 @@ lang PMExprRecursionElimination = PMExprAst
     -- topological order.
     let s = digraphTarjan g in
     let canOrderBindingsTopologically =
-      all
+      forAll
         (lam scc.
           if eqi (length scc) 1 then
             let vertex = head scc in

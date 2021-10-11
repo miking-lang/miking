@@ -1766,7 +1766,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (fi, _, s) -> (
+  | TmVar (fi, _, s, _) -> (
     match List.assoc_opt s env with
     | Some (TmApp (fi, (TmFix _ as f), a)) ->
         apply fi f a

@@ -66,7 +66,7 @@ let noSymConPrefix = "N"
 -- will be printed as Obj.t.
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst + AppTypeAst +
+  SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
   FunTypePrettyPrint + OCamlTypeAst
 
   sem pprintLabelString =

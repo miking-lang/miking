@@ -50,7 +50,7 @@ let raise_parse_error_on_partially_applied_external t =
     | TmApp (fi, t1, t2) ->
         let _ = recur (symb_map, app_depth + 1, fi) t1 in
         recur (symb_map, 0, NoInfo) t2
-    | TmVar (_, id, s) -> (
+    | TmVar (_, id, s, _) -> (
         SymbMap.find_opt s symb_map
         |> function
         | Some arity ->

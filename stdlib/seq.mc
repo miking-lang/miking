@@ -154,16 +154,16 @@ utest any (lam x. eqi x 5) [0, 4, 1, 2] with false
 utest any (lam x. true) [] with false
 
 recursive
-  let all = lam p. lam seq.
+  let forAll = lam p. lam seq.
     if null seq
     then true
-    else if p (head seq) then all p (tail seq)
+    else if p (head seq) then forAll p (tail seq)
     else false
 end
 
-utest all (lam x. eqi x 1) [1, 1, 1, 2] with false
-utest all (lam x. eqi x 0) [0, 0, 0] with true
-utest all (lam x. eqi x 1) [] with true
+utest forAll (lam x. eqi x 1) [1, 1, 1, 2] with false
+utest forAll (lam x. eqi x 0) [0, 0, 0] with true
+utest forAll (lam x. eqi x 1) [] with true
 
 -- Join
 let join = lam seqs. foldl concat [] seqs

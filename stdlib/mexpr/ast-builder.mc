@@ -79,12 +79,46 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
+let ntycon_ = use ConTypeAst in
+  lam n.
+  TyCon {ident = n, info = NoInfo ()}
+
+let tycon_ = lam s.
+  ntycon_ (nameNoSym s)
+
 let ntyvar_ = use VarTypeAst in
   lam n.
   TyVar {ident = n, info = NoInfo ()}
 
-let tyvar_ = lam s.
+let tyvar_ =
+  lam s.
   ntyvar_ (nameNoSym s)
+
+let ntyall_ = use AllTypeAst in
+  lam n. lam ty.
+  TyAll {ident = n, info = NoInfo (), ty = ty}
+
+let tyall_ =
+  lam s.
+  ntyall_ (nameNoSym s)
+
+let tyalls_ =
+  lam strs. lam ty.
+  foldr tyall_ ty strs
+
+let tyFlexUnbound = use VarTypeAst in
+  lam info. lam ident. lam level. lam weak.
+  TyFlex {info = info,
+          contents = ref (Unbound {ident = ident, level = level, weak = weak})}
+
+let tyflexunbound_ =
+  lam s.
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 false
+
+let tyflexlink_ = use VarTypeAst in
+  lam ty.
+  TyFlex {info = NoInfo (),
+          contents = ref (Link ty)}
 
 -- Tensor OP types
 let tytensorcreateint_ =
@@ -399,11 +433,16 @@ let ucondef_ = use MExprAst in
 
 let nvar_ = use MExprAst in
   lam n.
-  TmVar {ident = n, ty = tyunknown_, info = NoInfo ()}
+  TmVar {ident = n, ty = tyunknown_, info = NoInfo (), frozen = false}
 
 let var_ = use MExprAst in
   lam s.
   nvar_ (nameNoSym s)
+
+let freeze_ = use MExprAst in
+  lam var.
+  match var with TmVar t then TmVar {t with frozen = true}
+  else error "var is not a TmVar construct"
 
 let nconapp_ = use MExprAst in
   lam n. lam b.

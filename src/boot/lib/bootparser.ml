@@ -60,11 +60,15 @@ let idTyRecord = 207
 
 let idTyVariant = 208
 
-let idTyVar = 209
+let idTyCon = 209
 
-let idTyApp = 210
+let idTyVar = 210
 
-let idTyTensor = 211
+let idTyApp = 211
+
+let idTyTensor = 212
+
+let idTyAll = 213
 
 (* Const literals *)
 let idCBool = 300
@@ -188,8 +192,8 @@ let parseMCoreFile keywords filename =
 
 let getData = function
   (* Terms *)
-  | PTreeTm (TmVar (fi, x, _)) ->
-      (idTmVar, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTm (TmVar (fi, x, _, frozen)) ->
+      (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
@@ -245,6 +249,8 @@ let getData = function
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+  | PTreeTy (TyAll (fi, var, ty)) ->
+      (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
@@ -257,7 +263,9 @@ let getData = function
       let strs = List.map (fun (x, _) -> x) lst in
       let len = List.length lst in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyVar (fi, x, _)) ->
+  | PTreeTy (TyCon (fi, x, _)) ->
+      (idTyCon, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
       (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])

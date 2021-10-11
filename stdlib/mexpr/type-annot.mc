@@ -85,17 +85,31 @@ lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
 end
 
-lang VarCompatibleType = CompatibleType + VarTypeAst
+lang ConCompatibleType = CompatibleType + ConTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
-  | (TyVar t1 & ty1, TyVar t2) ->
+  | (TyCon t1 & ty1, TyCon t2) ->
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
   sem reduceType (tyEnv : TypeEnv) =
-  | TyVar {info = info, ident = id} ->
+  | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      infoErrorExit info (concat "Unbound TyVar in reduceType: " (nameGetStr id))
+      infoErrorExit info (concat "Unbound TyCon in reduceType: " (nameGetStr id))
 
+end
+
+lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
+  -- NOTE(aathn, 2021-09-26): As a temporary hack, type variables are made
+  -- compatible with everything.
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyVar _ & ty, TyVar _) -> Some ty
+  | (TyVar _, ! (TyVar _ | TyUnknown _) & ty) -> Some ty
+  | (! (TyVar _ | TyUnknown _) & ty, TyVar _) -> Some ty
+end
+
+lang AllCompatibleType = CompatibleType + AllTypeAst
+  sem reduceType (tyEnv : TypeEnv) =
+  | TyAll t -> Some t.ty
 end
 
 lang AppCompatibleType = CompatibleType + AppTypeAst
@@ -431,7 +445,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
         match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = to} then
             recursive let tyvar = lam ty.
-              match ty with TyVar _ then ty
+              match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
               else (ityunknown_ t.info)
             in
@@ -574,7 +588,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
     else never
 end
 
-lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
+lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
                         FunTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
@@ -632,11 +646,12 @@ end
 lang MExprTypeAnnot =
 
   -- Type compatibility
-  UnknownCompatibleType + VarCompatibleType + BoolCompatibleType +
+  UnknownCompatibleType + ConCompatibleType + BoolCompatibleType +
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType +
+  PropagateArrowLambda + PropagateLetType + VarCompatibleType +
+  AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
@@ -657,38 +672,36 @@ mexpr
 
 use TestLang in
 
-let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
-
 let x = nameSym "x" in
 let y = nameSym "y" in
 let z = nameSym "z" in
 let n = nameSym "n" in
 
 let appConst = addi_ (int_ 5) (int_ 2) in
-utest tyTm (typeAnnot appConst) with tyint_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot appConst) with tyint_ using eqType in
 
 let variableType = tyarrow_ tyint_ tybool_ in
 let appVariable = app_ (withType variableType (nvar_ x)) (int_ 0) in
-utest tyTm (typeAnnot appVariable) with tybool_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot appVariable) with tybool_ using eqType in
 
 let partialAppConst = nlam_ x tyint_ (addi_ (int_ 5) (nvar_ x)) in
 utest tyTm (typeAnnot partialAppConst)
 with  tyarrow_ tyint_ tyint_
-using eqTypeEmptyEnv in
+using eqType in
 
 let badApp = bindall_ [
   nulet_ x (int_ 5),
   app_ (nvar_ x) (float_ 3.14)
 ] in
-utest tyTm (typeAnnot badApp) with tyunknown_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot badApp) with tyunknown_ using eqType in
 
 let lamConstantReturnType = nulam_ x (int_ 0) in
 utest tyTm (typeAnnot lamConstantReturnType)
 with  tyarrow_ tyunknown_ tyint_
-using eqTypeEmptyEnv in
+using eqType in
 
 let letAscription = bind_ (nlet_ x tyint_ (nvar_ y)) (nvar_ x) in
-utest tyTm (typeAnnot letAscription) with tyint_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot letAscription) with tyint_ using eqType in
 
 let recLets = typeAnnot (bindall_ [
   nreclets_ [
@@ -698,7 +711,7 @@ let recLets = typeAnnot (bindall_ [
   ],
   uunit_
 ]) in
-utest tyTm recLets with tyunit_ using eqTypeEmptyEnv in
+utest tyTm recLets with tyunit_ using eqType in
 
 (match recLets with TmRecLets {bindings = bindings} then
   let b0 : RecLetBinding = get bindings 0 in
@@ -707,32 +720,32 @@ utest tyTm recLets with tyunit_ using eqTypeEmptyEnv in
   let xTy = tyarrow_ tyunit_ tyint_ in
   let yTy = tyarrow_ tyunit_ tyint_ in
   let zTy = tyarrow_ tyunit_ tyint_ in
-  utest b0.tyBody with xTy using eqTypeEmptyEnv in
-  utest b1.tyBody with yTy using eqTypeEmptyEnv in
-  utest b2.tyBody with zTy using eqTypeEmptyEnv in
+  utest b0.tyBody with xTy using eqType in
+  utest b1.tyBody with yTy using eqType in
+  utest b2.tyBody with zTy using eqType in
   ()
 else never);
 
-utest tyTm (typeAnnot (int_ 4)) with tyint_ using eqTypeEmptyEnv in
-utest tyTm (typeAnnot (char_ 'c')) with tychar_ using eqTypeEmptyEnv in
-utest tyTm (typeAnnot (float_ 1.2)) with tyfloat_ using eqTypeEmptyEnv in
-utest tyTm (typeAnnot true_) with tybool_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot (int_ 4)) with tyint_ using eqType in
+utest tyTm (typeAnnot (char_ 'c')) with tychar_ using eqType in
+utest tyTm (typeAnnot (float_ 1.2)) with tyfloat_ using eqType in
+utest tyTm (typeAnnot true_) with tybool_ using eqType in
 
 let emptySeq = typeAnnot (seq_ []) in
-utest tyTm emptySeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
+utest tyTm emptySeq with tyseq_ tyunknown_ using eqType in
 
 let intSeq = typeAnnot (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest tyTm intSeq with tyseq_ tyint_ using eqTypeEmptyEnv in
+utest tyTm intSeq with tyseq_ tyint_ using eqType in
 
 let intMatrix = typeAnnot (seq_ [seq_ [int_ 1, int_ 2],
                                  seq_ [int_ 3, int_ 4]]) in
-utest tyTm intMatrix with tyseq_ (tyseq_ tyint_) using eqTypeEmptyEnv in
+utest tyTm intMatrix with tyseq_ (tyseq_ tyint_) using eqType in
 
 let unknownSeq = typeAnnot (seq_ [nvar_ x, nvar_ y]) in
-utest tyTm unknownSeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
+utest tyTm unknownSeq with tyseq_ tyunknown_ using eqType in
 
 let emptyRecord = typeAnnot uunit_ in
-utest tyTm emptyRecord with tyunit_ using eqTypeEmptyEnv in
+utest tyTm emptyRecord with tyunit_ using eqType in
 
 let record = typeAnnot (urecord_ [
   ("a", int_ 0), ("b", float_ 2.718), ("c", urecord_ []),
@@ -752,55 +765,55 @@ let expectedRecordType = tyrecord_ [
     ])
   ])
 ] in
-utest tyTm record with expectedRecordType using eqTypeEmptyEnv in
+utest tyTm record with expectedRecordType using eqType in
 let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
-utest tyTm recordUpdate with expectedRecordType using eqTypeEmptyEnv in
+utest tyTm recordUpdate with expectedRecordType using eqType in
 
 let typeDecl = bind_ (ntype_ n tyunknown_) uunit_ in
-utest tyTm (typeAnnot typeDecl) with tyunit_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot typeDecl) with tyunit_ using eqType in
 
 let conApp = bindall_ [
   ntype_ n tyunknown_,
-  ncondef_ x (tyarrow_ tyint_ (ntyvar_ n)),
+  ncondef_ x (tyarrow_ tyint_ (ntycon_ n)),
   nconapp_ x (int_ 4)
 ] in
-utest tyTm (typeAnnot conApp) with ntyvar_ n using eqTypeEmptyEnv in
+utest tyTm (typeAnnot conApp) with ntycon_ n using eqType in
 
 let matchInteger = typeAnnot (bindall_ [
   nulet_ x (int_ 0),
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
-utest tyTm matchInteger with tyint_ using eqTypeEmptyEnv in
+utest tyTm matchInteger with tyint_ using eqType in
 (match matchInteger with TmLet {inexpr = TmMatch t} then
-  utest tyTm t.target with tyint_ using eqTypeEmptyEnv in
-  utest tyTm t.thn with tyint_ using eqTypeEmptyEnv in
-  utest tyTm t.els with tyint_ using eqTypeEmptyEnv in
+  utest tyTm t.target with tyint_ using eqType in
+  utest tyTm t.thn with tyint_ using eqType in
+  utest tyTm t.els with tyint_ using eqType in
   ()
 else never);
 
 let matchDistinct = typeAnnot (
   match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
 ) in
-utest tyTm matchDistinct with tyunknown_ using eqTypeEmptyEnv in
+utest tyTm matchDistinct with tyunknown_ using eqType in
 (match matchDistinct with TmMatch t then
-  utest tyTm t.target with tyint_ using eqTypeEmptyEnv in
-  utest tyTm t.thn with tyint_ using eqTypeEmptyEnv in
-  utest tyTm t.els with tychar_ using eqTypeEmptyEnv in
+  utest tyTm t.target with tyint_ using eqType in
+  utest tyTm t.thn with tyint_ using eqType in
+  utest tyTm t.els with tychar_ using eqType in
   ()
 else never);
 
 let utestAnnot = typeAnnot (
   utest_ (int_ 0) false_ (char_ 'c')
 ) in
-utest tyTm utestAnnot with tychar_ using eqTypeEmptyEnv in
+utest tyTm utestAnnot with tychar_ using eqType in
 (match utestAnnot with TmUtest t then
-  utest tyTm t.test with tyint_ using eqTypeEmptyEnv in
-  utest tyTm t.expected with tybool_ using eqTypeEmptyEnv in
-  utest tyTm t.next with tychar_ using eqTypeEmptyEnv in
+  utest tyTm t.test with tyint_ using eqType in
+  utest tyTm t.expected with tybool_ using eqType in
+  utest tyTm t.next with tychar_ using eqType in
   ()
 else never);
 
-utest tyTm (typeAnnot never_) with tyunknown_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot never_) with tyunknown_ using eqType in
 
 -- Test that types are propagated through patterns in match expressions
 let matchSeq = bindall_ [
@@ -809,12 +822,12 @@ let matchSeq = bindall_ [
     (var_ "mid")
     never_
 ] in
-utest tyTm (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqType in
 
 let matchTree = bindall_ [
   type_ "Tree" tyunknown_,
-  condef_ "Branch" (tyarrow_ (tytuple_ [tyvar_ "Tree", tyvar_ "Tree"]) (tyvar_ "Tree")),
-  condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tyvar_ "Tree")),
+  condef_ "Branch" (tyarrow_ (tytuple_ [tycon_ "Tree", tycon_ "Tree"]) (tycon_ "Tree")),
+  condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tycon_ "Tree")),
   ulet_ "t" (conapp_ "Branch" (utuple_ [
     conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
     conapp_ "Branch" (utuple_ [
@@ -828,6 +841,6 @@ let matchTree = bindall_ [
       never_)
     never_)
 ] in
-utest tyTm (typeAnnot (symbolize matchTree)) with tyseq_ tyint_ using eqTypeEmptyEnv in
+utest tyTm (typeAnnot (symbolize matchTree)) with tyseq_ tyint_ using eqType in
 
 ()

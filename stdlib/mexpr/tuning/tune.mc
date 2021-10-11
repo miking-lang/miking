@@ -285,7 +285,7 @@ lang TuneExhaustive = TuneLocalSearch
     let initState : SearchState = initState in
     match initState with {cur = {assignment = Table {holes = holes}}} then
       let initVals = map (next (None ()) 1) holes in
-      utest all optionIsSome initVals with true in
+      utest forAll optionIsSome initVals with true in
       Exhaustive {prev = initVals, exhausted = false}
     else never
 end

@@ -41,13 +41,13 @@ let recordConstructor =
   { name = nameSym "TmRecord"
   , synType = stringToSynType "Expr"
   , carried = recordType
-    [ ("info", targetableType (tyvar_ "Info"))
-    , ("ty", untargetableType (tyvar_ "Type"))
+    [ ("info", targetableType (tycon_ "Info"))
+    , ("ty", untargetableType (tycon_ "Type"))
     , ( "bindings"
       , seqType
         (tupleType
           [ targetableType tystr_
-          , targetableType (tyvar_ "Expr")])
+          , targetableType (tycon_ "Expr")])
       )
     ]
   }
@@ -60,7 +60,7 @@ use CarriedBasic in mkLanguages
   { namePrefix = "MExpr"
   , constructors = [recordConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tyvar_ "Expr")
+    [ (stringToSynType "Expr", tycon_ "Expr")
     ]
   , composedName = Some "Composed"
   }
@@ -200,7 +200,7 @@ lang CarriedTypeBase
   sem carriedSMapAccumL (f : Expr -> Expr -> Expr) (targetTy : Type) /- : CarriedType -> Option (Name -> Name -> Expr) -/ =
 end
 
-let _equalTypes = use MExprEq in eqType assocEmpty
+let _equalTypes = use MExprEq in eqType
 let _typeToString = use MExprPrettyPrint in lam ty. (getTypeStringCode 0 pprintEnvEmpty ty).1
 let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
   { ident = n
@@ -292,8 +292,8 @@ lang CarriedTypeHelpers = CarriedTypeBase
         Some
           { name = join ["smapAccumL_", _synTypeToString synType, "_", _typeToString targetTy]
           , preCaseArgs =
-            [ (fName, tyarrows_ [tyvar_ "a", targetTy, tytuple_ [tyvar_ "a", targetTy]])
-            , (accName, tyvar_ "a")
+            [ (fName, tyarrows_ [tycon_ "a", targetTy, tytuple_ [tycon_ "a", targetTy]])
+            , (accName, tycon_ "a")
             ]
           , cases =
             [ ( npcon_ constructor.name (npvar_ valName)
@@ -322,8 +322,8 @@ let _mkSFuncStubs
     let smapAccumL =
       { name = concat "smapAccumL" suffix
       , preCaseArgs =
-        [ (fName, tyarrows_ [tyvar_ "a", targetTy, tytuple_ [tyvar_ "a", targetTy]])
-        , (accName, tyvar_ "a")
+        [ (fName, tyarrows_ [tycon_ "a", targetTy, tytuple_ [tycon_ "a", targetTy]])
+        , (accName, tycon_ "a")
         ]
       , cases =
         [ (npvar_ valName, utuple_ [nvar_ accName, nvar_ valName])
@@ -347,8 +347,8 @@ let _mkSFuncStubs
     let sfold =
       { name = concat "sfold" suffix
       , preCaseArgs =
-        [ (fName, tyarrows_ [tyvar_ "a", targetTy, tyvar_ "a"])
-        , (accName, tyvar_ "a")
+        [ (fName, tyarrows_ [tycon_ "a", targetTy, tycon_ "a"])
+        , (accName, tycon_ "a")
         ]
       , cases =
         [ ( npvar_ valName
@@ -525,11 +525,11 @@ mexpr
 
 use CarriedBasic in
 
-let tyInfo = targetableType (tyvar_ "Info") in
-let tyName = targetableType (tyvar_ "Name") in
+let tyInfo = targetableType (tycon_ "Info") in
+let tyName = targetableType (tycon_ "Name") in
 let tyString = targetableType tystr_ in
-let tyExpr = targetableType (tyvar_ "Expr") in
-let tyType = targetableType (tyvar_ "Type") in
+let tyExpr = targetableType (tycon_ "Expr") in
+let tyType = targetableType (tycon_ "Type") in
 let tyField = tupleType [tyString, tyExpr] in
 let tyFields = seqType tyField in
 let tyRecord = recordType
@@ -568,9 +568,9 @@ let input =
   { namePrefix = "MExpr"
   , constructors = [recordConstructor, varConstructor, seqConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tyvar_ "Info")
-    , (stringToSynType "Expr", tyvar_ "Expr")
-    , (stringToSynType "Expr", tyvar_ "Type")
+    [ (stringToSynType "Expr", tycon_ "Info")
+    , (stringToSynType "Expr", tycon_ "Expr")
+    , (stringToSynType "Expr", tycon_ "Type")
     ]
   , composedName = Some "Composed"
   } in
@@ -582,13 +582,13 @@ let recordConstructor =
   { name = nameSym "TmRecord"
   , synType = stringToSynType "Expr"
   , carried = recordType
-    [ ("info", untargetableType (tyvar_ "Info"))
-    , ("ty", untargetableType (tyvar_ "Type"))
+    [ ("info", untargetableType (tycon_ "Info"))
+    , ("ty", untargetableType (tycon_ "Type"))
     , ( "bindings"
       , seqType
         (tupleType
           [ targetableType tystr_
-          , targetableType (tyvar_ "Expr")])
+          , targetableType (tycon_ "Expr")])
       )
     ]
   } in
@@ -596,7 +596,7 @@ let res = mkLanguages
   { namePrefix = "MExpr"
   , constructors = [recordConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tyvar_ "Expr")
+    [ (stringToSynType "Expr", tycon_ "Expr")
     ]
   , composedName = Some "Composed"
   } in

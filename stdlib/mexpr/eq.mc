@@ -50,7 +50,15 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
-type EqTypeEnv = AssocSeq Name Type
+type EqTypeEnv = {
+  tyVarEnv : BiNameMap,
+  tyConEnv : AssocSeq Name Type
+}
+
+type EqTypeFreeEnv = {
+  freeTyVars : BiNameMap,
+  freeTyFlex : BiNameMap
+}
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
@@ -74,9 +82,10 @@ let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
       Some (biInsert (i1,i2) free)
 
 let unwrapType = use MExprAst in
-  lam typeEnv. lam ty.
-  match ty with TyVar {ident = id} then
-    assocSeqLookup {eq=nameEq} id typeEnv
+  lam typeEnv : EqTypeEnv. lam ty.
+  let ty = resolveLink ty in
+  match ty with TyCon {ident = id} then
+    assocSeqLookup {eq=nameEq} id typeEnv.tyConEnv
   else Some ty
 
 -----------
@@ -94,16 +103,30 @@ lang Eq
   | (lhs, rhs) /- (Const, Const) -/ ->
     eqi (constructorTag lhs) (constructorTag rhs)
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  -- Intentionally left blank
+  sem eqType (lhs : Type) =
+  | rhs ->
+    let emptyEnv = {tyVarEnv = biEmpty, tyConEnv = assocEmpty} in
+    let emptyFree = {freeTyVars = biEmpty, freeTyFlex = biEmpty} in
+    match eqTypeH emptyEnv emptyFree lhs rhs with Some _ then true else false
 
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  -- eqTypeH env free ty1 ty2 compares ty1 and ty2, returning
+  -- + None () if ty1 and ty2 are not alpha equivalent, and
+  -- + Some free' if ty1 and ty2 are alpha equivalent, where free' is an
+  --   updated bijection between free variables.
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   -- Intentionally left blank
 
   sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
     match eqExprH empty empty e1 e2 with Some _ then true else false
+
+  -- eqExprH env free lhs rhs compares lhs and rhs, returning
+  -- + None () if lhs and rhs are not alpha equivalent, and
+  -- + Some free' if lhs and rhs are alpha equivalent, where free' is an
+  --   updated bijection between free variables.
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  -- Intentionally left blank
 end
 
 lang VarEq = Eq + VarAst
@@ -480,105 +503,147 @@ end
 -----------
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyUnknown _ ->
-    match unwrapType typeEnv lhs with Some (TyUnknown _) then true else false
+    match unwrapType typeEnv lhs with Some (TyUnknown _) then Some free
+    else None ()
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyBool _ ->
-    match unwrapType typeEnv lhs with Some (TyBool _) then true else false
+    match unwrapType typeEnv lhs with Some (TyBool _) then Some free
+    else None ()
 end
 
 lang IntTypeEq = Eq + IntTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyInt _ ->
-    match unwrapType typeEnv lhs with Some (TyInt _) then true else false
+    match unwrapType typeEnv lhs with Some (TyInt _) then Some free
+    else None ()
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFloat _ ->
-    match unwrapType typeEnv lhs with Some (TyFloat _) then true else false
+    match unwrapType typeEnv lhs with Some (TyFloat _) then Some free
+    else None ()
 end
 
 lang CharTypeEq = Eq + CharTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyChar _ ->
-    match unwrapType typeEnv lhs with Some (TyChar _) then true else false
+    match unwrapType typeEnv lhs with Some (TyChar _) then Some free
+    else None ()
 end
 
 lang FunTypeEq = Eq + FunTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyArrow r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyArrow l then
-        and (eqType typeEnv l.from r.from) (eqType typeEnv l.to r.to)
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyArrow l) then
+      match eqTypeH typeEnv free l.from r.from with Some free then
+        eqTypeH typeEnv free l.to r.to
+      else None ()
+    else None ()
 end
 
 lang SeqTypeEq = Eq + SeqTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TySeq r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TySeq l then
-        eqType typeEnv l.ty r.ty
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TySeq l) then
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
 end
 
 lang TensorTypeEq = Eq + TensorTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyTensor r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyTensor l then
-        eqType typeEnv l.ty r.ty
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyTensor l) then
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
 end
 
 lang RecordTypeEq = Eq + RecordTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyRecord r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyRecord l then
-        mapEq (eqType typeEnv) l.fields r.fields
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyRecord l) then
+      if eqi (mapLength l.fields) (mapLength r.fields) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.fields with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.fields
+      else None ()
+    else None ()
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariant r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyVariant l then
-        mapEq (eqType typeEnv) l.constrs r.constrs
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyVariant l) then
+      if eqi (mapLength l.constrs) (mapLength r.constrs) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.constrs with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.constrs
+      else None ()
+    else None ()
+end
+
+lang ConTypeEq = Eq + ConTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | rhs & TyCon r ->
+    match unwrapType typeEnv lhs with Some lty then
+      match unwrapType typeEnv rhs with Some rty then
+        eqTypeH typeEnv free lty rty
+      else None ()
+    else match lhs with TyCon l then
+      if nameEq l.ident r.ident then Some free else None ()
+    else None ()
 end
 
 lang VarTypeEq = Eq + VarTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
-  | rhs & TyVar r ->
-    match unwrapType typeEnv lhs with Some lty then
-      match unwrapType typeEnv rhs with Some rty then
-        eqType typeEnv lty rty
-      else false
-    else match lhs with TyVar l then
-      nameEq l.ident r.ident
-    else false
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyVar r ->
+    match lhs with TyVar l then
+      optionMap
+        (lam freeTyVars. {free with freeTyVars = freeTyVars})
+        (_eqCheck l.ident r.ident typeEnv.tyVarEnv free.freeTyVars)
+    else None ()
+  | TyFlex _ & rhs ->
+    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) then
+      match (lhs, rhs) with (TyFlex l, TyFlex r) then
+        match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) then
+          optionMap
+            (lam freeTyFlex. {free with freeTyFlex = freeTyFlex})
+            (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
+        else never
+      else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then
+        eqTypeH typeEnv free lhs rhs
+      else None ()
+    else never
+end
+
+lang AllTypeEq = Eq + AllTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyAll r ->
+    match unwrapType typeEnv lhs with Some (TyAll l) then
+      let tyVarEnv = biInsert (l.ident, r.ident) typeEnv.tyVarEnv in
+      eqTypeH {typeEnv with tyVarEnv = tyVarEnv} free l.ty r.ty
+    else None ()
 end
 
 lang AppTypeEq = Eq + AppTypeAst
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyApp r ->
-    match unwrapType typeEnv lhs with Some ty then
-      match ty with TyApp l then
-        and (eqType typeEnv l.lhs r.lhs) (eqType typeEnv l.rhs r.rhs)
-      else false
-    else false
+    match unwrapType typeEnv lhs with Some (TyApp l) then
+      match eqTypeH typeEnv free l.lhs r.lhs with Some free then
+        eqTypeH typeEnv free l.rhs r.rhs
+      else None ()
+    else None ()
 end
 
 -----------------------------
@@ -602,8 +667,8 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq + AppTypeEq
-  + TensorTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
+  AllTypeEq + AppTypeEq + TensorTypeEq
 end
 
 -----------
@@ -614,9 +679,10 @@ mexpr
 
 use MExprEq in
 
--- Redefine eqType with type annotations
-let eqType = lam env : EqTypeEnv. lam l : Type. lam r : Type.
-  eqType env l r
+-- Define a variant of eqType taking only an environment argument
+let eqType_Env = lam env : EqTypeEnv. lam l : Type. lam r : Type.
+  let emptyFree = {freeTyVars = biEmpty, freeTyFlex = biEmpty} in
+  match eqTypeH env emptyFree l r with Some _ then true else false
 in
 
 -- Simple variables
@@ -962,15 +1028,15 @@ let letb = letexpr tybool_ in
 let leti = letexpr tyint_ in
 let letfl = letexpr tyfloat_ in
 let letch = letexpr tychar_ in
-utest tyunknown_ with tyunknown_ using eqType [] in
-utest tybool_ with tybool_ using eqType [] in
-utest tyint_ with tyint_ using eqType [] in
-utest tyfloat_ with tyfloat_ using eqType [] in
-utest tychar_ with tychar_ using eqType [] in
-utest eqType [] tyunknown_ tybool_ with false in
-utest eqType [] tybool_ tyint_ with false in
-utest eqType [] tyint_ tyfloat_ with false in
-utest eqType [] tyint_ tychar_ with false in
+utest tyunknown_ with tyunknown_ using eqType in
+utest tybool_ with tybool_ using eqType in
+utest tyint_ with tyint_ using eqType in
+utest tyfloat_ with tyfloat_ using eqType in
+utest tychar_ with tychar_ using eqType in
+utest eqType tyunknown_ tybool_ with false in
+utest eqType tybool_ tyint_ with false in
+utest eqType tyint_ tyfloat_ with false in
+utest eqType tyint_ tychar_ with false in
 
 let tyarr1 = tyarrow_ tyunknown_ tyunknown_ in
 let tyarr2 = tyarrow_ tyint_ tyunknown_ in
@@ -980,41 +1046,72 @@ let tyseq = lam ty. tyseq_ ty in
 let tyrec1 = tyrecord_ [("0", tyint_), ("1", tyunknown_)] in
 let tyrec2 = tyrecord_ [("1", tyunknown_), ("0", tyunknown_)] in
 let tyrec3 = tytuple_ [tyunknown_, tyunknown_] in
-utest tyarr1 with tyarr1 using eqType [] in
-utest tyarr2 with tyarr2 using eqType [] in
-utest tyarr3 with tyarr3 using eqType [] in
-utest tyarr4 with tyarr4 using eqType [] in
-utest eqType [] tyarr1 tyarr2 with false in
-utest eqType [] tyarr2 tyarr3 with false in
-utest eqType [] tyarr3 tyarr4 with false in
-utest tystr_ with tystr_ using eqType [] in
-utest tyseq tyint_ with tyseq tyint_ using eqType [] in
-utest tytensor_ tyint_ with tytensor_ tyint_ using eqType [] in
-utest eqType [] tystr_ (tyseq tyint_) with false in
-utest tyrec1 with tyrec1 using eqType [] in
-utest tyrec2 with tyrec3 using eqType [] in
-utest eqType [] tyrec1 tyrec2 with false in
+utest tyarr1 with tyarr1 using eqType in
+utest tyarr2 with tyarr2 using eqType in
+utest tyarr3 with tyarr3 using eqType in
+utest tyarr4 with tyarr4 using eqType in
+utest eqType tyarr1 tyarr2 with false in
+utest eqType tyarr2 tyarr3 with false in
+utest eqType tyarr3 tyarr4 with false in
+utest tystr_ with tystr_ using eqType in
+utest tyseq tyint_ with tyseq tyint_ using eqType in
+utest tytensor_ tyint_ with tytensor_ tyint_ using eqType in
+utest eqType tystr_ (tyseq tyint_) with false in
+utest tyrec1 with tyrec1 using eqType in
+utest tyrec2 with tyrec3 using eqType in
+utest eqType tyrec1 tyrec2 with false in
 
-let tyEnv1 = [(t, tyint_)] in
-let tyEnv2 = [(t, tybool_)] in
-utest eqType [] (ntyvar_ t) tyint_ with false in
-utest eqType [] tyint_ (ntyvar_ t) with false in
-utest ntyvar_ t with tyint_ using eqType tyEnv1 in
-utest tyint_ with ntyvar_ t using eqType tyEnv1 in
-utest eqType tyEnv1 (ntyvar_ t) tybool_ with false in
-utest ntyvar_ t with tybool_ using eqType tyEnv2 in
+let tyEnv1 = {tyVarEnv = biEmpty, tyConEnv = [(t, tyint_)]} in
+let tyEnv2 = {tyVarEnv = biEmpty, tyConEnv = [(t, tybool_)]} in
+utest eqType (ntycon_ t) tyint_ with false in
+utest eqType tyint_ (ntycon_ t) with false in
+utest ntycon_ t with tyint_ using eqType_Env tyEnv1 in
+utest tyint_ with ntycon_ t using eqType_Env tyEnv1 in
+utest eqType_Env tyEnv1 (ntycon_ t) tybool_ with false in
+utest ntycon_ t with tybool_ using eqType_Env tyEnv2 in
 
 let tyApp1 = tyapp_ tyint_ tyint_ in
-let tyApp2 = tyapp_ (ntyvar_ t) tyint_ in
-let tyApp3 = tyapp_ tyint_ (ntyvar_ t) in
-utest tyApp1 with tyApp1 using eqType [] in
-utest tyApp2 with tyApp2 using eqType [] in
-utest tyApp3 with tyApp3 using eqType [] in
-utest tyApp1 with tyApp2 using eqType tyEnv1 in
-utest tyApp2 with tyApp3 using eqType tyEnv1 in
-utest eqType tyEnv2 tyApp1 tyApp2 with false in
-utest eqType tyEnv2 tyApp2 tyApp3 with false in
-utest eqType tyEnv2 tyApp1 tyApp3 with false in
+let tyApp2 = tyapp_ (ntycon_ t) tyint_ in
+let tyApp3 = tyapp_ tyint_ (ntycon_ t) in
+utest tyApp1 with tyApp1 using eqType in
+utest tyApp2 with tyApp2 using eqType in
+utest tyApp3 with tyApp3 using eqType in
+utest tyApp1 with tyApp2 using eqType_Env tyEnv1 in
+utest tyApp2 with tyApp3 using eqType_Env tyEnv1 in
+utest eqType_Env tyEnv2 tyApp1 tyApp2 with false in
+utest eqType_Env tyEnv2 tyApp2 tyApp3 with false in
+utest eqType_Env tyEnv2 tyApp1 tyApp3 with false in
+
+let tyVar1 = tyarrow_ (tyvar_ "a") (tyvar_ "a") in
+let tyVar2 = tyarrow_ (tyvar_ "b") (tyvar_ "b") in
+let tyVar3 = tyarrow_ (tyvar_ "a") (tyvar_ "b") in
+let tyVar4 = tyarrow_ (tyvar_ "a") (tyvar_ "c") in
+let tyAll1 = tyall_ "a" tyVar1 in
+let tyAll2 = tyall_ "b" tyVar1 in
+let tyAll3 = tyall_ "b" tyVar2 in
+let tyAll4 = tyall_ "a" tyVar3 in
+let tyAll5 = tyall_ "a" tyVar4 in
+let tyAll6 = tyall_ "b" tyVar3 in
+let tyAll7 = tyall_ "c" tyVar4 in
+utest tyVar1 with tyVar2 using eqType in
+utest tyVar3 with tyVar4 using eqType in
+utest tyAll1 with tyAll3 using eqType in
+utest tyAll4 with tyAll5 using eqType in
+utest tyAll6 with tyAll7 using eqType in
+utest eqType tyVar1 tyVar3 with false in
+utest eqType tyAll1 tyAll2 with false in
+utest eqType tyAll1 tyAll4 with false in
+utest eqType tyAll2 tyAll4 with false in
+utest eqType tyAll4 tyAll6 with false in
+
+let tyFlex1 = tyarrow_ (tyflexunbound_ "a") (tyflexunbound_ "b") in
+let tyFlex2 = tyarrow_ (tyflexunbound_ "b") (tyflexunbound_ "a") in
+let tyFlex3 = tyflexlink_ tyVar1 in
+utest tyFlex1 with tyFlex1 using eqType in
+utest tyFlex1 with tyFlex2 using eqType in
+utest tyFlex3 with tyVar1 using eqType in
+utest eqType tyFlex1 tyFlex3 with false in
+utest eqType tyFlex3 tyVar3 with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in

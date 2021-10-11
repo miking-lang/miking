@@ -100,7 +100,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         body = TmLam {ident = paramId, tyIdent = paramTy,
                       body = t.e, ty = retType, info = info},
         inexpr = TmApp {
-          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info},
+          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
           rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
           ty = retType,
           info = info},
@@ -122,7 +122,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
 
   sem collectIdentifiersType (used : Set Name) =
-  | TyVar t -> setInsert t.ident used
+  | TyCon t -> setInsert t.ident used
   | t -> sfold_Type_Type collectIdentifiersType used t
 
   -- Construct an extracted AST from the given AST, containing all terms that

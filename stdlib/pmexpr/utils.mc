@@ -45,7 +45,7 @@ let substituteIdentifier : Expr -> Name -> Name -> (Info -> Expr) =
   lam e. lam fromId. lam toId.
   let nameMap = mapFromSeq nameCmp
     [(fromId, lam info. TmVar {ident = toId, ty = TyUnknown {info = info},
-                               info = info})] in
+                               info = info, frozen = false})] in
   substituteVariables e nameMap
 
 -- Takes a function expression and produces a tuple containing a list of the
@@ -78,8 +78,6 @@ lang TestLang = MExprEq + MExprSym + MExprTypeAnnot
 mexpr
 
 use TestLang in
-
-let eqType = eqType assocEmpty in
 
 let t = typeAnnot (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
 utest functionBodyReturnType t with tychar_ using eqType in

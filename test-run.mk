@@ -56,6 +56,7 @@ run_files += test/mlang/also_includes_lib.mc
 # run_files += stdlib/mexpr/info.mc
 # run_files += stdlib/mexpr/anf.mc
 # run_files += stdlib/mexpr/type-annot.mc
+# run_files += stdlib/mexpr/type-check.mc
 # run_files += stdlib/mexpr/mexpr.mc
 # run_files += stdlib/mexpr/infix.mc
 # run_files += stdlib/mexpr/ast-builder.mc

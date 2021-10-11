@@ -27,7 +27,8 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let var = TmVar {
       ident = ident,
       ty = tyTm n,
-      info = NoInfo {}
+      info = NoInfo {},
+      frozen = false
     } in
     let inexpr = k var in
     TmLet {ident = ident,

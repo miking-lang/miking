@@ -34,7 +34,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       TmVar {
         ident = ident,
         ty = TyUnknown { info = info },
-        info = info
+        info = info,
+        frozen = false
       }
     in
     match convertData info env var ty1 ty2 with (cost, body) then
@@ -108,7 +109,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
                 TmVar {
                   ident = ident,
                   ty = TyUnknown { info = info },
-                  info = info
+                  info = info,
+                  frozen = false
                 }
               in
               convertData info env var (getTy1 ty1 ty2) (getTy2 ty1 ty2)
@@ -143,7 +145,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
       let ident = nameSym "x" in
-      let arg = TmVar { ident = ident, ty = ty21, info = info } in
+      let arg = TmVar { ident = ident, ty = ty21, info = info, frozen = false } in
       match (
         match ty11 with OTyLabel {label = label, ty = ty11} then
           match convertData info env arg ty21 ty11 with (cost1, arg) then
@@ -232,21 +234,21 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
         (0, semi_ t (OTmTuple { values = [] }))
       else infoErrorExit info "Cannot convert unit"
     else match tt with
-      (OTyTuple {tys = tys}, TyVar {ident = ident})
+      (OTyTuple {tys = tys}, TyCon {ident = ident})
     then
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields}) then
         _convertTuple info env (lam x. lam. x) (lam. lam x. x) t fields tys
       else infoErrorExit info "Cannot convert from OCaml tuple"
     else match tt with
-      (TyVar {ident = ident}, OTyTuple {tys = tys})
+      (TyCon {ident = ident}, OTyTuple {tys = tys})
     then
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields}) then
         _convertTuple info env (lam. lam x. x) (lam x. lam. x) t fields tys
       else infoErrorExit info "Cannot convert to OCaml tuple"
     else match tt with
-      (OTyRecord {fields = fields1}, TyVar {ident = ident})
+      (OTyRecord {fields = fields1}, TyCon {ident = ident})
     then
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields2, labels = labels2}) then
@@ -282,7 +284,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
         else never
       else infoErrorExit info "Cannot convert record"
     else match tt with
-      (TyVar {ident = ident}, OTyRecord {tyident = tyident, fields = fields2})
+      (TyCon {ident = ident}, OTyRecord {tyident = tyident, fields = fields2})
     then
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields1, labels = labels1}) then
@@ -313,7 +315,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
                         TmVar {
                           ident = ident,
                           ty = TyUnknown { info = info },
-                          info = info
+                          info = info,
+                          frozen = false
                         }
                       in
                       convertData info env (objMagic var) ty1 ty2
@@ -486,8 +489,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     then
       (0, t)
     else match tt with
-      (TyVar {ident = ident}, _) | (_, TyVar {ident = ident}) |
-      (TyApp {lhs = TyVar _}, _) | (_, TyApp {lhs = TyVar _})
+      (TyCon {ident = ident}, _) | (_, TyCon {ident = ident}) |
+      (TyApp {lhs = TyCon _}, _) | (_, TyApp {lhs = TyCon _})
     then
       (0, t)
     else

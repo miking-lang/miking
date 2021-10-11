@@ -45,6 +45,8 @@ let utest_fail_local = ref 0 (* Counts local failed tests for one file *)
 
 type side_effect = bool
 
+type frozen = bool
+
 (* Map type for record implementation *)
 module Record = Map.Make (Ustring)
 
@@ -250,7 +252,7 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t
+  | TmVar of info * ustring * Symb.t * frozen
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
@@ -340,6 +342,8 @@ and ty =
   | TyChar of info
   (* Function type *)
   | TyArrow of info * ty * ty
+  (* Forall quantifier *)
+  | TyAll of info * ustring * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)
@@ -348,8 +352,10 @@ and ty =
   | TyRecord of info * ty Record.t * ustring list
   (* Variant type *)
   | TyVariant of info * (ustring * Symb.t) list
+  (* Type constructors *)
+  | TyCon of info * ustring * Symb.t
   (* Type variables *)
-  | TyVar of info * ustring * Symb.t
+  | TyVar of info * ustring
   (* Type application, currently only used for documenation purposes *)
   | TyApp of info * ty * ty
 
@@ -446,7 +452,7 @@ let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
 
 (* Returns the info field from a term *)
 let tm_info = function
-  | TmVar (fi, _, _)
+  | TmVar (fi, _, _, _)
   | TmApp (fi, _, _)
   | TmLam (fi, _, _, _, _)
   | TmLet (fi, _, _, _, _, _)
@@ -490,11 +496,13 @@ let ty_info = function
   | TyFloat fi
   | TyChar fi
   | TyArrow (fi, _, _)
+  | TyAll (fi, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
   | TyRecord (fi, _, _)
   | TyVariant (fi, _)
-  | TyVar (fi, _, _)
+  | TyCon (fi, _, _)
+  | TyVar (fi, _)
   | TyApp (fi, _, _) ->
       fi
 

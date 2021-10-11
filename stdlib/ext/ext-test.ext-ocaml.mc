@@ -252,18 +252,18 @@ let extTestMap =
       impl
       {
         expr = "List.map",
-        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                        otylist_ (tyvar_ "a"),
-                        otylist_ (tyvar_ "b")]
+        ty = tyarrows_ [tyarrow_ (otyparam_ "a") (otyparam_ "b"),
+                        otylist_ (otyparam_ "a"),
+                        otylist_ (otyparam_ "b")]
       }
     ]),
     ("extTestListConcatMap", [
       impl
       {
         expr = "List.concat_map",
-        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (otylist_ (tyvar_ "b")),
-                        otylist_ (tyvar_ "a"),
-                        otylist_ (tyvar_ "b")]
+        ty = tyarrows_ [tyarrow_ (otyparam_ "a") (otylist_ (otyparam_ "b")),
+                        otylist_ (otyparam_ "a"),
+                        otylist_ (otyparam_ "b")]
       }
     ]),
     ("extTestNonExistant", [

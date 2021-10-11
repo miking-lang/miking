@@ -155,7 +155,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
                                        info = info} in
       let t = TmApp {
         lhs = TmVar {ident = newIdent, ty = functionWithAccTy,
-                     info = info},
+                     info = info, frozen = false},
         rhs = TmApp {lhs = TmApp {lhs = env.binop, rhs = larg, ty = innerAppTy,
                                   info = info},
                      rhs = rarg, ty = accTy, info = info},
@@ -205,7 +205,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
       else
         let info = infoTm expr in
         let acc = TmVar {ident = accIdent, ty = tyWithInfo info (tyTm expr),
-                         info = info} in
+                         info = info, frozen = false} in
         match expr with TmApp {lhs = TmApp {lhs = bop, rhs = arg1}, rhs = arg2} then
           if eqExpr env.binop bop then
             if and env.leftArgRecursion (isRecursiveCall arg1 binding.ident) then
@@ -248,7 +248,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
             lhs = TmVar {
               ident = binding.ident,
               ty = tyWithInfo info binding.tyBody,
-              info = binding.info
+              info = binding.info,
+              frozen = false
             },
             rhs = env.ne,
             ty = tyWithInfo info t.tyBody,
