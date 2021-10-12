@@ -58,12 +58,14 @@ let s = setEmpty subi in
 utest setSize s with 0 in
 utest setMem 1 s with false in
 utest setChoose s with None () in
+utest setIsEmpty s with true in
 
 let s1 = setInsert 1 s in
 utest setSize s1 with 1 in
 utest setMem 1 s1 with true in
 utest setChooseWithExn s1 with 1 in
 utest setChoose s1 with Some 1 in
+utest setIsEmpty s1 with false in
 
 let s0 = setRemove 1 s in
 utest setSize s0 with 0 in
