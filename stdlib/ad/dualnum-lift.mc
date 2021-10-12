@@ -9,8 +9,8 @@
 
 
 
--- include "dualnum-tree.mc"
-include "dualnum-alist.mc"
+include "dualnum-tree.mc"
+-- include "dualnum-alist.mc"
 include "dualnum-helpers.mc"
 include "bool.mc"
 include "math.mc"
