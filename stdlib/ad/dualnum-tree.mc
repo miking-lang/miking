@@ -14,7 +14,7 @@ type Eps = Int
 
 -- Dual-numbers can be nested and are implemented as explicit trees.
 type DualNum
-con DualNum : {e : Int, x : DualNum, xp : DualNum} -> DualNum
+con DualNum : {e : Eps, x : DualNum, xp : DualNum} -> DualNum
 con Num : Float -> DualNum -- we separate out generic real numbers
 
 -- epsilons are ordered
@@ -114,6 +114,89 @@ lam n.
       ]
     else never
   in recur n
+
+-----------------
+-- FOR BREVITY --
+-----------------
+
+let _num = dualnumNum
+let _dnum = dualnumDNum
+let _ltE = dualnumLtE
+
+----------------------------------
+-- LIFTING OF BINARY OPERATORS  --
+----------------------------------
+
+type DualNumFun2 = DualNum -> DualNum -> DualNum
+type FloatFun2 = Float -> Float -> Float
+
+recursive
+  -- lifts binary real operator to nested dual-numbers
+  -- f : real operator
+  -- dfdx1 : lifted first partial derivative of f
+  -- dfdx2 : lifted second partial derivative of f
+  let dualnumLift2
+  : FloatFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
+  lam f. lam dfdx1. lam dfdx2.
+    recursive let self = lam x1. lam x2.
+      let t = (x1, x2) in
+      match t with (Num x1, Num x2) then
+        _num (f x1 x2)
+      else match t with (DualNum {e = e, x = x11, xp = xp11}, Num _) then
+        _dnum e (self x11 x2) (muln (dfdx1 x11 x2) xp11)
+      else match t with (Num _, DualNum {e = e, x = x22, xp = xp22}) then
+        _dnum e (self x1 x22) (muln (dfdx2 x1 x22) xp22)
+      else match t with
+        (DualNum {e = e1, x = x11, xp = xp11},
+         DualNum {e = e2, x = x22, xp = xp22})
+      then
+        if _ltE e1 e2 then
+          _dnum e2 (self x1 x22) (muln (dfdx2 x1 x22) xp22)
+        else if _ltE e2 e1 then
+          _dnum e1 (self x11 x2) (muln (dfdx1 x11 x2) xp11)
+        else
+          _dnum
+            e1
+            (self x11 x22)
+            (addn (muln (dfdx1 x11 x22) xp11) (muln (dfdx2 x11 x22) xp22))
+      else never
+    in self
+
+    -- lifted addition
+    let addn = lam p1. lam p2.
+      dualnumLift2
+        addf
+        (lam. lam. (_num 1.))
+        (lam. lam. (_num 1.))
+        p1 p2
+
+    -- lifted multiplication
+    let muln = lam p1. lam p2.
+      dualnumLift2
+        mulf
+        (lam. lam x2. x2)
+        (lam x1. lam. x1)
+        p1 p2
+end
+
+---------------------------------
+-- LIFTING OF UNARY OPERATORS  --
+---------------------------------
+
+type DualNumFun1 = DualNum -> DualNum
+type FloatFun = Float -> Float
+
+-- lifts unary real operator to nested dual-numbers
+-- f : real operator
+-- dfdx : lifted derivative of f
+let dualnumLift1 : DualNumFun1 -> DualNumFun1 -> DualNumFun1 =
+lam f. lam dfdx.
+  recursive let self = lam x.
+    match x with Num x then _num (f x)
+    else match x with DualNum {e = e, x = x, xp = xp} then
+      _dnum e (self x) (muln (dfdx x) xp)
+    else never
+  in self
 
 mexpr
 

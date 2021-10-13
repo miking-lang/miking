@@ -23,68 +23,14 @@ include "common.mc"
 
 let _num = dualnumNum
 let _dnum = dualnumDNum
-
 let _ltE = dualnumLtE
 let _isDualNum = dualnumIsDualNum
 let _epsilon = dualnumEpsilon
 let _primal = dualnumPrimal
 let _primalDeep = dualnumPrimalDeep
 let _pertubation = dualnumPertubation
-
-
-----------------------------------
--- LIFTING OF BINARY OPERATORS  --
-----------------------------------
-
-type DualNumFun2 = DualNum -> DualNum -> DualNum
-type FloatFun2 = Float -> Float -> Float
-
-recursive
-  -- lifts binary real operator to nested dual-numbers
-  -- f : real operator
-  -- dfdx1 : lifted first partial derivative of f
-  -- dfdx2 : lifted second partial derivative of f
-  let dualnumLift2
-  : FloatFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
-  lam f. lam dfdx1. lam dfdx2.
-    recursive let self = lam p1. lam p2.
-      if or (_isDualNum p1)
-            (_isDualNum p2)
-      then
-        let e = if not (_isDualNum p1) then _epsilon p2
-                else if not (_isDualNum p2) then _epsilon p1
-                else if _ltE (_epsilon p1) (_epsilon p2) then _epsilon p2
-                else _epsilon p1
-        in
-
-        _dnum e
-             (self (_primal e p1) (_primal e p2))
-             (addn (muln (dfdx1 (_primal e p1) (_primal e p2))
-                         (_pertubation e p1))
-                   (muln (dfdx2 (_primal e p1) (_primal e p2))
-                         (_pertubation e p2)))
-      else
-        _num (f (_primalDeep p1) (_primalDeep p2))
-    in self
-
-    -- lifted addition
-    let addn = lam p1. lam p2.
-      dualnumLift2
-        addf
-        (lam. lam. (_num 1.))
-        (lam. lam. (_num 1.))
-        p1 p2
-
-    -- lifted multiplication
-    let muln = lam p1. lam p2.
-      dualnumLift2
-        mulf
-        (lam. lam x2. x2)
-        (lam x1. lam. x1)
-        p1 p2
-end
-
 let _lift2 = dualnumLift2
+let _lift1 = dualnumLift1
 
 -- addn
 utest addn num1 num2 with num3 using dualnumEq eqf
@@ -124,36 +70,6 @@ lam p. float2string (dualnumPrimalDeep p)
 utest dualnum2string num0 with "0."
 utest dualnum2string dnum134 with "3."
 utest dualnum2string (dnum1 dnum036 dnum048) with "3."
-
-
----------------------------------
--- LIFTING OF UNARY OPERATORS  --
----------------------------------
-
-type DualNumFun1 = DualNum -> DualNum
-type FloatFun = Float -> Float
-
--- lifts unary real operator to nested dual-numbers
--- f : real operator
--- dfdx : lifted derivative of f
-let dualnumLift1 : DualNumFun1 -> DualNumFun1 -> DualNumFun1 =
-lam f. lam dfdx.
-  recursive let self = lam p.
-    if _isDualNum p then
-      let e = _epsilon p in
-      _dnum
-        e
-        (self
-          (_primal e p))
-          (muln
-            (dfdx (_primal e p))
-            (_pertubation e p))
-    else
-      _num (f (_primalDeep p))
-  in self
-
-let _lift1 = dualnumLift1
-
 
 ---------------------------
 -- DERIVATIVE OPERATORS  --
