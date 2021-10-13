@@ -5,7 +5,6 @@ include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
 include "futhark/length-parameterize.mc"
 include "futhark/pprint.mc"
-include "futhark/record-inline.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -32,8 +31,8 @@ lang PMExprCompile =
   MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  FutharkGenerate + FutharkFunctionRestrictions + FutharkRecordInline +
-  FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
+  FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
+  FutharkLengthParameterize + FutharkCWrapper +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
