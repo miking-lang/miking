@@ -404,6 +404,10 @@ module Mmap : sig
 
   val bindings : Obj.t -> ('a * 'b) Mseq.t
 
+  val choose_exn : Obj.t -> 'a * 'b
+
+  val choose_or_else : (unit -> 'a * 'b) -> Obj.t -> 'a * 'b
+
   val size : Obj.t -> int
 
   val mem : 'a -> Obj.t -> bool

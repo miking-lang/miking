@@ -4,6 +4,7 @@
 -- Map intrinstics
 
 include "seq.mc"
+include "char.mc"
 
 mexpr
 
@@ -45,6 +46,21 @@ utest mapAny (lam k. lam v. eqi (char2int '5') (char2int v)) m with true in
 utest mapAny (lam k. lam v. eqi (char2int '4') (char2int v)) m with false in
 
 utest mapBindings m with [(1,'1'), (2,'2'), (3,'3'), (4,'5')] in
+
+utest
+  match mapChooseWithExn m with (k, v) then
+    and (mapMem k m) (eqChar (mapFindWithExn k m) v)
+  else never
+with true in
+
+utest
+  match mapChooseOrElse (lam. error "impossible") m with (k, v) then
+    and (mapMem k m) (eqChar (mapFindWithExn k m) v)
+  else never
+with true in
+
+utest mapChooseOrElse (lam. (0, '0')) (mapEmpty subi)
+with (0, '0') in
 
 let bindsSort = sort (lam t1 : (k, v). lam t2 : (k, v). subi t1.0 t2.0) in
 

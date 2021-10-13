@@ -167,6 +167,8 @@ and const =
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
+  | CmapChooseWithExn
+  | CmapChooseOrElse of tm option
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
@@ -618,6 +620,8 @@ let const_has_side_effect = function
   | CmapMapWithKey _
   | CmapFoldWithKey _
   | CmapBindings
+  | CmapChooseWithExn
+  | CmapChooseOrElse _
   | CmapEq _
   | CmapCmp _ ->
       false

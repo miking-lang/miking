@@ -784,6 +784,8 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapFindOrElse _ -> "mapFindOrElse"
   | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
   | CMapBindings _ -> "mapBindings"
+  | CMapChooseWithExn _ -> "mapChooseWithExn"
+  | CMapChooseOrElse _ -> "mapChooseOrElse"
   | CMapSize _ -> "mapSize"
   | CMapMem _ -> "mapMem"
   | CMapAny _ -> "mapAny"

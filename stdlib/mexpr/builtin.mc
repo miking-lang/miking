@@ -112,6 +112,8 @@ let builtin = use MExprAst in
   , ("mapMapWithKey", CMapMapWithKey ())
   , ("mapFoldWithKey", CMapFoldWithKey ())
   , ("mapBindings", CMapBindings ())
+  , ("mapChooseWithExn", CMapChooseWithExn ())
+  , ("mapChooseOrElse", CMapChooseOrElse ())
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors

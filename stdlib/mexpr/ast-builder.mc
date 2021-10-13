@@ -1123,6 +1123,14 @@ let mapBindings_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapBindings ())) m
 
+let mapChooseWithExn_ = use MExprAst in
+  lam m.
+  appf1_ (uconst_ (CMapChooseWithExn ())) m
+
+let mapChooseOrElse_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (uconst_ (CMapFindOrElse ())) f m
+
 let mapSize_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapSize ())) m

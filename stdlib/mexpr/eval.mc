@@ -1026,10 +1026,23 @@ lang MapEval =
   | CMapMapWithKey2 (Expr -> Expr -> Expr)
   | CMapFoldWithKey2 (Expr -> Expr -> Expr -> Expr)
   | CMapFoldWithKey3 (Expr -> Expr -> Expr -> Expr, Expr)
+  | CMapChooseOrElse2 Expr
   | CMapEq2 (Expr -> Expr -> Expr)
   | CMapEq3 (Expr -> Expr -> Expr, Map K V)
   | CMapCmp2 (Expr -> Expr -> Expr)
   | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
+
+  sem _bindToRecord =
+  | (k, v) ->
+    let labels = map stringToSid ["0", "1"] in
+    let bindings = mapFromSeq cmpSID (zip labels [k, v]) in
+    TmRecord {
+      bindings = bindings,
+      ty = TyRecord {
+        labels = labels,
+        fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
+        info = NoInfo ()},
+      info = NoInfo ()}
 
   sem delta (arg : Expr) =
   | CMapEmpty _ ->
@@ -1093,22 +1106,23 @@ lang MapEval =
       mapFindApplyOrElse fapply felse key m
     else error "Fourth argument of findApplyOrElse not a map"
   | CMapBindings _ ->
-    let bindToRecord : (k, v) -> Expr = lam bind.
-      let labels = map stringToSid ["0", "1"] in
-      let bindings = mapFromSeq cmpSID (zip labels [bind.0, bind.1]) in
-      TmRecord {
-        bindings = bindings,
-        ty = TyRecord {
-          labels = labels,
-          fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
-          info = NoInfo ()},
-        info = NoInfo ()}
-    in
     match arg with TmConst ({val = CMapVal m} & t) then
-      TmSeq {tms = map bindToRecord (mapBindings m.val),
+      TmSeq {tms = map _bindToRecord (mapBindings m.val),
              ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
              info = NoInfo ()}
     else error "Argument of mapBindings not a map"
+  | CMapChooseWithExn _ ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      _bindToRecord (mapChooseWithExn m)
+    else error "Argument of mapChooseWithExn not a map"
+  | CMapChooseOrElse _ ->
+    TmConst {val = CMapChooseOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapChooseOrElse2 elseFn ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      if gti (mapSize m) 0 then _bindToRecord (mapChooseWithExn m)
+      else apply {env = mapEmpty nameCmp} unit_ elseFn
+    else error "Second argument of mapChooseOrElse not a map"
   | CMapSize _ ->
     match arg with TmConst {val = CMapVal {val = m}} then
       TmConst {val = CInt {val = mapSize m}, ty = TyInt {info = NoInfo ()},

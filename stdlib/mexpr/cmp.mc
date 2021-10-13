@@ -674,6 +674,8 @@ utest cmpConst (CMapFindWithExn {}) (CMapFindWithExn {}) with 0 in
 utest cmpConst (CMapFindOrElse {}) (CMapFindOrElse {}) with 0 in
 utest cmpConst (CMapFindApplyOrElse {}) (CMapFindApplyOrElse {}) with 0 in
 utest cmpConst (CMapBindings {}) (CMapBindings {}) with 0 in
+utest cmpConst (CMapChooseWithExn {}) (CMapChooseWithExn {}) with 0 in
+utest cmpConst (CMapChooseOrElse {}) (CMapChooseOrElse {}) with 0 in
 utest cmpConst (CMapSize {}) (CMapSize {}) with 0 in
 utest cmpConst (CMapMem {}) (CMapMem {}) with 0 in
 utest cmpConst (CMapAny {}) (CMapAny {}) with 0 in

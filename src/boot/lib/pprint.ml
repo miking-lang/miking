@@ -482,6 +482,10 @@ let rec print_const fmt = function
       fprintf fmt "mapFoldWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  | CmapChooseWithExn ->
+      fprintf fmt "mapChooseWithExn"
+  | CmapChooseOrElse _ ->
+      fprintf fmt "mapChooseOrElse"
   | CmapEq _ ->
       fprintf fmt "mapEq"
   | CmapCmp _ ->

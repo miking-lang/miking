@@ -131,6 +131,8 @@ let builtin =
   ; ("mapMapWithKey", f (CmapMapWithKey None))
   ; ("mapFoldWithKey", f (CmapFoldWithKey (None, None)))
   ; ("mapBindings", f CmapBindings)
+  ; ("mapChooseWithExn", f CmapChooseWithExn)
+  ; ("mapChooseOrElse", f (CmapChooseOrElse None))
   ; ("mapEq", f (CmapEq (None, None)))
   ; ("mapCmp", f (CmapCmp (None, None))) (* MCore intrinsics: Tensors *)
   ; ("tensorCreateCArrayInt", f (CtensorCreateCArrayInt None))

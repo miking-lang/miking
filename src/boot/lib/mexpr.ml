@@ -359,6 +359,12 @@ let arity = function
       1
   | CmapBindings ->
       1
+  | CmapChooseWithExn ->
+      1
+  | CmapChooseOrElse None ->
+      2
+  | CmapChooseOrElse (Some _) ->
+      1
   | CmapEq (None, None) ->
       3
   | CmapEq (Some _, None) ->
@@ -1121,6 +1127,20 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       in
       TmSeq (fi, binds)
   | CmapBindings, _ ->
+      fail_constapp fi
+  | CmapChooseWithExn, TmConst (_, CMap (_, m)) ->
+      let k, v = Mmap.choose_exn m in
+      tuple2record fi [k; v]
+  | CmapChooseWithExn, _ ->
+      fail_constapp fi
+  | CmapChooseOrElse None, f ->
+      TmConst (fi, CmapChooseOrElse (Some f))
+  | CmapChooseOrElse (Some f), TmConst (_, CMap (_, m)) ->
+      if Mmap.size m > 0 then
+        let k, v = Mmap.choose_exn m in
+        tuple2record fi [k; v]
+      else apply f tm_unit
+  | CmapChooseOrElse _, _ ->
       fail_constapp fi
   | CmapEq (None, None), f ->
       let veq v1 v2 =
