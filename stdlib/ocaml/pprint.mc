@@ -267,7 +267,7 @@ lang OCamlPrettyPrint =
   | CMapEmpty _ -> intrinsicOpMap "empty"
   | CMapInsert _ -> intrinsicOpMap "insert"
   | CMapRemove _ -> intrinsicOpMap "remove"
-  | CMapFindWithExn _ -> intrinsicOpMap "find"
+  | CMapFindWithExn _ -> intrinsicOpMap "find_exn"
   | CMapFindOrElse _ -> intrinsicOpMap "find_or_else"
   | CMapFindApplyOrElse _ -> intrinsicOpMap "find_apply_or_else"
   | CMapBindings _ -> intrinsicOpMap "bindings"

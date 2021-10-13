@@ -631,7 +631,7 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     Obj.repr (MapModule.remove (Obj.repr k) m, cmp)
 
-  let find k mCmpPair =
+  let find_exn k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
     let module Ord = struct
       type t = Obj.t

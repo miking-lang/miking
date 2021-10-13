@@ -396,7 +396,7 @@ module Mmap : sig
 
   val remove : 'a -> Obj.t -> Obj.t
 
-  val find : 'a -> Obj.t -> 'b
+  val find_exn : 'a -> Obj.t -> 'b
 
   val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
 

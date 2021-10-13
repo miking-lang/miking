@@ -1050,7 +1050,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CmapFindWithExn None, k ->
       TmConst (fi, CmapFindWithExn (Some k))
   | CmapFindWithExn (Some k), TmConst (_, CMap (_, m)) ->
-      Mmap.find k m
+      Mmap.find_exn k m
   | CmapFindWithExn (Some _), _ ->
       fail_constapp fi
   | CmapFindOrElse (None, None), f ->
