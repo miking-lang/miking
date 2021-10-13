@@ -174,11 +174,13 @@ type BreakableGenGrammar prodLabel self res =
 type PermanentNode res self
 con AtomP :
   { id : PermanentId
+  , idx : Int
   , input : BreakableInput res self LClosed RClosed
   , self : self
   } -> PermanentNode res self
 con InfixP :
   { id : PermanentId
+  , idx : Int
   , input : BreakableInput res self LOpen ROpen
   , self : self
   , leftChildAlts : [PermanentNode res self] -- NonEmpty
@@ -186,12 +188,14 @@ con InfixP :
   } -> PermanentNode res self
 con PrefixP :
   { id : PermanentId
+  , idx : Int
   , input : BreakableInput res self LClosed ROpen
   , self : self
   , rightChildAlts : [PermanentNode res self] -- NonEmpty
   } -> PermanentNode res self
 con PostfixP :
   { id : PermanentId
+  , idx : Int
   , input : BreakableInput res self LOpen RClosed
   , self : self
   , leftChildAlts : [PermanentNode res self] -- NonEmpty
@@ -202,11 +206,13 @@ con PostfixP :
 type TentativeData res self
 con InfixT :
   { input : BreakableInput res self LOpen ROpen
+  , idx : Int
   , self : self
   , leftChildAlts : [PermanentNode res self] -- NonEmpty
   } -> TentativeData res self
 con PrefixT :
   { input : BreakableInput res self LClose ROpen
+  , idx : Int
   , self : self
   } -> TentativeData res self
 
@@ -245,7 +251,8 @@ con TentativeRoot :
 
 -- The data we carry along while parsing
 type State res self rstyle =
-  { timestep : Ref Int
+  { timestep : Ref TimeStep
+  , nextIdx : Ref Int
   , frontier : [TentativeNode res self rstyle]
   }
 
@@ -283,6 +290,15 @@ let _opIdP
     match node with InfixP {input = input} then _opIdI input else
     match node with PrefixP {input = input} then _opIdI input else
     match node with PostfixP {input = input} then _opIdI input else
+    never
+let _opIdxP
+  : PermanentNode res self
+  -> Int
+  = lam node.
+    match node with AtomP {idx = idx} then idx else
+    match node with InfixP {idx = idx} then idx else
+    match node with PrefixP {idx = idx} then idx else
+    match node with PostfixP {idx = idx} then idx else
     never
 let _opIdTD
   : TentativeData res self
@@ -328,7 +344,7 @@ let breakableInsertAllowSet
   -> AllowSet id
   = lam id. lam set.
     match set with AllowSet s then AllowSet (mapInsert id () s) else
-    match set with DisallowSet s then DisallowSet (mapRemove id () s) else
+    match set with DisallowSet s then DisallowSet (mapRemove id s) else
     never
 
 let breakableRemoveAllowSet
@@ -337,7 +353,7 @@ let breakableRemoveAllowSet
   -> AllowSet id
   = lam id. lam set.
     match set with AllowSet s then AllowSet (mapRemove id s) else
-    match set with DisallowSet s then DisallowSet (mapInsert id s) else
+    match set with DisallowSet s then DisallowSet (mapInsert id () s) else
     never
 
 let breakableMapAllowSet
@@ -437,9 +453,11 @@ let breakableGenGrammar
 let breakableInitState : () -> State res self ROpen
   = lam grammar.
     let timestep = ref _firstTimeStep in
+    let nextIdx = ref 0 in
     let addedLeft = ref (_firstTimeStep, ref []) in
     let addedRight = ref (_firstTimeStep, []) in
     { timestep = timestep
+    , nextIdx = nextIdx
     , frontier =
       [ TentativeRoot { addedNodesLeftChildren = addedLeft, addedNodesRightChildren = addedRight } ]
     }
@@ -487,10 +505,10 @@ let _addRightChildren
     match parent with TentativeMid {parents = parents, tentativeData = data} then
       let id = _uniqueID () in
       let node =
-        match data with InfixT {input = input, self = self, leftChildAlts = l} then
-          InfixP {id = id, input = input, self = self, leftChildAlts = l, rightChildAlts = children}
-        else match data with PrefixT {input = input, self = self} then
-          PrefixP {id = id, input = input, self = self, rightChildAlts = children}
+        match data with InfixT {input = input, idx = idx, self = self, leftChildAlts = l} then
+          InfixP {id = id, idx = idx, input = input, self = self, leftChildAlts = l, rightChildAlts = children}
+        else match data with PrefixT {input = input, idx = idx, self = self} then
+          PrefixP {id = id, idx = idx, input = input, self = self, rightChildAlts = children}
         else never in
       TentativeLeaf {parents = parents, node = node}
     else match parent with TentativeRoot _ then
@@ -505,6 +523,7 @@ let _addLeftChildren
   -> [TentativeNode res self ROpen] -- NonEmpty
   -> TentativeNode res self rstyle
   = lam st. lam input. lam self. lam leftChildren. lam parents.
+    let idx = deref st.nextIdx in
     match input with InfixI _ then
       let time = deref st.timestep in
       let addedLeft = ref (_firstTimeStep, ref []) in
@@ -514,13 +533,13 @@ let _addLeftChildren
         , addedNodesLeftChildren = addedLeft
         , addedNodesRightChildren = addedRight
         , maxDistanceFromRoot = addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot parents))
-        , tentativeData = InfixT {input = input, self = self, leftChildAlts = leftChildren}
+        , tentativeData = InfixT {input = input, idx = idx, self = self, leftChildAlts = leftChildren}
         }
     else match input with PostfixI _ then
       let id = _uniqueID () in
       TentativeLeaf
         { parents = parents
-        , node = PostfixP {id = id, input = input, self = self, leftChildAlts = leftChildren}
+        , node = PostfixP {id = id, idx = idx, input = input, self = self, leftChildAlts = leftChildren}
         }
     else never
 
@@ -696,6 +715,8 @@ let breakableAddPrefix
   = lam input. lam self. lam st.
     let frontier = st.frontier in
     let time = deref st.timestep in
+    let idx = deref st.nextIdx in
+    modref st.nextIdx (addi 1 idx);
     let addedLeft = ref (_firstTimeStep, ref []) in
     let addedRight = ref (_firstTimeStep, []) in
     { st with frontier =
@@ -704,7 +725,7 @@ let breakableAddPrefix
         , addedNodesLeftChildren = addedLeft
         , addedNodesRightChildren = addedRight
         , maxDistanceFromRoot = addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier))
-        , tentativeData = PrefixT {input = input, self = self}
+        , tentativeData = PrefixT {input = input, idx = idx, self = self}
         }
       ]
     }
@@ -714,14 +735,20 @@ let breakableAddInfix
   -> self
   -> State res self RClosed
   -> Option (State res self ROpen)
-  = _addLOpen
+  = lam input. lam self. lam st.
+    let res = _addLOpen input self st in
+    modref st.nextIdx (addi 1 (deref st.nextIdx));
+    res
 
 let breakableAddPostfix
   : BreakableInput res self LOpen RClosed
   -> self
   -> State res self RClosed
   -> Option (State res self RClosed)
-  = _addLOpen
+  = lam input. lam self. lam st.
+    let res = _addLOpen input self st in
+    modref st.nextIdx (addi 1 (deref st.nextIdx));
+    res
 
 let breakableAddAtom
   : BreakableInput res self LClosed RClosed
@@ -729,8 +756,16 @@ let breakableAddAtom
   -> State res self ROpen
   -> State res self RClosed
   = lam input. lam self. lam st.
+    let idx = deref st.nextIdx in
+    modref st.nextIdx (addi 1 idx);
     let id = _uniqueID () in
-    { st with frontier = [TentativeLeaf {parents = st.frontier, node = AtomP {id = id, input = input, self = self}}] }
+    { st with frontier =
+      [ TentativeLeaf
+        { parents = st.frontier
+        , node = AtomP {id = id, idx = idx, input = input, self = self}
+        }
+      ]
+    }
 
 -- TODO(vipa, 2021-02-15): There should be more information in case of
 -- a parse failure, but it's not obvious precisely how the information
@@ -782,58 +817,143 @@ let breakableFinalizeParse
     iter (handleLeaf queue) frontier;
     match work queue with res & [_] ++ _ then Some res else None ()
 
-type Irrelevancy self = {first: self, last: self}
-type Ambiguity self = {first: self, last: self, irrelevant: [Irrelevancy self]}
+type Ambiguity self tokish = {first: self, last: self, partialResolutions: [[tokish]]}
 
-type BreakableError self
-con Ambiguities : [Ambiguity self] -> BreakableError self
+type BreakableError self tokish
+con Ambiguities : [Ambiguity self tokish] -> BreakableError self tokish
 
 let breakableConstructResult
-  : [PermanentNode res self] -- NonEmpty
-  -> Either (BreakableError self) res
-  = lam nodes.
+  : (self -> tokish)
+  -> tokish
+  -> tokish
+  -> BreakableInput res self LCLosed RClosed
+  -> [PermanentNode res self] -- NonEmpty
+  -> Either (BreakableError self tokish) res
+  = lam selfToTok. lam lpar. lam rpar. lam parInput. lam nodes.
+    let parId = _opIdI parInput in
     -- NOTE(vipa, 2021-02-15): All alternatives for children at the
     -- same point in the tree have the exact same range in the input,
     -- i.e., they will have exactly the same input as first and last
     -- input, that's why we only look at one of the children, we don't
     -- need to look at the others
-    recursive let makeError
+    recursive let range
       : PermanentNode res self
       -> {first: self, last: self}
       = lam node.
         match node with AtomP {self = self} then {first = self, last = self}
         else match node with InfixP {leftChildAlts = [l] ++ _, rightChildAlts = [r] ++ _} then
-          { first = (makeError l).first
-          , last = (makeError r).last
+          { first = (range l).first
+          , last = (range r).last
           }
         else match node with PrefixP {self = self, rightChildAlts = [r] ++ _} then
           { first = self
-          , last = (makeError r).last
+          , last = (range r).last
           }
         else match node with PostfixP {self = self, leftChildAlts = [l] ++ _} then
-          { first = (makeError l).first
+          { first = (range l).first
           , last = self
           }
         else never
     in
 
+    recursive
+      let flattenOne : PermanentNode res self -> [tokish] = lam node.
+        switch node
+        case AtomP {self = self} then [selfToTok self]
+        case InfixP p then
+          join [flattenMany p.leftChildAlts, [selfToTok p.self], flattenMany p.rightChildAlts]
+        case PrefixP p then
+          cons (selfToTok p.self) (flattenMany p.rightChildAlts)
+        case PostfixP p then
+          snoc (flattenMany p.leftChildAlts) (selfToTok p.self)
+        end
+      let flattenMany : [PermanentNode res self] -> [tokish] = lam nodes. -- NonEmpty
+        match nodes with [n] ++ _ then
+          flattenOne n
+        else never
+    in
+
+    let resolveWith : [Int] -> AllowSet OpId -> [PermanentNode res self] -> ([Int] -> PermanentNode res self -> [[tokish]]) -> [[tokish]] =
+      lam tops. lam allowSet. lam children. lam resolveDir.
+        let needToWrap = not (null tops) in
+        if needToWrap then
+          if breakableInAllowSet parId allowSet then
+            [cons lpar (snoc (flattenMany children) rpar)]
+          else
+            join (map (resolveDir tops) children)
+        else
+          [flattenMany children]
+    in
+
+    recursive let resolveDir : Bool -> Bool -> [Int] -> PermamentNode res self -> [[tokish]] =
+      lam forceLeft. lam forceRight. lam tops. lam node.
+        switch node
+        case AtomP {self = self} then [[selfToTok self]]
+        case InfixP (node & {input = InfixI i}) then
+          let left =
+            if forceLeft then
+              [cons lpar (snoc (flattenMany node.leftChildAlts) rpar)]
+            else
+              let tops = filter (gti node.idx) tops in
+              resolveWith tops i.leftAllow node.leftChildAlts (resolveDir false true)
+          in
+          let right =
+            if forceRight then
+              [cons lpar (snoc (flattenMany node.rightChildAlts) rpar)]
+            else
+              let tops = filter (lti node.idx) tops in
+              resolveWith tops i.rightAllow node.rightChildAlts (resolveDir true false)
+          in
+          let here = [selfToTok node.self] in
+          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
+        case PrefixP (node & {input = PrefixI i}) then
+          let left = [[]] in
+          let right =
+            if forceRight then
+              [cons lpar (snoc (flattenMany node.rightChildAlts) rpar)]
+            else
+              let tops = filter (lti node.idx) tops in
+              resolveWith tops i.rightAllow node.rightChildAlts (resolveDir true false)
+          in
+          let here = [selfToTok node.self] in
+          -- OPT(vipa, 2021-10-11): This follows the structure above, but
+          -- could be done with just a concatMap
+          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
+        case PostfixP (node & {input = PostfixI i}) then
+          let left =
+            if forceLeft then
+              [cons lpar (snoc (flattenMany node.leftChildAlts) rpar)]
+            else
+              let tops = filter (gti node.idx) tops in
+              resolveWith tops i.leftAllow node.leftChildAlts (resolveDir false true)
+          in
+          let right = [[]] in
+          let here = [selfToTok node.self] in
+          -- OPT(vipa, 2021-10-11): This follows the structure above, but
+          -- could be done with just a concatMap
+          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
+        end
+    in
     let ambiguities : Ref [Ambiguity self] = ref [] in
 
     recursive
       let workMany
         : [PermanentNode res self] -- NonEmpty
         -> Option res
-        = lam nodes.
-          match nodes with [n] then
+        = lam tops.
+          match tops with [n] then
             workOne n
-          else match nodes with [n, _] ++ _ then
-            let err = makeError n in
-            -- TODO(vipa, 2021-02-15): Compute valid elisons, and use those to
-            -- populate the 'irrelevant' field
-            let err = {first = err.first, last = err.last, irrelevant = []} in
+          else match tops with [n] ++ _ then
+            -- OPT(vipa, 2021-10-11): This should probably be a set that supports
+            -- member querying as well as `removeGreaterThan` and `removeLesserThan`
+            let topIdxs = map _opIdxP tops in
+            let range = range n in
+            let resolutions = join (map (resolveDir false false topIdxs) tops) in
+            -- TODO(vipa, 2021-10-11): Compute valid elisons
+            let err = {first = range.first, last = range.last, partialResolutions = resolutions} in
             modref ambiguities (cons err (deref ambiguities));
             None ()
-          else dprintLn nodes; never
+          else dprintLn tops; never
       let workOne
         : PermanentNode res self
         -> Option res
@@ -866,8 +986,9 @@ con NegateA : {pos: Int, r: Ast} -> Ast in
 con IfA : {pos: Int, r: Ast} -> Ast in
 con ElseA : {pos: Int, l: Ast, r: Ast} -> Ast in
 con NonZeroA : {pos: Int, l: Ast} -> Ast in
+con ParA : {pos: Int} -> Ast in
 
-type Self = {pos: Int, val: Int} in
+type Self = {pos: Int, val: Int, str: String} in
 
 let allowAllBut = lam xs. DisallowSet (mapFromSeq cmpString (map (lam x. (x, ())) xs)) in
 let allowAll = allowAllBut [] in
@@ -896,7 +1017,8 @@ in
 
 let grammar =
   { productions =
-    [ BreakableAtom {label = "int", construct = lam x. IntA x}
+    [ BreakableAtom {label = "int", construct = lam x: Self. IntA {pos = x.pos, val = x.val}}
+    , BreakableAtom {label = "par", construct = lam x: Self. ParA {pos = x.pos}}
     , BreakableInfix
       { label = "plus"
       , construct = lam x: Self. lam l. lam r. PlusA {pos = x.pos, l = l, r = r}
@@ -953,7 +1075,7 @@ let prefix = lam label. mapFindExn label genned.prefixes in
 let infix = lam label. mapFindExn label genned.infixes in
 let postfix = lam label. mapFindExn label genned.postfixes in
 
-type Self = {val : Int, pos : Int} in
+type Self = {val : Int, pos : Int, str : String} in
 
 type TestToken in
 con TestAtom : { x : Self, input : BreakableInput Ast Self RClosed RClosed } -> TestToken in
@@ -963,32 +1085,34 @@ con TestPostfix : { x : Self, input : BreakableInput Ast Self ROpen RClosed } ->
 
 let _int =
   let input = atom "int" in
-  lam val. lam pos. TestAtom {x = {val = val, pos = pos}, input = input} in
+  lam val. lam pos. TestAtom {x = {val = val, pos = pos, str = int2string val}, input = input} in
 let _plus =
   let input = infix "plus" in
-  lam pos. TestInfix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "+"}, input = input} in
 let _times =
   let input = infix "times" in
-  lam pos. TestInfix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "*"}, input = input} in
 let _divide =
   let input = infix "divide" in
-  lam pos. TestInfix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "/"}, input = input} in
 let _negate =
   let input = prefix "negate" in
-  lam pos. TestPrefix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestPrefix {x = {val = 0, pos = pos, str = "-"}, input = input} in
 let _if =
   let input = prefix "if" in
-  lam pos. TestPrefix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestPrefix {x = {val = 0, pos = pos, str = "if"}, input = input} in
 let _else =
   let input = infix "else" in
-  lam pos. TestInfix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "else"}, input = input} in
 let _nonZero =
   let input = postfix "nonZero" in
-  lam pos. TestPostfix {x = {val = 0, pos = pos}, input = input} in
+  lam pos. TestPostfix {x = {val = 0, pos = pos, str = "?"}, input = input} in
+
+let selfToTok : Self -> String = lam x. x.str in
 
 let testParse
   : [Int -> TestToken]
-  -> Option (Either (BreakableError Self) Ast)
+  -> Option (Either (BreakableError Self String) Ast)
   = recursive
       let workROpen = lam pos. lam st. lam tokens.
         match tokens with [t] ++ tokens then
@@ -1013,7 +1137,7 @@ let testParse
             then workRClosed pos st tokens
             else None ()
           else None ()
-        else optionMap breakableConstructResult (breakableFinalizeParse st)
+        else optionMap (breakableConstructResult selfToTok "(" ")" (atom "par")) (breakableFinalizeParse st)
     in workROpen 0 (breakableInitState ())
 in
 
@@ -1099,27 +1223,36 @@ in
 
 utest testParse [_int 1, _times, _int 2, _divide, _int 3]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 1,pos = 0}
-    , last = {val = 3,pos = 4}
+  [ { first = {val = 1,pos = 0,str = "1"}
+    , last = {val = 3,pos = 4,str = "3"}
+    , partialResolutions =
+      [ ["1", "*", "(", "2", "/", "3", ")"]
+      , ["(", "1", "*", "2", ")", "/", "3"]
+      ]
     }
   ])))
 in
 
 utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 1,pos = 0}
-    , last = {val = 3,pos = 4}
+  [ { first = {val = 1,pos = 0,str = "1"}
+    , last = {val = 3,pos = 4,str = "3"}
+    , partialResolutions =
+      [ ["1","*","(","2","/","3",")"]
+      , ["(","1","*","2", ")","/","3"]
+      ]
     }
   ])))
 in
 
 utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 1,pos = 2}
-    , last = {val = 3,pos = 6}
+  [ { first = {val = 1,pos = 2,str = "1"}
+    , last = {val = 3,pos = 6,str = "3"}
+    , partialResolutions =
+      [ ["1","*","(","2","/","3",")"]
+      , ["(","1","*","2",")","/","3"]
+      ]
     }
   ])))
 in
@@ -1127,9 +1260,12 @@ in
 -- TODO(vipa, 2021-02-15): When we compute elisons we can report two ambiguities here, the nested one is independent
 utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 0,pos = 0}
-    , last = {val = 4,pos = 8}
+  [ { first = {val = 0,pos = 0,str = "0"}
+    , last = {val = 4,pos = 8,str = "4"}
+    , partialResolutions =
+    [ ["0","+","(","1","*","2","/","3","+","4",")"]
+    , ["(","0","+","1","*","2","/","3",")","+","4"]
+    ]
     }
   ])))
 in
@@ -1137,13 +1273,19 @@ in
 -- TODO(vipa, 2021-02-15): Do we want to specify the order of the returned ambiguities in some way?
 utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4, _divide, _int 5, _times, _int 6]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 4, pos = 6}
-    , last = {val = 6, pos = 10}
+  [ { first = {val = 4, pos = 6,str = "4"}
+    , last = {val = 6, pos = 10,str = "6"}
+    , partialResolutions =
+      [ ["4","/","(","5","*","6",")"]
+      , ["(","4","/","5",")","*","6"]
+      ]
     }
-  , { irrelevant = ([])
-    , first = {val = 1,pos = 0}
-    , last = {val = 3,pos = 4}
+  , { first = {val = 1,pos = 0,str = "1"}
+    , last = {val = 3,pos = 4,str = "3"}
+    , partialResolutions =
+      [ ["1","*","(","2","/","3",")"]
+      , ["(","1","*","2",")","/","3"]
+      ]
     }
   ])))
 in
@@ -1175,9 +1317,12 @@ in
 
 utest testParse [_if, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 0,pos = 0}
-    , last = {val = 2,pos = 4}
+  [ { first = {val = 0,pos = 0,str = "if"}
+    , last = {val = 2,pos = 4,str = "2"}
+    , partialResolutions =
+      [ ["if","(","if","1", "else","2",")"]
+      , ["if","(","if","1", ")","else","2"]
+      ]
     }
   ])))
 in
@@ -1199,18 +1344,24 @@ in
 
 utest testParse [_if, _negate, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 0,pos = 0}
-    , last = {val = 2,pos = 5}
+  [ { first = {val = 0,pos = 0,str = "if"}
+    , last = {val = 2,pos = 5,str = "2"}
+    , partialResolutions =
+      [ ["if","(","-","if", "1","else","2",")"]
+      , ["if","(","-","if", "1",")","else","2"]
+      ]
     }
   ])))
 in
 
 utest testParse [_int 1, _plus, _if, _negate, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
-  [ { irrelevant = ([])
-    , first = {val = 0,pos = 2}
-    , last = {val = 2,pos = 7}
+  [ { first = {val = 0,pos = 2,str = "if"}
+    , last = {val = 2,pos = 7,str = "2"}
+    , partialResolutions =
+      [ ["if","(","-","if", "1","else","2",")"]
+      , ["if","(","-","if", "1",")","else","2"]
+      ]
     }
   ])))
 in
