@@ -62,9 +62,18 @@ let mapFoldlOption : (acc -> k -> v -> Option acc)
 let mapAll : (v -> Bool) -> Map k v -> Bool = lam f. lam m.
   mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
 
+-- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
+-- empty.
+let mapChoose : Map k v -> Option (k, v) = lam m.
+  if mapIsEmpty m then None () else Some (mapChooseWithExn m)
+
 mexpr
 
 let m = mapEmpty subi in
+
+utest
+  match mapChoose m with None _ then true else false
+with true in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
@@ -84,6 +93,10 @@ utest mapLookup 1 m with Some "1" using optionEq eqString in
 utest mapLookup 2 m with Some "2" using optionEq eqString in
 utest mapLookup 3 m with Some "3" using optionEq eqString in
 utest mapLookup 4 m with None () using optionEq eqString in
+
+utest
+  match mapChoose m with Some _ then true else false
+with true in
 
 let m2 = mapInsert 2 "22" m in
 let m2 = mapInsert 4 "44" m2 in
