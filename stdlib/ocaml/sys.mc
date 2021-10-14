@@ -70,8 +70,13 @@ let sysTimeoutCommand : Option Float -> [String] -> String -> String -> (Float, 
       else fullCmd
     in
     match _commandListTime fullCmd with (ms, retCode) then
-      let stdout = readFile tempStdout in
-      let stderr = readFile tempStderr in
+
+      -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
+      _commandList ["echo", "", ">>", tempStdout];
+      _commandList ["echo", "", ">>", tempStderr];
+      let stdout = init (readFile tempStdout) in
+      let stderr = init (readFile tempStderr) in
+
       sysTempDirDelete tempDir ();
       (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
     else never
