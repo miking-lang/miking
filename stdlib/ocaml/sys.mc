@@ -76,6 +76,9 @@ let sysTimeoutCommand : Option Float -> [String] -> String -> String -> (Float, 
       (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
     else never
 
+utest sysTimeoutCommand (None ()) ["echo -n \"\""] "" "."; () with ()
+utest sysTimeoutCommand (Some 1.) ["echo -n \"\""] "" "."; () with ()
+
 let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
   lam cmd. lam stdin. lam cwd.
     sysTimeoutCommand (None ()) cmd stdin cwd
