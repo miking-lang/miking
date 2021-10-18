@@ -52,7 +52,14 @@ let tomlExtMap =
       ",
       ty = tyarrows_ [tyTomlValue_, tyfloat_] }
     ]),
-
+    ("externalTomlValueToTableExn", [
+      impl { expr =
+      "fun v -> match v with
+         | Toml.Types.TTable v -> v
+         | _ -> raise (Invalid_argument \"tomlValueToTableExn\")
+      ",
+      ty = tyarrows_ [tyTomlValue_, tyTomlTable_] }
+    ]),
     ("externalTomlValueToIntSeqExn", [
       impl { expr =
       "fun v -> match v with
@@ -76,6 +83,14 @@ let tomlExtMap =
          | _ -> raise (Invalid_argument \"tomlValueToFloatSeqExn\")
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyfloat_] }
+    ]),
+    ("externalTomlValueToTableSeqExn", [
+      impl { expr =
+      "fun v -> match v with
+         | Toml.Types.TArray (Toml.Types.NodeTable v) -> v
+         | _ -> raise (Invalid_argument \"tomlValueToTableSeqExn\")
+      ",
+      ty = tyarrows_ [tyTomlValue_, otylist_ tyTomlTable_] }
     ]),
 
     -- Writing TOML
@@ -101,8 +116,25 @@ let tomlExtMap =
     ("externalTomlFloatToValue", [
       impl { expr = "fun x -> Toml.Types.TFloat x",
       ty = tyarrows_ [tyfloat_, tyTomlValue_] }
+    ]),
+    ("externalTomlTableToValue", [
+      impl { expr = "fun x -> Toml.Types.TTable x",
+      ty = tyarrows_ [tyTomlTable_, tyTomlValue_] }
+    ]),
+    ("externalTomlIntSeqToValue", [
+      impl { expr = "fun x -> Toml.Types.TArray (Toml.Types.NodeInt x)",
+      ty = tyarrows_ [otylist_ tyint_, tyTomlValue_] }
+    ]),
+    ("externalTomlStringSeqToValue", [
+      impl { expr = "fun x -> Toml.Types.TArray (Toml.Types.NodeString x)",
+      ty = tyarrows_ [otylist_ otystring_, tyTomlValue_] }
+    ]),
+    ("externalTomlFloatSeqToValue", [
+      impl { expr = "fun x -> Toml.Types.TArray (Toml.Types.NodeFloat x)",
+      ty = tyarrows_ [otylist_ tyfloat_, tyTomlValue_] }
+    ]),
+    ("externalTomlTableSeqToValue", [
+      impl { expr = "fun x -> Toml.Types.TArray (Toml.Types.NodeTable x)",
+      ty = tyarrows_ [otylist_ tyTomlTable_, tyTomlValue_] }
     ])
-
-
-
   ]

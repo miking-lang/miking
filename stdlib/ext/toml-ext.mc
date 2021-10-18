@@ -1,8 +1,19 @@
 
 include "map.mc"
 
-type TomlTable
-type TomlValue
+/-
+  Implements functionality for reading and writing TOML data.
+
+  A TOML table is a sequence of (key, value) pairs, where each key is a string,
+  and each value is one of:
+  - integer
+  - float
+  - string
+  - TOML table
+  or a sequence of any of the above.
+
+  Boolean and date data types are currently not supported.
+-/
 
 ------------------
 -- READING TOML --
@@ -32,7 +43,7 @@ with ["intval", "stringval"]
 
 -- 'tomlBindings table' converts 'table' into a map.
 let tomlTableToMap : TomlTable -> Map String TomlValue = lam table.
-  mapFromSeq (tomlBindings table)
+  mapFromSeq cmpString (tomlBindings table)
 
 -- 'tomlValueToIntExn v' converts a toml value to an integer.
 external externalTomlValueToIntExn ! : TomlValue -> Int
@@ -52,6 +63,21 @@ let tomlValueToFloatExn = lam v. externalTomlValueToFloatExn v
 
 utest tomlValueToFloatExn (tomlFindExn "key" (tomlFromStringExn "key=3.14")) with 3.14
 
+-- 'tomlValueToTableExn v' converts a toml value to a toml table.
+external externalTomlValueToTableExn ! : TomlValue -> TomlTable
+let tomlValueToTableExn = lam v. externalTomlValueToTableExn v
+
+utest
+  let t1 = tomlFromStringExn
+  "
+  [key]
+  subkey=1
+  "
+  in
+  let t2 = tomlValueToTableExn (tomlFindExn "key" t1) in
+  tomlValueToIntExn (tomlFindExn "subkey" t2)
+with 1
+
 -- 'tomlValueToIntSeqExn v' converts a toml value to an integer sequence.
 external externalTomlValueToIntSeqExn ! : TomlValue -> [Int]
 let tomlValueToIntSeqExn = lam v. externalTomlValueToIntSeqExn v
@@ -69,6 +95,26 @@ external externalTomlValueToFloatSeqExn ! : TomlValue -> [Float]
 let tomlValueToFloatSeqExn = lam v. externalTomlValueToFloatSeqExn v
 
 utest tomlValueToFloatSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[3.14,1e1]")) with [3.14,1e1]
+
+-- 'tomlValueToTableSeqExn v' converts a toml value to a sequence of toml
+-- tables.
+external externalTomlValueToTableSeqExn ! : TomlValue -> [TomlTable]
+let tomlValueToTableSeqExn = lam v. externalTomlValueToTableSeqExn v
+
+utest
+  let t1 = tomlFromStringExn
+  "
+  [[fruit]]
+  name = \"apple\"
+
+  [[fruit]]
+  name = \"orange\"
+  "
+  in
+  let t2 : [TomlTable] = tomlValueToTableSeqExn (tomlFindExn "fruit" t1) in
+  let vals = map (lam t. tomlFindExn "name" t) t2 in
+  map tomlValueToStringExn vals
+with ["apple", "orange"]
 
 ------------------
 -- WRITING TOML --
@@ -107,7 +153,54 @@ let tomlFloatToValue = lam v. externalTomlFloatToValue v
 
 utest tomlToString (tomlFromBindings [("key", tomlFloatToValue 3.14)]) with "key=3.14" using _strEqNoWhitespace
 
+-- 'tomlTableToValue v' converts a toml table to a toml value.
+external externalTomlTableToValue ! : TomlTable -> TomlValue
+let tomlTableToValue = lam v. externalTomlTableToValue v
 
+utest
+  let t1 = tomlFromBindings [("subkey", tomlIntToValue 1)] in
+  let t2 = tomlFromBindings [("key", tomlTableToValue t1)] in
+  tomlToString t2
+with
+"
+[key]
+subkey=1
+"
+using _strEqNoWhitespace
 
+-- 'tomlIntSeqToValue v' converts an integer to a toml value.
+external externalTomlIntSeqToValue ! : [Int] -> TomlValue
+let tomlIntSeqToValue = lam v. externalTomlIntSeqToValue v
 
+utest tomlToString (tomlFromBindings [("key", tomlIntSeqToValue [1,2,3])]) with "key=[1,2,3]" using _strEqNoWhitespace
 
+-- 'tomlStringSeqToValue v' converts a string to a toml value.
+external externalTomlStringSeqToValue ! : [String] -> TomlValue
+let tomlStringSeqToValue = lam s. externalTomlStringSeqToValue s
+
+utest tomlToString (tomlFromBindings [("key", tomlStringSeqToValue ["42","43"])]) with "key=[\"42\", \"43\"]" using _strEqNoWhitespace
+
+-- 'tomlFloatSeqToValue v' converts a float to a toml value.
+external externalTomlFloatSeqToValue ! : [Float] -> TomlValue
+let tomlFloatSeqToValue = lam v. externalTomlFloatSeqToValue v
+
+utest tomlToString (tomlFromBindings [("key", tomlFloatSeqToValue [3.14])]) with "key=[3.14]" using _strEqNoWhitespace
+
+-- 'tomlTableSeqToValue v' converts a sequence of toml tables to a toml value.
+external externalTomlTableSeqToValue ! : [TomlTable] -> TomlValue
+let tomlTableSeqToValue = lam v. externalTomlTableSeqToValue v
+
+utest
+ let t1 = tomlFromBindings [("name", tomlStringToValue "apple")] in
+ let t2 = tomlFromBindings [("name", tomlStringToValue "orange")] in
+ let t3 = tomlFromBindings [("fruit", tomlTableSeqToValue [t1, t2])] in
+ tomlToString t3
+with
+"
+[[fruit]]
+name = \"apple\"
+
+[[fruit]]
+name = \"orange\"
+"
+using _strEqNoWhitespace
