@@ -1014,7 +1014,7 @@ lang MapEval =
   | CMapInsert2 Expr
   | CMapInsert3 (Expr, Expr)
   | CMapRemove2 Expr
-  | CMapFindWithExn2 Expr
+  | CMapFindExn2 Expr
   | CMapFindOrElse2 (Expr -> Expr)
   | CMapFindOrElse3 (Expr -> Expr, Expr)
   | CMapFindApplyOrElse2 (Expr -> Expr)
@@ -1072,13 +1072,13 @@ lang MapEval =
     match arg with TmConst ({val = CMapVal m} & t) then
       TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
     else error "Second argument of mapRemove not a map"
-  | CMapFindWithExn _ ->
-    TmConst {val = CMapFindWithExn2 arg, ty = TyUnknown {info = NoInfo ()},
+  | CMapFindExn _ ->
+    TmConst {val = CMapFindExn2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
-  | CMapFindWithExn2 key ->
+  | CMapFindExn2 key ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      mapFindWithExn key m
-    else error "Second argument of mapFindWithExn not a map"
+      mapFindExn key m
+    else error "Second argument of mapFindExn not a map"
   | CMapFindOrElse _ ->
     TmConst {val = CMapFindOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
@@ -1111,16 +1111,16 @@ lang MapEval =
              ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
              info = NoInfo ()}
     else error "Argument of mapBindings not a map"
-  | CMapChooseWithExn _ ->
+  | CMapChooseExn _ ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      _bindToRecord (mapChooseWithExn m)
-    else error "Argument of mapChooseWithExn not a map"
+      _bindToRecord (mapChooseExn m)
+    else error "Argument of mapChooseExn not a map"
   | CMapChooseOrElse _ ->
     TmConst {val = CMapChooseOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
   | CMapChooseOrElse2 elseFn ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      if gti (mapSize m) 0 then _bindToRecord (mapChooseWithExn m)
+      if gti (mapSize m) 0 then _bindToRecord (mapChooseExn m)
       else apply {env = mapEmpty nameCmp} unit_ elseFn
     else error "Second argument of mapChooseOrElse not a map"
   | CMapSize _ ->
@@ -2510,7 +2510,7 @@ utest eval (mapBindings_ m4) with seq_ [utuple_ [int_ 1, int_ 4]] using eqExpr i
 utest eval (mapBindings_ m5)
 with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
 
-utest eval (mapFindWithExn_ (int_ 0) m2) with int_ 1 using eqExpr in
+utest eval (mapFindExn_ (int_ 0) m2) with int_ 1 using eqExpr in
 
 let elsef = ulam_ "" (int_ 2) in
 utest eval (mapFindOrElse_ elsef (int_ 0) m1) with int_ 2 using eqExpr in

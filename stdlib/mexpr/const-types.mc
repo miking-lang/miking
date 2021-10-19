@@ -204,7 +204,7 @@ lang MapTypeAst = MapAst
                             tymap_
   | CMapInsert _ -> tyarrows_ [tygeneric_ "a", tygeneric_ "b", tymap_, tymap_]
   | CMapRemove _ -> tyarrows_ [tygeneric_ "a", tymap_, tymap_]
-  | CMapFindWithExn _ -> tyarrows_ [tygeneric_ "a", tymap_, tygeneric_ "b"]
+  | CMapFindExn _ -> tyarrows_ [tygeneric_ "a", tymap_, tygeneric_ "b"]
   | CMapFindOrElse _ -> tyarrows_ [tyarrow_ tyunit_ (tygeneric_ "b"),
                                    tygeneric_ "a", tymap_, tygeneric_ "b"]
   | CMapFindApplyOrElse _ ->
@@ -213,7 +213,7 @@ lang MapTypeAst = MapAst
                tymap_, tygeneric_ "c"]
   | CMapBindings _ -> tyarrow_ tymap_
                                (tyseq_ (tytuple_ [tygeneric_ "a", tygeneric_ "b"]))
-  | CMapChooseWithExn _ -> tyarrows_ [
+  | CMapChooseExn _ -> tyarrows_ [
       tymap_,
       (tytuple_ [tygeneric_ "a", tygeneric_ "b"])
     ]

@@ -1107,9 +1107,9 @@ let mapRemove_ = use MExprAst in
   lam k. lam m.
   appf2_ (uconst_ (CMapRemove ())) k m
 
-let mapFindWithExn_ = use MExprAst in
+let mapFindExn_ = use MExprAst in
   lam k. lam m.
-  appf2_ (uconst_ (CMapFindWithExn ())) k m
+  appf2_ (uconst_ (CMapFindExn ())) k m
 
 let mapFindOrElse_ = use MExprAst in
   lam f. lam k. lam m.
@@ -1123,9 +1123,9 @@ let mapBindings_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapBindings ())) m
 
-let mapChooseWithExn_ = use MExprAst in
+let mapChooseExn_ = use MExprAst in
   lam m.
-  appf1_ (uconst_ (CMapChooseWithExn ())) m
+  appf1_ (uconst_ (CMapChooseExn ())) m
 
 let mapChooseOrElse_ = use MExprAst in
   lam f. lam m.

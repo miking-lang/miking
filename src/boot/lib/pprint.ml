@@ -464,8 +464,8 @@ let rec print_const fmt = function
       fprintf fmt "mapInsert"
   | CmapRemove _ ->
       fprintf fmt "mapRemove"
-  | CmapFindWithExn _ ->
-      fprintf fmt "mapFindWithExn"
+  | CmapFindExn _ ->
+      fprintf fmt "mapFindExn"
   | CmapFindOrElse _ ->
       fprintf fmt "mapFindOrElse"
   | CmapFindApplyOrElse _ ->
@@ -482,8 +482,8 @@ let rec print_const fmt = function
       fprintf fmt "mapFoldWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
-  | CmapChooseWithExn ->
-      fprintf fmt "mapChooseWithExn"
+  | CmapChooseExn ->
+      fprintf fmt "mapChooseExn"
   | CmapChooseOrElse _ ->
       fprintf fmt "mapChooseOrElse"
   | CmapEq _ ->

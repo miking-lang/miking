@@ -670,11 +670,11 @@ utest cmpConst (CDeRef {}) (CDeRef {}) with 0 in
 utest cmpConst (CMapEmpty {}) (CMapEmpty {}) with 0 in
 utest cmpConst (CMapInsert {}) (CMapInsert {}) with 0 in
 utest cmpConst (CMapRemove {}) (CMapRemove {}) with 0 in
-utest cmpConst (CMapFindWithExn {}) (CMapFindWithExn {}) with 0 in
+utest cmpConst (CMapFindExn {}) (CMapFindExn {}) with 0 in
 utest cmpConst (CMapFindOrElse {}) (CMapFindOrElse {}) with 0 in
 utest cmpConst (CMapFindApplyOrElse {}) (CMapFindApplyOrElse {}) with 0 in
 utest cmpConst (CMapBindings {}) (CMapBindings {}) with 0 in
-utest cmpConst (CMapChooseWithExn {}) (CMapChooseWithExn {}) with 0 in
+utest cmpConst (CMapChooseExn {}) (CMapChooseExn {}) with 0 in
 utest cmpConst (CMapChooseOrElse {}) (CMapChooseOrElse {}) with 0 in
 utest cmpConst (CMapSize {}) (CMapSize {}) with 0 in
 utest cmpConst (CMapMem {}) (CMapMem {}) with 0 in

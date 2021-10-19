@@ -750,11 +750,11 @@ lang MapAst = ConstAst
   | CMapEmpty {}
   | CMapInsert {}
   | CMapRemove {}
-  | CMapFindWithExn {}
+  | CMapFindExn {}
   | CMapFindOrElse {}
   | CMapFindApplyOrElse {}
   | CMapBindings {}
-  | CMapChooseWithExn {}
+  | CMapChooseExn {}
   | CMapChooseOrElse {}
   | CMapSize {}
   | CMapMem {}

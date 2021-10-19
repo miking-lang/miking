@@ -23,10 +23,10 @@ let m = mapInsert 4 '5' m in
 
 utest mapSize m with 4 in
 
-utest mapFindWithExn 1 m with '1' in
-utest mapFindWithExn 2 m with '2' in
-utest mapFindWithExn 3 m with '3' in
-utest mapFindWithExn 4 m with '5' in
+utest mapFindExn 1 m with '1' in
+utest mapFindExn 2 m with '2' in
+utest mapFindExn 3 m with '3' in
+utest mapFindExn 4 m with '5' in
 
 utest mapFindOrElse (lam. '0') 1 m with '1' in
 utest mapFindOrElse (lam. '0') 2 m with '2' in
@@ -48,14 +48,14 @@ utest mapAny (lam k. lam v. eqi (char2int '4') (char2int v)) m with false in
 utest mapBindings m with [(1,'1'), (2,'2'), (3,'3'), (4,'5')] in
 
 utest
-  match mapChooseWithExn m with (k, v) then
-    and (mapMem k m) (eqChar (mapFindWithExn k m) v)
+  match mapChooseExn m with (k, v) then
+    and (mapMem k m) (eqChar (mapFindExn k m) v)
   else never
 with true in
 
 utest
   match mapChooseOrElse (lam. error "impossible") m with (k, v) then
-    and (mapMem k m) (eqChar (mapFindWithExn k m) v)
+    and (mapMem k m) (eqChar (mapFindExn k m) v)
   else never
 with true in
 
@@ -91,10 +91,10 @@ let m = mapInsert (1, 2) 2 m in
 let m = mapInsert (2, 42) 3 m in
 let m = mapInsert (3, 42) 4 m in
 
-utest mapFindWithExn (1, 1) m with 2 in
-utest mapFindWithExn (1, 2) m with 2 in
-utest mapFindWithExn (2, 42) m with 3 in
-utest mapFindWithExn (3, 42) m with 4 in
+utest mapFindExn (1, 1) m with 2 in
+utest mapFindExn (1, 2) m with 2 in
+utest mapFindExn (2, 42) m with 3 in
+utest mapFindExn (3, 42) m with 4 in
 
 -- NOTE(dlunde,2021-03-04): mapEq and mapCmp are a bit hazardous, since the compare
 -- function for keys bundled with the first map is always used when doing the

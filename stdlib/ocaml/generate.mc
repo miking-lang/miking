@@ -1626,7 +1626,7 @@ let mapInsertFindTest = bindall_
   [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
-  , mapFindWithExn_ (int_ 42) (var_ "m")
+  , mapFindExn_ (int_ 42) (var_ "m")
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapInsertFindTest)
 with int_ 1 using eqExpr in
@@ -1733,7 +1733,7 @@ let mapMapTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
-  , mapFindWithExn_ (int_ 3) (var_ "m")
+  , mapFindExn_ (int_ 3) (var_ "m")
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapMapTest)
 with int_ 100 using eqExpr in
@@ -1745,7 +1745,7 @@ let mapMapWithKeyTest = bindall_
   , ulet_ "m"
     (mapMapWithKey_ (ulam_ "k" (ulam_ "v"
       (addi_ (var_ "k") (var_ "v")))) (var_ "m"))
-  , mapFindWithExn_ (int_ 3) (var_ "m")
+  , mapFindExn_ (int_ 3) (var_ "m")
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapMapWithKeyTest)
 with int_ 59 using eqExpr in

@@ -65,7 +65,7 @@ let mapAll : (v -> Bool) -> Map k v -> Bool = lam f. lam m.
 -- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
 -- empty.
 let mapChoose : Map k v -> Option (k, v) = lam m.
-  if mapIsEmpty m then None () else Some (mapChooseWithExn m)
+  if mapIsEmpty m then None () else Some (mapChooseExn m)
 
 mexpr
 

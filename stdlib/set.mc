@@ -48,9 +48,9 @@ let setChoose : Set a -> Option a =
 
 -- `setChooseExn s` chooses one element from the set `s`, giving `error` if `s`
 -- is empty.
-let setChooseWithExn : Set a -> a =
+let setChooseExn : Set a -> a =
 lam s.
-  match mapChooseWithExn s with (k, _) then k else never
+  match mapChooseExn s with (k, _) then k else never
 
 mexpr
 
@@ -63,7 +63,7 @@ utest setIsEmpty s with true in
 let s1 = setInsert 1 s in
 utest setSize s1 with 1 in
 utest setMem 1 s1 with true in
-utest setChooseWithExn s1 with 1 in
+utest setChooseExn s1 with 1 in
 utest setChoose s1 with Some 1 in
 utest setIsEmpty s1 with false in
 

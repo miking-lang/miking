@@ -47,7 +47,7 @@ lam e. lam x. lam xp. concat x (map (_termAddEpsilon e) xp)
 let dualnumEpsilon : DualNum -> Eps =
 lam n.
   match find _termHasAnyEpsilon n with Some t then
-    setChooseWithExn (_termEpsilons t)
+    setChooseExn (_termEpsilons t)
   else error "Operand not a dual number"
 
 -- x in x+ex'
