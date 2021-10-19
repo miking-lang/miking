@@ -18,7 +18,7 @@ let _genCWrapperNames = lam.
     "CAMLreturn", "futhark_context_config", "futhark_context_config_new",
     "futhark_context", "futhark_context_new", "futhark_context_config_free",
     "futhark_context_free", "futhark_context_sync",
-    "futhark_context_get_error"]
+    "futhark_context_get_error", "NULL"]
   in
   mapFromSeq
     cmpString
@@ -89,14 +89,15 @@ type CWrapperEnv = {
   functionIdent : Name,
 
   -- The Futhark context config and context variable identifiers.
+  initContextIdent : Name,
   futharkContextConfigIdent : Name,
   futharkContextIdent : Name
 }
 
 let emptyWrapperEnv = {
   arguments = [], return = [], keywordIdentMap = mapEmpty cmpString,
-  functionIdent = nameNoSym "", futharkContextConfigIdent = nameNoSym "",
-  futharkContextIdent = nameNoSym ""
+  functionIdent = nameNoSym "", initContextIdent = nameNoSym "",
+  futharkContextConfigIdent = nameNoSym "", futharkContextIdent = nameNoSym ""
 }
 
 let getMExprSeqFutharkTypeString : Type -> String = use MExprAst in
@@ -418,29 +419,13 @@ lang CToFutharkWrapper = CWrapperBase
   sem generateCToFutharkWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    let ctxConfigIdent = nameSym "cfg" in
-    let ctxIdent = nameSym "ctx" in
-    let env = {{env with futharkContextConfigIdent = ctxConfigIdent}
-                    with futharkContextIdent = ctxIdent} in
-    let ctxConfigStructId = _getIdentExn "futhark_context_config" in
-    let ctxStructId = _getIdentExn "futhark_context" in
-    let configInitStmts = [
-      CSDef {
-        ty = CTyPtr {ty = CTyStruct {id = Some ctxConfigStructId,
-                                     mem = None ()}},
-        id = Some ctxConfigIdent,
-        init = Some (CIExpr {expr = CEApp {
-          fun = _getIdentExn "futhark_context_config_new", args = []}})},
-      CSDef {
-        ty = CTyPtr {ty = CTyStruct {id = Some ctxStructId, mem = None ()}},
-        id = Some ctxIdent,
-        init = Some (CIExpr {expr = CEApp {
-          fun = _getIdentExn "futhark_context_new",
-          args = [CEVar {id = ctxConfigIdent}]}})}
-    ] in
+    let ctxIdent = env.futharkContextIdent in
+    let initContextCall =
+      CSExpr {expr = CEApp { fun = env.initContextIdent, args = []}}
+    in
     match mapAccumL (_generateCToFutharkWrapperArg ctxIdent) [] env.arguments
     with (futharkCopyStmts, args) then
-      ({env with arguments = args}, join [configInitStmts, futharkCopyStmts])
+      ({env with arguments = args}, cons initContextCall futharkCopyStmts)
     else never
 end
 
@@ -647,18 +632,10 @@ lang FutharkToCWrapper = CWrapperBase
   sem generateFutharkToCWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    let freeContextStmts = [
-      CSExpr {expr = CEApp {
-        fun = _getIdentExn "futhark_context_free",
-        args = [CEVar {id = env.futharkContextIdent}]}},
-      CSExpr {expr = CEApp {
-        fun = _getIdentExn "futhark_context_config_free",
-        args = [CEVar {id = env.futharkContextConfigIdent}]}}
-    ] in
     let futCtx = env.futharkContextIdent in
     match _generateFutharkToCWrapperInner futCtx env.return env.return.ty
     with (return, copyStmts) then
-      ({env with return = return}, concat copyStmts freeContextStmts)
+      ({env with return = return}, copyStmts)
     else never
 end
 
@@ -819,6 +796,60 @@ lang FutharkCWrapper =
   OCamlToCWrapper + CToFutharkWrapper + FutharkCallWrapper +
   FutharkToCWrapper + CToOCamlWrapper + CProgAst
 
+  -- Generates global Futhark context config and context variables along with a
+  -- function to initialize them if they have not already been initialized.
+  -- This allows us to reuse the same context instead of constructing a new one
+  -- for each call, which significantly reduces the overhead of accelerate
+  -- calls.
+  --
+  -- NOTE(larshum, 2021-10-19): As we do not know when the last accelerate call
+  -- happens, the context config and context are not freed. This should not be
+  -- a problem because all values should be deallocated after each Futhark
+  -- call.
+  sem futharkContextInit =
+  | env /- : CWrapperEnv -> [CTop] -/ ->
+    let env : CWrapperEnv = env in
+    let ctxConfigStructId = _getIdentExn "futhark_context_config" in
+    let ctxStructId = _getIdentExn "futhark_context" in
+    let ctxConfigIdent = env.futharkContextConfigIdent in
+    let ctxIdent = env.futharkContextIdent in
+    let initBody = [
+      CSIf {
+        cond = CEBinOp {
+          op = COEq (),
+          lhs = CEVar {id = ctxConfigIdent},
+          rhs = CEVar {id = _getIdentExn "NULL"}
+        },
+        thn = [
+          CSExpr { expr = CEBinOp {
+            op = COAssign (),
+            lhs = CEVar {id = ctxConfigIdent},
+            rhs = CEApp {
+              fun = _getIdentExn "futhark_context_config_new", args = []}}},
+          CSExpr { expr = CEBinOp {
+            op = COAssign (),
+            lhs = CEVar {id = ctxIdent},
+            rhs = CEApp {
+              fun = _getIdentExn "futhark_context_new",
+              args = [CEVar {id = ctxConfigIdent}]}}}],
+        els = []
+      }
+    ] in
+    [ CTDef {
+        ty = CTyPtr {ty = CTyStruct {id = Some ctxConfigStructId,
+                                     mem = None ()}},
+        id = Some ctxConfigIdent,
+        init = None ()},
+      CTDef {
+        ty = CTyPtr {ty = CTyStruct {id = Some ctxStructId, mem = None ()}},
+        id = Some ctxIdent,
+        init = None ()},
+      CTFun {
+        ret = CTyVoid (),
+        id = env.initContextIdent,
+        params = [],
+        body = initBody} ]
+
   sem generateCAMLparamDeclarations =
   | args /- : [ArgData] -/ ->
     let genParamStmt : [ArgData] -> String -> CExpr = lam args. lam funStr.
@@ -871,7 +902,7 @@ lang FutharkCWrapper =
         args = functionArgs
       }}]}
 
-  sem generateWrapperFunctionCode =
+  sem generateWrapperFunctionCode (env : CWrapperEnv) =
   | data /- : AccelerateData -/ ->
     let data : AccelerateData = data in
     let toArgData = lam arg : (Name, Type).
@@ -881,9 +912,9 @@ lang FutharkCWrapper =
     let bytecodeWrapper = generateBytecodeWrapper data in
     let returnIdent = nameSym "out" in
     let returnArg = (returnIdent, data.returnType) in
-    let env = {{{emptyWrapperEnv with arguments = map toArgData data.params}
-                                 with return = toArgData returnArg}
-                                 with functionIdent = data.identifier}
+    let env = {{{env with arguments = map toArgData data.params}
+                     with return = toArgData returnArg}
+                     with functionIdent = data.identifier}
     in
     let camlParamStmts = generateCAMLparamDeclarations env.arguments in
     let camlLocalStmt = CSExpr {expr = CEApp {
@@ -918,8 +949,12 @@ lang FutharkCWrapper =
 
   sem generateWrapperCode =
   | accelerated /- Map Name AccelerateData -/ ->
+    let env = {{{emptyWrapperEnv with futharkContextConfigIdent = nameSym "config"}
+                                 with futharkContextIdent = nameSym "ctx"}
+                                 with initContextIdent = nameSym "initContext"} in
+    let contextInit = futharkContextInit env in
     let entryPointWrappers =
-      map generateWrapperFunctionCode (mapValues accelerated)
+      map (generateWrapperFunctionCode env) (mapValues accelerated)
     in
     -- NOTE(larshum, 2021-08-27): According to
     -- https://ocaml.org/manual/intfc.html CAML_NAME_SPACE should be defined
@@ -935,7 +970,7 @@ lang FutharkCWrapper =
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\""
       ],
-      tops = join entryPointWrappers
+      tops = join [contextInit, join entryPointWrappers]
     }
 end
 
