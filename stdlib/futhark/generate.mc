@@ -417,7 +417,8 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       -- Substitute 'acc' with 'ne' in the function body, and use the 'x' bound
       -- in the lambda.
       let subMap = mapFromSeq nameCmp [
-        (accLam, lam info. TmVar {ident = acc, ty = t.ty, info = info})] in
+        (accLam, lam info. TmVar {ident = acc, ty = t.ty, info = info,
+                                  frozen = false})] in
       let body = substituteVariables body subMap in
       let futBody = generateExpr env body in
       constructForEach futBody x
