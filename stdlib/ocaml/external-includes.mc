@@ -2,6 +2,7 @@ include "ocaml/ast.mc"
 include "ext/ext-test.ext-ocaml.mc"           -- For testing
 include "ext/math-ext.ext-ocaml.mc"
 include "ext/dist-ext.ext-ocaml.mc"
+include "ext/z3-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
@@ -26,5 +27,6 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       atomicExtMap,
       threadExtMap,
       distExtMap,
-      ipoptExtMap
+      ipoptExtMap,
+      z3ExtMap
     ]
