@@ -50,7 +50,7 @@ let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam.
   _commandList ["rm", "-rf", td]
 
-let sysTimeoutCommand : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
+let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
   lam timeoutSec. lam cmd. lam stdin. lam cwd.
     let tempDir = sysTempDirMake () in
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
@@ -81,16 +81,15 @@ let sysTimeoutCommand : Option Float -> [String] -> String -> String -> (Float, 
       (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
     else never
 
-utest sysTimeoutCommand (None ()) ["echo -n \"\""] "" "."; () with ()
-utest sysTimeoutCommand (Some 1.) ["echo -n \"\""] "" "."; () with ()
+utest sysRunCommandWithTimingTimeout (None ()) ["echo -n \"\""] "" "."; () with ()
 
-let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
+let sysRunCommandWithTiming : [String] -> String -> String -> (Float, ExecResult) =
   lam cmd. lam stdin. lam cwd.
-    sysTimeoutCommand (None ()) cmd stdin cwd
+    sysRunCommandWithTimingTimeout (None ()) cmd stdin cwd
 
 let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
-    match sysTimeCommand cmd stdin cwd with (_, res) then res else never
+    match sysRunCommandWithTiming cmd stdin cwd with (_, res) then res else never
 
 let sysCommandExists : String -> Bool = lam cmd.
   let res = sysRunCommand ["which", cmd] "" "." in
