@@ -71,7 +71,7 @@ lang SeqWellFormed = WellFormed + SeqAst
   sem wellFormedExpr (accelerateFlag : Int) (typeEnv : Map Name Type) =
   | TmSeq t ->
     let elemTy =
-      match optionFoldM  (compatibleType typeEnv) tyunknown_ t.tms with Some ty then
+      match optionFoldlM (compatibleType typeEnv) tyunknown_ t.tms with Some ty then
         ty
       else TyUnknown {info = infoTy t.ty}
     in

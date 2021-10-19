@@ -166,6 +166,8 @@ let rec ustring_of_ty = function
       us "Char"
   | TyArrow (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
+  | TyAll (_, var, ty) ->
+      us "all " ^. var ^. us ". " ^. ustring_of_ty ty
   | TySeq (_, ty1) -> (
     match ty1 with
     | TyChar _ ->
@@ -186,8 +188,10 @@ let rec ustring_of_ty = function
       us "<>"
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
-  | TyVar (_, x, s) ->
+  | TyCon (_, x, s) ->
       ustring_of_type x s
+  | TyVar (_, x) ->
+      x
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -430,6 +434,8 @@ let rec print_const fmt = function
       fprintf fmt "exit"
   | CflushStdout ->
       fprintf fmt "flushStdout"
+  | CflushStderr ->
+      fprintf fmt "flushStderr"
   (* MCore intrinsics: Symbols *)
   | CSymb id ->
       fprintf fmt "symb(%s)" (Symb.Helpers.string_of_sym id)
@@ -595,8 +601,9 @@ and print_tm' fmt t =
     if tystr = "Unknown" then "" else ":" ^ tystr
   in
   match t with
-  | TmVar (_, x, s) ->
-      let print = string_of_ustring (ustring_of_var x s) in
+  | TmVar (_, x, s, frozen) ->
+      let var_str = string_of_ustring (ustring_of_var x s) in
+      let print = if frozen then "`" ^ var_str else var_str in
       (*  fprintf fmt "%s#%d" print s *)
       fprintf fmt "%s" print
   | TmLam (_, x, s, ty, t1) ->

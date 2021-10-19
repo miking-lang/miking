@@ -170,7 +170,7 @@ let hashmapAny : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
 -- 'hashmapAll traits p hm' returns true iff all entries in the hashmap matches the predicate
 let hashmapAll : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
   lam traits. lam p. lam hm : HashMap k v.
-    all (all (lam r : HashMapEntry k v. p r.key r.value)) hm.buckets
+    forAll (forAll (lam r : HashMapEntry k v. p r.key r.value)) hm.buckets
 
 -- 'hashmapMap' maps the provided functions on all values in the hashmap
 let hashmapMap : HashMapTraits k -> (v1 -> v2) -> HashMap k v1 -> HashMap k v2 =
@@ -226,7 +226,7 @@ let empty = hashmapEmpty in
 let traits = hashmapStrTraits in
 let mem = hashmapMem traits in
 let any = hashmapAny traits in
-let all = hashmapAll traits in
+let forAll = hashmapAll traits in
 let map = hashmapMap traits in
 let filter = hashmapFilter traits in
 let filterKeys = hashmapFilterKeys traits in
@@ -262,9 +262,9 @@ utest any (lam. lam b. eqString "BBB" (str2upper b)) m with true in
 utest any (lam a. lam. eqString "FOO" (str2upper a)) m with true in
 utest any (lam a. lam b. eqString a b) m with false in
 utest any (lam a. lam. eqString "bar" a) m with true in
-utest all (lam a. lam. eqString "bar" a) m with false in
-utest all (lam a. lam. eqi (length a) 3) m with true in
-utest all (lam. lam b. eqi (length b) 3) m with true in
+utest forAll (lam a. lam. eqString "bar" a) m with false in
+utest forAll (lam a. lam. eqi (length a) 3) m with true in
+utest forAll (lam. lam b. eqi (length b) 3) m with true in
 utest lookup "bar" m with Some ("bbb") using optionEq eqString in
 utest lookupOrElse (lam. "BABAR") "bar" m with "bbb" in
 utest lookupOr "bananas" "bar42" m with "bananas" in

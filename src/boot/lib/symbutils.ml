@@ -14,7 +14,7 @@ module SymbMap = Map.Make (SymbOrd)
 (* From a term, create the map from symbols to text strings *)
 let symbmap t =
   let rec work acc = function
-    | TmVar (_, x, s) ->
+    | TmVar (_, x, s, _) ->
         SymbMap.add s x acc
     | TmLam (_, x, s, _, t)
     | TmType (_, x, s, _, t)

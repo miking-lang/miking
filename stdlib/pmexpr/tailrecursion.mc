@@ -139,7 +139,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
     let oldIdent = binding.ident in
     let newIdent = nameSetNewSym binding.ident in
     let accIdent = nameSym "acc" in
-    let accType = ty env.ne in
+    let accType = tyTm env.ne in
 
     -- Handles the recursive case, where the recursive call and the left- and
     -- right-hand side arguments of the updated accumulator value are given.
@@ -148,14 +148,14 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
     let makeRecursiveCallWithAccumulator : Info -> Expr -> Expr -> Expr -> Expr =
       lam info. lam recursiveApp. lam larg. lam rarg.
       let accTy = tyWithInfo info accType in
-      let innerAppTy = TyArrow {from = ty rarg, to = accTy,
+      let innerAppTy = TyArrow {from = tyTm rarg, to = accTy,
                                 info = info} in
       let bindingBodyTy = tyWithInfo info binding.tyBody in
       let functionWithAccTy = TyArrow {from = accTy, to = bindingBodyTy,
                                        info = info} in
       let t = TmApp {
         lhs = TmVar {ident = newIdent, ty = functionWithAccTy,
-                     info = info},
+                     info = info, frozen = false},
         rhs = TmApp {lhs = TmApp {lhs = env.binop, rhs = larg, ty = innerAppTy,
                                   info = info},
                      rhs = rarg, ty = accTy, info = info},
@@ -175,8 +175,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
       let info = infoTm acc in
       let args = if env.leftArgRecursion then (expr, acc) else (acc, expr) in
       match args with (larg, rarg) then
-        let resultTy = tyWithInfo info (ty acc) in
-        let innerAppTy = TyArrow {from = ty rarg, to = resultTy,
+        let resultTy = tyWithInfo info (tyTm acc) in
+        let innerAppTy = TyArrow {from = tyTm rarg, to = resultTy,
                                   info = info} in
         TmApp {lhs = TmApp {lhs = env.binop, rhs = larg, ty = innerAppTy,
                             info = info},
@@ -204,8 +204,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
                     with els = rewriteTailRecursive t.els}
       else
         let info = infoTm expr in
-        let acc = TmVar {ident = accIdent, ty = tyWithInfo info (ty expr),
-                         info = info} in
+        let acc = TmVar {ident = accIdent, ty = tyWithInfo info (tyTm expr),
+                         info = info, frozen = false} in
         match expr with TmApp {lhs = TmApp {lhs = bop, rhs = arg1}, rhs = arg2} then
           if eqExpr env.binop bop then
             if and env.leftArgRecursion (isRecursiveCall arg1 binding.ident) then
@@ -231,7 +231,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
         info = binding.info
       } in
       Some ({{{binding with ident = newIdent}
-                       with tyBody = ty bodyWithAcc}
+                       with tyBody = tyTm bodyWithAcc}
                        with body = bodyWithAcc})
     else never
 
@@ -248,7 +248,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
             lhs = TmVar {
               ident = binding.ident,
               ty = tyWithInfo info binding.tyBody,
-              info = binding.info
+              info = binding.info,
+              frozen = false
             },
             rhs = env.ne,
             ty = tyWithInfo info t.tyBody,

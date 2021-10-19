@@ -119,7 +119,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
   | t ->
     let aliasIdent =
-      match t with TyVar {ident = ident} then
+      match t with TyCon {ident = ident} then
         Some ident
       else match mapLookup t env.typeAliases with Some ident then
         Some ident
@@ -222,8 +222,8 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
-    FELet {ident = n, tyBody = ty t.target, body = generateExpr env t.target,
-           inexpr = generateExpr env t.thn, ty = generateType env (ty t.thn),
+    FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
+           inexpr = generateExpr env t.thn, ty = generateType env (tyTm t.thn),
            info = infoTm t.target}
   | TmMatch ({pat = PatRecord {bindings = bindings},
               thn = TmVar {ident = exprName}, els = TmNever _} & t) ->
@@ -238,7 +238,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                                 middle = PName tail, postfix = []},
               els = TmNever _} & t) ->
     let target = generateExpr env t.target in
-    let targetTy = generateType env (ty t.target) in
+    let targetTy = generateType env (tyTm t.target) in
     match targetTy with FTyArray {elem = elemTy} then
       FELet {
         ident = head,
@@ -259,9 +259,9 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
               info = t.info},
             rhs = target, ty = targetTy, info = t.info},
           inexpr = generateExpr env t.thn,
-          ty = generateType env (ty t.thn),
+          ty = generateType env (tyTm t.thn),
           info = t.info},
-        ty = generateType env (ty t.thn),
+        ty = generateType env (tyTm t.thn),
         info = t.info}
     else
       let tyStr = use MExprPrettyPrint in type2str targetTy in
@@ -270,7 +270,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
-      cases = [(generatePattern env (ty t.target) pat, generateExpr env t.thn)],
+      cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
       ty = generateType env t.ty,
       info = t.info}
   | (TmMatch _) & t -> defaultGenerateMatch env t
@@ -335,7 +335,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = TmConst {val = CInt {val = 0}}},
             rhs = arg3} & t) ->
-    let arrayType = generateType env (ty arg1) in
+    let arrayType = generateType env (tyTm arg1) in
     let takeConst = FEConst {
       val = FCTake (),
       ty = FTyArrow {
@@ -395,9 +395,9 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       rhs = s} & t) ->
     let acc = nameSym "acc" in
     let x = nameSym "x" in
-    let funcTy = generateType env (ty f) in
+    let funcTy = generateType env (tyTm f) in
     let accTy = generateType env t.ty in
-    let seqTy = generateType env (ty s) in
+    let seqTy = generateType env (tyTm s) in
     let elemTy =
       match funcTy with FTyArrow {from = FTyArrow {to = elemTy}} then
         elemTy
@@ -634,21 +634,21 @@ let s = nameSym "s" in
 let t = bindall_ [
   ntype_ intseq (tyseq_ tyint_),
   ntype_ floatseq (tyseq_ tyfloat_),
-  nlet_ a (ntyvar_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
-  nlet_ b (ntyvar_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
+  nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
+  nlet_ b (ntycon_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
   nlet_ c (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
            (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
                     [("a", int_ 3), ("b", float_ 2.0)]),
   nlet_ f (tyarrows_ [tyint_, tyint_, tyint_])
            (nlam_ a2 tyint_ (nlam_ b2 tyint_ (addi_ (nvar_ a2) (nvar_ b2)))),
-  nlet_ g (tyarrows_ [ntyvar_ floatseq, tyfloat_, tyfloat_])
-            (nlam_ r (ntyvar_ floatseq)
+  nlet_ g (tyarrows_ [ntycon_ floatseq, tyfloat_, tyfloat_])
+            (nlam_ r (ntycon_ floatseq)
               (nlam_ f2 tyfloat_ (addf_ (nvar_ f2) (get_ (nvar_ r) (int_ 0))))),
   nlet_ min (tyarrows_ [tyint_, tyint_, tyint_])
              (nlam_ a3 tyint_ (nlam_ b3 tyint_ (
                if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
-  nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntyvar_ intseq, ntyvar_ intseq])
-             (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntyvar_ intseq)
+  nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
+             (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
                (parallelMap_ (nvar_ f3) (nvar_ s)))),
   unit_
 ] in

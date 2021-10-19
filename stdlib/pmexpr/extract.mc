@@ -6,6 +6,7 @@ include "map.mc"
 include "name.mc"
 include "set.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/call-graph.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/lamlift.mc"
@@ -36,7 +37,7 @@ let _randAlphanum : Unit -> Char = lam.
   else if lti r 36 then int2char (addi r 55)
   else int2char (addi r 61)
 
-lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
+lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
@@ -99,7 +100,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
         body = TmLam {ident = paramId, tyIdent = paramTy,
                       body = t.e, ty = retType, info = info},
         inexpr = TmApp {
-          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info},
+          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
           rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
           ty = retType,
           info = info},
@@ -121,7 +122,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
   | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
 
   sem collectIdentifiersType (used : Set Name) =
-  | TyVar t -> setInsert t.ident used
+  | TyCon t -> setInsert t.ident used
   | t -> sfold_Type_Type collectIdentifiersType used t
 
   -- Construct an extracted AST from the given AST, containing all terms that
@@ -159,11 +160,9 @@ lang PMExprExtractAccelerate = PMExprAst + MExprLambdaLift
       collectIdentifiersExpr used bind.body
     in
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
-      -- Construct a call graph, reusing functions from lambda lifting. By
-      -- using DFS on this graph, we find the bindings that are used.
-      let g : Digraph Name Int = digraphEmpty nameCmp eqi in
-      let g = addGraphVertices g (TmRecLets t) in
-      let g = addGraphCallEdges g t.bindings in
+      -- NOTE(larshum, 2021-10-03): We find the bindings that are used by
+      -- applying DFS on the call graph.
+      let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
       let visited = setEmpty nameCmp in
       let usedIdents =
         foldl

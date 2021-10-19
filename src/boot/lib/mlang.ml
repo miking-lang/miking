@@ -289,7 +289,7 @@ let flatten prg : program = snd (flatten_with_env Record.empty prg)
  ***************)
 
 module AstHelpers = struct
-  let var x = TmVar (NoInfo, x, Symb.Helpers.nosym)
+  let var x = TmVar (NoInfo, x, Symb.Helpers.nosym, false)
 
   let app l r = TmApp (NoInfo, l, r)
 
@@ -537,8 +537,8 @@ let rec desugar_tm nss env subs =
   let map_right f (a, b) = (a, f b) in
   function
   (* Referencing things *)
-  | TmVar (fi, name, i) ->
-      TmVar (fi, resolve_id env name, i)
+  | TmVar (fi, name, i, frozen) ->
+      TmVar (fi, resolve_id env name, i, frozen)
   (* Introducing things *)
   | TmLam (fi, name, s, ty, body) ->
       TmLam
@@ -709,7 +709,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow (NoInfo, ty, TyVar (NoInfo, ty_name, Symb.Helpers.nosym))
+          , TyArrow (NoInfo, ty, TyCon (NoInfo, ty_name, Symb.Helpers.nosym))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)

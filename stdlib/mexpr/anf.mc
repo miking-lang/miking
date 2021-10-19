@@ -26,15 +26,16 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let ident = nameSym "t" in
     let var = TmVar {
       ident = ident,
-      ty = ty n,
-      info = NoInfo {}
+      ty = tyTm n,
+      info = NoInfo {},
+      frozen = false
     } in
     let inexpr = k var in
     TmLet {ident = ident,
-           tyBody = ty n,
+           tyBody = tyTm n,
            body = n,
            inexpr = inexpr,
-           ty = ty inexpr,
+           ty = tyTm inexpr,
            info = NoInfo{}}
 
   sem normalizeName (k : Expr -> Expr) =

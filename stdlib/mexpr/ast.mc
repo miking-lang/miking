@@ -26,7 +26,7 @@ lang Ast
   sem infoTm =
   -- Intentionally left blank
 
-  sem ty =
+  sem tyTm =
   -- Intentionally left blank
 
   sem withType (ty : Type) =
@@ -100,12 +100,13 @@ lang VarAst = Ast
   syn Expr =
   | TmVar {ident : Name,
            ty: Type,
-           info: Info}
+           info: Info,
+           frozen: Bool}
 
   sem infoTm =
   | TmVar r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmVar t -> t.ty
 
   sem withInfo (info : Info) =
@@ -127,7 +128,7 @@ lang AppAst = Ast
   sem infoTm =
   | TmApp r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmApp t -> t.ty
 
   sem withInfo (info : Info) =
@@ -158,7 +159,7 @@ lang LamAst = Ast + VarAst + AppAst
   sem infoTm =
   | TmLam r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmLam t -> t.ty
 
   sem withInfo (info : Info) =
@@ -194,7 +195,7 @@ lang LetAst = Ast + VarAst
   sem infoTm =
   | TmLet r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmLet t -> t.ty
 
   sem withInfo (info : Info) =
@@ -236,7 +237,7 @@ lang RecLetsAst = Ast + VarAst
   sem infoTm =
   | TmRecLets r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmRecLets t -> t.ty
 
   sem withInfo (info : Info) =
@@ -271,7 +272,7 @@ lang ConstAst = Ast
   sem infoTm =
   | TmConst r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmConst t -> t.ty
 
   sem withInfo (info : Info) =
@@ -291,7 +292,7 @@ lang SeqAst = Ast
   sem infoTm =
   | TmSeq r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmSeq t -> t.ty
 
   sem withInfo (info : Info) =
@@ -324,7 +325,7 @@ lang RecordAst = Ast
   | TmRecord r -> r.info
   | TmRecordUpdate r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmRecord t -> t.ty
   | TmRecordUpdate t -> t.ty
 
@@ -361,7 +362,7 @@ lang TypeAst = Ast
   sem infoTm =
   | TmType r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmType t -> t.ty
 
   sem withInfo (info : Info) =
@@ -400,7 +401,7 @@ lang DataAst = Ast
   | TmConDef r -> r.info
   | TmConApp r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmConDef t -> t.ty
   | TmConApp t -> t.ty
 
@@ -445,7 +446,7 @@ lang MatchAst = Ast
   sem infoTm =
   | TmMatch r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmMatch t -> t.ty
 
   sem withInfo (info : Info) =
@@ -479,7 +480,7 @@ lang UtestAst = Ast
   sem infoTm =
   | TmUtest r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmUtest t -> t.ty
 
   sem withInfo (info : Info) =
@@ -517,7 +518,7 @@ lang NeverAst = Ast
   sem infoTm =
   | TmNever r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmNever t -> t.ty
 
   sem withInfo (info : Info) =
@@ -540,7 +541,7 @@ lang ExtAst = Ast + VarAst
   sem infoTm =
   | TmExt r -> r.info
 
-  sem ty =
+  sem tyTm =
   | TmExt t -> t.ty
 
   sem withInfo (info : Info) =
@@ -708,6 +709,7 @@ lang IOAst = ConstAst
   | CPrintError {}
   | CDPrint {}
   | CFlushStdout {}
+  | CFlushStderr {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
@@ -1189,16 +1191,94 @@ lang VariantTypeAst = Ast
   | TyVariant r -> r.info
 end
 
-lang VarTypeAst = Ast
+lang ConTypeAst = Ast
   syn Type =
-  | TyVar {info   : Info,
+  | TyCon {info   : Info,
            ident  : Name}
 
   sem tyWithInfo (info : Info) =
-  | TyVar t -> TyVar {t with info = info}
+  | TyCon t -> TyCon {t with info = info}
 
   sem infoTy =
-  | TyVar r -> r.info
+  | TyCon r -> r.info
+end
+
+type Level = Int
+type TVarRec = {ident : Name,
+                weak  : Bool,
+                level : Level}
+
+lang VarTypeAst = Ast
+  syn TVar =
+  | Unbound TVarRec
+  | Link Type
+
+  syn Type =
+  -- Rigid type variable
+  | TyVar  {info     : Info,
+            ident    : Name}
+  -- Flexible type variable
+  | TyFlex {info     : Info,
+            contents : Ref TVar}
+
+  -- Recursively follow links, producing something guaranteed not to be a link.
+  sem resolveLink =
+  | TyFlex t & ty ->
+    match deref t.contents with Link ty then
+      resolveLink ty
+    else
+      ty
+  | ty ->
+    ty
+
+  sem tyWithInfo (info : Info) =
+  | TyVar t -> TyVar {t with info = info}
+  | TyFlex t ->
+    match deref t.contents with Link ty then
+      tyWithInfo ty
+    else
+      TyFlex {t with info = info}
+
+  sem infoTy =
+  | TyVar t -> t.info
+  | TyFlex t ->
+    match deref t.contents with Link ty then
+      infoTy ty
+    else
+      t.info
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyFlex t & ty1 ->
+    match deref t.contents with Link ty2 then
+      smapAccumL_Type_Type f acc ty2
+    else
+      (acc, ty1)
+end
+
+lang AllTypeAst = Ast
+  syn Type =
+  | TyAll {info  : Info,
+           ident : Name,
+           ty    : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyAll t -> TyAll {t with info = info}
+
+  sem infoTy =
+  | TyAll t -> t.info
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyAll t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, TyAll {t with ty = ty})
+    else never
+
+  sem stripTyAll =
+  | ty -> stripTyAllBase [] ty
+
+  sem stripTyAllBase (vars : [Name]) =
+  | TyAll t -> stripTyAllBase (snoc vars t.ident) t.ty
+  | ty -> (vars, ty)
 end
 
 lang AppTypeAst = Ast
@@ -1246,5 +1326,5 @@ lang MExprAst =
 
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
-  AppTypeAst + TensorTypeAst
+  FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
+  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst

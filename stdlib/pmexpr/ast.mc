@@ -41,7 +41,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
                                         as = get lst 2, ty = TyUnknown {info = info},
                                         info = info})
 
-  sem ty =
+  sem tyTm =
   | TmAccelerate t -> t.ty
   | TmParallelMap t -> t.ty
   | TmParallelMap2 t -> t.ty
@@ -101,15 +101,15 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
     let e = typeAnnotExpr env t.e in
     let ty =
       optionGetOrElse
-        (lam. ty e)
-        (compatibleType env.tyEnv (ty e) t.ty)
+        (lam. tyTm e)
+        (compatibleType env.tyEnv (tyTm e) t.ty)
     in
     TmAccelerate {{t with e = e}
                      with ty = ty}
   | TmParallelMap t ->
     let f = typeAnnotExpr env t.f in
     let elemTy =
-      match ty f with TyArrow {to = to} then to
+      match tyTm f with TyArrow {to = to} then to
       else tyunknown_
     in
     TmParallelMap {{{t with f = f}
@@ -118,7 +118,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelMap2 t ->
     let f = typeAnnotExpr env t.f in
     let elemTy =
-      match ty f with TyArrow {to = TyArrow {to = to}} then to
+      match tyTm f with TyArrow {to = TyArrow {to = to}} then to
       else tyunknown_
     in
     TmParallelMap2 {{{{t with f = f}
@@ -128,7 +128,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelFlatMap t ->
     let f = typeAnnotExpr env t.f in
     let targetSeqTy =
-      match ty f with TyArrow {to = (TySeq _) & to} then to
+      match tyTm f with TyArrow {to = (TySeq _) & to} then to
       else tyseq_ tyunknown_
     in
     TmParallelFlatMap {{{t with f = f}
@@ -139,7 +139,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
     TmParallelReduce {{{{t with f = typeAnnotExpr env t.f}
                            with ne = ne}
                            with as = typeAnnotExpr env t.as}
-                           with ty = ty ne}
+                           with ty = tyTm ne}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->

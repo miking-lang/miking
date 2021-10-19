@@ -72,6 +72,8 @@
 %token <unit Ast.tokendata> EXTERNAL
 %token <unit Ast.tokendata> SWITCH
 %token <unit Ast.tokendata> CASE
+%token <unit Ast.tokendata> ALL
+
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -103,6 +105,7 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> BACKTICK      /* "`"   */
 
 %start main
 %start main_mexpr
@@ -150,7 +153,7 @@ tops:
     { [] }
 
 type_params:
-  | type_ident type_params
+  | var_ident type_params
     { $1 :: $2 }
   |
     { [] }
@@ -368,7 +371,7 @@ left:
 swcases:
   | CASE pat THEN mexpr swcases
       { let fi = mkinfo $1.i (tm_info $5) in
-        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym) in
+        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym, false) in
         TmMatch(fi,id,$2,$4,$5) }
   | END
       { TmNever($1.i) }
@@ -378,14 +381,15 @@ atom:
       { let fi = mkinfo (tm_info $1) (fst $3) in
         let id = unique_ident in
         TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,Symb.Helpers.nosym)))),
-                                TmVar(fi,id,Symb.Helpers.nosym), TmNever(fi)) }
+                                TmVar(fi,id,Symb.Helpers.nosym,false), TmNever(fi)) }
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | var_ident                { TmVar($1.i,$1.v,Symb.Helpers.nosym) }
+  | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false) }
+  | BACKTICK var_ident   { TmVar($2.i,$2.v,Symb.Helpers.nosym, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
@@ -522,6 +526,9 @@ ty:
   | ty_left ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
+  | ALL var_ident DOT ty
+      { let fi = mkinfo $1.i (ty_info $4) in
+        TyAll(fi, $2.v, $4) }
 
 ty_left:
   | ty_atom
@@ -563,7 +570,9 @@ ty_atom:
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
-    { TyVar($1.i,$1.v,Symb.Helpers.nosym) }
+    { TyCon($1.i,$1.v,Symb.Helpers.nosym) }
+  | var_ident
+    { TyVar($1.i,$1.v)}
 
 ty_list:
   | ty COMMA ty_list
@@ -593,7 +602,7 @@ con_ident:
   | CON_IDENT {$1}
 
 type_ident:
-  | ident {$1}
+  | UC_IDENT {$1}
   | TYPE_IDENT {$1}
 
 label_ident:

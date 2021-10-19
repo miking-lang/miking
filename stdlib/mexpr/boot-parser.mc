@@ -45,7 +45,8 @@ lang BootParser = MExprAst + ConstTransformer
   | 100 /-TmVar-/ ->
     TmVar {ident = gname t 0,
            ty = TyUnknown { info = ginfo t 0 },
-           info = ginfo t 0}
+           info = ginfo t 0,
+           frozen = neqi (gint t 0) 0}
   | 101 /-TmApp-/ ->
     TmApp {lhs = gterm t 0,
            rhs = gterm t 1,
@@ -174,16 +175,24 @@ lang BootParser = MExprAst + ConstTransformer
       TyVariant {info = ginfo t 0,
                  constrs = mapEmpty nameCmp}
     else error "Parsing of non-empty variant types not yet supported"
-  | 209 /-TyVar-/ ->
+  | 209 /-TyCon-/ ->
+    TyCon {info = ginfo t 0,
+           ident = gname t 0}
+  | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
            ident = gname t 0}
-  | 210 /-TyApp-/ ->
+  | 211 /-TyApp-/ ->
     TyApp {info = ginfo t 0,
            lhs = gtype t 0,
            rhs = gtype t 1}
-  | 211 /-TyTensor-/ ->
+  | 212 /-TyTensor-/ ->
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
+  | 213 /-TyAll-/ ->
+    TyAll {info = ginfo t 0,
+           ident = gname t 0,
+           ty = gtype t 0}
+
 
   -- Get constant help function
   sem gconst(t:Unknown) =
@@ -628,6 +637,24 @@ let s = "let y:_asd = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 10 in
+
+-- TyAll
+let s = "let y:all x.x = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 13 in
+
+-- Nested TyAll
+let s = "let y:all x.(all y.all z.z)->(all w.w) = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 37 in
+
+-- TyCon
+let s = "let y:Foo = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprString [] s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 9 in
 
 -- TyApp
 let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in

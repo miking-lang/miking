@@ -15,7 +15,7 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal
 
   sem wrapInConvertData =
   | t ->
-    let ty = ty t in
+    let ty = tyTm t in
     let ocamlTy = _mexprToOCamlType ty in
     match convertData (infoTm t) emptyGenerateEnv t ty ocamlTy with (_, e) then
       e
@@ -31,7 +31,7 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal
   sem convertAccelerateParameters =
   | ast ->
     let ast = convertAccelerateParametersH ast in
-    let ty = ty ast in
+    let ty = tyTm ast in
     let ocamlTy = _mexprToOCamlType ty in
     match convertData (infoTm ast) emptyGenerateEnv ast ocamlTy ty
     with (_, ast) then

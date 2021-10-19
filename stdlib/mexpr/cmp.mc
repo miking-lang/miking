@@ -392,9 +392,32 @@ lang VariantTypeCmp = Cmp + VariantTypeAst
   | (TyVariant t1, TyVariant t2) -> mapCmp cmpType t1.constrs t2.constrs
 end
 
+lang ConTypeCmp = Cmp + ConTypeAst
+  sem cmpTypeH =
+  | (TyCon t1, TyCon t2) -> nameCmp t1.ident t2.ident
+end
+
 lang VarTypeCmp = Cmp + VarTypeAst
   sem cmpTypeH =
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
+  | (TyFlex _ & ty1, ty2)
+  | (ty1, TyFlex _ & ty2) ->
+    match (resolveLink ty1, resolveLink ty2) with (ty1, ty2) then
+      match (ty1, ty2) with (TyFlex t1, TyFlex t2) then
+        match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) then
+          nameCmp n1.ident n2.ident
+        else never
+      else match (ty1, ty2) with (! TyFlex _, ! TyFlex _) then cmpType ty1 ty2
+      else subi (constructorTag ty1) (constructorTag ty2)
+    else never
+end
+
+lang AllTypeCmp = Cmp + AllTypeAst
+  sem cmpTypeH =
+  | (TyAll t1, TyAll t2) ->
+    let identDiff = nameCmp t1.ident t2.ident in
+    if eqi identDiff 0 then cmpType t1.ty t2.ty
+    else identDiff
 end
 
 lang AppTypeCmp = Cmp + AppTypeAst
@@ -425,7 +448,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  VarTypeCmp + AppTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
 
 -----------
 -- TESTS --
@@ -648,6 +671,7 @@ utest cmpConst (CPrint {}) (CPrint {}) with 0 in
 utest cmpConst (CPrintError {}) (CPrintError {}) with 0 in
 utest cmpConst (CDPrint {}) (CDPrint {}) with 0 in
 utest cmpConst (CFlushStdout {}) (CFlushStdout {}) with 0 in
+utest cmpConst (CFlushStderr {}) (CFlushStderr {}) with 0 in
 utest cmpConst (CReadLine {}) (CReadLine {}) with 0 in
 utest cmpConst (CReadBytesAsString {}) (CReadBytesAsString {}) with 0 in
 
@@ -785,8 +809,8 @@ using neqi in
 
 utest cmpType (tyvariant_ []) (tyvariant_ []) with 0 in
 
-utest cmpType (tyvar_ "t") (tyvar_ "t") with 0 in
-utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
+utest cmpType (tycon_ "t") (tycon_ "t") with 0 in
+utest cmpType (tycon_ "a") (tycon_ "b") with 0 using neqi in
 
 utest cmpType (tyapp_ tybool_ tybool_) (tyapp_ tybool_ tybool_) with 0 in
 utest cmpType (tyapp_ tybool_ tybool_) (tyapp_ tyfloat_ tybool_) with 0
@@ -794,5 +818,17 @@ using neqi in
 
 utest cmpType (tytensor_ tybool_) (tytensor_ tybool_) with 0 in
 utest cmpType (tytensor_ tybool_) (tytensor_ tyint_) with 0 using neqi in
+
+utest cmpType (tyvar_ "a") (tyvar_ "a") with 0 in
+utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
+
+utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tybool_) with 0 in
+utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tyfloat_) with 0 using neqi in
+utest cmpType (tyall_ "a" tybool_) (tyall_ "b" tybool_) with 0 using neqi in
+
+utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "a") with 0 in
+utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "b") with 0 using neqi in
+utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "a") with 0 in
+utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "b") with 0 using neqi in
 
 ()

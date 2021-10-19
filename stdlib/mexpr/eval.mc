@@ -157,7 +157,10 @@ lang RecLetsEval =
                  ["a", "b", "c"]
     with "0a1b2c" in
     let eta_name = nameSym "eta" in
-    let eta_var = TmVar {ident = eta_name, ty = tyunknown_, info = NoInfo()} in
+    let eta_var = TmVar {ident = eta_name,
+                         ty = tyunknown_,
+                         info = NoInfo(),
+                         frozen = false} in
     let unpack_from = lam var. lam body.
       foldli
         (lam i. lam bodyacc. lam binding : RecLetBinding.
@@ -181,7 +184,8 @@ lang RecLetsEval =
     let lst_name = nameSym "lst" in
     let lst_var = TmVar {ident = lst_name,
                          ty = tyunknown_,
-                         info = NoInfo()} in
+                         info = NoInfo(),
+                         frozen = false} in
     let func_tuple = utuple_ (map (lam x : RecLetBinding. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
@@ -900,6 +904,13 @@ lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst
         uunit_
       else error "Argument to flushStdout is not unit"
     else error "Argument to flushStdout is not unit"
+  | CFlushStderr _ ->
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        flushStderr ();
+        uunit_
+      else error "Argument to flushStderr is not unit"
+    else error "Argument to flushStderr is not unit"
   | CReadLine _ ->
     match arg with TmRecord {bindings = bindings} then
       if mapIsEmpty bindings then

@@ -358,6 +358,8 @@ module IO : sig
 
   val flush_stdout : unit -> unit
 
+  val flush_stderr : unit -> unit
+
   val read_line : unit -> int Mseq.t
 end
 

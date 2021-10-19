@@ -64,7 +64,7 @@ lang PMExprRecursionElimination = PMExprAst
     -- topological order.
     let s = digraphTarjan g in
     let canOrderBindingsTopologically =
-      all
+      forAll
         (lam scc.
           if eqi (length scc) 1 then
             let vertex = head scc in
@@ -80,7 +80,7 @@ lang PMExprRecursionElimination = PMExprAst
     let toLetBinding : Expr -> RecLetBinding -> Expr = lam inexpr. lam binding.
       TmLet {ident = binding.ident, tyBody = binding.tyBody,
              body = binding.body, inexpr = inexpr,
-             ty = ty inexpr, info = binding.info}
+             ty = tyTm inexpr, info = binding.info}
     in
     match findReverseTopologicalOrderingOfBindings t.bindings
     with Some permutation then

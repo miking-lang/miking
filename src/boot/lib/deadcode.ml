@@ -11,7 +11,7 @@ let _symbmap = ref SymbMap.empty
    The 'nmap' contains information (third element of the tuple) if
    a symbol may contain a side effect. *)
 let rec tm_has_side_effect nmap acc = function
-  | TmVar (_, _, s) -> (
+  | TmVar (_, _, s, _) -> (
       if acc then true
       else
         match SymbMap.find_opt s nmap with
@@ -28,7 +28,7 @@ let rec tm_has_side_effect nmap acc = function
 
 (* Help function that collects all variables in a term *)
 let rec collect_vars (free : SymbSet.t) = function
-  | TmVar (_, _, s) ->
+  | TmVar (_, _, s, _) ->
       SymbSet.add s free
   | t ->
       sfold_tm_tm collect_vars free t
@@ -37,7 +37,7 @@ let rec collect_vars (free : SymbSet.t) = function
 let rec lam_counts n nmap = function
   | TmLam (_, _, _, _, tlam) ->
       lam_counts (n + 1) nmap tlam
-  | TmVar (_, _, s) -> (
+  | TmVar (_, _, s, _) -> (
     match SymbMap.find_opt s nmap with
     | Some (_, _, _, n_lambdas) ->
         n + n_lambdas
@@ -51,7 +51,7 @@ let rec lam_counts n nmap = function
 let rec lambdas_left nmap n se = function
   | TmApp (_, t1, t2) ->
       lambdas_left nmap (n - 1) (tm_has_side_effect nmap se t2) t1
-  | TmVar (_, _, s) -> (
+  | TmVar (_, _, s, _) -> (
     match SymbMap.find_opt s nmap with
     | Some (_, _, se2, n_lambdas) ->
         let left = max 0 (n + n_lambdas) in
@@ -95,7 +95,7 @@ let collect_in_body s nmap free = function
    all variables that are free, not under a lambda in a let *)
 let collect_lets nmap t =
   let rec work (nmap, free) = function
-    | TmVar (_, _, s) ->
+    | TmVar (_, _, s, _) ->
         (nmap, SymbSet.add s free)
     | TmLet (_, _, s, _, t1, t2) ->
         work (collect_in_body s nmap free t1) t2

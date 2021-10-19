@@ -42,23 +42,23 @@ let _isUnitTy = use RecordTypeAst in lam ty.
   else false
 
 -- Unwrap type until something useful falls out
-recursive let _unwrapType = use VarTypeAst in
+recursive let _unwrapType = use ConTypeAst in
     lam tyEnv: AssocSeq Name Type. lam ty: Type.
-    match ty with TyVar { ident = ident } then
+    match ty with TyCon { ident = ident } then
       match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
         _unwrapType tyEnv ty
-      else error "TyVar not defined in environment"
+      else error "TyCon not defined in environment"
     else ty
 end
 
 -- Unwrap type aliases
-recursive let _unwrapTypeAlias = use VarTypeAst in
+recursive let _unwrapTypeAlias = use ConTypeAst in
     lam tyEnv: AssocSeq Name Type. lam ty: Type.
-    match ty with TyVar { ident = ident } then
+    match ty with TyCon { ident = ident } then
       let res = assocSeqLookup { eq = nameEq } ident tyEnv in
-      match res with Some ((TyVar _) & ty) then _unwrapTypeAlias tyEnv ty
+      match res with Some ((TyCon _) & ty) then _unwrapTypeAlias tyEnv ty
       else match res with Some _ then ty
-      else error "TyVar not defined in environment"
+      else error "TyCon not defined in environment"
     else error "Not a tyVar in _unwrapTypeAlias"
 end
 
@@ -174,7 +174,7 @@ lang MExprCCompile = MExprAst + CAst
 
     match compileTops env [] [] prog with (tops, inits) then
 
-    let retTy: CType = compileType env (ty prog) in
+    let retTy: CType = compileType env (tyTm prog) in
 
     (env, join [decls, defs, postDefs], tops, inits, retTy)
 
@@ -289,10 +289,10 @@ lang MExprCCompile = MExprAst + CAst
       infoErrorExit (infoTy ty)
         "TyRecord should not occur in compileType. Did you run type lift?"
 
-  | TyVar { ident = ident } & ty ->
+  | TyCon { ident = ident } & ty ->
     -- Safety precaution, it seems this may already be handled by type lifting
     let unwrapped =
-      match _unwrapTypeAlias env.typeEnv ty with TyVar { ident = i } then i
+      match _unwrapTypeAlias env.typeEnv ty with TyCon { ident = i } then i
       else infoErrorExit (infoTy ty) "Impossible in compileType"
     in
     match find (nameEq unwrapped) env.structTypes with Some _ then
@@ -403,7 +403,7 @@ lang MExprCCompile = MExprAst + CAst
               compilePat env (snoc pres pre)
                 conds defs (CEVar { id = namePre }) ty subpat
             else error "Label does not match between PatRecord and TyRecord"
-          else error "Type not TyVar for PatRecord in compilePat"
+          else error "Type not TyCon for PatRecord in compilePat"
         else never
       in
       mapFoldWithKey f (pres, conds, defs) bindings
@@ -558,7 +558,7 @@ lang MExprCCompile = MExprAst + CAst
 
         -- Generate conditions corresponding to pat, and add pattern bindings
         -- to start of thn
-        match compilePat env [] [] [] ctarget (ty target) pat
+        match compilePat env [] [] [] ctarget (tyTm target) pat
         with (pres, conds, defs) then
 
           let thn = concat defs thn in
@@ -645,13 +645,13 @@ lang MExprCCompile = MExprAst + CAst
   | expr ->
 
     match res with Return _ then
-      if _isUnitTy (ty expr) then
+      if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
       else (env, [CSRet { val = Some (compileExpr env expr) }])
 
     else match res with None _ then
-      if _isUnitTy (ty expr) then
+      if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
       else infoErrorExit (infoTm expr)
@@ -750,7 +750,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
-        if _isUnitTy (ty rhs) then rec acc lhs
+        if _isUnitTy (tyTm rhs) then rec acc lhs
         else rec (cons rhs acc) lhs
       else (t, acc)
     in
@@ -1100,15 +1100,15 @@ let typedefs = bindall_ [
 
   type_ "Tree" (tyvariant_ []),
   type_ "Integer" tyint_,
-  type_ "MyRec" (tyrecord_ [("k", (tyvar_ "Integer"))]),
-  type_ "MyRec2" (tyrecord_ [("k", (tyvar_ "MyRec")), ("t", (tyvar_ "Tree"))]),
-  type_ "Integer2" (tyvar_ "Integer"),
+  type_ "MyRec" (tyrecord_ [("k", (tycon_ "Integer"))]),
+  type_ "MyRec2" (tyrecord_ [("k", (tycon_ "MyRec")), ("t", (tycon_ "Tree"))]),
+  type_ "Integer2" (tycon_ "Integer"),
 
   condef_ "Leaf"
-    (tyarrow_ (tyrecord_ [("v", (tyvar_ "Integer2"))]) (tyvar_ "Tree")),
+    (tyarrow_ (tyrecord_ [("v", (tycon_ "Integer2"))]) (tycon_ "Tree")),
   condef_ "Node" (tyarrow_
-    (tyrecord_ [("v", tyint_), ("l", (tyvar_ "Tree")), ("r", (tyvar_ "Tree"))])
-    (tyvar_ "Tree")),
+    (tyrecord_ [("v", tyint_), ("l", (tycon_ "Tree")), ("r", (tycon_ "Tree"))])
+    (tycon_ "Tree")),
 
   int_ 0
 ] in
@@ -1134,7 +1134,7 @@ utest testCompile typedefs with strJoin "\n" [
 -- Potentially tricky case with type aliases
 let alias = bindall_ [
   type_ "MyRec" (tyrecord_ [("k", tyint_)]),
-  let_ "myRec" (tyvar_ "MyRec") (urecord_ [("k", int_ 0)]),
+  let_ "myRec" (tycon_ "MyRec") (urecord_ [("k", int_ 0)]),
   int_ 0
 ] in
 utest testCompile alias with strJoin "\n" [
@@ -1176,18 +1176,18 @@ let trees = bindall_ [
   type_ "Tree" (tyvariant_ []),
 
   condef_ "Leaf"
-    (tyarrow_ (tyrecord_ [("v", tyint_)]) (tyvar_ "Tree")),
+    (tyarrow_ (tyrecord_ [("v", tyint_)]) (tycon_ "Tree")),
 
   condef_ "Node" (tyarrow_
-    (tyrecord_ [("v", tyint_), ("l", (tyvar_ "Tree")), ("r", (tyvar_ "Tree"))])
-    (tyvar_ "Tree")),
+    (tyrecord_ [("v", tyint_), ("l", (tycon_ "Tree")), ("r", (tycon_ "Tree"))])
+    (tycon_ "Tree")),
 
   ulet_ "tree"
     (node_ 1 (node_ 2 (leaf_ 3) (leaf_ 4)) (node_ 5 (leaf_ 6) (leaf_ 7))),
 
   reclet_
-    "treeRec" (tyarrow_ (tyvar_ "Tree") tyint_)
-    (lam_ "t" (tyvar_ "Tree")
+    "treeRec" (tyarrow_ (tycon_ "Tree") tyint_)
+    (lam_ "t" (tycon_ "Tree")
        (match_ (var_ "t") (pcon_ "Node" (prec_ [
            ("v", pvar_ "v"),
            ("l", pvar_ "l"),

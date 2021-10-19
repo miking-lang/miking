@@ -273,6 +273,8 @@ let arity = function
       1
   | CflushStdout ->
       1
+  | CflushStderr ->
+      1
   (* MCore intrinsics: Symbols *)
   | CSymb _ ->
       0
@@ -976,6 +978,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       Intrinsics.IO.flush_stdout () ;
       tm_unit
   | CflushStdout, _ ->
+      fail_constapp fi
+  | CflushStderr, TmRecord (_, x) when Record.is_empty x ->
+      Intrinsics.IO.flush_stderr () ;
+      tm_unit
+  | CflushStderr, _ ->
       fail_constapp fi
   (* MCore intrinsics: Symbols *)
   | CSymb _, _ ->
@@ -1759,7 +1766,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (fi, _, s) -> (
+  | TmVar (fi, _, s, _) -> (
     match List.assoc_opt s env with
     | Some (TmApp (fi, (TmFix _ as f), a)) ->
         apply fi f a
