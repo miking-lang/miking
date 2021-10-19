@@ -400,6 +400,10 @@ end
 lang VarTypeCmp = Cmp + VarTypeAst
   sem cmpTypeH =
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
+end
+
+lang FlexTypeCmp = Cmp + FlexTypeAst
+  sem cmpTypeH =
   | (TyFlex _ & ty1, ty2)
   | (ty1, TyFlex _ & ty2) ->
     match (resolveLink ty1, resolveLink ty2) with (ty1, ty2) then
@@ -448,7 +452,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
+  ConTypeCmp + VarTypeCmp + FlexTypeCmp + AppTypeCmp + AllTypeCmp
 
 -----------
 -- TESTS --

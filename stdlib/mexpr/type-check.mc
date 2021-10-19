@@ -85,7 +85,17 @@ lang Unify = MExprEq
     sfold_Type_Type (lam. lam ty. checkBeforeUnify tv ty) () ty
 end
 
-lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
+lang VarTypeUnify = Unify + VarTypeAst
+  sem unifyBase (names : BiNameMap) =
+  | (TyVar t1 & ty1, TyVar t2 & ty2) ->
+    if not (nameEq t1.ident t2.ident) then
+      match biLookup (t1.ident, t2.ident) names with None () then
+        unificationError (ty1, ty2)
+      else ()
+    else ()
+end
+
+lang FlexTypeUnify = Unify + FlexTypeAst + UnknownTypeAst
   sem unifyBase (names : BiNameMap) =
   -- We don't unify variables with TyUnknown
   | (TyFlex {contents = r}, !TyUnknown _ & ty1)
@@ -95,12 +105,6 @@ lang VarTypeUnify = Unify + VarTypeAst + UnknownTypeAst
     else match deref r with Link ty2 then
       unifyWithNames names (ty1, ty2)
     else never
-  | (TyVar t1 & ty1, TyVar t2 & ty2) ->
-    if not (nameEq t1.ident t2.ident) then
-      match biLookup (t1.ident, t2.ident) names with None () then
-        unificationError (ty1, ty2)
-      else ()
-    else ()
 
   sem checkBeforeUnify (tv : TVarRec) =
   | TyFlex {info = info, contents = r} ->
@@ -206,7 +210,9 @@ lang VarTypeGeneralize = Generalize + VarTypeAst
   | TyVar {ident = n} & ty ->
     match mapLookup n subst with Some tyvar then tyvar
     else ty
+end
 
+lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
   sem genBase (lvl : Level) =
   | TyFlex t ->
     match deref t.contents with Link ty then
@@ -363,11 +369,11 @@ end
 lang MExprTypeCheck =
 
   -- Type unification
-  VarTypeUnify + FunTypeUnify + AllTypeUnify + SeqTypeUnify +
+  VarTypeUnify + FlexTypeUnify + FunTypeUnify + AllTypeUnify + SeqTypeUnify +
   UnknownTypeUnify +
 
   -- Type generalization
-  VarTypeGeneralize +
+  VarTypeGeneralize + FlexTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck +
