@@ -12,5 +12,5 @@ end
 
 mexpr
 
-if even 3 then print "3 is even\n"
+if accelerate (even 3) then print "3 is even\n"
 else print "3 is not even\n"
