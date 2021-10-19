@@ -10,7 +10,7 @@ include "map.mc"
   - float
   - string
   - TOML table
-  or a sequence of any of the above.
+  - a sequence of values
 
   Boolean and date data types are currently not supported.
 -/
@@ -44,6 +44,24 @@ with ["intval", "stringval"]
 -- 'tomlBindings table' converts 'table' into a map.
 let tomlTableToMap : TomlTable -> Map String TomlValue = lam table.
   mapFromSeq cmpString (tomlBindings table)
+
+-- 'tomlValueToString v' converts a toml value to a string, regardless of the
+-- type of the value.
+external externalTomlValueToString ! : TomlValue -> String
+let tomlValueToString = lam v. externalTomlValueToString v
+
+utest
+  let t = tomlFromStringExn
+  "
+  key1=1
+  key2=3.14
+  key3=[3.14,4.1]
+  key4=\"value\"
+  key5=[[]]
+  "
+  in
+  map (lam b : (String, TomlValue). tomlValueToString b.1) (tomlBindings t)
+with ["1", "3.14", "[3.14, 4.1]", "\"value\"","[[]]"]
 
 -- 'tomlValueToIntExn v' converts a toml value to an integer.
 external externalTomlValueToIntExn ! : TomlValue -> Int
@@ -83,18 +101,21 @@ external externalTomlValueToIntSeqExn ! : TomlValue -> [Int]
 let tomlValueToIntSeqExn = lam v. externalTomlValueToIntSeqExn v
 
 utest tomlValueToIntSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[1,2,3]")) with [1,2,3]
+utest tomlValueToIntSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[]")) with []
 
 -- 'tomlValueToStringSeqExn v' converts a toml value to a string sequence.
 external externalTomlValueToStringSeqExn ! : TomlValue -> [String]
 let tomlValueToStringSeqExn = lam v. externalTomlValueToStringSeqExn v
 
 utest tomlValueToStringSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[\"foo\", \"bar\"]")) with ["foo", "bar"]
+utest tomlValueToStringSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[]")) with []
 
 -- 'tomlValueToFloatSeqExn v' converts a toml value to a float sequence.
 external externalTomlValueToFloatSeqExn ! : TomlValue -> [Float]
 let tomlValueToFloatSeqExn = lam v. externalTomlValueToFloatSeqExn v
 
 utest tomlValueToFloatSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[3.14,1e1]")) with [3.14,1e1]
+utest tomlValueToFloatSeqExn (tomlFindExn "key" (tomlFromStringExn "key=[]")) with []
 
 -- 'tomlValueToTableSeqExn v' converts a toml value to a sequence of toml
 -- tables.
@@ -115,6 +136,26 @@ utest
   let vals = map (lam t. tomlFindExn "name" t) t2 in
   map tomlValueToStringExn vals
 with ["apple", "orange"]
+
+utest
+  let t = tomlFromStringExn "[[fruit]]" in
+  tomlValueToTableSeqExn (tomlFindExn "fruit" t)
+with []
+
+-- 'tomlValueToSeqSeqExn v' converts a toml value to a sequence of sequence of
+-- toml values.
+external externalTomlValueToSeqSeqExn ! : TomlValue -> [TomlValue]
+let tomlValueToSeqSeqExn = lam v. externalTomlValueToSeqSeqExn v
+
+utest
+  let t1 = tomlFromStringExn
+  "
+  seq_of_seq = [[1,2],[3]]
+  "
+  in
+  let t2 : [TomlValue] = tomlValueToSeqSeqExn (tomlFindExn "seq_of_seq" t1) in
+  map tomlValueToIntSeqExn t2
+with [[1,2],[3]]
 
 ------------------
 -- WRITING TOML --
@@ -173,6 +214,7 @@ external externalTomlIntSeqToValue ! : [Int] -> TomlValue
 let tomlIntSeqToValue = lam v. externalTomlIntSeqToValue v
 
 utest tomlToString (tomlFromBindings [("key", tomlIntSeqToValue [1,2,3])]) with "key=[1,2,3]" using _strEqNoWhitespace
+utest tomlToString (tomlFromBindings [("key", tomlIntSeqToValue [])]) with "key=[]" using _strEqNoWhitespace
 
 -- 'tomlStringSeqToValue v' converts a string to a toml value.
 external externalTomlStringSeqToValue ! : [String] -> TomlValue
@@ -204,3 +246,13 @@ name = \"apple\"
 name = \"orange\"
 "
 using _strEqNoWhitespace
+
+-- 'tomlSeqSeqToValue v' converts a sequence of toml values to a toml value
+external externalTomlSeqSeqToValue ! : [TomlValue] -> TomlValue
+let tomlSeqSeqToValue = lam v. externalTomlSeqSeqToValue v
+
+utest
+  let t = tomlFromBindings
+    [("key", tomlSeqSeqToValue [tomlIntSeqToValue [1,2], tomlIntSeqToValue [3]])] in
+  tomlToString t
+with "key=[[1,2],[3]]" using _strEqNoWhitespace

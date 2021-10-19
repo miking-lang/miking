@@ -64,6 +64,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeInt v) -> v
+         | Toml.Types.TArray Toml.Types.NodeEmpty -> []
          | _ -> raise (Invalid_argument \"tomlValueToIntSeqExn\")
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyint_] }
@@ -72,6 +73,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeString v) -> v
+         | Toml.Types.TArray Toml.Types.NodeEmpty -> []
          | _ -> raise (Invalid_argument \"tomlValueToStringSeqExn\")
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ otystring_] }
@@ -80,6 +82,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeFloat v) -> v
+         | Toml.Types.TArray Toml.Types.NodeEmpty -> []
          | _ -> raise (Invalid_argument \"tomlValueToFloatSeqExn\")
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyfloat_] }
@@ -88,9 +91,23 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeTable v) -> v
+         | Toml.Types.TArray Toml.Types.NodeEmpty -> []
          | _ -> raise (Invalid_argument \"tomlValueToTableSeqExn\")
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyTomlTable_] }
+    ]),
+    ("externalTomlValueToSeqSeqExn", [
+      impl { expr =
+      "fun v -> match v with
+         | Toml.Types.TArray (Toml.Types.NodeArray a) ->
+           List.map (fun e -> Toml.Types.TArray e) a
+         | _ -> raise (Invalid_argument \"tomlValueToSeqSeqExn\")
+      ",
+      ty = tyarrows_ [tyTomlValue_, otylist_ tyTomlValue_] }
+    ]),
+    ("externalTomlValueToString", [
+      impl { expr = "Toml.Printer.string_of_value",
+      ty = tyarrows_ [tyTomlValue_, otystring_] }
     ]),
 
     -- Writing TOML
@@ -136,5 +153,16 @@ let tomlExtMap =
     ("externalTomlTableSeqToValue", [
       impl { expr = "fun x -> Toml.Types.TArray (Toml.Types.NodeTable x)",
       ty = tyarrows_ [otylist_ tyTomlTable_, tyTomlValue_] }
+    ]),
+    ("externalTomlSeqSeqToValue", [
+      impl { expr =
+      "fun x ->
+         let a = List.map (fun e -> match e with
+           | Toml.Types.TArray a -> a
+           | _ -> raise (Invalid_argument \"tomlSeqSeqToValue\")) x in
+         Toml.Types.TArray (Toml.Types.NodeArray a)
+      ",
+      ty = tyarrows_ [otylist_ tyTomlValue_, tyTomlValue_] }
     ])
+
   ]
