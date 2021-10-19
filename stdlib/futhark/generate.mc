@@ -736,9 +736,9 @@ let expected = FProg {decls = [
     ret = futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)],
     body = futRecord_ [
       ("a", futApp_ (futConst_ (FCNegi ())) (nFutVar_ a)),
-      ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))]}]} in
+      ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))],
+    info = NoInfo ()}]} in
 let entryPoints = setOfSeq nameCmp [] in
-printLn (printFutProg (generateProgram entryPoints negation));
 utest printFutProg (generateProgram entryPoints negation)
 with printFutProg expected using eqSeq eqc in
 
