@@ -133,7 +133,6 @@ compile_files += stdlib/futhark/function-restrictions.mc
 compile_files += stdlib/futhark/generate.mc
 compile_files += stdlib/futhark/length-parameterize.mc
 compile_files += stdlib/futhark/pprint.mc
-compile_files += stdlib/futhark/record-inline.mc
 compile_files += stdlib/futhark/wrapper.mc
 compile_files += stdlib/pmexpr/ast.mc
 compile_files += stdlib/pmexpr/c-externals.mc
