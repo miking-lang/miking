@@ -267,7 +267,7 @@ constr_params:
   | ty
     { fun _ -> $1 }
   |
-    { fun i -> tyUnit i }
+    { fun i -> ty_unit i }
 
 params:
   | LPAREN var_ident COLON ty RPAREN params
@@ -539,7 +539,7 @@ ty_left:
 
 ty_atom:
   | LPAREN RPAREN
-    { tyUnit (mkinfo $1.i $2.i) }
+    { ty_unit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
     { $2 }
   | LSQUARE ty RSQUARE
@@ -547,7 +547,7 @@ ty_atom:
   | LPAREN ty COMMA ty_list RPAREN
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LBRACKET RBRACKET
-    { tyUnit (mkinfo $1.i $2.i) }
+    { ty_unit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
     { let r = $2 |> List.fold_left
                       (fun acc (k,v) -> Record.add k v acc)
