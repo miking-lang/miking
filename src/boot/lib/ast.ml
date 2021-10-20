@@ -46,7 +46,24 @@ let utest_fail_local = ref 0 (* Counts local failed tests for one file *)
 type side_effect = bool
 
 (* Map type for record implementation *)
-module Record = Map.Make (Ustring)
+module Record = struct
+  include Map.Make (Ustring)
+
+  let map_fold (f : Ustring.t -> 'a -> 'b -> 'b * 'a) (s : 'a t) (init : 'b) :
+      'b * 'a t =
+    (* [map_fold] is a combination of [Record.mapi] and [Record.fold] that
+       threads an accumulator through calls to [f].*)
+    let acc = ref init in
+    let s' =
+      mapi
+        (fun k v ->
+          let acc', v' = f k v !acc in
+          acc := acc' ;
+          v' )
+        s
+    in
+    (!acc, s')
+end
 
 (* Evaluation environment *)
 type env = (Symb.t * tm) list
@@ -367,6 +384,79 @@ and ident =
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
 let ty_unit fi = TyRecord (fi, Record.empty, [])
+
+(* smap accumulate left for terms *)
+let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
+    = function
+  | TmApp (fi, t1, t2) ->
+      let acc', t1' = f acc t1 in
+      let acc'', t2' = f acc' t2 in
+      (acc'', TmApp (fi, t1', t2'))
+  | TmLam (fi, x, s, ty, t) ->
+      let acc', t' = f acc t in
+      (acc', TmLam (fi, x, s, ty, t'))
+  | TmLet (fi, x, s, ty, t1, t2) ->
+      let acc', t1' = f acc t1 in
+      let acc'', t2' = f acc' t2 in
+      (acc'', TmLet (fi, x, s, ty, t1', t2'))
+  | TmRecLets (fi, lst, t) ->
+      let acc', lst' =
+        List.fold_left_map
+          (fun acc (fi, x, s, ty, t) ->
+            let acc', t' = f acc t in
+            (acc', (fi, x, s, ty, t')) )
+          acc lst
+      in
+      let acc'', t' = f acc' t in
+      (acc'', TmRecLets (fi, lst', t'))
+  | TmSeq (fi, ts) ->
+      let acc', ts' = Mseq.Helpers.map_accum_left f acc ts in
+      (acc', TmSeq (fi, ts'))
+  | TmRecord (fi, r) ->
+      let acc', r' = Record.map_fold (fun _ t acc -> f acc t) r acc in
+      (acc', TmRecord (fi, r'))
+  | TmRecordUpdate (fi, r, l, t) ->
+      let acc', r' = f acc r in
+      let acc'', t' = f acc' t in
+      (acc'', TmRecordUpdate (fi, r', l, t'))
+  | TmType (fi, x, s, ty, t) ->
+      let acc', t' = f acc t in
+      (acc', TmType (fi, x, s, ty, t'))
+  | TmConDef (fi, x, s, ty, t) ->
+      let acc', t' = f acc t in
+      (acc', TmConDef (fi, x, s, ty, t'))
+  | TmConApp (fi, k, s, t) ->
+      let acc', t' = f acc t in
+      (acc', TmConApp (fi, k, s, t'))
+  | TmMatch (fi, t1, p, t2, t3) ->
+      let acc', t1' = f acc t1 in
+      let acc'', t2' = f acc' t2 in
+      let acc''', t3' = f acc'' t3 in
+      (acc''', TmMatch (fi, t1', p, t2', t3'))
+  | TmUtest (fi, t1, t2, tusing, tnext) ->
+      let acc', t1' = f acc t1 in
+      let acc'', t2' = f acc' t2 in
+      let acc''', tusing' =
+        match tusing with
+        | Some tusing' ->
+            let acc''', tusing'' = f acc'' tusing' in
+            (acc''', Some tusing'')
+        | None ->
+            (acc'', tusing)
+      in
+      let acc'''', tnext' = f acc''' tnext in
+      (acc'''', TmUtest (fi, t1', t2', tusing', tnext'))
+  | TmUse (fi, l, t) ->
+      let acc', t' = f acc t in
+      (acc', TmUse (fi, l, t'))
+  | TmExt (fi, x, s, ty, e, t) ->
+      let acc', t' = f acc t in
+      (acc', TmExt (fi, x, s, ty, e, t'))
+  | TmClos (fi, x, s, t, env) ->
+      let acc', t' = f acc t in
+      (acc', TmClos (fi, x, s, t', env))
+  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
+      (acc, t)
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) = function

@@ -216,6 +216,15 @@ module Mseq : sig
      *)
     val fold_right2 :
       ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
+
+    (* Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function
+     *)
+    val map_accum_left :
+      ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a t -> 'acc * 'b t
   end
 end
 
