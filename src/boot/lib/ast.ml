@@ -366,7 +366,7 @@ and ident =
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
-let tyUnit fi = TyRecord (fi, Record.empty, [])
+let ty_unit fi = TyRecord (fi, Record.empty, [])
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) = function
