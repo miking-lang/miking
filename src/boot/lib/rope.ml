@@ -178,6 +178,21 @@ let foldl_array (f : 'a -> 'b -> 'a) (acc : 'a) (s : 'b t) : 'a =
   let a = _collapse_array s in
   Array.fold_left f acc a
 
+let map_accuml_array_array (f : 'a -> 'b -> 'a * 'c) (acc : 'a) (s : 'b t) :
+    'a * 'c t =
+  (* TODO(oerikss,2021-10-20): In OCaml version 4.13.0 we can use
+     [Array.fold_left_map] directly *)
+  let acc' = ref acc in
+  let s' =
+    map_array_array
+      (fun x ->
+        let acc'', x' = f !acc' x in
+        acc' := acc'' ;
+        x' )
+      s
+  in
+  (!acc', s')
+
 let reverse_array (s : 'a t) : 'a t =
   let a = _collapse_array s in
   let a' = Array.copy a in

@@ -63,6 +63,11 @@ val foldl_array : ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
     accumulated value, which is initially [acc] and the elements of [s],
     starting from the leftmost element. This function collapses [s]. *)
 
+val map_accuml_array_array : ('a -> 'b -> 'a * 'c) -> 'a -> 'b t -> 'a * 'c t
+(** [Rope.map_accuml_* f acc s] is a combination of [Rope.map_*_*] and
+   [Rope.foldl_* f acc s] that threads an accumulator through calls to [f]. This
+   function collapses [s]. *)
+
 val reverse_array : 'a t -> 'a t
 (** [Rope.reverse_* s] returns a new rope containing the elements of [s] in
     reversed order. This function collapses [s]. *)
