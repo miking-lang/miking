@@ -21,7 +21,7 @@ let enable_debug_after_symbolize = ref false
 
 let enable_debug_after_dead_code_elimination = ref false
 
-let enable_debug_after_external_dependent_utest_removal = ref false
+let enable_debug_after_prune_external_utests = ref false
 
 let enable_debug_dead_code_info = ref false
 
@@ -37,9 +37,9 @@ let enable_debug_profiling = ref false
 
 let disable_dead_code_elimination = ref false
 
-let supress_external_dependent_utest_removal_summary = ref false
+let disable_prune_external_utests_summary = ref false
 
-let disable_external_dependent_utest_removal = ref false
+let disable_prune_external_utests = ref false
 
 let utest = ref false (* Set to true if unit testing is enabled *)
 

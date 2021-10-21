@@ -25,6 +25,9 @@ let evalprog filename =
       |> Symbolize.symbolize builtin_name2sym
       |> debug_after_symbolize
       |> Deadcode.elimination builtin_sym2term builtin_name2sym []
+      |> prune_external_utests_boot
+      |> debug_after_pruning_external_utests
+      |> Deadcode.elimination builtin_sym2term builtin_name2sym []
       |> debug_after_dead_code_elimination
       |> raise_parse_error_on_partially_applied_external
       |> Mexpr.eval builtin_sym2term

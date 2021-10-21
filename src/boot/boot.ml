@@ -77,6 +77,10 @@ let main =
       , Arg.Set enable_debug_after_symbolize
       , " Enables output of the mexpr program after symbolize transformations."
       )
+    ; ( "--debug-utest-pruning"
+      , Arg.Set enable_debug_after_prune_external_utests
+      , " Enables output of the mexpr program after external utests pruning."
+      )
     ; ( "--debug-dead-code-elim"
       , Arg.Set enable_debug_after_dead_code_elimination
       , " Enables output of the mexpr program after dead code elimination." )
@@ -112,6 +116,12 @@ let main =
       , Arg.Set Boot.Mlang.enable_subsumption_analysis
       , " Enables subsumption analysis of language fragments in mlang \
          transformations." )
+    ; ( "--disable-utest-removal"
+      , Arg.Set disable_prune_external_utests
+      , " Disables removal of external dependent utests." )
+    ; ( "--disable-utest-removal-summary"
+      , Arg.Set disable_prune_external_utests_summary
+      , " Disables removal of external dependent utests summary printing." )
     ; ( "--disable-dead-code-elim"
       , Arg.Set disable_dead_code_elimination
       , " Disables dead code elimination." )
