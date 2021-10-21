@@ -175,6 +175,12 @@ lang SeqTypeUnify = Unify + SeqTypeAst
     unifyBase names (t1.ty, t2.ty)
 end
 
+lang TensorTypeUnify = Unify + TensorTypeAst
+  sem unifyBase (names : BiNameMap) =
+  | (TyTensor t1, TyTensor t2) ->
+    unifyBase names (t1.ty, t2.ty)
+end
+
 ------------------------------------
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
@@ -388,7 +394,7 @@ lang MExprTypeCheck =
   -- Type unification
   VarTypeUnify + FlexTypeUnify + FunTypeUnify + AllTypeUnify + SeqTypeUnify +
   BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  UnknownTypeUnify +
+  UnknownTypeUnify + TensorTypeUnify +
 
   -- Type generalization
   VarTypeGeneralize + FlexTypeGeneralize +
