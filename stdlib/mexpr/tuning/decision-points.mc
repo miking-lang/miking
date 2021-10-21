@@ -7,8 +7,7 @@ include "mexpr/utesttrans.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 
-include "ocaml/sys.mc"
-
+include "sys.mc"
 include "digraph.mc"
 include "string.mc"
 include "eq-paths.mc"
