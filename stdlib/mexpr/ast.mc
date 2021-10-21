@@ -751,10 +751,12 @@ lang MapAst = ConstAst
   | CMapEmpty {}
   | CMapInsert {}
   | CMapRemove {}
-  | CMapFindWithExn {}
+  | CMapFindExn {}
   | CMapFindOrElse {}
   | CMapFindApplyOrElse {}
   | CMapBindings {}
+  | CMapChooseExn {}
+  | CMapChooseOrElse {}
   | CMapSize {}
   | CMapMem {}
   | CMapAny {}

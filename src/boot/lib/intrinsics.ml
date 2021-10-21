@@ -631,7 +631,7 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     Obj.repr (MapModule.remove (Obj.repr k) m, cmp)
 
-  let find k mCmpPair =
+  let find_exn k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
     let module Ord = struct
       type t = Obj.t
@@ -675,6 +675,31 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     let binds = MapModule.bindings m in
     Mseq.Helpers.of_list (List.map (fun (k, v) -> (Obj.obj k, v)) binds)
+
+  let choose_exn mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    let k, v = MapModule.choose m in
+    (Obj.obj k, v)
+
+  let choose_or_else f mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    match MapModule.choose_opt m with
+    | Some (k, v) ->
+        (Obj.obj k, v)
+    | None ->
+        f ()
 
   let size mCmpPair =
     let m, cmp = Obj.obj mCmpPair in

@@ -310,14 +310,14 @@ let evalJacG = lam x. lam jacG.
   let x1 = tget x [1] in
   let x2 = tget x [2] in
   let x3 = tget x [3] in
-  tset jacG [0] (mulf x1 (mulf x2 x3));
-  tset jacG [1] (mulf x0 (mulf x2 x3));
-  tset jacG [2] (mulf x0 (mulf x1 x3));
-  tset jacG [3] (mulf x0 (mulf x1 x2));
-  tset jacG [4] (mulf 2. x0);
-  tset jacG [5] (mulf 2. x1);
-  tset jacG [6] (mulf 2. x2);
-  tset jacG [7] (mulf 2. x3);
+  tset jacG [0] (mulf x1 (mulf x2 x3));   -- (0, 0)
+  tset jacG [1] (mulf x0 (mulf x2 x3));   -- (0, 1)
+  tset jacG [2] (mulf x0 (mulf x1 x3));   -- (0, 2)
+  tset jacG [3] (mulf x0 (mulf x1 x2));   -- (0, 3)
+  tset jacG [4] (mulf 2. x0);             -- (1, 0)
+  tset jacG [5] (mulf 2. x1);             -- (1, 1)
+  tset jacG [6] (mulf 2. x2);             -- (1, 2)
+  tset jacG [7] (mulf 2. x3);             -- (1, 3)
   ()
 in
 
@@ -385,6 +385,7 @@ let p = ipoptCreateNLP {
 
 ipoptAddNumOption p "tol" 3.82e-6;
 ipoptAddStrOption p "mu_strategy" "adaptive";
+ipoptAddStrOption p "derivative_test" "second-order";
 
 let x = tensorOfSeqExn tcreate [4] [1., 5., 5., 1.] in
 
@@ -589,6 +590,7 @@ let p = ipoptCreateNLP {
 
 ipoptAddNumOption p "tol" 3.82e-6;
 ipoptAddStrOption p "mu_strategy" "adaptive";
+ipoptAddStrOption p "derivative_test" "second-order";
 
 let x = tcreate [7] (lam. 0.) in
 tset x [0] (sin (divf pi 4.));

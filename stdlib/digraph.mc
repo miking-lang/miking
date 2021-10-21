@@ -173,7 +173,7 @@ let digraphReverse = lam g : Digraph v l.
 -- Remove an edge from the graph g.
 let digraphRemoveEdge = lam from. lam to. lam l. lam g : Digraph v l.
   utest (digraphHasEdge (from, to, l) g) with true in
-  let outgoing = mapFindWithExn from g.adj in
+  let outgoing = mapFindExn from g.adj in
   let newOutgoing = filter (lam o : (v, l). not (g.eql l o.1)) outgoing in
   {g with adj = mapInsert from newOutgoing g.adj}
 
@@ -210,7 +210,7 @@ let digraphTarjan : Digraph v l -> [[v]] =
 lam g.
   let cmpv = digraphCmpv g in
   let eqv = lam x. lam y. eqi (cmpv x y) 0 in
-  let mapFind = mapFindWithExn in
+  let mapFind = mapFindExn in
   let and = lam x. lam y. if not x then false else y in
 
   recursive let strongConnect = lam s : Successors v l. lam v.

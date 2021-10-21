@@ -375,7 +375,7 @@ let breakableGenGrammar
 
     let prodLabelToOpId : Map prodLabel OpId =
       mapFromSeq cmp (map (lam prod. (label prod, newOpId ())) grammar.productions) in
-    let toOpId : prodLabel -> OpId = lam label. mapFindWithExn label prodLabelToOpId in
+    let toOpId : prodLabel -> OpId = lam label. mapFindExn label prodLabelToOpId in
 
     -- TODO(vipa, 2021-02-15): This map can contain more entries than
     -- required; the inner map should only ever have entries where the
@@ -948,10 +948,10 @@ let grammar =
   }
 in
 let genned = breakableGenGrammar cmpString grammar in
-let atom = lam label. mapFindWithExn label genned.atoms in
-let prefix = lam label. mapFindWithExn label genned.prefixes in
-let infix = lam label. mapFindWithExn label genned.infixes in
-let postfix = lam label. mapFindWithExn label genned.postfixes in
+let atom = lam label. mapFindExn label genned.atoms in
+let prefix = lam label. mapFindExn label genned.prefixes in
+let infix = lam label. mapFindExn label genned.infixes in
+let postfix = lam label. mapFindExn label genned.postfixes in
 
 type Self = {val : Int, pos : Int} in
 
