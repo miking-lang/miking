@@ -13,7 +13,13 @@ let tomlExtMap =
   [
     -- Reading TOML
     ("externalTomlFromStringExn", [
-      impl { expr = "fun s -> Toml.Parser.(from_string s |> unsafe)",
+      impl { expr = "fun s ->
+        match Toml.Parser.from_string s with
+        | `Ok table -> table
+        | `Error (str, loc) ->
+          raise (Invalid_argument (\"tomlFromStringExn: \"
+            ^ str ^ \" when parsing: \"
+            ^ s))",
       ty = tyarrows_ [otystring_, tyTomlTable_] }
     ]),
     ("externalTomlFindExn", [
@@ -32,7 +38,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TInt v -> v
-         | _ -> raise (Invalid_argument \"tomlValueToIntExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToIntExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, tyint_] }
     ]),
@@ -40,7 +46,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TString v -> v
-         | _ -> raise (Invalid_argument \"tomlValueToStringExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToStringExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otystring_] }
     ]),
@@ -48,7 +54,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TFloat v -> v
-         | _ -> raise (Invalid_argument \"tomlValueToFloatExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToFloatExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, tyfloat_] }
     ]),
@@ -56,7 +62,7 @@ let tomlExtMap =
       impl { expr =
       "fun v -> match v with
          | Toml.Types.TTable v -> v
-         | _ -> raise (Invalid_argument \"tomlValueToTableExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToTableExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, tyTomlTable_] }
     ]),
@@ -65,7 +71,7 @@ let tomlExtMap =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeInt v) -> v
          | Toml.Types.TArray Toml.Types.NodeEmpty -> []
-         | _ -> raise (Invalid_argument \"tomlValueToIntSeqExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToIntSeqExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyint_] }
     ]),
@@ -74,7 +80,8 @@ let tomlExtMap =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeString v) -> v
          | Toml.Types.TArray Toml.Types.NodeEmpty -> []
-         | _ -> raise (Invalid_argument \"tomlValueToStringSeqExn\")
+         | _ ->
+           raise (Invalid_argument (\"tomlValueToStringSeqExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ otystring_] }
     ]),
@@ -83,7 +90,7 @@ let tomlExtMap =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeFloat v) -> v
          | Toml.Types.TArray Toml.Types.NodeEmpty -> []
-         | _ -> raise (Invalid_argument \"tomlValueToFloatSeqExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToFloatSeqExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyfloat_] }
     ]),
@@ -92,7 +99,7 @@ let tomlExtMap =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeTable v) -> v
          | Toml.Types.TArray Toml.Types.NodeEmpty -> []
-         | _ -> raise (Invalid_argument \"tomlValueToTableSeqExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToTableSeqExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyTomlTable_] }
     ]),
@@ -101,7 +108,7 @@ let tomlExtMap =
       "fun v -> match v with
          | Toml.Types.TArray (Toml.Types.NodeArray a) ->
            List.map (fun e -> Toml.Types.TArray e) a
-         | _ -> raise (Invalid_argument \"tomlValueToSeqSeqExn\")
+         | _ -> raise (Invalid_argument (\"tomlValueToSeqSeqExn: \" ^ (Toml.Printer.string_of_value v)))
       ",
       ty = tyarrows_ [tyTomlValue_, otylist_ tyTomlValue_] }
     ]),
@@ -159,7 +166,9 @@ let tomlExtMap =
       "fun x ->
          let a = List.map (fun e -> match e with
            | Toml.Types.TArray a -> a
-           | _ -> raise (Invalid_argument \"tomlSeqSeqToValue\")) x in
+           | _ ->
+             raise (Invalid_argument (\"tomlSeqSeqToValue: \"
+                                     ^ (Toml.Printer.string_of_value e)))) x in
          Toml.Types.TArray (Toml.Types.NodeArray a)
       ",
       ty = tyarrows_ [otylist_ tyTomlValue_, tyTomlValue_] }
