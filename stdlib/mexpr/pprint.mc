@@ -240,9 +240,12 @@ lang VarPrettyPrint = PrettyPrint + VarAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident, frozen = frozen} ->
-    let freezeStr = if frozen then "`" else "" in
-    match pprintVarName env ident with (env, str)
-    then (env, concat freezeStr str) else never
+    if frozen then
+      match pprintEnvGetStr env ident with (env,str) then
+        (env, join ["#frozen\"", str, "\""])
+      else never
+    else
+      pprintVarName env ident
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst
