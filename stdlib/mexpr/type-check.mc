@@ -270,6 +270,18 @@ lang TypeCheck = Unify + Generalize
     infoErrorExit (infoTm tm) msg
 end
 
+lang PatTypeCheck = Unify
+  sem typeCheckPat (env : TCEnv) =
+  | pat ->
+    let msg = join [
+      "Type check failed: type checking not supported for pattern\n",
+      use MExprPrettyPrint in
+      match getPatStringCode 0 pprintEnvEmpty pat with (_, str)
+      then str else never
+    ] in
+    infoErrorExit (infoPat pat) msg
+end
+
 lang VarTypeCheck = TypeCheck + VarAst
   sem typeCheckBase (env : TCEnv) =
   | TmVar t ->
@@ -380,6 +392,23 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
                    with ty = tyTm inexpr}
 end
 
+lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmMatch t ->
+    let target = typeCheckBase env t.target in
+    match typeCheckPat env t.pat with (thnEnv, pat) then
+      unify (tyTm target, tyPat pat);
+      let thn = typeCheckBase thnEnv t.thn in
+      let els = typeCheckBase env t.els in
+      unify (tyTm thn, tyTm els);
+      TmMatch {{{{{t with target = target}
+                     with thn = thn}
+                     with els = els}
+                     with ty = tyTm thn}
+                     with pat = pat}
+    else never
+end
+
 lang ConstTypeCheck = TypeCheck + MExprConstType
   sem typeCheckBase (env : TCEnv) =
   | TmConst t ->
@@ -431,6 +460,95 @@ lang ExtTypeCheck = TypeCheck + ExtAst
 end
 
 
+lang NamedPatTypeCheck = PatTypeCheck + NamedPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatNamed t ->
+    let patTy = newvar env.currentLvl t.info in
+    let env =
+      match t.ident with PName n then
+        _insertVar n patTy env
+      else env
+    in
+    (env, PatNamed {t with ty = patTy})
+end
+
+lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatSeqTot t ->
+    let elemTy = newvar env.currentLvl t.info in
+    match mapAccumL typeCheckPat env t.pats with (env, pats) then
+      iter (lam pat. unify (elemTy, tyPat pat)) pats;
+      (env, PatSeqTot {{t with pats = pats}
+                          with ty = tyseq_ elemTy})
+    else never
+end
+
+lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
+  sem typeCheckPat (env : TCEnv) =
+  | PatSeqEdge t ->
+    let elemTy = newvar env.currentLvl t.info in
+    let seqTy = tyseq_ elemTy in
+    let unifyPat = lam pat. unify (elemTy, tyPat pat) in
+    match mapAccumL typeCheckPat env t.prefix with (env, prefix) then
+      iter unifyPat prefix;
+      match mapAccumL typeCheckPat env t.postfix with (env, postfix) then
+        iter unifyPat postfix;
+        let env =
+          match t.middle with PName n then _insertVar n seqTy env
+          else env
+        in
+        (env, PatSeqEdge {{{t with prefix = prefix}
+                              with postfix = postfix}
+                              with ty = seqTy})
+      else never
+    else never
+end
+
+lang IntPatTypeCheck = PatTypeCheck + IntPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatInt t -> (env, PatInt {t with ty = tyint_})
+end
+
+lang CharPatTypeCheck = PatTypeCheck + CharPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatChar t -> (env, PatChar {t with ty = tychar_})
+end
+
+lang BoolPatTypeCheck = PatTypeCheck + BoolPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatBool t -> (env, PatBool {t with ty = tybool_})
+end
+
+lang AndPatTypeCheck = PatTypeCheck + AndPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatAnd t ->
+    match typeCheckPat env t.lpat with (env, lpat) then
+      match typeCheckPat env t.rpat with (env, rpat) then
+        unify (tyPat lpat, tyPat rpat);
+        (env, PatAnd {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
+      else never
+    else never
+end
+
+lang OrPatTypeCheck = PatTypeCheck + OrPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatOr t ->
+    match typeCheckPat env t.lpat with (env, lpat) then
+      match typeCheckPat env t.rpat with (env, rpat) then
+        unify (tyPat lpat, tyPat rpat);
+        (env, PatOr {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
+      else never
+    else never
+end
+
+lang NotPatTypeCheck = PatTypeCheck + NotPat
+  sem typeCheckPat (env : TCEnv) =
+  | PatNot t ->
+    match typeCheckPat env t.subpat with (env, subpat) then
+      (env, PatNot {{t with subpat = subpat} with ty = tyPat subpat})
+    else never
+end
+
 lang MExprTypeCheck =
 
   -- Type unification
@@ -443,8 +561,13 @@ lang MExprTypeCheck =
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
-  ConstTypeCheck + SeqTypeCheck + UtestTypeCheck + NeverTypeCheck +
-  ExtTypeCheck
+  MatchTypeCheck + ConstTypeCheck + SeqTypeCheck + UtestTypeCheck +
+  NeverTypeCheck + ExtTypeCheck +
+
+  -- Patterns
+  NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
+  IntPatTypeCheck + CharPatTypeCheck + BoolPatTypeCheck +
+  AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck
 
 end
 
