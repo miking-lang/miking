@@ -1053,6 +1053,10 @@ lang UnknownTypeAst = Ast
 
   sem infoTy =
   | TyUnknown r -> r.info
+
+  sem sremoveUnknown =
+  | TyUnknown _ -> None ()
+  | ty -> Some ty
 end
 
 lang BoolTypeAst = Ast

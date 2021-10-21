@@ -290,13 +290,11 @@ end
 lang LamTypeCheck = TypeCheck + LamAst
   sem typeCheckBase (env : TCEnv) =
   | TmLam t ->
-    let tyX =
-      match t.tyIdent with TyUnknown _ then
-        -- No type annotation: assign a monomorphic type variable to x.
-        newvarWeak env.currentLvl t.info
-      else
-        -- Type annotation: assign x its annotated type.
-        t.tyIdent
+    let tyX = optionGetOrElse
+      -- No type annotation: assign a monomorphic type variable to x
+      (lam. newvarWeak env.currentLvl t.info)
+      -- Type annotation: assign x its annotated type
+      (sremoveUnknown t.tyIdent)
     in
     let body = typeCheckBase (_insertVar t.ident tyX env) t.body in
     let tyLam = ityarrow_ t.info tyX (tyTm body) in
@@ -321,21 +319,65 @@ lang LetTypeCheck = TypeCheck + LetAst
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = typeCheckBase {env with currentLvl = addi 1 lvl} t.body in
-    let tyBody =
-      match t.tyBody with TyUnknown _ then
-        -- No type annotation: generalize the inferred type
-        gen lvl (tyTm body)
-      else
-        -- Type annotation: unify the annotated type with the inferred one
-        match stripTyAll t.tyBody with (_, tyAnnot) then
-          unify (tyAnnot, tyTm body);
-          t.tyBody
-        else never
+    let tyBody = optionMapOrElse
+      -- No type annotation: generalize the inferred type
+      (lam. gen lvl (tyTm body))
+      -- Type annotation: unify the annotated type with the inferred one
+      (lam ty.
+        match stripTyAll ty with (_, tyAnnot) then
+          unify (tyAnnot, (tyTm body));
+          ty
+        else never)
+      (sremoveUnknown t.tyBody)
     in
     let inexpr = typeCheckBase (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {{{t with body = body}
                with inexpr = inexpr}
                with ty = tyTm inexpr}
+end
+
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmRecLets t ->
+    let lvl = env.currentLvl in
+
+    -- First: Generate a new environment containing the recursive bindings
+    let recLetEnvIteratee = lam acc. lam b : RecLetBinding.
+      let tyBinding = optionGetOrElse (lam. newvar (addi 1 lvl) b.info) b.tyBody in
+      _insertVar b.ident tyBinding acc
+    in
+    let recLetEnv : TCEnv = foldl recLetEnvIteratee env t.bindings in
+
+    -- Second: Type check the body of each binding in the new environment
+    let typeCheckBinding = lam b : RecLetBinding.
+      let body = typeCheckBase {recLetEnv with currentLvl = addi 1 lvl} b.body in
+      optionMapOrElse
+        -- No type annotation: unify the inferred type of the body with the
+        -- inferred type of the binding
+        (lam.
+          match _lookupVar b.ident recLetEnv with Some ty then
+            unify (ty, tyTm body)
+          else never)
+        -- Type annotation: unify the inferred type of the body with the annotated one
+        (lam ty.
+          match stripTyAll ty with (_, tyAnnot) then
+            unify (tyAnnot, tyTm body)
+          else never)
+        (sremoveUnknown b.tyBody);
+      {b with body = body}
+    in
+    let bindings = map typeCheckBinding t.bindings in
+
+    -- Third: Produce a new environment with generalized types
+    let envIteratee = lam acc. lam b : RecLetBinding.
+      let tyBody = optionGetOrElse (lam. gen lvl (tyTm b.body)) b.tyBody in
+      _insertVar b.ident tyBody acc
+    in
+    let env = foldl envIteratee env bindings in
+    let inexpr = typeCheckBase env t.inexpr in
+    TmRecLets {{{t with bindings = bindings}
+                   with inexpr = inexpr}
+                   with ty = tyTm inexpr}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
@@ -400,7 +442,7 @@ lang MExprTypeCheck =
   VarTypeGeneralize + FlexTypeGeneralize +
 
   -- Terms
-  VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck +
+  VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
   ConstTypeCheck + SeqTypeCheck + UtestTypeCheck + NeverTypeCheck +
   ExtTypeCheck
 
