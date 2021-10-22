@@ -413,7 +413,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
   sem typeCheckBase (env : TCEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = f (tyConst t.val) in
+    let ty = inst env.currentLvl (f (tyConst t.val)) in
     TmConst {t with ty = ty}
 end
 

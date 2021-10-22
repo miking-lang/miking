@@ -378,12 +378,13 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     else never
 end
 
-lang ConstTypeAnnot = TypeAnnot + MExprConstType
+lang ConstTypeAnnot = TypeAnnot + MExprConstType + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = f (tyConst t.val) in
-    TmConst {t with ty = ty }
+    match stripTyAll (f (tyConst t.val)) with (_, ty) then
+      TmConst {t with ty = ty}
+    else never
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
