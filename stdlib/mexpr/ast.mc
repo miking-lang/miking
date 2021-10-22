@@ -1211,14 +1211,25 @@ type TVarRec = {ident : Name,
                 level : Level}
 
 lang VarTypeAst = Ast
+  syn Type =
+  -- Rigid type variable
+  | TyVar  {info     : Info,
+            ident    : Name}
+
+  sem tyWithInfo (info : Info) =
+  | TyVar t -> TyVar {t with info = info}
+
+  sem infoTy =
+  | TyVar t -> t.info
+
+end
+
+lang FlexTypeAst = Ast
   syn TVar =
   | Unbound TVarRec
   | Link Type
 
   syn Type =
-  -- Rigid type variable
-  | TyVar  {info     : Info,
-            ident    : Name}
   -- Flexible type variable
   | TyFlex {info     : Info,
             contents : Ref TVar}
@@ -1234,7 +1245,6 @@ lang VarTypeAst = Ast
     ty
 
   sem tyWithInfo (info : Info) =
-  | TyVar t -> TyVar {t with info = info}
   | TyFlex t ->
     match deref t.contents with Link ty then
       tyWithInfo ty
@@ -1242,7 +1252,6 @@ lang VarTypeAst = Ast
       TyFlex {t with info = info}
 
   sem infoTy =
-  | TyVar t -> t.info
   | TyFlex t ->
     match deref t.contents with Link ty then
       infoTy ty
@@ -1329,4 +1338,4 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+  VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst

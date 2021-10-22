@@ -1100,6 +1100,10 @@ lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
     pprintEnvGetStr env t.ident
+end
+
+lang FlexTypePrettyPrint = FlexTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyFlex t ->
     match deref t.contents with Unbound t then
       match pprintEnvGetStr env t.ident with (env, str) then
@@ -1165,8 +1169,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
-  TensorTypePrettyPrint + AllTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint + FlexTypePrettyPrint +
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
