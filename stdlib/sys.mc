@@ -92,7 +92,6 @@ let sysRunCommand : [String] -> String -> String -> ExecResult =
     match sysRunCommandWithTiming cmd stdin cwd with (_, res) then res else never
 
 let sysCommandExists : String -> Bool = lam cmd.
-  let res = sysRunCommand ["which", cmd] "" "." in
-  eqi 0 res.returncode
+  eqi 0 (command (join ["which ", cmd, " >/dev/null 2>&1"]))
 
 utest sysCommandExists "ls" with true
