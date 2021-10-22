@@ -535,6 +535,7 @@ module IO = struct
       else if Obj.tag v = Obj.double_tag then
         string_of_float (Obj.obj v) ^ "\n"
       else if Obj.tag v = Obj.closure_tag then "<closure>\n"
+      else if Obj.tag v = Obj.unaligned_tag then "<unaligned>\n"
       else
         let istr = String.make indent ' ' in
         let children =
