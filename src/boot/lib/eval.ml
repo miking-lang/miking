@@ -22,14 +22,14 @@ let evalprog filename =
       filename |> parse_mcore_file |> Mlang.flatten
       |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> raise_parse_error_on_non_unique_external_id
+      |> (fun t -> if !utest then t else remove_all_utests t)
       |> Symbolize.symbolize builtin_name2sym
       |> debug_after_symbolize
+      |> raise_parse_error_on_partially_applied_external
       |> Deadcode.elimination builtin_sym2term builtin_name2sym []
-      |> prune_external_utests_boot
-      |> debug_after_pruning_external_utests
+      |> prune_external_utests_boot |> debug_after_pruning_external_utests
       |> Deadcode.elimination builtin_sym2term builtin_name2sym []
       |> debug_after_dead_code_elimination
-      |> raise_parse_error_on_partially_applied_external
       |> Mexpr.eval builtin_sym2term
       |> fun _ -> ()
     with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->

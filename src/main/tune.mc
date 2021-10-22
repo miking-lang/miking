@@ -5,6 +5,7 @@
 include "compile.mc"
 include "options.mc"
 include "sys.mc"
+include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
@@ -17,7 +18,13 @@ let tune = lam files. lam options : Options. lam args.
 
   let tuneFile = lam file.
     use MCoreTune in
-    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
+    let ast = parseParseMCoreFile {
+      keepUtests = options.runTests,
+      pruneExternalUtests = options.pruneExternalUtests,
+      findExternalsExclude = true,
+      keywords = decisionPointsKeywords
+    } file in
+    let ast = makeKeywords [] ast in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
@@ -54,4 +61,3 @@ let tune = lam files. lam options : Options. lam args.
   if options.compileAfterTune then
     compile files {options with useTuned = true} args
   else ()
-

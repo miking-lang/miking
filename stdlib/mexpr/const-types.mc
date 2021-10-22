@@ -275,7 +275,12 @@ end
 lang BootParserTypeAst = BootParserAst
   sem tyConst =
   | CBootParserParseMExprString _ -> tyarrow_ tystr_ tybootparsetree_
-  | CBootParserParseMCoreFile _ -> tyarrow_ tystr_ tybootparsetree_
+  | CBootParserParseMCoreFile _ -> tyarrows_ [
+      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_],
+      tyseq_ tystr_,
+      tystr_,
+      tybootparsetree_
+    ]
   | CBootParserGetId _ -> tyarrow_ tybootparsetree_ tyint_
   | CBootParserGetTerm _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
   | CBootParserGetType _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]

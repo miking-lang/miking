@@ -38,11 +38,8 @@ let files_of_folders lst =
       else v :: a )
     [] lst
 
-let enable_test = ref false
-
 (* Iterate over all potential test files and run tests *)
 let testprog lst =
-  utest := true ;
   (* Select the lexer and parser, depending on the DSL*)
   let eprog name = evalprog name in
   (* Evaluate each of the programs in turn *)
@@ -66,7 +63,7 @@ let main =
   (* A list of command line arguments *)
   let speclist =
     [ (* First character in description string must be a space for alignment! *)
-      ("--test", Arg.Set enable_test, " Run unit tests.")
+      ("--test", Arg.Set utest, " Run unit tests.")
     ; ( "--debug-parse"
       , Arg.Set enable_debug_after_parse
       , " Enables output of parsing." )
@@ -116,12 +113,9 @@ let main =
       , Arg.Set Boot.Mlang.enable_subsumption_analysis
       , " Enables subsumption analysis of language fragments in mlang \
          transformations." )
-    ; ( "--disable-utest-removal"
+    ; ( "--disable-prune-utests"
       , Arg.Set disable_prune_external_utests
-      , " Disables removal of external dependent utests." )
-    ; ( "--disable-utest-removal-summary"
-      , Arg.Set disable_prune_external_utests_summary
-      , " Disables removal of external dependent utests summary printing." )
+      , " Disables pruning of external dependent utests." )
     ; ( "--disable-dead-code-elim"
       , Arg.Set disable_dead_code_elimination
       , " Disables dead code elimination." )
@@ -145,7 +139,7 @@ let main =
         runrepl lst
     (* Eval one program with program arguments without typechecking *)
     | "eval" :: (name :: _ as lst) ->
-        if !enable_test then testprog lst else evalprog name
+        if !utest then testprog lst else evalprog name
     (* Show the menu *)
     | _ ->
         Arg.usage speclist usage_msg

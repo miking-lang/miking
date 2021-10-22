@@ -67,8 +67,7 @@ let raise_parse_error_on_partially_applied_external t =
   t
 
 (* NOTE(oerikss, 2021-10-21) this function should be applied on a symbolized term *)
-let prune_external_utests ?(disable = false) ?(suppress_summary = false)
-    ?(externals_exclude = []) t =
+let prune_external_utests ?(enable = true) ?(externals_exclude = []) t =
   let module Set = Set.Make (Ustring) in
   let externals_exclude = Set.of_list externals_exclude in
   (* The accumulator [(sm, ntests, hasref)] contains, [sm], a map from symbols
@@ -85,7 +84,8 @@ let prune_external_utests ?(disable = false) ?(suppress_summary = false)
         in
         recur (sm, ntests, false) t
         |> fun ((sm, ntests, hasref''), t') ->
-        ((sm, ntests, hasref || hasref' || hasref''), TmExt (fi, x, s, ty, e, t'))
+        ( (sm, ntests, hasref || hasref' || hasref'')
+        , TmExt (fi, x, s, ty, e, t') )
     | TmLet (fi, x, s, ty, t1, t2) ->
         recur (sm, ntests, false) t1
         |> fun ((sm, ntests, hasref'), t1') ->
@@ -127,20 +127,27 @@ let prune_external_utests ?(disable = false) ?(suppress_summary = false)
     | t ->
         smap_accum_left_tm_tm recur (sm, ntests, hasref) t
   in
-  if not disable then (
+  if enable then (
     let (_, ntests, _), t' = recur (SymbMap.empty, 0, false) t in
-    if (not suppress_summary) && ntests > 0 then
+    if ntests > 0 then
       Printf.printf
-        "\nWARNING: Removed %d utests referencing external dependent identifiers.\n"
+        "\n\
+         WARNING: Removed %d utests referencing external dependent identifiers.\n"
         ntests
     else () ;
     t' )
   else t
 
-let prune_external_utests_boot =
+let prune_external_utests_boot t =
   prune_external_utests
-    ~disable:!disable_prune_external_utests
-    ~suppress_summary:(!disable_prune_external_utests_summary || not !utest)
+    ~enable:(!utest && not !disable_prune_external_utests)
+    t
+
+let rec remove_all_utests = function
+  | TmUtest (_, _, _, _, t) ->
+      remove_all_utests t
+  | t ->
+      smap_tm_tm remove_all_utests t
 
 (* Current working directory standard library path *)
 let stdlib_cwd = Sys.getcwd () ^ Filename.dir_sep ^ "stdlib"
