@@ -24,4 +24,4 @@ ocaml: $(ocaml-files)
 
 # File rule
 $(base-files) $(py-files) $(ocaml-files):
-	-@MCORE_STDLIB=`pwd`/stdlib build/${BOOT_NAME} eval --test $@
+	@MCORE_STDLIB=`pwd`/stdlib build/${BOOT_NAME} eval --test $@
