@@ -320,7 +320,7 @@ lang AppTypeCheck = TypeCheck + AppAst
     let lhs = typeCheckBase env t.lhs in
     let rhs = typeCheckBase env t.rhs in
     let tyRes = newvar env.currentLvl t.info in
-    unify (tyTm lhs, tyarrow_ (tyTm rhs) tyRes);
+    unify (tyTm lhs, ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
                with ty = tyRes}
@@ -479,7 +479,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
     match mapAccumL typeCheckPat env t.pats with (env, pats) then
       iter (lam pat. unify (elemTy, tyPat pat)) pats;
       (env, PatSeqTot {{t with pats = pats}
-                          with ty = tyseq_ elemTy})
+                          with ty = ityseq_ t.info elemTy})
     else never
 end
 
@@ -487,7 +487,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   sem typeCheckPat (env : TCEnv) =
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
-    let seqTy = tyseq_ elemTy in
+    let seqTy = ityseq_ t.info elemTy in
     let unifyPat = lam pat. unify (elemTy, tyPat pat) in
     match mapAccumL typeCheckPat env t.prefix with (env, prefix) then
       iter unifyPat prefix;
@@ -506,17 +506,17 @@ end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat
   sem typeCheckPat (env : TCEnv) =
-  | PatInt t -> (env, PatInt {t with ty = tyint_})
+  | PatInt t -> (env, PatInt {t with ty = TyInt {info = t.info}})
 end
 
 lang CharPatTypeCheck = PatTypeCheck + CharPat
   sem typeCheckPat (env : TCEnv) =
-  | PatChar t -> (env, PatChar {t with ty = tychar_})
+  | PatChar t -> (env, PatChar {t with ty = TyChar {info = t.info}})
 end
 
 lang BoolPatTypeCheck = PatTypeCheck + BoolPat
   sem typeCheckPat (env : TCEnv) =
-  | PatBool t -> (env, PatBool {t with ty = tybool_})
+  | PatBool t -> (env, PatBool {t with ty = TyBool {info = t.info}})
 end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
