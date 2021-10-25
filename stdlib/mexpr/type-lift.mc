@@ -119,19 +119,19 @@ lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
 end
 
 -- Define function for adding sequence types to environment
-lang TypeLiftAddSeqToEnv = SeqTypeAst + VarTypeAst
+lang TypeLiftAddSeqToEnv = SeqTypeAst + ConTypeAst
   sem addSeqToEnv (env: TypeLiftEnv) =
   | TySeq {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.seqs with Some name then
-      let tyvar = TyVar {ident = name, info = info} in
-      (env, tyvar)
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
     else
       let name = nameSym "Seq" in
-      let tyvar = TyVar {ident = name, info = info} in
+      let tycon = TyCon {ident = name, info = info} in
       let env = {{env with seqs = mapInsert innerTy name env.seqs}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
-      (env, tyvar)
+      (env, tycon)
 end
 
 -----------
@@ -468,8 +468,8 @@ let nestedSeq = typeAnnot (symbolize (bindall_ [
   let sndid = fst (get env 1) in
   let trdid = fst (get env 2) in
   let expectedEnv = [
-    (fstid, tyseq_ (ntyvar_ sndid)),
-    (sndid, tyseq_ (ntyvar_ trdid)),
+    (fstid, tyseq_ (ntycon_ sndid)),
+    (sndid, tyseq_ (ntycon_ trdid)),
     (trdid, tyseq_ (tyint_))
   ] in
   utest env with expectedEnv using eqEnv in
