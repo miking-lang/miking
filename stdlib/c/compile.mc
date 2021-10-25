@@ -68,14 +68,15 @@ let externalsMap: Map String ExtInfo = foldl1 mapUnion [
 ]
 
 -- Retrieve names used for externals. Used for making sure these names are printed without modification during C code generation.
-let externalNames =
+let externalNames: [String] =
   map nameNoSym
-    (mapFoldWithKey (lam acc. lam. lam v. cons v.ident acc) [] externalsMap)
+    (mapFoldWithKey (lam acc. lam. lam v: ExtInfo. cons v.ident acc)
+       [] externalsMap)
 
 -- Collect all includes for C externals.
-let externalIncludes =
+let externalIncludes: [String] =
   setToSeq
-    (mapFoldWithKey (lam acc. lam. lam v. setInsert v.header acc)
+    (mapFoldWithKey (lam acc. lam. lam v: ExtInfo. setInsert v.header acc)
        (setEmpty cmpString) externalsMap)
 
 -- Customizable set of includes
@@ -99,9 +100,9 @@ let _seqLenKey = nameNoSym "len"
 -- Used in compileStmt and compileStmts for deciding what action to take in
 -- tail position
 type Result
-con RIdent : Name -> Res
-con RReturn : () -> Res
-con RNone : () -> Res
+con RIdent : Name -> Result
+con RReturn : () -> Result
+con RNone : () -> Result
 
 --------------------------
 -- COMPILER ENVIRONMENT --
@@ -201,6 +202,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmExt t ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
+      let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
       let acc = mapInsert t.ident (nameNoSym e.ident) acc in
       sfold_Expr_Expr collectExternals acc t.inexpr
     else infoErrorExit (t.info) "Unsupported external"
@@ -279,7 +281,7 @@ lang MExprCCompile = MExprAst + CAst
       let enum = CTDef {
         ty = CTyEnum {
           id = Some nameEnum,
-          mem = Some (map (lam t. t.0) constrLs)
+          mem = Some (map (lam t: (Name, CType). t.0) constrLs)
         },
         id = None (), init = None ()
       } in
@@ -575,7 +577,7 @@ lang MExprCCompile = MExprAst + CAst
     let g = lam fun.
       match fun with CTFun { ret = ret, id = id, params = params, body = body }
       then
-        let params = map (lam t. t.0) params in
+        let params = map (lam t: (CType,Name). t.0) params in
         CTDef { ty = CTyFun { ret = ret, params = params }, id = Some id,
                 init = None () }
       else never
@@ -1059,7 +1061,7 @@ utest testCompile simpleLet with strJoin "\n" [
   "  (x = 1);",
   "  return 0;",
   "}"
-] in
+] using eqString in
 
 let simpleFun = bindall_ [
   let_ "foo" (tyarrows_ [tyint_, tyint_, tyint_])
@@ -1078,7 +1080,7 @@ utest testCompile simpleFun with strJoin "\n" [
   "  (x = foo(1, 2));",
   "  return 0;",
   "}"
-] in
+] using eqString in
 
 let constants = bindall_ [
   let_ "foo" (tyarrows_ [tyunit_, tyunit_])
@@ -1127,7 +1129,7 @@ utest testCompile constants with strJoin "\n" [
   "int main(int argc, char (*argv[])) {",
   "  return 0;",
   "}"
-] in
+] using eqString in
 
 let factorial = bindall_ [
   reclet_ "factorial" (tyarrow_ tyint_ tyint_)
