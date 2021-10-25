@@ -4,7 +4,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
-include "ocaml/sys.mc"
+include "sys.mc"
 
 lang MCoreCompileLang =
   MExprTypeAnnot + MExprTypeLift +

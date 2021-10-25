@@ -1,5 +1,5 @@
 include "ext/local-search.mc"
-include "ocaml/sys.mc"
+include "sys.mc"
 include "string.mc"
 include "map.mc"
 include "decision-points.mc"
@@ -578,7 +578,7 @@ let tuneEntry =
         concat (_timeoutCmd options timeoutMs) [concat "./" binary]
       in
       lam input : [String]. lam timeoutMs : Float.
-        sysTimeCommand (concat (cmd timeoutMs) input) "" "."
+        sysRunCommandWithTiming (concat (cmd timeoutMs) input) "" "."
     in
 
     -- Choose search method

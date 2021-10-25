@@ -400,6 +400,10 @@ end
 lang VarTypeCmp = Cmp + VarTypeAst
   sem cmpTypeH =
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
+end
+
+lang FlexTypeCmp = Cmp + FlexTypeAst
+  sem cmpTypeH =
   | (TyFlex _ & ty1, ty2)
   | (ty1, TyFlex _ & ty2) ->
     match (resolveLink ty1, resolveLink ty2) with (ty1, ty2) then
@@ -448,7 +452,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
+  ConTypeCmp + VarTypeCmp + FlexTypeCmp + AppTypeCmp + AllTypeCmp
 
 -----------
 -- TESTS --
@@ -693,10 +697,12 @@ utest cmpConst (CDeRef {}) (CDeRef {}) with 0 in
 utest cmpConst (CMapEmpty {}) (CMapEmpty {}) with 0 in
 utest cmpConst (CMapInsert {}) (CMapInsert {}) with 0 in
 utest cmpConst (CMapRemove {}) (CMapRemove {}) with 0 in
-utest cmpConst (CMapFindWithExn {}) (CMapFindWithExn {}) with 0 in
+utest cmpConst (CMapFindExn {}) (CMapFindExn {}) with 0 in
 utest cmpConst (CMapFindOrElse {}) (CMapFindOrElse {}) with 0 in
 utest cmpConst (CMapFindApplyOrElse {}) (CMapFindApplyOrElse {}) with 0 in
 utest cmpConst (CMapBindings {}) (CMapBindings {}) with 0 in
+utest cmpConst (CMapChooseExn {}) (CMapChooseExn {}) with 0 in
+utest cmpConst (CMapChooseOrElse {}) (CMapChooseOrElse {}) with 0 in
 utest cmpConst (CMapSize {}) (CMapSize {}) with 0 in
 utest cmpConst (CMapMem {}) (CMapMem {}) with 0 in
 utest cmpConst (CMapAny {}) (CMapAny {}) with 0 in

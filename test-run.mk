@@ -2,7 +2,7 @@
 run_files += test/mexpr/letlamif.mc
 run_files += test/mexpr/fix.mc
 run_files += test/mexpr/ident-test.mc
-# run_files += test/mexpr/map.mc
+run_files += test/mexpr/map.mc
 run_files += test/mexpr/tensor.mc
 # run_files += test/mexpr/match.mc
 run_files += test/mexpr/reclets.mc
@@ -110,7 +110,7 @@ run_files += stdlib/char.mc
 # run_files += stdlib/set.mc
 # run_files += test/py/python.mc
 # run_files += stdlib/ocaml/symbolize.mc
-# run_files += stdlib/ocaml/sys.mc
+# run_files += stdlib/sys.mc
 # run_files += stdlib/ocaml/pprint.mc
 # run_files += stdlib/ocaml/generate.mc
 # run_files += stdlib/ocaml/compile.mc

@@ -19,8 +19,6 @@ include "math.mc"
 let _num = dualnumNum
 let _lift1 = dualnumLift1
 let _lift2 = dualnumLift2
-let _float2num1 = dualnumFloat2num1
-let _float2num2 = dualnumFloat2num2
 
 ----------------
 -- CONSTANTS  --
@@ -35,8 +33,8 @@ let pin = num pi
 
 -- Trigonometric functions
 recursive
-  let sinn = lam p. _lift1 (_float2num1 sin) cosn p
-  let cosn = lam p. _lift1 (_float2num1 cos) (lam x. negn (sinn x)) p
+  let sinn = lam p. _lift1 sin cosn p
+  let cosn = lam p. _lift1 cos (lam x. negn (sinn x)) p
 end
 
 utest sinn (divn pin num2) with num1 using eqnEps
@@ -53,14 +51,14 @@ utest der cosn num1 with negn (sinn num1) using eqnEps
 
 -- Exponential function
 recursive
-  let expn = lam p. _lift1 (_float2num1 exp) expn p
+  let expn = lam p. _lift1 exp expn p
 end
 
 utest expn num0 with num1 using eqnEps
 utest der expn num1 with expn num1 using eqnEps
 
 -- Natural logarithm
-let logn = lam p. _lift1 (_float2num1 log) (lam x. divn (_num 1.) x) p
+let logn = lam p. _lift1 log (lam x. divn (_num 1.) x) p
 
 utest logn num1 with num0 using eqnEps
 utest logn (expn num3) with num3 using eqnEps
@@ -71,7 +69,7 @@ utest der logn num1 with num1 using eqnEps
 recursive
   let pown = lam p1. lam p2.
     _lift2
-      (_float2num2 pow)
+      pow
       (lam x1. lam x2. muln x2 (pown x1 (subn x2 (_num 1.))))
       (lam x1. lam x2.
         if eqn x1 (_num 0.) then
@@ -94,7 +92,7 @@ utest der (pow num1) num1 with num0 using eqnEps
 recursive
   let sqrtn = lam p.
     _lift1
-      (_float2num1 sqrt)
+      sqrt
       (lam x. divn (_num 1.) (muln (_num 2.) (sqrtn x)))
       p
 end

@@ -3,6 +3,7 @@
 
 include "mi-lite.mc"
 include "options.mc"
+include "sys.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
@@ -15,7 +16,6 @@ include "mexpr/tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
-include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +

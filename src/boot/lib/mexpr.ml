@@ -317,9 +317,9 @@ let arity = function
       2
   | CmapRemove (Some _) ->
       1
-  | CmapFindWithExn None ->
+  | CmapFindExn None ->
       2
-  | CmapFindWithExn (Some _) ->
+  | CmapFindExn (Some _) ->
       1
   | CmapFindOrElse (None, None) ->
       3
@@ -358,6 +358,12 @@ let arity = function
   | CmapFoldWithKey (_, Some _) ->
       1
   | CmapBindings ->
+      1
+  | CmapChooseExn ->
+      1
+  | CmapChooseOrElse None ->
+      2
+  | CmapChooseOrElse (Some _) ->
       1
   | CmapEq (None, None) ->
       3
@@ -1047,11 +1053,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CMap (cmp, Mmap.remove k m))
   | CmapRemove (Some _), _ ->
       fail_constapp fi
-  | CmapFindWithExn None, k ->
-      TmConst (fi, CmapFindWithExn (Some k))
-  | CmapFindWithExn (Some k), TmConst (_, CMap (_, m)) ->
-      Mmap.find k m
-  | CmapFindWithExn (Some _), _ ->
+  | CmapFindExn None, k ->
+      TmConst (fi, CmapFindExn (Some k))
+  | CmapFindExn (Some k), TmConst (_, CMap (_, m)) ->
+      Mmap.find_exn k m
+  | CmapFindExn (Some _), _ ->
       fail_constapp fi
   | CmapFindOrElse (None, None), f ->
       TmConst (fi, CmapFindOrElse (Some f, None))
@@ -1121,6 +1127,20 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       in
       TmSeq (fi, binds)
   | CmapBindings, _ ->
+      fail_constapp fi
+  | CmapChooseExn, TmConst (_, CMap (_, m)) ->
+      let k, v = Mmap.choose_exn m in
+      tuple2record fi [k; v]
+  | CmapChooseExn, _ ->
+      fail_constapp fi
+  | CmapChooseOrElse None, f ->
+      TmConst (fi, CmapChooseOrElse (Some f))
+  | CmapChooseOrElse (Some f), TmConst (_, CMap (_, m)) ->
+      if Mmap.size m > 0 then
+        let k, v = Mmap.choose_exn m in
+        tuple2record fi [k; v]
+      else apply f tm_unit
+  | CmapChooseOrElse _, _ ->
       fail_constapp fi
   | CmapEq (None, None), f ->
       let veq v1 v2 =
