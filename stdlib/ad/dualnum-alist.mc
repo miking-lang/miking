@@ -8,84 +8,77 @@
 -- Functions part of the API are prefixed with dualnum. Other functions are
 -- internal.
 
+include "set.mc"
 include "string.mc"
 
-type Eps = Int
+type Eps = Symb
 
--- Dual-numbers can be nested and are implemented as explicit trees.
-type DualNum
-con DualNum : {e : Eps, x : DualNum, xp : DualNum} -> DualNum
-con Num : Float -> DualNum -- we separate out generic real numbers
+-- Dual-numbers can be nested and are implemented as association lists. Each key
+-- is the set if epsilons for a particular term in the dual number and the
+-- value is the value of the term.
+type DualNumTerm = (Set Symb, Float)
+type DualNum = [DualNumTerm]
 
--- epsilons are ordered
-let dualnumLtE : Eps -> Eps -> Bool = lti
+let _cmpEpsilon = lam e1 : Eps. lam e2 : Eps. subi (sym2hash e1) (sym2hash e2)
+let _termEpsilons = lam t : DualNumTerm. t.0
+let _termValue = lam t : DualNumTerm. t.1
+let _termAddEpsilon = lam e : Eps. lam t : DualNumTerm.
+  (setInsert e (_termEpsilons t), _termValue t)
+let _termRemoveEpsilon = lam e : Eps. lam t : DualNumTerm.
+  (setRemove e (_termEpsilons t), _termValue t)
+let _termHasAnyEpsilon = lam t : DualNumTerm. not (setIsEmpty (_termEpsilons t))
+let _termHasEpsilon = lam e. lam t. setMem e (_termEpsilons t)
+
+-- epsilons are un-ordered
+let dualnumLtE : Eps -> Eps -> Bool = lam. lam. true
 
 -- packs a floating point number in a DualNumber
 let dualnumNum : Float -> DualNum =
-lam x. Num x
+lam x. [(setEmpty _cmpEpsilon, x)]
 
 -- false if x' = 0 in x+ex'
-let dualnumIsDualNum : DualNum -> Bool =
-lam n.
-  match n with Num _ then false else
-  match n with DualNum _ then true else
-  never
+let dualnumIsDualNum : DualNum -> Bool = any _termHasAnyEpsilon
 
 -- x if x' = 0 otherwise x+ex'
 let dualnumDNum : Eps -> DualNum -> DualNum -> DualNum =
-lam e. lam x. lam xp.
-  match xp with Num f then
-    if eqf f 0. then x else DualNum { e = e, x = x, xp = xp }
-  else DualNum { e = e, x = x, xp = xp }
+lam e. lam x. lam xp. concat x (map (_termAddEpsilon e) xp)
 
 -- e in x+ex'
 let dualnumEpsilon : DualNum -> Eps =
 lam n.
-  match n with DualNum dn then dn.e
+  match find _termHasAnyEpsilon n with Some t then
+    setChooseExn (_termEpsilons t)
   else error "Operand not a dual number"
 
 -- x in x+ex'
 let dualnumPrimal : Eps -> DualNum -> DualNum =
-lam e. lam n.
-  match n with Num _ then n else
-  match n with DualNum dn then
-    if dualnumLtE dn.e e then n else dn.x
-  else never
+lam e. filter (lam t. not (_termHasEpsilon e t))
 
 -- x in x+e1(x+e2(x+e3(...)))
-recursive
 let dualnumPrimalDeep : DualNum -> Float =
 lam n.
-  match n with Num n then n else
-  match n with DualNum {x = x} then
-    dualnumPrimalDeep x
-  else never
-end
+  -- NOTE(oerikss, 2021-10-11): Exactly one element in the association list
+  -- fulfills this predicate by construction.
+  let p = lam t. not (_termHasAnyEpsilon t) in
+  match find p n with Some (_, x) then x else error "Impossible"
 
 -- x' in x+ex'
 let dualnumPertubation : Eps -> DualNum -> DualNum =
 lam e. lam n.
-  match n with Num _ then Num 0. else
-  match n with DualNum dn then
-    if dualnumLtE dn.e e then Num 0. else dn.xp
-  else never
+  let ts = map (_termRemoveEpsilon e) (filter (_termHasEpsilon e) n) in
+  match ts with [] then dualnumNum 0. else ts
 
--- generate a unique epsilon e1 that fulfills the invariant e1 > e for all
--- previously generated epsilons e.
-let e = ref 0
-let dualnumGenEpsilon : Unit -> Eps =
-lam. modref e (succ (deref e)); deref e
+-- generate a unique epsilon
+let dualnumGenEpsilon : Unit -> Eps = gensym
 
 -- Equality function for epsilon
-let dualnumEqEpsilon : Eps -> Eps -> Bool = eqi
+let dualnumEqEpsilon : Eps -> Eps -> Bool = eqsym
 
 -- Structural equality function for dual numbers
 let dualnumEq : (a -> a -> Bool) -> DualNum -> DualNum -> Bool =
   lam eq.
   recursive let recur = lam n1. lam n2.
-    let nn = (n1, n2) in
-    match nn with (Num r1, Num r2) then eq r1 r2
-    else match nn with (DualNum _, DualNum _) then
+    if and (dualnumIsDualNum n1) (dualnumIsDualNum n2) then
       let e1 = dualnumEpsilon n1 in
       let e2 = dualnumEpsilon n2 in
       if dualnumEqEpsilon e1 e2 then
@@ -93,35 +86,37 @@ let dualnumEq : (a -> a -> Bool) -> DualNum -> DualNum -> Bool =
           recur (dualnumPertubation e1 n1) (dualnumPertubation e2 n2)
         else false
       else false
+    else if (and (not (dualnumIsDualNum n1)) (not (dualnumIsDualNum n2))) then
+      eqf (dualnumPrimalDeep n1) (dualnumPrimalDeep n2)
     else false
   in recur
 
 -- String representation of dual number
 let dualnumToString : DualNum -> String =
 lam n.
-  let wrapInParen = lam n. lam str.
-    if dualnumIsDualNum n then join ["(", str, ")"] else str
-  in
-  recursive let recur = lam n.
-    match n with Num r then float2string r
-    else match n with DualNum {e = e, x = x, xp = xp} then
-      join [
-        wrapInParen x (recur x),
-        " + e",
-        int2string e,
-        " ",
-        wrapInParen xp (recur xp)
-      ]
-    else never
-  in recur n
+  strJoin "+"
+    (map
+      (lam t : DualNumTerm.
+        match t with (es, x) then
+          join
+            (snoc
+              (map (lam e. join ["(", int2string (sym2hash e), ")"]) es)
+              (float2string x))
+        else never)
+      n)
 
------------------
--- FOR BREVITY --
------------------
+-------------
+-- ALIASES --
+-------------
 
 let _num = dualnumNum
 let _dnum = dualnumDNum
 let _ltE = dualnumLtE
+let _isDualNum = dualnumIsDualNum
+let _epsilon = dualnumEpsilon
+let _primal = dualnumPrimal
+let _primalDeep = dualnumPrimalDeep
+let _pertubation = dualnumPertubation
 
 ----------------------------------
 -- LIFTING OF BINARY OPERATORS  --
@@ -138,28 +133,24 @@ recursive
   let dualnumLift2
   : FloatFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
   lam f. lam dfdx1. lam dfdx2.
-    recursive let self = lam x1. lam x2.
-      let t = (x1, x2) in
-      match t with (Num x1, Num x2) then
-        _num (f x1 x2)
-      else match t with (DualNum {e = e, x = x11, xp = xp11}, Num _) then
-        _dnum e (self x11 x2) (muln (dfdx1 x11 x2) xp11)
-      else match t with (Num _, DualNum {e = e, x = x22, xp = xp22}) then
-        _dnum e (self x1 x22) (muln (dfdx2 x1 x22) xp22)
-      else match t with
-        (DualNum {e = e1, x = x11, xp = xp11},
-         DualNum {e = e2, x = x22, xp = xp22})
+    recursive let self = lam p1. lam p2.
+      if or (_isDualNum p1)
+            (_isDualNum p2)
       then
-        if _ltE e1 e2 then
-          _dnum e2 (self x1 x22) (muln (dfdx2 x1 x22) xp22)
-        else if _ltE e2 e1 then
-          _dnum e1 (self x11 x2) (muln (dfdx1 x11 x2) xp11)
-        else
-          _dnum
-            e1
-            (self x11 x22)
-            (addn (muln (dfdx1 x11 x22) xp11) (muln (dfdx2 x11 x22) xp22))
-      else never
+        let e = if not (_isDualNum p1) then _epsilon p2
+                else if not (_isDualNum p2) then _epsilon p1
+                else if _ltE (_epsilon p1) (_epsilon p2) then _epsilon p2
+                else _epsilon p1
+        in
+
+        _dnum e
+             (self (_primal e p1) (_primal e p2))
+             (addn (muln (dfdx1 (_primal e p1) (_primal e p2))
+                         (_pertubation e p1))
+                   (muln (dfdx2 (_primal e p1) (_primal e p2))
+                         (_pertubation e p2)))
+      else
+        _num (f (_primalDeep p1) (_primalDeep p2))
     in self
 
     -- lifted addition
@@ -191,11 +182,18 @@ type FloatFun = Float -> Float
 -- dfdx : lifted derivative of f
 let dualnumLift1 : DualNumFun1 -> DualNumFun1 -> DualNumFun1 =
 lam f. lam dfdx.
-  recursive let self = lam x.
-    match x with Num x then _num (f x)
-    else match x with DualNum {e = e, x = x, xp = xp} then
-      _dnum e (self x) (muln (dfdx x) xp)
-    else never
+  recursive let self = lam p.
+    if _isDualNum p then
+      let e = _epsilon p in
+      _dnum
+        e
+        (self
+          (_primal e p))
+          (muln
+            (dfdx (_primal e p))
+            (_pertubation e p))
+    else
+      _num (f (_primalDeep p))
   in self
 
 mexpr
@@ -205,10 +203,10 @@ let dnum = dualnumDNum in
 
 let eq = dualnumEq eqf in
 
-let e0 = 0 in
-let e1 = 1 in
-let e2 = 2 in
-let e3 = 3 in
+let e0 = dualnumGenEpsilon () in
+let e1 = dualnumGenEpsilon () in
+let e2 = dualnumGenEpsilon () in
+let e3 = dualnumGenEpsilon () in
 
 let num0 = num 0. in
 let num1 = num 1. in
@@ -231,7 +229,6 @@ utest dualnumPrimalDeep (dnum1 dnum036 dnum048) with 3. using eqf in
 utest dualnumIsDualNum num1 with false in
 utest dualnumIsDualNum dnum112 with true in
 utest dualnumEpsilon dnum112 with e1 in
-utest dualnumEpsilon (dnum e3 dnum112 dnum212) with e3 in
 utest dualnumPrimal e1 dnum112 with num1 using eq in
 utest dualnumPertubation e1 dnum112 with num2 using eq in
 utest dualnumPrimal e2 dnum112 with dnum112 using eq in

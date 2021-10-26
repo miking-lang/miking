@@ -18,6 +18,12 @@ let _commandListTime : [String] -> (Float, Int) = lam cmd.
 let _commandList = lam cmd : [String].
   match _commandListTime cmd with (_, res) then res else never
 
+let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. lam cmd.
+  join [ ["timeout", "-k", "0.1", float2string timeoutSec, "bash", "-c", "\'{"]
+       , cmd
+       , ["\'}"]
+       ]
+
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
@@ -44,20 +50,26 @@ let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam.
   _commandList ["rm", "-rf", td]
 
-let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
-  lam cmd. lam stdin. lam cwd.
+let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
+  lam timeoutSec. lam cmd. lam stdin. lam cwd.
     let tempDir = sysTempDirMake () in
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
     let tempStderr = sysJoinPath tempDir "stderr.txt" in
 
-    match _commandListTime
-      [ "cd", cwd, "&&"
-      , "echo", stdin, "|"
-      , strJoin " " cmd
-      , ">", tempStdout
-      , "2>", tempStderr
-      ]
-    with (ms, retCode) then
+    let fullCmd =
+    [ "cd", cwd, ";"
+    , "echo", stdin, "|"
+    , strJoin " " cmd
+    , ">", tempStdout
+    , "2>", tempStderr
+    , ";"
+    ] in
+    let fullCmd =
+      match timeoutSec with Some timeout then
+        _commandListTimeoutWrap timeout fullCmd
+      else fullCmd
+    in
+    match _commandListTime fullCmd with (ms, retCode) then
 
       -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
       _commandList ["echo", "", ">>", tempStdout];
@@ -66,13 +78,18 @@ let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
       let stderr = init (readFile tempStderr) in
 
       sysTempDirDelete tempDir ();
-
       (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
     else never
 
+utest sysRunCommandWithTimingTimeout (None ()) ["echo -n \"\""] "" "."; () with ()
+
+let sysRunCommandWithTiming : [String] -> String -> String -> (Float, ExecResult) =
+  lam cmd. lam stdin. lam cwd.
+    sysRunCommandWithTimingTimeout (None ()) cmd stdin cwd
+
 let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
-    match sysTimeCommand cmd stdin cwd with (_, res) then res else never
+    match sysRunCommandWithTiming cmd stdin cwd with (_, res) then res else never
 
 let sysCommandExists : String -> Bool = lam cmd.
   let res = sysRunCommand ["which", cmd] "" "." in

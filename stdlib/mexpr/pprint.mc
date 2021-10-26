@@ -781,10 +781,12 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapEmpty _ -> "mapEmpty"
   | CMapInsert _ -> "mapInsert"
   | CMapRemove _ -> "mapRemove"
-  | CMapFindWithExn _ -> "mapFind"
+  | CMapFindExn _ -> "mapFindExn"
   | CMapFindOrElse _ -> "mapFindOrElse"
   | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
   | CMapBindings _ -> "mapBindings"
+  | CMapChooseExn _ -> "mapChooseExn"
+  | CMapChooseOrElse _ -> "mapChooseOrElse"
   | CMapSize _ -> "mapSize"
   | CMapMem _ -> "mapMem"
   | CMapAny _ -> "mapAny"
@@ -1098,6 +1100,10 @@ lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
     pprintEnvGetStr env t.ident
+end
+
+lang FlexTypePrettyPrint = FlexTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyFlex t ->
     match deref t.contents with Unbound t then
       match pprintEnvGetStr env t.ident with (env, str) then
@@ -1163,8 +1169,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
-  TensorTypePrettyPrint + AllTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint + FlexTypePrettyPrint +
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

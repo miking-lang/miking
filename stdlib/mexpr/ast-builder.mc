@@ -106,7 +106,7 @@ let tyalls_ =
   lam strs. lam ty.
   foldr tyall_ ty strs
 
-let tyFlexUnbound = use VarTypeAst in
+let tyFlexUnbound = use FlexTypeAst in
   lam info. lam ident. lam level. lam weak.
   TyFlex {info = info,
           contents = ref (Unbound {ident = ident, level = level, weak = weak})}
@@ -115,7 +115,7 @@ let tyflexunbound_ =
   lam s.
   tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 false
 
-let tyflexlink_ = use VarTypeAst in
+let tyflexlink_ = use FlexTypeAst in
   lam ty.
   TyFlex {info = NoInfo (),
           contents = ref (Link ty)}
@@ -1146,9 +1146,9 @@ let mapRemove_ = use MExprAst in
   lam k. lam m.
   appf2_ (uconst_ (CMapRemove ())) k m
 
-let mapFindWithExn_ = use MExprAst in
+let mapFindExn_ = use MExprAst in
   lam k. lam m.
-  appf2_ (uconst_ (CMapFindWithExn ())) k m
+  appf2_ (uconst_ (CMapFindExn ())) k m
 
 let mapFindOrElse_ = use MExprAst in
   lam f. lam k. lam m.
@@ -1161,6 +1161,14 @@ let mapFindApplyOrElse_ = use MExprAst in
 let mapBindings_ = use MExprAst in
   lam m.
   appf1_ (uconst_ (CMapBindings ())) m
+
+let mapChooseExn_ = use MExprAst in
+  lam m.
+  appf1_ (uconst_ (CMapChooseExn ())) m
+
+let mapChooseOrElse_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (uconst_ (CMapFindOrElse ())) f m
 
 let mapSize_ = use MExprAst in
   lam m.

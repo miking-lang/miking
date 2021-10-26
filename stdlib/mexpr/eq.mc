@@ -613,6 +613,10 @@ lang VarTypeEq = Eq + VarTypeAst
         (lam freeTyVars. {free with freeTyVars = freeTyVars})
         (_eqCheck l.ident r.ident typeEnv.tyVarEnv free.freeTyVars)
     else None ()
+end
+
+lang FlexTypeEq = Eq + FlexTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFlex _ & rhs ->
     match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) then
       match (lhs, rhs) with (TyFlex l, TyFlex r) then
@@ -668,7 +672,7 @@ lang MExprEq =
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq
+  FlexTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq
 end
 
 -----------
