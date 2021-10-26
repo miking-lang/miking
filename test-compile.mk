@@ -155,4 +155,4 @@ compile_files += stdlib/pmexpr/utils.mc
 all: $(compile_files)
 
 $(compile_files):
-	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+	@./make compile-test $@ "build/mi compile --test --disable-optimizations"

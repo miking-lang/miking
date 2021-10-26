@@ -50,9 +50,10 @@ let testprog lst =
   (* Print out unit test results, if applicable *)
   if !utest_fail = 0 then
     printf "Unit testing SUCCESSFUL after executing %d tests.\n\n" !utest_ok
-  else
+  else (
     printf "ERROR! %d successful tests and %d failed tests.\n\n" !utest_ok
-      !utest_fail
+      !utest_fail ;
+    exit 1 )
 
 (* Run the REPL *)
 let runrepl _ = start_repl ()
