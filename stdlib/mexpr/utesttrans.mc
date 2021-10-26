@@ -833,6 +833,9 @@ lang MExprUtestTrans = MExprAst
         info = info},
       rhs = TmConst {val = CInt {val = 0}, ty = TyInt {info = info}, info = info},
       ty = TyBool {info = info}, info = info} in
+    -- NOTE(larshum, 2021-10-26): This produces code equivalent to
+    --   'if testsFailed then t; exit 1 else t'
+    -- where t is the final expression of the MExpr AST.
     TmMatch {
       target = testsFailedCond,
       pat = PatBool {val = true, info = info, ty = TyBool {info = info}},
