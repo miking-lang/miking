@@ -672,7 +672,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecordsCmpClosed
+lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
   sem generateTypeDecls =
   | env ->
     let env : AssocSeq Name Type = env in
