@@ -435,9 +435,9 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckBase env t.next in
     let tusing = optionMap (typeCheckBase env) t.tusing in
     (match tusing with Some tu then
-       unify (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
+       unify (tyTm tu, tyarrows_ [tyTm test, tyTm expected, tybool_])
      else
-       unify (tyTm test) (tyTm expected));
+       unify (tyTm test, tyTm expected));
     TmUtest {{{{{t with test = test}
                    with expected = expected}
                    with next = next}
@@ -638,6 +638,7 @@ in
 
 let tests = [
 
+  -- Examples from the paper
   -- A : Polymorphic Instantiation
   {name = "A1",
    tm = ulam_ "x" idbody_,
@@ -723,7 +724,7 @@ let tests = [
   {name = "A12*",
    tm = appf2_ (var_ "id") (var_ "poly") (gen_ idbody_),
    ty = tytuple_ [tyint_, tybool_],
-   env = [poly_, id_]}
+   env = [poly_, id_]},
 
   -- TODO(aathn, 2021-10-02): Add remaining tests from the paper
   -- B : Inference with Polymorphic Arguments
@@ -731,6 +732,101 @@ let tests = [
   -- D : Application Functions
   -- E : Eta-Expansion
   -- F : FreezeML Programs
+
+  -- Other tests
+  {name = "RecLets1",
+   tm = bindall_ [
+     ureclets_ [
+       ("x", ulam_ "n" (app_ (var_ "y") false_)),
+       ("y", ulam_ "n" (app_ (var_ "x") false_))
+     ],
+     var_ "x"
+   ],
+   ty = tyarrow_ tybool_ fa,
+   env = []},
+
+  {name = "RecLets2",
+   tm = bindall_ [
+     ureclets_ [
+       ("even", ulam_ "n"
+         (if_ (eqi_ (var_ "n") (int_ 0))
+           true_
+           (not_ (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1)))))),
+       ("odd", ulam_ "n"
+         (if_ (eqi_ (var_ "n") (int_ 1))
+           true_
+           (not_ (app_ (var_ "even") (subi_ (var_ "n") (int_ 1))))))
+     ],
+     var_ "even"
+   ],
+   ty = tyarrow_ tyint_ tybool_,
+   env = []},
+
+  {name = "Match1",
+   tm = if_ true_ (int_ 1) (int_ 0),
+   ty = tyint_,
+   env = []},
+
+  {name = "Match2",
+   tm = ulam_ "x"
+     (match_ (var_ "x") (pvar_ "y") (addi_ (var_ "y") (int_ 1)) (int_ 0)),
+   ty = tyarrow_ tyint_ tyint_,
+   env = []},
+
+  {name = "Match3",
+   tm = match_
+     (seq_ [str_ "a", str_ "b", str_ "c", str_ "d"])
+     (pseqedge_ [pseqtot_ [pchar_ 'a']] "mid" [pseqtot_ [pchar_ 'd']])
+     (var_ "mid")
+     never_,
+   ty = tyseq_ tystr_,
+   env = []},
+
+  {name = "Const1",
+   tm = addi_ (int_ 5) (int_ 2),
+   ty = tyint_,
+   env = []},
+
+  {name = "Const2",
+   tm = cons_ (int_ 0) empty_,
+   ty = tyseq_ tyint_,
+   env = []},
+
+  {name = "Const3",
+   tm = ulam_ "x" (int_ 0),
+   ty = tyarrow_ fa tyint_,
+   env = []},
+
+  {name = "Seq1",
+   tm = seq_ [],
+   ty = tyseq_ fa,
+   env = []},
+
+  {name = "Seq2",
+   tm = seq_ [int_ 1, int_ 2],
+   ty = tyseq_ tyint_,
+   env = []},
+
+  {name = "Seq3",
+   tm = seq_ [seq_ [int_ 1, int_ 2],
+              seq_ [int_ 3, int_ 4]],
+   ty = tyseq_ (tyseq_ tyint_),
+   env = []},
+
+  {name = "Utest1",
+   tm = utest_ (int_ 1) (addi_ (int_ 0) (int_ 1)) false_,
+   ty = tybool_,
+   env = []},
+
+  {name = "Utest2",
+   tm = utestu_ (int_ 1) true_ false_ (ulam_ "x" idbody_),
+   ty = tybool_,
+   env = []},
+
+  {name = "Never1",
+   tm = never_,
+   ty = fa,
+   env = []}
 
 ]
 in
