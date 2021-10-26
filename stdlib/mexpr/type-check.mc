@@ -355,7 +355,10 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
 
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b : RecLetBinding.
-      let tyBinding = optionGetOrElse (lam. newvar (addi 1 lvl) b.info) b.tyBody in
+      let tyBinding = optionGetOrElse
+        (lam. newvar (addi 1 lvl) b.info)
+        (sremoveUnknown b.tyBody)
+      in
       _insertVar b.ident tyBinding acc
     in
     let recLetEnv : TCEnv = foldl recLetEnvIteratee env t.bindings in
@@ -382,7 +385,10 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
 
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : RecLetBinding.
-      let tyBody = optionGetOrElse (lam. gen lvl (tyTm b.body)) b.tyBody in
+      let tyBody = optionGetOrElse
+        (lam. gen lvl (tyTm b.body))
+        (sremoveUnknown b.tyBody)
+      in
       _insertVar b.ident tyBody acc
     in
     let env = foldl envIteratee env bindings in
@@ -751,11 +757,11 @@ let tests = [
        ("even", ulam_ "n"
          (if_ (eqi_ (var_ "n") (int_ 0))
            true_
-           (not_ (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1)))))),
+           (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
        ("odd", ulam_ "n"
-         (if_ (eqi_ (var_ "n") (int_ 1))
-           true_
-           (not_ (app_ (var_ "even") (subi_ (var_ "n") (int_ 1))))))
+         (if_ (eqi_ (var_ "n") (int_ 0))
+           false_
+           (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))
      ],
      var_ "even"
    ],
