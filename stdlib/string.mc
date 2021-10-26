@@ -222,6 +222,19 @@ utest strTrim " aaaa   " with "aaaa"
 utest strTrim "   bbbbb  bbb " with "bbbbb  bbb"
 utest strTrim "ccccc c\t   \n" with "ccccc c"
 
+
+
+let stringIsInt = lam s.
+  if eqi (length s) 0 then false else
+  let s = if eqChar (get s 0) '-' then tail s else s in
+    forAll isDigit s
+
+utest stringIsInt "123" with true
+utest stringIsInt "-7" with true
+utest stringIsInt "a1" with false
+utest stringIsInt "" with false
+
+
 -- Joins the strings in strs on delim
 recursive
   let strJoin = lam delim. lam strs.
