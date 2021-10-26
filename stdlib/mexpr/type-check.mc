@@ -48,8 +48,8 @@ let _pprintType = use MExprPrettyPrint in
 
 lang Unify = MExprAst
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
-  sem unify =
-  | (ty1, ty2) ->
+  sem unify (ty1 : Type) =
+  | ty2 ->
     unifyBase biEmpty (ty1, ty2)
 
   -- Unify the types `ty1' and `ty2', assuming that any pair of type variables in
@@ -320,7 +320,7 @@ lang AppTypeCheck = TypeCheck + AppAst
     let lhs = typeCheckBase env t.lhs in
     let rhs = typeCheckBase env t.rhs in
     let tyRes = newvar env.currentLvl t.info in
-    unify (tyTm lhs, ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
+    unify (tyTm lhs) (ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
                with ty = tyRes}
@@ -337,7 +337,7 @@ lang LetTypeCheck = TypeCheck + LetAst
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
         match stripTyAll ty with (_, tyAnnot) then
-          unify (tyAnnot, (tyTm body));
+          unify tyAnnot (tyTm body);
           ty
         else never)
       (sremoveUnknown t.tyBody)
@@ -368,12 +368,12 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
         -- inferred type of the binding
         (lam.
           match _lookupVar b.ident recLetEnv with Some ty then
-            unify (ty, tyTm body)
+            unify ty (tyTm body)
           else never)
         -- Type annotation: unify the inferred type of the body with the annotated one
         (lam ty.
           match stripTyAll ty with (_, tyAnnot) then
-            unify (tyAnnot, tyTm body)
+            unify tyAnnot (tyTm body)
           else never)
         (sremoveUnknown b.tyBody);
       {b with body = body}
@@ -397,10 +397,10 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
   | TmMatch t ->
     let target = typeCheckBase env t.target in
     match typeCheckPat env t.pat with (thnEnv, pat) then
-      unify (tyTm target, tyPat pat);
+      unify (tyTm target) (tyPat pat);
       let thn = typeCheckBase thnEnv t.thn in
       let els = typeCheckBase env t.els in
-      unify (tyTm thn, tyTm els);
+      unify (tyTm thn) (tyTm els);
       TmMatch {{{{{t with target = target}
                      with thn = thn}
                      with els = els}
@@ -422,7 +422,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckBase env) t.tms in
-    iter (lam tm. unify (elemTy, tyTm tm)) tms;
+    iter (compose (unify elemTy) tyTm) tms;
     TmSeq {{t with tms = tms}
               with ty = ityseq_ t.info elemTy}
 end
@@ -477,7 +477,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL typeCheckPat env t.pats with (env, pats) then
-      iter (lam pat. unify (elemTy, tyPat pat)) pats;
+      iter (compose (unify elemTy) tyPat) pats;
       (env, PatSeqTot {{t with pats = pats}
                           with ty = ityseq_ t.info elemTy})
     else never
@@ -488,7 +488,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
-    let unifyPat = lam pat. unify (elemTy, tyPat pat) in
+    let unifyPat = compose (unify elemTy) tyPat in
     match mapAccumL typeCheckPat env t.prefix with (env, prefix) then
       iter unifyPat prefix;
       match mapAccumL typeCheckPat env t.postfix with (env, postfix) then
@@ -524,7 +524,7 @@ lang AndPatTypeCheck = PatTypeCheck + AndPat
   | PatAnd t ->
     match typeCheckPat env t.lpat with (env, lpat) then
       match typeCheckPat env t.rpat with (env, rpat) then
-        unify (tyPat lpat, tyPat rpat);
+        unify (tyPat lpat) (tyPat rpat);
         (env, PatAnd {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
       else never
     else never
@@ -535,7 +535,7 @@ lang OrPatTypeCheck = PatTypeCheck + OrPat
   | PatOr t ->
     match typeCheckPat env t.lpat with (env, lpat) then
       match typeCheckPat env t.rpat with (env, rpat) then
-        unify (tyPat lpat, tyPat rpat);
+        unify (tyPat lpat) (tyPat rpat);
         (env, PatOr {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
       else never
     else never
