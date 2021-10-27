@@ -16,7 +16,7 @@ type Hooks =
   { debugTypeAnnot : Expr -> ()
   , debugGenerate : String -> ()
   , exitBefore : () -> ()
-  , compileOcaml : [String] -> [String] -> String -> String
+  , compileOcaml : [String] -> [String] -> String -> a
   }
 
 let emptyHooks : Hooks =
@@ -39,7 +39,7 @@ let collectLibraries : ExternalNameMap -> ([String], [String])
   with (libs, clibs) then (setToSeq libs, setToSeq clibs)
   else never
 
-let compileMCore : Expr -> Hooks -> String =
+let compileMCore : Expr -> Hooks -> a =
   lam ast. lam hooks.
   use MCoreCompileLang in
   let ast = typeAnnot ast in
