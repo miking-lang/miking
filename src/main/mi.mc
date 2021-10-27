@@ -38,6 +38,7 @@ Options:
   --exit-before           Exit before evaluation or compilation
   --test                  Generate utest code
   --disable-optimizations Disables optimizations to decrease compilation time
+  --typecheck             Type check the program before evaluation or compilation
   -- <args>               If the run or eval commands are used, then the texts
                           following -- are arguments to the executed program
   --help                  Display this list of options
