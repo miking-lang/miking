@@ -441,9 +441,9 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckBase env t.next in
     let tusing = optionMap (typeCheckBase env) t.tusing in
     (match tusing with Some tu then
-       unify (tyTm tu, tyarrows_ [tyTm test, tyTm expected, tybool_])
+       unify (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
      else
-       unify (tyTm test, tyTm expected));
+       unify (tyTm test) (tyTm expected));
     TmUtest {{{{{t with test = test}
                    with expected = expected}
                    with next = next}
