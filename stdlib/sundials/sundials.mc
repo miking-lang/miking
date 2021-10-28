@@ -127,77 +127,80 @@ let idaReinit =
 
 mexpr
 
-let tget = tensorGetExn in
-let tset = tensorSetExn in
-let tcreate = tensorCreateCArrayFloat in
+utest
+  let tget = tensorGetExn in
+  let tset = tensorSetExn in
+  let tcreate = tensorCreateCArrayFloat in
 
-let y = tcreate [2] (lam. 0.) in
-let yp = tcreate [2] (lam. 0.) in
+  let y = tcreate [2] (lam. 0.) in
+  let yp = tcreate [2] (lam. 0.) in
 
-tset y [0] 1.;
-tset yp [1] (negf 1.);
+  tset y [0] 1.;
+  tset yp [1] (negf 1.);
 
-let v = nvectorSerialWrap y in
-let vp = nvectorSerialWrap yp in
+  let v = nvectorSerialWrap y in
+  let vp = nvectorSerialWrap yp in
 
-let m = sundialsMatrixDense 2 in
+  let m = sundialsMatrixDense 2 in
 
-let lsolver = idaDlsDense v m in
+  let lsolver = idaDlsDense v m in
 
-let jacf = lam jacargs : IdaJacArgs. lam m : SundialsMatrixDense.
-  let m = sundialsMatrixDenseUnwrap m in
-  let x = tget jacargs.y [0] in
-  let vx = tget jacargs.y [1] in
-  let dx = tget jacargs.yp [0] in
-  let dvx = tget jacargs.yp [1] in
-  tset m [0, 0] jacargs.c;
-  tset m [0, 1] (negf 1.);
-  tset m [1, 0] 1.;
-  tset m [1, 1] (addf 1. jacargs.c);
-  ()
-in
+  let jacf = lam jacargs : IdaJacArgs. lam m : SundialsMatrixDense.
+    let m = sundialsMatrixDenseUnwrap m in
+    let x = tget jacargs.y [0] in
+    let vx = tget jacargs.y [1] in
+    let dx = tget jacargs.yp [0] in
+    let dvx = tget jacargs.yp [1] in
+    tset m [0, 0] jacargs.c;
+    tset m [0, 1] (negf 1.);
+    tset m [1, 0] 1.;
+    tset m [1, 1] (addf 1. jacargs.c);
+    ()
+  in
 
--- let lsolver = idaDlsSolverJacf jacf lsolver in
-let lsolver = idaDlsSolver lsolver in
-let tol = idaSSTolerances 1.e-4 1.e-6 in
+  -- let lsolver = idaDlsSolverJacf jacf lsolver in
+  let lsolver = idaDlsSolver lsolver in
+  let tol = idaSSTolerances 1.e-4 1.e-6 in
 
-let resf = lam. lam y. lam yp. lam r.
-  let x = tget y [0] in
-  let vx = tget y [1] in
-  let dx = tget yp [0] in
-  let dvx = tget yp [1] in
-  tset r [0] (subf dx vx);
-  tset r [1] (addf dvx (addf vx x));
-  ()
-in
+  let resf = lam. lam y. lam yp. lam r.
+    let x = tget y [0] in
+    let vx = tget y [1] in
+    let dx = tget yp [0] in
+    let dvx = tget yp [1] in
+    tset r [0] (subf dx vx);
+    tset r [1] (addf dvx (addf vx x));
+    ()
+  in
 
-let varid = nvectorSerialWrap (tcreate [2] (lam. idaVarIdDifferential)) in
-let rootf = lam. lam. lam. lam. () in
-let t0 = 0. in
+  let varid = nvectorSerialWrap (tcreate [2] (lam. idaVarIdDifferential)) in
+  let rootf = lam. lam. lam. lam. () in
+  let t0 = 0. in
 
-let s = idaInit lsolver tol resf varid (0, rootf) t0 v vp in
-idaCalcICYaYd s 1.e-4 v vp;
-let r = idaSolveNormal s 2. v vp in
+  let s = idaInit lsolver tol resf varid (0, rootf) t0 v vp in
+  idaCalcICYaYd s 1.e-4 v vp;
+  let r = idaSolveNormal s 2. v vp in
 
-(match r with (tend, r) then
-  utest idaSolverResult r with IdaSuccess {} in
-  utest tend with 2. using eqf in
-  ()
-else never);
+  (match r with (tend, r) then
+    utest idaSolverResult r with IdaSuccess {} in
+    utest tend with 2. using eqf in
+    ()
+  else never);
 
-let y = nvectorSerialUnwrap v in
-let yp = nvectorSerialUnwrap vp in
+  let y = nvectorSerialUnwrap v in
+  let yp = nvectorSerialUnwrap vp in
 
-tset y [0] 1.;
-tset y [1] 0.;
-tset yp [0] 0.;
-tset yp [1] (negf 0.);
-idaReinit s (0, rootf) t0 v vp;
-idaCalcICYaYd s 1.e-4 v vp;
-let r = idaSolveNormal s 2. v vp in
+  tset y [0] 1.;
+  tset y [1] 0.;
+  tset yp [0] 0.;
+  tset yp [1] (negf 0.);
+  idaReinit s (0, rootf) t0 v vp;
+  idaCalcICYaYd s 1.e-4 v vp;
+  let r = idaSolveNormal s 2. v vp in
 
-(match r with (tend, r) then
-  utest idaSolverResult r with IdaSuccess {} in
-  utest tend with 2. using eqf in
-  ()
-else never)
+  (match r with (tend, r) then
+    utest idaSolverResult r with IdaSuccess {} in
+    utest tend with 2. using eqf in
+    ()
+  else never)
+with () in
+()

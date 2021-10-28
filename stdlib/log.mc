@@ -44,11 +44,11 @@ let logDebug = logMsg logLevel.debug
 
 mexpr
 
-logSetLogLevel logLevel.error;
+-- logSetLogLevel logLevel.error;
 
-logError "Some error!";
-logWarning "Some warning!";
-logInfo "Some info!";
-logDebug "Some debug info!";
+-- logError "Some error!";
+-- logWarning "Some warning!";
+-- logInfo "Some info!";
+-- logDebug "Some debug info!";
 
 ()
