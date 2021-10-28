@@ -28,6 +28,7 @@ lang FutharkConstAst
   | FCRem ()
   | FCFloatFloor ()
   | FCFloat2Int ()
+  | FCInt2Float ()
   | FCEq ()
   | FCNeq ()
   | FCGt ()

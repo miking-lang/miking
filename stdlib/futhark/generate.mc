@@ -98,6 +98,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CNegi _ -> FCNegi ()
   | CNegf _ -> FCNegf ()
   | CModi _ -> FCRem ()
+  | CInt2float _ -> FCInt2Float ()
   | CEqi _ | CEqf _ | CEqc _ -> FCEq ()
   | CNeqi _ | CNeqf _ -> FCNeq ()
   | CGti _ | CGtf _ -> FCGt ()

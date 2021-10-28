@@ -154,7 +154,7 @@ let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
       "Pattern replacement function for ", parallelPattern,
       " referenced unmatched variable pattern ", varPatString varPat])
 
-let getMatchName 
+let getMatchName
   : String -> VarPattern -> Map VarPattern (Name, Expr) -> Name =
   lam parallelPattern. lam varPat. lam matches.
   match getMatch parallelPattern varPat matches with (id, _) then

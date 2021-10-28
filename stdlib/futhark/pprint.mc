@@ -47,6 +47,7 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCRem () -> "(%)"
   | FCFloatFloor () -> "f64.floor"
   | FCFloat2Int () -> "i64.f64"
+  | FCInt2Float () -> "f64.i64"
   | FCEq () -> "(==)"
   | FCNeq () -> "(!=)"
   | FCGt () -> "(>)"
