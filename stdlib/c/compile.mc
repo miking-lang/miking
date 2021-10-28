@@ -387,6 +387,7 @@ lang MExprCCompile = MExprAst + CAst
             match (compileType env) retType with ret then
               let benv = { env with allocs = [] } in
               match compileStmts benv (RReturn ()) [] body with (benv, body) then
+                let benv: CompileCEnv = benv in
                 let body = concat benv.allocs body in
                 -- Restore previous allocs
                 let env = { benv with allocs = env.allocs } in
@@ -593,6 +594,7 @@ lang MExprCCompile = MExprAst + CAst
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
     match compileStmts env (RReturn ()) accInit rest with (env, accInit) then
+      let env: CompileCEnv = env in
       (accTop, concat env.allocs accInit)
     else never
 
@@ -703,6 +705,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmSeq { tms = tms } & t ->
     match res with RIdent id then
       match compileAlloc env (None ()) t with (env, def, init, n) then
+        let env: CompileCEnv = env in
         let def = map (lam d. CSDef d) def in
         let env = { env with allocs = concat def env.allocs } in
         (env, join [
@@ -720,6 +723,7 @@ lang MExprCCompile = MExprAst + CAst
     match res with RIdent id then
       match compileAlloc env (None ()) t with (env, def, init, n) then
         let def = map (lam d. CSDef d) def in
+        let env: CompileCEnv = env in
         let env = { env with allocs = concat def env.allocs } in
         (env, join [
           init,
@@ -739,6 +743,7 @@ lang MExprCCompile = MExprAst + CAst
     else
       match res with RIdent id then
         match compileAlloc env (None ()) t with (env, def, init, n) then
+          let env: CompileCEnv = env in
           let def = map (lam d. CSDef d) def in
           let env = { env with allocs = concat def env.allocs } in
           (env, join [
@@ -789,6 +794,7 @@ lang MExprCCompile = MExprAst + CAst
     match body with TmConApp _ | TmRecord _ | TmSeq _ then
       match compileAlloc env (Some ident) body with (env, def, init, n) then
         let def = map (lam d. CSDef d) def in
+        let env: CompileCEnv = env in
         let env = { env with allocs = concat def env.allocs } in
         let acc = join [ acc, init ] in
         compileStmts env res acc inexpr
