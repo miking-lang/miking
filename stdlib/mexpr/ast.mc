@@ -1053,6 +1053,10 @@ lang UnknownTypeAst = Ast
 
   sem infoTy =
   | TyUnknown r -> r.info
+
+  sem sremoveUnknown =
+  | TyUnknown _ -> None ()
+  | ty -> Some ty
 end
 
 lang BoolTypeAst = Ast
@@ -1205,11 +1209,6 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
-type Level = Int
-type TVarRec = {ident : Name,
-                weak  : Bool,
-                level : Level}
-
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
@@ -1223,6 +1222,11 @@ lang VarTypeAst = Ast
   | TyVar t -> t.info
 
 end
+
+type Level = Int
+type TVarRec = {ident : Name,
+                weak  : Bool,
+                level : Level}
 
 lang FlexTypeAst = Ast
   syn TVar =

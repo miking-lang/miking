@@ -75,7 +75,6 @@ let reserved_strings = [
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
   ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
-  ("`",             fun(i) -> Parser.BACKTICK{i=i;v=()});
 ]
 
 (* Info handling *)
@@ -169,7 +168,7 @@ let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++" | "`"
+              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++"
 
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+
@@ -207,16 +206,17 @@ rule main = parse
       { let s = Ustring.from_utf8 c in
         let esc_s = Ustring.convert_escaped_chars s in
         Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=esc_s}}
-  | '#' (("con" | "type" | "var" | "label") as ident) '"'
+  | '#' (("con" | "type" | "var" | "label" | "frozen") as ident) '"'
        { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let id = Ustring.convert_escaped_chars s  in
          let fi = mkinfo_ustring (s ^. us"  #" ^. us(ident)) in
 	 let rval = (match ident with
-            | "con"   -> Parser.CON_IDENT{i=fi; v=id}
-            | "type"  -> Parser.TYPE_IDENT{i=fi; v=id}
-            | "var"   -> Parser.VAR_IDENT{i=fi; v=id}
-            | "label" -> Parser.LABEL_IDENT{i=fi; v=id}
+            | "con"    -> Parser.CON_IDENT{i=fi; v=id}
+            | "type"   -> Parser.TYPE_IDENT{i=fi; v=id}
+            | "var"    -> Parser.VAR_IDENT{i=fi; v=id}
+            | "label"  -> Parser.LABEL_IDENT{i=fi; v=id}
+            | "frozen" -> Parser.FROZEN_IDENT{i=fi; v=id}
             | _ -> failwith "Cannot happen")
          in
 	 add_colno 3; colcount_fast ident; rval}

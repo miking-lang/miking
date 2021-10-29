@@ -32,9 +32,10 @@
 /* Misc tokens */
 %token EOF
 
-/* Use the non-terminals 'con_ident', 'var_ident', 'type_ident', and 'ident' instead of the below */
+/* Use the non-terminals 'con_ident', 'var_ident', 'frozen_ident', 'type_ident', and 'ident' instead of the below */
 %token <Ustring.ustring Ast.tokendata> CON_IDENT
 %token <Ustring.ustring Ast.tokendata> VAR_IDENT
+%token <Ustring.ustring Ast.tokendata> FROZEN_IDENT
 %token <Ustring.ustring Ast.tokendata> TYPE_IDENT
 %token <Ustring.ustring Ast.tokendata> LABEL_IDENT
 %token <Ustring.ustring Ast.tokendata> UC_IDENT  /* An identifier that starts with an upper-case letter */
@@ -105,7 +106,6 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
-%token <unit Ast.tokendata> BACKTICK      /* "`"   */
 
 %start main
 %start main_mexpr
@@ -389,7 +389,7 @@ atom:
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false) }
-  | BACKTICK var_ident   { TmVar($2.i,$2.v,Symb.Helpers.nosym, true) }
+  | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
@@ -596,6 +596,9 @@ ident:
 var_ident:
   | LC_IDENT {$1}
   | VAR_IDENT {$1}
+
+frozen_ident:
+  | FROZEN_IDENT {$1}
 
 con_ident:
   | UC_IDENT {$1}

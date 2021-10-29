@@ -8,6 +8,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/tuning/decision-points.mc"
@@ -20,7 +21,8 @@ include "ocaml/external-includes.mc"
 lang MCoreCompile =
   BootParser +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument
+  MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
+  MExprProfileInstrument
 end
 
 let pprintMcore = lam ast.
@@ -58,6 +60,9 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
       if options.debugProfile then instrumentProfiling (symbolize ast)
       else ast
     in
+
+    -- If option --typecheck, type check the AST
+    let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.

@@ -15,6 +15,7 @@ include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
@@ -22,8 +23,8 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans +
-  MExprProfileInstrument + MExprEval
+  BootParser + MExpr + MExprTypeAnnot + MExprTypeCheck + MExprTypeLift +
+  MExprUtestTrans + MExprProfileInstrument + MExprEval
 
   sem updateArgv (args : [String]) =
   | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
@@ -59,6 +60,9 @@ let eval = lam files. lam options : Options. lam args.
         instrumentProfiling (symbolize ast)
       else ast
     in
+
+    -- If option --typecheck, type check the AST
+    let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
