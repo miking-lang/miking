@@ -48,8 +48,10 @@ use
 make test
 ```
 
-Alternatively, you can use `make test-all` to run the full test suite.
-Beware that this may take some time.
+Alternatively, you can use `make test-all` to run the full test suite. Beware
+that this may take some time. Alternatively you can use `make
+test-all-prune-utests` which will exclude tests whose external dependencies are
+not met on the current system (with the exception of `pyml`).
 
 To run a hello world program, create a file `hello.mc` with the following code,
 
