@@ -16,7 +16,8 @@ include "tune.mc"
 mexpr
 
 -- Menu
-let menu =
+let menu = lam. join
+[
 "Usage: mi <command> [<options>] file [<options>]
 
 Commands:
@@ -30,19 +31,13 @@ If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
 In such case, options need to be written before the file name.
 
-Options:
-  --debug-parse           Print the AST after parsing
-  --debug-generate        Print the AST after code generation
-  --debug-type-annot      Print the AST after adding type annotations
-  --debug-profile         Instrument profiling expressions to AST
-  --exit-before           Exit before evaluation or compilation
-  --test                  Generate utest code
-  --disable-optimizations Disables optimizations to decrease compilation time
-  --typecheck             Type check the program before evaluation or compilation
-  -- <args>               If the run or eval commands are used, then the texts
-                          following -- are arguments to the executed program
-  --help                  Display this list of options
+Options:\n",
+optionsHelpString (),
 "
+  -- <args>                If the run or eval commands are used, then the texts
+                           following -- are arguments to the executed program
+"
+]
 in
 
 -- Commands map, maps command strings to functions. The functions
@@ -57,7 +52,7 @@ let commandsMap = [
 
 -- Print the usage message and exit.
 let usage = lam.
-  print menu;
+  print (menu ());
   exit 0
 in
 
@@ -66,6 +61,7 @@ let maybePrintHelp = lam o : Options.
   if o.printHelp then usage () else ()
 in
 
+let mapStringLookup = assocLookup {eq=eqString} in
 
 -- Main: find and run the correct command. See commandsMap above.
 
