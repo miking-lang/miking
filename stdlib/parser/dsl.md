@@ -34,6 +34,7 @@ thus the above yields the following fragment:
 lang TmInt
   syn Expr =
   | TmInt { value : Int }
+end
 ```
 
 The syntax of a single production can contain regex style repetition
@@ -46,6 +47,20 @@ prod TmTuple: Expr = "(" fields:Expr ("," fields:Expr)+ ")"
 -- Zero-or-more is expressed with `?` and produce an Option
 prod TmLet: Expr = "let" ident:LIdent (":" tyIdent:Type)? "=" value:Expr "in" body:Expr
 ```
+We thus get the following language fragments:
+
+```
+lang TmTuple
+  syn Expr =
+  | TmTuple { fields : [Expr] }
+end
+
+lang TmLet
+  syn Expr =
+  | TmLet { ident: String, tyIdent: Option Type, value: Expr, body: Expr }
+end
+```
+
 We can also give the constructor nested records:
 
 ```
@@ -66,13 +81,42 @@ production but rather explicitly as grouping:
 grouping "(" Expr ")"
 ```
 
-It should have the form `grouping` `<token>` `<type>` `<token>`.
+It should have the form `grouping` `<token>` `<type>` `<token>`. These
+do not produce a node in the final AST.
 
 ### Tokens
 
 Tokens can be either a literal (e.g. `"let"`) or a named token
-(e.g. `LIdent`). In the current system there is a number of builtin
-token types, currently specified in `lexer.mc`.
+(e.g. `LIdent`). In the current system new token types cannot be
+defined, rather there is a number of builtin token types, shown
+below. Each token carries a value that will end up in the AST if the
+token has a name attached. For example, `x:EOF` will put a field `x :
+()` in the AST node, while `value:Integer` gives a field `value: Int`.
+
+- `EOF : ()`
+- `LIdent : String` Identifier starting with a lowercase letter.
+- `UIdent : String` Identifier starting with an uppercase letter.
+- `Integer : Int`
+- `Float : Float`
+- `String : String`
+- `Char : Char`
+- `Operator : String` A sequence of one or more of these characters: `%<>!?~:.$&*+-/=@^|`.
+- `LParen : ()`
+- `RParen : ()`
+- `LBracket : ()`
+- `RBracket : ()`
+- `LBrace : ()`
+- `RBrace : ()`
+- `Semicolon : ()`
+- `Comma : ()`
+
+Note that for many of these it's likely nicer to use a literal than
+the token type, e.g., `"("` instead of `LParen`, though the latter is
+available if you want it.
+
+Finally: in the current implementation all literals have to lex as a
+single token. This means that, e.g., `"set="` is not a valid token
+since it would normally lex as a `LIdent` followed by an `Operator`.
 
 ## Operators
 
@@ -90,6 +134,9 @@ prefix TmNot: Expr = "!"
 postfix TmFieldAccess: Expr = "." field:LIdent
 ```
 
+Note that if you want to give the operands other names than `left` and
+`right` you need to use the explicit form.
+
 Each production will be one of these things:
 - Simple/atomic if it has no direct recursion on either edge
 - Prefix if it only has direct recursion on the right edge
@@ -99,6 +146,11 @@ Each production will be one of these things:
 I suspect that productions that sometimes have direct recursion on the
 edge and sometimes not are a bad idea. Please let me know if such
 cases come up, so we can see if that is correct or not.
+
+## Implicit and Explicit Grouping of Operators
+
+<!-- TODO(vipa, 2021-10-29): Rewrite all of the stuff on grouping in
+general, probably include ambiguity here -->
 
 Infix productions can specify their associativity:
 
