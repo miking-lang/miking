@@ -5,6 +5,7 @@ include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
 include "futhark/length-parameterize.mc"
 include "futhark/pprint.mc"
+include "futhark/record-lift.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -32,7 +33,7 @@ lang PMExprCompile =
   PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
   FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
-  FutharkLengthParameterize + FutharkCWrapper +
+  FutharkLengthParameterize + FutharkCWrapper + FutharkRecordParamLift +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
@@ -81,6 +82,7 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   use PMExprCompile in
   let ast = generateProgram entryPoints ast in
   reportFutharkFunctionViolations ast;
+  let ast = liftRecordParameters ast in
   let ast = deadcodeElimination ast in
   parameterizeLength ast
 

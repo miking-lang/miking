@@ -51,7 +51,7 @@ let _constructAppSeq = use FutharkAst in
     target
     args
 
-lang FutharkReplaceRecordParamWithFields = FutharkAst
+lang FutharkRecordParamLift = FutharkAst
   sem updateApplicationParameters (replaceMap : Map Name FunctionReplaceData) =
   | FEApp t ->
     match _collectAppTargetAndArgs (FEApp t) with (target, args) then
@@ -66,10 +66,7 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
               create diff (lam i.
                 let idx = addi i nargs in
                 let param : ParamData = get data.oldParams idx in
-                FEVar {
-                  ident = nameSym "x",
-                  ty = param.1,
-                  info = t.info})
+                FEVar {ident = nameSym "x", ty = param.1, info = t.info})
             else [] in
           let args = concat args addedArgs in
           let appArgs : [FutExpr] =
@@ -143,7 +140,7 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
     else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
   | t -> smap_FExpr_FExpr (replaceProjections paramReplace) t
 
-  sem replaceRecordParametersDecl (replaceMap : Map Name FunctionReplaceData) =
+  sem liftRecordParametersDecl (replaceMap : Map Name FunctionReplaceData) =
   | FDeclFun t ->
     -- 1. Update calls to functions in body for which the parameters have been
     -- updated, by using the replaceMap.
@@ -202,10 +199,10 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
       (replaceMap, declFun)
   | t -> (replaceMap, t)
 
-  sem replaceRecordParameters =
+  sem liftRecordParameters =
   | FProg t ->
     let replaceMap : Map Name FunctionReplaceData = mapEmpty nameCmp in
-    match mapAccumL replaceRecordParametersDecl replaceMap t.decls
+    match mapAccumL liftRecordParametersDecl replaceMap t.decls
     with (_, decls) then
       FProg {t with decls = decls}
     else never
@@ -213,7 +210,7 @@ end
 
 mexpr
 
-use FutharkReplaceRecordParamWithFields in
+use FutharkRecordParamLift in
 use FutharkPrettyPrint in
 
 let main = nameSym "main" in
@@ -248,7 +245,7 @@ let mainFieldBody = futBindall_ [
   futApp_ (nFutVar_ f) (futRecordProj_ (nFutVar_ x) "a")] in
 let expected = prog [fDeclFieldOnly] mainFieldBody in
 
-utest printFutProg (replaceRecordParameters projOneField)
+utest printFutProg (liftRecordParameters projOneField)
 with printFutProg expected using eqString in
 
 -- NOTE(larshum, 2021-10-31): For simplicity, even if all fields of a record
@@ -279,7 +276,7 @@ let mainAllBody = futBindall_ [
       futRecordProj_ (nFutVar_ x) "b" ]] in
 let expected = prog [fDeclAllFields] mainAllBody in
 
-utest printFutProg (replaceRecordParameters projAllFields)
+utest printFutProg (liftRecordParameters projAllFields)
 with printFutProg expected using eqString in
 
 let fRecordUpdate = FDeclFun {
@@ -288,7 +285,7 @@ let fRecordUpdate = FDeclFun {
   body = futRecordUpdate_ (nFutVar_ r) "a" (futInt_ 2)} in
 let recordUpdate = prog [fRecordUpdate] mainBody in
 
-utest printFutProg (replaceRecordParameters recordUpdate)
+utest printFutProg (liftRecordParameters recordUpdate)
 with printFutProg recordUpdate using eqString in
 
 let g = nameSym "g" in
@@ -313,7 +310,7 @@ let fDeclCallGField = FDeclFun {
   body = futApp_ (nFutVar_ g) (nFutVar_ a2)} in
 let expected = prog [gDeclAppVar, fDeclCallGField] mainFieldBody in
 
-utest printFutProg (replaceRecordParameters functionAppWithProj)
+utest printFutProg (liftRecordParameters functionAppWithProj)
 with printFutProg expected using eqString in
 
 let x = nameSym "x" in
@@ -346,7 +343,7 @@ let gDeclWrapped = FDeclFun {
     futAppSeq_ (nFutVar_ f) [futInt_ 1, futRecordProj_ (nFutVar_ x2) "a"])} in
 let expected = prog [fDeclField, gDeclWrapped] mainBody in
 
-utest printFutProg (replaceRecordParameters partialApp)
+utest printFutProg (liftRecordParameters partialApp)
 with printFutProg expected using eqString in
 
 ()
