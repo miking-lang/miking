@@ -28,35 +28,50 @@ type FunctionReplaceData = {
   paramReplace : Map Name (Map SID ParamData)
 }
 
+let _collectAppTargetAndArgs = use FutharkAst in
+  lam e : FutExpr.
+  recursive let work = lam args : [FutExpr]. lam e : FutExpr.
+    match e with FEApp {lhs = !(FEApp _) & lhs, rhs = rhs} then
+      (lhs, cons rhs args)
+    else match e with FEApp t then
+      work (cons t.rhs args) t.lhs
+    else (e, args)
+  in work [] e
+
+let _constructAppSeq = use FutharkAst in
+  lam target : FutExpr. lam args : [FutExpr].
+  foldl
+    (lam acc : FutExpr. lam arg : FutExpr.
+      let ty =
+        match tyFutTm acc with FTyArrow t then
+          t.to
+        else FTyUnknown {info = infoFutTm acc} in
+      let info = mergeInfo (infoFutTm acc) (infoFutTm arg) in
+      FEApp {lhs = acc, rhs = arg, ty = ty, info = info})
+    target
+    args
+
 lang FutharkReplaceRecordParamWithFields = FutharkAst
-  sem collectAppTargetAndArgs (args : [FutExpr]) =
-  | FEApp {lhs = !(FEApp _) & lhs, rhs = rhs} ->
-    (lhs, cons rhs args)
-  | FEApp t ->
-    collectAppTargetAndArgs (cons t.rhs args) t.lhs
-  | t -> (t, args)
-
-  sem constructAppSeq (target : FutExpr) =
-  | args /- : [FutExpr] -/ ->
-    foldl
-      (lam acc : FutExpr. lam arg : FutExpr.
-        let ty =
-          match tyFutTm acc with FTyArrow t then
-            t.to
-          else FTyUnknown {info = infoFutTm acc} in
-        let info = mergeInfo (infoFutTm acc) (infoFutTm arg) in
-        FEApp {lhs = acc, rhs = arg, ty = ty, info = info})
-      target
-      args
-
   sem updateApplicationParameters (replaceMap : Map Name FunctionReplaceData) =
   | FEApp t ->
-    match collectAppTargetAndArgs [] (FEApp t) with (target, args) then
+    match _collectAppTargetAndArgs (FEApp t) with (target, args) then
       match target with FEVar {ident = id} then
         match mapLookup id replaceMap with Some data then
           let data : FunctionReplaceData = data in
-          -- TODO(larshum, 2021-10-31): Add support for partially applied
-          -- functions here.
+          let nargs = length args in
+          let nparams = length data.oldParams in
+          let addedArgs =
+            if lti nargs nparams then
+              let diff = subi nparams nargs in
+              create diff (lam i.
+                let idx = addi i nargs in
+                let param : ParamData = get data.oldParams idx in
+                FEVar {
+                  ident = nameSym "x",
+                  ty = param.1,
+                  info = t.info})
+            else [] in
+          let args = concat args addedArgs in
           let appArgs : [FutExpr] =
             join
               (map
@@ -74,7 +89,17 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
                   else [argExpr])
                 (zip args data.oldParams)) in
           let target = withTypeFutTm data.newType target in
-          constructAppSeq target appArgs
+          foldr
+            (lam extraArg : FutExpr. lam acc : FutExpr.
+              let info = mergeInfo (infoFutTm extraArg) (infoFutTm acc) in
+              match extraArg with FEVar t then
+                FELam {ident = t.ident, body = acc, info = info,
+                       ty = FTyArrow {from = tyFutTm extraArg,
+                                      to = tyFutTm acc,
+                                      info = info}}
+              else infoErrorExit info "")
+            (_constructAppSeq target appArgs)
+            addedArgs
         else FEApp t
       else FEApp t
     else never
@@ -175,7 +200,7 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
       let declFun = FDeclFun {{t with params = newParams}
                                  with body = newBody} in
       (replaceMap, declFun)
-  | t -> (t, replaceMap)
+  | t -> (replaceMap, t)
 
   sem replaceRecordParameters =
   | FProg t ->
@@ -289,6 +314,39 @@ let fDeclCallGField = FDeclFun {
 let expected = prog [gDeclAppVar, fDeclCallGField] mainFieldBody in
 
 utest printFutProg (replaceRecordParameters functionAppWithProj)
+with printFutProg expected using eqString in
+
+let x = nameSym "x" in
+let fDecl = FDeclFun {
+  ident = f, entry = false, typeParams = [], ret = futIntTy_, info = NoInfo (),
+  params = [(x, futIntTy_), (r, recordTy)],
+  body =
+    futAdd_
+      (nFutVar_ x)
+      (withTypeFutTm futIntTy_ (futRecordProj_ (nFutVar_ r) "a"))} in
+let gDecl = FDeclFun {
+  ident = g, entry = false, typeParams = [], params = [], info = NoInfo (),
+  ret = futArrowTy_ recordTy futIntTy_,
+  body = futApp_ (nFutVar_ f) (futInt_ 1)} in
+let mainBody =
+  futApp_
+    (nFutVar_ g)
+    (futRecord_ [("a", futInt_ 4), ("b", futFloat_ 2.5)]) in
+let partialApp = prog [fDecl, gDecl] mainBody in
+
+let x2 = nameSym "x" in
+let fDeclField = FDeclFun {
+  ident = f, entry = false, typeParams = [], ret = futIntTy_, info = NoInfo (),
+  params = [(x, futIntTy_), (a, futIntTy_)],
+  body = futAdd_ (nFutVar_ x) (nFutVar_ a)} in
+let gDeclWrapped = FDeclFun {
+  ident = g, entry = false, typeParams = [], params = [], info = NoInfo (),
+  ret = futArrowTy_ recordTy futIntTy_,
+  body = nFutLam_ x2 (
+    futAppSeq_ (nFutVar_ f) [futInt_ 1, futRecordProj_ (nFutVar_ x2) "a"])} in
+let expected = prog [fDeclField, gDeclWrapped] mainBody in
+
+utest printFutProg (replaceRecordParameters partialApp)
 with printFutProg expected using eqString in
 
 ()
