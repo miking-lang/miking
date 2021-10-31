@@ -1,5 +1,5 @@
--- Finds record parameters which are only used in projections, and replaces
--- such record parameters with parameters represeting the projected fields.
+-- Lifts record parameters which are only used in projections by replacing them
+-- with parameters representing the projected fields.
 --
 -- This transformation is important for aliasing reasons. If we only use a
 -- subset of the fields in a record, but the full record is passed, then all
@@ -19,8 +19,9 @@ type FunctionReplaceData = {
   -- record field parameters.
   newType : FutType,
 
-  -- Contains the new sequence of parameters to the function.
-  newParams : [ParamData],
+  -- The sequence of parameter names and type, as expected by the function
+  -- prior to the record parameter lifting.
+  oldParams : [ParamData],
 
   -- Maps the name of a replaced record parameter to the parameters of the
   -- fields that replaced it.
@@ -35,19 +36,53 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
     collectAppTargetAndArgs (cons t.rhs args) t.lhs
   | t -> (t, args)
 
+  sem constructAppSeq (target : FutExpr) =
+  | args /- : [FutExpr] -/ ->
+    foldl
+      (lam acc : FutExpr. lam arg : FutExpr.
+        let ty =
+          match tyFutTm acc with FTyArrow t then
+            t.to
+          else FTyUnknown {info = infoFutTm acc} in
+        let info = mergeInfo (infoFutTm acc) (infoFutTm arg) in
+        FEApp {lhs = acc, rhs = arg, ty = ty, info = info})
+      target
+      args
+
   sem updateApplicationParameters (replaceMap : Map Name FunctionReplaceData) =
   | FEApp t ->
-    match collectAppTargetAndArgs [] (FEApp t) with (target, params) then
-      -- TODO(larshum, 2021-10-29): Use the collected
-      FEApp t
+    match collectAppTargetAndArgs [] (FEApp t) with (target, args) then
+      match target with FEVar {ident = id} then
+        match mapLookup id replaceMap with Some data then
+          let data : FunctionReplaceData = data in
+          -- TODO(larshum, 2021-10-31): Add support for partially applied
+          -- functions here.
+          let appArgs : [FutExpr] =
+            join
+              (map
+                (lam argParam : (FutExpr, ParamData).
+                  let argExpr = argParam.0 in
+                  let param = argParam.1 in
+                  match mapLookup param.0 data.paramReplace with Some fields then
+                    mapValues
+                      (mapMapWithKey
+                        (lam k : SID. lam v : ParamData.
+                          FERecordProj {
+                            rec = argExpr, key = k, ty = v.1,
+                            info = infoFutTm argExpr})
+                        fields)
+                  else [argExpr])
+                (zip args data.oldParams)) in
+          let target = withTypeFutTm data.newType target in
+          constructAppSeq target appArgs
+        else FEApp t
+      else FEApp t
     else never
   | t -> smap_FExpr_FExpr (updateApplicationParameters replaceMap) t
 
   sem collectRecordFields (paramReplace : Map Name (Map SID ParamData)) =
   | FEApp t ->
     match t.rhs with FEVar {ident = id} then
-      -- NOTE(larshum, 2021-10-29): Passing a record parameter to another
-      -- function means all its fields are indirectly used.
       if mapMem id paramReplace then
         mapRemove id (collectRecordFields paramReplace t.lhs)
       else sfold_FExpr_FExpr collectRecordFields paramReplace (FEApp t)
@@ -61,8 +96,6 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
       else sfold_FExpr_FExpr collectRecordFields paramReplace (FERecordProj t)
     else sfold_FExpr_FExpr collectRecordFields paramReplace (FERecordProj t)
   | FERecordUpdate t ->
-    -- NOTE(larshum, 2021-10-29): A record update indirectly involves all
-    -- fields of the record.
     match t.rec with FEVar {ident = id} then
       mapRemove id paramReplace
     else paramReplace
@@ -102,13 +135,13 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
         (mapEmpty nameCmp)
         t.params in
     if mapIsEmpty paramReplace then
-      (replaceMap, FDeclFun t)
+      (replaceMap, FDeclFun {t with body = body})
     else
       -- 3. Collect record fields which should replace each record parameter. A
       -- record parameter should be replaced by a (subset) of its fields if it is
       -- only used in record projections. If no such parameters are found, the
       -- following steps are not necessary.
-      let paramReplace = collectRecordFields paramReplace t.body in
+      let paramReplace = collectRecordFields paramReplace body in
 
       -- 4. Construct a new sequence of parameters by replacing record parameters
       -- with fields.
@@ -125,7 +158,7 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
 
       -- 5. Replace applicable record projections on record parameters, in the
       -- function body, with the corresponding record field parameter.
-      let newBody = replaceProjections paramReplace t.body in
+      let newBody = replaceProjections paramReplace body in
 
       -- 6. Store the applied replacements of the function, so that we can
       -- easily update calls in step 1 on later functions.
@@ -136,7 +169,7 @@ lang FutharkReplaceRecordParamWithFields = FutharkAst
             FTyArrow {from = param.1, to = accType, info = info})
           t.ret newParams in
       let functionReplaceData = {
-        newType = newFunctionType, newParams = newParams,
+        newType = newFunctionType, oldParams = t.params,
         paramReplace = paramReplace} in
       let replaceMap = mapInsert t.ident functionReplaceData replaceMap in
       let declFun = FDeclFun {{t with params = newParams}
@@ -167,9 +200,6 @@ let prog : [FutDecl] -> FutExpr -> FutProg = lam decls. lam mainBody.
   FProg {decls = snoc decls mainDecl}
 in
 
--- NOTE(larshum, 2021-10-29): Should replace this with an example in PMExpr
--- which is translated to Futhark, so that we can rely on type annot to
--- propagate types as expected.
 let f = nameSym "f" in
 let r = nameSym "r" in
 let x = nameSym "x" in
@@ -179,24 +209,86 @@ let fDecl = FDeclFun {
   ident = f, entry = false, typeParams = [], params = [(r, recordTy)],
   ret = futIntTy_, info = NoInfo (),
   body = withTypeFutTm futIntTy_ (futRecordProj_ (nFutVar_ r) "a")} in
+let mainBody = futBindall_ [
+  nFutLet_ x recordTy (futRecord_ [("a", futInt_ 4), ("b", futFloat_ 2.5)]),
+  futApp_ (nFutVar_ f) (withTypeFutTm recordTy (nFutVar_ x))] in
+let projOneField = prog [fDecl] mainBody in
+
 let fDeclFieldOnly = FDeclFun {
   ident = f, entry = false, typeParams = [], params = [(a, futIntTy_)],
   ret = futIntTy_, info = NoInfo (),
   body = nFutVar_ a} in
-let projOneField = prog [fDecl] (futBindall_ [
+let mainFieldBody = futBindall_ [
   nFutLet_ x recordTy (futRecord_ [("a", futInt_ 4), ("b", futFloat_ 2.5)]),
-  futApp_ (nFutVar_ f) (nFutVar_ x)
-]) in
+  futApp_ (nFutVar_ f) (futRecordProj_ (nFutVar_ x) "a")] in
+let expected = prog [fDeclFieldOnly] mainFieldBody in
 
-let expected = prog [fDeclFieldOnly] (futBindall_ [
+utest printFutProg (replaceRecordParameters projOneField)
+with printFutProg expected using eqString in
+
+-- NOTE(larshum, 2021-10-31): For simplicity, even if all fields of a record
+-- parameter are used in projections within the function, the record is lifted.
+let b = nameSym "rb" in
+let fDeclAll = FDeclFun {
+  ident = f, entry = false, typeParams = [], params = [(r, recordTy)],
+  ret = futIntTy_, info = NoInfo (),
+  body = withTypeFutTm futIntTy_ (
+    futAdd_
+      (withTypeFutTm futIntTy_ (futRecordProj_ (nFutVar_ r) "a"))
+      (futApp_ (futConst_ (FCFloat2Int ()))
+               (withTypeFutTm futFloatTy_ (futRecordProj_ (nFutVar_ r) "b"))))} in
+let projAllFields = prog [fDeclAll] mainBody in
+
+let fDeclAllFields = FDeclFun {
+  ident = f, entry = false, typeParams = [], ret = futIntTy_, info = NoInfo (),
+  params = [(a, futIntTy_), (b, futFloatTy_)],
+  body = withTypeFutTm futIntTy_ (
+    futAdd_
+      (nFutVar_ a)
+      (futApp_ (futConst_ (FCFloat2Int ()))
+               (nFutVar_ b)))} in
+let mainAllBody = futBindall_ [
   nFutLet_ x recordTy (futRecord_ [("a", futInt_ 4), ("b", futFloat_ 2.5)]),
-  futApp_ (nFutVar_ f) (futRecordProj_ (nFutVar_ x) "a")
-]) in
+  futAppSeq_ (nFutVar_ f)
+    [ futRecordProj_ (nFutVar_ x) "a",
+      futRecordProj_ (nFutVar_ x) "b" ]] in
+let expected = prog [fDeclAllFields] mainAllBody in
 
-printLn "";
-printLn (printFutProg (replaceRecordParameters projOneField));
-printLn (printFutProg expected);
---utest printFutProg (replaceRecordParameters projOneField)
---with printFutProg expected using eqString in
+utest printFutProg (replaceRecordParameters projAllFields)
+with printFutProg expected using eqString in
+
+let fRecordUpdate = FDeclFun {
+  ident = f, entry = false, typeParams = [], params = [(r, recordTy)],
+  ret = recordTy, info = NoInfo (),
+  body = futRecordUpdate_ (nFutVar_ r) "a" (futInt_ 2)} in
+let recordUpdate = prog [fRecordUpdate] mainBody in
+
+utest printFutProg (replaceRecordParameters recordUpdate)
+with printFutProg recordUpdate using eqString in
+
+let g = nameSym "g" in
+let gDeclAppProj = FDeclFun {
+  ident = g, entry = false, typeParams = [], params = [(r, recordTy)],
+  ret = futIntTy_, info = NoInfo (),
+  body = withTypeFutTm futIntTy_ (futRecordProj_ (nFutVar_ r) "a")} in
+let fDeclCallG = FDeclFun {
+  ident = f, entry = false, typeParams = [], params = [(r, recordTy)],
+  ret = futIntTy_, info = NoInfo (),
+  body = futApp_ (nFutVar_ g) (nFutVar_ r)} in
+let functionAppWithProj = prog [gDeclAppProj, fDeclCallG] mainBody in
+
+let a2 = nameSym "ra" in
+let gDeclAppVar = FDeclFun {
+  ident = g, entry = false, typeParams = [], params = [(a, futIntTy_)],
+  ret = futIntTy_, info = NoInfo (),
+  body = nFutVar_ a} in
+let fDeclCallGField = FDeclFun {
+  ident = f, entry = false, typeParams = [], params = [(a2, futIntTy_)],
+  ret = futIntTy_, info = NoInfo (),
+  body = futApp_ (nFutVar_ g) (nFutVar_ a2)} in
+let expected = prog [gDeclAppVar, fDeclCallGField] mainFieldBody in
+
+utest printFutProg (replaceRecordParameters functionAppWithProj)
+with printFutProg expected using eqString in
 
 ()
