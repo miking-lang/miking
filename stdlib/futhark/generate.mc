@@ -232,7 +232,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
       if nameEq patName exprName then
         FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                      ty = t.ty, info = t.info}
+                      ty = generateType env t.ty, info = t.info}
       else defaultGenerateMatch env (TmMatch t)
     else defaultGenerateMatch env (TmMatch t)
   | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],

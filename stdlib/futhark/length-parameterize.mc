@@ -8,7 +8,7 @@ include "futhark/ast.mc"
 include "futhark/pprint.mc"
 
 type LengthParameterizeEnv = {
-  params : Map Name FutType,
+  paramMap : Map Name FutType,
   typeParams : Map Name FutTypeParam
 }
 
@@ -19,7 +19,7 @@ lang FutharkLengthParameterize = FutharkAst
     let lengthParamVar = lam ident. lam info.
       FEVar {ident = ident, ty = FTyInt {info = info}, info = info}
     in
-    match mapLookup s env.params with Some (FTyArray tyArray) then
+    match mapLookup s env.paramMap with Some (FTyArray tyArray) then
       match tyArray.dim with Some n then
         (env, lengthParamVar n tyArray.info)
       else
@@ -27,7 +27,7 @@ lang FutharkLengthParameterize = FutharkAst
         let newParamType = FTyArray {tyArray with dim = Some n} in
         let typeParam = FPSize {val = n} in
         let typeParams = mapInsert n typeParam env.typeParams in
-        let env = {{env with params = mapInsert s newParamType env.params}
+        let env = {{env with paramMap = mapInsert s newParamType env.paramMap}
                         with typeParams = typeParams} in
         (env, lengthParamVar n tyArray.info)
     else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FEApp t)
@@ -57,13 +57,20 @@ lang FutharkLengthParameterize = FutharkAst
         else never in
       (typeParamName, typeParam)
     in
-    let env = {params = mapFromSeq nameCmp t.params,
-               typeParams = mapFromSeq nameCmp (map nameAndType t.typeParams)} in
+    let env = {
+      paramMap = mapFromSeq nameCmp t.params,
+      typeParams = mapFromSeq nameCmp (map nameAndType t.typeParams)} in
     match parameterizeLengthExpr env t.body with (env, body) then
       let body = eliminateParamAliases env (mapEmpty nameCmp) body in
       let env : LengthParameterizeEnv = env in
+      let params =
+        map
+          (lam param : (Name, FutType).
+            let ty = mapFindOrElse (lam. param.1) param.0 env.paramMap in
+            (param.0, ty))
+          t.params in
       FDeclFun {{{t with body = body}
-                    with params = mapBindings env.params}
+                    with params = params}
                     with typeParams = mapValues env.typeParams}
     else never
   | t -> t

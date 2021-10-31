@@ -103,6 +103,10 @@ lang FutharkRecordParamLift = FutharkAst
   | t -> smap_FExpr_FExpr (updateApplicationParameters replaceMap) t
 
   sem collectRecordFields (paramReplace : Map Name (Map SID ParamData)) =
+  | FEVar t ->
+    if mapMem t.ident paramReplace then
+      mapRemove t.ident paramReplace
+    else paramReplace
   | FEApp t ->
     match t.rhs with FEVar {ident = id} then
       if mapMem id paramReplace then
