@@ -13,7 +13,7 @@ include "info.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
   sem isValue =
-  -- Intentionally left blank
+  | t -> false
 
   sem normalizeTerm =
   | m -> normalizeName (lam x. x) m
@@ -27,7 +27,7 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let var = TmVar {
       ident = ident,
       ty = tyTm n,
-      info = NoInfo {},
+      info = infoTm n,
       frozen = false
     } in
     let inexpr = k var in
@@ -36,7 +36,7 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
            body = n,
            inexpr = inexpr,
            ty = tyTm inexpr,
-           info = NoInfo{}}
+           info = infoTm n }
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (isValue n) then k n else bind k n) m
@@ -44,6 +44,7 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
 end
 
 lang VarANF = ANF + VarAst
+
   sem isValue =
   | TmVar _ -> true
 
@@ -53,11 +54,8 @@ lang VarANF = ANF + VarAst
 end
 
 -- This simplifies multiple-argument applications by not binding every
--- intermediate closure to a variable. I'm not yet sure if this makes static
--- analysis easier or more difficult.
+-- intermediate closure to a variable.
 lang AppANF = ANF + AppAst
-  sem isValue =
-  | TmApp _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmApp t -> normalizeNames k (TmApp t)
@@ -73,13 +71,15 @@ lang AppANF = ANF + AppAst
 end
 
 lang LamANF = ANF + LamAst
-  sem isValue =
-  | TmLam _ -> true
 
   sem normalize (k : Expr -> Expr) =
-  | TmLam {ident = ident, ty = ty, tyIdent = tyIdent, body = body, info = info} ->
-    k (TmLam {ident = ident, body = normalizeTerm body,
-              ty = ty, tyIdent = tyIdent, info = info})
+  | TmLam _ & t -> k (normalizeLams t)
+
+  -- Similar to how each individual application is not name-bound, this ensures
+  -- that all lambdas in a sequence of lambdas are not name-bound
+  sem normalizeLams =
+  | TmLam t -> TmLam { t with body = normalizeLams t.body }
+  | t -> normalizeTerm t
 
 end
 
@@ -89,7 +89,6 @@ lang RecordANF = ANF + RecordAst
   | TmRecord t ->
     if mapIsEmpty t.bindings then true
     else false
-  | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmRecord t ->
@@ -117,8 +116,6 @@ lang RecordANF = ANF + RecordAst
 end
 
 lang LetANF = ANF + LetAst
-  sem isValue =
-  | TmLet _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmLet t ->
@@ -130,8 +127,6 @@ lang LetANF = ANF + LetAst
 end
 
 lang TypeANF = ANF + TypeAst
-  sem isValue =
-  | TmType _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmType {ident = ident, tyIdent = tyIdent, inexpr = m1, ty = ty, info = info} ->
@@ -140,15 +135,20 @@ lang TypeANF = ANF + TypeAst
 
 end
 
-lang RecLetsANF = ANF + RecLetsAst
-  sem isValue =
-  | TmRecLets _ -> false
+lang RecLetsANF = ANF + LamANF + RecLetsAst
 
   sem normalize (k : Expr -> Expr) =
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmRecLets t ->
-    let bindings = map (lam b : RecLetBinding. {b with body = normalizeTerm b.body}) t.bindings in
+    let bindings = map (
+      lam b: RecLetBinding. { b with body =
+        match b.body with TmLam _ & t then normalizeLams t
+        else infoErrorExit (infoTm b.body)
+          "Error: Not a TmLam in TmRecLet binding in ANF transformation"
+      }
+    )
+    t.bindings in
     TmRecLets {{t with bindings = bindings}
                   with inexpr = normalize k t.inexpr}
 end
@@ -163,9 +163,6 @@ lang ConstANF = ANF + ConstAst
 end
 
 lang DataANF = ANF + DataAst
-  sem isValue =
-  | TmConDef _ -> false
-  | TmConApp _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmConDef t ->
@@ -178,8 +175,6 @@ lang DataANF = ANF + DataAst
 end
 
 lang MatchANF = ANF + MatchAst
-  sem isValue =
-  | TmMatch _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmMatch t ->
@@ -192,8 +187,6 @@ lang MatchANF = ANF + MatchAst
 end
 
 lang UtestANF = ANF + UtestAst
-  sem isValue =
-  | TmUtest _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmUtest t -> let tusing = optionMap normalizeTerm t.tusing in
@@ -205,8 +198,6 @@ lang UtestANF = ANF + UtestAst
 end
 
 lang SeqANF = ANF + SeqAst
-  sem isValue =
-  | TmSeq _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmSeq t ->
@@ -232,8 +223,6 @@ lang NeverANF = ANF + NeverAst
 end
 
 lang ExtANF = ANF + ExtAst
-  sem isValue =
-  | TmExt _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->
@@ -252,11 +241,6 @@ lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 
 mexpr
 use TestLang in
-
-let eqExpr : Expr -> Expr -> Bool =
-  lam l : Expr. lam r : Expr.
-  eqExpr l r
-in
 
 let _anf = compose normalizeTerm symbolize in
 
@@ -301,13 +285,15 @@ let lambda =
 in
 utest _anf lambda with
   bindall_ [
+
+    ulet_ "t1" (ulam_ "x" (bindall_ [
+      (ulet_ "y" (int_ 3)),
+      (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
+      (var_ "t1")
+    ])),
     ulet_ "t"
       (app_
-        (ulam_ "x" (bindall_ [
-          (ulet_ "y" (int_ 3)),
-          (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
-          (var_ "t1")
-        ]))
+        (var_ "t1")
         (int_ 4)),
     var_ "t"
   ]
@@ -419,6 +405,24 @@ using eqExpr in
 let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
 utest _anf inv1 with inv1 using eqExpr in
 
+let nested = ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x"))) in
+utest _anf nested with
+  bind_
+    (ulet_ "t" (ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x")))))
+    (var_ "t")
+using eqExpr in
+
+let nestedreclet =
+  ureclet_ "f"
+    (ulam_ "a"
+      (ulam_ "b"
+        (ulam_ "c" (int_ 1)))) in
+utest _anf nestedreclet with
+  ureclet_ "f"
+    (ulam_ "a"
+      (ulam_ "b"
+        (ulam_ "c" (int_ 1))))
+using eqExpr in
 
 let debug = false in
 
