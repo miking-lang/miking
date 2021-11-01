@@ -7,6 +7,8 @@
 -- unnecessary copying in in-place updates, which may significantly degrade the
 -- performance.
 
+-- TODO(larshum, 2021-11-01): Does this work for nested records?
+
 include "stringid.mc"
 include "futhark/ast.mc"
 include "futhark/ast-builder.mc"
@@ -135,7 +137,7 @@ lang FutharkRecordParamLift = FutharkAst
           let data : ParamData = data in
           FEVar {ident = data.0, ty = data.1, info = t.info}
         else
-          -- TODO(larshum 2021-10-29): This case should never be reached, as all
+          -- NOTE(larshum 2021-10-29): This case should never be reached, as all
           -- record projections found here should also be found in the
           -- collection phase. If we were to get here, there is a bug in the
           -- implementation. What would be a good error message here?
