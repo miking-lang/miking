@@ -565,7 +565,7 @@ let matchall_ = use MExprAst in
     foldr1 (lam m. lam acc.
       match m with TmMatch t then
         TmMatch {t with els = acc}
-      else never)
+      else error "expected match expression")
       matches
 
 let nrecordproj_ = use MExprAst in
