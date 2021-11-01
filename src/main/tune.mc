@@ -6,8 +6,8 @@ include "compile.mc"
 include "options.mc"
 include "sys.mc"
 include "mexpr/boot-parser.mc"
-include "mexpr/tuning/decision-points.mc"
-include "mexpr/tuning/tune.mc"
+include "tuning/decision-points.mc"
+include "tuning/tune.mc"
 
 lang MCoreTune =
   BootParser + MExprHoles + MExprTune
