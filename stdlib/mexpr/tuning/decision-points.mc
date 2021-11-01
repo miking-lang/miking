@@ -731,6 +731,7 @@ let _lookupCallCtx
   : (Int -> Expr) -> NameInfo -> Name
   -> CallCtxEnv -> [[NameInfo]] -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
+  use MExprAst in
 
     let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
 
@@ -756,7 +757,9 @@ let _lookupCallCtx
               in (cases.0, cons branch cases.1)
             else never
           ) ([], []) children in
-          match branches with (defaultCase, matches) then
+          switch branches
+          case (([def], []) | ([], [TmMatch {thn = def}])) then def
+          case (defaultCase, matches) then
             let default = switch defaultCase
               case [] then never_
               case [default] then default
@@ -766,7 +769,7 @@ let _lookupCallCtx
             bind_
               (nulet_ tmpName (callCtxReadIncomingVar incVarName env))
               (matchall_ (snoc matches default))
-          else never
+          end
     in
     match tree with Node {children = children} then
       let res = work incVarName children [] in
