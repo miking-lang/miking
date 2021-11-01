@@ -79,7 +79,7 @@ if lti (length argv) 2 then usage () else
     let options : Options = res.options in
     let files : [String] = res.strings in
     maybePrintHelp options;
-    -- Yes, invoke the selected command
+    -- Invoke the selected command
     cmd files options (cons "mi" split.last)
   else
     -- No, not a well known command.
