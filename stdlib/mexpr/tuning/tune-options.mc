@@ -3,18 +3,20 @@ include "string.mc"
 -- Options for tuning
 
 type TuneOptions =
-{ debug : Bool          -- Whether to do debug prints during search
-, iters : Int           -- Number of search iterations
-, warmups : Int         -- Number of warmup runs
-, method : SearchMethod -- Search method
-, input : [[String]]    -- Input data
-, saInitTemp : Float    -- Initial temperature for simulated annealing
-, saDecayFactor : Float -- Decay factor for simulated annealing
-, tabuSize : Int        -- Maximum size of tabu set
-, epsilonMs : Float     -- Precision of time measurement
-, stepSize : Int        -- Step size in int range
-, ignoreErrors : Bool   -- Ignore errors during tuning
-, exitEarly : Bool      -- Exit process upon timeout (might speed up tuning)
+{ debug : Bool              -- Whether to do debug prints during search
+, iters : Int               -- Number of search iterations
+, timeoutMs : Option Float  -- Timeout in ms
+, warmups : Int             -- Number of warmup runs
+, method : SearchMethod     -- Search method
+, input : [[String]]        -- Input data
+, saInitTemp : Float        -- Initial temperature for simulated annealing
+, saDecayFactor : Float     -- Decay factor for simulated annealing
+, tabuSize : Int            -- Maximum size of tabu set
+, epsilonMs : Float         -- Precision of time measurement
+, stepSize : Int            -- Step size in int range
+, ignoreErrors : Bool       -- Ignore errors during tuning
+, exitEarly : Bool          -- Exit process upon timeout (might speed up tuning)
+, seed : Option Int         -- Set random seed for random search
 }
 
 type SearchMethod
@@ -37,6 +39,7 @@ let string2SearchMethod : String -> SearchMethod = lam s.
 let tuneOptionsDefault : TuneOptions =
 { debug = false
 , iters = 10
+, timeoutMs = None ()
 , warmups = 1
 , method = RandomWalk ()
 , input = []
@@ -47,26 +50,15 @@ let tuneOptionsDefault : TuneOptions =
 , stepSize = 1
 , ignoreErrors = false
 , exitEarly = true
+, seed = None ()
 }
 
 let tuneMenu =
 "
-Usage: mi tune [<options>] file [-- [<tune-options>]]
-
-Options:
-  --help                    Print this message and exit
-  --debug-parse             Print the AST after parsing
-  --debug-generate          Print the AST after code generation
-  --exit-before             Exit before evaluation or compilation
-  --test                    Generate utest code
-  --disable-optimizations   Disables optimizations to decrease compilation time
-  --tuned                   Use values from tuning during compilation
-  --enable-seq-transform    Transform sequence literals into using decision points
-  -- <tune-options>         Tuning options follow the --
-
 Tune options (after -- ):
   --verbose                 Print status during search
   --iters <n>               Maximum number of search iterations (default 10)
+  --timeout <n>             Timeout in ms. --timeout 0.0 means no timeout (default)
   --warmups <n>             Number of warmup runs before search begins
                             (default 1)
   --method <search-method>  Search method (default random-walk)
@@ -85,12 +77,13 @@ Tune options (after -- ):
                             the decay factor (default 0.95)
   --tabu-size <n>           If --method tabu-search is used, this gives the
                             number of configufations to keep in the tabu list.
-  --step-size <n>.          If --method semi-exhaustive is used, use this as step
+  --step-size <n>.          If exhaustive or semi-exhaustive is used, use this as step
                             size for integer ranges. TODO: should be number of steps
   --ignore-errors           Ignore errors during tuning.
   --disable-exit-early      Always let the process run to completion during
                             tuning (default is to kill it when it has run for
                             longer than the current best runtime.)
+  --seed <n>                Set the seed for random search.
 
 Search methods (after --method):
    random-walk              Each decision point is assigned a value from its
@@ -121,9 +114,19 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
     match args with [i] ++ args then
       let iters = string2int i in
       if geqi iters 0 then
-        parseTuneOptions {o with iters = string2int i} args
+        parseTuneOptions {o with iters = iters} args
       else error "iters cannot be negative"
     else error "--iters without an argument"
+
+  else match args with ["--timeout"] ++ args then
+    match args with [i] ++ args then
+      let timeout = string2float i in
+      if eqf 0.0 timeout then
+        parseTuneOptions {o with timeoutMs = None ()} args
+      else if gtf timeout 0.0 then
+        parseTuneOptions {o with timeoutMs = Some timeout} args
+      else error "timeout cannot be negative"
+    else error "--timeout without an argument"
 
   else match args with ["--warmups"] ++ args then
     match args with [i] ++ args then
@@ -132,6 +135,12 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
         parseTuneOptions {o with warmups = string2int i} args
       else error "warmups cannot be negative"
     else error "--warmups without an argument"
+
+  else match args with ["--seed"] ++ args then
+    match args with [i] ++ args then
+      let seed = string2int i in
+      parseTuneOptions {o with seed = Some seed} args
+    else error "--seed without an argument"
 
   else match args with ["--method"] ++ args then
     match args with [m] ++ args then
@@ -175,13 +184,13 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       else error "epsilon-ms cannot be negative"
     else error "--epsilon-ms without an argument"
 
-else match args with ["--step-size"] ++ args then
-match args with [a] ++ args then
-let step = string2int a in
-if geqi step 0 then
-parseTuneOptions {o with stepSize = step} args
-else error "step-size cannot be negative"
-else error "--step-size without an argument"
+  else match args with ["--step-size"] ++ args then
+    match args with [a] ++ args then
+      let step = string2int a in
+      if geqi step 0 then
+      parseTuneOptions {o with stepSize = step} args
+    else error "step-size cannot be negative"
+  else error "--step-size without an argument"
 
   else match args with [a] ++ args then
     error (concat "Unknown tune option: " a)

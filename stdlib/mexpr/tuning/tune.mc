@@ -18,12 +18,6 @@ let _inputEmpty = [""]
 -- Return code for timeout
 let _returnCodeTimeout = 124
 
--- Maximum timeout (5 years in ms)
-let _timeoutInf = 157680000000.
-
--- Send kill signal after this time (needs to be greater than zero)
-let _killAfter = 0.01
-
 -- Convert from ms to s
 let _ms2s = lam ms. divf ms 1000.
 
@@ -36,7 +30,7 @@ utest _distinct subi [1,2,1] with [1,2]
 ------------------------------
 -- Base fragment for tuning --
 ------------------------------
-type Runner = String -> Float -> (Float, ExecResult)
+type Runner = String -> Option Float -> (Float, ExecResult)
 
 type TimingResult
 con Success : {ms : Float} -> TimingResult
@@ -129,20 +123,20 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       match options.input with [] then _inputEmpty else options.input
     in
 
-    -- cost function = sum of execution times over all inputs
+    -- Cost function: sum of execution times over all inputs
     let costF : Option Solution -> Assignment -> Cost =
       lam inc : Option Solution. lam lookup : Assignment.
-        let timeoutVal =
+        let timeoutVal : Option Float =
           match inc with Some sol then
             let sol : Solution = sol in
             match sol with {cost = Runtime {time = time}} then
               switch time
-              case Success {ms = ms} then ms
-              case Error _ then _timeoutInf
+              case Success {ms = ms} then Some ms
+              case Error _ then None ()
               case Timeout _ then error "impossible"
               end
             else never
-          else _timeoutInf
+          else None ()
         in
         match lookup with Table {table = table} then
           let f = lam t1. lam t2.
@@ -172,28 +166,19 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
         end
       else error "impossible" in
 
-    -- Set up initial search state. Repeat the computation n times, where n is
-    -- the number of warmup runs, because the cost function is applied once per
-    -- setup.
-    let mkStartState = lam.
-      initSearchState costF cmpF
-        (Table { table = table
-               , start = table
-               , holes = holes
-               , options = options
-               , hole2idx = hole2idx
-               })
-    in
-    iter mkStartState (make options.warmups ());
-    let startState = mkStartState () in
-
     -- When to stop the search
-    let stopCond = lam niters. lam state : SearchState.
-      or state.stuck (geqi state.iter niters) in
+    let stopCond = lam niters. lam timeoutMs : Option Float. lam state : SearchState.
+      if state.stuck then true
+      else if geqi state.iter niters then true
+      else match timeoutMs with Some timeout then
+        let elapsed = subf (wallTimeMs ()) (deref tuneSearchStart) in
+        if geqf elapsed timeout then true else false
+      else false
+    in
 
-    let normalStop = stopCond options.iters in
+    let normalStop = stopCond options.iters options.timeoutMs in
 
-    let warmupStop = stopCond options.warmups in
+    let warmupStop = stopCond options.warmups (None ()) in
 
     recursive let search =
       lam stop.
@@ -216,8 +201,30 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
           else never
     in
 
+    -- Set up initial search state. Repeat the computation n times, where n is
+    -- the number of warmup runs, because the cost function is applied once per
+    -- setup.
+    let mkStartState = lam.
+      initSearchState costF cmpF
+        (Table { table = table
+               , start = table
+               , holes = holes
+               , options = options
+               , hole2idx = hole2idx
+               })
+    in
+    iter mkStartState (make options.warmups ());
+    let beforeStartState = wallTimeMs () in
+    let startState = mkStartState () in
+    let afterStartState = wallTimeMs () in
+
+    -- Timestamp of start of search (including time to create the start state)
+    let startOfSearch = lam.
+      subf (wallTimeMs ()) (subf afterStartState beforeStartState)
+    in
+
     -- Do warmup runs and throw away results
-    modref tuneSearchStart (wallTimeMs ());
+    modref tuneSearchStart (startOfSearch ());
     (if options.debug then
        printLn "----------------------- WARMUP RUNS -----------------------"
        else ());
@@ -227,7 +234,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
        else ());
 
     -- Do the search!
-    modref tuneSearchStart (wallTimeMs ());
+    modref tuneSearchStart (startOfSearch ());
     match search normalStop startState (initMeta startState) 0
     with (searchState, _) then
       let searchState : SearchState = searchState in
@@ -455,19 +462,12 @@ lang TuneTabuSearch = TuneLocalSearch
     printLn (join ["Tabu size: ", int2string (length tabu)])
 end
 
--- Binary search two neighbours (at most): (min + cur)/2 and (max + cur)/2
--- consider one hole at a time (from left to right?) compare min, cur and max.
--- Select the one that is best. When stopping at cur, go to next hole.
-
--- finish a binary search for a certain index before moving to the next hole
 
 let _binarySearch = lam lower : Int. lam mid : Int. lam upper : Int. lam curCost : a. lam cost : Int -> a. lam cmp : a -> a -> Int.
   -- Avoid applying cost function on the same value twice
   let memoized = mapInsert mid curCost (mapEmpty subi) in
 
   recursive let work = lam mem : Map Int a. lam lower : Int. lam mid : Int. lam upper : Int. lam curCost : a.
-    -- print "lower: "; dprintLn lower;
-    -- print "upper: "; dprintLn upper;
     if eqi lower upper then (curCost, mid)
     else
       let lowPoint = divi (addi lower mid) 2 in
@@ -486,11 +486,6 @@ let _binarySearch = lam lower : Int. lam mid : Int. lam upper : Int. lam curCost
           let c = cost highPoint in
           (c, mapInsert highPoint c mem)
       with (highCost, mem) then
-        -- print "lowPoint: "; dprintLn lowPoint;
-        -- print "highPoint: "; dprintLn highPoint;
-        -- print "lowCost: "; dprintLn lowCost;
-        -- print "highCost: "; dprintLn highCost;
-
         -- lower is better, recurse
         if lti (cmp lowCost curCost) 0 then
           work mem lower lowPoint mid lowCost
@@ -552,13 +547,6 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
-let _timeoutCmd = lam options : TuneOptions. lam timeoutMs : Float.
-  if options.exitEarly then
-    if sysCommandExists "timeout" then
-      ["timeout", "-k", float2string _killAfter, float2string (_ms2s timeoutMs)]
-    else []
-  else []
-
 -- Entry point for tuning
 let tuneEntry =
   lam binary : String.
@@ -569,16 +557,15 @@ let tuneEntry =
     let options = parseTuneOptions tuneOptionsDefault
       (filter (lam a. not (eqString "mi" a)) args) in
 
+    -- Set the random seed?
+    (match options.seed with Some seed then randSetSeed seed else ());
+
     let holes : [Expr] = deref env.idx2hole in
     let hole2idx : Map NameInfo (Map [NameInfo] Int) = deref env.hole2idx in
 
-    -- Runs the program with a given command-line input
-    let run =
-      let cmd = lam timeoutMs : Float.
-        concat (_timeoutCmd options timeoutMs) [concat "./" binary]
-      in
-      lam input : [String]. lam timeoutMs : Float.
-        sysRunCommandWithTiming (concat (cmd timeoutMs) input) "" "."
+    -- Runs the program with a given command-line input and optional timeout
+    let runner = lam input : String. lam timeoutMs : Option Float.
+        sysRunCommandWithTimingTimeout (optionMap _ms2s timeoutMs) [binary] input "."
     in
 
     -- Choose search method
@@ -590,4 +577,4 @@ let tuneEntry =
      case SemiExhaustive {} then use TuneSemiExhaustive in tune
      case BinarySearch {} then use TuneBinarySearch in tune
      end)
-     options run holes hole2idx tuneFile table
+     options runner holes hole2idx tuneFile table

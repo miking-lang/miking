@@ -70,7 +70,7 @@ let config = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with runTests = true}),
   ([("--tuned", "", "")],
-    "Use tuned values when compiling",
+    "Use tuned values when compiling, or as defaults when tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with useTuned = true}),
   ([("--compile", "", "")],
