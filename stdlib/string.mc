@@ -140,7 +140,7 @@ utest stringIsInt "-1098" with true
 let strIndex = lam c. lam s.
   recursive
   let strIndex_rechelper = lam i. lam c. lam s.
-    if eqi (length s) 0
+    if null s
     then None ()
     else if eqChar c (head s)
          then Some(i)
@@ -160,7 +160,7 @@ utest strIndex '@' "Some @TAG@" with Some(5) using optionEq eqi
 let strLastIndex = lam c. lam s.
   recursive
   let strLastIndex_rechelper = lam i. lam acc. lam c. lam s.
-    if eqi (length s) 0 then
+    if null s then
       if eqi acc (negi 1)
       then None ()
       else Some(acc)
@@ -197,7 +197,7 @@ let strSplit = lam delim. lam s.
     else
       work acc lastMatch (addi i 1)
   in
-  if eqi (length delim) 0 then [s]
+  if null delim then [s]
   else work [] 0 0
 
 utest strSplit "ll" "Hello" with ["He", "o"]
@@ -225,7 +225,7 @@ utest strTrim "ccccc c\t   \n" with "ccccc c"
 
 
 let stringIsInt = lam s.
-  if eqi (length s) 0 then false else
+  if null s then false else
   let s = if eqChar (get s 0) '-' then tail s else s in
     forAll isDigit s
 
@@ -238,7 +238,7 @@ utest stringIsInt "" with false
 -- Joins the strings in strs on delim
 recursive
   let strJoin = lam delim. lam strs.
-    if eqi (length strs) 0
+    if null strs
     then ""
     else if eqi (length strs) 1
          then head strs
