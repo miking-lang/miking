@@ -37,7 +37,12 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
     else opts
   in
   let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
-  let destinationFile = filenameWithoutExtension (filename sourcePath) in
+  let destinationFile =
+    switch options.output
+    case None () then filenameWithoutExtension (filename sourcePath)
+    case Some o then o
+    end
+  in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
   p.cleanup ();

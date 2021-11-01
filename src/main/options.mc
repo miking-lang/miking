@@ -14,7 +14,8 @@ type Options = {
   compileAfterTune : Bool,
   cpuOnly : Bool,
   typeCheck : Bool,
-  printHelp : Bool
+  printHelp : Bool,
+  output : Option String
 }
 
 -- Default values for options
@@ -30,7 +31,8 @@ let options = {
   compileAfterTune = false,
   cpuOnly = false,
   typeCheck = false,
-  printHelp = false
+  printHelp = false,
+  output = None ()
 }
 
 -- Options configuration
@@ -86,17 +88,22 @@ let config = [
   ([("--help", "", "")],
     "Display this list of options",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with printHelp = true})
+      let o: Options = p.options in {o with printHelp = true}),
+  ([("--output", " ", "<file>")],
+    "Write output to <file> when compiling",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with output = Some (argToString p)})
 ]
 
+-- Get the help string for options
 let optionsHelpString : Unit -> String = lam.
   argHelpOptions config
 
-let parseOptions : [String] -> Options = lam args.
+let parseOptions : [String] -> ArgResult Options = lam args.
   let result =
     argParse_general {args = args, optionsStartWith = ["--"]} options config
   in
-  match result with ParseOK r then r.options
+  match result with ParseOK r then r
   else argPrintError result; exit 1
 
 -- Split the program arguments before and after the empty '--'

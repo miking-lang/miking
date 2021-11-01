@@ -75,18 +75,19 @@ if lti (length argv) 2 then usage () else
   then
     -- Yes, split into program arguments (after stand alone '--')
     let split = splitDashDash rest in
-    let argvp = partition (isPrefix eqc "--") split.first in
-    let options = parseOptions argvp.0 in
+    let res : ArgResult Options = parseOptions split.first in
+    let options : Options = res.options in
+    let files : [String] = res.strings in
     maybePrintHelp options;
-    -- Invoke the selected command
-    cmd argvp.1 options (cons "mi" split.last)
+    -- Yes, invoke the selected command
+    cmd files options (cons "mi" split.last)
   else
-    -- No, not a well known command
-    -- Parse options as far as possible. Does user require help?
-    let split = splitOptionPrefix (tail argv) in
-    let options = parseOptions split.first in
-    maybePrintHelp options;
+    -- No, not a well known command.
+    -- Does user require help?
+    let wantHelp = optionIsSome (find (eqString "--help") (tail argv)) in
+    maybePrintHelp {options with printHelp = wantHelp};
     -- No help requested. Did user give a filename?
+    let split = splitOptionPrefix (tail argv) in
     match split.last with [file] ++ programArgv then
       if isSuffix eqChar ".mc" file then
         -- Yes, run the 'run' command with arguments and supplied options
