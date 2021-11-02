@@ -82,12 +82,13 @@ if lti (length argv) 2 then usage () else
     -- Invoke the selected command
     cmd files options (cons "mi" split.last)
   else
-    -- No, not a well known command.
-    -- Does user require help?
-    let wantHelp = optionIsSome (find (eqString "--help") (tail argv)) in
-    maybePrintHelp {options with printHelp = wantHelp};
-    -- No help requested. Did user give a filename?
+    -- No, not a well known command
+    -- Parse options as far as possible. Does user require help?
     let split = splitOptionPrefix (tail argv) in
+    let res : ArgResult Options = parseOptions split.first in
+    let options : Options = res.options in
+    maybePrintHelp options;
+    -- No help requested. Did user give a filename?
     match split.last with [file] ++ programArgv then
       if isSuffix eqChar ".mc" file then
         -- Yes, run the 'run' command with arguments and supplied options
