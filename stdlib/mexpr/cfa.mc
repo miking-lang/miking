@@ -1,8 +1,11 @@
 -- CFA framework for MExpr. Currently, only 0-CFA (context insensitive) is
 -- supported. The algorithm is based on Table 3.7 in the book "Principles of
 -- Program Analysis" (Nielson et al.).
+--
+-- Only works on terms in ANF (e.g., by transformation with mexpr/anf.mc).
 
 include "set.mc"
+include "either.mc"
 include "name.mc"
 include "ast.mc"
 
@@ -28,11 +31,11 @@ include "ast.mc"
 -- * Build the graph from constraints
 -- * Propagate constraints
 
--- NOTE(dlunde,2021-11-01): It would be nice if CFAFunction type and the
+-- NOTE(dlunde,2021-11-01): It would be nice if the CFAFunction type and
 -- 'functions' component of CFAGraph could be defined/added in the fragment
 -- LamCFA, rather than here. I guess this is what product extensions will
 -- eventually allow?
-type CFAFunction = { fident: Name, idents: [Name], body: Name }
+type CFAFunction = { ident: Name, body: Either AbsVal Name }
 type CFAGraph = {
   functions: [CFAFunction],
   constraints: [Constraint],
@@ -41,7 +44,7 @@ type CFAGraph = {
   edges: Map Name [Constraint]
 }
 
-emptyCFAGraph = {
+let emptyCFAGraph = {
   functions = [],
   constraints = [],
   worklist = [],
@@ -49,7 +52,7 @@ emptyCFAGraph = {
   edges = mapEmpty nameCmp
 }
 
-lang CFA = Ast
+lang CFA = Ast + LetAst
 
   syn Constraint =
   -- Intentionally left blank
@@ -62,13 +65,13 @@ lang CFA = Ast
 
   sem _collectConstraints (acc: CFAGraph) =
   | t ->
-    let acc = {
-      acc with constraints =
-        concat (generateConstraints acc.functions t) acc.constraints } in
+    let acc = { acc with
+      constraints = concat (generateConstraints acc.functions t) acc.constraints
+    } in
     sfold_Expr_Expr _collectConstraints acc t
 
   sem generateConstraints (functions: [CFAFunction]) =
-  -- Intentionally left blank
+  | t -> []
 
   sem initConstraint (graph: CFAGraph) =
   -- Intentionally left blank
@@ -79,14 +82,13 @@ lang CFA = Ast
   -- CFAGraph -> Name -> Set AbsVal -> CFAGraph
   sem _addData (graph: CFAGraph) (q: Name) =
   | d ->
-    match mapLookup q graph.data with Some dq then
-    if subset d dq then graph else
+    match mapLookup q graph.data with Some dq in
+    if setSubset d dq then graph else
       {{ graph with
            data = mapInsert q (setUnion dq d) graph.data } with
-           worklist = cons q worklist }
-    else never
+           worklist = cons q graph.worklist }
 
-  sem _collectFunctions (acc: CFAGraph) =
+  sem _collectFunctions (acc: [CFAFunction]) =
   -- Intentionally left blank. NOTE(dlunde,2021-11-01): It would be nice if
   -- this and other possible functions could be defined in language fragments
   -- below, and then somehow used abstractly here. For instance, fragments
@@ -96,66 +98,67 @@ lang CFA = Ast
 
 end
 
--- av ∈ rhs
-lang InitConstraint = CFA
-
-  syn Constraint =
-  | CstrInit { av: AbsVal, rhs: Name }
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrInit r -> _addData graph r.rhs (setInsert r.av setEmpty nameCmp)
-
-end
-
--- lhs ⊆ rhs
 lang DirectConstraint = CFA
 
   syn Constraint =
+  -- lhs ⊆ rhs
   | CstrDirect { lhs: Name, rhs: Name }
+  -- {av} ⊆ rhs
+  | CstrDirectAv { av: AbsVal, rhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrDirect r & cstr ->
-    match mapLookup r.lhs graph.edges with Some elhs then
-      { graph with edges = mapInsert r.lhs (cons cstr elhs) graph.edges }
-    else never
+    match mapLookup r.lhs graph.edges with Some elhs in
+    { graph with edges = mapInsert r.lhs (cons cstr elhs) graph.edges }
+  | CstrDirectAv r -> _addData graph r.rhs (setInsert r.av (setEmpty nameCmp))
 
   sem propagateConstraint (graph: CFAGraph) =
   | CstrDirect r ->
-    match mapLookup r.lhs graph.data with Some dlhs then
-      _addData graph r.rhs dlhs
-    else never
+    match mapLookup r.lhs graph.data with Some dlhs in
+    _addData graph r.rhs dlhs
 
 end
 
 lang ConditionalConstraint = CFA
 
-  -- av ∈  lrhs ⇒ rlhs ⊆ rrhs
   syn Constraint =
+  -- av ∈  lrhs ⇒ rlhs ⊆ rrhs
   | CstrCond { av: AbsVal, lrhs: Name, rlhs: Name, rrhs: Name }
+  -- lav ∈  lrhs ⇒ rav ⊆ rrhs
+  | CstrCondAv { lav: AbsVal, lrhs: Name, rav: AbsVal, rrhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrCond r & cstr ->
-    match mapLookup r.rlhs graph.edges with Some erlhs then
-    match mapLookup r.lrhs graph.edges with Some elrhs then
-      let es = mapInsert r.rlhs (cons cstr erlhs) graph.edges in
-      let es = mapInsert r.lrhs (cons cstr elrhs) es in
-      { graph with edges = es }
-    else never
-    else never
+    match mapLookup r.rlhs graph.edges with Some erlhs in
+    match mapLookup r.lrhs graph.edges with Some elrhs in
+    let es = mapInsert r.rlhs (cons cstr erlhs) graph.edges in
+    let es = mapInsert r.lrhs (cons cstr elrhs) es in
+    { graph with edges = es }
+  | CstrCondAv r & cstr ->
+    match mapLookup r.lrhs graph.edges with Some elrhs in
+    let es = mapInsert r.lrhs (cons cstr elrhs) graph.edges in
+    { graph with edges = es }
 
   sem propagateConstraint (graph: CFAGraph) =
   | CstrCond r ->
-    match mapLookup r.lrhs graph.data with Some dlrhs then
-      if setMem r.av dlrhs then _addData graph r.rrhs dlrhs
-      else graph
-    else never
+    match mapLookup r.lrhs graph.data with Some dlrhs in
+    if setMem r.av dlrhs then
+      match mapLookup r.rlhs with Some drlhs in
+      _addData graph r.rrhs drlhs
+    else graph
+  | CstrCondAv r ->
+    match mapLookup r.lrhs graph.data with Some dlrhs in
+    if setMem r.av dlrhs then
+      _addData graph r.rrhs (setInsert r.rav (setEmpty nameCmp))
+    else graph
 
 end
 
-lang VarCFA = CFA + VarAst
+lang VarCFA = CFA + DirectConstraint + VarAst
 
   sem generateConstraints (functions: [CFAFunction]) =
-  | TmVar t -> []
+  | TmLet { ident = ident, body = TmVar t } ->
+    [ CstrDirect { lhs = t.ident, rhs = ident } ]
 
   sem exprName =
   | TmVar t -> t.ident
@@ -165,40 +168,68 @@ end
 lang LamCFA = CFA + DirectConstraint + LamAst
 
   syn AbsVal =
-  | AVLam { fident: Name, paramIdent: Name }
+  | AVLam { ident: Name }
 
-  sem _collectFunctions (acc: CFAGraph) =
-  | TmLet { ident = fident, body = TmLam t } ->
-    -- TODO Recurse here, collect all idents in sequence of lambda
-    let cf = { fident = fident, ident = ident, body = exprName t.body } in
-    { acc with functions = cons cf acc.functions }
-  | TmLam t -> infoErrorExit t.info
-      "Unbound TmLam. Did you run ANF transformation?"
+  sem _collectFunctions (acc: [CFAFunction]) =
+  | TmLam t & tm ->
+    let body: Either AbsVal Name =
+      match t.body with TmLam { ident = ident } then
+        Left (AVLam { ident = ident })
+      else Right (exprName t.body)
+    in
+    let cfaFun = { ident = t.ident, body = body } in
+    sfold_Expr_Expr _collectFunctions (cons cfaFun acc) t
   | t -> sfold_Expr_Expr _collectFunctions acc t
 
   sem generateConstraints (functions: [CFAFunction]) =
-  | TmLet { ident = ident, body = TmLam _ } ->
-    -- TODO The AVLam here will have a different form eventually
-    [
-      CstrInit { lhs = AVLam { ident = ident }, rhs = ident }
-    ]
+  | TmLet { ident = ident, body = TmLam t } ->
+    [ CstrDirectAv { lhs = AVLam { ident = t.ident }, rhs = ident } ]
 
 end
 
-lang AppCFA = CFA + ConditionalConstraint + LamCFA + AppAst -- TODO Also reclets
-
-  -- TODO Need to do something smart here... Actually, should be quite
-  -- straightforward? a, b, and c flows to three first args in f.
-  -- f a b c
-  -- OPT f can only consist of functions of three or more arguments
+lang AppCFA = CFA + ConditionalConstraint + LamCFA + AppAst
 
   sem generateConstraints (functions: [CFAFunction]) =
-  | TmApp t ->
-    join (map (lam f: CFAFunction. [
-      CstrCond { av = AVLam { ident = f.fident }, lrhs =, rlhs =, rrhs = },
-      CstrCond { av =, lrhs =, rlhs =, rrhs = }
-    ] ) functions)
+  | TmLet { ident = ident, body = TmApp _ & body} ->
+    recursive let rec = lam acc: [Constraint]. lam res: Name. lam t: Expr.
+      let nameLhs =
+        match t.lhs with TmApp t then nameSym "cfaIntermediate"
+        else match t.lhs with TmVar t then t.ident
+        else infoErrorExit (infoTm t.lhs) "Not a variable or application in CFA"
+      in
+      let cstrs = join (map (lam f: CFAFunction.
+        let c1 =
+          match t.rhs with TmVar { ident = nameRhs } then
+            [CstrCond {
+               av = AVLam { ident = f.ident },
+               lrhs = nameLhs,
+               rlhs = nameRhs,
+               rrhs = f.ident
+            }]
+          else [] in
+        let c2 =
+          match f.body with Left av then
+            CstrCondAv {
+              lav = AVLam { ident = f.ident },
+              lrhs = nameLhs,
+              rav = av,
+              rrhs = res
+            }
+          else match f.body with Right n then
+            CstrCond {
+              lav = AVLam { ident = f.ident },
+              lrhs = nameLhs,
+              rlhs = n,
+              rrhs = res
+            }
+          else never in
+        cons c2 c1
+      ) functions) in
 
+      let acc = concat cstrs acc in
+
+      match t.lhs with TmApp t then rec acc nameLhs t.lhs else acc
+    in rec [] ident body
 end
 
 lang LetCFA = CFA + LetAst
@@ -230,8 +261,6 @@ lang DataCFA = CFA + DataAst
   | TmConDef t -> exprName t.inexpr
 end
 
--- NOTE We probably need more abstract values for records and variants to get
--- this right
 lang MatchCFA = CFA + MatchAst
 end
 
@@ -244,7 +273,7 @@ lang NeverCFA = CFA + NeverAst
 end
 
 lang ExtCFA = CFA + ExtAst
-  sem exprName
+  sem exprName =
   | TmExt t -> exprName t.inexpr
 end
 
