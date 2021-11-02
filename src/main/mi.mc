@@ -82,8 +82,8 @@ if lti (length argv) 2 then usage () else
     -- Invoke the selected command
     cmd files options (cons "mi" split.last)
   else
-    -- No, not a well known command.
-    -- Does user require help?
+    -- No, not a well known command
+    -- Parse options as far as possible. Does user require help?
     let split = splitOptionPrefix (tail argv) in
     let res : ArgResult Options = parseOptions split.first in
     let options : Options = res.options in
