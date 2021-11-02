@@ -84,8 +84,10 @@ if lti (length argv) 2 then usage () else
   else
     -- No, not a well known command.
     -- Does user require help?
-    let wantHelp = optionIsSome (find (eqString "--help") (tail argv)) in
-    maybePrintHelp {options with printHelp = wantHelp};
+    let split = splitOptionPrefix (tail argv) in
+    let res : ArgResult Options = parseOptions split.first in
+    let options : Options = res.options in
+    maybePrintHelp options;
     -- No help requested. Did user give a filename?
     let split = splitOptionPrefix (tail argv) in
     match split.last with [file] ++ programArgv then
