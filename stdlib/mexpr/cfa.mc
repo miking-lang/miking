@@ -7,10 +7,13 @@
 include "set.mc"
 include "either.mc"
 include "name.mc"
-include "ast.mc"
 
--- OPT(dlunde,2021-10-29): Map all names in analyzed program to integers 0,1,...,#variables-1
--- to speed up analysis? Or, use a hash table?
+include "ast.mc"
+include "anf.mc"
+
+-- OPT(dlunde,2021-10-29): Map all names in analyzed program to integers
+-- 0,1,...,#variables-1 to speed up analysis (through tensor lookups)? Current
+-- analysis adds a log factor for lookups to the (already cubic) complexity.
 
 -- NOTE:
 -- * We need to handle sequences of applications specially, (e.g., f a b c d)  since they are not labelled by ANF
@@ -37,16 +40,12 @@ include "ast.mc"
 -- eventually allow?
 type CFAFunction = { ident: Name, body: Either AbsVal Name }
 type CFAGraph = {
-  functions: [CFAFunction],
-  constraints: [Constraint],
   worklist: [Name],
   data: Map Name (Set AbsVal),
   edges: Map Name [Constraint]
 }
 
 let emptyCFAGraph = {
-  functions = [],
-  constraints = [],
   worklist = [],
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp
@@ -60,14 +59,41 @@ lang CFA = Ast + LetAst
   syn AbsVal =
   -- Intentionally left blank
 
+  sem cfa =
+  | t ->
+
+    -- Collect all functions
+    let functions = _collectFunctions [] t in
+
+    -- Generate and collect all constraints
+    let cstrs = _collectConstraints functions t in
+
+    -- Build the graph
+    let graph = foldl initConstraint emptyCFAGraph cstrs in
+
+    -- Iteration
+    recursive let iter = lam graph.
+      if null graph.worklist then graph
+      else
+        let q = head graph.worklist in
+        let worklist = tail graph.worklist in
+        match _edgesLookup q graph.edges with cc in
+        foldl propagateConstraint graph cc
+    in
+    let graph = iter graph in
+
+    -- Produce output
+    graph
+
+  sem cmpAbsVal (lhs: AbsVal) =
+  -- Intentionally left blank
+
   sem exprName =
   | t -> infoErrorExit (infoTm t) "Unsupported in exprName for CFA"
 
-  sem _collectConstraints (acc: CFAGraph) =
+  sem _collectConstraints (functions: [CFAFunction]) (acc: [Constraint]) =
   | t ->
-    let acc = { acc with
-      constraints = concat (generateConstraints acc.functions t) acc.constraints
-    } in
+    let acc = concat (generateConstraints functions t) acc in
     sfold_Expr_Expr _collectConstraints acc t
 
   sem generateConstraints (functions: [CFAFunction]) =
@@ -79,10 +105,16 @@ lang CFA = Ast + LetAst
   sem propagateConstraint (graph: CFAGraph) =
   -- Intentionally left blank
 
+  sem _dataLookup (key: Name) =
+  | dataMap -> mapLookupOrElse (lam. setEmpty cmpAbsVal) key dataMap
+
+  sem _edgesLookup (key: Name) =
+  | edgesMap -> mapLookupOrElse (lam. []) key edgesMap
+
   -- CFAGraph -> Name -> Set AbsVal -> CFAGraph
   sem _addData (graph: CFAGraph) (q: Name) =
   | d ->
-    match mapLookup q graph.data with Some dq in
+    match _dataLookup q graph.data with dq in
     if setSubset d dq then graph else
       {{ graph with
            data = mapInsert q (setUnion dq d) graph.data } with
@@ -108,13 +140,13 @@ lang DirectConstraint = CFA
 
   sem initConstraint (graph: CFAGraph) =
   | CstrDirect r & cstr ->
-    match mapLookup r.lhs graph.edges with Some elhs in
+    match _edgesLookup r.lhs graph.edges with elhs in
     { graph with edges = mapInsert r.lhs (cons cstr elhs) graph.edges }
-  | CstrDirectAv r -> _addData graph r.rhs (setInsert r.av (setEmpty nameCmp))
+  | CstrDirectAv r -> _addData graph r.rhs (setInsert r.av (setEmpty cmpAbsVal))
 
   sem propagateConstraint (graph: CFAGraph) =
   | CstrDirect r ->
-    match mapLookup r.lhs graph.data with Some dlhs in
+    match _dataLookup r.lhs graph.data with dlhs in
     _addData graph r.rhs dlhs
 
 end
@@ -129,27 +161,27 @@ lang ConditionalConstraint = CFA
 
   sem initConstraint (graph: CFAGraph) =
   | CstrCond r & cstr ->
-    match mapLookup r.rlhs graph.edges with Some erlhs in
-    match mapLookup r.lrhs graph.edges with Some elrhs in
+    match _edgesLookup r.rlhs graph.edges with erlhs in
+    match _edgesLookup r.lrhs graph.edges with elrhs in
     let es = mapInsert r.rlhs (cons cstr erlhs) graph.edges in
     let es = mapInsert r.lrhs (cons cstr elrhs) es in
     { graph with edges = es }
   | CstrCondAv r & cstr ->
-    match mapLookup r.lrhs graph.edges with Some elrhs in
+    match _edgesLookup r.lrhs graph.edges with elrhs in
     let es = mapInsert r.lrhs (cons cstr elrhs) graph.edges in
     { graph with edges = es }
 
   sem propagateConstraint (graph: CFAGraph) =
   | CstrCond r ->
-    match mapLookup r.lrhs graph.data with Some dlrhs in
+    match _dataLookup r.lrhs graph.data with dlrhs in
     if setMem r.av dlrhs then
-      match mapLookup r.rlhs with Some drlhs in
+      match _dataLookup r.rlhs graph.data with drlhs in
       _addData graph r.rrhs drlhs
     else graph
   | CstrCondAv r ->
-    match mapLookup r.lrhs graph.data with Some dlrhs in
+    match _dataLookup r.lrhs graph.data with dlrhs in
     if setMem r.av dlrhs then
-      _addData graph r.rrhs (setInsert r.rav (setEmpty nameCmp))
+      _addData graph r.rrhs (setInsert r.rav (setEmpty cmpAbsVal))
     else graph
 
 end
@@ -169,6 +201,12 @@ lang LamCFA = CFA + DirectConstraint + LamAst
 
   syn AbsVal =
   | AVLam { ident: Name }
+
+  sem cmpAbsVal (lhs: AbsVal) =
+  | AVLam { ident = nrhs } ->
+    match lhs with AVLam { ident = nlhs } then
+      nameCmp nlhs nrhs
+    else error "Cannot compare in cmpAbsVal for AVLam"
 
   sem _collectFunctions (acc: [CFAFunction]) =
   | TmLam t & tm ->
@@ -277,3 +315,14 @@ lang ExtCFA = CFA + ExtAst
   | TmExt t -> exprName t.inexpr
 end
 
+lang MExprCFA =
+  CFA + DirectConstraint + ConditionalConstraint + VarCFA + LamCFA + AppCFA +
+  LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
+  MatchCFA + UtestCFA + NeverCFA + ExtCFA
+
+
+-----------
+-- TESTS --
+-----------
+
+lang Test = MExprCFA + MExprANF
