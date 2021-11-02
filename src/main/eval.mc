@@ -3,9 +3,9 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 
 include "options.mc"
+include "parse.mc"
 include "seq.mc"
 include "name.mc"
-
 
 include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
@@ -50,7 +50,12 @@ let generateTests = lam ast. lam testsEnabled.
 let eval = lam files. lam options : Options. lam args.
   use ExtMCore in
   let evalFile = lam file.
-    let ast = parseMCoreFile [] file in
+    let ast = parseParseMCoreFile {
+      keepUtests = options.runTests,
+      keywords = [],
+      pruneExternalUtests = options.pruneExternalUtests,
+      findExternalsExclude = false -- the interpreter does not support externals
+    } file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());

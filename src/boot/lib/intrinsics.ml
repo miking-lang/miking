@@ -214,6 +214,14 @@ module Mseq = struct
       | _ ->
           raise (Invalid_argument "Mseq.fold_right2")
 
+    let map_accum_left f a = function
+      | Rope s ->
+          let a', s' = Rope.map_accuml_array_array f a s in
+          (a', Rope s')
+      | List s ->
+          let a', s' = List.fold_left_map f a s in
+          (a', List s')
+
     let of_list = of_list_rope
 
     let of_array = of_array_rope

@@ -4,6 +4,7 @@
 include "mi-lite.mc"
 include "options.mc"
 include "sys.mc"
+include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
@@ -86,7 +87,13 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
+    let ast = parseParseMCoreFile {
+      keepUtests = options.runTests,
+      pruneExternalUtests = options.pruneExternalUtests,
+      findExternalsExclude = true,
+      keywords = decisionPointsKeywords
+    } file in
+    let ast = makeKeywords [] ast in
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in

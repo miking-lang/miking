@@ -1530,12 +1530,14 @@ end
 
 lang BootParserEval =
   BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
-  FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst
+  FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
+  RecordAst
 
   syn Const =
   | CBootParserTree {val : BootParserTree}
   | CBootParserParseMExprString2 [String]
-  | CBootParserParseMCoreFile2 [String]
+  | CBootParserParseMCoreFile2 (Bool, Bool, [String])
+  | CBootParserParseMCoreFile3 ((Bool, Bool, [String]), [String])
   | CBootParserGetTerm2 BootParserTree
   | CBootParserGetType2 BootParserTree
   | CBootParserGetString2 BootParserTree
@@ -1566,22 +1568,49 @@ lang BootParserEval =
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserParseMExprString not a sequence"
+
   | CBootParserParseMCoreFile _ ->
-    match arg with TmSeq {tms = seq} then
+    match arg with TmRecord {bindings = bs} then
+      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2"]) with [
+        Some (TmConst { val = CBool { val = keepUtests } }),
+        Some (TmConst { val = CBool { val = pruneExternalUtests } }),
+        Some (TmSeq { tms = externalsExclude })
+      ]
+      then
+        let externalsExclude =
+          map
+            (lam x.
+              match x with TmSeq {tms = s} then
+                _seqOfCharsToString s
+              else
+                error (join ["External identifier of first argument passed to ",
+                             "bootParserParseMCoreFile not a sequence"]))
+            externalsExclude
+        in
+        TmConst {val = CBootParserParseMCoreFile2 (
+                  keepUtests, pruneExternalUtests, externalsExclude
+                 ),
+                 ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+      else error "First argument to bootParserParseMCoreFile incorrect record"
+    else error "First argument to bootParserParseMCoreFile not a record"
+  | CBootParserParseMCoreFile2 pruneArg ->
+    match arg with TmSeq {tms = keywords} then
       let keywords =
         map
           (lam keyword.
             match keyword with TmSeq {tms = s} then
               _seqOfCharsToString s
-            else error (join ["Keyword of first argument passed to ",
+            else error (join ["Keyword of third argument passed to ",
                               "bootParserParseMCoreFile not a sequence"]))
-          seq in
-      TmConst {val = CBootParserParseMCoreFile2 keywords,
+          keywords
+      in
+      TmConst {val = CBootParserParseMCoreFile3 (pruneArg, keywords),
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else error "First argument to bootParserParseMCoreFile not a sequence"
-  | CBootParserParseMCoreFile2 keywords ->
-    match arg with TmSeq {tms = seq} then
-      let t = bootParserParseMCoreFile keywords (_seqOfCharsToString seq) in
+    else error "Third argument to bootParserParseMCoreFile not a sequence"
+  | CBootParserParseMCoreFile3 (pruneArg, keywords) ->
+    match arg with TmSeq {tms = filename} then
+      let filename = _seqOfCharsToString filename in
+      let t = bootParserParseMCoreFile pruneArg keywords filename in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserParseMCoreFile not a sequence"

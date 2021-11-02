@@ -26,8 +26,8 @@ let emptyHooks : Hooks =
   , compileOcaml = lam. lam. lam. ""
   }
 
-let collectLibraries : ExternalNameMap -> ([String], [String])
-= lam extNameMap.
+let collectLibraries : ExternalNameMap -> Set String -> ([String], [String])
+= lam extNameMap. lam syslibs.
   let f = lam s. lam str. setInsert str s in
   let g = lam acc : (Set String, Set String). lam impl :  ExternalImpl.
     match acc with (libs, clibs) then
@@ -36,7 +36,8 @@ let collectLibraries : ExternalNameMap -> ([String], [String])
   in
   let h = lam acc. lam. lam impls. foldl g acc impls in
   match mapFoldWithKey h (setEmpty cmpString, setEmpty cmpString) extNameMap
-  with (libs, clibs) then (setToSeq libs, setToSeq clibs)
+  with (libs, clibs) then
+    (setToSeq libs, setToSeq clibs)
   else never
 
 let compileMCore : Expr -> Hooks -> a =
@@ -50,11 +51,19 @@ let compileMCore : Expr -> Hooks -> a =
 
   match typeLift ast with (env, ast) then
     match generateTypeDecls env with (env, typeTops) then
-      let env : GenerateEnv = chooseExternalImpls globalExternalImplsMap env ast in
+      let env : GenerateEnv =
+        chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+      in
       let exprTops = generateTops env ast in
 
+      -- List OCaml packages availible on the system.
+      let syslibs =
+        setOfSeq cmpString
+          (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+      in
+
       -- Collect external library dependencies
-      match collectLibraries env.exts with (libs, clibs) then
+      match collectLibraries env.exts syslibs with (libs, clibs) then
         let ocamlProg = pprintOcamlTops (concat typeTops exprTops) in
 
         -- If option --debug-generate, print the AST

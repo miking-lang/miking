@@ -274,7 +274,9 @@ let collectKnownProgramTypes = use MExprAst in
       let acc = collectType acc (tyTm t.expected) in
       let acc =
         match t.tusing with Some t then
-          match tyTm t with TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}} then
+          match tyTm t with
+            TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}}
+          then
             collectType (collectType acc lhs) rhs
           else
             let msg = join [
@@ -283,6 +285,9 @@ let collectKnownProgramTypes = use MExprAst in
             infoErrorExit (infoTm t) msg
         else acc
       in
+      let acc = collectTypes acc t.test in
+      let acc = collectTypes acc t.expected in
+      let acc = match t.tusing with Some t then collectTypes acc t else acc in
       collectTypes acc t.next
     else sfold_Expr_Expr collectTypes acc expr
   in
@@ -776,7 +781,7 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
                  with tyConEnv = typeNames}
 
 let withUtestRunner = lam utestFunctions. lam term.
-  bindall_ [utestRunner (), utestFunctions, term]
+  bindall_ [utestRunner (), utestFunctions, term, print_ (str_ "\n")]
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
 -- transformation.
@@ -790,6 +795,14 @@ lang MExprUtestTrans = MExprAst
 
   sem utestGenH (env : UtestTypeEnv) =
   | TmUtest t ->
+    let test = utestGenH env t.test in
+    let expected = utestGenH env t.expected in
+    let tusing = optionMap (utestGenH env) t.tusing in
+    let t =
+      { { { t with test = test }
+              with expected = expected }
+              with tusing = tusing }
+    in
     bind_ (ulet_ "" (_generateUtest env t))
           (utestGenH env t.next)
   | t -> smap_Expr_Expr (utestGenH env) t

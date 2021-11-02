@@ -6,6 +6,7 @@
 -- bootstrapping stage to speed up compile times.
 
 include "options.mc"
+include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/utesttrans.mc"
@@ -45,7 +46,12 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
 
 let compile : Options -> String -> Unit = lam options. lam file.
   use MCoreLiteCompile in
-  let ast = parseMCoreFile [] file in
+  let ast = parseParseMCoreFile {
+    keepUtests = options.runTests,
+    pruneExternalUtests = options.pruneExternalUtests,
+    findExternalsExclude = true,
+    keywords = []
+  } file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
   let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in

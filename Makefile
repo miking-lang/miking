@@ -23,16 +23,23 @@
   test\
   test-all\
   test-boot-compile\
+  test-boot-compile-all\
   test-compile\
+  test-compile-all\
+  test-all-prune-utests\
+  test-boot-compile-prune-utests\
+  test-boot-compile-prune-utests-all\
+  test-compile-prune-utests\
+  test-compile-prune-utests-all\
   test-run\
+  test-run-all\
   test-boot\
-  test-boot-base\
+  test-boot-all\
   test-boot-py\
-  test-boot-ocaml\
-  test-sundials\
-	test-ipopt\
   test-par\
-  test-tune
+  test-tune\
+  test-sundials\
+  test-ipopt
 
 all: build
 
@@ -45,7 +52,7 @@ install-boot: boot
 lite: install-boot
 	@./make lite
 
-test: test-boot-base
+test: test-boot
 
 build: install-boot
 # Run the complete bootstrapping process to compile `mi`.
@@ -71,48 +78,72 @@ clean:
 uninstall:
 	@./make uninstall
 
-test: test-boot-base
-
+# Tests everything except some files with very special external dependencies
 test-all:\
   test-boot-compile\
   test-compile\
   test-run\
-  test-par\
 	test-tune\
-  test-boot
+  test-boot-all
+	@./make lint
+
+# The same as test-all but prunes utests whose external dependencies are not met
+# on this system
+test-all-prune-utests:\
+  test-boot-compile-prune-utests\
+  test-compile-prune-utests\
+  test-run\
+	test-tune\
+  test-boot-all
 	@./make lint
 
 test-boot-compile: boot
-	@$(MAKE) -s -f test-boot-compile.mk
+	@$(MAKE) -s -f test-boot-compile.mk selected
+
+test-boot-compile-all: boot
+	@$(MAKE) -s -f test-boot-compile.mk all
 
 test-compile: build
-	@$(MAKE) -s -f test-compile.mk
+	@$(MAKE) -s -f test-compile.mk selected
+
+test-compile-all: build
+	@$(MAKE) -s -f test-compile.mk all
+
+test-boot-compile-prune-utests: boot
+	@$(MAKE) -s -f test-boot-compile-prune-utests.mk selected
+
+test-boot-compile-prune-utests-all: boot
+	@$(MAKE) -s -f test-boot-compile-prune-utests.mk all
+
+test-compile-prune-utests: build
+	@$(MAKE) -s -f test-compile-prune-utests.mk selected
+
+test-compile-prune-utests-all: build
+	@$(MAKE) -s -f test-compile-prune-utests.mk all
 
 test-run: build
-	@$(MAKE) -s -f test-run.mk
+	@$(MAKE) -s -f test-run.mk selected
 
-test-boot:\
-  test-boot-base\
-  test-boot-py\
-  test-boot-ocaml
+test-run-all: build
+	@$(MAKE) -s -f test-run.mk all
 
-test-boot-base: boot
-	@$(MAKE) -s -f test-boot.mk base
+test-boot: boot
+	@$(MAKE) -s -f test-boot.mk selected
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-ocaml: boot
-	@$(MAKE) -s -f test-boot.mk ocaml
-
-test-sundials: build
-	@$(MAKE) -s -f test-sundials.mk
-
-test-ipopt: build/mi
-	@$(MAKE) -s -f test-ipopt.mk all
+test-boot-all:
+	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build
 	@$(MAKE) -s -f test-par.mk
 
 test-tune: build
 	@$(MAKE) -s -f test-tune.mk
+
+test-sundials: build
+	@$(MAKE) -s -f test-sundials.mk
+
+test-ipopt: build
+	@$(MAKE) -s -f test-ipopt.mk

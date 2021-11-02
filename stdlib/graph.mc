@@ -17,7 +17,7 @@ include "digraph.mc"
 -- Presently, the graph is implemented using an adjacency map, which maps each
 -- vertex to a list of incident edges upon that vertex.
 
-type Graph = Digraph
+type Graph v l = Digraph v l
 
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let graphEmpty = digraphEmpty
@@ -29,9 +29,11 @@ let graphVertices = digraphVertices
 let graphCmpv = lam g : Graph v l.
   mapGetCmpFun g.adj
 
-let graphEdgeEq = lam g. lam e1. lam e2.
-  and (or (and (g.eqv e1.0 e2.0) (g.eqv e1.1 e2.1))
-          (and (g.eqv e1.1 e2.0) (g.eqv e1.0 e2.1)))
+let graphEdgeEq =
+lam g : Graph v l. lam e1 : DigraphEdge v l. lam e2: DigraphEdge v l.
+  let eqv = digraphEqv g in
+  and (or (and (eqv e1.0 e2.0) (eqv e1.1 e2.1))
+          (and (eqv e1.1 e2.0) (eqv e1.0 e2.1)))
       (g.eql e1.2 e2.2)
 
 let graphEdges = lam g. distinct (graphEdgeEq g) (digraphEdges g) -- Remove duplicate edges

@@ -228,7 +228,7 @@ utest dualnumPrimalDeep dnum134 with 3. using eqf in
 utest dualnumPrimalDeep (dnum1 dnum036 dnum048) with 3. using eqf in
 utest dualnumIsDualNum num1 with false in
 utest dualnumIsDualNum dnum112 with true in
-utest dualnumEpsilon dnum112 with e1 in
+utest dualnumEpsilon dnum112 with e1 using eqsym in
 utest dualnumPrimal e1 dnum112 with num1 using eq in
 utest dualnumPertubation e1 dnum112 with num2 using eq in
 utest dualnumPrimal e2 dnum112 with dnum112 using eq in
