@@ -89,7 +89,6 @@ if lti (length argv) 2 then usage () else
     let options : Options = res.options in
     maybePrintHelp options;
     -- No help requested. Did user give a filename?
-    let split = splitOptionPrefix (tail argv) in
     match split.last with [file] ++ programArgv then
       if isSuffix eqChar ".mc" file then
         -- Yes, run the 'run' command with arguments and supplied options
