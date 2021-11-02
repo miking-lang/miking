@@ -1642,6 +1642,13 @@ the tuned values, invoke the main compiler with the `--tuned` option:
 mi compile --tuned sort.mc
 ```
 
+Passing the `--tuned` flag to `mi tune` makes the auto tuner restart the tuning
+using the values in the tune file as start values:
+
+```
+mi compile --tuned sort.mc
+```
+
 To tune and compile the program in one go, provide the `--compile`
 flag to `mi tune`:
 
