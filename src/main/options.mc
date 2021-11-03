@@ -59,12 +59,8 @@ let config = [
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with exitBefore = true}),
-  ([("--exit-before", "", "")],
-    "Exit before evaluation or compilation",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with exitBefore = true}),
   ([("--disable-prune-utests", "", "")],
-    "Exit before evaluation or compilation",
+    "Disable pruning of utests with missing external dependencies",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with pruneExternalUtests = false}),
   ([("--test", "", "")],
@@ -74,7 +70,7 @@ let config = [
   ([("--disable-optimizations", "", "")],
     "Disables optimizations to decrease compilation time",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with runTests = true}),
+      let o: Options = p.options in {o with disableOptimizations = true}),
   ([("--tuned", "", "")],
     "Use tuned values when compiling",
     lam p: ArgPart Options.
