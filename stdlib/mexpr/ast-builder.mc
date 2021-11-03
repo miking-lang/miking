@@ -1097,7 +1097,14 @@ let bootParserParseMExprString_ = use MExprAst in
   lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
 
 let bootParserParseMCoreFile_ = use MExprAst in
-  lam key. lam str. appf2_ (uconst_ (CBootParserParseMCoreFile ())) key str
+  lam pruneArgs.
+  lam key.
+  lam str.
+  appf3_
+    (uconst_ (CBootParserParseMCoreFile ()))
+    pruneArgs
+    key
+    str
 
 let bootParserGetId_ = use MExprAst in
   lam pt. appf1_ (uconst_ (CBootParserGetId ())) pt

@@ -18,15 +18,34 @@ let gint = lam t. lam n. bootParserGetInt t n
 let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
 
+type BootParserParseMCoreFileArg = {
+  -- Should we keep utests
+  keepUtests : Bool,
+
+  -- Prune external dependent utests
+  pruneExternalUtests : Bool,
+
+  -- Exclude pruning of utest for externals with whose dependencies are met on
+  -- this system.
+  externalsExclude : [String],
+
+  -- Additional keywords
+  keywords : [String]
+}
 
 lang BootParser = MExprAst + ConstTransformer
 
   -- Parse a complete MCore file, including MLang code
   -- This function returns the final MExpr AST. The MCore
   -- file can refer to other files using include statements
-  sem parseMCoreFile (keywords : [String]) =
+  sem parseMCoreFile (arg : BootParserParseMCoreFileArg) =
   | filename ->
-    let t = bootParserParseMCoreFile keywords filename in
+    let t =
+      bootParserParseMCoreFile
+        (arg.keepUtests, arg.pruneExternalUtests, arg.externalsExclude)
+        arg.keywords
+        filename
+    in
     constTransform (matchTerm t (bootParserGetId t))
 
   -- Parses an MExpr string and returns the final MExpr AST

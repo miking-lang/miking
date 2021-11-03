@@ -48,8 +48,10 @@ use
 make test
 ```
 
-Alternatively, you can use `make test-all` to run the full test suite.
-Beware that this may take some time.
+Alternatively, you can use `make test-all` to run the full test suite. Beware
+that this may take some time. Alternatively you can use `make
+test-all-prune-utests` which will exclude tests whose external dependencies are
+not met on the current system (with the exception of `pyml`).
 
 To run a hello world program, create a file `hello.mc` with the following code,
 
@@ -1324,6 +1326,56 @@ You can then test the solver in Miking with
 ```
 make test-ipopt
 ```
+
+### External Dependent Utests Pruning
+As part of the parsing (see `prune_external_utests` in `parserutils.ml` for
+details) utests that depend on externals are marked and removed. This done in
+the following steps:
+1. Dead code removal is performed to remove dead code, including any dead code
+   inside utests that might reference externals. This is done to reduce the
+   number of false positivities.
+2. Utests that references externals are marked and removed.
+3. Dead code removal is run again to remove any dead code that result from the
+   removal of utests in step 2.
+
+Additionally, if `boot` or `mi` is run without the `--test` flag, all utests are
+removed prior to dead code removal as all utests can then be considered dead
+code. This both allows the dead code removal to remove more dead code and
+simplifies the pruning of utests implementation. If any utest pruning is
+performed, a warning summarizing pruned utests is printed to _stdout_.
+
+The pruning of utests can be disabled with the `--disable-prune-utests` flag and
+debugged with `--debug-prune-utests` (only in boot).
+
+Moreover, pruning of utests can be disabled for a selection of externals, which
+allows for a more granular approach to the testing of external dependent code
+(see below).
+
+#### Selective pruning
+During compilation, the available OCaml packages on the
+current system is queried and externals depending on these packages are excluded
+from utests pruning. In other words, utests that depend on externals that can be
+compiled on the system are kept, while all others are removed. The listing of
+OCaml packages is based around `dune installed-libraries` (see
+`externalListOcamlPackages` and `externalGetSupportedExternalImpls` in
+`external-includes.mc` so this functionality should not require any additional
+dependencies. For boot and the interpreter, _all_ external dependent utests are
+removed as these currently do not support externals at all.
+
+#### Test organization
+`make test-all` runs all tests, disabling utest pruning for compiled files
+(i.e. if dependencies are not met, you get an error). The recepie `make
+test-all-prune-utests` runs all tests but prunes non-supported utests which is
+handy if your system only meet the dependencies of a subset of the
+externals. Interpreted files are always pruned of external dependent
+utests. Please consult the makefiles for more details.
+
+#### Authoring new external libraries
+To maintain the flexibility of the test organization, future external libraries
+must ensure that externals, or external dependent identifiers are only fully
+applied inside utests. To verify that this is the case you can just run `boot
+eval --test <file.mc>` and verify that you get a non-zero exit code on the
+library that you are currently working on.
 
 ### Parallel Programming
 Miking offers a set of externals for shared-memory parallelism using

@@ -1,9 +1,8 @@
+include test-files.mk
 
-compile_files =
-compile_files += stdlib/ipopt/ipopt.mc
-compile_files += stdlib/ipopt/ipopt-ad.mc
+.PHONY: all $(ipopt_files)
 
-all: ${compile_files}
+all: $(ipopt_files)
 
-${compile_files}::
-	@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+$(ipopt_files):
+	@./make compile-test $@ "build/mi compile --test --disable-optimizations --disable-prune-utests"

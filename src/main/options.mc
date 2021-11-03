@@ -8,6 +8,7 @@ type Options = {
   debugTypeAnnot : Bool,
   debugProfile : Bool,
   exitBefore : Bool,
+  pruneExternalUtests : Bool,
   runTests : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
@@ -25,6 +26,7 @@ let options = {
   debugTypeAnnot = false,
   debugProfile = false,
   exitBefore = false,
+  pruneExternalUtests = true,
   runTests = false,
   disableOptimizations = false,
   useTuned = false,
@@ -61,6 +63,10 @@ let config = [
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with exitBefore = true}),
+  ([("--disable-prune-utests", "", "")],
+    "Exit before evaluation or compilation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with pruneExternalUtests = false}),
   ([("--test", "", "")],
     "Generate utest code",
     lam p: ArgPart Options.
@@ -85,14 +91,14 @@ let config = [
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with typeCheck = true}),
-  ([("--help", "", "")],
-    "Display this list of options",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printHelp = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with output = Some (argToString p)})
+      let o: Options = p.options in {o with output = Some (argToString p)}),
+  ([("--help", "", "")],
+    "Display this list of options",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with printHelp = true})
 ]
 
 -- Get the help string for options

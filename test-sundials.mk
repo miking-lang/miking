@@ -1,9 +1,8 @@
+include test-files.mk
 
-compile_files += stdlib/sundials/sundials.mc
+.PHONY: all $(sundials_files)
 
-.PHONY: all $(compile_files)
+all: $(sundials_files)
 
-all: $(compile_files)
-
-$(compile_files):
-	@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+$(sundials_files):
+	@./make compile-test $@ "build/mi compile --test --disable-optimizations --disable-prune-utests"
