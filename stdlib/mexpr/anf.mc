@@ -424,6 +424,10 @@ utest _anf nestedreclet with
         (ulam_ "c" (int_ 1))))
 using eqExpr in
 
+let constant = int_ 1 in
+utest _anf constant with int_ 1
+using eqExpr in
+
 let debug = false in
 
 let debugPrint = lam t.
