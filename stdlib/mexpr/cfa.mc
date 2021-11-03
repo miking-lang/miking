@@ -354,7 +354,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 
   sem generateConstraints (functions: [CFAFunction]) =
   | TmRecLets { bindings = bindings } ->
-    map (lam b.
+    map (lam b: RecLetBinding.
       match b.body with TmLam t then
         CstrDirectAv { lhs = AVLam { ident = t.ident}, rhs = b.ident }
       else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
