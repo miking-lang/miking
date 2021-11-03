@@ -33,61 +33,63 @@ let threadCPURelax = lam u.
 
 mexpr
 
--- Threads --
+utest
+  -- Threads --
 
-let ps = create 10 (lam. threadSpawn (lam. threadSelf ())) in
+  let ps = create 10 (lam. threadSpawn (lam. threadSelf ())) in
 
-let tids = map threadJoin ps in
+  let tids = map threadJoin ps in
 
--- We expect the thread IDs to be unique.
-utest length (distinct eqi tids) with length tids in
-
-
--- Threaded atomic operations --
--- increase/decrease an atomic in different threads
-let incr = lam a. atomicFetchAndAdd a 1 in
-let decr = lam a. atomicFetchAndAdd a (subi 0 1) in
-
-let a = atomicMake 0 in
-recursive let work : (ARef a -> Unit) -> Int -> Unit = lam op. lam n.
-  match n with 0 then ()
-  else
-    op a;
-    work op (subi n 1)
-in
-
-let nIncr = 10000 in
-let nDecr = 1000 in
-let nSpawns = 8 in
-
-let threads = create nSpawns (lam. threadSpawn (lam. work incr nIncr)) in
-work decr nDecr;
-
-iter (lam t. threadJoin t; ()) threads;
-
-utest atomicGet a with subi (muli nIncr nSpawns) nDecr in
+  -- We expect the thread IDs to be unique.
+  utest length (distinct eqi tids) with length tids in
 
 
--- Locksteps using CAS --
+  -- Threaded atomic operations --
+  -- increase/decrease an atomic in different threads
+  let incr = lam a. atomicFetchAndAdd a 1 in
+  let decr = lam a. atomicFetchAndAdd a (subi 0 1) in
 
--- use integer tids to make physical comparison in CAS possible
-let me = threadSelf () in
-let tid = atomicMake me in
-
--- Wait for friend to take a step before each step.
-recursive let loop : Int -> Tid -> Unit = lam n. lam friend.
-  match n with 0 then ()
-  else
-    match atomicCAS tid friend (threadSelf ()) with true then
-      loop (subi n 1) friend
+  let a = atomicMake 0 in
+  recursive let work : (ARef a -> Unit) -> Int -> Unit = lam op. lam n.
+    match n with 0 then ()
     else
-      threadCPURelax ();
-      loop n friend
-in
-let n = 100 in
-let t = threadSpawn (lam. loop n me) in
-loop n (threadGetID t);
--- Does not loop forever = the test has passed!
-threadJoin t;
+      op a;
+      work op (subi n 1)
+  in
 
+  let nIncr = 10000 in
+  let nDecr = 1000 in
+  let nSpawns = 8 in
+
+  let threads = create nSpawns (lam. threadSpawn (lam. work incr nIncr)) in
+  work decr nDecr;
+
+  iter (lam t. threadJoin t; ()) threads;
+
+  utest atomicGet a with subi (muli nIncr nSpawns) nDecr in
+
+
+  -- Locksteps using CAS --
+
+  -- use integer tids to make physical comparison in CAS possible
+  let me = threadSelf () in
+  let tid = atomicMake me in
+
+  -- Wait for friend to take a step before each step.
+  recursive let loop : Int -> Tid -> Unit = lam n. lam friend.
+    match n with 0 then ()
+    else
+      match atomicCAS tid friend (threadSelf ()) with true then
+        loop (subi n 1) friend
+      else
+        threadCPURelax ();
+        loop n friend
+  in
+  let n = 100 in
+  let t = threadSpawn (lam. loop n me) in
+  loop n (threadGetID t);
+  -- Does not loop forever = the test has passed!
+  threadJoin t;
+  ()
+with () in
 ()

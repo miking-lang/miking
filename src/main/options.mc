@@ -8,6 +8,7 @@ type Options = {
   debugTypeAnnot : Bool,
   debugProfile : Bool,
   exitBefore : Bool,
+  pruneExternalUtests : Bool,
   runTests : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
@@ -25,6 +26,7 @@ let options = {
   debugTypeAnnot = false,
   debugProfile = false,
   exitBefore = false,
+  pruneExternalUtests = true,
   runTests = false,
   disableOptimizations = false,
   useTuned = false,
@@ -57,10 +59,10 @@ let config = [
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with exitBefore = true}),
-  ([("--exit-before", "", "")],
-    "Exit before evaluation or compilation",
+  ([("--disable-prune-utests", "", "")],
+    "Disable pruning of utests with missing external dependencies",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with exitBefore = true}),
+      let o: Options = p.options in {o with pruneExternalUtests = false}),
   ([("--test", "", "")],
     "Generate utest code",
     lam p: ArgPart Options.
@@ -68,7 +70,7 @@ let config = [
   ([("--disable-optimizations", "", "")],
     "Disables optimizations to decrease compilation time",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with runTests = true}),
+      let o: Options = p.options in {o with disableOptimizations = true}),
   ([("--tuned", "", "")],
     "Use tuned values when compiling, or as defaults when tuning",
     lam p: ArgPart Options.
@@ -85,14 +87,14 @@ let config = [
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with typeCheck = true}),
-  ([("--help", "", "")],
-    "Display this list of options",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with printHelp = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with output = Some (argToString p)})
+      let o: Options = p.options in {o with output = Some (argToString p)}),
+  ([("--help", "", "")],
+    "Display this list of options",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with printHelp = true})
 ]
 
 -- Get the help string for options

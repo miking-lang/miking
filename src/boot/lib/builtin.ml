@@ -152,7 +152,7 @@ let builtin =
   ; ("tensor2string", f (Ctensor2string None))
     (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f (CbootParserParseMExprString None))
-  ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile None))
+  ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile (None, None)))
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
   ; ("bootParserGetType", f (CbootParserGetType None))

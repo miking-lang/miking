@@ -447,9 +447,11 @@ let arity = function
       2
   | CbootParserParseMExprString (Some _) ->
       1
-  | CbootParserParseMCoreFile None ->
+  | CbootParserParseMCoreFile (None, None) ->
+      3
+  | CbootParserParseMCoreFile (Some _, None) ->
       2
-  | CbootParserParseMCoreFile (Some _) ->
+  | CbootParserParseMCoreFile (_, Some _) ->
       1
   | CbootParserGetId ->
       1
@@ -1457,16 +1459,41 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
-  | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
+  | CbootParserParseMCoreFile (None, None), TmRecord (_, r) -> (
+    try
+      match
+        (Record.find (us "0") r, Record.find (us "1") r, Record.find (us "2") r)
+      with
+      | ( TmConst (_, CBool keep_utests)
+        , TmConst (_, CBool prune_external_utests)
+        , TmSeq (_, externals_exclude) ) ->
+          let externals_exclude =
+            Mseq.map
+              (function
+                | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi
+                )
+              externals_exclude
+          in
+          TmConst
+            ( fi
+            , CbootParserParseMCoreFile
+                ( Some (keep_utests, prune_external_utests, externals_exclude)
+                , None ) )
+      | _ ->
+          fail_constapp fi
+    with Not_found -> fail_constapp fi )
+  | CbootParserParseMCoreFile (Some prune_arg, None), TmSeq (fi, keywords) ->
       let keywords =
         Mseq.map
           (function
             | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
-          seq
+          keywords
       in
-      TmConst (fi, CbootParserParseMCoreFile (Some keywords))
-  | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2seq_of_int fi seq) in
+      TmConst (fi, CbootParserParseMCoreFile (Some prune_arg, Some keywords))
+  | ( CbootParserParseMCoreFile (Some prune_arg, Some keywords)
+    , TmSeq (fi, filename) ) ->
+      let filename = tmseq2seq_of_int fi filename in
+      let t = Bootparser.parseMCoreFile prune_arg keywords filename in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
