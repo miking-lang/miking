@@ -1,8 +1,7 @@
-include "assoc.mc"
+include "arg.mc"
 include "common.mc"
-include "option.mc"
-include "string.mc"
 
+-- Options type
 type Options = {
   debugParse : Bool,
   debugGenerate : Bool,
@@ -16,10 +15,11 @@ type Options = {
   compileAfterTune : Bool,
   cpuOnly : Bool,
   typeCheck : Bool,
-  printHelp : Bool
+  printHelp : Bool,
+  output : Option String
 }
 
--- Option structure
+-- Default values for options
 let options = {
   debugParse = false,
   debugGenerate = false,
@@ -33,37 +33,80 @@ let options = {
   compileAfterTune = false,
   cpuOnly = false,
   typeCheck = false,
-  printHelp = false
+  printHelp = false,
+  output = None ()
 }
 
--- Option map, maps strings to structure updates
-let optionsMap = [
-("--debug-parse", lam o : Options. {o with debugParse = true}),
-("--debug-generate", lam o : Options. {o with debugGenerate = true}),
-("--debug-type-annot", lam o : Options. {o with debugTypeAnnot = true}),
-("--debug-profile", lam o : Options. {o with debugProfile = true}),
-("--exit-before", lam o : Options. {o with exitBefore = true}),
-("--disable-prune-utests",
- lam o : Options. {o with pruneExternalUtests = false}),
-("--test", lam o : Options. {o with runTests = true}),
-("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
-("--tuned", lam o : Options. {o with useTuned = true}),
-("--compile", lam o : Options. {o with compileAfterTune = true}),
-("--cpu-only", lam o : Options. {o with cpuOnly = true}),
-("--typecheck", lam o : Options. {o with typeCheck = true}),
-("--help", lam o: Options. {o with printHelp = true})
+-- Options configuration
+let config = [
+  ([("--debug-parse", "", "")],
+    "Print the AST after parsing",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugParse = true}),
+  ([("--debug-generate", "", "")],
+    "Print the AST after code generation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugGenerate = true}),
+  ([("--debug-type-annot", "", "")],
+    "Print the AST after adding type annotations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugTypeAnnot = true}),
+  ([("--debug-profile", "", "")],
+    "Instrument profiling expressions to AST",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugProfile = true}),
+  ([("--exit-before", "", "")],
+    "Exit before evaluation or compilation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with exitBefore = true}),
+  ([("--disable-prune-utests", "", "")],
+    "Disable pruning of utests with missing external dependencies",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with pruneExternalUtests = false}),
+  ([("--test", "", "")],
+    "Generate utest code",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with runTests = true}),
+  ([("--disable-optimizations", "", "")],
+    "Disables optimizations to decrease compilation time",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableOptimizations = true}),
+  ([("--tuned", "", "")],
+    "Use tuned values when compiling",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with useTuned = true}),
+  ([("--compile", "", "")],
+    "Compile directly after tuning",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with compileAfterTune = true}),
+  ([("--cpu-only", "", "")],
+    "Translate accelerated code to multicore CPU code",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with cpuOnly = true}),
+  ([("--typecheck", "", "")],
+    "Type check the program before evaluation or compilation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with typeCheck = true}),
+  ([("--output", " ", "<file>")],
+    "Write output to <file> when compiling",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with output = Some (argToString p)}),
+  ([("--help", "", "")],
+    "Display this list of options",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with printHelp = true})
 ]
 
-let mapStringLookup = assocLookup {eq=eqString}
+-- Get the help string for options
+let optionsHelpString : Unit -> String = lam.
+  argHelpOptions config
 
--- Simple handling of options before we have an argument parsing library.
-let parseOptions = lam xs.
-  foldl
-    (lam accOps. lam s.
-      match mapStringLookup s optionsMap with Some f
-      then f accOps
-      else printLn (concat "Unknown option " s); exit 1
-    ) options xs
+let parseOptions : [String] -> ArgResult Options = lam args.
+  let result =
+    argParse_general {args = args, optionsStartWith = ["--"]} options config
+  in
+  match result with ParseOK r then r
+  else argPrintError result; exit 1
 
 -- Split the program arguments before and after the empty '--'
 let splitDashDash = lam lst.
