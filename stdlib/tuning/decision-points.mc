@@ -185,6 +185,9 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             info : Info,
             inner : Hole}
 
+  sem infoTm =
+  | TmHole h -> h.info
+
   sem tyTm =
   | TmHole {ty = ty} -> ty
 
