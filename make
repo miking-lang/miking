@@ -137,13 +137,20 @@ compile_test () {
   set -e
 }
 
-run_test() {
+run_test_prototype() {
   set +e
-  output=$1
-  output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1 2>&1)\n"
-  output="$output\n$(build/mi run --test $1)\n"
+  output=$2
+  output="$output\n$($1 $2 2>&1)\n"
   echo $output
   set -e
+}
+
+run_test() {
+  run_test_prototype "build/mi run --test" $1
+}
+
+run_test_boot() {
+  run_test_prototype "build/boot eval src/main/mi.mc -- run --test" $1
 }
 
 case $1 in
@@ -161,6 +168,9 @@ case $1 in
         ;;
     run-test)
         run_test "$2"
+        ;;
+    run-test-boot)
+        run_test_boot "$2"
         ;;
     compile-test)
         compile_test "$2" "$3"
