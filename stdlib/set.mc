@@ -26,6 +26,10 @@ let setRemove : a -> Set a -> Set a = lam e. lam s. mapRemove e s
 -- Is the element member of the set?
 let setMem : a -> Set a -> Bool = lam e. lam s. mapMem e s
 
+-- Is s1 a subset of s2?
+let setSubset : Set a -> Set a -> Bool = lam s1. lam s2.
+  mapAllWithKey (lam e. lam. mapMem e s2) s1
+
 -- `setUnion s1 s2` is the union of set `s1` and `s2`.
 let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 
@@ -89,5 +93,12 @@ utest setMem 3 s4 with true in
 
 utest setEq s4 s4 with true in
 utest setEq s4 s3 with false in
+
+let s5 = setOfSeq subi [1,2,3,4,5] in
+let s6 = setOfSeq subi [1,2,3] in
+let s7 = setOfSeq subi [1,2,6] in
+utest setSubset s5 s5 with true in
+utest setSubset s6 s5 with true in
+utest setSubset s7 s5 with false in
 
 ()

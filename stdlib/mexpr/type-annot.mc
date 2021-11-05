@@ -465,7 +465,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
               tyvar to
             else
               let msg = join [
-                "Inconsistent types of constructor application",
+                "Inconsistent types of constructor application. ",
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (tyTm body)
               ] in

@@ -13,7 +13,7 @@ let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
-let eqSeq = lam eq : (a -> a -> Bool). lam s1. lam s2.
+let eqSeq = lam eq : (a -> b -> Bool). lam s1. lam s2.
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       if eq h1 h2 then work t1 t2

@@ -133,11 +133,10 @@ lang VarEq = Eq + VarAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmVar r ->
     match lhs with TmVar l then
-      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) then
-        match _eqCheck l.ident r.ident varEnv freeVarEnv with Some freeVarEnv then
-          Some {free with varEnv = freeVarEnv}
-        else None ()
-      else never
+      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) in
+      match _eqCheck l.ident r.ident varEnv freeVarEnv with Some freeVarEnv then
+        Some {free with varEnv = freeVarEnv}
+      else None ()
     else None ()
 end
 

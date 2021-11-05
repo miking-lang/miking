@@ -59,6 +59,9 @@ let mapFoldlOption : (acc -> k -> v -> Option acc)
   lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t : (k, v). f acc t.0 t.1) acc (mapBindings m)
 
+let mapAllWithKey : (k -> v -> Bool) -> Map k v -> Bool = lam f. lam m.
+  mapFoldWithKey (lam acc. lam k. lam v. and acc (f k v)) true m
+
 let mapAll : (v -> Bool) -> Map k v -> Bool = lam f. lam m.
   mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
 
@@ -145,6 +148,9 @@ let m = mapFromSeq subi
   , (2, "2")
   , (123, "123")
   ] in
+utest mapAllWithKey (lam i. lam. geqi i 1) m with true in
+utest mapAllWithKey (lam i. lam. leqi i 123) m with true in
+utest mapAllWithKey (lam i. lam. lti i 123) m with false in
 utest mapAll (lam str. geqi (length str) 1) m with true in
 utest mapAll (lam str. leqi (length str) 3) m with true in
 utest mapAll (lam str. lti (length str) 2) m with false in
