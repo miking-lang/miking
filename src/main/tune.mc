@@ -7,12 +7,20 @@ include "options.mc"
 include "sys.mc"
 include "parse.mc"
 include "mexpr/boot-parser.mc"
-include "mexpr/tuning/decision-points.mc"
-include "mexpr/tuning/tune.mc"
+include "tuning/decision-points.mc"
+include "tuning/tune.mc"
 
 lang MCoreTune =
   BootParser + MExprHoles + MExprTune
 end
+
+let tableFromFile = lam file.
+  if fileExists file then tuneFileReadTable file
+  else error (join ["Tune file ", file, " does not exist"])
+
+let dumpTable = lam file. lam env. lam table.
+  let destination = tuneFileName file in
+  tuneFileDumpTable destination env table
 
 let tune = lam files. lam options : Options. lam args.
 
@@ -38,13 +46,14 @@ let tune = lam files. lam options : Options. lam args.
       { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
         env = env, tempDir = tempDir }
     then
-      -- Compile the program
-      let binary = ocamlCompileAstWithUtests options file ast in
+      -- If option --tuned is given, then use tune file as defaults
+      let table =
+        if options.useTuned then tableFromFile (tuneFileName file) else table in
 
-      -- Runs the program with a given input
-      let run = lam args : String.
-        sysRunCommand (cons (join ["./", binary]) args) "" "."
-      in
+      -- Compile the program and write to temporary directory
+      let binary = ocamlCompileAstWithUtests
+        {options with output = Some (sysJoinPath tempDir "tune")} file ast in
+
       -- Do the tuning
       let result = tuneEntry binary args tempFile env table in
 

@@ -661,12 +661,7 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CChar {val = '\n'} -> "\\n"
-  | CChar {val = '\t'} -> "\\t"
-  | CChar {val = '\\'} -> "\\\\"
-  | CChar {val = '\''} -> "\\'"
-  | CChar {val = '\"'} -> "\\\""
-  | CChar c -> ['\'', c.val, '\'']
+  | CChar c -> join ["\'", escapeChar c.val, "\'"]
 end
 
 lang CmpCharPrettyPrint = CmpCharAst + ConstPrettyPrint
