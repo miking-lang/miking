@@ -36,7 +36,62 @@ let _insertVar = lam name. lam ty. lam tyenv : TCEnv.
   let varEnvNew = mapInsert name ty tyenv.varEnv in
   {tyenv with varEnv = varEnvNew}
 
-let _pprintType = use MExprPrettyPrint in
+-- Schematic record type variables, used only in type checking (for now)
+lang FlexRecordTypeAst = Ast
+  syn RTVar =
+  | RUnbound {ident  : Name,
+              fields : Map SID Type}
+  | RLink Type
+
+  syn Type =
+  | TyFlexRecord {info     : Info,
+                  contents : Ref RTVar}
+
+  sem tyWithInfo (info : Info) =
+  | TyFlexRecord t ->
+    match deref t.contents with RLink ty then
+      tyWithInfo info ty
+    else
+      TyFlexRecord {t with info = info}
+
+  sem infoTy =
+  | TyFlexRecord {info = info} -> info
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyFlexRecord t & ty ->
+    match deref t.contents with RUnbound r then
+      match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
+      modref t.contents (RUnbound {r with fields = flds});
+      (acc, TyFlexRecord t)
+    else
+      smapAccumL_Type_Type f acc (resolveRLink ty)
+
+  sem resolveRLink =
+  | TyFlexRecord t & ty ->
+    match deref t.contents with RLink ty then
+      resolveRLink ty
+    else
+      ty
+  | ty ->
+    ty
+end
+
+lang FlexRecordTypePrettyPrint = FlexRecordTypeAst + RecordTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyFlexRecord t & ty ->
+    match deref t.contents with RUnbound r then
+      let recty =
+        TyRecord {info = t.info, fields = r.fields, labels = mapKeys r.fields} in
+      match pprintEnvGetStr env r.ident with (env, idstr) in
+      match getTypeStringCode indent env recty with (env, recstr) in
+      (env, join [idstr, "#", recstr])
+    else
+      getTypeStringCode indent env (resolveRLink ty)
+end
+
+lang MExprTypePrettyPrint = MExprPrettyPrint + FlexRecordTypePrettyPrint
+
+let pprintType = use MExprTypePrettyPrint in
   lam ty.
   match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) in tyStr
 
@@ -60,8 +115,8 @@ lang Unify = MExprAst
   | (ty1, ty2) ->
     let msg = join [
       "Type check failed: unification failure\n",
-      "LHS: ", _pprintType ty1, "\n",
-      "RHS: ", _pprintType ty2, "\n"
+      "LHS: ", pprintType ty1, "\n",
+      "RHS: ", pprintType ty2, "\n"
     ] in
     infoErrorExit (infoTy ty1) msg
 
@@ -181,6 +236,56 @@ lang TensorTypeUnify = Unify + TensorTypeAst
   sem unifyBase (names : BiNameMap) =
   | (TyTensor t1, TyTensor t2) ->
     unifyBase names (t1.ty, t2.ty)
+end
+
+lang RecordTypeUnify = Unify + RecordTypeAst
+  sem unifyBase (names : BiNameMap) =
+  | (TyRecord t1 & tyrec1, TyRecord t2 & tyrec2) ->
+    if eqi (length t1.labels) (length t2.labels) then
+      let f = lam b : (SID, Type).
+        match b with (k, ty1) in
+        match mapLookup k t2.fields with Some ty2 then
+          unifyBase names (ty1, ty2)
+        else
+          unificationError (tyrec1, tyrec2)
+      in
+      iter f (mapBindings t1.fields)
+    else
+      unificationError (tyrec1, tyrec2)
+end
+
+lang FlexRecordTypeUnify = Unify + FlexRecordTypeAst + RecordTypeAst
+  sem unifyBase (names : BiNameMap) =
+  | (TyFlexRecord t1 & ty1, TyFlexRecord t2 & ty2) ->
+    match (deref t1.contents, deref t2.contents) with (RUnbound r1, RUnbound r2) then
+      let f = lam acc. lam b : (SID, Type).
+        match b with (k, ty2) in
+        match mapLookup k r1.fields with Some ty1 then
+          -- TODO(aathn, 2021-11-06): Occurs check
+          unify ty1 ty2
+        else
+          mapInsert k ty2 acc
+      in
+      let fields = foldl f r1.fields (mapBindings r2.fields) in
+      modref t1.contents (RUnbound {ident = r1.ident, fields = fields});
+      modref t2.contents (RLink ty1)
+    else
+      unifyBase names (resolveRLink ty1, resolveRLink ty2)
+  | (TyFlexRecord t1 & tyflexrec, TyRecord t2 & tyrec)
+  | (TyRecord t2 & tyrec, TyFlexRecord t1 & tyflexrec) ->
+    match deref t1.contents with RUnbound r1 then
+      let f = lam b : (SID, Type).
+        match b with (k, ty1) in
+        match mapLookup k t2.fields with Some ty2 then
+          -- TODO(aathn, 2021-11-06): Occurs check
+          unify ty1 ty2
+        else
+          unificationError (tyflexrec, tyrec)
+      in
+      iter f (mapBindings r1.fields);
+      modref t1.contents (RLink tyrec)
+    else
+      unifyBase names (resolveRLink tyflexrec, tyrec)
 end
 
 ------------------------------------
@@ -426,6 +531,32 @@ lang SeqTypeCheck = TypeCheck + SeqAst
               with ty = ityseq_ t.info elemTy}
 end
 
+lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexRecordTypeAst + FlexTypeAst
+  sem typeCheckBase (env : TCEnv) =
+  | TmRecord t ->
+    let bindings = mapMap (typeCheckBase env) t.bindings in
+    let bindingTypes = mapMap tyTm bindings in
+    let labels = mapKeys t.bindings in
+    let ty = TyRecord {fields = bindingTypes, labels = labels, info = t.info} in
+    TmRecord {{t with bindings = bindings}
+                 with ty = ty}
+  | TmRecordUpdate t ->
+    let rec = typeCheckBase env t.rec in
+    let value = typeCheckBase env t.value in
+    -- NOTE(aathn, 2021-11-06): This prevents generalizing type variables occurring
+    -- in record patterns (by setting their level to 0), which is necessary until
+    -- we have row polymorphism
+    let tvarrec = {ident = nameSym "__dummy", weak = false, level = 0} in
+    checkBeforeUnify tvarrec (tyTm value);
+    let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
+    let rtvar = RUnbound {ident = nameSym "r", fields = fields} in
+    unify (tyTm rec) (TyFlexRecord {info = infoTm rec, contents = ref rtvar});
+    TmRecordUpdate {{{t with rec = rec}
+                        with value = value}
+                        with ty = tyTm rec}
+end
+
+
 lang UtestTypeCheck = TypeCheck + UtestAst
   sem typeCheckBase (env : TCEnv) =
   | TmUtest t ->
@@ -458,6 +589,9 @@ lang ExtTypeCheck = TypeCheck + ExtAst
               with ty = tyTm inexpr}
 end
 
+---------------------------
+-- PATTERN TYPE CHECKING --
+---------------------------
 
 lang NamedPatTypeCheck = PatTypeCheck + NamedPat
   sem typeCheckPat (env : TCEnv) =
@@ -500,6 +634,22 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
                           with ty = seqTy})
 end
 
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexRecordTypeAst
+  sem typeCheckPat (env : TCEnv) =
+  | PatRecord t ->
+    let oldLvl = env.currentLvl in
+    -- NOTE(aathn, 2021-11-06): This prevents generalizing type variables occurring
+    -- in record patterns, which is necessary until we have row polymorphism
+    let env = {env with currentLvl = 0} in
+    let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
+    match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
+    let rtvar = RUnbound {ident = nameSym "r", fields = mapMap tyPat bindings} in
+    let ty = TyFlexRecord {info = t.info, contents = ref rtvar} in
+    let env : TCEnv = {env with currentLvl = oldLvl} in
+    (env, PatRecord {{t with bindings = bindings}
+                        with ty = ty})
+end
+
 lang IntPatTypeCheck = PatTypeCheck + IntPat
   sem typeCheckPat (env : TCEnv) =
   | PatInt t -> (env, PatInt {t with ty = TyInt {info = t.info}})
@@ -540,24 +690,25 @@ lang NotPatTypeCheck = PatTypeCheck + NotPat
     (env, PatNot {{t with subpat = subpat} with ty = tyPat subpat})
 end
 
+
 lang MExprTypeCheck =
 
   -- Type unification
   VarTypeUnify + FlexTypeUnify + FunTypeUnify + AllTypeUnify + SeqTypeUnify +
   BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  UnknownTypeUnify + TensorTypeUnify +
+  UnknownTypeUnify + TensorTypeUnify + RecordTypeUnify + FlexRecordTypeUnify +
 
   -- Type generalization
   VarTypeGeneralize + FlexTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
-  MatchTypeCheck + ConstTypeCheck + SeqTypeCheck + UtestTypeCheck +
-  NeverTypeCheck + ExtTypeCheck +
+  MatchTypeCheck + ConstTypeCheck + SeqTypeCheck + RecordTypeCheck +
+  UtestTypeCheck + NeverTypeCheck + ExtTypeCheck +
 
   -- Patterns
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
-  IntPatTypeCheck + CharPatTypeCheck + BoolPatTypeCheck +
+  RecordPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck + BoolPatTypeCheck +
   AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck
 
 end
@@ -831,4 +982,3 @@ iter runTest tests;
 
 -- TODO(aathn, 2021-09-28): Value restriction
 
--- TODO(aathn, 2021-09-28): Type check remaining terms
