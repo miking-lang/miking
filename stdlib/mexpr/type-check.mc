@@ -955,6 +955,49 @@ let tests = [
    ty = tyseq_ (tyseq_ tyint_),
    env = []},
 
+  {name = "Record1",
+   tm = uunit_,
+   ty = tyunit_,
+   env = []},
+
+  {name = "Record2",
+   tm = utuple_ [int_ 0, true_],
+   ty = tytuple_ [tyint_, tybool_],
+   env = []},
+
+  {name = "Record3",
+   tm = urecord_ [
+     ("a", int_ 0), ("b", float_ 2.718), ("c", urecord_ []),
+     ("d", urecord_ [
+       ("e", seq_ [int_ 1, int_ 2]),
+       ("f", urecord_ [
+         ("x", var_ "x"), ("y", var_ "y"), ("z", var_ "z")
+       ])
+     ])
+   ],
+   ty = tyrecord_ [
+     ("a", tyint_), ("b", tyfloat_), ("c", tyunit_),
+     ("d", tyrecord_ [
+       ("e", tyseq_ tyint_),
+       ("f", tyrecord_ [
+         ("x", tyint_), ("y", tyfloat_), ("z", tybool_)
+       ])
+     ])
+   ],
+   env = [("x", tyint_), ("y", tyfloat_), ("z", tybool_)]},
+
+  {name = "Record4",
+   tm = recordupdate_ (urecord_ [
+     ("a", int_ 0),
+     ("b", float_ 2.718)
+   ]) "a" (int_ 1),
+   ty = tyrecord_ [
+     ("a", tyint_),
+     ("b", tyfloat_)
+   ],
+   env = []},
+
+
   {name = "Utest1",
    tm = utest_ (int_ 1) (addi_ (int_ 0) (int_ 1)) false_,
    ty = tybool_,
