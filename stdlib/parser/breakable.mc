@@ -610,12 +610,9 @@ let _newQueueFromFrontier
   : [TentativeNode res self rstyle]
   -> BreakableQueue res self
   = lam frontier.
-    -- TODO(vipa, 2021-02-12): This could use a `make : (Int -> a) -> Int -> [a]` that we discussed a while back
-    map
-      (lam. ref [])
-      (create
-        (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
-        (lam. ()))
+    (create
+      (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
+      (lam. ref []))
 let _addToQueue
   : TentativeNode res self ROpen
   -> BreakableQueue res self
@@ -662,22 +659,29 @@ let _addLOpen
         else never -- TODO(vipa, 2021-02-12): this isn't technically never by for the typesystem, since we're matching against a possibly empty list. However, the list will never be empty, by the comment about NonEmpty above
     in
 
+    -- NOTE(vipa, 2021-11-04): We only ever add to the queue here, no popping.
     let handleLeaf
       : BreakableQueue res self
       -> TentativeNode res self RClosed
       -> Option [TentativeNode res self ROpen] -- NonEmpty
       = lam queue. lam child.
         match _getParents child with Some parents then
-          for_ parents
-            (lam parent.
-              if not (_mayGroupLeft parent input) then () else
-              match _shallowAllowedRight parent child with Some child then
-                match _addRightChildToParent time child parent with Some parent then
-                  _addToQueue parent queue
-                else ()
-              else ());
-          match (_shallowAllowedLeft input child, filter (lam l. _mayGroupRight l input) parents)
-          with (Some child, parents & [_] ++ _) then
+          let shallowRight = _shallowAllowedLeft input child in
+          let f = lam parent.
+            let shallowLeft = _shallowAllowedRight parent child in
+            let precLeft = _mayGroupLeft parent input in
+            let precRight = _mayGroupRight parent input in
+            let config = (shallowLeft, shallowRight, precLeft, precRight) in
+            (match config with (Some child, None _, _, _) | (Some child, _, true, _) then
+               match _addRightChildToParent time child parent with Some parent then
+                 _addToQueue parent queue
+               else ()
+             else ());
+            match config with (None _, Some child, _, _) | (_, Some child, _, true) then
+              true
+            else false in
+          let parentsThatAllowRight = filter f parents in
+          match (shallowRight, parentsThatAllowRight) with (Some child, parents & [_] ++ _) then
             _addLeftChildToParent time child parents
           else None ()
         else never
@@ -699,6 +703,10 @@ let _addLOpen
     in
 
     let frontier = st.frontier in
+    -- NOTE(vipa, 2021-11-04): This is a priority queue sorted on
+    --   maxDistanceFromRoot (pop longest distance first). It's
+    --   empty from the start (the frontier is used to find the
+    --   highest possible distance).
     let queue = _newQueueFromFrontier frontier in
     let newParents = mapOption (handleLeaf queue) frontier in
     let newParents = work queue newParents in
