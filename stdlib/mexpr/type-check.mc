@@ -88,9 +88,14 @@ end
 lang FlexTypeUnify = Unify + FlexTypeAst + UnknownTypeAst
   sem unifyBase (names : BiNameMap) =
   | (TyFlex {contents = r1} & ty1, TyFlex {contents = r2} & ty2) ->
-    match (deref r1, deref r2) with (Unbound {ident = n}, Unbound {ident = m}) then
+    match (deref r1, deref r2) with
+      (Unbound {ident = n, weak = w1, level = l1},
+       Unbound {ident = m, weak = w2, level = l2})
+    then
       if not (nameEq n m) then
-        modref r1 (Link ty2)
+        let updated = Unbound {ident = n, weak = or w1 w2, level = mini l1 l2} in
+        modref r1 updated;
+        modref r2 (Link ty1)
       else ()
     else
       unifyBase names (resolveLink ty1, resolveLink ty2)

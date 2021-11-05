@@ -1251,16 +1251,12 @@ lang FlexTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyFlex t ->
     match deref t.contents with Link ty then
-      tyWithInfo ty
+      tyWithInfo info ty
     else
       TyFlex {t with info = info}
 
   sem infoTy =
-  | TyFlex t ->
-    match deref t.contents with Link ty then
-      infoTy ty
-    else
-      t.info
+  | TyFlex {info = info} -> info
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyFlex t & ty1 ->
