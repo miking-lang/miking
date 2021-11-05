@@ -115,7 +115,11 @@ let main =
          transformations." )
     ; ( "--disable-prune-utests"
       , Arg.Set disable_prune_external_utests
-      , " Disables pruning of external dependent utests." )
+      , " Disables pruning of utests with missing external dependencies." )
+    ; ( "--disable-prune-warning"
+      , Arg.Set disable_prune_external_utests_warning
+      , " Disable warning when pruning utests with missing external \
+         dependencies" )
     ; ( "--disable-dead-code-elim"
       , Arg.Set disable_dead_code_elimination
       , " Disables dead code elimination." )

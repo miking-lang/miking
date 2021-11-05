@@ -150,8 +150,9 @@ let parseMExprString keywords str =
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 
-let parseMCoreFile (keep_utests, prune_external_utests, externals_exclude)
-    keywords filename =
+let parseMCoreFile
+    (keep_utests, prune_external_utests, externals_exclude, warn) keywords
+    filename =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
@@ -182,7 +183,7 @@ let parseMCoreFile (keep_utests, prune_external_utests, externals_exclude)
       |> Deadcode.elimination builtin_sym2term name2sym symKeywords
       |> Parserutils.prune_external_utests
            ~enable:(keep_utests && prune_external_utests)
-           ~externals_exclude
+           ~externals_exclude ~warn
       |> Deadcode.elimination builtin_sym2term name2sym symKeywords )
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e

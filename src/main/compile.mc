@@ -89,7 +89,8 @@ let compile = lam files. lam options : Options. lam args.
   let compileFile = lam file.
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
-      pruneExternalUtests = options.pruneExternalUtests,
+      pruneExternalUtests = not options.disablePruneExternalUtests,
+      pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
       keywords = decisionPointsKeywords
     } file in

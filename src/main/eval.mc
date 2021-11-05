@@ -53,7 +53,8 @@ let eval = lam files. lam options : Options. lam args.
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
       keywords = [],
-      pruneExternalUtests = options.pruneExternalUtests,
+      pruneExternalUtests = not options.disablePruneExternalUtests,
+      pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = false -- the interpreter does not support externals
     } file in
 

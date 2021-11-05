@@ -146,11 +146,11 @@ run_test_prototype() {
 }
 
 run_test() {
-  run_test_prototype "build/mi run --test" $1
+  run_test_prototype "build/mi run --test --disable-prune-warning" $1
 }
 
 run_test_boot() {
-  run_test_prototype "build/boot eval src/main/mi.mc -- run --test" $1
+  run_test_prototype "build/boot eval src/main/mi.mc -- run --test --disable-prune-warning" $1
 }
 
 case $1 in
