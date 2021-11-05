@@ -25,12 +25,23 @@ type BootParserParseMCoreFileArg = {
   -- Prune external dependent utests
   pruneExternalUtests : Bool,
 
+  -- Warn on pruned external dependent utests
+  pruneExternalUtestsWarning : Bool,
+
   -- Exclude pruning of utest for externals with whose dependencies are met on
   -- this system.
   externalsExclude : [String],
 
   -- Additional keywords
   keywords : [String]
+}
+
+let defaultBootParserParseMCoreFileArg = {
+  keepUtests = true,
+  pruneExternalUtests = false,
+  pruneExternalUtestsWarning = true,
+  externalsExclude = [],
+  keywords = []
 }
 
 lang BootParser = MExprAst + ConstTransformer
@@ -42,7 +53,12 @@ lang BootParser = MExprAst + ConstTransformer
   | filename ->
     let t =
       bootParserParseMCoreFile
-        (arg.keepUtests, arg.pruneExternalUtests, arg.externalsExclude)
+        (
+          arg.keepUtests,
+          arg.pruneExternalUtests,
+          arg.externalsExclude,
+          arg.pruneExternalUtestsWarning
+        )
         arg.keywords
         filename
     in

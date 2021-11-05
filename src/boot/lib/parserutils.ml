@@ -41,7 +41,8 @@ let raise_parse_error_on_non_unique_external_id t =
   let _ = recur ExtIdMap.empty t in
   t
 
-(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
+(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized
+ * term *)
 let raise_parse_error_on_partially_applied_external t =
   let rec recur ((symb_map, app_depth, fi) as acc) = function
     | TmExt (_, _, s, _, ty, t) ->
@@ -66,8 +67,10 @@ let raise_parse_error_on_partially_applied_external t =
   let _ = recur (SymbMap.empty, 0, NoInfo) t in
   t
 
-(* NOTE(oerikss, 2021-10-21) this function should be applied on a symbolized term *)
-let prune_external_utests ?(enable = true) ?(externals_exclude = []) t =
+(* NOTE(oerikss, 2021-10-21) this function should be applied on a symbolized
+ * term *)
+let prune_external_utests ?(enable = true) ?(warn = true)
+    ?(externals_exclude = []) t =
   let module Set = Set.Make (Ustring) in
   let externals_exclude = Set.of_list externals_exclude in
   (* The accumulator [(sm, ntests, hasref)] contains, [sm], a map from symbols
@@ -129,7 +132,7 @@ let prune_external_utests ?(enable = true) ?(externals_exclude = []) t =
   in
   if enable then (
     let (_, ntests, _), t' = recur (SymbMap.empty, 0, false) t in
-    if ntests > 0 then
+    if ntests > 0 && warn then
       Printf.printf
         "\n\
          WARNING: Removed %d utests referencing external dependent identifiers.\n"
@@ -141,6 +144,7 @@ let prune_external_utests ?(enable = true) ?(externals_exclude = []) t =
 let prune_external_utests_boot t =
   prune_external_utests
     ~enable:(!utest && not !disable_prune_external_utests)
+    ~warn:(not !disable_prune_external_utests_warning)
     t
 
 let rec remove_all_utests = function

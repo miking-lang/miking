@@ -158,7 +158,8 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
   let ast = parseParseMCoreFile {
     keepUtests = options.runTests,
-    pruneExternalUtests = options.pruneExternalUtests,
+    pruneExternalUtests = not options.disablePruneExternalUtests,
+    pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
     findExternalsExclude = true,
     keywords = parallelKeywords
   } file in
