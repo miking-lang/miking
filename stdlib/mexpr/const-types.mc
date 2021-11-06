@@ -118,11 +118,11 @@ lang SeqOpTypeAst = SeqOpAst
   | CTail _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvarseq_ "a"))
   | CNull _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
   | CMap _ ->
-    tyall_ "a" (tyarrows_ [ tyarrow_ (tyvar_ "a") (tyvar_ "a"),
-                            tyvarseq_ "a", tyvarseq_ "a" ])
+    tyalls_ ["a", "b"] (tyarrows_ [ tyarrow_ (tyvar_ "a") (tyvar_ "b"),
+                                    tyvarseq_ "a", tyvarseq_ "b" ])
   | CMapi _ ->
-    tyall_ "a" (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyvar_ "a"],
-                            tyvarseq_ "a", tyvarseq_ "a" ])
+    tyalls_ ["a", "b"] (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyvar_ "b"],
+                                               tyvarseq_ "a", tyvarseq_ "b" ])
   | CIter _ ->
     tyall_ "a" (tyarrows_ [tyarrow_ (tyvar_ "a") tyunit_, tyvarseq_ "a", tyunit_])
   | CIteri _ ->
