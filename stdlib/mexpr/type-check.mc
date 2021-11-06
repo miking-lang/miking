@@ -145,11 +145,9 @@ end
 lang VarTypeUnify = Unify + VarTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
-    if not (nameEq t1.ident t2.ident) then
-      match biLookup (t1.ident, t2.ident) env.names with None () then
-        unificationError (ty1, ty2)
-      else ()
-    else ()
+    if nameEq t1.ident t2.ident then ()
+    else if biMem (t1.ident, t2.ident) env.names then ()
+    else unificationError (ty1, ty2)
 end
 
 lang FlexTypeUnify = Unify + FlexTypeAst + UnknownTypeAst
@@ -296,7 +294,8 @@ lang RecordFlexTypeUnify = Unify + RecordFlexTypeAst + RecordTypeAst
           match b with (k, ty2) in
           match mapLookup k r1.fields with Some ty1 then
             -- TODO(aathn, 2021-11-06): Occurs check
-            unify ty1 ty2
+            unifyBase env (ty1, ty2);
+            acc
           else
             mapInsert k ty2 acc
         in
@@ -313,7 +312,7 @@ lang RecordFlexTypeUnify = Unify + RecordFlexTypeAst + RecordTypeAst
         match b with (k, ty1) in
         match mapLookup k t2.fields with Some ty2 then
           -- TODO(aathn, 2021-11-06): Occurs check
-          unify ty1 ty2
+          unifyBase env (ty1, ty2)
         else
           unificationError (tyrecflex, tyrec)
       in

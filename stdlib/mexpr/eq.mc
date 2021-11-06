@@ -45,6 +45,15 @@ let biLookup : (Name,Name) -> BiNameMap -> Option (Name,Name) =
     in
     find pred bmap
 
+-- 'biMem (i1, i2) bmap' returns true if i1 <-> i2 in the bijective map,
+-- or false otherwise.
+let biMem : (Name, Name) -> BiNameMap -> Bool =
+  lam i : (Name, Name). lam bmap.
+  let pred = lam n : (Name, Name).
+    if nameEq i.0 n.0 then nameEq i.1 n.1 else false
+  in
+  optionIsSome (find pred bmap)
+
 type EqEnv = {
   varEnv : BiNameMap,
   conEnv : BiNameMap
