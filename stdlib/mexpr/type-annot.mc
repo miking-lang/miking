@@ -15,7 +15,7 @@ include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
 include "mexpr/type.mc"
-include "type-check.mc" -- Used only to access TyFlexRecord
+include "type-check.mc" -- Used only to access TyRecordFlex
 
 type TypeEnv = {
   varEnv: Map Name Type,
@@ -119,10 +119,10 @@ lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
       TyUnknown {info = i}
 end
 
-lang FlexRecordCompatibleType = CompatibleType + FlexRecordTypeAst + UnknownTypeAst
+lang RecordFlexCompatibleType = CompatibleType + RecordFlexTypeAst + UnknownTypeAst
   sem reduceTyVar =
-  | TyFlexRecord {info = i} & ty ->
-    match resolveRLink ty with ! TyFlexRecord _ & ty then
+  | TyRecordFlex {info = i} & ty ->
+    match resolveRLink ty with ! TyRecordFlex _ & ty then
       ty
     else
       TyUnknown {info = i}
@@ -673,7 +673,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  FlexCompatibleType + FlexRecordCompatibleType + AllCompatibleType +
+  FlexCompatibleType + RecordFlexCompatibleType + AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

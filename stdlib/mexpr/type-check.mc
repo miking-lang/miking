@@ -48,37 +48,37 @@ type UnifyEnv = {
 -- Schematic record type variables, used only in type checking (for now)
 -- TODO(aathn, 2021-11-06): Should this be here or in ast.mc? Could it be
 -- combined with FlexTypeAst somehow?
-lang FlexRecordTypeAst = Ast
+lang RecordFlexTypeAst = Ast
   syn RTVar =
   | RUnbound {ident  : Name,
               fields : Map SID Type}
   | RLink Type
 
   syn Type =
-  | TyFlexRecord {info     : Info,
+  | TyRecordFlex {info     : Info,
                   contents : Ref RTVar}
 
   sem tyWithInfo (info : Info) =
-  | TyFlexRecord t ->
+  | TyRecordFlex t ->
     match deref t.contents with RLink ty then
       tyWithInfo info ty
     else
-      TyFlexRecord {t with info = info}
+      TyRecordFlex {t with info = info}
 
   sem infoTy =
-  | TyFlexRecord {info = info} -> info
+  | TyRecordFlex {info = info} -> info
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
-  | TyFlexRecord t & ty ->
+  | TyRecordFlex t & ty ->
     match deref t.contents with RUnbound r then
       match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
       modref t.contents (RUnbound {r with fields = flds});
-      (acc, TyFlexRecord t)
+      (acc, TyRecordFlex t)
     else
       smapAccumL_Type_Type f acc (resolveRLink ty)
 
   sem resolveRLink =
-  | TyFlexRecord t & ty ->
+  | TyRecordFlex t & ty ->
     match deref t.contents with RLink ty then
       resolveRLink ty
     else
@@ -87,9 +87,9 @@ lang FlexRecordTypeAst = Ast
     ty
 end
 
-lang FlexRecordTypePrettyPrint = FlexRecordTypeAst + RecordTypeAst
+lang RecordFlexTypePrettyPrint = RecordFlexTypeAst + RecordTypeAst
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlexRecord t & ty ->
+  | TyRecordFlex t & ty ->
     match deref t.contents with RUnbound r then
       let recty =
         TyRecord {info = t.info, fields = r.fields, labels = mapKeys r.fields} in
@@ -100,7 +100,7 @@ lang FlexRecordTypePrettyPrint = FlexRecordTypeAst + RecordTypeAst
       getTypeStringCode indent env (resolveRLink ty)
 end
 
-lang MExprTypePrettyPrint = MExprPrettyPrint + FlexRecordTypePrettyPrint
+lang MExprTypePrettyPrint = MExprPrettyPrint + RecordFlexTypePrettyPrint
 
 let pprintType = use MExprTypePrettyPrint in
   lam ty.
@@ -287,25 +287,27 @@ lang RecordTypeUnify = Unify + RecordTypeAst
       unificationError (tyrec1, tyrec2)
 end
 
-lang FlexRecordTypeUnify = Unify + FlexRecordTypeAst + RecordTypeAst
+lang RecordFlexTypeUnify = Unify + RecordFlexTypeAst + RecordTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyFlexRecord t1 & ty1, TyFlexRecord t2 & ty2) ->
+  | (TyRecordFlex t1 & ty1, TyRecordFlex t2 & ty2) ->
     match (deref t1.contents, deref t2.contents) with (RUnbound r1, RUnbound r2) then
-      let f = lam acc. lam b : (SID, Type).
-        match b with (k, ty2) in
-        match mapLookup k r1.fields with Some ty1 then
-          -- TODO(aathn, 2021-11-06): Occurs check
-          unify ty1 ty2
-        else
-          mapInsert k ty2 acc
-      in
-      let fields = foldl f r1.fields (mapBindings r2.fields) in
-      modref t1.contents (RUnbound {ident = r1.ident, fields = fields});
-      modref t2.contents (RLink ty1)
+      if not (nameEq r1.ident r2.ident) then
+        let f = lam acc. lam b : (SID, Type).
+          match b with (k, ty2) in
+          match mapLookup k r1.fields with Some ty1 then
+            -- TODO(aathn, 2021-11-06): Occurs check
+            unify ty1 ty2
+          else
+            mapInsert k ty2 acc
+        in
+        let fields = foldl f r1.fields (mapBindings r2.fields) in
+        modref t1.contents (RUnbound {ident = r1.ident, fields = fields});
+        modref t2.contents (RLink ty1)
+      else ()
     else
       unifyBase env (resolveRLink ty1, resolveRLink ty2)
-  | (TyFlexRecord t1 & tyflexrec, TyRecord t2 & tyrec)
-  | (TyRecord t2 & tyrec, TyFlexRecord t1 & tyflexrec) ->
+  | (TyRecordFlex t1 & tyrecflex, TyRecord t2 & tyrec)
+  | (TyRecord t2 & tyrec, TyRecordFlex t1 & tyrecflex) ->
     match deref t1.contents with RUnbound r1 then
       let f = lam b : (SID, Type).
         match b with (k, ty1) in
@@ -313,12 +315,12 @@ lang FlexRecordTypeUnify = Unify + FlexRecordTypeAst + RecordTypeAst
           -- TODO(aathn, 2021-11-06): Occurs check
           unify ty1 ty2
         else
-          unificationError (tyflexrec, tyrec)
+          unificationError (tyrecflex, tyrec)
       in
       iter f (mapBindings r1.fields);
       modref t1.contents (RLink tyrec)
     else
-      unifyBase env (resolveRLink tyflexrec, tyrec)
+      unifyBase env (resolveRLink tyrecflex, tyrec)
 end
 
 ------------------------------------
@@ -553,7 +555,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
               with ty = ityseq_ t.info elemTy}
 end
 
-lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexRecordTypeAst + FlexTypeAst
+lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + RecordFlexTypeAst + FlexTypeAst
   sem typeCheckBase (env : TCEnv) =
   | TmRecord t ->
     let bindings = mapMap (typeCheckBase env) t.bindings in
@@ -572,7 +574,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexRecordTypeAst
     checkBeforeUnify tvarrec (tyTm value);
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     let rtvar = RUnbound {ident = nameSym "r", fields = fields} in
-    unify env (tyTm rec) (TyFlexRecord {info = infoTm rec, contents = ref rtvar});
+    unify env (tyTm rec) (TyRecordFlex {info = infoTm rec, contents = ref rtvar});
     TmRecordUpdate {{{t with rec = rec}
                         with value = value}
                         with ty = tyTm rec}
@@ -693,7 +695,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
                           with ty = seqTy})
 end
 
-lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexRecordTypeAst
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat + RecordFlexTypeAst
   sem typeCheckPat (env : TCEnv) =
   | PatRecord t ->
     let oldLvl = env.currentLvl in
@@ -703,7 +705,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexRecordTypeAst
     let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
     match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
     let rtvar = RUnbound {ident = nameSym "r", fields = mapMap tyPat bindings} in
-    let ty = TyFlexRecord {info = t.info, contents = ref rtvar} in
+    let ty = TyRecordFlex {info = t.info, contents = ref rtvar} in
     let env : TCEnv = {env with currentLvl = oldLvl} in
     (env, PatRecord {{t with bindings = bindings}
                         with ty = ty})
@@ -773,7 +775,7 @@ lang MExprTypeCheck =
   VarTypeUnify + FlexTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + SeqTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify +
   CharTypeUnify + UnknownTypeUnify + TensorTypeUnify + RecordTypeUnify +
-  FlexRecordTypeUnify +
+  RecordFlexTypeUnify +
 
   -- Type generalization
   VarTypeGeneralize + FlexTypeGeneralize +
