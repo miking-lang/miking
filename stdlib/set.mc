@@ -38,6 +38,12 @@ let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
 
+-- `setFold f acc s` folds over the values of s with the given function and
+-- initial accumulator
+let setFold : (acc -> a -> acc) -> acc -> Set a -> acc =
+  lam f. lam acc. lam s.
+    mapFoldWithKey (lam acc. lam k. lam. f acc k) acc s
+
 -- Transform a set to a sequence.
 let setToSeq : Set a -> [a] = lam s. mapKeys s
 
@@ -100,5 +106,8 @@ let s7 = setOfSeq subi [1,2,6] in
 utest setSubset s5 s5 with true in
 utest setSubset s6 s5 with true in
 utest setSubset s7 s5 with false in
+
+let sFold = setOfSeq subi [1,2,3,4,5] in
+utest setFold (lam acc. lam v. addi v acc) 0 sFold with 15 in
 
 ()
