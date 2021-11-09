@@ -139,7 +139,7 @@ test-boot: boot
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-all:
+test-boot-all: boot
 	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build
