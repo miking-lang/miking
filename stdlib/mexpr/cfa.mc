@@ -164,10 +164,14 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
       graph avs
 
   sem _dataLookup (key: Name) =
-  | graph -> mapLookupOrElse (lam. setEmpty cmpAbsVal) key graph.data
+  | graph ->
+    let graph: CFAGraph = graph in
+    mapLookupOrElse (lam. setEmpty cmpAbsVal) key graph.data
 
   sem _edgesLookup (key: Name) =
-  | graph -> mapLookupOrElse (lam. []) key graph.edges
+  | graph ->
+    let graph: CFAGraph = graph in
+    mapLookupOrElse (lam. []) key graph.edges
 
   -- CFAGraph -> AbsVal -> Name -> CFAGraph
   sem _addData (graph: CFAGraph) (d: AbsVal) =
@@ -391,7 +395,7 @@ end
 lang ConstCFA = CFA + ConstAst
   -- Most data-flow constraints will need to add things here. However, in this
   -- base version of 0-CFA without data-flow, it is empty.
-  -- TODO(dlunde,2021-11-10): Potentially add sequence intrinsics here.
+  -- TODO(dlunde,2021-11-10): Potentially add sequence and map intrinsics here.
 end
 
 lang SeqCFA = CFA + DirectConstraint + SeqAst
@@ -463,22 +467,22 @@ end
 lang DataCFA = CFA + DirectConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
-  | AVConApp { ident: Name, body: Name }
+  | AVCon { ident: Name, body: Name }
 
   sem cmpAbsValH =
-  | (AVConApp { ident = ilhs, body = blhs },
-     AVConApp { ident = irhs, body = brhs }) ->
+  | (AVCon { ident = ilhs, body = blhs },
+     AVCon { ident = irhs, body = brhs }) ->
     let idiff = nameCmp ilhs irhs in
     if eqi idiff 0 then nameCmp blhs brhs else idiff
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmConApp t } ->
     let body = match t.body with TmVar t then t.ident else nameEmpty in
-    let av: AbsVal = AVConApp { ident = ident, body = body } in
+    let av: AbsVal = AVCon { ident = t.ident, body = body } in
     [ CstrDirectAv { lhs = av, rhs = ident } ]
 
   sem absValToString (env: PprintEnv) =
-  | AVConApp { ident = ident, body = body } ->
+  | AVCon { ident = ident, body = body } ->
     match pprintConName env ident with (env,ident) in
     match pprintVarName env body with (env,body) in
     (env, join [ident, " ", body])
@@ -553,7 +557,7 @@ end
 lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
   sem propagateMatchConstraint (graph: CFAGraph) =
   | (PatSeqTot p, AVSeq { names = names }) ->
-    let f = lam graph. lam pat: Pat. foldl (lam graph. lam name.
+    let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
         let cstr = CstrMatch { pat = pat, target = name } in
         initConstraint graph cstr
       ) graph names in
@@ -593,26 +597,26 @@ end
 
 lang DataPatCFA = MatchCFA + DataCFA + DataPat
   sem propagateMatchConstraint (graph: CFAGraph) =
-  | (PatCon p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatCon p, AVCon { ident = ident, body = body }) ->
+    if nameEq p.ident ident then
+      let cstr = CstrMatch { pat = p.subpat, target = body } in
+      initConstraint graph cstr
+    else graph
 end
 
 lang IntPatCFA = MatchCFA + IntPat
   sem propagateMatchConstraint (graph: CFAGraph) =
-  | (PatInt p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatInt p, _) -> graph
 end
 
 lang CharPatCFA = MatchCFA + CharPat
   sem propagateMatchConstraint (graph: CFAGraph) =
-  | (PatChar p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatChar p, _) -> graph
 end
 
 lang BoolPatCFA = MatchCFA + BoolPat
   sem propagateMatchConstraint (graph: CFAGraph) =
-  | (PatBool p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatBool p, _) -> graph
 end
 
 lang AndPatCFA = MatchCFA + AndPat
@@ -783,8 +787,40 @@ utest test false t ["res","a"] with [
   ("a", ["x"])
 ] using eqTestLam in
 
--- TODO ConApp
+-- ConApp
+let t = parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let d = C f in
+  let res = match d with C a then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
 
--- TODO Nested matches
+-- Nested
+let t = parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let d = { a = [C f], b = 3 } in
+  let res = match d with { a = [C a] } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
 
 ()
