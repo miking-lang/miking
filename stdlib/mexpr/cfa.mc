@@ -79,12 +79,22 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
 
   -- Required for the data type Set AbsVal
   sem cmpAbsVal (lhs: AbsVal) =
-  -- Intentionally left blank
+  | rhs /- : AbsVal -/ -> cmpAbsValH (lhs, rhs)
+
+  sem cmpAbsValH =
+  | (lhs, rhs) /- : (AbsVal, AbsVal) -/ ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      error
+        "Missing case in cmpAbsValH for abstract values with same constructor."
+    else res
 
   -- Required for the data type Set AbsVal
   sem eqAbsVal (lhs: AbsVal) =
   | rhs -> eqi (cmpAbsVal lhs rhs) 0
 
+  -- Base constraint generation function (must still be included manually in
+  -- _constraintGenFuns)
   sem generateConstraints =
   | t -> []
 
@@ -150,27 +160,23 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   sem absValToString (env: PprintEnv) =
   -- Intentionally left blank
 
-  -- Prints CFA names
-  sem _printName (env: PprintEnv) =
-  | n -> pprintCode 0 env (nvar_ n)
-
   -- Prints a CFA graph
   sem cfaGraphToString (env: PprintEnv) =
   | graph ->
     let graph: CFAGraph = graph in
     let f = lam env. lam e: (Name,AbsVal).
-      match _printName env e.0 with (env,n) in
+      match pprintVarName env e.0 with (env,n) in
       match absValToString env e.1 with (env,av) in
       (env,join ["(", n, ", ", av, ")"]) in
     match mapAccumL f env graph.worklist with (env,worklist) in
     match mapAccumL (lam env: PprintEnv. lam b:(Name,Set AbsVal).
-        match _printName env b.0 with (env,b0) in
+        match pprintVarName env b.0 with (env,b0) in
         match mapAccumL absValToString env (setToSeq b.1) with (env,b1) in
         (env,(b0,b1))
       ) env (mapBindings graph.data)
     with (env, data) in
     match mapAccumL (lam env: PprintEnv. lam b:(Name,[Constraint]).
-        match _printName env b.0 with (env,b0) in
+        match pprintVarName env b.0 with (env,b0) in
         match mapAccumL constraintToString env b.1 with (env,b1) in
         (env,(b0,b1))
       ) env (mapBindings graph.edges)
@@ -212,12 +218,12 @@ lang DirectConstraint = CFA
 
   sem constraintToString (env: PprintEnv) =
   | CstrDirect { lhs = lhs, rhs = rhs } ->
-    match _printName env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
     (env, join [lhs, " ⊆ ", rhs])
   | CstrDirectAv { lhs = lhs, rhs = rhs } ->
     match absValToString env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
+    match pprintVarName env rhs with (env,rhs) in
     (env, join ["{", lhs, "}", " ⊆ ", rhs])
 
 end
@@ -235,34 +241,35 @@ end
 
 lang LamCFA = CFA + DirectConstraint + LamAst
 
+  -- Abstract representation of lambdas. The body can either be another
+  -- abstract lambda or the exprName of the body.
   syn AbsVal =
   | AVLam { ident: Name, body: Either AbsVal Name }
 
-  sem cmpAbsVal (lhs: AbsVal) =
-  | AVLam { ident = nrhs } ->
-    match lhs with AVLam { ident = nlhs } then nameCmp nlhs nrhs
-    else error "Cannot compare in cmpAbsVal for AVLam"
+  sem cmpAbsValH =
+  | (AVLam { ident = lhs }, AVLam { ident = rhs }) ->
+    nameCmp lhs rhs
 
   -- Type Expr -> Either AbsVal Name
   -- Convert a lambda to an Either AbsVal Name
-  sem _avLam =
+  sem _lamBody =
   | t ->
     match t with TmLam t then
-      let body = _avLam t.body in
+      let body = _lamBody t.body in
       Left (AVLam { ident = t.ident, body = body })
     else Right (exprName t)
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmLam t } ->
-    let av: AbsVal = AVLam { ident = t.ident, body = _avLam t.body } in
+    let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
     [ CstrDirectAv { lhs = av, rhs = ident } ]
 
   sem absValToString (env: PprintEnv) =
   | AVLam { ident = ident, body = body } ->
-    match _printName env ident with (env,ident) in
+    match pprintVarName env ident with (env,ident) in
     let tmp =
       match body with Left av then absValToString env body
-      else match body with Right n then _printName env n
+      else match body with Right n then pprintVarName env n
       else never
     in
     match tmp with (env, body) in
@@ -299,9 +306,9 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
 
   sem constraintToString (env: PprintEnv) =
   | CstrApp { lhs = lhs, rhs = rhs, res = res } ->
-    match _printName env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
-    match _printName env res with (env,res) in
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< and >b< ⊆ ", res ])
 
   sem generateConstraints =
@@ -338,7 +345,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
   | TmRecLets { bindings = bindings } ->
     map (lam b: RecLetBinding.
       match b.body with TmLam t then
-        let av: AbsVal = AVLam { ident = t.ident, body = _avLam t.body } in
+        let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
         CstrDirectAv { lhs = av, rhs = b.ident }
       else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
     ) bindings
@@ -348,10 +355,65 @@ end
 lang ConstCFA = CFA + ConstAst
 end
 
-lang SeqCFA = CFA + SeqAst
+lang SeqCFA = CFA + DirectConstraint + SeqAst
+  syn AbsVal =
+  -- Abstract representation of sequences. Contains a set of names that may
+  -- flow to the sequence.
+  | AVSeq { names: Set Name }
+
+  sem cmpAbsValH =
+  | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmSeq t } ->
+    let names = foldl (lam acc: [Name]. lam t: Expr.
+      match t with TmVar t then cons t.ident acc else acc) t.tms
+    in
+    let av: AbsVal = AVSeq { names = setOfSeq nameCmp names } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVSeq { names = names } ->
+    match mapAccumL pprintVarName env names with (env,names) in
+    let names = strJoin ", " names in
+    (env, join ["[{", names, "}]"])
+
 end
 
-lang RecordCFA = CFA + RecordAst
+-- Empty name used in records and conapps
+let nameEmpty = nameSym "∅"
+
+lang RecordCFA = CFA + DirectConstraint + RecordAst
+  -- NOTE(dlunde,2021-11-10) TmRecordUpdate is currently not supported.
+
+  syn AbsVal =
+  -- Abstract representation of records. The bindings are from SIDs to names,
+  -- rather than expressions.
+  | AVRec { bindings: Map SID Name }
+
+  sem cmpAbsValH =
+  | (AVRec { bindings = lhs }, AVRec { bindings = rhs }) ->
+    mapCmp nameCmp lhs rhs
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmRecord t } ->
+    let bindings = mapMap (lam v: Expr.
+      match v with TmVar t then t.ident else nameEmpty) t.bindings
+    in
+    let av: AbsVal = AVRec { bindings = bindings } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVRec { bindings = bindings } ->
+    match mapMapAccum (lam env. lam k. lam v.
+        match pprintVarName v with (env, v) in
+        (env, join [pprintLabelString k, " = ", v])
+      ) env bindings
+    with (env, bindings) in
+    let binds = mapValues bindings in
+    let merged = strJoin ", " binds in
+    (env, join ["{ ", merged, " }"])
+
 end
 
 lang TypeCFA = CFA + TypeAst
@@ -359,12 +421,51 @@ lang TypeCFA = CFA + TypeAst
   | TmType t -> exprName t.inexpr
 end
 
-lang DataCFA = CFA + DataAst
+lang DataCFA = CFA + DirectConstraint + DataAst
+  syn AbsVal =
+  -- Abstract representation of constructed data.
+  | AVConApp { ident: Name, body: Name }
+
+  sem cmpAbsValH =
+  | (AVConApp { ident = ilhs, body = blhs },
+     AVConApp { ident = irhs, body = brhs }) ->
+    let idiff = nameCmp ilhs irhs in
+    if eqi idiff 0 then nameCmp blhs brhs else idiff
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmConApp t } ->
+    let body = match t.body with TmVar t then t.ident else nameEmpty in
+    let av: AbsVal = AVConApp { ident = ident, body = body } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVConApp { ident = ident, body = body } ->
+    match pprintConName env ident with (env,ident) in
+    match pprintVarName env body with (env,body) in
+    (env, join [ident, " ", body])
+
   sem exprName =
   | TmConDef t -> exprName t.inexpr
+
 end
 
 lang MatchCFA = CFA + MatchAst
+
+  -- TODO
+
+  syn Constraint =
+
+  -- TODO Not sure if needed
+  sem initConstraint (graph: CFAGraph) =
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+
+  sem constraintToString (env: PprintEnv) =
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmMatch t } ->
+    error "TODO"
+
 end
 
 lang UtestCFA = CFA + UtestAst
@@ -479,5 +580,11 @@ utest test false t ["g","x","y","z","res"] with [
   ("z", []),
   ("res", [])
 ] using eqTestLam in
+
+-- TODO Utest with sequence
+
+-- TODO Utest with records
+
+-- TODO Utest with conapp
 
 ()
