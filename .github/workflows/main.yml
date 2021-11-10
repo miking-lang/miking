@@ -34,12 +34,7 @@ jobs:
         # Install all opam packages used in make test-all
         opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
 
-    - name: Install Miking
-      run: |
-        eval $(opam env)
-        make install
-
-    - name: Run all tests
+    - name: Build Miking and run all tests
       run: |
         eval $(opam env)
         make -j$(nproc) test-all
