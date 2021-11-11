@@ -318,7 +318,7 @@ lang LamCFA = CFA + DirectConstraint + LamAst
 
 end
 
-lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
+lang AppCFA = CFA + DirectConstraint + ConstAst + LamCFA + AppAst
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
@@ -393,9 +393,14 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 end
 
 lang ConstCFA = CFA + ConstAst
-  -- Most data-flow constraints will need to add things here. However, in this
-  -- base version of 0-CFA without data-flow, it is empty.
-  -- TODO(dlunde,2021-11-10): Potentially add sequence and map intrinsics here.
+
+  sem generateConstraints =
+  | TmConst t ->
+    generateConstraintsConst t.info t.val
+
+  sem generateConstraintsConst (info: Info) =
+  | const -> infoErrorExit info "Constant not supported in CFA"
+
 end
 
 lang SeqCFA = CFA + DirectConstraint + SeqAst
@@ -543,6 +548,255 @@ lang ExtCFA = CFA + ExtAst
   | TmExt t -> exprName t.inexpr
 end
 
+---------------
+-- CONSTANTS --
+---------------
+-- Most data-flow constraints will need to add things here. However, in this
+-- base version of 0-CFA without data-flow, no data flow constraints are
+-- generated.
+
+lang IntCFA = CFA + ConstCFA + IntAst
+  sem generateConstraintsConst (info: Info) =
+  | CInt _ -> []
+end
+
+lang ArithIntCFA = CFA + ConstCFA + ArithIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CAddi _ -> []
+  | CSubi _ -> []
+  | CMuli _ -> []
+  | CDivi _ -> []
+  | CNegi _ -> []
+  | CModi _ -> []
+end
+
+lang ShiftIntCFA = CFA + ConstCFA + ShiftIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CSlli _ -> []
+  | CSrli _ -> []
+  | CSrai _ -> []
+end
+
+lang FloatCFA = CFA + ConstCFA + FloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CFloat _ -> []
+end
+
+lang ArithFloatCFA = CFA + ConstCFA + ArithFloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CAddf _ -> []
+  | CSubf _ -> []
+  | CMulf _ -> []
+  | CDivf _ -> []
+  | CNegf _ -> []
+end
+
+lang FloatIntConversionCFA = CFA + ConstCFA + FloatIntConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CFloorfi _ -> []
+  | CCeilfi _ -> []
+  | CRoundfi _ -> []
+  | CInt2float _ -> []
+end
+
+lang BoolCFA = CFA + ConstCFA + BoolAst
+  sem generateConstraintsConst (info: Info) =
+  | CBool _ -> []
+end
+
+lang CmpIntCFA = CFA + ConstCFA + CmpIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqi _ -> []
+  | CNeqi _ -> []
+  | CLti _ -> []
+  | CGti _ -> []
+  | CLeqi _ -> []
+  | CGeqi _ -> []
+end
+
+lang CmpFloatCFA = CFA + ConstCFA + CmpFloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqf _ -> []
+  | CLtf _ -> []
+  | CLeqf _ -> []
+  | CGtf _ -> []
+  | CGeqf _ -> []
+  | CNeqf _ -> []
+end
+
+lang CharCFA = CFA + ConstCFA + CharAst
+  sem generateConstraintsConst (info: Info) =
+  | CChar _ -> []
+end
+
+lang CmpCharCFA = CFA + ConstCFA + CmpCharAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqc _ -> []
+end
+
+lang IntCharConversionCFA = CFA + ConstCFA + IntCharConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CInt2Char _ -> []
+  | CChar2Int _ -> []
+end
+
+lang FloatStringConversionCFA = CFA + ConstCFA + FloatStringConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CString2float _ -> []
+  | CFloat2string _ -> []
+end
+
+lang SymbCFA = CFA + ConstCFA + SymbAst
+  sem generateConstraintsConst (info: Info) =
+  | CSymb _ -> []
+  | CGensym _ -> []
+  | CSym2hash _ -> []
+end
+
+lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqsym _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Add flow constraints for sequence operations?
+lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CSet _ -> []
+  -- | CGet _ -> []
+  -- | CCons _ -> []
+  -- | CSnoc _ -> []
+  -- | CConcat _ -> []
+  -- | CLength _ -> []
+  -- | CReverse _ -> []
+  -- | CHead _ -> []
+  -- | CTail _ -> []
+  -- | CNull _ -> []
+  -- | CMap _ -> []
+  -- | CMapi _ -> []
+  -- | CIter _ -> []
+  -- | CIteri _ -> []
+  -- | CFoldl _ -> []
+  -- | CFoldr _ -> []
+  -- | CCreate _ -> []
+  -- | CCreateList _ -> []
+  -- | CCreateRope _ -> []
+  -- | CSplitAt _ -> []
+  -- | CSubsequence _ -> []
+end
+
+lang FileOpCFA = CFA + ConstCFA + FileOpAst
+  sem generateConstraintsConst (info: Info) =
+  | CFileRead _ -> []
+  | CFileWrite _ -> []
+  | CFileExists _ -> []
+  | CFileDelete _ -> []
+end
+
+lang IOCFA = CFA + ConstCFA + IOAst
+  sem generateConstraintsConst (info: Info) =
+  | CPrint _ -> []
+  | CPrintError _ -> []
+  | CDPrint _ -> []
+  | CFlushStdout _ -> []
+  | CFlushStderr _ -> []
+  | CReadLine _ -> []
+  | CReadBytesAsString _ -> []
+end
+
+lang RandomNumberGeneratorCFA = CFA + ConstCFA + RandomNumberGeneratorAst
+  sem generateConstraintsConst (info: Info) =
+  | CRandIntU _ -> []
+  | CRandSetSeed _ -> []
+end
+
+lang SysCFA = CFA + ConstCFA + SysAst
+  sem generateConstraintsConst (info: Info) =
+  | CExit _ -> []
+  | CError _ -> []
+  | CArgv _ -> []
+  | CCommand _ -> []
+end
+
+lang TimeCFA = CFA + ConstCFA + TimeAst
+  sem generateConstraintsConst (info: Info) =
+  | CWallTimeMs _ -> []
+  | CSleepMs _ -> []
+end
+
+lang ConTagCFA = CFA + ConstCFA + ConTagAst
+  sem generateConstraintsConst (info: Info) =
+  | CConstructorTag _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+-- probably be added.
+lang RefOpCFA = CFA + ConstCFA + RefOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CRef _ -> []
+  -- | CModRef _ -> []
+  -- | CDeRef _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
+lang MapCFA = CFA + ConstCFA + MapAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CMapEmpty _ -> []
+  -- | CMapInsert _ -> []
+  -- | CMapRemove _ -> []
+  -- | CMapFindExn _ -> []
+  -- | CMapFindOrElse _ -> []
+  -- | CMapFindApplyOrElse _ -> []
+  -- | CMapBindings _ -> []
+  -- | CMapChooseExn _ -> []
+  -- | CMapChooseOrElse _ -> []
+  -- | CMapSize _ -> []
+  -- | CMapMem _ -> []
+  -- | CMapAny _ -> []
+  -- | CMapMap _ -> []
+  -- | CMapMapWithKey _ -> []
+  -- | CMapFoldWithKey _ -> []
+  -- | CMapEq _ -> []
+  -- | CMapCmp _ -> []
+  -- | CMapGetCmpFun _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+-- probably be added.
+lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CTensorCreateInt _ -> []
+  -- | CTensorCreateFloat _ -> []
+  -- | CTensorCreate _ -> []
+  -- | CTensorGetExn _ -> []
+  -- | CTensorSetExn _ -> []
+  -- | CTensorRank _ -> []
+  -- | CTensorShape _ -> []
+  -- | CTensorReshapeExn _ -> []
+  -- | CTensorCopy _ -> []
+  -- | CTensorTransposeExn _ -> []
+  -- | CTensorSliceExn _ -> []
+  -- | CTensorSubExn _ -> []
+  -- | CTensorIterSlice _ -> []
+  -- | CTensorEq _ -> []
+  -- | CTensorToString _ -> []
+end
+
+lang BootParserCFA = CFA + ConstCFA + BootParserAst
+  sem generateConstraintsConst (info: Info) =
+  | CBootParserParseMExprString _ -> []
+  | CBootParserParseMCoreFile _ -> []
+  | CBootParserGetId _ -> []
+  | CBootParserGetTerm _ -> []
+  | CBootParserGetType _ -> []
+  | CBootParserGetString _ -> []
+  | CBootParserGetInt _ -> []
+  | CBootParserGetFloat _ -> []
+  | CBootParserGetListLength _ -> []
+  | CBootParserGetConst _ -> []
+  | CBootParserGetPat _ -> []
+  | CBootParserGetInfo _ -> []
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -650,6 +904,14 @@ lang MExprCFA = CFA +
   VarCFA + LamCFA + AppCFA +
   LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
   MatchCFA + UtestCFA + NeverCFA + ExtCFA +
+
+  -- Constants
+  IntCFA + ArithIntCFA + ShiftIntCFA + FloatCFA + ArithFloatCFA +
+  FloatIntConversionCFA + BoolCFA + CmpIntCFA + CmpFloatCFA + CharCFA +
+  CmpCharCFA + IntCharConversionCFA + FloatStringConversionCFA + SymbCFA +
+  CmpSymbCFA + SeqOpCFA + FileOpCFA + IOCFA + RandomNumberGeneratorCFA +
+  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + MapCFA + TensorOpCFA +
+  BootParserCFA +
 
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
