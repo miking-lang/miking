@@ -27,6 +27,7 @@ type ParseType
 con ParseTypeInt : String -> ParseType
 con ParseTypeIntMin : (String, Int) -> ParseType
 con ParseTypeFloat : String -> ParseType
+con ParseTypeGeneric : (String, String) -> ParseType
 
 type ParseResult
 con ParseOK : ArgResult -> ParseResult
@@ -232,6 +233,7 @@ let argPrintErrorString = lam result.
       join
         ["Option ", s, " expects an integer value of at least ",
          int2string minVal, "."]
+    case ParseTypeGeneric (msg, sval) then join [msg, " '", sval, "'."]
     end
   end
 
@@ -254,14 +256,16 @@ type Options = {
   foo : Bool,
   len : Int,
   message : String,
-  real: Float
+  real : Float,
+  complex : (Float, Float)
 } in
 
 let default = {
   foo = false,
   len = 7,
   message = "",
-  real = 0.
+  real = 0.,
+  complex = (0., 0.)
 } in
 
 let config = [
@@ -269,19 +273,47 @@ let config = [
     "This is a boolean option. ",
     lam p : ArgPart. let o : Options = p.options in {o with foo = true}),
   ([("--len", " ", "<value>")],
-    "A number argument followed by equality and then the integer value.",
+    "A named argument followed by a space and then the integer value.",
     lam p : ArgPart. let o : Options = p.options in {o with len = argToIntMin p 1}),
   ([("-m", " ", "<msg>"),("--message", " ", "<msg>")],
-    "A string argument, with both short and long form arguments, and different separators.",
+    "A string argument, with both short and long form arguments.",
     lam p : ArgPart. let o : Options = p.options in {o with message = argToString p}),
   ([("--real", " ", "<value>")],
-    "A number argument followed by equality and then the float value.",
-    lam p : ArgPart. let o : Options = p.options in {o with real = argToFloat p })
+    "A named argument followed by space and then the float value.",
+    lam p : ArgPart. let o : Options = p.options in {o with real = argToFloat p }),
+  ([("--complex", " ", "<value>")],
+    "A complex argument with a custom parser and error message.",
+    lam p : ArgPart.
+      let o : Options = p.options in
+      let strSplitTrim = lam delim. lam s. map strTrim (strSplit delim s) in
+      match strSplitTrim "+i" p.str with [re, im] then
+        if and (stringIsFloat re) (stringIsFloat im) then
+          { o with complex = (string2float re, string2float im) }
+        else
+          modref
+            p.fail
+            (Some (ParseTypeGeneric ("Re or Im part not real in", p.str)));
+          o
+      else
+        modref
+          p.fail
+          (Some
+            (ParseTypeGeneric
+              ("Could not identify Re and Im part in", p.str)));
+        o)
 ] in
 
 let testOptions = {
   argParse_defaults with
-  args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg", "--real", "1.", "f2"]
+  args = [
+    "file.mc",
+    "--len", "12",
+    "--foo", "-m",
+    "mymsg",
+    "--real", "1.",
+    "--complex", "1+i2",
+    "f2"
+  ]
 } in
 let argParseCustom = argParse_general testOptions in
 let res : ArgResult =
@@ -306,6 +338,17 @@ let res = argParse_general testOptions default config in
 utest res with ParseFailConversion (ParseTypeFloat ("noFloat"), "--real") in
 utest argPrintErrorString res with
   "Option --real expects a float value, but received 'noFloat'."
+in
+
+let testOptions = {argParse_defaults with args = ["--complex", "noComplex"]} in
+let res = argParse_general testOptions default config in
+utest res with
+  ParseFailConversion
+    (ParseTypeGeneric
+      ("Could not identify Re and Im part in", "noComplex"), "--complex")
+in
+utest argPrintErrorString res with
+  "Could not identify Re and Im part in 'noComplex'."
 in
 
 let testOptions = {argParse_defaults with args = ["--len", "-2"]} in
@@ -339,6 +382,6 @@ utest res with ParseFailUnknownOption("--unknown") in
 
 let text = argHelpOptions config in
 --print "\n---\n"; print text; print "\n---\n";
-utest length text with 448 in
+utest length text with 536 in
 
 ()
