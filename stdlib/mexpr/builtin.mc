@@ -37,6 +37,7 @@ let builtin = use MExprAst in
   , ("ceilfi", CCeilfi ())
   , ("roundfi", CRoundfi ())
   , ("int2float", CInt2float ())
+  , ("stringIsFloat", CStringIsFloat ())
   , ("string2float", CString2float ())
   , ("float2string", CFloat2string ())
   -- Characters

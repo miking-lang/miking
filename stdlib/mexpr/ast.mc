@@ -654,6 +654,7 @@ end
 
 lang FloatStringConversionAst = SeqAst + FloatAst
   syn Const =
+  | CStringIsFloat {}
   | CString2float {}
   | CFloat2string {}
 end

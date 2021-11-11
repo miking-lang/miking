@@ -834,8 +834,17 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     else error "Third argument to subsequence not a number"
 end
 
-lang FloatStringConversionEval = FloatStringConversionAst
+lang FloatStringConversionEval = FloatStringConversionAst + BoolAst
   sem delta (arg : Expr) =
+  | CStringIsFloat _ ->
+    match arg with TmSeq {tms = tms} then
+      let s = _seqOfCharsToString tms in
+      TmConst {
+        val = CBool { val = stringIsFloat s },
+        ty = tyunknown_,
+        info = NoInfo ()
+      }
+    else error "First argument not a sequence"
   | CString2float _ ->
     match arg with TmSeq {tms = tms} then
       let s = _seqOfCharsToString tms in

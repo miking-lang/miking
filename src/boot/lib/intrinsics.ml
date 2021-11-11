@@ -507,6 +507,10 @@ module FloatConversion = struct
 
   let roundfi f = f |> Float.round |> int_of_float
 
+  let string_is_float s =
+    s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> float_of_string_opt
+    |> function Some _ -> true | None -> false
+
   let string2float s = s |> Mseq.Helpers.to_ustring |> float_of_ustring
 
   let float2string r = r |> ustring_of_float |> Mseq.Helpers.of_ustring

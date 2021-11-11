@@ -136,6 +136,8 @@ let arity = function
       1
   | Cint2float ->
       1
+  | CstringIsFloat ->
+      1
   | Cstring2float ->
       1
   | Cfloat2string ->
@@ -703,6 +705,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | Cneqf (Some v1), TmConst (fi, CFloat v2) ->
       TmConst (fi, CBool (v1 <> v2))
   | Cneqf None, _ | Cneqf (Some _), _ ->
+      fail_constapp fi
+  | CstringIsFloat, TmSeq (_, s) ->
+      let s = tm_seq2int_seq fi s in
+      TmConst (fi, CBool (Intrinsics.FloatConversion.string_is_float s))
+  | CstringIsFloat, _ ->
       fail_constapp fi
   | Cstring2float, TmSeq (fi, s) ->
       let f = tm_seq2int_seq fi s in

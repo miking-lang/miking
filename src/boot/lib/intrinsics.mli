@@ -353,6 +353,8 @@ module FloatConversion : sig
 
   val roundfi : float -> int
 
+  val string_is_float : int Mseq.t -> bool
+
   val string2float : int Mseq.t -> float
 
   val float2string : float -> int Mseq.t
