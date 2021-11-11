@@ -318,7 +318,7 @@ lang LamCFA = CFA + DirectConstraint + LamAst
 
 end
 
-lang AppCFA = CFA + DirectConstraint + ConstAst + LamCFA + AppAst
+lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
@@ -353,21 +353,23 @@ lang AppCFA = CFA + DirectConstraint + ConstAst + LamCFA + AppAst
   sem generateConstraints =
   | TmLet { ident = ident, body = TmApp _ & body} ->
     recursive let rec = lam acc: [Constraint]. lam res: Name. lam t: Expr.
-      match t with TmApp t in
-      match t.lhs with TmConst t then acc
-      else
-        let nameLhs =
-          match t.lhs with TmApp t then nameSym "cfa"
-          else match t.lhs with TmVar t then t.ident
-          else infoErrorExit (infoTm t.lhs) "Not a variable or application in CFA"
-        in
-        let cstr =
-          match t.rhs with TmVar { ident = nameRhs } then
-            [CstrApp { lhs = nameLhs, rhs = nameRhs, res = res}]
-          else []
-        in
-        let acc = concat cstr acc in
-        match t.lhs with TmApp _ then rec acc nameLhs t.lhs else acc
+      match t with TmApp t then
+        match t.lhs with TmApp _ | TmVar _ then
+          let nameLhs =
+            match t.lhs with TmApp t then nameSym "cfa"
+            else match t.lhs with TmVar t then t.ident
+            else error "Impossible"
+          in
+          let cstr =
+            match t.rhs with TmVar { ident = nameRhs } then
+              [CstrApp { lhs = nameLhs, rhs = nameRhs, res = res}]
+            else []
+          in
+          let acc = concat cstr acc in
+          match t.lhs with TmApp _ then rec acc nameLhs t.lhs else acc
+        else acc
+      else infoErrorExit (infoTm t)
+             "Non-application in generateConstraints for TmApp"
     in rec [] ident body
 
 end
