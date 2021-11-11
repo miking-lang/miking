@@ -35,6 +35,7 @@ jobs:
         opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
 
     - name: Build Miking and run all tests
+      timeout-minutes: 30
       run: |
         eval $(opam env)
         make -j$(nproc) test-all
