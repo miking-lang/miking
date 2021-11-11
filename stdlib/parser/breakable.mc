@@ -122,6 +122,7 @@ type OpGrouping = {mayGroupLeft : Bool, mayGroupRight : Bool}
 type BreakableGrammar prodLabel res self =
   { productions : [BreakableProduction prodLabel res self]
   , precedences : [((prodLabel, prodLabel), OpGrouping)]
+  , topAllowed : AllowSet prodLabel
   }
 
 -- Each operator is uniquely identifiable by its ID, which is used to
@@ -161,11 +162,12 @@ con PostfixI :
   } -> BreakableInput res self LOpen RClosed
 
 -- This describes a generated breakable grammar that is ready for parsing with
-type BreakableGenGrammar prodLabel self res =
+type BreakableGenGrammar prodLabel res self =
   { atoms : Map prodLabel (BreakableInput res self LClosed RClosed)
   , prefixes : Map prodLabel (BreakableInput res self LClosed ROpen)
   , infixes : Map prodLabel (BreakableInput res self LOpen ROpen)
   , postfixes : Map prodLabel (BreakableInput res self LOpen RClosed)
+  , topAllowed : AllowSet OpId
   }
 
 -- NOTE(vipa, 2021-02-12): Many sequences in this file have an extra comment after them: NonEmpty. In the original implementation this was the type of a non-empty list, but we don't have one of those here, so for now I'm just recording that knowledge in comments, then we'll see what we do about it later.
@@ -247,6 +249,7 @@ con TentativeMid :
 con TentativeRoot :
   { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
   , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
+  , allowedChildren : AllowSet OpId
   } -> TentativeNode res self ROpen
 
 -- The data we carry along while parsing
@@ -448,10 +451,11 @@ let breakableGenGrammar
     , prefixes = mapFromSeq cmp (deref prefixes)
     , infixes = mapFromSeq cmp (deref infixes)
     , postfixes = mapFromSeq cmp (deref postfixes)
+    , topAllowed = breakableMapAllowSet toOpId _cmpOpId grammar.topAllowed
     }
 
-let breakableInitState : () -> State res self ROpen
-  = lam grammar.
+let breakableInitState : BreakableGenGrammar prodLabel res self -> () -> State res self ROpen
+  = lam grammar. lam.
     let timestep = ref _firstTimeStep in
     let nextIdx = ref 0 in
     let addedLeft = ref (_firstTimeStep, ref []) in
@@ -459,7 +463,7 @@ let breakableInitState : () -> State res self ROpen
     { timestep = timestep
     , nextIdx = nextIdx
     , frontier =
-      [ TentativeRoot { addedNodesLeftChildren = addedLeft, addedNodesRightChildren = addedRight } ]
+      [ TentativeRoot { addedNodesLeftChildren = addedLeft, addedNodesRightChildren = addedRight, allowedChildren = grammar.topAllowed } ]
     }
 
 recursive let _maxDistanceFromRoot
@@ -490,8 +494,10 @@ let _shallowAllowedRight
   -> Option (PermanentNode res self)
   = lam parent. lam child.
     match child with TentativeLeaf {node = node} then
-      match parent with TentativeRoot _ then Some node else
-      match parent with TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})} then
+      match parent
+      with TentativeRoot {allowedChildren = s}
+        | TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})}
+      then
         if breakableInAllowSet (_opIdP node) s then Some node else None ()
       else dprintLn parent; never
     else never
