@@ -26,6 +26,7 @@ type ParseConfig = [([ParseOption], String, a -> String -> a)]
 type ParseType
 con ParseTypeInt : String -> ParseType
 con ParseTypeIntMin : (String, Int) -> ParseType
+con ParseTypeFloat : String -> ParseType
 
 type ParseResult
 con ParseOK : ArgResult -> ParseResult
@@ -108,6 +109,10 @@ let argToInt = lam p : ArgPart.
   let v = string2int p.str in
   if stringIsInt p.str then string2int p.str
   else modref p.fail (Some (ParseTypeInt p.str)); 0
+
+let argToFloat = lam p : ArgPart.
+  if stringIsFloat p.str then string2float p.str
+  else modref p.fail (Some (ParseTypeFloat p.str)); 0.
 
 let argToIntMin = lam p : ArgPart. lam minVal.
   let v = argToInt p in
@@ -209,20 +214,26 @@ let argParse = argParse_general argParse_defaults
 -- Error feedback --
 
 let argPrintErrorString = lam result.
-  match result with ParseOK _ then
+  switch result
+  case ParseOK _ then
     "Parse OK."
-  else match result with ParseFailUnknownOption s then
+  case ParseFailUnknownOption s then
     join ["Unknown option ", s, "."]
-  else match result with ParseFailMissingOpArg s then
+  case ParseFailMissingOpArg s then
     join ["Option ", s, " is missing an argument value."]
-  else match result with ParseFailConversion (ptype, s) then
-    match ptype with ParseTypeInt sval then
-      join ["Option ", s, " expects an integer value, but received '", sval, "'."]
-    else match ptype with ParseTypeIntMin (_, minVal) then
-      join ["Option ", s, " expects an integer value of at least ", int2string minVal, "."]
-    else never
-  else never
-
+  case ParseFailConversion (ptype, s) then
+    switch ptype
+    case ParseTypeInt sval then
+      join
+        ["Option ", s, " expects an integer value, but received '", sval, "'."]
+    case ParseTypeFloat sval then
+      join ["Option ", s, " expects a float value, but received '", sval, "'."]
+    case ParseTypeIntMin (_, minVal) then
+      join
+        ["Option ", s, " expects an integer value of at least ",
+         int2string minVal, "."]
+    end
+  end
 
 let argPrintError = lam result.
   print (join [argPrintErrorString result, "\n"])
@@ -242,13 +253,15 @@ utest stringLineFormat s1 13 1 0 with s2 in
 type Options = {
   foo : Bool,
   len : Int,
-  message : String
+  message : String,
+  real: Float
 } in
 
 let default = {
   foo = false,
   len = 7,
-  message = ""
+  message = "",
+  real = 0.
 } in
 
 let config = [
@@ -260,12 +273,21 @@ let config = [
     lam p : ArgPart. let o : Options = p.options in {o with len = argToIntMin p 1}),
   ([("-m", " ", "<msg>"),("--message", " ", "<msg>")],
     "A string argument, with both short and long form arguments, and different separators.",
-    lam p : ArgPart. let o : Options = p.options in {o with message = argToString p})
+    lam p : ArgPart. let o : Options = p.options in {o with message = argToString p}),
+  ([("--real", " ", "<value>")],
+    "A number argument followed by equality and then the float value.",
+    lam p : ArgPart. let o : Options = p.options in {o with real = argToFloat p })
 ] in
 
-let testOptions = {argParse_defaults with args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg", "f2"]} in
+let testOptions = {
+  argParse_defaults with
+  args = ["file.mc", "--len", "12", "--foo", "-m", "mymsg", "--real", "1.", "f2"]
+} in
 let argParseCustom = argParse_general testOptions in
-let res : ArgResult = match argParseCustom default config with ParseOK r then r else error "Incorrect type" in
+let res : ArgResult =
+  match argParseCustom default config with ParseOK r then r
+  else error "Incorrect type"
+in
 let opt : Options = res.options in
 utest res.strings with ["file.mc", "f2"] using eqSeq eqString in
 utest opt.foo with true in
@@ -275,12 +297,22 @@ utest opt.len with 12 in
 let testOptions = {argParse_defaults with args = ["--len", "noInt"]} in
 let res = argParse_general testOptions default config in
 utest res with ParseFailConversion (ParseTypeInt ("noInt"), "--len") in
-utest argPrintErrorString res with "Option --len expects an integer value, but received 'noInt'." in
+utest argPrintErrorString res with
+  "Option --len expects an integer value, but received 'noInt'."
+in
+
+let testOptions = {argParse_defaults with args = ["--real", "noFloat"]} in
+let res = argParse_general testOptions default config in
+utest res with ParseFailConversion (ParseTypeFloat ("noFloat"), "--real") in
+utest argPrintErrorString res with
+  "Option --real expects a float value, but received 'noFloat'."
+in
 
 let testOptions = {argParse_defaults with args = ["--len", "-2"]} in
 let res = argParse_general testOptions default config in
 utest res with ParseFailConversion (ParseTypeIntMin ("-2", 1), "--len") in
-utest argPrintErrorString res with "Option --len expects an integer value of at least 1." in
+utest argPrintErrorString res
+with "Option --len expects an integer value of at least 1." in
 
 let testOptions = {argParse_defaults with args = ["--messageNo", "msg"]} in
 let res = argParse_general testOptions default config in
@@ -290,12 +322,15 @@ utest argPrintErrorString res with "Unknown option --messageNo." in
 let testOptions = {argParse_defaults with args = ["--message"]} in
 let res = argParse_general testOptions default config in
 utest res with ParseFailMissingOpArg "--message" in
-utest argPrintErrorString res with "Option --message is missing an argument value." in
+utest argPrintErrorString res
+with "Option --message is missing an argument value." in
 
-let testOptions = {argParse_defaults with args = ["--message", "--len", "78"]} in
+let testOptions = {argParse_defaults
+with args = ["--message", "--len", "78"]} in
 let res = argParse_general testOptions default config in
 utest res with ParseFailMissingOpArg "--message" in
-utest argPrintErrorString res with "Option --message is missing an argument value." in
+utest argPrintErrorString res
+with "Option --message is missing an argument value." in
 
 let testOptions = {argParse_defaults with args = ["--unknown"]} in
 let res = argParse_general testOptions default config in
@@ -304,7 +339,6 @@ utest res with ParseFailUnknownOption("--unknown") in
 
 let text = argHelpOptions config in
 --print "\n---\n"; print text; print "\n---\n";
-utest length text with 325 in
+utest length text with 448 in
 
 ()
-
