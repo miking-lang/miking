@@ -107,13 +107,13 @@ let tyalls_ =
   foldr tyall_ ty strs
 
 let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam weak.
+  lam info. lam ident. lam level. lam sort.
   TyFlex {info = info,
-          contents = ref (Unbound {ident = ident, level = level, weak = weak})}
+          contents = ref (Unbound {ident = ident, level = level, sort = sort})}
 
-let tyflexunbound_ =
+let tyflexunbound_ = use FlexTypeAst in
   lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 false
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ())
 
 let tyflexlink_ = use FlexTypeAst in
   lam ty.

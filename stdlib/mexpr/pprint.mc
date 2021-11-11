@@ -1100,17 +1100,23 @@ lang VarTypePrettyPrint = VarTypeAst
     pprintEnvGetStr env t.ident
 end
 
-lang FlexTypePrettyPrint = FlexTypeAst
+lang FlexTypePrettyPrint = FlexTypeAst + RecordTypeAst
+  sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
+  | TypeVar () -> (env, idstr)
+  | WeakVar () -> (env, concat "_" idstr)
+  | RecordVar r ->
+    let recty =
+      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+    match getTypeStringCode indent env recty with (env, recstr) in
+    (env, join [idstr, "<:", recstr])
+
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlex t ->
+  | TyFlex t & ty ->
     match deref t.contents with Unbound t then
-      match pprintEnvGetStr env t.ident with (env, str) then
-        let prefix = if t.weak then "_" else "" in
-        (env, concat prefix str)
-      else never
-    else match deref t.contents with Link ty then
-      getTypeStringCode indent env ty
-    else never
+      match pprintEnvGetStr env t.ident with (env, idstr) in
+      getVarSortStringCode indent env idstr t.sort
+    else
+      getTypeStringCode indent env (resolveLink ty)
 end
 
 lang AllTypePrettyPrint = AllTypeAst
