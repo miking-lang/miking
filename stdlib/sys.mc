@@ -58,7 +58,7 @@ let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> Strin
 
     let fullCmd =
     [ "cd", cwd, ";"
-    , "echo", "\"", stdin, "\"|"
+    , "echo", join ["\"", stdin, "\""], "|"
     , strJoin " " cmd
     , ">", tempStdout
     , "2>", tempStderr
