@@ -37,6 +37,10 @@ let emptyCFAGraph = {
   edges = mapEmpty nameCmp
 }
 
+-------------------
+-- BASE FRAGMENT --
+-------------------
+
 lang CFA = Ast + LetAst + MExprPrettyPrint
 
   syn Constraint =
@@ -61,16 +65,43 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
       else
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
-        match _dataLookup q graph.data with dq in
-        match _edgesLookup q graph.edges with cc in
+        match _dataLookup q graph with dq in
+        match _edgesLookup q graph with cc in
         let graph = foldl (propagateConstraint h) graph cc in
         iter graph
     in
-    let graph = iter graph in
+    iter graph
 
+  sem cfaDebug (env: PprintEnv) =
+  | t ->
 
-    -- Produce output
-    graph
+    let printGraph = lam env. lam graph. lam str.
+      match cfaGraphToString env graph with (env, graph) in
+      printLn (join ["\n--- ", str, " ---"]);
+      printLn graph;
+      env
+    in
+
+    -- Generate and collect all constraints
+    let cstrs: [Constraint] = _collectConstraints [] t in
+
+    -- Build the graph
+    let graph = foldl initConstraint emptyCFAGraph cstrs in
+
+    -- Iteration
+    recursive let iter = lam env: PprintEnv. lam graph: CFAGraph.
+      if null graph.worklist then (env,graph)
+      else
+        match printGraph env graph "INTERMEDIATE CFA GRAPH" with env in
+        match head graph.worklist with (q,d) & h in
+        let graph = { graph with worklist = tail graph.worklist } in
+        match _dataLookup q graph with dq in
+        match _edgesLookup q graph with cc in
+        let graph = foldl (propagateConstraint h) graph cc in
+        iter env graph
+    in
+    iter env graph
+
 
   -- For a given expression, returns the variable "labeling" that expression.
   -- The existence of such a label is guaranteed by ANF.
@@ -79,12 +110,22 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
 
   -- Required for the data type Set AbsVal
   sem cmpAbsVal (lhs: AbsVal) =
-  -- Intentionally left blank
+  | rhs /- : AbsVal -/ -> cmpAbsValH (lhs, rhs)
+
+  sem cmpAbsValH =
+  | (lhs, rhs) /- : (AbsVal, AbsVal) -/ ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      error
+        "Missing case in cmpAbsValH for abstract values with same constructor."
+    else res
 
   -- Required for the data type Set AbsVal
   sem eqAbsVal (lhs: AbsVal) =
   | rhs -> eqi (cmpAbsVal lhs rhs) 0
 
+  -- Base constraint generation function (must still be included manually in
+  -- _constraintGenFuns)
   sem generateConstraints =
   | t -> []
 
@@ -107,38 +148,39 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   -- Intentionally left blank
 
+  -- CFAGraph -> Name -> Constraint -> CFAGraph
+  sem _addEdge (graph: CFAGraph) (q: Name) =
+  | cstr ->
+    match _edgesLookup q graph with cstrsq in
+    { graph with edges = mapInsert q (cons cstr cstrsq) graph.edges }
+
+  -- Helper function for initializing a constraint for a given name (mainly
+  -- used for convenience in initConstraint)
+  sem _initConstraintName (name: Name) (graph: CFAGraph) =
+  | cstr ->
+    let graph = _addEdge graph name cstr in
+    let avs = _dataLookup name graph in
+    setFold (lam graph. lam av. propagateConstraint (name,av) graph cstr)
+      graph avs
+
   sem _dataLookup (key: Name) =
-  | dataMap -> mapLookupOrElse (lam. setEmpty cmpAbsVal) key dataMap
+  | graph ->
+    let graph: CFAGraph = graph in
+    mapLookupOrElse (lam. setEmpty cmpAbsVal) key graph.data
 
   sem _edgesLookup (key: Name) =
-  | edgesMap -> mapLookupOrElse (lam. []) key edgesMap
+  | graph ->
+    let graph: CFAGraph = graph in
+    mapLookupOrElse (lam. []) key graph.edges
 
   -- CFAGraph -> AbsVal -> Name -> CFAGraph
   sem _addData (graph: CFAGraph) (d: AbsVal) =
   | q ->
-    match _dataLookup q graph.data with dq in
+    match _dataLookup q graph with dq in
     if setMem d dq then graph else
       {{ graph with
            data = mapInsert q (setInsert d dq) graph.data } with
            worklist = cons (q,d) graph.worklist }
-
-  -- CFAGraph -> Name -> Name -> CFAGraph
-  sem _addDataName (graph: CFAGraph) (d: Name) =
-  | q ->
-    match _dataLookup d graph.data with ds in
-    match _dataLookup q graph.data with dq in
-    setFold (lam graph: CFAGraph. lam d.
-      if setMem d dq then graph else
-        {{ graph with
-             data = mapInsert q (setInsert d dq) graph.data } with
-             worklist = cons (q,d) graph.worklist }
-    ) graph ds
-
-  -- CFAGraph -> Name -> Constraint -> CFAGraph
-  sem _addEdge (graph: CFAGraph) (q: Name) =
-  | cstr ->
-    match _edgesLookup q graph.edges with cstrsq in
-    { graph with edges = mapInsert q (cons cstr cstrsq) graph.edges }
 
   ---------------------
   -- PRETTY PRINTING --
@@ -150,27 +192,23 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   sem absValToString (env: PprintEnv) =
   -- Intentionally left blank
 
-  -- Prints CFA names
-  sem _printName (env: PprintEnv) =
-  | n -> pprintCode 0 env (nvar_ n)
-
   -- Prints a CFA graph
   sem cfaGraphToString (env: PprintEnv) =
   | graph ->
     let graph: CFAGraph = graph in
     let f = lam env. lam e: (Name,AbsVal).
-      match _printName env e.0 with (env,n) in
+      match pprintVarName env e.0 with (env,n) in
       match absValToString env e.1 with (env,av) in
       (env,join ["(", n, ", ", av, ")"]) in
     match mapAccumL f env graph.worklist with (env,worklist) in
     match mapAccumL (lam env: PprintEnv. lam b:(Name,Set AbsVal).
-        match _printName env b.0 with (env,b0) in
+        match pprintVarName env b.0 with (env,b0) in
         match mapAccumL absValToString env (setToSeq b.1) with (env,b1) in
         (env,(b0,b1))
       ) env (mapBindings graph.data)
     with (env, data) in
     match mapAccumL (lam env: PprintEnv. lam b:(Name,[Constraint]).
-        match _printName env b.0 with (env,b0) in
+        match pprintVarName env b.0 with (env,b0) in
         match mapAccumL constraintToString env b.1 with (env,b1) in
         (env,(b0,b1))
       ) env (mapBindings graph.edges)
@@ -195,6 +233,10 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
 
 end
 
+----------------------
+-- BASE CONSTRAINTS --
+----------------------
+
 lang DirectConstraint = CFA
 
   syn Constraint =
@@ -204,7 +246,8 @@ lang DirectConstraint = CFA
   | CstrDirectAv { lhs: AbsVal, rhs: Name }
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrDirect r & cstr -> _addEdge graph r.lhs cstr
+  | CstrDirect r & cstr -> _initConstraintName r.lhs graph cstr
+
   | CstrDirectAv r -> _addData graph r.lhs r.rhs
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
@@ -212,15 +255,19 @@ lang DirectConstraint = CFA
 
   sem constraintToString (env: PprintEnv) =
   | CstrDirect { lhs = lhs, rhs = rhs } ->
-    match _printName env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
     (env, join [lhs, " ⊆ ", rhs])
   | CstrDirectAv { lhs = lhs, rhs = rhs } ->
     match absValToString env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
+    match pprintVarName env rhs with (env,rhs) in
     (env, join ["{", lhs, "}", " ⊆ ", rhs])
 
 end
+
+-----------
+-- TERMS --
+-----------
 
 lang VarCFA = CFA + DirectConstraint + VarAst
 
@@ -235,34 +282,35 @@ end
 
 lang LamCFA = CFA + DirectConstraint + LamAst
 
+  -- Abstract representation of lambdas. The body can either be another
+  -- abstract lambda or the exprName of the body.
   syn AbsVal =
   | AVLam { ident: Name, body: Either AbsVal Name }
 
-  sem cmpAbsVal (lhs: AbsVal) =
-  | AVLam { ident = nrhs } ->
-    match lhs with AVLam { ident = nlhs } then nameCmp nlhs nrhs
-    else error "Cannot compare in cmpAbsVal for AVLam"
+  sem cmpAbsValH =
+  | (AVLam { ident = lhs }, AVLam { ident = rhs }) ->
+    nameCmp lhs rhs
 
   -- Type Expr -> Either AbsVal Name
   -- Convert a lambda to an Either AbsVal Name
-  sem _avLam =
+  sem _lamBody =
   | t ->
     match t with TmLam t then
-      let body = _avLam t.body in
+      let body = _lamBody t.body in
       Left (AVLam { ident = t.ident, body = body })
     else Right (exprName t)
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmLam t } ->
-    let av: AbsVal = AVLam { ident = t.ident, body = _avLam t.body } in
+    let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
     [ CstrDirectAv { lhs = av, rhs = ident } ]
 
   sem absValToString (env: PprintEnv) =
   | AVLam { ident = ident, body = body } ->
-    match _printName env ident with (env,ident) in
+    match pprintVarName env ident with (env,ident) in
     let tmp =
       match body with Left av then absValToString env body
-      else match body with Right n then _printName env n
+      else match body with Right n then pprintVarName env n
       else never
     in
     match tmp with (env, body) in
@@ -277,21 +325,19 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
   | CstrApp { lhs: Name, rhs: Name, res: Name }
 
   sem initConstraint (graph: CFAGraph) =
-  | CstrApp r & cstr -> _addEdge graph r.lhs cstr
+  | CstrApp r & cstr -> _initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrApp { lhs = lhs, rhs = rhs, res = res } ->
     -- Only lambda abstract values have an effect here.
     match update.1 with AVLam { ident = x, body = b } then
-      -- Add rhs ⊆ x to edges[rhs] and add all avs in rhs to x
-      let graph = _addEdge graph rhs (CstrDirect { lhs = rhs, rhs = x }) in
-      let graph = _addDataName graph rhs x in
-      -- Add b ⊆ res and add all avs in b to res
+      -- Add rhs ⊆ x constraint
+      let graph = initConstraint graph (CstrDirect { lhs = rhs, rhs = x }) in
+      -- Add b ⊆ res constraint
       match b with Left av then
         _addData graph av res
       else match b with Right b then
-        let graph = _addEdge graph b (CstrDirect { lhs = b, rhs = res }) in
-        _addDataName graph b res
+        initConstraint graph (CstrDirect { lhs = b, rhs = res })
       else never
 
     -- Not a lambda abstract value
@@ -299,30 +345,33 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
 
   sem constraintToString (env: PprintEnv) =
   | CstrApp { lhs = lhs, rhs = rhs, res = res } ->
-    match _printName env lhs with (env,lhs) in
-    match _printName env rhs with (env,rhs) in
-    match _printName env res with (env,res) in
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< and >b< ⊆ ", res ])
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmApp _ & body} ->
     recursive let rec = lam acc: [Constraint]. lam res: Name. lam t: Expr.
-      match t with TmApp t in
-      match t.lhs with TmConst t then acc
-      else
-        let nameLhs =
-          match t.lhs with TmApp t then nameSym "cfaIntermediate"
-          else match t.lhs with TmVar t then t.ident
-          else infoErrorExit (infoTm t.lhs) "Not a variable or application in CFA"
-        in
-        let cstr =
-          match t.rhs with TmVar { ident = nameRhs } then
-            [CstrApp { lhs = nameLhs, rhs = nameRhs, res = res}]
-          else []
-        in
-        let acc = concat cstr acc in
-        match t.lhs with TmApp _ then rec acc nameLhs t.lhs else acc
+      match t with TmApp t then
+        match t.lhs with TmApp _ | TmVar _ then
+          let nameLhs =
+            match t.lhs with TmApp t then nameSym "cfa"
+            else match t.lhs with TmVar t then t.ident
+            else error "Impossible"
+          in
+          let cstr =
+            match t.rhs with TmVar { ident = nameRhs } then
+              [CstrApp { lhs = nameLhs, rhs = nameRhs, res = res}]
+            else []
+          in
+          let acc = concat cstr acc in
+          match t.lhs with TmApp _ then rec acc nameLhs t.lhs else acc
+        else acc
+      else infoErrorExit (infoTm t)
+             "Non-application in generateConstraints for TmApp"
     in rec [] ident body
+
 end
 
 lang LetCFA = CFA + LetAst
@@ -338,7 +387,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
   | TmRecLets { bindings = bindings } ->
     map (lam b: RecLetBinding.
       match b.body with TmLam t then
-        let av: AbsVal = AVLam { ident = t.ident, body = _avLam t.body } in
+        let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
         CstrDirectAv { lhs = av, rhs = b.ident }
       else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
     ) bindings
@@ -346,12 +395,75 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 end
 
 lang ConstCFA = CFA + ConstAst
+
+  sem generateConstraints =
+  | TmConst t ->
+    generateConstraintsConst t.info t.val
+
+  sem generateConstraintsConst (info: Info) =
+  | const -> infoErrorExit info "Constant not supported in CFA"
+
 end
 
-lang SeqCFA = CFA + SeqAst
+lang SeqCFA = CFA + DirectConstraint + SeqAst
+  syn AbsVal =
+  -- Abstract representation of sequences. Contains a set of names that may
+  -- flow to the sequence.
+  | AVSeq { names: Set Name }
+
+  sem cmpAbsValH =
+  | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmSeq t } ->
+    let names = foldl (lam acc: [Name]. lam t: Expr.
+      match t with TmVar t then cons t.ident acc else acc) [] t.tms
+    in
+    let av: AbsVal = AVSeq { names = setOfSeq nameCmp names } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVSeq { names = names } ->
+    match mapAccumL pprintVarName env (setToSeq names) with (env,names) in
+    let names = strJoin ", " names in
+    (env, join ["[{", names, "}]"])
+
 end
 
-lang RecordCFA = CFA + RecordAst
+-- Empty name used in records and conapps
+let nameEmpty = nameSym "cfaEmpty"
+
+lang RecordCFA = CFA + DirectConstraint + RecordAst
+  -- NOTE(dlunde,2021-11-10) TmRecordUpdate is currently not supported.
+
+  syn AbsVal =
+  -- Abstract representation of records. The bindings are from SIDs to names,
+  -- rather than expressions.
+  | AVRec { bindings: Map SID Name }
+
+  sem cmpAbsValH =
+  | (AVRec { bindings = lhs }, AVRec { bindings = rhs }) ->
+    mapCmp nameCmp lhs rhs
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmRecord t } ->
+    let bindings = mapMap (lam v: Expr.
+      match v with TmVar t then t.ident else nameEmpty) t.bindings
+    in
+    let av: AbsVal = AVRec { bindings = bindings } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVRec { bindings = bindings } ->
+    match mapMapAccum (lam env. lam k. lam v.
+        match pprintVarName env v with (env, v) in
+        (env, join [pprintLabelString k, " = ", v])
+      ) env bindings
+    with (env, bindings) in
+    let binds = mapValues bindings in
+    let merged = strJoin ", " binds in
+    (env, join ["{ ", merged, " }"])
+
 end
 
 lang TypeCFA = CFA + TypeAst
@@ -359,12 +471,69 @@ lang TypeCFA = CFA + TypeAst
   | TmType t -> exprName t.inexpr
 end
 
-lang DataCFA = CFA + DataAst
+lang DataCFA = CFA + DirectConstraint + DataAst
+  syn AbsVal =
+  -- Abstract representation of constructed data.
+  | AVCon { ident: Name, body: Name }
+
+  sem cmpAbsValH =
+  | (AVCon { ident = ilhs, body = blhs },
+     AVCon { ident = irhs, body = brhs }) ->
+    let idiff = nameCmp ilhs irhs in
+    if eqi idiff 0 then nameCmp blhs brhs else idiff
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmConApp t } ->
+    let body = match t.body with TmVar t then t.ident else nameEmpty in
+    let av: AbsVal = AVCon { ident = t.ident, body = body } in
+    [ CstrDirectAv { lhs = av, rhs = ident } ]
+
+  sem absValToString (env: PprintEnv) =
+  | AVCon { ident = ident, body = body } ->
+    match pprintConName env ident with (env,ident) in
+    match pprintVarName env body with (env,body) in
+    (env, join [ident, " ", body])
+
   sem exprName =
   | TmConDef t -> exprName t.inexpr
+
 end
 
-lang MatchCFA = CFA + MatchAst
+lang MatchCFA = CFA + DirectConstraint + MatchAst
+
+  syn Constraint =
+  | CstrMatch { pat: Pat, target: Name }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrMatch r & cstr -> _initConstraintName r.target graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrMatch { pat = pat, target = target } ->
+    propagateMatchConstraint graph (pat,update.1)
+
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | _ -> graph -- Default: do nothing
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrMatch { pat = pat, target = target } ->
+    match getPatStringCode 0 env pat with (env, pat) in
+    match pprintVarName env target with (env, target) in
+    (env, join ["match ", target, " with ", pat])
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmMatch t } ->
+    let thnName = exprName t.thn in
+    let elsName = exprName t.els in
+    let cstr1 = [
+      CstrDirect { lhs = thnName, rhs = ident },
+      CstrDirect { lhs = elsName, rhs = ident }
+    ] in
+    let cstr2 = match t.target with TmVar tv then
+        [ CstrMatch { pat = t.pat, target = tv.ident } ]
+      else []
+    in
+    concat cstr1 cstr2
+
 end
 
 lang UtestCFA = CFA + UtestAst
@@ -373,6 +542,7 @@ lang UtestCFA = CFA + UtestAst
 end
 
 lang NeverCFA = CFA + NeverAst
+  -- Nothing to be done here
 end
 
 lang ExtCFA = CFA + ExtAst
@@ -380,11 +550,374 @@ lang ExtCFA = CFA + ExtAst
   | TmExt t -> exprName t.inexpr
 end
 
-lang MExprCFA =
-  CFA + DirectConstraint + VarCFA + LamCFA + AppCFA +
-  LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
-  MatchCFA + UtestCFA + NeverCFA + ExtCFA
+---------------
+-- CONSTANTS --
+---------------
+-- Most data-flow constraints will need to add things here. However, in this
+-- base version of 0-CFA without data-flow, no data flow constraints are
+-- generated.
 
+lang IntCFA = CFA + ConstCFA + IntAst
+  sem generateConstraintsConst (info: Info) =
+  | CInt _ -> []
+end
+
+lang ArithIntCFA = CFA + ConstCFA + ArithIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CAddi _ -> []
+  | CSubi _ -> []
+  | CMuli _ -> []
+  | CDivi _ -> []
+  | CNegi _ -> []
+  | CModi _ -> []
+end
+
+lang ShiftIntCFA = CFA + ConstCFA + ShiftIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CSlli _ -> []
+  | CSrli _ -> []
+  | CSrai _ -> []
+end
+
+lang FloatCFA = CFA + ConstCFA + FloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CFloat _ -> []
+end
+
+lang ArithFloatCFA = CFA + ConstCFA + ArithFloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CAddf _ -> []
+  | CSubf _ -> []
+  | CMulf _ -> []
+  | CDivf _ -> []
+  | CNegf _ -> []
+end
+
+lang FloatIntConversionCFA = CFA + ConstCFA + FloatIntConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CFloorfi _ -> []
+  | CCeilfi _ -> []
+  | CRoundfi _ -> []
+  | CInt2float _ -> []
+end
+
+lang BoolCFA = CFA + ConstCFA + BoolAst
+  sem generateConstraintsConst (info: Info) =
+  | CBool _ -> []
+end
+
+lang CmpIntCFA = CFA + ConstCFA + CmpIntAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqi _ -> []
+  | CNeqi _ -> []
+  | CLti _ -> []
+  | CGti _ -> []
+  | CLeqi _ -> []
+  | CGeqi _ -> []
+end
+
+lang CmpFloatCFA = CFA + ConstCFA + CmpFloatAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqf _ -> []
+  | CLtf _ -> []
+  | CLeqf _ -> []
+  | CGtf _ -> []
+  | CGeqf _ -> []
+  | CNeqf _ -> []
+end
+
+lang CharCFA = CFA + ConstCFA + CharAst
+  sem generateConstraintsConst (info: Info) =
+  | CChar _ -> []
+end
+
+lang CmpCharCFA = CFA + ConstCFA + CmpCharAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqc _ -> []
+end
+
+lang IntCharConversionCFA = CFA + ConstCFA + IntCharConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CInt2Char _ -> []
+  | CChar2Int _ -> []
+end
+
+lang FloatStringConversionCFA = CFA + ConstCFA + FloatStringConversionAst
+  sem generateConstraintsConst (info: Info) =
+  | CString2float _ -> []
+  | CFloat2string _ -> []
+end
+
+lang SymbCFA = CFA + ConstCFA + SymbAst
+  sem generateConstraintsConst (info: Info) =
+  | CSymb _ -> []
+  | CGensym _ -> []
+  | CSym2hash _ -> []
+end
+
+lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
+  sem generateConstraintsConst (info: Info) =
+  | CEqsym _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Add flow constraints for sequence operations?
+lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CSet _ -> []
+  -- | CGet _ -> []
+  -- | CCons _ -> []
+  -- | CSnoc _ -> []
+  -- | CConcat _ -> []
+  -- | CLength _ -> []
+  -- | CReverse _ -> []
+  -- | CHead _ -> []
+  -- | CTail _ -> []
+  -- | CNull _ -> []
+  -- | CMap _ -> []
+  -- | CMapi _ -> []
+  -- | CIter _ -> []
+  -- | CIteri _ -> []
+  -- | CFoldl _ -> []
+  -- | CFoldr _ -> []
+  -- | CCreate _ -> []
+  -- | CCreateList _ -> []
+  -- | CCreateRope _ -> []
+  -- | CSplitAt _ -> []
+  -- | CSubsequence _ -> []
+end
+
+lang FileOpCFA = CFA + ConstCFA + FileOpAst
+  sem generateConstraintsConst (info: Info) =
+  | CFileRead _ -> []
+  | CFileWrite _ -> []
+  | CFileExists _ -> []
+  | CFileDelete _ -> []
+end
+
+lang IOCFA = CFA + ConstCFA + IOAst
+  sem generateConstraintsConst (info: Info) =
+  | CPrint _ -> []
+  | CPrintError _ -> []
+  | CDPrint _ -> []
+  | CFlushStdout _ -> []
+  | CFlushStderr _ -> []
+  | CReadLine _ -> []
+  | CReadBytesAsString _ -> []
+end
+
+lang RandomNumberGeneratorCFA = CFA + ConstCFA + RandomNumberGeneratorAst
+  sem generateConstraintsConst (info: Info) =
+  | CRandIntU _ -> []
+  | CRandSetSeed _ -> []
+end
+
+lang SysCFA = CFA + ConstCFA + SysAst
+  sem generateConstraintsConst (info: Info) =
+  | CExit _ -> []
+  | CError _ -> []
+  | CArgv _ -> []
+  | CCommand _ -> []
+end
+
+lang TimeCFA = CFA + ConstCFA + TimeAst
+  sem generateConstraintsConst (info: Info) =
+  | CWallTimeMs _ -> []
+  | CSleepMs _ -> []
+end
+
+lang ConTagCFA = CFA + ConstCFA + ConTagAst
+  sem generateConstraintsConst (info: Info) =
+  | CConstructorTag _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+-- probably be added.
+lang RefOpCFA = CFA + ConstCFA + RefOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CRef _ -> []
+  -- | CModRef _ -> []
+  -- | CDeRef _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
+lang MapCFA = CFA + ConstCFA + MapAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CMapEmpty _ -> []
+  -- | CMapInsert _ -> []
+  -- | CMapRemove _ -> []
+  -- | CMapFindExn _ -> []
+  -- | CMapFindOrElse _ -> []
+  -- | CMapFindApplyOrElse _ -> []
+  -- | CMapBindings _ -> []
+  -- | CMapChooseExn _ -> []
+  -- | CMapChooseOrElse _ -> []
+  -- | CMapSize _ -> []
+  -- | CMapMem _ -> []
+  -- | CMapAny _ -> []
+  -- | CMapMap _ -> []
+  -- | CMapMapWithKey _ -> []
+  -- | CMapFoldWithKey _ -> []
+  -- | CMapEq _ -> []
+  -- | CMapCmp _ -> []
+  -- | CMapGetCmpFun _ -> []
+end
+
+-- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+-- probably be added.
+lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
+  sem generateConstraintsConst (info: Info) =
+  -- | CTensorCreateInt _ -> []
+  -- | CTensorCreateFloat _ -> []
+  -- | CTensorCreate _ -> []
+  -- | CTensorGetExn _ -> []
+  -- | CTensorSetExn _ -> []
+  -- | CTensorRank _ -> []
+  -- | CTensorShape _ -> []
+  -- | CTensorReshapeExn _ -> []
+  -- | CTensorCopy _ -> []
+  -- | CTensorTransposeExn _ -> []
+  -- | CTensorSliceExn _ -> []
+  -- | CTensorSubExn _ -> []
+  -- | CTensorIterSlice _ -> []
+  -- | CTensorEq _ -> []
+  -- | CTensorToString _ -> []
+end
+
+lang BootParserCFA = CFA + ConstCFA + BootParserAst
+  sem generateConstraintsConst (info: Info) =
+  | CBootParserParseMExprString _ -> []
+  | CBootParserParseMCoreFile _ -> []
+  | CBootParserGetId _ -> []
+  | CBootParserGetTerm _ -> []
+  | CBootParserGetType _ -> []
+  | CBootParserGetString _ -> []
+  | CBootParserGetInt _ -> []
+  | CBootParserGetFloat _ -> []
+  | CBootParserGetListLength _ -> []
+  | CBootParserGetConst _ -> []
+  | CBootParserGetPat _ -> []
+  | CBootParserGetInfo _ -> []
+end
+
+--------------
+-- PATTERNS --
+--------------
+
+lang NamedPatCFA = MatchCFA + NamedPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatNamed { ident = PName n }, av) ->
+    _addData graph av n
+  | (PatNamed { ident = PWildcard _ }, _) -> graph
+end
+
+lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatSeqTot p, AVSeq { names = names }) ->
+    let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
+        let cstr = CstrMatch { pat = pat, target = name } in
+        initConstraint graph cstr
+      ) graph names in
+    foldl f graph p.pats
+end
+
+lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatSeqEdge p, AVSeq { names = names }) ->
+    let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
+        let cstr = CstrMatch { pat = pat, target = name } in
+        initConstraint graph cstr
+      ) graph names in
+    let graph = foldl f graph p.prefix in
+    let graph = foldl f graph p.postfix in
+    match p.middle with PName rhs then
+      foldl (lam graph. lam lhs: Name.
+        let cstr = CstrDirect { lhs = lhs, rhs = rhs } in
+        initConstraint graph cstr
+      ) graph names
+    else graph
+end
+
+lang RecordPatCFA = MatchCFA + RecordCFA + RecordPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatRecord { bindings = pbindings }, AVRec { bindings = abindings }) ->
+    -- Check if record pattern is compatible with abstract value record
+    let compatible = mapAllWithKey (lam k. lam. mapMem k abindings) pbindings in
+    if compatible then
+      mapFoldWithKey (lam graph. lam k. lam pb: Pattern.
+        let ab: Name = mapFindExn k abindings in
+        let cstr = CstrMatch { pat = pb, target = ab } in
+        initConstraint graph cstr
+      ) graph pbindings
+    else graph -- Nothing to be done
+end
+
+lang DataPatCFA = MatchCFA + DataCFA + DataPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatCon p, AVCon { ident = ident, body = body }) ->
+    if nameEq p.ident ident then
+      let cstr = CstrMatch { pat = p.subpat, target = body } in
+      initConstraint graph cstr
+    else graph
+end
+
+lang IntPatCFA = MatchCFA + IntPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatInt p, _) -> graph
+end
+
+lang CharPatCFA = MatchCFA + CharPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatChar p, _) -> graph
+end
+
+lang BoolPatCFA = MatchCFA + BoolPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatBool p, _) -> graph
+end
+
+lang AndPatCFA = MatchCFA + AndPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatAnd p, _) ->
+    infoErrorExit p.info "Pattern currently unsupported in CFA"
+end
+
+lang OrPatCFA = MatchCFA + OrPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatOr p, _) ->
+    infoErrorExit p.info "Pattern currently unsupported in CFA"
+end
+
+lang NotPatCFA = MatchCFA + NotPat
+  sem propagateMatchConstraint (graph: CFAGraph) =
+  | (PatNot p, _) ->
+    infoErrorExit p.info "Pattern currently unsupported in CFA"
+end
+
+---------------
+-- MEXPR CFA --
+---------------
+
+lang MExprCFA = CFA +
+
+  -- Base constraints
+  DirectConstraint +
+
+  -- Terms
+  VarCFA + LamCFA + AppCFA +
+  LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
+  MatchCFA + UtestCFA + NeverCFA + ExtCFA +
+
+  -- Constants
+  IntCFA + ArithIntCFA + ShiftIntCFA + FloatCFA + ArithFloatCFA +
+  FloatIntConversionCFA + BoolCFA + CmpIntCFA + CmpFloatCFA + CharCFA +
+  CmpCharCFA + IntCharConversionCFA + FloatStringConversionCFA + SymbCFA +
+  CmpSymbCFA + SeqOpCFA + FileOpCFA + IOCFA + RandomNumberGeneratorCFA +
+  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + MapCFA + TensorOpCFA +
+  BootParserCFA +
+
+  -- Patterns
+  NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
+  IntPatCFA + CharPatCFA + BoolPatCFA + AndPatCFA + OrPatCFA + NotPatCFA
 
 -----------
 -- TESTS --
@@ -405,24 +938,30 @@ use Test in
 let parse = parseMExprString [] in
 let test: Bool -> Expr -> [String] -> [[AbsVal]] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
-    let tANF = normalizeTerm t in
-    match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
-    match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
-    (if debug then
-       printLn "\n--- ORIGINAL PROGRAM ---";
-       printLn tStr;
-       printLn "\n--- ANF ---";
-       printLn tANFStr
-     else ());
-    let cfaRes = cfa tANF in
-    match cfaGraphToString env cfaRes with (_, resStr) in
-    (if debug then
-       printLn "\n--- FINAL CFA GRAPH ---";
-       printLn resStr
-     else ());
-    map (lam var: String.
-      (var, _dataLookup (nameNoSym var) cfaRes.data)
-    ) vars
+    if debug then
+      -- Version with debug printouts
+      let tANF = normalizeTerm t in
+      match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
+      printLn "\n--- ORIGINAL PROGRAM ---";
+      printLn tStr;
+      match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
+      printLn "\n--- ANF ---";
+      printLn tANFStr;
+      match cfaDebug env tANF with (env,cfaRes) in
+      match cfaGraphToString env cfaRes with (_, resStr) in
+      printLn "\n--- FINAL CFA GRAPH ---";
+      printLn resStr;
+      map (lam var: String.
+        (var, _dataLookup (nameNoSym var) cfaRes)
+      ) vars
+
+    else
+      -- Version without debug printouts
+      let tANF = normalizeTerm t in
+      let cfaRes = cfa tANF in
+      map (lam var: String.
+        (var, _dataLookup (nameNoSym var) cfaRes)
+      ) vars
 in
 
 -- Custom equality function for testing lambda control flow only
@@ -478,6 +1017,74 @@ utest test false t ["g","x","y","z","res"] with [
   ("y", []),
   ("z", []),
   ("res", [])
+] using eqTestLam in
+
+-- Sequence
+let t = parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let seq = [f, lam z. z] in
+  let res = match seq with [a] ++ _ then
+      a g
+    else
+      (lam v. v)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["v","y"]),
+  ("a", ["x","z"])
+] using eqTestLam in
+
+-- Record
+let t = parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let r = { a = f, b = 3 } in
+  let res = match r with { a = a } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
+
+-- ConApp
+let t = parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let d = C f in
+  let res = match d with C a then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
+
+-- Nested
+let t = parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let d = { a = [C f], b = 3 } in
+  let res = match d with { a = [C a] } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
 ] using eqTestLam in
 
 ()

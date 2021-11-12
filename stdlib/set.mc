@@ -51,6 +51,9 @@ let setToSeq : Set a -> [a] = lam s. mapKeys s
 -- Both sets are assumed to have the same equality function.
 let setEq : Set a -> Set a -> Bool = mapEq (lam. lam. true)
 
+-- `setCmp` provides comparison over sets.
+let setCmp : Set a -> Set a -> Int = mapCmp (lam. lam. 0)
+
 -- `setChoose s` chooses one element from the set `s`, giving `None ()` if `s`
 -- is empty.
 let setChoose : Set a -> Option a =
@@ -106,6 +109,13 @@ let s7 = setOfSeq subi [1,2,6] in
 utest setSubset s5 s5 with true in
 utest setSubset s6 s5 with true in
 utest setSubset s7 s5 with false in
+
+utest setCmp s5 s5 with 0 in
+utest setCmp s5 s6 with 1 in
+utest setCmp s6 s5 with negi 1 in
+utest setCmp s5 s7 with negi 3 in
+utest setCmp s7 s5 with 3 in
+utest setCmp s6 s7 with negi 3 in
 
 let sFold = setOfSeq subi [1,2,3,4,5] in
 utest setFold (lam acc. lam v. addi v acc) 0 sFold with 15 in
