@@ -33,6 +33,8 @@
   test-compile-prune-utests-all\
   test-run\
   test-run-all\
+  test-run-boot\
+  test-run-boot-all\
   test-boot\
   test-boot-all\
   test-boot-py\
@@ -80,21 +82,19 @@ uninstall:
 
 # Tests everything except some files with very special external dependencies
 test-all:\
-  test-boot-compile\
+  test-boot-all\
   test-compile\
   test-run\
-	test-tune\
-  test-boot-all
+	test-tune
 	@./make lint
 
 # The same as test-all but prunes utests whose external dependencies are not met
 # on this system
 test-all-prune-utests:\
-  test-boot-compile-prune-utests\
+  test-boot-all\
   test-compile-prune-utests\
   test-run\
-	test-tune\
-  test-boot-all
+	test-tune
 	@./make lint
 
 test-boot-compile: boot
@@ -127,13 +127,19 @@ test-run: build
 test-run-all: build
 	@$(MAKE) -s -f test-run.mk all
 
+test-boot-run: boot
+	@$(MAKE) -s -f test-boot-run.mk selected
+
+test-boot-run-all: boot
+	@$(MAKE) -s -f test-boot-run.mk all
+
 test-boot: boot
 	@$(MAKE) -s -f test-boot.mk selected
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-all:
+test-boot-all: boot
 	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build

@@ -322,6 +322,9 @@ mexpr:
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
         TmMatch(fi,$2,$4,$6,$8) }
+  | MATCH mexpr WITH pat IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmMatch(fi,$2,$4,$6,TmNever(fi)) }
   | SWITCH mexpr swcases
       {
         let fi = mkinfo $1.i (tm_info $3) in

@@ -12,8 +12,19 @@ type ParseOptions = {
   -- this system.
   findExternalsExclude : Bool,
 
+  -- Warn if there are pruned utests
+  pruneExternalUtestsWarning : Bool,
+
   -- Additional keywords
   keywords : [String]
+}
+
+let defaultParseOptions = {
+  keepUtests = true,
+  pruneExternalUtests = false,
+  pruneExternalUtestsWarning = true,
+  findExternalsExclude = false,
+  keywords = []
 }
 
 let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
@@ -28,6 +39,7 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
       keepUtests = opt.keepUtests,
       pruneExternalUtests = true,
       externalsExclude = externalsExclude,
+      pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning,
       keywords = opt.keywords
     } file
   else
@@ -35,5 +47,6 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
       keepUtests = opt.keepUtests,
       pruneExternalUtests = false,
       externalsExclude = [],
+      pruneExternalUtestsWarning = false,
       keywords = opt.keywords
   } file

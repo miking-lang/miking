@@ -403,17 +403,25 @@ lang VarTypeCmp = Cmp + VarTypeAst
 end
 
 lang FlexTypeCmp = Cmp + FlexTypeAst
+  sem cmpVarSort =
+  | (RecordVar l, RecordVar r) ->
+    mapCmp cmpType l.fields r.fields
+  | (lhs, rhs) ->
+    subi (constructorTag lhs) (constructorTag rhs)
+
   sem cmpTypeH =
-  | (TyFlex _ & ty1, ty2)
-  | (ty1, TyFlex _ & ty2) ->
-    match (resolveLink ty1, resolveLink ty2) with (ty1, ty2) then
-      match (ty1, ty2) with (TyFlex t1, TyFlex t2) then
-        match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) then
-          nameCmp n1.ident n2.ident
-        else never
-      else match (ty1, ty2) with (! TyFlex _, ! TyFlex _) then cmpType ty1 ty2
-      else subi (constructorTag ty1) (constructorTag ty2)
-    else never
+  | (TyFlex _ & lhs, rhs)
+  | (lhs, TyFlex _ & rhs) ->
+    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
+    match (lhs, rhs) with (TyFlex t1, TyFlex t2) then
+    match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) in
+      let identDiff = nameCmp n1.ident n2.ident in
+      if eqi identDiff 0 then
+        cmpVarSort (n1.sort, n2.sort)
+      else
+        identDiff
+    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then cmpType lhs rhs
+    else subi (constructorTag lhs) (constructorTag rhs)
 end
 
 lang AllTypeCmp = Cmp + AllTypeAst
@@ -629,6 +637,7 @@ utest cmpConst (CEqc {}) (CEqc {}) with 0 in
 utest cmpConst (CInt2Char {}) (CInt2Char {}) with 0 in
 utest cmpConst (CChar2Int {}) (CChar2Int {}) with 0 in
 
+utest cmpConst (CStringIsFloat {}) (CStringIsFloat {}) with 0 in
 utest cmpConst (CString2float {}) (CString2float {}) with 0 in
 utest cmpConst (CFloat2string {}) (CFloat2string {}) with 0 in
 

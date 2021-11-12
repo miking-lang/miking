@@ -41,6 +41,8 @@ let disable_prune_external_utests_summary = ref false
 
 let disable_prune_external_utests = ref false
 
+let disable_prune_external_utests_warning = ref false
+
 let utest = ref false (* Set to true if unit testing is enabled *)
 
 let utest_ok = ref 0 (* Counts the number of successful unit tests *)
@@ -114,6 +116,7 @@ and const =
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string
   (* MCore intrinsics: Characters *)
@@ -216,7 +219,8 @@ and const =
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
-      (bool * bool * int Mseq.t Mseq.t) option * int Mseq.t Mseq.t option
+      (bool * bool * int Mseq.t Mseq.t * bool) option
+      * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetType of tm option
@@ -572,6 +576,7 @@ let const_has_side_effect = function
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string ->
       false

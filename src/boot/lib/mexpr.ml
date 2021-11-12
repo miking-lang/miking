@@ -136,6 +136,8 @@ let arity = function
       1
   | Cint2float ->
       1
+  | CstringIsFloat ->
+      1
   | Cstring2float ->
       1
   | Cfloat2string ->
@@ -703,6 +705,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | Cneqf (Some v1), TmConst (fi, CFloat v2) ->
       TmConst (fi, CBool (v1 <> v2))
   | Cneqf None, _ | Cneqf (Some _), _ ->
+      fail_constapp fi
+  | CstringIsFloat, TmSeq (_, s) ->
+      let s = tm_seq2int_seq fi s in
+      TmConst (fi, CBool (Intrinsics.FloatConversion.string_is_float s))
+  | CstringIsFloat, _ ->
       fail_constapp fi
   | Cstring2float, TmSeq (fi, s) ->
       let f = tm_seq2int_seq fi s in
@@ -1462,11 +1469,15 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CbootParserParseMCoreFile (None, None), TmRecord (_, r) -> (
     try
       match
-        (Record.find (us "0") r, Record.find (us "1") r, Record.find (us "2") r)
+        ( Record.find (us "0") r
+        , Record.find (us "1") r
+        , Record.find (us "2") r
+        , Record.find (us "3") r )
       with
       | ( TmConst (_, CBool keep_utests)
         , TmConst (_, CBool prune_external_utests)
-        , TmSeq (_, externals_exclude) ) ->
+        , TmSeq (_, externals_exclude)
+        , TmConst (_, CBool warn) ) ->
           let externals_exclude =
             Mseq.map
               (function
@@ -1477,7 +1488,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
           TmConst
             ( fi
             , CbootParserParseMCoreFile
-                ( Some (keep_utests, prune_external_utests, externals_exclude)
+                ( Some
+                    ( keep_utests
+                    , prune_external_utests
+                    , externals_exclude
+                    , warn )
                 , None ) )
       | _ ->
           fail_constapp fi

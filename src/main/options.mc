@@ -8,7 +8,8 @@ type Options = {
   debugTypeAnnot : Bool,
   debugProfile : Bool,
   exitBefore : Bool,
-  pruneExternalUtests : Bool,
+  disablePruneExternalUtests : Bool,
+  disablePruneExternalUtestsWarning : Bool,
   runTests : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
@@ -26,7 +27,8 @@ let optionsDefault = {
   debugTypeAnnot = false,
   debugProfile = false,
   exitBefore = false,
-  pruneExternalUtests = true,
+  disablePruneExternalUtests = false,
+  disablePruneExternalUtestsWarning = false,
   runTests = false,
   disableOptimizations = false,
   useTuned = false,
@@ -62,7 +64,12 @@ let optionsConfig : ParseConfig = [
   ([("--disable-prune-utests", "", "")],
     "Disable pruning of utests with missing external dependencies",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with pruneExternalUtests = false}),
+      let o: Options = p.options in {o with disablePruneExternalUtests = true}),
+  ([("--disable-prune-warning", "", "")],
+    "Disable warning when pruning utests with missing external dependencies",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+        {o with disablePruneExternalUtestsWarning = true}),
   ([("--test", "", "")],
     "Generate utest code",
     lam p: ArgPart Options.

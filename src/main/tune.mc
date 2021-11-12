@@ -28,7 +28,8 @@ let tune = lam files. lam options : Options. lam args.
     use MCoreTune in
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
-      pruneExternalUtests = options.pruneExternalUtests,
+      pruneExternalUtests = not options.disablePruneExternalUtests,
+      pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
       keywords = decisionPointsKeywords
     } file in

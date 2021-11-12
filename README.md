@@ -1484,6 +1484,9 @@ output of the above program might be:
 However, the values and order of the thread IDs might be different over
 different runs.
 
+### Probability distributions
+Externals for probability distributions are defined in `stdlib/ext/dist-ext.mc`. To use these, you must install the `opam` package `owl` (i.e., `opam install owl`)
+
 ## Profiling
 
 Profiling of an MExpr program can be enabled using the `--debug-profile` flag

@@ -45,6 +45,15 @@ let biLookup : (Name,Name) -> BiNameMap -> Option (Name,Name) =
     in
     find pred bmap
 
+-- 'biMem (i1, i2) bmap' returns true if i1 <-> i2 in the bijective map,
+-- or false otherwise.
+let biMem : (Name, Name) -> BiNameMap -> Bool =
+  lam i : (Name, Name). lam bmap.
+  let pred = lam n : (Name, Name).
+    if nameEq i.0 n.0 then nameEq i.1 n.1 else false
+  in
+  optionIsSome (find pred bmap)
+
 type EqEnv = {
   varEnv : BiNameMap,
   conEnv : BiNameMap
@@ -133,11 +142,10 @@ lang VarEq = Eq + VarAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmVar r ->
     match lhs with TmVar l then
-      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) then
-        match _eqCheck l.ident r.ident varEnv freeVarEnv with Some freeVarEnv then
-          Some {free with varEnv = freeVarEnv}
-        else None ()
-      else never
+      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) in
+      match _eqCheck l.ident r.ident varEnv freeVarEnv with Some freeVarEnv then
+        Some {free with varEnv = freeVarEnv}
+      else None ()
     else None ()
 end
 
@@ -616,19 +624,32 @@ lang VarTypeEq = Eq + VarTypeAst
 end
 
 lang FlexTypeEq = Eq + FlexTypeAst
+  sem eqVarSort (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (RecordVar l, RecordVar r) ->
+      if eqi (mapSize l.fields) (mapSize r.fields) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.fields with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.fields
+      else None ()
+  | (lhs, rhs) ->
+    if eqi (constructorTag lhs) (constructorTag rhs) then Some free
+    else None ()
+
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFlex _ & rhs ->
-    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) then
-      match (lhs, rhs) with (TyFlex l, TyFlex r) then
-        match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) then
-          optionMap
-            (lam freeTyFlex. {free with freeTyFlex = freeTyFlex})
-            (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        else never
-      else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then
-        eqTypeH typeEnv free lhs rhs
-      else None ()
-    else never
+    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
+    match (lhs, rhs) with (TyFlex l, TyFlex r) then
+      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
+      optionBind
+        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
+        (lam freeTyVars.
+          eqVarSort typeEnv {free with freeTyVars = freeTyVars} (n1.sort, n2.sort))
+    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then
+      eqTypeH typeEnv free lhs rhs
+    else None ()
 end
 
 lang AllTypeEq = Eq + AllTypeAst

@@ -107,13 +107,13 @@ let tyalls_ =
   foldr tyall_ ty strs
 
 let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam weak.
+  lam info. lam ident. lam level. lam sort.
   TyFlex {info = info,
-          contents = ref (Unbound {ident = ident, level = level, weak = weak})}
+          contents = ref (Unbound {ident = ident, level = level, sort = sort})}
 
-let tyflexunbound_ =
+let tyflexunbound_ = use FlexTypeAst in
   lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 false
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ())
 
 let tyflexlink_ = use FlexTypeAst in
   lam ty.
@@ -779,6 +779,10 @@ let int2char_ = use MExprAst in
 let char2int_ = use MExprAst in
   lam c.
   app_ (uconst_ (CChar2Int ())) c
+
+let stringIsfloat_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CStringIsFloat ())) s
 
 let string2float_ = use MExprAst in
   lam s.
