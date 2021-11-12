@@ -663,7 +663,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  AllCompatibleType +
+  FlexCompatibleType + AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

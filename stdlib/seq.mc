@@ -13,7 +13,7 @@ let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
-let eqSeq = lam eq : (a -> b -> Bool). lam s1. lam s2.
+let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       if eq h1 h2 then work t1 t2
@@ -74,7 +74,7 @@ let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 utest foldr (lam x. lam acc. x) 0 [1,2] with 1
 utest foldr (lam acc. lam x. x) 0 [] with 0
 utest foldr cons [] [1,2,3] with [1,2,3]
-utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
+utest foldr1 addi [1,2] with 3
 
 recursive
 let unfoldr = lam f. lam b.
@@ -247,7 +247,7 @@ utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0]
 
 -- Sorting
 recursive
-let quickSort = lam cmp. lam seq.
+let quickSort : all a. (a -> a -> Int) -> ([a] -> [a]) = lam cmp. lam seq.
   if null seq then seq else
     let h = head seq in
     let t = tail seq in
