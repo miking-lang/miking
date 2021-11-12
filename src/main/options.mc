@@ -20,7 +20,7 @@ type Options = {
 }
 
 -- Default values for options
-let options = {
+let optionsDefault = {
   debugParse = false,
   debugGenerate = false,
   debugTypeAnnot = false,
@@ -38,7 +38,7 @@ let options = {
 }
 
 -- Options configuration
-let config = [
+let optionsConfig : ParseConfig = [
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.
@@ -98,12 +98,12 @@ let config = [
 ]
 
 -- Get the help string for options
-let optionsHelpString : Unit -> String = lam.
+let optionsHelpString : ParseConfig -> String = lam config.
   argHelpOptions config
 
-let parseOptions : [String] -> ArgResult Options = lam args.
+let parseOptions : [String] -> ParseConfig -> ArgResult Options = lam args. lam config.
   let result =
-    argParse_general {args = args, optionsStartWith = ["--"]} options config
+    argParse_general {args = args, optionsStartWith = ["--"]} optionsDefault config
   in
   match result with ParseOK r then r
   else argPrintError result; exit 1

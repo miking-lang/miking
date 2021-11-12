@@ -21,7 +21,7 @@ type ArgPart = {
 }
 
 type ParseOption = (String, String, String)
-type ParseConfig = [([ParseOption], String, a -> String -> a)]
+type ParseConfig = [([ParseOption], String, ArgPart -> a)]
 
 type ParseType
 con ParseTypeInt : String -> ParseType
