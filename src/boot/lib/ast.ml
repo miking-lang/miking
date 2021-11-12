@@ -116,6 +116,7 @@ and const =
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string
   (* MCore intrinsics: Characters *)
@@ -575,6 +576,7 @@ let const_has_side_effect = function
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string ->
       false

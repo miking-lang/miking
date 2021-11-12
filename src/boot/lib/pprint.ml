@@ -339,6 +339,8 @@ let rec print_const fmt = function
       fprintf fmt "roundfi"
   | Cint2float ->
       fprintf fmt "int2float"
+  | CstringIsFloat ->
+      fprintf fmt "stringIsFloat"
   | Cstring2float ->
       fprintf fmt "string2float"
   | Cfloat2string ->

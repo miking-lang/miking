@@ -629,6 +629,7 @@ utest cmpConst (CEqc {}) (CEqc {}) with 0 in
 utest cmpConst (CInt2Char {}) (CInt2Char {}) with 0 in
 utest cmpConst (CChar2Int {}) (CChar2Int {}) with 0 in
 
+utest cmpConst (CStringIsFloat {}) (CStringIsFloat {}) with 0 in
 utest cmpConst (CString2float {}) (CString2float {}) with 0 in
 utest cmpConst (CFloat2string {}) (CFloat2string {}) with 0 in
 

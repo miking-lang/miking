@@ -56,6 +56,7 @@ let builtin =
   ; ("ceilfi", f Cceilfi)
   ; ("roundfi", f Croundfi)
   ; ("int2float", f Cint2float)
+  ; ("stringIsFloat", f CstringIsFloat)
   ; ("string2float", f Cstring2float)
   ; ("float2string", f Cfloat2string) (* MCore intrinsics: Characters *)
   ; ("eqc", f (Ceqc None))

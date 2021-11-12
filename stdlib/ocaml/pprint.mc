@@ -220,6 +220,7 @@ lang OCamlPrettyPrint =
   | CFloorfi _ -> intrinsicOpFloat "floorfi"
   | CCeilfi _ -> intrinsicOpFloat "ceilfi"
   | CRoundfi _ -> intrinsicOpFloat "roundfi"
+  | CStringIsFloat _ -> intrinsicOpFloat "string_is_float"
   | CString2float _ -> intrinsicOpFloat "string2float"
   | CFloat2string _ -> intrinsicOpFloat "float2string"
   | CCreate _ -> intrinsicOpSeq "create"

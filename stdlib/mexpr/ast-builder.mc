@@ -780,6 +780,10 @@ let char2int_ = use MExprAst in
   lam c.
   app_ (uconst_ (CChar2Int ())) c
 
+let stringIsfloat_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CStringIsFloat ())) s
+
 let string2float_ = use MExprAst in
   lam s.
   app_ (uconst_ (CString2float ())) s

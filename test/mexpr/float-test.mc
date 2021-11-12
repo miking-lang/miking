@@ -95,6 +95,12 @@ utest int2float 17 with 17.0 using eqf in
 utest int2float (negi 10) with negf 10.0 using eqf in
 
 -- Conversion from String to Float
+utest stringIsFloat "42" with true in
+utest stringIsFloat "3.14159" with true in
+utest stringIsFloat "3.2e-2" with true in
+utest stringIsFloat "3.2E-2" with true in
+utest stringIsFloat "-3.2e2" with true in
+utest stringIsFloat "a" with false in
 -- String -> Float
 utest string2float "42" with 42.0 using eqf in
 utest string2float "3.14159" with 3.14159 using eqf in
