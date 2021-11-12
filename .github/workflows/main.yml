@@ -1,0 +1,41 @@
+name: Miking CI
+
+on:
+  pull_request:
+    branches: [master, develop]
+    types: [opened, reopened, synchronize]
+
+jobs:
+  build-and-test-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install OCaml and opam for Miking
+      uses: ocaml/setup-ocaml@v2
+      with:
+        ocaml-compiler: ocaml-variants.4.12.0+domains
+        opam-repositories: |
+          default: https://github.com/ocaml/opam-repository.git
+          multicore: https://github.com/ocaml-multicore/multicore-opam.git
+
+    - name: Cache opam packages
+      uses: actions/cache@v2
+      with:
+        path: ~/.opam
+        key: ${{ runner.os }}-opam-build
+
+    - name: Install opam packages
+      run: |
+        # Install dependencies of owl
+        sudo apt-get install -y liblapacke-dev libopenblas-dev
+
+        # Install all opam packages used in make test-all
+        opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
+
+    - name: Build Miking and run all tests
+      timeout-minutes: 30
+      run: |
+        eval $(opam env)
+        make -j$(nproc) test-all
