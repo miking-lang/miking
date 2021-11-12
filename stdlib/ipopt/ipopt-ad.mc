@@ -2,7 +2,7 @@ include "ad/dualnum.mc"
 include "ipopt.mc"
 
 -- for brevity
-let num = dualnumNum
+let num = dualnumCreatePrimal
 let primalDeep = dualnumPrimalDeep
 let tset = tensorSetExn
 let tget = tensorGetExn
@@ -103,9 +103,10 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
         iteri
           (lam k : Int. lam ij : (Int, Int).
             match ij with (i, j) then
-              tset h [k] (mulf sigma (primalDeep (hessij arg.f i j xd)));
-              hessijs arg.g i j xd hijd;
-              tensorMapExn (lam x. lam. primalDeep x) hijd hij;
+              let v = dualnumHessij arg.f xd i j in
+              _tset h [k] (mulf sigma (_primalDeep v));
+              dualnumHessijs arg.g xd i j hijd;
+              tensorMapExn (lam x. lam. _primalDeep x) hijd hij;
               tensorMapExn mulf lambda hij;
               tset h [k] (tensorFold addf (tget h [k]) hij);
               ()

@@ -1,5 +1,5 @@
 -- This is an implementation of functions lifting operators over reals to nested
--- dual-numbers described in the paper:
+-- dual-bers described in the paper:
 
 -- Siskind, Jeffrey Mark, and Barak A. Pearl mutter. “Nesting Forward-Mode AD in
 -- a Functional Framework.” Higher-Order and Symbolic Computation 21, no. 4
@@ -11,7 +11,6 @@
 
 include "dualnum-tree.mc"
 -- include "dualnum-alist.mc"
-include "dualnum-helpers.mc"
 include "bool.mc"
 include "math.mc"
 include "tensor.mc"
@@ -21,9 +20,9 @@ include "common.mc"
 -- ALIASES --
 -------------
 
-let _num = dualnumNum
-let _dnum = dualnumDNum
-let _ltE = dualnumLtE
+let _num = dualnumCreatePrimal
+let _dnum = dualnumCreateDual
+let _ltE = dualLtE
 let _isDualNum = dualnumIsDualNum
 let _epsilon = dualnumEpsilon
 let _primal = dualnumPrimal
@@ -31,20 +30,40 @@ let _primalDeep = dualnumPrimalDeep
 let _pertubation = dualnumPertubation
 let _lift2 = dualnumLift2
 let _lift1 = dualnumLift1
+let _genEpsilon = dualGenEpsilon
 
--- addn
-utest addn num1 num2 with num3 using dualnumEq eqf
-utest addn dnum010 num2 with dnum0 num3 num0 using dualnumEq eqf
-utest addn dnum011 num2 with dnum031 using dualnumEq eqf
-utest addn dnum011 dnum011 with dnum022 using dualnumEq eqf
-utest addn dnum011 dnum111 with dnum1 dnum021 num1 using dualnumEq eqf
+let _num0 = _num 0.
+let _num1 = _num 1.
+let _num2 = _num 2.
+let _num3 = _num 3.
+let _num4 = _num 4.
+let _num6 = _num 6.
+let _num8 = _num 8.
+let _num10 = _num 10.
 
--- muln
-utest muln num1 num2 with num2 using dualnumEq eqf
-utest muln dnum010 num2 with dnum0 num2 num0 using dualnumEq eqf
-utest muln dnum011 num2 with dnum022 using dualnumEq eqf
-utest muln dnum012 dnum034 with dnum0 num3 num10 using dualnumEq eqf
-utest muln dnum012 dnum134 with dnum1 dnum036 dnum048 using dualnumEq eqf
+let _e0 = _genEpsilon ()
+let _e1 = _genEpsilon ()
+let _e2 = _genEpsilon ()
+let _e3 = _genEpsilon ()
+
+let _dnum0 = _dnum _e0
+let _dnum1 = _dnum _e1
+let _dnum010 = _dnum0 _num1 _num0
+let _dnum011 = _dnum0 _num1 _num1
+let _dnum012 = _dnum0 _num1 _num2
+let _dnum020 = _dnum0 _num2 _num0
+let _dnum021 = _dnum0 _num2 _num1
+let _dnum022 = _dnum0 _num2 _num2
+let _dnum031 = _dnum0 _num3 _num1
+let _dnum034 = _dnum0 _num3 _num4
+let _dnum036 = _dnum0 _num3 _num6
+let _dnum040 = _dnum0 _num4 _num0
+let _dnum044 = _dnum0 _num4 _num4
+let _dnum048 = _dnum0 _num4 _num8
+let _dnum111 = _dnum1 _num1 _num1
+let _dnum112 = _dnum1 _num1 _num2
+let _dnum122 = _dnum1 _num2 _num2
+let _dnum134 = _dnum1 _num3 _num4
 
 
 ----------------------------------
@@ -62,15 +81,6 @@ lam cmp. lam p1. lam p2. cmp (_primalDeep p1) (_primalDeep p2)
 
 let _liftBool = dualnumLiftBoolFun2
 
-
--- Real part of arbitrary nested dual number p as string.
-let dualnum2string : DualNum -> String =
-lam p. float2string (dualnumPrimalDeep p)
-
-utest dualnum2string num0 with "0."
-utest dualnum2string dnum134 with "3."
-utest dualnum2string (dnum1 dnum036 dnum048) with "3."
-
 ---------------------------
 -- DERIVATIVE OPERATORS  --
 ---------------------------
@@ -78,24 +88,25 @@ utest dualnum2string (dnum1 dnum036 dnum048) with "3."
 -- We define the scalar derivative operator over dual numbers
 let der : (DualNum -> DualNum) -> DualNum -> DualNum =
   lam f. lam x.
-  let e = genEpsilon () in
+  let e = _genEpsilon () in
   _pertubation e (f (_dnum e x (_num 1.)))
 
-utest der (lam. num2) num2 with num0
-utest der (lam x. muln x x) (num2) with num4
+utest der (lam. _num2) _num2 with _num0 using dualnumEq eqf
+utest der (lam x. muln x x) (_num2) with _num4 using dualnumEq eqf
 
 -- As well as scalar higher order derivatives
 recursive
-let nder : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
+let nder
+  : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
   lam n. lam f.
     if lti n 0 then error "Negative derivative order"
     else if eqi n 0 then f
     else nder (subi n 1) (der f)
 end
 
-utest nder 0 (lam x. muln x x) (num2) with num4
-utest nder 1 (lam x. muln x x) (num4) with num8
-utest nder 2 (lam x. muln x x) (num4) with num2
+utest nder 0 (lam x. muln x x) (_num2) with _num4 using dualnumEq eqf
+utest nder 1 (lam x. muln x x) (_num4) with _num8 using dualnumEq eqf
+utest nder 2 (lam x. muln x x) (_num4) with _num2 using dualnumEq eqf
 
 -- Inplace computation of the i'th component of the Jacobian df_j/dx_i.
 let jaci
@@ -105,7 +116,7 @@ let jaci
   -> Tensor[DualNum]
   -> () =
 lam f. lam i. lam x. lam r.
-  let e = genEpsilon () in
+  let e = _genEpsilon () in
   tensorSetExn x [i] (_dnum e (tensorGetExn x [i]) (_num 1.));
   f x r;
   tensorMapInplace (_pertubation e) r;
@@ -150,7 +161,7 @@ utest
     ()
   in
   let x =
-    tensorOfSeqExn tensorCreateDense [4] [_num 1., _num 5., num 5., num 1.]
+    tensorOfSeqExn tensorCreateDense [4] [_num 1., _num 5., _num 5., _num 1.]
   in
   let m = tensorCreateDense [4, 2] (lam. _num 0.) in
   jacT f x m;
@@ -171,7 +182,7 @@ let grad
   -> () =
 lam f. lam x. lam g.
   if and (tensorHasRank x 1) (tensorHasRank g 1) then
-    let e = genEpsilon () in
+    let e = _genEpsilon () in
     tensorIteri
       (lam idx. lam xi.
         tensorSetExn x idx (_dnum e xi (_num 1.));
@@ -200,8 +211,8 @@ let hessij
   -> Tensor[DualNum]
   -> DualNum =
 lam f. lam i. lam j. lam x.
-  let ei = genEpsilon () in
-  let ej = genEpsilon () in
+  let ei = _genEpsilon () in
+  let ej = _genEpsilon () in
   let xi = tensorGetExn x [i] in
   tensorSetExn x [i] (_dnum ei xi (_num 1.));
   let xj = tensorGetExn x [j] in
@@ -240,18 +251,18 @@ with
 ]
 
 -- Computes the ij'th component of the Hessian d2f_k/(dx_i)(dx_j) simultaneously
--- for each component k of vector valued function `f` at `x`, storing the result
--- in `hij`.
-let hessijs
+-- for each component k of vector valued function `f` at `x`, storing the
+-- result in `hij`.
+let dualnumHessijs
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
-  -> Int
-  -> Int
   -> Tensor[DualNum]
+  -> Int
+  -> Int
   -> Tensor[DualNum]
   -> () =
-lam f. lam i. lam j. lam x. lam hij.
-  let ei = genEpsilon () in
-  let ej = genEpsilon () in
+lam f. lam x. lam i. lam j. lam hij.
+  let ei = _genEpsilon () in
+  let ej = _genEpsilon () in
   let xi = tensorGetExn x [i] in
   tensorSetExn x [i] (_dnum ei xi (_num 1.));
   let xj = tensorGetExn x [j] in
@@ -270,9 +281,9 @@ utest
     tensorSetExn r [1] (addn (muln x1 x2) (muln x1 x2));
     ()
   in
-  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
-  let hij = tensorCreateDense [2] (lam. _num 0.) in
-  hessijs f 0 1 x hij;
+  let x = tensorOfSeqExn tensorCreateDense [2] [Primal 2., Primal 3.] in
+  let hij = tensorCreateDense [2] (lam. Primal 0.) in
+  dualnumHessijs f x 0 1 hij;
   map _primalDeep (tensorToSeqExn (hij))
 with [24., 2.]
 
@@ -290,74 +301,88 @@ let epsn = _num 1.e-15
 
 let eqn = _liftBool eqf -- lifted ==
 
-utest eqn num1 num1 with true
-utest eqn num1 num2 with false
-utest eqn (_dnum e2 dnum112 num3) num1 with true
-utest eqn (_dnum e2 dnum112 num3) num2 with false
+utest eqn _num1 _num1 with true
+utest eqn _num1 _num2 with false
+utest eqn (_dnum _e2 _dnum112 _num3) _num1 with true
+utest eqn (_dnum _e2 _dnum112 _num3) _num2 with false
 
 
 let neqn = _liftBool neqf -- lifted !=
 
-utest neqn num1 num1 with false
-utest neqn num1 num2 with true
-utest neqn (_dnum e2 dnum112 num3) num1 with false
-utest neqn (_dnum e2 dnum112 num3) num2 with true
+utest neqn _num1 _num1 with false
+utest neqn _num1 _num2 with true
+utest neqn (_dnum _e2 _dnum112 _num3) _num1 with false
+utest neqn (_dnum _e2 _dnum112 _num3) _num2 with true
 
 
 let ltn = _liftBool ltf -- lifted <
 
-utest ltn num1 num1 with false
-utest ltn num1 num2 with true
-utest ltn num2 num1 with false
-utest ltn (_dnum e2 dnum112 num3) num1 with false
-utest ltn (_dnum e2 dnum112 num3) num2 with true
-utest ltn num2 (_dnum e2 dnum112 num3) with false
+utest ltn _num1 _num1 with false
+utest ltn _num1 _num2 with true
+utest ltn _num2 _num1 with false
+utest ltn (_dnum _e2 _dnum112 _num3) _num1 with false
+utest ltn (_dnum _e2 _dnum112 _num3) _num2 with true
+utest ltn _num2 (_dnum _e2 _dnum112 _num3) with false
 
 
 let leqn = _liftBool leqf -- lifted <=
 
-utest leqn num1 num1 with true
-utest leqn num1 num2 with true
-utest leqn num2 num1 with false
-utest leqn (_dnum e2 dnum112 num3) num1 with true
-utest leqn (_dnum e2 dnum112 num3) num2 with true
-utest leqn num2 (_dnum e2 dnum112 num3) with false
+utest leqn _num1 _num1 with true
+utest leqn _num1 _num2 with true
+utest leqn _num2 _num1 with false
+utest leqn (_dnum _e2 _dnum112 _num3) _num1 with true
+utest leqn (_dnum _e2 _dnum112 _num3) _num2 with true
+utest leqn _num2 (_dnum _e2 _dnum112 _num3) with false
 
 
 let gtn = _liftBool gtf -- lifted >
 
-utest gtn num1 num1 with false
-utest gtn num1 num2 with false
-utest gtn num2 num1 with true
-utest gtn (_dnum e2 dnum112 num3) num1 with false
-utest gtn (_dnum e2 dnum112 num3) num2 with false
-utest gtn num2 (_dnum e2 dnum112 num3) with true
+utest gtn _num1 _num1 with false
+utest gtn _num1 _num2 with false
+utest gtn _num2 _num1 with true
+utest gtn (_dnum _e2 _dnum112 _num3) _num1 with false
+utest gtn (_dnum _e2 _dnum112 _num3) _num2 with false
+utest gtn _num2 (_dnum _e2 _dnum112 _num3) with true
 
 
 let geqn = _liftBool geqf -- lifted >=
 
-utest geqn num1 num1 with true
-utest geqn num1 num2 with false
-utest geqn num2 num1 with true
-utest geqn (_dnum e2 dnum112 num3) num1 with true
-utest geqn (_dnum e2 dnum112 num3) num2 with false
-utest geqn num2 (_dnum e2 dnum112 num3) with true
+utest geqn _num1 _num1 with true
+utest geqn _num1 _num2 with false
+utest geqn _num2 _num1 with true
+utest geqn (_dnum _e2 _dnum112 _num3) _num1 with true
+utest geqn (_dnum _e2 _dnum112 _num3) _num2 with false
+utest geqn _num2 (_dnum _e2 _dnum112 _num3) with true
 
 
 ---------------------------
 -- ARITHMETIC OPERATORS  --
 ---------------------------
 
+-- lifted addition
+utest addn _num1 _num2 with _num3 using dualnumEq eqf
+utest addn _dnum010 _num2 with _dnum0 _num3 _num0 using dualnumEq eqf
+utest addn _dnum011 _num2 with _dnum031 using dualnumEq eqf
+utest addn _dnum011 _dnum011 with _dnum022 using dualnumEq eqf
+utest addn _dnum011 _dnum111 with _dnum1 _dnum021 _num1 using dualnumEq eqf
+
+-- lifted multiplication
+utest muln _num1 _num2 with _num2 using dualnumEq eqf
+utest muln _dnum010 _num2 with _dnum0 _num2 _num0 using dualnumEq eqf
+utest muln _dnum011 _num2 with _dnum022 using dualnumEq eqf
+utest muln _dnum012 _dnum034 with _dnum0 _num3 _num10 using dualnumEq eqf
+utest muln _dnum012 _dnum134 with _dnum1 _dnum036 _dnum048 using dualnumEq eqf
+
 -- lifted negation
 let negn = lam p. _lift1 negf (lam. _num (negf 1.)) p
 
-utest negn num1 with _num (negf 1.) using dualnumEq eqf
-utest negn num0 with _num (negf 0.) using dualnumEq eqf
-utest negn dnum010 with dnum0 (_num (negf 1.)) num0 using dualnumEq eqf
-utest negn dnum012 with dnum0 (_num (negf 1.)) (_num (negf 2.))
+utest negn _num1 with _num (negf 1.) using dualnumEq eqf
+utest negn _num0 with _num (negf 0.) using dualnumEq eqf
+utest negn _dnum010 with _dnum0 (_num (negf 1.)) _num0 using dualnumEq eqf
+utest negn _dnum012 with _dnum0 (_num (negf 1.)) (_num (negf 2.))
 using dualnumEq eqf
 
-utest der negn num1 with negn num1 using dualnumEq eqf
+utest der negn _num1 with negn _num1 using dualnumEq eqf
 
 -- lifted subtraction
 let subn = lam p1. lam p2.
@@ -367,19 +392,19 @@ let subn = lam p1. lam p2.
     (lam. lam. negn (_num 1.))
     p1 p2
 
-utest subn num2 num1 with num1 using dualnumEq eqf
-utest subn dnum020 num1 with dnum0 num1 num0 using dualnumEq eqf
-utest subn dnum021 num1 with dnum011 using dualnumEq eqf
-utest subn dnum022 dnum011 with dnum011 using dualnumEq eqf
+utest subn _num2 _num1 with _num1 using dualnumEq eqf
+utest subn _dnum020 _num1 with _dnum0 _num1 _num0 using dualnumEq eqf
+utest subn _dnum021 _num1 with _dnum011 using dualnumEq eqf
+utest subn _dnum022 _dnum011 with _dnum011 using dualnumEq eqf
 
 utest
-  let r = subn dnum122 dnum011 in
-  dualnumPrimal e1 r
-with dnum0 num1 (_num (negf 1.)) using dualnumEq eqf
+  let r = subn _dnum122 _dnum011 in
+  dualnumPrimal _e1 r
+with _dnum0 _num1 (_num (negf 1.)) using dualnumEq eqf
 
 
 -- lifted abs
-let absn = lam p. if ltn p num0 then negn p else p
+let absn = lam p. if ltn p _num0 then negn p else p
 
 
 -- lifted approximate compare function
@@ -397,16 +422,16 @@ recursive
       p1 p2
 end
 
-utest divn num4 num2 with num2 using dualnumEq eqf
-utest divn dnum040 num2 with dnum0 num2 num0 using dualnumEq eqf
-utest divn dnum044 num2 with dnum022 using dualnumEq eqf
+utest divn _num4 _num2 with _num2 using dualnumEq eqf
+utest divn _dnum040 _num2 with _dnum0 _num2 _num0 using dualnumEq eqf
+utest divn _dnum044 _num2 with _dnum022 using dualnumEq eqf
 
-utest divn dnum012 dnum034
-with dnum0 (_num (divf 1. 3.)) (_num (divf 2. 9.)) using dualnumEq eqf
+utest divn _dnum012 _dnum034
+with _dnum0 (_num (divf 1. 3.)) (_num (divf 2. 9.)) using dualnumEq eqf
 
-utest divn dnum012 dnum134
-with dnum1 (dnum0 (_num (divf 1. 3.))
-                  (_num (divf 2. 3.)))
-           (dnum0 (_num (divf (negf 4.) 9.))
-                  (_num (divf (negf 8.) 9.)))
+utest divn _dnum012 _dnum134
+with _dnum1 (_dnum0 (_num (divf 1. 3.))
+                    (_num (divf 2. 3.)))
+            (_dnum0 (_num (divf (negf 4.) 9.))
+                    (_num (divf (negf 8.) 9.)))
 using dualnumEq eqf
