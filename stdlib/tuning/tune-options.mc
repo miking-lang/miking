@@ -49,7 +49,7 @@ let tuneOptionsDefault : TuneOptions =
 , epsilonMs = 10.0
 , stepSize = 1
 , ignoreErrors = false
-, exitEarly = true
+, exitEarly = false
 , seed = None ()
 }
 
@@ -80,7 +80,7 @@ Tune options (after -- ):
   --step-size <n>.          If exhaustive or semi-exhaustive is used, use this as step
                             size for integer ranges. TODO: should be number of steps
   --ignore-errors           Ignore errors during tuning.
-  --disable-exit-early      Always let the process run to completion during
+  --enable-exit-early       Always let the process run to completion during
                             tuning (default is to kill it when it has run for
                             longer than the current best runtime.)
   --seed <n>                Set the seed for random search.
@@ -107,8 +107,8 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
   else match args with ["--ignore-errors"] ++ args then
     parseTuneOptions {o with ignoreErrors = true} args
 
-  else match args with ["--disable-exit-early"] ++ args then
-    parseTuneOptions {o with exitEarly = false} args
+  else match args with ["--enable-exit-early"] ++ args then
+    parseTuneOptions {o with exitEarly = true} args
 
   else match args with ["--iters"] ++ args then
     match args with [i] ++ args then
