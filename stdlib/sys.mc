@@ -58,7 +58,7 @@ let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> Strin
 
     let fullCmd =
     [ "cd", cwd, ";"
-    , "echo", stdin, "|"
+    , "echo", "\"", stdin, "\"|"
     , strJoin " " cmd
     , ">", tempStdout
     , "2>", tempStderr
@@ -72,8 +72,8 @@ let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> Strin
     match _commandListTime fullCmd with (ms, retCode) then
 
       -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
-      _commandList ["echo", "", ">>", tempStdout];
-      _commandList ["echo", "", ">>", tempStderr];
+      _commandList ["echo", "\"\"", ">>", tempStdout];
+      _commandList ["echo", "\"\"", ">>", tempStderr];
       let stdout = init (readFile tempStdout) in
       let stderr = init (readFile tempStderr) in
 
