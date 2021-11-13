@@ -12,8 +12,11 @@ include "eq.mc"
 include "info.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
-  sem isValue =
-  | t -> false
+
+  -- By default, everything is lifted (except variables)
+  sem liftANF =
+  | TmVar _ -> false
+  | t /- : Expr -/ -> true
 
   sem normalizeTerm =
   | m -> normalizeName (lam x. x) m
@@ -39,27 +42,24 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
            info = infoTm n }
 
   sem normalizeName (k : Expr -> Expr) =
-  | m -> normalize (lam n. if (isValue n) then k n else bind k n) m
+  | m -> normalize (lam n. if (liftANF n) then bind k n else k n) m
 
 end
 
 lang VarANF = ANF + VarAst
-
-  sem isValue =
-  | TmVar _ -> true
 
   sem normalize (k : Expr -> Expr) =
   | TmVar t -> k (TmVar t)
 
 end
 
--- This simplifies multiple-argument applications by not binding every
--- intermediate closure to a variable.
 lang AppANF = ANF + AppAst
 
   sem normalize (k : Expr -> Expr) =
   | TmApp t -> normalizeNames k (TmApp t)
 
+  -- This simplifies multiple-argument applications by not binding every
+  -- intermediate closure to a variable.
   sem normalizeNames (k : Expr -> Expr) =
   | TmApp t ->
     normalizeNames
@@ -85,10 +85,6 @@ end
 
 -- Records and record updates can be seen as sequences of applications.
 lang RecordANF = ANF + RecordAst
-  sem isValue =
-  | TmRecord t ->
-    if mapIsEmpty t.bindings then true
-    else false
 
   sem normalize (k : Expr -> Expr) =
   | TmRecord t ->
@@ -154,8 +150,6 @@ lang RecLetsANF = ANF + LamANF + RecLetsAst
 end
 
 lang ConstANF = ANF + ConstAst
-  sem isValue =
-  | TmConst _ -> true
 
   sem normalize (k : Expr -> Expr) =
   | TmConst t -> k (TmConst t)
@@ -214,8 +208,6 @@ lang SeqANF = ANF + SeqAst
 end
 
 lang NeverANF = ANF + NeverAst
-  sem isValue =
-  | TmNever _ -> true
 
   sem normalize (k : Expr -> Expr) =
   | TmNever t -> k (TmNever t)
@@ -227,11 +219,27 @@ lang ExtANF = ANF + ExtAst
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->
     TmExt {t with inexpr = normalize k t.inexpr}
+
 end
 
-lang MExprANF =
+-- Version in which everything is lifted
+lang MExprANFAll =
   VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
+
+lang MExprANF = MExprANFAll
+
+  -- The default ANF transformation for MExpr only lifts non-values
+  sem liftANF =
+  | TmLam _ -> false
+  | TmConst _ -> false
+  | TmNever _ -> false
+
+end
+
+-- TODO
+lang ValueReverseANF
+
 
 -----------
 -- TESTS --
@@ -242,13 +250,28 @@ lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 mexpr
 use TestLang in
 
-let _anf = compose normalizeTerm symbolize in
+let debug = false in
+let _test = lam expr.
+  (if debug then
+    printLn "--- BEFORE ANF ---";
+    printLn (expr2str expr);
+    print "\n"
+  else ());
+  let expr = symbolize expr in
+  let expr = normalizeTerm expr in
+  (if debug then
+    printLn "--- AFTER ANF ---";
+    printLn (expr2str expr);
+    print "\n"
+  else ());
+  expr
+in
 
 let basic =
   bind_ (ulet_ "f" (ulam_ "x" (var_ "x")))
   (addi_ (addi_ (int_ 2) (int_ 2))
     (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
-utest _anf basic with
+utest _test basic with
   bindall_ [
     ulet_ "f" (ulam_ "x" (var_ "x")),
     ulet_ "t" (addi_ (int_ 2) (int_ 2)),
@@ -266,7 +289,7 @@ let ext =
      ulet_ "x" (int_ 3),
      (addi_ (addi_ (int_ 2) (var_ "x")))
        (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
-utest _anf ext with
+utest _test ext with
   bindall_ [
     ulet_ "f" (ulam_ "x" (var_ "x")),
     ulet_ "x1" (int_ 3),
@@ -283,17 +306,15 @@ let lambda =
     (ulam_ "x" (bind_ (ulet_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
     (int_ 4)
 in
-utest _anf lambda with
+utest _test lambda with
   bindall_ [
-
-    ulet_ "t1" (ulam_ "x" (bindall_ [
-      (ulet_ "y" (int_ 3)),
-      (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
-      (var_ "t1")
-    ])),
     ulet_ "t"
       (app_
-        (var_ "t1")
+        (ulam_ "x" (bindall_ [
+          (ulet_ "y" (int_ 3)),
+          (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
+          (var_ "t1")
+        ]))
         (int_ 4)),
     var_ "t"
   ]
@@ -302,7 +323,7 @@ using eqExpr in
 let apps =
   app_ (app_ (int_ 1) (app_ (int_ 2) (int_ 3))) (app_ (int_ 4) (app_ (int_ 5) (int_ 6)))
 in
-utest _anf apps with
+utest _test apps with
   bindall_ [
     ulet_ "x"  (app_ (int_ 2) (int_ 3)),
     ulet_ "x1" (app_ (int_ 5) (int_ 6)),
@@ -328,7 +349,7 @@ let factorial =
         (int_ 1)
         (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))
 in
-utest _anf factorial with
+utest _test factorial with
   bindall_ [
     ureclet_ "fact"
       (ulam_ "n" (bindall_ [
@@ -350,12 +371,12 @@ utest _anf factorial with
 using eqExpr in
 
 let const = (int_ 1) in
-utest _anf const with
+utest _test const with
   (int_ 1)
 using eqExpr in
 
 let data = bind_ (ucondef_ "A") (conapp_ "A" (app_ (int_ 1) (int_ 2))) in
-utest _anf data with
+utest _test data with
   bindall_ [
     (ucondef_ "A"),
     ulet_ "t" (app_ (int_ 1) (int_ 2)),
@@ -371,7 +392,7 @@ let seq =
     (app_ (int_ 5) (int_ 6))
   ]
 in
-utest _anf seq with
+utest _test seq with
   bindall_ [
     ulet_ "t" (app_ (int_ 5) (int_ 6)),
     ulet_ "t1" (app_ (int_ 2) (int_ 3)),
@@ -382,7 +403,7 @@ utest _anf seq with
 using eqExpr in
 
 let smatch = if_ (app_ (int_ 1) (int_ 2)) (int_ 3) (int_ 4) in
-utest _anf smatch with
+utest _test smatch with
   bindall_ [
     ulet_ "t" (app_ (int_ 1) (int_ 2)),
     ulet_ "t1" (if_ (var_ "t") (int_ 3) (int_ 4)),
@@ -391,10 +412,10 @@ utest _anf smatch with
 using eqExpr in
 
 let simple = bind_ (ulet_ "x" (int_ 1)) (var_ "x") in
-utest _anf simple with simple using eqExpr in
+utest _test simple with simple using eqExpr in
 
 let simple2 = app_ (int_ 1) simple in
-utest _anf simple2 with
+utest _test simple2 with
   bindall_ [
     ulet_ "x" (int_ 1),
     ulet_ "t" (app_ (int_ 1) (var_ "x")),
@@ -403,13 +424,11 @@ utest _anf simple2 with
 using eqExpr in
 
 let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
-utest _anf inv1 with inv1 using eqExpr in
+utest _test inv1 with inv1 using eqExpr in
 
 let nested = ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x"))) in
-utest _anf nested with
-  bind_
-    (ulet_ "t" (ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x")))))
-    (var_ "t")
+utest _test nested with
+  (ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x"))))
 using eqExpr in
 
 let nestedreclet =
@@ -417,7 +436,7 @@ let nestedreclet =
     (ulam_ "a"
       (ulam_ "b"
         (ulam_ "c" (int_ 1)))) in
-utest _anf nestedreclet with
+utest _test nestedreclet with
   ureclet_ "f"
     (ulam_ "a"
       (ulam_ "b"
@@ -425,37 +444,7 @@ utest _anf nestedreclet with
 using eqExpr in
 
 let constant = int_ 1 in
-utest _anf constant with int_ 1
+utest _test constant with int_ 1
 using eqExpr in
 
-let debug = false in
-
-let debugPrint = lam t.
-    let s = symbolize t in
-    let n = normalizeTerm s in
-    printLn "--- BEFORE ANF ---";
-    printLn (expr2str s);
-    print "\n";
-    printLn "--- AFTER ANF ---";
-    printLn (expr2str n);
-    print "\n";
-    ()
-in
-
-if debug then
-  map debugPrint [
-    basic,
-    ext,
-    lambda,
-    apps,
-    record,
-    rupdate,
-    factorial,
-    const,
-    data,
-    seq,
-    smatch,
-    simple,
-    simple2
-  ]
-else ()
+()
