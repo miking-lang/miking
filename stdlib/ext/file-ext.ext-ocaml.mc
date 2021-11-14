@@ -19,6 +19,14 @@ let fileExtMap =
         cLibraries = []
       }
     ]),
+    ("fileSize", [
+      { expr = concat "(fun n -> try let f = open_in_bin n in let s = in_channel_length "
+                       "f in let _ = close_in_noerr f in s with _ -> 0)",
+        ty = tyarrows_ [otystring_, tyint_],
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
     ("writeOpen", [
       { expr = "(fun s -> try (open_out_bin s, true) with _ -> (stdout, false))",
         ty = tyarrows_ [otystring_, otytuple_ [otyvarext_ "out_channel", tybool_]],

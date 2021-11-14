@@ -17,7 +17,7 @@ let deleteFile = lam s. if fileExists s then deleteFile s else ()
 -- Returns the size in bytes of a given file
 -- If the file does not exist, 0 is returned.
 -- Use function fileExists to check if a file exists.
---external fileSize ! : String -> Int
+external fileSize ! : String -> Int
 
 -- Open a file for writing. Note that we
 -- always open binary channels.
@@ -99,6 +99,9 @@ utest
   else ("Error reading file","","","")
 with ("Hello", "Next string", "Final", "EOF") in
 
+-- Check that the file size is correct
+utest fileSize "___testfile___.txt" with 23 in
+
 -- Delete the newly created file and check that it does not exist anymore
 utest
   deleteFile "___testfile___.txt";
@@ -107,6 +110,9 @@ with false in
 
 -- Delete the file, even if it does not exist, and make sure that we do not get an error
 utest deleteFile "___testfile___.txt" with () in
+
+-- Check that we get file size 0 if the file does not exist
+utest fileSize "___testfile___.txt" with 0 in
 
 -- Test to open a file (for reading) that should not exist
 utest
