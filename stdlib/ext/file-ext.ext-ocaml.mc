@@ -6,8 +6,8 @@ let fileExtMap =
   mapFromSeq cmpString
   [
     ("writeOpen", [
-      { expr = "open_out_bin",
-        ty = tyarrows_ [otystring_, otyvarext_ "out_channel"],
+      { expr = "(fun s -> try (open_out_bin s, true) with _ -> (stdout, false))",
+        ty = tyarrows_ [otystring_, otytuple_ [otyvarext_ "out_channel", tybool_]],
         libraries = [],
         cLibraries = []
       }
@@ -34,13 +34,13 @@ let fileExtMap =
       }
     ]),
     ("readOpen", [
-      { expr = "open_in_bin",
-        ty = tyarrows_ [otystring_, otyvarext_ "in_channel"],
+      { expr = "(fun s -> try (open_in_bin s, true) with _ -> (stdin, false))",
+        ty = tyarrows_ [otystring_, otytuple_ [otyvarext_ "in_channel", tybool_]],
         libraries = [],
         cLibraries = []
       }
     ]),
-    ("externalReadLine", [
+    ("readLine", [
       { expr = "(fun rc -> try (input_line rc, false) with | End_of_file -> (\"\",true))",
         ty = tyarrows_ [otyvarext_ "in_channel", otytuple_ [otystring_, tybool_]],
         libraries = [],
