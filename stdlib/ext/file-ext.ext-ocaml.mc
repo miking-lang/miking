@@ -69,9 +69,37 @@ let fileExtMap =
         cLibraries = []
       }
     ]),
+    ("readString", [
+      { expr = "(fun f -> try really_input_string f (in_channel_length f) with _ -> \"\")",
+        ty = tyarrows_ [otyvarext_ "in_channel", otystring_],
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
     ("readClose", [
       { expr = "close_in_noerr",
         ty = tyarrows_ [otyvarext_ "in_channel", otyunit_],
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
+    ("stdin", [
+      { expr = "stdin",
+        ty = otyvarext_ "in_channel",
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
+    ("stdout", [
+      { expr = "stdout",
+        ty = otyvarext_ "out_channel",
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
+    ("stderr", [
+      { expr = "stderr",
+        ty = otyvarext_ "out_channel",
         libraries = [],
         cLibraries = []
       }

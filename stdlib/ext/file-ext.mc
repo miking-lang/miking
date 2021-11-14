@@ -48,32 +48,38 @@ let readOpen : String -> Option ReadChannel =
 -- Reads one line of text. Returns None if end of file.
 -- If a successful line is read, it is returned without
 -- the end-of-line character.
+-- Should support Unicode in the future.
 -- Note: the external function is shadowed. Use the second signature
 external readLine ! : ReadChannel -> (String, Bool)
 let readLine : ReadChannel -> Option String =
   lam rc. match readLine rc with (s, false) then Some s else None ()
 
--- Reads everything in a file and returns the content as a string
---external readString ! : ReadChannel -> String
+-- Reads everything in a file and returns the content as a string.
+-- Should support Unicode in the future.
+external readString ! : ReadChannel -> String
 
 -- Closes a channel that was opened for reading
 external readClose ! : ReadChannel -> Unit
 
+-- Standard in read channel
+external stdin ! : ReadChannel
+
+-- Standard out write channel
+external stdout ! : WriteChannel
+
+-- Standard error write channel
+external stderr ! : WriteChannel
 
 
---external stdin ! : ReadChannel
+
 
 mexpr
 
--- Test to delete a file that does not exist. Should not give an error.
---utest
---  deleteFile "___cannot_exist__.txt";
---  deleteFile "___cannot_exist__.txt" -- Cannot exist the second time
---with () in
+let filename = "___testfile___.txt" in
 
 -- Test to open a file and write some lines of text
 utest
-  match writeOpen "___testfile___.txt" with Some wc then
+  match writeOpen filename with Some wc then
     let write = writeString wc in
     write "Hello\n";
     write "Next string\n";
@@ -85,11 +91,11 @@ utest
 with "" in
 
 -- Check that the created file exists
-utest fileExists "___testfile___.txt" with true in
+utest fileExists filename with true in
 
 -- Test to open and read the file created above (line by line)
 utest
-  match readOpen "___testfile___.txt" with Some rc then
+  match readOpen filename with Some rc then
     let l1 = match readLine rc with Some s then s else "" in
     let l2 = match readLine rc with Some s then s else "" in
     let l3 = match readLine rc with Some s then s else "" in
@@ -100,19 +106,27 @@ utest
 with ("Hello", "Next string", "Final", "EOF") in
 
 -- Check that the file size is correct
-utest fileSize "___testfile___.txt" with 23 in
+utest fileSize filename with 23 in
+
+-- Reads the content of the file using function readString()
+utest
+  match readOpen filename with Some rc then
+    let s = readString rc in
+    (s, length s)
+  else ("",0)
+with ("Hello\nNext string\nFinal", 23) in
 
 -- Delete the newly created file and check that it does not exist anymore
 utest
-  deleteFile "___testfile___.txt";
-  fileExists "___testfile___.txt"
+  deleteFile filename;
+  fileExists filename
 with false in
 
 -- Delete the file, even if it does not exist, and make sure that we do not get an error
-utest deleteFile "___testfile___.txt" with () in
+utest deleteFile filename with () in
 
 -- Check that we get file size 0 if the file does not exist
-utest fileSize "___testfile___.txt" with 0 in
+utest fileSize filename with 0 in
 
 -- Test to open a file (for reading) that should not exist
 utest
@@ -123,5 +137,15 @@ with false in
 utest
   match writeOpen "////" with Some _ then true else false
 with false in
+
+-- Tests that stdin, stdout, and stderr are available.
+-- Uncomment the lines below to test the echo function in interactive mode.
+utest
+  let skip = (stdin, stdout, stderr) in
+  --match readLine stdin with Some s in
+  --writeString stdout s;
+  --writeString stderr s;
+  ()
+with () in
 
 ()
