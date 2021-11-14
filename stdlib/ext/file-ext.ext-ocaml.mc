@@ -5,6 +5,20 @@ let fileExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
+    ("fileExists", [
+      { expr = "(fun s -> try Sys.file_exists s with _ -> false)",
+        ty = tyarrows_ [otystring_, tybool_],
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
+    ("deleteFile", [
+      { expr = "(fun s -> try Sys.remove s with _ -> ())",
+        ty = tyarrows_ [otystring_, otyunit_],
+        libraries = [],
+        cLibraries = []
+      }
+    ]),
     ("writeOpen", [
       { expr = "(fun s -> try (open_out_bin s, true) with _ -> (stdout, false))",
         ty = tyarrows_ [otystring_, otytuple_ [otyvarext_ "out_channel", tybool_]],
