@@ -13,10 +13,7 @@ lang FutharkDeadcodeElimination = FutharkAst
     match deadcodeEliminationExpr used t.inexpr with (used, inexpr) then
       if setMem t.ident used then
         match deadcodeEliminationExpr used t.body with (used, body) then
-          match inexpr with FEVar {ident = id} then
-            if nameEq t.ident id then (used, body)
-            else (used, FELet {{t with body = body} with inexpr = inexpr})
-          else (used, FELet {{t with body = body} with inexpr = inexpr})
+          (used, FELet {{t with body = body} with inexpr = inexpr})
         else never
       else (used, inexpr)
     else never
