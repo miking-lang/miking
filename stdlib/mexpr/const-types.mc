@@ -10,8 +10,8 @@ let tysym_ = tyunknown_
 let tyref_ = tyunknown_
 let tymap_ = tyunknown_
 let tybootparsetree_ = tyunknown_
-let tygeneric_ = lam id. tyunknown_
-let tygenericseq_ = lam id. tyseq_ (tygeneric_ id)
+
+let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
 
 lang LiteralTypeAst = IntAst + FloatAst + BoolAst + CharAst
   sem tyConst =
@@ -88,6 +88,7 @@ end
 
 lang FloatStringConversionTypeAst = FloatStringConversionAst
   sem tyConst =
+  | CStringIsFloat _ -> tyarrow_ tystr_ tybool_
   | CString2float _ -> tyarrow_ tystr_ tyfloat_
   | CFloat2string _ -> tyarrow_ tyfloat_ tystr_
 end
@@ -106,45 +107,47 @@ end
 
 lang SeqOpTypeAst = SeqOpAst
   sem tyConst =
-  | CSet _ -> tyarrows_ [tygenericseq_ "a", tyint_,
-                         tygeneric_ "a", tygenericseq_ "a"]
-  | CGet _ -> tyarrows_ [tygenericseq_ "a", tyint_, tygeneric_ "a"]
-  | CCons _ -> tyarrows_ [tygeneric_ "a", tygenericseq_ "a", tygenericseq_ "a"]
-  | CSnoc _ -> tyarrows_ [tygenericseq_ "a", tygeneric_ "a", tygenericseq_ "a"]
-  | CConcat _ -> tyarrows_ [tygenericseq_ "a", tygenericseq_ "a",
-                            tygenericseq_ "a"]
-  | CLength _ -> tyarrow_ (tygenericseq_ "a") tyint_
-  | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
-  | CHead _ -> tyarrow_ (tygenericseq_ "a") (tygeneric_ "a")
-  | CTail _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
-  | CNull _ -> tyarrow_ (tygenericseq_ "a") tybool_
+  | CSet _ ->
+    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_, tyvar_ "a", tyvarseq_ "a"])
+  | CGet _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyint_, tyvar_ "a"])
+  | CCons _ -> tyall_ "a" (tyarrows_ [tyvar_ "a", tyvarseq_ "a", tyvarseq_ "a"])
+  | CSnoc _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyvar_ "a", tyvarseq_ "a"])
+  | CConcat _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyvarseq_ "a", tyvarseq_ "a"])
+  | CLength _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tyint_)
+  | CReverse _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvarseq_ "a"))
+  | CHead _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvar_ "a"))
+  | CTail _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvarseq_ "a"))
+  | CNull _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
   | CMap _ ->
-    tyarrows_ [ tyarrow_ (tygeneric_ "a") (tygeneric_ "a"),
-                tygenericseq_ "a", tygenericseq_ "a" ]
+    tyalls_ ["a", "b"] (tyarrows_ [ tyarrow_ (tyvar_ "a") (tyvar_ "b"),
+                                    tyvarseq_ "a", tyvarseq_ "b" ])
   | CMapi _ ->
-    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tygeneric_ "a"],
-                tygenericseq_ "a", tygenericseq_ "a" ]
+    tyalls_ ["a", "b"] (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyvar_ "b"],
+                                               tyvarseq_ "a", tyvarseq_ "b" ])
   | CIter _ ->
-    tyarrows_ [tyarrow_ (tygeneric_ "a") tyunit_, tygenericseq_ "a", tyunit_]
+    tyall_ "a" (tyarrows_ [tyarrow_ (tyvar_ "a") tyunit_, tyvarseq_ "a", tyunit_])
   | CIteri _ ->
-    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tyunit_],
-                tygenericseq_ "a", tyunit_ ]
+    tyall_ "a" (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyunit_],
+                            tyvarseq_ "a", tyunit_ ])
   | CFoldl _ ->
-    tyarrows_ [ tyarrows_ [tygeneric_ "a", tygeneric_ "b", tygeneric_ "a"],
-                tygeneric_ "a", tygenericseq_ "b", tygeneric_ "a" ]
+    tyalls_ ["a", "b"]
+            (tyarrows_ [ tyarrows_ [tyvar_ "a", tyvar_ "b", tyvar_ "a"],
+                         tyvar_ "a", tyvarseq_ "b", tyvar_ "a" ])
   | CFoldr _ ->
-    tyarrows_ [ tyarrows_ [tygeneric_ "b", tygeneric_ "a", tygeneric_ "a"],
-                tygeneric_ "a", tygenericseq_ "b", tygeneric_ "a" ]
-  | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
-                            tygenericseq_ "a"]
+    tyalls_ ["a", "b"]
+            (tyarrows_ [ tyarrows_ [tyvar_ "b", tyvar_ "a", tyvar_ "a"],
+                         tyvar_ "a", tyvarseq_ "b", tyvar_ "a" ])
+  | CCreate _ ->
+    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
   | CCreateList _ ->
-    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
+    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
   | CCreateRope _ ->
-    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
-  | CSplitAt _ -> tyarrows_ [tygenericseq_ "a", tyint_,
-                             tytuple_ [tygenericseq_ "a", tygenericseq_ "a"]]
-  | CSubsequence _ -> tyarrows_ [tygenericseq_ "a", tyint_, tyint_,
-                                 tygenericseq_ "a"]
+    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
+  | CSplitAt _ ->
+    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_,
+                            tytuple_ [tyvarseq_ "a", tyvarseq_ "a"]])
+  | CSubsequence _ ->
+    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_, tyint_, tyvarseq_ "a"])
 end
 
 lang FileOpTypeAst = FileOpAst
@@ -188,74 +191,97 @@ end
 
 lang RefOpTypeAst = RefOpAst
   sem tyConst =
-  | CRef _ -> tyarrow_ (tygeneric_ "a") tyref_
-  | CModRef _ -> tyarrows_ [tyref_, tygeneric_ "a", tyunit_]
-  | CDeRef _ -> tyarrow_ tyref_ (tygeneric_ "a")
+  | CRef _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") tyref_)
+  | CModRef _ -> tyall_ "a" (tyarrows_ [tyref_, tyvar_ "a", tyunit_])
+  | CDeRef _ -> tyall_ "a" (tyarrow_ tyref_ (tyvar_ "a"))
 end
 
 lang ConTagTypeAst = ConTagAst
   sem tyConst =
-  | CConstructorTag _ -> tyarrow_ (tygeneric_ "a") tyint_
+  | CConstructorTag _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_)
 end
 
 lang MapTypeAst = MapAst
   sem tyConst =
-  | CMapEmpty _ -> tyarrow_ (tyarrows_ [tygeneric_ "a", tygeneric_ "a", tyint_])
-                            tymap_
-  | CMapInsert _ -> tyarrows_ [tygeneric_ "a", tygeneric_ "b", tymap_, tymap_]
-  | CMapRemove _ -> tyarrows_ [tygeneric_ "a", tymap_, tymap_]
-  | CMapFindWithExn _ -> tyarrows_ [tygeneric_ "a", tymap_, tygeneric_ "b"]
-  | CMapFindOrElse _ -> tyarrows_ [tyarrow_ tyunit_ (tygeneric_ "b"),
-                                   tygeneric_ "a", tymap_, tygeneric_ "b"]
+  | CMapEmpty _ ->
+    tyall_ "a" (tyarrow_ (tyarrows_ [tyvar_ "a", tyvar_ "a", tyint_]) tymap_)
+  | CMapInsert _ ->
+    tyalls_ ["a", "b"] (tyarrows_ [tyvar_ "a", tyvar_ "b", tymap_, tymap_])
+  | CMapRemove _ -> tyall_ "a" (tyarrows_ [tyvar_ "a", tymap_, tymap_])
+  | CMapFindExn _ ->
+    tyalls_ ["a", "b"] (tyarrows_ [tyvar_ "a", tymap_, tyvar_ "b"])
+  | CMapFindOrElse _ ->
+    tyalls_ ["a", "b"]
+            (tyarrows_ [tyarrow_ tyunit_ (tyvar_ "b"),
+                        tyvar_ "a", tymap_, tyvar_ "b"])
   | CMapFindApplyOrElse _ ->
-    tyarrows_ [tyarrow_ (tygeneric_ "b") (tygeneric_ "c"),
-               tyarrow_ tyunit_ (tygeneric_ "c"), tygeneric_ "a",
-               tymap_, tygeneric_ "c"]
-  | CMapBindings _ -> tyarrow_ tymap_
-                               (tyseq_ (tytuple_ [tygeneric_ "a", tygeneric_ "b"]))
+    tyalls_ ["a", "b", "c"]
+            (tyarrows_ [tyarrow_ (tyvar_ "b") (tyvar_ "c"),
+                        tyarrow_ tyunit_ (tyvar_ "c"), tyvar_ "a",
+                        tymap_, tyvar_ "c"])
+  | CMapBindings _ ->
+    tyalls_ ["a", "b"]
+            (tyarrow_ tymap_ (tyseq_ (tytuple_ [tyvar_ "a", tyvar_ "b"])))
+  | CMapChooseExn _ ->
+    tyalls_ ["a", "b"]
+            (tyarrows_ [tymap_, (tytuple_ [tyvar_ "a", tyvar_ "b"])])
+  | CMapChooseOrElse _ ->
+    tyalls_ ["a", "b"]
+            (tyarrows_ [tyarrow_ tyunit_ (tytuple_ [tyvar_ "a", tyvar_ "b"]),
+                        tymap_, (tytuple_ [tyvar_ "a", tyvar_ "b"])])
   | CMapSize _ -> tyarrow_ tymap_ tyint_
-  | CMapMem _ -> tyarrows_ [tygeneric_ "a", tymap_, tybool_]
-  | CMapAny _ -> tyarrows_ [tyarrows_ [tygeneric_ "a", tygeneric_ "b", tybool_],
-                            tymap_, tybool_]
-  | CMapMap _ -> tyarrows_ [tyarrow_ (tygeneric_ "b") (tygeneric_ "c"),
-                            tymap_, tymap_]
+  | CMapMem _ -> tyall_ "a" (tyarrows_ [tyvar_ "a", tymap_, tybool_])
+  | CMapAny _ ->
+    tyalls_ ["a", "b"]
+            (tyarrows_ [tyarrows_ [tyvar_ "a", tyvar_ "b", tybool_], tymap_, tybool_])
+  | CMapMap _ ->
+    tyalls_ ["b", "c"]
+            (tyarrows_ [tyarrow_ (tyvar_ "b") (tyvar_ "c"), tymap_, tymap_])
   | CMapMapWithKey _ ->
-    tyarrows_ [tyarrows_ [tygeneric_ "a", tygeneric_ "b", tygeneric_ "c"],
-               tymap_, tymap_]
+    tyalls_ ["a", "b", "c"]
+            (tyarrows_ [tyarrows_ [tyvar_ "a", tyvar_ "b", tyvar_ "c"],
+                        tymap_, tymap_])
   | CMapFoldWithKey _ ->
-    tyarrows_ [tyarrows_ [tygeneric_ "a", tygeneric_ "b",
-                          tygeneric_ "c", tygeneric_ "c"],
-               tygeneric_ "c", tymap_, tygeneric_ "c"]
-  | CMapEq _ -> tyarrows_ [tyarrows_ [tygeneric_ "b", tygeneric_ "b", tybool_],
-                           tymap_, tymap_, tybool_]
-  | CMapCmp _ -> tyarrows_ [tyarrows_ [tygeneric_ "b", tygeneric_ "b", tyint_],
-                            tymap_, tymap_, tyint_]
-  | CMapGetCmpFun _ -> tyarrows_ [tymap_, tygeneric_ "a", tygeneric_ "a", tyint_]
+    tyalls_ ["a", "b", "c"]
+            (tyarrows_ [tyarrows_ [tyvar_ "a", tyvar_ "b", tyvar_ "c", tyvar_ "c"],
+                        tyvar_ "c", tymap_, tyvar_ "c"])
+  | CMapEq _ ->
+    tyall_ "b" (tyarrows_ [tyarrows_ [tyvar_ "b", tyvar_ "b", tybool_],
+                           tymap_, tymap_, tybool_])
+  | CMapCmp _ ->
+    tyall_ "b" (tyarrows_ [tyarrows_ [tyvar_ "b", tyvar_ "b", tyint_],
+                           tymap_, tymap_, tyint_])
+  | CMapGetCmpFun _ -> tyall_ "a" (tyarrows_ [tymap_, tyvar_ "a", tyvar_ "a", tyint_])
 end
 
 lang TensorOpTypeAst = TensorOpAst
   sem tyConst =
   | CTensorCreateInt _ -> tytensorcreateint_
   | CTensorCreateFloat _ -> tytensorcreatefloat_
-  | CTensorCreate _ -> tytensorcreate_ (tygeneric_ "a")
-  | CTensorGetExn _ -> tytensorgetexn_ (tygeneric_ "a")
-  | CTensorSetExn _ -> tytensorsetexn_ (tygeneric_ "a")
-  | CTensorRank _ -> tytensorrank_ (tygeneric_ "a")
-  | CTensorShape _ -> tytensorshape_ (tygeneric_ "a")
-  | CTensorReshapeExn _ -> tytensorreshapeexn_ (tygeneric_ "a")
-  | CTensorCopy _ -> tytensorcopy_ (tygeneric_ "a")
-  | CTensorTransposeExn _ -> tytensortransposeexn_ (tygeneric_ "a")
-  | CTensorSliceExn _ -> tytensorsliceexn_ (tygeneric_ "a")
-  | CTensorSubExn _ -> tytensorsubexn_ (tygeneric_ "a")
-  | CTensorIterSlice _ -> tytensoriteri_ (tygeneric_ "a")
-  | CTensorEq _ -> tytensoreq_ (tygeneric_ "a") (tygeneric_ "a")
-  | CTensorToString _ -> tytensortostring_ (tygeneric_ "a")
+  | CTensorCreate _ -> tyall_ "a" (tytensorcreate_ (tyvar_ "a"))
+  | CTensorGetExn _ -> tyall_ "a" (tytensorgetexn_ (tyvar_ "a"))
+  | CTensorSetExn _ -> tyall_ "a" (tytensorsetexn_ (tyvar_ "a"))
+  | CTensorRank _ -> tyall_ "a" (tytensorrank_ (tyvar_ "a"))
+  | CTensorShape _ -> tyall_ "a" (tytensorshape_ (tyvar_ "a"))
+  | CTensorReshapeExn _ -> tyall_ "a" (tytensorreshapeexn_ (tyvar_ "a"))
+  | CTensorCopy _ -> tyall_ "a" (tytensorcopy_ (tyvar_ "a"))
+  | CTensorTransposeExn _ -> tyall_ "a" (tytensortransposeexn_ (tyvar_ "a"))
+  | CTensorSliceExn _ -> tyall_ "a" (tytensorsliceexn_ (tyvar_ "a"))
+  | CTensorSubExn _ -> tyall_ "a" (tytensorsubexn_ (tyvar_ "a"))
+  | CTensorIterSlice _ -> tyall_ "a" (tytensoriteri_ (tyvar_ "a"))
+  | CTensorEq _ -> tyall_ "a" (tytensoreq_ (tyvar_ "a") (tyvar_ "a"))
+  | CTensorToString _ -> tyall_ "a" (tytensortostring_ (tyvar_ "a"))
 end
 
 lang BootParserTypeAst = BootParserAst
   sem tyConst =
   | CBootParserParseMExprString _ -> tyarrow_ tystr_ tybootparsetree_
-  | CBootParserParseMCoreFile _ -> tyarrow_ tystr_ tybootparsetree_
+  | CBootParserParseMCoreFile _ -> tyarrows_ [
+      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_],
+      tyseq_ tystr_,
+      tystr_,
+      tybootparsetree_
+    ]
   | CBootParserGetId _ -> tyarrow_ tybootparsetree_ tyint_
   | CBootParserGetTerm _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
   | CBootParserGetType _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]

@@ -226,3 +226,11 @@ let futReplicate_ = use FutharkAst in
 let futTabulate_ = use FutharkAst in
   lam n. lam f.
   futAppSeq_ (futConst_ (FCTabulate ())) [n, f]
+
+let futCopy_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCCopy ())) s
+
+let futLength_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCLength ())) s

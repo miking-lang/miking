@@ -339,6 +339,8 @@ let rec print_const fmt = function
       fprintf fmt "roundfi"
   | Cint2float ->
       fprintf fmt "int2float"
+  | CstringIsFloat ->
+      fprintf fmt "stringIsFloat"
   | Cstring2float ->
       fprintf fmt "string2float"
   | Cfloat2string ->
@@ -468,8 +470,8 @@ let rec print_const fmt = function
       fprintf fmt "mapInsert"
   | CmapRemove _ ->
       fprintf fmt "mapRemove"
-  | CmapFindWithExn _ ->
-      fprintf fmt "mapFindWithExn"
+  | CmapFindExn _ ->
+      fprintf fmt "mapFindExn"
   | CmapFindOrElse _ ->
       fprintf fmt "mapFindOrElse"
   | CmapFindApplyOrElse _ ->
@@ -486,6 +488,10 @@ let rec print_const fmt = function
       fprintf fmt "mapFoldWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  | CmapChooseExn ->
+      fprintf fmt "mapChooseExn"
+  | CmapChooseOrElse _ ->
+      fprintf fmt "mapChooseOrElse"
   | CmapEq _ ->
       fprintf fmt "mapEq"
   | CmapCmp _ ->
@@ -602,10 +608,12 @@ and print_tm' fmt t =
   in
   match t with
   | TmVar (_, x, s, frozen) ->
-      let var_str = string_of_ustring (ustring_of_var x s) in
-      let print = if frozen then "`" ^ var_str else var_str in
+      let var_str =
+        if frozen then string_of_ustring (us "#frozen\"" ^. x ^. us "\"")
+        else string_of_ustring (ustring_of_var x s)
+      in
       (*  fprintf fmt "%s#%d" print s *)
-      fprintf fmt "%s" print
+      fprintf fmt "%s" var_str
   | TmLam (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in

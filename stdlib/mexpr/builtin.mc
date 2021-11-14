@@ -37,6 +37,7 @@ let builtin = use MExprAst in
   , ("ceilfi", CCeilfi ())
   , ("roundfi", CRoundfi ())
   , ("int2float", CInt2float ())
+  , ("stringIsFloat", CStringIsFloat ())
   , ("string2float", CString2float ())
   , ("float2string", CFloat2string ())
   -- Characters
@@ -103,7 +104,7 @@ let builtin = use MExprAst in
   , ("mapGetCmpFun", CMapGetCmpFun ())
   , ("mapInsert", CMapInsert ())
   , ("mapRemove", CMapRemove ())
-  , ("mapFindWithExn", CMapFindWithExn ())
+  , ("mapFindExn", CMapFindExn ())
   , ("mapFindOrElse", CMapFindOrElse ())
   , ("mapFindApplyOrElse", CMapFindApplyOrElse ())
   , ("mapAny", CMapAny ())
@@ -112,6 +113,8 @@ let builtin = use MExprAst in
   , ("mapMapWithKey", CMapMapWithKey ())
   , ("mapFoldWithKey", CMapFoldWithKey ())
   , ("mapBindings", CMapBindings ())
+  , ("mapChooseExn", CMapChooseExn ())
+  , ("mapChooseOrElse", CMapChooseOrElse ())
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors

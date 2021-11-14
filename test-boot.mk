@@ -1,27 +1,15 @@
+include test-files.mk
 
 BOOT_NAME = boot
 
-base-files += $(wildcard test/mexpr/*.mc)
-base-files += $(wildcard test/mlang/*.mc)
-base-files += $(wildcard stdlib/mexpr/*.mc)
-base-files += $(wildcard stdlib/c/*.mc)
-base-files += $(wildcard stdlib/ad/*.mc)
-base-files += $(wildcard stdlib/parser/*.mc)
-base-files += $(wildcard stdlib/*.mc)
+.PHONY: all selected py $(src_files_all)
 
-py-files = $(wildcard test/py/*.mc)
+all: $(src_files_all)
 
-ocaml-files = $(wildcard stdlib/ocaml/*.mc)
+selected: $(boot_files)
 
-.PHONY: base py ocaml\
-  $(base-files) $(py-files) $(ocaml-files)
-
-# Rules
-
-base: $(base-files)
-py: $(py-files)
-ocaml: $(ocaml-files)
+py: $(python_files)
 
 # File rule
-$(base-files) $(py-files) $(ocaml-files):
-	-@MCORE_STDLIB=`pwd`/stdlib build/${BOOT_NAME} eval --test $@
+$(src_files_all):
+	@MCORE_STDLIB=`pwd`/stdlib build/${BOOT_NAME} eval --test --disable-prune-warning $@

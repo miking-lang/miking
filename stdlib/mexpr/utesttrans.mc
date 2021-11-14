@@ -27,6 +27,8 @@ type UtestTypeEnv = {
 }
 
 let _utestRunnerStr = "
+let numFailed = ref 0 in
+
 let join = lam seqs.
   foldl concat [] seqs
 in
@@ -88,6 +90,7 @@ let utestTestFailed =
   lam line   : String.
   lam lhsStr : String.
   lam rhsStr : String.
+  modref numFailed (addi (deref numFailed) 1);
   printLn \"\";
   printLn (join [\" ** Unit test FAILED on line \", line, \" **\"]);
   printLn (join [\"    LHS: \", lhsStr]);
@@ -186,6 +189,10 @@ let utestRunnerName = lam. optionGetOrElse
   (lam. error "Expected utestRunner to be defined")
   (findName "utestRunner" (utestRunner ()))
 
+let numFailedName = lam. optionGetOrElse
+  (lam. error "Expected utestNumFailed to be defined")
+  (findName "numFailed" (utestRunner ()))
+
 let getUniquePprintAndEqualityNames = lam.
   (nameSym "pp", nameSym "eq")
 
@@ -267,7 +274,9 @@ let collectKnownProgramTypes = use MExprAst in
       let acc = collectType acc (tyTm t.expected) in
       let acc =
         match t.tusing with Some t then
-          match tyTm t with TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}} then
+          match tyTm t with
+            TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}}
+          then
             collectType (collectType acc lhs) rhs
           else
             let msg = join [
@@ -276,6 +285,9 @@ let collectKnownProgramTypes = use MExprAst in
             infoErrorExit (infoTm t) msg
         else acc
       in
+      let acc = collectTypes acc t.test in
+      let acc = collectTypes acc t.expected in
+      let acc = match t.tusing with Some t then collectTypes acc t else acc in
       collectTypes acc t.next
     else sfold_Expr_Expr collectTypes acc expr
   in
@@ -769,7 +781,7 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
                  with tyConEnv = typeNames}
 
 let withUtestRunner = lam utestFunctions. lam term.
-  bindall_ [utestRunner (), utestFunctions, term]
+  bindall_ [utestRunner (), utestFunctions, term, print_ (str_ "\n")]
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
 -- transformation.
@@ -783,15 +795,85 @@ lang MExprUtestTrans = MExprAst
 
   sem utestGenH (env : UtestTypeEnv) =
   | TmUtest t ->
+    let test = utestGenH env t.test in
+    let expected = utestGenH env t.expected in
+    let tusing = optionMap (utestGenH env) t.tusing in
+    let t =
+      { { { t with test = test }
+              with expected = expected }
+              with tusing = tusing }
+    in
     bind_ (ulet_ "" (_generateUtest env t))
           (utestGenH env t.next)
   | t -> smap_Expr_Expr (utestGenH env) t
+
+  -- NOTE(larshum, 2021-10-26): If a test has failed, we want to return a
+  -- non-zero exit code to indicate failure.
+  sem returnNonZeroIfTestsFailed =
+  | TmLet t -> TmLet {t with inexpr = returnNonZeroIfTestsFailed t.inexpr}
+  | TmRecLets t -> TmRecLets {t with inexpr = returnNonZeroIfTestsFailed t.inexpr}
+  | TmType t -> TmType {t with inexpr = returnNonZeroIfTestsFailed t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = returnNonZeroIfTestsFailed t.inexpr}
+  | TmExt t -> TmExt {t with inexpr = returnNonZeroIfTestsFailed t.inexpr}
+  | t ->
+    let info = infoTm t in
+    -- NOTE(larshum, 2021-10-26): Check if a test failed, which is true if the
+    -- 'numFailed' reference contains a non-zero value.
+    let testsFailedCond = TmApp {
+      lhs = TmApp {
+        lhs = TmConst {
+          val = CGti (), info = info,
+          ty = TyArrow {
+            from = TyArrow {
+              from = TyInt {info = info},
+              to = TyInt {info = info}, info = info},
+            to = TyInt {info = info},
+            info = info}},
+        rhs = TmApp {
+          lhs = TmConst {
+            val = CDeRef (), info = info,
+            ty = TyArrow {
+              from = TyUnknown {info = info},
+              to = TyUnknown {info = info}, info = info}},
+          rhs = TmVar {
+            ident = numFailedName (), info = info,
+            ty = TyUnknown {info = info},
+            frozen = false},
+          ty = TyInt {info = info}, info = info},
+        ty = TyArrow {
+          from = TyInt {info = info}, to = TyBool {info = info},
+          info = info},
+        info = info},
+      rhs = TmConst {val = CInt {val = 0}, ty = TyInt {info = info}, info = info},
+      ty = TyBool {info = info}, info = info} in
+    -- NOTE(larshum, 2021-10-26): This produces code equivalent to
+    --   'if testsFailed then t; exit 1 else t'
+    -- where t is the final expression of the MExpr AST.
+    TmMatch {
+      target = testsFailedCond,
+      pat = PatBool {val = true, info = info, ty = TyBool {info = info}},
+      thn = TmLet {
+        ident = nameSym "", tyBody = tyTm t, body = t,
+        inexpr = TmApp {
+          lhs = TmConst {
+            val = CExit (), info = info,
+            ty = TyArrow {
+              from = TyInt {info = info}, to = TyUnknown {info = info},
+              info = info}},
+          rhs = TmConst {
+            val = CInt {val = 1}, info = info,
+            ty = TyInt {info = info}},
+          ty = TyUnknown {info = info},
+          info = info},
+        ty = TyUnknown {info = info}, info = info},
+      els = t, ty = tyTm t, info = info}
 
   sem utestGen =
   | t ->
     let env : UtestTypeEnv = collectKnownProgramTypes t in
     let utestFunctions = generateUtestFunctions env in
     let t = utestGenH env t in
+    let t = returnNonZeroIfTestsFailed t in
     -- NOTE(larshum, 2021-03-27): We will need to create a symbolization
     -- environment here to avoid errors later because the generated utest
     -- functions will be placed before the definitions of any types in the

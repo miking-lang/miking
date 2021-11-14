@@ -50,15 +50,16 @@ lang CompatibleType =
   -- be found, `None` is returned.
   sem compatibleType (tyEnv : TypeEnv) (ty1: Type) =
   | ty2 ->
-    let tys = (ty1, ty2) in
-    match compatibleTypeBase tyEnv tys with Some ty then Some ty
+    let ty1 = reduceTyVar ty1 in
+    let ty2 = reduceTyVar ty2 in
+    match compatibleTypeBase tyEnv (ty1, ty2) with Some ty then Some ty
 
     -- NOTE(dlunde,2021-05-05): Temporary hack to make sure that tyapps are
     -- reduced before tyvars. Not sure why this is needed, but it should not
     -- matter in the end when we have a proper type system.
-    else match tys with (TyApp t1, _) then
+    else match ty1 with TyApp t1 then
       compatibleType tyEnv t1.lhs ty2
-    else match tys with (_, TyApp t2) then
+    else match ty2 with TyApp t2 then
       compatibleType tyEnv ty1 t2.lhs
     --------
 
@@ -74,6 +75,11 @@ lang CompatibleType =
   sem reduceType (tyEnv: Env) =
   | _ -> None () -- Types cannot be reduced by default
 
+  -- NOTE(aathn,2021-10-27): We convert type variables to TyUnknown using this
+  -- semantic function as a temporary solution to enable typeCheck and typeAnnot
+  -- to be used in tandem.
+  sem reduceTyVar =
+  | ty -> ty
 end
 
 lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
@@ -99,12 +105,17 @@ lang ConCompatibleType = CompatibleType + ConTypeAst
 end
 
 lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
-  -- NOTE(aathn, 2021-09-26): As a temporary hack, type variables are made
-  -- compatible with everything.
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
-  | (TyVar _ & ty, TyVar _) -> Some ty
-  | (TyVar _, ! (TyVar _ | TyUnknown _) & ty) -> Some ty
-  | (! (TyVar _ | TyUnknown _) & ty, TyVar _) -> Some ty
+  sem reduceTyVar =
+  | TyVar {info = i} -> TyUnknown {info = i}
+end
+
+lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
+  sem reduceTyVar =
+  | TyFlex {info = i} & ty ->
+    match resolveLink ty with ! TyFlex _ & ty then
+      ty
+    else
+      TyUnknown {info = i}
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
@@ -378,12 +389,13 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     else never
 end
 
-lang ConstTypeAnnot = TypeAnnot + MExprConstType
+lang ConstTypeAnnot = TypeAnnot + MExprConstType + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = f (tyConst t.val) in
-    TmConst {t with ty = ty }
+    match stripTyAll (f (tyConst t.val)) with (_, ty) then
+      TmConst {t with ty = ty}
+    else never
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -453,7 +465,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
               tyvar to
             else
               let msg = join [
-                "Inconsistent types of constructor application",
+                "Inconsistent types of constructor application. ",
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (tyTm body)
               ] in
@@ -651,7 +663,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  AllCompatibleType +
+  FlexCompatibleType + AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

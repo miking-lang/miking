@@ -654,6 +654,7 @@ end
 
 lang FloatStringConversionAst = SeqAst + FloatAst
   syn Const =
+  | CStringIsFloat {}
   | CString2float {}
   | CFloat2string {}
 end
@@ -751,10 +752,12 @@ lang MapAst = ConstAst
   | CMapEmpty {}
   | CMapInsert {}
   | CMapRemove {}
-  | CMapFindWithExn {}
+  | CMapFindExn {}
   | CMapFindOrElse {}
   | CMapFindApplyOrElse {}
   | CMapBindings {}
+  | CMapChooseExn {}
+  | CMapChooseOrElse {}
   | CMapSize {}
   | CMapMem {}
   | CMapAny {}
@@ -1051,6 +1054,10 @@ lang UnknownTypeAst = Ast
 
   sem infoTy =
   | TyUnknown r -> r.info
+
+  sem sremoveUnknown =
+  | TyUnknown _ -> None ()
+  | ty -> Some ty
 end
 
 lang BoolTypeAst = Ast
@@ -1203,20 +1210,38 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+lang VarTypeAst = Ast
+  syn Type =
+  -- Rigid type variable
+  | TyVar  {info     : Info,
+            ident    : Name}
+
+  sem tyWithInfo (info : Info) =
+  | TyVar t -> TyVar {t with info = info}
+
+  sem infoTy =
+  | TyVar t -> t.info
+
+end
+
 type Level = Int
 type TVarRec = {ident : Name,
-                weak  : Bool,
-                level : Level}
+                level : Level,
+                sort  : VarSort}
 
-lang VarTypeAst = Ast
+lang FlexTypeAst = Ast
+  -- VarSort indicates the sort of type variable and contains related data
+  -- (such as regular type variable or row variable)
+  syn VarSort =
+  | TypeVar ()
+  | WeakVar ()
+  | RecordVar {fields : Map SID Type}
+
   syn TVar =
   | Unbound TVarRec
   | Link Type
 
   syn Type =
-  -- Rigid type variable
-  | TyVar  {info     : Info,
-            ident    : Name}
   -- Flexible type variable
   | TyFlex {info     : Info,
             contents : Ref TVar}
@@ -1232,27 +1257,30 @@ lang VarTypeAst = Ast
     ty
 
   sem tyWithInfo (info : Info) =
-  | TyVar t -> TyVar {t with info = info}
-  | TyFlex t ->
-    match deref t.contents with Link ty then
-      tyWithInfo ty
-    else
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound _ then
       TyFlex {t with info = info}
+    else
+      tyWithInfo info (resolveLink ty)
 
   sem infoTy =
-  | TyVar t -> t.info
-  | TyFlex t ->
-    match deref t.contents with Link ty then
-      infoTy ty
-    else
-      t.info
+  | TyFlex {info = info} -> info
+
+  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | RecordVar r ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
+    (acc, RecordVar {r with fields = flds})
+  | s ->
+    (acc, s)
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
-  | TyFlex t & ty1 ->
-    match deref t.contents with Link ty2 then
-      smapAccumL_Type_Type f acc ty2
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound r then
+      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
+      modref t.contents (Unbound {r with sort = sort});
+      (acc, ty)
     else
-      (acc, ty1)
+      smapAccumL_Type_Type f acc (resolveLink ty)
 end
 
 lang AllTypeAst = Ast
@@ -1327,4 +1355,4 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+  VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst

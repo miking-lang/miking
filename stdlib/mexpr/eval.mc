@@ -834,8 +834,17 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     else error "Third argument to subsequence not a number"
 end
 
-lang FloatStringConversionEval = FloatStringConversionAst
+lang FloatStringConversionEval = FloatStringConversionAst + BoolAst
   sem delta (arg : Expr) =
+  | CStringIsFloat _ ->
+    match arg with TmSeq {tms = tms} then
+      let s = _seqOfCharsToString tms in
+      TmConst {
+        val = CBool { val = stringIsFloat s },
+        ty = tyunknown_,
+        info = NoInfo ()
+      }
+    else error "First argument not a sequence"
   | CString2float _ ->
     match arg with TmSeq {tms = tms} then
       let s = _seqOfCharsToString tms in
@@ -1018,7 +1027,7 @@ lang MapEval =
   | CMapInsert2 Expr
   | CMapInsert3 (Expr, Expr)
   | CMapRemove2 Expr
-  | CMapFindWithExn2 Expr
+  | CMapFindExn2 Expr
   | CMapFindOrElse2 (Expr -> Expr)
   | CMapFindOrElse3 (Expr -> Expr, Expr)
   | CMapFindApplyOrElse2 (Expr -> Expr)
@@ -1030,10 +1039,23 @@ lang MapEval =
   | CMapMapWithKey2 (Expr -> Expr -> Expr)
   | CMapFoldWithKey2 (Expr -> Expr -> Expr -> Expr)
   | CMapFoldWithKey3 (Expr -> Expr -> Expr -> Expr, Expr)
+  | CMapChooseOrElse2 Expr
   | CMapEq2 (Expr -> Expr -> Expr)
   | CMapEq3 (Expr -> Expr -> Expr, Map K V)
   | CMapCmp2 (Expr -> Expr -> Expr)
   | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
+
+  sem _bindToRecord =
+  | (k, v) ->
+    let labels = map stringToSid ["0", "1"] in
+    let bindings = mapFromSeq cmpSID (zip labels [k, v]) in
+    TmRecord {
+      bindings = bindings,
+      ty = TyRecord {
+        labels = labels,
+        fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
+        info = NoInfo ()},
+      info = NoInfo ()}
 
   sem delta (arg : Expr) =
   | CMapEmpty _ ->
@@ -1063,13 +1085,13 @@ lang MapEval =
     match arg with TmConst ({val = CMapVal m} & t) then
       TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
     else error "Second argument of mapRemove not a map"
-  | CMapFindWithExn _ ->
-    TmConst {val = CMapFindWithExn2 arg, ty = TyUnknown {info = NoInfo ()},
+  | CMapFindExn _ ->
+    TmConst {val = CMapFindExn2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
-  | CMapFindWithExn2 key ->
+  | CMapFindExn2 key ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      mapFindWithExn key m
-    else error "Second argument of mapFindWithExn not a map"
+      mapFindExn key m
+    else error "Second argument of mapFindExn not a map"
   | CMapFindOrElse _ ->
     TmConst {val = CMapFindOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
              info = NoInfo ()}
@@ -1097,22 +1119,23 @@ lang MapEval =
       mapFindApplyOrElse fapply felse key m
     else error "Fourth argument of findApplyOrElse not a map"
   | CMapBindings _ ->
-    let bindToRecord : (k, v) -> Expr = lam bind.
-      let labels = map stringToSid ["0", "1"] in
-      let bindings = mapFromSeq cmpSID (zip labels [bind.0, bind.1]) in
-      TmRecord {
-        bindings = bindings,
-        ty = TyRecord {
-          labels = labels,
-          fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
-          info = NoInfo ()},
-        info = NoInfo ()}
-    in
     match arg with TmConst ({val = CMapVal m} & t) then
-      TmSeq {tms = map bindToRecord (mapBindings m.val),
+      TmSeq {tms = map _bindToRecord (mapBindings m.val),
              ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
              info = NoInfo ()}
     else error "Argument of mapBindings not a map"
+  | CMapChooseExn _ ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      _bindToRecord (mapChooseExn m)
+    else error "Argument of mapChooseExn not a map"
+  | CMapChooseOrElse _ ->
+    TmConst {val = CMapChooseOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapChooseOrElse2 elseFn ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      if gti (mapSize m) 0 then _bindToRecord (mapChooseExn m)
+      else apply {env = mapEmpty nameCmp} unit_ elseFn
+    else error "Second argument of mapChooseOrElse not a map"
   | CMapSize _ ->
     match arg with TmConst {val = CMapVal {val = m}} then
       TmConst {val = CInt {val = mapSize m}, ty = TyInt {info = NoInfo ()},
@@ -1516,12 +1539,14 @@ end
 
 lang BootParserEval =
   BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
-  FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst
+  FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
+  RecordAst
 
   syn Const =
   | CBootParserTree {val : BootParserTree}
   | CBootParserParseMExprString2 [String]
-  | CBootParserParseMCoreFile2 [String]
+  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool)
+  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool), [String])
   | CBootParserGetTerm2 BootParserTree
   | CBootParserGetType2 BootParserTree
   | CBootParserGetString2 BootParserTree
@@ -1552,22 +1577,50 @@ lang BootParserEval =
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserParseMExprString not a sequence"
+
   | CBootParserParseMCoreFile _ ->
-    match arg with TmSeq {tms = seq} then
+    match arg with TmRecord {bindings = bs} then
+      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3"]) with [
+        Some (TmConst { val = CBool { val = keepUtests } }),
+        Some (TmConst { val = CBool { val = pruneExternalUtests } }),
+        Some (TmSeq { tms = externalsExclude }),
+        Some (TmConst { val = CBool { val = warn } })
+      ]
+      then
+        let externalsExclude =
+          map
+            (lam x.
+              match x with TmSeq {tms = s} then
+                _seqOfCharsToString s
+              else
+                error (join ["External identifier of first argument passed to ",
+                             "bootParserParseMCoreFile not a sequence"]))
+            externalsExclude
+        in
+        TmConst {val = CBootParserParseMCoreFile2 (
+                  keepUtests, pruneExternalUtests, externalsExclude, warn
+                 ),
+                 ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+      else error "First argument to bootParserParseMCoreFile incorrect record"
+    else error "First argument to bootParserParseMCoreFile not a record"
+  | CBootParserParseMCoreFile2 pruneArg ->
+    match arg with TmSeq {tms = keywords} then
       let keywords =
         map
           (lam keyword.
             match keyword with TmSeq {tms = s} then
               _seqOfCharsToString s
-            else error (join ["Keyword of first argument passed to ",
+            else error (join ["Keyword of third argument passed to ",
                               "bootParserParseMCoreFile not a sequence"]))
-          seq in
-      TmConst {val = CBootParserParseMCoreFile2 keywords,
+          keywords
+      in
+      TmConst {val = CBootParserParseMCoreFile3 (pruneArg, keywords),
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else error "First argument to bootParserParseMCoreFile not a sequence"
-  | CBootParserParseMCoreFile2 keywords ->
-    match arg with TmSeq {tms = seq} then
-      let t = bootParserParseMCoreFile keywords (_seqOfCharsToString seq) in
+    else error "Third argument to bootParserParseMCoreFile not a sequence"
+  | CBootParserParseMCoreFile3 (pruneArg, keywords) ->
+    match arg with TmSeq {tms = filename} then
+      let filename = _seqOfCharsToString filename in
+      let t = bootParserParseMCoreFile pruneArg keywords filename in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserParseMCoreFile not a sequence"
@@ -2500,7 +2553,7 @@ utest eval (mapBindings_ m4) with seq_ [utuple_ [int_ 1, int_ 4]] using eqExpr i
 utest eval (mapBindings_ m5)
 with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
 
-utest eval (mapFindWithExn_ (int_ 0) m2) with int_ 1 using eqExpr in
+utest eval (mapFindExn_ (int_ 0) m2) with int_ 1 using eqExpr in
 
 let elsef = ulam_ "" (int_ 2) in
 utest eval (mapFindOrElse_ elsef (int_ 0) m1) with int_ 2 using eqExpr in

@@ -7,8 +7,7 @@ include "mexpr/utesttrans.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 
-include "ocaml/sys.mc"
-
+include "sys.mc"
 include "digraph.mc"
 include "string.mc"
 include "eq-paths.mc"
@@ -86,7 +85,7 @@ let _handleApps = use AppAst in use VarAst in
       match app with TmApp {lhs = TmVar v, rhs = rhs} then
         let resLhs =
           if digraphHasVertex (v.ident, v.info) g then
-            let correctInfo : Info = mapFindWithExn v.ident name2info
+            let correctInfo : Info = mapFindExn v.ident name2info
               -- match
               --   find (lam n : NameInfo. nameEq v.ident n.0) (digraphVertices g)
               -- with Some v then v else error "impossible"
@@ -185,6 +184,9 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             ty : Type,
             info : Info,
             inner : Hole}
+
+  sem infoTm =
+  | TmHole h -> h.info
 
   sem tyTm =
   | TmHole {ty = ty} -> ty
@@ -464,7 +466,7 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
         (lam e. match e with (_, _, lbl) then lbl else never)
         (lam e.
            match e with (from, _, _) then
-             mapFindWithExn from fun2inc
+             mapFindExn from fun2inc
            else never)
     in
 
@@ -535,7 +537,7 @@ let callCtxFunLookup : Name -> CallCtxEnv -> Option Name =
 -- name is not part of the call graph.
 let callCtxFun2Inc : Name -> CallCtxEnv -> Name = lam name. lam env : CallCtxEnv.
   match env with { fun2inc = fun2inc } then
-    mapFindWithExn name fun2inc
+    mapFindExn name fun2inc
   else never
 
 -- Get the incoming variable name of an edge label, giving an error if the edge
@@ -593,7 +595,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
 let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
   lam nameInfo. lam path. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx } then
-      mapFindWithExn path (mapFindWithExn nameInfo (deref hole2idx))
+      mapFindExn path (mapFindExn nameInfo (deref hole2idx))
     else never
 
 let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [Expr] =
@@ -732,6 +734,7 @@ let _lookupCallCtx
   : (Int -> Expr) -> NameInfo -> Name
   -> CallCtxEnv -> [[NameInfo]] -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
+  use MExprAst in
 
     let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
 
@@ -757,7 +760,9 @@ let _lookupCallCtx
               in (cases.0, cons branch cases.1)
             else never
           ) ([], []) children in
-          match branches with (defaultCase, matches) then
+          switch branches
+          case (([def], []) | ([], [TmMatch {thn = def}])) then def
+          case (defaultCase, matches) then
             let default = switch defaultCase
               case [] then never_
               case [default] then default
@@ -767,7 +772,7 @@ let _lookupCallCtx
             bind_
               (nulet_ tmpName (callCtxReadIncomingVar incVarName env))
               (matchall_ (snoc matches default))
-          else never
+          end
     in
     match tree with Node {children = children} then
       let res = work incVarName children [] in
@@ -1000,7 +1005,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         let env = callCtxAddHole t.body (ident, t.info) [[]] cur env in
         lookup (callCtxHole2Idx (ident, t.info) [] env)
       else
-        let paths = mapFindWithExn (ident, t.info) eqPaths in
+        let paths = mapFindExn (ident, t.info) eqPaths in
         let env = callCtxAddHole t.body (ident, t.info) paths cur env in
         let iv = callCtxFun2Inc cur.0 env in
         let lblPaths = map (lam p. map (lam e : Edge. e.2) p) paths in

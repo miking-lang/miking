@@ -3,24 +3,27 @@
 
 include "mi-lite.mc"
 include "options.mc"
+include "sys.mc"
+include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
-include "mexpr/tuning/decision-points.mc"
-include "mexpr/tuning/tune.mc"
-include "mexpr/tuning/tune-file.mc"
+include "tuning/decision-points.mc"
+include "tuning/tune.mc"
+include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
-include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument
+  MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
+  MExprProfileInstrument
 end
 
 let pprintMcore = lam ast.
@@ -59,6 +62,9 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
       else ast
     in
 
+    -- If option --typecheck, type check the AST
+    let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
+
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     match generateTests ast options.runTests with (symEnv, ast) then
@@ -81,7 +87,14 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
+    let ast = parseParseMCoreFile {
+      keepUtests = options.runTests,
+      pruneExternalUtests = not options.disablePruneExternalUtests,
+      pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
+      findExternalsExclude = true,
+      keywords = decisionPointsKeywords
+    } file in
+    let ast = makeKeywords [] ast in
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in

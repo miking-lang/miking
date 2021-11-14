@@ -530,6 +530,19 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
       let env = { env with exts = mapInsert ident [impl] env.exts } in
       chooseExternalImpls implsMap env inexpr
     else
-      infoErrorExit info (join ["No implementation for external ", identStr])
+      let errMsg = join ["No implementation for external ", identStr, "."] in
+      let errMsg =
+        match mapLookup identStr globalExternalImplsMap with Some impls then
+          join [
+            errMsg,
+            " Try to install one of the following set of OCaml packages: ",
+            strJoin " "
+              (map
+                (lam x: ExternalImpl. join ["[", strJoin "," x.libraries, "]"])
+                impls)
+          ]
+        else errMsg
+      in
+      infoErrorExit info errMsg
   | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
 end

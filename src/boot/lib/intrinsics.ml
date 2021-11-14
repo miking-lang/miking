@@ -214,6 +214,14 @@ module Mseq = struct
       | _ ->
           raise (Invalid_argument "Mseq.fold_right2")
 
+    let map_accum_left f a = function
+      | Rope s ->
+          let a', s' = Rope.map_accuml_array_array f a s in
+          (a', Rope s')
+      | List s ->
+          let a', s' = List.fold_left_map f a s in
+          (a', List s')
+
     let of_list = of_list_rope
 
     let of_array = of_array_rope
@@ -499,6 +507,10 @@ module FloatConversion = struct
 
   let roundfi f = f |> Float.round |> int_of_float
 
+  let string_is_float s =
+    s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> float_of_string_opt
+    |> function Some _ -> true | None -> false
+
   let string2float s = s |> Mseq.Helpers.to_ustring |> float_of_ustring
 
   let float2string r = r |> ustring_of_float |> Mseq.Helpers.of_ustring
@@ -535,6 +547,7 @@ module IO = struct
       else if Obj.tag v = Obj.double_tag then
         string_of_float (Obj.obj v) ^ "\n"
       else if Obj.tag v = Obj.closure_tag then "<closure>\n"
+      else if Obj.tag v = Obj.unaligned_tag then "<unaligned>\n"
       else
         let istr = String.make indent ' ' in
         let children =
@@ -631,7 +644,7 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     Obj.repr (MapModule.remove (Obj.repr k) m, cmp)
 
-  let find k mCmpPair =
+  let find_exn k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
     let module Ord = struct
       type t = Obj.t
@@ -675,6 +688,31 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     let binds = MapModule.bindings m in
     Mseq.Helpers.of_list (List.map (fun (k, v) -> (Obj.obj k, v)) binds)
+
+  let choose_exn mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    let k, v = MapModule.choose m in
+    (Obj.obj k, v)
+
+  let choose_or_else f mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    match MapModule.choose_opt m with
+    | Some (k, v) ->
+        (Obj.obj k, v)
+    | None ->
+        f ()
 
   let size mCmpPair =
     let m, cmp = Obj.obj mCmpPair in

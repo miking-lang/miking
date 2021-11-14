@@ -6,6 +6,7 @@
 -- bootstrapping stage to speed up compile times.
 
 include "options.mc"
+include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/utesttrans.mc"
@@ -37,7 +38,12 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
     else opts
   in
   let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
-  let destinationFile = filenameWithoutExtension (filename sourcePath) in
+  let destinationFile =
+    switch options.output
+    case None () then filenameWithoutExtension (filename sourcePath)
+    case Some o then o
+    end
+  in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
   p.cleanup ();
@@ -45,7 +51,13 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
 
 let compile : Options -> String -> Unit = lam options. lam file.
   use MCoreLiteCompile in
-  let ast = parseMCoreFile [] file in
+  let ast = parseParseMCoreFile {
+    keepUtests = options.runTests,
+    pruneExternalUtests = not options.disablePruneExternalUtests,
+    pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
+    findExternalsExclude = true,
+    keywords = []
+  } file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
   let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in

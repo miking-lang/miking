@@ -16,7 +16,8 @@ include "tune.mc"
 mexpr
 
 -- Menu
-let menu =
+let menu = lam. join
+[
 "Usage: mi <command> [<options>] file [<options>]
 
 Commands:
@@ -30,18 +31,13 @@ If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
 In such case, options need to be written before the file name.
 
-Options:
-  --debug-parse           Print the AST after parsing
-  --debug-generate        Print the AST after code generation
-  --debug-type-annot      Print the AST after adding type annotations
-  --debug-profile         Instrument profiling expressions to AST
-  --exit-before           Exit before evaluation or compilation
-  --test                  Generate utest code
-  --disable-optimizations Disables optimizations to decrease compilation time
-  -- <args>               If the run or eval commands are used, then the texts
-                          following -- are arguments to the executed program
-  --help                  Display this list of options
+Options:\n",
+optionsHelpString (),
 "
+  -- <args>                If the run or eval commands are used, then the texts
+                           following -- are arguments to the executed program
+"
+]
 in
 
 -- Commands map, maps command strings to functions. The functions
@@ -56,7 +52,7 @@ let commandsMap = [
 
 -- Print the usage message and exit.
 let usage = lam.
-  print menu;
+  print (menu ());
   exit 0
 in
 
@@ -65,6 +61,7 @@ let maybePrintHelp = lam o : Options.
   if o.printHelp then usage () else ()
 in
 
+let mapStringLookup = assocLookup {eq=eqString} in
 
 -- Main: find and run the correct command. See commandsMap above.
 
@@ -78,16 +75,18 @@ if lti (length argv) 2 then usage () else
   then
     -- Yes, split into program arguments (after stand alone '--')
     let split = splitDashDash rest in
-    let argvp = partition (isPrefix eqc "--") split.first in
-    let options = parseOptions argvp.0 in
+    let res : ArgResult Options = parseOptions split.first in
+    let options : Options = res.options in
+    let files : [String] = res.strings in
     maybePrintHelp options;
     -- Invoke the selected command
-    cmd argvp.1 options (cons "mi" split.last)
+    cmd files options (cons "mi" split.last)
   else
     -- No, not a well known command
     -- Parse options as far as possible. Does user require help?
     let split = splitOptionPrefix (tail argv) in
-    let options = parseOptions split.first in
+    let res : ArgResult Options = parseOptions split.first in
+    let options : Options = res.options in
     maybePrintHelp options;
     -- No help requested. Did user give a filename?
     match split.last with [file] ++ programArgv then

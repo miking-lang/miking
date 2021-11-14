@@ -47,22 +47,24 @@ let atomicDecr : ARef -> Unit = lam r.
 
 mexpr
 
-let a = atomicMake 0 in
-utest atomicCAS a 0 1 with true in
-utest atomicCAS a 1 (subi 0 1) with true in
-utest atomicCAS a 42 0 with false in
-utest atomicExchange a 0 with subi 0 1 in
-utest atomicFetchAndAdd a 2 with 0 in
-utest atomicGet a with 2 in
+utest
+  let a = atomicMake 0 in
+  utest atomicCAS a 0 1 with true in
+  utest atomicCAS a 1 (subi 0 1) with true in
+  utest atomicCAS a 42 0 with false in
+  utest atomicExchange a 0 with subi 0 1 in
+  utest atomicFetchAndAdd a 2 with 0 in
+  utest atomicGet a with 2 in
 
-let a = atomicMake [] in
-utest atomicSet a [1,2,3] with () in
-utest atomicGet a with [1,2,3] in
+  let a = atomicMake [] in
+  utest atomicSet a [1,2,3] with () in
+  utest atomicGet a with [1,2,3] in
 
-let a = atomicMake 0 in
-utest atomicIncr a with () in
-utest atomicGet a with 1 in
-utest atomicDecr a with () in
-utest atomicGet a with 0 in
-
+  let a = atomicMake 0 in
+  utest atomicIncr a with () in
+  utest atomicGet a with 1 in
+  utest atomicDecr a with () in
+  utest atomicGet a with 0 in
+  ()
+with () in
 ()

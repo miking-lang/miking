@@ -64,6 +64,10 @@ let str2info : String -> Info = lam str.
   match str with "[No file info]" then NoInfo ()
   else
     match strSplit " " str with ["FILE", filename, rowcols] then
+      let filename =
+        match filename with ['\"'] ++ filename ++ ['\"'] then filename
+        else errorNotAnInfo ()
+      in
       let parseRowCol : String -> (Int, Int) = lam rowcol.
         match strSplit ":" rowcol with [row, col] then
           (string2int row, string2int col)
@@ -81,7 +85,7 @@ let str2info : String -> Info = lam str.
     else errorNotAnInfo ()
 
 utest str2info "   [No file info] " with NoInfo ()
-utest str2info "FILE path/to/file.mc 123:3-124:4"
+utest str2info "FILE \"path/to/file.mc\" 123:3-124:4"
 with Info { filename = "path/to/file.mc",
             row1 = 123, col1 = 3, row2 = 124, col2 = 4 }
 

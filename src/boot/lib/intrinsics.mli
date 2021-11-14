@@ -216,6 +216,15 @@ module Mseq : sig
      *)
     val fold_right2 :
       ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
+
+    (* Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function
+     *)
+    val map_accum_left :
+      ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a t -> 'acc * 'b t
   end
 end
 
@@ -344,6 +353,8 @@ module FloatConversion : sig
 
   val roundfi : float -> int
 
+  val string_is_float : int Mseq.t -> bool
+
   val string2float : int Mseq.t -> float
 
   val float2string : float -> int Mseq.t
@@ -396,13 +407,17 @@ module Mmap : sig
 
   val remove : 'a -> Obj.t -> Obj.t
 
-  val find : 'a -> Obj.t -> 'b
+  val find_exn : 'a -> Obj.t -> 'b
 
   val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
 
   val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> Obj.t -> 'c
 
   val bindings : Obj.t -> ('a * 'b) Mseq.t
+
+  val choose_exn : Obj.t -> 'a * 'b
+
+  val choose_or_else : (unit -> 'a * 'b) -> Obj.t -> 'a * 'b
 
   val size : Obj.t -> int
 

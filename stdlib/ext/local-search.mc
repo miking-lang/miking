@@ -423,34 +423,42 @@ use _testTspSimulatedAnnealing in
 
 let metaSA = SimulatedAnnealing {temp = 100.0} in
 
-(match loop (nIters 100) (startState, metaSA) debugMeta debugSearch minimize
- with ({inc = {cost = TspCost {cost = cost}}}, _) then
-   utest cost with 251 in ()
- else never);
+utest
+  match loop (nIters 100) (startState, metaSA) debugMeta debugSearch minimize
+  with ({inc = {cost = TspCost {cost = cost}}}, _) then cost
+  else never
+with 251 in
 
 -- Use tabu search.
 use _testTspTabuSearch in
 
 let metaTabu = TabuSearch {tabu = TabuList {list = []}} in
 
-(match loop (nIters 100) (startState, metaTabu) debugMeta debugSearch minimize
- with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
-   utest cost with 251 in ()
- else never);
+utest
+  match loop (nIters 100) (startState, metaTabu) debugMeta debugSearch minimize
+  with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
+    cost
+  else never
+with 251 in
 
 -- Start with simulated annealing, then switch to tabu search.
 use _testTspSimulatedAnnealing in
 
-(match loop (nIters 10) (startState, metaSA) debugMeta debugSearch minimize
- with ({inc = {cost = TspCost {cost = cost}}} & searchState, _) then
-   utest leqi cost 800 with true in
+utest
+  match loop (nIters 10) (startState, metaSA) debugMeta debugSearch minimize
+  with ({inc = {cost = TspCost {cost = cost}}} & searchState, _) then
+    use _testTspTabuSearch in
 
-   use _testTspTabuSearch in
+    utest
+      match
+        loop (nIters 100) (searchState, metaTabu) debugMeta debugSearch minimize
+      with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
+        cost
+      else never
+    with 251 in
 
-   match loop (nIters 100) (searchState, metaTabu) debugMeta debugSearch  minimize
-   with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
-     utest cost with 251 in ()
-    else never
- else never);
+    leqi cost 800
+  else never
+with true in
 
 ()

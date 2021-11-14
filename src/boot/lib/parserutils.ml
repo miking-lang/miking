@@ -41,7 +41,8 @@ let raise_parse_error_on_non_unique_external_id t =
   let _ = recur ExtIdMap.empty t in
   t
 
-(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
+(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized
+ * term *)
 let raise_parse_error_on_partially_applied_external t =
   let rec recur ((symb_map, app_depth, fi) as acc) = function
     | TmExt (_, _, s, _, ty, t) ->
@@ -65,6 +66,92 @@ let raise_parse_error_on_partially_applied_external t =
   in
   let _ = recur (SymbMap.empty, 0, NoInfo) t in
   t
+
+(* NOTE(oerikss, 2021-10-21) this function should be applied on a symbolized
+ * term *)
+let prune_external_utests ?(enable = true) ?(warn = true)
+    ?(externals_exclude = []) t =
+  let module Set = Set.Make (Ustring) in
+  let externals_exclude = Set.of_list externals_exclude in
+  (* The accumulator [(sm, ntests, hasref)] contains, [sm], a map from symbols
+     that references an external to their identifier, [ntests] the number of
+     removed utests, and [hasref] which is a Boolean indicating if a sub
+     expression contains references to an external *)
+  let rec recur (sm, ntests, hasref) = function
+    | TmVar (_, _, s, _) as t ->
+        ((sm, ntests, SymbMap.mem s sm || hasref), t)
+    | TmExt (fi, x, s, ty, e, t) ->
+        let sm, hasref' =
+          if Set.mem x externals_exclude then (sm, false)
+          else (SymbMap.add s x sm, true)
+        in
+        recur (sm, ntests, false) t
+        |> fun ((sm, ntests, hasref''), t') ->
+        ( (sm, ntests, hasref || hasref' || hasref'')
+        , TmExt (fi, x, s, ty, e, t') )
+    | TmLet (fi, x, s, ty, t1, t2) ->
+        recur (sm, ntests, false) t1
+        |> fun ((sm, ntests, hasref'), t1') ->
+        recur ((if hasref' then SymbMap.add s x sm else sm), ntests, false) t2
+        |> fun ((sm, ntests, hasref''), t2') ->
+        ( (sm, ntests, hasref || hasref' || hasref'')
+        , TmLet (fi, x, s, ty, t1', t2') )
+    | TmRecLets (fi, lst, t) ->
+        List.fold_left_map
+          (fun (sm, ntests, hasref) (fi, x, s, ty, t) ->
+            recur (sm, ntests, false) t
+            |> fun ((sm, ntests, hasref'), t') ->
+            ( ( (if hasref' then SymbMap.add s x sm else sm)
+              , ntests
+              , hasref || hasref' )
+            , (fi, x, s, ty, t') ) )
+          (sm, ntests, false) lst
+        |> fun ((sm, ntests, hasref'), lst') ->
+        recur (sm, ntests, false) t
+        |> fun ((sm, ntests, hasref''), t') ->
+        ((sm, ntests, hasref || hasref' || hasref''), TmRecLets (fi, lst', t'))
+    | TmUtest (fi, t1, t2, t3, t4) ->
+        recur (sm, ntests, false) t1
+        |> fun ((sm, ntests, hasref'), t1') ->
+        recur (sm, ntests, hasref') t2
+        |> fun ((sm, ntests, hasref'), t2') ->
+        ( match t3 with
+        | Some t3' ->
+            let (sm, ntests, hasref'), t3' = recur (sm, ntests, hasref') t3' in
+            ((sm, ntests, hasref'), Some t3')
+        | None ->
+            ((sm, ntests, hasref'), t3) )
+        |> fun ((sm, ntests, hasref'), t3') ->
+        recur (sm, ntests, false) t4
+        |> fun ((sm, ntests, hasref''), t4') ->
+        if hasref' then ((sm, succ ntests, hasref || hasref''), t4')
+        else
+          ((sm, ntests, hasref || hasref''), TmUtest (fi, t1', t2', t3', t4'))
+    | t ->
+        smap_accum_left_tm_tm recur (sm, ntests, hasref) t
+  in
+  if enable then (
+    let (_, ntests, _), t' = recur (SymbMap.empty, 0, false) t in
+    if ntests > 0 && warn then
+      Printf.printf
+        "\n\
+         WARNING: Removed %d utests referencing external dependent identifiers.\n"
+        ntests
+    else () ;
+    t' )
+  else t
+
+let prune_external_utests_boot t =
+  prune_external_utests
+    ~enable:(!utest && not !disable_prune_external_utests)
+    ~warn:(not !disable_prune_external_utests_warning)
+    t
+
+let rec remove_all_utests = function
+  | TmUtest (_, _, _, _, t) ->
+      remove_all_utests t
+  | t ->
+      smap_tm_tm remove_all_utests t
 
 (* Current working directory standard library path *)
 let stdlib_cwd = Sys.getcwd () ^ Filename.dir_sep ^ "stdlib"
@@ -103,6 +190,14 @@ let debug_after_parse t =
 let debug_after_symbolize t =
   if !enable_debug_after_symbolize then (
     printf "\n-- After symbolize --\n" ;
+    uprint_endline (ustring_of_tm ~margin:80 t) ;
+    t )
+  else t
+
+(* Debug printing after external dependent utest removal *)
+let debug_after_pruning_external_utests t =
+  if !enable_debug_after_prune_external_utests then (
+    printf "\n-- After external utest pruning  --\n" ;
     uprint_endline (ustring_of_tm ~margin:80 t) ;
     t )
   else t

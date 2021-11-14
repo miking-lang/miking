@@ -48,8 +48,10 @@ use
 make test
 ```
 
-Alternatively, you can use `make test-all` to run the full test suite.
-Beware that this may take some time.
+Alternatively, you can use `make test-all` to run the full test suite. Beware
+that this may take some time. Alternatively you can use `make
+test-all-prune-utests` which will exclude tests whose external dependencies are
+not met on the current system (with the exception of `pyml`).
 
 To run a hello world program, create a file `hello.mc` with the following code,
 
@@ -1325,6 +1327,56 @@ You can then test the solver in Miking with
 make test-ipopt
 ```
 
+### External Dependent Utests Pruning
+As part of the parsing (see `prune_external_utests` in `parserutils.ml` for
+details) utests that depend on externals are marked and removed. This done in
+the following steps:
+1. Dead code removal is performed to remove dead code, including any dead code
+   inside utests that might reference externals. This is done to reduce the
+   number of false positivities.
+2. Utests that references externals are marked and removed.
+3. Dead code removal is run again to remove any dead code that result from the
+   removal of utests in step 2.
+
+Additionally, if `boot` or `mi` is run without the `--test` flag, all utests are
+removed prior to dead code removal as all utests can then be considered dead
+code. This both allows the dead code removal to remove more dead code and
+simplifies the pruning of utests implementation. If any utest pruning is
+performed, a warning summarizing pruned utests is printed to _stdout_.
+
+The pruning of utests can be disabled with the `--disable-prune-utests` flag and
+debugged with `--debug-prune-utests` (only in boot).
+
+Moreover, pruning of utests can be disabled for a selection of externals, which
+allows for a more granular approach to the testing of external dependent code
+(see below).
+
+#### Selective pruning
+During compilation, the available OCaml packages on the
+current system is queried and externals depending on these packages are excluded
+from utests pruning. In other words, utests that depend on externals that can be
+compiled on the system are kept, while all others are removed. The listing of
+OCaml packages is based around `dune installed-libraries` (see
+`externalListOcamlPackages` and `externalGetSupportedExternalImpls` in
+`external-includes.mc` so this functionality should not require any additional
+dependencies. For boot and the interpreter, _all_ external dependent utests are
+removed as these currently do not support externals at all.
+
+#### Test organization
+`make test-all` runs all tests, disabling utest pruning for compiled files
+(i.e. if dependencies are not met, you get an error). The recepie `make
+test-all-prune-utests` runs all tests but prunes non-supported utests which is
+handy if your system only meet the dependencies of a subset of the
+externals. Interpreted files are always pruned of external dependent
+utests. Please consult the makefiles for more details.
+
+#### Authoring new external libraries
+To maintain the flexibility of the test organization, future external libraries
+must ensure that externals, or external dependent identifiers are only fully
+applied inside utests. To verify that this is the case you can just run `boot
+eval --test <file.mc>` and verify that you get a non-zero exit code on the
+library that you are currently working on.
+
 ### Parallel Programming
 Miking offers a set of externals for shared-memory parallelism using
 atomic operations and threads running on multiple cores.
@@ -1431,6 +1483,9 @@ output of the above program might be:
 
 However, the values and order of the thread IDs might be different over
 different runs.
+
+### Probability distributions
+Externals for probability distributions are defined in `stdlib/ext/dist-ext.mc`. To use these, you must install the `opam` package `owl` (i.e., `opam install owl`)
 
 ## Profiling
 
@@ -1607,6 +1662,83 @@ In addition, the accelerated AST must be properly annotated with types. The
 types are needed in the Futhark AST, and they are also needed to generate the
 correct data conversion from and to the C wrapper. Failing to do so may result
 in runtime errors.
+
+## Auto Tuning
+
+An MExpr program can contain decision variables, or so called holes, whose
+values are to be decided by an autotuner. A hole is introduced into a program
+using the keyword `hole`. The `hole` takes as argument the type of the hole
+(either `Boolean` or `IntRange`) and its default value. Additionally, an
+`IntRange` hole expects a minimum and maximum value.
+
+For example, the following defines a function `sort` that chooses sorting
+algorithm based on input data length.
+
+```
+let sort = lam seq.
+  let threshold = hole (IntRange {default = 10, min = 0, max = 10000}) in
+  if leqi (length seq) threshold then insertionSort seq
+  else mergeSort seq
+in
+```
+
+We can invoke the autotuner using the `mi tune` subcommand:
+
+```
+mi tune sort.mc
+```
+
+The autotuner uses offline profiling in order to assign the holes values such
+that the execution time of the program is minimized. Available command-line
+options (for setting search strategy, stopping condition, etc.) are listed in
+`stdlib/tuning/tune-options.mc`.
+
+The result of `mi tune` is a tune file, which by default is written to
+`sort.tune` (if your program is called `sort.mc`). To compile the program using
+the tuned values, invoke the main compiler with the `--tuned` option:
+
+```
+mi compile --tuned sort.mc
+```
+
+Passing the `--tuned` flag to `mi tune` makes the auto tuner restart the tuning
+using the values in the tune file as start values:
+
+```
+mi compile --tuned sort.mc
+```
+
+To tune and compile the program in one go, provide the `--compile`
+flag to `mi tune`:
+
+```
+mi tune --compile sort.mc
+```
+
+Note that `mi compile sort.mc` compiles the program using the default values of
+the holes.
+
+### Context-Dependent Holes
+
+A `hole` takes an additional (optional) parameter `depth`, which represents the
+length of the most recent function call history that should influence the choice
+of the value of the hole. By default (if not provided), then `depth` is 0, which
+means that the hole is assigned one value globally by the autotuner. If `depth`
+is larger than 0, then the hole is potentially assigned a different values for
+each possible context.
+
+For instance, the following defines a function `hcreate` that chooses between
+two sequence representations:
+
+```
+let hcreate = lam n. lam f.
+  let rope = hole (Boolean {default = true, depth = 1}) in
+  (if rope then createRope else createList) n f
+in
+```
+
+The hole `rope` has `depth` one, which means that its value might be different
+for two different calls to `hcreate`.
 
 ## Contributing
 

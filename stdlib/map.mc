@@ -44,7 +44,7 @@ let mapValues : Map k v -> [v] = lam m.
   mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
 
 let mapToSeq : Map k v -> [(k,v)] = lam m.
-  zipWith (lam k. lam v. (k,v)) (mapKeys m) (mapValues m)
+  mapBindings m
 
 let mapMapAccum : (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
   lam f. lam acc. lam m.
@@ -59,12 +59,24 @@ let mapFoldlOption : (acc -> k -> v -> Option acc)
   lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t : (k, v). f acc t.0 t.1) acc (mapBindings m)
 
+let mapAllWithKey : (k -> v -> Bool) -> Map k v -> Bool = lam f. lam m.
+  mapFoldWithKey (lam acc. lam k. lam v. and acc (f k v)) true m
+
 let mapAll : (v -> Bool) -> Map k v -> Bool = lam f. lam m.
   mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
+
+-- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
+-- empty.
+let mapChoose : Map k v -> Option (k, v) = lam m.
+  if mapIsEmpty m then None () else Some (mapChooseExn m)
 
 mexpr
 
 let m = mapEmpty subi in
+
+utest
+  match mapChoose m with None _ then true else false
+with true in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
@@ -84,6 +96,10 @@ utest mapLookup 1 m with Some "1" using optionEq eqString in
 utest mapLookup 2 m with Some "2" using optionEq eqString in
 utest mapLookup 3 m with Some "3" using optionEq eqString in
 utest mapLookup 4 m with None () using optionEq eqString in
+
+utest
+  match mapChoose m with Some _ then true else false
+with true in
 
 let m2 = mapInsert 2 "22" m in
 let m2 = mapInsert 4 "44" m2 in
@@ -132,6 +148,9 @@ let m = mapFromSeq subi
   , (2, "2")
   , (123, "123")
   ] in
+utest mapAllWithKey (lam i. lam. geqi i 1) m with true in
+utest mapAllWithKey (lam i. lam. leqi i 123) m with true in
+utest mapAllWithKey (lam i. lam. lti i 123) m with false in
 utest mapAll (lam str. geqi (length str) 1) m with true in
 utest mapAll (lam str. leqi (length str) 3) m with true in
 utest mapAll (lam str. lti (length str) 2) m with false in

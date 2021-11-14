@@ -119,14 +119,18 @@ lang CExprTypePrettyPrint = CExprTypeAst
             match pprintEnvGetStr env n with (env,n) then
               printCType n env t.0
             else never
-          else printCType "" env t.0
+          else match t.1 with None _ then
+            printCType "" env t.0
+          else never
         in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
           (env, _joinSpace (join [_joinSpace "struct" id, " {", mem, "}"]) decl)
         else never
-      else (env, _joinSpace (_joinSpace "struct" id) decl)
+      else match mem with None _ then
+        (env, _joinSpace (_joinSpace "struct" id) decl)
+      else never
     else never
 
   | CTyUnion { id = id, mem = mem } ->
@@ -280,7 +284,9 @@ lang CDefPrettyPrint = CExprTypePrettyPrint + CInitPrettyPrint
         match printCInit env init with (env,init) then
           (env, join [decl, " = ", init])
         else never
-      else (env, decl)
+      else match init with None _ then
+        (env, decl)
+      else never
     else never
 
 end

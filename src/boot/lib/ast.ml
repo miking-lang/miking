@@ -21,6 +21,8 @@ let enable_debug_after_symbolize = ref false
 
 let enable_debug_after_dead_code_elimination = ref false
 
+let enable_debug_after_prune_external_utests = ref false
+
 let enable_debug_dead_code_info = ref false
 
 let enable_debug_after_mlang = ref false
@@ -35,6 +37,12 @@ let enable_debug_profiling = ref false
 
 let disable_dead_code_elimination = ref false
 
+let disable_prune_external_utests_summary = ref false
+
+let disable_prune_external_utests = ref false
+
+let disable_prune_external_utests_warning = ref false
+
 let utest = ref false (* Set to true if unit testing is enabled *)
 
 let utest_ok = ref 0 (* Counts the number of successful unit tests *)
@@ -48,7 +56,24 @@ type side_effect = bool
 type frozen = bool
 
 (* Map type for record implementation *)
-module Record = Map.Make (Ustring)
+module Record = struct
+  include Map.Make (Ustring)
+
+  let map_fold (f : Ustring.t -> 'a -> 'b -> 'b * 'a) (s : 'a t) (init : 'b) :
+      'b * 'a t =
+    (* [map_fold] is a combination of [Record.mapi] and [Record.fold] that
+       threads an accumulator through calls to [f].*)
+    let acc = ref init in
+    let s' =
+      mapi
+        (fun k v ->
+          let acc', v' = f k v !acc in
+          acc := acc' ;
+          v' )
+        s
+    in
+    (!acc, s')
+end
 
 (* Evaluation environment *)
 type env = (Symb.t * tm) list
@@ -91,6 +116,7 @@ and const =
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string
   (* MCore intrinsics: Characters *)
@@ -160,7 +186,7 @@ and const =
   | CmapGetCmpFun
   | CmapInsert of tm option * tm option
   | CmapRemove of tm option
-  | CmapFindWithExn of tm option
+  | CmapFindExn of tm option
   | CmapFindOrElse of tm option * tm option
   | CmapFindApplyOrElse of tm option * tm option * tm option
   | CmapMem of tm option
@@ -169,6 +195,8 @@ and const =
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
+  | CmapChooseExn
+  | CmapChooseOrElse of tm option
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
@@ -190,7 +218,9 @@ and const =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
-  | CbootParserParseMCoreFile of int Mseq.t Mseq.t option
+  | CbootParserParseMCoreFile of
+      (bool * bool * int Mseq.t Mseq.t * bool) option
+      * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetType of tm option
@@ -372,80 +402,81 @@ and ident =
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
-let tyUnit fi = TyRecord (fi, Record.empty, [])
+let ty_unit fi = TyRecord (fi, Record.empty, [])
+
+(* smap accumulate left for terms *)
+let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
+    = function
+  | TmApp (fi, t1, t2) ->
+      f acc t1
+      |> fun (acc, t1') ->
+      f acc t2 |> fun (acc, t2') -> (acc, TmApp (fi, t1', t2'))
+  | TmLam (fi, x, s, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmLam (fi, x, s, ty, t'))
+  | TmLet (fi, x, s, ty, t1, t2) ->
+      f acc t1
+      |> fun (acc, t1') ->
+      f acc t2 |> fun (acc, t2') -> (acc, TmLet (fi, x, s, ty, t1', t2'))
+  | TmRecLets (fi, lst, t) ->
+      List.fold_left_map
+        (fun acc (fi, x, s, ty, t) ->
+          f acc t |> fun (acc, t') -> (acc, (fi, x, s, ty, t')) )
+        acc lst
+      |> fun (acc, lst') ->
+      f acc t |> fun (acc, t') -> (acc, TmRecLets (fi, lst', t'))
+  | TmSeq (fi, ts) ->
+      let acc, ts' = Mseq.Helpers.map_accum_left f acc ts in
+      (acc, TmSeq (fi, ts'))
+  | TmRecord (fi, r) ->
+      let acc, r' = Record.map_fold (fun _ t acc -> f acc t) r acc in
+      (acc, TmRecord (fi, r'))
+  | TmRecordUpdate (fi, r, l, t) ->
+      f acc r
+      |> fun (acc, r') ->
+      f acc t |> fun (acc, t') -> (acc, TmRecordUpdate (fi, r', l, t'))
+  | TmType (fi, x, s, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, ty, t'))
+  | TmConDef (fi, x, s, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmConDef (fi, x, s, ty, t'))
+  | TmConApp (fi, k, s, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmConApp (fi, k, s, t'))
+  | TmMatch (fi, t1, p, t2, t3) ->
+      f acc t1
+      |> fun (acc, t1') ->
+      f acc t2
+      |> fun (acc, t2') ->
+      f acc t3 |> fun (acc, t3') -> (acc, TmMatch (fi, t1', p, t2', t3'))
+  | TmUtest (fi, t1, t2, tusing, tnext) ->
+      f acc t1
+      |> fun (acc, t1') ->
+      f acc t2
+      |> fun (acc, t2') ->
+      ( match tusing with
+      | Some tusing' ->
+          f acc tusing' |> fun (acc, tusing'') -> (acc, Some tusing'')
+      | None ->
+          (acc, tusing) )
+      |> fun (acc, tusing') ->
+      f acc tnext
+      |> fun (acc, tnext') -> (acc, TmUtest (fi, t1', t2', tusing', tnext'))
+  | TmUse (fi, l, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmUse (fi, l, t'))
+  | TmExt (fi, x, s, ty, e, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmExt (fi, x, s, ty, e, t'))
+  | TmClos (fi, x, s, t, env) ->
+      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, t', env))
+  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
+      (acc, t)
 
 (* smap for terms *)
-let smap_tm_tm (f : tm -> tm) = function
-  | TmApp (fi, t1, t2) ->
-      TmApp (fi, f t1, f t2)
-  | TmLam (fi, x, s, ty, t1) ->
-      TmLam (fi, x, s, ty, f t1)
-  | TmLet (fi, x, s, ty, t1, t2) ->
-      TmLet (fi, x, s, ty, f t1, f t2)
-  | TmRecLets (fi, lst, tm) ->
-      TmRecLets
-        (fi, List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, f t)) lst, f tm)
-  | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.map f tms)
-  | TmRecord (fi, r) ->
-      TmRecord (fi, Record.map f r)
-  | TmRecordUpdate (fi, r, l, t) ->
-      TmRecordUpdate (fi, f r, l, f t)
-  | TmType (fi, x, s, ty, t1) ->
-      TmType (fi, x, s, ty, f t1)
-  | TmConDef (fi, x, s, ty, t1) ->
-      TmConDef (fi, x, s, ty, f t1)
-  | TmConApp (fi, k, s, t) ->
-      TmConApp (fi, k, s, f t)
-  | TmMatch (fi, t1, p, t2, t3) ->
-      TmMatch (fi, f t1, p, f t2, f t3)
-  | TmUtest (fi, t1, t2, tusing, tnext) ->
-      let tusing_mapped = Option.map f tusing in
-      TmUtest (fi, f t1, f t2, tusing_mapped, f tnext)
-  | TmUse (fi, l, t1) ->
-      TmUse (fi, l, f t1)
-  | TmExt (fi, x, s, ty, e, t) ->
-      TmExt (fi, x, s, ty, e, f t)
-  | TmClos (fi, x, s, t1, env) ->
-      TmClos (fi, x, s, f t1, env)
-  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
-      t
+let smap_tm_tm (f : tm -> tm) (t : tm) : tm =
+  let _, t' = smap_accum_left_tm_tm (fun _ t -> ((), f t)) () t in
+  t'
 
 (* sfold over terms *)
-let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
-  | TmApp (_, t1, t2) ->
-      f (f acc t1) t2
-  | TmLam (_, _, _, _, t1) ->
-      f acc t1
-  | TmLet (_, _, _, _, t1, t2) ->
-      f (f acc t1) t2
-  | TmRecLets (_, lst, tm) ->
-      f (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst) tm
-  | TmSeq (_, tms) ->
-      Mseq.Helpers.fold_left f acc tms
-  | TmRecord (_, r) ->
-      Record.fold (fun _ t acc -> f acc t) r acc
-  | TmRecordUpdate (_, r, _, t) ->
-      f (f acc r) t
-  | TmType (_, _, _, _, t1) ->
-      f acc t1
-  | TmConDef (_, _, _, _, t1) ->
-      f acc t1
-  | TmConApp (_, _, _, t) ->
-      f acc t
-  | TmMatch (_, t1, _, t2, t3) ->
-      f (f (f acc t1) t2) t3
-  | TmUtest (_, t1, t2, tusing, tnext) ->
-      let acc = f (f acc t1) t2 in
-      f (match tusing with None -> acc | Some t -> f acc t) tnext
-  | TmUse (_, _, t1) ->
-      f acc t1
-  | TmExt (_, _, _, _, _, t) ->
-      f acc t
-  | TmClos (_, _, _, t1, _) ->
-      f acc t1
-  | TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _ ->
-      acc
+let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) (t : tm) : 'a =
+  let acc', _ = smap_accum_left_tm_tm (fun acc t -> (f acc t, t)) acc t in
+  acc'
 
 (* Returns arity given an type *)
 let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
@@ -545,6 +576,7 @@ let const_has_side_effect = function
   | Cceilfi
   | Croundfi
   | Cint2float
+  | CstringIsFloat
   | Cstring2float
   | Cfloat2string ->
       false
@@ -617,7 +649,7 @@ let const_has_side_effect = function
   | CmapGetCmpFun
   | CmapInsert _
   | CmapRemove _
-  | CmapFindWithExn _
+  | CmapFindExn _
   | CmapFindOrElse _
   | CmapFindApplyOrElse _
   | CmapMem _
@@ -626,6 +658,8 @@ let const_has_side_effect = function
   | CmapMapWithKey _
   | CmapFoldWithKey _
   | CmapBindings
+  | CmapChooseExn
+  | CmapChooseOrElse _
   | CmapEq _
   | CmapCmp _ ->
       false
@@ -646,7 +680,7 @@ let const_has_side_effect = function
   | CtensorEq _
   | Ctensor2string _ ->
       true
-  (* MCore intrinsics: Boot parser *)
+  (* MCore Boot parser *)
   | CbootParserTree _
   | CbootParserParseMExprString _
   | CbootParserParseMCoreFile _

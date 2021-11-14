@@ -32,9 +32,10 @@
 /* Misc tokens */
 %token EOF
 
-/* Use the non-terminals 'con_ident', 'var_ident', 'type_ident', and 'ident' instead of the below */
+/* Use the non-terminals 'con_ident', 'var_ident', 'frozen_ident', 'type_ident', and 'ident' instead of the below */
 %token <Ustring.ustring Ast.tokendata> CON_IDENT
 %token <Ustring.ustring Ast.tokendata> VAR_IDENT
+%token <Ustring.ustring Ast.tokendata> FROZEN_IDENT
 %token <Ustring.ustring Ast.tokendata> TYPE_IDENT
 %token <Ustring.ustring Ast.tokendata> LABEL_IDENT
 %token <Ustring.ustring Ast.tokendata> UC_IDENT  /* An identifier that starts with an upper-case letter */
@@ -105,7 +106,6 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
-%token <unit Ast.tokendata> BACKTICK      /* "`"   */
 
 %start main
 %start main_mexpr
@@ -267,7 +267,7 @@ constr_params:
   | ty
     { fun _ -> $1 }
   |
-    { fun i -> tyUnit i }
+    { fun i -> ty_unit i }
 
 params:
   | LPAREN var_ident COLON ty RPAREN params
@@ -322,6 +322,9 @@ mexpr:
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
         TmMatch(fi,$2,$4,$6,$8) }
+  | MATCH mexpr WITH pat IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmMatch(fi,$2,$4,$6,TmNever(fi)) }
   | SWITCH mexpr swcases
       {
         let fi = mkinfo $1.i (tm_info $3) in
@@ -389,7 +392,7 @@ atom:
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false) }
-  | BACKTICK var_ident   { TmVar($2.i,$2.v,Symb.Helpers.nosym, true) }
+  | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
@@ -539,7 +542,7 @@ ty_left:
 
 ty_atom:
   | LPAREN RPAREN
-    { tyUnit (mkinfo $1.i $2.i) }
+    { ty_unit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
     { $2 }
   | LSQUARE ty RSQUARE
@@ -547,7 +550,7 @@ ty_atom:
   | LPAREN ty COMMA ty_list RPAREN
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LBRACKET RBRACKET
-    { tyUnit (mkinfo $1.i $2.i) }
+    { ty_unit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
     { let r = $2 |> List.fold_left
                       (fun acc (k,v) -> Record.add k v acc)
@@ -596,6 +599,9 @@ ident:
 var_ident:
   | LC_IDENT {$1}
   | VAR_IDENT {$1}
+
+frozen_ident:
+  | FROZEN_IDENT {$1}
 
 con_ident:
   | UC_IDENT {$1}

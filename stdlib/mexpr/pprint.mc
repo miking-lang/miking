@@ -240,9 +240,12 @@ lang VarPrettyPrint = PrettyPrint + VarAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident, frozen = frozen} ->
-    let freezeStr = if frozen then "`" else "" in
-    match pprintVarName env ident with (env, str)
-    then (env, concat freezeStr str) else never
+    if frozen then
+      match pprintEnvGetStr env ident with (env,str) then
+        (env, join ["#frozen\"", str, "\""])
+      else never
+    else
+      pprintVarName env ident
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst
@@ -658,12 +661,7 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CChar {val = '\n'} -> "\\n"
-  | CChar {val = '\t'} -> "\\t"
-  | CChar {val = '\\'} -> "\\\\"
-  | CChar {val = '\''} -> "\\'"
-  | CChar {val = '\"'} -> "\\\""
-  | CChar c -> ['\'', c.val, '\'']
+  | CChar c -> join ["\'", escapeChar c.val, "\'"]
 end
 
 lang CmpCharPrettyPrint = CmpCharAst + ConstPrettyPrint
@@ -679,6 +677,7 @@ end
 
 lang FloatStringConversionPrettyPrint = FloatStringConversionAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
+  | CStringIsFloat _ -> "stringIsFloat"
   | CString2float _ -> "string2float"
   | CFloat2string _ -> "float2string"
 end
@@ -781,10 +780,12 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapEmpty _ -> "mapEmpty"
   | CMapInsert _ -> "mapInsert"
   | CMapRemove _ -> "mapRemove"
-  | CMapFindWithExn _ -> "mapFind"
+  | CMapFindExn _ -> "mapFindExn"
   | CMapFindOrElse _ -> "mapFindOrElse"
   | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
   | CMapBindings _ -> "mapBindings"
+  | CMapChooseExn _ -> "mapChooseExn"
+  | CMapChooseOrElse _ -> "mapChooseOrElse"
   | CMapSize _ -> "mapSize"
   | CMapMem _ -> "mapMem"
   | CMapAny _ -> "mapAny"
@@ -1098,15 +1099,25 @@ lang VarTypePrettyPrint = VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
     pprintEnvGetStr env t.ident
-  | TyFlex t ->
+end
+
+lang FlexTypePrettyPrint = FlexTypeAst + RecordTypeAst
+  sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
+  | TypeVar () -> (env, idstr)
+  | WeakVar () -> (env, concat "_" idstr)
+  | RecordVar r ->
+    let recty =
+      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+    match getTypeStringCode indent env recty with (env, recstr) in
+    (env, join [idstr, "<:", recstr])
+
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyFlex t & ty ->
     match deref t.contents with Unbound t then
-      match pprintEnvGetStr env t.ident with (env, str) then
-        let prefix = if t.weak then "_" else "" in
-        (env, concat prefix str)
-      else never
-    else match deref t.contents with Link ty then
-      getTypeStringCode indent env ty
-    else never
+      match pprintEnvGetStr env t.ident with (env, idstr) in
+      getVarSortStringCode indent env idstr t.sort
+    else
+      getTypeStringCode indent env (resolveLink ty)
 end
 
 lang AllTypePrettyPrint = AllTypeAst
@@ -1163,8 +1174,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint + AppTypePrettyPrint +
-  TensorTypePrettyPrint + AllTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint + FlexTypePrettyPrint +
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

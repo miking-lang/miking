@@ -16,7 +16,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
-include "ocaml/sys.mc"
+include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
 include "pmexpr/extract.mc"
@@ -26,6 +26,7 @@ include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
+include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
@@ -159,7 +160,13 @@ gpu.c gpu.h: gpu.fut
 
 let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
-  let ast = parseMCoreFile parallelKeywords file in
+  let ast = parseParseMCoreFile {
+    keepUtests = options.runTests,
+    pruneExternalUtests = not options.disablePruneExternalUtests,
+    pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
+    findExternalsExclude = true,
+    keywords = parallelKeywords
+  } file in
   let ast = makeKeywords [] ast in
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = utestStrip ast in

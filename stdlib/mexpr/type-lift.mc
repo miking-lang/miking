@@ -22,6 +22,7 @@ include "cmp.mc"
 -- TYPE LIFTING ENVIRONMENT --
 ------------------------------
 
+-- NOTE(dlunde,2021-10-06): The type 'Type' is not visible here.
 type TypeLiftEnv = {
 
   -- Collects all type bindings encountered in the program in sequence.
@@ -30,6 +31,10 @@ type TypeLiftEnv = {
   -- Record types encountered so far. Uses intrinsic maps as this is
   -- performance critical.
   records: Map (Map SID Type) Name,
+
+  -- Sequence types encountered so far. Uses intrinsic maps as this is
+  -- performance critical.
+  seqs: Map Type Name,
 
   labels: Set [SID],
 
@@ -100,7 +105,7 @@ lang TypeLiftAddRecordToEnvOrdered = RecordTypeAst
       _addRecordToEnv env name ty
     else
       _addRecordToEnv env (None ()) ty
-  | ty -> (env, ty)
+  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
 -- This implementation does not take record field order into account when
@@ -110,7 +115,23 @@ lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
   | TyRecord {fields = fields, labels = labels, info = info} & ty ->
     _addRecordToEnv
       env (mapLookup fields env.records) ty
-  | ty -> (env, ty)
+  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
+end
+
+-- Define function for adding sequence types to environment
+lang TypeLiftAddSeqToEnv = SeqTypeAst + ConTypeAst
+  sem addSeqToEnv (env: TypeLiftEnv) =
+  | TySeq {info = info, ty = innerTy} & ty ->
+    match mapLookup innerTy env.seqs with Some name then
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
+    else
+      let name = nameSym "Seq" in
+      let tycon = TyCon {ident = name, info = info} in
+      let env = {{env with seqs = mapInsert innerTy name env.seqs}
+                      with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tycon)
 end
 
 -----------
@@ -161,6 +182,7 @@ lang TypeLift = Cmp
     let emptyTypeLiftEnv : TypeLiftEnv = {
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
+      seqs = mapEmpty cmpType,
       labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
@@ -259,7 +281,7 @@ end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyRecord ({fields = fields} & r) & ty->
+  | TyRecord ({fields = fields} & r) & ty ->
     if eqi (mapLength fields) 0 then
       (env, ty)
     else
@@ -267,6 +289,21 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
       match mapMapAccum f env fields with (env, fields) then
         addRecordToEnv env (TyRecord {r with fields = fields})
       else never
+end
+
+-- Optional lifting of records (not added as default in MExprTypeLift)
+lang SeqTypeTypeLift = TypeLift + SeqTypeAst + TypeLiftAddSeqToEnv
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TySeq ({info = info, ty = innerTy} & r) & ty ->
+    match typeLiftType env innerTy with (env, innerTy) then
+      addSeqToEnv env (TySeq {r with ty = innerTy})
+    else never
+end
+
+-- Type lifting, but leave strings = [char] intact (not added as default in MExprTypeLift).
+lang SeqTypeNoStringTypeLift = SeqTypeTypeLift + CharTypeAst
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TySeq {info = _, ty = TyChar _} & ty -> (env,ty)
 end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
@@ -297,16 +334,17 @@ lang MExprTypeLift =
   RecordTypeTypeLift + AppTypeTypeLift
 end
 
-lang MExprTypeLiftOrderedRecordsCmpClosed =
-  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + MExprCmp
+lang MExprTypeLiftOrderedRecords =
+  MExprTypeLift + TypeLiftAddRecordToEnvOrdered
+
 lang MExprTypeLiftUnOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
-lang MExprTypeLiftUnOrderedRecordsCmpClosed =
-  MExprTypeLiftUnOrderedRecords + MExprCmp
 
 lang TestLang =
-  MExprTypeLiftUnOrderedRecordsCmpClosed + MExprSym + MExprTypeAnnot +
-  MExprPrettyPrint
+  MExprTypeLiftUnOrderedRecords + SeqTypeTypeLift + MExprSym +
+  MExprTypeAnnot + MExprPrettyPrint
+
+-- TODO(dlunde,2021-10-06): No tests for ordered records?
 
 mexpr
 
@@ -421,6 +459,24 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   ()
 else never);
 
+let nestedSeq = typeAnnot (symbolize (bindall_ [
+  ulet_ "s" (seq_ [seq_ [seq_ [int_ 2]], seq_ [seq_ [int_ 3]]]),
+  uunit_
+])) in
+(match typeLift nestedSeq with (env, t) then
+  let fstid = fst (get env 0) in
+  let sndid = fst (get env 1) in
+  let trdid = fst (get env 2) in
+  let expectedEnv = [
+    (fstid, tyseq_ (ntycon_ sndid)),
+    (sndid, tyseq_ (ntycon_ trdid)),
+    (trdid, tyseq_ (tyint_))
+  ] in
+  utest env with expectedEnv using eqEnv in
+  utest t with nestedSeq using eqExpr in
+  ()
+else never);
+
 let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
@@ -498,25 +554,29 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   -- as they are processed, so the last record in the given term will be first
   -- in the environment.
   let ids = map (lam p: (a, b). p.0) env in
-  let fstRecordId = get ids 5 in -- type Rec1 = {0 : [Char], 1 : Int}
-  let globalEnvId = get ids 4 in -- type GlobalEnv = [Rec1]
-  let localEnvId = get ids 3 in  -- type LocalEnv = [Rec1]
+  let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
+  let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
+  let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
+  let globalEnvId = get ids 4 in -- type GlobalEnv = Seq2
+  let localEnvId = get ids 3 in  -- type LocalEnv = Seq2
   let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
   let envId = get ids 1 in       -- type Env = Rec2
-  let trdRecordId = get ids 0 in -- type Rec3 = {global : [Rec1], local : [Rec1]}
+  let trdRecordId = get ids 0 in -- type Rec3 = {global : Seq2, local : Seq2}
   let expectedEnv = [
     (trdRecordId, tyrecord_ [
-      ("local", tyseq_ (ntycon_ fstRecordId)),
-      ("global", tyseq_ (ntycon_ fstRecordId))
+      ("local", ntycon_ sndSeqId),
+      ("global", ntycon_ sndSeqId)
     ]),
     (envId, ntycon_ sndRecordId),
     (sndRecordId, tyrecord_ [
       ("local", ntycon_ localEnvId),
       ("global", ntycon_ globalEnvId)
     ]),
-    (localEnvId, tyseq_ (ntycon_ fstRecordId)),
-    (globalEnvId, tyseq_ (ntycon_ fstRecordId)),
-    (fstRecordId, tytuple_ [tystr_, tyint_])
+    (localEnvId, ntycon_ sndSeqId),
+    (globalEnvId, ntycon_ sndSeqId),
+    (sndSeqId, tyseq_ (ntycon_ fstRecordId)),
+    (fstRecordId, tytuple_ [ntycon_ fstSeqId, tyint_]),
+    (fstSeqId, tystr_)
   ] in
   utest env with expectedEnv using eqEnv in
   ()

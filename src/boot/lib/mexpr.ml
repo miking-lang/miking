@@ -136,6 +136,8 @@ let arity = function
       1
   | Cint2float ->
       1
+  | CstringIsFloat ->
+      1
   | Cstring2float ->
       1
   | Cfloat2string ->
@@ -317,9 +319,9 @@ let arity = function
       2
   | CmapRemove (Some _) ->
       1
-  | CmapFindWithExn None ->
+  | CmapFindExn None ->
       2
-  | CmapFindWithExn (Some _) ->
+  | CmapFindExn (Some _) ->
       1
   | CmapFindOrElse (None, None) ->
       3
@@ -358,6 +360,12 @@ let arity = function
   | CmapFoldWithKey (_, Some _) ->
       1
   | CmapBindings ->
+      1
+  | CmapChooseExn ->
+      1
+  | CmapChooseOrElse None ->
+      2
+  | CmapChooseOrElse (Some _) ->
       1
   | CmapEq (None, None) ->
       3
@@ -441,9 +449,11 @@ let arity = function
       2
   | CbootParserParseMExprString (Some _) ->
       1
-  | CbootParserParseMCoreFile None ->
+  | CbootParserParseMCoreFile (None, None) ->
+      3
+  | CbootParserParseMCoreFile (Some _, None) ->
       2
-  | CbootParserParseMCoreFile (Some _) ->
+  | CbootParserParseMCoreFile (_, Some _) ->
       1
   | CbootParserGetId ->
       1
@@ -695,6 +705,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | Cneqf (Some v1), TmConst (fi, CFloat v2) ->
       TmConst (fi, CBool (v1 <> v2))
   | Cneqf None, _ | Cneqf (Some _), _ ->
+      fail_constapp fi
+  | CstringIsFloat, TmSeq (_, s) ->
+      let s = tm_seq2int_seq fi s in
+      TmConst (fi, CBool (Intrinsics.FloatConversion.string_is_float s))
+  | CstringIsFloat, _ ->
       fail_constapp fi
   | Cstring2float, TmSeq (fi, s) ->
       let f = tm_seq2int_seq fi s in
@@ -1047,11 +1062,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CMap (cmp, Mmap.remove k m))
   | CmapRemove (Some _), _ ->
       fail_constapp fi
-  | CmapFindWithExn None, k ->
-      TmConst (fi, CmapFindWithExn (Some k))
-  | CmapFindWithExn (Some k), TmConst (_, CMap (_, m)) ->
-      Mmap.find k m
-  | CmapFindWithExn (Some _), _ ->
+  | CmapFindExn None, k ->
+      TmConst (fi, CmapFindExn (Some k))
+  | CmapFindExn (Some k), TmConst (_, CMap (_, m)) ->
+      Mmap.find_exn k m
+  | CmapFindExn (Some _), _ ->
       fail_constapp fi
   | CmapFindOrElse (None, None), f ->
       TmConst (fi, CmapFindOrElse (Some f, None))
@@ -1121,6 +1136,20 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       in
       TmSeq (fi, binds)
   | CmapBindings, _ ->
+      fail_constapp fi
+  | CmapChooseExn, TmConst (_, CMap (_, m)) ->
+      let k, v = Mmap.choose_exn m in
+      tuple2record fi [k; v]
+  | CmapChooseExn, _ ->
+      fail_constapp fi
+  | CmapChooseOrElse None, f ->
+      TmConst (fi, CmapChooseOrElse (Some f))
+  | CmapChooseOrElse (Some f), TmConst (_, CMap (_, m)) ->
+      if Mmap.size m > 0 then
+        let k, v = Mmap.choose_exn m in
+        tuple2record fi [k; v]
+      else apply f tm_unit
+  | CmapChooseOrElse _, _ ->
       fail_constapp fi
   | CmapEq (None, None), f ->
       let veq v1 v2 =
@@ -1437,16 +1466,49 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
-  | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
+  | CbootParserParseMCoreFile (None, None), TmRecord (_, r) -> (
+    try
+      match
+        ( Record.find (us "0") r
+        , Record.find (us "1") r
+        , Record.find (us "2") r
+        , Record.find (us "3") r )
+      with
+      | ( TmConst (_, CBool keep_utests)
+        , TmConst (_, CBool prune_external_utests)
+        , TmSeq (_, externals_exclude)
+        , TmConst (_, CBool warn) ) ->
+          let externals_exclude =
+            Mseq.map
+              (function
+                | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi
+                )
+              externals_exclude
+          in
+          TmConst
+            ( fi
+            , CbootParserParseMCoreFile
+                ( Some
+                    ( keep_utests
+                    , prune_external_utests
+                    , externals_exclude
+                    , warn )
+                , None ) )
+      | _ ->
+          fail_constapp fi
+    with Not_found -> fail_constapp fi )
+  | CbootParserParseMCoreFile (Some prune_arg, None), TmSeq (fi, keywords) ->
       let keywords =
         Mseq.map
           (function
             | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
-          seq
+          keywords
       in
-      TmConst (fi, CbootParserParseMCoreFile (Some keywords))
-  | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2seq_of_int fi seq) in
+      TmConst (fi, CbootParserParseMCoreFile (Some prune_arg, Some keywords))
+  | ( CbootParserParseMCoreFile (Some prune_arg, Some keywords)
+    , TmSeq (fi, filename) ) ->
+      let filename = tmseq2seq_of_int fi filename in
+      let t = Bootparser.parseMCoreFile prune_arg keywords filename in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
