@@ -62,6 +62,13 @@ let for_
   -> ()
   = lam xs. lam f. iter f xs
 
+-- In contrast to map, mapReverse is tail recursive.
+let mapReverse = lam f. lam lst.
+  foldl (lam acc. lam x. cons (f x) acc) [] lst
+
+utest mapReverse (lam x. addi x 1) [10,20,30] with [31,21,11]
+
+
 -- Folds
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 

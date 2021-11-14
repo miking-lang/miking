@@ -4,6 +4,7 @@ include "set.mc"
 include "ext/ext-test.ext-ocaml.mc"           -- For testing
 include "ext/math-ext.ext-ocaml.mc"
 include "ext/dist-ext.ext-ocaml.mc"
+include "ext/file-ext.ext-ocaml.mc"
 
 include "ext/toml-ext.ext-ocaml.mc"
 include "ext/async-ext.ext-ocaml.mc"
@@ -32,6 +33,7 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       atomicExtMap,
       threadExtMap,
       distExtMap,
+      fileExtMap,
       ipoptExtMap,
       tomlExtMap,
       asyncExtMap
