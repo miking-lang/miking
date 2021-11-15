@@ -97,6 +97,7 @@ let mapStringLookup = assocLookup {eq=eqString} in
 
 -- Does the command line include at least a file or a command?
 if lti (length argv) 2 then usage (None ()) else
+
   let cmdString = get argv 1 in
   let rest = tail (tail argv) in
   -- Is it a known command?
