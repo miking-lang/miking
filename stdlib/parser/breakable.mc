@@ -64,6 +64,23 @@ connect, as opposed to what their fundamental meaning is, which I
 (vipa) hypothesize is quite helpful for the understandability of
 ambiguities.
 
+# Grammar restrictions for resolvable ambiguity
+
+To ensure that all ambiguities that may arise while parsing are
+resolvable there are two restrictions:
+
+- Grouping parentheses should be allowed almost always; the only place
+  they are not allowed are inside broken productions. For example,
+  using the `if then else` example above, parentheses are not allowed
+  on the left of `else` since that would split it from the `if`.
+  - This should be expressed by using an `AllowSet` that does not
+    contain the grouping operator. Most other locations should use
+    `DisallowSet`s with very few members.
+- It should be unambiguous how we "unbreak" a broken production. If
+  there were such an ambiguity we could not resolve it since we can't
+  put parentheses inside a broken production, following the previous
+  point.
+
 # Mid-level usage instructions
 
 1. Create a value of the `BreakableGrammar` type. See the tests at the
@@ -87,6 +104,7 @@ parse, or an ambiguity error.
 -/
 
 include "map.mc"
+include "set.mc"
 include "either.mc"
 include "common.mc"
 include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the tests, but we can't put an include only there
@@ -94,6 +112,10 @@ include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the te
 type AllowSet id
 con AllowSet : Map id () -> AllowSet id
 con DisallowSet : Map id () -> AllowSet id
+
+let _isWhitelist
+  : AllowSet id -> Bool
+  = lam a. match a with AllowSet _ then true else false
 
 type BreakableProduction prodLabel res self
 con BreakableAtom :
@@ -140,10 +162,12 @@ type RClosed
 type BreakableInput res self lstyle rstyle
 con AtomI :
   { id : OpId
+  , allowedTop : Bool
   , construct : self -> res
   } -> BreakableInput res self LClosed RClosed
 con InfixI :
   { id : OpId
+  , allowedTop : Bool
   , leftAllow : AllowSet OpId
   , rightAllow : AllowSet OpId
   , precWhenThisIsRight : Map OpId OpGrouping
@@ -151,11 +175,13 @@ con InfixI :
   } -> BreakableInput res self LOpen ROpen
 con PrefixI :
   { id : OpId
+  , allowedTop : Bool
   , rightAllow : AllowSet OpId
   , construct : self -> res -> res
   } -> BreakableInput res self LClosed ROpen
 con PostfixI :
   { id : OpId
+  , allowedTop : Bool
   , leftAllow : AllowSet OpId
   , precWhenThisIsRight : Map OpId OpGrouping
   , construct : self -> res -> res
@@ -167,7 +193,6 @@ type BreakableGenGrammar prodLabel res self =
   , prefixes : Map prodLabel (BreakableInput res self LClosed ROpen)
   , infixes : Map prodLabel (BreakableInput res self LOpen ROpen)
   , postfixes : Map prodLabel (BreakableInput res self LOpen RClosed)
-  , topAllowed : AllowSet OpId
   }
 
 -- NOTE(vipa, 2021-02-12): Many sequences in this file have an extra comment after them: NonEmpty. In the original implementation this was the type of a non-empty list, but we don't have one of those here, so for now I'm just recording that knowledge in comments, then we'll see what we do about it later.
@@ -249,7 +274,6 @@ con TentativeMid :
 con TentativeRoot :
   { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
   , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
-  , allowedChildren : AllowSet OpId
   } -> TentativeNode res self ROpen
 
 -- The data we carry along while parsing
@@ -331,6 +355,69 @@ let _addedNodesRightChildren
     match node with TentativeRoot{addedNodesRightChildren = x} | TentativeMid{addedNodesRightChildren = x}
     then x
     else never
+let _isTopAllowedP = lam p.
+  switch p
+  case AtomP { input = AtomI { allowedTop = allowedTop } } then allowedTop
+  case InfixP { input = InfixI { allowedTop = allowedTop } } then allowedTop
+  case PrefixP { input = PrefixI { allowedTop = allowedTop } } then allowedTop
+  case PostfixP { input = PostfixI { allowedTop = allowedTop } } then allowedTop
+  end
+let _selfP = lam p.
+  match p with AtomP {self = self} | InfixP {self = self} | PrefixP {self = self} | PostfixP {self = self}
+  then self
+  else never
+
+let _isBrokenEdge
+  : Bool
+  -> PermanentNode res self
+  -> Bool
+  = lam isWhitelist. lam node.
+    or isWhitelist (not (_isTopAllowedP node))
+let _leftStuffP = lam p.
+  switch p
+  case InfixP ({ input = InfixI { leftAllow = allows } } & r) then
+    Some (r.leftChildAlts, allows)
+  case PostfixP ({ input = PostfixI { leftAllow = allows } } & r) then
+    Some (r.leftChildAlts, allows)
+  case _ then None ()
+  end
+let _rightStuffP = lam p.
+  switch p
+  case InfixP ({ input = InfixI { rightAllow = allows } } & r) then
+    Some (r.rightChildAlts, allows)
+  case PrefixP ({ input = PrefixI { rightAllow = allows } } & r) then
+    Some (r.rightChildAlts, allows)
+  case _ then None ()
+  end
+
+let _brokenIdxesP
+  : PermanentNode res self
+  -> [Int]
+  = recursive let work = lam isWhitelist. lam p.
+      if _isBrokenEdge isWhitelist p then
+        let l = match _leftStuffP p with Some (children, allows)
+          then join (map (work (_isWhitelist allows)) children)
+          else [] in
+        let r = match _rightStuffP p with Some (children, allows)
+          then join (map (work (_isWhitelist allows)) children)
+          else [] in
+        join [l, [_opIdxP p], r]
+      else []
+    in work true
+let _brokenChildrenP
+  : PermanentNode res self
+  -> [PermanentNode res self]
+  = recursive let work = lam isWhitelist. lam p.
+      if _isBrokenEdge isWhitelist p then
+        let l = match _leftStuffP p with Some (children, allows)
+          then join (map (work (_isWhitelist allows)) children)
+          else [] in
+        let r = match _rightStuffP p with Some (children, allows)
+          then join (map (work (_isWhitelist allows)) children)
+          else [] in
+        concat l r
+      else [p]
+    in work true
 
 let breakableInAllowSet
   : id
@@ -427,35 +514,38 @@ let breakableGenGrammar
     let updateRef : Ref a -> (a -> a) -> ()
       = lam ref. lam f. modref ref (f (deref ref)) in
 
+    let isTopAllowed =
+      let topAllowed = breakableMapAllowSet toOpId _cmpOpId grammar.topAllowed in
+      lam id. breakableInAllowSet id topAllowed in
+
     for_ grammar.productions
       (lam prod.
         let label = label prod in
         let id = toOpId label in
         match prod with BreakableAtom {construct = construct} then
-          updateRef atoms (cons (label, AtomI {id = id, construct = construct}))
+          updateRef atoms (cons (label, AtomI {id = id, allowedTop = isTopAllowed id, construct = construct}))
         else match prod with BreakablePrefix {construct = c, rightAllow = r} then
           let r = breakableMapAllowSet toOpId _cmpOpId r in
-          updateRef prefixes (cons (label, PrefixI {id = id, construct = c, rightAllow = r}))
+          updateRef prefixes (cons (label, PrefixI {id = id, allowedTop = isTopAllowed id, construct = c, rightAllow = r}))
         else match prod with BreakableInfix {construct = c, leftAllow = l, rightAllow = r} then
           let l = breakableMapAllowSet toOpId _cmpOpId l in
           let r = breakableMapAllowSet toOpId _cmpOpId r in
           let p = getGroupingByRight id in
-          updateRef infixes (cons (label, InfixI {id = id, construct = c, leftAllow = l, rightAllow = r, precWhenThisIsRight = p}))
+          updateRef infixes (cons (label, InfixI {id = id, allowedTop = isTopAllowed id, construct = c, leftAllow = l, rightAllow = r, precWhenThisIsRight = p}))
         else match prod with BreakablePostfix {construct = c, leftAllow = l} then
           let l = breakableMapAllowSet toOpId _cmpOpId l in
           let p = getGroupingByRight id in
-          updateRef postfixes (cons (label, PostfixI {id = id, construct = c, leftAllow = l, precWhenThisIsRight = p}))
+          updateRef postfixes (cons (label, PostfixI {id = id, allowedTop = isTopAllowed id, construct = c, leftAllow = l, precWhenThisIsRight = p}))
         else never);
 
     { atoms = mapFromSeq cmp (deref atoms)
     , prefixes = mapFromSeq cmp (deref prefixes)
     , infixes = mapFromSeq cmp (deref infixes)
     , postfixes = mapFromSeq cmp (deref postfixes)
-    , topAllowed = breakableMapAllowSet toOpId _cmpOpId grammar.topAllowed
     }
 
-let breakableInitState : BreakableGenGrammar prodLabel res self -> () -> State res self ROpen
-  = lam grammar. lam.
+let breakableInitState : () -> State res self ROpen
+  = lam.
     let timestep = ref _firstTimeStep in
     let nextIdx = ref 0 in
     let addedLeft = ref (_firstTimeStep, ref []) in
@@ -463,7 +553,7 @@ let breakableInitState : BreakableGenGrammar prodLabel res self -> () -> State r
     { timestep = timestep
     , nextIdx = nextIdx
     , frontier =
-      [ TentativeRoot { addedNodesLeftChildren = addedLeft, addedNodesRightChildren = addedRight, allowedChildren = grammar.topAllowed } ]
+      [ TentativeRoot { addedNodesLeftChildren = addedLeft, addedNodesRightChildren = addedRight } ]
     }
 
 recursive let _maxDistanceFromRoot
@@ -494,12 +584,12 @@ let _shallowAllowedRight
   -> Option (PermanentNode res self)
   = lam parent. lam child.
     match child with TentativeLeaf {node = node} then
-      match parent
-      with TentativeRoot {allowedChildren = s}
-        | TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})}
-      then
+      switch parent
+      case TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})} then
         if breakableInAllowSet (_opIdP node) s then Some node else None ()
-      else dprintLn parent; never
+      case TentativeRoot _ then
+        if _isTopAllowedP node then Some node else None ()
+      end
     else never
 
 let _addRightChildren
@@ -840,10 +930,11 @@ let breakableConstructResult
   : (self -> tokish)
   -> tokish
   -> tokish
+  -> tokish
   -> BreakableInput res self LCLosed RClosed
   -> [PermanentNode res self] -- NonEmpty
   -> Either (BreakableError self tokish) res
-  = lam selfToTok. lam lpar. lam rpar. lam parInput. lam nodes.
+  = lam selfToTok. lam lpar. lam rpar. lam elided. lam parInput. lam nodes.
     let parId = _opIdI parInput in
     -- NOTE(vipa, 2021-02-15): All alternatives for children at the
     -- same point in the tree have the exact same range in the input,
@@ -887,105 +978,122 @@ let breakableConstructResult
         else never
     in
 
-    let resolveWith : [Int] -> AllowSet OpId -> [PermanentNode res self] -> ([Int] -> PermanentNode res self -> [[tokish]]) -> [[tokish]] =
-      lam tops. lam allowSet. lam children. lam resolveDir.
-        let needToWrap = not (null tops) in
-        if needToWrap then
-          if breakableInAllowSet parId allowSet then
-            [cons lpar (snoc (flattenMany children) rpar)]
-          else
-            join (map (resolveDir tops) children)
-        else
-          [flattenMany children]
-    in
-
-    recursive let resolveDir : Bool -> Bool -> [Int] -> PermamentNode res self -> [[tokish]] =
-      lam forceLeft. lam forceRight. lam tops. lam node.
-        switch node
-        case AtomP {self = self} then [[selfToTok self]]
-        case InfixP (node & {input = InfixI i}) then
-          let left =
-            if forceLeft then
-              [cons lpar (snoc (flattenMany node.leftChildAlts) rpar)]
-            else
-              let tops = filter (gti node.idx) tops in
-              resolveWith tops i.leftAllow node.leftChildAlts (resolveDir false true)
-          in
-          let right =
-            if forceRight then
-              [cons lpar (snoc (flattenMany node.rightChildAlts) rpar)]
-            else
-              let tops = filter (lti node.idx) tops in
-              resolveWith tops i.rightAllow node.rightChildAlts (resolveDir true false)
-          in
-          let here = [selfToTok node.self] in
-          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
-        case PrefixP (node & {input = PrefixI i}) then
-          let left = [[]] in
-          let right =
-            if forceRight then
-              [cons lpar (snoc (flattenMany node.rightChildAlts) rpar)]
-            else
-              let tops = filter (lti node.idx) tops in
-              resolveWith tops i.rightAllow node.rightChildAlts (resolveDir true false)
-          in
-          let here = [selfToTok node.self] in
-          -- OPT(vipa, 2021-10-11): This follows the structure above, but
-          -- could be done with just a concatMap
-          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
-        case PostfixP (node & {input = PostfixI i}) then
-          let left =
-            if forceLeft then
-              [cons lpar (snoc (flattenMany node.leftChildAlts) rpar)]
-            else
-              let tops = filter (gti node.idx) tops in
-              resolveWith tops i.leftAllow node.leftChildAlts (resolveDir false true)
-          in
-          let right = [[]] in
-          let here = [selfToTok node.self] in
-          -- OPT(vipa, 2021-10-11): This follows the structure above, but
-          -- could be done with just a concatMap
-          seqLiftA2 (lam l. lam r. join [l, here, r]) left right
-        end
+    recursive
+      let resolveTopOne : [Int] -> PermanentNode res self -> [[tokish]] =
+        lam topIdxs. lam p.
+          let idx = _opIdxP p in
+          let l = match _leftStuffP p with Some (children, allows)
+            then resolveTopMany (filter (gti idx) topIdxs) (_isWhitelist allows) children
+            else [[]] in
+          let r = match _rightStuffP p with Some (children, allows)
+            then resolveTopMany (filter (lti idx) topIdxs) (_isWhitelist allows) children
+            else [[]] in
+          let here = [selfToTok (_selfP p)] in
+          seqLiftA2 (lam l. lam r. join [l, here, r]) l r
+      let resolveTopMany : [Int] -> Bool -> [PermanentNode res self] -> [[tokish]] =
+        lam topIdxs. lam isWhitelist. lam ps.
+          -- TODO(vipa, 2021-11-15): Use `match ... with ... in ...`
+          match partition (_isBrokenEdge isWhitelist) ps with (broken, whole) then
+            let broken = join (map (resolveTopOne topIdxs) broken) in
+            let whole = if null whole then [] else
+              let flattened = flattenMany whole in
+              if null topIdxs then [flattened] else [snoc (cons lpar flattened) rpar]
+            in
+            concat broken whole
+          else never
     in
     let ambiguities : Ref [Ambiguity self] = ref [] in
 
     recursive
       let workMany
-        : [PermanentNode res self] -- NonEmpty
+        : Option (PermanentNode res self)
+        -> Bool
+        -> [PermanentNode res self] -- NonEmpty
         -> Option res
-        = lam tops.
+        = lam brokenParent. lam isWhitelist. lam tops.
           match tops with [n] then
-            workOne n
+            workOne (if _isBrokenEdge isWhitelist n then Some brokenParent else None ()) n
           else match tops with [n] ++ _ then
+            -- TODO(vipa, 2021-11-12): Use `match ... with ... in ...`?
+            let x = match (any (_isBrokenEdge isWhitelist) tops, brokenParent)
+              with (true, Some parent) then ([parent], range parent)
+              else (tops, range n) in
+            let tops = x.0 in
+            let range = x.1 in
+
+            -- TODO(vipa, 2021-11-12): Make sure to not report the
+            -- same brokenParent multiple times, since that's possible
+            -- with the current setup
+
+            -- NOTE(vipa, 2021-11-12): Find all nodes that can be at
+            -- the root, including nodes that are part of the same
+            -- broken production
+            let topIdxs = setOfSeq subi (join (map _brokenIdxesP tops)) in
+            -- NOTE(vipa, 2021-11-12): Some nodes will be in the top
+            -- broken production in some alternatives but not in
+            -- others. If we cover these in those alternatives then we
+            -- cut off some ambiguity, but not all. Ex: we have `I I x
+            -- E x` with prefix `I` and infix `E`, and unbreaking must
+            -- put `E` as a child of an `I`. One alternative is
+            -- resolved as `I (I x) E x`. However, neither the inner
+            -- `I` nor the `x` can be in the root, unbroken or not,
+            -- yet we still need to cover it with parens. This is
+            -- because another node (`E`) that *can* be in the root
+            -- can also be unbroken into a production that contains
+            -- both it and the inner `I`, namely in the other
+            -- alternative: `I (I x E x)`. We must thus also find
+            -- nodes that can be unbroken together with nodes that can
+            -- be in the root.
+            -- OPT(vipa, 2021-11-15): It should be sufficient to check
+            -- children along the edges only, not all descendants.
+            recursive let addChildMaybe = lam acc. lam c.
+              let idxs = _brokenIdxesP c in
+              let acc = if any (lam x. setMem x topIdxs) idxs
+                then foldl (lam acc. lam x. setInsert x acc) acc idxs
+                else acc in
+              foldl addChildMaybe acc (_brokenChildrenP c)
+            in
+            let addChildrenMaybe = lam acc. lam top.
+              foldl addChildMaybe acc (_brokenChildrenP top) in
+            let mergeRootIdxs = foldl addChildrenMaybe (setEmpty subi) tops in
+
             -- OPT(vipa, 2021-10-11): This should probably be a set that supports
             -- member querying as well as `removeGreaterThan` and `removeLesserThan`
-            let topIdxs = map _opIdxP tops in
-            let range = range n in
-            let resolutions = join (map (resolveDir false false topIdxs) tops) in
+            let idxesToCover = setToSeq (setUnion mergeRootIdxs topIdxs) in
+
+            let resolutions : [[tokish]] = resolveTopMany idxesToCover true tops in
+
             -- TODO(vipa, 2021-10-11): Compute valid elisons
             let err = {first = range.first, last = range.last, partialResolutions = resolutions} in
             modref ambiguities (cons err (deref ambiguities));
             None ()
           else dprintLn tops; never
       let workOne
-        : PermanentNode res self
+        : Option (PermanentNode res self)
+        -> PermanentNode res self
         -> Option res
-        = lam node.
-          match node with AtomP {self = self, input = AtomI {construct = c}} then
+        = lam brokenParent. lam node.
+          let l = match _leftStuffP node with Some (children, allows)
+            then workMany (optionOr brokenParent (Some node)) (_isWhitelist allows) children
+            else None () in
+          let r = match _rightStuffP node with Some (children, allows)
+            then workMany (optionOr brokenParent (Some node)) (_isWhitelist allows) children
+            else None () in
+          switch (node, l, r)
+          case (AtomP {self = self, input = AtomI {construct = c}}, _, _) then
             Some (c self)
-          else match node with PrefixP {self = self, rightChildAlts = rs, input = PrefixI {construct = c}} then
-            optionMap (c self) (workMany rs)
-          else match node with InfixP {self = self, leftChildAlts = ls, rightChildAlts = rs, input = InfixI {construct = c}} then
-            let l = workMany ls in
-            let r = workMany rs in
-            optionZipWith (c self) l r
-          else match node with PostfixP {self = self, leftChildAlts = ls, input = PostfixI {construct = c}} then
-            optionMap (c self) (workMany ls)
-          else never
+          case (PrefixP {self = self, input = PrefixI {construct = c}}, _, Some r) then
+            Some (c self r)
+          case (PostfixP {self = self, input = PostfixI {construct = c}}, Some l, _) then
+            Some (c self l)
+          case (InfixP {self = self, input = InfixI {construct = c}}, Some l, Some r) then
+            Some (c self l r)
+          case _ then
+            None ()
+          end
     in
 
-    match workMany nodes
+    match workMany (None ()) false nodes
     with Some res then Right res
     else Left (Ambiguities (deref ambiguities))
 
