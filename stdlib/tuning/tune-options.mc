@@ -18,7 +18,7 @@ let tuneSearchMethodMap =
 
 -- Options for tuning
 type TuneOptions =
-{ debug : Bool
+{ verbose : Bool
 , iters : Int
 , timeoutMs : Option Float
 , warmups : Int
@@ -36,7 +36,7 @@ type TuneOptions =
 
 -- Default options
 let tuneOptionsDefault : TuneOptions =
-{ debug = false
+{ verbose = false
 , iters = 10
 , timeoutMs = None ()
 , warmups = 1

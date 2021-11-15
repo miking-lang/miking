@@ -185,7 +185,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       lam searchState.
       lam metaState.
       lam iter.
-        (if options.debug then
+        (if options.verbose then
           printLn "-----------------------";
           debugSearch searchState;
           debugMeta metaState;
@@ -225,11 +225,11 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     -- Do warmup runs and throw away results
     modref tuneSearchStart (startOfSearch ());
-    (if options.debug then
+    (if options.verbose then
        printLn "----------------------- WARMUP RUNS -----------------------"
        else ());
     search warmupStop startState (initMeta startState) 0;
-    (if options.debug then
+    (if options.verbose then
        printLn "-----------------------------------------------------------"
        else ());
 
