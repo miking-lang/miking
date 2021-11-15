@@ -13,7 +13,7 @@ include "assoc.mc"
 include "options.mc"
 include "options-config.mc"
 include "tune.mc"
-include "tune-options.mc"
+include "tune-config.mc"
 
 mexpr
 

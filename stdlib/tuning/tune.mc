@@ -550,12 +550,10 @@ lang MExprTune = MExpr + TuneBase
 -- Entry point for tuning
 let tuneEntry =
   lam binary : String.
-  lam args : [String].
+  lam options : TuneOptions.
   lam tuneFile : String.
   lam env : CallCtxEnv.
   lam table : LookupTable.
-    let options = parseTuneOptions tuneOptionsDefault
-      (filter (lam a. not (eqString "mi" a)) args) in
 
     -- Set the random seed?
     (match options.seed with Some seed then randSetSeed seed else ());

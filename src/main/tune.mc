@@ -55,7 +55,7 @@ let tune = lam files. lam options : Options. lam args.
         {options with output = Some (sysJoinPath tempDir "tune")} file ast in
 
       -- Do the tuning
-      let result = tuneEntry binary args tempFile env table in
+      let result = tuneEntry binary options.tuneOptions tempFile env table in
 
       -- Write the best found values to filename.tune
       tuneFileDumpTable (tuneFileName file) (Some env) result;
