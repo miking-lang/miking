@@ -27,6 +27,7 @@ type ParseType
 con ParseTypeInt : String -> ParseType
 con ParseTypeIntMin : (String, Int) -> ParseType
 con ParseTypeFloat : String -> ParseType
+con ParseTypeFloatMin : (String, Float) -> ParseType
 con ParseTypeGeneric : (String, String) -> ParseType
 
 type ParseResult
@@ -125,6 +126,15 @@ let argToIntMin = lam p : ArgPart. lam minVal.
   else
     v
 
+let argToFloatMin = lam p : ArgPart. lam minVal.
+  let v = argToFloat p in
+  match deref p.fail with None () then
+    if ltf v minVal then
+      modref p.fail (Some (ParseTypeFloatMin (p.str, minVal))); v
+    else
+      v
+  else
+    v
 
 
 -- argParse --
