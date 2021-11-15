@@ -33,21 +33,21 @@ let _tcEnvEmpty = {
   currentLvl = 1
 }
 
-let _lookupVar = lam name. lam tyenv : TCEnv.
-  mapLookup name tyenv.varEnv
+let _insertVar = lam name. lam ty. lam env : TCEnv.
+  {env with varEnv = mapInsert name ty env.varEnv}
 
-let _insertVar = lam name. lam ty. lam tyenv : TCEnv.
-  let varEnvNew = mapInsert name ty tyenv.varEnv in
-  {tyenv with varEnv = varEnvNew}
+let _insertCon = lam name. lam ty. lam env : TCEnv.
+  {env with conEnv = mapInsert name ty env.conEnv}
+
+let _insertTyCon = lam name. lam ty. lam env : TCEnv.
+  {env with tyConEnv = mapInsert name ty env.tyConEnv}
 
 type UnifyEnv = {
   names: BiNameMap,
   tyConEnv: Map Name Type
 }
 
-let pprintType = use MExprPrettyPrint in
-  lam ty.
-  match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) in tyStr
+let _type2str = use MExprPrettyPrint in type2str
 
 let errInfo = ref (NoInfo ())
 
@@ -60,15 +60,15 @@ let unificationError =
   ] in
   infoErrorExit (deref errInfo) msg
 
-let typeUnificationError = use MExprAst in
+let typeUnificationError =
   lam ty1. lam ty2.
-  unificationError (pprintType ty1) (pprintType ty2)
+  unificationError (_type2str ty1) (_type2str ty2)
 
 let fieldUnificationError = use RecordTypeAst in
   lam m1. lam m2.
-  let printFields = lam m.
-    pprintType (TyRecord {info = NoInfo (), fields = m, labels = mapKeys m}) in
-  unificationError (printFields m1) (printFields m2)
+  let fields2str = lam m.
+    _type2str (TyRecord {info = NoInfo (), fields = m, labels = mapKeys m}) in
+  unificationError (fields2str m1) (fields2str m2)
 
 recursive let resolveAlias = use MExprAst in
   lam env : Map Name Type. lam ty.
@@ -386,7 +386,7 @@ end
 lang VarTypeCheck = TypeCheck + VarAst
   sem typeCheckBase (env : TCEnv) =
   | TmVar t ->
-    match _lookupVar t.ident env with Some ty then
+    match mapLookup t.ident env.varEnv with Some ty then
       let ty =
         if t.frozen then ty
         else inst env.currentLvl ty
@@ -470,7 +470,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
         -- No type annotation: unify the inferred type of the body with the
         -- inferred type of the binding
         (lam.
-          match _lookupVar b.ident recLetEnv with Some ty in
+          match mapLookup b.ident recLetEnv.varEnv with Some ty in
           unify env ty (tyTm body))
         -- Type annotation: unify the inferred type of the body with the annotated one
         (lam ty.
@@ -559,13 +559,11 @@ lang TypeTypeCheck = TypeCheck + TypeAst
   | TmType t ->
     let isAlias =
       match t.tyIdent with TyVariant {constrs = constrs} then
-        if mapIsEmpty constrs then false else true
+        not (mapIsEmpty constrs)
       else true
     in
-    let tyConEnv =
-      if isAlias then mapInsert t.ident t.tyIdent env.tyConEnv else env.tyConEnv
-    in
-    let inexpr = typeCheckExpr {env with tyConEnv = tyConEnv} t.inexpr in
+    let env = if isAlias then _insertTyCon t.ident t.tyIdent env else env in
+    let inexpr = typeCheckExpr env t.inexpr in
     TmType {{t with inexpr = inexpr}
                with ty = tyTm inexpr}
 end
@@ -573,8 +571,7 @@ end
 lang DataTypeCheck = TypeCheck + DataAst
   sem typeCheckBase (env : TCEnv) =
   | TmConDef t ->
-    let conEnv = mapInsert t.ident t.tyIdent env.conEnv in
-    let inexpr = typeCheckExpr {env with conEnv = conEnv} t.inexpr in
+    let inexpr = typeCheckExpr (_insertCon t.ident t.tyIdent env) t.inexpr in
     TmConDef {{t with inexpr = inexpr}
                  with ty = tyTm inexpr}
   | TmConApp t ->
