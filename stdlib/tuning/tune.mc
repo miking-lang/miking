@@ -51,8 +51,9 @@ lang TuneBase = Holes
   -- Intentionally left blank
 
   sem time (table : LookupTable) (runner : Runner) (file : String)
-           (options : TuneOptions) (timeout : Float) =
+           (options : TuneOptions) (timeout : Option Float) =
   | args ->
+    let timeout = if options.exitEarly then timeout else None () in
     tuneFileDumpTable file (None ()) table;
     match runner args timeout with (ms, res) then
       let res : ExecResult = res in
