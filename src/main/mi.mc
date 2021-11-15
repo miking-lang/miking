@@ -11,7 +11,9 @@ include "eval.mc"
 include "run.mc"
 include "assoc.mc"
 include "options.mc"
+include "options-config.mc"
 include "tune.mc"
+include "tune-options.mc"
 
 mexpr
 
@@ -71,7 +73,7 @@ let commandsMap : [(String, SubConfig)] = map (lam c : SubConfig. (c.name, c))
 , {name = "eval", cmd = eval, config = optionsConfig}
 , {name = "compile", cmd = compile, config = optionsConfig}
 , {name = "accelerate", cmd = accelerate, config = optionsConfig}
-, {name = "tune", cmd = tune, config = optionsConfig}
+, {name = "tune", cmd = tune, config = tuneOptionsConfig}
 ] in
 
 -- Print the usage message and exit.
@@ -95,7 +97,6 @@ let mapStringLookup = assocLookup {eq=eqString} in
 
 -- Does the command line include at least a file or a command?
 if lti (length argv) 2 then usage (None ()) else
-
   let cmdString = get argv 1 in
   let rest = tail (tail argv) in
   -- Is it a known command?
@@ -104,7 +105,7 @@ if lti (length argv) 2 then usage (None ()) else
     let c : SubConfig = c in
     -- Yes, split into program arguments (after stand alone '--')
     let split = splitDashDash rest in
-    let res : ArgResult Options = parseOptions split.first optionsConfig in
+    let res : ArgResult Options = parseOptions split.first c.config in
     let options : Options = res.options in
     let files : [String] = res.strings in
     maybePrintHelp options (Some c);
