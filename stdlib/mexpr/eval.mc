@@ -304,6 +304,13 @@ lang ArithIntEval = ArithIntAst + ConstEval
   | CDivi2 Int
   | CModi2 Int
 
+  sem constArity =
+  | CAddi2 _ -> 1
+  | CSubi2 _ -> 1
+  | CMuli2 _ -> 1
+  | CDivi2 _ -> 1
+  | CModi2 _ -> 1
+
   sem delta (arg : Expr) =
   | CAddi _ ->
     match arg with TmConst (t & {val = CInt {val = n}}) then
@@ -357,6 +364,11 @@ lang ShiftIntEval = ShiftIntAst + ConstEval
   | CSrli2 Int
   | CSrai2 Int
 
+  sem constArity =
+  | CSlli2 _ -> 1
+  | CSrli2 _ -> 1
+  | CSrai2 _ -> 1
+
   sem delta (arg : Expr) =
   | CSlli _ ->
     match arg with TmConst (t & {val = CInt {val = n}}) then
@@ -390,6 +402,12 @@ lang ArithFloatEval = ArithFloatAst + ConstEval
   | CSubf2 Float
   | CMulf2 Float
   | CDivf2 Float
+
+  sem constArity =
+  | CAddf2 _ -> 1
+  | CSubf2 _ -> 1
+  | CMulf2 _ -> 1
+  | CDivf2 _ -> 1
 
   sem delta (arg : Expr) =
   | CAddf _ ->
@@ -477,6 +495,14 @@ lang CmpIntEval = CmpIntAst + ConstEval
   | CLeqi2 Int
   | CGeqi2 Int
 
+  sem constArity =
+  | CEqi2 _ -> 1
+  | CNeqi2 _ -> 1
+  | CLti2 _ -> 1
+  | CGti2 _ -> 1
+  | CLeqi2 _ -> 1
+  | CGeqi2 _ -> 1
+
   sem delta (arg : Expr) =
   | CEqi _ ->
     match arg with TmConst (t & {val = CInt {val = n}}) then
@@ -532,6 +558,9 @@ lang CmpCharEval = CmpCharAst + ConstEval
   syn Const =
   | CEqc2 Char
 
+  sem constArity =
+  | CEqc2 _ -> 1
+
   sem delta (arg : Expr) =
   | CEqc _ ->
     match arg with TmConst (t & {val = CChar {val = c}}) then
@@ -563,6 +592,14 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
   | CGtf2 Float
   | CGeqf2 Float
   | CNeqf2 Float
+
+  sem constArity =
+  | CEqf2 _ -> 1
+  | CLtf2 _ -> 1
+  | CLeqf2 _ -> 1
+  | CGtf2 _ -> 1
+  | CGeqf2 _ -> 1
+  | CNeqf2 _ -> 1
 
   sem delta (arg : Expr) =
   | CEqf _ ->
@@ -641,6 +678,9 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
   | CEqsym2 Symb
 
+  sem constArity =
+  | CEqsym2 _ -> 1
+
   sem delta (arg : Expr) =
   | CEqsym _ ->
     match arg with TmConst (t & {val = CSymb s}) then
@@ -653,6 +693,7 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
 end
 
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
+
   syn Const =
   | CGet2 [Expr]
   | CSet2 [Expr]
@@ -674,6 +715,28 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CFoldl3 (Expr, Expr)
   | CFoldr2 Expr
   | CFoldr3 (Expr, Expr)
+
+  sem constArity =
+  | CGet2 _ -> 1
+  | CSet2 _ -> 2
+  | CSet3 _ -> 3
+  | CCons2 _ -> 1
+  | CSnoc2 _ -> 1
+  | CConcat2 _ -> 1
+  | CSplitAt2 _ -> 1
+  | CCreate2 _ -> 1
+  | CCreateList2 _ -> 1
+  | CCreateRope2 _ -> 1
+  | CSubsequence2 _ -> 2
+  | CSubsequence3 _ -> 1
+  | CMap2 _ -> 1
+  | CMapi2 _ -> 1
+  | CIter2 _ -> 1
+  | CIteri2 _ -> 1
+  | CFoldl2 _ -> 2
+  | CFoldl3 _ -> 1
+  | CFoldr2 _ -> 2
+  | CFoldr3 _ -> 1
 
   sem delta (arg : Expr) =
   | CHead _ ->
@@ -859,7 +922,10 @@ end
 
 lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   syn Const =
-  | CFileWrite2 string
+  | CFileWrite2 String
+
+  sem constArity =
+  | CFileWrite2 _ -> 1
 
   sem delta (arg : Expr) =
   | CFileRead _ ->
@@ -933,6 +999,9 @@ lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
   syn Const =
   | CRandIntU2 Int
 
+  sem constArity =
+  | CRandIntU2 _ -> 1
+
   sem delta (arg : Expr) =
   | CRandIntU _ ->
     match arg with TmConst c then
@@ -987,6 +1056,9 @@ end
 lang RefOpEval = RefOpAst + RefEval + IntAst
   syn Const =
   | CModRef2 Ref
+
+  sem constArity =
+  | CModRef2 _ -> 1
 
   sem delta (arg : Expr) =
   | CRef _ -> TmRef {ref = ref arg}
@@ -1044,6 +1116,29 @@ lang MapEval =
   | CMapEq3 (Expr -> Expr -> Expr, Map K V)
   | CMapCmp2 (Expr -> Expr -> Expr)
   | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
+
+  sem constArity =
+  | CMapVal _ -> 0
+  | CMapInsert2 _ -> 2
+  | CMapInsert3 _ -> 1
+  | CMapRemove2 _ -> 1
+  | CMapFindExn2 _ -> 1
+  | CMapFindOrElse2 _ -> 2
+  | CMapFindOrElse3 _ -> 1
+  | CMapFindApplyOrElse2 _ -> 3
+  | CMapFindApplyOrElse3 _ -> 2
+  | CMapFindApplyOrElse4 _ -> 1
+  | CMapMem2 _ -> 1
+  | CMapAny2 _ -> 1
+  | CMapMap2 _ -> 1
+  | CMapMapWithKey2 _ -> 1
+  | CMapFoldWithKey2 _ -> 2
+  | CMapFoldWithKey3 _ -> 1
+  | CMapChooseOrElse2 _ -> 1
+  | CMapEq2 _ -> 2
+  | CMapEq3 _ -> 1
+  | CMapCmp2 _ -> 2
+  | CMapCmp3 _ -> 1
 
   sem _bindToRecord =
   | (k, v) ->
@@ -1262,6 +1357,24 @@ lang TensorOpEval =
   | CTensorEq2 Expr
   | CTensorEq3 (Expr, T)
   | CTensorToString2 Expr
+
+  sem constArity =
+  | CTensorCreateInt2 _ -> 1
+  | CTensorCreateFloat2 _ -> 1
+  | CTensorCreate2 _ -> 1
+  | CTensorGetExn2 _ -> 1
+  | CTensorSetExn2 _ -> 2
+  | CTensorSetExn3 _ -> 1
+  | CTensorReshapeExn2 _ -> 1
+  | CTensorTransposeExn2 _ -> 2
+  | CTensorTransposeExn3 _ -> 1
+  | CTensorSliceExn2 _ -> 1
+  | CTensorSubExn2 _ -> 2
+  | CTensorSubExn3 _ -> 1
+  | CTensorIterSlice2 _ -> 1
+  | CTensorEq2 _ -> 2
+  | CTensorEq3 _ -> 1
+  | CTensorToString2 _ -> 1
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -1556,6 +1669,21 @@ lang BootParserEval =
   | CBootParserGetConst2 BootParserTree
   | CBootParserGetPat2 BootParserTree
   | CBootParserGetInfo2 BootParserTree
+
+  sem constArity =
+  | CBootParserTree _ -> 0
+  | CBootParserParseMExprString2 _ -> 1
+  | CBootParserParseMCoreFile2 _ -> 2
+  | CBootParserParseMCoreFile3 _ -> 3
+  | CBootParserGetTerm2 _ -> 1
+  | CBootParserGetType2 _ -> 1
+  | CBootParserGetString2 _ -> 1
+  | CBootParserGetInt2 _ -> 1
+  | CBootParserGetFloat2 _ -> 1
+  | CBootParserGetListLength2 _ -> 1
+  | CBootParserGetConst2 _ -> 1
+  | CBootParserGetPat2 _ -> 1
+  | CBootParserGetInfo2 _ -> 1
 
   sem delta (arg : Expr) =
   | CBootParserParseMExprString _ ->
