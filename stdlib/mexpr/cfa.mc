@@ -65,7 +65,6 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
       else
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
-        match dataLookup q graph with dq in
         match edgesLookup q graph with cc in
         let graph = foldl (propagateConstraint h) graph cc in
         iter graph
@@ -97,7 +96,6 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
         match printGraph env graph "INTERMEDIATE CFA GRAPH" with env in
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
-        match dataLookup q graph with dq in
         match edgesLookup q graph with cc in
         let graph = foldl (propagateConstraint h) graph cc in
         iter env graph
