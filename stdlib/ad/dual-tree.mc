@@ -12,16 +12,16 @@ include "string.mc"
 
 type Eps = Int
 
--- Dual-numbers can be nested and are implemented as explicit trees.
+-- Dual's can be nested and are implemented as explicit trees.
 type Dual a
 con Dual : {e : Eps, x : Dual a, xp : Dual a} -> Dual a
-con Primal : a -> Dual a -- we separate out generic real numbers
+con Primal : a -> Dual a
 
--- epsilons are ordered
+-- Epsilons are ordered.
 let dualLtE : Eps -> Eps -> Bool = lti
 let dualEqE : Eps -> Eps -> Bool = eqi
 
--- packs a floating point number in a DualNumber
+-- `dualCreatePrimal x` embeds `x` in a `Primal`.
 let dualCreatePrimal : a -> Dual a =
 lam x. Primal x
 
@@ -46,7 +46,7 @@ lam n.
   match n with Dual dn then dn.e
   else error "Operand not a dual number"
 
--- x in x+ex'
+-- x in x+ex' given e
 let dualPrimal : Eps -> Dual a -> Dual a =
 lam e. lam n.
   switch n
@@ -64,7 +64,7 @@ lam n.
   end
 end
 
--- x' in x+ex'
+-- x' in x+ex' given e
 let dualPertubation : a -> Eps -> Dual a -> Dual a =
 lam zero. lam e. lam n.
   switch n
@@ -78,7 +78,7 @@ let e = ref 0
 let dualGenEpsilon : Unit -> Eps =
 lam. modref e (succ (deref e)); deref e
 
--- Structural equality function for dual numbers
+-- Structural equality function for duals
 let dualEq : (a -> a -> Bool) -> Dual a -> Dual a -> Bool =
   lam eq.
   recursive let recur = lam n1. lam n2.
@@ -92,7 +92,7 @@ let dualEq : (a -> a -> Bool) -> Dual a -> Dual a -> Bool =
     end
   in recur
 
--- String representation of dual number
+-- String representation of duals
 let dualToString : (a -> String) -> Dual a -> String =
 lam pri2str. lam n.
   let wrapInParen = lam n. lam str.
@@ -110,4 +110,3 @@ lam pri2str. lam n.
       ]
     else never
   in recur n
-
