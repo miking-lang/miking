@@ -32,6 +32,7 @@ type TuneOptions =
 , ignoreErrors : Bool
 , exitEarly : Bool
 , seed : Option Int
+, cleanup : Bool
 }
 
 -- Default options
@@ -50,4 +51,5 @@ let tuneOptionsDefault : TuneOptions =
 , ignoreErrors = false
 , exitEarly = true
 , seed = None ()
+, cleanup = false
 }

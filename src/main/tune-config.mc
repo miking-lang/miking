@@ -91,5 +91,12 @@ let tuneOptionsConfig : ParseConfig = concat optionsConfig [
     lam p: ArgPart Options.
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with seed = argToInt p}})
+      {o with tuneOptions = {to with seed = argToInt p}}),
+  ([("--enable-cleanup", "", "")],
+    "Clean up tune file after tuning",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with cleanup = true}})
+
 ]
