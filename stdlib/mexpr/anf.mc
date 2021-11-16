@@ -237,7 +237,8 @@ lang MExprANF = MExprANFAll
 
 end
 
--- TODO
+-- TODO(dlunde,2021-11-16): This fragment should define a function for
+-- reversing ANF transformation for values.
 lang ValueReverseANF
 
 
