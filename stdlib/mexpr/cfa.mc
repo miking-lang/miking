@@ -848,7 +848,7 @@ end
 
 lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatSeqEdge p, AVSeq { names = names }) ->
+  | (PatSeqEdge p, AVSeq { names = names } & av) ->
     let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
         let cstrs = foldl (lam acc. lam f. concat (f id name pat) acc)
           [] (matchConstraintGenFuns ()) in
@@ -856,11 +856,10 @@ lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
       ) graph names in
     let graph = foldl f graph p.prefix in
     let graph = foldl f graph p.postfix in
-    match p.middle with PName rhs then
-      foldl (lam graph. lam lhs: Name.
-        let cstr = CstrDirect { lhs = lhs, rhs = rhs } in
-        initConstraint graph cstr
-      ) graph names
+    match p.middle with PName rhs then addData graph av rhs
+    else graph
+  | (PatSeqEdge p, av) ->
+    match p.middle with PName rhs then addData graph av rhs
     else graph
 end
 
