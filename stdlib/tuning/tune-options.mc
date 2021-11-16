@@ -1,3 +1,4 @@
+include "option.mc"
 
 type SearchMethod
 con SimulatedAnnealing : Unit -> SearchMethod
