@@ -1,3 +1,4 @@
+include "tuning/tune-options.mc"
 
 -- Options type
 type Options = {
