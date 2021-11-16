@@ -65,6 +65,11 @@ let setChooseExn : Set a -> a =
 lam s.
   match mapChooseExn s with (k, _) then k else never
 
+-- `setAny p s` returns true if the predicate p returns true for any element in
+-- s.
+let setAny: (a -> Bool) -> Set a -> Bool = lam p. lam s.
+  mapFoldWithKey (lam acc. lam v. lam. if acc then acc else p v) false s
+
 mexpr
 
 let s = setEmpty subi in
@@ -116,6 +121,9 @@ utest setCmp s6 s5 with negi 1 in
 utest setCmp s5 s7 with negi 3 in
 utest setCmp s7 s5 with 3 in
 utest setCmp s6 s7 with negi 3 in
+
+utest setAny (eqi 2) s5 with true in
+utest setAny (eqi 0) s5 with false in
 
 let sFold = setOfSeq subi [1,2,3,4,5] in
 utest setFold (lam acc. lam v. addi v acc) 0 sFold with 15 in
