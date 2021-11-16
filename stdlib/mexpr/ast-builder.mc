@@ -94,13 +94,15 @@ let tyvar_ =
   lam s.
   ntyvar_ (nameNoSym s)
 
-let ntyall_ = use AllTypeAst in
-  lam n. lam ty.
-  TyAll {ident = n, info = NoInfo (), ty = ty, sort = TypeVar ()}
+let nstyall_ = use AllTypeAst in
+  lam n. lam sort. lam ty.
+  TyAll {ident = n, info = NoInfo (), ty = ty, sort = sort}
 
-let tyall_ =
+let styall_ = lam s. nstyall_ (nameNoSym s)
+
+let tyall_ = use VarSortAst in
   lam s.
-  ntyall_ (nameNoSym s)
+  styall_ s (TypeVar ())
 
 let tyalls_ =
   lam strs. lam ty.

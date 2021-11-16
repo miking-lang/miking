@@ -449,6 +449,10 @@ lang LetTypeCheck = TypeCheck + LetAst
       (lam. gen lvl (tyTm body))
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
+        -- TODO(aathn, 2021-11-16): Simply stripping the tyalls is insufficient
+        -- if the annotated type has record bounds. Then, we should instantiate
+        -- the record variables in the annotated type with their bounding record
+        -- types before unifying. For now such annotations are not supported though.
         match stripTyAll ty with (_, tyAnnot) in
         unify env tyAnnot (tyTm body);
         ty)
@@ -1050,6 +1054,24 @@ let tests = [
      ("a", tyint_),
      ("b", tyfloat_)
    ],
+   env = []},
+
+  {name = "Record5",
+   tm = bind_
+     (ulet_ "f"
+       (ulam_ "r" (ulam_ "x" (ulam_ "y"
+         (recordupdate_
+           (recordupdate_
+             (var_ "r") "x" (var_ "x"))
+           "y" (var_ "y"))))))
+     (freeze_ (var_ "f")),
+   ty =
+     let fields =  mapInsert (stringToSid "x") a
+                  (mapInsert (stringToSid "y") b
+                  (mapEmpty cmpSID))
+     in
+     tyalls_ ["a", "b"] (styall_ "r" (RecordVar {fields = fields})
+       (tyarrows_ [tyvar_ "r", a, b, tyvar_ "r"])),
    env = []},
 
   {name = "Con1",
