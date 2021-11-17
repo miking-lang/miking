@@ -839,7 +839,7 @@ end
 lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
   | (PatSeqTot p, AVSeq { names = names }) ->
-    let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
+    let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs =
           foldl (lam acc. lam f. concat (f id name pat) acc) [] graph.mcgfs
         in
@@ -851,7 +851,7 @@ end
 lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
   | (PatSeqEdge p, AVSeq { names = names } & av) ->
-    let f = lam graph. lam pat: Pat. setFold (lam graph. lam name.
+    let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs = foldl (lam acc. lam f. concat (f id name pat) acc)
           [] graph.mcgfs in
         foldl initConstraint graph cstrs
@@ -871,7 +871,7 @@ lang RecordPatCFA = MatchCFA + RecordCFA + RecordPat
     -- Check if record pattern is compatible with abstract value record
     let compatible = mapAllWithKey (lam k. lam. mapMem k abindings) pbindings in
     if compatible then
-      mapFoldWithKey (lam graph. lam k. lam pb: Pattern.
+      mapFoldWithKey (lam graph: CFAGraph. lam k. lam pb: Pattern.
         let ab: Name = mapFindExn k abindings in
         let cstrs = foldl (lam acc. lam f. concat (f id ab pb) acc)
           [] graph.mcgfs in
