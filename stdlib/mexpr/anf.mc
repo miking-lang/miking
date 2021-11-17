@@ -53,13 +53,13 @@ lang VarANF = ANF + VarAst
 
 end
 
+-- Version that simplifies multiple-argument applications by not binding every
+-- intermediate closure to a variable.
 lang AppANF = ANF + AppAst
 
   sem normalize (k : Expr -> Expr) =
   | TmApp t -> normalizeNames k (TmApp t)
 
-  -- This simplifies multiple-argument applications by not binding every
-  -- intermediate closure to a variable.
   sem normalizeNames (k : Expr -> Expr) =
   | TmApp t ->
     normalizeNames
@@ -70,16 +70,41 @@ lang AppANF = ANF + AppAst
 
 end
 
+-- Version that lifts out each individual application
+lang AppANFAll = ANF + AppAst
+
+  sem normalize (k : Expr -> Expr) =
+  | TmApp t ->
+    normalizeName (lam l.
+      normalizeName (lam r.
+        k (TmApp {{t with lhs = l}
+                     with rhs = r})
+        )
+      t.rhs)
+    t.lhs
+
+end
+
+-- Version analogous to AppANF, where each individual lambda is not name-bound.
 lang LamANF = ANF + LamAst
 
   sem normalize (k : Expr -> Expr) =
   | TmLam _ & t -> k (normalizeLams t)
 
-  -- Similar to how each individual application is not name-bound, this ensures
-  -- that all lambdas in a sequence of lambdas are not name-bound
   sem normalizeLams =
   | TmLam t -> TmLam { t with body = normalizeLams t.body }
   | t -> normalizeTerm t
+
+end
+
+-- Version where each individual lambda is name-bound.
+lang LamANFAll = ANF + LamAst
+
+  sem normalize (k : Expr -> Expr) =
+  | TmLam _ & t -> k (normalizeLams t)
+
+  sem normalizeLams =
+  | TmLam t -> TmLam { t with body = normalizeTerm t.body }
 
 end
 
@@ -131,7 +156,10 @@ lang TypeANF = ANF + TypeAst
 
 end
 
-lang RecLetsANF = ANF + LamANF + RecLetsAst
+lang RecLetsANFBase = ANF + RecLetsAst + LamAst
+
+  sem normalizeLams =
+  -- Intentionally left blank
 
   sem normalize (k : Expr -> Expr) =
   -- We do not allow lifting things outside of reclets, since they might
@@ -147,7 +175,12 @@ lang RecLetsANF = ANF + LamANF + RecLetsAst
     t.bindings in
     TmRecLets {{t with bindings = bindings}
                   with inexpr = normalize k t.inexpr}
+
 end
+
+-- Analogous to LamANF and LamANFAll
+lang RecLetsANF = RecLetsANFBase + LamANF
+lang RecLetsANFAll = RecLetsANFBase + LamANFAll
 
 lang ConstANF = ANF + ConstAst
 
@@ -222,14 +255,12 @@ lang ExtANF = ANF + ExtAst
 
 end
 
--- Version in which everything is lifted
-lang MExprANFAll =
+-- The default ANF transformation for MExpr. Only lifts non-values, and does
+-- not lift individual terms in sequences of lambdas or applications.
+lang MExprANF =
   VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
 
-lang MExprANF = MExprANFAll
-
-  -- The default ANF transformation for MExpr only lifts non-values
   sem liftANF =
   | TmLam _ -> false
   | TmConst _ -> false
@@ -237,22 +268,27 @@ lang MExprANF = MExprANFAll
 
 end
 
--- TODO(dlunde,2021-11-16): This fragment should define a function for
--- reversing ANF transformation for values.
-lang ValueReverseANF
-
+-- Full ANF transformation. Lifts everything
+lang MExprANFAll =
+  VarANF + AppANFAll + LamANFAll + RecordANF + LetANF + TypeANF + RecLetsANFAll +
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
 
 -----------
 -- TESTS --
 -----------
 
-lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
+lang TestBase = MExprSym + MExprPrettyPrint
+
+lang TestANF = MExprANF + MExprEq
+
+lang TestANFAll = MExprANFAll + MExprEq
 
 mexpr
-use TestLang in
+
+use TestBase in
 
 let debug = false in
-let _test = lam expr.
+let _testConstr = lam normalizeTerm. lam expr.
   (if debug then
     printLn "--- BEFORE ANF ---";
     printLn (expr2str expr);
@@ -267,6 +303,10 @@ let _test = lam expr.
   else ());
   expr
 in
+
+use TestANF in
+
+let _test = _testConstr normalizeTerm in
 
 let basic =
   bind_ (ulet_ "f" (ulam_ "x" (var_ "x")))
@@ -446,6 +486,41 @@ using eqExpr in
 
 let constant = int_ 1 in
 utest _test constant with int_ 1
+using eqExpr in
+
+-- Tests for full ANF
+use TestANFAll in
+
+let _test = _testConstr normalizeTerm in
+
+let appseq = addi_ (int_ 1) (int_ 2) in
+utest _test appseq with
+  bindall_ [
+    ulet_ "t" (uconst_ (CAddi {})),
+    ulet_ "t1" (int_ 1),
+    ulet_ "t2" (app_ (var_ "t") (var_ "t1")),
+    ulet_ "t3" (int_ 2),
+    ulet_ "t4" (app_ (var_ "t2") (var_ "t3")),
+    var_ "t4"
+  ]
+using eqExpr in
+
+let lamseq = ulam_ "x" (ulam_ "y" (ulam_ "z" (int_ 1))) in
+utest _test lamseq with
+  let ulet_ = lam s. lam body. lam inexpr. bind_ (ulet_ s body) inexpr in
+  ulet_ "t" (
+    ulam_ "x" (
+      ulet_ "t1" (
+        ulam_ "y" (
+          ulet_ "t2" (
+            ulam_ "z" (
+              ulet_ "t3" (int_ 1) (var_ "t3")
+            )
+          ) (var_ "t2")
+        )
+      ) (var_ "t1")
+    )
+  ) (var_ "t")
 using eqExpr in
 
 ()

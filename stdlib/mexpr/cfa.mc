@@ -71,7 +71,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
     in
     iter graph
 
-  -- Main algorithm with debug statements
+  -- Main algorithm with debug printouts
   -- TODO(dlunde,2021-11-13): Code duplication
   sem cfaDebug (env: PprintEnv) =
   | t ->
@@ -291,37 +291,25 @@ end
 
 lang LamCFA = CFA + InitConstraint + LamAst
 
-  -- Abstract representation of lambdas. The body can either be another
-  -- abstract lambda or the exprName of the body.
+  -- Abstract representation of lambdas.
   syn AbsVal =
-  | AVLam { ident: Name, body: Either AbsVal Name }
+  | AVLam { ident: Name, body: Name }
 
   sem cmpAbsValH =
-  | (AVLam { ident = lhs }, AVLam { ident = rhs }) -> nameCmp lhs rhs
-
-  -- Type Expr -> Either AbsVal Name
-  -- Convert a lambda to an Either AbsVal Name
-  sem _lamBody =
-  | t ->
-    match t with TmLam t then
-      let body = _lamBody t.body in
-      Left (AVLam { ident = t.ident, body = body })
-    else Right (exprName t)
+  | (AVLam { ident = lhs, body = lbody },
+     AVLam { ident = rhs, body = rbody }) ->
+     let diff = nameCmp lhs rhs in
+     if eqi diff 0 then nameCmp lbody rbody else diff
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmLam t } ->
-    let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
+    let av: AbsVal = AVLam { ident = t.ident, body = exprName t.body } in
     [ CstrInit { lhs = av, rhs = ident } ]
 
   sem absValToString (env: PprintEnv) =
   | AVLam { ident = ident, body = body } ->
     match pprintVarName env ident with (env,ident) in
-    let tmp =
-      match body with Left av then absValToString env body
-      else match body with Right n then pprintVarName env n
-      else never
-    in
-    match tmp with (env, body) in
+    match pprintVarName env body with (env,body) in
     (env, join ["lam ", ident, ". ", body])
 
 end
@@ -341,11 +329,7 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
       -- Add rhs ⊆ x constraint
       let graph = initConstraint graph (CstrDirect { lhs = rhs, rhs = x }) in
       -- Add b ⊆ res constraint
-      match b with Left av then
-        addData graph av res
-      else match b with Right b then
-        initConstraint graph (CstrDirect { lhs = b, rhs = res })
-      else never
+      initConstraint graph (CstrDirect { lhs = b, rhs = res })
     else graph
 
   sem constraintToString (env: PprintEnv) =
@@ -355,35 +339,13 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
     match pprintVarName env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< and >b< ⊆ ", res ])
 
-  -- Type () -> [Name -> Name -> Name -> [Constraint]]
-  -- This must be overriden in the final fragment where CFA should be applied.
-  -- Gives a list of application constraint generating functions (e.g.,
-  -- generateLamAppConstraints)
-  sem appConstraintGenFuns =
-  -- Intentionally left blank
-
-  -- Type Name -> Name -> Name -> [Constraint]
-  sem generateLamAppConstraints (lhs: Name) (rhs: Name) =
-  | res /- : Name -/ -> [ CstrLamApp { lhs = lhs, rhs = rhs, res = res} ]
-
   sem generateConstraints =
-  | TmLet { ident = ident, body = TmApp _ & body} ->
-    recursive let rec = lam acc: [Constraint]. lam res: Name. lam t: Expr.
-      match t with TmApp t then
-        let lhs = match t.lhs with TmVar t then t.ident
-                  else match t.lhs with TmApp t then nameSym "cfaApp"
-                  else infoErrorExit (infoTm t.lhs) "Not a TmVar or TmApp" in
-        let rhs = match t.rhs with TmVar t then t.ident
-                  else infoErrorExit (infoTm t.rhs) "Not a TmVar" in
-
-        let acc = foldl (lam acc. lam f. concat (f lhs rhs res) acc)
-          acc (appConstraintGenFuns ()) in
-
-        match t.lhs with TmApp _ then rec acc lhs t.lhs else acc
-
-      else infoErrorExit (infoTm t)
-             "Non-application in generateConstraints for TmApp"
-    in rec [] ident body
+  | TmLet { ident = ident, body = TmApp app} ->
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then
+        [ CstrLamApp { lhs = l.ident, rhs = r.ident, res = ident } ]
+      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
+    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
 
 end
 
@@ -400,7 +362,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
   | TmRecLets { bindings = bindings } ->
     map (lam b: RecLetBinding.
       match b.body with TmLam t then
-        let av: AbsVal = AVLam { ident = t.ident, body = _lamBody t.body } in
+        let av: AbsVal = AVLam { ident = t.ident, body = exprName t.body } in
         CstrInit { lhs = av, rhs = b.ident }
       else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
     ) bindings
@@ -522,7 +484,8 @@ lang MatchCFA = CFA + DirectConstraint + MatchAst
   | CstrMatch r & cstr -> initConstraintName r.target graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrMatch r -> propagateMatchConstraint graph r.id (r.pat,update.1)
+  | CstrMatch r ->
+    propagateMatchConstraint graph r.id (r.pat,update.1)
 
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
   | _ -> graph -- Default: do nothing
@@ -554,8 +517,7 @@ lang MatchCFA = CFA + DirectConstraint + MatchAst
   -- Intentionally left blank
 
   sem generateMatchConstraints (id: Name) (target: Name) =
-  | pat /- : Pat -/ ->
-    [ CstrMatch { id = id, pat = pat, target = target } ]
+  | pat /- : Pat -/ -> [ CstrMatch { id = id, pat = pat, target = target } ]
 
 end
 
@@ -956,10 +918,6 @@ lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
   -- Specify what functions to use when generating constraints
   sem constraintGenFuns =
   | _ -> [generateConstraints]
-
-  -- Specify what functions to use when generating application constraints
-  sem appConstraintGenFuns =
-  | _ -> [generateLamAppConstraints]
 
   -- Specify what functions to use when generating match constraints
   sem matchConstraintGenFuns =
