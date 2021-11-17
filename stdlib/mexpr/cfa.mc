@@ -23,12 +23,12 @@ include "anf.mc"
 include "ast-builder.mc"
 
 type GenFun = Expr -> [Constraint]
-type MatchGenFun = Expr -> Name -> Name -> Pat -> [Constraint]
+type MatchGenFun = Name -> Name -> Pat -> [Constraint]
 
 -- NOTE(dlunde,2021-11-03): CFAGraph should of course when possible be defined
 -- as part of the CFA fragment (AbsVal and Constraint are not defined out
 -- here). It would be nice if it could also be extended with additional
--- information required by various analyses.
+-- information required by various analyses (product extension?).
 type CFAGraph = {
 
   -- Contains updates that needs to be processed in the main CFA loop
@@ -41,21 +41,17 @@ type CFAGraph = {
   -- repropagated upon updates to the abstract values for the name.
   edges: Map Name [Constraint],
 
-  -- Contains a list of functions used for generating constraints
-  cgfs: [GenFun],
-
   -- Contains a list of functions used for generating match constraints
+  -- TODO(dlunde,2021-11-17): Should probably be added as a product extension
+  -- in the MatchCFA fragment instead
   mcgfs: [MatchGenFun]
 
-  -- TODO(dlunde,2021-11-17): ... and extensible with other elements as well,
-  -- as needed by various analyses.
 }
 
 let emptyCFAGraph = {
   worklist = [],
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp,
-  cgfs = [],
   mcgfs = []
 }
 
@@ -71,63 +67,23 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   syn AbsVal =
   -- Intentionally left blank
 
-  -- Main CFA algorithm
   sem cfa =
-  | t ->
+  | t -> match cfaDebug (None ()) t with (_,graph) in graph
 
-    -- Initialize match constraint generating functions
-    let mcgfs = matchConstraintGenFuns t in
-
-    -- Initialize constraint generating functions (depends on mcgfs)
-    let cgfs = constraintGenFuns mcgfs t in
-
-    -- Initialize graph
-    let graph = {{ emptyCFAGraph with mcgfs = mcgfs } with cgfs = cgfs } in
-
-    -- Generate and collect all constraints
-    let cstrs: [Constraint] = _collectConstraints graph [] t in
-
-    -- Build the graph
-    let graph = foldl initConstraint graph cstrs in
-
-    -- Iteration
-    recursive let iter = lam graph: CFAGraph.
-      if null graph.worklist then graph
-      else
-        match head graph.worklist with (q,d) & h in
-        let graph = { graph with worklist = tail graph.worklist } in
-        match edgesLookup q graph with cc in
-        let graph = foldl (propagateConstraint h) graph cc in
-        iter graph
-    in
-    iter graph
-
-  -- Main algorithm with debug printouts
-  -- TODO(dlunde,2021-11-13): Code duplication
-  sem cfaDebug (env: PprintEnv) =
+  -- Main algorithm
+  sem cfaDebug (env: Option PprintEnv) =
   | t ->
 
     let printGraph = lam env. lam graph. lam str.
-      match cfaGraphToString env graph with (env, graph) in
-      printLn (join ["\n--- ", str, " ---"]);
-      printLn graph;
-      env
+      match env with Some env then
+        match cfaGraphToString env graph with (env, graph) in
+        printLn (join ["\n--- ", str, " ---"]);
+        printLn graph;
+        Some env
+      else None ()
     in
 
-    -- Initialize match constraint generating functions
-    let mcgfs = matchConstraintGenFuns t in
-
-    -- Initialize constraint generating functions (depends on mcgfs)
-    let cgfs = constraintGenFuns mcgfs t in
-
-    -- Initialize graph
-    let graph = {{ emptyCFAGraph with mcgfs = mcgfs } with cgfs = cgfs } in
-
-    -- Generate and collect all constraints
-    let cstrs: [Constraint] = _collectConstraints graph [] t in
-
-    -- Build the graph
-    let graph = foldl initConstraint graph cstrs in
+    let graph = initGraph t in
 
     -- Iteration
     recursive let iter = lam env: PprintEnv. lam graph: CFAGraph.
@@ -168,26 +124,10 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   sem generateConstraints (mcgfs: [MatchGenFun]) =
   | t -> []
 
-  -- Type: [MatchGenFun] -> Expr -> [GenFun]
-  -- This must be overriden in the final fragment where CFA should be applied.
-  -- Given the program to be analyzed, gives a list of constraint generating
-  -- functions (e.g., generateConstraints)
-  sem constraintGenFuns (mcgfs: [MatchGenFun]) =
+  -- This function is responsible for setting up the initial CFAGraph given the
+  -- program to analyze.
+  sem initGraph =
   -- Intentionally left blank
-
-  -- Type: Expr -> [MatchGenFun]
-  -- This must be overriden in the final fragment where
-  -- CFA should be applied.  Given the program to be analyzed, gives a list of
-  -- match constraint generating functions (e.g., generateMatchConstraints)
-  sem matchConstraintGenFuns =
-  -- Intentionally left blank
-
-  -- Traverses all subterms and collects constraints
-  sem _collectConstraints (graph: CFAGraph) (acc: [Constraint]) =
-  | t ->
-    let acc =
-      foldl (lam acc. lam f. concat (f t) acc) acc graph.cgfs in
-    sfold_Expr_Expr (_collectConstraints graph) acc t
 
   sem initConstraint (graph: CFAGraph) =
   -- Intentionally left blank
@@ -955,13 +895,32 @@ lang MExprCFA = CFA +
 
 lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
 
-  -- Specify what functions to use when generating constraints
-  sem constraintGenFuns (mcgfs: [MatchGenFun]) =
-  | _ -> [generateConstraints mcgfs]
+  -- Type: Expr -> CFAGraph
+  sem initGraph =
+  | t ->
 
-  -- Specify what functions to use when generating match constraints
-  sem matchConstraintGenFuns =
-  | _ -> [generateMatchConstraints]
+    -- Initial graph
+    let graph = emptyCFAGraph in
+
+    -- Initialize match constraint generating functions
+    let graph = { graph with mcgfs = [generateMatchConstraints] } in
+
+    -- Initialize constraint generating functions (depends on mcgfs)
+    let cgfs = [generateConstraints graph.mcgfs] in
+
+    -- Generate and collect constraints from terms
+    recursive let collectConstraints = lam acc: [Constraint]. lam t: Expr.
+      let acc =
+        foldl (lam acc. lam f. concat (f t) acc) acc cgfs in
+      sfold_Expr_Expr collectConstraints acc t
+    in
+
+    let cstrs: [Constraint] = collectConstraints [] t in
+
+    -- Build the graph
+    let graph = foldl initConstraint graph cstrs in
+
+    graph
 
 end
 
@@ -981,7 +940,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug env tANF with (env,cfaRes) in
+      match cfaDebug (Some env) tANF with (env,cfaRes) in
       match cfaGraphToString env cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
