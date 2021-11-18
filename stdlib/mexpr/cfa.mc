@@ -969,7 +969,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some env) tANF with (env,cfaRes) in
+      match cfaDebug (Some env) tANF with (Some env,cfaRes) in
       match cfaGraphToString env cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
