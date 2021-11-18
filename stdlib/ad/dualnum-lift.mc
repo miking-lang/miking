@@ -109,13 +109,13 @@ utest nder 1 (lam x. muln x x) (_num4) with _num8 using dualnumEq eqf
 utest nder 2 (lam x. muln x x) (_num4) with _num2 using dualnumEq eqf
 
 -- Inplace computation of the i'th component of the Jacobian df_j/dx_i.
-let jaci
+let dualnumJacj
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
+  -> Tensor[DualNum]
   -> Int
   -> Tensor[DualNum]
-  -> Tensor[DualNum]
   -> () =
-lam f. lam i. lam x. lam r.
+lam f. lam x. lam i. lam r.
   let e = _genEpsilon () in
   tensorSetExn x [i] (_dnum e (tensorGetExn x [i]) (_num 1.));
   f x r;
@@ -124,12 +124,12 @@ lam f. lam i. lam x. lam r.
 
 -- Inplace computation of Jacobian df_j/dx_i, where j index columns and i index
 -- rows, of `f` at `x` stored in `m`.
-let jacT
+let dualnumJacT
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
   -> Tensor[DualNum]
   -> Tensor[DualNum]
   -> () =
-lam f. lam x. lam j. tensorIterSlice (lam i. lam r. jaci f i x r) j
+lam f. lam x. lam t. tensorIterSlice (lam j. lam r. dualnumJacj f x j r) t
 
 utest
   let f = lam t. lam r.
@@ -141,7 +141,7 @@ utest
   in
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 1., _num 2.] in
   let m = tensorCreateDense [2, 2] (lam. _num 0.) in
-  jacT f x m;
+  dualnumJacT f x m;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn m [4]))
 with
 [
@@ -164,7 +164,7 @@ utest
     tensorOfSeqExn tensorCreateDense [4] [_num 1., _num 5., _num 5., _num 1.]
   in
   let m = tensorCreateDense [4, 2] (lam. _num 0.) in
-  jacT f x m;
+  dualnumJacT f x m;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn m [8]))
 with
 [
@@ -175,7 +175,7 @@ with
 ]
 
 -- Inplace computation of gradient df/dx_i of `f` at `x` stored in `g`.
-let grad
+let dualnumGrad
   : (Tensor[DualNum] -> DualNum)
   -> Tensor[DualNum]
   -> Tensor[DualNum]
@@ -189,7 +189,7 @@ lam f. lam x. lam g.
         tensorSetExn g idx (_pertubation e (f x));
         tensorSetExn x idx xi)
       x
-   else error "Invalid Input: grad"
+   else error "Invalid Input: dualnumGrad"
 
 utest
   let f = lam x.
@@ -199,18 +199,18 @@ utest
   in
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
   let g = tensorCreateDense [2] (lam. _num 0.) in
-  grad f x g;
+  dualnumGrad f x g;
   map _primalDeep (tensorToSeqExn g)
 with [3., 2.]
 
 -- Computes the ij'th component of the Hessian d2f/(dx_i)(dx_j) of `f` at `x`.
-let hessij
+let dualnumHessij
   : (Tensor[DualNum] -> DualNum)
-  -> Int
-  -> Int
   -> Tensor[DualNum]
+  -> Int
+  -> Int
   -> DualNum =
-lam f. lam i. lam j. lam x.
+lam f. lam x. lam i. lam j.
   let ei = _genEpsilon () in
   let ej = _genEpsilon () in
   let xi = tensorGetExn x [i] in
@@ -223,7 +223,7 @@ lam f. lam i. lam j. lam x.
   hij
 
 -- Inplace computation of Hessian d2f/(dx_i)(dx_j) of `f` at `x` stored in `h`.
-let hess
+let dualnumHess
   : (Tensor[DualNum] -> DualNum)
   -> Tensor[DualNum]
   -> Tensor[DualNum]
@@ -231,8 +231,9 @@ let hess
 lam f. lam x. lam h.
   if and (tensorHasRank x 1) (tensorHasRank h 2) then
     tensorIterSlice
-      (lam i. lam hi. tensorMapiInplace (lam idxj. lam. hessij f i (head idxj) x) hi) h
-  else error "Invalid Input: hess"
+      (lam i. lam hi.
+        tensorMapiInplace (lam idxj. lam. dualnumHessij f x i (head idxj)) hi) h
+  else error "Invalid Input: dualnumHess"
 
 utest
   let f = lam x.
@@ -242,7 +243,7 @@ utest
   in
   let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
   let h = tensorCreateDense [2, 2] (lam. _num 0.) in
-  hess f x h;
+  dualnumHess f x h;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn h [4]))
 with
 [

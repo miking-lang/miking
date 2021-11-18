@@ -285,9 +285,9 @@ lam f. lam t.
 
 type DualVec = DualTensor
 
--- `jacvecprod f x y r rp` computes the Jacobian-vector product of `f` at `x`
--- with `y`, storing f(x) in `r` and 𝛁f(x)y in `rp`.
-let jacfvecprod
+-- `dualtensorJacvecprod f x y r rp` computes the Jacobian-vector product of `f`
+-- at `x` with `y`, storing f(x) in `r` and 𝛁f(x)y in `rp`.
+let dualtensorJacfvecprod
   : (DualVec -> DualTensor -> ())
   -> DualVec
   -> DualVec
@@ -300,9 +300,9 @@ lam f. lam x. lam y. lam r. lam rp.
   let t2 = dualtensorCreateDual e r rp in
   f t1 t2
 
--- `jacfj f x j r rp` computes the j'th row in the Jacobian of `f` at `x`,
--- storing f(x) in `r` and 𝛁f(x)_j in `rp`.
-let jacfj
+-- `dualtensorJacfj f x j r rp` computes the j'th row in the Jacobian of `f` at
+-- `x`, storing f(x) in `r` and 𝛁f(x)_j in `rp`.
+let dualtensorJacfj
   : (DualVec -> DualTensor -> ())
   -> DualVec
   -> Int
@@ -310,36 +310,36 @@ let jacfj
   -> DualTensor
   -> () =
 lam f. lam x. lam j.
-  jacfvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
+  dualtensorJacfvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
 
--- `jacvecprod f x y rp` computes the Jacobian-vector product of `f` at `x` with
--- `y`, storing 𝛁f(x)y in `rp`.
-let jacvecprod
+-- `dualtensorJacvecprod f x y rp` computes the Jacobian-vector product of `f`
+-- at `x` with `y`, storing 𝛁f(x)y in `rp`.
+let dualtensorJacvecprod
   : (DualVec -> DualVec -> ()) -> DualVec -> DualVec -> DualTensor -> () =
 lam f. lam x. lam y. lam rp.
   let r = tensorCreateDense (dualtensorShape rp) (lam. 0.) in
   dualtensorJacfvecprod f x y (PrimalTensor r) rp
 
--- `jacfj f x j rp` computes the j'th row in the Jacobian of `f` at `x`, storing
--- 𝛁f(x)_j in `rp`.
-let jacj
+-- `dualtensorJacj f x j rp` computes the j'th row in the Jacobian of `f` at
+-- `x`, storing 𝛁f(x)_j in `rp`.
+let dualtensorJacj
   : (DualVec -> DualTensor -> ())
   -> DualVec
   -> Int
   -> DualTensor
-  -> DualTensor
   -> () =
 lam f. lam x. lam j.
-  jacvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
+  dualtensorJacvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
 -- Computes 𝛁f(x)^T and stores the result in `t`.
-let jacT : (DualVec -> DualTensor -> ()) ->  DualVec -> DualTensor =
+let dualtensorJacT
+  : (DualVec -> DualTensor -> ()) ->  DualVec -> DualTensor -> () =
 lam f. lam x. lam t.
-  dualtensorIterSlice (lam j. lam r. jacj f x j r) t
+  dualtensorIterSlice (lam j. lam r. dualtensorJacj f x j r) t
 
--- `gradfvecprod f x y` computes the Gradient-vector product of `f` at
+-- `dualtensorGradfvecprod f x y` computes the Gradient-vector product of `f` at
 -- `x` with `y` returning the tuple (f(x), 𝛁f(x)y).
-let gradfvecprod
+let dualtensorGradfvecprod
   : (DualVec -> DualNum) -> DualVec -> DualVec -> (DualNum, DualNum) =
 lam f. lam x. lam y.
   let e = dualGenEpsilon () in
@@ -347,31 +347,32 @@ lam f. lam x. lam y.
   let r = f t1 in
   (dualnumPrimal e r, dualnumPertubation e r)
 
--- `gradfj f x j` computes the j'th element in the gradient of `f` at `x`,
--- returning the tuple (f(x), 𝛁f(x)_j).
-let gradfj
+-- `dualtensorGradfj f x j` computes the j'th element in the gradient of `f` at
+-- `x`, returning the tuple (f(x), 𝛁f(x)_j).
+let dualtensorGradfj
   : (DualVec -> DualTensor -> ()) -> DualVec -> Int -> (DualNum, DualNum) =
 lam f. lam x. lam j.
-  gradfvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
+  dualtensorGradfvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
--- `gradvecprod f x y` computes the Gradient-vector product of `f` at
+-- `dualtensorGradvecprod f x y` computes the Gradient-vector product of `f` at
 -- `x` with `y` returning 𝛁f(x)y.
-let gradvecprod
+let dualtensorGradvecprod
   : (DualVec -> DualNum) -> DualVec -> DualVec -> DualNum =
 lam f. lam x. lam y.
   let e = dualGenEpsilon () in
   let t1 = dualtensorCreateDual e x y in
   dualnumPertubation e (f t1)
 
--- `gradj f x j` computes the j'th element in the gradient of `f` at `x`,
--- returning 𝛁f(x)_j.
-let gradj
-  : (DualVec -> DualNum)-> DualVec -> Int -> DualTensor -> DualNum =
+-- `dualtensorGradj f x j` computes the j'th element in the gradient of `f` at
+-- `x`, returning 𝛁f(x)_j.
+let dualtensorGradj
+  : (DualVec -> DualNum)-> DualVec -> Int -> DualNum =
 lam f. lam x. lam j.
-  gradvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
+  dualtensorGradvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
--- `grad f x r` computes the gradient 𝛁f(x) and stores the result in `r`.
-let grad : (DualVec -> DualNum) -> DualVec -> DualVec -> () =
+-- `dualtensorGrad f x r` computes the gradient 𝛁f(x) and stores the result in
+-- `r`.
+let dualtensorGrad : (DualVec -> DualNum) -> DualVec -> DualVec -> () =
 lam f. lam x. lam r.
   dualtensorIterSlice
     (lam j. lam. dualtensorSetExn r [j] (dualtensorGradj f x j))
@@ -387,8 +388,8 @@ lam f. lam x. lam i. lam j. dualtensorGradj (lam x. dualtensorGradj f x i) x j
 -- Hessian, 𝛁^2f(x)_ij, storing the result in `t`.
 let dualtensorHessijs
   : (DualVec -> DualTensor -> ()) -> DualVec -> Int -> Int -> DualTensor -> () =
-lam f. lam x. lam i. lam j. lam t. jacj (lam x. jacj f x i) x j t
-
+lam f. lam x. lam i. lam j. lam t.
+  dualtensorJacj (lam x. dualtensorJacj f x i) x j t
 
 mexpr
 
@@ -553,8 +554,8 @@ let y = tensorOfSeqExn tensorCreateDense [2] [4., 5.] in
 -- Test Jacobian calculation --
 -------------------------------
 
-jacfvecprod f (_t x) (_t y) (_t r1) (_t rp1);
-jacvecprod f (_t x) (_t y) (_t rp3);
+dualtensorJacfvecprod f (_t x) (_t y) (_t r1) (_t rp1);
+dualtensorJacvecprod f (_t x) (_t y) (_t rp3);
 primal_f x r2;
 pertubation_f x y rp2;
 
@@ -564,21 +565,21 @@ utest rp3 with rp2 using _Eq in
 
 -- Test Gradient calculation.
 (
-  match gradfvecprod f1 (_t x) (_t y) with (x, xp) in
+  match dualtensorGradfvecprod f1 (_t x) (_t y) with (x, xp) in
   utest _primalDeep x with tensorGetExn r2 [0] using eqf in
   utest _primalDeep xp with tensorGetExn rp2 [0] using eqf in
   ()
 );
 
 (
-  match gradfvecprod f2 (_t x) (_t y) with (x, xp) in
+  match dualtensorGradfvecprod f2 (_t x) (_t y) with (x, xp) in
   utest _primalDeep x with tensorGetExn r2 [1] using eqf in
   utest _primalDeep xp with tensorGetExn rp2 [1] using eqf in
   ()
 );
 
 (
-  match gradfvecprod f3 (_t x) (_t y) with (x, xp) in
+  match dualtensorGradfvecprod f3 (_t x) (_t y) with (x, xp) in
   utest _primalDeep x with tensorGetExn r2 [2] using eqf in
   utest _primalDeep xp with tensorGetExn rp2 [2] using eqf in
   ()
@@ -627,7 +628,7 @@ in
 let m1 = tensorCreateDense [2, 3] (lam. 0.) in
 let m2 = tensorCopy m1 in
 
-jacT f (_t x) (_t m1);
+dualtensorJacT f (_t x) (_t m1);
 jacT_f x m2;
 
 utest m1 with m2 using _Eq in
@@ -650,7 +651,7 @@ in
 -- Computes the Hessian vector product (𝛁^2f(x))y and stores the result in `rp`,
 -- (𝛁f(x) is stored in `r`).
 let hessvecprod_f =
-  lam x. lam y. lam r. lam rp. jacfvecprod (grad f) x y r rp
+  lam x. lam y. lam r. lam rp. dualtensorJacfvecprod (dualtensorGrad f) x y r rp
 in
 
 -- Analytical solution to 𝛁f(x)
@@ -739,19 +740,19 @@ hess_f x t;
 let t = tensorTransposeExn t 0 2 in
 
 let r = tensorCreateDense [3] (lam. 0.) in
-hessijs f (_t x) 0 0 (_t r);
+dualtensorHessijs f (_t x) 0 0 (_t r);
 utest r with tensorSliceExn t [0, 0] using _Eq in
 
 let r = tensorCreateDense [3] (lam. 0.) in
-hessijs f (_t x) 0 1 (_t r);
+dualtensorHessijs f (_t x) 0 1 (_t r);
 utest r with tensorSliceExn t [0, 1] using _Eq in
 
 let r = tensorCreateDense [3] (lam. 0.) in
-hessijs f (_t x) 1 0 (_t r);
+dualtensorHessijs f (_t x) 1 0 (_t r);
 utest r with tensorSliceExn t [1, 0] using _Eq in
 
 let r = tensorCreateDense [3] (lam. 0.) in
-hessijs f (_t x) 1 1 (_t r);
+dualtensorHessijs f (_t x) 1 1 (_t r);
 utest r with tensorSliceExn t [1, 1] using _Eq in
 
 let f = lam x.
@@ -777,9 +778,13 @@ in
 let m = tensorCreateDense [2, 2] (lam. 0.) in
 hess_f x m;
 
-utest _primalDeep (hessij f (_t x) 0 0) with tensorGetExn m [0, 0] using eqf in
-utest _primalDeep (hessij f (_t x) 0 1) with tensorGetExn m [0, 1] using eqf in
-utest _primalDeep (hessij f (_t x) 1 0) with tensorGetExn m [1, 0] using eqf in
-utest _primalDeep (hessij f (_t x) 1 1) with tensorGetExn m [1, 1] using eqf in
+utest _primalDeep (dualtensorHessij f (_t x) 0 0)
+with tensorGetExn m [0, 0] using eqf in
+utest _primalDeep (dualtensorHessij f (_t x) 0 1)
+with tensorGetExn m [0, 1] using eqf in
+utest _primalDeep (dualtensorHessij f (_t x) 1 0)
+with tensorGetExn m [1, 0] using eqf in
+utest _primalDeep (dualtensorHessij f (_t x) 1 1)
+with tensorGetExn m [1, 1] using eqf in
 
 ()
