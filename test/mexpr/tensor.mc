@@ -482,16 +482,16 @@ utest tensorGetExn t [1, 2] with [1, 2]
 
 -- To string and utest
 let t : Tensor[Int] = tensorCreateCArrayInt [2, 3] (foldl addi 0)
-utest tensor2string int2string t with "\n[\n\t[0, 1, 2],\n\t[1, 2, 3]\n]\n"
+utest tensor2string int2string t with "[\n\t[0, 1, 2],\n\t[1, 2, 3]\n]"
 utest t with t
 
 let t : Tensor[Float] =
   tensorCreateCArrayFloat [2, 3] (lam idx. int2float (foldl addi 0 idx))
 utest tensor2string float2string t
-with "\n[\n\t[0., 1., 2.],\n\t[1., 2., 3.]\n]\n"
+with "[\n\t[0., 1., 2.],\n\t[1., 2., 3.]\n]"
 utest t with t
 
 let t : Tensor[[Int]] = tensorCreateDense [2, 3] (lam idx. [foldl addi 0 idx])
 utest tensor2string (lam x. join ["[", int2string (get x 0) ,"]"]) t
-with "\n[\n\t[[0], [1], [2]],\n\t[[1], [2], [3]]\n]\n"
+with "[\n\t[[0], [1], [2]],\n\t[[1], [2], [3]]\n]"
 utest t with t

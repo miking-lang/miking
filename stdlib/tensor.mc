@@ -29,6 +29,24 @@ utest linearToCartesianIndex [2, 3] 2 with [0, 2]
 utest linearToCartesianIndex [2, 3] 3 with [1, 0]
 
 
+-- Converts Cartesian index `idx` to linear index assuming row-major order.
+let cartesianToLinearIndex = lam shape. lam idx.
+  let acc =
+    foldl
+      (lam acc : ([Int], Int). lam i.
+        match acc with (shape, ofs) in
+        (tail shape, addi ofs (muli (_prod shape) i)))
+      (tail shape, 0)
+      idx
+   in
+   match acc with (_, i) in i
+
+utest cartesianToLinearIndex [2] [0] with 0
+utest cartesianToLinearIndex [2] [1] with 1
+utest cartesianToLinearIndex [2, 3] [0, 2] with 2
+utest cartesianToLinearIndex [2, 3] [1, 0] with 3
+
+
 -- Folds `f` over the range `start` `stop` using accumulator `acc`
 let indexFoldu : (a -> Int -> a) -> a -> Int -> Int -> a =
 lam f. lam acc. lam start. lam stop.

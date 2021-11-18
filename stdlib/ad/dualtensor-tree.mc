@@ -1,10 +1,11 @@
+include "common.mc"
 include "tensor.mc"
 include "dual-tree.mc"
 include "dualnum-tree.mc"
 
 type DualTensor
 -- Tensor with a 1. at exactly one index and 0. at all other indices.
-con UnitTensor : {shape : [Int], idx : [Int]} -> DualTensor
+con UnitTensor : {shape : [Int], lidx : Int} -> DualTensor
 -- A primal tensor
 con PrimalTensor : Tensor[Float] -> DualTensor
 --- A dual tensor t + et', where t is the primal and t' the perturbation.
@@ -33,7 +34,7 @@ recursive let recur = lam t.
 in recur
 
 let _prod = foldl muli 1
-let _eqIdx = eqSeq eqi
+let _eqShape = eqSeq eqi
 
 let _idxInShape =
 lam idx. lam shape.
@@ -66,9 +67,13 @@ lam t.
   match t with DualTensor {e = e} then e
   else error "Operand not a dual tensor"
 
+let dualtensorCreateUnit : [Int] -> [Int] -> DualTensor =
+lam shape. lam idx.
+  UnitTensor { shape = shape, lidx = cartesianToLinearIndex shape idx }
+
 let dualtensorCreateDual : Eps -> DualTensor -> DualTensor -> DualTensor =
 lam e. lam x. lam xp.
-  if _eqIdx (dualtensorShape x) (dualtensorShape xp) then
+  if _eqShape (dualtensorShape x) (dualtensorShape xp) then
     DualTensor { e = e, x = x, xp = xp }
   else error "dualtensorCreateDual: Invalid Argument"
 
@@ -104,14 +109,21 @@ let dualtensorGenEpsilon : () -> Eps = dualGenEpsilon
 let dualtensorEq
   : (Float -> Float -> Bool) -> DualTensor -> DualTensor -> Bool =
 lam eq. lam t1. lam t2.
-  if _eqIdx (dualtensorShape t1) (dualtensorShape t2) then
+  if _eqShape (dualtensorShape t1) (dualtensorShape t2) then
     recursive let recur = lam t1. lam t2.
       switch (t1, t2)
       case
-        (UnitTensor {idx = idx}, PrimalTensor t)
-        | (PrimalTensor t, UnitTensor {idx = idx})
+        (UnitTensor {lidx = i1, shape = shape1},
+         UnitTensor {lidx = i2, shape = shape2})
       then
-        eq 1. (tensorGetExn t idx)
+        eqSeq eqi
+          (linearToCartesianIndex shape1 i1)
+          (linearToCartesianIndex shape2 i2)
+      case
+        (UnitTensor {shape = shape, lidx = i}, PrimalTensor t)
+        | (PrimalTensor t, UnitTensor {shape = shape, lidx = i})
+      then
+        eq 1. (tensorGetExn t (linearToCartesianIndex shape i))
       case (PrimalTensor t1, PrimalTensor t2) then
         tensorEq eq t1 t2
       case
@@ -318,7 +330,7 @@ let jacj
   -> DualTensor
   -> () =
 lam f. lam x. lam j.
-  jacvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
+  jacvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
 -- Computes 𝛁f(x)^T and stores the result in `t`.
 let jacT : (DualVec -> DualTensor -> ()) ->  DualVec -> DualTensor =
@@ -332,29 +344,31 @@ let gradfvecprod
 lam f. lam x. lam y.
   let e = dualGenEpsilon () in
   let t1 = dualtensorCreateDual e x y in
-  match f t1 with Dual {x = x, xp = xp} in
-  (x, xp)
+  let r = f t1 in
+  (dualnumPrimal e r, dualnumPertubation e r)
 
 -- `gradfj f x j` computes the j'th element in the gradient of `f` at `x`,
 -- returning the tuple (f(x), 𝛁f(x)_j).
 let gradfj
   : (DualVec -> DualTensor -> ()) -> DualVec -> Int -> (DualNum, DualNum) =
 lam f. lam x. lam j.
-  gradfvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
+  gradfvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
 -- `gradvecprod f x y` computes the Gradient-vector product of `f` at
 -- `x` with `y` returning 𝛁f(x)y.
 let gradvecprod
   : (DualVec -> DualNum) -> DualVec -> DualVec -> DualNum =
 lam f. lam x. lam y.
-  match gradfvecprod f x y with (_, xp) in xp
+  let e = dualGenEpsilon () in
+  let t1 = dualtensorCreateDual e x y in
+  dualnumPertubation e (f t1)
 
 -- `gradj f x j` computes the j'th element in the gradient of `f` at `x`,
 -- returning 𝛁f(x)_j.
 let gradj
   : (DualVec -> DualNum)-> DualVec -> Int -> DualTensor -> DualNum =
 lam f. lam x. lam j.
-  gradvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
+  gradvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
 -- `grad f x r` computes the gradient 𝛁f(x) and stores the result in `r`.
 let grad : (DualVec -> DualNum) -> DualVec -> DualVec -> () =
