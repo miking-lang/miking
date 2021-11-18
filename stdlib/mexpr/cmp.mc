@@ -426,11 +426,15 @@ lang FlexTypeCmp = VarSortCmp + FlexTypeAst
     else subi (constructorTag lhs) (constructorTag rhs)
 end
 
-lang AllTypeCmp = Cmp + AllTypeAst
+lang AllTypeCmp = VarSortCmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
-    if eqi identDiff 0 then cmpType t1.ty t2.ty
+    if eqi identDiff 0 then
+      let sortDiff = cmpVarSort (t1.sort, t2.sort) in
+      if eqi sortDiff 0 then
+        cmpType t1.ty t2.ty
+      else sortDiff
     else identDiff
 end
 

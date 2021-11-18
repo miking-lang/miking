@@ -105,10 +105,11 @@ lang LetSym = Sym + LetAst + AllTypeAst
       let tyBody = symbolizeType env t.tyBody in
       let ty = symbolizeType env t.ty in
       let body =
-        match stripTyAll tyBody with (vars, _) then
-          let tyVarEnv = foldr (lam v. mapInsert (nameGetStr v) v) env.tyVarEnv vars in
-          symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
-        else never
+        match stripTyAll tyBody with (vars, _) in
+        let tyVarEnv =
+          foldr (lam v: (Name, VarSort). mapInsert (nameGetStr v.0) v.0)
+            env.tyVarEnv vars in
+        symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
       in
       if nameHasSym t.ident then
         TmLet {{{{t with tyBody = tyBody}
@@ -294,16 +295,18 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
         TyUnknown {info = t.info}
 end
 
-lang AllTypeSym = AllTypeAst
+lang AllTypeSym = AllTypeAst + VarSortAst
   sem symbolizeType (env : SymEnv) =
   | TyAll t & ty ->
     if nameHasSym t.ident then ty
     else
+      let sort = smap_VarSort_Type (symbolizeType env) t.sort in
       let str = nameGetStr t.ident in
       let ident = nameSetNewSym t.ident in
       let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
-      TyAll {{t with ident = ident}
-                with ty = symbolizeType env t.ty}
+      TyAll {{{t with ident = ident}
+                 with ty = symbolizeType env t.ty}
+                 with sort = sort}
 end
 
 --------------

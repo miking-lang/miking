@@ -96,7 +96,7 @@ let tyvar_ =
 
 let ntyall_ = use AllTypeAst in
   lam n. lam ty.
-  TyAll {ident = n, info = NoInfo (), ty = ty}
+  TyAll {ident = n, info = NoInfo (), ty = ty, sort = TypeVar ()}
 
 let tyall_ =
   lam s.

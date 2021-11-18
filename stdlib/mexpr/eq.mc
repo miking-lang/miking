@@ -654,12 +654,15 @@ lang FlexTypeEq = VarSortEq + FlexTypeAst
     else None ()
 end
 
-lang AllTypeEq = Eq + AllTypeAst
+lang AllTypeEq = VarSortEq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
     match unwrapType typeEnv lhs with Some (TyAll l) then
-      let tyVarEnv = biInsert (l.ident, r.ident) typeEnv.tyVarEnv in
-      eqTypeH {typeEnv with tyVarEnv = tyVarEnv} free l.ty r.ty
+      optionBind (eqVarSort typeEnv free (l.sort, r.sort))
+        (lam free.
+          eqTypeH
+            {typeEnv with tyVarEnv = biInsert (l.ident, r.ident) typeEnv.tyVarEnv}
+            free l.ty r.ty)
     else None ()
 end
 

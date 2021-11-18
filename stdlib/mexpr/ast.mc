@@ -1247,6 +1247,14 @@ lang VarSortAst
     (acc, RecordVar {r with fields = flds})
   | s ->
     (acc, s)
+
+  sem smap_VarSort_Type (f : a -> b) =
+  | s ->
+    match smapAccumL_VarSort_Type (lam. lam x. ((), f x)) () s with (_, s) in s
+
+  sem sfold_VarSort_Type (f : acc -> a -> acc) (acc : acc) =
+  | s ->
+    match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
 type Level = Int
@@ -1294,10 +1302,11 @@ lang FlexTypeAst = VarSortAst + Ast
       smapAccumL_Type_Type f acc (resolveLink ty)
 end
 
-lang AllTypeAst = Ast
+lang AllTypeAst = VarSortAst + Ast
   syn Type =
   | TyAll {info  : Info,
            ident : Name,
+           sort  : VarSort,
            ty    : Type}
 
   sem tyWithInfo (info : Info) =
@@ -1308,15 +1317,16 @@ lang AllTypeAst = Ast
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyAll t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, TyAll {t with ty = ty})
-    else never
+    match smapAccumL_VarSort_Type f acc t.sort with (acc, sort) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TyAll {{t with sort = sort}
+                    with ty = ty})
 
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty
 
-  sem stripTyAllBase (vars : [Name]) =
-  | TyAll t -> stripTyAllBase (snoc vars t.ident) t.ty
+  sem stripTyAllBase (vars : [(Name, VarSort)]) =
+  | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.sort)) t.ty
   | ty -> (vars, ty)
 end
 

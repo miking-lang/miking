@@ -1139,14 +1139,13 @@ lang FlexTypePrettyPrint = FlexTypeAst + VarSortPrettyPrint
       getTypeStringCode indent env (resolveLink ty)
 end
 
-lang AllTypePrettyPrint = AllTypeAst
+lang AllTypePrettyPrint = AllTypeAst + VarSortPrettyPrint
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyAll t ->
-    match pprintEnvGetStr env t.ident with (env, var) then
-      match getTypeStringCode indent env t.ty with (env, str) then
-        (env, join ["all ", var, ". ", str])
-      else never
-    else never
+    match pprintEnvGetStr env t.ident with (env, idstr) in
+    match getVarSortStringCode indent env idstr t.sort with (env, varstr) in
+    match getTypeStringCode indent env t.ty with (env, tystr) in
+    (env, join ["all ", varstr, ". ", tystr])
 end
 
 lang AppTypePrettyPrint = AppTypeAst
