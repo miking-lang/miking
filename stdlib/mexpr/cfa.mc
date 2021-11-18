@@ -270,6 +270,31 @@ lang DirectConstraint = CFA
 
 end
 
+lang DirectAbsValConstraint = CFA
+
+  syn Constraint =
+  -- {lhsav} ⊆ lhs ⇒ {rhsav} ⊆ rhs
+  | CstrDirectAv { lhs: Name, lhsav: AbsVal, rhs: Name, rhsav: AbsVal }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrDirectAv r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrDirectAv r ->
+    if eqAbsVal update.1 r.lhsav then
+      addData graph r.rhsav r.rhs
+    else graph
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrDirectAv { lhs = lhs, lhsav = lhsav, rhs = rhs, rhsav = rhsav } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match absValToString env lhsav with (env,lhsav) in
+    match pprintVarName env rhs with (env,rhs) in
+    match absValToString env rhsav with (env,rhsav) in
+    (env, join ["{", lhsav ,"} ⊆ ", lhs, " ⇒ {", rhsav ,"} ⊆ ", rhs])
+
+end
+
 -----------
 -- TERMS --
 -----------
@@ -333,7 +358,7 @@ lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env res with (env,res) in
-    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< and >b< ⊆ ", res ])
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< AND >b< ⊆ ", res ])
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmApp app} ->
@@ -879,7 +904,7 @@ end
 lang MExprCFA = CFA +
 
   -- Base constraints
-  DirectConstraint +
+  InitConstraint + DirectConstraint + DirectAbsValConstraint +
 
   -- Terms
   VarCFA + LamCFA + AppCFA +
