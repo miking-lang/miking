@@ -56,6 +56,20 @@ let distExtMap =
         cLibraries = []
       }
     ]),
+    ("externalMultinomialSample", [
+      { expr = "Owl_stats.multinomial_rvs ",
+        ty = tyarrows_ [tyint_, otylabel_ "p" (otyarray_ tyfloat_), otyarray_ tyint_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalCategoricalSample", [
+      { expr = "Owl_stats.categorical_rvs ",
+        ty = tyarrows_ [otyarray_ tyfloat_, tyint_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
     ("uniformSample", [
       { expr = "Owl_stats.std_uniform_rvs",
         ty = tyarrows_ [tyunit_, tyfloat_],

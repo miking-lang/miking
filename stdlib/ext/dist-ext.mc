@@ -40,15 +40,20 @@ let gaussianSample = lam mu:Float. lam sigma:Float.
 
 -- Multinomial and Categorical
 external externalMultinomialLogPmf : [Int] -> [Float] -> Float
+external externalMultinomialSample ! : Int -> [Float] -> [Int]
+external externalCategoricalSample ! : [Float] -> Int
 let multinomialLogPmf : [Float] -> [Int] -> Float =
   lam ps. lam ns. externalMultinomialLogPmf ns ps
 let multinomialPmf : [Float] -> [Int] -> Float =
   lam ps. lam ns. exp (externalMultinomialLogPmf ns ps)
 let categoricalLogPmf : [Float] -> Int -> Float =
-  lam ps. lam n. log (get ps n)
+  lam ps. lam x. log (get ps x)
 let categoricalPmf : [Float] -> Int -> Float =
-  lam ps. lam n. get ps n
-
+  lam ps. lam x. get ps x
+let multinomialSample : [Float] -> Int -> [Int] =
+  lam ps. lam n. externalMultinomialSample n ps
+let categoricalSample : [Float] -> Int =
+  lam ps. externalCategoricalSample ps
 
 
 -- Uniform (continuous)
@@ -100,7 +105,9 @@ utest multinomialPmf [0.1, 0.3, 0.6] [0,2,3] with 0.1944 using _eqf in
 utest categoricalLogPmf [0.3, 0.2, 0.5] 2 with log 0.5 using _eqf in
 utest categoricalPmf [0.1, 0.3, 0.6] 2 with 0.6 using _eqf in
 utest categoricalPmf [0.1, 0.3, 0.6] 1 with 0.3 using _eqf in
-
+utest multinomialSample [0.2, 0.8] 3 with [] using
+  lam r. lam l. match r with [v1,v2] then eqi (addi v1 v2) 3 else false in
+utest categoricalSample [0.1, 0.4, 0.2, 0.3] with 0 using intRange 0 3 in
 
 -- Testing Uniform
 utest uniformSample () with 0. using floatRange 0. 1. in
