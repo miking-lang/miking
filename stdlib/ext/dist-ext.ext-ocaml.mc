@@ -49,6 +49,13 @@ let distExtMap =
         cLibraries = []
       }
     ]),
+    ("externalMultinomialLogPmf", [
+      { expr = "Owl_stats.multinomial_logpdf ",
+        ty = tyarrows_ [otyarray_ tyint_, otylabel_ "p" (otyarray_ tyfloat_), tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
     ("uniformSample", [
       { expr = "Owl_stats.std_uniform_rvs",
         ty = tyarrows_ [tyunit_, tyfloat_],
