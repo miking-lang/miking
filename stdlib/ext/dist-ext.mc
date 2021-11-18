@@ -5,33 +5,47 @@ include "bool.mc"
 -- Binomial and Bernoulli
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
 external externalBinomialSample ! : Float -> Int -> Int
-let binomialPmf = lam p:Float. lam n:Int. lam x:Int. exp (externalBinomialLogPmf x p n)
-let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int. externalBinomialLogPmf x p n
-let binomialSample = lam p:Float. lam n:Int. externalBinomialSample p n
-let bernoulliPmf = lam p:Float. lam x:Int. if eqi x 0 then subf 1. p else p
-let bernoulliLogPmf = lam p:Float. lam x:Int. log (bernoulliPmf p x)
-let bernoulliSample = lam p:Float. externalBinomialSample p 1
+let binomialPmf = lam n:Int. lam p:Float. lam x:Int.
+  exp (externalBinomialLogPmf x p n)
+let binomialLogPmf = lam n:Int. lam p:Float. lam x:Int.
+  externalBinomialLogPmf x p n
+let binomialSample = lam n:Int. lam p:Float.
+  externalBinomialSample p n
+let bernoulliPmf = lam p:Float. lam x:Int.
+  if eqi x 0 then subf 1. p else p
+let bernoulliLogPmf = lam p:Float. lam x:Int.
+  log (bernoulliPmf p x)
+let bernoulliSample = lam p:Float.
+  externalBinomialSample p 1
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
 external externalBetaSample ! : Float -> Float -> Float
-let betaPdf = lam a:Float. lam b:Float. lam x:Float. exp (externalBetaLogPdf x a b)
-let betaLogPdf = lam a:Float. lam b:Float. lam x:Float. externalBetaLogPdf x a b
-let betaSample = lam a:Float. lam b:Float. externalBetaSample a b
+let betaPdf = lam a:Float. lam b:Float. lam x:Float.
+  exp (externalBetaLogPdf x a b)
+let betaLogPdf = lam a:Float. lam b:Float. lam x:Float.
+  externalBetaLogPdf x a b
+let betaSample = lam a:Float. lam b:Float.
+  externalBetaSample a b
 
 -- Gaussian
 external externalGaussianLogPdf : Float -> Float -> Float -> Float
 external externalGaussianSample ! : Float -> Float -> Float
-let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float. exp (externalGaussianLogPdf x mu sigma)
-let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float. externalGaussianLogPdf x mu sigma
-let gaussianSample = lam mu:Float. lam sigma:Float. externalGaussianSample mu sigma
+let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  exp (externalGaussianLogPdf x mu sigma)
+let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  externalGaussianLogPdf x mu sigma
+let gaussianSample = lam mu:Float. lam sigma:Float.
+  externalGaussianSample mu sigma
+
 
 -- Uniform (continuous)
 external uniformSample ! : Unit -> Float
 
 -- Random (discrete)
 external externalRandomSample ! : Int -> Int -> Int
-let randomSample = lam a:Int. lam b:Int. externalRandomSample a b
+let randomSample = lam a:Int. lam b:Int.
+  externalRandomSample a b
 
 
 mexpr
@@ -50,9 +64,9 @@ let floatRange = lam lower. lam upper. lam r. lam l.
   and (and (leqf r upper) (geqf r lower)) (and (leqf l upper) (geqf l lower)) in
 
 -- Testing Binomial and Bernoulli
-utest binomialPmf 0.7 20 15 with 0.17886305057 using _eqf in
-utest exp (binomialLogPmf 0.5 40 20) with 0.12537068762 using _eqf in
-utest binomialSample 0.7 20 with 0 using intRange 0 20 in
+utest binomialPmf 20 0.7 15 with 0.17886305057 using _eqf in
+utest exp (binomialLogPmf 40 0.5 20) with 0.12537068762 using _eqf in
+utest binomialSample 20 0.7 with 0 using intRange 0 20 in
 utest bernoulliPmf 0.3 0 with 0.7 using _eqf in
 utest exp (bernoulliLogPmf 0.6 1) with 0.6 using _eqf in
 utest bernoulliSample 0.6 with 0 using intRange 0 1 in
