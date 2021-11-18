@@ -70,17 +70,29 @@ let fieldUnificationError = use RecordTypeAst in
     pprintType (TyRecord {info = NoInfo (), fields = m, labels = mapKeys m}) in
   unificationError (printFields m1) (printFields m2)
 
+recursive let resolveAlias = use MExprAst in
+  lam env : Map Name Type. lam ty.
+  match ty with TyCon t then
+    match mapLookup t.ident env with Some ty then resolveAlias env ty
+    else ty
+  else ty
+end
+
 ----------------------
 -- TYPE UNIFICATION --
 ----------------------
 
 lang Unify = MExprAst
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
-  -- TODO(aathn, 2021-11-06): Resolve links and aliases before calling unifyBase
   sem unify (env : TCEnv) (ty1 : Type) =
   | ty2 ->
     let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv} in
-    unifyBase env (ty1, ty2)
+    unifyTypes env (ty1, ty2)
+
+  sem unifyTypes (env : UnifyEnv) =
+  | (ty1, ty2) ->
+    let resolve = compose (resolveAlias env.tyConEnv) resolveLink in
+    unifyBase env (resolve ty1, resolve ty2)
 
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
@@ -105,7 +117,7 @@ lang UnifyFields = Unify
     let f = lam b : (SID, Type).
       match b with (k, tyfield1) in
       match mapLookup k m2 with Some tyfield2 then
-        unifyBase env (tyfield1, tyfield2)
+        unifyTypes env (tyfield1, tyfield2)
       else
         fieldUnificationError m1 m2
     in
@@ -134,7 +146,7 @@ lang FlexTypeUnify = Unify + UnifyFields + FlexTypeAst + UnknownTypeAst
     let f = lam acc. lam b : (SID, Type).
       match b with (k, ty2) in
       match mapLookup k r1.fields with Some ty1 then
-        unifyBase env (ty1, ty2);
+        unifyTypes env (ty1, ty2);
         acc
       else
         mapInsert k ty2 acc
@@ -149,29 +161,27 @@ lang FlexTypeUnify = Unify + UnifyFields + FlexTypeAst + UnknownTypeAst
 
   sem unifyBase (env : UnifyEnv) =
   | (TyFlex t1 & ty1, TyFlex t2 & ty2) ->
-    match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) then
-      if not (nameEq r1.ident r2.ident) then
-        checkBeforeUnify r1 ty2;
-        let updated =
-          Unbound {{r1 with level = mini r1.level r2.level}
-                       with sort = addSorts env (r1.sort, r2.sort)} in
-        modref t1.contents updated;
-        modref t2.contents (Link ty1)
-      else ()
-    else
-      unifyBase env (resolveLink ty1, resolveLink ty2)
+    -- NOTE(aathn, 2021-11-17): unifyBase is always called by unifyTypes, which
+    -- resolves any potential links, so TyFlexes are always unbound here.
+    match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
+    if not (nameEq r1.ident r2.ident) then
+      checkBeforeUnify r1 ty2;
+      let updated =
+        Unbound {{r1 with level = mini r1.level r2.level}
+                     with sort = addSorts env (r1.sort, r2.sort)} in
+      modref t1.contents updated;
+      modref t2.contents (Link ty1)
+    else ()
   | (TyFlex t1 & ty1, !(TyUnknown _ | TyFlex _) & ty2)
   | (!(TyUnknown _ | TyFlex _) & ty2, TyFlex t1 & ty1) ->
-    match deref t1.contents with Unbound tv then
-      checkBeforeUnify tv ty2;
-      (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
-         unifyFields env t1.info r1.fields r2.fields
-       else match tv.sort with RecordVar _ then
-         typeUnificationError ty1 ty2
-       else ());
-      modref t1.contents (Link ty2)
-    else
-      unifyBase env (resolveLink ty1, ty2)
+    match deref t1.contents with Unbound tv in
+    checkBeforeUnify tv ty2;
+    (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
+       unifyFields env t1.info r1.fields r2.fields
+     else match tv.sort with RecordVar _ then
+       typeUnificationError ty1 ty2
+     else ());
+    modref t1.contents (Link ty2)
 
   sem checkBeforeUnify (tv : TVarRec) =
   | TyFlex {contents = r} ->
@@ -194,22 +204,22 @@ end
 lang FunTypeUnify = Unify + FunTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyArrow {from = from1, to = to1}, TyArrow {from = from2, to = to2}) ->
-    unifyBase env (from1, from2);
-    unifyBase env (to1, to2)
+    unifyTypes env (from1, from2);
+    unifyTypes env (to1, to2)
 end
 
 lang AppTypeUnify = Unify + AppTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyApp t1, TyApp t2) ->
-    unifyBase env (t1.lhs, t2.lhs);
-    unifyBase env (t1.rhs, t2.rhs)
+    unifyTypes env (t1.lhs, t2.lhs);
+    unifyTypes env (t1.rhs, t2.rhs)
 end
 
 lang AllTypeUnify = Unify + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
-    unifyBase env (t1.ty, t2.ty)
+    unifyTypes env (t1.ty, t2.ty)
 
   sem checkBeforeUnify (tv : TVarRec) =
   | TyAll t ->
@@ -225,15 +235,9 @@ end
 
 lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyCon t1 & ty1, ! (TyFlex _ | TyUnknown _) & ty2)
-  | (! (TyFlex _ | TyUnknown _) & ty2, TyCon t1 & ty1) ->
-     match mapLookup t1.ident env.tyConEnv with Some ty1 then
-       unifyBase env (ty1, ty2)
-     else match ty2 with TyCon t2 then
-       if nameEq t1.ident t2.ident then ()
-       else typeUnificationError ty1 ty2
-     else
-       typeUnificationError ty1 ty2
+  | (TyCon t1 & ty1, TyCon t2 & ty2) ->
+    if nameEq t1.ident t2.ident then ()
+    else typeUnificationError ty1 ty2
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -266,13 +270,13 @@ end
 lang SeqTypeUnify = Unify + SeqTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TySeq t1, TySeq t2) ->
-    unifyBase env (t1.ty, t2.ty)
+    unifyTypes env (t1.ty, t2.ty)
 end
 
 lang TensorTypeUnify = Unify + TensorTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyTensor t1, TyTensor t2) ->
-    unifyBase env (t1.ty, t2.ty)
+    unifyTypes env (t1.ty, t2.ty)
 end
 
 lang RecordTypeUnify = Unify + UnifyFields + RecordTypeAst
@@ -1068,6 +1072,15 @@ let tests = [
        never_)
    ],
    ty = tyseq_ tyint_,
+   env = []},
+
+  {name = "Type1",
+   tm = bindall_ [
+     type_ "Foo" (tyrecord_ [("x", tyint_)]),
+     ulet_ "f" (lam_ "r" (tycon_ "Foo") (recordupdate_ (var_ "r") "x" (int_ 1))),
+     app_ (var_ "f") (urecord_ [("x", int_ 0)])
+   ],
+   ty = tyrecord_ [("x", tyint_)],
    env = []},
 
   {name = "Utest1",
