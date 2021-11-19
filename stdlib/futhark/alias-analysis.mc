@@ -147,7 +147,17 @@ lang FutharkAliasAnalysis = FutharkAst
     -- represent this underlying array.
     let arrayId = nameSym "" in
     (LeafAliasResult arrayId, env)
-  | t -> (EmptyAliasResult (), env)
+  | t ->
+    -- NOTE(larshum, 2021-11-19: For other kinds of expressions, it is possible
+    -- that multiple aliases of the same array are created. To be conservative,
+    -- we ignore the resulting array identifiers, but update the environment to
+    -- take any variables used in the expression into account.
+    let f = lam env. lam t : FutExpr.
+      match aliasAnalysisLetBody env t with (_, env) in
+      env
+    in
+    let env = sfold_FExpr_FExpr f env t in
+    (EmptyAliasResult (), env)
 
   sem aliasAnalysisExpr (env : FutharkAliasAnalysisEnv) =
   | FELet t ->
@@ -308,6 +318,16 @@ let expected = futBindall_ [
       futRecord_ [("a", nFutVar_ tt), ("b", nFutVar_ ttt)]])),
   nFutVar_ t] in
 utest printFutProg (aliasAnalysis (prog t4)) with printFutProg (prog expected)
+using eqString in
+
+let f = nameSym "f" in
+let passArrayAliasToFunction = futBindall_ [
+  nFutLet_ s2 arrayTy (futReplicate_ (futLength_ (nFutVar_ s)) (futInt_ 1)),
+  nFutLet_ t arrayTy (futApp_ (nFutVar_ f) (nFutVar_ s2)),
+  nFutLet_ tt arrayTy (futArrayUpdate_ (futCopy_ (nFutVar_ s2)) (futInt_ 0) (futInt_ 1)),
+  nFutVar_ tt] in
+utest printFutProg (aliasAnalysis (prog passArrayAliasToFunction))
+with printFutProg (prog passArrayAliasToFunction)
 using eqString in
 
 ()
