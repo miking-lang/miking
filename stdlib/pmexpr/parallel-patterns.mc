@@ -194,9 +194,6 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
   else never
 
 -- Definition of the map pattern
--- This pattern can be matched both by 'parallelMap' uses, but also by
--- 'flatMap' uses. They are distinguished by looking at the final result, which
--- is a singleton sequence in the 'parallelMap' case.
 let mapPatRef : Ref (Option Pattern) = ref (None ())
 let mapPattern : () -> Pattern =
   use PMExprAst in
@@ -227,18 +224,19 @@ let mapPattern : () -> Pattern =
     let sExpr = getMatchExpr patternName (PatternName s) matches in
 
     match branchExpr with TmMatch {els = els} then
-      let x = nameSym "x" in
-      let subMap = mapFromSeq nameCmp [
-        (headPair.0, lam info.
-          TmVar {ident = x, ty = tyWithInfo info (tyTm headPair.1), info = info, frozen = false})
-      ] in
-      let els = substituteVariables els subMap in
       match fPair.1 with TmSeq {tms = [fResultVar]} then
+        let x = nameSym "x" in
+        let subMap = mapFromSeq nameCmp [
+          (headPair.0, lam info.
+            TmVar {ident = x, ty = tyWithInfo info (tyTm headPair.1), info = info, frozen = false})
+        ] in
+        let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
         parallelMap_ (nulam_ x els) sExpr
       else
-        let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fPair.0)) in
-        parallelFlatMap_ (nulam_ x els) sExpr
+        error (join [
+          "Rewriting into parallelMap pattern failed: The functional expression ",
+          "did not result in a singleton sequence"])
     else
       error (join [
         "Rewriting into parallelMap pattern failed: BranchPattern matched ",

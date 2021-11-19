@@ -466,6 +466,10 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
            body = generateExpr env t.body,
            inexpr = generateExpr inexprEnv t.inexpr,
            ty = generateType env t.ty, info = t.info}
+  | TmFlatten t ->
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futFlatten_ (generateExpr env t.e)))
   | TmParallelMap t ->
     withTypeFutTm
       (generateType env t.ty)
@@ -476,17 +480,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       (withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
                                       (generateExpr env t.as)
                                       (generateExpr env t.bs)))
-  | TmParallelFlatMap t ->
-    -- TODO(larshum, 2021-07-08): Compile differently depending on the possible
-    -- sizes of sequences.
-    -- * If size is either 0 or 1, we should use 'filter' on the map results.
-    -- * Otherwise we use 'flatten' on the map results. This requires that the
-    --   size is a constant 'n' for all elements, and that the Futhark compiler
-    --   can figure this out.
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futFlatten_ (futMap_ (generateExpr env t.f)
-                                                  (generateExpr env t.as))))
   | TmParallelReduce t ->
     withTypeFutTm
       (generateType env t.ty)

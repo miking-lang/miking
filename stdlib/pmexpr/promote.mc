@@ -21,16 +21,17 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
                                rhs = ne},
                   rhs = s}) ->
     let fBody = getInnerFunction arg1 in
-    if isAssociative fBody then
+    -- NOTE(larshum, 2021-11-1): A fold using concat is not well-formed in
+    -- PMExpr as the sizes are part of a sequence type there. However, since it
+    -- is such a regular pattern, we translate it to a well-formed flattening
+    -- operation.
+    match fBody with TmConst {val = CConcat ()} then
+      TmFlatten {e = s, ty = tyTm app, info = infoTm app}
+    else if isAssociative fBody then
       match getNeutralElement fBody with Some fNeutralElement then
         if eqExpr ne fNeutralElement then
-          -- TODO(larshum, 2021-09-07): This operation should be translated
-          -- to a flattening operation.
-          match fBody with TmConst {val = CConcat ()} then
-            app
-          else
-            TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
-                              info = infoTm app}
+          TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
+                            info = infoTm app}
         else app
       else app
     else app
