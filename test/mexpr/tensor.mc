@@ -6,7 +6,7 @@ include "string.mc"
 let testTensors =
   lam tcreate.
   lam eq : a -> a -> Bool.
-  lam fromInt : a -> Int.
+  lam fromInt : Int -> a.
   lam vs : [a].
 
   let v0 = get vs 0 in
