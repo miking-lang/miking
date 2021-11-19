@@ -60,6 +60,22 @@ type FutharkAliasAnalysisEnv = {
   inPlaceUpdates : Set ArrayID
 }
 
+recursive let addBindingAliasesToEnv = use FutharkAst in
+  lam env : FutharkAliasAnalysisEnv.
+  lam pat : FutPat. lam alias : AliasResult.
+  let t = (pat, alias) in
+  match t with (FPRecord {bindings = patBinds}, RecordAliasResult aliasBinds) then
+    mapFoldWithKey
+      (lam env. lam k : SID. lam alias : AliasResult.
+        match mapLookup k patBinds with Some pat then
+          addBindingAliasesToEnv env pat alias
+        else env)
+      env aliasBinds
+  else match t with (FPNamed {ident = PName id}, result) then
+    {env with aliases = mapInsert id result env.aliases}
+  else env
+end
+
 lang FutharkAliasAnalysis = FutharkAst
   sem aliasAnalysisLetBody (env : FutharkAliasAnalysisEnv) =
   | FEVar t ->
@@ -113,19 +129,22 @@ lang FutharkAliasAnalysis = FutharkAst
                 with expired = setInsert accId env.expired}
         else match t with (FPRecord t, RecordAliasResult binds) then
           let env = {env with expired = setInsert accId env.expired} in
-          -- TODO: recurse through pattern and alias result together, and add
-          -- aliases as they are found (recursion needed because we may have
-          -- nested records here)
-          env
+          addBindingAliasesToEnv env pat result
         else env
       else env in
     aliasAnalysisExpr env body
+  | FEApp {lhs = FEConst {val = FCFlatten ()}, rhs = FEVar {ident = id}} ->
+    match mapLookup id env.aliases with Some aliasResult then
+      (aliasResult, env)
+    else (EmptyAliasResult (), env)
   | FEArray _
   | FEApp {lhs = FEConst {val = FCIota () | FCIndices ()}}
   | FEApp {lhs = FEApp {lhs = FEConst {val = FCMap () | FCTabulate () |
                                              FCReplicate () | FCConcat ()}}}
   | FEApp {lhs = FEApp {lhs = FEApp {lhs = FEConst {val = FCMap2 ()}}}} ->
-    -- NOTE(larshum, 2021-11-19): The below expressions introduce a new array.
+    -- NOTE(larshum, 2021-11-19): The above intrinsics introduce a fresh array,
+    -- which is guaranteed not to be aliased. We create a new identifier to
+    -- represent this underlying array.
     let arrayId = nameSym "" in
     (LeafAliasResult arrayId, env)
   | t -> (EmptyAliasResult (), env)
@@ -142,6 +161,16 @@ lang FutharkAliasAnalysis = FutharkAst
       if setMem t.ident env.expired then (EmptyAliasResult (), env)
       else (result, env)
     else (EmptyAliasResult (), env)
+  | FERecord t ->
+    match
+      mapFoldWithKey
+        (lam acc. lam k : SID. lam v : FutExpr.
+          match acc with (aliasResult, env) in
+          match aliasAnalysisLetBody env v with (fieldResult, env) in
+          (mapInsert k fieldResult aliasResult, env))
+        (mapEmpty cmpSID, env) t.fields
+    with (binds, env) in
+    (RecordAliasResult binds, env)
   | t -> (EmptyAliasResult (), env)
 
   sem eliminateCopyInArrayUpdate (env : FutharkAliasAnalysisEnv)
@@ -150,7 +179,6 @@ lang FutharkAliasAnalysis = FutharkAst
                                    rhs = FEVar ({ident = updateId} & var)}} & t) ->
     match mapLookup updateId env.aliases with Some (LeafAliasResult arrayId) then
       if setMem arrayId safeArrays then
-        printLn (join ["Eliminated copy of in-place array update"]);
         FEArrayUpdate {t with array = FEVar var}
       else FEArrayUpdate t
     else FEArrayUpdate t
@@ -241,6 +269,45 @@ let expected = futBindall_ [
       nFutVar_ tt])),
   nFutVar_ t] in
 utest printFutProg (aliasAnalysis (prog t3)) with printFutProg (prog expected)
+using eqString in
+
+let r = nameSym "r" in
+let arrayTy = futUnsizedArrayTy_ futIntTy_ in
+let recTy = futRecordTy_ [("a", arrayTy), ("b", arrayTy)] in
+let a = nameSym "a" in
+let b = nameSym "b" in
+let recPat = futPrecord_ [
+  ("a", nFutPvar_ a),
+  ("b", nFutPvar_ b)] in
+let t4 = futBindall_ [
+  nFutLet_ r recTy (
+    futRecord_ [
+      ("a", futIota_ (nFutVar_ s)),
+      ("b", futArraySlice_ (nFutVar_ s) (futInt_ 0) (futInt_ 3))]),
+  nFutLet_ idx arrayTy (futIndices_ (nFutVar_ s)),
+  nFutLet_ t recTy (
+    futForEach_ (recPat, nFutVar_ r) i (nFutVar_ idx) (futBindall_ [
+      nFutLet_ tt arrayTy (
+        futArrayUpdate_ (futCopy_ (nFutVar_ a)) (futInt_ 0) (futInt_ 1)),
+      nFutLet_ ttt arrayTy (
+        futArrayUpdate_ (futCopy_ (nFutVar_ b)) (futInt_ 0) (futInt_ 1)),
+      futRecord_ [("a", nFutVar_ tt), ("b", nFutVar_ ttt)]])),
+  nFutVar_ t] in
+let expected = futBindall_ [
+  nFutLet_ r recTy (
+    futRecord_ [
+      ("a", futIota_ (nFutVar_ s)),
+      ("b", futArraySlice_ (nFutVar_ s) (futInt_ 0) (futInt_ 3))]),
+  nFutLet_ idx arrayTy (futIndices_ (nFutVar_ s)),
+  nFutLet_ t recTy (
+    futForEach_ (recPat, nFutVar_ r) i (nFutVar_ idx) (futBindall_ [
+      nFutLet_ tt arrayTy (
+        futArrayUpdate_ (nFutVar_ a) (futInt_ 0) (futInt_ 1)),
+      nFutLet_ ttt arrayTy (
+        futArrayUpdate_ (futCopy_ (nFutVar_ b)) (futInt_ 0) (futInt_ 1)),
+      futRecord_ [("a", nFutVar_ tt), ("b", nFutVar_ ttt)]])),
+  nFutVar_ t] in
+utest printFutProg (aliasAnalysis (prog t4)) with printFutProg (prog expected)
 using eqString in
 
 ()
