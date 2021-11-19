@@ -55,6 +55,15 @@ let multinomialSample : [Float] -> Int -> [Int] =
 let categoricalSample : [Float] -> Int =
   lam ps. externalCategoricalSample ps
 
+-- Dirichlet
+external externalDirichletLogPdf : [Float] -> [Float] -> Float
+external externalDirichletSample : [Float] -> [Float]
+let dirichletLogPdf : [Float] -> [Float] -> Float =
+  lam alpha. lam xs. externalDirichletLogPdf xs alpha
+let dirichletPdf : [Float] -> [Float] -> Float =
+  lam alpha. lam xs. exp (externalDirichletLogPdf xs alpha)
+let dirichletSample : [Float] -> [Float] =
+  lam alpha. externalDirichletSample alpha
 
 -- Uniform (continuous)
 external uniformSample ! : Unit -> Float
@@ -106,8 +115,15 @@ utest categoricalLogPmf [0.3, 0.2, 0.5] 2 with log 0.5 using _eqf in
 utest categoricalPmf [0.1, 0.3, 0.6] 2 with 0.6 using _eqf in
 utest categoricalPmf [0.1, 0.3, 0.6] 1 with 0.3 using _eqf in
 utest multinomialSample [0.2, 0.8] 3 with [] using
-  lam r. lam l. match r with [v1,v2] then eqi (addi v1 v2) 3 else false in
+  lam l. lam r. match l with [v1,v2] then eqi (addi v1 v2) 3 else false in
 utest categoricalSample [0.1, 0.4, 0.2, 0.3] with 0 using intRange 0 3 in
+
+-- Testing Dirichlet
+utest dirichletLogPdf [1.5, 1.5, 1.5] [0.5, 0.25, 0.25]
+  with 1.08321533235 using _eqf in
+utest dirichletPdf [1.0, 1.0, 2.0] [0.01, 0.01, 0.98] with 5.88 using _eqf in
+utest dirichletSample [5.0, 5.0, 5.0] with [0.] using
+  lam l. lam r. _eqf (foldl addf 0. l) 1.0 in
 
 -- Testing Uniform
 utest uniformSample () with 0. using floatRange 0. 1. in
