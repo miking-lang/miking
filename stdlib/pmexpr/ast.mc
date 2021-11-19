@@ -154,13 +154,6 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
       else None ()
     else None ()
 
-  sem isValue =
-  | TmAccelerate _ -> false
-  | TmFlatten _ -> false
-  | TmParallelMap _ -> false
-  | TmParallelMap2 _ -> false
-  | TmParallelReduce _ -> false
-
   sem normalize (k : Expr -> Expr) =
   | TmAccelerate t ->
     k (TmAccelerate {t with e = normalizeTerm t.e})

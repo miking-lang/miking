@@ -222,9 +222,6 @@ lang HoleAst = IntAst + ANF + KeywordMaker
       else never
     else never
 
-  sem isValue =
-  | TmHole _ -> false
-
   sem next (last : Option Expr) (stepSize : Int) =
   | TmHole {inner = inner} ->
     hnext last stepSize inner
