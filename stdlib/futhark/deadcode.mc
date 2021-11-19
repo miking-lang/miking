@@ -10,20 +10,25 @@ lang FutharkDeadcodeElimination = FutharkAst
   sem deadcodeEliminationExpr (used : Set Name) =
   | FEVar t -> (setInsert t.ident used, FEVar t)
   | FELet t ->
-    match deadcodeEliminationExpr used t.inexpr with (used, inexpr) then
-      if setMem t.ident used then
-        match deadcodeEliminationExpr used t.body with (used, body) then
-          (used, FELet {{t with body = body} with inexpr = inexpr})
-        else never
-      else (used, inexpr)
-    else never
+    match deadcodeEliminationExpr used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then
+      match deadcodeEliminationExpr used t.body with (used, body) in
+      let body =
+        let default = lam. FELet {{t with body = body} with inexpr = inexpr} in
+        match inexpr with FEVar {ident = id} then
+          if nameEq t.ident id then
+            match t.tyBody with FTyRecord _ then body
+            else default()
+          else default ()
+        else default () in
+      (used, body)
+    else (used, inexpr)
   | t -> smapAccumL_FExpr_FExpr deadcodeEliminationExpr used t
 
   sem deadcodeEliminationDecl =
   | FDeclFun t ->
-    match deadcodeEliminationExpr (setEmpty nameCmp) t.body with (_, body) then
-      FDeclFun {t with body = body}
-    else never
+    match deadcodeEliminationExpr (setEmpty nameCmp) t.body with (_, body) in
+    FDeclFun {t with body = body}
   | t -> t
 
   sem deadcodeElimination =
@@ -55,7 +60,8 @@ let t = futFunction (futBindall_ [
   nFutVar_ z]) in
 let expected = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 2),
-  futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 4]]) in
+  nuFutLet_ z (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 4]),
+  nFutVar_ z]) in
 utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
 
 let f = nameSym "f" in
@@ -66,6 +72,12 @@ let t = futFunction (futBindall_ [
   ]))),
   futUnit_ ()]) in
 let expected = futFunction (futUnit_ ()) in
+utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
+
+let t = futFunction (futBindall_ [
+  nFutLet_ x (futRecordTy_ [("a", futIntTy_)]) (futRecord_ [("a", futInt_ 0)]),
+  nFutVar_ x]) in
+let expected = futFunction (futRecord_ [("a", futInt_ 0)]) in
 utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
 
 let i = nameSym "i" in
@@ -80,14 +92,6 @@ let t = futFunction (futBindall_ [
       nuFutLet_ z (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i]),
       nuFutLet_ w (nFutVar_ z),
       nFutVar_ w])]) in
-let expected = futFunction (futBindall_ [
-  nuFutLet_ x (futInt_ 0),
-  nuFutLet_ y (futArray_ [futInt_ 2, futInt_ 7]),
-  futForEach_
-    (nFutPvar_ x, nFutVar_ x)
-    i
-    (nFutVar_ y)
-    (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i])]) in
-utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
+utest printFutProg (deadcodeElimination t) with printFutProg t using eqString in
 
 ()
