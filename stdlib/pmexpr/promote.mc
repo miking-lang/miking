@@ -68,10 +68,7 @@ utest promote foldlMuli with parallelReduce_ f3 ne2 s1 using eqExpr in
 let foldlAddiNonNeutral = foldl_ f2 ne2 s1 in
 utest promote foldlAddiNonNeutral with foldlAddiNonNeutral using eqExpr in
 
--- NOTE(larshum, 2021-09-07): Translating foldl of concat into a reduce is not
--- valid in Futhark, because the array size is part of the type. Hence we
--- explicitly prevent that translation here.
 let foldlConcat = foldl_ f4 ne3 s2 in
-utest promote foldlConcat with foldlConcat using eqExpr in
+utest promote foldlConcat with flatten_ s2 using eqExpr in
 
 ()
