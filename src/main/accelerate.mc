@@ -1,5 +1,6 @@
 include "c/ast.mc"
 include "c/pprint.mc"
+include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
 include "futhark/function-restrictions.mc"
@@ -36,7 +37,7 @@ lang PMExprCompile =
   PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
   FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
   FutharkLengthParameterize + FutharkCWrapper + FutharkRecordParamLift +
-  FutharkForEachRecordPattern +
+  FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
@@ -88,7 +89,8 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = deadcodeElimination ast in
-  parameterizeLength ast
+  let ast = parameterizeLength ast in
+  aliasAnalysis ast
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
