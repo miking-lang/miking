@@ -11,10 +11,12 @@ src_files_all =\
 # install or are mutually exclusive with other dependencies.
 sundials_files = $(wildcard stdlib/sundials/*.mc)
 ipopt_files = $(wildcard stdlib/ipopt/*.mc)
+accelerate_files = $(wildcard test/examples/accelerate/*.mc)
 
 special_dependencies_files +=\
 	$(sundials_files)\
-	$(ipopt_files)
+	$(ipopt_files)\
+	$(accelerate_files)
 
 
 # These are special, special cases since the python externals are implemented
