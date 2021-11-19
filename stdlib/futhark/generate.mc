@@ -113,6 +113,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CTail _ -> FCTail ()
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
+  | CFoldl _ -> FCFoldl ()
   | c -> infoErrorExit info "Constant cannot be accelerated"
 end
 
