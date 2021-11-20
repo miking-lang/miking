@@ -43,40 +43,37 @@ let sundialsExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
-    ("externalSundialsRealArrayCreate", [
-      impl { expr = "Sundials.RealArray.create", ty = tyarrow_ tyint_ otyopaque_}
-    ]),
-    ("externalNvectorSerialWrap", [
+    ("nvectorSerialWrap", [
       impl {
         expr = "Nvector_serial.wrap",
         ty = tyarrow_ (otybaarrayclayoutfloat_ 1) otyopaque_
       }
     ]),
-    ("externalNvectorSerialUnwrap", [
+    ("nvectorSerialUnwrap", [
       impl {
         expr = "Nvector_serial.unwrap",
         ty = tyarrow_ otyopaque_ (otybaarrayclayoutfloat_ 1)
       }
     ]),
-    ("externalSundialsMatrixDense", [
+    ("sundialsMatrixDense", [
       impl {
         expr = "Sundials.Matrix.dense",
         ty = tyarrows_ [tyint_, otyopaque_]
       }
     ]),
-    ("externalSundialsMatrixDenseUnwrap", [
+    ("sundialsMatrixDenseUnwrap", [
       impl {
         expr = "Sundials.Matrix.Dense.unwrap",
         ty = tyarrows_ [otyopaque_, (otybaarrayclayoutfloat_ 2)]
       }
     ]),
-    ("externalIdaDlsDense", [
+    ("idaDlsDense", [
       impl {
         expr = "Ida.Dls.dense",
         ty = tyarrows_ [otyopaque_, otyopaque_, otyopaque_]
       }
     ]),
-    ("externalIdaDlsSolverJacf", [
+    ("idaDlsSolverJacf", [
       impl {
         expr = "Ida.Dls.solver",
         ty =
@@ -87,7 +84,7 @@ let sundialsExtMap =
           ]
       }
     ]),
-    ("externalIdaDlsSolver", [
+    ("idaDlsSolver", [
       impl {
         expr = "Ida.Dls.solver",
         ty =
@@ -103,13 +100,13 @@ let sundialsExtMap =
     ("idaVarIdDifferential", [
       impl { expr = "Ida.VarId.differential", ty = tyfloat_ }
     ]),
-    ("externalIdaSSTolerances", [
+    ("idaSSTolerances", [
       impl {
         expr = "fun rtol atol -> Ida.SStolerances (rtol, atol)",
         ty = tyarrows_ [tyfloat_, tyfloat_, otyopaque_]
       }
     ]),
-    ("externalIdaRetcode", [
+    ("idaRetcode", [
       impl {
         expr =
 "function
@@ -122,7 +119,7 @@ let sundialsExtMap =
         ty = tyarrow_ otyopaque_ tyint_
       }
     ]),
-    ("externalIdaInit", [
+    ("idaInit", [
       impl {
         expr = "Ida.init",
         ty = tyarrows_ [
@@ -138,7 +135,7 @@ let sundialsExtMap =
         ]
       }
     ]),
-    ("externalIdaCalcICYaYd", [
+    ("idaCalcICYaYd", [
       impl {
         expr = "Ida.calc_ic_ya_yd'",
         ty = tyarrows_ [
@@ -150,7 +147,7 @@ let sundialsExtMap =
         ]
       }
     ]),
-    ("externalIdaSolveNormal", [
+    ("idaSolveNormal", [
       impl {
         expr = "Ida.solve_normal",
         ty = tyarrows_ [
@@ -162,7 +159,7 @@ let sundialsExtMap =
         ]
       }
     ]),
-    ("externalIdaReinit", [
+    ("idaReinit", [
       impl {
         expr = "Ida.reinit",
         ty = tyarrows_ [
