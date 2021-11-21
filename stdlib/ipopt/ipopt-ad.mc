@@ -2,7 +2,6 @@ include "ad/dualnum.mc"
 include "ipopt.mc"
 
 -- for brevity
-let _num = dualnumCreatePrimal
 let _primalDeep = dualnumPrimalDeep
 let _tset = tensorSetExn
 let _tget = tensorGetExn
@@ -49,27 +48,27 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
         (tensorHasSameShape arg.constraintsLb arg.constraintsUb)
     then
       -- Pre-allocate some memory.
-      let xd = tensorCreate [nx] (lam. _num 0.) in
-      let gd = tensorCreate [ng] (lam. _num 0.) in
-      let gradFd = tensorCreate [nx] (lam. _num 0.) in
-      let jacGd = tensorCreate [nx, ng] (lam. _num 0.) in
+      let xd = tensorCreate [nx] (lam. Primal 0.) in
+      let gd = tensorCreate [ng] (lam. Primal 0.) in
+      let gradFd = tensorCreate [nx] (lam. Primal 0.) in
+      let jacGd = tensorCreate [nx, ng] (lam. Primal 0.) in
       let hij = tensorCreate [ng] (lam. 0.) in
-      let hijd = tensorCreate [ng] (lam. _num 0.) in
+      let hijd = tensorCreate [ng] (lam. Primal 0.) in
       -- Computes f(x)
       let evalF = lam x.
-        tensorMapExn (lam x. lam. _num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         _primalDeep (arg.f xd)
       in
       -- Computes g(x)
       let evalG = lam x. lam g.
-        tensorMapExn (lam x. lam. _num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         arg.g xd gd;
         tensorMapExn (lam x. lam. _primalDeep x) gd g;
         ()
       in
       -- Computes 𝛁f(x)
       let evalGradF = lam x. lam gradF.
-        tensorMapExn (lam x. lam. _num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         dualnumGrad arg.f xd gradFd;
         tensorMapExn (lam x. lam. _primalDeep x) gradFd gradF;
         ()
@@ -79,7 +78,7 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       let nJacG = muli ng nx in
       -- Computes 𝛁g(x)
       let evalJacG = lam x. lam jacG.
-        tensorMapExn (lam x. lam. _num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         dualnumJacT arg.g xd jacGd;
         tensorMapExn
           (lam x. lam. _primalDeep x)
@@ -99,7 +98,7 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       in
       -- Computes σ𝛁^2f(x_k) + Σ_i[λ_i𝛁^2g_i(x_k)]
       let evalH = lam sigma. lam x. lam lambda. lam h.
-        tensorMapExn (lam x. lam. _num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         iteri
           (lam k : Int. lam ij : (Int, Int).
             match ij with (i, j) then
@@ -222,21 +221,21 @@ utest
     let ddx2 = _tget x [5] in
     let x3 = _tget x [6] in
     let f1 = subn ddx1 (muln x1 x3) in
-    let f2 = addn (subn ddx2 (muln x2 x3)) (_num 1.) in
-    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (_num 1.) in
-    let df3 = muln (_num 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
+    let f2 = addn (subn ddx2 (muln x2 x3)) (Primal 1.) in
+    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (Primal 1.) in
+    let df3 = muln (Primal 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
     let ddf3 =
       addn
-        (muln (_num 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
-        (muln (_num 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
+        (muln (Primal 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
+        (muln (Primal 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
     in
-    foldl (lam r. lam f. addn r (muln f f)) (_num 0.) [f1, f2, f3, df3, ddf3]
+    foldl (lam r. lam f. addn r (muln f f)) (Primal 0.) [f1, f2, f3, df3, ddf3]
   in
 
   let g = lam x. lam r.
     let x1 = _tget x [0] in
     let x2 = _tget x [3] in
-    _tset r [0] (subn x1 (sinn (_num (divf pi 4.))));
+    _tset r [0] (subn x1 (sinn (Primal (divf pi 4.))));
     _tset r [1] x2;
     ()
   in

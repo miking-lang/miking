@@ -3,7 +3,6 @@ include "ipopt.mc"
 include "ad/dualtensor-tree.mc"
 
 -- for brevity
-let _num = dualnumCreatePrimal
 let _primalDeep = dualnumPrimalDeep
 let _tset = tensorSetExn
 let _tget = tensorGetExn
@@ -205,21 +204,21 @@ utest
     let ddx2 = _dtget x [5] in
     let x3 = _dtget x [6] in
     let f1 = subn ddx1 (muln x1 x3) in
-    let f2 = addn (subn ddx2 (muln x2 x3)) (_num 1.) in
-    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (_num 1.) in
-    let df3 = muln (_num 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
+    let f2 = addn (subn ddx2 (muln x2 x3)) (Primal 1.) in
+    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (Primal 1.) in
+    let df3 = muln (Primal 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
     let ddf3 =
       addn
-        (muln (_num 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
-        (muln (_num 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
+        (muln (Primal 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
+        (muln (Primal 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
     in
-    foldl (lam r. lam f. addn r (muln f f)) (_num 0.) [f1, f2, f3, df3, ddf3]
+    foldl (lam r. lam f. addn r (muln f f)) (Primal 0.) [f1, f2, f3, df3, ddf3]
   in
 
   let g = lam x. lam r.
     let x1 = _dtget x [0] in
     let x2 = _dtget x [3] in
-    _dtset r [0] (subn x1 (sinn (_num (divf pi 4.))));
+    _dtset r [0] (subn x1 (sinn (Primal (divf pi 4.))));
     _dtset r [1] x2;
     ()
   in

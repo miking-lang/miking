@@ -21,10 +21,6 @@ con Primal : a -> Dual a
 let dualLtE : Eps -> Eps -> Bool = lti
 let dualEqE : Eps -> Eps -> Bool = eqi
 
--- `dualCreatePrimal x` embeds `x` in a `Primal`.
-let dualCreatePrimal : a -> Dual a =
-lam x. Primal x
-
 -- false if x' = 0 in x+ex'
 let dualIsDual : Dual a -> Bool =
 lam n.

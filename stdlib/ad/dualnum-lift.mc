@@ -20,7 +20,6 @@ include "common.mc"
 -- ALIASES --
 -------------
 
-let _num = dualnumCreatePrimal
 let _dnum = dualnumCreateDual
 let _ltE = dualLtE
 let _isDualNum = dualnumIsDualNum
@@ -32,14 +31,14 @@ let _lift2 = dualnumLift2
 let _lift1 = dualnumLift1
 let _genEpsilon = dualGenEpsilon
 
-let _num0 = _num 0.
-let _num1 = _num 1.
-let _num2 = _num 2.
-let _num3 = _num 3.
-let _num4 = _num 4.
-let _num6 = _num 6.
-let _num8 = _num 8.
-let _num10 = _num 10.
+let _num0 = Primal 0.
+let _num1 = Primal 1.
+let _num2 = Primal 2.
+let _num3 = Primal 3.
+let _num4 = Primal 4.
+let _num6 = Primal 6.
+let _num8 = Primal 8.
+let _num10 = Primal 10.
 
 let _e0 = _genEpsilon ()
 let _e1 = _genEpsilon ()
@@ -89,7 +88,7 @@ let _liftBool = dualnumLiftBoolFun2
 let der : (DualNum -> DualNum) -> DualNum -> DualNum =
   lam f. lam x.
   let e = _genEpsilon () in
-  _pertubation e (f (_dnum e x (_num 1.)))
+  _pertubation e (f (_dnum e x (Primal 1.)))
 
 utest der (lam. _num2) _num2 with _num0 using dualnumEq eqf
 utest der (lam x. muln x x) (_num2) with _num4 using dualnumEq eqf
@@ -117,7 +116,7 @@ let dualnumJacj
   -> () =
 lam f. lam x. lam i. lam r.
   let e = _genEpsilon () in
-  tensorSetExn x [i] (_dnum e (tensorGetExn x [i]) (_num 1.));
+  tensorSetExn x [i] (_dnum e (tensorGetExn x [i]) (Primal 1.));
   f x r;
   tensorMapInplace (_pertubation e) r;
   tensorSetExn x [i] (_primal e (tensorGetExn x [i]))
@@ -135,12 +134,12 @@ utest
   let f = lam t. lam r.
     let x1 = tensorGetExn t [0] in
     let x2 = tensorGetExn t [1] in
-    tensorSetExn r [0] (addn x1 (muln (_num 2.) x2));
-    tensorSetExn r [1] (muln (muln (_num 3.) x1) (muln (_num 4.) x2));
+    tensorSetExn r [0] (addn x1 (muln (Primal 2.) x2));
+    tensorSetExn r [1] (muln (muln (Primal 3.) x1) (muln (Primal 4.) x2));
     ()
   in
-  let x = tensorOfSeqExn tensorCreateDense [2] [_num 1., _num 2.] in
-  let m = tensorCreateDense [2, 2] (lam. _num 0.) in
+  let x = tensorOfSeqExn tensorCreateDense [2] [Primal 1., Primal 2.] in
+  let m = tensorCreateDense [2, 2] (lam. Primal 0.) in
   dualnumJacT f x m;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn m [4]))
 with
@@ -161,9 +160,12 @@ utest
     ()
   in
   let x =
-    tensorOfSeqExn tensorCreateDense [4] [_num 1., _num 5., _num 5., _num 1.]
+    tensorOfSeqExn
+      tensorCreateDense
+      [4]
+      [Primal 1., Primal 5., Primal 5., Primal 1.]
   in
-  let m = tensorCreateDense [4, 2] (lam. _num 0.) in
+  let m = tensorCreateDense [4, 2] (lam. Primal 0.) in
   dualnumJacT f x m;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn m [8]))
 with
@@ -185,7 +187,7 @@ lam f. lam x. lam g.
     let e = _genEpsilon () in
     tensorIteri
       (lam idx. lam xi.
-        tensorSetExn x idx (_dnum e xi (_num 1.));
+        tensorSetExn x idx (_dnum e xi (Primal 1.));
         tensorSetExn g idx (_pertubation e (f x));
         tensorSetExn x idx xi)
       x
@@ -197,8 +199,8 @@ utest
     let x2 = tensorGetExn x [1] in
     muln x1 x2
   in
-  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
-  let g = tensorCreateDense [2] (lam. _num 0.) in
+  let x = tensorOfSeqExn tensorCreateDense [2] [Primal 2., Primal 3.] in
+  let g = tensorCreateDense [2] (lam. Primal 0.) in
   dualnumGrad f x g;
   map _primalDeep (tensorToSeqExn g)
 with [3., 2.]
@@ -214,9 +216,9 @@ lam f. lam x. lam i. lam j.
   let ei = _genEpsilon () in
   let ej = _genEpsilon () in
   let xi = tensorGetExn x [i] in
-  tensorSetExn x [i] (_dnum ei xi (_num 1.));
+  tensorSetExn x [i] (_dnum ei xi (Primal 1.));
   let xj = tensorGetExn x [j] in
-  tensorSetExn x [j] (_dnum ej xj (_num 1.));
+  tensorSetExn x [j] (_dnum ej xj (Primal 1.));
   let hij = _pertubation ei (_pertubation ej (f x)) in
   tensorSetExn x [j] xj;
   tensorSetExn x [i] xi;
@@ -241,8 +243,8 @@ utest
     let x2 = tensorGetExn x [1] in
     muln (muln x1 x1) (muln x2 x2)
   in
-  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
-  let h = tensorCreateDense [2, 2] (lam. _num 0.) in
+  let x = tensorOfSeqExn tensorCreateDense [2] [Primal 2., Primal 3.] in
+  let h = tensorCreateDense [2, 2] (lam. Primal 0.) in
   dualnumHess f x h;
   map _primalDeep (tensorToSeqExn (tensorReshapeExn h [4]))
 with
@@ -265,9 +267,9 @@ lam f. lam x. lam i. lam j. lam hij.
   let ei = _genEpsilon () in
   let ej = _genEpsilon () in
   let xi = tensorGetExn x [i] in
-  tensorSetExn x [i] (_dnum ei xi (_num 1.));
+  tensorSetExn x [i] (_dnum ei xi (Primal 1.));
   let xj = tensorGetExn x [j] in
-  tensorSetExn x [j] (_dnum ej xj (_num 1.));
+  tensorSetExn x [j] (_dnum ej xj (Primal 1.));
   f x hij;
   tensorMapInplace (lam h. _pertubation ei (_pertubation ej h)) hij;
   tensorSetExn x [j] xj;
@@ -293,7 +295,7 @@ with [24., 2.]
 -- CONSTANTS  --
 ----------------
 
-let epsn = _num 1.e-15
+let epsn = Primal 1.e-15
 
 
 -----------------------
@@ -375,12 +377,12 @@ utest muln _dnum012 _dnum034 with _dnum0 _num3 _num10 using dualnumEq eqf
 utest muln _dnum012 _dnum134 with _dnum1 _dnum036 _dnum048 using dualnumEq eqf
 
 -- lifted negation
-let negn = lam p. _lift1 negf (lam. _num (negf 1.)) p
+let negn = lam p. _lift1 negf (lam. Primal (negf 1.)) p
 
-utest negn _num1 with _num (negf 1.) using dualnumEq eqf
-utest negn _num0 with _num (negf 0.) using dualnumEq eqf
-utest negn _dnum010 with _dnum0 (_num (negf 1.)) _num0 using dualnumEq eqf
-utest negn _dnum012 with _dnum0 (_num (negf 1.)) (_num (negf 2.))
+utest negn _num1 with Primal (negf 1.) using dualnumEq eqf
+utest negn _num0 with Primal (negf 0.) using dualnumEq eqf
+utest negn _dnum010 with _dnum0 (Primal (negf 1.)) _num0 using dualnumEq eqf
+utest negn _dnum012 with _dnum0 (Primal (negf 1.)) (Primal (negf 2.))
 using dualnumEq eqf
 
 utest der negn _num1 with negn _num1 using dualnumEq eqf
@@ -389,8 +391,8 @@ utest der negn _num1 with negn _num1 using dualnumEq eqf
 let subn = lam p1. lam p2.
   _lift2
     subf
-    (lam. lam. (_num 1.))
-    (lam. lam. negn (_num 1.))
+    (lam. lam. (Primal 1.))
+    (lam. lam. negn (Primal 1.))
     p1 p2
 
 utest subn _num2 _num1 with _num1 using dualnumEq eqf
@@ -401,7 +403,7 @@ utest subn _dnum022 _dnum011 with _dnum011 using dualnumEq eqf
 utest
   let r = subn _dnum122 _dnum011 in
   dualnumPrimal _e1 r
-with _dnum0 _num1 (_num (negf 1.)) using dualnumEq eqf
+with _dnum0 _num1 (Primal (negf 1.)) using dualnumEq eqf
 
 
 -- lifted abs
@@ -418,7 +420,7 @@ recursive
   let divn = lam p1. lam p2.
     _lift2
       divf
-      (lam. lam x2. divn (_num 1.) x2)
+      (lam. lam x2. divn (Primal 1.) x2)
       (lam x1. lam x2. divn (negn x1) (muln x2 x2))
       p1 p2
 end
@@ -428,11 +430,11 @@ utest divn _dnum040 _num2 with _dnum0 _num2 _num0 using dualnumEq eqf
 utest divn _dnum044 _num2 with _dnum022 using dualnumEq eqf
 
 utest divn _dnum012 _dnum034
-with _dnum0 (_num (divf 1. 3.)) (_num (divf 2. 9.)) using dualnumEq eqf
+with _dnum0 (Primal (divf 1. 3.)) (Primal (divf 2. 9.)) using dualnumEq eqf
 
 utest divn _dnum012 _dnum134
-with _dnum1 (_dnum0 (_num (divf 1. 3.))
-                    (_num (divf 2. 3.)))
-            (_dnum0 (_num (divf (negf 4.) 9.))
-                    (_num (divf (negf 8.) 9.)))
+with _dnum1 (_dnum0 (Primal (divf 1. 3.))
+                    (Primal (divf 2. 3.)))
+            (_dnum0 (Primal (divf (negf 4.) 9.))
+                    (Primal (divf (negf 8.) 9.)))
 using dualnumEq eqf

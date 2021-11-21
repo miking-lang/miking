@@ -2,7 +2,6 @@ include "dual-tree.mc"
 
 type DualNum = Dual Float
 
-let dualnumCreatePrimal : Float -> DualNum = dualCreatePrimal
 let dualnumIsDualNum : DualNum -> Bool = dualIsDual
 let dualnumEpsilon : DualNum -> Eps = dualEpsilon
 let dualnumCreateDual
@@ -18,7 +17,6 @@ let dualnumToString : DualNum -> String = dualToString float2string
 -- FOR BREVITY --
 -----------------
 
-let _num = dualnumCreatePrimal
 let _dnum = dualnumCreateDual
 let _ltE = dualLtE
 
@@ -40,7 +38,7 @@ recursive
     recursive let self = lam x1. lam x2.
       switch (x1, x2)
       case (Primal x1, Primal x2) then
-        _num (f x1 x2)
+        Primal (f x1 x2)
       case (Dual {e = e, x = x11, xp = xp11}, Primal _) then
         _dnum e (self x11 x2) (muln (dfdx1 x11 x2) xp11)
       case (Primal _, Dual {e = e, x = x22, xp = xp22}) then
@@ -65,8 +63,8 @@ recursive
   let addn = lam p1. lam p2.
     dualnumLift2
       addf
-      (lam. lam. (_num 1.))
-      (lam. lam. (_num 1.))
+      (lam. lam. (Primal 1.))
+      (lam. lam. (Primal 1.))
       p1 p2
 
   -- lifted multiplication
@@ -92,7 +90,7 @@ let dualnumLift1 : FloatFun -> DualNumFun1 -> DualNumFun1 =
 lam f. lam dfdx.
   recursive let self = lam x.
     switch x
-    case Primal x then _num (f x)
+    case Primal x then Primal (f x)
     case Dual {e = e, x = x, xp = xp} then
       _dnum e (self x) (muln (dfdx x) xp)
     end
@@ -107,13 +105,13 @@ let e1 = 1 in
 let e2 = 2 in
 let e3 = 3 in
 
-let num0 = _num 0. in
-let num1 = _num 1. in
-let num2 = _num 2. in
-let num3 = _num 3. in
-let num4 = _num 4. in
-let num6 = _num 6. in
-let num8 = _num 8. in
+let num0 = Primal 0. in
+let num1 = Primal 1. in
+let num2 = Primal 2. in
+let num3 = Primal 3. in
+let num4 = Primal 4. in
+let num6 = Primal 6. in
+let num8 = Primal 8. in
 let dnum112 = _dnum e1 num1 num2 in
 let dnum212 = _dnum e2 num3 num4 in
 let dnum0 = _dnum e0 in
