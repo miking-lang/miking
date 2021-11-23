@@ -43,10 +43,13 @@ type CFAGraph = {
   -- Contains a list of functions used for generating match constraints
   -- TODO(dlunde,2021-11-17): Should be added as a product extension
   -- in the MatchCFA fragment instead, when possible.
-  mcgfs: [MatchGenFun]
+  mcgfs: [MatchGenFun],
 
   -- NOTE(dlunde,2021-11-18): Data needed for analyses based on this framework
-  -- must be put here directly, since we do not yet have product extensions.
+  -- must be put below directly, since we do not yet have product extensions.
+
+  -- Used for alignment analysis in miking-dppl
+  stochMatches: Set Name
 
 }
 
@@ -54,7 +57,8 @@ let emptyCFAGraph = {
   worklist = [],
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp,
-  mcgfs = []
+  mcgfs = [],
+  stochMatches = setEmpty nameCmp
 }
 
 -------------------
