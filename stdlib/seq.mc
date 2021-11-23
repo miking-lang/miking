@@ -165,6 +165,31 @@ with ([1,2,3], [1,2,3])
 let unzip : all a. all b. [(a, b)] -> ([a], [b]) =
   mapAccumL (lam l. lam p : (a, b). (snoc l p.0, p.1)) []
 
+-- `iter2 f seq1 seq1` iterativly applies `f` to the first
+-- min(`length seq1`, `length seq2`) elements in `seq1` and `seq2`.
+let iter2 : all a. all b. (a -> b -> ()) -> [a] -> [b] -> () =
+  lam f. lam seq1. lam seq2.
+    let f = lam x : (a, b). match x with (x1, x2) in f x1 x2 in
+    iter f (zip seq1 seq2)
+
+utest
+  let r = ref [] in
+  let s1 = [1, 2, 3, 4] in
+  let s2 = [0, 1, 2, 3] in
+  let f = lam x1. lam x2. modref r (snoc (deref r) (subi x1 x2)) in
+  utest iter2 f s1 s2 with () in
+  deref r
+with [1, 1, 1, 1]
+
+utest
+  let r = ref [] in
+  let s1 = [1, 2, 3, 4, 5] in
+  let s2 = [0, 1, 2, 3] in
+  let f = lam x1. lam x2. modref r (snoc (deref r) (subi x1 x2)) in
+  utest iter2 f s1 s2 with () in
+  deref r
+with [1, 1, 1, 1]
+
 -- Predicates
 recursive
   let any = lam p. lam seq.
