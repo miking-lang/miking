@@ -961,43 +961,51 @@ mexpr
 use Test in
 
 -- Test functions --
-let parse = parseMExprString [] in
-let test: Bool -> Expr -> [String] -> [[AbsVal]] =
-  lam debug: Bool. lam t: Expr. lam vars: [String].
-    if debug then
+let _parse = parseMExprString [] in
+let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
+  lam env: Option PprintEnv. lam t: Expr.
+    match env with Some env then
       -- Version with debug printouts
       let tANF = normalizeTerm t in
-      match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
+      match pprintCode 0 env t with (env,tStr) in
       printLn "\n--- ORIGINAL PROGRAM ---";
       printLn tStr;
-      match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
+      match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
       match cfaDebug (Some env) tANF with (Some env,cfaRes) in
-      match cfaGraphToString env cfaRes with (_, resStr) in
+      match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
-      map (lam var: String.
-        (var, dataLookup (nameNoSym var) cfaRes)
-      ) vars
+      (Some env,cfaRes)
 
     else
       -- Version without debug printouts
       let tANF = normalizeTerm t in
       let cfaRes = cfa tANF in
-      map (lam var: String.
-        (var, dataLookup (nameNoSym var) cfaRes)
-      ) vars
+      (None (), cfaRes)
+in
+
+let _test: Bool -> Expr -> [String] -> [(String,[String])] =
+  lam debug. lam t. lam vars.
+    let env = if debug then Some pprintEnvEmpty else None () in
+    match _testBase env t with (_, cfaRes) in
+    map (lam var: String.
+      let avs = dataLookup (nameNoSym var) cfaRes in
+      let val = setFold
+        (lam acc. lam av.
+           match av with AVLam { ident = i } then
+             cons (nameGetStr i) acc
+           else acc)
+        [] avs
+      in (var, val)
+    ) vars
 in
 
 -- Custom equality function for testing lambda control flow only
-let eqTestLam = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,[String]).
+let eqTestLam = eqSeq (lam t1:(String,[String]). lam t2:(String,[String]).
   if eqString t1.0 t2.0 then
-    let t11 = setFold
-      (lam acc. lam av.
-       match av with AVLam { ident = i } then setInsert (nameGetStr i) acc
-       else acc)
-      (setEmpty cmpString) t1.1 in
+    let t11 = setOfSeq cmpString t1.1 in
     let t21 = setOfSeq cmpString t2.1 in
     setEq t11 t21
   else false
@@ -1005,23 +1013,23 @@ let eqTestLam = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,[String]).
 --------------------
 
 -- First test from Nielson et al.
-let t = parse "
+let t = _parse "
   (lam x. x) (lam y. y)
 ------------------------" in
-utest test false t ["x","y"] with [
+utest _test false t ["x","y"] with [
   ("x", ["y"]),
   ("y", [])
 ] using eqTestLam in
 
 -- Second test from Nielson et al.
-let t = parse "
+let t = _parse "
   let f = lam x. x 1 in
   let g = lam y. addi y 2 in
   let h = lam z. addi z 3 in
   let res = addi (f g) (f h) in
   res
 ------------------------" in
-utest test false t ["f","g","h","x","y","z","res"] with [
+utest _test false t ["f","g","h","x","y","z","res"] with [
   ("f", ["x"]),
   ("g", ["y"]),
   ("h", ["z"]),
@@ -1032,12 +1040,12 @@ utest test false t ["f","g","h","x","y","z","res"] with [
 ] using eqTestLam in
 
 -- Third test from Nielson et al.
-let t = parse "
+let t = _parse "
 recursive let g = lam x. g (lam y. y) in
 let res = g (lam z. z) in
 res
 ------------------------" in
-utest test false t ["g","x","y","z","res"] with [
+utest _test false t ["g","x","y","z","res"] with [
   ("g", ["x"]),
   ("x", ["y","z"]),
   ("y", []),
@@ -1046,7 +1054,7 @@ utest test false t ["g","x","y","z","res"] with [
 ] using eqTestLam in
 
 -- Sequence
-let t = parse "
+let t = _parse "
   let f = lam x. x in
   let g = lam y. y in
   let seq = [f, lam z. z] in
@@ -1056,13 +1064,13 @@ let t = parse "
       (lam v. v)
   in res
 ------------------------" in
-utest test false t ["res","a"] with [
+utest _test false t ["res","a"] with [
   ("res", ["v","y"]),
   ("a", ["x","z"])
 ] using eqTestLam in
 
 -- Record
-let t = parse "
+let t = _parse "
   let f = lam x. x in
   let g = lam y. y in
   let r = { a = f, b = 3 } in
@@ -1072,13 +1080,13 @@ let t = parse "
       (lam z. z)
   in res
 ------------------------" in
-utest test false t ["res","a"] with [
+utest _test false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
 ] using eqTestLam in
 
 -- ConApp
-let t = parse "
+let t = _parse "
   type T in
   con C: (a -> a) -> T in
   let f = lam x. x in
@@ -1090,13 +1098,13 @@ let t = parse "
       (lam z. z)
   in res
 ------------------------" in
-utest test false t ["res","a"] with [
+utest _test false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
 ] using eqTestLam in
 
 -- Nested
-let t = parse "
+let t = _parse "
   type T in
   con C: (a -> a) -> T in
   let f = lam x. x in
@@ -1108,7 +1116,7 @@ let t = parse "
       (lam z. z)
   in res
 ------------------------" in
-utest test false t ["res","a"] with [
+utest _test false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
 ] using eqTestLam in
