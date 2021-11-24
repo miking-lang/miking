@@ -14,6 +14,7 @@ type Options = {
   disableOptimizations : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
+  accelerate : Bool,
   cpuOnly : Bool,
   typeCheck : Bool,
   printHelp : Bool,
@@ -33,6 +34,7 @@ let options = {
   disableOptimizations = false,
   useTuned = false,
   compileAfterTune = false,
+  accelerate = false,
   cpuOnly = false,
   typeCheck = false,
   printHelp = false,
@@ -86,6 +88,10 @@ let config = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
+  ([("--accelerate", "", "")],
+    "Compile into an accelerated executable",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with accelerate = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.

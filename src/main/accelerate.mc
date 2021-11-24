@@ -17,6 +17,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
@@ -234,5 +235,7 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
     else never
   else never
 
-let accelerate = lam files. lam options : Options. lam args.
-  iter (compileAccelerated options) files
+let compileAccelerate = lam files. lam options : Options. lam args.
+  if options.runTests then
+    error "Flags --test and --accelerate may not be used at the same time"
+  else iter (compileAccelerated options) files
