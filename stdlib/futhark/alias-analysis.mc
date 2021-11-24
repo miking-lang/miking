@@ -92,6 +92,10 @@ lang FutharkAliasAnalysis = FutharkAst
         (mapEmpty cmpSID, env) t.fields
     with (binds, env) in
     (RecordAliasResult binds, env)
+  | FEArrayAccess {array = FEVar {ident = _}, index = index} ->
+    -- NOTE(larshum, 2021-11-24): This operation does not alias the accessed
+    -- array.
+    aliasAnalysisLetBody env index
   | FEArrayUpdate {array = FEApp {lhs = FEConst {val = FCCopy ()},
                                   rhs = FEVar {ident = updateId}},
                    value = value} ->
@@ -161,7 +165,6 @@ lang FutharkAliasAnalysis = FutharkAst
 
   sem aliasAnalysisExpr (env : FutharkAliasAnalysisEnv) =
   | FELet t ->
-    -- NOTE(larshum, 2021-11-19): We also need to update the counter here
     match aliasAnalysisLetBody env t.body with (result, env) in
     let env : FutharkAliasAnalysisEnv = env in
     let env = {env with aliases = mapInsert t.ident result env.aliases} in
