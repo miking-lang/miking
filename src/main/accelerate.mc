@@ -44,7 +44,7 @@ end
 
 let parallelKeywords = [
   "accelerate",
-  "flatten",
+  "parallelFlatten",
   "parallelMap",
   "parallelMap2",
   "parallelReduce"

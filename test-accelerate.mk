@@ -5,4 +5,4 @@ include test-files.mk
 all: $(accelerate_files)
 
 $(accelerate_files):
-	@./make compile-test $@ "build/mi accelerate --cpu-only"
+	@./make compile-test $@ "build/mi compile --accelerate --cpu-only"

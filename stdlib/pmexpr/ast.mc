@@ -25,7 +25,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | "accelerate" ->
     Some (1, lam lst. TmAccelerate {e = get lst 0, ty = TyUnknown {info = info},
                                     info = info})
-  | "flatten" ->
+  | "parallelFlatten" ->
     Some (1, lam lst. TmFlatten {e = get lst 0, ty = TyUnknown {info = info},
                                  info = info})
   | "parallelMap" ->
@@ -208,7 +208,7 @@ let zip_ = ulam_ "x" (ulam_ "y" (utuple_ [var_ "x", var_ "y"])) in
 let expr = app_ (var_ "accelerate") (app_ id_ (int_ 2)) in
 utest makeKeywords [] expr with accelerate_ (app_ id_ (int_ 2)) using eqExpr in
 
-let expr = app_ (var_ "flatten") emptySeq_ in
+let expr = app_ (var_ "parallelFlatten") emptySeq_ in
 utest makeKeywords [] expr with flatten_ emptySeq_ using eqExpr in
 
 let expr = appf2_ (var_ "parallelMap") id_ emptySeq_ in
