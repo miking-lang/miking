@@ -5,33 +5,73 @@ include "bool.mc"
 -- Binomial and Bernoulli
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
 external externalBinomialSample ! : Float -> Int -> Int
-let binomialPmf = lam p:Float. lam n:Int. lam x:Int. exp (externalBinomialLogPmf x p n)
-let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int. externalBinomialLogPmf x p n
-let binomialSample = lam p:Float. lam n:Int. externalBinomialSample p n
-let bernoulliPmf = lam p:Float. lam x:Int. if eqi x 0 then subf 1. p else p
-let bernoulliLogPmf = lam p:Float. lam x:Int. log (bernoulliPmf p x)
-let bernoulliSample = lam p:Float. externalBinomialSample p 1
+let binomialPmf = lam p:Float. lam n:Int. lam x:Int.
+  exp (externalBinomialLogPmf x p n)
+let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int.
+  externalBinomialLogPmf x p n
+let binomialSample = lam p:Float. lam n:Int.
+  externalBinomialSample p n
+let bernoulliPmf = lam p:Float. lam x:Int.
+  if eqi x 0 then subf 1. p else p
+let bernoulliLogPmf = lam p:Float. lam x:Int.
+  log (bernoulliPmf p x)
+let bernoulliSample = lam p:Float.
+  externalBinomialSample p 1
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
 external externalBetaSample ! : Float -> Float -> Float
-let betaPdf = lam a:Float. lam b:Float. lam x:Float. exp (externalBetaLogPdf x a b)
-let betaLogPdf = lam a:Float. lam b:Float. lam x:Float. externalBetaLogPdf x a b
-let betaSample = lam a:Float. lam b:Float. externalBetaSample a b
+let betaPdf = lam a:Float. lam b:Float. lam x:Float.
+  exp (externalBetaLogPdf x a b)
+let betaLogPdf = lam a:Float. lam b:Float. lam x:Float.
+  externalBetaLogPdf x a b
+let betaSample = lam a:Float. lam b:Float.
+  externalBetaSample a b
 
 -- Gaussian
 external externalGaussianLogPdf : Float -> Float -> Float -> Float
 external externalGaussianSample ! : Float -> Float -> Float
-let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float. exp (externalGaussianLogPdf x mu sigma)
-let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float. externalGaussianLogPdf x mu sigma
-let gaussianSample = lam mu:Float. lam sigma:Float. externalGaussianSample mu sigma
+let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  exp (externalGaussianLogPdf x mu sigma)
+let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  externalGaussianLogPdf x mu sigma
+let gaussianSample = lam mu:Float. lam sigma:Float.
+  externalGaussianSample mu sigma
+
+-- Multinomial and Categorical
+external externalMultinomialLogPmf : [Int] -> [Float] -> Float
+external externalMultinomialSample ! : Int -> [Float] -> [Int]
+external externalCategoricalSample ! : [Float] -> Int
+let multinomialLogPmf : [Float] -> [Int] -> Float =
+  lam ps. lam ns. externalMultinomialLogPmf ns ps
+let multinomialPmf : [Float] -> [Int] -> Float =
+  lam ps. lam ns. exp (externalMultinomialLogPmf ns ps)
+let categoricalLogPmf : [Float] -> Int -> Float =
+  lam ps. lam x. log (get ps x)
+let categoricalPmf : [Float] -> Int -> Float =
+  lam ps. lam x. get ps x
+let multinomialSample : [Float] -> Int -> [Int] =
+  lam ps. lam n. externalMultinomialSample n ps
+let categoricalSample : [Float] -> Int =
+  lam ps. externalCategoricalSample ps
+
+-- Dirichlet
+external externalDirichletLogPdf : [Float] -> [Float] -> Float
+external externalDirichletSample : [Float] -> [Float]
+let dirichletLogPdf : [Float] -> [Float] -> Float =
+  lam alpha. lam xs. externalDirichletLogPdf xs alpha
+let dirichletPdf : [Float] -> [Float] -> Float =
+  lam alpha. lam xs. exp (externalDirichletLogPdf xs alpha)
+let dirichletSample : [Float] -> [Float] =
+  lam alpha. externalDirichletSample alpha
 
 -- Uniform (continuous)
 external uniformSample ! : Unit -> Float
 
 -- Random (discrete)
 external externalRandomSample ! : Int -> Int -> Int
-let randomSample = lam a:Int. lam b:Int. externalRandomSample a b
+let randomSample = lam a:Int. lam b:Int.
+  externalRandomSample a b
 
 
 mexpr
@@ -66,6 +106,24 @@ utest betaSample 2. 2. with 0. using floatRange 0. 1. in
 utest gaussianPdf 0. 0.4472 0. with 0.892089178 using _eqf in
 utest exp (gaussianLogPdf 2. 1. 2.) with 0.398942280401 using _eqf in
 utest gaussianSample 0. 0.2 with 0. using lam. lam. true in
+
+-- Testing Multinomial and Categorical
+utest multinomialLogPmf [0.1, 0.3, 0.6] [0,1,0] with log 0.3 using _eqf in
+utest multinomialPmf [0.1, 0.3, 0.6] [0,0,1] with 0.6 using _eqf in
+utest multinomialPmf [0.1, 0.3, 0.6] [0,2,3] with 0.1944 using _eqf in
+utest categoricalLogPmf [0.3, 0.2, 0.5] 2 with log 0.5 using _eqf in
+utest categoricalPmf [0.1, 0.3, 0.6] 2 with 0.6 using _eqf in
+utest categoricalPmf [0.1, 0.3, 0.6] 1 with 0.3 using _eqf in
+utest multinomialSample [0.2, 0.8] 3 with [] using
+  lam l. lam r. match l with [v1,v2] then eqi (addi v1 v2) 3 else false in
+utest categoricalSample [0.1, 0.4, 0.2, 0.3] with 0 using intRange 0 3 in
+
+-- Testing Dirichlet
+utest dirichletLogPdf [1.5, 1.5, 1.5] [0.5, 0.25, 0.25]
+  with 1.08321533235 using _eqf in
+utest dirichletPdf [1.0, 1.0, 2.0] [0.01, 0.01, 0.98] with 5.88 using _eqf in
+utest dirichletSample [5.0, 5.0, 5.0] with [0.] using
+  lam l. lam r. _eqf (foldl addf 0. l) 1.0 in
 
 -- Testing Uniform
 utest uniformSample () with 0. using floatRange 0. 1. in

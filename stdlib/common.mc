@@ -12,7 +12,8 @@ let flip = lam f. lam x. lam y. f y x
 
 -- Printing stuff
 let printLn = lam s. print (concat s "\n"); flushStdout ()
-
+let printSeq = lam s. print (join s)
+let printSeqLn = lam s. printSeq s; print "\n"; flushStdout ()
 let dprintLn = lam x. dprint x; printLn ""
 
 
