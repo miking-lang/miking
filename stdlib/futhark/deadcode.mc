@@ -7,6 +7,10 @@ include "futhark/ast-builder.mc"
 include "futhark/pprint.mc"
 
 lang FutharkDeadcodeElimination = FutharkAst
+  sem deadcodeEliminationType (used : Set Name) =
+  | FTyArray {dim = Some id} -> setInsert id used
+  | t -> sfold_FType_FType deadcodeEliminationType used t
+
   sem deadcodeEliminationExpr (used : Set Name) =
   | FEVar t -> (setInsert t.ident used, FEVar t)
   | FELet t ->
@@ -18,12 +22,14 @@ lang FutharkDeadcodeElimination = FutharkAst
         match inexpr with FEVar {ident = id} then
           if nameEq t.ident id then
             match t.tyBody with FTyRecord _ then body
-            else default()
+            else default ()
           else default ()
         else default () in
       (used, body)
     else (used, inexpr)
-  | t -> smapAccumL_FExpr_FExpr deadcodeEliminationExpr used t
+  | t ->
+    let used = deadcodeEliminationType used (tyFutTm t) in
+    smapAccumL_FExpr_FExpr deadcodeEliminationExpr used t
 
   sem deadcodeEliminationDecl =
   | FDeclFun t ->

@@ -28,6 +28,7 @@ include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
+include "pmexpr/utest-size-coercion.mc"
 include "parse.mc"
 
 lang PMExprCompile =
@@ -36,9 +37,9 @@ lang PMExprCompile =
   MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
-  FutharkLengthParameterize + FutharkCWrapper + FutharkRecordParamLift +
-  FutharkForEachRecordPattern + FutharkAliasAnalysis +
+  PMExprUtestSizeCoercion + FutharkGenerate + FutharkFunctionRestrictions +
+  FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
+  FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
@@ -77,6 +78,7 @@ let pprintCAst : CPProg -> String = lam ast.
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
+  let ast = replaceUtestsWithSizeCoercion ast in
   let ast = rewriteTerm ast in
   let ast = tailRecursive ast in
   let ast = cseGlobal ast in
@@ -91,8 +93,7 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
-  let ast = deadcodeElimination ast in
-  parameterizeLength ast
+  deadcodeElimination ast
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -165,15 +166,14 @@ gpu.c gpu.h: gpu.fut
 let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
   let ast = parseParseMCoreFile {
-    keepUtests = options.runTests,
-    pruneExternalUtests = not options.disablePruneExternalUtests,
-    pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
-    findExternalsExclude = true,
+    keepUtests = true,
+    pruneExternalUtests = false,
+    pruneExternalUtestsWarning = false,
+    findExternalsExclude = false,
     keywords = parallelKeywords
   } file in
   let ast = makeKeywords [] ast in
   let ast = symbolizeExpr keywordsSymEnv ast in
-  let ast = utestStrip ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
 
@@ -185,6 +185,7 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- Perform lambda lifting and return the free variable solutions
   match liftLambdasWithSolutions ast with (solutions, ast) in
 
+  -- Extract the accelerate AST
   let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
   let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
@@ -193,7 +194,7 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   match eliminateDummyParameter solutions accelerated accelerateAst
   with (accelerated, accelerateAst) in
 
-  -- Generate Futhark code
+  -- BEGIN Futhark generation --
 
   -- Detect patterns in the accelerate AST to eliminate recursion. The
   -- result is a PMExpr AST.
@@ -208,11 +209,20 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   let futharkAst = futharkTranslation accelerateIds pmexprAst in
   let futharkProg = pprintFutharkAst futharkAst in
 
-  -- Generate C wrapper code
+  -- END Futhark generation --
+
+  -- BEGIN C wrapper generation --
+
   let cAst = generateWrapperCode accelerated in
   let cProg = pprintCAst cAst in
 
-  -- Generate OCaml code
+  -- END C wrapper generation --
+
+  -- BEGIN OCaml generation --
+
+  -- Eliminate all utests in the MExpr AST
+  let ast = utestStrip ast in
+
   match typeLift ast with (env, ast) in
   match generateTypeDecls env with (env, typeTops) in
   -- Replace auxilliary accelerate terms in the AST by eliminating
@@ -230,6 +240,8 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   let ocamlTops = join [externalTops, typeTops, exprTops] in
   let ocamlProg = pprintOCamlTops ocamlTops in
   compileAccelerated options file ocamlProg cProg futharkProg
+
+  -- END OCaml generation --
 
 let compileAccelerate = lam files. lam options : Options. lam args.
   if options.runTests then

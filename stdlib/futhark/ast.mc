@@ -51,7 +51,6 @@ lang FutharkConstAst
   | FCTail ()
   | FCNull ()
   | FCFoldl ()
-  | FCTake ()
   | FCReplicate ()
   | FCTabulate ()
   | FCCopy ()
@@ -158,6 +157,7 @@ end
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   syn FutExpr =
   | FEVar { ident : Name, ty : FutType, info : Info }
+  | FESizeCoercion { e : FutExpr, ty : FutType, info : Info }
   | FERecord { fields : Map SID FutExpr, ty : FutType, info : Info }
   | FERecordProj { rec : FutExpr, key : SID, ty : FutType, info : Info }
   | FERecordUpdate { rec : FutExpr, key : SID, value : FutExpr, ty : FutType,
@@ -183,6 +183,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
 
   sem infoFutTm =
   | FEVar t -> t.info
+  | FESizeCoercion t -> t.info
   | FERecord t -> t.info
   | FERecordProj t -> t.info
   | FERecordUpdate t -> t.info
@@ -200,6 +201,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
 
   sem withInfoFutTm (info : Info) =
   | FEVar t -> FEVar {t with info = info}
+  | FESizeCoercion t -> FESizeCoercion {t with info = info}
   | FERecord t -> FERecord {t with info = info}
   | FERecordProj t -> FERecordProj {t with info = info}
   | FERecordUpdate t -> FERecordUpdate {t with info = info}
@@ -217,6 +219,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
 
   sem tyFutTm =
   | FEVar t -> t.ty
+  | FESizeCoercion t -> t.ty
   | FERecord t -> t.ty
   | FERecordProj t -> t.ty
   | FERecordUpdate t -> t.ty
@@ -234,6 +237,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
 
   sem withTypeFutTm (ty : Type) =
   | FEVar t -> FEVar {t with ty = ty}
+  | FESizeCoercion t -> FESizeCoercion {t with ty = ty}
   | FERecord t -> FERecord {t with ty = ty}
   | FERecordProj t -> FERecordProj {t with ty = ty}
   | FERecordUpdate t -> FERecordUpdate {t with ty = ty}
@@ -250,108 +254,82 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEMatch t -> FEMatch {t with ty = ty}
 
   sem smapAccumL_FExpr_FExpr (f : acc -> a -> (acc, b)) (acc : acc) =
+  | FESizeCoercion t ->
+    match f acc t.e with (acc, e) in
+    (acc, FESizeCoercion {t with e = e})
   | FERecord t ->
-    match mapMapAccum (lam acc. lam. lam v. f acc v) acc t.fields with (acc, fields) then
-      (acc, FERecord {t with fields = fields})
-    else never
+    match mapMapAccum (lam acc. lam. lam v. f acc v) acc t.fields with (acc, fields) in
+    (acc, FERecord {t with fields = fields})
   | FERecordProj t ->
-    match f acc t.rec with (acc, rec) then
-      (acc, FERecordProj {t with rec = rec})
-    else never
+    match f acc t.rec with (acc, rec) in
+    (acc, FERecordProj {t with rec = rec})
   | FERecordUpdate t ->
-    match f acc t.rec with (acc, rec) then
-      match f acc t.value with (acc, value) then
-        (acc, FERecordUpdate {{t with rec = rec} with value = value})
-      else never
-    else never
+    match f acc t.rec with (acc, rec) in
+    match f acc t.value with (acc, value) in
+    (acc, FERecordUpdate {{t with rec = rec} with value = value})
   | FEArray t ->
-    match mapAccumL f acc t.tms with (acc, tms) then
-      (acc, FEArray {t with tms = tms})
-    else never
+    match mapAccumL f acc t.tms with (acc, tms) in
+    (acc, FEArray {t with tms = tms})
   | FEArrayAccess t ->
-    match f acc t.array with (acc, array) then
-      match f acc t.index with (acc, index) then
-        (acc, FEArrayAccess {{t with array = array} with index = index})
-      else never
-    else never
+    match f acc t.array with (acc, array) in
+    match f acc t.index with (acc, index) in
+    (acc, FEArrayAccess {{t with array = array} with index = index})
   | FEArrayUpdate t ->
-    match f acc t.array with (acc, array) then
-      match f acc t.index with (acc, index) then
-        match f acc t.value with (acc, value) then
-          (acc, FEArrayUpdate {{{t with array = array}
-                                   with index = index}
-                                   with value = value})
-        else never
-      else never
-    else never
+    match f acc t.array with (acc, array) in
+    match f acc t.index with (acc, index) in
+    match f acc t.value with (acc, value) in
+    (acc, FEArrayUpdate {{{t with array = array}
+                             with index = index}
+                             with value = value})
   | FEArraySlice t ->
-    match f acc t.array with (acc, array) then
-      match f acc t.startIdx with (acc, startIdx) then
-        match f acc t.endIdx with (acc, endIdx) then
-          (acc, FEArraySlice {{{t with array = array}
-                                  with startIdx = startIdx}
-                                  with endIdx = endIdx})
-        else never
-      else never
-    else never
+    match f acc t.array with (acc, array) in
+    match f acc t.startIdx with (acc, startIdx) in
+    match f acc t.endIdx with (acc, endIdx) in
+    (acc, FEArraySlice {{{t with array = array}
+                            with startIdx = startIdx}
+                            with endIdx = endIdx})
   | FELam t ->
-    match f acc t.body with (acc, body) then
-      (acc, FELam {t with body = body})
-    else never
+    match f acc t.body with (acc, body) in
+    (acc, FELam {t with body = body})
   | FEApp t ->
-    match f acc t.lhs with (acc, lhs) then
-      match f acc t.rhs with (acc, rhs) then
-        (acc, FEApp {{t with lhs = lhs} with rhs = rhs})
-      else never
-    else never
+    match f acc t.lhs with (acc, lhs) in
+    match f acc t.rhs with (acc, rhs) in
+    (acc, FEApp {{t with lhs = lhs} with rhs = rhs})
   | FELet t ->
-    match f acc t.body with (acc, body) then
-      match f acc t.inexpr with (acc, inexpr) then
-        (acc, FELet {{t with body = body} with inexpr = inexpr})
-      else never
-    else never
+    match f acc t.body with (acc, body) in
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, FELet {{t with body = body} with inexpr = inexpr})
   | FEIf t ->
-    match f acc t.cond with (acc, cond) then
-      match f acc t.thn with (acc, thn) then
-        match f acc t.els with (acc, els) then
-          (acc, FEIf {{{t with cond = cond} with thn = thn} with els = els})
-        else never
-      else never
-    else never
+    match f acc t.cond with (acc, cond) in
+    match f acc t.thn with (acc, thn) in
+    match f acc t.els with (acc, els) in
+    (acc, FEIf {{{t with cond = cond} with thn = thn} with els = els})
   | FEForEach t ->
-    match f acc t.param.1 with (acc, paramExpr) then
-      match f acc t.seq with (acc, seq) then
-        match f acc t.body with (acc, body) then
-          (acc, FEForEach {{{t with param = (t.param.0, paramExpr)}
-                               with seq = seq}
-                               with body = body})
-        else never
-      else never
-    else never
+    match f acc t.param.1 with (acc, paramExpr) in
+    match f acc t.seq with (acc, seq) in
+    match f acc t.body with (acc, body) in
+    (acc, FEForEach {{{t with param = (t.param.0, paramExpr)}
+                         with seq = seq}
+                         with body = body})
   | FEMatch t ->
     let caseFunc = lam acc. lam patExpr : (FutPat, FutExpr).
-      match f acc patExpr.1 with (acc, expr) then
-        (acc, (patExpr.0, expr))
-      else never
+      match f acc patExpr.1 with (acc, expr) in
+      (acc, (patExpr.0, expr))
     in
-    match f acc t.target with (acc, target) then
-      match mapAccumL caseFunc acc t.cases with (acc, cases) then
-        (acc, FEMatch {{t with target = target} with cases = cases})
-      else never
-    else never
+    match f acc t.target with (acc, target) in
+    match mapAccumL caseFunc acc t.cases with (acc, cases) in
+    (acc, FEMatch {{t with target = target} with cases = cases})
   | t -> (acc, t)
 
   sem smap_FExpr_FExpr (f : a -> b) =
   | t ->
-    let res : ((), FutExpr) =
-      smapAccumL_FExpr_FExpr (lam. lam a. ((), f a)) () t in
-    res.1
+    match smapAccumL_FExpr_FExpr (lam. lam a. ((), f a)) () t with (_, e) in
+    e
 
   sem sfold_FExpr_FExpr (f : acc -> a -> acc) (acc : acc) =
   | t ->
-    let res : (acc, FutExpr) =
-      smapAccumL_FExpr_FExpr (lam acc. lam a. (f acc a, a)) acc t in
-    res.0
+    match smapAccumL_FExpr_FExpr (lam acc. lam a. (f acc a, a)) acc t with (acc, _) in
+    acc
 end
 
 lang FutharkAst = FutharkTypeParamAst + FutharkTypeAst + FutharkExprAst

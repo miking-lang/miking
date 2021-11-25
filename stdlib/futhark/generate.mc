@@ -335,38 +335,25 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     withTypeFutTm resultType (withInfoFutTm t.info result)
   | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                       rhs = arg1},
-                         rhs = TmConst {val = CInt {val = 0}}},
-            rhs = arg3} & t) ->
-    let arrayType = generateType env (tyTm arg1) in
-    let takeConst = FEConst {
-      val = FCTake (),
-      ty = FTyArrow {
-        from = FTyInt {info = t.info},
-        to = FTyArrow {from = arrayType, to = arrayType, info = t.info},
-        info = t.info},
-      info = t.info} in
-    withTypeFutTm arrayType
-      (withInfoFutTm t.info
-        (futAppSeq_ takeConst [generateExpr env arg3, generateExpr env arg1]))
-  | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
-                                      rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
     let startIdx = generateExpr env arg2 in
     let offset = generateExpr env arg3 in
     let info = mergeInfo (infoFutTm startIdx) (infoFutTm offset) in
-    let endIdx = FEApp {
-      lhs = FEApp {
-        lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
-        rhs = startIdx,
-        ty = FTyArrow {
-          from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
-        info = info
-      },
-      rhs = offset,
-      ty = FTyInt {info = info},
-      info = info
-    } in
+    let endIdx =
+      match startIdx with FEConst {val = FCInt {val = 0}} then offset
+      else
+        FEApp {
+          lhs = FEApp {
+            lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
+            rhs = startIdx,
+            ty = FTyArrow {
+              from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
+            info = info
+          },
+          rhs = offset,
+          ty = FTyInt {info = info},
+          info = info} in
     FEArraySlice {
       array = generateExpr env arg1, startIdx = startIdx, endIdx = endIdx,
       ty = generateType env t.ty, info = t.info}
@@ -487,6 +474,14 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       (withInfoFutTm t.info (futReduce_ (generateExpr env t.f)
                                         (generateExpr env t.ne)
                                         (generateExpr env t.as)))
+  | TmParallelSizeCoercion t ->
+    let ty = generateType env t.ty in
+    match ty with FTyArray aty then
+      FESizeCoercion {
+        e = generateExpr env t.e, ty = FTyArray {aty with dim = Some t.size},
+        info = t.info}
+    else infoErrorExit t.info (join ["Size coercion could not be generated ",
+                                     "due to unexpected type of sequence"])
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
   | t -> infoErrorExit (infoTm t) "Term cannot be translated into Futhark"
@@ -557,6 +552,8 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
   | TmExt t ->
     infoErrorExit t.info "External functions cannot be accelerated"
   | TmUtest t ->
+    -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
+    -- are removed/replaced in earlier stages of the compilation.
     infoErrorExit t.info "Utests cannot be accelerated"
   | TmConDef t ->
     infoErrorExit t.info "Constructor definitions cannot be accelerated"

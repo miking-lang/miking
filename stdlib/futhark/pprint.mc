@@ -67,7 +67,6 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCTail () -> "tail"
   | FCNull () -> "null"
   | FCFoldl () -> "foldl"
-  | FCTake () -> "take"
   | FCReplicate () -> "replicate"
   | FCTabulate () -> "tabulate"
   | FCCopy () -> "copy"
@@ -160,6 +159,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
                               FutharkPatPrettyPrint + FutharkTypePrettyPrint
   sem isAtomic =
   | FEVar _ -> true
+  | FESizeCoercion _ -> true
   | FERecord _ -> true
   | FERecordUpdate _ -> true
   | FERecordProj _ -> false
@@ -191,6 +191,10 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
 
   sem pprintExpr (indent : Int) (env : PprintEnv) =
   | FEVar {ident = ident} -> pprintVarName env ident
+  | FESizeCoercion {e = e, ty = ty} ->
+    match pprintExpr indent env e with (env, e) in
+    match pprintType indent env ty with (env, ty) in
+    (env, join [e, " :> ", ty])
   | FERecord {fields = fields} ->
     let pprintField = lam env. lam k. lam v.
       let str = pprintLabelString k in
