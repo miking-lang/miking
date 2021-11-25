@@ -1,4 +1,28 @@
--- Analysis of data- and execution time dependency for holes.
+-- Uses 0-CFA analysis for analyzing data-flow of holes in an MExpr program. The
+-- final output is the set of holes that (may) affect the execution time, for
+-- each labelled subexpression.
+--
+-- There are currently two ways in which execution time dependency is inferred:
+-- 1. In a match, if the _condition is data-dependent_ on hole `h`, then the
+-- _execution time_ of the match is dependent on `h`.
+-- 2. In the result of applying some intrinsic functions. For example, in
+-- `sleepMs x`, if `x` is data-dependent, then the result of the application is
+-- execution time dependent. The behaviour for each intrinsic function is
+-- encoded in `const-dep.mc`.
+--
+-- Limitations:
+-- * Some side-effects are not handled, e.g. parallelism and mutable data.
+-- * Context depth of holes is not considered.
+
+-- NOTE(Linnea, 2021-11-25): Currently, execution time dependency is not
+-- propagated from a subexpression into its enclosing expression. For example:
+-- ```
+-- let h = hole (IntRange {default = 1, min = 1, max = 1}) in
+-- let x =  -- { } ⊆ x
+--   let y = sleepMs h in  -- { e(h) } ⊆ y
+--   2
+-- in
+-- ()
 
 include "name.mc"
 include "common.mc"
@@ -508,7 +532,7 @@ let x9 = addi h1 h2 in  -- { d(h1), d(h2) } ⊆ x9
 
 ()
 " in
-utest test true t ["x1", "x2", "x22", "x3", "x4", "x5", "x6", "x0", "x7", "x8", "x9"]
+utest test debug t ["x1", "x2", "x22", "x3", "x4", "x5", "x6", "x0", "x7", "x8", "x9"]
 with [ ("x1", {d=["h"],e=[]})
      , ("x2", {d=["h"],e=[]})
      , ("x22", {d=["h"],e=[]})
@@ -524,6 +548,22 @@ with [ ("x1", {d=["h"],e=[]})
 using eqTestHole
 in
 
+let t = parse
+"
+let h = hole (IntRange {default = 1, min = 1, max = 1}) in
+let x =
+  let y = sleepMs h in
+  2
+in
+x
+" in
+
+utest test debug t ["x", "y"]
+with [ ("x", {d=[], e=[]})
+     , ("y", {d=[], e=["h"]})
+     ]
+using eqTestHole
+in
 
 -- TODO(Linnea,2021-11-22): test sequences, maps
 
