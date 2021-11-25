@@ -86,7 +86,8 @@ lang PMExprRecursionElimination = PMExprAst
     with Some permutation then
       let orderedBindings = permute t.bindings permutation in
       foldl toLetBinding t.inexpr orderedBindings
-    else TmRecLets t
+    else infoErrorExit t.info (join ["Cannot accelerate recursive bindings ",
+                                     "with cyclic references"])
   | t -> smap_Expr_Expr eliminateRecursion t
 end
 
@@ -95,9 +96,9 @@ mexpr
 use PMExprRecursionElimination in
 
 let t = symbolize (ureclets_ [
-  ("a", ulam_ "x" (addi_ (var_ "x") (int_ 2))),
   ("b", ulam_ "y" (muli_ (var_ "y") (app_ (var_ "a") (int_ 3)))),
-  ("c", ulam_ "z" (subi_ (var_ "z") (app_ (var_ "b") (int_ 2))))
+  ("c", ulam_ "z" (subi_ (var_ "z") (app_ (var_ "b") (int_ 2)))),
+  ("a", ulam_ "x" (addi_ (var_ "x") (int_ 2)))
 ]) in
 let expected = symbolize (bindall_ [
   ulet_ "a" (ulam_ "x" (addi_ (var_ "x") (int_ 2))),
@@ -106,24 +107,5 @@ let expected = symbolize (bindall_ [
   unit_
 ]) in
 utest eliminateRecursion t with expected using eqExpr in
-
-let t = symbolize (ureclets_ [
-  ("factThree", ulam_ "" (app_ (var_ "fact") (int_ 3))),
-  ("fact", ulam_ "n" (
-    if_ (leqi_ (var_ "n") (int_ 1))
-      (int_ 1)
-      (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))]) in
-utest eliminateRecursion t with t using eqExpr in
-
-let t = symbolize (ureclets_ [
-  ("even", ulam_ "n" (
-    if_ (eqi_ (var_ "n") (int_ 0))
-      true_
-      (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
-  ("odd", ulam_ "n" (
-    if_ (eqi_ (var_ "n") (int_ 0))
-      false_
-      (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))]) in
-utest eliminateRecursion t with t using eqExpr in
 
 ()

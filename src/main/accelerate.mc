@@ -1,11 +1,13 @@
 include "c/ast.mc"
 include "c/pprint.mc"
+include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
+include "futhark/for-each-record-pat.mc"
 include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
 include "futhark/length-parameterize.mc"
 include "futhark/pprint.mc"
-include "futhark/record-inline.mc"
+include "futhark/record-lift.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -19,6 +21,7 @@ include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
 include "pmexpr/extract.mc"
+include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
 include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
@@ -31,14 +34,16 @@ lang PMExprCompile =
   MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
   MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprReplaceAccelerate + FutharkGenerate +
-  FutharkFunctionRestrictions + FutharkRecordInline +
-  FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
+  PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
+  FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
+  FutharkLengthParameterize + FutharkCWrapper + FutharkRecordParamLift +
+  FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
 let parallelKeywords = [
   "accelerate",
+  "flatten",
   "parallelMap",
   "parallelMap2",
   "parallelReduce"
@@ -82,7 +87,9 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   use PMExprCompile in
   let ast = generateProgram entryPoints ast in
   reportFutharkFunctionViolations ast;
-  let ast = inlineRecords ast in
+  let ast = liftRecordParameters ast in
+  let ast = useRecordPatternInForEach ast in
+  let ast = aliasAnalysis ast in
   let ast = deadcodeElimination ast in
   parameterizeLength ast
 
@@ -185,7 +192,17 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
       with (accelerated, accelerateAst) then
 
         -- Generate Futhark code
+
+        -- Detect patterns in the accelerate AST to eliminate recursion. The
+        -- result is a PMExpr AST.
         let pmexprAst = patternTransformation accelerateAst in
+
+        -- Report errors if there are nested accelerate terms within the PMExpr
+        -- AST.
+        reportNestedAccelerate accelerateIds pmexprAst;
+
+        -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
+        -- the result.
         let futharkAst = futharkTranslation accelerateIds pmexprAst in
         let futharkProg = pprintFutharkAst futharkAst in
 

@@ -38,7 +38,9 @@ let matSumSq : [[Int]] -> Int = lam m.
 
 mexpr
 
-let n = 1024 in
+-- If we increase this value, the accelerated code will become faster relative
+-- to the pure OCaml code.
+let n = 128 in
 let a : [[Int]] = create n (lam. create n (lam. randIntU 0 10)) in
 let b : [[Int]] = create n (lam. create n (lam. randIntU 0 10)) in
 let t0 = wallTimeMs () in

@@ -6,6 +6,7 @@ include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
+include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "pmexpr/ast.mc"
@@ -85,15 +86,20 @@ let _usePassedParameters = use MExprAst in
   work body
 
 lang FutharkConstGenerate = MExprAst + FutharkAst
-  sem generateConst =
+  sem generateConst (info : Info) =
   | CInt n -> FCInt {val = n.val}
   | CFloat f -> FCFloat {val = f.val}
+  | CBool b -> FCBool {val = b.val}
+  | CChar c -> FCInt {val = char2int c.val}
   | CAddi _ | CAddf _ -> FCAdd ()
   | CSubi _ | CSubf _ -> FCSub ()
   | CMuli _ | CMulf _ -> FCMul ()
   | CDivi _ | CDivf _ -> FCDiv ()
+  | CNegi _ -> FCNegi ()
+  | CNegf _ -> FCNegf ()
   | CModi _ -> FCRem ()
-  | CEqi _ | CEqf _ -> FCEq ()
+  | CInt2float _ -> FCInt2Float ()
+  | CEqi _ | CEqf _ | CEqc _ -> FCEq ()
   | CNeqi _ | CNeqf _ -> FCNeq ()
   | CGti _ | CGtf _ -> FCGt ()
   | CLti _ | CLtf _ -> FCLt ()
@@ -108,6 +114,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
   | CFoldl _ -> FCFoldl ()
+  | c -> infoErrorExit info "Constant cannot be accelerated"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
@@ -133,6 +140,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyInt t -> FTyInt {info = t.info}
   | TyFloat t -> FTyFloat {info = t.info}
   | TyBool t -> FTyBool {info = t.info}
+  | TyChar t -> FTyInt {info = t.info}
   | TySeq t ->
     FTyArray {elem = generateType env t.ty, dim = None (), info = t.info}
   | TyRecord t ->
@@ -140,8 +148,12 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyArrow t ->
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
-  | TyCon t -> FTyIdent {ident = t.ident, info = t.info}
-  | t -> infoErrorExit (infoTy t) "Unsupported type"
+  | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
+  | TyVariant t -> infoErrorExit t.info "Variant types cannot be accelerated"
+  | t ->
+    let tyStr = use MExprPrettyPrint in type2str t in
+    infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
+                                    "' cannot be accelerated"])
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
@@ -152,6 +164,8 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     FPInt {val = t.val, ty = generateType env t.ty, info = t.info}
   | PatBool t ->
     FPBool {val = t.val, ty = generateType env t.ty, info = t.info}
+  | PatChar t ->
+    FPInt {val = char2int t.val, ty = generateType env t.ty, info = t.info}
   | PatRecord t ->
     let mergeBindings = lam bindings : Map SID Pat. lam fields : Map SID Type.
       mapMapWithKey
@@ -164,7 +178,11 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     match targetTy with TyRecord {fields = fields} then
       FPRecord {bindings = mergeBindings t.bindings fields,
                 ty = generateType env t.ty, info = t.info}
-    else infoErrorExit t.info "Cannot match non-record type on record pattern"
+    else
+      let tyStr = use MExprPrettyPrint in type2str targetTy in
+      infoErrorExit t.info (join ["Term of non-record type '", tyStr,
+                                  "' cannot be matched with record pattern"])
+  | p -> infoErrorExit (infoPat p) "Pattern cannot be accelerated"
 end
 
 let _collectParams = use FutharkTypeGenerate in
@@ -180,7 +198,9 @@ let _collectParams = use FutharkTypeGenerate in
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                             FutharkTypeGenerate + FutharkTypePrettyPrint
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
-  | TmMatch t -> infoErrorExit t.info "Unsupported match expression"
+  | TmMatch t ->
+    infoErrorExit t.info (join ["Acceleration is not supported for this kind ",
+                                "of match expression"])
 
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmMatch ({pat = PatBool {val = true}} & t) ->
@@ -196,6 +216,12 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     FEIf {cond = cond, thn = generateExpr env t.thn,
           els = generateExpr env t.els, ty = generateType env t.ty,
           info = t.info}
+  | TmMatch ({pat = PatChar {val = c}} & t) ->
+    let cond = generateExpr env (withInfo (infoTm t.target)
+                            (eqi_ (int_ (char2int c)) t.target)) in
+    FEIf {cond = cond, thn = generateExpr env t.thn,
+          els = generateExpr env t.els, ty = generateType env t.ty,
+          info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
     FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
@@ -207,7 +233,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
       if nameEq patName exprName then
         FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                      ty = t.ty, info = t.info}
+                      ty = generateType env t.ty, info = t.info}
       else defaultGenerateMatch env (TmMatch t)
     else defaultGenerateMatch env (TmMatch t)
   | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],
@@ -239,7 +265,10 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info},
         ty = generateType env (tyTm t.thn),
         info = t.info}
-    else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
+    else
+      let tyStr = use MExprPrettyPrint in type2str targetTy in
+      infoErrorExit t.info (join ["Term of non-sequence type '", tyStr,
+                                  "' cannot be matched on sequence pattern"])
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
@@ -263,9 +292,21 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
+    let arrayTy = generateType env t.ty in
+    -- NOTE(larshum, 2021-09-27): In-place updates in Futhark require that the
+    -- array is not aliased. As MExpr performs no alias analysis, we instead
+    -- add an explicit copy of the target array.
+    let arrayCopy = FEApp {
+      lhs = FEConst {
+        val = FCCopy (),
+        ty = FTyArrow {from = arrayTy, to = arrayTy, info = t.info},
+        info = t.info},
+      rhs = generateExpr env arg1,
+      ty = arrayTy,
+      info = t.info} in
     FEArrayUpdate {
-      array = generateExpr env arg1, index = generateExpr env arg2,
-      value = generateExpr env arg3, ty = generateType env t.ty, info = t.info}
+      array = arrayCopy, index = generateExpr env arg2,
+      value = generateExpr env arg3, ty = arrayTy, info = t.info}
   | TmApp ({lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
             rhs = arg2} & t) ->
     let tryLookupExpr = lam e.
@@ -311,9 +352,6 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                       rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
-    -- NOTE(larshum, 2021-06-16): The generated code constructs a slice, which
-    -- is a reference rather than a copy. This could result in compilation
-    -- errors on Futhark's side.
     let startIdx = generateExpr env arg2 in
     let offset = generateExpr env arg3 in
     let info = mergeInfo (infoFutTm startIdx) (infoFutTm offset) in
@@ -351,18 +389,52 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       ty = FTyInt {info = info},
       info = info}
   | TmApp ({
-      rhs = s,
       lhs = TmApp {
-        rhs = ne,
         lhs = TmApp {
           lhs = TmConst {val = CFoldl _},
-          rhs = TmLam {ident = acc, body = TmLam {ident = x, body = body}}}}
-    } & t) ->
-    let subMap = mapFromSeq nameCmp [(acc, lam info. ne)] in
-    let body = substituteVariables body subMap in
-    FEForEach {
-      param = generateExpr env ne, loopVar = x, seq = generateExpr env s,
-      body = generateExpr env body, ty = generateType env t.ty, info = t.info}
+          rhs = f},
+        rhs = ne},
+      rhs = s} & t) ->
+    let acc = nameSym "acc" in
+    let x = nameSym "x" in
+    let funcTy = generateType env (tyTm f) in
+    let accTy = generateType env t.ty in
+    let seqTy = generateType env (tyTm s) in
+    let elemTy =
+      match funcTy with FTyArrow {from = FTyArrow {to = elemTy}} then
+        elemTy
+      else FTyUnknown {info = t.info} in
+    let param : (FutPat, FutExpr) =
+      ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
+        generateExpr env ne ) in
+    let constructForEach : FutExpr -> Name -> FutExpr = lam body. lam x.
+      FEForEach {
+        param = param, loopVar = x, seq = generateExpr env s, body = body,
+        ty = accTy, info = t.info}
+    in
+    -- NOTE(larshum, 2021-09-29): If the body consists of lambdas, eliminate
+    -- them by substitution. This can only happen because of a pattern
+    -- transformation, as lambda lifting would have eliminated it otherwise.
+    match f with TmLam {ident = accLam, body = TmLam {ident = x, body = body}} then
+      -- Substitute 'acc' with 'ne' in the function body, and use the 'x' bound
+      -- in the lambda.
+      let subMap = mapFromSeq nameCmp [
+        (accLam, lam info. TmVar {ident = acc, ty = t.ty, info = info,
+                                  frozen = false})] in
+      let body = substituteVariables body subMap in
+      let futBody = generateExpr env body in
+      constructForEach futBody x
+    else
+      let forBody =
+        FEApp {
+          lhs = FEApp {
+            lhs = generateExpr env f,
+            rhs = FEVar {ident = acc, ty = accTy, info = t.info},
+            ty = FTyArrow {from = elemTy, to = accTy, info = t.info},
+            info = t.info},
+          rhs = FEVar {ident = x, ty = elemTy, info = t.info},
+          ty = accTy, info = t.info} in
+      constructForEach forBody x
   | (TmApp _) & t -> defaultGenerateApp env t
 end
 
@@ -383,7 +455,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FEArray {tms = map (generateExpr env) t.tms, ty = generateType env t.ty,
              info = t.info}
   | TmConst t ->
-    FEConst {val = generateConst t.val, ty = generateType env t.ty,
+    FEConst {val = generateConst t.info t.val, ty = generateType env t.ty,
              info = t.info}
   | TmLam t ->
     FELam {ident = t.ident, body = generateExpr env t.body,
@@ -395,6 +467,10 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
            body = generateExpr env t.body,
            inexpr = generateExpr inexprEnv t.inexpr,
            ty = generateType env t.ty, info = t.info}
+  | TmFlatten t ->
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futFlatten_ (generateExpr env t.e)))
   | TmParallelMap t ->
     withTypeFutTm
       (generateType env t.ty)
@@ -405,17 +481,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       (withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
                                       (generateExpr env t.as)
                                       (generateExpr env t.bs)))
-  | TmParallelFlatMap t ->
-    -- TODO(larshum, 2021-07-08): Compile differently depending on the possible
-    -- sizes of sequences.
-    -- * If size is either 0 or 1, we should use 'filter' on the map results.
-    -- * Otherwise we use 'flatten' on the map results. This requires that the
-    --   size is a constant 'n' for all elements, and that the Futhark compiler
-    --   can figure this out.
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futFlatten_ (futMap_ (generateExpr env t.f)
-                                                  (generateExpr env t.as))))
   | TmParallelReduce t ->
     withTypeFutTm
       (generateType env t.ty)
@@ -424,7 +489,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                                         (generateExpr env t.as)))
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
-  | t -> infoErrorExit (infoTm t) "Expression cannot be translated into Futhark"
+  | t -> infoErrorExit (infoTm t) "Term cannot be translated into Futhark"
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
@@ -465,10 +530,13 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
       cons decl (generateToplevel env t.inexpr)
     else never
   | TmLet t ->
-    recursive let findReturnType = lam ty : Type.
-      match ty with TyArrow t then
-        findReturnType t.to
-      else ty
+    recursive let findReturnType = lam params. lam ty : Type.
+      if null params then ty
+      else match ty with TyArrow t then
+        findReturnType (tail params) t.to
+      else
+        infoErrorExit t.info (join ["Function takes more parameters than ",
+                                    "specified in return type"])
     in
     let decl =
       match _collectParams env t.body with (params, body) then
@@ -476,7 +544,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
           FDeclConst {ident = t.ident, ty = generateType env t.tyBody,
                       val = generateExpr env body, info = t.info}
         else
-          let retTy = findReturnType t.tyBody in
+          let retTy = findReturnType params t.tyBody in
           let entry = setMem t.ident env.entryPoints in
           FDeclFun {ident = t.ident, entry = entry, typeParams = [],
                     params = params, ret = generateType env retTy,
@@ -485,13 +553,13 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     in
     cons decl (generateToplevel env t.inexpr)
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions are not supported in Futhark"
+    infoErrorExit t.info "Recursive functions cannot be accelerated"
   | TmExt t ->
-    infoErrorExit t.info "External functions are not supported in Futhark"
+    infoErrorExit t.info "External functions cannot be accelerated"
   | TmUtest t ->
-    infoErrorExit t.info "Utests are not supported in Futhark"
+    infoErrorExit t.info "Utests cannot be accelerated"
   | TmConDef t ->
-    infoErrorExit t.info "Constructor definitions are not supported in Futhark"
+    infoErrorExit t.info "Constructor definitions cannot be accelerated"
   | _ -> []
 end
 
@@ -514,6 +582,30 @@ end
 mexpr
 
 use TestLang in
+
+let f = nameSym "f" in
+let c = nameSym "c" in
+let chars = bindall_ [
+  nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
+    match_ (nvar_ c) (pchar_ 'a')
+      true_
+      false_)),
+  app_ (nvar_ f) (char_ 'x')] in
+
+let charsExpected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(c, futIntTy_)], ret = futBoolTy_,
+    body =
+      futIf_
+        (futAppSeq_ (futConst_ (FCEq ())) [futInt_ (char2int 'a'), nFutVar_ c])
+        (futConst_ (FCBool {val = true}))
+        (futConst_ (FCBool {val = false})),
+    info = NoInfo ()}]} in
+
+let entryPoints = setOfSeq nameCmp [] in
+utest printFutProg (generateProgram entryPoints chars)
+with printFutProg charsExpected using eqSeq eqc in
 
 let intseq = nameSym "intseq" in
 let n = nameSym "n" in
@@ -579,14 +671,13 @@ let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [],
     params = [(a2, futIntTy_), (b2, futIntTy_)], ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ a2, nFutVar_ b2],
+    body = futAdd_ (nFutVar_ a2) (nFutVar_ b2),
     info = NoInfo ()},
   FDeclFun {
     ident = g, entry = true, typeParams = [],
     params = [(r, floatSeqType), (f2, futFloatTy_)], ret = futFloatTy_,
     body =
-      futAppSeq_ (futConst_ (FCAdd ()))
-        [nFutVar_ f2, futArrayAccess_ (nFutVar_ r) (futInt_ 0)],
+      futAdd_ (nFutVar_ f2) (futArrayAccess_ (nFutVar_ r) (futInt_ 0)),
     info = NoInfo ()},
   FDeclFun {
     ident = min, entry = true, typeParams = [],
@@ -606,5 +697,45 @@ let expected = FProg {decls = [
 let entryPoints = setOfSeq nameCmp [f, g, min] in
 utest printFutProg (generateProgram entryPoints t) with printFutProg expected
 using eqSeq eqc in
+
+let acc = nameSym "acc" in
+let x = nameSym "x" in
+let y = nameSym "y" in
+let foldlToFor =
+  nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
+    nlam_ s (tyseq_ tyint_) (
+      foldl_
+        (nlam_ acc tyint_ (nlam_ y tyint_ (
+          addi_ (nvar_ acc) (nvar_ y))))
+        (int_ 0) (nvar_ s))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = true, typeParams = [],
+    params = [(s, futUnsizedArrayTy_ futIntTy_)], ret = futIntTy_,
+    body =
+      futForEach_
+        (nFutPvar_ acc, futInt_ 0)
+        y (nFutVar_ s) (futAdd_ (nFutVar_ acc) (nFutVar_ y)),
+    info = NoInfo ()}]} in
+let entryPoints = setOfSeq nameCmp [f] in
+utest printFutProg (generateProgram entryPoints foldlToFor)
+with printFutProg expected using eqSeq eqc in
+
+let negation =
+  nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]]) (
+    nlam_ a tyint_ (nlam_ b tyfloat_ (
+      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))]))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(a, futIntTy_), (b, futFloatTy_)],
+    ret = futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)],
+    body = futRecord_ [
+      ("a", futApp_ (futConst_ (FCNegi ())) (nFutVar_ a)),
+      ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))],
+    info = NoInfo ()}]} in
+let entryPoints = setOfSeq nameCmp [] in
+utest printFutProg (generateProgram entryPoints negation)
+with printFutProg expected using eqSeq eqc in
 
 ()

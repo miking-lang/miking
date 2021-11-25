@@ -100,6 +100,11 @@ let futRecordProj_ = use FutharkAst in
   FERecordProj {rec = rec, key = stringToSid field, ty = futUnknownTy_,
                 info = NoInfo ()}
 
+let futRecordUpdate_ = use FutharkAst in
+  lam rec. lam field. lam v.
+  FERecordUpdate {rec = rec, key = stringToSid field, value = v,
+                  ty = futUnknownTy_, info = NoInfo ()}
+
 let futArray_ = use FutharkAst in
   lam tms.
   FEArray {tms = tms, ty = futUnknownTy_, info = NoInfo ()}
@@ -160,7 +165,7 @@ let futIf_ = use FutharkAst in
   FEIf {cond = cond, thn = thn, els = els, ty = futUnknownTy_, info = NoInfo ()}
 
 let futForEach_ = use FutharkAst in
-  lam param. lam loopVar. lam seq. lam body.
+  lam param : (FutPat, FutExpr). lam loopVar. lam seq. lam body.
   FEForEach {param = param, loopVar = loopVar, seq = seq, body = body,
              ty = futUnknownTy_, info = NoInfo ()}
 
@@ -221,3 +226,11 @@ let futReplicate_ = use FutharkAst in
 let futTabulate_ = use FutharkAst in
   lam n. lam f.
   futAppSeq_ (futConst_ (FCTabulate ())) [n, f]
+
+let futCopy_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCCopy ())) s
+
+let futLength_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCLength ())) s

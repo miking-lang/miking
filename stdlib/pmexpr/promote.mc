@@ -21,16 +21,17 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
                                rhs = ne},
                   rhs = s}) ->
     let fBody = getInnerFunction arg1 in
-    if isAssociative fBody then
+    -- NOTE(larshum, 2021-11-1): A fold using concat is not well-formed in
+    -- PMExpr as the sizes are part of a sequence type there. However, since it
+    -- is such a regular pattern, we translate it to a well-formed flattening
+    -- operation.
+    match fBody with TmConst {val = CConcat ()} then
+      TmFlatten {e = s, ty = tyTm app, info = infoTm app}
+    else if isAssociative fBody then
       match getNeutralElement fBody with Some fNeutralElement then
         if eqExpr ne fNeutralElement then
-          -- TODO(larshum, 2021-09-07): This operation should be translated
-          -- to a flattening operation.
-          match fBody with TmConst {val = CConcat ()} then
-            app
-          else
-            TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
-                              info = infoTm app}
+          TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
+                            info = infoTm app}
         else app
       else app
     else app
@@ -67,10 +68,7 @@ utest promote foldlMuli with parallelReduce_ f3 ne2 s1 using eqExpr in
 let foldlAddiNonNeutral = foldl_ f2 ne2 s1 in
 utest promote foldlAddiNonNeutral with foldlAddiNonNeutral using eqExpr in
 
--- NOTE(larshum, 2021-09-07): Translating foldl of concat into a reduce is not
--- valid in Futhark, because the array size is part of the type. Hence we
--- explicitly prevent that translation here.
 let foldlConcat = foldl_ f4 ne3 s2 in
-utest promote foldlConcat with foldlConcat using eqExpr in
+utest promote foldlConcat with flatten_ s2 using eqExpr in
 
 ()

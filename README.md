@@ -1609,7 +1609,7 @@ Note that the acceleration has significant overheads as data has to be copied.
 This overhead is much larger for GPU code. Because of this overhead, the
 example program above will become slower after adding the `accelerate` keyword.
 For this example as well as more complicated examples, see the
-`test/accelerate` directory.
+`test/examples/accelerate` directory.
 
 #### Parallel patterns
 
@@ -1633,17 +1633,17 @@ The current implementation has the following limitations:
   shown by the earlier example, however, side-effects can still be used in the
   OCaml part of the program.
 * Multi-dimensional sequences must contain inner sequences of exactly the same
-  size, in accelerated code. This is because in Futhark, arrays are typed by
-  their element and their size. As the size of a sequence is not known
+  size, in the accelerated code. This is because in Futhark, arrays are typed
+  by their element and their size. As the size of a sequence is not known
   statically in MExpr, violating this limitation will result in a runtime
   error.
 * Recursive functions are not supported in Futhark and thus not in accelerated
   code. The compiler has limited support for rewriting recursive bindings
   written in a certain way into parallel patterns. But if it fails to rewrite
   all recursive bindings, the compilation will fail.
-* Dynamic allocations within a repeated operation (in the function of a fold)
-  may result in a compile-time error when the target is a GPU. This is due to a
-  known compiler limitation of Futhark.
+* Dynamic allocations (by concatenation) is not allowed inside the function of
+  a fold, used inside a parallel construct. This is due to a known compiler
+  limitation in Futhark when targeting GPUs.
 * Records and tuples may not be passed as an input argument or be the result of
   an accelerate expression. This is primarily because of difficulties of
   translating them back and forth to Futhark via C. However, using records and
@@ -1653,6 +1653,10 @@ The current implementation has the following limitations:
   in Futhark.
 * Matching on sequences within accelerated code is limited to patterns of the
   form `[h] ++ t`.
+* A higher-order function (a term of arrow type) cannot be:
+  * Stored in a sequence
+  * The result of a match-expression
+  * Used as the accumulator of a fold
 
 In addition, the accelerated AST must be properly annotated with types. The
 types are needed in the Futhark AST, and they are also needed to generate the

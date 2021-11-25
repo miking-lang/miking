@@ -41,7 +41,8 @@
   test-par\
   test-tune\
   test-sundials\
-  test-ipopt
+  test-ipopt\
+  test-accelerate
 
 all: build
 
@@ -153,3 +154,6 @@ test-sundials: build
 
 test-ipopt: build
 	@$(MAKE) -s -f test-ipopt.mk
+
+test-accelerate: build
+	@$(MAKE) -s -f test-accelerate.mk

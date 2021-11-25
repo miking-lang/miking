@@ -121,7 +121,6 @@ lang TestLang =
   sem isAtomic =
   | TmParallelMap _ -> false
   | TmParallelMap2 _ -> false
-  | TmParallelFlatMap _ -> false
   | TmParallelReduce _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
@@ -137,12 +136,6 @@ lang TestLang =
         match pprintCode indent env t.bs with (env, bs) then
           (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
         else never
-      else never
-    else never
-  | TmParallelFlatMap t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelFlatMap (", f, ") (", as, ")"])
       else never
     else never
   | TmParallelReduce t ->
@@ -202,27 +195,6 @@ let expr = preprocess (nreclets_ [
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
-utest containsParallelKeyword expr with true in
-
-let flatMap = nameSym "flatMap" in
-let expr = preprocess (bindall_ [
-  nureclets_ [
-    (flatMap, nulam_ f (nulam_ s (
-      match_ (nvar_ s)
-        (pseqtot_ [])
-        (seq_ [])
-        (match_ (nvar_ s)
-          (pseqedgen_ [npvar_ h] t [])
-          (concat_ (app_ (nvar_ f) (head_ (nvar_ s)))
-                   (appf2_ (nvar_ flatMap) (nvar_ f) (tail_ (nvar_ s))))
-          never_))))],
-  ulet_ "double" (
-    appf2_ (nvar_ flatMap)
-      (nulam_ x (seq_ [nvar_ x, nvar_ x]))
-      (seq_ [int_ 1, int_ 2, int_ 3]))
-]) in
-let expr = parallelPatternRewrite patterns expr in
-utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 
 let reduce = nameSym "reduce" in
