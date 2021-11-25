@@ -180,60 +180,56 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- Translate accelerate terms into functions with one dummy parameter, so
   -- that we can accelerate terms without free variables and so that it is
   -- lambda lifted.
-  match addIdentifierToAccelerateTerms ast with (accelerated, ast) then
+  match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
 
-    -- Perform lambda lifting and return the free variable solutions
-    match liftLambdasWithSolutions ast with (solutions, ast) then
-      let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-      let accelerateAst = extractAccelerateTerms accelerateIds ast in
+  -- Perform lambda lifting and return the free variable solutions
+  match liftLambdasWithSolutions ast with (solutions, ast) in
 
-      -- Eliminate the dummy parameter in functions of accelerate terms with at
-      -- least one free variable parameter.
-      match eliminateDummyParameter solutions accelerated accelerateAst
-      with (accelerated, accelerateAst) then
+  let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+  let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
-        -- Generate Futhark code
+  -- Eliminate the dummy parameter in functions of accelerate terms with at
+  -- least one free variable parameter.
+  match eliminateDummyParameter solutions accelerated accelerateAst
+  with (accelerated, accelerateAst) in
 
-        -- Detect patterns in the accelerate AST to eliminate recursion. The
-        -- result is a PMExpr AST.
-        let pmexprAst = patternTransformation accelerateAst in
+  -- Generate Futhark code
 
-        -- Report errors if there are nested accelerate terms within the PMExpr
-        -- AST.
-        reportNestedAccelerate accelerateIds pmexprAst;
+  -- Detect patterns in the accelerate AST to eliminate recursion. The
+  -- result is a PMExpr AST.
+  let pmexprAst = patternTransformation accelerateAst in
 
-        -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
-        -- the result.
-        let futharkAst = futharkTranslation accelerateIds pmexprAst in
-        let futharkProg = pprintFutharkAst futharkAst in
+  -- Report errors if there are nested accelerate terms within the PMExpr
+  -- AST.
+  reportNestedAccelerate accelerateIds pmexprAst;
 
-        -- Generate C wrapper code
-        let cAst = generateWrapperCode accelerated in
-        let cProg = pprintCAst cAst in
+  -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
+  -- the result.
+  let futharkAst = futharkTranslation accelerateIds pmexprAst in
+  let futharkProg = pprintFutharkAst futharkAst in
 
-        -- Generate OCaml code
-        match typeLift ast with (env, ast) then
-          match generateTypeDecls env with (env, typeTops) then
-            -- Replace auxilliary accelerate terms in the AST by eliminating
-            -- the let-expressions (only used in the accelerate AST) and adding
-            -- data conversion of parameters and result.
-            let ast = replaceAccelerate accelerated ast in
+  -- Generate C wrapper code
+  let cAst = generateWrapperCode accelerated in
+  let cProg = pprintCAst cAst in
 
-            -- Generate the OCaml AST
-            let exprTops = generateTops env ast in
+  -- Generate OCaml code
+  match typeLift ast with (env, ast) in
+  match generateTypeDecls env with (env, typeTops) in
+  -- Replace auxilliary accelerate terms in the AST by eliminating
+  -- the let-expressions (only used in the accelerate AST) and adding
+  -- data conversion of parameters and result.
+  let ast = replaceAccelerate accelerated ast in
 
-            -- Add an external declaration of a C function in the OCaml AST,
-            -- for each accelerate term.
-            let externalTops = getExternalCDeclarations accelerated in
+  -- Generate the OCaml AST
+  let exprTops = generateTops env ast in
 
-            let ocamlTops = join [externalTops, typeTops, exprTops] in
-            let ocamlProg = pprintOCamlTops ocamlTops in
-            compileAccelerated options file ocamlProg cProg futharkProg
-          else never
-        else never
-      else never
-    else never
-  else never
+  -- Add an external declaration of a C function in the OCaml AST,
+  -- for each accelerate term.
+  let externalTops = getExternalCDeclarations accelerated in
+
+  let ocamlTops = join [externalTops, typeTops, exprTops] in
+  let ocamlProg = pprintOCamlTops ocamlTops in
+  compileAccelerated options file ocamlProg cProg futharkProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
   if options.runTests then
