@@ -93,7 +93,8 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
-  deadcodeElimination ast
+  let ast = deadcodeElimination ast in
+  parameterizeLength ast
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
