@@ -23,7 +23,6 @@ let _tailEmptyMsg = "Tail on empty sequence"
 let _splitAtNegIndexMsg = "Split at using negative index"
 let _splitAtBeyondEndOfSeqMsg = "Split at beyond end of sequence"
 let _subseqNegativeIndexMsg = "Subsequence using negative index"
-let _subseqOutOfBoundsIndexMsg = "Subsequence index out of bounds"
 let _subseqNegativeLenMsg = "Subsequence using negative length"
 
 let _nonEmptySequenceCond = lam s. gti_ (length_ s) (int_ 0)
@@ -51,12 +50,12 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     [(_splitAtNegIndexMsg, _nonNegativeCond (var_ "1")),
      (_splitAtBeyondEndOfSeqMsg, leqi_ (var_ "1") (length_ (var_ "0")))]
   | CSubsequence _ ->
-    -- TODO(larshum, 2021-11-29): The current implementation of subsequence
-    -- accepts an out of bounds index if the length is 0, and the compiler
-    -- seems to rely on this behaviour. However, this means the second test is
-    -- more strict than the way we use it.
+    -- TODO(larshum, 2021-11-29): How should the subsequence function behave?
+    -- The current implementation allows the index to be outside of the bounds,
+    -- given that the length is zero. It also allows providing a length such
+    -- that the index plus length is outside the bounds (it then returns a
+    -- subsequence from the start index until the end).
     [(_subseqNegativeIndexMsg, _nonNegativeCond (var_ "1")),
-     (_subseqOutOfBoundsIndexMsg, _lessThanLengthCond (var_ "1") (var_ "0")),
      (_subseqNegativeLenMsg, _nonNegativeCond (var_ "2"))]
   | _ -> []
 
@@ -157,10 +156,6 @@ let expectedSubseq =
       (if_ (_nonNegativeCond (var_ "1"))
         unit_ 
         (err _subseqNegativeIndexMsg)),
-    ulet_ ""
-      (if_ (_lessThanLengthCond (var_ "1") (var_ "0"))
-        unit_
-        (err _subseqOutOfBoundsIndexMsg)),
     ulet_ ""
       (if_ (_nonNegativeCond (var_ "2"))
         unit_
