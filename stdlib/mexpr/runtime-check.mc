@@ -21,7 +21,7 @@ let _outOfBoundsMsg = "Out of bounds access in sequence"
 let _headEmptyMsg = "Head on empty sequence"
 let _tailEmptyMsg = "Tail on empty sequence"
 let _splitAtNegIndexMsg = "Split at using negative index"
-let _splitAtBeyondEndOfSeqMsg = "Split at beyond end of sequence"
+let _splitAtBeyondEndOfSeqMsg = "Split at index out of bounds"
 let _subseqNegativeIndexMsg = "Subsequence using negative index"
 let _subseqNegativeLenMsg = "Subsequence using negative length"
 
@@ -65,15 +65,17 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     else setInsert t.val used
   | t -> sfold_Expr_Expr collectUsedRuntimeCheckedIntrinsics used t
 
-  sem defineRuntimeCheckedFunction =
+  sem defineRuntimeCheckedFunction (errId : Name) =
   | (intrinsic, id) /- (Const, Name) -/ ->
     -- NOTE(larshum, 2021-11-29): We don't store an info field for the
     -- runtime-checked intrinsic functions because they should catch runtime
     -- errors. In such cases, they will print the info of the intrinsic where
     -- the call originated from.
     recursive let generateCheck = lam infoId. lam cond : (String, Expr).
-      ulet_ "" (if_ cond.1 unit_ (error_ (concat_ (var_ infoId)
-                                                  (str_ cond.0)))) in
+      ulet_ ""
+        (if_ cond.1
+          unit_
+          (app_ (nvar_ errId) (concat_ (var_ infoId) (str_ cond.0)))) in
     recursive let addParam = lam acc : Expr. lam paramId : Name.
       ulam_ paramId acc in
     let conditions = intrinsicRuntimeConditions intrinsic in
@@ -86,12 +88,20 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     nulet_ id (ulams_ (cons infoId intrinsicArgs) body)
 
   sem defineRuntimeCheckedFunctions =
-  | used -> /- [Const] -> ([Name], [Expr]) -/
+  | used -> /- [Const] -> ([Name], Expr) -/
+    let errorFunctionId = nameSym "errfn" in
+    let errorFunction =
+      nulet_ errorFunctionId (ulam_ "msg"
+        (bind_
+          (ulet_ "" (printError_ (concat_ (var_ "msg") (str_ "\n"))))
+          (exit_ (int_ 1)))) in
     let intrinsicName = lam c : Const.
       nameSym (cons '_' (getConstStringCode 0 c)) in
     let usedWithId = zip used (map intrinsicName used) in
     let intrinsicMap : Map Const Name = mapFromSeq cmpConst usedWithId in
-    (intrinsicMap, map defineRuntimeCheckedFunction usedWithId)
+    let runtimeCheckedFunctions =
+      map (defineRuntimeCheckedFunction errorFunctionId) usedWithId in
+    (intrinsicMap, bindall_ (join [[errorFunction], runtimeCheckedFunctions]))
 
   sem callRuntimeCheckedFunctions (intrinsicIds : Map Const Name) =
   | TmConst t ->
@@ -119,7 +129,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
       let used = setToSeq used in
       match defineRuntimeCheckedFunctions used with (intrinsicIds, functions) in
       let t = callRuntimeCheckedFunctions intrinsicIds t in
-      bindall_ (snoc functions t)
+      bind_ functions t
 end
 
 lang TestLang = MExprRuntimeCheck + MExprPrettyPrint + MExprEq
@@ -131,7 +141,8 @@ use TestLang in
 let i = Info {filename = "test.txt", row1 = 1, col1 = 5, row2 = 1, col2 = 20} in
 
 let id = lam c : Const. nameSym (cons '_' (getConstStringCode 0 c)) in
-let err = lam msg. error_ (concat_ (var_ "i") (str_ msg)) in
+let errorFunctionId = nameSym "errfn" in
+let err = lam msg. app_ (nvar_ errorFunctionId) (concat_ (var_ "i") (str_ msg)) in
 
 let divId = id (CDivi ()) in
 let expectedDivi =
@@ -139,7 +150,8 @@ let expectedDivi =
     (ulet_ ""
       (if_ (_nonZeroCond (var_ "1")) unit_ (err _divByZeroMsg)))
     (divi_ (var_ "0") (var_ "1")))))) in
-utest defineRuntimeCheckedFunction (CDivi (), divId) with expectedDivi using eqExpr in
+utest defineRuntimeCheckedFunction errorFunctionId (CDivi (), divId)
+with expectedDivi using eqExpr in
 
 let headId = id (CHead ()) in
 let expectedHead =
@@ -147,7 +159,8 @@ let expectedHead =
     (ulet_ ""
       (if_ (gti_ (length_ (var_ "0")) (int_ 0)) unit_ (err _headEmptyMsg)))
     (head_ (var_ "0"))))) in
-utest defineRuntimeCheckedFunction (CHead (), headId) with expectedHead using eqExpr in
+utest defineRuntimeCheckedFunction errorFunctionId (CHead (), headId)
+with expectedHead using eqExpr in
 
 let subseqId = id (CSubsequence ()) in
 let expectedSubseq =
@@ -161,7 +174,7 @@ let expectedSubseq =
         unit_
         (err _subseqNegativeLenMsg)),
     subsequence_ (var_ "0") (var_ "1") (var_ "2")]))))) in
-utest defineRuntimeCheckedFunction (CSubsequence (), subseqId)
+utest defineRuntimeCheckedFunction errorFunctionId (CSubsequence (), subseqId)
 with expectedSubseq using eqExpr in
 
 ()

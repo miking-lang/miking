@@ -11,7 +11,7 @@ type Options = {
   disablePruneExternalUtests : Bool,
   disablePruneExternalUtestsWarning : Bool,
   runTests : Bool,
-  enableRuntimeCheck : Bool,
+  runtimeChecks : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
@@ -31,7 +31,7 @@ let options = {
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,
   runTests = false,
-  enableRuntimeCheck = false,
+  runtimeChecks = false,
   disableOptimizations = false,
   useTuned = false,
   compileAfterTune = false,
@@ -76,11 +76,10 @@ let config = [
     "Generate utest code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with runTests = true}),
-  ([("--debug", "", "")],
-    "Enables debug mode, which includes utest generation and runtime checks",
+  ([("--runtime-checks", "", "")],
+    "Enables runtime checks",
     lam p: ArgPart Options.
-      let o: Options = p.options in {{o with runTests = true}
-                                        with enableRuntimeCheck = true}),
+      let o: Options = p.options in {o with runtimeChecks = true}),
   ([("--disable-optimizations", "", "")],
     "Disables optimizations to decrease compilation time",
     lam p: ArgPart Options.
