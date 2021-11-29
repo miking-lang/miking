@@ -7,6 +7,7 @@ include "sys.mc"
 include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/profiling.mc"
+include "mexpr/runtime-check.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
@@ -23,7 +24,7 @@ lang MCoreCompile =
   BootParser +
   MExprHoles +
   MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
-  MExprProfileInstrument
+  MExprRuntimeCheck + MExprProfileInstrument
 end
 
 let pprintMcore = lam ast.
@@ -65,20 +66,23 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- If option --typecheck, type check the AST
     let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
 
+    -- If --debug has been enabled, instrument runtime safety checks in AST.
+    -- This includes for example bounds checking on sequence operations.
+    let ast = if options.enableRuntimeCheck then injectRuntimeChecks ast else ast in
+
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) then
+    match generateTests ast options.runTests with (symEnv, ast) in
 
-      -- Re-symbolize the MExpr AST and re-annotate it with types
-      let ast = symbolizeExpr symEnv ast in
+    -- Re-symbolize the MExpr AST and re-annotate it with types
+    let ast = symbolizeExpr symEnv ast in
 
-      compileMCore ast
-        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
-        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
-        , exitBefore = lam. if options.exitBefore then exit 0 else ()
-        , compileOcaml = ocamlCompile options sourcePath
-        }
-    else never
+    compileMCore ast
+      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+      , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+      , exitBefore = lam. if options.exitBefore then exit 0 else ()
+      , compileOcaml = ocamlCompile options sourcePath
+      }
 
 -- Main function for compiling a program
 -- files: a list of files
