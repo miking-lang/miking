@@ -196,16 +196,31 @@ lang PrettyPrint = IdentifierPrettyPrint
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
+  sem exprToString (env: PprintEnv) =
+  | expr ->
+    match pprintCode 0 env expr with (_,str)
+    then str else never
+
+  sem exprToStringKeywords (keywords: [String]) =
+  | expr ->
+    let addName = lam env. lam name.
+      match pprintAddStr env name with Some env then env
+      else error
+        (join ["Duplicate keyword in exprToStringKeywords: ", nameGetStr name])
+    in
+    let env = foldl addName pprintEnvEmpty (map nameSym keywords) in
+    exprToString env expr
+
+  sem typeToString (env: PprintEnv) =
+  | ty ->
+    match getTypeStringCode 0 env ty with (_,str)
+    then str else never
 
   sem expr2str =
-  | expr ->
-    match pprintCode 0 pprintEnvEmpty expr with (_,str)
-    then str else never
+  | expr -> exprToString pprintEnvEmpty expr
 
   sem type2str =
-  | ty ->
-    match getTypeStringCode 0 pprintEnvEmpty ty with (_,str)
-    then str else never
+  | ty -> typeToString pprintEnvEmpty ty
 
   -- Helper function for printing parentheses
   sem printParen (indent : Int) (env: PprintEnv) =
@@ -1145,6 +1160,12 @@ end
 -- MEXPR PPRINT FRAGMENT --
 ---------------------------
 
+let mexprKeywords = [
+  "if", "then", "else", "true", "false", "match", "with", "utest", "type",
+  "con", "lang", "let", "recursive", "lam", "in", "end", "syn", "sem", "use",
+  "mexpr", "include", "never", "using", "external", "switch", "case", "all"
+]
+
 lang MExprPrettyPrint =
 
   -- Terms
@@ -1183,7 +1204,11 @@ lang MExprPrettyPrint =
   -- Syntactic Sugar
   + RecordProjectionSyntaxSugarPrettyPrint
 
+  sem mexprToString =
+  | expr -> exprToStringKeywords mexprKeywords expr
+
 end
+
 
 -----------
 -- TESTS --
@@ -1424,5 +1449,9 @@ in
 -- print "\n\n";
 
 utest length (expr2str sample_ast) with 0 using geqi in
+
+-- Test keyword variable names
+utest eqString (mexprToString (var_ "lam")) "lam"
+with false in
 
 ()
