@@ -25,13 +25,11 @@ let _splitAtBeyondEndOfSeqMsg = "Split at beyond end of sequence"
 let _subseqNegativeIndexMsg = "Subsequence using negative index"
 let _subseqOutOfBoundsIndexMsg = "Subsequence index out of bounds"
 let _subseqNegativeLenMsg = "Subsequence using negative length"
-let _subseqOutOfBoundsEndMsg = "Subsequence endpoint out of bounds"
 
 let _nonEmptySequenceCond = lam s. gti_ (length_ s) (int_ 0)
 let _nonZeroCond = lam x. neqi_ x (int_ 0)
 let _nonNegativeCond = lam x. geqi_ x (int_ 0)
 let _lessThanLengthCond = lam x. lam s. lti_ x (length_ s)
-let _endWithinBoundsCond = lam s. lam i. lam n. leqi_ (addi_ i n) (length_ s)
 
 lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
   -- This function returns a sequence of conditions that are to be checked at
@@ -53,11 +51,13 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     [(_splitAtNegIndexMsg, _nonNegativeCond (var_ "1")),
      (_splitAtBeyondEndOfSeqMsg, leqi_ (var_ "1") (length_ (var_ "0")))]
   | CSubsequence _ ->
+    -- TODO(larshum, 2021-11-29): The current implementation of subsequence
+    -- accepts an out of bounds index if the length is 0, and the compiler
+    -- seems to rely on this behaviour. However, this means the second test is
+    -- more strict than the way we use it.
     [(_subseqNegativeIndexMsg, _nonNegativeCond (var_ "1")),
      (_subseqOutOfBoundsIndexMsg, _lessThanLengthCond (var_ "1") (var_ "0")),
-     (_subseqNegativeLenMsg, _nonNegativeCond (var_ "2")),
-     ( _subseqOutOfBoundsEndMsg
-     , _endWithinBoundsCond (var_ "0") (var_ "1") (var_ "2") )]
+     (_subseqNegativeLenMsg, _nonNegativeCond (var_ "2"))]
   | _ -> []
 
   sem collectUsedRuntimeCheckedIntrinsics (used : Set Const) =
@@ -165,10 +165,6 @@ let expectedSubseq =
       (if_ (_nonNegativeCond (var_ "2"))
         unit_
         (err _subseqNegativeLenMsg)),
-    ulet_ ""
-      (if_ (_endWithinBoundsCond (var_ "0") (var_ "1") (var_ "2"))
-        unit_
-        (err _subseqOutOfBoundsEndMsg)),
     subsequence_ (var_ "0") (var_ "1") (var_ "2")]))))) in
 utest defineRuntimeCheckedFunction (CSubsequence (), subseqId)
 with expectedSubseq using eqExpr in
