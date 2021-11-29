@@ -68,7 +68,7 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     -- If --debug has been enabled, instrument runtime safety checks in AST.
     -- This includes for example bounds checking on sequence operations.
-    let ast = if options.enableRuntimeCheck then injectRuntimeChecks ast else ast in
+    let ast = if options.runtimeChecks then injectRuntimeChecks ast else ast in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
