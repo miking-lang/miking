@@ -762,22 +762,51 @@ let _addLOpen
       -> Option [TentativeNode res self ROpen] -- NonEmpty
       = lam queue. lam child.
         match _getParents child with Some parents then
+          -- NOTE(vipa, 2021-11-30): `_shallowAllowedLeft` and
+          -- `_shallowAllowedRight` do two things: they check if the
+          -- child is allowed as a left or right child, respectively,
+          -- and they extract the already created PermanentNode inside
+          -- the TentativeNode. `shallowRight` is thus `Some` iff
+          -- shallow restrictions allow grouping to the right, and
+          -- correspondingly for `shallowLeft`.
+          -- NOTE(vipa, 2021-11-30): This means that if both
+          -- `shallowLeft` and `shallowRight` are `Some`, then
+          -- `shallowLeft = shallowRight`.
           let shallowRight = _shallowAllowedLeft input child in
           let f = lam parent.
             let shallowLeft = _shallowAllowedRight parent child in
             let precLeft = _mayGroupLeft parent input in
             let precRight = _mayGroupRight parent input in
             let config = (shallowLeft, shallowRight, precLeft, precRight) in
+            -- NOTE(vipa, 2021-11-30): Grouping to the left is done by
+            -- telling the parent that it should have `child` as a
+            -- right child and adding it (the parent) to the queue if
+            -- it isn't there already. It will later be made into a
+            -- new permanent node, once all its children have been
+            -- processed.
             (match config with (Some child, None _, _, _) | (Some child, _, true, _) then
                match _addRightChildToParent time child parent with Some parent then
                  _addToQueue parent queue
                else ()
              else ());
+            -- NOTE(vipa, 2021-11-30): Grouping to the right is done
+            -- by returning `true` to `filter`
             match config with (None _, Some child, _, _) | (_, Some child, _, true) then
               true
             else false in
           let parentsThatAllowRight = filter f parents in
+          -- NOTE(vipa, 2021-11-30): If `parents` is non-empty then
+          -- `shallowRight` must be `Some` (since `f` would return
+          -- `false` otherwise).
           match (shallowRight, parentsThatAllowRight) with (Some child, parents & [_] ++ _) then
+            -- NOTE(vipa, 2021-11-30): We cannot create the new
+            -- tentative node yet because there may be more sharing
+            -- available: multiple parents may share multiple
+            -- children, in which case we still want to only create
+            -- *one* new tentative node that has all of the shared
+            -- children as left children. Thus we tell the parents
+            -- that this `child` should be a left-child of this new
+            -- node, once it is created.
             _addLeftChildToParent time child parents
           else None ()
         else never
@@ -800,9 +829,9 @@ let _addLOpen
 
     let frontier = st.frontier in
     -- NOTE(vipa, 2021-11-04): This is a priority queue sorted on
-    --   maxDistanceFromRoot (pop longest distance first). It's
-    --   empty from the start (the frontier is used to find the
-    --   highest possible distance).
+    --   maxDistanceFromRoot (pop longest distance first). It's empty
+    --   from the start (the frontier is only used to find the highest
+    --   possible distance).
     let queue = _newQueueFromFrontier frontier in
     let newParents = mapOption (handleLeaf queue) frontier in
     let newParents = work queue newParents in
