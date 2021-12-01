@@ -5,9 +5,9 @@ include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
 include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
-include "futhark/length-parameterize.mc"
 include "futhark/pprint.mc"
 include "futhark/record-lift.mc"
+include "futhark/size-parameterize.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -21,6 +21,7 @@ include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
+include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
@@ -34,11 +35,12 @@ include "parse.mc"
 lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
-  MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
-  PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
+  MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
+  PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
+  PMExprRecursionElimination + PMExprExtractAccelerate +
+  PMExprReplaceAccelerate + PMExprNestedAccelerate +
   PMExprUtestSizeConstraint + FutharkGenerate + FutharkFunctionRestrictions +
-  FutharkDeadcodeElimination + FutharkLengthParameterize + FutharkCWrapper +
+  FutharkDeadcodeElimination + FutharkSizeParameterize + FutharkCWrapper +
   FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
@@ -78,7 +80,7 @@ let pprintCAst : CPProg -> String = lam ast.
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
-  let ast = replaceUtestsWithSizeCoercion ast in
+  let ast = replaceUtestsWithSizeConstraint ast in
   let ast = rewriteTerm ast in
   let ast = tailRecursive ast in
   let ast = cseGlobal ast in
@@ -94,7 +96,7 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
   let ast = deadcodeElimination ast in
-  parameterizeLength ast
+  parameterizeSizes ast
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -174,6 +176,13 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
     keywords = parallelKeywords
   } file in
   let ast = makeKeywords [] ast in
+
+  -- Construct a sequential version of the AST where parallel constructs have
+  -- been demoted to sequential equivalents
+  let seqAst = demoteParallel ast in
+  let seqAst = symbolize seqAst in
+  let seqAst = typeAnnot seqAst in
+
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
@@ -222,10 +231,11 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- BEGIN OCaml generation --
 
   -- Eliminate all utests in the MExpr AST
-  let ast = utestStrip ast in
+  let ast = utestStrip seqAst in
 
   match typeLift ast with (env, ast) in
   match generateTypeDecls env with (env, typeTops) in
+
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.

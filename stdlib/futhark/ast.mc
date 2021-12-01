@@ -158,6 +158,8 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   syn FutExpr =
   | FEVar { ident : Name, ty : FutType, info : Info }
   | FESizeCoercion { e : FutExpr, ty : FutType, info : Info }
+  | FESizeEquality { x1 : Name, d1 : Int, x2 : Name, d2 : Int, ty : FutType,
+                     info : Info }
   | FERecord { fields : Map SID FutExpr, ty : FutType, info : Info }
   | FERecordProj { rec : FutExpr, key : SID, ty : FutType, info : Info }
   | FERecordUpdate { rec : FutExpr, key : SID, value : FutExpr, ty : FutType,
@@ -184,6 +186,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem infoFutTm =
   | FEVar t -> t.info
   | FESizeCoercion t -> t.info
+  | FESizeEquality t -> t.info
   | FERecord t -> t.info
   | FERecordProj t -> t.info
   | FERecordUpdate t -> t.info
@@ -202,6 +205,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem withInfoFutTm (info : Info) =
   | FEVar t -> FEVar {t with info = info}
   | FESizeCoercion t -> FESizeCoercion {t with info = info}
+  | FESizeEquality t -> FESizeEquality {t with info = info}
   | FERecord t -> FERecord {t with info = info}
   | FERecordProj t -> FERecordProj {t with info = info}
   | FERecordUpdate t -> FERecordUpdate {t with info = info}
@@ -220,6 +224,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem tyFutTm =
   | FEVar t -> t.ty
   | FESizeCoercion t -> t.ty
+  | FESizeEquality t -> t.ty
   | FERecord t -> t.ty
   | FERecordProj t -> t.ty
   | FERecordUpdate t -> t.ty
@@ -238,6 +243,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem withTypeFutTm (ty : Type) =
   | FEVar t -> FEVar {t with ty = ty}
   | FESizeCoercion t -> FESizeCoercion {t with ty = ty}
+  | FESizeEquality t -> FESizeEquality {t with ty = ty}
   | FERecord t -> FERecord {t with ty = ty}
   | FERecordProj t -> FERecordProj {t with ty = ty}
   | FERecordUpdate t -> FERecordUpdate {t with ty = ty}

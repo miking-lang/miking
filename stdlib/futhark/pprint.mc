@@ -195,6 +195,11 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     match pprintExpr indent env e with (env, e) in
     match pprintType indent env ty with (env, ty) in
     (env, join [e, " :> ", ty])
+  | FESizeEquality _ ->
+    -- NOTE(larshum, 2021-11-30): These expressions are processed and
+    -- eliminated from the AST at an earlier point. As they have no effect on
+    -- the evaluation of the program, they are replaced by empty tuples.
+    (env, join ["()"])
   | FERecord {fields = fields} ->
     let pprintField = lam env. lam k. lam v.
       let str = pprintLabelString k in

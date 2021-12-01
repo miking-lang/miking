@@ -13,6 +13,9 @@ lang FutharkDeadcodeElimination = FutharkAst
 
   sem deadcodeEliminationExpr (used : Set Name) =
   | FEVar t -> (setInsert t.ident used, FEVar t)
+  | FELet (t & {body = FESizeEquality _}) ->
+    match deadcodeEliminationExpr used t.inexpr with (used, inexpr) in
+    (used, FELet {t with inexpr = inexpr})
   | FELet t ->
     match deadcodeEliminationExpr used t.inexpr with (used, inexpr) in
     if setMem t.ident used then
