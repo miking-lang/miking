@@ -1562,12 +1562,12 @@ using the evaluator.
 
 ## Acceleration
 
-By using the `--accelerate` flag when using `mi compile`, parts of the program
-can be marked for accelerated execution. While the main part of the program
-will be compiled to OCaml (as usual), an expression that has been wrapped in an
-`accelerate` term will be compiled to an accelerated format. Additional
-compiler flags can be used to control which accelerated mode should be used.
-Acceleration requires `futhark` to be installed
+By using the `--accelerate` flag with `mi compile`, parts of the program can be
+compiled in an accelerated mode. The main part of the program will be compiled
+to the default backend (currently OCaml), while expressions that have been
+wrapped in an `accelerate` term will be compiled to an accelerated format.
+Additional compiler flags can be used to control which accelerated mode should
+be used. Acceleration requires `futhark` to be installed
 ([installation instructions](https://futhark.readthedocs.io/en/stable/installation.html)).
 
 ### Accelerated modes
@@ -1577,8 +1577,8 @@ CUDA GPU code. This mode requires an NVidia GPU and an installation of CUDA at
 `/usr/local/cuda`.
 
 If the `--cpu-only` flag has been set, the accelerated parts of the code are
-translated to multicore CPU code. This mode does not require a GPU, and it does
-not require installing anything in addition to `futhark`.
+translated to multicore CPU code. This mode does not require a GPU, nor does it
+require any additional installations apart from `futhark`.
 
 ### Usage
 
@@ -1586,17 +1586,57 @@ The accelerated compilation via `mi compile --accelerate` makes use of parallel
 keywords. The most important keyword is `accelerate`, whose only argument is an
 expression that is requested to be accelerated. The other keywords are used for
 explicitly parallel operations, such as `parallelMap` and `parallelReduce`.
-There are several limitations on what expressions may be used. If the compiler
-is unable to accelerate a marked expression, an error will be reported.
+There are several limitations on what expressions may be used. If an
+accelerated expression makes use of such a limitation, an error will be
+reported, pointing to the unsupported expression.
 
-When the `--accelerate` flag is not used, parallel keywords are removed from
-the program. The `accelerate` keyword is removed from the program, while the
-parallel constructs are replaced by equivalent sequential code.
+When the `--accelerate` flag is not set, the `accelerate` keywords are removed
+from the program, and parallel constructs are replaced by equivalent sequential
+code.
 
-Accelerated calls have a significant overhead, in particular for the first
-call. This is because any data that is used by the accelerated computation has
-to be copied which is slow, in particular when running on the GPU. The example
-below and more can be found in the `test/examples/accelerate` directory.
+Accelerated calls have a significant overhead (in particular for the first
+call). This is because any data that is used by the accelerated computation has
+to be copied which is slow, in particular when running on the GPU.
+
+#### Recommended workflow
+
+The recommended workflow when working with acceleration is to first implement
+the program in MExpr without using acceleration. In this stage, the compiler
+should be used in debug mode, that is, using the flags `--test` and
+`--runtime-checks` to provide clear errors when the program does not behave as
+expected.
+
+Once the implementation is determined to be ready for acceleration, the desired
+expressions can be marked for acceleration by wrapping them in the `accelerate`
+keyword, one by one. If this results in a compile error when the `--accelerate`
+flag has been set, the program needs to be rewritten according to what the
+error message states.
+
+After the program can be compiled with acceleration enabled, the program can be
+executed. At this point, the accelerated program will only encounter a
+runtime error if the program compiled in debug mode (with `--test` and
+`--runtime-checks` enabled) also does. If this is the case, the debug mode
+should be used to get a better error message.
+
+#### Supported accelerate constructs
+
+The following keywords are reserved for parallel constructs:
+* `accelerate` - marks expressions that should be accelerated.
+* `parallelFlatten` - flattens a two-dimensional sequence, producing a
+  one-dimensional sequence. The term `parallelFlatten s` is equivalent to
+  `foldl concat [] s`.
+* `parallelMap` - equivalent to the `map` keyword.
+* `parallelMap2` - performs a `map` operation over two sequences that are
+  assumed to be of the same length.
+* `parallelReduce` - performs a reduction over elements of a sequence. If the
+  applied function is associative and the initial accumulator value is the
+  neutral element of this function (so that the applications can be reordered),
+  the result of `foldl f a s` is equivalent to `parallelReduce f a s`.
+
+Note that the assumptions on the `parallelReduce` keyword are not checked. The
+compiler will assume that the user knows what they are doing, and leave it as
+is. The `foldl` intrinsic should be used if the function `f` is not known to be
+associative.
 
 #### Example
 
@@ -1613,7 +1653,87 @@ To accelerate the expression `addOne 25.0`, it is passed as an argument to the
 is compiled with the `--accelerate` flag, it will produce an executable where
 the evaluation of `addOne 25.0` is performed in the accelerated mode. Should it
 be compiled without the `--accelerate` flag set, the `accelerate` keyword is
-removed and the program behaves as in the original version.
+removed by the compiler and the program behaves as in the original version.
+
+For more example uses, see the `test/examples/accelerate` directory.
+
+### Sequence sizes
+
+A significant difference between MExpr and Futhark is that the latter includes
+the size of a sequence as part of its type. This means that, for example, when
+a function returns a two-dimensional sequence, the inner sequences must all
+have the same size (otherwise they would have different types). As this is not
+required by MExpr, there are situations where one may need to provide
+additional information to help the Futhark compiler.
+
+Such constraints are expressed using `utest` expressions of specific shapes.
+When the program is compiled in debug mode without acceleration, the `utest`
+expressions will be checked at runtime. This means that if such a `utest` fails
+at runtime in debug mode, it would also fail in the accelerated code, but
+likely with a far worse error message.
+
+In the future, the accelerate compiler will statically check that the necessary
+size constraints have been added. For now, failing to provide sufficient
+information results in a Futhark compilation error.
+
+#### Size coercions
+
+Consider the following example
+
+```
+mexpr
+let g : [Int] -> [Int] = lam s. snoc s 5 in
+let f : [[Int]] -> [[Int]] = lam s. map g s in
+let s : [[Int]] = [[1,2],[3,4]] in
+let s : [[Int]] = accelerate (f s) in
+s
+```
+
+In the function `g`, the size of the array is increased because `snoc` appends
+an integer element to the end of the given sequence. In this case, the size of
+the output sequence is not the same as the size of the input sequence. The
+Futhark compiler will fail because it cannot show that all inner sequences in
+the `map` of the `f` function have the same size.
+
+We need to show the compiler that all inner sequences in `f` will have the same
+size.  This is performed using a `utest` of the shape `utest length s with n in
+e`, where `s` is a sequence and `n` is either a function parameter or a
+captured variable from an outer scope. To achieve this, `f` can be rewritten as
+
+```
+let f : [[Int]] -> [[Int]] = lam s.
+  -- 'n' is defined outside the map function so that the compiler knows this
+  -- size will be the same for every inner sequence.
+  let n = addi (length s) 1 in
+  map
+    (lam inner : [Int].
+      let inner : [Int] = g inner in
+      utest length inner with n in
+      inner)
+    s
+in
+```
+
+#### Size equality
+
+Consider the following implementation of the transpose operation on a square
+matrix:
+
+```
+let transposeSq : [[Int]] -> [[Int]] = lam m.
+  let n = length m in
+  create n (lam i : Int.
+    let inner : [Int] = create n (lam j : Int. get (get m j) i) in
+    inner)
+in
+...
+```
+
+This implementation accepts a matrix of any form, even though it only works for
+a square matrix. In this case, we insert a `utest` at the start of the function
+of the form `utest length m with length (head m) in ...`. A `utest` of this
+shape is interpreted as an equality constraint between the first two dimensions
+of the matrix `m` - which is encoded in the Futhark types.
 
 ### Limitations
 
@@ -1627,12 +1747,13 @@ The current implementation has the following limitations:
   used `printLn` which has a side-effect, but that this was used outside of the
   accelerated parts.
 * The inner sequences of multi-dimensional sequences must have the same size.
-  As the size of a sequence is not known statically in MExpr, violating this
-  limitation will result in a runtime error.
+  Without providing the necessary hints to the compiler, this results in a
+  compile-time error. If the provided hints are not always valid, this may
+  result in a runtime error.
 * Recursion is not supported in accelerated code. The compiler has a limiited
   ability to rewrite recursive bindings that are equivalent to `map` and
-  `foldl`. But should this fail, and a recursive binding remains after this
-  step, the compilation fails.
+  `foldl`. Should this fail, and recursive bindings remain after this step, the
+  compilation fails.
 * Records and tuples may not be directly used in an accelerated expression, nor
   may the result use such types. Records and tuples may however be used within
   a function that is used by accelerated code.
