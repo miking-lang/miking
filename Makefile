@@ -128,19 +128,19 @@ test-run: build
 test-run-all: build
 	@$(MAKE) -s -f test-run.mk all
 
-test-boot-run: boot
+test-boot-run: install-boot
 	@$(MAKE) -s -f test-boot-run.mk selected
 
-test-boot-run-all: boot
+test-boot-run-all: install-boot
 	@$(MAKE) -s -f test-boot-run.mk all
 
-test-boot: boot
+test-boot: install-boot
 	@$(MAKE) -s -f test-boot.mk selected
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-all: boot
+test-boot-all: install-boot
 	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build

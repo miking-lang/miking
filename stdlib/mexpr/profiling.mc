@@ -26,6 +26,8 @@ include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/eval.mc"
 
+include "sys.mc"
+
 type ProfileEnv = Map Name (Int, Info)
 
 let profilingResultFileName = "mexpr.prof"
@@ -300,6 +302,9 @@ utest fileExists profilingResultFileName with true in
   -- Exclusive time spent in function
   utest string2float (get fst 3) with 0.0 using gtf in
   utest string2float (get snd 3) with 0.0 using gtf in
+
+  -- Remove profiling file
+  sysDeleteFile profilingResultFileName;
   ()
 else ());
 
