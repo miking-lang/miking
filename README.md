@@ -1632,8 +1632,8 @@ The following keywords are reserved for parallel constructs:
   assumed to be of the same length.
 * `parallelReduce` - performs a reduction over elements of a sequence. If the
   applied function is associative and the initial accumulator value is the
-  neutral element of this function (so that the applications can be reordered),
-  the result of `foldl f a s` is equivalent to `parallelReduce f a s`.
+  neutral element of this function, the result of `parallelReduce f a s` will
+  be equivalent to that of `foldl f a s`, but it will be computed in parallel.
 
 Note that the assumptions on the `parallelReduce` keyword are not checked. The
 compiler will assume that the parameters satisfy the requirements and produce
