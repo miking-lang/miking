@@ -1669,7 +1669,7 @@ the size of a sequence as part of its type. This means that, for example, when
 a function returns a two-dimensional sequence, the inner sequences must all
 have the same size (otherwise they would have different types). As this is not
 required by MExpr, there are situations where one may need to provide
-additional information in PMExpr to help the Futhark compiler.
+additional information in MExpr to help the Futhark compiler.
 
 Such information is provided through `utest` expressions of specific shapes.
 The idea is that, when the program is compiled in debug mode, the `utest`
