@@ -177,12 +177,6 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   } file in
   let ast = makeKeywords [] ast in
 
-  -- Construct a sequential version of the AST where parallel constructs have
-  -- been demoted to sequential equivalents
-  let seqAst = demoteParallel ast in
-  let seqAst = symbolize seqAst in
-  let seqAst = typeAnnot seqAst in
-
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
@@ -231,7 +225,11 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- BEGIN OCaml generation --
 
   -- Eliminate all utests in the MExpr AST
-  let ast = utestStrip seqAst in
+  let ast = utestStrip ast in
+
+  -- Construct a sequential version of the AST where parallel constructs have
+  -- been demoted to sequential equivalents
+  let ast = demoteParallel ast in
 
   match typeLift ast with (env, ast) in
   match generateTypeDecls env with (env, typeTops) in
