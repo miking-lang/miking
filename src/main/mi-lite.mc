@@ -70,8 +70,8 @@ let printMenu = lam. print "Usage: mi-lite [0|1] file" in
 if neqi (length argv) 3 then
   printMenu ()
 else match get argv 1 with "0" then
-  let options = {options with disableOptimizations = true} in
+  let options = {optionsDefault with disableOptimizations = true} in
   compile options (get argv 2)
 else match get argv 1 with "1" then
-  compile options (get argv 2)
+  compile optionsDefault (get argv 2)
 else printMenu ()

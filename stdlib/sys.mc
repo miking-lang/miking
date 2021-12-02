@@ -27,6 +27,9 @@ let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. la
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
+let sysDeleteFile = lam file.
+  _commandList ["rm", "-f", file]
+
 let sysChmodWriteAccessFile = lam file.
   _commandList ["chmod", "+w", file]
 

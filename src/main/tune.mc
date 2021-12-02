@@ -6,7 +6,6 @@ include "compile.mc"
 include "options.mc"
 include "sys.mc"
 include "parse.mc"
-include "mexpr/boot-parser.mc"
 include "tuning/decision-points.mc"
 include "tuning/tune.mc"
 
@@ -23,6 +22,8 @@ let dumpTable = lam file. lam env. lam table.
   tuneFileDumpTable destination env table
 
 let tune = lam files. lam options : Options. lam args.
+
+  let tuneOptions : TuneOptions = options.tuneOptions in
 
   let tuneFile = lam file.
     use MCoreTune in
@@ -55,19 +56,22 @@ let tune = lam files. lam options : Options. lam args.
         {options with output = Some (sysJoinPath tempDir "tune")} file ast in
 
       -- Do the tuning
-      let result = tuneEntry binary args tempFile env table in
+      let result = tuneEntry binary tuneOptions tempFile env table in
 
       -- Write the best found values to filename.tune
       tuneFileDumpTable (tuneFileName file) (Some env) result;
+
+      -- If option --compile is given, then compile the program using the
+      -- tuned values
+      (if options.compileAfterTune then
+        compile [file] {options with useTuned = true} args
+       else ());
+
+      -- If option --enable-cleanup is given, then remove the tune file
+      (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
 
       -- Clean up temporary files used during tuning
       cleanup ()
     else never
   in
-  iter tuneFile files;
-
-  -- If option --compile is given, then compile the program using the
-  -- tuned values
-  if options.compileAfterTune then
-    compile files {options with useTuned = true} args
-  else ()
+  iter tuneFile files

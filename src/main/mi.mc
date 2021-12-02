@@ -5,19 +5,20 @@
 
 include "accelerate.mc"
 include "compile.mc"
-include "accelerate.mc"
 include "seq.mc"
 include "string.mc"
 include "eval.mc"
 include "run.mc"
 include "assoc.mc"
 include "options.mc"
+include "options-config.mc"
 include "tune.mc"
+include "tune-config.mc"
 
 mexpr
 
 -- Menu
-let menu = lam. join
+let mainMenu = join
 [
 "Usage: mi <command> [<options>] file [<options>]
 
@@ -32,7 +33,7 @@ and all arguments after the file are arguments to the .mc executed file.
 In such case, options need to be written before the file name.
 
 Options:\n",
-optionsHelpString (),
+optionsHelpString optionsConfig,
 "
   -- <args>                If the run or eval commands are used, then the texts
                            following -- are arguments to the executed program
@@ -40,24 +41,52 @@ optionsHelpString (),
 ]
 in
 
--- Commands map, maps command strings to functions. The functions
--- always take two arguments: a list of filename and an option structure.
-let commandsMap = [
-("run", run),
-("eval", eval),
-("compile", compile),
-("tune", tune)
+let subMenu = lam sub : String. lam config : ParseConfig. join
+[
+"Usage: mi ",
+sub,
+" [<options>] file [<options>]
+
+Options:\n",
+optionsHelpString config,
+"
+  -- <args>                If the run or eval commands are used, then the texts
+                           following -- are arguments to the executed program
+"
+]
+in
+
+-- Configuration structure for a sub command. The 'cmd' is a function that takes
+-- three arguments: a list of filenames, an option structure, and arguments
+-- passed to the (potentially) executed program. The 'config' is the parse
+-- configuration for parsing options for the sub command.
+type SubConfig = {
+  name : String,
+  cmd : [String] -> Options -> [String] -> Unit,
+  config : ParseConfig
+} in
+
+-- Commands map, maps command strings to functions.
+let commandsMap : [(String, SubConfig)] = map (lam c : SubConfig. (c.name, c))
+[ {name = "run", cmd = run, config = optionsConfig}
+, {name = "eval", cmd = eval, config = optionsConfig}
+, {name = "compile", cmd = compile, config = optionsConfig}
+, {name = "tune", cmd = tune, config = tuneOptionsConfig}
 ] in
 
 -- Print the usage message and exit.
-let usage = lam.
-  print (menu ());
+let usage = lam sub : Option SubConfig.
+  print (
+    match sub with Some config then
+      let config : SubConfig = config in
+      subMenu config.name config.config
+    else mainMenu);
   exit 0
 in
 
 -- Check the program options, and print help if the user requested it.
-let maybePrintHelp = lam o : Options.
-  if o.printHelp then usage () else ()
+let maybePrintHelp = lam o : Options. lam sub : Option SubConfig.
+  if o.printHelp then usage sub else ()
 in
 
 let mapStringLookup = assocLookup {eq=eqString} in
@@ -65,28 +94,29 @@ let mapStringLookup = assocLookup {eq=eqString} in
 -- Main: find and run the correct command. See commandsMap above.
 
 -- Does the command line include at least a file or a command?
-if lti (length argv) 2 then usage () else
+if lti (length argv) 2 then usage (None ()) else
 
   let cmdString = get argv 1 in
   let rest = tail (tail argv) in
   -- Is it a known command?
-  match mapStringLookup cmdString commandsMap with Some cmd
+  match mapStringLookup cmdString commandsMap with Some c
   then
+    let c : SubConfig = c in
     -- Yes, split into program arguments (after stand alone '--')
     let split = splitDashDash rest in
-    let res : ArgResult Options = parseOptions split.first in
+    let res : ArgResult Options = parseOptions split.first c.config in
     let options : Options = res.options in
     let files : [String] = res.strings in
-    maybePrintHelp options;
+    maybePrintHelp options (Some c);
     -- Invoke the selected command
-    cmd files options (cons "mi" split.last)
+    c.cmd files options (cons "mi" split.last)
   else
     -- No, not a well known command
     -- Parse options as far as possible. Does user require help?
     let split = splitOptionPrefix (tail argv) in
-    let res : ArgResult Options = parseOptions split.first in
+    let res : ArgResult Options = parseOptions split.first optionsConfig in
     let options : Options = res.options in
-    maybePrintHelp options;
+    maybePrintHelp options (None ());
     -- No help requested. Did user give a filename?
     match split.last with [file] ++ programArgv then
       if isSuffix eqChar ".mc" file then
@@ -98,4 +128,4 @@ if lti (length argv) 2 then usage () else
         exit 1
     else
       -- No command or filename. Print help message.
-      usage ()
+      usage (None ())
