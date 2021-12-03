@@ -14,6 +14,7 @@ type Options = {
   disableOptimizations : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
+  accelerate : Bool,
   cpuOnly : Bool,
   typeCheck : Bool,
   printHelp : Bool,

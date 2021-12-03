@@ -1,6 +1,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "accelerate.mc"
 include "mi-lite.mc"
 include "options.mc"
 include "parse.mc"
@@ -16,9 +17,11 @@ include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
+include "pmexpr/demote.mc"
 
 lang MCoreCompile =
   BootParser +
+  PMExprDemote +
   MExprHoles +
   MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
   MExprRuntimeCheck + MExprProfileInstrument
@@ -93,9 +96,13 @@ let compile = lam files. lam options : Options. lam args.
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
-      keywords = decisionPointsKeywords
+      keywords = concat decisionPointsKeywords parallelKeywords
     } file in
     let ast = makeKeywords [] ast in
+
+    -- Demote parallel constructs to sequential equivalents and remove
+    -- accelerate terms
+    let ast = demoteParallel ast in
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in
@@ -105,4 +112,5 @@ let compile = lam files. lam options : Options. lam args.
 
     ocamlCompileAstWithUtests options file ast; ()
   in
-  iter compileFile files
+  if options.accelerate then compileAccelerate files options args
+  else iter compileFile files

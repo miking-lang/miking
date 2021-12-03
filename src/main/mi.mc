@@ -3,8 +3,8 @@
 --
 -- File miking.mi is the main file of the Miking tool chain.
 
-include "compile.mc"
 include "accelerate.mc"
+include "compile.mc"
 include "seq.mc"
 include "string.mc"
 include "eval.mc"
@@ -25,7 +25,6 @@ let mainMenu = join
 Commands:
   eval       Evaluates a .mc file using an internal interpreter
   compile    Compiles a .mc file into an executable with the same name
-  accelerate Compiles a .mc file into an accelerated executable with the same name
   run        Combines eval and compile, to run the program as fast as possible
   tune       Tunes a program with decision points
 
@@ -72,7 +71,6 @@ let commandsMap : [(String, SubConfig)] = map (lam c : SubConfig. (c.name, c))
 [ {name = "run", cmd = run, config = optionsConfig}
 , {name = "eval", cmd = eval, config = optionsConfig}
 , {name = "compile", cmd = compile, config = optionsConfig}
-, {name = "accelerate", cmd = accelerate, config = optionsConfig}
 , {name = "tune", cmd = tune, config = tuneOptionsConfig}
 ] in
 

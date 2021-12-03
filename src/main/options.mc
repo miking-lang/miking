@@ -17,6 +17,7 @@ let optionsDefault : Options = {
   disableOptimizations = false,
   useTuned = false,
   compileAfterTune = false,
+  accelerate = false,
   cpuOnly = false,
   typeCheck = false,
   printHelp = false,
