@@ -13,6 +13,7 @@ let optionsDefault : Options = {
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,
   runTests = false,
+  runtimeChecks = false,
   disableOptimizations = false,
   useTuned = false,
   compileAfterTune = false,

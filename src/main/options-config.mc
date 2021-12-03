@@ -36,6 +36,10 @@ let optionsConfig : ParseConfig = [
     "Generate utest code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with runTests = true}),
+  ([("--runtime-checks", "", "")],
+    "Enables runtime checks",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with runtimeChecks = true}),
   ([("--disable-optimizations", "", "")],
     "Disables optimizations to decrease compilation time",
     lam p: ArgPart Options.

@@ -10,6 +10,7 @@ type Options = {
   disablePruneExternalUtests : Bool,
   disablePruneExternalUtestsWarning : Bool,
   runTests : Bool,
+  runtimeChecks : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
