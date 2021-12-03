@@ -10,9 +10,11 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
   | TmFlatten {e : Expr, ty : Type, info : Info}
-  | TmParallelMap {f: Expr, as: Expr, ty: Type, info: Info}
-  | TmParallelMap2 {f: Expr, as: Expr, bs: Expr, ty: Type, info: Info}
-  | TmParallelReduce {f: Expr, ne: Expr, as: Expr, ty: Type, info: Info}
+  | TmParallelMap {f : Expr, as : Expr, ty : Type, info : Info}
+  | TmParallelMap2 {f : Expr, as : Expr, bs : Expr, ty : Type, info : Info}
+  | TmParallelReduce {f : Expr, ne : Expr, as : Expr, ty : Type, info : Info}
+  | TmParallelSizeCoercion {e: Expr, size : Name, ty : Type, info : Info}
+  | TmParallelSizeEquality {x1: Name, d1: Int, x2: Name, d2: Int, ty : Type, info : Info}
 
   sem isKeyword =
   | TmAccelerate _ -> true
@@ -25,7 +27,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | "accelerate" ->
     Some (1, lam lst. TmAccelerate {e = get lst 0, ty = TyUnknown {info = info},
                                     info = info})
-  | "flatten" ->
+  | "parallelFlatten" ->
     Some (1, lam lst. TmFlatten {e = get lst 0, ty = TyUnknown {info = info},
                                  info = info})
   | "parallelMap" ->
@@ -46,6 +48,8 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelMap t -> t.ty
   | TmParallelMap2 t -> t.ty
   | TmParallelReduce t -> t.ty
+  | TmParallelSizeCoercion t -> t.ty
+  | TmParallelSizeEquality t -> t.ty
 
   sem infoTm =
   | TmAccelerate t -> t.info
@@ -53,6 +57,8 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelMap t -> t.info
   | TmParallelMap2 t -> t.info
   | TmParallelReduce t -> t.info
+  | TmParallelSizeCoercion t -> t.info
+  | TmParallelSizeEquality t -> t.info
 
   sem withType (ty : Type) =
   | TmAccelerate t -> TmAccelerate {t with ty = ty}
@@ -60,6 +66,8 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelMap t -> TmParallelMap {t with ty = ty}
   | TmParallelMap2 t -> TmParallelMap2 {t with ty = ty}
   | TmParallelReduce t -> TmParallelReduce {t with ty = ty}
+  | TmParallelSizeCoercion t -> TmParallelSizeCoercion {t with ty = ty}
+  | TmParallelSizeEquality t -> TmParallelSizeEquality {t with ty = ty}
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmAccelerate t ->
@@ -82,6 +90,9 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
     match f acc t.ne with (acc, ne) in
     match f acc t.as with (acc, as) in
     (acc, TmParallelReduce {{{t with f = tf} with ne = ne} with as = as})
+  | TmParallelSizeCoercion t ->
+    match f acc t.e with (acc, e) in
+    (acc, TmParallelSizeCoercion {t with e = e})
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmAccelerate t ->
@@ -121,6 +132,12 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
                            with ne = ne}
                            with as = typeAnnotExpr env t.as}
                            with ty = tyTm ne}
+  | TmParallelSizeCoercion t ->
+    let e = typeAnnotExpr env t.e in
+    TmParallelSizeCoercion {{t with e = e} with ty = tyTm e}
+  | TmParallelSizeEquality t ->
+    let ty = tyWithInfo t.info tyunit_ in
+    TmParallelSizeEquality {t with ty = ty}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->
@@ -153,6 +170,28 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
         else None ()
       else None ()
     else None ()
+  | TmParallelSizeCoercion r ->
+    match lhs with TmParallelSizeCoercion l then
+      match eqExprH env free l.e r.e with Some free then
+        let free : EqEnv = free in
+        match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) in
+        match _eqCheck l.size r.size varEnv freeVarEnv with Some freeVarEnv then
+          Some {free with varEnv = freeVarEnv}
+        else None ()
+      else None ()
+    else None ()
+  | TmParallelSizeEquality r ->
+    match lhs with TmParallelSizeEquality l then
+      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) in
+      match _eqCheck l.x1 r.x1 varEnv freeVarEnv with Some freeVarEnv then
+        if eqi l.d1 r.d1 then
+          match _eqCheck l.x2 r.x2 varEnv freeVarEnv with Some freeVarEnv then
+            if eqi l.d2 r.d2 then Some {free with varEnv = freeVarEnv}
+            else None ()
+          else None ()
+        else None ()
+      else None ()
+    else None ()
 
   sem normalize (k : Expr -> Expr) =
   | TmAccelerate t ->
@@ -170,6 +209,9 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
     k (TmParallelReduce {{{t with f = normalizeTerm t.f}
                              with ne = normalizeTerm t.ne}
                              with as = normalizeTerm t.as})
+  | TmParallelSizeCoercion t ->
+    k (TmParallelSizeCoercion {t with e = normalizeTerm t.e})
+  | TmParallelSizeEquality t -> k (TmParallelSizeEquality t)
 end
 
 let accelerate_ = lam e.
@@ -195,6 +237,16 @@ let parallelReduce_ = lam f. lam ne. lam as.
   TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
                     info = NoInfo ()}
 
+let parallelSizeCoercion_ = lam e. lam size.
+  use PMExprAst in
+  TmParallelSizeCoercion {e = e, size = size, ty = TyUnknown {info = NoInfo ()},
+                          info = NoInfo ()}
+
+let parallelSizeEquality_ = lam x1. lam d1. lam x2. lam d2.
+  use PMExprAst in
+  TmParallelSizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
+                          ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+
 mexpr
 
 use PMExprAst in
@@ -208,7 +260,7 @@ let zip_ = ulam_ "x" (ulam_ "y" (utuple_ [var_ "x", var_ "y"])) in
 let expr = app_ (var_ "accelerate") (app_ id_ (int_ 2)) in
 utest makeKeywords [] expr with accelerate_ (app_ id_ (int_ 2)) using eqExpr in
 
-let expr = app_ (var_ "flatten") emptySeq_ in
+let expr = app_ (var_ "parallelFlatten") emptySeq_ in
 utest makeKeywords [] expr with flatten_ emptySeq_ using eqExpr in
 
 let expr = appf2_ (var_ "parallelMap") id_ emptySeq_ in

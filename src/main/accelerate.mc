@@ -5,9 +5,9 @@ include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
 include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
-include "futhark/length-parameterize.mc"
 include "futhark/pprint.mc"
 include "futhark/record-lift.mc"
+include "futhark/size-parameterize.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -17,9 +17,11 @@ include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
+include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
@@ -27,23 +29,25 @@ include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
+include "pmexpr/utest-size-constraint.mc"
 include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
-  MExprANF + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
-  PMExprCExternals + MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  FutharkGenerate + FutharkFunctionRestrictions + FutharkDeadcodeElimination +
-  FutharkLengthParameterize + FutharkCWrapper + FutharkRecordParamLift +
-  FutharkForEachRecordPattern + FutharkAliasAnalysis +
+  MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
+  PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
+  PMExprRecursionElimination + PMExprExtractAccelerate +
+  PMExprReplaceAccelerate + PMExprNestedAccelerate +
+  PMExprUtestSizeConstraint + FutharkGenerate + FutharkFunctionRestrictions +
+  FutharkDeadcodeElimination + FutharkSizeParameterize + FutharkCWrapper +
+  FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
 let parallelKeywords = [
   "accelerate",
-  "flatten",
+  "parallelFlatten",
   "parallelMap",
   "parallelMap2",
   "parallelReduce"
@@ -76,6 +80,7 @@ let pprintCAst : CPProg -> String = lam ast.
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
+  let ast = replaceUtestsWithSizeConstraint ast in
   let ast = rewriteTerm ast in
   let ast = tailRecursive ast in
   let ast = cseGlobal ast in
@@ -91,7 +96,7 @@ let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
   let ast = deadcodeElimination ast in
-  parameterizeLength ast
+  parameterizeSizes ast
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -146,7 +151,7 @@ gpu.c gpu.h: gpu.fut
   writeFile (tempfile "Makefile") makefile;
 
   -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
-  -- it for convenience because dune cannot set environment variables.
+  -- it because dune cannot set environment variables.
   let command = ["make"] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
@@ -164,75 +169,90 @@ gpu.c gpu.h: gpu.fut
 let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   use PMExprCompile in
   let ast = parseParseMCoreFile {
-    keepUtests = options.runTests,
-    pruneExternalUtests = not options.disablePruneExternalUtests,
-    pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
-    findExternalsExclude = true,
+    keepUtests = true,
+    pruneExternalUtests = false,
+    pruneExternalUtestsWarning = false,
+    findExternalsExclude = false,
     keywords = parallelKeywords
   } file in
   let ast = makeKeywords [] ast in
+
   let ast = symbolizeExpr keywordsSymEnv ast in
-  let ast = utestStrip ast in
   let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
 
   -- Translate accelerate terms into functions with one dummy parameter, so
   -- that we can accelerate terms without free variables and so that it is
   -- lambda lifted.
-  match addIdentifierToAccelerateTerms ast with (accelerated, ast) then
+  match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
 
-    -- Perform lambda lifting and return the free variable solutions
-    match liftLambdasWithSolutions ast with (solutions, ast) then
-      let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-      let accelerateAst = extractAccelerateTerms accelerateIds ast in
+  -- Perform lambda lifting and return the free variable solutions
+  match liftLambdasWithSolutions ast with (solutions, ast) in
 
-      -- Eliminate the dummy parameter in functions of accelerate terms with at
-      -- least one free variable parameter.
-      match eliminateDummyParameter solutions accelerated accelerateAst
-      with (accelerated, accelerateAst) then
+  -- Extract the accelerate AST
+  let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+  let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
-        -- Generate Futhark code
+  -- Eliminate the dummy parameter in functions of accelerate terms with at
+  -- least one free variable parameter.
+  match eliminateDummyParameter solutions accelerated accelerateAst
+  with (accelerated, accelerateAst) in
 
-        -- Detect patterns in the accelerate AST to eliminate recursion. The
-        -- result is a PMExpr AST.
-        let pmexprAst = patternTransformation accelerateAst in
+  -- BEGIN Futhark generation --
 
-        -- Report errors if there are nested accelerate terms within the PMExpr
-        -- AST.
-        reportNestedAccelerate accelerateIds pmexprAst;
+  -- Detect patterns in the accelerate AST to eliminate recursion. The
+  -- result is a PMExpr AST.
+  let pmexprAst = patternTransformation accelerateAst in
 
-        -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
-        -- the result.
-        let futharkAst = futharkTranslation accelerateIds pmexprAst in
-        let futharkProg = pprintFutharkAst futharkAst in
+  -- Report errors if there are nested accelerate terms within the PMExpr
+  -- AST.
+  reportNestedAccelerate accelerateIds pmexprAst;
 
-        -- Generate C wrapper code
-        let cAst = generateWrapperCode accelerated in
-        let cProg = pprintCAst cAst in
+  -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
+  -- the result.
+  let futharkAst = futharkTranslation accelerateIds pmexprAst in
+  let futharkProg = pprintFutharkAst futharkAst in
 
-        -- Generate OCaml code
-        match typeLift ast with (env, ast) then
-          match generateTypeDecls env with (env, typeTops) then
-            -- Replace auxilliary accelerate terms in the AST by eliminating
-            -- the let-expressions (only used in the accelerate AST) and adding
-            -- data conversion of parameters and result.
-            let ast = replaceAccelerate accelerated ast in
+  -- END Futhark generation --
 
-            -- Generate the OCaml AST
-            let exprTops = generateTops env ast in
+  -- BEGIN C wrapper generation --
 
-            -- Add an external declaration of a C function in the OCaml AST,
-            -- for each accelerate term.
-            let externalTops = getExternalCDeclarations accelerated in
+  let cAst = generateWrapperCode accelerated in
+  let cProg = pprintCAst cAst in
 
-            let ocamlTops = join [externalTops, typeTops, exprTops] in
-            let ocamlProg = pprintOCamlTops ocamlTops in
-            compileAccelerated options file ocamlProg cProg futharkProg
-          else never
-        else never
-      else never
-    else never
-  else never
+  -- END C wrapper generation --
 
-let accelerate = lam files. lam options : Options. lam args.
-  iter (compileAccelerated options) files
+  -- BEGIN OCaml generation --
+
+  -- Eliminate all utests in the MExpr AST
+  let ast = utestStrip ast in
+
+  -- Construct a sequential version of the AST where parallel constructs have
+  -- been demoted to sequential equivalents
+  let ast = demoteParallel ast in
+
+  match typeLift ast with (env, ast) in
+  match generateTypeDecls env with (env, typeTops) in
+
+  -- Replace auxilliary accelerate terms in the AST by eliminating
+  -- the let-expressions (only used in the accelerate AST) and adding
+  -- data conversion of parameters and result.
+  let ast = replaceAccelerate accelerated ast in
+
+  -- Generate the OCaml AST
+  let exprTops = generateTops env ast in
+
+  -- Add an external declaration of a C function in the OCaml AST,
+  -- for each accelerate term.
+  let externalTops = getExternalCDeclarations accelerated in
+
+  let ocamlTops = join [externalTops, typeTops, exprTops] in
+  let ocamlProg = pprintOCamlTops ocamlTops in
+  compileAccelerated options file ocamlProg cProg futharkProg
+
+  -- END OCaml generation --
+
+let compileAccelerate = lam files. lam options : Options. lam args.
+  if options.runTests then
+    error "Flags --test and --accelerate may not be used at the same time"
+  else iter (compileAccelerated options) files
