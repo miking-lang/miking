@@ -113,7 +113,7 @@ let digraphGraphEq =
       if eqi (digraphCountVertices g1) (digraphCountVertices g2) then
         mapEq (lam ds1. lam ds2.
           let zipped = zipWith (lam d1. lam d2. (d1, d2)) ds1 ds2 in
-          forAll (lam d. and (digraphEqv g1 (d.0).0 (d.1).0) (digraphEql g1 (d.0).1 (d.1).1)) zipped
+          forAll (lam d:((v,l),(v,l)). and (digraphEqv g1 (d.0).0 (d.1).0) (digraphEql g1 (d.0).1 (d.1).1)) zipped
          ) g1.adj g2.adj
          else false
     else false
