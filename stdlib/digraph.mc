@@ -106,6 +106,18 @@ let digraphHasEdge = lam e. lam g.
 let digraphHasEdges = lam es. lam g.
   forAll (lam e. digraphHasEdge e g) es
 
+-- Check whether graph g1 is equal to graph g2.
+let digraphGraphEq =
+  lam g1: Digraph v l. lam g2: Digraph v l.
+    if eqi (digraphCountEdges g1) (digraphCountEdges g2) then
+      if eqi (digraphCountVertices g1) (digraphCountVertices g2) then
+        mapEq (lam ds1. lam ds2.
+          let zipped = zipWith (lam d1. lam d2. (d1, d2)) ds1 ds2 in
+          forAll (lam d. and (digraphEqv g1 (d.0).0 (d.1).0) (digraphEql g1 (d.0).1 (d.1).1)) zipped
+         ) g1.adj g2.adj
+         else false
+    else false
+
 -- Get successor nodes of v.
 let digraphSuccessors = lam v. lam g : Digraph v l.
   let outgoing = digraphEdgesFrom v g in
@@ -402,5 +414,24 @@ let g3 = digraphAddEdge 8 1 (gensym ()) g3 in
 let g3 = digraphAddEdge 8 7 (gensym ()) g3 in
 
 utest compsEq (digraphStrongConnects g3) [[1,2,8],[3,4,5,7],[6]] with true in
+
+let g4 = digraphAddEdge 8 7 (gensym ()) g3 in
+let g5 = digraphAddEdge 8 2 (gensym ()) g3 in
+let g6 = digraphAddVertex 9 g3 in
+let g7 = digraphAddVertex 9 g3 in
+let g8 = digraphAddVertex 10 g3 in
+let sym = gensym () in
+let g9 = digraphAddEdge 1 10 sym g8 in
+let g10 = digraphAddEdge 1 10 sym g8 in
+
+utest digraphGraphEq empty empty with true in
+utest digraphGraphEq empty g3 with false in
+utest digraphGraphEq g2 g3 with false in
+utest digraphGraphEq g2 g2 with true in
+utest digraphGraphEq g3 g3 with true in
+utest digraphGraphEq g4 g5 with false in
+utest digraphGraphEq g6 g7 with true in
+utest digraphGraphEq g7 g8 with false in
+utest digraphGraphEq g9 g10 with true in
 
 ()
