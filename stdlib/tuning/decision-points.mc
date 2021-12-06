@@ -75,8 +75,8 @@ let _callGraphTop = (nameSym "top", NoInfo ())
 type Binding = {ident : Name, body : Expr, info : Info}
 let _handleLetVertex = use LamAst in
   lam f. lam letexpr : Binding.
-    match letexpr.body with TmLam lm
-    then cons (letexpr.ident, letexpr.info) (f lm.body)
+    match letexpr.body with TmLam lm then
+      cons (letexpr.ident, letexpr.info) (f lm.body)
     else f letexpr.body
 
 let _handleApps = use AppAst in use VarAst in
@@ -85,11 +85,7 @@ let _handleApps = use AppAst in use VarAst in
       match app with TmApp {lhs = TmVar v, rhs = rhs} then
         let resLhs =
           if digraphHasVertex (v.ident, v.info) g then
-            let correctInfo : Info = mapFindExn v.ident name2info
-              -- match
-              --   find (lam n : NameInfo. nameEq v.ident n.0) (digraphVertices g)
-              -- with Some v then v else error "impossible"
-            in
+            let correctInfo : Info = mapFindExn v.ident name2info in
             [(prev, (v.ident, correctInfo), id)]
           else []
         in concat resLhs (f g prev name2info rhs)
@@ -106,7 +102,7 @@ let _handleApps = use AppAst in use VarAst in
 -- node exactly once and each time potentially perform a graph union operation,
 -- which we assume has complexity O(|F|). V is the set of nodes in the AST and F
 -- is the set of nodes in the call graph (i.e. set of functions in the AST).
-lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
+lang HoleCallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
     let gempty = digraphAddVertex _callGraphTop
@@ -799,7 +795,7 @@ type Flattened =
 }
 
 -- Fragment for transforming a program with decision points.
-lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
+lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
   -- 'flatten public t' eliminates all decision points in the expression 't' and
   --  and replace them by lookups in a static table One reference per function
   --  tracks which function that latest called that function, thereby
