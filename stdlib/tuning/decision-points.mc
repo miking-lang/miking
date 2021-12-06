@@ -1012,7 +1012,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
   | TmLet ({ body = TmLam lm } & t) ->
     let curBody = (t.ident, t.info) in
     match _maintainCallCtx lookup env eqPaths curBody t.body with (env, body) in
-    match _maintainCallCtx lookup env eqPaths curBody t.inexpr with (env, inexpr) in
+    match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
     ( env,
       TmLet {{t with body = body}
                 with inexpr = inexpr})
