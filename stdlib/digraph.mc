@@ -111,11 +111,9 @@ let digraphGraphEq =
   lam g1: Digraph v l. lam g2: Digraph v l.
     if eqi (digraphCountEdges g1) (digraphCountEdges g2) then
       if eqi (digraphCountVertices g1) (digraphCountVertices g2) then
-        mapEq (lam ds1. lam ds2.
-          let zipped = zipWith (lam d1. lam d2. (d1, d2)) ds1 ds2 in
-          forAll (lam d:((v,l),(v,l)). and (digraphEqv g1 (d.0).0 (d.1).0) (digraphEql g1 (d.0).1 (d.1).1)) zipped
+        mapEq (lam ds1. lam ds2. eqsetEqual (lam d1:(v,l). lam d2:(v,l). and (digraphEqv g1 d1.0 d2.0) (digraphEql g1 d1.1 d2.1)) ds1 ds2
          ) g1.adj g2.adj
-         else false
+      else false
     else false
 
 -- Get successor nodes of v.
@@ -421,9 +419,11 @@ let g6 = digraphAddVertex 9 g3 in
 let g7 = digraphAddVertex 9 g3 in
 let g8 = digraphAddVertex 10 g3 in
 let sym = gensym () in
-let g9 = digraphAddEdge 1 10 sym g8 in
-let g10 = digraphAddEdge 1 10 sym g8 in
+let g9 = digraphAddEdge 10 1 sym g8 in
+let g9 = digraphAddEdge 10 2 sym g9 in
 
+let g10 = digraphAddEdge 10 2 sym g8 in
+let g10 = digraphAddEdge 10 1 sym g10 in
 utest digraphGraphEq empty empty with true in
 utest digraphGraphEq empty g3 with false in
 utest digraphGraphEq g2 g3 with false in
