@@ -101,13 +101,11 @@ let _handleApps = use AppAst in use VarAst in
       else never
   in appHelper g app
 
--- NOTE(Linnea, 2021-02-03): Complexity O(|V|*|F|), as we visit each node
--- exactly once and each time potentially perform a graph union operation, which
--- we assume has complexity O(|F|). V is the set of nodes in the AST and F is
--- the set of nodes in the call graph (i.e. set of functions in the AST).
-
 -- Construct a call graph from an AST. The nodes are named functions, and the
--- edges are calls to named functions. Complexity TODO
+-- edges are calls to named functions. Complexity O(|V|*|F|), as we visit each
+-- node exactly once and each time potentially perform a graph union operation,
+-- which we assume has complexity O(|F|). V is the set of nodes in the AST and F
+-- is the set of nodes in the call graph (i.e. set of functions in the AST).
 lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
@@ -382,7 +380,6 @@ let threadPoolNbrThreadsStr = "threadPoolNbrThreads"
 let threadPoolId2idxStr = "threadPoolId2idx"
 
 -- Maintains call context information necessary for program transformations.
--- Except for 'hole2idx' and 'count', the information is static.
 type CallCtxEnv = {
 
   -- Call graph of the program. Functions are nodes, function calls are edges.
@@ -418,16 +415,16 @@ type CallCtxEnv = {
   -- sets of 'hole2idx'.
   -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
   -- expression may be repeated many times.
-  idx2hole: Ref ([Expr]),
+  idx2hole: [Expr],
 
   -- Maps a hole to the function in which it is defined
-  hole2fun: Ref (Map NameInfo NameInfo),
+  hole2fun: Map NameInfo NameInfo,
 
   -- Maps a hole to its type
-  hole2ty: Ref (Map NameInfo Type),
+  hole2ty: Map NameInfo Type,
 
   -- Maps a hole index to its edge path
-  verbosePath: Ref (Map Int Path)
+  verbosePath: Map Int Path
 }
 
 -- Create a new name from a prefix string and name.
@@ -514,10 +511,10 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     , publicFns = publicFns
     , threadPoolInfo = threadPoolInfo
     , hole2idx = mapEmpty nameInfoCmp
-    , idx2hole = ref []
-    , hole2fun = ref (mapEmpty nameInfoCmp)
-    , hole2ty = ref (mapEmpty nameInfoCmp)
-    , verbosePath = ref (mapEmpty subi)
+    , idx2hole = []
+    , hole2fun = mapEmpty nameInfoCmp
+    , hole2ty = mapEmpty nameInfoCmp
+    , verbosePath = mapEmpty subi
     }
 
 -- Returns the incoming variable of a function name, or None () if the name is
@@ -565,7 +562,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
       { hole2idx = hole2idx, idx2hole = idx2hole, hole2fun = hole2fun,
         hole2ty = hole2ty, verbosePath = verbosePath}
     then
-    let countInit = length (deref idx2hole) in
+    let countInit = length idx2hole in
     match
       foldl
       (lam acc. lam path.
@@ -573,20 +570,19 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
            let lblPath = map (lam e : Edge. e.2) path in
            (mapInsert lblPath i m, mapInsert i path verbose, addi i 1)
          else never)
-      (mapEmpty _cmpPaths, deref env.verbosePath, countInit)
+      (mapEmpty _cmpPaths, env.verbosePath, countInit)
       paths
     with (m, verbose, count) then
       let n = length paths in
       utest n with subi count countInit in
-      modref idx2hole (concat (deref idx2hole) (create n (lam. h)));
-      modref hole2fun (mapInsert name funName (deref hole2fun));
-      modref hole2ty (mapInsert name (use HoleAst in tyTm h) (deref hole2ty));
-      modref verbosePath verbose;
-      {env with hole2idx = mapInsert name m hole2idx}
+      {{{{{env with hole2idx = mapInsert name m hole2idx}
+               with idx2hole = concat idx2hole (create n (lam. h))}
+               with hole2fun = mapInsert name funName hole2fun}
+               with hole2ty = mapInsert name (use HoleAst in tyTm h) hole2ty}
+               with verbosePath = verbose}
     else never
   else never
 
--- TODO
 let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
   lam nameInfo. lam path. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx } then
@@ -911,8 +907,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   sem _initAssignments =
   | env ->
     let env : CallCtxEnv = env in
-    let idx2hole = deref env.idx2hole in
-    map (lam h. default h) idx2hole
+    map (lam h. default h) env.idx2hole
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
@@ -1029,16 +1024,12 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     match
       mapAccumL (lam env : CallCtxEnv. lam bind : RecLetBinding.
-        -- TODO: shorten
-        match bind with { body = TmLam lm } then
-          let curBody = (bind.ident, bind.info) in
-          match _maintainCallCtx lookup env eqPaths curBody bind.body
-          with (env, body) in
-          (env, { bind with body = body })
-        else
-          match _maintainCallCtx lookup env eqPaths cur bind.body
-          with (env, body) in
-          (env, { bind with body = _maintainCallCtx lookup env eqPaths cur bind.body })
+        let curBody =
+          match bind with { body = TmLam lm } then (bind.ident, bind.info)
+          else cur
+        in
+        match _maintainCallCtx lookup env eqPaths curBody bind.body
+        with (env, body) in (env, { bind with body = body })
       ) env bindings
     with (env, newBinds) in
     match _maintainCallCtx lookup env eqPaths cur inexpr with (env, inexpr) in
@@ -1046,12 +1037,10 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       TmRecLets {{t with bindings = newBinds}
                     with inexpr = inexpr})
   | tm ->
-    --smap_Expr_Expr (_maintainCallCtx lookup env eqPaths cur) tm
     smapAccumL_Expr_Expr (lam env. _maintainCallCtx lookup env eqPaths cur) env tm
 
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
-    -- TODO: update in case stdlib functions are better
     use BootParser in
     let impl = parseMExprString [] "
     let or: Bool -> Bool -> Bool =
@@ -1066,15 +1055,20 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         work [] seq1 seq2
     in
 
-    let eqSeq = lam eq : (a -> a -> Bool).
-      recursive let work = lam as. lam bs.
-      let pair = (as, bs) in
-      match pair with ([], []) then true else
-      match pair with ([a] ++ as, [b] ++ bs) then
-        if eq a b then work as bs else false
-        else false
-      in work
+    let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
+      recursive let work = lam s1. lam s2.
+        match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
+          if eq h1 h2 then work t1 t2
+          else false
+        else true
+      in
+      let n1 = length s1 in
+      let n2 = length s2 in
+      let ndiff = subi n1 n2 in
+      if eqi ndiff 0 then work s1 s2
+      else false
     in
+
     let eqString = eqSeq eqc in
 
     let join = lam seqs. foldl concat [] seqs in
@@ -1103,7 +1097,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         else
           work acc lastMatch (addi i 1)
       in
-      if eqi (length delim) 0 then [s]
+      if null delim then [s]
       else work [] 0 0
     in
 
@@ -1175,7 +1169,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       match h with TmHole {ty = TyBool _} then string2boolName
       else match h with TmHole {ty = TyInt _} then string2intName
       else error "Unsupported type"
-    ) (deref env.idx2hole) in
+    ) env.idx2hole in
 
     let x = nameSym "x" in
     let y = nameSym "y" in
