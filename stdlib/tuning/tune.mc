@@ -51,8 +51,9 @@ lang TuneBase = Holes
   -- Intentionally left blank
 
   sem time (table : LookupTable) (runner : Runner) (file : String)
-           (options : TuneOptions) (timeout : Float) =
+           (options : TuneOptions) (timeout : Option Float) =
   | args ->
+    let timeout = if options.exitEarly then timeout else None () in
     tuneFileDumpTable file (None ()) table;
     match runner args timeout with (ms, res) then
       let res : ExecResult = res in
@@ -185,7 +186,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       lam searchState.
       lam metaState.
       lam iter.
-        (if options.debug then
+        (if options.verbose then
           printLn "-----------------------";
           debugSearch searchState;
           debugMeta metaState;
@@ -225,11 +226,11 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     -- Do warmup runs and throw away results
     modref tuneSearchStart (startOfSearch ());
-    (if options.debug then
+    (if options.verbose then
        printLn "----------------------- WARMUP RUNS -----------------------"
        else ());
     search warmupStop startState (initMeta startState) 0;
-    (if options.debug then
+    (if options.verbose then
        printLn "-----------------------------------------------------------"
        else ());
 
@@ -550,12 +551,10 @@ lang MExprTune = MExpr + TuneBase
 -- Entry point for tuning
 let tuneEntry =
   lam binary : String.
-  lam args : [String].
+  lam options : TuneOptions.
   lam tuneFile : String.
   lam env : CallCtxEnv.
   lam table : LookupTable.
-    let options = parseTuneOptions tuneOptionsDefault
-      (filter (lam a. not (eqString "mi" a)) args) in
 
     -- Set the random seed?
     (match options.seed with Some seed then randSetSeed seed else ());

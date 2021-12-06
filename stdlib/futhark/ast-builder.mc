@@ -86,6 +86,15 @@ let nFutVar_ = use FutharkAst in
 
 let futVar_ = lam str. nFutVar_ (nameNoSym str)
 
+let futSizeCoercion_ = use FutharkAst in
+  lam e. lam ty.
+  FESizeCoercion {e = e, ty = ty, info = NoInfo ()}
+
+let futSizeEquality_ = use FutharkAst in
+  lam x1. lam d1. lam x2. lam d2.
+  FESizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
+                  ty = FTyUnknown {info = NoInfo ()}, info = NoInfo ()}
+
 let futRecord_ = use FutharkAst in
   lam fieldSeq.
   FERecord {fields = mapFromSeq cmpSID (map

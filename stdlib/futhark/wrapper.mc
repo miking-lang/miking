@@ -151,15 +151,17 @@ lang CWrapperBase = MExprAst + CAst
     if nameEq id (_getIdentExn "int64_t") then
       "i64"
     else
-      let tyStr = use MExprPrettyPrint in type2str ty in
+      let tyStr = use CPrettyPrint in printCType "" pprintEnvEmpty ty in
       infoErrorExit (infoTy ty) (join ["Terms of type '", tyStr,
                                        "' cannot be accelerated"])
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
 
   -- Converts a given MExpr type to a sequence containing the C type or types
-  -- used to represent it in the C wrapper. Records and tuples are represented
-  -- by multiple types, one for each field.
+  -- used to represent it in the C wrapper.
+  --
+  -- TODO(larshum, 2021-11-24): Represent records and tuples using multiple
+  -- types, one for each field.
   sem mexprToCTypes =
   | TyInt _ | TyChar _ -> [CTyVar {id = _getIdentExn "int64_t"}]
   | TyFloat _ -> [CTyDouble {}]

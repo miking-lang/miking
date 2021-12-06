@@ -11,6 +11,8 @@ include "common.mc"
 include "string.mc"
 
 let transposeSq : [[Int]] -> [[Int]] = lam m.
+  -- We use this utest to express that m is a square matrix.
+  utest length m with length (head m) in
   let n = length m in
   create n
     (lam i : Int.
@@ -26,6 +28,11 @@ let addProd : [Int] -> [Int] -> Int = lam row. lam col.
   foldl addi 0 (work row col)
 
 let matMulSq : [[Int]] -> [[Int]] -> [[Int]] = lam a. lam b.
+  -- We use the below utests to express size equality constraints on the
+  -- dimensions of a and b.
+  utest length a with length b in
+  utest length a with length (head a) in
+  utest length a with length (head b) in
   let b = transposeSq b in
   map
     (lam aRow : [Int].

@@ -142,7 +142,11 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyBool t -> FTyBool {info = t.info}
   | TyChar t -> FTyInt {info = t.info}
   | TySeq t ->
-    FTyArray {elem = generateType env t.ty, dim = None (), info = t.info}
+    -- NOTE(larshum, 2021-12-01): We generate an identifier for the size type
+    -- of every array type. These identifiers are extracted at a later stage to
+    -- declare the size type parameters.
+    let dimId = nameSym "n" in
+    FTyArray {elem = generateType env t.ty, dim = Some dimId, info = t.info}
   | TyRecord t ->
     FTyRecord {fields = mapMap (generateType env) t.fields, info = t.info}
   | TyArrow t ->
@@ -184,16 +188,6 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                                   "' cannot be matched with record pattern"])
   | p -> infoErrorExit (infoPat p) "Pattern cannot be accelerated"
 end
-
-let _collectParams = use FutharkTypeGenerate in
-  lam env : FutharkGenerateEnv. lam body : Expr.
-  recursive let work = lam params : [(Name, FutType)]. lam body : Expr.
-    match body with TmLam t then
-      let params = snoc params (t.ident, generateType env t.tyIdent) in
-      work params t.body
-    else (params, body)
-  in
-  work [] body
 
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                             FutharkTypeGenerate + FutharkTypePrettyPrint
@@ -335,38 +329,25 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     withTypeFutTm resultType (withInfoFutTm t.info result)
   | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                       rhs = arg1},
-                         rhs = TmConst {val = CInt {val = 0}}},
-            rhs = arg3} & t) ->
-    let arrayType = generateType env (tyTm arg1) in
-    let takeConst = FEConst {
-      val = FCTake (),
-      ty = FTyArrow {
-        from = FTyInt {info = t.info},
-        to = FTyArrow {from = arrayType, to = arrayType, info = t.info},
-        info = t.info},
-      info = t.info} in
-    withTypeFutTm arrayType
-      (withInfoFutTm t.info
-        (futAppSeq_ takeConst [generateExpr env arg3, generateExpr env arg1]))
-  | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
-                                      rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
     let startIdx = generateExpr env arg2 in
     let offset = generateExpr env arg3 in
     let info = mergeInfo (infoFutTm startIdx) (infoFutTm offset) in
-    let endIdx = FEApp {
-      lhs = FEApp {
-        lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
-        rhs = startIdx,
-        ty = FTyArrow {
-          from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
-        info = info
-      },
-      rhs = offset,
-      ty = FTyInt {info = info},
-      info = info
-    } in
+    let endIdx =
+      match startIdx with FEConst {val = FCInt {val = 0}} then offset
+      else
+        FEApp {
+          lhs = FEApp {
+            lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
+            rhs = startIdx,
+            ty = FTyArrow {
+              from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
+            info = info
+          },
+          rhs = offset,
+          ty = FTyInt {info = info},
+          info = info} in
     FEArraySlice {
       array = generateExpr env arg1, startIdx = startIdx, endIdx = endIdx,
       ty = generateType env t.ty, info = t.info}
@@ -487,48 +468,58 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       (withInfoFutTm t.info (futReduce_ (generateExpr env t.f)
                                         (generateExpr env t.ne)
                                         (generateExpr env t.as)))
+  | TmParallelSizeCoercion t ->
+    let ty = generateType env t.ty in
+    match ty with FTyArray aty then
+      FESizeCoercion {
+        e = generateExpr env t.e, ty = FTyArray {aty with dim = Some t.size},
+        info = t.info}
+    else infoErrorExit t.info (join ["Size coercion could not be generated ",
+                                     "due to unexpected type of sequence"])
+  | TmParallelSizeEquality t ->
+    FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2, ty = t.ty,
+                    info = t.info}
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
   | t -> infoErrorExit (infoTm t) "Term cannot be translated into Futhark"
 end
 
+recursive let _extractTypeParams = use FutharkAst in
+  lam typeParams : [FutTypeParam]. lam ty : FutType.
+  match ty with FTyArray {elem = elem, dim = Some id} then
+    let typeParams = cons (FPSize {val = id}) typeParams in
+    _extractTypeParams typeParams elem
+  else typeParams
+end
+
+let _collectParams = use FutharkTypeGenerate in
+  lam env : FutharkGenerateEnv. lam body : Expr.
+  recursive let work =
+    lam params : [(Name, FutType)]. lam typeParams : [FutTypeParam]. lam body : Expr.
+    match body with TmLam t then
+      let ty = generateType env t.tyIdent in
+      let typeParams = _extractTypeParams typeParams ty in
+      let params = snoc params (t.ident, ty) in
+      work params typeParams t.body
+    else (params, typeParams, body)
+  in
+  work [] [] body
+
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
   sem generateToplevel (env : FutharkGenerateEnv) =
   | TmType t ->
-    recursive let parameterizeType =
-      lam params : [FutTypeParam]. lam ty : FutType.
-      match ty with FTyArray t then
-        match parameterizeType params t.elem with (params, elem) then
-          let n = nameSym "n" in
-          let params = cons (FPSize {val = n}) params in
-          (params, FTyArray {{t with elem = elem} with dim = Some n})
-        else never
-      else match ty with FTyRecord t then
-        let paramField = lam params. lam. lam ty. parameterizeType params ty in
-        match mapMapAccum paramField params t.fields with (params, fields) then
-          (params, FTyRecord {t with fields = fields})
-        else never
-      else match ty with FTyArrow t then
-        match parameterizeType params t.from with (params, from) then
-          match parameterizeType params t.to with (params, to) then
-            (params, FTyArrow {{t with from = from} with to = to})
-          else never
-        else never
-      else (params, ty)
-    in
-    let futType = generateType env t.tyIdent in
-    match parameterizeType [] futType with (typeParams, ty) then
-      let env = {{env with typeAliases = mapInsert t.tyIdent t.ident env.typeAliases}
-                      with typeParams = mapInsert t.ident typeParams env.typeParams} in
-      let decl = FDeclType {
-        ident = t.ident,
-        typeParams = typeParams,
-        ty = ty,
-        info = t.info
-      } in
-      cons decl (generateToplevel env t.inexpr)
-    else never
+    let ty = generateType env t.tyIdent in
+    let typeParams = _extractTypeParams [] ty in
+    let env = {{env with typeAliases = mapInsert t.tyIdent t.ident env.typeAliases}
+                    with typeParams = mapInsert t.ident typeParams env.typeParams} in
+    let decl = FDeclType {
+      ident = t.ident,
+      typeParams = typeParams,
+      ty = ty,
+      info = t.info
+    } in
+    cons decl (generateToplevel env t.inexpr)
   | TmLet t ->
     recursive let findReturnType = lam params. lam ty : Type.
       if null params then ty
@@ -539,17 +530,19 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                     "specified in return type"])
     in
     let decl =
-      match _collectParams env t.body with (params, body) then
-        if null params then
-          FDeclConst {ident = t.ident, ty = generateType env t.tyBody,
-                      val = generateExpr env body, info = t.info}
-        else
-          let retTy = findReturnType params t.tyBody in
-          let entry = setMem t.ident env.entryPoints in
-          FDeclFun {ident = t.ident, entry = entry, typeParams = [],
-                    params = params, ret = generateType env retTy,
-                    body = generateExpr env body, info = t.info}
-      else never
+      match _collectParams env t.body with (params, typeParams, body) in
+      if null params then
+        -- NOTE(larshum, 2021-12-01): The generation currently does not support
+        -- type parameters in constant declarations.
+        FDeclConst {ident = t.ident, ty = generateType env t.tyBody,
+                    val = generateExpr env body, info = t.info}
+      else
+        let retTy = generateType env (findReturnType params t.tyBody) in
+        let typeParams = _extractTypeParams typeParams retTy in
+        let entry = setMem t.ident env.entryPoints in
+        FDeclFun {ident = t.ident, entry = entry, typeParams = typeParams,
+                  params = params, ret = retTy,
+                  body = generateExpr env body, info = t.info}
     in
     cons decl (generateToplevel env t.inexpr)
   | TmRecLets t ->
@@ -557,6 +550,8 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
   | TmExt t ->
     infoErrorExit t.info "External functions cannot be accelerated"
   | TmUtest t ->
+    -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
+    -- are removed/replaced in earlier stages of the compilation.
     infoErrorExit t.info "Utests cannot be accelerated"
   | TmConDef t ->
     infoErrorExit t.info "Constructor definitions cannot be accelerated"
@@ -701,6 +696,7 @@ using eqSeq eqc in
 let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
+let n = nameSym "n" in
 let foldlToFor =
   nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
     nlam_ s (tyseq_ tyint_) (
@@ -710,8 +706,8 @@ let foldlToFor =
         (int_ 0) (nvar_ s))) in
 let expected = FProg {decls = [
   FDeclFun {
-    ident = f, entry = true, typeParams = [],
-    params = [(s, futUnsizedArrayTy_ futIntTy_)], ret = futIntTy_,
+    ident = f, entry = true, typeParams = [FPSize {val = n}],
+    params = [(s, futSizedArrayTy_ futIntTy_ n)], ret = futIntTy_,
     body =
       futForEach_
         (nFutPvar_ acc, futInt_ 0)

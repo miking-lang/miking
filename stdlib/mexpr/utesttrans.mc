@@ -781,7 +781,7 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
                  with tyConEnv = typeNames}
 
 let withUtestRunner = lam utestFunctions. lam term.
-  bindall_ [utestRunner (), utestFunctions, term, print_ (str_ "\n")]
+  bindall_ [utestRunner (), utestFunctions, ulet_ "" term, print_ (str_ "\n")]
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
 -- transformation.
