@@ -1,366 +1,26 @@
 include "mexpr/mexpr.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
-include "mexpr/keyword-maker.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/utesttrans.mc"
-include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
+include "mexpr/ast-builder.mc"
 
 include "sys.mc"
 include "digraph.mc"
-include "string.mc"
+
+include "ast.mc"
+include "call-graph.mc"
 include "eq-paths.mc"
-include "name.mc"
+include "name-info.mc"
 include "prefix-tree.mc"
 
--- This file contains implementations related to decision points.
-
-let _eqn = lam n1. lam n2.
-  if and (nameHasSym n1) (nameHasSym n2) then
-    nameEqSym n1 n2
-  else
-    error "Name without symbol."
-
-type NameInfo = (Name, Info)
-
-let nameInfoCmp = lam v1 : NameInfo. lam v2 : NameInfo.
-  nameCmp v1.0 v2.0
-
-let nameInfoEq = lam l1 : NameInfo. lam l2 : NameInfo.
-  _eqn l1.0 l2.0
-
-let nameInfoGetStr = lam ni : NameInfo.
-  nameGetStr ni.0
-
-let nameInfoGetName = lam ni : NameInfo.
-  ni.0
-
-let nameInfoGetInfo = lam ni : NameInfo.
-  ni.1
-
-let _cmpPaths = seqCmp nameInfoCmp
+-- Implements context expansion for a program with holes.
 
 let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Map Name v =
   lam items. lam toKey. lam toVal.
     foldl (lam acc. lam e. mapInsert (toKey e) (toVal e) acc)
       (mapEmpty nameCmp)
       items
-
--------------------------
--- Call graph creation --
--------------------------
-
--- NOTE(Linnea, 2021-02-03): the call graph creation algorithm assumes that the
--- AST is symbolized and in ANF.
-
--- The type of the call graph. Vertices are names of function identifiers, edges
--- are names of application nodes.
-
-type CallGraph = DiGraph NameInfo NameInfo
-
-let callGraphNames = lam cg.
-  map (lam t : NameInfo. t.0) (digraphVertices cg)
-
-let _callGraphNameSeq = lam seq.
-  map (lam t : (NameInfo, NameInfo, NameInfo).
-    ((t.0).0, (t.1).0, (t.2).0)) seq
-
-let callGraphEdgeNames = lam cg.
-  _callGraphNameSeq (digraphEdges cg)
-
--- The top of the call graph, has no incoming edges.
-let _callGraphTop = (nameSym "top", NoInfo ())
-
-type Binding = {ident : Name, body : Expr, info : Info}
-let _handleLetVertex = use LamAst in
-  lam f. lam letexpr : Binding.
-    match letexpr.body with TmLam lm then
-      cons (letexpr.ident, letexpr.info) (f lm.body)
-    else f letexpr.body
-
-let _handleApps = use AppAst in use VarAst in
-  lam id. lam f. lam prev. lam g. lam name2info. lam app.
-    recursive let appHelper = lam g. lam app.
-      match app with TmApp {lhs = TmVar v, rhs = rhs} then
-        let resLhs =
-          if digraphHasVertex (v.ident, v.info) g then
-            let correctInfo : Info = mapFindExn v.ident name2info in
-            [(prev, (v.ident, correctInfo), id)]
-          else []
-        in concat resLhs (f g prev name2info rhs)
-      else match app with TmApp {lhs = TmApp a, rhs = rhs} then
-        let resLhs = appHelper g (TmApp a) in
-        concat resLhs (f g prev name2info rhs)
-      else match app with TmApp a then
-        concat (f g prev name2info a.lhs) (f g prev name2info a.rhs)
-      else never
-  in appHelper g app
-
--- Construct a call graph from an AST. The nodes are named functions, and the
--- edges are calls to named functions. Complexity O(|V|*|F|), as we visit each
--- node exactly once and each time potentially perform a graph union operation,
--- which we assume has complexity O(|F|). V is the set of nodes in the AST and F
--- is the set of nodes in the call graph (i.e. set of functions in the AST).
-lang HoleCallGraph = LetAst + LamAst + RecLetsAst
-  sem toCallGraph =
-  | arg ->
-    let gempty = digraphAddVertex _callGraphTop
-      (digraphEmpty nameInfoCmp nameInfoEq) in
-    let g = digraphAddVertices (_findVertices arg) gempty in
-    let infoMap = mapFromSeq nameCmp (digraphVertices g) in
-    let edges = _findEdges g _callGraphTop infoMap arg in
-    digraphAddEdges edges g
-
-  sem _findVertices =
-  | TmLet t ->
-    concat
-      (_handleLetVertex _findVertices
-        {ident = t.ident, body = t.body, info = t.info})
-      (_findVertices t.inexpr)
-
-  | TmRecLets t ->
-    let res =
-      foldl (lam acc. lam b : RecLetBinding.
-               concat acc
-                 (_handleLetVertex _findVertices
-                   {ident = b.ident, body = b.body, info = b.info}))
-            [] t.bindings
-    in concat res (_findVertices t.inexpr)
-
-  | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
-
-  sem _findEdges (cg : CallGraph) (prev : NameInfo) (name2info : Map Name Info) =
-  | TmLet ({body = TmApp a} & t) ->
-    let resBody = _handleApps (t.ident, t.info) _findEdges prev cg name2info t.body in
-    concat resBody (_findEdges cg prev name2info t.inexpr)
-
-  | TmLet ({body = TmLam lm} & t) ->
-    let resBody = _findEdges cg (t.ident, t.info) name2info lm.body in
-    concat resBody (_findEdges cg prev name2info t.inexpr)
-
-  | TmRecLets t ->
-    let res =
-      let handleBinding = lam g. lam b : RecLetBinding.
-        match b with { body = TmLam { body = lambody }, ident = ident, info = info } then
-          _findEdges g (ident, info) name2info lambody
-        else
-          _findEdges g prev name2info b.body
-      in foldl (lam acc. lam b. concat acc (handleBinding cg b)) [] t.bindings
-    in concat res (_findEdges cg prev name2info t.inexpr)
-
-  | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr (_findEdges cg prev name2info) tm)
-
-end
-
---------------------------------------------
--- Language fragments for decision points --
---------------------------------------------
-
-let decisionPointsKeywords = ["hole", "Boolean", "IntRange"]
-
-let _lookupExit = lam info : Info. lam s : String. lam m : Map String a.
-  mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
-
-let _expectConstInt = lam info : Info. lam s. lam i.
-  use IntAst in
-  match i with TmConst {val = CInt {val = i}} then i
-  else infoErrorExit info (concat "Expected a constant integer: " s)
-
-lang HoleAst = IntAst + ANF + KeywordMaker
-  syn Hole =
-
-  syn Expr =
-  | TmHole {default : Expr,
-            depth : Int,
-            ty : Type,
-            info : Info,
-            inner : Hole}
-
-  sem infoTm =
-  | TmHole h -> h.info
-
-  sem tyTm =
-  | TmHole {ty = ty} -> ty
-
-  sem symbolizeExpr (env : SymEnv) =
-  | TmHole h -> TmHole h
-
-  sem default =
-  | TmHole {default = default} -> default
-  | t -> smap_Expr_Expr default t
-
-  sem isAtomic =
-  | TmHole _ -> false
-
-  sem pprintHole =
-
-  sem pprintCode (indent : Int) (env : SymEnv) =
-  | TmHole t ->
-    match pprintCode indent env t.default with (env, default) then
-      match pprintHole t.inner with (keyword, bindings) then
-        (env, join
-          [ "hole ("
-          , keyword
-          , " {"
-          , "depth = ", int2string t.depth, ", "
-          , "default = ", default, ", "
-          , strJoin ", "
-            (map (lam b : (String, String). join [b.0, " = ", b.1])
-               bindings)
-          ,  "}"
-          , ")"
-          ])
-      else never
-    else never
-
-  sem next (last : Option Expr) (stepSize : Int) =
-  | TmHole {inner = inner} ->
-    hnext last stepSize inner
-
-  sem hnext (last : Option Expr) (stepSize : Int) =
-
-  sem sample =
-  | TmHole {inner = inner} ->
-    hsample inner
-
-  sem hsample =
-
-  sem normalize (k : Expr -> Expr) =
-  | TmHole ({default = default} & t) ->
-    k (TmHole {t with default = normalizeTerm t.default})
-
-  sem isKeyword =
-  | TmHole _ -> true
-
-  sem matchKeywordString (info : Info) =
-  | "hole" -> Some (1, lam lst. head lst)
-
-  sem _mkHole (info : Info) (hty : Type) (holeMap : Map String Expr -> Hole)
-              (validate : Expr -> Expr) =
-  | arg ->
-    use RecordAst in
-    match arg with TmRecord {bindings = bindings} then
-      let bindings = mapFromSeq cmpString
-        (map (lam t : (SID, Expr). (sidToString t.0, t.1))
-           (mapBindings bindings)) in
-      let default = _lookupExit info "default" bindings in
-      let depth = mapLookupOrElse (lam. int_ 0) "depth" bindings in
-      validate
-        (TmHole { default = default
-                , depth = _expectConstInt info "depth" depth
-                , info = info
-                , ty = hty
-                , inner = holeMap bindings})
-    else error "impossible"
-end
-
--- A Boolean decision point.
-lang HoleBoolAst = BoolAst + HoleAst
-  syn Hole =
-  | BoolHole {}
-
-  sem hsample =
-  | BoolHole {} ->
-    get [true_, false_] (randIntU 0 2)
-
-  sem hnext (last : Option Expr) (stepSize : Int) =
-  | BoolHole {} ->
-    match last with None () then Some false_
-    else match last with Some (TmConst {val = CBool {val = false}}) then
-      Some true_
-    else match last with Some (TmConst {val = CBool {val = true}}) then
-      None ()
-    else never
-
-  sem fromString =
-  | "true" -> true
-  | "false" -> false
-
-  sem matchKeywordString (info : Info) =
-  | "Boolean" ->
-    Some (1,
-      let validate = lam expr.
-        match expr with TmHole {default = default} then
-          match default with TmConst {val = CBool _} then expr
-          else infoErrorExit info "Default value not a constant Boolean"
-        else infoErrorExit info "Not a decision point" in
-
-      lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
-
-  sem pprintHole =
-  | BoolHole {} ->
-    ("Boolean", [])
-end
-
--- An integer decision point (range of integers).
-lang HoleIntRangeAst = IntAst + HoleAst
-  syn Hole =
-  | HIntRange {min : Int,
-              max : Int}
-
-  sem hsample =
-  | HIntRange {min = min, max = max} ->
-    int_ (randIntU min (addi max 1))
-
-  sem hnext (last : Option Expr) (stepSize : Int) =
-  | HIntRange {min = min, max = max} ->
-    match last with None () then Some (int_ min)
-    else match last with Some (TmConst {val = CInt {val = i}}) then
-      if eqi i max then
-        None ()
-      else
-        let next = addi i stepSize in
-        utest geqi next min with true in
-        if leqi next max then Some (int_ next)
-        else None ()
-    else never
-
-  sem matchKeywordString (info : Info) =
-  | "IntRange" ->
-    Some (1,
-      let validate = lam expr.
-        match expr
-        with TmHole {default = TmConst {val = CInt {val = i}},
-                     inner = HIntRange {min = min, max = max}}
-        then
-          if and (leqi min i) (geqi max i) then expr
-          else infoErrorExit info "Default value is not within range"
-        else infoErrorExit info "Not an integer decision point" in
-
-      lam lst. _mkHole info tyint_
-        (lam m.
-           let min = _expectConstInt info "min" (_lookupExit info "min" m) in
-           let max = _expectConstInt info "max" (_lookupExit info "max" m) in
-           if leqi min max then
-             HIntRange {min = min, max = max}
-           else infoErrorExit info
-             (join ["Empty domain: ", int2string min, "..", int2string max]))
-        validate (get lst 0))
-
-  sem pprintHole =
-  | HIntRange {min = min, max = max} ->
-    ("IntRange", [("min", int2string min), ("max", int2string max)])
-end
-
-let holeBool_ = use HoleBoolAst in
-  lam default. lam depth.
-  TmHole { default = default
-         , depth = depth
-         , ty = tybool_
-         , info = NoInfo ()
-         , inner = BoolHole {}}
-
-let holeIntRange_ = use HoleIntRangeAst in
-  lam default. lam depth. lam min. lam max.
-  TmHole { default = default
-         , depth = depth
-         , ty = tyint_
-         , info = NoInfo ()
-         , inner = HIntRange {min = min, max = max}}
-
 
 ------------------------------
 -- Call context environment --
@@ -372,8 +32,8 @@ type Path = [Edge]
 let edgeCmp = lam e1 : Edge. lam e2 : Edge.
   nameInfoCmp e1.2 e2.2
 
-let threadPoolNbrThreadsStr = "threadPoolNbrThreads"
-let threadPoolId2idxStr = "threadPoolId2idx"
+let _threadPoolNbrThreadsStr = "threadPoolNbrThreads"
+let _threadPoolId2idxStr = "threadPoolId2idx"
 
 -- Maintains call context information necessary for program transformations.
 type CallCtxEnv = {
@@ -404,10 +64,10 @@ type CallCtxEnv = {
   -- name of threadPoolId2idx, otherwise None ().
   threadPoolInfo: Option (Int, Name),
 
-  -- Maps a decision point and a call path to a unique integer.
+  -- Maps a hole and a call path to a unique integer.
   hole2idx: Map NameInfo (Map [NameInfo] Int),
 
-  -- Maps an index to its decision point. The key set is the union of the value
+  -- Maps an index to its hole. The key set is the union of the value
   -- sets of 'hole2idx'.
   -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
   -- expression may be repeated many times.
@@ -483,19 +143,19 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     let threadPoolInfo =
       use MExprAst in
       switch
-        (findName threadPoolNbrThreadsStr tm, findName threadPoolId2idxStr tm)
+        (findName _threadPoolNbrThreadsStr tm, findName _threadPoolId2idxStr tm)
       case (Some n1, Some n2) then
         match _findLetBinding n1 tm
         with Some (TmConst {val = CInt {val = i}})
         then Some (i, n2)
         else error (join [ "Expected "
-                         , threadPoolNbrThreadsStr
+                         , _threadPoolNbrThreadsStr
                          , " to be bound to an integer"])
       case (None (), None ()) then None ()
       case _ then error (join ["Expected both or none of "
-                              , threadPoolNbrThreadsStr
+                              , _threadPoolNbrThreadsStr
                               , " and "
-                              , threadPoolId2idxStr,
+                              , _threadPoolId2idxStr,
                               " to be defined."])
       end
     in
@@ -566,7 +226,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
            let lblPath = map (lam e : Edge. e.2) path in
            (mapInsert lblPath i m, mapInsert i path verbose, addi i 1)
          else never)
-      (mapEmpty _cmpPaths, env.verbosePath, countInit)
+      (mapEmpty (seqCmp nameInfoCmp), env.verbosePath, countInit)
       paths
     with (m, verbose, count) then
       let n = length paths in
@@ -715,8 +375,7 @@ let t =
   with (nulam_ _x (nulam_ _y (nulam_ _z (muli_ (nvar_ _x) (nvar_ _y)))))
   using use MExprEq in eqExpr in ()
 
--- Generate code for looking up a value of a decision point depending on its
--- call history
+-- Generate code for looking up a value of a hole depending on its call history
 let _lookupCallCtx
   : (Int -> Expr) -> NameInfo -> Name
   -> CallCtxEnv -> [[NameInfo]] -> Expr =
@@ -785,25 +444,25 @@ type LookupTable = [Expr]
 let _table = nameSym "table"
 let _argv = nameSym "argv"
 
-type Flattened =
-{ ast : Expr             -- The flattened ast
+type ContextExpanded =
+{ ast : Expr             -- The context-expanded ast
 , table : LookupTable    -- The initial lookup table
 , tempDir : String       -- The temporary directory
-, tempFile : String      -- The file from which decision point values are read
+, tempFile : String      -- The file from which hole values are read
 , cleanup : Unit -> Unit -- Removes all temporary files from the disk
 , env : CallCtxEnv       -- Call context environment
 }
 
--- Fragment for transforming a program with decision points.
-lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
-  -- 'flatten public t' eliminates all decision points in the expression 't' and
-  --  and replace them by lookups in a static table One reference per function
+-- Fragment for transforming a program with holes.
+lang ContextExpand = HoleCallGraph + HoleAst + IntAst
+  -- 'contextExpand public t' eliminates all holes in the expression 't' and and
+  --  replace them by lookups in a static table. One reference per function
   --  tracks which function that latest called that function, thereby
-  --  maintaining call history. Returns a result of type 'Flattened'.
-  sem flatten (publicFns : [NameInfo]) =
+  --  maintaining call history. Returns a result of type 'ContextExpanded'.
+  sem contextExpand (publicFns : [NameInfo]) =
   | t ->
     let lookup = lam i. tensorGetExn_ tyunknown_ (nvar_ _table) (seq_ [int_ i]) in
-    match _flattenWithLookup publicFns lookup t with (prog, env)
+    match _contextExpandWithLookup publicFns lookup t with (prog, env)
     then
       let tempDir = sysTempDirMake () in
       let tuneFile = sysJoinPath tempDir ".tune" in
@@ -817,15 +476,15 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
       }
     else never
 
-  -- 'insert public table t' replaces the decision points in expression 't' by
-  -- the values in 'table'
+  -- 'insert public table t' replaces the holes in expression 't' by the values
+  -- in 'table'
   sem insert (publicFns : [NameInfo]) (table : LookupTable) =
   | t ->
     let lookup = lam i. get table i in
-    match _flattenWithLookup publicFns lookup t with (prog, _)
+    match _contextExpandWithLookup publicFns lookup t with (prog, _)
     then prog else never
 
-  sem _flattenWithLookup (publicFns : [NameInfo]) (lookup : Int -> Expr) =
+  sem _contextExpandWithLookup (publicFns : [NameInfo]) (lookup : Int -> Expr) =
   | t ->
     let pub2priv =
       _nameMapInit (map (lam t : NameInfo. t.0) publicFns)
@@ -874,7 +533,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
     match _maintainCallCtx lookup eqPathsMap _callGraphTop env tm with (env, prog) in
     (prog, env)
 
-  -- Compute the equivalence paths of each decision point
+  -- Compute the equivalence paths of each hole.
   -- ... -> [(Name, [[Name]])]
   sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) =
   | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
@@ -898,7 +557,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
   | tm ->
     sfold_Expr_Expr concat [] (smap_Expr_Expr (_eqPaths g public cur) tm)
 
-  -- Find the initial mapping from decision points to values
+  -- Find the initial mapping from holes to values
   sem _initAssignments =
   | env ->
     let env : CallCtxEnv = env in
@@ -987,7 +646,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
       else (env, le) -- not an application with TmVar
     else (env, le) -- caller not part of call graph
 
-  -- Decision point: lookup the value depending on call history.
+  -- Hole: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
     match
       let isTop = nameInfoEq cur _callGraphTop in
@@ -1197,10 +856,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
     ]
 end
 
-lang Holes =
-  HoleAst + HoleBoolAst + HoleIntRangeAst + FlattenHoles
-
-lang MExprHoles = Holes + MExprSym + MExprANF
+lang MExprHoles = HoleAst + ContextExpand + MExprSym + MExprANF
 
 lang HolesPrettyPrint = MExprHoles + MExprPrettyPrint
 
@@ -1212,205 +868,6 @@ use TestLang in
 
 let anf = compose normalizeTerm symbolize in
 
-----------------------
--- Call graph tests --
-----------------------
-
-type CallGraphTest = {ast : Expr, expected : Expr, vs : [String],
-                      calls : [(String, String)]} in
-
-let doCallGraphTests = lam r : CallGraphTest.
-  let tests = lam ast. lam strVs : [String]. lam strEdgs : [(String, String)].
-
-    let toStr = lam ng.
-      let edges = map (lam t : (NameInfo, NameInfo, NameInfo).
-        match t with (from, to, label) then
-          (nameGetStr from.0, nameGetStr to.0, label.0)
-        else never
-      ) (digraphEdges ng) in
-
-      let vertices = map nameInfoGetStr (digraphVertices ng) in
-
-      digraphAddEdges edges (digraphAddVertices vertices (digraphEmpty cmpString _eqn))
-    in
-    let sg = toStr (toCallGraph ast) in
-
-    utest eqsetEqual eqString strVs (digraphVertices sg) with true in
-
-    let es = digraphEdges sg in
-    utest length es with length strEdgs in
-    map (lam t : (String, String).
-      utest digraphIsSuccessor t.1 t.0 sg with true in ()) strEdgs
-  in
-  tests (anf r.ast) r.vs r.calls
-in
-
--- 1
-let constant = {
-  ast = int_ 1,
-  expected = int_ 1,
-  vs = ["top"],
-  calls = []
-} in
-
--- let foo = lam x. x in ()
-let identity = {
-  ast = ulet_ "foo" (ulam_ "x" (var_ "x")),
-  expected = uunit_,
-  vs = ["top", "foo"],
-  calls = []
-} in
-
--- let foo = lam x. x in
--- let bar = lam x. foo x in ()
-let funCall = {
-  ast = bind_ (ulet_ "foo" (ulam_ "x" (var_ "x")))
-              (ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
-  expected = uunit_,
-  vs = ["top", "foo", "bar"],
-  calls = [("bar", "foo")]
-} in
-
--- let foo = lam x. x in
--- let bar = lam x. addi (foo x) (foo x) in
--- bar 1
-let ast =
-  bindall_ [identity.ast,
-            ulet_ "bar" (ulam_ "x" (addi_ (app_ (var_ "foo") (var_ "x"))
-                                         (app_ (var_ "foo") (var_ "x")))),
-            (app_ (var_ "bar") (int_ 1))] in
-let callSameFunctionTwice = {
-  ast = ast,
-  expected = int_ 2,
-  vs = ["top", "foo", "bar"],
-  calls = [("top", "bar"), ("bar", "foo"), ("bar", "foo")]
-} in
-
---let foo = lam x. lam y. addi x y in
---foo 1 2
-let twoArgs = {
-  ast = bind_
-          (ulet_ "foo"
-            (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))))
-          (appf2_ (var_ "foo") (int_ 1) (int_ 2)),
-  expected = int_ 3,
-  vs = ["top", "foo"],
-  calls = [("top", "foo")]
-} in
-
--- let foo = lam a. lam b.
---     let bar = lam x. addi b x in
---     let b = 3 in
---     addi (bar b) a
--- in ()
-let innerFun = {
-  ast = ulet_ "foo" (ulam_ "a" (ulam_ "b" (
-          let bar = ulet_ "bar" (ulam_ "x"
-                         (addi_ (var_ "b") (var_ "x"))) in
-          let babar = ulet_ "b" (int_ 3) in
-          bind_ bar (
-          bind_ babar (
-            addi_ (app_ (var_ "bar")
-                        (var_ "b"))
-                  (var_ "a")))))),
-  expected = uunit_,
-  vs = ["top", "foo", "bar"],
-  calls = [("foo", "bar")]
-} in
-
--- let foo = lam x. x in
--- let a = foo 1 in
--- a
-let letWithFunCall = {
-  ast = let foo = ulet_ "foo" (ulam_ "x" (var_ "x")) in
-        let a = ulet_ "a" (app_ (var_ "foo") (int_ 1)) in
-        bind_ (bind_ foo a) (var_ "a"),
-  expected = int_ 1,
-  vs = ["top", "foo"],
-  calls = [("top", "foo")]
-} in
-
--- recursive let factorial = lam n.
---     if eqi n 0 then
---       1
---     else
---       muli n (factorial (subi n 1))
--- in
--- factorial 4
-let factorial = {
-  ast = bind_
-    (ureclets_add "factorial"
-           (lam_ "n" (tyint_)
-                 (if_ (eqi_ (var_ "n") (int_ 0))
-                      (int_ 1)
-                      (muli_ (var_ "n")
-                             (app_ (var_ "factorial")
-                                   (subi_ (var_ "n")
-                                          (int_ 1))))))
-     reclets_empty)
-    (app_ (var_ "factorial") (int_ 2)),
-  expected = int_ 2,
-  vs = ["top", "factorial"],
-  calls = [("top", "factorial"), ("factorial", "factorial")]
-} in
-
--- recursive
---     let even = lam x.
---         if eqi x 0
---         then true
---         else odd (subi x 1)
---     let odd = lam x.
---         if eqi x 1
---         then true
---         else even (subi x 1)
--- in even 4
-let evenOdd ={
-  ast = bind_
-    (ureclets_add "even" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 0))
-                                       (true_)
-                                       (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
-    (ureclets_add "odd" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 1))
-                                      (true_)
-                                      (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
-     reclets_empty))
-    (app_ (var_ "even") (int_ 2)),
-  expected = true_,
-  vs = ["top", "even", "odd"],
-  calls = [("top", "even"), ("even", "odd"), ("odd", "even")]
-} in
-
--- let bar = lam y. y in
--- let foo = lam f. lam x. f x in -- cannot see that foo calls bar
--- foo bar 1
-let hiddenCall = {
-  ast = bindall_ [
-          ulet_ "bar" (ulam_ "y" (var_ "y")),
-          ulet_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x")))),
-          appf2_ (var_ "foo") (var_ "bar") (int_ 1)],
-  expected = int_ 1,
-  vs = ["top", "foo", "bar"],
-  calls = [("top", "foo")]
-} in
-
-
-let cgTests =
-[ constant
-, identity
-, funCall
-, callSameFunctionTwice
-, innerFun
-, letWithFunCall
-, factorial
-, evenOdd
-, hiddenCall
-] in
-
-map doCallGraphTests cgTests;
-
----------------------------
--- Decision points tests --
----------------------------
-
 let debug = false in
 
 let debugPrint = lam ast. lam pub.
@@ -1420,7 +877,7 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match flatten pub ast with {ast = ast} then
+    match contextExpand pub ast with {ast = ast} then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
       printLn (expr2str ast);
       ()
@@ -1472,7 +929,7 @@ in
 debugPrint ast [(funB, NoInfo ()), (funC, NoInfo ())];
 let ast = anf ast in
 
-match flatten [(funB, NoInfo ()), (funC, NoInfo ())] ast with
+match contextExpand [(funB, NoInfo ()), (funC, NoInfo ())] ast with
   {ast = flatAst, table = table, tempFile = tempFile, cleanup = cleanup, env = env}
 then
 

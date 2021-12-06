@@ -6,7 +6,7 @@ include "compile.mc"
 include "options.mc"
 include "sys.mc"
 include "parse.mc"
-include "tuning/decision-points.mc"
+include "tuning/context-expansion.mc"
 include "tuning/tune.mc"
 
 lang MCoreTune =
@@ -32,7 +32,7 @@ let tune = lam files. lam options : Options. lam args.
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
-      keywords = decisionPointsKeywords
+      keywords = holeKeywords
     } file in
     let ast = makeKeywords [] ast in
 
@@ -42,8 +42,8 @@ let tune = lam files. lam options : Options. lam args.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
 
-    -- Flatten the decision points
-    match flatten [] ast with
+    -- Context expand the holes
+    match contextExpand [] ast with
       { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
         env = env, tempDir = tempDir }
     then
