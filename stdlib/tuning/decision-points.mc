@@ -412,9 +412,7 @@ type CallCtxEnv = {
   threadPoolInfo: Option (Int, Name),
 
   -- Maps a decision point and a call path to a unique integer.
-  -- TODO(Linnea, 2021-04-21): Once we have 'smapAccumL_Expr_Expr', this
-  -- shouldn't be a reference.
-  hole2idx: Ref (Map NameInfo (Map [NameInfo] Int)),
+  hole2idx: Map NameInfo (Map [NameInfo] Int),
 
   -- Maps an index to its decision point. The key set is the union of the value
   -- sets of 'hole2idx'.
@@ -515,7 +513,7 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     , lbl2count = lbl2count
     , publicFns = publicFns
     , threadPoolInfo = threadPoolInfo
-    , hole2idx  = ref (mapEmpty nameInfoCmp)
+    , hole2idx = mapEmpty nameInfoCmp
     , idx2hole = ref []
     , hole2fun = ref (mapEmpty nameInfoCmp)
     , hole2ty = ref (mapEmpty nameInfoCmp)
@@ -581,18 +579,18 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
       let n = length paths in
       utest n with subi count countInit in
       modref idx2hole (concat (deref idx2hole) (create n (lam. h)));
-      modref hole2idx (mapInsert name m (deref hole2idx));
       modref hole2fun (mapInsert name funName (deref hole2fun));
       modref hole2ty (mapInsert name (use HoleAst in tyTm h) (deref hole2ty));
       modref verbosePath verbose;
-      env
+      {env with hole2idx = mapInsert name m hole2idx}
     else never
   else never
 
+-- TODO
 let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
   lam nameInfo. lam path. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx } then
-      mapFindExn path (mapFindExn nameInfo (deref hole2idx))
+      mapFindExn path (mapFindExn nameInfo hole2idx)
     else never
 
 let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [Expr] =
@@ -881,7 +879,8 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let tm = bind_ incVars tm in
 
     -- Transform program to maintain the call history when needed
-    let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
+    --let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
+    match _maintainCallCtx lookup env eqPathsMap _callGraphTop tm with (env, prog) in
     (prog, env)
 
   -- Compute the equivalence paths of each decision point
@@ -974,67 +973,81 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
                        (eqPaths : Map NameInfo [Path]) (cur : NameInfo) =
   -- Application: caller updates incoming variable of callee
   | TmLet ({ body = TmApp a } & t) ->
-    let le =
-      TmLet {{t with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
-                with body = _maintainCallCtx lookup env eqPaths cur t.body}
-    in
+    match
+      match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
+      match _maintainCallCtx lookup env eqPaths cur t.body with (env, body) in
+      ( env,
+        TmLet {{t with inexpr = inexpr}
+                  with body = body})
+    with (env, le) in
+    let env : CallCtxEnv = env in
     -- Track call only if edge is part of the call graph
-    match env with { callGraph = callGraph } then
-      match callCtxFunLookup cur.0 env with Some _ then
-        match _appGetCallee (TmApp a) with Some callee then
-          match callCtxFunLookup (nameInfoGetName callee) env
-          with Some iv then
-            if digraphIsSuccessor callee cur callGraph then
-              -- Set the incoming var of callee to current node
-              let count = callCtxLbl2Count t.ident env in
-              let update = callCtxModifyIncomingVar iv count env in
-              bind_ (nulet_ (nameSym "") update) le
-            else le -- edge not part of call graph
-          else le -- callee not part of call graph
-        else le -- not an application with TmVar
-      else le -- caller not part of call graph
-    else never
+    match env with { callGraph = callGraph } in
+    match callCtxFunLookup cur.0 env with Some _ then
+      match _appGetCallee (TmApp a) with Some callee then
+        match callCtxFunLookup (nameInfoGetName callee) env
+        with Some iv then
+          if digraphIsSuccessor callee cur callGraph then
+            -- Set the incoming var of callee to current node
+            let count = callCtxLbl2Count t.ident env in
+            let update = callCtxModifyIncomingVar iv count env in
+            (env, bind_ (nulet_ (nameSym "") update) le)
+          else (env, le) -- edge not part of call graph
+        else (env, le) -- callee not part of call graph
+      else (env, le) -- not an application with TmVar
+    else (env, le) -- caller not part of call graph
 
   -- Decision point: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
-    let lookupCode =
+    match
       let isTop = nameInfoEq cur _callGraphTop in
       if or (eqi depth 0) isTop then
         let env = callCtxAddHole t.body (ident, t.info) [[]] cur env in
-        lookup (callCtxHole2Idx (ident, t.info) [] env)
+        (env, lookup (callCtxHole2Idx (ident, t.info) [] env))
       else
         let paths = mapFindExn (ident, t.info) eqPaths in
         let env = callCtxAddHole t.body (ident, t.info) paths cur env in
         let iv = callCtxFun2Inc cur.0 env in
         let lblPaths = map (lam p. map (lam e : Edge. e.2) p) paths in
-
         let res = _lookupCallCtx lookup (ident, t.info) iv env lblPaths in
-        res
-    in
-    TmLet {{t with body = lookupCode}
-              with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
+        (env, res)
+    with (env, lookupCode) in
+    match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
+    ( env,
+      TmLet {{t with body = lookupCode}
+                with inexpr = inexpr})
 
   -- Function definitions: possibly update cur inside body of function
   | TmLet ({ body = TmLam lm } & t) ->
     let curBody = (t.ident, t.info) in
-    TmLet {{t with body = _maintainCallCtx lookup env eqPaths curBody t.body}
-              with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
+    match _maintainCallCtx lookup env eqPaths curBody t.body with (env, body) in
+    match _maintainCallCtx lookup env eqPaths curBody t.inexpr with (env, inexpr) in
+    ( env,
+      TmLet {{t with body = body}
+                with inexpr = inexpr})
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
-    let newBinds =
-      map (lam bind : RecLetBinding.
+    match
+      mapAccumL (lam env : CallCtxEnv. lam bind : RecLetBinding.
+        -- TODO: shorten
         match bind with { body = TmLam lm } then
           let curBody = (bind.ident, bind.info) in
-          {bind with body =
-             _maintainCallCtx lookup env eqPaths curBody bind.body}
+          match _maintainCallCtx lookup env eqPaths curBody bind.body
+          with (env, body) in
+          (env, { bind with body = body })
         else
-        {bind with body = _maintainCallCtx lookup env eqPaths cur bind.body})
-      bindings
-    in
-    TmRecLets {{t with bindings = newBinds}
-                  with inexpr = _maintainCallCtx lookup env eqPaths cur inexpr}
+          match _maintainCallCtx lookup env eqPaths cur bind.body
+          with (env, body) in
+          (env, { bind with body = _maintainCallCtx lookup env eqPaths cur bind.body })
+      ) env bindings
+    with (env, newBinds) in
+    match _maintainCallCtx lookup env eqPaths cur inexpr with (env, inexpr) in
+    ( env,
+      TmRecLets {{t with bindings = newBinds}
+                    with inexpr = inexpr})
   | tm ->
-    smap_Expr_Expr (_maintainCallCtx lookup env eqPaths cur) tm
+    --smap_Expr_Expr (_maintainCallCtx lookup env eqPaths cur) tm
+    smapAccumL_Expr_Expr (lam env. _maintainCallCtx lookup env eqPaths cur) env tm
 
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->

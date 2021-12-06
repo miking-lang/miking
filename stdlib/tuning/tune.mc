@@ -560,7 +560,7 @@ let tuneEntry =
     (match options.seed with Some seed then randSetSeed seed else ());
 
     let holes : [Expr] = deref env.idx2hole in
-    let hole2idx : Map NameInfo (Map [NameInfo] Int) = deref env.hole2idx in
+    let hole2idx : Map NameInfo (Map [NameInfo] Int) = env.hole2idx in
 
     -- Runs the program with a given command-line input and optional timeout
     let runner = lam input : String. lam timeoutMs : Option Float.

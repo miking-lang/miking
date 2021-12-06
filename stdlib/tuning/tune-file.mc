@@ -66,7 +66,7 @@ let _tuneTable2str = lam table : LookupTable.
   strJoin _delim rows
 
 let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : TuneFileFormat.
-  let hole2idx = deref env.hole2idx in
+  let hole2idx = env.hole2idx in
   let hole2fun = deref env.hole2fun in
   let verbosePath = deref env.verbosePath in
   let callGraph = env.callGraph in
