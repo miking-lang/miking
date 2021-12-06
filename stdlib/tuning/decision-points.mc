@@ -998,7 +998,8 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   -- Decision point: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
     let lookupCode =
-      if eqi depth 0 then
+      let isTop = nameInfoEq cur _callGraphTop in
+      if or (eqi depth 0) isTop then
         let env = callCtxAddHole t.body (ident, t.info) [[]] cur env in
         lookup (callCtxHole2Idx (ident, t.info) [] env)
       else
