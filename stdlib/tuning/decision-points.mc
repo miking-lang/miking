@@ -871,8 +871,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
     let tm = bind_ incVars tm in
 
     -- Transform program to maintain the call history when needed
-    --let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
-    match _maintainCallCtx lookup env eqPathsMap _callGraphTop tm with (env, prog) in
+    match _maintainCallCtx lookup eqPathsMap _callGraphTop env tm with (env, prog) in
     (prog, env)
 
   -- Compute the equivalence paths of each decision point
@@ -960,13 +959,13 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
 
   -- Maintain call context history by updating incoming variables before
   -- function calls.
-  sem _maintainCallCtx (lookup : Lookup) (env : CallCtxEnv)
-                       (eqPaths : Map NameInfo [Path]) (cur : NameInfo) =
+  sem _maintainCallCtx (lookup : Lookup) (eqPaths : Map NameInfo [Path])
+                       (cur : NameInfo) (env : CallCtxEnv) =
   -- Application: caller updates incoming variable of callee
   | TmLet ({ body = TmApp a } & t) ->
     match
-      match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
-      match _maintainCallCtx lookup env eqPaths cur t.body with (env, body) in
+      match _maintainCallCtx lookup eqPaths cur env t.inexpr with (env, inexpr) in
+      match _maintainCallCtx lookup eqPaths cur env t.body with (env, body) in
       ( env,
         TmLet {{t with inexpr = inexpr}
                   with body = body})
@@ -1003,7 +1002,7 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
         let res = _lookupCallCtx lookup (ident, t.info) iv env lblPaths in
         (env, res)
     with (env, lookupCode) in
-    match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
+    match _maintainCallCtx lookup eqPaths cur env t.inexpr with (env, inexpr) in
     ( env,
       TmLet {{t with body = lookupCode}
                 with inexpr = inexpr})
@@ -1011,8 +1010,8 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
   -- Function definitions: possibly update cur inside body of function
   | TmLet ({ body = TmLam lm } & t) ->
     let curBody = (t.ident, t.info) in
-    match _maintainCallCtx lookup env eqPaths curBody t.body with (env, body) in
-    match _maintainCallCtx lookup env eqPaths cur t.inexpr with (env, inexpr) in
+    match _maintainCallCtx lookup eqPaths curBody env t.body with (env, body) in
+    match _maintainCallCtx lookup eqPaths cur env t.inexpr with (env, inexpr) in
     ( env,
       TmLet {{t with body = body}
                 with inexpr = inexpr})
@@ -1024,16 +1023,16 @@ lang FlattenHoles = HoleCallGraph + HoleAst + IntAst
           match bind with { body = TmLam lm } then (bind.ident, bind.info)
           else cur
         in
-        match _maintainCallCtx lookup env eqPaths curBody bind.body
+        match _maintainCallCtx lookup eqPaths curBody env bind.body
         with (env, body) in (env, { bind with body = body })
       ) env bindings
     with (env, newBinds) in
-    match _maintainCallCtx lookup env eqPaths cur inexpr with (env, inexpr) in
+    match _maintainCallCtx lookup eqPaths cur env inexpr with (env, inexpr) in
     ( env,
       TmRecLets {{t with bindings = newBinds}
                     with inexpr = inexpr})
   | tm ->
-    smapAccumL_Expr_Expr (lam env. _maintainCallCtx lookup env eqPaths cur) env tm
+    smapAccumL_Expr_Expr (_maintainCallCtx lookup eqPaths cur) env tm
 
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
