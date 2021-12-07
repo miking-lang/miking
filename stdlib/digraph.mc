@@ -83,9 +83,6 @@ let digraphLabels = lam v1 : v. lam v2 : v. lam g : Digraph v l.
       (digraphEdgesFrom v1 g) in
   map (lam tup : DigraphEdge v l. tup.2) from_v1_to_v2
 
--- Get the vertex v
-let digraphVertex = lam v. lam g: Digraph v l.
-  filter (lam k. lam. ) g.adj
 -- Check whether g has vertex v.
 let digraphHasVertex = lam v. lam g : Digraph v l.
   mapMem v g.adj
