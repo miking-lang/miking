@@ -83,6 +83,9 @@ let digraphLabels = lam v1 : v. lam v2 : v. lam g : Digraph v l.
       (digraphEdgesFrom v1 g) in
   map (lam tup : DigraphEdge v l. tup.2) from_v1_to_v2
 
+-- Get the vertex v
+let digraphVertex = lam v. lam g: Digraph v l.
+  filter (lam k. lam. ) g.adj
 -- Check whether g has vertex v.
 let digraphHasVertex = lam v. lam g : Digraph v l.
   mapMem v g.adj
@@ -107,6 +110,7 @@ let digraphHasEdges = lam es. lam g.
   forAll (lam e. digraphHasEdge e g) es
 
 -- Check whether graph g1 is equal to graph g2.
+-- NOTE(gizem, 2021-12-7): This has quadratic time complexity.
 let digraphGraphEq =
   lam g1: Digraph v l. lam g2: Digraph v l.
     if eqi (digraphCountEdges g1) (digraphCountEdges g2) then
