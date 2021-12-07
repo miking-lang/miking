@@ -205,15 +205,28 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     FEIf {cond = generateExpr env t.target, thn = generateExpr env t.els,
           els = generateExpr env t.thn, ty = generateType env t.ty,
           info = t.info}
-  | TmMatch ({pat = PatInt {val = i}} & t) ->
-    let cond = generateExpr env (withInfo (infoTm t.target) (eqi_ (int_ i) t.target)) in
-    FEIf {cond = cond, thn = generateExpr env t.thn,
-          els = generateExpr env t.els, ty = generateType env t.ty,
-          info = t.info}
-  | TmMatch ({pat = PatChar {val = c}} & t) ->
-    let cond = generateExpr env (withInfo (infoTm t.target)
-                            (eqi_ (int_ (char2int c)) t.target)) in
-    FEIf {cond = cond, thn = generateExpr env t.thn,
+  | TmMatch ({pat = PatInt _ | PatChar _} & t) ->
+    let condInfo = mergeInfo (infoTm t.target) (infoPat t.pat) in
+    let resultTy = FTyBool {info = condInfo} in
+    let eqiAppTy = FTyArrow {
+      from = FTyInt {info = condInfo}, to = resultTy, info = condInfo} in
+    let eqiTy = FTyArrow {
+      from = FTyInt {info = condInfo}, to = eqiAppTy, info = condInfo} in
+    let lhsConstVal =
+      match t.pat with PatInt {val = i} then
+        FCInt {val = i}
+      else match t.pat with PatChar {val = c} then
+        FCInt {val = char2int c}
+      else never in
+    let condExpr = FEApp {
+      lhs = FEApp {
+        lhs = FEConst {val = FCEq (), ty = eqiTy, info = condInfo},
+        rhs = FEConst {val = lhsConstVal, ty = FTyInt {info = condInfo},
+                       info = condInfo},
+        ty = eqiAppTy, info = condInfo},
+      rhs = generateExpr env t.target,
+      ty = resultTy, info = condInfo} in
+    FEIf {cond = condExpr, thn = generateExpr env t.thn,
           els = generateExpr env t.els, ty = generateType env t.ty,
           info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
@@ -382,9 +395,9 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     let accTy = generateType env t.ty in
     let seqTy = generateType env (tyTm s) in
     let elemTy =
-      match funcTy with FTyArrow {from = FTyArrow {to = elemTy}} then
+      match funcTy with FTyArrow {to = FTyArrow {to = elemTy}} then
         elemTy
-      else FTyUnknown {info = t.info} in
+      else infoErrorExit t.info "Invalid type of function passed to foldl" in
     let param : (FutPat, FutExpr) =
       ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
         generateExpr env ne ) in
@@ -580,12 +593,12 @@ use TestLang in
 
 let f = nameSym "f" in
 let c = nameSym "c" in
-let chars = bindall_ [
+let chars = typeAnnot (bindall_ [
   nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
     match_ (nvar_ c) (pchar_ 'a')
       true_
       false_)),
-  app_ (nvar_ f) (char_ 'x')] in
+  app_ (nvar_ f) (char_ 'x')]) in
 
 let charsExpected = FProg {decls = [
   FDeclFun {
@@ -622,7 +635,7 @@ let map = nameSym "map" in
 let f3 = nameSym "f" in
 let s = nameSym "s" in
 
-let t = bindall_ [
+let t = typeAnnot (bindall_ [
   ntype_ intseq (tyseq_ tyint_),
   ntype_ floatseq (tyseq_ tyfloat_),
   nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
@@ -641,8 +654,7 @@ let t = bindall_ [
   nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
              (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
                (parallelMap_ (nvar_ f3) (nvar_ s)))),
-  unit_
-] in
+  unit_]) in
 
 let intSeqType = FTyParamsApp {
   ty = nFutIdentTy_ intseq, params = [FPSize {val = n}], info = NoInfo ()} in
@@ -697,13 +709,13 @@ let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let n = nameSym "n" in
-let foldlToFor =
-  nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
+let foldlToFor = typeAnnot
+  (nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
     nlam_ s (tyseq_ tyint_) (
       foldl_
         (nlam_ acc tyint_ (nlam_ y tyint_ (
           addi_ (nvar_ acc) (nvar_ y))))
-        (int_ 0) (nvar_ s))) in
+        (int_ 0) (nvar_ s)))) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = n}],
@@ -717,10 +729,10 @@ let entryPoints = setOfSeq nameCmp [f] in
 utest printFutProg (generateProgram entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
 
-let negation =
-  nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]]) (
-    nlam_ a tyint_ (nlam_ b tyfloat_ (
-      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))]))) in
+let negation = typeAnnot
+  (nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]])
+    (nlam_ a tyint_ (nlam_ b tyfloat_ (
+      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))])))) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = false, typeParams = [],
