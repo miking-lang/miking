@@ -1623,7 +1623,8 @@ messages.
 #### Supported accelerate constructs
 
 The following keywords are reserved for parallel constructs:
-* `accelerate` - marks expressions that should be accelerated.
+* `accelerate` - marks expressions that should be accelerated. Nested
+  `accelerate` terms are not allowed.
 * `parallelFlatten` - flattens a two-dimensional sequence, producing a
   one-dimensional sequence. The term `parallelFlatten s` is equivalent to
   `foldl concat [] s`.
@@ -1635,12 +1636,19 @@ The following keywords are reserved for parallel constructs:
   neutral element of this function, the result of `parallelReduce f a s` will
   be equivalent to that of `foldl f a s`, but it will be computed in parallel.
 
-Note that the assumptions on the `parallelReduce` keyword are not checked. The
-compiler will assume that the parameters satisfy the requirements and produce
-parallel code. If the function `f` is not known to be associative, the `foldl`
-intrinsic should be used to generate sequential code. This will only result in
-parallel code if the compiler knows it is safe to do so (currently, if the
-function is either `addi` or `muli`).
+The parallel constructs, apart from `accelerate`, need to be placed within an
+`accelerate` term in order for them to be parallelised. If they are placed
+anywhere else, they will be generated as their sequential counterparts.
+
+In general, the `foldl` intrinsic should be used over the `parallelReduce`. If
+the compiler can determine that the given function `f` is associative
+(currently, if it is `addi` or `muli`), the `foldl` is promoted to a
+`parallelReduce`.
+
+Note in particular that floating-point addition and multiplication is not
+associative due to precision errors. Should these errors not be of any concern
+to the user, the `parallelReduce` construct may be used in place of `foldl` to
+force parallel execution.
 
 #### Example
 
