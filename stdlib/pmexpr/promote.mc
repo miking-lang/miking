@@ -29,6 +29,7 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
       TmFlatten {e = s, ty = tyTm app, info = infoTm app}
     else if isAssociative fBody then
       match getNeutralElement fBody with Some fNeutralElement then
+        let fNeutralElement = withInfo (infoTm ne) fNeutralElement in
         if eqExpr ne fNeutralElement then
           TmParallelReduce {f = arg1, ne = ne, as = s, ty = tyTm app,
                             info = infoTm app}

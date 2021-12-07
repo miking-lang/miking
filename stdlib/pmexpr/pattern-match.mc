@@ -5,6 +5,8 @@ include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utils.mc"
 
+type Argument = (Name, Type, Info)
+
 type PatternMatchState = {
   -- A sequence of indices of the active patterns. These are patterns whose
   -- dependencies have been matched with expressions, but which have not been
@@ -22,8 +24,8 @@ type PatternMatchState = {
   -- Maps the index of a pattern to the expression it matched with.
   atomicPatternMatches : Map Int Expr,
 
-  -- Maps the name of a parameter to the argument name it has matched with.
-  nameMatches : Map Name Name,
+  -- Maps the name of a parameter to the argument it has matched with.
+  nameMatches : Map Name Argument,
 
   -- Maps the name of a variable to the set of variable patterns on which it
   -- depends.
@@ -137,7 +139,7 @@ let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
                         -> Option PatternMatchState =
   use PMExprAst in
   lam expr. lam state. lam varPat.
-  match expr with TmVar {ident = ident} then
+  match expr with TmVar {ident = ident, ty = ty, info = info} then
     match varPat with PatternIndex index then
       match mapLookup index state.patternIndexToBoundVar with Some matchedId then
         if nameEq ident matchedId then Some state else None ()
@@ -145,10 +147,11 @@ let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
         error (concat "Found reference to unmatched pattern with index "
                       (int2string index))
     else match varPat with PatternName name then
-      match mapLookup name state.nameMatches with Some boundIdent then
+      match mapLookup name state.nameMatches with Some (boundIdent, _, _) then
         if nameEq ident boundIdent then Some state else None ()
       else
-        let nameMatches = mapInsert name ident state.nameMatches in
+        let arg = (ident, ty, info) in
+        let nameMatches = mapInsert name arg state.nameMatches in
         Some {state with nameMatches = nameMatches}
     else None ()
   else match expr with TmConst {val = CInt {val = n1}} then
@@ -187,13 +190,14 @@ recursive
         if lti i n then
           let arg = get args i in
           match bindingVar with PatternName id then
-            match getVariableIdentifier arg with Some argName then
-              match mapLookup id state.nameMatches with Some paramName then
+            match arg with TmVar {ident = argName, ty = ty, info = info} then
+              match mapLookup id state.nameMatches with Some (paramName, _, _) then
                 if nameEq argName paramName then
                   Some state
                 else work state (addi i 1)
               else
-                let nameMatches = mapInsert id argName state.nameMatches in
+                let arg = (argName, ty, info) in
+                let nameMatches = mapInsert id arg state.nameMatches in
                 Some {state with nameMatches = nameMatches}
             else None ()
           else match bindingVar with PatternIndex idx then
@@ -201,7 +205,7 @@ recursive
               match mapLookup idx state.patternIndexToBoundVar
               with Some boundVar then
                 match bindingName with Some id then
-                  match mapLookup id state.nameMatches with Some paramIdent then
+                  match mapLookup id state.nameMatches with Some (paramIdent, _, _) then
                     let paramEqName : (Name, Type, Info) -> Bool = lam param.
                       nameEq param.0 paramIdent
                     in
@@ -241,7 +245,7 @@ recursive
           match varPat with PatternIndex _ then
             setMem varPat deps
           else match varPat with PatternName paramId then
-            match mapLookup paramId state.nameMatches with Some argId then
+            match mapLookup paramId state.nameMatches with Some (argId, _, _) then
               setMem (PatternName argId) deps
             else false
           else false
@@ -336,7 +340,9 @@ recursive
     else None ()
 end
 
-let constructLookup : PatternMatchState -> Map VarPattern Expr = lam state.
+let constructLookup : PatternMatchState -> Map VarPattern Expr =
+  use MExprAst in
+  lam state.
   let lookup =
     mapFoldWithKey
       (lam acc. lam patIdx. lam patExpr : Expr.
@@ -346,9 +352,11 @@ let constructLookup : PatternMatchState -> Map VarPattern Expr = lam state.
         else error "Could not find identifier matched with pattern")
       (mapEmpty cmpVarPattern) state.atomicPatternMatches in
   mapFoldWithKey
-    (lam acc. lam patFnName. lam paramName.
+    (lam acc. lam patFnName. lam arg : Argument.
       let key = PatternName patFnName in
-      mapInsert key (paramName, nvar_ paramName) acc)
+      match arg with (id, ty, info) in
+      let param = TmVar {ident = id, ty = ty, info = info, frozen = false} in
+      mapInsert key (id, param) acc)
     lookup state.nameMatches
 
 let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
@@ -400,8 +408,8 @@ let f = nameSym "f" in
 let s = nameSym "s" in
 let h = nameSym "h" in
 let t = nameSym "t" in
-let expr = preprocess (nreclets_ [
-  (map, tyunknown_, nulam_ f (nulam_ s (
+let expr = typeAnnot (preprocess (nreclets_ [
+  (map, tyunknown_, nlam_ f (tyarrow_ tyint_ tyint_) (nulam_ s (
     match_ (nvar_ s)
       (pseqtot_ [])
       (seq_ [])
@@ -409,8 +417,7 @@ let expr = preprocess (nreclets_ [
         (pseqedgen_ [npvar_ h] t [])
         (cons_ (app_ (nvar_ f) (head_ (nvar_ s)))
                (appf2_ (nvar_ map) (nvar_ f) (tail_ (nvar_ s))))
-        never_))))
-]) in
+        never_))))])) in
 let mapPat = getMapPattern () in
 let mapPatternMatchResult = matchBindingsWithPattern expr mapPat in
 let fst = optionGetOrElse (lam. never) (get mapPatternMatchResult 0) in

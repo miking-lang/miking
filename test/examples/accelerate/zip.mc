@@ -5,7 +5,7 @@ mexpr
 
 let zip : [Int] -> [Int] -> Int = lam a. lam b.
   utest length a with length b in
-  parallelReduce addi 0 (parallelMap2 (lam x. lam y. addi x y) a b)
+  parallelReduce addi 0 (parallelMap2 (lam x : Int. lam y : Int. addi x y) a b)
 in
 
 let s1 : [Int] = create 100 (lam i. i) in

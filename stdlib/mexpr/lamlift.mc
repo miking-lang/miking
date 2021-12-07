@@ -271,9 +271,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
   | t ->
-    match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) then
-      t
-    else never
+    match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) in
+    t
 end
 
 lang LambdaLiftLiftGlobal = MExprAst

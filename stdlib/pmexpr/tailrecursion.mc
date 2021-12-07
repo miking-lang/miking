@@ -116,13 +116,16 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
     let exprs = findExpressionsAtTailPosition binding.body in
     let tailPosInfo = map (tailPositionExpressionInfo binding.ident) exprs in
     match foldl compatibleBinop (None ()) tailPosInfo with Some binop then
-      if isAssociative binop then
-        match getNeutralElement binop with Some ne then
-          match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
-            let leftArgRecursion =
-              match side with Left () | Both () then true else false
-            in
-            Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
+      match tyTm binop with TyArrow {from = elemTy, to = TyArrow _} then
+        if isAssociative binop then
+          match getNeutralElement binop with Some ne then
+            let ne = withType elemTy (withInfo binding.info ne) in
+            match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
+              let leftArgRecursion =
+                match side with Left () | Both () then true else false
+              in
+              Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
+            else None ()
           else None ()
         else None ()
       else None ()

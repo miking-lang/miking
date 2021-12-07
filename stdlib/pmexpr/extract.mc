@@ -61,7 +61,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
 
   -- Adds identifiers to accelerate terms and collects information on the
   -- accelerated terms. An accelerate term 'accelerate e' is rewritten as
-  -- 'let t = lam x : Int. e x in t 0', where t is a name containing a globally
+  -- 'let t = lam _x : Int. e in t 0', where t is a name containing a globally
   -- unique string within the AST. This format makes accelerate work even when
   -- there are no free variables, and it ensures that the term will be lambda
   -- lifted to the top of the program.
@@ -72,10 +72,9 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
       programIdentifiers = setEmpty cmpSID
     } in
     let env = collectProgramIdentifiers env t in
-    match addIdentifierToAccelerateTermsH env t with (env, t) then
-      let env : AddIdentifierAccelerateEnv = env in
-      (env.functions, t)
-    else never
+    match addIdentifierToAccelerateTermsH env t with (env, t) in
+    let env : AddIdentifierAccelerateEnv = env in
+    (env.functions, t)
 
   sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
   | TmAccelerate t ->
@@ -97,8 +96,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
       TmLet {
         ident = accelerateIdent,
         tyBody = funcType,
-        body = TmLam {ident = paramId, tyIdent = paramTy,
-                      body = t.e, ty = retType, info = info},
+        body = TmLam {
+          ident = paramId, tyIdent = paramTy, body = t.e,
+          ty = TyArrow {from = paramTy, to = retType, info = info},
+          info = info},
         inexpr = TmApp {
           lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
           rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
@@ -129,20 +130,16 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   -- are used by the accelerate terms.
   sem extractAccelerateTerms (accelerated : Set Name) =
   | t ->
-    match extractAccelerateTermsH accelerated t with (_, t) then
-      t
-    else never
+    match extractAccelerateTermsH accelerated t with (_, t) in t
 
   sem extractAccelerateTermsH (used : Set Name) =
   | TmLet t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
-      if setMem t.ident used then
-        let used = collectIdentifiersType used t.tyBody in
-        let used = collectIdentifiersExpr used t.body in
-        (used, TmLet {t with inexpr = inexpr})
-      else
-        (used, inexpr)
-    else never
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then
+      let used = collectIdentifiersType used t.tyBody in
+      let used = collectIdentifiersExpr used t.body in
+      (used, TmLet {t with inexpr = inexpr})
+    else (used, inexpr)
   | TmRecLets t ->
     let bindingIdents = map (lam bind : RecLetBinding. bind.ident) t.bindings in
     recursive let dfs = lam g. lam visited. lam ident.
@@ -159,36 +156,35 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
       let used = collectIdentifiersType used bind.tyBody in
       collectIdentifiersExpr used bind.body
     in
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
-      -- NOTE(larshum, 2021-10-03): We find the bindings that are used by
-      -- applying DFS on the call graph.
-      let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
-      let visited = setEmpty nameCmp in
-      let usedIdents =
-        foldl
-          (lam visited. lam ident.
-            if setMem ident used then
-              dfs g visited ident
-            else visited)
-          visited bindingIdents in
-      let usedBinds =
-        filter
-          (lam bind : RecLetBinding. setMem bind.ident usedIdents)
-          t.bindings in
-      let used = foldl collectBindIdents used usedBinds in
-      if null usedBinds then (used, inexpr)
-      else (used, TmRecLets {{t with bindings = usedBinds}
-                                with inexpr = inexpr})
-    else never
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    -- NOTE(larshum, 2021-10-03): We find the bindings that are used by
+    -- applying DFS on the call graph.
+    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let visited = setEmpty nameCmp in
+    let usedIdents =
+      foldl
+        (lam visited. lam ident.
+          if setMem ident used then
+            dfs g visited ident
+          else visited)
+        visited bindingIdents in
+    let usedBinds =
+      filter
+        (lam bind : RecLetBinding. setMem bind.ident usedIdents)
+        t.bindings in
+    let used = foldl collectBindIdents used usedBinds in
+    if null usedBinds then (used, inexpr)
+    else (used, TmRecLets {{t with bindings = usedBinds}
+                              with inexpr = inexpr})
   | TmType t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) then
-      if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
-      else (used, inexpr)
-    else never
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
+    else (used, inexpr)
   | TmConDef t -> extractAccelerateTermsH used t.inexpr
   | TmUtest t -> extractAccelerateTermsH used t.next
   | TmExt t -> extractAccelerateTermsH used t.inexpr
-  | t -> (used, unit_)
+  | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
+                         info = infoTm t})
 
   -- NOTE(larshum, 2021-09-17): All accelerated terms are given a dummy
   -- parameter, so that expressions without free variables can also be
@@ -249,20 +245,19 @@ let preprocess = lam t.
 in
 
 let extractAccelerate = lam t.
-  match addIdentifierToAccelerateTerms t with (accelerated, t) then
-    let ids = mapMap (lam. ()) accelerated in
-    let t = liftLambdas t in
-    (accelerated, extractAccelerateTerms ids t)
-  else never
+  match addIdentifierToAccelerateTerms t with (accelerated, t) in
+  let ids = mapMap (lam. ()) accelerated in
+  let t = liftLambdas t in
+  (accelerated, extractAccelerateTerms ids t)
 in
 
 let noAccelerateCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   app_ (var_ "f") (int_ 2)
 ]) in
-let x : (Map Name AccelerateData, Expr) = extractAccelerate noAccelerateCalls in
-utest mapSize x.0 with 0 in
-utest x.1 with unit_ using eqExpr in
+match extractAccelerate noAccelerateCalls with (m, ast) in
+utest mapSize m with 0 in
+utest ast with int_ 0 using eqExpr in
 
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
@@ -273,11 +268,11 @@ let t = preprocess (bindall_ [
 let extracted = preprocess (bindall_ [
   ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2))),
-  unit_
+  int_ 0
 ]) in
-let x : (Map Name Type, Expr) = extractAccelerate t in
-utest mapSize x.0 with 1 in
-utest x.1 with extracted using eqExpr in
+match extractAccelerate t with (m, ast) in
+utest mapSize m with 1 in
+utest ast with extracted using eqExpr in
 
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
@@ -289,11 +284,11 @@ let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (app_ (var_ "f") (var_ "x")) (int_ 2))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4))),
-  unit_
+  int_ 0
 ]) in
-let x : (Map Name Type, Expr) = extractAccelerate t in
-utest mapSize x.0 with 1 in
-utest x.1 with extracted using eqExpr in
+match extractAccelerate t with (m, ast) in
+utest mapSize m with 1 in
+utest ast with extracted using eqExpr in
 
 let multipleCallsToSame = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
@@ -310,11 +305,11 @@ let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "t" (ulam_ "y" (ulam_ "" (app_ (var_ "f") (var_ "y")))),
   ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x")))),
-  unit_
+  int_ 0
 ]) in
-let x : (Map Name Type, Expr) = extractAccelerate multipleCallsToSame in
-utest mapSize x.0 with 2 in
-utest x.1 with extracted using eqExpr in
+match extractAccelerate multipleCallsToSame with (m, ast) in
+utest mapSize m with 2 in
+utest ast with extracted using eqExpr in
 
 let distinctCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
@@ -328,11 +323,11 @@ let extracted = preprocess (bindall_ [
   ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "f") (int_ 1))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0))),
-  unit_
+  int_ 0
 ]) in
-let x : (Map Name Type, Expr) = extractAccelerate distinctCalls in
-utest mapSize x.0 with 2 in
-utest x.1 with extracted using eqExpr in
+match extractAccelerate distinctCalls with (m, ast) in
+utest mapSize m with 2 in
+utest ast with extracted using eqExpr in
 
 let inRecursiveBinding = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
@@ -346,10 +341,10 @@ let extracted = preprocess (bindall_ [
   ureclets_ [
     ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
     ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
-  unit_
+  int_ 0
 ]) in
-let x : (Map Name Type, Expr) = extractAccelerate inRecursiveBinding in
-utest mapSize x.0 with 1 in
-utest x.1 with extracted using eqExpr in
+match extractAccelerate inRecursiveBinding with (m, ast) in
+utest mapSize m with 1 in
+utest ast with extracted using eqExpr in
 
 ()
