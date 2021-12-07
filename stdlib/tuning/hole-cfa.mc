@@ -2,13 +2,15 @@
 -- final output is the set of holes that (may) affect the execution time, for
 -- each labelled subexpression.
 --
--- There are currently two ways in which execution time dependency is inferred:
+-- There are currently three ways in which execution time dependency is inferred:
 -- 1. In a match, if the _condition is data-dependent_ on hole `h`, then the
--- _execution time_ of the match is dependent on `h`.
--- 2. In the result of applying some intrinsic functions. For example, in
--- `sleepMs x`, if `x` is data-dependent, then the result of the application is
--- execution time dependent. The behaviour for each intrinsic function is
--- encoded in `const-dep.mc`.
+--    _execution time_ of the match is dependent on `h`.
+-- 2. In an application, if the lhs has a data-dependency on `h`, then the
+--    execution time of the application is dependent on `h`.
+-- 3. In the result of applying some intrinsic functions. For example, in
+--    `sleepMs x`, if `x` is data-dependent, then the the application
+--    is execution time dependent. The behaviour for each intrinsic function is
+--    encoded in `const-dep.mc`.
 --
 -- Limitations:
 -- * Some side-effects are not handled, e.g. parallelism and mutable data.
@@ -49,6 +51,9 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     let const = getConstStringCode 0 const in
     let args = strJoin ", " (map nameGetStr args) in
     (env, join [const, "(", args, ")"])
+
+  sem isDirect =
+  | AVEHole _ -> false
 
   sem cmpAbsValH =
   | (AVDHole {id = id1}, AVDHole {id = id2}) -> nameCmp id1 id2
@@ -317,7 +322,7 @@ x
 in
 
 utest test debug t ["h1", "h2", "x", "y"]
-with [("h1", {d = ["h1"], e = []}),("h2", {d = ["h2"], e = []}),("x", {d = ["h1"], e = []}),("y", {d = ["h2"], e = []})]
+with [("h1", {d=["h1"], e=[]}),("h2", {d=["h2"], e=[]}),("x", {d=["h1"], e=[]}),("y", {d=["h2"], e=[]})]
 using eqTestHole in
 
 
@@ -332,7 +337,7 @@ let x = foo () in x
 in
 
 utest test debug t ["x"]
-with [("x", {d = ["h"], e = []})]
+with [("x", {d=["h"], e=[]})]
 using eqTestHole in
 
 
@@ -347,7 +352,7 @@ let y = foo h in y
 in
 
 utest test debug t ["x", "y"]
-with [("x", {d = ["h"], e = []}), ("y", {d = ["h"], e = []})]
+with [("x", {d=["h"], e=[]}), ("y", {d=["h"], e=[]})]
 using eqTestHole in
 
 
@@ -365,14 +370,14 @@ y
 in
 
 utest test debug t ["y", "z"]
-with [("y", {d = [], e = []}), ("z", {d = [], e = []})]
+with [("y", {d=[], e=[]}), ("z", {d=[], e=[]})]
 using eqTestHole in
 
 
 let t = parse
 "
 let h = hole (Boolean {default = true}) in
-let x = if h then 1 else 2 in
+let x = if h then 1 else 2 in  -- rule 1
 let y = if true then 1 else 2 in
 let z = if true then h else 2 in
 let a = match h with h1 then true else false in
@@ -385,7 +390,7 @@ utest test debug t ["x", "y", "z", "a", "b", "h"]
 with [ ("x", {d=["h"],e=["h"]})
      , ("y", {d=[],e=[]})
      , ("z", {d=["h"],e=[]})
-     , ("a", {d = [], e = []})
+     , ("a", {d=[], e=[]})
      , ("b", {d=["h"],e=[]})
      , ("h", {d=["h"],e=[]})
      ]
@@ -396,7 +401,7 @@ let t = parse
 "
 let h = hole (Boolean {default = true}) in
 let f = if h then lam x. x else lam x. x in
-let a = f 1 in
+let a = f 1 in  -- rule 2
 a
 "
 in
@@ -454,15 +459,17 @@ using eqTestHole in
 
 let t = parse
 "
-let f = lam y. if y then 1 else 2 in
+let f = lam y. let z = if y then 1 else 2 in z in
 let h = hole (Boolean {default = true}) in
 let x = f h in
 x
 "
 in
 
-utest test debug t ["x"]
-with [ ("x", {d=["h"],e=["h"]}) ]
+utest test debug t ["x", "z"]
+with [ ("x", {d=["h"],e=[]})
+     , ("z", {d=["h"],e=["h"]})
+     ]
 using eqTestHole in
 
 
@@ -514,9 +521,9 @@ let x4 = match r with {a = true} then 1 else 2 in -- { d(h), e(h) ⊆ x4 }
 -- x5 is not dependent on h since the match can never fail
 let x5 = match r with {a = a, b = false} then 1 else 2 in -- { } ⊆ x5
 
-let f = lam x. if x then 1 else 2 in
+let f = lam x. let x111 = if x then 1 else 2 in x111 in -- { d(h), e(h) } ⊆ x10
 let g = lam f. f h in
-let x6 = g f in -- { d(h), e(h) } ⊆ x6
+let x6 = g f in -- { d(h) } ⊆ x6
 
 let f = if h then lam x. x else lam y. y in
 -- Similar for x4, x0 should not have e(h).
@@ -533,18 +540,19 @@ let x9 = addi h1 h2 in  -- { d(h1), d(h2) } ⊆ x9
 
 ()
 " in
-utest test debug t ["x1", "x2", "x22", "x3", "x4", "x5", "x6", "x0", "x7", "x8", "x9"]
+utest test debug t ["x1", "x2", "x22", "x3", "x4", "x5", "x6", "x0", "x7", "x8", "x9", "x111"]
 with [ ("x1", {d=["h"],e=[]})
      , ("x2", {d=["h"],e=[]})
      , ("x22", {d=["h"],e=[]})
      , ("x3", {d=[],e=[]})
      , ("x4", {d=["h"],e=["h"]})
      , ("x5", {d=[],e=[]})
-     , ("x6", {d=["h"],e=["h"]})
+     , ("x6", {d=["h"],e=[]})
      , ("x0", {d=["h"],e=["h"]})
      , ("x7", {d=["h1"],e=[]})
      , ("x8", {d=["h2"],e=[]})
      , ("x9", {d=["h1", "h2"],e=[]})
+     , ("x111", {d=["h"],e=["h"]})
      ]
 using eqTestHole
 in
@@ -553,7 +561,7 @@ let t = parse
 "
 let h = hole (IntRange {default = 1, min = 1, max = 1}) in
 let x =
-  let y = sleepMs h in
+  let y = sleepMs h in  -- rule 3
   2
 in
 x
@@ -565,6 +573,50 @@ with [ ("x", {d=[], e=[]})
      ]
 using eqTestHole
 in
+
+
+-- Questions.
+
+-- CstrDirect (⊆)
+-- TODO: should 'x' have an e-dep or not? Because of contraint y ⊆ x, x will
+-- inherit e-dep from y.
+-- 'z' should not have an e-dep
+let t = parse
+"
+let f = lam x.
+  let h = hole (Boolean {default = true}) in
+  let y = if h then x else addi 1 x in
+  let z = y in
+  z
+in
+let x = f 1 in
+()
+" in
+
+utest test debug t ["x", "z"]
+with [ ("x", {d=["h"],e=[]})
+     , ("z", {d=["h"],e=[]})
+     ]
+using eqTestHole
+in
+-- However, in this case 'x' does not inherit e-dep because 'y' is not returned
+-- by 'f'.
+let t = parse
+"
+let f = lam x.
+  let h = hole (Boolean {default = true}) in
+  let y = if h then x else addi 1 x in
+  h
+in
+let x = f 1 in
+()
+" in
+
+utest test debug t ["x"]
+with [ ("x", {d=["h"],e=[]})]
+using eqTestHole
+in
+
 
 -- TODO(Linnea,2021-11-22): test sequences, maps
 

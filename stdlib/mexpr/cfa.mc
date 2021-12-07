@@ -260,11 +260,16 @@ lang DirectConstraint = CFA
   -- lhs ⊆ rhs
   | CstrDirect { lhs: Name, rhs: Name }
 
+  sem isDirect =
+  | _ /- : AbsVal -/ -> true
+
   sem initConstraint (graph: CFAGraph) =
   | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrDirect r -> addData graph update.1 r.rhs
+  | CstrDirect r ->
+    if isDirect update.1 then addData graph update.1 r.rhs
+    else graph
 
   sem constraintToString (env: PprintEnv) =
   | CstrDirect { lhs = lhs, rhs = rhs } ->
