@@ -136,7 +136,6 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     else generateTypeNoAlias env t
 
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
-  | TyUnknown t -> FTyUnknown {info = t.info}
   | TyInt t -> FTyInt {info = t.info}
   | TyFloat t -> FTyFloat {info = t.info}
   | TyBool t -> FTyBool {info = t.info}
@@ -153,7 +152,8 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
   | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
-  | TyVariant t -> infoErrorExit t.info "Variant types cannot be accelerated"
+  | TyUnknown t -> infoErrorExit t.info "Unknown type cannot be accelerated"
+  | TyVariant t -> infoErrorExit t.info "Variant type cannot be accelerated"
   | t ->
     let tyStr = use MExprPrettyPrint in type2str t in
     infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
