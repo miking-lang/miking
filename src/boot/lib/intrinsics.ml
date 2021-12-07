@@ -3,6 +3,14 @@ open Ustring.Op
 module Mseq = struct
   type 'a t = List of 'a List.t | Rope of 'a Rope.t
 
+  let _catchOutOfBounds (f : unit -> 'a) : 'a =
+    try f ()
+    with _ ->
+      Printf.eprintf
+        "Out of bounds access in sequence. Compile with flag --runtime-checks \
+         enabled for precise error information.\n" ;
+      exit 1
+
   let create_rope n f = Rope (Rope.create_array n f)
 
   let create_list n f = List (List.init n f)
@@ -30,12 +38,17 @@ module Mseq = struct
     | _ ->
         raise (Invalid_argument "Mseq.concat")
 
-  let get = function Rope s -> Rope.get_array s | List s -> List.nth s
+  let get s i =
+    match s with
+    | Rope s ->
+        _catchOutOfBounds (fun _ -> Rope.get_array s i)
+    | List s ->
+        List.nth s i
 
   let set s i v =
     match s with
     | Rope s ->
-        Rope (Rope.set_array s i v)
+        Rope (_catchOutOfBounds (fun _ -> Rope.set_array s i v))
     | List s ->
         let rec set i v s acc =
           match (i, s) with
@@ -67,11 +80,17 @@ module Mseq = struct
     | List s ->
         List (List.rev s)
 
-  let head = function Rope s -> Rope.get_array s 0 | List s -> List.hd s
+  let head = function
+    | Rope s ->
+        _catchOutOfBounds (fun _ -> Rope.get_array s 0)
+    | List s ->
+        List.hd s
 
   let tail = function
     | Rope s ->
-        Rope (Rope.sub_array s 1 (Rope.length_array s))
+        Rope
+          (_catchOutOfBounds (fun _ ->
+               Rope.sub_array s 1 (Rope.length_array s) ) )
     | List s ->
         List (List.tl s)
 
@@ -96,7 +115,7 @@ module Mseq = struct
   let split_at s i =
     match s with
     | Rope s ->
-        let s1, s2 = Rope.split_at_array s i in
+        let s1, s2 = _catchOutOfBounds (fun _ -> Rope.split_at_array s i) in
         (Rope s1, Rope s2)
     | List s ->
         let rec split_at_rev l r = function
@@ -111,7 +130,7 @@ module Mseq = struct
   let subsequence s a n =
     match s with
     | Rope s ->
-        Rope (Rope.sub_array s a n)
+        Rope (_catchOutOfBounds (fun _ -> Rope.sub_array s a n))
     | List s ->
         let rec subsequence_rev acc s i j =
           match s with
