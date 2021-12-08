@@ -36,17 +36,20 @@ include "common.mc"
 
 include "ast.mc"
 include "const-dep.mc"
+include "context-expansion.mc"
 
 lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
   syn AbsVal =
-  | AVDHole { id : Name }
-  | AVEHole { id : Name }
+  | AVDHole { id : Name, contexts : Set Int }
+  | AVEHole { id : Name, contexts : Set Int }
   | AVConst { const : Const, args : [Name] }
 
   sem absValToString (env : PprintEnv) =
-  | AVDHole {id = id} -> (env, join ["dhole", "(", nameGetStr id, ")"])
-  | AVEHole {id = id} -> (env, join ["ehole", "(", nameGetStr id, ")"])
+  | ( AVDHole {id = id, contexts = contexts}
+    | AVEHole {id = id, contexts = contexts} ) ->
+    (env, join ["dhole", "(", nameGetStr id, ",{",
+       strJoin "," (setToSeq contexts), "}", ")"])
   | AVConst { const = const, args = args } ->
     let const = getConstStringCode 0 const in
     let args = strJoin ", " (map nameGetStr args) in
@@ -56,8 +59,12 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | AVEHole _ -> false
 
   sem cmpAbsValH =
-  | (AVDHole {id = id1}, AVDHole {id = id2}) -> nameCmp id1 id2
-  | (AVEHole {id = id1}, AVEHole {id = id2}) -> nameCmp id1 id2
+  | ( (AVDHole {id = id1, contexts = ctxs1},
+       AVDHole {id = id2, contexts = ctxs2})
+    | (AVEHole {id = id1, contexts = ctxs1},
+       AVEHole {id = id2, contexts = ctxs2}) ) ->
+    let ncmp = nameCmp id1 id2 in
+    if eqi 0 ncmp then setCmp ctxs1 ctxs2 else ncmp
   | (AVConst lhs, AVConst rhs) ->
     use ConstCmp in
     let cmp = cmpConst lhs.const rhs.const in
@@ -91,12 +98,14 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | CstrHoleDirect { lhs = lhs, rhs = rhs } ->
     match update.1 with AVDHole _ & av then addData graph av rhs else graph
   | CstrHoleApp { lhs = lhs, res = res } ->
-    match update.1 with AVDHole {id = id} & av then
+    match update.1 with AVDHole {id = id, contexts = contexts} & av then
       let graph = addData graph av res in
-      addData graph (AVEHole {id = id}) res
+      addData graph (AVEHole {id = id, contexts = contexts}) res
     else graph
   | CstrHoleMatch { lhs = lhs, res = res } ->
-    match update.1 with AVDHole {id = id} then addData graph (AVEHole {id = id}) res else graph
+    match update.1 with AVDHole {id = id, contexts = contexts}
+    then addData graph (AVEHole {id = id, contexts = contexts}) res
+    else graph
   | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
     use MExprConstDep in
     match update.1 with AVConst ({ const = const, args = args } & avc) then
@@ -111,21 +120,25 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
           let isDataDep = dep.0 in
           let isExeDep = dep.1 in
           let s = dataLookup arg graph in
-          let avHoles : [Name] = setFold (lam acc. lam e.
-            match e with AVDHole {id = id} then cons id acc
+          let avHoles : [(Name, Set Int)] = setFold (lam acc. lam e.
+            match e with AVDHole {id=id, contexts=ctxs} then cons (id, ctxs) acc
             else acc) [] s
           in
           -- Add data dependencies to the result
           let graph =
             if isDataDep then
-              foldl (lam acc. lam id. addData acc (AVDHole {id=id}) res)
-                graph avHoles
+              foldl (lam acc. lam idCtxs.
+                match idCtxs with (id, ctxs) in
+                addData acc (AVDHole {id=id, contexts=ctxs}) res
+              ) graph avHoles
             else graph
           in
           -- Add execution time dependencies the result
           if isExeDep then
-            foldl (lam acc. lam id. addData acc (AVEHole {id = id}) res)
-              graph avHoles
+            foldl (lam acc. lam idCtxs.
+              match idCtxs with (id, ctxs) in
+              addData acc (AVEHole {id=id, contexts=ctxs}) res
+            ) graph avHoles
           else graph) graph (zip args cdeps) in
         graph
       else
@@ -137,7 +150,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | _ -> []
     -- Holes
   | TmLet { ident = ident, body = TmHole _} ->
-    [ CstrInit {lhs = AVDHole {id = ident}, rhs = ident } ]
+    [ CstrInit {lhs = AVDHole {id=ident, contexts=setEmpty subi}, rhs=ident } ]
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
@@ -256,9 +269,26 @@ let parse = lam str.
 in
 let test: Bool -> Expr -> [String] -> [[AbsVal]] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
+    -- Use small ANF first, needed for context expansion
+    let tANFSmall = use MExprHoles in normalizeTerm t in
+    -- Do context expansion (throw away AST for now)
+    let contextMap : Map Name (Set Int) =
+      use MExprHoles in
+      let res = contextExpand [] tANFSmall in
+      let env : CallCtxEnv = res.env in
+      match env with {hole2idx = hole2idx} in
+      mapFoldWithKey
+        (lam acc : Map Name (Set Int). lam nameInfo : NameInfo.
+         lam vals : Map [NameInfo] Int.
+           mapInsert nameInfo.0 (setOfSeq subi (mapValues vals))
+        ) (mapEmpty nameCmp) hole2idx
+    in
+
+    -- Use full ANF
+    let tANF = normalizeTerm tANFSmall in
+
     if debug then
       -- Version with debug printouts
-      let tANF = normalizeTerm t in
       match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
       printLn "\n--- ORIGINAL PROGRAM ---";
       printLn tStr;
@@ -280,7 +310,6 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
 
     else
       -- Version without debug printouts
-      let tANF = normalizeTerm t in
       let cfaRes : CFAGraph = cfa tANF in
       map (lam var: String.
         let binds = mapBindings cfaRes.data in
@@ -619,5 +648,32 @@ in
 
 
 -- TODO(Linnea,2021-11-22): test sequences, maps
+
+-- AVDHole and AVEHole are annotated by contexts
+-- Semantic function: AbsVal -> CFAGraph -> AbsVal
+-- To use in CstrDirect
+-- Describes how values change via function calls
+-- Possibly expensive if we have to check each name if it's a context path
+
+-- Context information (stored in the graph?)
+-- The set of contexts for a hole: Map Name (Set Int)
+-- The set of contexts that pass a part of context path: Name -> Name -> Set Int
+-- (label, name of hole) -> set of contexts
+
+let t = parse
+"
+let f = lam x.
+  let h = hole (Boolean {default = true, depth = 1}) in  -- {dhole(h,{1,2})} ⊆ x
+  h
+in
+let x = f 1 in  -- {dhole(h,{1})} ⊆ x
+let y = f 1 in  -- {dhole(h,{2})} ⊆ y
+()
+" in
+
+utest test true t ["x"]
+with [ ("x", {d=["h"],e=[]}) ]
+using eqTestHole
+in
 
 ()
