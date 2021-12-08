@@ -49,7 +49,11 @@ type CFAGraph = {
   -- must be put below directly, since we do not yet have product extensions.
 
   -- Used for alignment analysis in miking-dppl
-  stochMatches: Set Name
+  stochMatches: Set Name,
+
+  -- Used to store any data in the graph
+  -- NOTE: this is a temporary hack to explore context analysis
+  graphData: Option GraphData
 
 }
 
@@ -58,7 +62,8 @@ let emptyCFAGraph = {
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp,
   mcgfs = [],
-  stochMatches = setEmpty nameCmp
+  stochMatches = setEmpty nameCmp,
+  graphData = None ()
 }
 
 -------------------
@@ -73,11 +78,16 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   syn AbsVal =
   -- Intentionally left blank
 
+  syn GraphData =
+
   sem cfa =
-  | t -> match cfaDebug (None ()) t with (_,graph) in graph
+  | t -> match cfaDebug (None ()) (None ()) t with (_,graph) in graph
+
+  sem cfaData (graphData: GraphData) =
+  | t -> match cfaDebug (Some graphData) (None ()) t with (_,graph) in graph
 
   -- Main algorithm
-  sem cfaDebug (env: Option PprintEnv) =
+  sem cfaDebug (graphData: Option GraphData) (env: Option PprintEnv) =
   | t ->
 
     let printGraph = lam env. lam graph. lam str.
@@ -90,6 +100,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
     in
 
     let graph = initGraph t in
+    let graph = {graph with graphData = graphData} in
 
     -- Iteration
     recursive let iter = lam env: PprintEnv. lam graph: CFAGraph.

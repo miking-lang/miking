@@ -45,6 +45,9 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | AVEHole { id : Name, contexts : Set Int }
   | AVConst { const : Const, args : [Name] }
 
+  syn GraphData =
+  | CtxInfo { contextMap : Map Name (Set Int) }
+
   sem absValToString (env : PprintEnv) =
   | ( AVDHole {id = id, contexts = contexts}
     | AVEHole {id = id, contexts = contexts} ) ->
@@ -280,7 +283,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       mapFoldWithKey
         (lam acc : Map Name (Set Int). lam nameInfo : NameInfo.
          lam vals : Map [NameInfo] Int.
-           mapInsert nameInfo.0 (setOfSeq subi (mapValues vals))
+           mapInsert nameInfo.0 (setOfSeq subi (mapValues vals)) acc
         ) (mapEmpty nameCmp) hole2idx
     in
 
@@ -295,7 +298,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some env) tANF with (Some env,cfaRes) in
+      match cfaDebug (None ()) (Some env) tANF with (Some env,cfaRes) in
       match cfaGraphToString env cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -310,7 +313,7 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfa tANF in
+      let cfaRes : CFAGraph = cfaData (CtxInfo {contextMap = contextMap}) tANF in
       map (lam var: String.
         let binds = mapBindings cfaRes.data in
         let res = foldl (lam acc. lam b : (Name, Set AbsVal).
@@ -671,7 +674,7 @@ let y = f 1 in  -- {dhole(h,{2})} ⊆ y
 ()
 " in
 
-utest test true t ["x"]
+utest test debug t ["x"]
 with [ ("x", {d=["h"],e=[]}) ]
 using eqTestHole
 in
