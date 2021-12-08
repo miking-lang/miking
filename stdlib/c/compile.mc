@@ -350,6 +350,8 @@ lang MExprCCompile = MExprAst + CAst
     --   else never
     -- else never
 
+  | ty -> .infoErrorExit (infoTy ty) "Unsupported type in compileType"
+
 
   -----------------------
   -- COMPILE FUNCTIONS --
