@@ -117,15 +117,10 @@ lang TestLang =
   PMExprParallelPattern
 
   sem isAtomic =
-  | TmParallelMap _ -> false
   | TmParallelMap2 _ -> false
   | TmParallelReduce _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmParallelMap t ->
-    match printParen indent env t.f with (env, f) in
-    match pprintCode indent env t.as with (env, as) in
-    (env, join ["parallelMap (", f, ") (", as, ")"])
   | TmParallelMap2 t ->
     match printParen indent env t.f with (env, f) in
     match pprintCode indent env t.as with (env, as) in
@@ -157,6 +152,7 @@ in
 let containsParallelKeyword : Expr -> Bool = lam e.
   recursive let work = lam acc. lam e.
     if or acc (isKeyword e) then true
+    else match e with TmApp {lhs = TmApp {lhs = TmConst {val = CMap ()}}} then true
     else sfold_Expr_Expr work acc e
   in
   work false e

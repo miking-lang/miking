@@ -215,10 +215,25 @@ let mapPattern : () -> Pattern =
         ] in
         let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
-        TmParallelMap {
-          f = TmLam {ident = x, tyIdent = tyTm headExpr, body = els,
-                     ty = tyTm els, info = infoTm els},
-          as = sExpr, ty = TySeq {ty = tyTm els, info = info}, info = info}
+        let fType = TyArrow {
+          from = tyTm headExpr, to = tyTm els, info = infoTm els} in
+        let innerAppType = TyArrow {
+          from = TySeq {ty = tyTm headExpr, info = info},
+          to = TySeq {ty = tyTm els, info = info},
+          info = info} in
+        let mapTy = TyArrow {
+          from = fType,
+          to = innerAppType,
+          info = info} in
+        TmApp {
+          lhs = TmApp {
+            lhs = TmConst {val = CMap (), ty = mapTy, info = info},
+            rhs = TmLam {
+              ident = x, tyIdent = tyTm headExpr, body = els,
+              ty = fType, info = infoTm els},
+            ty = innerAppType, info = info},
+          rhs = sExpr,
+          ty = TySeq {ty = tyTm els, info = info}, info = info}
       else
         error (join [
           "Rewriting into parallelMap pattern failed: The functional expression ",

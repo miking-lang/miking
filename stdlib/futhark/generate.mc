@@ -465,10 +465,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     withTypeFutTm
       (generateType env t.ty)
       (withInfoFutTm t.info (futFlatten_ (generateExpr env t.e)))
-  | TmParallelMap t ->
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futMap_ (generateExpr env t.f) (generateExpr env t.as)))
   | TmParallelMap2 t ->
     withTypeFutTm
       (generateType env t.ty)
@@ -653,7 +649,7 @@ let t = typeAnnot (bindall_ [
                if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
   nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
              (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
-               (parallelMap_ (nvar_ f3) (nvar_ s)))),
+               (map_ (nvar_ f3) (nvar_ s)))),
   unit_]) in
 
 let intSeqType = FTyParamsApp {
