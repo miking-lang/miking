@@ -51,8 +51,7 @@ type CFAGraph = {
   -- Used for alignment analysis in miking-dppl
   stochMatches: Set Name,
 
-  -- Used to store any data in the graph
-  -- NOTE: this is a temporary hack to explore context analysis
+  -- Used to store any custom data in the graph
   graphData: Option GraphData
 
 }
@@ -79,6 +78,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   -- Intentionally left blank
 
   syn GraphData =
+  -- Intentionally left blank
 
   sem cfa =
   | t -> match cfaDebug (None ()) (None ()) t with (_,graph) in graph
