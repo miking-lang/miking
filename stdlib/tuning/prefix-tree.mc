@@ -8,9 +8,9 @@ include "common.mc"
 
 -- The type of a prefix tree. A node has an element, the set of id's rooted in
 -- that subtree, and a set of children. A leaf has an identifier.
-type PTree
-con Node : { root : a, ids : [Int], children : Map a PTree } -> PTree
-con Leaf : Int -> PTree
+type PTree a
+con Node : { root : a, ids : [Int], children : Map a PTree } -> PTree a
+con Leaf : Int -> PTree a
 
 -- 'prefixTreeEmpty cmp sentinel' creates an empty prefix tree, where 'sentinel' may
 -- not be used as value in any string to be added to the tree.
@@ -54,6 +54,21 @@ let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
   let z = zip ids paths in
   foldl (lam acc. lam idPath : (Int, a). prefixTreeInsert cmp acc idPath.0 idPath.1) tree z
 
+let prefixTreeToString = lam toStr. lam tree.
+  match tree with Node {children = cs} in
+  recursive let work = lam ind. lam children.
+    mapMapWithKey (lam root. lam subtree.
+      printLn (join [make ind ' ', "root: ", toStr root]);
+      match subtree with Leaf id then
+        printLn (join [make ind ' ', "leaf ", int2string id])
+      else match subtree with Node {ids = ids, children = children} in
+        printLn (join [make ind ' ', "ids: ", strJoin ", " (map int2string ids)]);
+        work (addi ind 2) children
+    ) children
+  in
+  work 0 cs
+
+-- Used for testing.
 recursive let prefixTreeEq = lam cmp. lam t1. lam t2.
   match (t1, t2) with (Leaf i1, Leaf i2) then eqi i1 i2
   else match (t1, t2) with (Node n1, Node n2) then

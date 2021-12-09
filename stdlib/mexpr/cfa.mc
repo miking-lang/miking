@@ -99,11 +99,10 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
       else None ()
     in
 
-    let graph = initGraph t in
-    let graph = {graph with graphData = graphData} in
+    let graph = initGraph graphData t in
 
     -- Iteration
-    recursive let iter = lam env: PprintEnv. lam graph: CFAGraph.
+    recursive let iter = lam env: Option PprintEnv. lam graph: CFAGraph.
       if null graph.worklist then (env,graph)
       else
         match printGraph env graph "INTERMEDIATE CFA GRAPH" with env in
@@ -142,7 +141,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
 
   -- This function is responsible for setting up the initial CFAGraph given the
   -- program to analyze.
-  sem initGraph =
+  sem initGraph (graphData: Option GraphData) =
   -- Intentionally left blank
 
   -- Call a set of constraint generation functions on each term in program.
@@ -274,12 +273,18 @@ lang DirectConstraint = CFA
   sem isDirect =
   | _ /- : AbsVal -/ -> true
 
+  -- AbsVal -> AbsVal
+  sem directTransition (graph: CFAGraph) (rhs: Name) =
+  | av -> av
+
   sem initConstraint (graph: CFAGraph) =
   | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
   | CstrDirect r ->
-    if isDirect update.1 then addData graph update.1 r.rhs
+    if isDirect update.1 then
+      let av = directTransition graph r.rhs update.1 in
+      addData graph av r.rhs
     else graph
 
   sem constraintToString (env: PprintEnv) =
@@ -950,7 +955,7 @@ lang MExprCFA = CFA +
 lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
 
   -- Type: Expr -> CFAGraph
-  sem initGraph =
+  sem initGraph (graphData : Option GraphData) =
   | t ->
 
     -- Initial graph
