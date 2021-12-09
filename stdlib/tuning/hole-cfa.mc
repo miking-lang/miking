@@ -316,12 +316,11 @@ let parse = lam str.
   let ast = makeKeywords [] ast in
   symbolize ast
 in
-let test: Bool -> Expr -> [String] -> [[AbsVal]] =
+let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameInfo] Int))] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
     -- Do context expansion (throw away AST for now)
-    --let contextMap : Map Name (Set Int) =
     match
       use MExprHoles in
       let res = contextExpand [] tANFSmall in
@@ -341,8 +340,8 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
            lam tree : Ptree NameInfo.
              mapInsert nameInfo.0 (blurb tree) acc
           ) (mapEmpty nameCmp) env.contexts
-      in (contextMap, prefixMap)
-    with (contextMap, prefixMap) in
+      in (contextMap, prefixMap, hole2idx)
+    with (contextMap, prefixMap, hole2idx) in
 
     -- Use full ANF
     let tANF = normalizeTerm tANFSmall in
@@ -360,43 +359,95 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
-      map (lam var: String.
-        let binds = mapBindings cfaRes.data in
-        let res = foldl (lam acc. lam b : (Name, Set AbsVal).
-          if eqString var (nameGetStr b.0) then b.1 else acc
-        ) (setEmpty cmpAbsVal) binds in
-        (var, res)
-      ) vars
+      let avs : [(String, Set AbsVal, Map NameInfo (Map [NameInfo] Int))] =
+        map (lam var: String.
+          let binds = mapBindings cfaRes.data in
+          let res = foldl (lam acc. lam b : (Name, Set AbsVal).
+            if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
+          ) [] binds in
+          (var, res, hole2idx)
+        ) vars
+      in avs
 
     else
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData (CtxInfo {contextMap = contextMap, prefixMap = prefixMap}) tANF in
-      map (lam var: String.
-        let binds = mapBindings cfaRes.data in
-        let res = foldl (lam acc. lam b : (Name, Set AbsVal).
-          if eqString var (nameGetStr b.0) then b.1 else acc
-        ) (setEmpty cmpAbsVal) binds in
-        (var, res)
-      ) vars
+      let avs : [(String, Set AbsVal, Map NameInfo (Map [NameInfo] Int))] =
+        map (lam var: String.
+          let binds = mapBindings cfaRes.data in
+          let res = foldl (lam acc. lam b : (Name, Set AbsVal).
+            if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
+          ) [] binds in
+          (var, res, hole2idx)
+        ) vars
+      in avs
 in
 
--- Custom equality function for testing lambda control flow only
-type Dep = {d: [String], e: [String]} in
-let eqTestHole = eqSeq (lam t1:(String,Set AbsVal). lam t2:(String,Dep).
-  if eqString t1.0 t2.0 then
-    let data = setFold (lam acc. lam av.
-      match av with AVDHole {id = id} then cons (nameGetStr id) acc else acc)
-      [] t1.1
-    in
-    let exe = setFold (lam acc. lam av.
-      match av with AVEHole {id = id} then cons (nameGetStr id) acc else acc)
-      [] t1.1
-    in
-    let deps : Dep = t2.1 in
-    if setEq (setOfSeq cmpString data) (setOfSeq cmpString deps.d) then
-      setEq (setOfSeq cmpString exe) (setOfSeq cmpString deps.e)
-    else false
-  else false
+-- Custom equality function
+type Dep = {d: [(String,[[String]])], e: [(String,[[String]])]} in
+let gbl = lam s. (s,[[]]) in
+let eqTestHole = eqSeq
+  (lam t1:(String,[AbsVal],Map NameInfo (Map [NameInfo] Int)).
+   lam t2:(String,Dep).
+     let index2Path : String -> Int -> [String] = lam str. lam i.
+       let pathMap =
+         match mapFoldWithKey (lam acc. lam nameInfo. lam bind.
+           match acc with Some _ then acc
+           else if eqString (nameInfoGetStr nameInfo) str then Some bind
+           else acc
+         ) (None ()) t1.2
+         with Some pathMap then pathMap
+         else error "impossible"
+       in
+       match mapFoldWithKey (lam acc. lam path. lam index.
+         if eqi index i then Some (map nameInfoGetStr path)
+         else acc
+       ) (None ()) pathMap
+       with Some path then path
+       else error "impossible"
+     in
+
+     if eqString t1.0 t2.0 then
+       let data : [(String,Set Int)] = foldl (lam acc. lam av.
+           match av with AVDHole {id = id, contexts = contexts}
+           then
+             cons (nameGetStr id, contexts) acc else acc
+         ) [] t1.1
+       in
+       let exe : [(String,Set Int)] = foldl (lam acc. lam av.
+           match av with AVEHole {id = id, contexts = contexts}
+           then cons (nameGetStr id, contexts) acc else acc
+         ) [] t1.1
+       in
+       let deps : Dep = t2.1 in
+       -- Comparison of names
+       let namesEq =
+         let dataStrs = map (lam e : (String,[Int]). e.0) data in
+         let exeStrs = map (lam e : (String,[Int]). e.0) exe in
+         let depDataStrs = map (lam e : (String,[[String]]). e.0) deps.d in
+         let depExeStrs = map (lam e : (String,[[String]]). e.0) deps.e in
+         if setEq (setOfSeq cmpString dataStrs) (setOfSeq cmpString depDataStrs) then
+           setEq (setOfSeq cmpString exeStrs) (setOfSeq cmpString depExeStrs)
+         else false
+       in
+       -- Comparison of contexts
+       if namesEq then
+         let dataCtxs : [(String, [Int])] = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) data in
+         let dataCtxPaths : [[String]] = map (lam e : (String, [Int]). map (index2Path e.0) e.1) dataCtxs in
+         let dataCtxPaths : [Set [String]] = map (setOfSeq (seqCmp cmpString)) dataCtxPaths in
+
+         let exeCtxs : [(String, [Int])] = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) exe in
+         let exeCtxPaths : [[String]] = map (lam e : (String, [Int]). map (index2Path e.0) e.1) exeCtxs in
+         let exeCtxPaths : [Set [String]] = map (setOfSeq (seqCmp cmpString)) exeCtxPaths in
+
+         let depDataCtxs : [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.d in
+         let depExeCtxs : [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.e in
+
+         if setEq (setOfSeq setCmp dataCtxPaths) (setOfSeq setCmp depDataCtxs) then
+           setEq (setOfSeq setCmp exeCtxPaths) (setOfSeq setCmp depExeCtxs)
+         else false
+       else false
+     else false
 ) in
 --------------------
 
@@ -411,7 +462,10 @@ x
 in
 
 utest test debug t ["h1", "h2", "x", "y"]
-with [("h1", {d=["h1"], e=[]}),("h2", {d=["h2"], e=[]}),("x", {d=["h1"], e=[]}),("y", {d=["h2"], e=[]})]
+with [ ("h1", {d=[gbl "h1"], e=[]})
+     , ("h2", {d=[gbl "h2"], e=[]})
+     , ("x", {d=[gbl "h1"], e=[]})
+     , ("y", {d=[gbl "h2"], e=[]})]
 using eqTestHole in
 
 
@@ -426,7 +480,7 @@ let x = foo () in x
 in
 
 utest test debug t ["x"]
-with [("x", {d=["h"], e=[]})]
+with [("x", {d=[gbl "h"], e=[]})]
 using eqTestHole in
 
 
@@ -441,7 +495,7 @@ let y = foo h in y
 in
 
 utest test debug t ["x", "y"]
-with [("x", {d=["h"], e=[]}), ("y", {d=["h"], e=[]})]
+with [("x", {d=[gbl "h"], e=[]}), ("y", {d=[gbl "h"], e=[]})]
 using eqTestHole in
 
 
@@ -476,12 +530,12 @@ x
 in
 
 utest test debug t ["x", "y", "z", "a", "b", "h"]
-with [ ("x", {d=["h"],e=["h"]})
+with [ ("x", {d=[gbl "h"],e=[gbl "h"]})
      , ("y", {d=[],e=[]})
-     , ("z", {d=["h"],e=[]})
+     , ("z", {d=[gbl "h"],e=[]})
      , ("a", {d=[], e=[]})
-     , ("b", {d=["h"],e=[]})
-     , ("h", {d=["h"],e=[]})
+     , ("b", {d=[gbl "h"],e=[]})
+     , ("h", {d=[gbl "h"],e=[]})
      ]
 using eqTestHole in
 
@@ -496,8 +550,8 @@ a
 in
 
 utest test debug t ["f", "a"]
-with [ ("f", {d=["h"],e=["h"]})
-     , ("a", {d=["h"],e=["h"]})
+with [ ("f", {d=[gbl "h"],e=[gbl "h"]})
+     , ("a", {d=[gbl "h"],e=[gbl "h"]})
      ]
 using eqTestHole in
 
@@ -515,10 +569,10 @@ x
 in
 
 utest test false t ["x", "y", "z", "y2"]
-with [ ("x", {d=["h1"],e=[]})
-     , ("y", {d=["h1"],e=[]})
-     , ("z", {d=[],e=["h1"]})
-     , ("y2",{d=["h1", "h2"],e=[]})
+with [ ("x", {d=[gbl "h1"],e=[]})
+     , ("y", {d=[gbl "h1"],e=[]})
+     , ("z", {d=[],e=[gbl "h1"]})
+     , ("y2",{d=[gbl "h1", gbl "h2"],e=[]})
      ]
 using eqTestHole in
 
@@ -537,10 +591,10 @@ let e = r.y in
 in
 
 utest test debug t ["a", "b", "c", "d", "e"]
-with [ ("a", {d=["h"],e=[]})
-     , ("b", {d=["h"],e=["h"]})
+with [ ("a", {d=[gbl "h"],e=[]})
+     , ("b", {d=[gbl "h"],e=[gbl "h"]})
      , ("c", {d=[],e=[]})
-     , ("d", {d=["h"],e=["h"]})
+     , ("d", {d=[gbl "h"],e=[gbl "h"]})
      , ("e", {d=[],e=[]})
      ]
 using eqTestHole in
@@ -556,8 +610,8 @@ x
 in
 
 utest test debug t ["x", "z"]
-with [ ("x", {d=["h"],e=[]})
-     , ("z", {d=["h"],e=["h"]})
+with [ ("x", {d=[gbl "h"],e=[]})
+     , ("z", {d=[gbl "h"],e=[gbl "h"]})
      ]
 using eqTestHole in
 
@@ -579,10 +633,10 @@ let d = f h2 h3 in
 " in
 
 utest test debug t ["a", "b", "c", "d"]
-with [ ("a",{d=["h1","h2","h3"],e=[]})
-     , ("b",{d=["h1","h2","h3"],e=[]})
-     , ("c",{d=["h1","h2","h3"],e=[]})
-     , ("d",{d=["h1","h2","h3"],e=[]})
+with [ ("a",{d=map gbl ["h1","h2","h3"],e=[]})
+     , ("b",{d=map gbl ["h1","h2","h3"],e=[]})
+     , ("c",{d=map gbl ["h1","h2","h3"],e=[]})
+     , ("d",{d=map gbl ["h1","h2","h3"],e=[]})
      ]
 using eqTestHole in
 
@@ -630,18 +684,18 @@ let x9 = addi h1 h2 in  -- { d(h1), d(h2) } ⊆ x9
 ()
 " in
 utest test debug t ["x1", "x2", "x22", "x3", "x4", "x5", "x6", "x0", "x7", "x8", "x9", "x111"]
-with [ ("x1", {d=["h"],e=[]})
-     , ("x2", {d=["h"],e=[]})
-     , ("x22", {d=["h"],e=[]})
+with [ ("x1", {d=[gbl "h"],e=[]})
+     , ("x2", {d=[gbl "h"],e=[]})
+     , ("x22", {d=[gbl "h"],e=[]})
      , ("x3", {d=[],e=[]})
-     , ("x4", {d=["h"],e=["h"]})
+     , ("x4", {d=[gbl "h"],e=[gbl "h"]})
      , ("x5", {d=[],e=[]})
-     , ("x6", {d=["h"],e=[]})
-     , ("x0", {d=["h"],e=["h"]})
-     , ("x7", {d=["h1"],e=[]})
-     , ("x8", {d=["h2"],e=[]})
-     , ("x9", {d=["h1", "h2"],e=[]})
-     , ("x111", {d=["h"],e=["h"]})
+     , ("x6", {d=[gbl "h"],e=[]})
+     , ("x0", {d=[gbl "h"],e=[gbl "h"]})
+     , ("x7", {d=[gbl "h1"],e=[]})
+     , ("x8", {d=[gbl "h2"],e=[]})
+     , ("x9", {d=[gbl "h1", gbl "h2"],e=[]})
+     , ("x111", {d=[gbl "h"],e=[gbl "h"]})
      ]
 using eqTestHole
 in
@@ -658,89 +712,19 @@ x
 
 utest test debug t ["x", "y"]
 with [ ("x", {d=[], e=[]})
-     , ("y", {d=[], e=["h"]})
+     , ("y", {d=[], e=[gbl "h"]})
      ]
-using eqTestHole
-in
-
-
--- Questions.
-
--- CstrDirect (⊆)
--- TODO: should 'x' have an e-dep or not? Because of contraint y ⊆ x, x will
--- inherit e-dep from y.
--- 'z' should not have an e-dep
-let t = parse
-"
-let f = lam x.
-  let h = hole (Boolean {default = true}) in
-  let y = if h then x else addi 1 x in
-  let z = y in
-  z
-in
-let x = f 1 in
-()
-" in
-
-utest test debug t ["x", "z"]
-with [ ("x", {d=["h"],e=[]})
-     , ("z", {d=["h"],e=[]})
-     ]
-using eqTestHole
-in
--- However, in this case 'x' does not inherit e-dep because 'y' is not returned
--- by 'f'.
-let t = parse
-"
-let f = lam x.
-  let h = hole (Boolean {default = true}) in
-  let y = if h then x else addi 1 x in
-  h
-in
-let x = f 1 in
-()
-" in
-
-utest test debug t ["x"]
-with [ ("x", {d=["h"],e=[]})]
 using eqTestHole
 in
 
 
 -- TODO(Linnea,2021-11-22): test sequences, maps
 
--- AVDHole and AVEHole are annotated by contexts
--- Semantic function: AbsVal -> CFAGraph -> AbsVal
--- To use in CstrDirect
--- Describes how values change via function calls
--- Possibly expensive if we have to check each name if it's a context path
-
--- Context information (stored in the graph?)
--- The set of contexts for a hole: Map Name (Set Int)
--- The set of contexts that pass a part of context path: Name -> Name -> Set Int
--- (label, name of hole) -> set of contexts
-
-let t = parse
-"
-let f = lam x.
-  let h = hole (Boolean {default = true, depth = 2}) in  -- {dhole(h,{1,2})} ⊆ x
-  h
-in
-let x = f 1 in  -- {dhole(h,{0})} ⊆ x
-let y = f 1 in  -- {dhole(h,{1})} ⊆ y
-()
-" in
-
-utest test debug t ["x"]
-with [ ("x", {d=["h"],e=[]}) ]
-using eqTestHole
-in
-
-
+-- Context-sensitivity
 let t = parse
 "
 let f1 = lam x.
-  let h = hole (Boolean {default = true, depth = 2}) in  -- {dhole(h,{1,2})} ⊆ x
+  let h = hole (Boolean {default = true, depth = 2}) in
   h
 in
 let f2 = lam x.
@@ -749,16 +733,60 @@ let f2 = lam x.
   let c = addi a b in
   c
 in
-let d = f2 1 in  -- {dhole(h,{0})} ⊆ y
-let e = f2 1 in  -- {dhole(h,{1})} ⊆ y
+let f3 = lam f.
+  f 1
+in
+let d = f2 1 in
+let e = f2 1 in
 let f = addi d e in
 let g = sleepMs f in
+let i = f3 f2 in  -- TODO: should not be allowed?
 ()
 " in
 
-utest test true t []
---with [ ("c", {d=["h"],e=[]}) ]
-with []
+utest test debug t
+[ "a"
+, "b"
+, "c"
+, "d"
+, "e"
+, "f"
+, "g"
+, "i"
+]
+with
+[ ("a", {d=[ ("h", [["d","a"], ["e","a"]]) ],e=[]})
+, ("b", {d=[ ("h", [["d","b"], ["e","b"]]) ],e=[]})
+, ("c", {d=[ ("h", [["d","a"], ["e","a"]])
+           , ("h", [["d","b"], ["e","b"]])
+           ],
+         e=[]})
+, ("d", {d=[ ("h", [["d","a"]])
+           , ("h", [["d","b"]])
+           ],
+         e=[]})
+, ("e", {d=[ ("h", [["e","a"]])
+           , ("h", [["e","b"]])
+           ],
+         e=[]})
+, ("f", {d=[ ("h", [["d","a"]])
+           , ("h", [["d","b"]])
+           , ("h", [["e","a"]])
+           , ("h", [["e","b"]])
+           ],
+         e=[]})
+, ("g", {e=[ ("h", [["d","a"]])
+           , ("h", [["d","b"]])
+           , ("h", [["e","a"]])
+           , ("h", [["e","b"]])
+           ],
+         d=[]})
+-- 'i' gets the same as 'e'
+, ("i", {d=[ ("h", [["d","a"], ["e","a"]])
+           , ("h", [["d","b"], ["e","b"]])
+           ],
+         e=[]})
+]
 using eqTestHole
 in
 
