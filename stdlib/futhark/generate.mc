@@ -234,15 +234,22 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
            inexpr = generateExpr env t.thn, ty = generateType env (tyTm t.thn),
            info = infoTm t.target}
-  | TmMatch ({pat = PatRecord {bindings = bindings},
-              thn = TmVar {ident = exprName}, els = TmNever _} & t) ->
+  | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
+    let defaultGenerateRecordMatch = lam.
+      FEMatch {
+        target = generateExpr env t.target,
+        cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
+        ty = generateType env t.ty,
+        info = t.info} in
     let binds : [(SID, Pat)] = mapBindings bindings in
-    match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
-      if nameEq patName exprName then
-        FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                      ty = generateType env t.ty, info = t.info}
-      else defaultGenerateMatch env (TmMatch t)
-    else defaultGenerateMatch env (TmMatch t)
+    match t.thn with TmVar {ident = exprName} then
+      match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
+        if nameEq patName exprName then
+          FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
+                        ty = generateType env t.ty, info = t.info}
+        else defaultGenerateRecordMatch ()
+      else defaultGenerateRecordMatch ()
+    else defaultGenerateRecordMatch ()
   | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],
                                 middle = PName tail, postfix = []},
               els = TmNever _} & t) ->
@@ -276,12 +283,6 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
       let tyStr = use MExprPrettyPrint in type2str targetTy in
       infoErrorExit t.info (join ["Term of non-sequence type '", tyStr,
                                   "' cannot be matched on sequence pattern"])
-  | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
-    FEMatch {
-      target = generateExpr env t.target,
-      cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
-      ty = generateType env t.ty,
-      info = t.info}
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
@@ -738,8 +739,29 @@ let expected = FProg {decls = [
       ("a", futApp_ (futConst_ (FCNegi ())) (nFutVar_ a)),
       ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))],
     info = NoInfo ()}]} in
-let entryPoints = setOfSeq nameCmp [] in
+let entryPoints = setEmpty nameCmp in
 utest printFutProg (generateProgram entryPoints negation)
 with printFutProg expected using eqSeq eqc in
+
+let recordTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
+let recordPat = prec_ [("a", npvar_ a), ("b", npvar_ b)] in
+let recordMatchNotProj = typeAnnot
+  (nlet_ f (tyarrows_ [recordTy, tyint_])
+    (nlam_ x recordTy
+      (match_ (nvar_ x) recordPat
+        (nvar_ a)
+        never_))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(x, futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)])],
+    ret = futIntTy_,
+    body =
+      futMatch_
+        (nFutVar_ x)
+        [(futPrecord_ [("a", nFutPvar_ a), ("b", nFutPvar_ b)], nFutVar_ a)],
+    info = NoInfo ()}]} in
+utest printFutProg (generateProgram (setEmpty nameCmp) recordMatchNotProj)
+with printFutProg expected using eqString in
 
 ()
