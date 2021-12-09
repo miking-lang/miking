@@ -290,7 +290,10 @@ lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym
 mexpr
 use Test in
 
-let blurb : PTree NameInfo -> Map Name (Set Int) = lam tree.
+-- Test functions --
+
+-- Helper for converting info from context expansion
+let treeToMap : PTree NameInfo -> Map Name (Set Int) = lam tree.
   match tree with Node {children = children} then
     recursive let work = lam acc. lam children.
       mapFoldWithKey (lam acc. lam root. lam subtree.
@@ -309,7 +312,7 @@ let blurb : PTree NameInfo -> Map Name (Set Int) = lam tree.
   else error "Missing sentinel node"
 in
 
--- Test functions --
+-- Actual test functions
 let debug = false in
 let parse = lam str.
   let ast = parseMExprString holeKeywords str in
@@ -320,7 +323,9 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
-    -- Do context expansion (throw away AST for now)
+    -- Do context expansion to get context information (throw away the AST)
+    -- TODO(Linnea,2021-12-09): Separate transformation from computing context
+    -- information
     match
       use MExprHoles in
       let res = contextExpand [] tANFSmall in
@@ -338,7 +343,7 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
           (lam acc : Map Name (Map Name (Set Int)).
            lam nameInfo : NameInfo.
            lam tree : Ptree NameInfo.
-             mapInsert nameInfo.0 (blurb tree) acc
+             mapInsert nameInfo.0 (treeToMap tree) acc
           ) (mapEmpty nameCmp) env.contexts
       in (contextMap, prefixMap, hole2idx)
     with (contextMap, prefixMap, hole2idx) in
