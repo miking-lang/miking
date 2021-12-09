@@ -54,19 +54,19 @@ let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
   let z = zip ids paths in
   foldl (lam acc. lam idPath : (Int, a). prefixTreeInsert cmp acc idPath.0 idPath.1) tree z
 
-let prefixTreeToString = lam toStr. lam tree.
-  match tree with Node {children = cs} in
-  recursive let work = lam ind. lam children.
-    mapMapWithKey (lam root. lam subtree.
-      printLn (join [make ind ' ', "root: ", toStr root]);
-      match subtree with Leaf id then
-        printLn (join [make ind ' ', "leaf ", int2string id])
-      else match subtree with Node {ids = ids, children = children} in
-        printLn (join [make ind ' ', "ids: ", strJoin ", " (map int2string ids)]);
-        work (addi ind 2) children
-    ) children
-  in
-  work 0 cs
+-- let prefixTreeToString = lam toStr. lam tree.
+--   match tree with Node {children = cs} in
+--   recursive let work = lam ind. lam children.
+--     mapMapWithKey (lam root. lam subtree.
+--       printLn (join [make ind ' ', "root: ", toStr root]);
+--       match subtree with Leaf id then
+--         printLn (join [make ind ' ', "leaf ", int2string id])
+--       else match subtree with Node {ids = ids, children = children} in
+--         printLn (join [make ind ' ', "ids: ", strJoin ", " (map int2string ids)]);
+--         work (addi ind 2) children
+--     ) children
+--   in
+--   work 0 cs
 
 -- Used for testing.
 recursive let prefixTreeEq = lam cmp. lam t1. lam t2.

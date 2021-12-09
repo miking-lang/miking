@@ -327,20 +327,13 @@ let test: Bool -> Expr -> [String] -> [[AbsVal]] =
       let res = contextExpand [] tANFSmall in
       let env : CallCtxEnv = res.env in
       match env with {hole2idx = hole2idx} in
-      printLn "CONTEXTS: ";
-      (let tree = head (mapBindings env.contexts) in
-        match tree with (_,Node {children = cs}) in
-        prefixTreeToString (lam x. nameGetStr (nameInfoGetName x)) (Node {children = cs})
-        ); --exit 0;
       let contextMap : Map Name (Set Int) =
         mapFoldWithKey
           (lam acc : Map Name (Set Int). lam nameInfo : NameInfo.
            lam vals : Map [NameInfo] Int.
---             print "*** bindings"; dprintLn (mapBindings vals);
              mapInsert nameInfo.0 (setOfSeq subi (mapValues vals)) acc
           ) (mapEmpty nameCmp) hole2idx
       in
-      -- TODO: merge nodes, it's a tree and not a graph
       let prefixMap : Map Name (Map Name (Set Int)) =
         mapFoldWithKey
           (lam acc : Map Name (Map Name (Set Int)).
