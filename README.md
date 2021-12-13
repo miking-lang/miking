@@ -1648,7 +1648,9 @@ the compiler can determine that the given function `f` is associative
 Note in particular that floating-point addition and multiplication is not
 associative due to precision errors. Should these errors not be of any concern
 to the user, the `parallelReduce` construct may be used in place of `foldl` to
-force parallel execution.
+force parallel execution. Also, note that an associative function must take two
+arguments of the same type, and this is a requirement on the function passed to
+`parallelReduce`.
 
 #### Example
 
