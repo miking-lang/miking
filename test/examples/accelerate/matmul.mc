@@ -50,7 +50,10 @@ let matMulSq : [[Int]] -> [[Int]] -> [[Int]] = lam a. lam b.
     a
 
 let matSumSq : [[Int]] -> Int = lam m.
-  foldl addi 0 (map (foldl addi 0) m)
+  -- We use an explicit type annotation here to eliminate the type variable
+  -- result of map (needed because type annot does not eliminate these).
+  let t : [Int] = map (foldl addi 0) m in
+  foldl addi 0 t
 
 mexpr
 

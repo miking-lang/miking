@@ -3,7 +3,6 @@ include "c/pprint.mc"
 include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
-include "futhark/function-restrictions.mc"
 include "futhark/generate.mc"
 include "futhark/pprint.mc"
 include "futhark/record-lift.mc"
@@ -30,6 +29,7 @@ include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utest-size-constraint.mc"
+include "pmexpr/well-formed.mc"
 include "parse.mc"
 
 lang PMExprCompile =
@@ -39,7 +39,7 @@ lang PMExprCompile =
   PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
   PMExprRecursionElimination + PMExprExtractAccelerate +
   PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  PMExprUtestSizeConstraint + FutharkGenerate + FutharkFunctionRestrictions +
+  PMExprUtestSizeConstraint + PMExprWellFormed + FutharkGenerate +
   FutharkDeadcodeElimination + FutharkSizeParameterize + FutharkCWrapper +
   FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
   OCamlGenerate + OCamlTypeDeclGenerate
@@ -48,7 +48,6 @@ end
 let parallelKeywords = [
   "accelerate",
   "parallelFlatten",
-  "parallelMap",
   "parallelMap2",
   "parallelReduce"
 ]
@@ -88,10 +87,14 @@ let patternTransformation : Expr -> Expr = lam ast.
   let ast = parallelPatternRewrite parallelPatterns ast in
   eliminateRecursion ast
 
+let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
+  use PMExprCompile in
+  reportNestedAccelerate accelerateIds ast ;
+  pmexprWellFormed ast
+
 let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
   use PMExprCompile in
   let ast = generateProgram entryPoints ast in
-  reportFutharkFunctionViolations ast;
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
@@ -204,9 +207,10 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- result is a PMExpr AST.
   let pmexprAst = patternTransformation accelerateAst in
 
-  -- Report errors if there are nested accelerate terms within the PMExpr
-  -- AST.
-  reportNestedAccelerate accelerateIds pmexprAst;
+  -- Perform validation of the produced PMExpr AST to ensure it is valid
+  -- in terms of the well-formed rules. If it is found to violate these
+  -- constraints, an error is reported.
+  validatePMExprAst accelerateIds pmexprAst ;
 
   -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
   -- the result.
