@@ -323,9 +323,10 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
-    -- Do context expansion to get context information (throw away the AST)
+    -- Do context expansion to get context information (throw away the AST for
+    -- now).
     -- TODO(Linnea,2021-12-09): Separate transformation from computing context
-    -- information
+    -- information.
     match
       use MExprHoles in
       let res = contextExpand [] tANFSmall in
@@ -745,7 +746,7 @@ let d = f2 1 in
 let e = f2 1 in
 let f = addi d e in
 let g = sleepMs f in
-let i = f3 f2 in  -- TODO: should not be allowed?
+let i = f3 f2 in
 ()
 " in
 
