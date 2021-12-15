@@ -1586,10 +1586,10 @@ does it require any additional installations apart from `futhark`.
 The accelerated compilation via `mi compile --accelerate` makes use of parallel
 keywords. The most important keyword is `accelerate`, whose only argument is an
 expression that is requested to be accelerated. The other keywords are used for
-operations specific to acceleration, such as `map2` and `parallelReduce`.
-There are several limitations on what expressions may be used. If an
-accelerated expression attempts to make use of an unsupported subexpression, an
-error is reported.
+accelerate-specific operations, such as `map2` and `parallelReduce`. There are
+several limitations on what expressions may be used. If an accelerated
+expression attempts to make use of an unsupported subexpression, an error is
+reported.
 
 When the `--accelerate` flag is not set, the `accelerate` keywords are removed
 from the program, and parallel constructs are replaced by equivalent sequential
