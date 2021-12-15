@@ -428,13 +428,13 @@ let recursiveCall = appf3_ (nvar_ map) (var_ "acc") (var_ "f") (var_ "t") in
 utest lookupSnd (PatternIndex 7) fst with Some recursiveCall using optionEq eqExpr in
 utest mapSize fst with 12 in
 
-let map2 = nameSym "map2" in
+let map2id = nameSym "map2" in
 let acc = nameSym "acc" in
 let s2 = nameSym "s" in
 let h2 = nameSym "h" in
 let t2 = nameSym "t" in
 let expr = preprocess (nreclets_ [
-  (map2, tyunknown_, nulam_ acc (nulam_ s (nulam_ s2 (
+  (map2id, tyunknown_, nulam_ acc (nulam_ s (nulam_ s2 (
     match_ (nvar_ s)
       (pseqtot_ [])
       (nvar_ acc)
@@ -445,7 +445,7 @@ let expr = preprocess (nreclets_ [
           (pseqedgen_ [npvar_ h] t [])
           (match_ (nvar_ s2)
             (pseqedgen_ [npvar_ h2] t2 [])
-            (appf3_ (nvar_ map2)
+            (appf3_ (nvar_ map2id)
               (snoc_ (nvar_ acc) (muli_ (head_ (nvar_ s)) (head_ (nvar_ s2))))
               (tail_ (nvar_ s))
               (tail_ (nvar_ s2)))

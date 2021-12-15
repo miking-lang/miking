@@ -308,7 +308,7 @@ let map2Pattern : () -> Pattern =
         ] in
         let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
-        TmParallelMap2 {
+        TmMap2 {
           f = TmLam {
             ident = x, tyIdent = tyTm headFstExpr,
             body = TmLam {

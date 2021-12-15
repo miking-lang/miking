@@ -1586,7 +1586,7 @@ does it require any additional installations apart from `futhark`.
 The accelerated compilation via `mi compile --accelerate` makes use of parallel
 keywords. The most important keyword is `accelerate`, whose only argument is an
 expression that is requested to be accelerated. The other keywords are used for
-explicitly parallel operations, such as `parallelMap` and `parallelReduce`.
+operations specific to acceleration, such as `map2` and `parallelReduce`.
 There are several limitations on what expressions may be used. If an
 accelerated expression attempts to make use of an unsupported subexpression, an
 error is reported.
@@ -1622,15 +1622,14 @@ messages.
 
 #### Supported accelerate constructs
 
-The following keywords are reserved for parallel constructs:
+The following keywords are reserved for accelerate-specific constructs:
 * `accelerate` - marks expressions that should be accelerated. Nested
   `accelerate` terms are not allowed.
 * `parallelFlatten` - flattens a two-dimensional sequence, producing a
   one-dimensional sequence. The term `parallelFlatten s` is equivalent to
   `foldl concat [] s`.
-* `parallelMap` - equivalent to the `map` keyword.
-* `parallelMap2` - performs a `map` operation over two sequences that are
-  assumed to be of the same length.
+* `map2` - performs a `map` operation over two sequences that are assumed to be
+  of the same length.
 * `parallelReduce` - performs a reduction over elements of a sequence. If the
   applied function is associative and the initial accumulator value is the
   neutral element of this function, the result of `parallelReduce f a s` will

@@ -117,11 +117,11 @@ lang TestLang =
   PMExprParallelPattern
 
   sem isAtomic =
-  | TmParallelMap2 _ -> false
+  | TmMap2 _ -> false
   | TmParallelReduce _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmParallelMap2 t ->
+  | TmMap2 t ->
     match printParen indent env t.f with (env, f) in
     match pprintCode indent env t.as with (env, as) in
     match pprintCode indent env t.bs with (env, bs) in

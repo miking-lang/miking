@@ -466,7 +466,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     withTypeFutTm
       (generateType env t.ty)
       (withInfoFutTm t.info (futFlatten_ (generateExpr env t.e)))
-  | TmParallelMap2 t ->
+  | TmMap2 t ->
     withTypeFutTm
       (generateType env t.ty)
       (withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
