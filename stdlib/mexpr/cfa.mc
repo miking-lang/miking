@@ -273,7 +273,6 @@ lang DirectConstraint = CFA
   sem isDirect =
   | _ /- : AbsVal -/ -> true
 
-  -- AbsVal -> AbsVal
   sem directTransition (graph: CFAGraph) (rhs: Name) =
   | av -> av
 
