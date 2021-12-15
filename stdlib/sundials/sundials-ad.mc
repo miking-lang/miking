@@ -7,27 +7,29 @@ type IdaAdResFn =
 
 -- See `IdaInitArg`.
 type IdaAdInitArg = {
-  lsolver : IdaDlsSolverSession,
-  tol     : IdaTolerance,
-  resf    : IdaAdResFn,
-  varid   : NvectorSerial,
-  roots   : (Int, IdaRootFn),
-  t       : Float,
-  y       : NvectorSerial,
-  yp      : NvectorSerial
+  tol      : IdaTolerance,
+  nlsolver : SundialsNonlinearSolver,
+  lsolver  : IdaDlsSolverSession,
+  resf     : IdaAdResFn,
+  varid    : NvectorSerial,
+  roots    : (Int, IdaRootFn),
+  t        : Float,
+  y        : NvectorSerial,
+  yp       : NvectorSerial
 }
 
 -- See `idaInit`.
 let idaAdInit = lam arg : IdaAdInitArg.
   match arg with {
-    lsolver = lsolver,
-    tol     = tol,
-    resf    = resf,
-    varid   = varid,
-    roots   = roots,
-    t       = t,
-    y       = y,
-    yp      = yp
+    tol      = tol,
+    nlsolver = nlsolver,
+    lsolver  = lsolver,
+    resf     = resf,
+    varid    = varid,
+    roots    = roots,
+    t        = t,
+    y        = y,
+    yp       = yp
   } in
   let ny = tensorSize (nvectorSerialUnwrap arg.y) in
   let yd = tensorCreateDense [ny] (lam. Primal 0.) in
@@ -41,8 +43,9 @@ let idaAdInit = lam arg : IdaAdInitArg.
     ()
   in
   idaInit {
-    lsolver = lsolver,
     tol     = tol,
+    nlsolver = nlsolver,
+    lsolver = lsolver,
     resf    = resf,
     varid   = varid,
     roots   = roots,
@@ -107,6 +110,8 @@ utest
 
     let m = sundialsMatrixDense 2 in
 
+    let nlsolver = sundialsNonlinearSolverNewtonMake v in
+
     let lsolver = mklsolver (idaDlsDense v m) in
     let tol = idaSSTolerances 1.e-4 1.e-6 in
 
@@ -114,14 +119,15 @@ utest
     let t0 = 0. in
 
     let s = idaAdInit {
-      lsolver = lsolver,
-      tol     = tol,
-      resf    = resf,
-      varid   = varid,
-      roots   = idaNoRoots,
-      t       = t0,
-      y       = v,
-      yp      = vp
+      tol      = tol,
+      nlsolver = nlsolver,
+      lsolver  = lsolver,
+      resf     = resf,
+      varid    = varid,
+      roots    = idaNoRoots,
+      t        = t0,
+      y        = v,
+      yp       = vp
     } in
     idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
     let r = idaSolveNormal s { tend = 2., y = v, yp = vp } in

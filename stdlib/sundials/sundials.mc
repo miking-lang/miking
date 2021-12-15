@@ -10,6 +10,7 @@ type IdaDlsSolverSession
 type IdaTolerance
 type IdaSession
 type IdaSolverResultInternal
+type SundialsNonlinearSolver
 
 type IdaSolverResult
 con IdaSuccess : {} -> IdaSolverResult
@@ -85,6 +86,22 @@ external idaDlsSolverJacf ! : IdaJacFn -> IdaDlsDense -> IdaDlsSolverSession
 -- Jacobian `jacf`.
 let idaDlsSolverJacf = lam jacf. lam solver. idaDlsSolverJacf jacf solver
 
+external sundialsNonlinearSolverNewtonMake
+  : NvectorSerial -> SundialsNonlinearSolver
+
+-- `sundialsNonlinearSolverNewtonMake` creates a generic nonlinear solver based
+-- on Newtons method.
+let sundialsNonlinearSolverNewtonMake =
+  lam y. sundialsNonlinearSolverNewtonMake y
+
+external sundialsNonlinearSolverFixedPointMake
+  : Int -> NvectorSerial -> SundialsNonlinearSolver
+
+-- `sundialsNonlinearSolverFixedPointMake` creates a generic nonlinear solver
+-- for fixed-point (functional) iteration with optional Anderson acceleration.
+let sundialsNonlinearSolverFixedPointMake =
+  lam n. lam y. sundialsNonlinearSolverFixedPointMake n y
+
 external idaVarIdAlgebraic : Float    -- Indicates an algebraic variable
 external idaVarIdDifferential : Float -- Indicates a differential variable
 
@@ -109,8 +126,9 @@ let idaSolverResult : IdaSolverResultInternal -> IdaSolverResult =
     end
 
 external idaInit !
-  : IdaDlsSolverSession ->
-    IdaTolerance ->
+  : IdaTolerance ->
+    SundialsNonlinearSolver ->
+    IdaDlsSolverSession ->
     IdaResFn ->
     NvectorSerial ->
     (Int, IdaRootFn) ->
@@ -120,11 +138,15 @@ external idaInit !
     IdaSession
 
 type IdaInitArg = {
-  -- The linear solver.
-  lsolver : IdaDlsSolverSession,
-
   -- The error tolerances.
   tol     : IdaTolerance,
+
+  -- The linear solver to use when calculating consistent inital conditions and
+  -- calculating integrations steps.
+  nlsolver : SundialsNonlinearSolver,
+
+  -- The linear solver.
+  lsolver : IdaDlsSolverSession,
 
   -- The residual function.
   resf    : IdaResFn,
@@ -150,16 +172,17 @@ type IdaInitArg = {
 -- `idaInit arg` creates an IDA session given arguments `arg`.
 let idaInit = lam arg : IdaInitArg.
   match arg with {
-    lsolver = lsolver,
-    tol     = tol,
-    resf    = resf,
-    varid   = varid,
-    roots   = roots,
-    t       = t,
-    y       = y,
-    yp      = yp
+    tol      = tol,
+    nlsolver = nlsolver,
+    lsolver  = lsolver,
+    resf     = resf,
+    varid    = varid,
+    roots    = roots,
+    t        = t,
+    y        = y,
+    yp       = yp
   } in
-  idaInit lsolver tol resf varid roots t y yp
+  idaInit tol nlsolver lsolver resf varid roots t y yp
 
 external idaCalcICYaYd !
   : IdaSession -> Float -> NvectorSerial -> NvectorSerial -> ()
@@ -254,7 +277,7 @@ utest
     ()
   in
 
-  let runTests = lam mklsolver.
+  let runTests = lam mknlsolver. lam mklsolver.
     let y = tcreate [2] (lam. 0.) in
     let yp = tcreate [2] (lam. 0.) in
 
@@ -266,6 +289,8 @@ utest
 
     let m = sundialsMatrixDense 2 in
 
+    let nlsolver = mknlsolver v in
+
     let lsolver = mklsolver (idaDlsDense v m) in
     let tol = idaSSTolerances 1.e-4 1.e-6 in
 
@@ -273,14 +298,15 @@ utest
     let t0 = 0. in
 
     let s = idaInit {
-      lsolver = lsolver,
-      tol = tol,
-      resf = resf,
-      varid = varid,
-      roots = idaNoRoots,
-      t = t0,
-      y = v,
-      yp = vp
+      tol      = tol,
+      nlsolver = nlsolver,
+      lsolver  = lsolver,
+      resf     = resf,
+      varid    = varid,
+      roots    = idaNoRoots,
+      t        = t0,
+      y        = v,
+      yp       = vp
     } in
     idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
 
@@ -297,15 +323,21 @@ utest
     tset yp [1] (negf 0.);
     idaReinit s { roots = idaNoRoots, t = t0, y = v, yp = vp };
     idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
-    
+
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in
     utest tend with 2. using eqf in
     ()
   in
 
-  runTests (lam lsolver. idaDlsSolver lsolver);
-  runTests (lam lsolver. idaDlsSolverJacf jacf lsolver);
+  let nlnewton = sundialsNonlinearSolverNewtonMake in
+  let nlfixedpoint = sundialsNonlinearSolverFixedPointMake 0 in
+
+  runTests nlnewton (lam lsolver. idaDlsSolver lsolver);
+  runTests nlnewton (lam lsolver. idaDlsSolverJacf jacf lsolver);
+
+  -- runTests nlfixedpoint (lam lsolver. idaDlsSolver lsolver);
+  -- runTests nlfixedpoint (lam lsolver. idaDlsSolverJacf jacf lsolver);
 
   ()
 with () in

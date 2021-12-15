@@ -6,8 +6,9 @@ type IdaAdVResFn = DualNum -> DualTensor -> DualTensor -> DualTensor -> ()
 
 -- See `IdaInitArg`.
 type IdaAdVInitArg = {
-  lsolver : IdaDlsSolverSession,
-  tol     : IdaTolerance,
+  tol      : IdaTolerance,
+  nlsolver : SundialsNonlinearSolver,
+  lsolver  : IdaDlsSolverSession,
   resf    : IdaAdVResFn,
   varid   : NvectorSerial,
   roots   : (Int, IdaRootFn),
@@ -19,27 +20,29 @@ type IdaAdVInitArg = {
 -- See `idaInit`.
 let idaAdVInit = lam arg : IdaAdVInitArg.
   match arg with {
-    lsolver = lsolver,
-    tol     = tol,
-    resf    = resf,
-    varid   = varid,
-    roots   = roots,
-    t       = t,
-    y       = y,
-    yp      = yp
+    tol      = tol,
+    nlsolver = nlsolver,
+    lsolver  = lsolver,
+    resf     = resf,
+    varid    = varid,
+    roots    = roots,
+    t        = t,
+    y        = y,
+    yp       = yp
   } in
   let resf = lam t. lam y. lam yp. lam r.
     resf (Primal t) (PrimalTensor y) (PrimalTensor yp) (PrimalTensor r)
   in
   idaInit {
-    lsolver = lsolver,
-    tol     = tol,
-    resf    = resf,
-    varid   = varid,
-    roots   = roots,
-    t       = t,
-    y       = y,
-    yp      = yp
+    tol      = tol,
+    nlsolver = nlsolver,
+    lsolver  = lsolver,
+    resf     = resf,
+    varid    = varid,
+    roots    = roots,
+    t        = t,
+    y        = y,
+    yp       = yp
   }
 
 -- `idaAdDlsSolverJacf resf solver` is a variant of `idaDlsSolverJacf` where the
@@ -101,6 +104,8 @@ utest
 
     let m = sundialsMatrixDense 2 in
 
+    let nlsolver = sundialsNonlinearSolverNewtonMake v in
+
     let lsolver = mklsolver (idaDlsDense v m) in
     let tol = idaSSTolerances 1.e-4 1.e-6 in
 
@@ -108,17 +113,18 @@ utest
     let t0 = 0. in
 
     let s = idaAdVInit {
-      lsolver = lsolver,
-      tol     = tol,
-      resf    = resf,
-      varid   = varid,
-      roots   = idaNoRoots,
-      t       = t0,
-      y       = v,
-      yp      = vp
+      tol      = tol,
+      nlsolver = nlsolver,
+      lsolver  = lsolver,
+      resf     = resf,
+      varid    = varid,
+      roots    = idaNoRoots,
+      t        = t0,
+      y        = v,
+      yp       = vp
     } in
     idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
-    
+
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in
     utest tend with 2. using eqf in

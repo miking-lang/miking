@@ -94,6 +94,27 @@ let sundialsExtMap =
           ]
       }
     ]),
+    ("sundialsNonlinearSolverNewtonMake", [
+      impl {
+        expr = "Sundials_NonlinearSolver.Newton.make",
+        ty =
+          tyarrows_ [
+            otyopaque_,
+            otyopaque_
+          ]
+      }
+    ]),
+    ("sundialsNonlinearSolverFixedPointMake", [
+      impl {
+        expr = "Sundials_NonlinearSolver.FixedPoint.make",
+        ty =
+          tyarrows_ [
+            otylabel_ "acceleration_vectors" tyint_,
+            otyopaque_,
+            otyopaque_
+          ]
+      }
+    ]),
     ("idaVarIdAlgebraic", [
       impl { expr = "Ida.VarId.algebraic", ty = tyfloat_ }
     ]),
@@ -124,7 +145,8 @@ let sundialsExtMap =
         expr = "Ida.init",
         ty = tyarrows_ [
           otyopaque_,
-          otyopaque_,
+          otylabel_ "nlsolver" otyopaque_,
+          otylabel_ "lsolver" otyopaque_,
           tyidaresf,
           otylabel_ "varid" otyopaque_,
           otylabel_ "roots" (otytuple_ [tyint_, tyidarootf]),
