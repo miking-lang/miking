@@ -229,6 +229,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     | PatInt _
     | PatChar _
     | PatBool _
+    | PatRecord _
     ) & pat -> [
       CstrHoleDirect { lhs = target, rhs = id },
       CstrHoleMatch { lhs = target, res = id }
@@ -739,6 +740,37 @@ with [ ("a", {d=[],e=[gbl "h"]})
      , ("b", {d=[],e=[]})
      , ("c", {d=[],e=[]})
      ]
+using eqTestHole
+in
+
+
+-- Match on records
+let t = parse
+"
+let r =
+  let h = hole (Boolean {default = true}) in
+  if h then
+    { a = 1, b = 2 }
+  else
+    { a = 2, b = 1 }
+in
+let res =
+  match r with { a = 1, b = 2 } then
+    let t1 = 1 in
+    t1
+  else
+    let t2 = 1 in
+    t2
+in
+res
+" in
+
+utest test true t ["t1", "t2", "res"]
+with
+[ ("t1", {d=[],e=[]})
+, ("t2", {d=[],e=[]})
+, ("res", {d=[gbl "h"],e=[gbl "h"]})
+]
 using eqTestHole
 in
 
