@@ -706,6 +706,7 @@ with [ ("x1", {d=[gbl "h"],e=[]})
 using eqTestHole
 in
 
+
 let t = parse
 "
 let h = hole (IntRange {default = 1, min = 1, max = 1}) in
@@ -723,6 +724,23 @@ with [ ("x", {d=[], e=[]})
 using eqTestHole
 in
 
+
+-- Tests that NamedPatCFA does not transfer e-dep to wild cards
+let t = parse
+"
+let h = hole (Boolean {default = true}) in
+let a = sleepMs h in
+let b = match a with c in c in
+()
+" in
+
+utest test debug t ["a", "b", "c"]
+with [ ("a", {d=[],e=[gbl "h"]})
+     , ("b", {d=[],e=[]})
+     , ("c", {d=[],e=[]})
+     ]
+using eqTestHole
+in
 
 -- TODO(Linnea,2021-11-22): test sequences, maps
 

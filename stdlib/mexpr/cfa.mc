@@ -264,27 +264,31 @@ lang InitConstraint = CFA
 
 end
 
-lang DirectConstraint = CFA
-
-  syn Constraint =
-  -- lhs ⊆ rhs
-  | CstrDirect { lhs: Name, rhs: Name }
-
+lang DirectConstraintOptions = CFA
   sem isDirect =
   | _ /- : AbsVal -/ -> true
 
   sem directTransition (graph: CFAGraph) (rhs: Name) =
   | av -> av
 
+  sem propagateDirectConstraint (rhs: Name) (graph: CFAGraph) =
+  | av ->
+    if isDirect av then
+      addData graph (directTransition graph rhs av) rhs
+    else graph
+end
+
+lang DirectConstraint = CFA + DirectConstraintOptions
+
+  syn Constraint =
+  -- lhs ⊆ rhs
+  | CstrDirect { lhs: Name, rhs: Name }
+
   sem initConstraint (graph: CFAGraph) =
   | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrDirect r ->
-    if isDirect update.1 then
-      let av = directTransition graph r.rhs update.1 in
-      addData graph av r.rhs
-    else graph
+  | CstrDirect r -> propagateDirectConstraint r.rhs graph update.1
 
   sem constraintToString (env: PprintEnv) =
   | CstrDirect { lhs = lhs, rhs = rhs } ->
@@ -828,9 +832,9 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatCFA = MatchCFA + NamedPat
+lang NamedPatCFA = MatchCFA + NamedPat + DirectConstraintOptions
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatNamed { ident = PName n }, av) -> addData graph av n
+  | (PatNamed { ident = PName n }, av) -> propagateDirectConstraint n graph av
   | (PatNamed { ident = PWildcard _ }, _) -> graph
 end
 
