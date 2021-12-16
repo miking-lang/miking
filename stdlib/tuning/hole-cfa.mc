@@ -765,7 +765,7 @@ in
 res
 " in
 
-utest test true t ["t1", "t2", "res"]
+utest test debug t ["t1", "t2", "res"]
 with
 [ ("t1", {d=[],e=[]})
 , ("t2", {d=[],e=[]})
