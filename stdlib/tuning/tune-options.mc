@@ -33,6 +33,7 @@ type TuneOptions =
 , ignoreErrors : Bool
 , exitEarly : Bool
 , seed : Option Int
+, dependencyAnalysis : Bool
 , cleanup : Bool
 }
 
@@ -52,5 +53,6 @@ let tuneOptionsDefault : TuneOptions =
 , ignoreErrors = false
 , exitEarly = true
 , seed = None ()
+, dependencyAnalysis = false
 , cleanup = false
 }

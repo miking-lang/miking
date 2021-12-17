@@ -92,6 +92,12 @@ let tuneOptionsConfig : ParseConfig = concat optionsConfig [
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
       {o with tuneOptions = {to with seed = argToInt p}}),
+  ([("--dependency-analysis", "", "")],
+    "Perform dependency analysis",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with dependencyAnalysis = true}}),
   ([("--enable-cleanup", "", "")],
     "Clean up tune file after tuning",
     lam p: ArgPart Options.

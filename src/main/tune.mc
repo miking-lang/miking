@@ -8,6 +8,7 @@ include "sys.mc"
 include "parse.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune.mc"
+include "tuning/hole-cfa.mc"
 
 lang MCoreTune =
   BootParser + MExprHoles + MExprTune
@@ -20,6 +21,15 @@ let tableFromFile = lam file.
 let dumpTable = lam file. lam env. lam table.
   let destination = tuneFileName file in
   tuneFileDumpTable destination env table
+
+let dependencyAnalysis =
+  lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
+    use MExprHoleCFA in
+    if options.dependencyAnalysis then
+      let ast = normalizeTerm ast in
+      let cfaRes = cfaData (graphDataFromEnv env) ast in
+      ast
+    else ast
 
 let tune = lam files. lam options : Options. lam args.
 
@@ -44,6 +54,9 @@ let tune = lam files. lam options : Options. lam args.
 
     -- Do coloring of call graph for maintaining call context
     match colorCallGraph [] ast with (env, ast) in
+
+    -- Perform dependency analysis
+    match dependencyAnalysis tuneOptions env ast with ast in
 
     -- Context expand holes
     let r : ContextExpanded = contextExpand env ast in
