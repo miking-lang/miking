@@ -240,6 +240,15 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity + MExprANFAll
     ) -> infoErrorExit p.info "Pattern currently not supported"
   | _ -> []
 
+  -- NOTE(Linnea, 2021-12-17): We need to handle references, since references
+  -- are used in the graph coloring. By construction, these references
+  -- operations are free from holes, so it is safe to assume no constraints.
+  -- However, the analysis does not support references in the general case.
+  sem generateConstraintsConst (info: Info) =
+  | CRef _ -> []
+  | CModRef _ -> []
+  | CDeRef _ -> []
+
   sem generateHoleMatchConstraints (id: Name) (target: Name) =
   | pat ->
     recursive let f = lam acc. lam pat.
