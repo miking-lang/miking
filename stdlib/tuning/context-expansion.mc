@@ -25,8 +25,7 @@ type ContextExpanded =
 
 -- Generate code for looking up a value of a hole depending on its call history
 let _lookupCallCtx
-  : (Int -> Expr) -> NameInfo -> Name
-  -> CallCtxEnv -> [[NameInfo]] -> Expr =
+  : (Int -> Expr) -> NameInfo -> Name -> CallCtxEnv -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv.
     use MExprAst in
     let tree : PTree NameInfo = mapFindExn holeId env.contexts in
@@ -100,6 +99,9 @@ lang ContextExpand = HoleAst
       if eqi depth 0 then
         lookup (callCtxHole2Idx (ident, t.info) [] env)
       else
+        -- print "env = "; dprintLn env;
+        -- dprintLn (mapBindings env.hole2fun);
+        -- print "key = "; dprintLn ident;
         let funDefined = callCtxHole2Fun (ident, t.info) env in
         let iv = callCtxFun2Inc funDefined.0 env in
         let res = _lookupCallCtx lookup (ident, t.info) iv env in
@@ -283,7 +285,7 @@ lang MExprHoles = HoleAst + GraphColoring + ContextExpand + MExprSym + MExprANF
 
 lang HolesPrettyPrint = MExprHoles + MExprPrettyPrint
 
-lang TestLang = HolesPrettyPrint + MExprEq
+lang TestLang = BootParser + HolesPrettyPrint + MExprEq
 
 mexpr
 
@@ -291,7 +293,15 @@ use TestLang in
 
 let anf = compose normalizeTerm symbolize in
 
+-- TODO: rewrite tests to parse a string
+-- write a test with top-level statement
+
 let debug = false in
+let parse = lam str.
+  let ast = parseMExprString holeKeywords str in
+  let ast = makeKeywords [] ast in
+  symbolize ast
+in
 
 let debugPrint = lam ast. lam pub.
   if debug then
@@ -300,11 +310,11 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match contextExpand pub ast with {ast = ast} then
-      printLn "\n----- AFTER TRANSFORMATION -----\n";
-      printLn (expr2str ast);
-      ()
-    else never
+    match colorCallGraph pub ast with (env, ast) in
+    match contextExpand env ast with {ast = ast} in
+    printLn "\n----- AFTER TRANSFORMATION -----\n";
+    printLn (expr2str ast);
+    ()
   else ()
 in
 
@@ -352,71 +362,70 @@ in
 debugPrint ast [(funB, NoInfo ()), (funC, NoInfo ())];
 let ast = anf ast in
 
-match contextExpand [(funB, NoInfo ()), (funC, NoInfo ())] ast with
+match colorCallGraph [(funB, NoInfo ()), (funC, NoInfo ())] ast with (env, ast) in
+match contextExpand env ast with
   {ast = flatAst, table = table, tempFile = tempFile, cleanup = cleanup, env = env}
-then
+in
 
-  let dumpTable = lam table : LookupTable.
-    use MExprPrettyPrint in
-    let rows = mapi (lam i. lam expr.
-      join [int2string i, ": ", expr2str expr]) table in
-    let rows = cons (int2string (length table)) rows in
-    let str = strJoin "\n" (concat rows ["="]) in
-    writeFile tempFile str
-  in
+let dumpTable = lam table : LookupTable.
+  use MExprPrettyPrint in
+  let rows = mapi (lam i. lam expr.
+    join [int2string i, ": ", expr2str expr]) table in
+  let rows = cons (int2string (length table)) rows in
+  let str = strJoin "\n" (concat rows ["="]) in
+  writeFile tempFile str
+in
 
-  let evalWithTable = lam table : LookupTable. lam ast : Expr. lam ext : Expr.
-    let astExt = bind_ ast ext in
-    dumpTable table;
-    (if debug then
-       printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
-       printLn (expr2str astExt)
-     else ());
-    use MExprEval in
-    eval { env = mapEmpty nameCmp } astExt
-  in
+let evalWithTable = lam table : LookupTable. lam ast : Expr. lam ext : Expr.
+  let astExt = bind_ ast ext in
+  dumpTable table;
+  (if debug then
+     printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
+     printLn (expr2str astExt)
+   else ());
+  use MExprEval in
+  eval { env = mapEmpty nameCmp } astExt
+in
 
-  let idxs = mapi (lam i. lam. i) table in
-  let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
-  let insertedAst = insert [(funB, NoInfo ()), (funC, NoInfo ())] table ast in
+let idxs = mapi (lam i. lam. i) table in
+let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
+let insertedAst = insert env table ast in
 
-  let eval = evalWithTable table in
+let eval = evalWithTable table in
 
-  -- Path 1: B (1)-> A
-  let extAst = appf2_ (nvar_ funB) true_ false_ in
-  utest eval flatAst extAst with int_ 1 using eqExpr in
-  utest eval insertedAst extAst with int_ 1 using eqExpr in
+-- Path 1: B (1)-> A
+let extAst = appf2_ (nvar_ funB) true_ false_ in
+utest eval flatAst extAst with int_ 1 using eqExpr in
+utest eval insertedAst extAst with int_ 1 using eqExpr in
 
-  -- Path 2: B -> B (1)-> A
-  let extAst = appf2_ (nvar_ funB) true_ true_ in
-  utest eval flatAst extAst with int_ 2 using eqExpr in
-  utest eval insertedAst extAst with int_ 2 using eqExpr in
+-- Path 2: B -> B (1)-> A
+let extAst = appf2_ (nvar_ funB) true_ true_ in
+utest eval flatAst extAst with int_ 2 using eqExpr in
+utest eval insertedAst extAst with int_ 2 using eqExpr in
 
-  -- Path 3: C -> B (1)-> A
-  let extAst = app_ (nvar_ funC) true_ in
-  utest eval flatAst extAst with int_ 3 using eqExpr in
-  utest eval insertedAst extAst with int_ 3 using eqExpr in
+-- Path 3: C -> B (1)-> A
+let extAst = app_ (nvar_ funC) true_ in
+utest eval flatAst extAst with int_ 3 using eqExpr in
+utest eval insertedAst extAst with int_ 3 using eqExpr in
 
-  -- Path 6: C -> B (2)-> A
-  let extAst = app_ (nvar_ funC) false_ in
-  utest eval flatAst extAst with int_ 6 using eqExpr in
-  utest eval insertedAst extAst with int_ 6 using eqExpr in
+-- Path 6: C -> B (2)-> A
+let extAst = app_ (nvar_ funC) false_ in
+utest eval flatAst extAst with int_ 6 using eqExpr in
+utest eval insertedAst extAst with int_ 6 using eqExpr in
 
-  -- Path 4: B (2)-> A
-  let extAst = appf2_ (nvar_ funB) false_ false_ in
-  utest eval flatAst extAst with int_ 4 using eqExpr in
-  utest eval insertedAst extAst with int_ 4 using eqExpr in
+-- Path 4: B (2)-> A
+let extAst = appf2_ (nvar_ funB) false_ false_ in
+utest eval flatAst extAst with int_ 4 using eqExpr in
+utest eval insertedAst extAst with int_ 4 using eqExpr in
 
-  -- Path 4 again
-  let extAst = bind_
-    (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
-    (appf2_ (nvar_ funB) false_ false_) in
-  utest eval flatAst extAst with int_ 4 using eqExpr in
-  utest eval insertedAst extAst with int_ 4 using eqExpr in
+-- Path 4 again
+let extAst = bind_
+  (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
+  (appf2_ (nvar_ funB) false_ false_) in
+utest eval flatAst extAst with int_ 4 using eqExpr in
+utest eval insertedAst extAst with int_ 4 using eqExpr in
 
-  -- Path 5: B -> B (2)-> A
-  -- unreachable
+-- Path 5: B -> B (2)-> A
+-- unreachable
 
-  cleanup ()
-
-else never
+cleanup ()
