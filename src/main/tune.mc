@@ -42,36 +42,37 @@ let tune = lam files. lam options : Options. lam args.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
 
-    -- Context expand the holes
-    match contextExpand [] ast with
-      { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
-        env = env, tempDir = tempDir }
-    then
-      -- If option --tuned is given, then use tune file as defaults
-      let table =
-        if options.useTuned then tableFromFile (tuneFileName file) else table in
+    -- Do coloring of call graph for maintaining call context
+    match colorCallGraph [] ast with (env, ast) in
 
-      -- Compile the program and write to temporary directory
-      let binary = ocamlCompileAstWithUtests
-        {options with output = Some (sysJoinPath tempDir "tune")} file ast in
+    -- Context expand holes
+    let r : ContextExpanded = contextExpand env ast in
+    let ast = r.ast in
 
-      -- Do the tuning
-      let result = tuneEntry binary tuneOptions tempFile env table in
+    -- If option --tuned is given, then use tune file as defaults
+    let table =
+      if options.useTuned then tableFromFile (tuneFileName file) else r.table in
 
-      -- Write the best found values to filename.tune
-      tuneFileDumpTable (tuneFileName file) (Some env) result;
+    -- Compile the program and write to temporary directory
+    let binary = ocamlCompileAstWithUtests
+      {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
 
-      -- If option --compile is given, then compile the program using the
-      -- tuned values
-      (if options.compileAfterTune then
-        compile [file] {options with useTuned = true} args
-       else ());
+    -- Do the tuning
+    let result = tuneEntry binary tuneOptions r.tempFile r.env r.table in
 
-      -- If option --enable-cleanup is given, then remove the tune file
-      (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+    -- Write the best found values to filename.tune
+    tuneFileDumpTable (tuneFileName file) (Some r.env) result;
 
-      -- Clean up temporary files used during tuning
-      cleanup ()
-    else never
+    -- If option --compile is given, then compile the program using the
+    -- tuned values
+    (if options.compileAfterTune then
+      compile [file] {options with useTuned = true} args
+     else ());
+
+    -- If option --enable-cleanup is given, then remove the tune file
+    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+
+    -- Clean up temporary files used during tuning
+    r.cleanup ()
   in
   iter tuneFile files
