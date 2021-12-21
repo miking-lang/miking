@@ -14,11 +14,12 @@ mexpr
 
 let s : [Int] = create 100 (lam i. i) in
 
--- Any use of the map intrinsic will be translated into a parallel map.
+-- Any use of the map intrinsic, within an accelerate expression, will be
+-- translated into a parallel map.
 let s1 : [Int] = accelerate (map (muli 2) s) in
 
--- But we can also use the parallelMap keyword explicitly.
-let s2 : [Int] = accelerate (parallelMap (muli 2) s) in
+-- If used outside accelerate, it becomes a sequential map
+let s2 : [Int] = map (muli 2) s in
 
 (if eqSeq eqi s1 s2 then print "map OK\n" else error "map failed");
 

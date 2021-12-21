@@ -14,16 +14,25 @@ let transposeSq : [[Int]] -> [[Int]] = lam m.
   -- We use this utest to express that m is a square matrix.
   utest length m with length (head m) in
   let n = length m in
-  create n
-    (lam i : Int.
-      let inner : [Int] = create n (lam j : Int. get (get m j) i) in
-      inner)
+  let g : Int -> Int -> Int = lam i. lam j.
+    let row : [Int] = get m j in
+    let cell : Int = get row i in
+    cell in
+  let f : Int -> [Int] = lam i.
+    create n (g i) in
+  let t : [[Int]] = create n f in
+  t
 
 let addProd : [Int] -> [Int] -> Int = lam row. lam col.
-  recursive let work = lam row. lam col.
-    if null row then []
-    else if null col then []
-    else cons (muli (head row) (head col)) (work (tail row) (tail col))
+  recursive let work : [Int] -> [Int] -> [Int] = lam row. lam col.
+    if null row then (let t : [Int] = [] in t)
+    else if null col then (let t : [Int] = [] in t)
+    else
+      let rh : Int = head row in
+      let ch : Int = head col in
+      let rt : [Int] = tail row in
+      let ct : [Int] = tail col in
+      cons (muli rh ch) (work rt ct)
   in
   foldl addi 0 (work row col)
 
@@ -41,7 +50,10 @@ let matMulSq : [[Int]] -> [[Int]] -> [[Int]] = lam a. lam b.
     a
 
 let matSumSq : [[Int]] -> Int = lam m.
-  foldl addi 0 (map (foldl addi 0) m)
+  -- We use an explicit type annotation here to eliminate the type variable
+  -- result of map (needed because type annot does not eliminate these).
+  let t : [Int] = map (foldl addi 0) m in
+  foldl addi 0 t
 
 mexpr
 
