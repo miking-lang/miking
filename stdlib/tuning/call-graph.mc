@@ -24,7 +24,7 @@ let callGraphEdgeNames = lam cg.
   _callGraphNameSeq (digraphEdges cg)
 
 -- The top of the call graph, has no incoming edges.
-let _callGraphTop = (nameSym "top", NoInfo ())
+let callGraphTop = (nameSym "top", NoInfo ())
 
 type Binding = {ident : Name, body : Expr, info : Info}
 let _handleLetVertex = use LamAst in
@@ -59,11 +59,11 @@ let _handleApps = use AppAst in use VarAst in
 lang HoleCallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    let gempty = digraphAddVertex _callGraphTop
+    let gempty = digraphAddVertex callGraphTop
       (digraphEmpty nameInfoCmp nameInfoEq) in
     let g = digraphAddVertices (_findVertices arg) gempty in
     let infoMap = mapFromSeq nameCmp (digraphVertices g) in
-    let edges = _findEdges g _callGraphTop infoMap arg in
+    let edges = _findEdges g callGraphTop infoMap arg in
     digraphAddEdges edges g
 
   sem _findVertices =

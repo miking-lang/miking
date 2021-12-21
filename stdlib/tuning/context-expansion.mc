@@ -94,18 +94,20 @@ lang ContextExpand = HoleAst
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
-    -- TODO: handle case when hole is on top level. check fun2hole
+    let lookupGlobal = lam info.
+      lookup (callCtxHole2Idx (ident, info) [] env)
+    in
     let body =
-      if eqi depth 0 then
-        lookup (callCtxHole2Idx (ident, t.info) [] env)
+      if eqi depth 0 then lookupGlobal t.info
       else
-        -- print "env = "; dprintLn env;
-        -- dprintLn (mapBindings env.hole2fun);
-        -- print "key = "; dprintLn ident;
         let funDefined = callCtxHole2Fun (ident, t.info) env in
-        let iv = callCtxFun2Inc funDefined.0 env in
-        let res = _lookupCallCtx lookup (ident, t.info) iv env in
-        res
+        if nameInfoEq funDefined callGraphTop then
+          -- Context-sensitive hole on top-level: handle as global
+          lookupGlobal t.info
+        else
+          let iv = callCtxFun2Inc funDefined.0 env in
+          let res = _lookupCallCtx lookup (ident, t.info) iv env in
+          res
     in TmLet {{t with body = body}
                  with inexpr = _contextExpandWithLookup env lookup t.inexpr}
 
@@ -359,7 +361,7 @@ let eqTest = lam str1. lam str2.
   eqString (trimWhiteSpace str1) (trimWhiteSpace str2)
 in
 
-
+-- Global hole
 let t = parse
 "
 let f = lam.
@@ -372,6 +374,7 @@ f ()
 utest test true t [("h", [([], false_)])] with "false" using eqTest in
 
 
+-- Context-sensitive hole
 let t = parse
 "
 let a = lam.
@@ -407,5 +410,18 @@ utest test true t
         ])
 ]
 with "[1,2,3,4,5]" using eqTest in
+
+
+-- Top-level context-sensitive hole
+let t = parse
+"
+let h = hole (Boolean {default = true, depth = 1}) in
+h
+" in
+
+utest test true t
+[ ("h", [ ([], false_) ])
+
+] with "false" using eqTest in
 
 ()

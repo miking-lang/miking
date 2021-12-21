@@ -414,7 +414,7 @@ lang GraphColoring = HoleAst + HoleCallGraph
     let g = toCallGraph tm in
 
     -- Prune the call graph
-    let eqPathsAssoc = _eqPaths g publicFns _callGraphTop tm in
+    let eqPathsAssoc = _eqPaths g publicFns callGraphTop tm in
     let eqPathsMap : Map NameInfo [Path] = mapFromSeq nameInfoCmp eqPathsAssoc in
     let keepEdges : [Edge] =
       foldl (lam acc. lam path : (NameInfo, [[(NameInfo,NameInfo,NameInfo)]]).
@@ -448,7 +448,7 @@ lang GraphColoring = HoleAst + HoleCallGraph
     let tm = bind_ incVars tm in
 
     -- Transform program to maintain the call history when needed
-    match _maintainCallCtx eqPathsMap _callGraphTop env tm with (env, prog) in
+    match _maintainCallCtx eqPathsMap callGraphTop env tm with (env, prog) in
     (env, prog)
 
   -- Main function for graph coloring. Maintains call context history by
