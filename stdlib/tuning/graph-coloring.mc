@@ -414,7 +414,13 @@ lang GraphColoring = HoleAst + HoleCallGraph
     let g = toCallGraph tm in
 
     -- Prune the call graph
-    let eqPathsAssoc = _eqPaths g publicFns callGraphTop tm in
+    let eqPaths : [{id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}] =
+      _eqPaths g publicFns callGraphTop tm
+    in
+    let eqPathsAssoc =
+      map (lam e: {id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}.
+        (e.id, e.eqPaths)) eqPaths
+    in
     let eqPathsMap : Map NameInfo [Path] = mapFromSeq nameInfoCmp eqPathsAssoc in
     let keepEdges : [Edge] =
       foldl (lam acc. lam path : (NameInfo, [[(NameInfo,NameInfo,NameInfo)]]).
@@ -422,17 +428,24 @@ lang GraphColoring = HoleAst + HoleCallGraph
         [] eqPathsAssoc
     in
 
+    -- Keep edges that are part of context strings
     let edgeCmp = lam e1 : DigraphEdge NameInfo NameInfo. lam e2 : DigraphEdge NameInfo NameInfo.
       nameInfoCmp e1.2 e2.2
     in
     let keepEdges = setToSeq (setOfSeq edgeCmp keepEdges) in
+
+    -- Keep vertices that define holes
+    let keepVertices =
+      map (lam e: {id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}.
+        e.home) eqPaths
+    in
 
     let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
       match e with (from, to, lbl) then
         digraphAddEdge from to lbl
           (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
       else never)
-      (digraphEmpty nameInfoCmp nameInfoEq)
+      (digraphAddVertices keepVertices (digraphEmpty nameInfoCmp nameInfoEq))
       keepEdges in
 
     -- Initialize environment
@@ -567,12 +580,12 @@ lang GraphColoring = HoleAst + HoleCallGraph
 
   | tm -> smap_Expr_Expr (_replacePublic pub2priv) tm
 
-  -- Compute the equivalence paths of a hole.
-  -- Type: CallGraph -> [NameInfo] -> NameInfo -> Expr -> [(NameInfo, [[NameInfo]])]
+  -- Finds the home vertex and equivalence path for each hole.
+  -- Type: CallGraph -> [NameInfo] -> NameInfo -> Expr -> [{id : NameInfo, home : NameInfo, eqPaths : [[NameInfo]]}]
   sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) =
   | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
     let paths = eqPaths g cur depth public in
-    cons ((ident, t.info), paths) (_eqPaths g public cur t.inexpr)
+    cons {id=(ident, t.info), home=cur, eqPaths=paths} (_eqPaths g public cur t.inexpr)
 
   | TmLet ({ body = TmLam lm } & t) ->
     concat (_eqPaths g public (t.ident, t.info) t.body)

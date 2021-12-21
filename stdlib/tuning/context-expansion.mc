@@ -102,7 +102,7 @@ lang ContextExpand = HoleAst
       else
         let funDefined = callCtxHole2Fun (ident, t.info) env in
         if nameInfoEq funDefined callGraphTop then
-          -- Context-sensitive hole on top-level: handle as global
+          -- Context-sensitive hole on top-level: handle as a global hole
           lookupGlobal t.info
         else
           let iv = callCtxFun2Inc funDefined.0 env in
@@ -308,10 +308,23 @@ in
 --let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
 let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
   lam debug: Bool. lam ast: Expr. lam lookupMap: Map String (Map [String] Expr).
+    (if debug then
+       printLn "-------- BEFORE ANF --------";
+       printLn (expr2str ast)
+     else ());
+
     -- Do the analysis
     let ast = anf ast in
+    (if debug then
+       printLn "-------- AFTER ANF --------";
+       printLn (expr2str ast)
+     else ());
     match colorCallGraph [] ast with (env, ast) in
     let res = contextExpand env ast in
+    (if debug then
+       printLn "-------- AFTER CONTEXT EXPANSION --------";
+       printLn (expr2str res.ast)
+     else ());
 
     -- Convert map to lookup table, use default for no value provided
     let lookupMap : [(String, Map [String] Expr)] = map (lam t : (String, [([String],Expr)]).
@@ -371,7 +384,7 @@ in
 f ()
 " in
 
-utest test true t [("h", [([], false_)])] with "false" using eqTest in
+utest test debug t [("h", [([], false_)])] with "false" using eqTest in
 
 
 -- Context-sensitive hole
@@ -401,7 +414,7 @@ in
 ]
 " in
 
-utest test true t
+utest test debug t
 [ ("h", [ (["l5", "l2"], int_ 1)
         , (["l1", "l2"], int_ 2)
         , (["l4", "l2"], int_ 3)
@@ -419,9 +432,26 @@ let h = hole (Boolean {default = true, depth = 1}) in
 h
 " in
 
-utest test true t
+utest test debug t
 [ ("h", [ ([], false_) ])
 
 ] with "false" using eqTest in
+
+
+-- Indirect function call. For now, the context of the latest call will be
+-- assumed.
+let t = parse
+"
+let f = lam x.
+  let h = hole (IntRange {depth = 1, default = 10, min = 0, max = 10}) in
+  addi x h
+in
+let a = f 1 in
+map f [1,2,3]
+" in
+
+utest test debug t
+[ ("h", [ (["a"], int_ 1) ]) ]
+with "[2,3,4]" using eqTest in
 
 ()
