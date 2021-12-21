@@ -12,7 +12,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
-include "tuning/decision-points.mc"
+include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
@@ -96,7 +96,7 @@ let compile = lam files. lam options : Options. lam args.
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
-      keywords = concat decisionPointsKeywords parallelKeywords
+      keywords = concat holeKeywords parallelKeywords
     } file in
     let ast = makeKeywords [] ast in
 

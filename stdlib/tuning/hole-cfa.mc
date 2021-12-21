@@ -24,17 +24,18 @@
 -- in
 -- ()
 
-include "name.mc"
-include "common.mc"
-
-include "decision-points.mc"
-include "const-dep.mc"
-
 include "mexpr/cfa.mc"
 include "mexpr/const-arity.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/cmp.mc"
 
-lang MExprHoleCFA = Holes + MExprCFA + MExprArity
+include "name.mc"
+include "common.mc"
+
+include "ast.mc"
+include "const-dep.mc"
+
+lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
   syn AbsVal =
   | AVDHole { id : Name }
@@ -244,7 +245,7 @@ use Test in
 -- Test functions --
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString decisionPointsKeywords str in
+  let ast = parseMExprString holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in
