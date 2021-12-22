@@ -1,6 +1,8 @@
 -- Implements graph coloring for maintaining the call context during runtime of
 -- the program.
 
+include "mexpr/utesttrans.mc"
+
 include "ast.mc"
 include "eq-paths.mc"
 include "prefix-tree.mc"
