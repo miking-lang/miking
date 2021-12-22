@@ -434,18 +434,12 @@ lang GraphColoring = HoleAst + HoleCallGraph
     in
     let keepEdges = setToSeq (setOfSeq edgeCmp keepEdges) in
 
-    -- Keep vertices that define holes
-    let keepVertices =
-      map (lam e: {id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}.
-        e.home) eqPaths
-    in
-
     let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
       match e with (from, to, lbl) then
         digraphAddEdge from to lbl
           (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
       else never)
-      (digraphAddVertices keepVertices (digraphEmpty nameInfoCmp nameInfoEq))
+      (digraphEmpty nameInfoCmp nameInfoEq)
       keepEdges in
 
     -- Initialize environment
