@@ -136,7 +136,6 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     else generateTypeNoAlias env t
 
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
-  | TyUnknown t -> FTyUnknown {info = t.info}
   | TyInt t -> FTyInt {info = t.info}
   | TyFloat t -> FTyFloat {info = t.info}
   | TyBool t -> FTyBool {info = t.info}
@@ -153,7 +152,8 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
   | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
-  | TyVariant t -> infoErrorExit t.info "Variant types cannot be accelerated"
+  | TyUnknown t -> infoErrorExit t.info "Unknown type cannot be accelerated"
+  | TyVariant t -> infoErrorExit t.info "Variant type cannot be accelerated"
   | t ->
     let tyStr = use MExprPrettyPrint in type2str t in
     infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
@@ -205,15 +205,28 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     FEIf {cond = generateExpr env t.target, thn = generateExpr env t.els,
           els = generateExpr env t.thn, ty = generateType env t.ty,
           info = t.info}
-  | TmMatch ({pat = PatInt {val = i}} & t) ->
-    let cond = generateExpr env (withInfo (infoTm t.target) (eqi_ (int_ i) t.target)) in
-    FEIf {cond = cond, thn = generateExpr env t.thn,
-          els = generateExpr env t.els, ty = generateType env t.ty,
-          info = t.info}
-  | TmMatch ({pat = PatChar {val = c}} & t) ->
-    let cond = generateExpr env (withInfo (infoTm t.target)
-                            (eqi_ (int_ (char2int c)) t.target)) in
-    FEIf {cond = cond, thn = generateExpr env t.thn,
+  | TmMatch ({pat = PatInt _ | PatChar _} & t) ->
+    let condInfo = mergeInfo (infoTm t.target) (infoPat t.pat) in
+    let resultTy = FTyBool {info = condInfo} in
+    let eqiAppTy = FTyArrow {
+      from = FTyInt {info = condInfo}, to = resultTy, info = condInfo} in
+    let eqiTy = FTyArrow {
+      from = FTyInt {info = condInfo}, to = eqiAppTy, info = condInfo} in
+    let lhsConstVal =
+      match t.pat with PatInt {val = i} then
+        FCInt {val = i}
+      else match t.pat with PatChar {val = c} then
+        FCInt {val = char2int c}
+      else never in
+    let condExpr = FEApp {
+      lhs = FEApp {
+        lhs = FEConst {val = FCEq (), ty = eqiTy, info = condInfo},
+        rhs = FEConst {val = lhsConstVal, ty = FTyInt {info = condInfo},
+                       info = condInfo},
+        ty = eqiAppTy, info = condInfo},
+      rhs = generateExpr env t.target,
+      ty = resultTy, info = condInfo} in
+    FEIf {cond = condExpr, thn = generateExpr env t.thn,
           els = generateExpr env t.els, ty = generateType env t.ty,
           info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
@@ -221,15 +234,22 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
            inexpr = generateExpr env t.thn, ty = generateType env (tyTm t.thn),
            info = infoTm t.target}
-  | TmMatch ({pat = PatRecord {bindings = bindings},
-              thn = TmVar {ident = exprName}, els = TmNever _} & t) ->
+  | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
+    let defaultGenerateRecordMatch = lam.
+      FEMatch {
+        target = generateExpr env t.target,
+        cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
+        ty = generateType env t.ty,
+        info = t.info} in
     let binds : [(SID, Pat)] = mapBindings bindings in
-    match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
-      if nameEq patName exprName then
-        FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                      ty = generateType env t.ty, info = t.info}
-      else defaultGenerateMatch env (TmMatch t)
-    else defaultGenerateMatch env (TmMatch t)
+    match t.thn with TmVar {ident = exprName} then
+      match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
+        if nameEq patName exprName then
+          FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
+                        ty = generateType env t.ty, info = t.info}
+        else defaultGenerateRecordMatch ()
+      else defaultGenerateRecordMatch ()
+    else defaultGenerateRecordMatch ()
   | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],
                                 middle = PName tail, postfix = []},
               els = TmNever _} & t) ->
@@ -263,12 +283,6 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
       let tyStr = use MExprPrettyPrint in type2str targetTy in
       infoErrorExit t.info (join ["Term of non-sequence type '", tyStr,
                                   "' cannot be matched on sequence pattern"])
-  | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
-    FEMatch {
-      target = generateExpr env t.target,
-      cases = [(generatePattern env (tyTm t.target) pat, generateExpr env t.thn)],
-      ty = generateType env t.ty,
-      info = t.info}
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
@@ -382,9 +396,9 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     let accTy = generateType env t.ty in
     let seqTy = generateType env (tyTm s) in
     let elemTy =
-      match funcTy with FTyArrow {from = FTyArrow {to = elemTy}} then
+      match funcTy with FTyArrow {to = FTyArrow {to = elemTy}} then
         elemTy
-      else FTyUnknown {info = t.info} in
+      else infoErrorExit t.info "Invalid type of function passed to foldl" in
     let param : (FutPat, FutExpr) =
       ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
         generateExpr env ne ) in
@@ -452,11 +466,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     withTypeFutTm
       (generateType env t.ty)
       (withInfoFutTm t.info (futFlatten_ (generateExpr env t.e)))
-  | TmParallelMap t ->
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futMap_ (generateExpr env t.f) (generateExpr env t.as)))
-  | TmParallelMap2 t ->
+  | TmMap2 t ->
     withTypeFutTm
       (generateType env t.ty)
       (withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
@@ -580,12 +590,12 @@ use TestLang in
 
 let f = nameSym "f" in
 let c = nameSym "c" in
-let chars = bindall_ [
+let chars = typeAnnot (bindall_ [
   nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
     match_ (nvar_ c) (pchar_ 'a')
       true_
       false_)),
-  app_ (nvar_ f) (char_ 'x')] in
+  app_ (nvar_ f) (char_ 'x')]) in
 
 let charsExpected = FProg {decls = [
   FDeclFun {
@@ -622,7 +632,7 @@ let map = nameSym "map" in
 let f3 = nameSym "f" in
 let s = nameSym "s" in
 
-let t = bindall_ [
+let t = typeAnnot (bindall_ [
   ntype_ intseq (tyseq_ tyint_),
   ntype_ floatseq (tyseq_ tyfloat_),
   nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
@@ -640,9 +650,8 @@ let t = bindall_ [
                if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
   nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
              (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
-               (parallelMap_ (nvar_ f3) (nvar_ s)))),
-  unit_
-] in
+               (map_ (nvar_ f3) (nvar_ s)))),
+  unit_]) in
 
 let intSeqType = FTyParamsApp {
   ty = nFutIdentTy_ intseq, params = [FPSize {val = n}], info = NoInfo ()} in
@@ -697,13 +706,13 @@ let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let n = nameSym "n" in
-let foldlToFor =
-  nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
+let foldlToFor = typeAnnot
+  (nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
     nlam_ s (tyseq_ tyint_) (
       foldl_
         (nlam_ acc tyint_ (nlam_ y tyint_ (
           addi_ (nvar_ acc) (nvar_ y))))
-        (int_ 0) (nvar_ s))) in
+        (int_ 0) (nvar_ s)))) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = n}],
@@ -717,10 +726,10 @@ let entryPoints = setOfSeq nameCmp [f] in
 utest printFutProg (generateProgram entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
 
-let negation =
-  nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]]) (
-    nlam_ a tyint_ (nlam_ b tyfloat_ (
-      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))]))) in
+let negation = typeAnnot
+  (nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]])
+    (nlam_ a tyint_ (nlam_ b tyfloat_ (
+      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))])))) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = false, typeParams = [],
@@ -730,8 +739,29 @@ let expected = FProg {decls = [
       ("a", futApp_ (futConst_ (FCNegi ())) (nFutVar_ a)),
       ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))],
     info = NoInfo ()}]} in
-let entryPoints = setOfSeq nameCmp [] in
+let entryPoints = setEmpty nameCmp in
 utest printFutProg (generateProgram entryPoints negation)
 with printFutProg expected using eqSeq eqc in
+
+let recordTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
+let recordPat = prec_ [("a", npvar_ a), ("b", npvar_ b)] in
+let recordMatchNotProj = typeAnnot
+  (nlet_ f (tyarrows_ [recordTy, tyint_])
+    (nlam_ x recordTy
+      (match_ (nvar_ x) recordPat
+        (nvar_ a)
+        never_))) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [],
+    params = [(x, futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)])],
+    ret = futIntTy_,
+    body =
+      futMatch_
+        (nFutVar_ x)
+        [(futPrecord_ [("a", nFutPvar_ a), ("b", nFutPvar_ b)], nFutVar_ a)],
+    info = NoInfo ()}]} in
+utest printFutProg (generateProgram (setEmpty nameCmp) recordMatchNotProj)
+with printFutProg expected using eqString in
 
 ()

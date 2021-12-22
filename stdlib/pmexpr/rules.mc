@@ -10,18 +10,28 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
   -- cons e seq -> concat [e] seq
   | TmApp ({lhs = TmApp ({lhs = TmConst ({val = CCons _} & cons),
                           rhs = arg1} & innerApp)} & t) ->
-    let concat = TmConst {cons with val = CConcat ()} in
-    let elemSeq = TmSeq {
-      tms = [arg1],
-      ty = TySeq {ty = tyTm arg1, info = infoTm arg1},
-      info = infoTm arg1
-    } in
+    let newArgType = TySeq {ty = tyTm arg1, info = infoTm arg1} in
+    let concat = TmConst {
+      val = CConcat (),
+      ty = TyArrow {
+        from = newArgType,
+        to = TyArrow {from = newArgType, to = newArgType, info = cons.info},
+        info = cons.info},
+      info = cons.info} in
+    let elemSeq = TmSeq {tms = [arg1], ty = newArgType, info = infoTm arg1} in
     TmApp {t with lhs = TmApp {{innerApp with lhs = concat}
                                          with rhs = rewriteTerm elemSeq}}
   -- snoc seq e -> concat seq [e]
   | TmApp ({lhs = TmApp ({lhs = TmConst ({val = CSnoc _} & snoc)} & innerApp),
             rhs = arg2} & t) ->
-    let concat = TmConst {snoc with val = CConcat ()} in
+    let newArgType = TySeq {ty = tyTm arg2, info = infoTm arg2} in
+    let concat = TmConst {
+      val = CConcat (),
+      ty = TyArrow {
+        from = newArgType,
+        to = TyArrow {from = newArgType, to = newArgType, info = snoc.info},
+        info = snoc.info},
+      info = snoc.info} in
     let elemSeq = TmSeq {
       tms = [arg2],
       ty = TySeq {ty = tyTm arg2, info = infoTm arg2},

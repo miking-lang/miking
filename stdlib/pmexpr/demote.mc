@@ -31,16 +31,7 @@ lang PMExprDemote = PMExprAst
         ty = tyuk, info = t.info},
       rhs = demoteParallel t.e,
       ty = tyuk, info = t.info}
-  | TmParallelMap t ->
-    let tyuk = TyUnknown {info = t.info} in
-    TmApp {
-      lhs = TmApp {
-        lhs = TmConst {val = CMap (), ty = tyuk, info = t.info},
-        rhs = demoteParallel t.f,
-        ty = tyuk, info = t.info},
-      rhs = demoteParallel t.as,
-      ty = tyuk, info = t.info}
-  | TmParallelMap2 t ->
+  | TmMap2 t ->
     let tyuk = TyUnknown {info = t.info} in
     let lty = match tyTm t.as with TySeq {ty = elemTy} then elemTy else tyuk in
     let rty = match tyTm t.bs with TySeq {ty = elemTy} then elemTy else tyuk in
@@ -144,12 +135,10 @@ let flattenSeqExpr = foldl_ (uconst_ (CConcat ())) (seq_ []) s in
 utest demoteParallel (flatten_ s)
 with foldl_ (uconst_ (CConcat ())) (seq_ []) s using eqExpr in
 
-utest demoteParallel (parallelMap_ id s) with map_ id s using eqExpr in
-
 utest demoteParallel (parallelReduce_ (uconst_ (CAddi ())) (int_ 0) (seq_ []))
 with foldl_ (uconst_ (CAddi ())) (int_ 0) (seq_ []) using eqExpr in
 
-utest demoteParallel (parallelMap2_ (uconst_ (CAddi ())) (flatten_ s) (flatten_ s))
+utest demoteParallel (map2_ (uconst_ (CAddi ())) (flatten_ s) (flatten_ s))
 with bindall_ [
   ulet_ "a" flattenSeqExpr,
   ulet_ "b" flattenSeqExpr,
@@ -165,7 +154,7 @@ using eqExpr in
 utest demoteParallel (parallelReduce_ (uconst_ (CAddi ())) (int_ 0) (flatten_ s))
 with foldl_ (uconst_ (CAddi ())) (int_ 0) flattenSeqExpr using eqExpr in
 
-utest demoteParallel (accelerate_ (parallelMap_ id (flatten_ s)))
+utest demoteParallel (accelerate_ (map_ id (flatten_ s)))
 with map_ id (foldl_ (uconst_ (CConcat ())) (seq_ []) s) using eqExpr in
 
 ()

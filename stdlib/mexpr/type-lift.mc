@@ -291,7 +291,7 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
       else never
 end
 
--- Optional lifting of records (not added as default in MExprTypeLift)
+-- Optional lifting of sequences (not added as default in MExprTypeLift)
 lang SeqTypeTypeLift = TypeLift + SeqTypeAst + TypeLiftAddSeqToEnv
   sem typeLiftType (env : TypeLiftEnv) =
   | TySeq ({info = info, ty = innerTy} & r) & ty ->
