@@ -79,8 +79,13 @@ type CallCtxEnv = {
   -- Maps a hole to its type
   hole2ty: Map NameInfo Type,
 
-  -- Maps a hole index to its edge path
-  verbosePath: Map Int Path
+  -- Maps a context-expanded hole index to its edge path
+  verbosePath: Map Int Path,
+
+  -- Maps a base hole to its prefix tree, which stores a compact representation of
+  -- the paths
+  contexts: Map NameInfo (PTree NameInfo)
+
 }
 
 -- Create a new name from a prefix string and name.
@@ -171,6 +176,7 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     , hole2fun = mapEmpty nameInfoCmp
     , hole2ty = mapEmpty nameInfoCmp
     , verbosePath = mapEmpty subi
+    , contexts = mapEmpty nameInfoCmp
     }
 
 -- Returns the incoming variable of a function name, or None () if the name is
@@ -212,32 +218,36 @@ let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
     mapValues fun2inc
   else never
 
-let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv -> CallCtxEnv =
+let callCtxAddHole : Expr -> NameInfo -> [[Edge]] -> NameInfo -> CallCtxEnv -> CallCtxEnv =
   lam h. lam name. lam paths. lam funName. lam env : CallCtxEnv.
     match env with
       { hole2idx = hole2idx, idx2hole = idx2hole, hole2fun = hole2fun,
-        hole2ty = hole2ty, verbosePath = verbosePath}
-    then
+        hole2ty = hole2ty, verbosePath = verbosePath, contexts = contexts }
+    in
     let countInit = length idx2hole in
+    -- Empty prefix tree with a sentinel node
+    let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
     match
       foldl
       (lam acc. lam path.
-         match acc with (m, verbose, i) then
-           let lblPath = map (lam e : Edge. e.2) path in
-           (mapInsert lblPath i m, mapInsert i path verbose, addi i 1)
-         else never)
-      (mapEmpty (seqCmp nameInfoCmp), env.verbosePath, countInit)
+         match acc with (m, verbose, tree, i) in
+         let lblPath = map (lam e : Edge. e.2) path in
+         ( mapInsert lblPath i m,
+           mapInsert i path verbose,
+           prefixTreeInsert nameInfoCmp tree i (reverse lblPath),
+           addi i 1)
+         )
+      (mapEmpty (seqCmp nameInfoCmp), env.verbosePath, tree, countInit)
       paths
-    with (m, verbose, count) then
-      let n = length paths in
-      utest n with subi count countInit in
-      {{{{{env with hole2idx = mapInsert name m hole2idx}
-               with idx2hole = concat idx2hole (create n (lam. h))}
-               with hole2fun = mapInsert name funName hole2fun}
-               with hole2ty = mapInsert name (use HoleAst in tyTm h) hole2ty}
-               with verbosePath = verbose}
-    else never
-  else never
+    with (m, verbose, tree, count) in
+    let n = length paths in
+    utest n with subi count countInit in
+    {{{{{{env with hole2idx = mapInsert name m hole2idx}
+              with idx2hole = concat idx2hole (create n (lam. h))}
+              with hole2fun = mapInsert name funName hole2fun}
+              with hole2ty = mapInsert name (use HoleAst in tyTm h) hole2ty}
+              with verbosePath = verbose}
+              with contexts = mapInsert name tree contexts}
 
 let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
   lam nameInfo. lam path. lam env : CallCtxEnv.
@@ -380,14 +390,9 @@ let _lookupCallCtx
   : (Int -> Expr) -> NameInfo -> Name
   -> CallCtxEnv -> [[NameInfo]] -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
-  use MExprAst in
-
-    let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
-
-    let dummyIds = create (length paths) (lam i. i) in
-    let tree = prefixTreeInsertMany nameInfoCmp tree dummyIds (map reverse paths) in
-
-    recursive let work : NameInfo -> [PTree] -> [NameInfo] -> Expr =
+    use MExprAst in
+    let tree : PTree NameInfo = mapFindExn holeId env.contexts in
+    recursive let work : NameInfo -> [PTree NameInfo] -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
         match children with [] then never_
