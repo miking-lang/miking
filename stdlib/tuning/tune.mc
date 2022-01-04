@@ -109,7 +109,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       let incValues = map expr2str inc in
       let curValues = map expr2str cur in
       let elapsed = subf (wallTimeMs ()) (deref tuneSearchStart) in
-      printLn (join ["Iter: ", int2string iter, "\n",
+      printLn (join ["Iteration: ", int2string iter, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
                      "Current time: ", _timingResult2str curTime, "\n",
                      "Best time: ", _timingResult2str incTime, "\n",
@@ -188,20 +188,29 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       lam searchState.
       lam metaState.
       lam iter.
-        (if options.verbose then
-          printLn "-----------------------";
-          debugSearch searchState;
-          debugMeta metaState;
-          printLn "-----------------------";
-          flushStdout ()
+        let printState = lam header. lam searchState. lam metaState.
+          if options.verbose then
+            printLn header;
+            debugSearch searchState;
+            debugMeta metaState;
+            printLn (make (length header) '-')
+          else ()
+        in
+
+        (if eqi iter 0 then
+          printState "----- Initial state -----" searchState metaState
          else ());
+
         if stop searchState then
+          printState "----- Final state -----" searchState metaState;
           (searchState, metaState)
         else
           match minimize searchState metaState with (searchState, metaState)
-          then
+          in
+            printState (join [
+              "----- Iteration ", int2string (addi iter 1), " -----"])
+              searchState metaState;
             search stop searchState metaState (addi iter 1)
-          else never
     in
 
     -- Set up initial search state. Repeat the computation n times, where n is
