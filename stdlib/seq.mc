@@ -414,13 +414,23 @@ utest
   match gti (seqCmp subi [1,2] [1,1]) 0 with true then true else false
   with true
 
--- Select an element uniformly at random
-let randElem = lam seq.
+-- Select an index uniformly at random.
+let randIndex : [a] -> Option Int = lam seq.
   match seq with [] then None ()
-  else Some (get seq (randIntU 0 (length seq)))
+  else Some (randIntU 0 (length seq))
 
-utest randElem [] with None () using optionEq eqi
-utest randElem [1] with Some 1 using optionEq eqi
+utest randIndex [] with None ()
+utest randIndex [1] with Some 0
+utest
+  match randIndex [1,2] with Some (0 | 1) then true else false
+  with true
+
+-- Select an element uniformly at random.
+let randElem : [a] -> Option a = lam seq.
+  optionMap (get seq) (randIndex seq)
+
+utest randElem [] with None ()
+utest randElem [1] with Some 1
 utest
   match randElem [1,2] with Some (1 | 2) then true else false
   with true

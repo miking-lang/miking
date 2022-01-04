@@ -364,7 +364,28 @@ lang TuneSemiExhaustive = TuneLocalSearch
                      (use MExprPrettyPrint in expr2str) prev])
 end
 
-lang TuneOneRandomNeighbour = TuneLocalSearch
+lang TuneOneRandomNeighbourModifyOne = TuneLocalSearch
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+             Table ({holes = holes, table = table} & t)}}
+    then
+      let table =
+        switch randIndex table
+        case None () then table
+        case Some i then
+          let randHole = get holes i in
+          let modifiedHole = sample randHole in
+          set table i modifiedHole
+        end
+      in iteratorFromSeq [Table {t with table = table}]
+    else never
+end
+
+lang TuneOneRandomNeighbourModifyAll = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
@@ -378,7 +399,7 @@ lang TuneOneRandomNeighbour = TuneLocalSearch
     else never
 end
 
-lang TuneManyRandomNeighbours = TuneLocalSearch
+lang TuneManyRandomNeighboursModifyAll = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
@@ -396,7 +417,7 @@ lang TuneManyRandomNeighbours = TuneLocalSearch
 end
 
 lang TuneRandomWalk = TuneLocalSearch
-                    + TuneOneRandomNeighbour
+                    + TuneOneRandomNeighbourModifyAll
                     + LocalSearchSelectRandomUniform
   syn MetaState =
   | Empty {}
@@ -410,7 +431,7 @@ lang TuneRandomWalk = TuneLocalSearch
 end
 
 lang TuneSimulatedAnnealing = TuneLocalSearch
-                            + TuneOneRandomNeighbour
+                            + TuneOneRandomNeighbourModifyOne
                             + LocalSearchSimulatedAnnealing
                             + LocalSearchSelectRandomUniform
   sem decay (searchState : SearchState) =
@@ -434,7 +455,7 @@ lang TuneSimulatedAnnealing = TuneLocalSearch
 end
 
 lang TuneTabuSearch = TuneLocalSearch
-                    + TuneManyRandomNeighbours
+                    + TuneManyRandomNeighboursModifyAll
                     + LocalSearchTabuSearch
                     + LocalSearchSelectFirst
   syn TabuSet =
