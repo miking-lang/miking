@@ -45,7 +45,7 @@ let tuneOptionsConfig : ParseConfig = concat optionsConfig [
     lam p: ArgPart Options.
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with input = cons to.input p.str}}),
+      {o with tuneOptions = {to with input = snoc to.input p.str}}),
   ([("--sa-init-temp", " ", "<t>")],
     join ["If --method simulated-annealing is used, this gives the initial temperature (default ",
           float2string tuneOptionsDefault.saInitTemp, ")"],

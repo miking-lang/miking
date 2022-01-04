@@ -68,7 +68,7 @@ lang TuneBase = HoleAst
         let msg = strJoin " "
         [ "Program returned non-zero exit code during tuning\n"
         , "hole values:\n", _tuneTable2str table, "\n"
-        , "command line arguments:", strJoin " " args, "\n"
+        , "command line arguments:", args, "\n"
         , "stdout:", res.stdout, "\n"
         , "stderr:", res.stderr
         ] in
