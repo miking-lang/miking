@@ -22,7 +22,7 @@ utest _split [] 4 with [[]]
 -- Join for lists
 let _joinLists = lam seqs. foldl concat (createList 0 (lam. 0)) seqs
 
--- Reverse map for lists
+-- Reverse map for lists (tail recursive)
 let _mapReverseList = lam f. lam lst.
   foldl (lam acc. lam x. cons (f x) acc) (createList 0 (lam. 0)) lst
 
@@ -31,36 +31,19 @@ let _mapReverseList = lam f. lam lst.
 -- min(nbrChunks, length s) chunks, where each chunk is operated on in parallel.
 let pmap : ThreadPool -> Int -> (a -> b) -> [a] -> [b] =
   lam pool. lam nbrChunks. lam f. lam seq.
-    if eqi nbrChunks 1 then map f seq
+    if eqi nbrChunks 1 then
+      if isList seq then reverse (_mapReverseList f seq)
+      else map f seq
     else
       let len = length seq in
-      let nbrChunks = if gti nbrChunks len then len else nbrChunks in
-      let div = divi len nbrChunks in
-      let rem = modi len nbrChunks in
-      let chunkSize = addi div rem in
+      let chunkSize = addi (divi len nbrChunks) (modi len nbrChunks) in
+      let chunks = _split seq chunkSize in
       if isList seq then
-        -- List: split into chunks
-        let chunks = _split seq chunkSize in
         utest forAll isList chunks with true in
         let tasks = map (lam chunk. threadPoolAsync pool (lam. reverse (_mapReverseList f chunk))) chunks in
         _joinLists (map (threadPoolWait pool) tasks)
-      else if true then
-        let chunks = _split seq chunkSize in
-        let tasks = map (lam chunk. threadPoolAsync pool (lam. map f chunk)) chunks in
-        join (map (threadPoolWait pool) tasks)
       else
-        -- Rope: access elements with offset
-        let lastIdx = subi nbrChunks 1 in
-        let tasks = map (lam chunkIdx.
-            let start = muli chunkIdx chunkSize in
-            let len =
-              if eqi chunkIdx lastIdx then
-                if eqi rem 0 then chunkSize else rem
-              else chunkSize
-            in
-            threadPoolAsync pool (lam. map f (subsequence seq start len)))
-          (create nbrChunks (lam i. i))
-        in
+        let tasks = map (lam chunk. threadPoolAsync pool (lam. map f chunk)) chunks in
         join (map (threadPoolWait pool) tasks)
 
 utest

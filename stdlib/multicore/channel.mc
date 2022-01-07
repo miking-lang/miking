@@ -5,6 +5,8 @@
 -- threads. The channel has an infinite buffer, so a call to 'channelSend' never
 -- blocks.
 
+-- OPT(Linnea,2021-01-07): Explore other synchronization strategies.
+
 include "atomic.mc"
 include "thread.mc"
 include "mutex.mc"
