@@ -367,11 +367,9 @@ let unitNotLifted = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (int_ 2),
   uunit_
 ])) in
-(match typeLift unitNotLifted with (env, t) then
-  utest env with [] using eqEnv in
-  utest t with unitNotLifted using eqExpr in
-  ()
-else never);
+match typeLift unitNotLifted with (env, t) in
+utest env with [] using eqEnv in
+utest t with unitNotLifted using eqExpr in
 
 let noVariantsOrRecords = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (int_ 3),
@@ -379,11 +377,9 @@ let noVariantsOrRecords = typeAnnot (symbolize (bindall_ [
   ulet_ "z" (addi_ (var_ "x") (var_ "y")),
   var_ "z"
 ])) in
-(match typeLift noVariantsOrRecords with (env, t) then
-  utest env with [] using eqEnv in
-  utest t with noVariantsOrRecords using eqExpr in
-  ()
-else never);
+match typeLift noVariantsOrRecords with (env, t) in
+utest env with [] using eqEnv in
+utest t with noVariantsOrRecords using eqExpr in
 
 let treeName = nameSym "Tree" in
 let branchName = nameSym "Branch" in
@@ -396,10 +392,8 @@ let variant = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
   uunit_
 ])) in
-(match typeLift variant with (_, t) then
-  utest t with uunit_ using eqExpr in
-  ()
-else never);
+match typeLift variant with (_, t) in
+utest t with uunit_ using eqExpr in
 
 let lastTerm = nconapp_ branchName (urecord_ [
   ("lhs", nconapp_ leafName (int_ 1)),
@@ -413,21 +407,19 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
   lastTerm
 ])) in
-(match typeLift variantWithRecords with (env, t) then
-  let recid = fst (get env 0) in
-  let expectedEnv = [
-    (recid, tyrecord_ [
-      ("lhs", ntycon_ treeName), ("rhs", ntycon_ treeName)
-    ]),
-    (treeName, tyvariant_ [
-      (branchName, ntycon_ recid),
-      (leafName, tyint_)
-    ])
-  ] in
-  utest env with expectedEnv using eqEnv in
-  utest t with lastTerm using eqExpr in
-  ()
-else never);
+match typeLift variantWithRecords with (env, t) in
+let recid = fst (get env 0) in
+let expectedEnv = [
+  (recid, tyrecord_ [
+    ("lhs", ntycon_ treeName), ("rhs", ntycon_ treeName)
+  ]),
+  (treeName, tyvariant_ [
+    (branchName, ntycon_ recid),
+    (leafName, tyint_)
+  ])
+] in
+utest env with expectedEnv using eqEnv in
+utest t with lastTerm using eqExpr in
 
 let nestedRecord = typeAnnot (symbolize (bindall_ [
   ulet_ "r" (urecord_ [
@@ -440,101 +432,85 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   ]),
   uunit_
 ])) in
-(match typeLift nestedRecord with (env, t) then
-  let fstid = fst (get env 0) in
-  let sndid = fst (get env 1) in
-  let expectedEnv = [
-    (fstid, tyrecord_ [
-      ("a", ntycon_ sndid),
-      ("b", tyint_)
-    ]),
-    (sndid, tyrecord_ [
-      ("x", tyint_),
-      ("y", tyfloat_),
-      ("z", tyunit_)
-    ])
-  ] in
-  utest env with expectedEnv using eqEnv in
-  utest t with nestedRecord using eqExpr in
-  ()
-else never);
+match typeLift nestedRecord with (env, t) in
+let fstid = fst (get env 0) in
+let sndid = fst (get env 1) in
+let expectedEnv = [
+  (fstid, tyrecord_ [
+    ("a", ntycon_ sndid),
+    ("b", tyint_)
+  ]),
+  (sndid, tyrecord_ [
+    ("x", tyint_),
+    ("y", tyfloat_),
+    ("z", tyunit_)
+  ])
+] in
+utest env with expectedEnv using eqEnv in
+utest t with nestedRecord using eqExpr in
 
 let nestedSeq = typeAnnot (symbolize (bindall_ [
   ulet_ "s" (seq_ [seq_ [seq_ [int_ 2]], seq_ [seq_ [int_ 3]]]),
   uunit_
 ])) in
-(match typeLift nestedSeq with (env, t) then
-  let fstid = fst (get env 0) in
-  let sndid = fst (get env 1) in
-  let trdid = fst (get env 2) in
-  let expectedEnv = [
-    (fstid, tyseq_ (ntycon_ sndid)),
-    (sndid, tyseq_ (ntycon_ trdid)),
-    (trdid, tyseq_ (tyint_))
-  ] in
-  utest env with expectedEnv using eqEnv in
-  utest t with nestedSeq using eqExpr in
-  ()
-else never);
+match typeLift nestedSeq with (env, t) in
+let fstid = fst (get env 0) in
+let sndid = fst (get env 1) in
+let trdid = fst (get env 2) in
+let expectedEnv = [
+  (fstid, tyseq_ (ntycon_ sndid)),
+  (sndid, tyseq_ (ntycon_ trdid)),
+  (trdid, tyseq_ (tyint_))
+] in
+utest env with expectedEnv using eqEnv in
+utest t with nestedSeq using eqExpr in
 
 let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
   uunit_
 ])) in
-(match typeLift recordsSameFieldsDifferentTypes with (env, t) then
-  let fstid = fst (get env 0) in
-  let sndid = fst (get env 1) in
-  let expectedEnv = [
-    (fstid, tyrecord_ [("a", tyint_), ("b", tybool_)]),
-    (sndid, tyrecord_ [("a", tyint_), ("b", tyint_)])
-  ] in
-  utest env with expectedEnv using eqEnv in
-  utest t with recordsSameFieldsDifferentTypes using eqExpr in
-  ()
-else never);
+match typeLift recordsSameFieldsDifferentTypes with (env, t) in
+let fstid = fst (get env 0) in
+let sndid = fst (get env 1) in
+let expectedEnv = [
+  (fstid, tyrecord_ [("a", tyint_), ("b", tybool_)]),
+  (sndid, tyrecord_ [("a", tyint_), ("b", tyint_)])
+] in
+utest env with expectedEnv using eqEnv in
+utest t with recordsSameFieldsDifferentTypes using eqExpr in
 
 let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)]),
   uunit_
 ])) in
-(match typeLift recordsSameFieldsSameTypes with (env, t) then
-  let recid = fst (get env 0) in
-  let expectedEnv = [
-    (recid, tyrecord_ [("a", tyint_), ("b", tyint_)])
-  ] in
-  utest env with expectedEnv using eqEnv in
-  utest t with recordsSameFieldsSameTypes using eqExpr in
-  ()
-else never);
+match typeLift recordsSameFieldsSameTypes with (env, t) in
+let recid = fst (get env 0) in
+let expectedEnv = [
+  (recid, tyrecord_ [("a", tyint_), ("b", tyint_)])
+] in
+utest env with expectedEnv using eqEnv in
+utest t with recordsSameFieldsSameTypes using eqExpr in
 
 let record = typeAnnot (symbolize (urecord_ [
   ("a", int_ 2),
   ("b", float_ 1.5)
 ])) in
-(match typeLift record with (env, t) then
-  match tyTm t with TyCon {ident = ident} then
-    match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
-      utest recordTy with tyTm record using eqType in
-      ()
-    else never
-  else never
-else never);
+match typeLift record with (env, t) in
+match tyTm t with TyCon {ident = ident} in
+match assocSeqLookup {eq=nameEq} ident env with Some recordTy in
+utest recordTy with tyTm record using eqType in
 
 let recordUpdate = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   recordupdate_ (var_ "x") "a" (int_ 2)
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
-(match typeLift recordUpdate with (env, t) then
-  match t with TmLet {tyBody = TyCon {ident = ident}} then
-    match assocSeqLookup {eq=nameEq} ident env with Some ty then
-      utest ty with recordType using eqType in
-      ()
-    else never
-  else never
-else never);
+match typeLift recordUpdate with (env, t) in
+match t with TmLet {tyBody = TyCon {ident = ident}} in
+match assocSeqLookup {eq=nameEq} ident env with Some ty in
+utest ty with recordType using eqType in
 
 let typeAliases = typeAnnot (symbolize (bindall_ [
   type_ "GlobalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
@@ -549,37 +525,35 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   ]),
   var_ "env"
 ])) in
-(match typeLift typeAliases with (env, t) then
-  -- Note that records and variants are added to the front of the environment
-  -- as they are processed, so the last record in the given term will be first
-  -- in the environment.
-  let ids = map (lam p: (a, b). p.0) env in
-  let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
-  let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
-  let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
-  let globalEnvId = get ids 4 in -- type GlobalEnv = Seq2
-  let localEnvId = get ids 3 in  -- type LocalEnv = Seq2
-  let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
-  let envId = get ids 1 in       -- type Env = Rec2
-  let trdRecordId = get ids 0 in -- type Rec3 = {global : Seq2, local : Seq2}
-  let expectedEnv = [
-    (trdRecordId, tyrecord_ [
-      ("local", ntycon_ sndSeqId),
-      ("global", ntycon_ sndSeqId)
-    ]),
-    (envId, ntycon_ sndRecordId),
-    (sndRecordId, tyrecord_ [
-      ("local", ntycon_ localEnvId),
-      ("global", ntycon_ globalEnvId)
-    ]),
-    (localEnvId, ntycon_ sndSeqId),
-    (globalEnvId, ntycon_ sndSeqId),
-    (sndSeqId, tyseq_ (ntycon_ fstRecordId)),
-    (fstRecordId, tytuple_ [ntycon_ fstSeqId, tyint_]),
-    (fstSeqId, tystr_)
-  ] in
-  utest env with expectedEnv using eqEnv in
-  ()
-else never);
+match typeLift typeAliases with (env, t) in
+-- Note that records and variants are added to the front of the environment
+-- as they are processed, so the last record in the given term will be first
+-- in the environment.
+let ids = map (lam p: (a, b). p.0) env in
+let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
+let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
+let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
+let globalEnvId = get ids 4 in -- type GlobalEnv = Seq2
+let localEnvId = get ids 3 in  -- type LocalEnv = Seq2
+let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
+let envId = get ids 1 in       -- type Env = Rec2
+let trdRecordId = get ids 0 in -- type Rec3 = {global : Seq2, local : Seq2}
+let expectedEnv = [
+  (trdRecordId, tyrecord_ [
+    ("local", ntycon_ sndSeqId),
+    ("global", ntycon_ sndSeqId)
+  ]),
+  (envId, ntycon_ sndRecordId),
+  (sndRecordId, tyrecord_ [
+    ("local", ntycon_ localEnvId),
+    ("global", ntycon_ globalEnvId)
+  ]),
+  (localEnvId, ntycon_ sndSeqId),
+  (globalEnvId, ntycon_ sndSeqId),
+  (sndSeqId, tyseq_ (ntycon_ fstRecordId)),
+  (fstRecordId, tytuple_ [ntycon_ fstSeqId, tyint_]),
+  (fstSeqId, tystr_)
+] in
+utest env with expectedEnv using eqEnv in
 
 ()
