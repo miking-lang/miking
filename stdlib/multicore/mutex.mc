@@ -27,7 +27,7 @@ let mutexRelease = lam m.
 
 mexpr
 
-let debug = true in
+let debug = false in
 let debugPrint = if debug then print else lam x. x in
 
 -- Used for debug printing, included to avoid dependency on seq.mc
