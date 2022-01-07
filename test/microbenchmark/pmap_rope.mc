@@ -7,8 +7,8 @@ include "multicore/pseq.mc"
 
 mexpr
 
-let nCores = 8 in
-let pool = threadPoolCreate nCores in
+let nThreads = 8 in
+let pool = threadPoolCreate nThreads in
 
 let workload = 20 in
 recursive let fibonacci = lam n.
@@ -18,7 +18,7 @@ in
 
 let mapf = lam n.
   --let res = map (lam. fibonacci workload) (createRope n (lam i. i)) in
-  let res = pmap pool nCores (lam. fibonacci workload) (createRope n (lam i. i)) in
+  let res = pmap pool nThreads (lam. fibonacci workload) (createRope n (lam i. i)) in
   utest length res with n in
   res
 in
