@@ -556,4 +556,18 @@ let expectedEnv = [
 ] in
 utest env with expectedEnv using eqEnv in
 
+let tupleTy = tytuple_ [tyint_, tyint_] in
+let recordTypeInBindingAnnotation = symbolize (bindall_ [
+  reclet_ "gcd" (tyarrow_ tupleTy tyint_)
+    (ulam_ "x" (bindall_ [
+      ulet_ "a" (tupleproj_ 0 (var_ "x")),
+      ulet_ "b" (tupleproj_ 1 (var_ "x")),
+      if_ (eqi_ (var_ "b") (int_ 0))
+        (var_ "a")
+        (app_ (var_ "gcd") (utuple_ [var_ "b", modi_ (var_ "a") (var_ "b")]))])),
+  app_ (var_ "gcd") (utuple_ [int_ 7, int_ 14])
+]) in
+match typeLift recordTypeInBindingAnnotation with (env, t) in
+utest length env with 1 using eqi in
+
 ()
