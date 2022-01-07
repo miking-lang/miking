@@ -2,14 +2,18 @@
 include "benchmarkcommon.mc"
 include "string.mc"
 include "common.mc"
-include "map.ml"
+include "map_n.ml"
 
 mexpr
 
-let mapf = lam n.
-  map (addi 1) (createList n (lam i. i))
+let workload = 30 in
+recursive let fibonacci = lam n.
+  if lti n 3 then 1
+  else addi (fibonacci (subi n 1)) (fibonacci (subi n 2))
 in
 
--- iter (lam x. print (int2string x)) (mapf n);
+let mapf = lam n.
+  map (lam. fibonacci workload) (createList n (lam i. i))
+in
 
 repeat (lam. mapf n)
