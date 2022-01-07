@@ -875,6 +875,14 @@ let createRope_ = use MExprAst in
   lam n. lam f.
   appf2_ (uconst_ (CCreateRope ())) n f
 
+let isList_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CIsList ())) s
+
+let isRope_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CIsRope ())) s
+
 let head_ = use MExprAst in
   lam s.
   app_ (uconst_ (CHead ())) s

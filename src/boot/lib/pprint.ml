@@ -363,6 +363,10 @@ let rec print_const fmt = function
       fprintf fmt "createList"
   | CcreateRope _ ->
       fprintf fmt "createRope"
+  | CisList ->
+      fprintf fmt "isList"
+  | CisRope ->
+      fprintf fmt "isRope"
   | Clength ->
       fprintf fmt "length"
   | Cconcat _ ->

@@ -65,6 +65,8 @@ let builtin =
   ; ("create", f (Ccreate None))
   ; ("createList", f (CcreateList None))
   ; ("createRope", f (CcreateRope None))
+  ; ("isList", f CisList)
+  ; ("isRope", f CisRope)
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
   ; ("get", f (Cget None))
