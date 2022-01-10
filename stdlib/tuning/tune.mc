@@ -1,13 +1,15 @@
 include "ext/local-search.mc"
+
 include "sys.mc"
 include "string.mc"
 include "map.mc"
-include "decision-points.mc"
-include "tune-options.mc"
 include "common.mc"
+
+include "context-expansion.mc"
+include "tune-options.mc"
 include "tune-file.mc"
 
--- Performs tuning of a flattened program with decision points.
+-- Performs tuning of a context expanded program with holes.
 
 -- Start time of search.
 let tuneSearchStart = ref 0.
@@ -45,7 +47,7 @@ let _timingResult2str : TimingResult -> String = lam t.
   case Timeout {ms = ms} then join ["Timeout at ", float2string ms, " ms"]
   end
 
-lang TuneBase = Holes
+lang TuneBase = HoleAst
   sem tune (options : TuneOptions) (run : Runner) (holes : Expr)
            (file : String) (hole2idx : Map NameInfo (Map [NameInfo] Int)) =
   -- Intentionally left blank
@@ -65,7 +67,7 @@ lang TuneBase = Holes
       else
         let msg = strJoin " "
         [ "Program returned non-zero exit code during tuning\n"
-        , "decision point values:\n", _tuneTable2str table, "\n"
+        , "hole values:\n", _tuneTable2str table, "\n"
         , "command line arguments:", strJoin " " args, "\n"
         , "stdout:", res.stdout, "\n"
         , "stderr:", res.stderr
@@ -246,7 +248,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 end
 
 -- Explore the search space exhaustively, i.e. try all combinations of all
--- decision points. The decision points are explored from left to right.
+-- holes. The holes are explored from left to right.
 lang TuneExhaustive = TuneLocalSearch
   syn MetaState =
   | Exhaustive {prev : [Option Expr], exhausted : Bool}
@@ -298,10 +300,10 @@ lang TuneExhaustive = TuneLocalSearch
     else never
 end
 
--- Explore the values of each decision point one by one, from left to right,
+-- Explore the values of each hole one by one, from left to right,
 -- while keeping the rest fixed (to their tuned values, or their defaults if
 -- they have note yet been tuned). Hence, it assumes a total independence of the
--- decision points.
+-- holes.
 lang TuneSemiExhaustive = TuneLocalSearch
   syn MetaState =
   | SemiExhaustive {curIdx : Int, lastImproved : Int, prev : Option Expr}
@@ -559,8 +561,8 @@ let tuneEntry =
     -- Set the random seed?
     (match options.seed with Some seed then randSetSeed seed else ());
 
-    let holes : [Expr] = deref env.idx2hole in
-    let hole2idx : Map NameInfo (Map [NameInfo] Int) = deref env.hole2idx in
+    let holes : [Expr] = env.idx2hole in
+    let hole2idx : Map NameInfo (Map [NameInfo] Int) = env.hole2idx in
 
     -- Runs the program with a given command-line input and optional timeout
     let runner = lam input : String. lam timeoutMs : Option Float.

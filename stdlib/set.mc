@@ -33,6 +33,13 @@ let setSubset : Set a -> Set a -> Bool = lam s1. lam s2.
 -- `setUnion s1 s2` is the union of set `s1` and `s2`.
 let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 
+-- `setIntersect s1 s2` is the intersection of set `s1` and `s2`.
+let setIntersect : Set a -> Set a -> Set a = lam s1. lam s2.
+  let cmp = mapGetCmpFun s1 in
+  mapFoldWithKey (lam acc. lam key. lam.
+    if setMem key s2 then setInsert key acc else acc
+  ) (setEmpty cmp) s1
+
 -- `setOfSeq cmp seq` construct a set ordered by `cmp` from a sequence `seq`.
 let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
@@ -114,6 +121,13 @@ let s7 = setOfSeq subi [1,2,6] in
 utest setSubset s5 s5 with true in
 utest setSubset s6 s5 with true in
 utest setSubset s7 s5 with false in
+
+let sInt1 = setIntersect (setOfSeq subi []) (setOfSeq subi [1]) in
+utest setSize sInt1 with 0 in
+
+let sInt2 = setIntersect (setOfSeq subi [1,2]) (setOfSeq subi [2]) in
+utest setSize sInt2 with 1 in
+utest setMem 2 sInt2 with true in
 
 utest setCmp s5 s5 with 0 in
 utest setCmp s5 s6 with 1 in

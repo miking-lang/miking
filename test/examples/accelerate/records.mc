@@ -32,7 +32,7 @@ let s1 : [Data] = map sumToInt s in
 -- manually destruct it, and manually reconstruct the result in the CPU code.
 let sa : [Int] = map getInt s in
 let sb : [Float] = map getFloat s in
-let sx : [Int] = accelerate (parallelMap2 accSumToInt sa sb) in
+let sx : [Int] = accelerate (map2 accSumToInt sa sb) in
 let s2 : [Data] =
   map
     (lam d : (Int, Float). {a = d.0, b = d.1})
@@ -49,7 +49,7 @@ let sum1 : Int =
 -- We can safely use the data type, as long as it only exists within the
 -- accelerated code.
 let sum2 : Int = accelerate (
-  let s : [Data] = parallelMap2 (lam a : Int. lam b : Float. {a = a, b = b}) sa sb in
+  let s : [Data] = map2 (lam a : Int. lam b : Float. {a = a, b = b}) sa sb in
   let s : [Data] = map sumToInt s in
   let sa : [Int] = map getInt s in
   parallelReduce addi 0 sa) in

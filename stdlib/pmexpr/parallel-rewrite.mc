@@ -11,7 +11,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
       if lti i n then
         let pattern : Pattern = get patterns i in
         match matchPattern binding pattern with Some map then
-          Some (pattern.replacement map)
+          Some (pattern.replacement binding.info map)
         else
           tryPattern (addi i 1)
       else None ()
@@ -21,9 +21,8 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
   sem parallelPatternRewrite (patterns : [Pattern]) =
   | t ->
     let replacements = mapEmpty nameCmp in
-    match parallelPatternRewriteH patterns replacements t with (_, t) then
-      promote t
-    else never
+    match parallelPatternRewriteH patterns replacements t with (_, t) in
+    promote t
 
   sem parallelPatternRewriteH (patterns : [Pattern])
                               (replacements : Map Name ([Name], Expr)) =
@@ -34,9 +33,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
         (lam replacements. lam binding : RecLetBinding.
           match functionParametersAndBody binding.body with (params, _) then
             match tryPatterns patterns binding with Some replacement then
-              let paramNames =
-                map (lam param : (Name, Type, Info). param.0) params in
-              mapInsert binding.ident (paramNames, replacement) replacements
+              mapInsert binding.ident (params, replacement) replacements
             else replacements
           else replacements)
         replacements
@@ -58,59 +55,60 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
         map
           (lam binding : RecLetBinding.
             match parallelPatternRewriteH patterns replacements binding.body
-            with (_, body) then
-              {binding with body = body}
-            else never)
+            with (_, body) in
+            {binding with body = body})
           retainedBindings in
 
       -- Apply on the inexpr of the recursive let-expression (apply on the
       -- remaining part of the tree).
       match parallelPatternRewriteH patterns replacements t.inexpr
-      with (replacements, inexpr) then
-        (replacements, TmRecLets {{t with bindings = bindings}
-                                     with inexpr = inexpr})
-    else never
+      with (replacements, inexpr) in
+      (replacements, TmRecLets {{t with bindings = bindings}
+                                   with inexpr = inexpr})
   | (TmApp {info = info}) & t ->
-    let performSubstitution : Expr -> [Name] -> [Expr] -> Expr =
-      lam e. lam paramNames. lam args.
+    let performSubstitution : Expr -> [(Name, Type, Info)] -> [Expr] -> Expr =
+      lam e. lam params. lam args.
       let substMap = mapFromSeq nameCmp
         (map
-          (lam paramNameArg : (Name, Expr).
-            (paramNameArg.0, lam info. withInfo info paramNameArg.1))
-          (zip paramNames args)) in
+          (lam paramArg : ((Name, Type, Info), Expr).
+            match paramArg with ((id, ty, info), expr) in
+            (id, lam info. withInfo info (withType ty expr)))
+          (zip params args)) in
       substituteVariables e substMap
     in
-    match collectAppArguments t with (f, args) then
-      let appBody =
-        match f with TmVar {ident = ident} then
-          match mapLookup ident replacements with Some (paramNames, expr) then
-            let nargs = length args in
-            let nparams = length paramNames in
-            if lti nargs nparams then
-              let diff = subi nparams nargs in
-              let extraNames = create diff (lam. nameSym "x") in
-              let exprWrappedInLambdas =
-                foldl
-                  (lam e. lam name.
-                    TmLam {
-                      ident = name,
-                      tyIdent = TyUnknown {info = NoInfo ()},
-                      body = e,
-                      ty = tyTm e,
-                      info = NoInfo ()})
-                  expr
-                  extraNames in
-              let args = concat args (reverse extraNames) in
-              Some (performSubstitution exprWrappedInLambdas paramNames args)
-            else if eqi nargs nparams then
-              Some (performSubstitution expr paramNames args)
-            else
-              infoErrorExit info (concat "Too many arguments passed to " (nameGetStr ident))
-          else None ()
+    match collectAppArguments t with (f, args) in
+    let appBody =
+      match f with TmVar {ident = ident} then
+        match mapLookup ident replacements with Some (params, expr) then
+          let nargs = length args in
+          let nparams = length params in
+          if lti nargs nparams then
+            let diff = subi nparams nargs in
+            let extraNames = create diff (lam. nameSym "x") in
+            let exprWrappedInLambdas =
+              foldl
+                (lam e. lam name.
+                  -- TODO(larshum, 2021-12-06): Do not use TyUnknown, but
+                  -- propagate the appropriate types based on the parameter
+                  -- types, which are known.
+                  TmLam {
+                    ident = name,
+                    tyIdent = TyUnknown {info = info},
+                    body = e,
+                    ty = tyTm e,
+                    info = info})
+                expr
+                extraNames in
+            let args = concat args (reverse extraNames) in
+            Some (performSubstitution exprWrappedInLambdas params args)
+          else if eqi nargs nparams then
+            Some (performSubstitution expr params args)
+          else infoErrorExit info (concat "Too many arguments passed to "
+                                          (nameGetStr ident))
         else None ()
-      in
-      (replacements, optionGetOrElse (lam. t) appBody)
-    else never
+      else None ()
+    in
+    (replacements, optionGetOrElse (lam. t) appBody)
   | t -> smapAccumL_Expr_Expr (parallelPatternRewriteH patterns) replacements t
 end
 
@@ -119,33 +117,20 @@ lang TestLang =
   PMExprParallelPattern
 
   sem isAtomic =
-  | TmParallelMap _ -> false
-  | TmParallelMap2 _ -> false
+  | TmMap2 _ -> false
   | TmParallelReduce _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmParallelMap t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelMap (", f, ") (", as, ")"])
-      else never
-    else never
-  | TmParallelMap2 t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        match pprintCode indent env t.bs with (env, bs) then
-          (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
-        else never
-      else never
-    else never
+  | TmMap2 t ->
+    match printParen indent env t.f with (env, f) in
+    match pprintCode indent env t.as with (env, as) in
+    match pprintCode indent env t.bs with (env, bs) in
+    (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
   | TmParallelReduce t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.ne with (env, ne) then
-        match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelReduce (", f, ") (", ne, ") (", as, ")"])
-        else never
-      else never
-    else never
+    match printParen indent env t.f with (env, f) in
+    match pprintCode indent env t.ne with (env, ne) in
+    match pprintCode indent env t.as with (env, as) in
+    (env, join ["parallelReduce (", f, ") (", ne, ") (", as, ")"])
 end
 
 mexpr
@@ -167,6 +152,7 @@ in
 let containsParallelKeyword : Expr -> Bool = lam e.
   recursive let work = lam acc. lam e.
     if or acc (isKeyword e) then true
+    else match e with TmApp {lhs = TmApp {lhs = TmConst {val = CMap ()}}} then true
     else sfold_Expr_Expr work acc e
   in
   work false e

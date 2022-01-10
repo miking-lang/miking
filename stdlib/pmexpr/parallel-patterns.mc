@@ -53,7 +53,7 @@ type Pattern = {
   atomicPatternMap : Map Int AtomicPattern,
   activePatterns : [AtomicPattern],
   dependencies : Map Int (Set Int),
-  replacement : Map VarPattern (Name, Expr) -> Expr
+  replacement : Info -> Map VarPattern (Name, Expr) -> Expr
 }
 
 let getPatternIndex : AtomicPattern -> Int = lam p.
@@ -135,14 +135,13 @@ let withDependencies :
       foldl work acc pats
     else acc
   in
-  match getPatternDependencies pat.atomicPatterns with (activePatterns, dependencies) then
-    let nestedPatterns = foldl work [] pat.atomicPatterns in
-    let patMap = mapFromSeq subi nestedPatterns in
-    { atomicPatternMap = patMap
-    , activePatterns = activePatterns
-    , dependencies = dependencies
-    , replacement = pat.replacement }
-  else never
+  match getPatternDependencies pat.atomicPatterns with (activePatterns, dependencies) in
+  let nestedPatterns = foldl work [] pat.atomicPatterns in
+  let patMap = mapFromSeq subi nestedPatterns in
+  { atomicPatternMap = patMap
+  , activePatterns = activePatterns
+  , dependencies = dependencies
+  , replacement = pat.replacement }
 
 let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
             -> (Name, Expr) =
@@ -153,20 +152,6 @@ let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
     error (join [
       "Pattern replacement function for ", parallelPattern,
       " referenced unmatched variable pattern ", varPatString varPat])
-
-let getMatchName
-  : String -> VarPattern -> Map VarPattern (Name, Expr) -> Name =
-  lam parallelPattern. lam varPat. lam matches.
-  match getMatch parallelPattern varPat matches with (id, _) then
-    id
-  else never
-
-let getMatchExpr
-  : String -> VarPattern -> Map VarPattern (Name, Expr) -> Expr =
-  lam parallelPattern. lam varPat. lam matches.
-  match getMatch parallelPattern varPat matches with (_, expr) then
-    expr
-  else never
 
 let eliminateUnusedLetExpressions : Expr -> Expr =
   use PMExprAst in
@@ -180,18 +165,15 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
     match expr with TmVar {ident = ident} then
       (setInsert ident acc, expr)
     else match expr with TmLet t then
-      match work acc t.inexpr with (acc, inexpr) then
-        if setMem t.ident acc then
-          let acc = collectVariables acc t.body in
-          (acc, TmLet {t with inexpr = inexpr})
-        else
-          (acc, inexpr)
-      else never
+      match work acc t.inexpr with (acc, inexpr) in
+      if setMem t.ident acc then
+        let acc = collectVariables acc t.body in
+        (acc, TmLet {t with inexpr = inexpr})
+      else (acc, inexpr)
     else smapAccumL_Expr_Expr work acc expr
   in
-  match work (setEmpty nameCmp) e with (_, e) then
-    e
-  else never
+  match work (setEmpty nameCmp) e with (_, e) in
+  e
 
 -- Definition of the map pattern
 let mapPatRef : Ref (Option Pattern) = ref (None ())
@@ -216,23 +198,42 @@ let mapPattern : () -> Pattern =
       ]},
     ReturnPattern {id = 9, var = PatternIndex 1}
   ] in
-  let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
+  let replacement : Info -> (Map VarPattern (Name, Expr)) -> Expr =
+    lam info. lam matches.
     let patternName = "parallelMap" in
-    let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
-    let fPair : (Name, Expr) = getMatch patternName (PatternIndex 5) matches in
-    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
-    let sExpr = getMatchExpr patternName (PatternName s) matches in
-
+    match getMatch patternName (PatternIndex 1) matches with (_, branchExpr) in
+    match getMatch patternName (PatternIndex 5) matches with (fId, fExpr) in
+    match getMatch patternName (PatternIndex 4) matches with (headId, headExpr) in
+    match getMatch patternName (PatternName s) matches with (_, sExpr) in
     match branchExpr with TmMatch {els = els} then
-      match fPair.1 with TmSeq {tms = [fResultVar]} then
+      match fExpr with TmSeq {tms = [fResultVar]} then
         let x = nameSym "x" in
         let subMap = mapFromSeq nameCmp [
-          (headPair.0, lam info.
-            TmVar {ident = x, ty = tyWithInfo info (tyTm headPair.1), info = info, frozen = false})
+          (headId, lam info.
+            TmVar {ident = x, ty = tyWithInfo info (tyTm headExpr),
+                   info = info, frozen = false})
         ] in
         let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
-        parallelMap_ (nulam_ x els) sExpr
+        let fType = TyArrow {
+          from = tyTm headExpr, to = tyTm els, info = infoTm els} in
+        let innerAppType = TyArrow {
+          from = TySeq {ty = tyTm headExpr, info = info},
+          to = TySeq {ty = tyTm els, info = info},
+          info = info} in
+        let mapTy = TyArrow {
+          from = fType,
+          to = innerAppType,
+          info = info} in
+        TmApp {
+          lhs = TmApp {
+            lhs = TmConst {val = CMap (), ty = mapTy, info = info},
+            rhs = TmLam {
+              ident = x, tyIdent = tyTm headExpr, body = els,
+              ty = fType, info = infoTm els},
+            ty = innerAppType, info = info},
+          rhs = sExpr,
+          ty = TySeq {ty = tyTm els, info = info}, info = info}
       else
         error (join [
           "Rewriting into parallelMap pattern failed: The functional expression ",
@@ -284,28 +285,45 @@ let map2Pattern : () -> Pattern =
         ReturnPattern {id = 14, var = PatternIndex 4}]},
     ReturnPattern {id = 15, var = PatternIndex 1}
   ] in
-  let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
+  let replacement : Info -> (Map VarPattern (Name, Expr)) -> Expr =
+    lam info. lam matches.
     let patternName = "parallelMap2" in
-    let branchExpr = getMatchExpr patternName (PatternIndex 4) matches in
-    let fExpr = getMatchExpr patternName (PatternIndex 10) matches in
-    let headFst : (Name, Expr) = getMatch patternName (PatternIndex 8) matches in
-    let headSnd : (Name, Expr) = getMatch patternName (PatternIndex 9) matches in
-    let sFstExpr = getMatchExpr patternName (PatternName s1) matches in
-    let sSndExpr = getMatchExpr patternName (PatternName s2) matches in
-
+    match getMatch patternName (PatternIndex 4) matches with (_, branchExpr) in
+    match getMatch patternName (PatternIndex 10) matches with (_, fExpr) in
+    match getMatch patternName (PatternIndex 8) matches with (headFstId, headFstExpr) in
+    match getMatch patternName (PatternIndex 9) matches with (headSndId, headSndExpr) in
+    match getMatch patternName (PatternName s1) matches with (_, sFstExpr) in
+    match getMatch patternName (PatternName s2) matches with (_, sSndExpr) in
     match branchExpr with TmMatch {els = els} then
       match fExpr with TmSeq {tms = [fResultVar]} then
         let x = nameSym "x" in
         let y = nameSym "y" in
         let subMap = mapFromSeq nameCmp [
-          (headFst.0, lam info.
-            TmVar {ident = x, ty = tyWithInfo info (tyTm headFst.1), info = info, frozen = false}),
-          (headSnd.0, lam info.
-            TmVar {ident = y, ty = tyWithInfo info (tyTm headSnd.1), info = info, frozen = false})
+          (headFstId, lam info.
+            TmVar {ident = x, ty = tyWithInfo info (tyTm headFstExpr),
+                   info = info, frozen = false}),
+          (headSndId, lam info.
+            TmVar {ident = y, ty = tyWithInfo info (tyTm headSndExpr),
+                   info = info, frozen = false})
         ] in
         let els = substituteVariables els subMap in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
-        parallelMap2_ (nulam_ x (nulam_ y els)) sFstExpr sSndExpr
+        TmMap2 {
+          f = TmLam {
+            ident = x, tyIdent = tyTm headFstExpr,
+            body = TmLam {
+              ident = y, tyIdent = tyTm headSndExpr, body = els,
+              ty = TyArrow {from = tyTm headSndExpr, to = tyTm els, info = info},
+              info = infoTm els},
+            ty = TyArrow {
+              from = tyTm headFstExpr,
+              to = TyArrow {from = tyTm headSndExpr, to = tyTm els, info = info},
+              info = info},
+            info = info},
+          as = sFstExpr,
+          bs = sSndExpr,
+          ty = TySeq {ty = tyTm els, info = info},
+          info = info}
       else
         error (join [
           "Rewriting into parallelMap2 pattern failed: The functional ",
@@ -325,7 +343,7 @@ let getMap2Pattern = lam.
     modref map2PatRef (Some pat);
     pat
 
--- Definition of the 'parallelReduce'/'foldLeft' pattern
+-- Definition of the fold pattern
 let reducePatRef : Ref (Option Pattern) = ref (None ())
 let reducePattern : () -> Pattern =
   use PMExprFunctionProperties in
@@ -345,46 +363,78 @@ let reducePattern : () -> Pattern =
       ]},
     ReturnPattern {id = 8, var = PatternIndex 1}
   ] in
-  let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
+  let replacement : Info -> Map VarPattern (Name, Expr) -> Expr =
+    lam info. lam matches.
+    let getReduceFunctionTypes = lam f.
+      let errMsg = join [
+        "Rewriting info fold pattern failed: invalid type of function argument\n",
+        "Expected type of shape A -> (B -> C), got ",
+        use MExprPrettyPrint in type2str (tyTm f)] in
+      match tyTm f with TyArrow {from = tya, to = TyArrow {from = tyb, to = tyc}} then
+        if eqType tya tyc then
+          (tya, tyb)
+        else infoErrorExit info errMsg
+      else infoErrorExit info errMsg
+    in
     let seqReduce = lam f. lam acc. lam s.
+      match getReduceFunctionTypes f with (accType, seqElemType) in
+      let seqAppType = TyArrow {
+        from = TySeq {ty = seqElemType, info = info},
+        to = accType, info = infoTy accType} in
+      let foldlAppType = TyArrow {from = accType, to = seqAppType, info = info} in
+      let foldlType = TyArrow {from = tyTm f, to = foldlAppType, info = info} in
       TmApp {
         lhs = TmApp {
           lhs = TmApp {
-            lhs = TmConst {val = CFoldl (), ty = tyunknown_, info = NoInfo ()},
+            lhs = TmConst {val = CFoldl (), ty = foldlType, info = info},
             rhs = f,
-            ty = tyunknown_,
-            info = NoInfo ()
-          },
+            ty = foldlAppType,
+            info = info},
           rhs = acc,
-          ty = tyunknown_,
-          info = NoInfo ()
-        },
+          ty = seqAppType,
+          info = info},
         rhs = s,
-        ty = tyunknown_,
-        info = NoInfo ()} in
-    let patternName = "parallelReduce" in
-    let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
-    let fResultPair : (Name, Expr) = getMatch patternName (PatternIndex 5) matches in
-    let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
-    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
-    let sExpr = getMatchExpr patternName (PatternName s) matches in
-
+        ty = accType,
+        info = info} in
+    let patternName = "fold" in
+    match getMatch patternName (PatternIndex 1) matches with (_, branchExpr) in
+    match getMatch patternName (PatternIndex 4) matches with (headId, headExpr) in
+    match getMatch patternName (PatternIndex 5) matches with (fResultId, fResultExpr) in
+    match getMatch patternName (PatternName acc) matches with (accId, accExpr) in
+    match getMatch patternName (PatternName s) matches with (_, sExpr) in
     match branchExpr with TmMatch {els = els} then
       let x = nameSym "x" in
       let y = nameSym "y" in
       let subMap = mapFromSeq nameCmp [
-        (accPair.0, lam info.
-          TmVar {ident = x, ty = tyWithInfo info (tyTm accPair.1), info = info, frozen = false}),
-        (headPair.0, lam info.
-          TmVar {ident = y, ty = tyWithInfo info (tyTm headPair.1), info = info, frozen = false})
+        (accId, lam info.
+          TmVar {ident = x, ty = tyWithInfo info (tyTm accExpr), info = info,
+                 frozen = false}),
+        (headId, lam info.
+          TmVar {ident = y, ty = tyWithInfo info (tyTm headExpr), info = info,
+                 frozen = false})
       ] in
       let els = substituteVariables els subMap in
-      let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultPair.0)) in
-      let f = nulam_ x (nulam_ y els) in
-      seqReduce f accPair.1 sExpr
+      let fResultVar = TmVar {ident = fResultId, ty = tyTm fResultExpr,
+                              info = infoTm fResultExpr, frozen = false} in
+      let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+      let elemTy = tyTm headExpr in
+      let accTy = tyTm accExpr in
+      let f = TmLam {
+        ident = x, tyIdent = accTy,
+        body = TmLam {
+          ident = y, tyIdent = elemTy, body = els,
+          ty = TyArrow {from = elemTy, to = accTy,
+                        info = infoTm els},
+          info = info},
+        ty = TyArrow {
+          from = accTy,
+          to = TyArrow {from = elemTy, to = accTy, info = info},
+          info = info},
+        info = info} in
+      seqReduce f accExpr sExpr
     else
       error (join [
-        "Rewriting into parallelReduce pattern failed: BranchPattern matched ",
+        "Rewriting into fold pattern failed: BranchPattern matched ",
         "with non-branch expression"])
   in
   withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}

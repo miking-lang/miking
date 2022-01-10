@@ -2,13 +2,12 @@ include "digraph.mc"
 include "string.mc"
 include "eqset.mc"
 
--- This file implements eqPaths: computing equivalence paths for decision
--- points.
+-- Computes equivalence paths for holes.
 
 -- 'eqPaths g endNode depth startNodes' computes representative paths in the
 -- call graph 'g' for the equivalence classes used for classifying computation
--- contexts for decision points. The paths are suffixes of paths starting in
--- any of the 'startNodes' and end in 'endNode'.
+-- contexts for holes. The paths are suffixes of paths starting in any of the
+-- 'startNodes' and end in 'endNode'.
 let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
   lam g. lam endNode. lam depth. lam startNodes.
     -- Reverse graph for forward search (more efficient for adjacency map)
