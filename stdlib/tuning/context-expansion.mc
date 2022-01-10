@@ -295,9 +295,6 @@ use TestLang in
 
 let anf = compose normalizeTerm symbolize in
 
--- TODO:
--- write a test with top-level statement
-
 let debug = false in
 let parse = lam str.
   let ast = parseMExprString holeKeywords str in

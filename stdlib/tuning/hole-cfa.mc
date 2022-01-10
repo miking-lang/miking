@@ -360,8 +360,7 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
 
-    -- Do graph coloring to get context information (throw away the AST for
-    -- now).
+    -- Do graph coloring to get context information (throw away the AST).
     match colorCallGraph [] tANFSmall with (env, _) in
 
     -- Initialize the graph data
