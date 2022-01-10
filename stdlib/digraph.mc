@@ -320,7 +320,7 @@ let digraphTopologicalOrder:Digraph v l -> [v] = lam g.
   let rootnodes = filter (lam v. eqi (length (digraphEdgesTo v g)) 0) (digraphVertices g) in
   recursive
     let order = lam ordering. lam indegrees. lam rootnodes.
-      if eqi (length (rootnodes)) 0 then ordering
+      if null rootnodes then ordering
       else
         let cnode = head rootnodes in
         let successors = digraphSuccessors cnode g in
