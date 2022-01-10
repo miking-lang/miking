@@ -107,13 +107,20 @@ let digraphHasEdges = lam es. lam g.
   forAll (lam e. digraphHasEdge e g) es
 
 -- Check whether graph g1 is equal to graph g2.
--- NOTE(gizem, 2021-12-7): This has quadratic time complexity.
 let digraphGraphEq =
   lam g1: Digraph v l. lam g2: Digraph v l.
     if eqi (digraphCountEdges g1) (digraphCountEdges g2) then
       if eqi (digraphCountVertices g1) (digraphCountVertices g2) then
-        mapEq (lam ds1. lam ds2. eqsetEqual (lam d1:(v,l). lam d2:(v,l). and (digraphEqv g1 d1.0 d2.0) (digraphEql g1 d1.1 d2.1)) ds1 ds2
-         ) g1.adj g2.adj
+        mapEq (lam ds1. lam ds2.
+          let m1 = mapEmpty (digraphCmpv g1) in
+          let m1 = foldl (lam acc. lam d:(v,l).
+                        let vals = mapLookupOrElse (lam. []) d.0 acc in
+                        mapInsert d.0 (cons d.1 vals) acc) m1 ds1 in
+          let m2 = mapEmpty (digraphCmpv g2) in
+          let m2 = foldl (lam acc. lam d:(v,l).
+                        let vals = mapLookupOrElse (lam. []) d.0 acc in
+                        mapInsert d.0 (cons d.1 vals) acc) m2 ds2 in
+          mapEq (lam d1. lam d2. eqsetEqual (lam dx1. lam dx2. digraphEql g1 dx1 dx2) d1 d2) m1 m2) g1.adj g2.adj
       else false
     else false
 
@@ -153,6 +160,15 @@ let digraphAddVertex = lam v. lam g.
 let digraphMaybeAddVertex = lam v. lam g.
   digraphAddVertexCheck v g false
 
+-- Add a vertex v to g. Updates the vertex v in graph g if v already exists in g.
+let digraphAddUpdateVertex = lam v. lam g : Digraph v l.
+  if digraphHasVertex v g then
+    let edgeList = mapLookupOrElse (lam. error "Lookup failed") v g.adj in
+    let m = mapRemove v g.adj in
+    {g with adj = mapInsert v edgeList m}
+  else
+    {g with adj = mapInsert v [] g}
+
 -- Add edge e=(v1,v2,l) to g. Checks invariants iff utests are enabled.
 let digraphAddEdge = lam v1. lam v2. lam l. lam g : Digraph v l.
   utest digraphHasVertex v1 g with true in
@@ -165,6 +181,19 @@ let digraphAddEdge = lam v1. lam v2. lam l. lam g : Digraph v l.
     mapLookupOrElse (lam. error "Vertex not found") v1 g.adj
   in
   {g with adj = mapInsert v1 (snoc oldEdgeList (v2, l)) g.adj}
+
+-- Add edge e=(v1,v2,l) to g. Graph stays unchanged if e already exists in g.
+let digraphMaybeAddEdge = lam v1. lam v2. lam l. lam g : Digraph v l.
+  if digraphHasEdge (v1,v2,l) g then g
+  else
+    let oldEdgeList =
+    mapLookupOrElse (lam. error "Vertex not found") v1 g.adj
+  in
+    {g with adj = mapInsert v1 (snoc oldEdgeList (v2, l)) g.adj}
+
+-- Add a list of edges to a graph g using the digraphMaybeAddEdge.
+let digraphMaybeAddEdges = lam es. lam g.
+  foldl (lam g. lam e : DigraphEdge v l. digraphMaybeAddEdge e.0 e.1 e.2 g) g es
 
 -- Add a list of vertices to a graph g.
 let digraphAddVertices = lam vs. lam g.
@@ -282,6 +311,27 @@ lam g.
 
 -- Strongly connected components of g.
 let digraphStrongConnects = lam g. digraphTarjan g
+
+-- Kahn's algorithm: Topological sorting of large networks
+-- https://dl.acm.org/doi/10.1145/368996.369025
+-- Returns a list of sorted vertices
+let digraphTopologicalOrder:Digraph v l -> [v] = lam g.
+  let indegrees = foldl (lam acc. lam v. mapInsert v (length (digraphEdgesTo v g)) acc) (mapEmpty (digraphCmpv g)) (digraphVertices g) in
+  let rootnodes = filter (lam v. eqi (length (digraphEdgesTo v g)) 0) (digraphVertices g) in
+  recursive
+    let order = lam ordering. lam indegrees. lam rootnodes.
+      if eqi (length (rootnodes)) 0 then ordering
+      else
+        let cnode = head rootnodes in
+        let successors = digraphSuccessors cnode g in
+        let indegrees = foldl (lam acc. lam v. mapInsert v (subi (mapFindExn v acc) 1) acc) indegrees successors in
+        let newroots = filter (lam s. eqi (mapFindExn s indegrees) 0) successors in
+        let rootnodes = concat (tail rootnodes) newroots in
+        order (cons cnode ordering) indegrees rootnodes
+  in
+  let res = order [] indegrees rootnodes in
+  if eqi (length res) (length (digraphVertices g)) then reverse res
+  else error "Cycle detected! Topological order only applies to DAG"
 
 -- Print as dot format
 let digraphPrintDot = lam g. lam v2str. lam l2str.
@@ -434,5 +484,22 @@ utest digraphGraphEq g4 g5 with false in
 utest digraphGraphEq g6 g7 with true in
 utest digraphGraphEq g7 g8 with false in
 utest digraphGraphEq g9 g10 with true in
+
+let g10 = digraphAddUpdateVertex 10 g8 in
+utest digraphGraphEq g8 g10 with true in
+let g2 = digraphAddEdge 1 2 (gensym ()) g in
+let g2 = digraphAddEdge 1 3 (gensym ()) g2 in
+let g2 = digraphAddEdge 2 4 (gensym ()) g2 in
+let g2 = digraphAddEdge 3 4 (gensym ()) g2 in
+let g2 = digraphAddEdge 2 5 (gensym ()) g2 in
+let g2 = digraphAddEdge 3 6 (gensym ()) g2 in
+
+let tOrder = digraphTopologicalOrder g2 in
+utest tOrder with [1,7,8,2,3,5,4,6] in
+
+let sym = gensym () in
+let g2 = digraphMaybeAddEdges [(1,2, sym), (1,3,sym), (1,2,sym)] g in
+let g3 = digraphAddEdges [(1,2, sym), (1,3,sym)] g in
+utest digraphGraphEq g2 g3 with true in
 
 ()
