@@ -404,7 +404,7 @@ lang OCamlPrettyPrint =
       (env, concat code ";;")
     else never
   | OTopTryWith {try = try, arms = arms} ->
-    let i = 0 in
+    let i = pprintIncr 0 in
     let ii = pprintIncr i in
     let iii = pprintIncr ii in
     match pprintCode i env try with (env, try) in
@@ -416,7 +416,7 @@ lang OCamlPrettyPrint =
       else never
     else never in
     match mapAccumL pprintArm env arms with (env, arms) then
-      (env, join ["try", pprintNewline ii, try, pprintNewline i,
+      (env, join ["try", pprintNewline i, try, pprintNewline 0,
                   "with", join arms])
     else never
 
