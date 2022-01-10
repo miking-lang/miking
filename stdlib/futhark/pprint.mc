@@ -79,15 +79,6 @@ lang FutharkPatPrettyPrint = FutharkAst + PatNamePrettyPrint
   | FPBool t -> (env, if t.val then "true" else "false")
   | FPRecord t ->
     if mapIsEmpty t.bindings then (env, "{}")
-    else match record2tuple t.bindings with Some pats then
-      match mapAccumL (lam env. lam e. pprintPat indent env e) env pats
-      with (env, tuplePats) then
-        let merged =
-          match tuplePats with [e]
-          then concat e ","
-          else strJoin ", " tuplePats in
-        (env, join ["(", merged, ")"])
-      else never
     else match
       mapMapAccum
         (lam env. lam k. lam v.

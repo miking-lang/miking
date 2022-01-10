@@ -49,7 +49,10 @@ type CFAGraph = {
   -- must be put below directly, since we do not yet have product extensions.
 
   -- Used for alignment analysis in miking-dppl
-  stochMatches: Set Name
+  stochMatches: Set Name,
+
+  -- Used to store any custom data in the graph
+  graphData: Option GraphData
 
 }
 
@@ -58,7 +61,8 @@ let emptyCFAGraph = {
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp,
   mcgfs = [],
-  stochMatches = setEmpty nameCmp
+  stochMatches = setEmpty nameCmp,
+  graphData = None ()
 }
 
 -------------------
@@ -73,11 +77,17 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   syn AbsVal =
   -- Intentionally left blank
 
+  syn GraphData =
+  -- Intentionally left blank
+
   sem cfa =
-  | t -> match cfaDebug (None ()) t with (_,graph) in graph
+  | t -> match cfaDebug (None ()) (None ()) t with (_,graph) in graph
+
+  sem cfaData (graphData: GraphData) =
+  | t -> match cfaDebug (Some graphData) (None ()) t with (_,graph) in graph
 
   -- Main algorithm
-  sem cfaDebug (env: Option PprintEnv) =
+  sem cfaDebug (graphData: Option GraphData) (env: Option PprintEnv) =
   | t ->
 
     let printGraph = lam env. lam graph. lam str.
@@ -89,10 +99,10 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
       else None ()
     in
 
-    let graph = initGraph t in
+    let graph = initGraph graphData t in
 
     -- Iteration
-    recursive let iter = lam env: PprintEnv. lam graph: CFAGraph.
+    recursive let iter = lam env: Option PprintEnv. lam graph: CFAGraph.
       if null graph.worklist then (env,graph)
       else
         match printGraph env graph "INTERMEDIATE CFA GRAPH" with env in
@@ -131,7 +141,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
 
   -- This function is responsible for setting up the initial CFAGraph given the
   -- program to analyze.
-  sem initGraph =
+  sem initGraph (graphData: Option GraphData) =
   -- Intentionally left blank
 
   -- Call a set of constraint generation functions on each term in program.
@@ -254,7 +264,21 @@ lang InitConstraint = CFA
 
 end
 
-lang DirectConstraint = CFA
+lang DirectConstraintOptions = CFA
+  sem isDirect =
+  | _ /- : AbsVal -/ -> true
+
+  sem directTransition (graph: CFAGraph) (rhs: Name) =
+  | av -> av
+
+  sem propagateDirectConstraint (rhs: Name) (graph: CFAGraph) =
+  | av ->
+    if isDirect av then
+      addData graph (directTransition graph rhs av) rhs
+    else graph
+end
+
+lang DirectConstraint = CFA + DirectConstraintOptions
 
   syn Constraint =
   -- lhs ⊆ rhs
@@ -264,7 +288,7 @@ lang DirectConstraint = CFA
   | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrDirect r -> addData graph update.1 r.rhs
+  | CstrDirect r -> propagateDirectConstraint r.rhs graph update.1
 
   sem constraintToString (env: PprintEnv) =
   | CstrDirect { lhs = lhs, rhs = rhs } ->
@@ -808,9 +832,9 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatCFA = MatchCFA + NamedPat
+lang NamedPatCFA = MatchCFA + NamedPat + DirectConstraintOptions
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatNamed { ident = PName n }, av) -> addData graph av n
+  | (PatNamed { ident = PName n }, av) -> propagateDirectConstraint n graph av
   | (PatNamed { ident = PWildcard _ }, _) -> graph
 end
 
@@ -934,7 +958,7 @@ lang MExprCFA = CFA +
 lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
 
   -- Type: Expr -> CFAGraph
-  sem initGraph =
+  sem initGraph (graphData : Option GraphData) =
   | t ->
 
     -- Initial graph

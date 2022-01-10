@@ -1,5 +1,5 @@
 
-include "decision-points.mc"
+include "context-expansion.mc"
 include "string.mc"
 
 -- Defines helpers for writing to and reading from a tune file.
@@ -49,9 +49,9 @@ in concat withoutExtension tuneFileExtension
 
 let _vertexPath : NameInfo -> Int -> Env -> [NameInfo] = lam h : NameInfo. lam i : Int. lam env : CallCtxEnv.
   match env with {verbosePath = verbosePath, hole2fun = hole2fun} then
-    let edgePath = mapFindExn i (deref verbosePath) in
+    let edgePath = mapFindExn i verbosePath in
     match edgePath with [] then
-      [mapFindExn h (deref hole2fun)]
+      [mapFindExn h hole2fun]
     else
       let lastEdge : (NameInfo, NameInfo, NameInfo) = last edgePath in
       let destination = lastEdge.1 in
@@ -66,9 +66,9 @@ let _tuneTable2str = lam table : LookupTable.
   strJoin _delim rows
 
 let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : TuneFileFormat.
-  let hole2idx = deref env.hole2idx in
-  let hole2fun = deref env.hole2fun in
-  let verbosePath = deref env.verbosePath in
+  let hole2idx = env.hole2idx in
+  let hole2fun = env.hole2fun in
+  let verbosePath = env.verbosePath in
   let callGraph = env.callGraph in
 
   let entry2str = lam holeInfo : NameInfo. lam path : [NameInfo]. lam i : Int.

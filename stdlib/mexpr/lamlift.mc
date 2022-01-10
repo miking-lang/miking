@@ -187,32 +187,24 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         foldr
           (lam freeVar : (Name, Type). lam body.
             TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                   body = body, ty = tyTm body, info = info})
+                   body = body, info = info,
+                   ty = TyArrow {from = freeVar.1, to = tyTm body,
+                                 info = info}})
           t.body
           fv in
+      let tyBody = tyTm body in
       let subExpr = lam info.
         foldr
           (lam freeVar : (Name, Type). lam acc.
             let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info, frozen = false} in
-            -- NOTE(larshum, 2021-09-19): We assume that the application
-            -- argument has the correct type.
             let appType =
               match tyTm acc with TyArrow {to = to} then
                 to
-              else TyUnknown {info = info}
+              else infoErrorExit info "Application on non-arrow type"
             in
             TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-          (TmVar {ident = t.ident, ty = t.tyBody, info = info, frozen = false})
+          (TmVar {ident = t.ident, ty = tyBody, info = info, frozen = false})
           (reverse fv) in
-
-      -- Update the annotated type of the function to include the types of the
-      -- added parameters.
-      let tyBody =
-        foldr
-          (lam freeVar : (Name, Type). lam accTy.
-            TyArrow {from = freeVar.1, to = accTy, info = infoTy accTy})
-          t.tyBody
-          fv in
       match insertFreeVariablesH solutions subMap body with (subMap, body) then
         let subMap = mapInsert t.ident subExpr subMap in
         match insertFreeVariablesH solutions subMap t.inexpr
@@ -228,20 +220,23 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     let addBindingSubExpression =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
       match mapLookup bind.ident solutions with Some freeVars then
+        let bindType =
+          foldr
+            (lam freeVar : (Name, Type). lam accType : Type.
+              TyArrow {from = freeVar.1, to = accType, info = infoTy accType})
+            bind.tyBody (mapBindings freeVars) in
         let subExpr = lam info.
           foldr
             (lam freeVar : (Name, Type). lam acc.
               let x = TmVar {ident = freeVar.0, ty = freeVar.1,
                              info = info, frozen = false} in
-              -- NOTE(larshum, 2021-09-19): We assume that the application
-              -- argument has the correct type.
               let appType =
                 match tyTm acc with TyArrow {to = to} then
                   to
-                else TyUnknown {info = info}
+                else infoErrorExit info "Application on non-arrow type"
               in
               TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-            (TmVar {ident = bind.ident, ty = bind.tyBody, info = info, frozen = false})
+            (TmVar {ident = bind.ident, ty = bindType, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
       else error (join ["Lambda lifting error: No solution found for binding ",
@@ -256,15 +251,11 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
               TmLam {ident = freeVar.0, tyIdent = freeVar.1,
-                     body = body, ty = tyTm body, info = info})
+                     body = body, info = info,
+                     ty = TyArrow {from = freeVar.1, to = tyTm body,
+                                   info = info}})
             bind.body fv in
-        -- Update the annotated type of the function to include the types of the
-        -- added parameters.
-        let tyBody =
-          foldr
-            (lam freeVar : (Name, Type). lam accTy.
-              TyArrow {from = freeVar.1, to = accTy, info = infoTy accTy})
-            bind.tyBody fv in
+        let tyBody = tyTm body in
         match insertFreeVariablesH solutions subMap body with (subMap, body) then
           (subMap, {{bind with tyBody = tyBody} with body = body})
         else never
@@ -272,20 +263,16 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                         nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
-    match mapAccumL insertFreeVarsBinding subMap t.bindings
-    with (subMap, bindings) then
-      match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) then
-        (subMap, TmRecLets {{t with bindings = bindings}
-                               with inexpr = inexpr})
-      else never
-    else never
+    match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in
+    match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
+    (subMap, TmRecLets {{t with bindings = bindings}
+                           with inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
   | t ->
-    match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) then
-      t
-    else never
+    match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) in
+    t
 end
 
 lang LambdaLiftLiftGlobal = MExprAst

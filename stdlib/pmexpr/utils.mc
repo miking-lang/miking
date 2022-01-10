@@ -40,14 +40,6 @@ let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
     else smap_Expr_Expr work e
   in work e
 
-let substituteIdentifier : Expr -> Name -> Name -> (Info -> Expr) =
-  use MExprAst in
-  lam e. lam fromId. lam toId.
-  let nameMap = mapFromSeq nameCmp
-    [(fromId, lam info. TmVar {ident = toId, ty = TyUnknown {info = info},
-                               info = info, frozen = false})] in
-  substituteVariables e nameMap
-
 -- Takes a function expression and produces a tuple containing a list of the
 -- arguments and the function body without the lambdas.
 let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
