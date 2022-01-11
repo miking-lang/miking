@@ -167,7 +167,7 @@ let digraphAddUpdateVertex = lam v. lam g : Digraph v l.
     let m = mapRemove v g.adj in
     {g with adj = mapInsert v edgeList m}
   else
-    {g with adj = mapInsert v [] g}
+    {g with adj = mapInsert v [] g.adj}
 
 -- Add edge e=(v1,v2,l) to g. Checks invariants iff utests are enabled.
 let digraphAddEdge = lam v1. lam v2. lam l. lam g : Digraph v l.
@@ -320,7 +320,7 @@ let digraphTopologicalOrder:Digraph v l -> [v] = lam g.
   let rootnodes = filter (lam v. eqi (length (digraphEdgesTo v g)) 0) (digraphVertices g) in
   recursive
     let order = lam ordering. lam indegrees. lam rootnodes.
-      if eqi (length (rootnodes)) 0 then ordering
+      if null rootnodes then ordering
       else
         let cnode = head rootnodes in
         let successors = digraphSuccessors cnode g in
@@ -502,4 +502,7 @@ let g2 = digraphMaybeAddEdges [(1,2, sym), (1,3,sym), (1,2,sym)] g in
 let g3 = digraphAddEdges [(1,2, sym), (1,3,sym)] g in
 utest digraphGraphEq g2 g3 with true in
 
+let g2 = digraphAddUpdateVertex 1 g in
+let g2 = digraphAddUpdateVertex 14 g2 in
+utest digraphVertices g2 with [1,2,3,4,5,6,7,8,14] in
 ()
