@@ -35,8 +35,14 @@ jobs:
           # Install all opam packages used in make test-all
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
 
-      - name: Build Miking and run all tests
-        timeout-minutes: 30
+      - name: Build Miking
+        timeout-minutes: 10
+        run: |
+          eval $(opam env)
+          make install
+
+      - name: Run tests
+        timeout-minutes: 20
         run: |
           eval $(opam env)
           make test-all
@@ -72,8 +78,14 @@ jobs:
           # Install all opam packages used in make test-all
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
 
-      - name: Build Miking and run all tests
-        timeout-minutes: 30
+      - name: Build Miking
+        timeout-minutes: 10
+        run: |
+          eval $(opam env)
+          make install
+
+      - name: Run tests
+        timeout-minutes: 20
         run: |
           eval $(opam env)
           make test-all
