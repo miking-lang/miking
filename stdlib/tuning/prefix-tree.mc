@@ -19,7 +19,6 @@ let prefixTreeEmpty = lam cmp : a -> a -> Int. lam sentinel : a.
 
 -- 'prefixTreeInsert cmp tree id path' inserts 'path' into the 'tree'.
 let prefixTreeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
-  let eq = lam x. lam y. eqi 0 (cmp x y) in
   match tree with Node t then
     -- Use sentinel value as leaf key as this will never be used as a key in a
     -- map
@@ -54,6 +53,85 @@ let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
   let z = zip ids paths in
   foldl (lam acc. lam idPath : (Int, a). prefixTreeInsert cmp acc idPath.0 idPath.1) tree z
 
+-- 'prefixTreeGetId tree path' returns an option with the id of 'path' in
+-- 'tree' if it exists, otherwise None ().
+let prefixTreeGetId = lam tree. lam path.
+  match tree with Node {root = root, children = children} then
+    let treeLeafKey = root in
+    let n = length path in
+    recursive let find = lam children. lam i.
+      if eqi i n then
+        match mapLookup treeLeafKey children with Some (Leaf id) then Some id
+        else None ()
+      else
+        let p = get path i in
+        match mapLookup p children with Some (Node {children = children}) then
+          find children (addi i 1)
+        else None ()
+    in
+    find children 0
+  else error "missing sentinel node"
+
+-- 'prefixTreeGetIds tree path' returns the id's that are prefixed by 'path'
+-- in 'tree'.
+let prefixTreeGetIds = lam tree. lam path.
+  match tree with Node {root = root, children = children, ids = ids} then
+    let treeLeafKey = root in
+    let n = length path in
+    recursive let find = lam children. lam ids. lam i.
+      if eqi i n then ids
+      else
+        let p = get path i in
+        match mapLookup p children with Some (Node {children = children, ids = ids}) then
+          find children ids (addi i 1)
+        else []
+    in
+    find children ids 0
+  else error "missing sentinel node"
+
+-- 'prefixTreeMaybeInsert cmp tree id path' inserts 'path' in 'tree' if it doesn't
+-- already exist. Returns both the (updated) tree and a Boolean representing if
+-- the insert was done or not (true if path was inserted, false if it already
+-- existed).
+-- 'prefixTreeInsert cmp tree id path' inserts 'path' into the 'tree'.
+let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
+  match tree with Node t then
+    -- Use sentinel value as leaf key as this will never be used as a key in a
+    -- map
+    let treeLeafKey = t.root in
+    let n = length path in
+    recursive let insert = lam children. lam i.
+      if eqi i n then
+        if mapMem treeLeafKey children then (false, children)
+        else (true, mapInsert treeLeafKey (Leaf id) children)
+      else
+        let p = get path i in
+        match mapLookup p children with Some c then
+          -- equal
+          match c with Node {root = root, children = cs, ids = ids} then
+            switch insert cs (addi i 1)
+            case (true, children) then
+              let newNode = Node {root = root, children = children, ids = cons id ids} in
+              (true, mapInsert p newNode children)
+            case (false, _) then (false, children)
+            end
+          else never
+        else
+          switch insert (mapEmpty cmp) (addi i 1)
+          case (true, children) then
+            let newNode = Node {root = p, ids = [id], children = children} in
+            (true, mapInsert p newNode children)
+          case (false, _) then error "impossible"
+          end
+    in
+    switch insert t.children 0
+    case (true, children) then
+      (true, Node {{t with children = children} with ids = cons id t.ids})
+    case (false, _) then (false, tree)
+    end
+else error "missing sentinel node"
+
+-- Debug printing of a prefix tree.
 let prefixTreeDebug = lam toStr. lam tree : PTree a.
   match tree with Node {children = cs} in
   recursive let work = lam ind. lam children.
@@ -85,10 +163,26 @@ mexpr
 let empty = prefixTreeEmpty subi 0 in
 let treeLeafKey = 0 in
 
-utest prefixTreeInsert subi empty 0 []
+let t = prefixTreeInsert subi empty 0 [] in
+utest t
 with Node {root = 0, ids = [0], children = mapFromSeq subi [(treeLeafKey, Leaf 0)]}
 using prefixTreeEq subi
 in
+
+utest prefixTreeGetId t [] with Some 0 in
+utest prefixTreeGetIds t [] with [0] in
+utest prefixTreeGetId t [1] with None () in
+utest prefixTreeGetIds t [1] with [] in
+
+utest
+  match prefixTreeMaybeInsert subi t 1 [] with (false, _) then true
+  else false
+with true in
+
+utest
+  match prefixTreeMaybeInsert subi t 1 [1] with (true, _) then true
+  else false
+with true in
 
 utest prefixTreeInsert subi empty 0 [1]
 with Node
@@ -143,5 +237,21 @@ with Node
 }
 using prefixTreeEq subi
 in
+
+utest prefixTreeGetId t [1] with Some 0 in
+utest prefixTreeGetId t [1,2] with Some 1 in
+utest prefixTreeGetId t [3] with Some 2 in
+utest prefixTreeGetId t [3,1] with None () in
+
+utest prefixTreeGetIds t [1] with [1,0] in
+utest prefixTreeGetIds t [1,2] with [1] in
+utest prefixTreeGetIds t [3] with [2] in
+utest prefixTreeGetIds t [3,1] with [] in
+
+utest
+  match prefixTreeMaybeInsert subi t 42 [1,2,3] with (true, t) then
+    Some (prefixTreeGetIds t [1,2])
+  else None ()
+with Some [42,1] in
 
 ()
