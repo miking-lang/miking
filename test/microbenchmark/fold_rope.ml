@@ -1,3 +1,3 @@
-let foldf n = Rope.foldl_array ( + ) 0 (Rope.create_array Fold.n (fun i -> i))
+let foldf n = Rope.foldl_array ( + ) 0 (Rope.create_array n (fun i -> i))
 
-let _ = Benchmarkcommon.repeat (fun () -> foldf)
+let _ = Benchmarkcommon.repeat (fun () -> foldf Fold.n)
