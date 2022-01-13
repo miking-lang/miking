@@ -46,6 +46,9 @@ type CallCtxEnv = {
   -- from-node.
   lbl2inc: Map Name Name,
 
+  -- Maps edge labels in the call graph to its from-node.
+  lbl2fun: Map Name Name,
+
   -- Each node in the call graph assigns a per-node unique integer to each
   -- incoming edge. This map maps an edge to the count value of its destination
   -- node.
@@ -109,11 +112,16 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
 
     let lbl2inc =
       _nameMapInit (callGraphEdgeNames callGraph)
-        (lam e. match e with (_, _, lbl) then lbl else never)
+        (lam e. match e with (_, _, lbl) in lbl)
         (lam e.
-           match e with (from, _, _) then
-             mapFindExn from fun2inc
-           else never)
+           match e with (from, _, _) in
+           mapFindExn from fun2inc)
+    in
+
+    let lbl2fun =
+      _nameMapInit (callGraphEdgeNames callGraph)
+        (lam e. match e with (_, _, lbl) in lbl)
+        (lam e. match e with (from, _, _) in from)
     in
 
     let callGraphRev = digraphReverse callGraph in
@@ -123,16 +131,12 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
                let incomingEdges =
                  _callGraphNameSeq (digraphEdgesFrom funName callGraphRev) in
                match foldl (lam acc. lam e.
-                              match e with (_, _, lbl) then
-                                match acc with (hm, i) then
-                                  (mapInsert lbl i hm,
-                                   addi i 1)
-                                else never
-                              else never)
+                              match e with (_, _, lbl) in
+                              match acc with (hm, i) in
+                              (mapInsert lbl i hm, addi i 1))
                            (acc, 1)
                            incomingEdges
-               with (hm, _) then hm
-               else never)
+               with (hm, _) in hm)
             (mapEmpty nameCmp)
             (digraphVertices callGraph)
 
@@ -161,6 +165,7 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     { callGraph = callGraph
     , fun2inc = fun2inc
     , lbl2inc = lbl2inc
+    , lbl2fun = lbl2fun
     , lbl2count = lbl2count
     , publicFns = publicFns
     , threadPoolInfo = threadPoolInfo
