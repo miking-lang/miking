@@ -247,6 +247,7 @@ utest prefixTreeGetIds t [1] with [1,0] in
 utest prefixTreeGetIds t [1,2] with [1] in
 utest prefixTreeGetIds t [3] with [2] in
 utest prefixTreeGetIds t [3,1] with [] in
+utest prefixTreeGetIds t [] with [2,1,0] in
 
 utest
   match prefixTreeMaybeInsert subi t 42 [1,2,3] with (true, t) then
