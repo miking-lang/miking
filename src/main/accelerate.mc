@@ -1,5 +1,7 @@
 include "c/ast.mc"
 include "c/pprint.mc"
+include "cuda/compile.mc"
+include "cuda/pprint.mc"
 include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
@@ -42,8 +44,13 @@ lang PMExprCompile =
   PMExprUtestSizeConstraint + PMExprWellFormed + FutharkGenerate +
   FutharkDeadcodeElimination + FutharkSizeParameterize + FutharkCWrapper +
   FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
-  OCamlGenerate + OCamlTypeDeclGenerate
+  CudaPrettyPrint + OCamlGenerate + OCamlTypeDeclGenerate
 end
+
+type AccelerateHooks = {
+  pprintGpuCode : Set Name -> Expr -> String,
+  pprintWrapperCode : Map Name AccelerateData -> String
+}
 
 let parallelKeywords = [
   "accelerate",
@@ -92,14 +99,20 @@ let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
   reportNestedAccelerate accelerateIds ast ;
   pmexprWellFormed ast
 
-let futharkTranslation : Expr -> FutProg = lam entryPoints. lam ast.
-  use PMExprCompile in
+let futharkTranslation : Set Name -> Expr -> FutProg = use PMExprCompile in
+  lam entryPoints. lam ast.
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = aliasAnalysis ast in
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
+
+let cudaTranslation : Set Name -> Expr -> CProg = use PMExprCompile in
+  lam entryPoints. lam ast.
+  use CudaCompile in
+  -- TODO(larshum, 2022-01-16): implement cuda-specific compilation
+  CPProg {includes = [], tops = []}
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -169,7 +182,8 @@ gpu.c gpu.h: gpu.fut
   sysTempDirDelete td ();
   ()
 
-let compileAccelerated : Options -> String -> Unit = lam options. lam file.
+let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
+  lam options. lam hooks. lam file.
   use PMExprCompile in
   let ast = parseParseMCoreFile {
     keepUtests = true,
@@ -201,8 +215,6 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   match eliminateDummyParameter solutions accelerated accelerateAst
   with (accelerated, accelerateAst) in
 
-  -- BEGIN Futhark generation --
-
   -- Detect patterns in the accelerate AST to eliminate recursion. The
   -- result is a PMExpr AST.
   let pmexprAst = patternTransformation accelerateAst in
@@ -210,23 +222,13 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
   -- Perform validation of the produced PMExpr AST to ensure it is valid
   -- in terms of the well-formed rules. If it is found to violate these
   -- constraints, an error is reported.
-  validatePMExprAst accelerateIds pmexprAst ;
+  validatePMExprAst accelerateIds pmexprAst;
 
-  -- Translate the PMExpr AST into a Futhark AST, and then pretty-print
-  -- the result.
-  let futharkAst = futharkTranslation accelerateIds pmexprAst in
-  let futharkProg = pprintFutharkAst futharkAst in
+  -- Translate the PMExpr AST into an AST representing the GPU code, and then
+  -- pretty-print the result.
+  let gpuProg = hooks.pprintGpuCode accelerateIds pmexprAst in
 
-  -- END Futhark generation --
-
-  -- BEGIN C wrapper generation --
-
-  let cAst = generateWrapperCode accelerated in
-  let cProg = pprintCAst cAst in
-
-  -- END C wrapper generation --
-
-  -- BEGIN OCaml generation --
+  let wrapperProg = hooks.pprintWrapperCode accelerated in
 
   -- Eliminate all utests in the MExpr AST
   let ast = utestStrip ast in
@@ -252,11 +254,32 @@ let compileAccelerated : Options -> String -> Unit = lam options. lam file.
 
   let ocamlTops = join [externalTops, typeTops, exprTops] in
   let ocamlProg = pprintOCamlTops ocamlTops in
-  compileAccelerated options file ocamlProg cProg futharkProg
-
-  -- END OCaml generation --
+  compileAccelerated options file ocamlProg wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
-  if options.runTests then
-    error "Flags --test and --accelerate may not be used at the same time"
-  else iter (compileAccelerated options) files
+  use PMExprAst in
+  let hooks =
+    if options.runTests then
+      error "Flag --test may not be used for accelerated code generation"
+    else if options.accelerateCuda then
+      { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
+          use PMExprCompile in
+          let cudaAst = cudaTranslation accelerateIds ast in
+          pprintCAst cudaAst
+      , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
+          use PMExprCompile in
+          -- TODO(larshum, 2022-01-16): Add wrapper code generation for the
+          -- CUDA target.
+          ""}
+    else if options.accelerateFuthark then
+      { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
+          use PMExprCompile in
+          let futharkAst = futharkTranslation accelerateIds ast in
+          pprintFutharkAst futharkAst
+      , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
+          use PMExprCompile in
+          let wrapperAst = generateWrapperCode accelerateData in
+          pprintCAst wrapperAst}
+    else
+      error "Neither CUDA nor Futhark was chosen as acceleration target"
+  in iter (compileAccelerated options hooks) files

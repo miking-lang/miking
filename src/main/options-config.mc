@@ -52,10 +52,14 @@ let optionsConfig : ParseConfig = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
-  ([("--accelerate", "", "")],
-    "Compile into an accelerated executable",
+  ([("--accelerate-cuda", "", "")],
+    "Compile into an accelerated executable using the CUDA backend",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerate = true}),
+      let o: Options = p.options in {o with accelerateCuda = true}),
+  ([("--accelerate-futhark", "", "")],
+    "Compile into an accelerated executable using the Futhark backend",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with accelerateFuthark = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.

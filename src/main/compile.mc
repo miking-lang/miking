@@ -112,5 +112,6 @@ let compile = lam files. lam options : Options. lam args.
 
     ocamlCompileAstWithUtests options file ast; ()
   in
-  if options.accelerate then compileAccelerate files options args
+  if or options.accelerateCuda options.accelerateFuthark then
+    compileAccelerate files options args
   else iter compileFile files
