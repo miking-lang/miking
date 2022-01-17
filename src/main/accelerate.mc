@@ -48,6 +48,8 @@ lang PMExprCompile =
   CudaPrettyPrint + OCamlGenerate + OCamlTypeDeclGenerate
 end
 
+lang MExprCudaCompile = MExprTypeLift + SeqTypeTypeLift + CudaCompile
+
 type AccelerateHooks = {
   pprintGpuCode : Set Name -> Expr -> String,
   pprintWrapperCode : Map Name AccelerateData -> String
@@ -111,9 +113,10 @@ let futharkTranslation : Set Name -> Expr -> FutProg = use PMExprCompile in
 
 let cudaTranslation : Set Name -> Expr -> CProg = use PMExprCompile in
   lam entryPoints. lam ast.
-  use CudaCompile in
-  -- TODO(larshum, 2022-01-16): implement cuda-specific compilation
-  CPProg {includes = [], tops = []}
+  use MExprCudaCompile in
+  match typeLift ast with (typeEnv, ast) in
+  match compile typeEnv ast with (_, types, tops, _, _) in
+  CPProg { includes = cIncludes, tops = join [types, tops] }
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -128,8 +131,9 @@ let filenameWithoutExtension = lam filename.
 let compileAccelerated : Options -> String -> String -> String -> String -> Unit =
   lam options. lam sourcePath. lam ocamlProg. lam cProg. lam futharkProg.
   let linkedFiles =
-    if options.cpuOnly then ""
-    else "(link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"
+    if options.accelerateFuthark then
+      "(link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"
+    else ""
   in
   let dunefile = join ["
 (env (dev (flags (:standard -w -a)) (ocamlc_flags (-without-runtime))))
@@ -266,7 +270,7 @@ let compileAccelerate = lam files. lam options : Options. lam args.
       { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
           use PMExprCompile in
           let cudaAst = cudaTranslation accelerateIds ast in
-          pprintCAst cudaAst
+          printCProg [] cudaAst
       , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
           use PMExprCompile in
           -- TODO(larshum, 2022-01-16): Add wrapper code generation for the
