@@ -93,7 +93,6 @@ let prefixTreeGetIds = lam tree. lam path.
 -- already exist. Returns both the (updated) tree and a Boolean representing if
 -- the insert was done or not (true if path was inserted, false if it already
 -- existed).
--- 'prefixTreeInsert cmp tree id path' inserts 'path' into the 'tree'.
 let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
   match tree with Node t then
     -- Use sentinel value as leaf key as this will never be used as a key in a
@@ -130,6 +129,28 @@ let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
     case (false, _) then (false, tree)
     end
 else error "missing sentinel node"
+
+-- 'prefixTreeGetPathExn tree id' returns the path with 'id' in 'tree'.
+let prefixTreeGetPathExn = lam tree. lam id.
+  match tree with Node {children = cs, ids = ids} then
+    recursive let findPath = lam children. lam ids. lam path.
+      -- Is the id among the id's?
+      if optionIsSome (find (eqi id) ids) then
+        foldl (lam acc. lam prefixChild.
+          match prefixChild with (prefix,c) in
+          match acc with Some res then Some res
+          else
+            match c with Leaf i then
+              if eqi id i then Some path else None ()
+            else match c with Node {children = children, ids = ids} in
+            findPath children ids (snoc path prefix)
+        ) (None ()) (mapBindings children)
+      else None ()
+    in
+    optionGetOrElse (lam. error (join ["ID ", int2string id, " not found"]))
+      (findPath cs ids [])
+  else error "missing sentinel node"
+
 
 -- Debug printing of a prefix tree.
 let prefixTreeDebug = lam toStr. lam tree : PTree a.
@@ -173,6 +194,7 @@ utest prefixTreeGetId t [] with Some 0 in
 utest prefixTreeGetIds t [] with [0] in
 utest prefixTreeGetId t [1] with None () in
 utest prefixTreeGetIds t [1] with [] in
+utest prefixTreeGetPathExn t 0 with [] in
 
 utest
   match prefixTreeMaybeInsert subi t 1 [] with (false, _) then true
@@ -248,6 +270,10 @@ utest prefixTreeGetIds t [1,2] with [1] in
 utest prefixTreeGetIds t [3] with [2] in
 utest prefixTreeGetIds t [3,1] with [] in
 utest prefixTreeGetIds t [] with [2,1,0] in
+
+utest prefixTreeGetPathExn t 0 with [1] in
+utest prefixTreeGetPathExn t 1 with [1,2] in
+utest prefixTreeGetPathExn t 2 with [3] in
 
 utest
   match prefixTreeMaybeInsert subi t 42 [1,2,3] with (true, t) then
