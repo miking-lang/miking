@@ -138,7 +138,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     if setMem t.ident used then
       let used = collectIdentifiersType used t.tyBody in
       let used = collectIdentifiersExpr used t.body in
-      (used, TmLet {t with inexpr = inexpr})
+      (used, TmLet {{t with inexpr = inexpr}
+                       with ty = tyTm inexpr})
     else (used, inexpr)
   | TmRecLets t ->
     let bindingIdents = map (lam bind : RecLetBinding. bind.ident) t.bindings in
