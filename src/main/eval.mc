@@ -23,8 +23,9 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprTypeCheck + MExprTypeLift +
-  MExprUtestTrans + MExprProfileInstrument + MExprEval
+  BootParser + MExpr + MExprTypeAnnot + MExprRemoveTypeAscription +
+  MExprTypeCheck + MExprTypeLift + MExprUtestTrans + MExprProfileInstrument +
+  MExprEval
 
   sem updateArgv (args : [String]) =
   | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r

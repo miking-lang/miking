@@ -23,8 +23,8 @@ lang MCoreCompile =
   BootParser +
   PMExprDemote +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
-  MExprRuntimeCheck + MExprProfileInstrument
+  MExprSym + MExprTypeAnnot + MExprRemoveTypeAscription + MExprTypeCheck +
+  MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument
 end
 
 let pprintMcore = lam ast.

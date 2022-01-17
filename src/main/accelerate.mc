@@ -13,6 +13,7 @@ include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
@@ -36,8 +37,8 @@ include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans + PMExprAst +
-  MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
+  MExprSym + MExprTypeAnnot + MExprRemoveTypeAscription + MExprUtestTrans +
+  PMExprAst + MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
   PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
   PMExprRecursionElimination + PMExprExtractAccelerate +
   PMExprReplaceAccelerate + PMExprNestedAccelerate +
