@@ -776,11 +776,8 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
             ( { constructors= USMap.add_seq new_constructors constructors
               ; normals }
             , USMap.add name fi syns )
-        | Inter (_, name, _, _) ->
+        | Inter (_, name, _, _) | Alias (_, name, _) ->
             ( {normals= USMap.add name (mangle name) normals; constructors}
-            , syns )
-        | Alias (_, name, _) ->
-            ( {constructors; normals= USMap.add name (mangle name) normals}
             , syns )
       in
       let ns, new_syns = List.fold_left add_decl (previous_ns, syns) decls in
