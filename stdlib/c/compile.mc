@@ -1019,9 +1019,9 @@ let printCompiledCProg = use CProgPrettyPrint in
 -----------
 
 lang Test =
-  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
-  + SeqTypeNoStringTypeLift
+  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
+  MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
+  MExprTypeLiftUnOrderedRecords + SeqTypeNoStringTypeLift
 
 mexpr
 use Test in
