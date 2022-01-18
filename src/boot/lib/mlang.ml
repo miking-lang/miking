@@ -69,7 +69,9 @@ type inter_data =
     subsets: (info * info) list }
 
 type lang_data =
-  {inters: inter_data Record.t; syns: (info * cdecl list) Record.t}
+  { inters: inter_data Record.t
+  ; syns: (info * cdecl list) Record.t
+  ; aliases: (info * ty) Record.t }
 
 let spprint_inter_data {info; cases; _} : ustring =
   List.map
@@ -133,6 +135,15 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
           ^ "', previously defined at "
           ^ Ustring.to_utf8 (info2str info) )
   in
+  let add_new_alias name ((fi, _) as data) = function
+    | None ->
+        Some data
+    | Some (old_fi, _) ->
+        raise_error fi
+          ( "Duplicate definition of '" ^ Ustring.to_utf8 name
+          ^ "', previously defined at "
+          ^ Ustring.to_utf8 (info2str old_fi) )
+  in
   let add_decl lang_data = function
     | Data (fi, name, cons) ->
         { lang_data with
@@ -157,12 +168,19 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
             Record.update name
               (add_new_sem name fi inter_data)
               lang_data.inters }
+    | Alias (fi, name, ty) ->
+        { lang_data with
+          aliases=
+            Record.update name (add_new_alias name (fi, ty)) lang_data.aliases
+        }
   in
-  List.fold_left add_decl {inters= Record.empty; syns= Record.empty} decls
+  List.fold_left add_decl
+    {inters= Record.empty; syns= Record.empty; aliases= Record.empty}
+    decls
 
 (* Merges the second language into the first, because the first includes the second *)
-let merge_lang_data fi {inters= i1; syns= s1} {inters= i2; syns= s2} :
-    lang_data =
+let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
+    {inters= i2; syns= s2; aliases= a2} : lang_data =
   let eq_cons (CDecl (_, c1, _)) (CDecl (_, c2, _)) = c1 =. c2 in
   let merge_syn _ a b =
     match (a, b) with
@@ -215,7 +233,63 @@ let merge_lang_data fi {inters= i1; syns= s1} {inters= i2; syns= s2} :
           in
           Some {data with subsets; cases= List.rev_append c2 c1}
   in
-  {inters= Record.merge merge_inter i1 i2; syns= Record.merge merge_syn s1 s2}
+  let rec syntactic_eq_type ty1 ty2 =
+    match (ty1, ty2) with
+    | TyUnknown _, TyUnknown _ ->
+        true
+    | TyBool _, TyBool _ ->
+        true
+    | TyInt _, TyInt _ ->
+        true
+    | TyFloat _, TyFloat _ ->
+        true
+    | TyChar _, TyChar _ ->
+        true
+    | TyArrow (_, ty11, ty12), TyArrow (_, ty21, ty22) ->
+        syntactic_eq_type ty11 ty21 && syntactic_eq_type ty12 ty22
+    | TyAll (_, id1, ty1), TyAll (_, id2, ty2) ->
+        Ustring.equal id1 id2 && syntactic_eq_type ty1 ty2
+    | TySeq (_, ty1), TySeq (_, ty2) ->
+        syntactic_eq_type ty1 ty2
+    | TyTensor (_, ty1), TyTensor (_, ty2) ->
+        syntactic_eq_type ty1 ty2
+    | TyRecord (_, binds1, labels1), TyRecord (_, binds2, labels2) ->
+        Record.equal syntactic_eq_type binds1 binds2
+        && List.equal Ustring.equal labels1 labels2
+    | TyVariant (_, constr1), TyVariant (_, constr2) ->
+        List.equal
+          (fun (id1, sym1) (id2, sym2) ->
+            Ustring.equal id1 id2 && Symb.eqsym sym1 sym2 )
+          constr1 constr2
+    | TyCon (_, id1, sym1), TyCon (_, id2, sym2) ->
+        Ustring.equal id1 id2 && Symb.eqsym sym1 sym2
+    | TyVar (_, id1), TyVar (_, id2) ->
+        Ustring.equal id1 id2
+    | TyApp (_, ty11, ty12), TyApp (_, ty21, ty22) ->
+        syntactic_eq_type ty11 ty21 && syntactic_eq_type ty12 ty22
+    | _ ->
+        false
+  in
+  let merge_alias name a b =
+    match (a, b) with
+    | None, None ->
+        None
+    | None, Some a ->
+        Some a
+    | Some a, None ->
+        Some a
+    | Some (fi1, ty1), Some (fi2, ty2) ->
+        if syntactic_eq_type ty1 ty2 then Some (fi, ty1)
+        else
+          raise_error fi1
+            ( "Type alias '" ^ Ustring.to_utf8 name
+            ^ "' is a syntactically different type from previous definition \
+               at "
+            ^ Ustring.to_utf8 (info2str fi2) )
+  in
+  { inters= Record.merge merge_inter i1 i2
+  ; syns= Record.merge merge_syn s1 s2
+  ; aliases= Record.merge merge_alias a1 a2 }
 
 (* TODO(vipa,?): this is likely fairly low hanging fruit when it comes to optimization *)
 let topo_sort (eq : 'a -> 'a -> bool) (edges : ('a * 'a) list)
@@ -240,7 +314,7 @@ let topo_sort (eq : 'a -> 'a -> bool) (edges : ('a * 'a) list)
   in
   recur [] edges vertices
 
-let data_to_lang info name includes {inters; syns} : mlang =
+let data_to_lang info name includes {inters; syns; aliases} : mlang =
   let info_assoc fi l = List.find (fun (fi2, _) -> eq_info fi fi2) l |> snd in
   let syns =
     Record.bindings syns
@@ -260,7 +334,15 @@ let data_to_lang info name includes {inters; syns} : mlang =
     Record.bindings inters
     |> List.map (fun (name, inter_data) -> sort_inter name inter_data)
   in
-  Lang (info, name, includes, List.rev_append syns inters)
+  let aliases =
+    Record.bindings aliases
+    |> List.map (fun (name, (fi, ty)) -> Alias (fi, name, ty))
+  in
+  Lang
+    ( info
+    , name
+    , includes
+    , List.rev_append aliases (List.rev_append syns inters) )
 
 let flatten_lang (prev_langs : lang_data Record.t) :
     top -> lang_data Record.t * top = function
@@ -443,8 +525,15 @@ let lang_is_subsumed_by l1 l2 =
                              impossible" )
                   true cases2 )
               cases1
-        | Data _, Data _ | Inter _, Inter _ | Data _, Inter _ | Inter _, Data _
-          ->
+        | Data _, Data _
+        | Inter _, Inter _
+        | Data _, Inter _
+        | Inter _, Data _
+        | Alias _, Data _
+        | Alias _, Inter _
+        | Alias _, Alias _
+        | Data _, Alias _
+        | Inter _, Alias _ ->
             true
       in
       List.for_all
@@ -681,7 +770,8 @@ let rec desugar_tm nss env subs =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
+let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
+  function
   | TopLang (Lang (_, langName, includes, decls) as lang) ->
       let default d = function Some x -> x | None -> d in
       let add_lang ns lang =
@@ -692,17 +782,23 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       (* compute the namespace *)
       let mangle str = langName ^. us "_" ^. str in
       let cdecl_names (CDecl (_, name, _)) = (name, mangle name) in
-      let add_decl ({constructors; normals}, syns) = function
+      let add_decl ({constructors; normals}, syns, aliases) = function
         | Data (fi, name, cdecls) ->
             let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names in
             ( { constructors= USMap.add_seq new_constructors constructors
               ; normals }
-            , USMap.add name fi syns )
+            , USMap.add name fi syns
+            , aliases )
         | Inter (_, name, _, _) ->
             ( {normals= USMap.add name (mangle name) normals; constructors}
-            , syns )
+            , syns
+            , aliases )
+        | Alias (fi, name, ty) ->
+            ({constructors; normals}, syns, USMap.add name (fi, ty) aliases)
       in
-      let ns, new_syns = List.fold_left add_decl (previous_ns, syns) decls in
+      let ns, new_syns, new_aliases =
+        List.fold_left add_decl (previous_ns, syns, aliases) decls
+      in
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
         TmConDef
@@ -758,6 +854,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       , new_langs
       , handle_subsumption subs new_langs langName includes
       , new_syns
+      , new_aliases
       , wrap :: stack )
   (* The other tops are trivial translations *)
   | TopLet (Let (fi, id, ty, tm)) ->
@@ -770,10 +867,10 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           , desugar_tm nss emptyMlangEnv subs tm
           , tm' )
       in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
   | TopType (Type (fi, id, ty)) ->
       let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
         TmRecLets
@@ -788,24 +885,26 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
               lets
           , tm' )
       in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
   | TopExt (Ext (fi, id, e, ty)) ->
       let wrap tm' =
         TmExt (fi, empty_mangle id, Symb.Helpers.nosym, e, ty, tm')
       in
-      (nss, langs, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, aliases, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start = (nss, USMap.empty, emptySubsumeEnv, USMap.empty, []) in
-  let new_nss, _langs, subs, syns, stack =
+  let acc_start =
+    (nss, USMap.empty, emptySubsumeEnv, USMap.empty, USMap.empty, [])
+  in
+  let new_nss, _langs, subs, syns, aliases, stack =
     List.fold_left desugar_top acc_start tops
   in
   let syntydecl =
@@ -814,7 +913,12 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
         TmType (fi, syn, Symb.Helpers.nosym, TyUnknown NoInfo, tm') )
       (USMap.bindings syns)
   in
-  let stack = stack @ syntydecl in
+  let aliastydecl =
+    List.rev_map
+      (fun (id, (fi, ty)) tm' -> TmType (fi, id, Symb.Helpers.nosym, ty, tm'))
+      (USMap.bindings aliases)
+  in
+  let stack = stack @ aliastydecl @ syntydecl in
   let desugared_tm =
     List.fold_left ( |> ) (desugar_tm new_nss emptyMlangEnv subs t) stack
   in

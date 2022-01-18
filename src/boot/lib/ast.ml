@@ -251,6 +251,7 @@ and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
   | Inter of info * ustring * param list * (pat * tm) list
+  | Alias of info * ustring * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list
 
