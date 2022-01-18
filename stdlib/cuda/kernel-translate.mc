@@ -1,5 +1,7 @@
 -- Defines translate rules for CUDA kernels.
 
+include "set.mc"
+include "c/compile.mc"
 include "cuda/ast.mc"
 
 lang CudaKernelTranslate = CudaAst

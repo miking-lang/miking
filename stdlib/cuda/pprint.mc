@@ -62,7 +62,7 @@ mexpr
 
 use CudaPrettyPrint in
 
-let printExpr = lam expr : CExpr.
+let printExpr : CExpr -> String = lam expr.
   match printCExpr pprintEnvEmpty expr with (_, str) in str
 in
 
@@ -86,7 +86,9 @@ let kernelApp = lam args : [CExpr].
     blockSize = (cint_ 3, cint_ 5, cint_ 6),
     sharedMem = cint_ 12,
     args = args} in
-let kernelStr = lam str. concat "kernel<<<{4, 2, 7}, {3, 5, 6}, 12>>>" str in
+let kernelStr : String -> String = lam str.
+  concat "kernel<<<{4, 2, 7}, {3, 5, 6}, 12>>>" str
+in
 utest printExpr (kernelApp []) with kernelStr "()" in
 utest printExpr (kernelApp [cint_ 1]) with kernelStr "(1)" in
 utest printExpr (kernelApp [cint_ 1, cint_ 2]) with kernelStr "(1, 2)" in
