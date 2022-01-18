@@ -585,8 +585,7 @@ let handle_subsumption env langs lang includes =
       (del_lang env) includes
   else env
 
-let rec desugar_ty env =
-  function
+let rec desugar_ty env = function
   | TyArrow (fi, lty, rty) ->
       TyArrow (fi, desugar_ty env lty, desugar_ty env rty)
   | TyAll (fi, id, ty) ->
@@ -605,7 +604,7 @@ let rec desugar_ty env =
       TyVar (fi, id)
   | TyApp (fi, lty, rty) ->
       TyApp (fi, desugar_ty env lty, desugar_ty env rty)
-  | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ as ty ->
+  | (TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _) as ty ->
       ty
 
 let rec desugar_tm nss env subs =
@@ -642,7 +641,11 @@ let rec desugar_tm nss env subs =
         ( fi
         , List.map
             (fun (fi, name, s, ty, e) ->
-              (fi, empty_mangle name, s, desugar_ty env ty, desugar_tm nss env' subs e) )
+              ( fi
+              , empty_mangle name
+              , s
+              , desugar_ty env ty
+              , desugar_tm nss env' subs e ) )
             bindings
         , desugar_tm nss env' subs body )
   | TmConDef (fi, name, s, ty, body) ->
@@ -756,8 +759,7 @@ let rec desugar_tm nss env subs =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) =
-  function
+let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
   | TopLang (Lang (_, langName, includes, decls) as lang) ->
       let default d = function Some x -> x | None -> d in
       let add_lang ns lang =
@@ -778,18 +780,20 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) =
             ( {normals= USMap.add name (mangle name) normals; constructors}
             , syns )
         | Alias (_, name, _) ->
-            ({constructors; normals= USMap.add name (mangle name) normals}, syns)
+            ( {constructors; normals= USMap.add name (mangle name) normals}
+            , syns )
       in
-      let ns, new_syns =
-        List.fold_left add_decl (previous_ns, syns) decls
-      in
+      let ns, new_syns = List.fold_left add_decl (previous_ns, syns) decls in
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
         TmConDef
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow (NoInfo, desugar_ty ns ty, TyCon (NoInfo, ty_name, Symb.Helpers.nosym))
+          , TyArrow
+              ( NoInfo
+              , desugar_ty ns ty
+              , TyCon (NoInfo, ty_name, Symb.Helpers.nosym) )
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
@@ -886,9 +890,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) =
       (nss, langs, subs, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start =
-    (nss, USMap.empty, emptySubsumeEnv, USMap.empty, [])
-  in
+  let acc_start = (nss, USMap.empty, emptySubsumeEnv, USMap.empty, []) in
   let new_nss, _langs, subs, syns, stack =
     List.fold_left desugar_top acc_start tops
   in
