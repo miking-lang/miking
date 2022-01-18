@@ -51,7 +51,7 @@ lang DependencyAnalysis = MExprHoleCFA
   | TmLet ({ident = ident} & t) ->
     match acc with (graph, measCount) in
     -- Add base measuring point to dependency graph
-    let graph = {
+    let graph : DependencyGraph = {
       graph with measuringPoints = setInsert ident graph.measuringPoints
     } in
 
@@ -72,6 +72,7 @@ lang DependencyAnalysis = MExprHoleCFA
             match av with AVEHole {id = id, contexts = contexts} then
               setFold (lam acc. lam c.
                 match acc with (graph, shortContexts) in
+                let graph : DependencyGraph = graph in
 
                 -- Assert contexts are unique
                 utest mapMem c shortContexts with false in
@@ -88,8 +89,7 @@ lang DependencyAnalysis = MExprHoleCFA
             else acc
           ) (graph, mapEmpty subi) deps
         with (graph, shortContexts) in
-        -- dprintLn ident;
-        -- dprintLn (mapBindings shortContexts);
+        let graph : DependencyGraph = graph in
 
         -- Compute measuring contexts and dependency graph
         if mapIsEmpty shortContexts then (graph, measCount)
@@ -101,8 +101,8 @@ lang DependencyAnalysis = MExprHoleCFA
               case (true,tree) then (tree, addi id 1)
               case (false,_) then (tree, id)
               end
-            ) (prefixTreeEmpty nameInfoCmp
-            (nameSym "", NoInfo ()), measCount) shortContexts
+            ) ( prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()),
+                 measCount ) shortContexts
           with (tree, newMeasCount) in
           -- For each context-sensitive hole, add an edge to the set of
           -- measuring id's it affects
@@ -185,7 +185,7 @@ let test = lam debug: Bool. lam t: Expr.
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
       let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
-      dprintLn dep;
+      -- dprintLn dep;
       printLn "\n--- DEPENDENCY GRAPH ---";
       digraphPrintDot dep.graph int2string int2string;
       -- dprintLn (mapKeys dep.measuringContexts);
@@ -207,10 +207,8 @@ in
 let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
   let ids = prefixTreeGetIds tree [] in
   let paths = foldl (lam acc. lam id.
-    let path =
-      optionGetOrElse (lam. error "impossible")
-        (prefixTreeGetPathExn tree id)
-    in cons path acc) [] ids
+    let path = prefixTreeGetPathExn tree id in
+    cons path acc) [] ids
   in
   let paths : [[String]] = map (
       lam path : [NameInfo].
@@ -222,7 +220,9 @@ let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
   setEq s1 s2
 in
 
-let eqTest = lam dep : DepencyGraph. lam r : TestResult.
+type TestResult = {measuringPoints : [(String,[[String]])]} in
+
+let eqTest = lam dep : DependencyGraph. lam r : TestResult.
   let treeBinds = mapBindings dep.measuringContexts in
   let trees : Map String (PTree NameInfo) = foldl (
     lam acc. lam b : (Name,PTree NameInfo).
@@ -235,6 +235,7 @@ let eqTest = lam dep : DepencyGraph. lam r : TestResult.
       let tree = mapFindExn str trees in
       eqMeasContexts tree ctxs
     ) r.measuringPoints in
+  forAll (lam x. x) measCtxs
 in
 
 let t = parse
@@ -257,30 +258,35 @@ utest test debug t with {
   measuringPoints = [("a",[[]])]
 } using eqTest in
 
--- let t = parse
--- "
--- let f1 = lam x.
---   let h = hole (Boolean {default = true, depth = 2}) in
---   h
--- in
--- let f2 = lam x.
---   let a = f1 x in
---   let b = f1 x in
---   let c = addi a b in
---   let cc = sleepMs c in
---   c
--- in
--- let f3 = lam f.
---   f 1
--- in
--- let d = f2 1 in
--- let e = f2 1 in
--- let f = addi d e in
--- let g = sleepMs f in
--- let i = f3 f2 in
--- ()
--- " in
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 2}) in
+  h
+in
+let f2 = lam x.
+  let a = f1 x in
+  let b = f1 x in
+  let c = addi a b in
+  let cc = sleepMs c in
+  c
+in
+let f3 = lam f.
+  f 1
+in
+let d = f2 1 in
+let e = f2 1 in
+let f = addi d e in
+let g = sleepMs f in
+let i = f3 f2 in
+()
+" in
 
--- utest test true t with () in
+utest test debug t with {
+  measuringPoints =
+  [ ("g", [[]])
+  , ("cc", [["d"],["e"]])
+  ]
+} using eqTest in
 
 ()

@@ -117,8 +117,8 @@ let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
           else never
         else
           switch insert (mapEmpty cmp) (addi i 1)
-          case (true, children) then
-            let newNode = Node {root = p, ids = [id], children = children} in
+          case (true, newChildren) then
+            let newNode = Node {root = p, ids = [id], children = newChildren} in
             (true, mapInsert p newNode children)
           case (false, _) then error "impossible"
           end
@@ -154,7 +154,7 @@ let prefixTreeGetPathExn = lam tree. lam id.
 
 -- Debug printing of a prefix tree.
 let prefixTreeDebug = lam toStr. lam tree : PTree a.
-  match tree with Node {children = cs} in
+  match tree with Node {children = cs, ids = ids} in
   recursive let work = lam ind. lam children.
     mapMapWithKey (lam root. lam subtree.
       printLn (join [make ind ' ', "root: ", toStr root]);
