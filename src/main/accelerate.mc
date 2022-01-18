@@ -2,6 +2,7 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/pprint.mc"
+include "cuda/kernel-translate.mc"
 include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
@@ -48,7 +49,7 @@ lang PMExprCompile =
   CudaPrettyPrint + OCamlGenerate + OCamlTypeDeclGenerate
 end
 
-lang MExprCudaCompile = MExprTypeLift + SeqTypeTypeLift + CudaCompile
+lang MExprCudaCompile = MExprTypeLift + SeqTypeTypeLift + CudaCompile + CudaKernelTranslate
 
 type AccelerateHooks = {
   pprintGpuCode : Set Name -> Expr -> String,
@@ -111,12 +112,13 @@ let futharkTranslation : Set Name -> Expr -> FutProg = use PMExprCompile in
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Set Name -> Expr -> CProg = use PMExprCompile in
+let cudaTranslation : Set Name -> Expr -> CProg =
   lam entryPoints. lam ast.
   use MExprCudaCompile in
   match typeLift ast with (typeEnv, ast) in
   match compile typeEnv ast with (_, types, tops, _, _) in
-  CPProg { includes = cIncludes, tops = join [types, tops] }
+  let cudaTops = translateCudaTops entryPoints (join [types, tops]) in
+  CuPProg { includes = cIncludes, tops = cudaTops }
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -270,7 +272,7 @@ let compileAccelerate = lam files. lam options : Options. lam args.
       { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
           use PMExprCompile in
           let cudaAst = cudaTranslation accelerateIds ast in
-          printCProg [] cudaAst
+          printCudaProg [] cudaAst
       , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
           use PMExprCompile in
           -- TODO(larshum, 2022-01-16): Add wrapper code generation for the
