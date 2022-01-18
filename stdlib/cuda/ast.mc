@@ -3,9 +3,14 @@ include "mexpr/ast.mc"
 
 lang CudaAst = CAst + MExprAst
   syn CudaDimension =
-  | DimX ()
-  | DimY ()
-  | DimZ ()
+  | CuDX ()
+  | CuDY ()
+  | CuDZ ()
+
+  syn CudaAttribute =
+  | CuAHost ()
+  | CuADevice ()
+  | CuAGlobal ()
 
   syn CExpr =
   | CEMap {f : CExpr, s : CExpr}
@@ -16,7 +21,9 @@ lang CudaAst = CAst + MExprAst
                  blockSize : (CExpr, CExpr, CExpr), sharedMem : CExpr,
                  args : [CExpr]}
 
-  syn CTop =
-  | CTGlobalAttr {top : CTop}
-  | CTDeviceAttr {top : CTop}
+  syn CuTop =
+  | CuTTop {attrs : [CudaAttribute], top : CTop}
+
+  syn CudaProg =
+  | CuPProg {includes : [String], tops : [CuTop]}
 end
