@@ -64,7 +64,7 @@ let for_
 
 -- In contrast to map, mapReverse is tail recursive.
 let mapReverse = lam f. lam lst.
-  foldl (lam acc. lam x. cons (f x) acc) [] lst
+  foldl (lam acc. lam x. cons (f x) acc) (createList 0 (lam. 0)) lst
 
 utest mapReverse (lam x. addi x 1) [10,20,30] with [31,21,11]
 
