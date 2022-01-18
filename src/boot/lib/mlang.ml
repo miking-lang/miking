@@ -233,43 +233,6 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
           in
           Some {data with subsets; cases= List.rev_append c2 c1}
   in
-  let rec syntactic_eq_type ty1 ty2 =
-    match (ty1, ty2) with
-    | TyUnknown _, TyUnknown _ ->
-        true
-    | TyBool _, TyBool _ ->
-        true
-    | TyInt _, TyInt _ ->
-        true
-    | TyFloat _, TyFloat _ ->
-        true
-    | TyChar _, TyChar _ ->
-        true
-    | TyArrow (_, ty11, ty12), TyArrow (_, ty21, ty22) ->
-        syntactic_eq_type ty11 ty21 && syntactic_eq_type ty12 ty22
-    | TyAll (_, id1, ty1), TyAll (_, id2, ty2) ->
-        Ustring.equal id1 id2 && syntactic_eq_type ty1 ty2
-    | TySeq (_, ty1), TySeq (_, ty2) ->
-        syntactic_eq_type ty1 ty2
-    | TyTensor (_, ty1), TyTensor (_, ty2) ->
-        syntactic_eq_type ty1 ty2
-    | TyRecord (_, binds1, labels1), TyRecord (_, binds2, labels2) ->
-        Record.equal syntactic_eq_type binds1 binds2
-        && List.equal Ustring.equal labels1 labels2
-    | TyVariant (_, constr1), TyVariant (_, constr2) ->
-        List.equal
-          (fun (id1, sym1) (id2, sym2) ->
-            Ustring.equal id1 id2 && Symb.eqsym sym1 sym2 )
-          constr1 constr2
-    | TyCon (_, id1, sym1), TyCon (_, id2, sym2) ->
-        Ustring.equal id1 id2 && Symb.eqsym sym1 sym2
-    | TyVar (_, id1), TyVar (_, id2) ->
-        Ustring.equal id1 id2
-    | TyApp (_, ty11, ty12), TyApp (_, ty21, ty22) ->
-        syntactic_eq_type ty11 ty21 && syntactic_eq_type ty12 ty22
-    | _ ->
-        false
-  in
   let merge_alias name a b =
     match (a, b) with
     | None, None ->
@@ -279,7 +242,7 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
     | Some a, None ->
         Some a
     | Some (fi1, ty1), Some (fi2, ty2) ->
-        if syntactic_eq_type ty1 ty2 then Some (fi, ty1)
+        if ty_syntactic_eq ty1 ty2 then Some (fi, ty1)
         else
           raise_error fi1
             ( "Type alias '" ^ Ustring.to_utf8 name
@@ -622,6 +585,29 @@ let handle_subsumption env langs lang includes =
       (del_lang env) includes
   else env
 
+let rec desugar_ty env =
+  function
+  | TyArrow (fi, lty, rty) ->
+      TyArrow (fi, desugar_ty env lty, desugar_ty env rty)
+  | TyAll (fi, id, ty) ->
+      TyAll (fi, id, desugar_ty (delete_id env id) ty)
+  | TySeq (fi, ty) ->
+      TySeq (fi, desugar_ty env ty)
+  | TyTensor (fi, ty) ->
+      TyTensor (fi, desugar_ty env ty)
+  | TyRecord (fi, bindings, labels) ->
+      TyRecord (fi, Record.map (desugar_ty env) bindings, labels)
+  | TyVariant (fi, constrs) ->
+      TyVariant (fi, constrs)
+  | TyCon (fi, id, symb) ->
+      TyCon (fi, resolve_id env id, symb)
+  | TyVar (fi, id) ->
+      TyVar (fi, id)
+  | TyApp (fi, lty, rty) ->
+      TyApp (fi, desugar_ty env lty, desugar_ty env rty)
+  | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ as ty ->
+      ty
+
 let rec desugar_tm nss env subs =
   let map_right f (a, b) = (a, f b) in
   function
@@ -634,18 +620,18 @@ let rec desugar_tm nss env subs =
         ( fi
         , empty_mangle name
         , s
-        , ty
+        , desugar_ty env ty
         , desugar_tm nss (delete_id env name) subs body )
   | TmLet (fi, name, s, ty, e, body) ->
       TmLet
         ( fi
         , empty_mangle name
         , s
-        , ty
+        , desugar_ty env ty
         , desugar_tm nss env subs e
         , desugar_tm nss (delete_id env name) subs body )
   | TmType (fi, name, s, ty, body) ->
-      TmType (fi, name, s, ty, desugar_tm nss env subs body)
+      TmType (fi, name, s, desugar_ty env ty, desugar_tm nss env subs body)
   | TmRecLets (fi, bindings, body) ->
       let env' =
         List.fold_left
@@ -656,7 +642,7 @@ let rec desugar_tm nss env subs =
         ( fi
         , List.map
             (fun (fi, name, s, ty, e) ->
-              (fi, empty_mangle name, s, ty, desugar_tm nss env' subs e) )
+              (fi, empty_mangle name, s, desugar_ty env ty, desugar_tm nss env' subs e) )
             bindings
         , desugar_tm nss env' subs body )
   | TmConDef (fi, name, s, ty, body) ->
@@ -664,7 +650,7 @@ let rec desugar_tm nss env subs =
         ( fi
         , empty_mangle name
         , s
-        , ty
+        , desugar_ty env ty
         , desugar_tm nss (delete_con env name) subs body )
   | TmConApp (fi, x, s, t) ->
       TmConApp (fi, resolve_con env x, s, desugar_tm nss env subs t)
@@ -770,7 +756,7 @@ let rec desugar_tm nss env subs =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
+let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) =
   function
   | TopLang (Lang (_, langName, includes, decls) as lang) ->
       let default d = function Some x -> x | None -> d in
@@ -782,22 +768,20 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
       (* compute the namespace *)
       let mangle str = langName ^. us "_" ^. str in
       let cdecl_names (CDecl (_, name, _)) = (name, mangle name) in
-      let add_decl ({constructors; normals}, syns, aliases) = function
+      let add_decl ({constructors; normals}, syns) = function
         | Data (fi, name, cdecls) ->
             let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names in
             ( { constructors= USMap.add_seq new_constructors constructors
               ; normals }
-            , USMap.add name fi syns
-            , aliases )
+            , USMap.add name fi syns )
         | Inter (_, name, _, _) ->
             ( {normals= USMap.add name (mangle name) normals; constructors}
-            , syns
-            , aliases )
-        | Alias (fi, name, ty) ->
-            ({constructors; normals}, syns, USMap.add name (fi, ty) aliases)
+            , syns )
+        | Alias (_, name, _) ->
+            ({constructors; normals= USMap.add name (mangle name) normals}, syns)
       in
-      let ns, new_syns, new_aliases =
-        List.fold_left add_decl (previous_ns, syns, aliases) decls
+      let ns, new_syns =
+        List.fold_left add_decl (previous_ns, syns) decls
       in
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
@@ -805,7 +789,7 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow (NoInfo, ty, TyCon (NoInfo, ty_name, Symb.Helpers.nosym))
+          , TyArrow (NoInfo, desugar_ty ns ty, TyCon (NoInfo, ty_name, Symb.Helpers.nosym))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
@@ -814,6 +798,8 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
         (* TODO(vipa,?): this does not declare the type itself *)
         | Data (_, name, cdecls) ->
             List.fold_right (wrap_con name) cdecls tm
+        | Alias (fi, name, ty) ->
+            TmType (fi, mangle name, Symb.Helpers.nosym, desugar_ty ns ty, tm)
         | _ ->
             tm
       in
@@ -821,7 +807,7 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
       let inter_to_tm fname fi params cases =
         let target = us "__sem_target" in
         let wrap_param (Param (fi, name, ty)) tm =
-          TmLam (fi, name, Symb.Helpers.nosym, ty, tm)
+          TmLam (fi, name, Symb.Helpers.nosym, desugar_ty ns ty, tm)
         in
         TmLam
           ( fi
@@ -854,7 +840,6 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
       , new_langs
       , handle_subsumption subs new_langs langName includes
       , new_syns
-      , new_aliases
       , wrap :: stack )
   (* The other tops are trivial translations *)
   | TopLet (Let (fi, id, ty, tm)) ->
@@ -867,10 +852,10 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
           , desugar_tm nss emptyMlangEnv subs tm
           , tm' )
       in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopType (Type (fi, id, ty)) ->
       let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
         TmRecLets
@@ -885,26 +870,26 @@ let desugar_top (nss, langs, subs, syns, aliases, (stack : (tm -> tm) list)) =
               lets
           , tm' )
       in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopExt (Ext (fi, id, e, ty)) ->
       let wrap tm' =
         TmExt (fi, empty_mangle id, Symb.Helpers.nosym, e, ty, tm')
       in
-      (nss, langs, subs, syns, aliases, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let acc_start =
-    (nss, USMap.empty, emptySubsumeEnv, USMap.empty, USMap.empty, [])
+    (nss, USMap.empty, emptySubsumeEnv, USMap.empty, [])
   in
-  let new_nss, _langs, subs, syns, aliases, stack =
+  let new_nss, _langs, subs, syns, stack =
     List.fold_left desugar_top acc_start tops
   in
   let syntydecl =
@@ -913,12 +898,7 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
         TmType (fi, syn, Symb.Helpers.nosym, TyUnknown NoInfo, tm') )
       (USMap.bindings syns)
   in
-  let aliastydecl =
-    List.rev_map
-      (fun (id, (fi, ty)) tm' -> TmType (fi, id, Symb.Helpers.nosym, ty, tm'))
-      (USMap.bindings aliases)
-  in
-  let stack = stack @ aliastydecl @ syntydecl in
+  let stack = stack @ syntydecl in
   let desugared_tm =
     List.fold_left ( |> ) (desugar_tm new_nss emptyMlangEnv subs t) stack
   in
