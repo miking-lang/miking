@@ -22,7 +22,7 @@ type DependencyGraph = {
 
   -- Maps a context-sensitive measuring point to its prefix tree, which gives a
   -- compact representation of the context strings
-  measuringContexts : Map Name (PTree Name)
+  measuringContexts : Map Name (PTree NameInfo)
 }
 
 let _dependencyGraphEmpty =
@@ -91,39 +91,38 @@ lang DependencyAnalysis = MExprHoleCFA
         -- dprintLn ident;
         -- dprintLn (mapBindings shortContexts);
 
-        -- Build a prefix tree with measuring contexts
-        --let tree : PTree NameInfo = mapFoldWithKey (lam treeId. lam. lam path.
-        match mapFoldWithKey (lam treeId. lam. lam path.
-            match treeId with (tree,id) in
-            switch prefixTreeMaybeInsert nameInfoCmp tree id path
-            case (true,tree) then (tree, addi id 1)
-            case (false,_) then (tree, id)
-            end
-          )
-          (prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()), measCount) shortContexts
-        with (tree, measCount) in
-
-        -- For each context-sensitive hole, add an edge to the set of measuring
-        -- id's it affects
-        let graphGraph = mapFoldWithKey (
-          lam acc: Digraph Int Int. lam id: Int. lam path: [NameInfo].
-            -- Set of measuring points that this context string affects.
-            let measPoints : [Int] = prefixTreeGetIds tree path in
-            -- Add context-expanded hole to dependency graph
-            let acc = digraphMaybeAddVertex id acc in
-            -- Add corresponding edges to dependency graph
-            foldl (lam acc : Digraph Int Int. lam mp: Int.
-              let acc = digraphMaybeAddVertex mp acc in
-              digraphAddEdge id mp 0 acc
-            ) acc measPoints
-          ) graph.graph shortContexts
-        in
-
-        -- Insert the prefix tree and return final result
-        let measuringContexts = mapInsert ident tree graph.measuringContexts in
-        ( { { graph with measuringContexts = measuringContexts }
-                    with graph = graphGraph },
-          measCount )
+        -- Compute measuring contexts and dependency graph
+        if mapIsEmpty shortContexts then (graph, measCount)
+        else
+          -- Build a prefix tree with measuring contexts
+          match mapFoldWithKey (lam treeId. lam. lam path.
+              match treeId with (tree,id) in
+              switch prefixTreeMaybeInsert nameInfoCmp tree id path
+              case (true,tree) then (tree, addi id 1)
+              case (false,_) then (tree, id)
+              end
+            ) (prefixTreeEmpty nameInfoCmp
+            (nameSym "", NoInfo ()), measCount) shortContexts
+          with (tree, newMeasCount) in
+          -- For each context-sensitive hole, add an edge to the set of
+          -- measuring id's it affects
+          let graphGraph = mapFoldWithKey (
+            lam acc: Digraph Int Int. lam id: Int. lam path: [NameInfo].
+              -- Set of measuring points that this context string affects.
+              let measPoints : [Int] = prefixTreeGetIds tree path in
+              -- Add context-expanded hole to dependency graph
+              let acc = digraphMaybeAddVertex id acc in
+              -- Add corresponding edges to dependency graph
+              foldl (lam acc : Digraph Int Int. lam mp: Int.
+                let acc = digraphMaybeAddVertex mp acc in
+                digraphAddEdge id mp 0 acc
+              ) acc measPoints
+            ) graph.graph shortContexts
+          in
+          let measContexts = mapInsert ident tree graph.measuringContexts in
+          ( { { graph with measuringContexts = measContexts }
+                      with graph = graphGraph },
+            newMeasCount )
 
       else (graph, measCount)
     in
@@ -189,19 +188,54 @@ let test = lam debug: Bool. lam t: Expr.
       dprintLn dep;
       printLn "\n--- DEPENDENCY GRAPH ---";
       digraphPrintDot dep.graph int2string int2string;
-      ()
+      -- dprintLn (mapKeys dep.measuringContexts);
+      dep
 
     else
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData graphData tANF in
       let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
-      ()
+      dep
 in
 
 -- Print out bipartite graph in dot format
 -- Maybe provide bipartite graph as context strings
 -- Provide names of holes and measuring points
 -- Provide measuring contexts for each measuring name
+
+-- Helper for eqTest
+let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
+  let ids = prefixTreeGetIds tree [] in
+  let paths = foldl (lam acc. lam id.
+    let path =
+      optionGetOrElse (lam. error "impossible")
+        (prefixTreeGetPathExn tree id)
+    in cons path acc) [] ids
+  in
+  let paths : [[String]] = map (
+      lam path : [NameInfo].
+        map (lam e : NameInfo. nameInfoGetStr e) path
+    ) paths
+  in
+  let s1 : Set [String] = setOfSeq (seqCmp cmpString) paths in
+  let s2 : Set [String] = setOfSeq (seqCmp cmpString) contexts in
+  setEq s1 s2
+in
+
+let eqTest = lam dep : DepencyGraph. lam r : TestResult.
+  let treeBinds = mapBindings dep.measuringContexts in
+  let trees : Map String (PTree NameInfo) = foldl (
+    lam acc. lam b : (Name,PTree NameInfo).
+      mapInsert (nameGetStr b.0) b.1 acc
+    ) (mapEmpty cmpString) treeBinds
+  in
+  let measCtxs = map (
+    lam strCtxs.
+      match strCtxs with (str, ctxs) in
+      let tree = mapFindExn str trees in
+      eqMeasContexts tree ctxs
+    ) r.measuringPoints in
+in
 
 let t = parse
 "
@@ -219,32 +253,34 @@ in
 foo ()
 " in
 
-utest test debug t with () in
+utest test debug t with {
+  measuringPoints = [("a",[[]])]
+} using eqTest in
 
-let t = parse
-"
-let f1 = lam x.
-  let h = hole (Boolean {default = true, depth = 2}) in
-  h
-in
-let f2 = lam x.
-  let a = f1 x in
-  let b = f1 x in
-  let c = addi a b in
-  let cc = sleepMs c in
-  c
-in
-let f3 = lam f.
-  f 1
-in
-let d = f2 1 in
-let e = f2 1 in
-let f = addi d e in
-let g = sleepMs f in
-let i = f3 f2 in
-()
-" in
+-- let t = parse
+-- "
+-- let f1 = lam x.
+--   let h = hole (Boolean {default = true, depth = 2}) in
+--   h
+-- in
+-- let f2 = lam x.
+--   let a = f1 x in
+--   let b = f1 x in
+--   let c = addi a b in
+--   let cc = sleepMs c in
+--   c
+-- in
+-- let f3 = lam f.
+--   f 1
+-- in
+-- let d = f2 1 in
+-- let e = f2 1 in
+-- let f = addi d e in
+-- let g = sleepMs f in
+-- let i = f3 f2 in
+-- ()
+-- " in
 
-utest test true t with () in
+-- utest test true t with () in
 
 ()
