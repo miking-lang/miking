@@ -133,9 +133,8 @@ let filenameWithoutExtension = lam filename.
 let compileAccelerated : Options -> String -> String -> String -> String -> Unit =
   lam options. lam sourcePath. lam ocamlProg. lam cProg. lam futharkProg.
   let linkedFiles =
-    if options.accelerateFuthark then
-      "(link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"
-    else ""
+    if options.cpuOnly then ""
+    else "(link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"
   in
   let dunefile = join ["
 (env (dev (flags (:standard -w -a)) (ocamlc_flags (-without-runtime))))
