@@ -1,6 +1,7 @@
-
--- Run CFA, give back as result:
--- Bipartite graph
+-- Dependency analysis of a program with holes. The input is the result from
+-- 0-CFA, and the output is a bipartite dependency graph (H,M,E), where H is the
+-- set of context-sensitive holes, M is the set of context-sensitive measuring
+-- points, and E are the set of edges. There is an edge (h,m)∈E if h affects m.
 
 include "hole-cfa.mc"
 include "prefix-tree.mc"
@@ -131,7 +132,7 @@ lang DependencyAnalysis = MExprHoleCFA
     -- of the call graph.
     let curBody =
       match t.body with TmLam lm then
-        if digraphHasVertex (ident, NoInfo ()) env.callGraph then (ident, t.info)
+        if digraphHasVertex (ident, t.info) env.callGraph then (ident, t.info)
         else cur
       else cur
     in
@@ -139,7 +140,26 @@ lang DependencyAnalysis = MExprHoleCFA
     match buildDependencies cur env data acc t.inexpr with (acc, inexpr) in
     (acc, TmLet {{t with body = body} with inexpr = inexpr})
 
-  -- TODO: recursive lets
+  -- Possibly update cur inside bodies of bindings
+  | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
+    match
+      mapAccumL (lam acc : (DependencyGraph, Int). lam bind : RecLetBinding.
+        let curBody =
+          match bind with {body = TmLam lm, ident = ident} then
+            if digraphHasVertex (ident, t.info) env.callGraph then
+              (ident, t.info)
+            else cur
+          else cur
+        in
+        match buildDependencies curBody env data acc bind.body
+        with (acc, body) in
+        (acc, { bind with body = body })
+      ) acc bindings
+    with (acc, newBinds) in
+    match buildDependencies cur env data acc inexpr with (acc, inexpr) in
+    ( acc,
+      TmRecLets {{t with bindings = newBinds}
+                    with inexpr = inexpr})
 
   | t ->
     smapAccumL_Expr_Expr (buildDependencies cur env data) acc t
@@ -239,11 +259,6 @@ let depExists = lam holeTree : PTree NameInfo. lam measTree : PTree NameInfo.
   -- Reverse edge paths
   let from = reverse edge.0 in
   let to = reverse edge.1 in
-
-  -- printLn "holePathId";
-  -- dprintLn holePathId;
-  -- printLn "measPathId";
-  -- dprintLn measPathId;
 
   -- Translate string edges to integer id's
   let fromId : Int = assocLookupOrElse {eq=eqSeq eqString}
@@ -439,12 +454,12 @@ let f2 = lam x.
   let a = f1 x in
   a
 in
-let f3 = lam x.
+let f3 = lam x. lam y.
   let c = f2 x in
   c
 in
 let f4 = lam x.
-  let d = f3 x in
+  let d = f3 x 2 in
   d
 in
 f4 ()
@@ -453,6 +468,27 @@ f4 ()
 utest test debug t with {
   measuringPoints = [ ("m", [["d","c","a"]]) ],
   deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ]
+} using eqTest in
+
+-- Recursive lets
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 2}) in
+  h
+in
+recursive let f2 = lam x. lam y.
+  let a = f1 x in
+  let b = sleepMs a in
+  b
+in
+let c = f2 1 2 in
+c
+" in
+
+utest test debug t with {
+  measuringPoints = [ ("b", [["c"]]) ],
+  deps = [ (("h", ["c","a"]), ("b", ["c"])) ]
 } using eqTest in
 
 ()
