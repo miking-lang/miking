@@ -65,35 +65,9 @@ let defaultArgData = use MExprAst in {
   ident = nameNoSym "", ty = TyUnknown {info = NoInfo ()}, cTempVars = [],
   gpuIdent = nameNoSym "", dimIdents = [], sizeIdent = nameNoSym ""}
 
-type CWrapperEnv = {
-  -- Identifiers and type of the arguments of the function. These are needed
-  -- to keep track of identifiers (in OCaml, C and the GPU target) across
-  -- multiple translation steps.
-  arguments : [ArgData],
-
-  -- Identifiers and type of the return value. Needed for the same reason as
-  -- above.
-  return : ArgData,
-
-  -- The name of the GPU function that is being called.
-  functionIdent : Name,
-
-  -- NOTE(larshum, 2022-01-18): As we cannot define aliases within language
-  -- fragments, there is no way to extend this type for specific targets. Thus
-  -- we include the Futhark-specific fields in the general environment for now.
-
-  -- Identifiers related to the Futhark context config and context.
-  initContextIdent : Name,
-  futharkContextConfigIdent : Name,
-  futharkContextIdent : Name
-}
-
 let emptyWrapperEnv = {
   arguments = [], return = defaultArgData,
-  keywordIdentMap = mapEmpty cmpString, functionIdent = nameNoSym "",
-  initContextIdent = nameNoSym "", futharkContextConfigIdent = nameNoSym "",
-  futharkContextIdent = nameNoSym ""
-}
+  keywordIdentMap = mapEmpty cmpString, functionIdent = nameNoSym ""}
 
 recursive let getDimensionsOfType : Type -> Int = use MExprAst in
   lam ty.
@@ -103,6 +77,31 @@ recursive let getDimensionsOfType : Type -> Int = use MExprAst in
 end
 
 lang PMExprCWrapperBase = MExprAst + CAst
+  syn TargetWrapperEnv =
+  | EmptyTargetEnv ()
+
+  type CWrapperEnv = {
+    -- Identifiers and type of the arguments of the function. These are needed
+    -- to keep track of identifiers (in OCaml, C and the GPU target) across
+    -- multiple translation steps.
+    arguments : [ArgData],
+
+    -- Identifiers and type of the return value. Needed for the same reason as
+    -- above.
+    return : ArgData,
+
+    -- The name of the GPU function that is being called.
+    functionIdent : Name,
+
+    -- Environment containing target-specific variables.
+    targetEnv : TargetWrapperEnv}
+
+  sem _emptyWrapperEnv =
+  | () ->
+    { arguments = [], return = defaultArgData
+    , keywordIdentMap = mapEmpty cmpString, functionIdent = nameNoSym ""
+    , targetEnv = EmptyTargetEnv () }
+
   sem _wosize = 
   | id -> CEApp {fun = _getIdentExn "Wosize_val", args = [CEVar {id = id}]}
 

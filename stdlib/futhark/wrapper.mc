@@ -42,6 +42,13 @@ recursive let getDimensionsOfType : Type -> Int = use MExprAst in
 end
 
 lang FutharkCWrapperBase = PMExprCWrapper
+  -- In the Futhark-specific environment, we store identifiers related to the
+  -- Futhark context config and the context.
+  syn TargetWrapperEnv =
+  | FutharkTargetEnv {
+      initContextIdent : Name, futharkContextConfigIdent : Name,
+      futharkContextIdent : Name}
+
   sem getFutharkCType =
   | TyInt _ | TyChar _ -> CTyVar {id = _getIdentExn "int64_t"}
   | TyFloat _ -> CTyDouble ()
@@ -107,9 +114,10 @@ lang CToFutharkWrapper = FutharkCWrapperBase
   sem generateCToTargetWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    let ctxIdent = env.futharkContextIdent in
+    match env.targetEnv with FutharkTargetEnv targetEnv in
+    let ctxIdent = targetEnv.futharkContextIdent in
     let initContextCall =
-      CSExpr {expr = CEApp { fun = env.initContextIdent, args = []}}
+      CSExpr {expr = CEApp { fun = targetEnv.initContextIdent, args = []}}
     in
     match mapAccumL (_generateCToFutharkWrapperArg ctxIdent) [] env.arguments
     with (futharkCopyStmts, args) then
@@ -121,6 +129,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
   sem generateTargetCall =
   | env ->
     let env : CWrapperEnv = env in
+    match env.targetEnv with FutharkTargetEnv targetEnv in
     let return = env.return in
     let returnType = return.ty in
 
@@ -162,7 +171,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
         fun = funcId,
         args =
           concat
-            [ CEVar {id = env.futharkContextIdent}
+            [ CEVar {id = targetEnv.futharkContextIdent}
             , CEUnOp {op = COAddrOf (), arg = CEVar {id = futResultIdent}} ]
             args}
     }} in
@@ -171,7 +180,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
       lhs = CEVar {id = returnCodeIdent},
       rhs = CEApp {
         fun = _getIdentExn "futhark_context_sync",
-        args = [CEVar {id = env.futharkContextIdent}]}
+        args = [CEVar {id = targetEnv.futharkContextIdent}]}
     }} in
 
     -- Handle Futhark errors by printing the error message and exiting
@@ -187,7 +196,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
             CEString {s = "Runtime error in generated code: %s\n"},
             CEApp {
               fun = _getIdentExn "futhark_context_get_error",
-              args = [CEVar {id = env.futharkContextIdent}]}]}},
+              args = [CEVar {id = targetEnv.futharkContextIdent}]}]}},
         CSExpr {expr = CEApp {
           fun = _getIdentExn "exit",
           args = [CEVar {id = returnCodeIdent}]}}],
@@ -206,7 +215,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
               [CSExpr {expr = CEApp {
                 fun = deallocIdent,
                 args = [
-                  CEVar {id = env.futharkContextIdent},
+                  CEVar {id = targetEnv.futharkContextIdent},
                   CEVar {id = arg.gpuIdent}]}}]
             else [])
           env.arguments)
@@ -320,7 +329,8 @@ lang FutharkToCWrapper = FutharkCWrapperBase
   sem generateTargetToCWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    let futCtx = env.futharkContextIdent in
+    match env.targetEnv with FutharkTargetEnv targetEnv in
+    let futCtx = targetEnv.futharkContextIdent in
     match _generateFutharkToCWrapperInner futCtx env.return env.return.ty
     with (return, copyStmts) then
       ({env with return = return}, copyStmts)
@@ -343,10 +353,11 @@ lang FutharkCWrapper =
   sem futharkContextInit =
   | env /- : CWrapperEnv -> [CTop] -/ ->
     let env : CWrapperEnv = env in
+    match env.targetEnv with FutharkTargetEnv targetEnv in
     let ctxConfigStructId = _getIdentExn "futhark_context_config" in
     let ctxStructId = _getIdentExn "futhark_context" in
-    let ctxConfigIdent = env.futharkContextConfigIdent in
-    let ctxIdent = env.futharkContextIdent in
+    let ctxConfigIdent = targetEnv.futharkContextConfigIdent in
+    let ctxIdent = targetEnv.futharkContextIdent in
     let initBody = [
       CSIf {
         cond = CEBinOp {
@@ -378,15 +389,18 @@ lang FutharkCWrapper =
         init = None ()},
       CTFun {
         ret = CTyVoid (),
-        id = env.initContextIdent,
+        id = targetEnv.initContextIdent,
         params = [],
         body = initBody} ]
 
   sem generateInitWrapperEnv =
   | _ ->
-    {{{emptyWrapperEnv with futharkContextConfigIdent = nameSym "config"}
-                       with futharkContextIdent = nameSym "ctx"}
-                       with initContextIdent = nameSym "initContext"}
+    let targetEnv = FutharkTargetEnv {
+      initContextIdent = nameSym "initContext",
+      futharkContextConfigIdent = nameSym "config",
+      futharkContextIdent = nameSym "ctx"} in
+    let env : CWrapperEnv = _emptyWrapperEnv () in
+    {env with targetEnv = targetEnv}
 
   sem generateWrapperCode =
   | accelerated ->

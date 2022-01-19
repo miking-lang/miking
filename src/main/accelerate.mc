@@ -50,6 +50,7 @@ lang PMExprCompile =
 end
 
 lang MExprCudaCompile = MExprTypeLift + SeqTypeTypeLift + CudaCompile + CudaKernelTranslate
+end
 
 type AccelerateHooks = {
   pprintGpuCode : Set Name -> Expr -> String,
