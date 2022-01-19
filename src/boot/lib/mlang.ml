@@ -305,7 +305,7 @@ let data_to_lang info name includes {inters; syns; aliases} : mlang =
     ( info
     , name
     , includes
-    , List.rev_append aliases (List.rev_append syns inters) )
+    , aliases @ (List.rev_append syns inters) )
 
 let flatten_lang (prev_langs : lang_data Record.t) :
     top -> lang_data Record.t * top = function
