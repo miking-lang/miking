@@ -301,11 +301,7 @@ let data_to_lang info name includes {inters; syns; aliases} : mlang =
     Record.bindings aliases
     |> List.map (fun (name, (fi, ty)) -> Alias (fi, name, ty))
   in
-  Lang
-    ( info
-    , name
-    , includes
-    , aliases @ (List.rev_append syns inters) )
+  Lang (info, name, includes, aliases @ List.rev_append syns inters)
 
 let flatten_lang (prev_langs : lang_data Record.t) :
     top -> lang_data Record.t * top = function
