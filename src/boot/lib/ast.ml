@@ -251,6 +251,7 @@ and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
   | Inter of info * ustring * param list * (pat * tm) list
+  | Alias of info * ustring * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list
 
@@ -698,6 +699,46 @@ let const_has_side_effect = function
   (* External functions *)
   | CPy _ ->
       true
+
+(* Determines whether two types are syntactically equivalent. This means two
+ * types are not considered equal if they use different aliases for the same
+ * type. *)
+let rec ty_syntactic_eq ty1 ty2 =
+  match (ty1, ty2) with
+  | TyUnknown _, TyUnknown _ ->
+      true
+  | TyBool _, TyBool _ ->
+      true
+  | TyInt _, TyInt _ ->
+      true
+  | TyFloat _, TyFloat _ ->
+      true
+  | TyChar _, TyChar _ ->
+      true
+  | TyArrow (_, ty11, ty12), TyArrow (_, ty21, ty22) ->
+      ty_syntactic_eq ty11 ty21 && ty_syntactic_eq ty12 ty22
+  | TyAll (_, id1, ty1), TyAll (_, id2, ty2) ->
+      Ustring.equal id1 id2 && ty_syntactic_eq ty1 ty2
+  | TySeq (_, ty1), TySeq (_, ty2) ->
+      ty_syntactic_eq ty1 ty2
+  | TyTensor (_, ty1), TyTensor (_, ty2) ->
+      ty_syntactic_eq ty1 ty2
+  | TyRecord (_, binds1, labels1), TyRecord (_, binds2, labels2) ->
+      Record.equal ty_syntactic_eq binds1 binds2
+      && List.equal Ustring.equal labels1 labels2
+  | TyVariant (_, constr1), TyVariant (_, constr2) ->
+      List.equal
+        (fun (id1, sym1) (id2, sym2) ->
+          Ustring.equal id1 id2 && Symb.eqsym sym1 sym2 )
+        constr1 constr2
+  | TyCon (_, id1, sym1), TyCon (_, id2, sym2) ->
+      Ustring.equal id1 id2 && Symb.eqsym sym1 sym2
+  | TyVar (_, id1), TyVar (_, id2) ->
+      Ustring.equal id1 id2
+  | TyApp (_, ty11, ty12), TyApp (_, ty21, ty22) ->
+      ty_syntactic_eq ty11 ty21 && ty_syntactic_eq ty12 ty22
+  | _ ->
+      false
 
 (* Converts a sequence of terms to a sequence of integers *)
 let tmseq2seq_of_int fi s =

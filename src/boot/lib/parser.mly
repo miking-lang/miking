@@ -252,6 +252,9 @@ decl:
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
       Inter (fi, $2.v, $3, $5) }
+  | TYPE type_ident EQ ty
+    { let fi = mkinfo $1.i $3.i in
+      Alias (fi, $2.v, $4) }
 
 constrs:
   | constr constrs
