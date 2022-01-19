@@ -6,6 +6,9 @@ include "cuda/ast.mc"
 let cudaKeywords = concat cKeywords []
 
 lang CudaPrettyPrint = CPrettyPrint + CudaAst
+  sem printCType (decl: String) (env: PprintEnv) =
+  | CTyInt64 _ -> (env, _joinSpace "int64_t" decl)
+
   sem _printCudaDim =
   | CuDX _ -> "x"
   | CuDY _ -> "y"
@@ -20,23 +23,17 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
   | CEKernelApp t ->
-    let _printInitList = lam env : PprintEnv. lam indices : (CExpr, CExpr, CExpr).
-      match printCExpr env indices.0 with (env, x) in
-      match printCExpr env indices.1 with (env, y) in
-      match printCExpr env indices.2 with (env, z) in
-      (env, join ["{", x, ", ", y, ", ", z, "}"]) in
-    match pprintEnvGetStr env t.fun with (env, fun) in
     match mapAccumL printCExpr env t.args with (env, args) in
-    match _printInitList env t.gridSize with (env, gridDims) in
-    match _printInitList env t.blockSize with (env, blockDims) in
-    match printCExpr env t.sharedMem with (env, sharedMem) in
-    (env, join [fun, "<<<", gridDims, ", ", blockDims, ", ", sharedMem, ">>>(",
+    match printCExpr env t.gridSize with (env, gridSize) in
+    match printCExpr env t.blockSize with (env, blockSize) in
+    (env, join [t.fun, "<<<", gridSize, ", ", blockSize, ">>>(",
                 strJoin ", " args, ")"])
 
   sem printCudaAttribute (env : PprintEnv) =
   | CuAHost _ -> (env, "__host__")
   | CuADevice _ -> (env, "__device__")
   | CuAGlobal _ -> (env, "__global__")
+  | CuAExternC _ -> (env, "extern \"C\"")
 
   sem printCudaTop (indent : Int) (env : PprintEnv) =
   | CuTTop {attrs = attrs, top = top} ->
@@ -82,12 +79,11 @@ let cint_ = lam i. CEInt {i = i} in
 let kernelApp = lam args : [CExpr].
   CEKernelApp {
     fun = nameNoSym "kernel",
-    gridSize = (cint_ 4, cint_ 2, cint_ 7),
-    blockSize = (cint_ 3, cint_ 5, cint_ 6),
-    sharedMem = cint_ 12,
+    gridSize = cint_ 7,
+    blockSize = cint_ 5,
     args = args} in
 let kernelStr : String -> String = lam str.
-  concat "kernel<<<{4, 2, 7}, {3, 5, 6}, 12>>>" str
+  concat "kernel<<<7, 5>>>" str
 in
 utest printExpr (kernelApp []) with kernelStr "()" in
 utest printExpr (kernelApp [cint_ 1]) with kernelStr "(1)" in

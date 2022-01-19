@@ -6,29 +6,67 @@ include "cuda/ast.mc"
 
 lang CudaKernelTranslate = CudaAst
   sem translateCudaTops (entryIds : Set Name) =
-  | tops -> map (translateTop entryIds) tops
+  | tops -> map (translateTopToCudaFormat entryIds) tops
 
-  sem translateTop (entryIds : Set Name) =
-  | CTDef _ & def -> CuTTop {attrs = [CuADevice ()], top = def}
-  | CTFun t & fun ->
+  sem translateTopToCudaFormat (entryIds : Set Name) =
+  | CTTyDef t ->
+    CuTTop {attrs = [], top = CTTyDef {t with ty = replaceIntWithInt64 t.ty}}
+  | CTDef t ->
+    CuTTop {
+      attrs = [CuADevice ()],
+      top = CTDef {t with ty = replaceIntWithInt64 t.ty}}
+  | CTFun t ->
     let wrapParamInPointer = lam param : (CType, Name).
       match param with (ty, id) in
       (CTyPtr {ty = ty}, id) in
+    let replaceIntsInParam = lam param : (CType, Name).
+      match param with (ty, id) in
+      (replaceIntWithInt64 ty, id) in
+    let params = map replaceIntsInParam t.params in
+    let body = map replaceIntWithInt64Stmt t.body in
     let swapTuple = lam t : (a, b). match t with (x, y) in (y, x) in
     if setMem t.id entryIds then
       let outId = nameSym "out" in
       let outParam = (t.ret, outId) in
-      let kernelParams = map wrapParamInPointer (cons outParam t.params) in
+      let kernelParams = map wrapParamInPointer (cons outParam params) in
       let paramLookup : Map Name CType =
         mapFromSeq nameCmp (map swapTuple kernelParams) in
+      let cudaId = nameSym (concat "cuda_" (nameGetStr t.id)) in
       let cudaFun = CTFun {
         ret = CTyVoid (),
-        id = t.id,
+        id = cudaId,
         params = kernelParams,
-        body = translateKernelBody paramLookup outId t.body} in
+        body = translateKernelBody paramLookup outId body} in
       CuTTop {attrs = [CuAGlobal ()], top = cudaFun}
-    else CuTTop {attrs = [CuADevice ()], top = fun}
-  | t -> CuTTop {attrs = [], top = t}
+    else
+      let ret = replaceIntWithInt64 t.ret in
+      CuTTop {
+        attrs = [CuADevice ()],
+        top = CTFun {{{t with ret = ret}
+                         with params = params}
+                         with body = body}}
+
+  sem replaceIntWithInt64 =
+  | CTyInt _ -> CTyInt64 ()
+  | ty -> smapCTypeCType replaceIntWithInt64 ty
+
+  sem replaceIntWithInt64Expr =
+  | CECast t -> CECast {{t with ty = replaceIntWithInt64 t.ty}
+                           with rhs = replaceIntWithInt64Expr t.rhs}
+  | CESizeOfType t -> CESizeOfType {t with ty = replaceIntWithInt64 t.ty}
+  | expr -> smap_CExpr_CExpr replaceIntWithInt64Expr expr
+
+  sem replaceIntWithInt64Init =
+  | init -> smap_CInit_CExpr replaceIntWithInt64Expr init
+
+  sem replaceIntWithInt64Stmt =
+  | CSDef t ->
+    let ty = replaceIntWithInt64 t.ty in
+    let init = optionMap replaceIntWithInt64Init t.init in
+    CSDef {{t with ty = ty} with init = init}
+  | stmt ->
+    let stmt = smap_CStmt_CStmt replaceIntWithInt64Stmt stmt in
+    smap_CStmt_CExpr replaceIntWithInt64Expr stmt
 
   sem translateKernelBody (params : Map Name CType) (outId : Name) =
   | stmts ->
@@ -47,6 +85,9 @@ lang CudaKernelTranslate = CudaAst
 
     -- 3. Translate body to use thread and block indexing.
     let stmts = _useCudaIndexing stmts in
+
+    -- 4. Replace any uses of the 'int' type with 'int64_t'.
+    let stmts = map replaceIntWithInt64Stmt stmts in
 
     stmts
 

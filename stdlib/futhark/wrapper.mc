@@ -404,7 +404,8 @@ lang FutharkCWrapper =
 
   sem generateWrapperCode =
   | accelerated ->
-    match generateWrapperCodeH accelerated with (env, entryPointWrappers) in
+    let env = generateInitWrapperEnv () in
+    match generateWrapperCodeH env accelerated with (env, entryPointWrappers) in
     let contextInit = futharkContextInit env in
     -- NOTE(larshum, 2021-08-27): According to
     -- https://ocaml.org/manual/intfc.html CAML_NAME_SPACE should be defined

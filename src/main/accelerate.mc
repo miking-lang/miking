@@ -3,6 +3,7 @@ include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/pprint.mc"
 include "cuda/kernel-translate.mc"
+include "cuda/wrapper.mc"
 include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
@@ -43,18 +44,24 @@ lang PMExprCompile =
   PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
   PMExprRecursionElimination + PMExprExtractAccelerate +
   PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  PMExprUtestSizeConstraint + PMExprWellFormed + FutharkGenerate +
-  FutharkDeadcodeElimination + FutharkSizeParameterize + FutharkCWrapper +
-  FutharkRecordParamLift + FutharkForEachRecordPattern + FutharkAliasAnalysis +
-  CudaPrettyPrint + OCamlGenerate + OCamlTypeDeclGenerate
+  PMExprUtestSizeConstraint + PMExprWellFormed +
+  OCamlGenerate + OCamlTypeDeclGenerate
 end
 
-lang MExprCudaCompile = MExprTypeLift + SeqTypeTypeLift + CudaCompile + CudaKernelTranslate
+lang MExprFutharkCompile =
+  FutharkGenerate + FutharkDeadcodeElimination + FutharkSizeParameterize +
+  FutharkCWrapper + FutharkRecordParamLift + FutharkForEachRecordPattern +
+  FutharkAliasAnalysis
 end
 
-type AccelerateHooks = {
-  pprintGpuCode : Set Name -> Expr -> String,
-  pprintWrapperCode : Map Name AccelerateData -> String
+lang MExprCudaCompile =
+  MExprTypeLift + SeqTypeTypeLift + CudaCompile + CudaKernelTranslate +
+  CudaPrettyPrint + CudaCWrapper
+end
+
+type AccelerateHooks a b = {
+  generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
+  buildAccelerated : Options -> String -> [Top] -> a -> b -> Unit
 }
 
 let parallelKeywords = [
@@ -89,6 +96,10 @@ let pprintCAst : CPProg -> String = lam ast.
   use CProgPrettyPrint in
   printCProg [] ast
 
+let pprintCudaAst : CuPProg -> String = lam ast.
+  use CudaPrettyPrint in
+  printCudaProg [] ast
+
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
   let ast = replaceUtestsWithSizeConstraint ast in
@@ -104,8 +115,9 @@ let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
   reportNestedAccelerate accelerateIds ast ;
   pmexprWellFormed ast
 
-let futharkTranslation : Set Name -> Expr -> FutProg = use PMExprCompile in
+let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
+  use MExprFutharkCompile in
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
@@ -113,13 +125,15 @@ let futharkTranslation : Set Name -> Expr -> FutProg = use PMExprCompile in
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Set Name -> Expr -> CProg =
-  lam entryPoints. lam ast.
+let cudaTranslation : Map Name AccelerateData -> Expr -> CProg =
+  lam accelerateData. lam ast.
   use MExprCudaCompile in
+  let entryPoints : Set Name = mapMap (lam. ()) accelerateData in
   match typeLift ast with (typeEnv, ast) in
   match compile typeEnv ast with (_, types, tops, _, _) in
   let cudaTops = translateCudaTops entryPoints (join [types, tops]) in
-  CuPProg { includes = cIncludes, tops = cudaTops }
+  let wrapperProg = generateWrapperCode accelerateData typeEnv in
+  (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -131,63 +145,140 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let compileAccelerated : Options -> String -> String -> String -> String -> Unit =
-  lam options. lam sourcePath. lam ocamlProg. lam cProg. lam futharkProg.
-  let linkedFiles =
-    if options.cpuOnly then ""
-    else "(link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"
-  in
-  let dunefile = join ["
-(env (dev (flags (:standard -w -a)) (ocamlc_flags (-without-runtime))))
-(executable (name program) (libraries boot)",
-  linkedFiles,
-  "(foreign_stubs (language c) (names gpu wrap)))"] in
+let duneBuildBase = lam ocamloptFlags.
+  strJoin "\n" [
+    "(env",
+    "  (dev",
+    "    (flags (:standard -w -a))",
+    "    (ocamlc_flags (-without-runtime))",
+    join ["    (ocamlopt_flags (:standard", ocamloptFlags, "))))"],
+    "(executable",
+    "  (name program)",
+    "  (libraries boot)"]
 
-  let envVariables =
-    if options.cpuOnly then ""
-    else
-"export LIBRARY_PATH=/usr/local/cuda/lib64
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64/
-export CPATH=/usr/local/cuda/include" in
-  let futharkCompileCommand =
-    if options.cpuOnly then
-      "futhark multicore --library $^"
-    else
-      "futhark cuda --library $^" in
-  let makefile = join [envVariables,
-"
-program: program.ml wrap.c gpu.c
-	dune build $@.exe
+let futharkDuneBuildMakeRule = lam.
+  strJoin "\n" [
+    "program.exe: program.ml wrap.c gpu.c",
+    "\tdune build $@"]
 
-gpu.c gpu.h: gpu.fut
-	", futharkCompileCommand] in
+let futharkGPUBuildMakeRule = lam.
+  strJoin "\n" [
+    "gpu.c gpu.h: gpu.fut",
+    "\tfuthark cuda --library $^"]
 
-  let td = sysTempDirMake () in
-  let dir = sysTempDirName td in
+let futharkCPUBuildMakeRule = lam.
+  strJoin "\n" [
+    "gpu.c gpu.h: gpu.fut",
+    "\tfuthark multicore --library $^"]
+
+let duneFutharkCFiles = lam. "(foreign_stubs (language c) (names gpu wrap)))"
+
+let buildConfigFutharkCPU : Unit -> (String, String) = lam.
+  let dunefile = strJoin "\n" [
+    duneBuildBase "",
+    duneFutharkCFiles ()] in
+  let makefile = strJoin "\n" [
+    futharkDuneBuildMakeRule (),
+    futharkCPUBuildMakeRule ()] in
+  (dunefile, makefile)
+
+let buildConfigFutharkGPU : Unit -> (String, String) = lam.
+  let dunefile = strJoin "\n" [
+    duneBuildBase (),
+    "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
+    duneFutharkCFiles ()] in
+  let makefile = strJoin "\n" [
+    "export LIBRARY_PATH=/usr/local/cuda/lib64",
+    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
+    "export CPATH=/usr/local/cuda/include",
+    futharkDuneBuildMakeRule (),
+    futharkGPUBuildMakeRule ()] in
+  (dunefile, makefile)
+
+let buildConfigCuda : Unit -> (String, String) = lam.
+  let dunefile = strJoin "\n" [
+    duneBuildBase " libgpu.a",
+    "  (link_flags -cclib -lcudart -cclib -lstdc++))"] in
+  let makefile = strJoin "\n" [
+    "export LIBRARY_PATH=/usr/local/cuda/lib64",
+    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
+    "export CPATH=/usr/local/cuda/include",
+    "program.exe: program.ml _build/default/libgpu.a",
+    "\tdune build $@",
+    "_build/default/libgpu.a: libgpu.a _build/default",
+    "\tcp $< $@",
+    "_build/default:",
+    "\tmkdir -p $@",
+    "libgpu.a: gpu.cu",
+    "\tnvcc -I`ocamlc -where` $^ -lib -o $@"] in
+  (dunefile, makefile)
+
+
+let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
   let tempfile = lam f. sysJoinPath dir f in
+  iter
+    (lam fstr : (String, String).
+      match fstr with (filename, text) in
+      writeFile (tempfile filename) text)
+    fileStrs
 
-  writeFile (tempfile "program.ml") ocamlProg;
-  writeFile (tempfile "program.mli") "";
-  writeFile (tempfile "wrap.c") cProg;
-  writeFile (tempfile "gpu.fut") futharkProg;
-  writeFile (tempfile "dune") dunefile;
-  writeFile (tempfile "Makefile") makefile;
-
-  -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
-  -- it because dune cannot set environment variables.
-  let command = ["make"] in
-  let r = sysRunCommand command "" dir in
+-- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
+-- it because dune cannot set environment variables.
+let buildBinaryUsingMake : String -> String -> Unit =
+  lam sourcePath. lam td.
+  let dir = sysTempDirName td in
+  let r = sysRunCommand ["make"] "" dir in
   (if neqi r.returncode 0 then
     print (join ["Make failed:\n\n", r.stderr]);
     sysTempDirDelete td;
     exit 1
   else ());
-  let binPath = tempfile "_build/default/program.exe" in
-  let destinationFile = filenameWithoutExtension (filename sourcePath) in
-  sysMoveFile binPath destinationFile;
-  sysChmodWriteAccessFile destinationFile;
+  let binPath = sysJoinPath dir "_build/default/program.exe" in
+  let destFile = filenameWithoutExtension (filename sourcePath) in
+  sysMoveFile binPath destFile;
+  sysChmodWriteAccessFile destFile;
   sysTempDirDelete td ();
   ()
+
+let buildFuthark : Options -> String -> [Top] -> CProg -> FutProg -> Unit =
+  lam options. lam sourcePath. lam ocamlTops. lam wrapperProg. lam futharkProg.
+  match
+    if options.cpuOnly then buildConfigFutharkCPU ()
+    else buildConfigFutharkGPU ()
+  with (dunefile, makefile) in
+  let td = sysTempDirMake () in
+  writeFiles (sysTempDirName td) [
+    ("program.ml", pprintOCamlTops ocamlTops),
+    ("program.mli", ""),
+    ("wrap.c", pprintCAst wrapperProg),
+    ("gpu.fut", pprintFutharkAst futharkProg),
+    ("dune", dunefile),
+    ("Makefile", makefile)];
+  buildBinaryUsingMake sourcePath td
+
+let mergePrograms : CudaProg -> CudaProg -> CudaProg =
+  lam lprog. lam rprog.
+  use MExprCudaCompile in
+  match lprog with CuPProg {includes = lincludes, tops = ltops} in
+  match rprog with CuPProg {includes = rincludes, tops = rtops} in
+  CuPProg {includes = concat lincludes rincludes, tops = concat ltops rtops}
+
+let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
+  lam options. lam sourcePath. lam ocamlTops. lam wrapperProg. lam cudaProg.
+  let cudaProg = mergePrograms cudaProg wrapperProg in
+  match
+    if options.cpuOnly then
+      error "CUDA backend does not support CPU compilation"
+    else buildConfigCuda ()
+  with (dunefile, makefile) in
+  let td = sysTempDirMake () in
+  writeFiles (sysTempDirName td) [
+    ("program.ml", pprintOCamlTops ocamlTops),
+    ("program.mli", ""),
+    ("gpu.cu", pprintCudaAst cudaProg),
+    ("dune", dunefile),
+    ("Makefile", makefile)];
+  buildBinaryUsingMake sourcePath td
 
 let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   lam options. lam hooks. lam file.
@@ -231,11 +322,9 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- constraints, an error is reported.
   validatePMExprAst accelerateIds pmexprAst;
 
-  -- Translate the PMExpr AST into an AST representing the GPU code, and then
-  -- pretty-print the result.
-  let gpuProg = hooks.pprintGpuCode accelerateIds pmexprAst in
-
-  let wrapperProg = hooks.pprintWrapperCode accelerated in
+  -- Translate the PMExpr AST into a representation of the GPU code and the
+  -- wrapper code.
+  match hooks.generateGpuCode accelerated pmexprAst with (gpuProg, wrapperProg) in
 
   -- Eliminate all utests in the MExpr AST
   let ast = utestStrip ast in
@@ -260,8 +349,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   let externalTops = getExternalCDeclarations accelerated in
 
   let ocamlTops = join [externalTops, typeTops, exprTops] in
-  let ocamlProg = pprintOCamlTops ocamlTops in
-  compileAccelerated options file ocamlProg wrapperProg gpuProg
+  hooks.buildAccelerated options file ocamlTops wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
   use PMExprAst in
@@ -269,24 +357,17 @@ let compileAccelerate = lam files. lam options : Options. lam args.
     if options.runTests then
       error "Flag --test may not be used for accelerated code generation"
     else if options.accelerateCuda then
-      { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
-          use PMExprCompile in
-          let cudaAst = cudaTranslation accelerateIds ast in
-          printCudaProg [] cudaAst
-      , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
-          use PMExprCompile in
-          -- TODO(larshum, 2022-01-16): Add wrapper code generation for the
-          -- CUDA target.
-          ""}
+      { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.
+          cudaTranslation accelerateData ast
+      , buildAccelerated = buildCuda}
     else if options.accelerateFuthark then
-      { pprintGpuCode = lam accelerateIds : Set Name. lam ast : Expr.
-          use PMExprCompile in
-          let futharkAst = futharkTranslation accelerateIds ast in
-          pprintFutharkAst futharkAst
-      , pprintWrapperCode = lam accelerateData : Map Name AccelerateData.
-          use PMExprCompile in
-          let wrapperAst = generateWrapperCode accelerateData in
-          pprintCAst wrapperAst}
+      { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.
+          use MExprFutharkCompile in
+          let accelerateIds = mapMap (lam. ()) accelerateData in
+          let futharkProg = futharkTranslation accelerateIds ast in
+          let wrapperProg = generateWrapperCode accelerateData in
+          (futharkProg, wrapperProg)
+      , buildAccelerated = buildFuthark}
     else
       error "Neither CUDA nor Futhark was chosen as acceleration target"
   in iter (compileAccelerated options hooks) files

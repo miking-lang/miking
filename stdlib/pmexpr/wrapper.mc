@@ -1,6 +1,9 @@
 include "c/ast.mc"
 include "pmexpr/ast.mc"
 
+-- TODO(larshum, 2022-01-19): Figure out a way to make this set of names
+-- extensible for the individual wrappers, instead of having to include all of
+-- them here.
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
   let identifiers =
@@ -11,7 +14,9 @@ let _genCWrapperNames = lam.
     "CAMLreturn", "futhark_context_config", "futhark_context_config_new",
     "futhark_context", "futhark_context_new", "futhark_context_config_free",
     "futhark_context_free", "futhark_context_sync",
-    "futhark_context_get_error", "NULL"]
+    "futhark_context_get_error", "NULL",
+    "cudaMalloc", "cudaFree", "cudaMemcpy", "cudaDeviceSynchronize",
+    "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost"]
   in
   mapFromSeq
     cmpString
@@ -482,12 +487,6 @@ lang PMExprCWrapper =
   -- Generates conversion of output data from the GPU code to C data.
   sem generateTargetToCWrapper /- : CWrapperEnv -> (CWrapperEnv, [CStmt]) -/ =
 
-  -- Generates the initial wrapper
-  sem generateInitWrapperEnv =
-
-  -- Defines the target-specific generation of wrapper code.
-  sem generateWrapperCode =
-
   -- Generates an additional wrapper function to be referenced from OCaml. This
   -- function is used when calling from bytecode (hence the name) and also when
   -- the function takes more than five parameters.
@@ -511,9 +510,9 @@ lang PMExprCWrapper =
       ret = valueTy,
       id = bytecodeFunctionName,
       params = [(CTyPtr {ty = valueTy}, args), (CTyInt (), argc)],
-      body = [CSExpr {expr = CEApp {
+      body = [CSRet {val = Some (CEApp {
         fun = data.identifier,
-        args = functionArgs}}]}
+        args = functionArgs})}]}
 
   sem generateCAMLparamDeclarations =
   | args /- : [ArgData] -/ ->
@@ -576,9 +575,8 @@ lang PMExprCWrapper =
                      stmt3, stmt4, stmt5, [camlReturnStmt]]}
     , bytecodeWrapper ]
 
-  sem generateWrapperCodeH =
+  sem generateWrapperCodeH (env : CWrapperEnv) =
   | accelerated /- Map Name AccelerateData -/ ->
-    let env = generateInitWrapperEnv () in
     let entryPointWrappers =
       map (generateWrapperFunctionCode env) (mapValues accelerated) in
     (env, join entryPointWrappers)
