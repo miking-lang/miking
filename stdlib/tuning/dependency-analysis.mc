@@ -97,7 +97,7 @@ lang DependencyAnalysis = MExprHoleCFA
           -- Build a prefix tree with measuring contexts
           match mapFoldWithKey (lam treeId. lam. lam path.
               match treeId with (tree,id) in
-              switch prefixTreeMaybeInsert nameInfoCmp tree id path
+              switch prefixTreeMaybeInsert nameInfoCmp tree id (reverse path)
               case (true,tree) then (tree, addi id 1)
               case (false,_) then (tree, id)
               end
@@ -109,7 +109,7 @@ lang DependencyAnalysis = MExprHoleCFA
           let graphGraph = mapFoldWithKey (
             lam acc: Digraph Int Int. lam id: Int. lam path: [NameInfo].
               -- Set of measuring points that this context string affects.
-              let measPoints : [Int] = prefixTreeGetIds tree path in
+              let measPoints : [Int] = prefixTreeGetIds tree (reverse path) in
               -- Add context-expanded hole to dependency graph
               let acc = digraphMaybeAddVertex id acc in
               -- Add corresponding edges to dependency graph
@@ -196,11 +196,6 @@ let test = lam debug: Bool. lam t: Expr.
       (dep, env)
 in
 
--- Print out bipartite graph in dot format
--- Maybe provide bipartite graph as context strings
--- Provide names of holes and measuring points
--- Provide measuring contexts for each measuring name
-
 type TestResult = {
   measuringPoints : [(String,[[String]])],
   -- Edges in the bipartite graph
@@ -214,9 +209,11 @@ let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
     let path = prefixTreeGetPathExn tree id in
     cons path acc) [] ids
   in
+  -- Paths are stored in reverse order in tree
   let paths : [[String]] = map (
       lam path : [NameInfo].
-        map (lam e : NameInfo. nameInfoGetStr e) path
+        reverse (
+          map (lam e : NameInfo. nameInfoGetStr e) path)
     ) paths
   in
   let s1 : Set [String] = setOfSeq (seqCmp cmpString) paths in
@@ -242,6 +239,11 @@ let depExists = lam holeTree : PTree NameInfo. lam measTree : PTree NameInfo.
   -- Reverse edge paths
   let from = reverse edge.0 in
   let to = reverse edge.1 in
+
+  -- printLn "holePathId";
+  -- dprintLn holePathId;
+  -- printLn "measPathId";
+  -- dprintLn measPathId;
 
   -- Translate string edges to integer id's
   let fromId : Int = assocLookupOrElse {eq=eqSeq eqString}
@@ -424,6 +426,33 @@ utest test debug t with {
   , ( ("h", ["e","a"]), ("cc", ["e"]) )
   , ( ("h", ["e","b"]), ("cc", ["e"]) )
   ]
+} using eqTest in
+
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 3}) in
+  let m = sleepMs h in
+  m
+in
+let f2 = lam x.
+  let a = f1 x in
+  a
+in
+let f3 = lam x.
+  let c = f2 x in
+  c
+in
+let f4 = lam x.
+  let d = f3 x in
+  d
+in
+f4 ()
+" in
+
+utest test debug t with {
+  measuringPoints = [ ("m", [["d","c","a"]]) ],
+  deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ]
 } using eqTest in
 
 ()
