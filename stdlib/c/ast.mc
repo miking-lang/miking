@@ -64,6 +64,49 @@ lang CExprTypeAst
   | CTyUnion  { id: Option Name, mem: Option [(CType,Option Name)] }
   | CTyEnum   { id: Option Name, mem: Option [Name] }
 
+  sem _mapAccumLMem (f : acc -> a -> (acc, b)) (acc : acc) =
+  | mem ->
+    let fMem = lam acc. lam memEntry : (CType, Option Name).
+      match memEntry with (ty, optId) in
+      match f acc ty with (acc, ty) in
+      (acc, (ty, optId)) in
+    match mem with Some mem then
+      match mapAccumL fMem acc mem with (acc, mem) in
+      (acc, Some mem)
+    else (acc, mem)
+
+  sem smapAccumLCTypeCType (f : acc -> a -> (acc, b)) (acc : acc) =
+  | CTyPtr t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyPtr {t with ty = ty})
+  | CTyFun t ->
+    match f acc t.ret with (acc, ret) in
+    match mapAccumL f acc t.params with (acc, params) in
+    (acc, CTyFun {{t with ret = ret} with params = params})
+  | CTyArray t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyArray {t with ty = ty})
+  | CTyStruct t ->
+    match _mapAccumLMem f acc t.mem with (acc, mem) in
+    (acc, CTyStruct {t with mem = mem})
+  | CTyUnion t ->
+    match _mapAccumLMem f acc t.mem with (acc, mem) in
+    (acc, CTyStruct {t with mem = mem})
+  | CTyEnum t -> CTyEnum t
+  | ty & (CTyVar _ | CTyChar _ | CTyInt _ | CTyDouble _ | CTyChar _ |
+          CTyVoid _ | CTyEnum _) ->
+    ty
+
+  sem smapCTypeCType (f : a -> b) =
+  | p ->
+    match smapAccumLCTypeCType (lam. lam a. ((), f a)) () p with (_, p) in p
+
+  sem sfoldCTypeCType (f : acc -> a -> acc) (acc : acc) =
+  | p ->
+    match smapAccumLCTypeCType (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in
+    acc
+
   syn CExpr =
   | CEVar        /- Variables -/            { id: Name }
   | CEApp        /- Function application -/ { fun: Name, args: [CExpr] }
