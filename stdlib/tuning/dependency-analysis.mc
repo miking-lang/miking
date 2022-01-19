@@ -151,7 +151,7 @@ lang TestLang = DependencyAnalysis + MExprHoleCFA + GraphColoring + BootParser +
 mexpr
 use TestLang in
 
-let debug = true in
+let debug = false in
 let parse = lam str.
   let ast = parseMExprString holeKeywords str in
   let ast = makeKeywords [] ast in
@@ -185,17 +185,15 @@ let test = lam debug: Bool. lam t: Expr.
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
       let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
-      -- dprintLn dep;
       printLn "\n--- DEPENDENCY GRAPH ---";
       digraphPrintDot dep.graph int2string int2string;
-      -- dprintLn (mapKeys dep.measuringContexts);
-      dep
+      (dep, env)
 
     else
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData graphData tANF in
       let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
-      dep
+      (dep, env)
 in
 
 -- Print out bipartite graph in dot format
@@ -203,7 +201,13 @@ in
 -- Provide names of holes and measuring points
 -- Provide measuring contexts for each measuring name
 
--- Helper for eqTest
+type TestResult = {
+  measuringPoints : [(String,[[String]])],
+  -- Edges in the bipartite graph
+  deps : [((String,[String]), (String,[String]))]
+} in
+
+-- Helper for eqTest, to check that provided measuring contexts match.
 let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
   let ids = prefixTreeGetIds tree [] in
   let paths = foldl (lam acc. lam id.
@@ -220,22 +224,139 @@ let eqMeasContexts = lam tree : PTree NameInfo. lam contexts : [[String]].
   setEq s1 s2
 in
 
-type TestResult = {measuringPoints : [(String,[[String]])]} in
+-- Helper for eqTest, to check that a given dependency edge exists.
+let depExists = lam holeTree : PTree NameInfo. lam measTree : PTree NameInfo.
+                lam graph : Digraph Int Int.
+                lam edge : ([String], [String]).
+  -- Convert name info paths to string paths
+  let holeIdPath : [(Int,[NameInfo])] = prefixTreeBindings holeTree in
+  let holePathId : [([String],Int)] = map (
+    lam b : (Int,[NameInfo]). (map nameInfoGetStr b.1, b.0)
+  ) holeIdPath in
 
-let eqTest = lam dep : DependencyGraph. lam r : TestResult.
-  let treeBinds = mapBindings dep.measuringContexts in
-  let trees : Map String (PTree NameInfo) = foldl (
+  let measIdPath : [(Int,[NameInfo])] = prefixTreeBindings measTree in
+  let measPathId : [([String],Int)] = map (
+    lam b : (Int,[NameInfo]). (map nameInfoGetStr b.1, b.0)
+  ) measIdPath in
+
+  -- Reverse edge paths
+  let from = reverse edge.0 in
+  let to = reverse edge.1 in
+
+  -- Translate string edges to integer id's
+  let fromId : Int = assocLookupOrElse {eq=eqSeq eqString}
+    (lam. error (concat "Hole path missing: " (strJoin " " from)))
+    from holePathId
+  in
+  let toId : Int = assocLookupOrElse {eq=eqSeq eqString}
+    (lam. error (concat "Measuring path missing: " (strJoin " " to)))
+    to measPathId
+  in
+
+  -- Edge lookup ignoring label
+  let edgeExists = lam from. lam to.
+    not (null (digraphEdgesBetween from to graph))
+  in
+
+  -- Check whether the bipartite graph contains the edge.
+  edgeExists fromId toId
+in
+
+-- Test equality function
+let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
+  match lhs with (dep, env) in
+  -- Convert from name info to string
+  let measTreeBinds : [(Name,PTree NameInfo)] = mapBindings dep.measuringContexts in
+  let measTrees : Map String (PTree NameInfo) = foldl (
     lam acc. lam b : (Name,PTree NameInfo).
       mapInsert (nameGetStr b.0) b.1 acc
-    ) (mapEmpty cmpString) treeBinds
+    ) (mapEmpty cmpString) measTreeBinds
   in
+
+  let holeTrees : Map String (PTree NameInfo) = mapFoldWithKey (
+    lam acc. lam k : NameInfo. lam v : PTree NameInfo.
+      mapInsert (nameInfoGetStr k) v acc
+    ) (mapEmpty cmpString) env.contexts
+  in
+
+  -- Measuring contexts match
   let measCtxs = map (
     lam strCtxs.
       match strCtxs with (str, ctxs) in
-      let tree = mapFindExn str trees in
+      let tree = mapFindExn str measTrees in
       eqMeasContexts tree ctxs
-    ) r.measuringPoints in
-  forAll (lam x. x) measCtxs
+    ) rhs.measuringPoints in
+  let measCtxsMatch = forAll (lam x. x) measCtxs in
+
+  -- Number of measuring contexts match
+  let nbrCtxs1 = foldl (
+    lam acc. lam ctx : (String,[[String]]). addi acc (length ctx.1)
+    ) 0 rhs.measuringPoints in
+  let nbrCtxs2 = mapFoldWithKey (
+    lam acc. lam k : String. lam v : PTree NameInfo.
+      addi acc (length (prefixTreeGetIds v []))
+    ) 0 measTrees in
+  let nbrCtxsMatch = eqi nbrCtxs1 nbrCtxs2 in
+
+  -- Dependency edges exist
+  let edgesExist = map (
+    lam e : ((String,[String]),(String,[String])).
+      match e with ((h,hPath),(m,mPath)) in
+      depExists (mapFindExn h holeTrees) (mapFindExn m measTrees)
+        dep.graph (hPath,mPath)
+    ) rhs.deps
+  in
+  let edgesExist = forAll (lam x. x) edgesExist in
+
+  -- Number of dependency edges match
+  let nbrEdges1 = length rhs.deps in
+  let nbrEdges2 = digraphCountEdges dep.graph in
+  let nbrEdgesMatch = eqi nbrEdges1 nbrEdges2 in
+
+  let failPrint = lam.
+    printLn "Measuring contexts";
+    mapMapWithKey (lam k. lam v.
+      printLn "-------";
+      printLn k;
+      let binds = prefixTreeBindings v in
+      iter (lam b: (Int, [NameInfo]).
+        printLn (strJoin " " [int2string b.0,
+          strJoin " " (map nameInfoGetStr b.1)
+          ])) binds;
+      printLn "-------"
+      ) measTrees;
+
+   printLn "Hole contexts";
+   mapMapWithKey (lam k. lam v.
+     printLn "-------";
+     printLn k;
+     --prefixTreeDebug nameInfoGetStr v;
+     let binds = prefixTreeBindings v in
+     iter (lam b: (Int, [NameInfo]).
+       printLn (strJoin " " [int2string b.0,
+         strJoin " " (map nameInfoGetStr b.1)
+         ])) binds;
+     printLn "-------"
+   ) holeTrees;
+
+   printLn "Dependency graph";
+   digraphPrintDot dep.graph int2string int2string
+  in
+
+
+  let result : [(Bool, String)] =
+  [ (measCtxsMatch, "\nFAIL: Measuring context mismatch")
+  , (nbrCtxsMatch, "\nFAIL: Number of measuring context mismatch")
+  , (edgesExist, "\nFAIL: Some edge does not exist")
+  , (nbrEdgesMatch, "\nFAIL: Number of edges mismatch")
+  ] in
+
+  iter (lam b: (Bool, String, Unit -> Unit).
+    if b.0 then ()
+    else printLn b.1; failPrint ()
+  ) result;
+
+  forAll (lam b : (Bool, String, Unit -> Unit). b.0) result
 in
 
 let t = parse
@@ -255,7 +376,12 @@ foo ()
 " in
 
 utest test debug t with {
-  measuringPoints = [("a",[[]])]
+  measuringPoints = [ ("a",[[]]), ("b",[[]]), ("c",[[]])],
+  deps =
+  [ ( ("h", []), ("a", []) )
+  , ( ("h", []), ("b", []) )
+  , ( ("h1", []), ("c", []) )
+  ]
 } using eqTest in
 
 let t = parse
@@ -286,6 +412,17 @@ utest test debug t with {
   measuringPoints =
   [ ("g", [[]])
   , ("cc", [["d"],["e"]])
+  ],
+  deps =
+  [ ( ("h", ["d","a"]), ("g", []) )
+  , ( ("h", ["d","b"]), ("g", []) )
+  , ( ("h", ["e","a"]), ("g", []) )
+  , ( ("h", ["e","b"]), ("g", []) )
+
+  , ( ("h", ["d","a"]), ("cc", ["d"]) )
+  , ( ("h", ["d","b"]), ("cc", ["d"]) )
+  , ( ("h", ["e","a"]), ("cc", ["e"]) )
+  , ( ("h", ["e","b"]), ("cc", ["e"]) )
   ]
 } using eqTest in
 

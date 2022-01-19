@@ -130,8 +130,9 @@ let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
     end
 else error "missing sentinel node"
 
--- 'prefixTreeGetPathExn tree id' returns the path with 'id' in 'tree'.
-let prefixTreeGetPathExn = lam tree. lam id.
+-- 'prefixTreeGetPathExn tree id' returns the path with 'id' in 'tree', and
+-- throws an error if 'id' is not stored in 'tree'.
+let prefixTreeGetPathExn : PTree a -> Int -> [a] = lam tree. lam id.
   match tree with Node {children = cs, ids = ids} then
     recursive let findPath = lam children. lam ids. lam path.
       -- Is the id among the id's?
@@ -151,6 +152,12 @@ let prefixTreeGetPathExn = lam tree. lam id.
       (findPath cs ids [])
   else error "missing sentinel node"
 
+-- 'prefixTreeBindings tree' returns the pairs of id-paths stored in the tree.
+let prefixTreeBindings : PTree a -> [(Int,[a])] = lam tree.
+  let ids = prefixTreeGetIds tree [] in
+  foldl (lam acc. lam id.
+    let path = prefixTreeGetPathExn tree id in
+    cons (id, path) acc) [] ids
 
 -- Debug printing of a prefix tree.
 let prefixTreeDebug = lam toStr. lam tree : PTree a.
@@ -280,5 +287,7 @@ utest
     Some (prefixTreeGetIds t [1,2])
   else None ()
 with Some [42,1] in
+
+utest prefixTreeBindings t with [(0,[1]),(1,[1,2]),(2,[3])] in
 
 ()
