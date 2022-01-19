@@ -24,11 +24,10 @@ type ContextExpanded =
 }
 
 -- Generate code for looking up a value of a hole depending on its call history
-let _lookupCallCtx
-  : (Int -> Expr) -> NameInfo -> Name -> CallCtxEnv -> Expr =
-  lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv.
+let contextExpansionLookupCallCtx
+  : (Int -> Expr) -> PTree Name -> Name -> CallCtxEnv -> Expr =
+  lam lookup. lam tree. lam incVarName. lam env.
     use MExprAst in
-    let tree : PTree NameInfo = mapFindExn holeId env.contexts in
     recursive let work : NameInfo -> [PTree NameInfo] -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
@@ -36,8 +35,8 @@ let _lookupCallCtx
         else
           let tmpName = nameSym "tmp" in
           let branches = foldl (lam cases: ([Expr], [Expr]). lam c.
-            match c with Leaf _ then
-              (cons (lookup (callCtxHole2Idx holeId acc env)) cases.0, cases.1)
+            match c with Leaf id then
+              (cons (lookup id) cases.0, cases.1)
             else match c with Node {root = root, children = cs} then
               let root : NameInfo = root in
               let iv = callCtxLbl2Inc root.0 env in
@@ -106,7 +105,8 @@ lang ContextExpand = HoleAst
           lookupGlobal t.info
         else
           let iv = callCtxFun2Inc funDefined.0 env in
-          let res = _lookupCallCtx lookup (ident, t.info) iv env in
+          let tree = mapFindExn (ident, t.info) env.contexts in
+          let res = contextExpansionLookupCallCtx lookup tree iv env in
           res
     in TmLet {{t with body = body}
                  with inexpr = _contextExpandWithLookup env lookup t.inexpr}

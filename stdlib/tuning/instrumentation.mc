@@ -7,22 +7,13 @@
 -- CallCtxEnv for id:s
 
 include "ast.mc"
+include "dependency-analysis.mc"
 
 include "common.mc"
 include "set.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
-include "mexpr/utesttrans.mc"
-
-type InstrumentationEnv = {
-  -- Maps a name of a of measuring points to the set of holes and contexts that
-  -- it depends on.
-  dep : Map Name (Set (Name, Set Int)),
-
-  -- Maps a name of a measuring point to its unique identifier.
-  id : Map Name Int
-}
 
 let _instrumentationHeaderStr =
 "
@@ -46,28 +37,43 @@ let _instrumentationRecordName =
   else error "impossible"
 
 lang Instrumentation = LetAst
-  sem instrument (env : InstrumentationEnv) =
-  | TmLet ({ident = ident} & t) ->
-    match mapLookup ident env.dep with Some holes then
-      let id = mapFindExn ident env.id in
+  sem instrumentH (env : CallCtxEnv) (graph : DependencyGraph) (expr : Expr)
+                  (inexpr : Expr) =
+  | idExpr ->
       let startName = nameSym "s" in
       let endName = nameSym "e" in
       bindall_
       [ nulet_ startName (wallTimeMs_ uunit_)
-      , TmLet {t with inexpr = uunit_}
+      , expr
       , nulet_ endName (wallTimeMs_ uunit_)
       , nulet_ (nameSym "") (
-          appf3_ (nvar_ _instrumentationRecordName) (int_ id)
-             (nvar_ startName) (nvar_ endName))
-      , instrument env t.inexpr
+          appf3_ (nvar_ _instrumentationRecordName) idExpr
+            (nvar_ startName) (nvar_ endName))
+      , instrument env graph inexpr
       ]
-    else smap_Expr_Expr (instrument env) (TmLet t)
-  | t -> smap_Expr_Expr (instrument env) t
+
+  sem instrument (env : CallCtxEnv) (graph : DependencyGraph) =
+  | TmLet ({ident = ident} & t) ->
+    match mapLookup ident graph.measuringContexts with Some tree then
+      -- More than one context?
+      let ids = prefixTreeGetIds tree [] in
+      let expr = TmLet {t with inexpr = uunit_} in
+      match ids with [id] then
+        instrumentH env graph expr t.inexpr (int_ id)
+      else match ids with [id] ++ ids in
+        let incVarName = nameSym "inc" in
+        -- TODO: the id here is the inc var value, should find the corresponding
+        -- measuring path for the path
+        let lookup = lam i. int_ i in
+        let idExpr = contextExpansionLookupCallCtx lookup tree incVarName env in
+        instrumentH env graph expr t.inexpr idExpr
+    else smap_Expr_Expr (instrument env graph) (TmLet t)
+  | t -> smap_Expr_Expr (instrument env graph) t
 
 end
 
-lang TestLang = Instrumentation + HoleAst + BootParser + MExprSym +
-                MExprPrettyPrint
+lang TestLang = Instrumentation + GraphColoring + MExprHoleCFA +
+                DependencyAnalysis + BootParser + MExprSym + MExprPrettyPrint
 
 mexpr
 
@@ -75,8 +81,8 @@ use TestLang in
 
 let debug = true in
 
-let debugPrintLn =
-  if debug then printLn else ()
+let debugPrintLn = lam debug.
+  if debug then printLn else lam x. x
 in
 
 let parse = lam str.
@@ -85,37 +91,37 @@ let parse = lam str.
   symbolize ast
 in
 
-let str2name = lam str. lam expr.
-  match findName str expr with Some name then name
-  else error (concat "name not found: " str)
-in
+let test = lam debug. lam expr.
+  debugPrintLn debug "\n-------- ORIGINAL PROGRAM --------";
+  debugPrintLn debug (expr2str expr);
 
-let createEnv = lam expr. lam env : [(String,[(String,[Int])])].
-  let set1 : [(Name, Set (Name,Set Int))] =
-    map (lam e : (String, [(String,[Int])]).
-      (str2name e.0 expr,
-       setOfSeq (map (lam e: (String, [Int]). (str2name e.0 expr, setOfSeq e.1)) e.1))
-    ) env
-  in
-  let dep = mapFromSeq nameCmp set1 in
-  let id = match mapMapAccum (
-      lam acc. lam k. lam.
-        (addi acc 1, acc)) 0 dep
-    with (_, m) in m
-  in
-  { dep = dep, id = id }
-in
+  -- Use small ANF first, needed for context expansion
+  let tANFSmall = use MExprHoles in normalizeTerm expr in
 
-let test = lam debug. lam expr. lam env.
-  debugPrintLn "\n-------- ORIGINAL PROGRAM --------";
-  debugPrintLn (expr2str expr);
-  let res = instrument env expr in
-  debugPrintLn "\n-------- INSTRUMENTED PROGRAM --------";
-  debugPrintLn (expr2str res);
-  debugPrintLn "";
+  -- Do graph coloring to get context information (throw away the AST).
+  match colorCallGraph [] tANFSmall with (env, _) in
+
+  -- Initialize the graph data
+  let graphData = graphDataFromEnv env in
+
+  -- Apply full ANF
+  let tANF = normalizeTerm tANFSmall in
+
+  -- Perform CFA
+  let cfaRes : CFAGraph = cfaData graphData tANF in
+
+  -- Perform dependency analysis
+  let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
+
+  -- Do instrumentation
+  let res = instrument env dep expr in
+  debugPrintLn debug "\n-------- INSTRUMENTED PROGRAM --------";
+  debugPrintLn debug (expr2str res);
+  debugPrintLn debug "";
   ()
 in
 
+-- Global hole
 let t = parse
 "
 let foo = lam x.
@@ -132,10 +138,84 @@ in
 foo ()
 " in
 
-utest test debug t (createEnv t
-[ ("a",[("h",[1])])
-, ("b",[("h",[1])])
-, ("c",[("h1",[1])])
-] ) with () in
+utest test debug t with () in
+
+-- Context-sensitive, but only one context
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 3}) in
+  let m = sleepMs h in
+  m
+in
+let f2 = lam x.
+  let a = f1 x in
+  a
+in
+let f3 = lam x. lam y.
+  let c = f2 x in
+  c
+in
+let f4 = lam x.
+  let d = f3 x 2 in
+  d
+in
+f4 ()
+" in
+
+utest test debug t with () in
+
+-- Context-sensitive, several contexts
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 2}) in
+  h
+in
+let f2 = lam x.
+  let a = f1 x in
+  let b = f1 x in
+  let c = addi a b in
+  let cc = sleepMs c in
+  c
+in
+let f3 = lam f.
+  f 1
+in
+let d = f2 1 in
+let e = f2 1 in
+let f = addi d e in
+let g = sleepMs f in
+let i = f3 f2 in
+()
+" in
+
+utest test debug t with () in
+
+-- Context-sensitive, longer contexts
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 3}) in
+  let m = sleepMs h in
+  m
+in
+let f2 = lam x.
+  let a = f1 x in
+  a
+in
+let f3 = lam x. lam y.
+  let c = f2 x in
+  c
+in
+let f4 = lam x.
+  let d = f3 x 2 in
+  let e = f3 x 2 in
+  d
+in
+f4 ()
+" in
+
+utest test debug t with () in
 
 ()
