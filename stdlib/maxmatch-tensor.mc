@@ -12,6 +12,14 @@ type Slack = {
   v   : Int                     -- v in V associated with this slack
 }
 
+let slackToString = lam slack : Slack.
+  match slack with {val = val, u = u, v = v} in
+  join [
+    "{ val = ", int2string val,
+    ", u = ", int2string u,
+    ", v = ", int2string v, "}"
+  ]
+
 -- Find a maximum weight matching on weighted bipartite graph encoded by weight
 -- matrix w. This implementation uses slack variables to ensure sub O(n^3) time
 -- complexity.
@@ -117,22 +125,22 @@ let maxmatchHungarian = lam w : Tensor[Int].
     -- Debug state
     let debugShowState = lam.
       printLn "===";
-      print "\nlus: ";
-      dprint lus;
-      print "\nlvs: ";
-      dprint lvs;
-      print "\nmus: ";
-      dprint mus;
-      print "\nmvs: ";
-      dprint mvs;
-      print "\nss: ";
-      dprint (deref ss);
-      print "\nts: ";
-      dprint ts;
-      print "\nslacks: ";
-      dprint slacks;
-      print "\npreds: ";
-      dprint preds;
+      printLn "lus: ";
+      printLn (tensor2string int2string lus);
+      printLn "lvs: ";
+      printLn (tensor2string int2string lvs);
+      printLn "mus: ";
+      printLn (tensor2string int2string mus);
+      printLn "mvs: ";
+      printLn (tensor2string int2string mvs);
+      printLn "ss: ";
+      printLn (strJoin " ," (map int2string (deref ss)));
+      printLn "ts: ";
+      printLn (tensor2string (lam x. if x then "true" else "false") ts);
+      printLn "slacks: ";
+      printLn (tensor2string slackToString slacks);
+      printLn "preds: ";
+      printLn (tensor2string int2string preds);
       ()
     in
 
