@@ -40,30 +40,28 @@ lang Instrumentation = LetAst
   sem instrumentH (env : CallCtxEnv) (graph : DependencyGraph) (expr : Expr)
                   (inexpr : Expr) =
   | idExpr ->
-      let startName = nameSym "s" in
-      let endName = nameSym "e" in
-      bindall_
-      [ nulet_ startName (wallTimeMs_ uunit_)
-      , expr
-      , nulet_ endName (wallTimeMs_ uunit_)
-      , nulet_ (nameSym "") (
-          appf3_ (nvar_ _instrumentationRecordName) idExpr
-            (nvar_ startName) (nvar_ endName))
-      , instrument env graph inexpr
-      ]
+    let startName = nameSym "s" in
+    let endName = nameSym "e" in
+    bindall_
+    [ nulet_ startName (wallTimeMs_ uunit_)
+    , expr
+    , nulet_ endName (wallTimeMs_ uunit_)
+    , nulet_ (nameSym "") (
+        appf3_ (nvar_ _instrumentationRecordName) idExpr
+          (nvar_ startName) (nvar_ endName))
+    , instrument env graph inexpr
+    ]
 
   sem instrument (env : CallCtxEnv) (graph : DependencyGraph) =
   | TmLet ({ident = ident} & t) ->
-    match mapLookup ident graph.measuringContexts with Some tree then
-      -- More than one context?
+    match mapLookup ident graph.measuringPoints with Some tree then
       let ids = prefixTreeGetIds tree [] in
       let expr = TmLet {t with inexpr = uunit_} in
+      -- One or several contexts?
       match ids with [id] then
         instrumentH env graph expr t.inexpr (int_ id)
-      else match ids with [id] ++ ids in
-        let incVarName = nameSym "inc" in
-        -- TODO: the id here is the inc var value, should find the corresponding
-        -- measuring path for the path
+      else match ids with [_] ++ _ in
+        let incVarName = mapFindExn (mapFindExn ident graph.meas2fun) env.fun2inc in
         let lookup = lam i. int_ i in
         let idExpr = contextExpansionLookupCallCtx lookup tree incVarName env in
         instrumentH env graph expr t.inexpr idExpr
@@ -79,7 +77,7 @@ mexpr
 
 use TestLang in
 
-let debug = true in
+let debug = false in
 
 let debugPrintLn = lam debug.
   if debug then printLn else lam x. x

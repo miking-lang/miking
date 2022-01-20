@@ -109,8 +109,8 @@ let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
           -- equal
           match c with Node {root = root, children = cs, ids = ids} then
             switch insert cs (addi i 1)
-            case (true, children) then
-              let newNode = Node {root = root, children = children, ids = cons id ids} in
+            case (true, newChildren) then
+              let newNode = Node {root = root, children = newChildren, ids = cons id ids} in
               (true, mapInsert p newNode children)
             case (false, _) then (false, children)
             end

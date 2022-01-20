@@ -15,22 +15,19 @@ type DependencyGraph = {
   -- unused)
   graph : Digraph Int Int,
 
-  -- The set of base holes in the graph
-  holes : Set Name,
-
-  -- The set of base measuring points in the graph
-  measuringPoints : Set Name,
-
   -- Maps a context-sensitive measuring point to its prefix tree, which gives a
   -- compact representation of the context strings
-  measuringContexts : Map Name (PTree NameInfo)
+  measuringPoints : Map Name (PTree NameInfo),
+
+  -- Maps a base measuring point to the closest enclosing function in the call
+  -- graph in which it occurs
+  meas2fun: Map Name Name
 }
 
 let _dependencyGraphEmpty =
   { graph = digraphEmpty subi (lam. lam. false) -- disable graph labels
-  , holes = setEmpty nameCmp
-  , measuringPoints = setEmpty nameCmp
-  , measuringContexts = mapEmpty nameCmp
+  , measuringPoints = mapEmpty nameCmp
+  , meas2fun = mapEmpty nameCmp
   }
 
 lang DependencyAnalysis = MExprHoleCFA
@@ -39,7 +36,7 @@ lang DependencyAnalysis = MExprHoleCFA
     -- Start the indexing of measuring points from the number of
     -- context-sensitive holes, to guarantee no collision in indices (to be able
     -- to store both sets as vertices in a graph).
-    let nHoles = mapSize env.contexts in
+    let nHoles = length env.idx2hole in
     match
       buildDependencies callGraphTop env cfaGraph.data
         (_dependencyGraphEmpty, nHoles) t
@@ -51,10 +48,7 @@ lang DependencyAnalysis = MExprHoleCFA
                         (acc : (DependencyGraph, Int)) =
   | TmLet ({ident = ident} & t) ->
     match acc with (graph, measCount) in
-    -- Add base measuring point to dependency graph
-    let graph : DependencyGraph = {
-      graph with measuringPoints = setInsert ident graph.measuringPoints
-    } in
+    let graph : DependencyGraph = graph in
 
     -- Function to keep the part of a path that happened before the current node
     -- in the call history
@@ -63,6 +57,15 @@ lang DependencyAnalysis = MExprHoleCFA
       else match path with [(from,to,lbl)] ++ path in
         if nameInfoEq cur from then []
         else cons (from,to,lbl) (shortenPath path)
+    in
+
+    -- Update 'cur' when recursing in body if defining a function that is part
+    -- of the call graph.
+    let curBody =
+      match t.body with TmLam lm then
+        if digraphHasVertex (ident, t.info) env.callGraph then (ident, t.info)
+        else cur
+      else cur
     in
 
     -- Update dependency graph from CFA dependencies
@@ -84,7 +87,7 @@ lang DependencyAnalysis = MExprHoleCFA
                 let lblPath : [NameInfo] = map (lam e : Edge. e.2) shortPath in
 
                 -- Insert base hole in the graph, and accumulate context
-                ( { graph with holes = setInsert id graph.holes },
+                ( graph,
                   mapInsert c lblPath shortContexts )
               ) acc contexts
             else acc
@@ -120,22 +123,15 @@ lang DependencyAnalysis = MExprHoleCFA
               ) acc measPoints
             ) graph.graph shortContexts
           in
-          let measContexts = mapInsert ident tree graph.measuringContexts in
-          ( { { graph with measuringContexts = measContexts }
-                      with graph = graphGraph },
+          let measContexts = mapInsert ident tree graph.measuringPoints in
+          ( { { { graph with measuringPoints = measContexts }
+                        with graph = graphGraph }
+                        with meas2fun = mapInsert ident (nameInfoGetName curBody) graph.meas2fun},
             newMeasCount )
 
       else (graph, measCount)
     in
 
-    -- Update 'cur' when recursing in body if defining a function that is part
-    -- of the call graph.
-    let curBody =
-      match t.body with TmLam lm then
-        if digraphHasVertex (ident, t.info) env.callGraph then (ident, t.info)
-        else cur
-      else cur
-    in
     match buildDependencies curBody env data acc t.body with (acc, body) in
     match buildDependencies cur env data acc t.inexpr with (acc, inexpr) in
     (acc, TmLet {{t with body = body} with inexpr = inexpr})
@@ -219,7 +215,8 @@ in
 type TestResult = {
   measuringPoints : [(String,[[String]])],
   -- Edges in the bipartite graph
-  deps : [((String,[String]), (String,[String]))]
+  deps : [((String,[String]), (String,[String]))],
+  meas2fun : [(String,String)]
 } in
 
 -- Helper for eqTest, to check that provided measuring contexts match.
@@ -283,7 +280,7 @@ in
 let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
   match lhs with (dep, env) in
   -- Convert from name info to string
-  let measTreeBinds : [(Name,PTree NameInfo)] = mapBindings dep.measuringContexts in
+  let measTreeBinds : [(Name,PTree NameInfo)] = mapBindings dep.measuringPoints in
   let measTrees : Map String (PTree NameInfo) = foldl (
     lam acc. lam b : (Name,PTree NameInfo).
       mapInsert (nameGetStr b.0) b.1 acc
@@ -330,6 +327,14 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
   let nbrEdges2 = digraphCountEdges dep.graph in
   let nbrEdgesMatch = eqi nbrEdges1 nbrEdges2 in
 
+  -- meas2fun match
+  let meas2funStr : [(String, String)] = map (
+    lam nn : (Name, Name). (nameGetStr nn.0, nameGetStr nn.1)
+    ) (mapBindings dep.meas2fun) in
+  let mapLhs = mapFromSeq cmpString meas2funStr in
+  let mapRhs = mapFromSeq cmpString rhs.meas2fun in
+  let meas2funEq = mapEq eqString mapLhs mapRhs in
+
   let failPrint = lam.
     printLn "Measuring contexts";
     mapMapWithKey (lam k. lam v.
@@ -347,7 +352,6 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
    mapMapWithKey (lam k. lam v.
      printLn "-------";
      printLn k;
-     --prefixTreeDebug nameInfoGetStr v;
      let binds = prefixTreeBindings v in
      iter (lam b: (Int, [NameInfo]).
        printLn (strJoin " " [int2string b.0,
@@ -357,7 +361,12 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
    ) holeTrees;
 
    printLn "Dependency graph";
-   digraphPrintDot dep.graph int2string int2string
+   digraphPrintDot dep.graph int2string int2string;
+
+   printLn "meas2fun";
+   mapMapWithKey (lam k. lam v.
+     printLn (join [nameGetStr k, " ", nameGetStr v])
+   ) dep.meas2fun
   in
 
 
@@ -366,6 +375,7 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
   , (nbrCtxsMatch, "\nFAIL: Number of measuring context mismatch")
   , (edgesExist, "\nFAIL: Some edge does not exist")
   , (nbrEdgesMatch, "\nFAIL: Number of edges mismatch")
+  , (meas2funEq, "\nFAIL: Mismatch in meas2fun")
   ] in
 
   iter (lam b: (Bool, String, Unit -> Unit).
@@ -398,7 +408,8 @@ utest test debug t with {
   [ ( ("h", []), ("a", []) )
   , ( ("h", []), ("b", []) )
   , ( ("h1", []), ("c", []) )
-  ]
+  ],
+  meas2fun = [("a","top"), ("b","top"), ("c","top")]
 } using eqTest in
 
 let t = parse
@@ -440,7 +451,8 @@ utest test debug t with {
   , ( ("h", ["d","b"]), ("cc", ["d"]) )
   , ( ("h", ["e","a"]), ("cc", ["e"]) )
   , ( ("h", ["e","b"]), ("cc", ["e"]) )
-  ]
+  ],
+  meas2fun = [("g","top"), ("cc","f2")]
 } using eqTest in
 
 let t = parse
@@ -467,7 +479,8 @@ f4 ()
 
 utest test debug t with {
   measuringPoints = [ ("m", [["d","c","a"]]) ],
-  deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ]
+  deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ],
+  meas2fun = [("m","f1")]
 } using eqTest in
 
 -- Recursive lets
@@ -488,7 +501,8 @@ c
 
 utest test debug t with {
   measuringPoints = [ ("b", [["c"]]) ],
-  deps = [ (("h", ["c","a"]), ("b", ["c"])) ]
+  deps = [ (("h", ["c","a"]), ("b", ["c"])) ],
+  meas2fun = [("b","f2")]
 } using eqTest in
 
 ()
