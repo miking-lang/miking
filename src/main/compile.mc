@@ -17,6 +17,7 @@ include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
+include "ocaml/wrap-in-try-with.mc"
 include "pmexpr/demote.mc"
 
 lang MCoreCompile =
@@ -24,7 +25,8 @@ lang MCoreCompile =
   PMExprDemote +
   MExprHoles +
   MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
-  MExprRuntimeCheck + MExprProfileInstrument
+  MExprRuntimeCheck + MExprProfileInstrument +
+  OCamlTryWithWrap
 end
 
 let pprintMcore = lam ast.
@@ -66,8 +68,9 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- If option --typecheck, type check the AST
     let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
 
-    -- If --debug has been enabled, instrument runtime safety checks in AST.
-    -- This includes for example bounds checking on sequence operations.
+    -- If --runtime-checks is set, runtime safety checks are instrumented in
+    -- the AST. This includes for example bounds checking on sequence
+    -- operations.
     let ast = if options.runtimeChecks then injectRuntimeChecks ast else ast in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
@@ -81,6 +84,7 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
+      , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
       , compileOcaml = ocamlCompile options sourcePath
       }
 
