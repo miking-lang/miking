@@ -52,7 +52,8 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
       let table = tuneFileReadTable tuneFile in
       let ast = symbolize ast in
       let ast = normalizeTerm ast in
-      insert [] table ast
+      match colorCallGraph [] ast with (env, ast) in
+      insert env table ast
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 

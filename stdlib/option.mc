@@ -156,20 +156,8 @@ let optionMapM: (a -> Option b) -> [a] -> Option [b] = lam f. lam l.
   in
   g l []
 
--- Equality function used in the tests that follow. It is needed because no
--- default equality can be derived for options, and this file cannot include
--- seq.mc because that would lead to a cyclic dependency.
-recursive let _eqintseq = lam a. lam b.
-  match (a,b) with ([],[]) then true
-  else match (a,b) with ([h1]++t1,[h2]++t2) then
-    if eqi h1 h2 then _eqintseq t1 t2 else false
-  else never
-end
-
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
-using optionEq _eqintseq
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
-using optionEq _eqintseq
 
 -- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
 -- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
