@@ -33,6 +33,15 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
+-- Converting between List and Rope
+let toRope = lam seq.
+  createRope (length seq) (lam i. get seq i)
+
+let toList = lam seq.
+  createList (length seq) (lam i. get seq i)
+
+utest toRope (toList [1,2,3]) with [1,2,3]
+
 -- Maps
 let mapOption
   : (a -> Option b)
@@ -64,10 +73,9 @@ let for_
 
 -- In contrast to map, mapReverse is tail recursive.
 let mapReverse = lam f. lam lst.
-  foldl (lam acc. lam x. cons (f x) acc) [] lst
+  foldl (lam acc. lam x. cons (f x) acc) (toList []) lst
 
-utest mapReverse (lam x. addi x 1) [10,20,30] with [31,21,11]
-
+utest toRope (mapReverse (lam x. addi x 1) [10,20,30]) with [31,21,11]
 
 -- Folds
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)

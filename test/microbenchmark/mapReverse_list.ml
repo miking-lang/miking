@@ -1,4 +1,4 @@
-let mapf n = List.map (( + ) 1) (List.init n (fun i -> i))
+let mapf n = List.rev_map (( + ) 1) (List.init n (fun i -> i))
 
 let _ = Benchmarkcommon.repeat (fun () -> mapf Map_n.n)
 
