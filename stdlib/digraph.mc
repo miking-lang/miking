@@ -167,7 +167,7 @@ let digraphAddUpdateVertex = lam v. lam g : Digraph v l.
     let m = mapRemove v g.adj in
     let m = foldl (lam acc. lam v2.
             let edgeLst = mapLookupOrElse (lam. error "Lookup failed") v2 acc in
-            let newEdgeLst = map (lam e. if (digraphEqv g) v e.0 then (v,e.1) else e) edgeLst in
+            let newEdgeLst = map (lam e:(v,l). if (digraphEqv g) v e.0 then (v,e.1) else e) edgeLst in
             mapInsert v2 newEdgeLst acc) m (mapKeys m) in
     {g with adj = mapInsert v edgeList m}
   else
