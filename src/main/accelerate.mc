@@ -210,7 +210,7 @@ let buildConfigCuda : Unit -> (String, String) = lam.
     "_build/default:",
     "\tmkdir -p $@",
     "libgpu.a: gpu.cu",
-    "\tnvcc -I`ocamlc -where` $^ -lib -o $@"] in
+    "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@"] in
   (dunefile, makefile)
 
 
