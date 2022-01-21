@@ -114,7 +114,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
   | CFoldl _ -> FCFoldl ()
-  | c -> infoErrorExit info "Constant cannot be accelerated"
+  | c -> infoErrorExit info "Constant is not supported by the Futhark backend"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
@@ -152,12 +152,14 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
     FTyArrow {from = generateType env t.from, to = generateType env t.to,
               info = t.info}
   | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
-  | TyUnknown t -> infoErrorExit t.info "Unknown type cannot be accelerated"
-  | TyVariant t -> infoErrorExit t.info "Variant type cannot be accelerated"
+  | TyUnknown t ->
+    infoErrorExit t.info "Unknown types are not supported by the Futhark backend"
+  | TyVariant t ->
+    infoErrorExit t.info "Variant types are not supported by the Futhark backend"
   | t ->
     let tyStr = use MExprPrettyPrint in type2str t in
-    infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
-                                    "' cannot be accelerated"])
+    infoErrorExit (infoTy t)
+      (join ["Terms of type '" tyStr "' are not supported by the Futhark backend"])
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
@@ -186,15 +188,15 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       let tyStr = use MExprPrettyPrint in type2str targetTy in
       infoErrorExit t.info (join ["Term of non-record type '", tyStr,
                                   "' cannot be matched with record pattern"])
-  | p -> infoErrorExit (infoPat p) "Pattern cannot be accelerated"
+  | p ->
+    infoErrorExit (infoPat p) "Pattern is not supported by Futhark backend"
 end
 
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                             FutharkTypeGenerate + FutharkTypePrettyPrint
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
-    infoErrorExit t.info (join ["Acceleration is not supported for this kind ",
-                                "of match expression"])
+    infoErrorExit t.info (join ["Match expression not supported by the Futhark backend"])
 
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmMatch ({pat = PatBool {val = true}} & t) ->
@@ -490,8 +492,9 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2, ty = t.ty,
                     info = t.info}
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
-  | t -> infoErrorExit (infoTm t) "Term cannot be translated into Futhark"
+    infoErrorExit t.info "Recursive functions are not supported by the Futhark backend"
+  | t ->
+    infoErrorExit (infoTm t) "Term is not supported by the Futhark backend"
 end
 
 recursive let _extractTypeParams = use FutharkAst in
@@ -556,15 +559,15 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     in
     cons decl (generateToplevel env t.inexpr)
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions cannot be accelerated"
+    infoErrorExit t.info "Recursive functions are not supported by the Futhark backend"
   | TmExt t ->
-    infoErrorExit t.info "External functions cannot be accelerated"
+    infoErrorExit t.info "External functions are not supported by the Futhark backend"
   | TmUtest t ->
     -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
     -- are removed/replaced in earlier stages of the compilation.
-    infoErrorExit t.info "Utests cannot be accelerated"
+    infoErrorExit t.info "Utests are not supported by the Futhark backend"
   | TmConDef t ->
-    infoErrorExit t.info "Constructor definitions cannot be accelerated"
+    infoErrorExit t.info "Constructor definitions are not supported by the Futhark backend"
   | _ -> []
 end
 

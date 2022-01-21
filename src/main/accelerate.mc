@@ -125,7 +125,7 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Map Name AccelerateData -> Expr -> CProg =
+let cudaTranslation : Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam accelerateData. lam ast.
   use MExprCudaCompile in
   let entryPoints : Set Name = mapMap (lam. ()) accelerateData in
