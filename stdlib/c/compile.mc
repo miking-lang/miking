@@ -841,7 +841,9 @@ lang MExprCCompile = MExprAst + CAst
   | CSubf _ -> CEBinOp { op = COSub {}, lhs = head args, rhs = last args }
   | CMuli _
   | CMulf _ -> CEBinOp { op = COMul {}, lhs = head args, rhs = last args }
+  | CDivi _
   | CDivf _ -> CEBinOp { op = CODiv {}, lhs = head args, rhs = last args }
+  | CModi _ -> CEBinOp { op = COMod {}, lhs = head args, rhs = last args }
   | CEqi _
   | CEqf _  -> CEBinOp { op = COEq {},  lhs = head args, rhs = last args }
   | CLti _
