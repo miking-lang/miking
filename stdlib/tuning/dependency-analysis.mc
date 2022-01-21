@@ -21,13 +21,21 @@ type DependencyGraph = {
 
   -- Maps a base measuring point to the closest enclosing function in the call
   -- graph in which it occurs
-  meas2fun: Map Name Name
+  meas2fun: Map Name Name,
+
+  -- The offset (from zero) of the indices of the measuring points
+  offset: Int,
+
+  -- The total number of context-sensitive measuring points
+  nbrMeas: Int
 }
 
 let _dependencyGraphEmpty =
   { graph = digraphEmpty subi (lam. lam. false) -- disable graph labels
   , measuringPoints = mapEmpty nameCmp
   , meas2fun = mapEmpty nameCmp
+  , offset = 0
+  , nbrMeas = 0
   }
 
 lang DependencyAnalysis = MExprHoleCFA
@@ -41,7 +49,13 @@ lang DependencyAnalysis = MExprHoleCFA
       buildDependencies callGraphTop env cfaGraph.data
         (_dependencyGraphEmpty, nHoles) t
     with ((graph, _), _) in
-    graph
+    let graph : DependencyGraph = graph in
+    let nMeas = mapFoldWithKey (
+      lam acc. lam. lam tree.
+        addi acc (length (prefixTreeGetIds tree []))
+      ) 0 graph.measuringPoints in
+    { { graph with offset = nHoles }
+              with nbrMeas = nMeas }
 
   sem buildDependencies (cur : NameInfo) (env : CallCtxEnv)
                         (data : Map Name (Set AbsVal))
@@ -216,7 +230,9 @@ type TestResult = {
   measuringPoints : [(String,[[String]])],
   -- Edges in the bipartite graph
   deps : [((String,[String]), (String,[String]))],
-  meas2fun : [(String,String)]
+  meas2fun : [(String,String)],
+  offset : Int,
+  nbrMeas : Int
 } in
 
 -- Helper for eqTest, to check that provided measuring contexts match.
@@ -335,6 +351,12 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
   let mapRhs = mapFromSeq cmpString rhs.meas2fun in
   let meas2funEq = mapEq eqString mapLhs mapRhs in
 
+  -- Offset matches
+  let offsetEq = eqi dep.offset rhs.offset in
+
+  -- nbrMeas matches
+  let nbrMeasEq = eqi dep.nbrMeas rhs.nbrMeas in
+
   let failPrint = lam.
     printLn "Measuring contexts";
     mapMapWithKey (lam k. lam v.
@@ -366,7 +388,13 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
    printLn "meas2fun";
    mapMapWithKey (lam k. lam v.
      printLn (join [nameGetStr k, " ", nameGetStr v])
-   ) dep.meas2fun
+   ) dep.meas2fun;
+
+   printLn "offset";
+   printLn (int2string dep.offset);
+
+   printLn "nbrMeas";
+   printLn (int2string dep.nbrMeas)
   in
 
 
@@ -376,6 +404,8 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
   , (edgesExist, "\nFAIL: Some edge does not exist")
   , (nbrEdgesMatch, "\nFAIL: Number of edges mismatch")
   , (meas2funEq, "\nFAIL: Mismatch in meas2fun")
+  , (offsetEq, "\nFAIL: Mismatch in offset")
+  , (nbrMeasEq, "\nFAIL: Mismatch in nbrMeas")
   ] in
 
   iter (lam b: (Bool, String, Unit -> Unit).
@@ -409,7 +439,9 @@ utest test debug t with {
   , ( ("h", []), ("b", []) )
   , ( ("h1", []), ("c", []) )
   ],
-  meas2fun = [("a","top"), ("b","top"), ("c","top")]
+  meas2fun = [("a","top"), ("b","top"), ("c","top")],
+  offset = 2,
+  nbrMeas = 3
 } using eqTest in
 
 let t = parse
@@ -452,7 +484,9 @@ utest test debug t with {
   , ( ("h", ["e","a"]), ("cc", ["e"]) )
   , ( ("h", ["e","b"]), ("cc", ["e"]) )
   ],
-  meas2fun = [("g","top"), ("cc","f2")]
+  meas2fun = [("g","top"), ("cc","f2")],
+  offset = 4,
+  nbrMeas = 3
 } using eqTest in
 
 let t = parse
@@ -480,7 +514,9 @@ f4 ()
 utest test debug t with {
   measuringPoints = [ ("m", [["d","c","a"]]) ],
   deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ],
-  meas2fun = [("m","f1")]
+  meas2fun = [("m","f1")],
+  offset = 1,
+  nbrMeas = 1
 } using eqTest in
 
 -- Recursive lets
@@ -502,7 +538,9 @@ c
 utest test debug t with {
   measuringPoints = [ ("b", [["c"]]) ],
   deps = [ (("h", ["c","a"]), ("b", ["c"])) ],
-  meas2fun = [("b","f2")]
+  meas2fun = [("b","f2")],
+  offset = 1,
+  nbrMeas = 1
 } using eqTest in
 
 ()
