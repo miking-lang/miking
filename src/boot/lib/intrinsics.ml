@@ -30,7 +30,7 @@ module Mseq = struct
     | _ ->
         raise (Invalid_argument "Mseq.concat")
 
-  let get = function Rope s -> Rope.get_array s | List s -> List.nth s
+  let get s = match s with Rope s -> Rope.get_array s | List s -> List.nth s
 
   let set s i v =
     match s with

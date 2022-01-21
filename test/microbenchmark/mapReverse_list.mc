@@ -7,7 +7,7 @@ include "map_n.ml"
 mexpr
 
 let mapf = lam n.
-  map (addi 1) (createList n (lam i. i))
+  mapReverse (addi 1) (createList n (lam i. i))
 in
 
 -- iter (lam x. print (int2string x)) (mapf n);

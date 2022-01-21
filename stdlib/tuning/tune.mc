@@ -144,7 +144,8 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
         match lookup with Table {table = table} then
           let f = lam t1. lam t2.
             switch (t1, t2)
-            case (Success {ms = ms1}, Success {ms = ms2}) then addf ms1 ms2
+            case (Success {ms = ms1}, Success {ms = ms2}) then
+              Success {ms = addf ms1 ms2}
             case ((Error e, _) | (_, Error e)) then Error e
             end
           in
