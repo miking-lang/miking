@@ -184,7 +184,7 @@ let buildConfigFutharkCPU : Unit -> (String, String) = lam.
 
 let buildConfigFutharkGPU : Unit -> (String, String) = lam.
   let dunefile = strJoin "\n" [
-    duneBuildBase (),
+    duneBuildBase "",
     "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [

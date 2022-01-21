@@ -36,7 +36,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst
       match mapLookup arg.ty t.revTypeEnv with Some seqId then
         CTyVar {id = seqId}
       else error (concat "Could not find sequence type for argument"
-                         (nameGetStr arg.id)) in
+                         (nameGetStr arg.ident)) in
     let declIntermediateStmt = CSDef {
       ty = seqType,
       id = Some intermId,
