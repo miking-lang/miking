@@ -150,8 +150,7 @@ let duneBuildBase = lam ocamloptFlags.
     "(env",
     "  (dev",
     "    (flags (:standard -w -a))",
-    "    (ocamlc_flags (-without-runtime))",
-    join ["    (ocamlopt_flags (:standard", ocamloptFlags, "))))"],
+    "    (ocamlc_flags (-without-runtime))))",
     "(executable",
     "  (name program)",
     "  (libraries boot)"]
@@ -175,7 +174,7 @@ let duneFutharkCFiles = lam. "(foreign_stubs (language c) (names gpu wrap)))"
 
 let buildConfigFutharkCPU : Unit -> (String, String) = lam.
   let dunefile = strJoin "\n" [
-    duneBuildBase "",
+    duneBuildBase (),
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
     futharkDuneBuildMakeRule (),
@@ -184,7 +183,7 @@ let buildConfigFutharkCPU : Unit -> (String, String) = lam.
 
 let buildConfigFutharkGPU : Unit -> (String, String) = lam.
   let dunefile = strJoin "\n" [
-    duneBuildBase "",
+    duneBuildBase (),
     "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
@@ -195,20 +194,16 @@ let buildConfigFutharkGPU : Unit -> (String, String) = lam.
     futharkGPUBuildMakeRule ()] in
   (dunefile, makefile)
 
-let buildConfigCuda : Unit -> (String, String) = lam.
+let buildConfigCuda : String -> (String, String) = lam dir.
   let dunefile = strJoin "\n" [
-    duneBuildBase " libgpu.a",
-    "  (link_flags -cclib -lcudart -cclib -lstdc++))"] in
+    duneBuildBase (),
+    "  (link_flags -I ", dir, " -cclib -lgpu -cclib -lcudart -cclib -lstdc++))"] in
   let makefile = strJoin "\n" [
     "export LIBRARY_PATH=/usr/local/cuda/lib64",
     "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
     "export CPATH=/usr/local/cuda/include",
-    "program.exe: program.ml _build/default/libgpu.a",
+    "program.exe: program.ml libgpu.a",
     "\tdune build $@",
-    "_build/default/libgpu.a: libgpu.a _build/default",
-    "\tcp $< $@",
-    "_build/default:",
-    "\tmkdir -p $@",
     "libgpu.a: gpu.cu",
     "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@"] in
   (dunefile, makefile)
@@ -266,13 +261,14 @@ let mergePrograms : CudaProg -> CudaProg -> CudaProg =
 let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
   lam options. lam sourcePath. lam ocamlTops. lam wrapperProg. lam cudaProg.
   let cudaProg = mergePrograms cudaProg wrapperProg in
+  let td = sysTempDirMake () in
+  let dir = sysTempDirName td in
   match
     if options.cpuOnly then
       error "CUDA backend does not support CPU compilation"
-    else buildConfigCuda ()
+    else buildConfigCuda dir
   with (dunefile, makefile) in
-  let td = sysTempDirMake () in
-  writeFiles (sysTempDirName td) [
+  writeFiles dir [
     ("program.ml", pprintOCamlTops ocamlTops),
     ("program.mli", ""),
     ("gpu.cu", pprintCudaAst cudaProg),
