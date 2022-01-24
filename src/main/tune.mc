@@ -7,12 +7,18 @@ include "options.mc"
 include "sys.mc"
 include "parse.mc"
 include "tuning/context-expansion.mc"
-include "tuning/tune.mc"
 include "tuning/hole-cfa.mc"
+include "tuning/dependency-analysis.mc"
+include "tuning/instrumentation.mc"
+include "tuning/tune.mc"
 
 lang MCoreTune =
-  BootParser + MExprHoles + MExprTune
+  BootParser +
+  MExprHoles + MExprHoleCFA + DependencyAnalysis + Instrumentation + MExprTune
 end
+
+-- NOTE(Linnea,2022-01-24): Causes a slowdown in boot strapping.
+lang ANFAll = HoleAst + MExprANFAll
 
 let tableFromFile = lam file.
   if fileExists file then tuneFileReadTable file
@@ -24,10 +30,12 @@ let dumpTable = lam file. lam env. lam table.
 
 let dependencyAnalysis =
   lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
-    use MExprHoleCFA in
+    use MCoreTune in
     if options.dependencyAnalysis then
-      let ast = normalizeTerm ast in
+      let ast = use ANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
+      let dep = analyzeDependency env cfaRes ast in
+      match instrument env dep ast with (res, ast) in
       ast
     else ast
 
