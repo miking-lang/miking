@@ -1,20 +1,13 @@
--- input:
--- Map Name (Set (Name, Set Int))
--- Expr -> set of  (hole, set of contexts)
-
--- probably also prefix tree for producing switch statements
-
--- CallCtxEnv for id:s
-
--- TODO:
--- Log is an array with nbrMeasPoints elements
--- Each entry is a tuple (nbrCalls,totalTime) spent in that measuring point
--- The measuring points are indexed with offset nbrHoles (store offset in dep?)
--- In the end, the log is written to a file
--- The instrumentation returns both this file name and the instrumented program
--- Format of the file is CSV?
--- index,nbrCalls,totalTime
--- The tests should read the file and check some values
+-- Performs instrumentation of a program with holes.
+--
+-- The input is the call context environment and the dependency graph, and the
+-- output is an instrumented program where each measuring point has been wrapped
+-- in time measurements. Upon running the instrumented program, a CSV file with
+-- the three columns 'id', 'nbrRuns', and 'totalMs' is outputted, where:
+-- * 'id' is the identifier of the measuring points (as defined in dependency
+-- * graph);
+-- * 'nbrRuns' is the number of times the measuring point was executed; and
+-- * 'totalMs' is the total time in ms spent in the measuring point.
 
 include "ast.mc"
 include "dependency-analysis.mc"
@@ -37,21 +30,25 @@ type InstrumentedResult = {
 lang Instrumentation = LetAst
   sem instrument (env : CallCtxEnv) (graph : DependencyGraph) =
   | t ->
+    -- Create header
     match instrumentHeader (graph.nbrMeas, graph.offset)
     with (header, logName, funName) in
+    -- Create footer
     let tempDir = sysTempDirMake () in
     let fileName = sysJoinPath tempDir ".profile" in
     match instrumentFooter fileName graph.offset with (footer, dumpToFile) in
+    -- Instrument the program
     let expr = instrumentH env graph funName t in
+
+    -- Put together the final AST
     let ast =
       bindall_
       [ header
-      , bindSemi_ (instrumentH env graph funName t) footer
+      , bindSemi_ expr footer
       , app_ (nvar_ dumpToFile) (nvar_ logName)
       ]
     in
-    --let ast = bindKeepLast_ (instrumentH env graph funName t) footer in
-    let res = {fileName = fileName, cleanup = lam. sysTempDirDelete tempDir} in
+    let res = {fileName = fileName, cleanup = sysTempDirDelete tempDir} in
     (res, ast)
 
   -- Recursive helper for instrument
@@ -76,7 +73,6 @@ lang Instrumentation = LetAst
         (funName : Name) (expr : Expr) (inexpr : Expr) =
   | idExpr ->
     let startName = nameSym "s" in
-
     let endName = nameSym "e" in
     bindall_
     [ nulet_ startName (wallTimeMs_ uunit_)
@@ -196,13 +192,10 @@ lang TestLang = Instrumentation + GraphColoring + MExprHoleCFA + ContextExpand +
 
 mexpr
 
--- TODO
--- read profile result
--- provide context and value in table
-
 use TestLang in
 
-let debug = true in
+let debug = false in
+let epsilon = 10.0 in
 
 let debugPrintLn = lam debug.
   if debug then printLn else lam x. x
@@ -219,21 +212,43 @@ type TestResult = {
   epsilon : Float
 } in
 
-let test = lam debug. lam table. lam expr.
+let resolveId =
+  lam point : (String, [String]). lam m : Map k (PTree NameInfo). lam keyToStr : k -> String.
+    let strMap = mapFoldWithKey (lam acc. lam k : Name. lam v.
+        mapInsert (keyToStr k) v acc
+      ) (mapEmpty cmpString) m
+    in
+    let tree = mapFindExn point.0 strMap in
+    let binds : [(Int,[NameInfo])] = prefixTreeBindings tree in
+    let strBinds = map (lam b : (Int, [NameInfo]).
+      (map nameInfoGetStr b.1, b.0)
+    ) binds in
+    assocLookupOrElse {eq=eqSeq eqString}
+      (lam. error (concat "Path missing: " (strJoin " " point.1)))
+      (reverse point.1) strBinds
+in
+
+let test = lam debug. lam table : [((String,[String]),Expr)]. lam expr.
   debugPrintLn debug "\n-------- ORIGINAL PROGRAM --------";
   debugPrintLn debug (expr2str expr);
 
   -- Use small ANF first, needed for context expansion
   let tANFSmall = use MExprHoles in normalizeTerm expr in
 
-  -- Do graph coloring to get context information (throw away the AST).
-  match colorCallGraph [] tANFSmall with (env, _) in
+  -- Do graph coloring to get context information
+  match colorCallGraph [] tANFSmall with (env, ast) in
 
   -- Initialize the graph data
   let graphData = graphDataFromEnv env in
+  debugPrintLn debug "\n-------- COLORED PROGRAM --------";
+  debugPrintLn debug (expr2str ast);
+  debugPrintLn debug "";
 
   -- Apply full ANF
-  let tANF = normalizeTerm tANFSmall in
+  let tANF = normalizeTerm ast in
+  debugPrintLn debug "\n-------- ANF --------";
+  debugPrintLn debug (expr2str tANF);
+  debugPrintLn debug "";
 
   -- Perform CFA
   let cfaRes : CFAGraph = cfaData graphData tANF in
@@ -242,13 +257,19 @@ let test = lam debug. lam table. lam expr.
   let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
 
   -- Do instrumentation
-  match instrument env dep expr with (res, ast) in
+  match instrument env dep tANF with (res, ast) in
   debugPrintLn debug "\n-------- INSTRUMENTED PROGRAM --------";
   debugPrintLn debug (expr2str ast);
   debugPrintLn debug "";
 
   -- Context expansion with lookup table
-  let ast = insert env table ast in
+  let tableMap : Map Int Expr = foldl (
+    lam acc. lam t : ((String,[String]),Expr).
+      let id = resolveId t.0 env.contexts nameInfoGetStr in
+      mapInsert id t.1 acc
+    ) (mapEmpty subi) table in
+  let lookupTable = mapValues tableMap in
+  let ast = insert env lookupTable ast in
   debugPrintLn debug "\n-------- CONTEXT EXPANSION --------";
   debugPrintLn debug (expr2str ast);
   debugPrintLn debug "";
@@ -279,31 +300,18 @@ let test = lam debug. lam table. lam expr.
   (log, env, dep)
 in
 
-let resolvePoint = lam point : (String, [String]). lam graph : DependencyGraph.
-  let strMap = mapFoldWithKey (lam acc. lam k : Name. lam v.
-      mapInsert (nameGetStr k) v acc
-    ) (mapEmpty cmpString) graph.measuringPoints
-  in
-  let tree = mapFindExn point.0 strMap in
-  let binds : [(Int,[NameInfo])] = prefixTreeBindings tree in
-  let strBinds = map (lam b : (Int, [NameInfo]).
-    (map nameInfoGetStr b.1, b.0)
-  ) binds in
-  assocLookupOrElse {eq=eqSeq eqString}
-    (lam. error (concat "Path missing: " (strJoin " " point.1)))
-    point.1 strBinds
-in
-
 let eqTest = lam lhs. lam rhs : TestResult.
   match lhs with (log, env, graph) in
   let env : CallCtxEnv = env in
   let graph : DependencyGraph = graph in
   let res : [Bool] = map (
     lam d : {point : (String,[String]), nbrRuns : Int, totalTime : Float}.
-      let id : Int = resolvePoint d.point graph in
+      let id : Int = resolveId d.point graph.measuringPoints nameGetStr in
       match mapLookup id log with Some (nbrRunsReal, totalTimeReal) then
         if eqi d.nbrRuns nbrRunsReal then
-          if eqfApprox rhs.epsilon totalTimeReal d.totalTime then true
+          -- Allow one epsilon of error for each run
+          let margin = mulf (int2float nbrRunsReal) rhs.epsilon in
+          if eqfApprox margin totalTimeReal d.totalTime then true
           else error (join
           [ "Total time mismatch: got ", float2string totalTimeReal
           , ", expected ", float2string d.totalTime
@@ -314,6 +322,8 @@ let eqTest = lam lhs. lam rhs : TestResult.
             [ "Number of runs do not match: got ", int2string nbrRunsReal
             , ", expected ", int2string d.nbrRuns
             , " for id ", int2string id
+            , " with name ", d.point.0
+            , " and path ", strJoin " " d.point.1
             ])
       else error (concat "Unknown id: " (int2string id))
   ) rhs.data
@@ -324,7 +334,7 @@ in
 let t = parse
 "
 let foo = lam x.
-  let h = hole (IntRange {default = 1, min = 1, max = 1}) in
+  let h = hole (IntRange {default = 200, min = 1, max = 200}) in
   let a = sleepMs h in
   let b = sleepMs h in
   (a,b)
@@ -337,91 +347,136 @@ in
 foo ()
 " in
 
-utest test debug [int_ 200, true_] t with {
-  data = [ {point = ("a",[]), nbrRuns = 1, totalTime = 200.0}
-         , {point = ("b",[]), nbrRuns = 1, totalTime = 200.0}
+utest test debug [(("h", []), int_ 50), (("h1", []), true_)] t with {
+  data = [ {point = ("a",[]), nbrRuns = 1, totalTime = 50.0}
+         , {point = ("b",[]), nbrRuns = 1, totalTime = 50.0}
          , {point = ("c",[]), nbrRuns = 0, totalTime = 0.}
          ],
-  epsilon = 10.0
+  epsilon = epsilon
 }
 using eqTest in
 
--- -- Context-sensitive, but only one context
--- let t = parse
--- "
--- let f1 = lam x.
---   let h = hole (Boolean {default = true, depth = 3}) in
---   let m = sleepMs h in
---   m
--- in
--- let f2 = lam x.
---   let a = f1 x in
---   a
--- in
--- let f3 = lam x. lam y.
---   let c = f2 x in
---   c
--- in
--- let f4 = lam x.
---   let d = f3 x 2 in
---   d
--- in
--- f4 ()
--- " in
+-- Context-sensitive, but only one context
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (IntRange {default = 200, min = 1, max = 200, depth = 3}) in
+  let m = sleepMs h in
+  m
+in
+let f2 = lam x.
+  let a = f1 x in
+  a
+in
+let f3 = lam x. lam y.
+  let c = f2 x in
+  c
+in
+let f4 = lam x.
+  let d = f3 x 2 in
+  d
+in
+f4 ()
+" in
 
--- utest test debug t with () in
+utest test debug [(("h", ["d", "c", "a"]), int_ 40)] t with {
+  data = [ {point = ("m", ["d", "c", "a"]), nbrRuns = 1, totalTime = 40.0} ],
+  epsilon = epsilon
+}
+using eqTest in
 
--- -- Context-sensitive, several contexts
--- let t = parse
--- "
--- let f1 = lam x.
---   let h = hole (Boolean {default = true, depth = 2}) in
---   h
--- in
--- let f2 = lam x.
---   let a = f1 x in
---   let b = f1 x in
---   let c = addi a b in
---   let cc = sleepMs c in
---   c
--- in
--- let f3 = lam f.
---   f 1
--- in
--- let d = f2 1 in
--- let e = f2 1 in
--- let f = addi d e in
--- let g = sleepMs f in
--- let i = f3 f2 in
--- ()
--- " in
+-- Context-sensitive, several contexts
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (IntRange {default = 300, min = 1, max = 500, depth = 2}) in
+  h
+in
+let f2 = lam x.
+  let a = f1 x in
+  let b = f1 x in
+  let c = addi a b in
+  let cc = sleepMs c in
+  c
+in
+let f3 = lam f.
+  f 1
+in
+let f4 = lam.
+  let d = f2 1 in
+  let e = f2 1 in
+  let f = addi d e in
+  let g = sleepMs f in
+  ()
+in
+let f5 = lam.
+  let i = f2 1 in
+  i
+in
+f4 ();
+f5 ();
+f5 ()
+" in
 
--- utest test debug t with () in
+let table =
+[ ( ("h", ["d","a"]), int_ 20)
+, ( ("h", ["d","b"]), int_ 40)
+, ( ("h", ["e","a"]), int_ 60)
+, ( ("h", ["e","b"]), int_ 80)
+, ( ("h", ["i","a"]), int_ 30)
+, ( ("h", ["i","b"]), int_ 50)
+]
+in
+utest test debug table t with {
+  data =
+  [ {point = ("cc", ["d"]), nbrRuns = 1, totalTime = 60.0}
+  , {point = ("cc", ["e"]), nbrRuns = 1, totalTime = 140.0}
+  , {point = ("cc", ["i"]), nbrRuns = 2, totalTime = 160.0}
+  , {point = ("g", []), nbrRuns = 1, totalTime = 200.0}
+  ],
+  epsilon = epsilon
+} using eqTest in
 
--- -- Context-sensitive, longer contexts
--- let t = parse
--- "
--- let f1 = lam x.
---   let h = hole (Boolean {default = true, depth = 3}) in
---   let m = sleepMs h in
---   m
--- in
--- let f2 = lam x.
---   let a = f1 x in
---   a
--- in
--- let f3 = lam x. lam y.
---   let c = f2 x in
---   c
--- in
--- let f4 = lam x.
---   let d = f3 x 2 in
---   let e = f3 x 2 in
---   d
--- in
--- f4 ()
--- " in
 
--- utest test debug t with () in
+-- Context-sensitive, longer contexts
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 3}) in
+  let m = sleepMs h in
+  m
+in
+let f2 = lam x.
+  let a = f1 x in
+  a
+in
+let f3 = lam x. lam y.
+  let c = f2 x in
+  c
+in
+let f4 = lam x.
+  let d = f3 x 2 in
+  d
+in
+let f5 = lam x.
+  let e = f3 x 2 in
+  e
+in
+f4 ();
+f4 ();
+f5 ()
+" in
+
+let table =
+[ ( ("h", ["d","c","a"]), int_ 30 )
+, ( ("h", ["e","c","a"]), int_ 40 )
+] in
+utest test debug table t with {
+  data =
+  [ {point = ("m", ["d", "c", "a"]), nbrRuns = 2, totalTime = 60.0}
+  , {point = ("m", ["e", "c", "a"]), nbrRuns = 1, totalTime = 40.0}
+  ],
+  epsilon = epsilon
+} using eqTest in
 
 ()
