@@ -173,6 +173,43 @@ lang DependencyAnalysis = MExprHoleCFA
 
   | t ->
     smapAccumL_Expr_Expr (buildDependencies cur env data) acc t
+
+  -- Compute the dependency graph as if all holes are dependent on each other,
+  -- without actually analyzing dependency. The whole AST becomes one single
+  -- measuring point, which is dependent on all holes. Returns both the graph
+  -- and the modified AST.
+  sem assumeFullDependency (env : CallCtxEnv) =
+  | t ->
+    -- Put the entire AST in the body of a let-expression: the measuring point
+    let m = nameSym "m" in
+    let t = nulet_ m t in
+    let t = bind_ t (nvar_ m) in
+
+    -- Build the dependency graph
+    let dep = _dependencyGraphEmpty in
+    let nHoles = length env.idx2hole in
+    -- Identifier of measuring point
+    let mId = nHoles in
+    let holeIds = create nHoles (lam i. i) in
+    -- Build bipartite graph
+    let vertices = cons mId holeIds in
+    let edges = map (lam h. (h,mId,0)) holeIds in
+    let graphGraph = digraphAddEdges edges (
+      digraphAddVertices vertices dep.graph)
+    in
+    -- Create empty context tree (measuring point has no context)
+    let tree = prefixTreeEmpty nameInfoCmp (nameSym "", NoInfo ()) in
+    let tree = prefixTreeInsert nameInfoCmp tree mId [] in
+    let measuringPoints = mapInsert m tree dep.measuringPoints in
+    -- Closest enclosing call graph function is top-level
+    let meas2fun = mapInsert m (nameInfoGetName callGraphTop) dep.meas2fun in
+    let dep = {{{{{dep with graph = graphGraph}
+                       with measuringPoints = measuringPoints}
+                       with meas2fun = meas2fun}
+                       with offset = nHoles}
+                       with nbrMeas = 1} in
+    (dep, t)
+
 end
 
 lang TestLang = DependencyAnalysis + MExprHoleCFA + GraphColoring + BootParser +
@@ -188,7 +225,8 @@ let parse = lam str.
   symbolize ast
 in
 
-let test = lam debug: Bool. lam t: Expr.
+let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
+  lam debug: Bool. lam full: Bool. lam t: Expr.
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
 
@@ -214,15 +252,25 @@ let test = lam debug: Bool. lam t: Expr.
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
-      let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
+      match
+        if full then assumeFullDependency env tANF
+        else (analyzeDependency env cfaRes tANF, tANF)
+      with (dep, ast)
+      in
       printLn "\n--- DEPENDENCY GRAPH ---";
       digraphPrintDot dep.graph int2string int2string;
+      let dep : DependencyGraph = dep in
       (dep, env)
 
     else
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData graphData tANF in
-      let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
+      match
+        if full then assumeFullDependency env tANF
+        else (analyzeDependency env cfaRes tANF, tANF)
+      with (dep, ast)
+      in
+      let dep : DependencyGraph = dep in
       (dep, env)
 in
 
@@ -432,7 +480,7 @@ in
 foo ()
 " in
 
-utest test debug t with {
+utest test debug false t with {
   measuringPoints = [ ("a",[[]]), ("b",[[]]), ("c",[[]])],
   deps =
   [ ( ("h", []), ("a", []) )
@@ -468,7 +516,7 @@ let i = f3 f2 in
 ()
 " in
 
-utest test debug t with {
+utest test debug false t with {
   measuringPoints =
   [ ("g", [[]])
   , ("cc", [["d"],["e"]])
@@ -511,7 +559,7 @@ in
 f4 ()
 " in
 
-utest test debug t with {
+utest test debug false t with {
   measuringPoints = [ ("m", [["d","c","a"]]) ],
   deps = [ (("h", ["d","c","a"]), ("m", ["d","c","a"])) ],
   meas2fun = [("m","f1")],
@@ -535,11 +583,50 @@ let c = f2 1 2 in
 c
 " in
 
-utest test debug t with {
+utest test debug false t with {
   measuringPoints = [ ("b", [["c"]]) ],
   deps = [ (("h", ["c","a"]), ("b", ["c"])) ],
   meas2fun = [("b","f2")],
   offset = 1,
+  nbrMeas = 1
+} using eqTest in
+
+-- Tests with full dependency
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 2}) in
+  h
+in
+let f2 = lam x.
+  let a = f1 x in
+  let b = f1 x in
+  let c = addi a b in
+  let cc = sleepMs c in
+  c
+in
+let f3 = lam f.
+  f 1
+in
+let d = f2 1 in
+let e = f2 1 in
+let f = addi d e in
+let g = sleepMs f in
+let i = f3 f2 in
+()
+" in
+
+utest test debug true t with {
+  measuringPoints =
+  [ ("m", [[]]) ],
+  deps =
+  [ ( ("h", ["d","a"]), ("m", []) )
+  , ( ("h", ["d","b"]), ("m", []) )
+  , ( ("h", ["e","a"]), ("m", []) )
+  , ( ("h", ["e","b"]), ("m", []) )
+  ],
+  meas2fun = [("m","top")],
+  offset = 4,
   nbrMeas = 1
 } using eqTest in
 
