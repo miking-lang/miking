@@ -99,8 +99,15 @@ let digraphEdgeEq =
       (g.eql e1.2 e2.2)
 
 -- Check whether g has edge e.
-let digraphHasEdge = lam e. lam g.
-  any (digraphEdgeEq g e) (digraphEdges g)
+let digraphHasEdge = lam e : DigraphEdge v l. lam g : Digraph v l.
+  match e with (from, to, lbl) in
+  match mapLookup from g.adj with Some edgesFrom then
+    any (lam t : (v, l).
+      if eqi 0 (digraphCmpv g t.0 to) then
+        g.eql t.1 lbl
+      else false
+    ) edgesFrom
+  else false
 
 -- Check whether graph g has all the edges in es.
 let digraphHasEdges = lam es. lam g.
