@@ -403,6 +403,23 @@ lang OCamlPrettyPrint =
     match pprintCode indent env expr with (env, code) then
       (env, concat code ";;")
     else never
+  | OTopTryWith {try = try, arms = arms} ->
+    let i = pprintIncr 0 in
+    let ii = pprintIncr i in
+    let iii = pprintIncr ii in
+    match pprintCode i env try with (env, try) in
+    let pprintArm = lam env. lam arm. match arm with (pat, expr) then
+      match getPatStringCode ii env pat with (env, pat) then
+        match printParen iii env expr with (env, expr) then
+          (env, join [pprintNewline i, "| ", pat, " ->", pprintNewline iii, expr])
+        else never
+      else never
+    else never in
+    match mapAccumL pprintArm env arms with (env, arms) then
+      (env, join ["try", pprintNewline i, try, pprintNewline 0,
+                  "with", join arms])
+    else never
+
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVarExt {ident = ident} -> (env, ident)

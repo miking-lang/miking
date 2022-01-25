@@ -68,7 +68,7 @@ lang TuneBase = HoleAst
         let msg = strJoin " "
         [ "Program returned non-zero exit code during tuning\n"
         , "hole values:\n", _tuneTable2str table, "\n"
-        , "command line arguments:", strJoin " " args, "\n"
+        , "command line arguments:", args, "\n"
         , "stdout:", res.stdout, "\n"
         , "stderr:", res.stderr
         ] in
@@ -109,7 +109,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       let incValues = map expr2str inc in
       let curValues = map expr2str cur in
       let elapsed = subf (wallTimeMs ()) (deref tuneSearchStart) in
-      printLn (join ["Iter: ", int2string iter, "\n",
+      printLn (join ["Iteration: ", int2string iter, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
                      "Current time: ", _timingResult2str curTime, "\n",
                      "Best time: ", _timingResult2str incTime, "\n",
@@ -144,7 +144,8 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
         match lookup with Table {table = table} then
           let f = lam t1. lam t2.
             switch (t1, t2)
-            case (Success {ms = ms1}, Success {ms = ms2}) then addf ms1 ms2
+            case (Success {ms = ms1}, Success {ms = ms2}) then
+              Success {ms = addf ms1 ms2}
             case ((Error e, _) | (_, Error e)) then Error e
             end
           in
@@ -188,20 +189,29 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       lam searchState.
       lam metaState.
       lam iter.
-        (if options.verbose then
-          printLn "-----------------------";
-          debugSearch searchState;
-          debugMeta metaState;
-          printLn "-----------------------";
-          flushStdout ()
+        let printState = lam header. lam searchState. lam metaState.
+          if options.verbose then
+            printLn header;
+            debugSearch searchState;
+            debugMeta metaState;
+            printLn (make (length header) '-')
+          else ()
+        in
+
+        (if eqi iter 0 then
+          printState "----- Initial state -----" searchState metaState
          else ());
+
         if stop searchState then
+          printState "----- Final state -----" searchState metaState;
           (searchState, metaState)
         else
           match minimize searchState metaState with (searchState, metaState)
-          then
+          in
+            printState (join [
+              "----- Iteration ", int2string (addi iter 1), " -----"])
+              searchState metaState;
             search stop searchState metaState (addi iter 1)
-          else never
     in
 
     -- Set up initial search state. Repeat the computation n times, where n is
@@ -364,7 +374,28 @@ lang TuneSemiExhaustive = TuneLocalSearch
                      (use MExprPrettyPrint in expr2str) prev])
 end
 
-lang TuneOneRandomNeighbour = TuneLocalSearch
+lang TuneOneRandomNeighbourModifyOne = TuneLocalSearch
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+             Table ({holes = holes, table = table} & t)}}
+    then
+      let table =
+        switch randIndex table
+        case None () then table
+        case Some i then
+          let randHole = get holes i in
+          let modifiedHole = sample randHole in
+          set table i modifiedHole
+        end
+      in iteratorFromSeq [Table {t with table = table}]
+    else never
+end
+
+lang TuneOneRandomNeighbourModifyAll = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
@@ -378,7 +409,7 @@ lang TuneOneRandomNeighbour = TuneLocalSearch
     else never
 end
 
-lang TuneManyRandomNeighbours = TuneLocalSearch
+lang TuneManyRandomNeighboursModifyAll = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
@@ -396,7 +427,7 @@ lang TuneManyRandomNeighbours = TuneLocalSearch
 end
 
 lang TuneRandomWalk = TuneLocalSearch
-                    + TuneOneRandomNeighbour
+                    + TuneOneRandomNeighbourModifyAll
                     + LocalSearchSelectRandomUniform
   syn MetaState =
   | Empty {}
@@ -410,7 +441,7 @@ lang TuneRandomWalk = TuneLocalSearch
 end
 
 lang TuneSimulatedAnnealing = TuneLocalSearch
-                            + TuneOneRandomNeighbour
+                            + TuneOneRandomNeighbourModifyOne
                             + LocalSearchSimulatedAnnealing
                             + LocalSearchSelectRandomUniform
   sem decay (searchState : SearchState) =
@@ -434,7 +465,7 @@ lang TuneSimulatedAnnealing = TuneLocalSearch
 end
 
 lang TuneTabuSearch = TuneLocalSearch
-                    + TuneManyRandomNeighbours
+                    + TuneManyRandomNeighboursModifyAll
                     + LocalSearchTabuSearch
                     + LocalSearchSelectFirst
   syn TabuSet =

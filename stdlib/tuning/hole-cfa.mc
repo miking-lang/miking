@@ -38,7 +38,7 @@ include "ast.mc"
 include "const-dep.mc"
 include "context-expansion.mc"
 
-lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
+lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity + MExprANFAll
 
   syn AbsVal =
   | AVDHole { id : Name, contexts : Set Int }
@@ -240,6 +240,15 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     ) -> infoErrorExit p.info "Pattern currently not supported"
   | _ -> []
 
+  -- NOTE(Linnea, 2021-12-17): We need to handle references, since references
+  -- are used in the graph coloring. By construction, these references
+  -- operations are free from holes, so it is safe to assume no constraints.
+  -- However, the analysis does not support references in the general case.
+  sem generateConstraintsConst (info: Info) =
+  | CRef _ -> []
+  | CModRef _ -> []
+  | CDeRef _ -> []
+
   sem generateHoleMatchConstraints (id: Name) (target: Name) =
   | pat ->
     recursive let f = lam acc. lam pat.
@@ -284,36 +293,64 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     -- Return graph
     graph
 
+  -- Extracts info from graph coloring transformation.
+  -- Type: CtxEnv -> GraphData.
+  sem graphDataFromEnv =
+  | env ->
+    -- Converts a prefix tree for a hole to a mapping from a call site to the
+    -- set of contexts that pass through the call site.
+    let treeToCallSiteCtxUnion : PTree NameInfo -> Map Name (Set Int) = lam tree.
+      match tree with Node {children = children} then
+        recursive let work = lam acc. lam children.
+          mapFoldWithKey (lam acc. lam root. lam subtree.
+            let s = match mapLookup (nameInfoGetName root) acc with Some s
+                    then s else setEmpty subi in
+            switch subtree
+            case Leaf id then
+              mapInsert (nameInfoGetName root) (setInsert id s) acc
+            case Node {ids = ids, children = children} then
+              let acc = work acc children in
+              mapInsert (nameInfoGetName root) (
+                  foldl (lam acc. lam id. setInsert id acc) s ids
+                ) acc
+            end) acc children
+        in work (mapEmpty nameCmp) children
+      else error "Missing sentinel node"
+    in
+
+    let env : CallCtxEnv = env in
+
+    -- Maps a hole to its set of contexts.
+    let contextMap : Map Name (Set Int) =
+      mapFoldWithKey
+        (lam acc : Map Name (Set Int). lam nameInfo : NameInfo.
+         lam vals : Map [NameInfo] Int.
+           mapInsert nameInfo.0 (setOfSeq subi (mapValues vals)) acc
+        ) (mapEmpty nameCmp) env.hole2idx
+    in
+    -- Maps a hole to its call site map.
+    let prefixMap : Map Name (Map Name (Set Int)) =
+      mapFoldWithKey
+        (lam acc : Map Name (Map Name (Set Int)).
+         lam nameInfo : NameInfo.
+         lam tree : Ptree NameInfo.
+           mapInsert nameInfo.0 (treeToCallSiteCtxUnion tree) acc
+        ) (mapEmpty nameCmp) env.contexts
+    in
+    CtxInfo { contextMap = contextMap, prefixMap = prefixMap }
 end
 
-lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym end
+lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym + GraphColoring
+end
+
+lang MExpr
+end
 
 mexpr
 use Test in
 
 -- Test functions --
 
--- Helper for converting info from context expansion
-let treeToMap : PTree NameInfo -> Map Name (Set Int) = lam tree.
-  match tree with Node {children = children} then
-    recursive let work = lam acc. lam children.
-      mapFoldWithKey (lam acc. lam root. lam subtree.
-        let s = match mapLookup (nameInfoGetName root) acc with Some s
-                then s else setEmpty subi in
-        switch subtree
-        case Leaf id then
-          mapInsert (nameInfoGetName root) (setInsert id s) acc
-        case Node {ids = ids, children = children} then
-          let acc = work acc children in
-          mapInsert (nameInfoGetName root) (
-              foldl (lam acc. lam id. setInsert id acc) s ids
-            ) acc
-        end) acc children
-    in work (mapEmpty nameCmp) children
-  else error "Missing sentinel node"
-in
-
--- Actual test functions
 let debug = false in
 let parse = lam str.
   let ast = parseMExprString holeKeywords str in
@@ -324,33 +361,14 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
-    -- Do context expansion to get context information (throw away the AST for
-    -- now).
-    -- TODO(Linnea,2021-12-09): Separate transformation from computing context
-    -- information.
-    match
-      use MExprHoles in
-      let res = contextExpand [] tANFSmall in
-      let env : CallCtxEnv = res.env in
-      match env with {hole2idx = hole2idx} in
-      let contextMap : Map Name (Set Int) =
-        mapFoldWithKey
-          (lam acc : Map Name (Set Int). lam nameInfo : NameInfo.
-           lam vals : Map [NameInfo] Int.
-             mapInsert nameInfo.0 (setOfSeq subi (mapValues vals)) acc
-          ) (mapEmpty nameCmp) hole2idx
-      in
-      let prefixMap : Map Name (Map Name (Set Int)) =
-        mapFoldWithKey
-          (lam acc : Map Name (Map Name (Set Int)).
-           lam nameInfo : NameInfo.
-           lam tree : Ptree NameInfo.
-             mapInsert nameInfo.0 (treeToMap tree) acc
-          ) (mapEmpty nameCmp) env.contexts
-      in (contextMap, prefixMap, hole2idx)
-    with (contextMap, prefixMap, hole2idx) in
 
-    -- Use full ANF
+    -- Do graph coloring to get context information (throw away the AST).
+    match colorCallGraph [] tANFSmall with (env, _) in
+
+    -- Initialize the graph data
+    let graphData = graphDataFromEnv env in
+
+    -- Apply full ANF
     let tANF = normalizeTerm tANFSmall in
 
     if debug then
@@ -358,11 +376,11 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
       match pprintCode 0 pprintEnvEmpty t with (_,tStr) in
       printLn "\n--- ORIGINAL PROGRAM ---";
       printLn tStr;
-      match pprintCode 0 pprintEnvEmpty tANF with (env,tANFStr) in
+      match pprintCode 0 pprintEnvEmpty tANF with (pprintEnv,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some (CtxInfo {contextMap = contextMap, prefixMap = prefixMap})) (Some env) tANF with (Some env,cfaRes) in
-      match cfaGraphToString env cfaRes with (_, resStr) in
+      match cfaDebug (Some graphData) (Some pprintEnv) tANF with (Some pprintEnv,cfaRes) in
+      match cfaGraphToString pprintEnv cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
@@ -372,20 +390,20 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in
-          (var, res, hole2idx)
+          (var, res, env.hole2idx)
         ) vars
       in avs
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData (CtxInfo {contextMap = contextMap, prefixMap = prefixMap}) tANF in
+      let cfaRes : CFAGraph = cfaData graphData tANF in
       let avs : [(String, Set AbsVal, Map NameInfo (Map [NameInfo] Int))] =
         map (lam var: String.
           let binds = mapBindings cfaRes.data in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in
-          (var, res, hole2idx)
+          (var, res, env.hole2idx)
         ) vars
       in avs
 in

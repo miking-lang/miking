@@ -8,6 +8,7 @@ include "sys.mc"
 include "parse.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune.mc"
+include "tuning/hole-cfa.mc"
 
 lang MCoreTune =
   BootParser + MExprHoles + MExprTune
@@ -20,6 +21,15 @@ let tableFromFile = lam file.
 let dumpTable = lam file. lam env. lam table.
   let destination = tuneFileName file in
   tuneFileDumpTable destination env table
+
+let dependencyAnalysis =
+  lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
+    use MExprHoleCFA in
+    if options.dependencyAnalysis then
+      let ast = normalizeTerm ast in
+      let cfaRes = cfaData (graphDataFromEnv env) ast in
+      ast
+    else ast
 
 let tune = lam files. lam options : Options. lam args.
 
@@ -42,36 +52,40 @@ let tune = lam files. lam options : Options. lam args.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
 
-    -- Context expand the holes
-    match contextExpand [] ast with
-      { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
-        env = env, tempDir = tempDir }
-    then
-      -- If option --tuned is given, then use tune file as defaults
-      let table =
-        if options.useTuned then tableFromFile (tuneFileName file) else table in
+    -- Do coloring of call graph for maintaining call context
+    match colorCallGraph [] ast with (env, ast) in
 
-      -- Compile the program and write to temporary directory
-      let binary = ocamlCompileAstWithUtests
-        {options with output = Some (sysJoinPath tempDir "tune")} file ast in
+    -- Perform dependency analysis
+    match dependencyAnalysis tuneOptions env ast with ast in
 
-      -- Do the tuning
-      let result = tuneEntry binary tuneOptions tempFile env table in
+    -- Context expand holes
+    let r : ContextExpanded = contextExpand env ast in
+    let ast = r.ast in
 
-      -- Write the best found values to filename.tune
-      tuneFileDumpTable (tuneFileName file) (Some env) result;
+    -- If option --tuned is given, then use tune file as defaults
+    let table =
+      if options.useTuned then tableFromFile (tuneFileName file) else r.table in
 
-      -- If option --compile is given, then compile the program using the
-      -- tuned values
-      (if options.compileAfterTune then
-        compile [file] {options with useTuned = true} args
-       else ());
+    -- Compile the program and write to temporary directory
+    let binary = ocamlCompileAstWithUtests
+      {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
 
-      -- If option --enable-cleanup is given, then remove the tune file
-      (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+    -- Do the tuning
+    let result = tuneEntry binary tuneOptions r.tempFile r.env r.table in
 
-      -- Clean up temporary files used during tuning
-      cleanup ()
-    else never
+    -- Write the best found values to filename.tune
+    tuneFileDumpTable (tuneFileName file) (Some r.env) result;
+
+    -- If option --compile is given, then compile the program using the
+    -- tuned values
+    (if options.compileAfterTune then
+      compile [file] {options with useTuned = true} args
+     else ());
+
+    -- If option --enable-cleanup is given, then remove the tune file
+    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+
+    -- Clean up temporary files used during tuning
+    r.cleanup ()
   in
   iter tuneFile files
