@@ -17,7 +17,6 @@ recursive let fibonacci = lam n.
 in
 
 let mapf = lam n.
-  -- let res = map (lam. fibonacci workload) (createList n (lam i. i)) in
   let res = pmap pool nThreads (lam. fibonacci workload) (createList n (lam i. i)) in
   utest length res with n using eqi in
   res
