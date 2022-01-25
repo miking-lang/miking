@@ -23,7 +23,7 @@ type InstrumentedResult = {
   -- The filename to where the profiling data is written
   fileName : String,
 
-  -- Cleanup function for removing temporary all files
+  -- Cleanup function for removing all temporary files
   cleanup : Unit -> Unit
 }
 
@@ -512,10 +512,11 @@ let table =
 , ( ("h", ["e","a"]), int_ 20)
 , ( ("h", ["e","b"]), int_ 20)
 ] in
-utest test true true table t with {
+utest test debug true table t with {
   data =
-  [ {point = ("m", []), nbrRuns = 1, totalTime = 180.0} ],
-  epsilon = epsilon
+  [ {point = ("m", []), nbrRuns = 1, totalTime = 160.0} ],
+  -- Use larger epsilon since total execution time is measured
+  epsilon = mulf 3.0 epsilon
 } using eqTest in
 
 
