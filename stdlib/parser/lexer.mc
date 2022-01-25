@@ -73,6 +73,7 @@ end
 
 -- Commbined WSAC parser for MExpr
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
+end
 
 lang EOFTokenParser = TokenParser
   syn Token =
@@ -568,6 +569,7 @@ lang Lexer
   + OperatorTokenParser + BracketTokenParser + SemiTokenParser + CommaTokenParser
   + StringTokenParser + CharTokenParser
   + HashStringTokenParser
+end
 
 -- NOTE(vipa, 2021-02-05): This is not a semantic function in a
 -- language fragment since the output for each case must be distinct

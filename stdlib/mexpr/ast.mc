@@ -1355,3 +1355,4 @@ lang MExprAst =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
   VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+end

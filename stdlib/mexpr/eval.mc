@@ -2004,6 +2004,7 @@ end
 -----------
 
 lang TestLang = MExprEval + MExprPrettyPrint + MExprEq + MExprSym
+end
 
 mexpr
 

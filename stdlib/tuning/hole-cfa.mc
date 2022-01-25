@@ -286,7 +286,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
 end
 
-lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym
+lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym end
 
 mexpr
 use Test in

@@ -461,12 +461,14 @@ lang MExprCmp =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
   ConTypeCmp + VarTypeCmp + FlexTypeCmp + AppTypeCmp + AllTypeCmp
+end
 
 -----------
 -- TESTS --
 -----------
 
 lang TestLang = MExprCmp + MExprAst
+end
 
 mexpr
 

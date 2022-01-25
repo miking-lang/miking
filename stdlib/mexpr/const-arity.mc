@@ -244,6 +244,7 @@ lang MExprArity =
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
   ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity
+end
 
 mexpr
 

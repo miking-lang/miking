@@ -14,6 +14,7 @@ let removeTypeAscription = use MExprAst in
 end
 
 lang TestLang = MExprAst + MExprEq
+end
 
 mexpr
 use TestLang in

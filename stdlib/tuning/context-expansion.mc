@@ -861,11 +861,11 @@ lang ContextExpand = HoleCallGraph + HoleAst + IntAst
     ]
 end
 
-lang MExprHoles = HoleAst + ContextExpand + MExprSym + MExprANF
+lang MExprHoles = HoleAst + ContextExpand + MExprSym + MExprANF end
 
-lang HolesPrettyPrint = MExprHoles + MExprPrettyPrint
+lang HolesPrettyPrint = MExprHoles + MExprPrettyPrint end
 
-lang TestLang = HolesPrettyPrint + MExprEq
+lang TestLang = HolesPrettyPrint + MExprEq end
 
 mexpr
 

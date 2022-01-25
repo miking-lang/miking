@@ -278,7 +278,7 @@ lang MExprCSE =
   | t -> t
 end
 
-lang TestLang = MExprCSE + MExprEq + MExprSym + MExprTypeAnnot
+lang TestLang = MExprCSE + MExprEq + MExprSym + MExprTypeAnnot end
 
 mexpr
 

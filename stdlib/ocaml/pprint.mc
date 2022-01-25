@@ -646,6 +646,7 @@ lang OCamlPrettyPrint =
 end
 
 lang TestLang = OCamlPrettyPrint + OCamlSym
+end
 
 mexpr
 use TestLang in

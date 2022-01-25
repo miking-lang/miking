@@ -179,8 +179,8 @@ lang RecLetsANFBase = ANF + RecLetsAst + LamAst
 end
 
 -- Analogous to LamANF and LamANFAll
-lang RecLetsANF = RecLetsANFBase + LamANF
-lang RecLetsANFAll = RecLetsANFBase + LamANFAll
+lang RecLetsANF = RecLetsANFBase + LamANF end
+lang RecLetsANFAll = RecLetsANFBase + LamANFAll end
 
 lang ConstANF = ANF + ConstAst
 
@@ -272,16 +272,17 @@ end
 lang MExprANFAll =
   VarANF + AppANFAll + LamANFAll + RecordANF + LetANF + TypeANF + RecLetsANFAll +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
+end
 
 -----------
 -- TESTS --
 -----------
 
-lang TestBase = MExprSym + MExprPrettyPrint
+lang TestBase = MExprSym + MExprPrettyPrint end
 
-lang TestANF = MExprANF + MExprEq
+lang TestANF = MExprANF + MExprEq end
 
-lang TestANFAll = MExprANFAll + MExprEq
+lang TestANFAll = MExprANFAll + MExprEq end
 
 mexpr
 

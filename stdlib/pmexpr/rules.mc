@@ -112,7 +112,7 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
   | t -> smap_Expr_Expr rewriteTerm t
 end
 
-lang TestLang = PMExprRewrite + MExprTypeAnnot + MExprEq + MExprPrettyPrint
+lang TestLang = PMExprRewrite + MExprTypeAnnot + MExprEq + MExprPrettyPrint end
 
 mexpr
 

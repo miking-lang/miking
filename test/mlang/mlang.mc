@@ -29,7 +29,7 @@ lang MyBool
     else eval els
 end
 
-lang ArithBool = Arith + MyBool
+lang ArithBool = Arith + MyBool end
 
 lang ArithBool2 = Arith + MyBool
   syn Expr =
@@ -63,7 +63,7 @@ lang AExtend = A
   | ACon {aextfield : Dyn}
 end
 
-lang Overlap = ArithBool + ArithBool2 + Arith
+lang Overlap = ArithBool + ArithBool2 + Arith end
 
 lang FooA
   syn Val =
@@ -81,9 +81,9 @@ lang FooB
   | B _ -> "B"
 end
 
-lang FooTrans = FooA + FooB
+lang FooTrans = FooA + FooB end
 
-lang FooCombined = FooA + FooTrans
+lang FooCombined = FooA + FooTrans end
 
 mexpr
 

@@ -675,6 +675,7 @@ lang UtestViaMatchData = UtestViaMatch + DataAst
 end
 
 lang MExprUtestViaMatch = MExprAst + UtestViaMatchInt + UtestViaMatchBool + UtestViaMatchChar + UtestViaMatchSeq + UtestViaMatchRecord + UtestViaMatchData
+end
 
 let _generateUtest = use MExprTypeAnnot in
   lam env : UtestTypeEnv.
@@ -883,6 +884,7 @@ lang MExprUtestTrans = MExprAst
 end
 
 lang TestLang = MExprUtestTrans + MExprEq + MExprTypeAnnot + MExprEval
+end
 
 mexpr
 

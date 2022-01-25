@@ -977,6 +977,7 @@ lang FutharkCWrapper =
 end
 
 lang Test = FutharkCWrapper + CProgPrettyPrint + CPrettyPrint
+end
 
 mexpr
 

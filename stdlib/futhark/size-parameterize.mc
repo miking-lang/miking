@@ -276,7 +276,7 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
     FProg {t with decls = map eliminateUnnecessarySizeParameters decls}
 end
 
-lang TestLang = FutharkSizeParameterize + FutharkPrettyPrint
+lang TestLang = FutharkSizeParameterize + FutharkPrettyPrint end
 
 mexpr
 

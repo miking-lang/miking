@@ -44,7 +44,7 @@ lang FutharkDeadcodeElimination = FutharkAst
   | FProg t -> FProg {t with decls = map deadcodeEliminationDecl t.decls}
 end
 
-lang TestLang = FutharkDeadcodeElimination + FutharkPrettyPrint
+lang TestLang = FutharkDeadcodeElimination + FutharkPrettyPrint end
 
 mexpr
 

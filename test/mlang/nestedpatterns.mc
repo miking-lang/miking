@@ -120,7 +120,7 @@ lang LexBinary = LexBase
     (prev_digits, rest)
 end
 
-lang Lexer = LexSpace + LexBinary + LexDecimal
+lang Lexer = LexSpace + LexBinary + LexDecimal end
 
 -- lang Broken
 --   sem foo =

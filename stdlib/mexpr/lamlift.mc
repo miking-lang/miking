@@ -388,6 +388,7 @@ lang MExprLambdaLift =
 end
 
 lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
+end
 
 mexpr
 

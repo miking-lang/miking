@@ -378,6 +378,7 @@ let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
 
 lang TestLang =
   MExprANF + PMExprRewrite + PMExprAst + PMExprTailRecursion + MExprPrettyPrint
+end
 
 mexpr
 

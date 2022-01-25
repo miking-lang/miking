@@ -548,7 +548,7 @@ lang TuneBinarySearch = TuneLocalSearch
 
 end
 
-lang MExprTune = MExpr + TuneBase
+lang MExprTune = MExpr + TuneBase end
 
 -- Entry point for tuning
 let tuneEntry =

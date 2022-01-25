@@ -11,7 +11,7 @@ include "info.mc"
 -- "ast-builder.mc" includes "ast.mc" though, so we can't use it inside "ast.mc",
 -- thus we create this file instead.
 
-lang TestLang = MExprAst + MExprEq
+lang TestLang = MExprAst + MExprEq end
 
 mexpr
 use TestLang in

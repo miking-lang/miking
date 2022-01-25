@@ -257,6 +257,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
 end
 
 lang TestLang = MExprProfileInstrument + MExprEval
+end
 
 mexpr
 

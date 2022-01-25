@@ -45,7 +45,7 @@ lang PMExprFunctionProperties = PMExprAst + MExprCmp
   | t -> mapLookup t neutralElementMap
 end
 
-lang TestLang = PMExprFunctionProperties + MExprCmp + MExprEq + MExprSym
+lang TestLang = PMExprFunctionProperties + MExprCmp + MExprEq + MExprSym end
 
 mexpr
 
