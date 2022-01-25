@@ -85,6 +85,7 @@ uninstall:
 test-all:\
   test-boot-all\
   test-compile\
+	test-compile-type-checked\
   test-run\
 	test-tune
 	@./make lint
@@ -109,6 +110,9 @@ test-compile: build
 
 test-compile-all: build
 	@$(MAKE) -s -f test-compile.mk all
+
+test-compile-type-checked: build
+	@$(MAKE) -s -f test-compile-type-checked.mk selected
 
 test-boot-compile-prune-utests: boot
 	@$(MAKE) -s -f test-boot-compile-prune-utests.mk selected

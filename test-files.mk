@@ -24,6 +24,10 @@ special_dependencies_files +=\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
+# Programs that should be compiled with type-checking enabled. These are
+# excluded from the default compile rules, so that we don't test them twice.
+compile_type_checked += test/mlang/type-alias.mc
+
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
@@ -53,11 +57,11 @@ run_files_exclude += test/mlang/mlang.mc
 compile_files_prune =\
 	$(filter-out $(python_files) $(compile_files_exclude), $(src_files_all))
 
-
 # Programs that we should be able to compile/test, even without utest pruning,
-# if all, except the special, external dependencies are met.
+# if all, except the special, external dependencies are met. Excludes files
+# that are to be compiled with type checking enabled.
 compile_files =\
-	$(filter-out $(special_dependencies_files), $(compile_files_prune))
+	$(filter-out $(special_dependencies_files) $(compile_type_checked), $(compile_files_prune))
 
 
 # Programs the we should be able to interpret/test with the interpreter.
