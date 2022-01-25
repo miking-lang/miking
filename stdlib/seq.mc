@@ -33,6 +33,15 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
+-- Converting between List and Rope
+let toRope = lam seq.
+  createRope (length seq) (lam i. get seq i)
+
+let toList = lam seq.
+  createList (length seq) (lam i. get seq i)
+
+utest toRope (toList [1,2,3]) with [1,2,3]
+
 -- Maps
 let mapOption
   : (a -> Option b)
@@ -64,10 +73,9 @@ let for_
 
 -- In contrast to map, mapReverse is tail recursive.
 let mapReverse = lam f. lam lst.
-  foldl (lam acc. lam x. cons (f x) acc) [] lst
+  foldl (lam acc. lam x. cons (f x) acc) (toList []) lst
 
-utest mapReverse (lam x. addi x 1) [10,20,30] with [31,21,11]
-
+utest toRope (mapReverse (lam x. addi x 1) [10,20,30]) with [31,21,11]
 
 -- Folds
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
@@ -106,20 +114,37 @@ utest range (negi 1) 6 2 with [(negi 1), 1, 3, 5] using eqSeq eqi
 utest range (negi 1) 2 1 with [negi 1, 0, 1] using eqSeq eqi
 utest range 5 3 1 with [] using eqSeq eqi
 
-let zipWith = lam f. lam seq1. lam seq2.
-  recursive let work = lam a. lam s1. lam s2.
-    if or (null s1) (null s2) then a
-    else
-      work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
-  in
-  work [] seq1 seq2
+-- `foldl2 f acc seq1 seq2` left folds `f` over the first
+-- min(`length seq1`, `length seq2`) elements in `seq1` and `seq2`, accumuating
+-- on `acc`.
+recursive
+let foldl2 : all a. all b. all c. (a -> b -> c -> a) -> a -> [b] -> [c] -> a =
+  lam f. lam acc. lam seq1. lam seq2.
+    let g = lam acc : (a, [b]). lam x2.
+      match acc with (acc, [x1] ++ xs1) in (f acc x1 x2, xs1)
+    in
+    if geqi (length seq1) (length seq2) then
+      match foldl g (acc, seq1) seq2 with (acc, _) in acc
+    else foldl2 (lam acc. lam x1. lam x2. f acc x2 x1) acc seq2 seq1
+end
+
+utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2, 3] [4, 5, 6]
+with [(1, 4), (2, 5), (3, 6)]
+utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2] [4, 5, 6]
+with [(1, 4), (2, 5)]
+utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2, 3] [4, 5]
+with [(1, 4), (2, 5)]
+
+-- zips
+let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
+  lam f. foldl2 (lam acc. lam x1. lam x2. snoc acc (f x1 x2)) []
 
 utest zipWith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6]
 utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
 utest zipWith addi [] [] with [] using eqSeq eqi
 
-let zip : [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
+let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps
 let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
@@ -145,8 +170,33 @@ with (9, [2,3,4])
 utest mapAccumR (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
 with ([1,2,3], [1,2,3])
 
-let unzip : [(a, b)] -> ([a], [b]) =
+let unzip : all a. all b. [(a, b)] -> ([a], [b]) =
   mapAccumL (lam l. lam p : (a, b). (snoc l p.0, p.1)) []
+
+-- `iter2 f seq1 seq1` iterativly applies `f` to the first
+-- min(`length seq1`, `length seq2`) elements in `seq1` and `seq2`.
+let iter2 : all a. all b. (a -> b -> ()) -> [a] -> [b] -> () =
+  lam f. lam seq1. lam seq2.
+    let f = lam x : (a, b). match x with (x1, x2) in f x1 x2 in
+    iter f (zip seq1 seq2)
+
+utest
+  let r = ref [] in
+  let s1 = [1, 2, 3, 4] in
+  let s2 = [0, 1, 2, 3] in
+  let f = lam x1. lam x2. modref r (snoc (deref r) (subi x1 x2)) in
+  utest iter2 f s1 s2 with () in
+  deref r
+with [1, 1, 1, 1]
+
+utest
+  let r = ref [] in
+  let s1 = [1, 2, 3, 4, 5] in
+  let s2 = [0, 1, 2, 3] in
+  let f = lam x1. lam x2. modref r (snoc (deref r) (subi x1 x2)) in
+  utest iter2 f s1 s2 with () in
+  deref r
+with [1, 1, 1, 1]
 
 -- Predicates
 recursive
@@ -414,13 +464,23 @@ utest
   match gti (seqCmp subi [1,2] [1,1]) 0 with true then true else false
   with true
 
--- Select an element uniformly at random
-let randElem = lam seq.
+-- Select an index uniformly at random.
+let randIndex : [a] -> Option Int = lam seq.
   match seq with [] then None ()
-  else Some (get seq (randIntU 0 (length seq)))
+  else Some (randIntU 0 (length seq))
 
-utest randElem [] with None () using optionEq eqi
-utest randElem [1] with Some 1 using optionEq eqi
+utest randIndex [] with None ()
+utest randIndex [1] with Some 0
+utest
+  match randIndex [1,2] with Some (0 | 1) then true else false
+  with true
+
+-- Select an element uniformly at random.
+let randElem : [a] -> Option a = lam seq.
+  optionMap (get seq) (randIndex seq)
+
+utest randElem [] with None ()
+utest randElem [1] with Some 1
 utest
   match randElem [1,2] with Some (1 | 2) then true else false
   with true

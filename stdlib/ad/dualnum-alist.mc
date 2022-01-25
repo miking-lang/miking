@@ -29,18 +29,22 @@ let _termRemoveEpsilon = lam e : Eps. lam t : DualNumTerm.
 let _termHasAnyEpsilon = lam t : DualNumTerm. not (setIsEmpty (_termEpsilons t))
 let _termHasEpsilon = lam e. lam t. setMem e (_termEpsilons t)
 
+-- generate a unique epsilon
+let dualGenEpsilon : Unit -> Eps = gensym
+
 -- epsilons are un-ordered
-let dualnumLtE : Eps -> Eps -> Bool = lam. lam. true
+let dualLtE : Eps -> Eps -> Bool = lam. lam. true
+let dualEqE : Eps -> Eps -> Bool = eqsym
 
 -- packs a floating point number in a DualNumber
-let dualnumNum : Float -> DualNum =
+let dualnumCreatePrimal : a -> DualNum =
 lam x. [(setEmpty _cmpEpsilon, x)]
 
 -- false if x' = 0 in x+ex'
 let dualnumIsDualNum : DualNum -> Bool = any _termHasAnyEpsilon
 
 -- x if x' = 0 otherwise x+ex'
-let dualnumDNum : Eps -> DualNum -> DualNum -> DualNum =
+let dualnumCreateDual : Eps -> DualNum -> DualNum -> DualNum =
 lam e. lam x. lam xp. concat x (map (_termAddEpsilon e) xp)
 
 -- e in x+ex'
@@ -55,7 +59,7 @@ let dualnumPrimal : Eps -> DualNum -> DualNum =
 lam e. filter (lam t. not (_termHasEpsilon e t))
 
 -- x in x+e1(x+e2(x+e3(...)))
-let dualnumPrimalDeep : DualNum -> Float =
+let dualnumPrimalDeep : DualNum -> a =
 lam n.
   -- NOTE(oerikss, 2021-10-11): Exactly one element in the association list
   -- fulfills this predicate by construction.
@@ -66,22 +70,16 @@ lam n.
 let dualnumPertubation : Eps -> DualNum -> DualNum =
 lam e. lam n.
   let ts = map (_termRemoveEpsilon e) (filter (_termHasEpsilon e) n) in
-  match ts with [] then dualnumNum 0. else ts
-
--- generate a unique epsilon
-let dualnumGenEpsilon : Unit -> Eps = gensym
-
--- Equality function for epsilon
-let dualnumEqEpsilon : Eps -> Eps -> Bool = eqsym
+  match ts with [] then dualnumCreatePrimal 0. else ts
 
 -- Structural equality function for dual numbers
-let dualnumEq : (a -> a -> Bool) -> DualNum -> DualNum -> Bool =
+let dualnumEq : (Float -> Float -> Bool) -> DualNum -> DualNum -> Bool =
   lam eq.
   recursive let recur = lam n1. lam n2.
     if and (dualnumIsDualNum n1) (dualnumIsDualNum n2) then
       let e1 = dualnumEpsilon n1 in
       let e2 = dualnumEpsilon n2 in
-      if dualnumEqEpsilon e1 e2 then
+      if dualEqE e1 e2 then
         if recur (dualnumPrimal e1 n1) (dualnumPrimal e2 n2) then
           recur (dualnumPertubation e1 n1) (dualnumPertubation e2 n2)
         else false
@@ -92,8 +90,8 @@ let dualnumEq : (a -> a -> Bool) -> DualNum -> DualNum -> Bool =
   in recur
 
 -- String representation of dual number
-let dualnumToString : DualNum -> String =
-lam n.
+let dualnumToString : (a -> String) -> DualNum -> String =
+lam pri2str. lam n.
   strJoin "+"
     (map
       (lam t : DualNumTerm.
@@ -101,7 +99,7 @@ lam n.
           join
             (snoc
               (map (lam e. join ["(", int2string (sym2hash e), ")"]) es)
-              (float2string x))
+              (pri2str x))
         else never)
       n)
 
@@ -109,9 +107,9 @@ lam n.
 -- ALIASES --
 -------------
 
-let _num = dualnumNum
-let _dnum = dualnumDNum
-let _ltE = dualnumLtE
+let _num = dualnumCreatePrimal
+let _dnum = dualnumCreateDual
+let _ltE = dualLtE
 let _isDualNum = dualnumIsDualNum
 let _epsilon = dualnumEpsilon
 let _primal = dualnumPrimal
@@ -180,7 +178,7 @@ type FloatFun = Float -> Float
 -- lifts unary real operator to nested dual-numbers
 -- f : real operator
 -- dfdx : lifted derivative of f
-let dualnumLift1 : DualNumFun1 -> DualNumFun1 -> DualNumFun1 =
+let dualnumLift1 : FloatFun -> DualNumFun1 -> DualNumFun1 =
 lam f. lam dfdx.
   recursive let self = lam p.
     if _isDualNum p then
@@ -198,15 +196,15 @@ lam f. lam dfdx.
 
 mexpr
 
-let num = dualnumNum in
-let dnum = dualnumDNum in
+let num = dualnumCreatePrimal in
+let dnum = dualnumCreateDual in
 
 let eq = dualnumEq eqf in
 
-let e0 = dualnumGenEpsilon () in
-let e1 = dualnumGenEpsilon () in
-let e2 = dualnumGenEpsilon () in
-let e3 = dualnumGenEpsilon () in
+let e0 = dualGenEpsilon () in
+let e1 = dualGenEpsilon () in
+let e2 = dualGenEpsilon () in
+let e3 = dualGenEpsilon () in
 
 let num0 = num 0. in
 let num1 = num 1. in

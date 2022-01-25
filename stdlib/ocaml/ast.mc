@@ -15,6 +15,7 @@ lang OCamlTopAst
   | OTopLet { ident : Name, tyBody: Type, body : Expr }
   | OTopRecLets { bindings : [OCamlTopBinding] }
   | OTopExpr { expr : Expr }
+  | OTopTryWith { try : Expr, arms : [(Pat, Expr)] }
 end
 
 lang OCamlRecord
