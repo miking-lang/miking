@@ -15,12 +15,10 @@ include "graph-coloring.mc"
 type LookupTable = [Expr]
 
 type ContextExpanded =
-{ ast : Expr             -- The context-expanded AST
-, table : LookupTable    -- The initial lookup table
+{ table : LookupTable    -- The initial lookup table
 , tempDir : String       -- The temporary directory
 , tempFile : String      -- The file from which hole values are read
 , cleanup : Unit -> Unit -- Removes all temporary files from the disk
-, env : CallCtxEnv       -- Call context environment
 }
 
 -- Generate code for looking up a value of a hole depending on its call history
@@ -77,13 +75,11 @@ lang ContextExpand = HoleAst
     let tempDir = sysTempDirMake () in
     let tuneFile = sysJoinPath tempDir ".tune" in
     let ast = _wrapReadFile env tuneFile ast in
-    { ast = ast
-    , table = _initAssignments env
-    , tempDir = tempDir
-    , tempFile = tuneFile
-    , cleanup = sysTempDirDelete tempDir
-    , env = env
-    }
+    ( { table = _initAssignments env
+      , tempDir = tempDir
+      , tempFile = tuneFile
+      , cleanup = sysTempDirDelete tempDir
+      }, ast )
 
   -- 'insert public table t' replaces the holes in expression 't' by the values
   -- in 'table'
@@ -317,10 +313,10 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
        printLn (expr2str ast)
      else ());
     match colorCallGraph [] ast with (env, ast) in
-    let res = contextExpand env ast in
+    match contextExpand env ast with (res, ast) in
     (if debug then
        printLn "-------- AFTER CONTEXT EXPANSION --------";
-       printLn (expr2str res.ast)
+       printLn (expr2str ast)
      else ());
 
     -- Convert map to lookup table, use default for no value provided
@@ -354,7 +350,7 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
     in
     dumpTable lookupTable;
     use MExprEval in
-    let s = expr2str (eval { env = mapEmpty nameCmp } res.ast) in
+    let s = expr2str (eval { env = mapEmpty nameCmp } ast) in
 
     -- Clean up and return result
     res.cleanup ();

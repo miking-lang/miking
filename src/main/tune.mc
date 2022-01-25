@@ -28,16 +28,16 @@ let dumpTable = lam file. lam env. lam table.
   let destination = tuneFileName file in
   tuneFileDumpTable destination env table
 
-let dependencyAnalysis =
+let dependencyAnalysis
+  : TuneOptions -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
   lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.dependencyAnalysis then
       let ast = use ANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
       let dep = analyzeDependency env cfaRes ast in
-      match instrument env dep ast with (res, ast) in
-      ast
-    else ast
+      (dep, ast)
+    else assumeFullDependency env ast
 
 let tune = lam files. lam options : Options. lam args.
 
@@ -64,11 +64,13 @@ let tune = lam files. lam options : Options. lam args.
     match colorCallGraph [] ast with (env, ast) in
 
     -- Perform dependency analysis
-    match dependencyAnalysis tuneOptions env ast with ast in
+    match dependencyAnalysis tuneOptions env ast with (dep, ast) in
 
-    -- Context expand holes
-    let r : ContextExpanded = contextExpand env ast in
-    let ast = r.ast in
+    -- Instrument the program
+    match instrument env dep ast with (instRes, ast) in
+
+    -- Context expand the holes
+    match contextExpand env ast with (r, ast) in
 
     -- If option --tuned is given, then use tune file as defaults
     let table =
@@ -79,10 +81,10 @@ let tune = lam files. lam options : Options. lam args.
       {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
 
     -- Do the tuning
-    let result = tuneEntry binary tuneOptions r.tempFile r.env r.table in
+    let result = tuneEntry binary tuneOptions env dep instRes r in
 
     -- Write the best found values to filename.tune
-    tuneFileDumpTable (tuneFileName file) (Some r.env) result;
+    tuneFileDumpTable (tuneFileName file) (Some env) result;
 
     -- If option --compile is given, then compile the program using the
     -- tuned values
@@ -94,6 +96,7 @@ let tune = lam files. lam options : Options. lam args.
     (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
 
     -- Clean up temporary files used during tuning
-    r.cleanup ()
+    r.cleanup ();
+    instRes.cleanup ()
   in
   iter tuneFile files
