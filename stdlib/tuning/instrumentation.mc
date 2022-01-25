@@ -188,7 +188,7 @@ end
 
 lang TestLang = Instrumentation + GraphColoring + MExprHoleCFA + ContextExpand +
                 DependencyAnalysis + BootParser + MExprSym + MExprPrettyPrint +
-                MExprEval
+                MExprANFAll + MExprEval
 
 mexpr
 
@@ -228,7 +228,7 @@ let resolveId =
       (reverse point.1) strBinds
 in
 
-let test = lam debug. lam table : [((String,[String]),Expr)]. lam expr.
+let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. lam expr.
   debugPrintLn debug "\n-------- ORIGINAL PROGRAM --------";
   debugPrintLn debug (expr2str expr);
 
@@ -254,10 +254,13 @@ let test = lam debug. lam table : [((String,[String]),Expr)]. lam expr.
   let cfaRes : CFAGraph = cfaData graphData tANF in
 
   -- Perform dependency analysis
-  let dep : DependencyGraph = analyzeDependency env cfaRes tANF in
+  match
+    if full then assumeFullDependency env tANF
+    else (analyzeDependency env cfaRes tANF, tANF)
+  with (dep, ast) in
 
   -- Do instrumentation
-  match instrument env dep tANF with (res, ast) in
+  match instrument env dep ast with (res, ast) in
   debugPrintLn debug "\n-------- INSTRUMENTED PROGRAM --------";
   debugPrintLn debug (expr2str ast);
   debugPrintLn debug "";
@@ -347,7 +350,7 @@ in
 foo ()
 " in
 
-utest test debug [(("h", []), int_ 50), (("h1", []), true_)] t with {
+utest test debug false [(("h", []), int_ 50), (("h1", []), true_)] t with {
   data = [ {point = ("a",[]), nbrRuns = 1, totalTime = 50.0}
          , {point = ("b",[]), nbrRuns = 1, totalTime = 50.0}
          , {point = ("c",[]), nbrRuns = 0, totalTime = 0.}
@@ -379,7 +382,7 @@ in
 f4 ()
 " in
 
-utest test debug [(("h", ["d", "c", "a"]), int_ 40)] t with {
+utest test debug false [(("h", ["d", "c", "a"]), int_ 40)] t with {
   data = [ {point = ("m", ["d", "c", "a"]), nbrRuns = 1, totalTime = 40.0} ],
   epsilon = epsilon
 }
@@ -427,7 +430,7 @@ let table =
 , ( ("h", ["i","b"]), int_ 50)
 ]
 in
-utest test debug table t with {
+utest test debug false table t with {
   data =
   [ {point = ("cc", ["d"]), nbrRuns = 1, totalTime = 60.0}
   , {point = ("cc", ["e"]), nbrRuns = 1, totalTime = 140.0}
@@ -471,12 +474,49 @@ let table =
 [ ( ("h", ["d","c","a"]), int_ 30 )
 , ( ("h", ["e","c","a"]), int_ 40 )
 ] in
-utest test debug table t with {
+utest test debug false table t with {
   data =
   [ {point = ("m", ["d", "c", "a"]), nbrRuns = 2, totalTime = 60.0}
   , {point = ("m", ["e", "c", "a"]), nbrRuns = 1, totalTime = 40.0}
   ],
   epsilon = epsilon
 } using eqTest in
+
+-- Tests with full dependency
+let t = parse
+"
+let f1 = lam x.
+  let h = hole (Boolean {default = true, depth = 2}) in
+  h
+in
+let f2 = lam x.
+  let a = f1 x in
+  let b = f1 x in
+  let c = addi a b in
+  let cc = sleepMs c in
+  c
+in
+let f3 = lam f.
+  f 1
+in
+let d = f2 1 in
+let e = f2 1 in
+let f = addi d e in
+let g = sleepMs f in
+()
+" in
+
+let table =
+[ ( ("h", ["d","a"]), int_ 20)
+, ( ("h", ["d","b"]), int_ 20)
+, ( ("h", ["e","a"]), int_ 20)
+, ( ("h", ["e","b"]), int_ 20)
+] in
+utest test true true table t with {
+  data =
+  [ {point = ("m", []), nbrRuns = 1, totalTime = 180.0} ],
+  epsilon = epsilon
+} using eqTest in
+
 
 ()
