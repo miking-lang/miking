@@ -85,7 +85,7 @@ uninstall:
 test-all:\
   test-boot-all\
   test-compile\
-	test-compile-type-checked\
+  test-compile-type-checked\
   test-run\
 	test-tune
 	@./make lint

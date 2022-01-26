@@ -245,7 +245,8 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
         if eq_info fi1 fi2 then Some (fi1, ty1)
         else
           raise_error fi1
-            ( "Type alias '" ^ Ustring.to_utf8 name ^ "' was redefined at "
+            ( "Conflicting definition of type alias '" ^ Ustring.to_utf8 name
+            ^ "' found at "
             ^ Ustring.to_utf8 (info2str fi2) )
   in
   { inters= Record.merge merge_inter i1 i2
