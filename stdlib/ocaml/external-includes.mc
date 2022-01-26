@@ -11,6 +11,8 @@ include "ext/async-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
+include "multicore/mutex.ext-ocaml.mc"
+include "multicore/cond.ext-ocaml.mc"
 include "ipopt/ipopt.ext-ocaml.mc"
 
 
@@ -32,6 +34,8 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       sundialsExtMap,
       atomicExtMap,
       threadExtMap,
+      mutexExtMap,
+      condExtMap,
       distExtMap,
       fileExtMap,
       ipoptExtMap,
