@@ -35,8 +35,10 @@ lang L4 = L3
   type A5 = (A3, T3)
 
   syn T3 =
-  | A ()
+  | A A6
   | B A5
+
+  type A6 = Float
 end
 
 mexpr
@@ -80,14 +82,14 @@ let t13 = {a1 = W (), a2 = K t} in
 utest f t13 t22 with 7 in
 
 recursive let sum_a5 : A5 -> Int = lam t : A5.
-  match t with (n, A ()) then
-    n
+  match t with (n, A f) then
+    addi n (floorfi f)
   else match t with (n, B next) then
     addi n (sum_a5 next)
   else never
 in
 
-let t : A5 = (3, B (4, B (9, A ()))) in
-utest sum_a5 t with 16 in
+let t : A5 = (3, B (4, B (9, A 2.0))) in
+utest sum_a5 t with 18 in
 
 ()
