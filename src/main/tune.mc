@@ -17,9 +17,6 @@ lang MCoreTune =
   MExprHoles + MExprHoleCFA + DependencyAnalysis + Instrumentation + MExprTune
 end
 
--- NOTE(Linnea,2022-01-24): Causes a slowdown in boot strapping.
-lang ANFAll = HoleAst + MExprANFAll
-
 let tableFromFile = lam file.
   if fileExists file then tuneFileReadTable file
   else error (join ["Tune file ", file, " does not exist"])
@@ -33,7 +30,7 @@ let dependencyAnalysis
   lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.dependencyAnalysis then
-      let ast = use ANFAll in normalizeTerm ast in
+      let ast = use HoleANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
       let dep = analyzeDependency env cfaRes ast in
       (dep, ast)
@@ -58,7 +55,7 @@ let tune = lam files. lam options : Options. lam args.
     (if options.debugParse then printLn (expr2str ast) else ());
 
     let ast = symbolize ast in
-    let ast = normalizeTerm ast in
+    let ast = use HoleANF in normalizeTerm ast in
 
     -- Do coloring of call graph for maintaining call context
     match colorCallGraph [] ast with (env, ast) in
