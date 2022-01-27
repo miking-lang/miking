@@ -196,6 +196,7 @@ use TestLang in
 
 let debug = false in
 let epsilon = 10.0 in
+let epsilonEnabled = false in
 
 let debugPrintLn = lam debug.
   if debug then printLn else lam x. x
@@ -312,6 +313,7 @@ let eqTest = lam lhs. lam rhs : TestResult.
       let id : Int = resolveId d.point graph.measuringPoints nameGetStr in
       match mapLookup id log with Some (nbrRunsReal, totalTimeReal) then
         if eqi d.nbrRuns nbrRunsReal then
+          if not epsilonEnabled then true else
           -- Allow one epsilon of error for each run
           let margin = mulf (int2float nbrRunsReal) rhs.epsilon in
           if eqfApprox margin totalTimeReal d.totalTime then true
