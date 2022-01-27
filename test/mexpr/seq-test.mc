@@ -53,6 +53,13 @@ utest
   [get s 0, get s 1, get s 2]
 with [0, 1, 2] in
 
+-- 'isList s' and 'isRope s' check if the sequence is a list or a rope,
+-- respectively.
+utest isList (createList 3 (lam i. i)) with true in
+utest isList (createRope 3 (lam i. i)) with false in
+utest isRope (createRope 3 (lam i. i)) with true in
+utest isRope (createList 3 (lam i. i)) with false in
+
 -- 'length s' returns the length of a sequence (or a string)
 utest length [] with 0 in
 utest length [4,5,1,7,9] with 5 in

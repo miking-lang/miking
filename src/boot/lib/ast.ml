@@ -128,6 +128,8 @@ and const =
   | Ccreate of int option
   | CcreateList of int option
   | CcreateRope of int option
+  | CisList
+  | CisRope
   | Clength
   | Cconcat of tm Mseq.t option
   | Cget of tm Mseq.t option
@@ -587,6 +589,8 @@ let const_has_side_effect = function
   | Ccreate _
   | CcreateList _
   | CcreateRope _
+  | CisList
+  | CisRope
   | Clength
   | Cconcat _
   | Cget _

@@ -7,6 +7,10 @@ module Mseq = struct
 
   let create_list n f = List (List.init n f)
 
+  let is_rope s = match s with Rope _ -> true | _ -> false
+
+  let is_list s = match s with List _ -> true | _ -> false
+
   let empty_rope = Rope Rope.empty_array
 
   let empty_list = List []

@@ -672,6 +672,8 @@ utest cmpConst (CFoldr {}) (CFoldr {}) with 0 in
 utest cmpConst (CCreate {}) (CCreate {}) with 0 in
 utest cmpConst (CCreateList {}) (CCreateList {}) with 0 in
 utest cmpConst (CCreateRope {}) (CCreateRope {}) with 0 in
+utest cmpConst (CIsList {}) (CIsList {}) with 0 in
+utest cmpConst (CIsRope {}) (CIsRope {}) with 0 in
 utest cmpConst (CSplitAt {}) (CSplitAt {}) with 0 in
 utest cmpConst (CSubsequence {}) (CSubsequence {}) with 0 in
 
