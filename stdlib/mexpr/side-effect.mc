@@ -118,9 +118,7 @@ lang MExprSideEffect =
   | TmLam t ->
     if acc then true
     else if lambdaCounting then false
-    else
-      
-      exprHasSideEffectH env lambdaCounting false t.body
+    else exprHasSideEffectH env lambdaCounting false t.body
   | TmConst t -> if acc then true else constHasSideEffect t.val
   | t -> if acc then true else sfold_Expr_Expr (exprHasSideEffectH env lambdaCounting) false t
 
@@ -227,7 +225,7 @@ let bindings = bindall_ [
   nulet_ b (nulam_ x (addi_ (nvar_ x) (deref_ (nvar_ x)))),
   nulet_ c (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y)))),
   appf2_ (nvar_ c) (int_ 2) (app_ (nvar_ b) (int_ 3))] in
-let env = constructSideEffectEnv bindings in
+let env : SideEffectEnv = constructSideEffectEnv bindings in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [a, b] using eqSeq nameEq in
 utest mapToSeq arityId with [(b, 1), (c, 2)] using eqSeq eqArityEntry in
@@ -247,7 +245,7 @@ let reclets = bindall_ [
   nulet_ y (app_ (nvar_ b) (int_ 3)),
   nulet_ z (app_ (nvar_ a) (int_ 2)),
   int_ 0] in
-let env = constructSideEffectEnv reclets in
+let env : SideEffectEnv = constructSideEffectEnv reclets in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [b, c, y, d] using eqSeq nameEq in
 utest mapToSeq arityId with [(a, 1), (b, 1), (c, 1)] using eqSeq eqArityEntry in
@@ -260,7 +258,7 @@ let exts = bindall_ [
   nulet_ x (app_ (nvar_ a) (int_ 4)),
   nulet_ y (app_ (nvar_ b) (int_ 3)),
   addi_ (nvar_ x) (nvar_ y)] in
-let env = constructSideEffectEnv exts in
+let env : SideEffectEnv = constructSideEffectEnv exts in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [b, y] using eqSeq nameEq in
 utest mapToSeq arityId with [(a, 1), (b, 1)] using eqSeq eqArityEntry in
@@ -272,7 +270,7 @@ let t = bind_
       (nulet_ b (nulam_ y (deref_ (nvar_ y))))
       (nvar_ x))))
   (app_ (nvar_ a) (ref_ (int_ 2))) in
-let env = constructSideEffectEnv t in
+let env : SideEffectEnv = constructSideEffectEnv t in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [a, b] using eqSeq nameEq in
 utest mapToSeq arityId with [(a, 1), (b, 1)] using eqSeq eqArityEntry in
