@@ -23,9 +23,9 @@ type Env = [(Name, Expr)]
 
 let evalEnvEmpty = createList 0 (lam. (nameNoSym "", unit_))
 
-let lookupEnv = lam id. lam env. assocSeqLookup {eq=nameEq} id env
+let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEq} id env
 
-let insertEnv = lam id. lam e. lam env. assocSeqInsert id e env
+let evalEnvInsert = lam id. lam e. lam env. assocSeqInsert id e env
 
 let _eqn =
   lam n1. lam n2.
@@ -79,7 +79,7 @@ end
 lang VarEval = Eval + VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
-    match lookupEnv ident ctx.env with Some t then
+    match evalEnvLookup ident ctx.env with Some t then
       match t with TmApp {lhs = TmFix _} then
         eval ctx t
       else t
@@ -100,7 +100,7 @@ lang LamEval = Eval + LamAst + VarEval + AppEval
   | TmClos {ident : Name, body : Expr, env : Env}
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmClos t -> eval {ctx with env = insertEnv t.ident arg t.env} t.body
+  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg t.env} t.body
 
   sem eval (ctx : {env : Env}) =
   | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
@@ -110,7 +110,7 @@ end
 lang LetEval = Eval + LetAst + VarEval
   sem eval (ctx : {env : Env}) =
   | TmLet t ->
-    eval {ctx with env = insertEnv t.ident (eval ctx t.body) ctx.env}
+    eval {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
 
@@ -121,7 +121,7 @@ lang FixEval = Eval + FixAst + LamEval + UnknownTypeAst
       let ident = clos.ident in
       let body = clos.body in
       let env =
-        insertEnv ident (TmApp {lhs = TmFix (),
+        evalEnvInsert ident (TmApp {lhs = TmFix (),
                                 rhs = TmClos clos,
                                 ty = tyunknown_,
                                 info = NoInfo()}) clos.env in
@@ -199,7 +199,7 @@ lang RecLetsEval =
                                ty = tyunknown_,
                                info = NoInfo()} in
     eval {ctx with env =
-            insertEnv lst_name (TmApp {lhs = TmFix (),
+            evalEnvInsert lst_name (TmApp {lhs = TmFix (),
                                        rhs = unfixed_tuple,
                                        ty = tyunknown_,
                                        info = NoInfo()})
@@ -1875,7 +1875,7 @@ end
 
 lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PatNamed {ident = PName name} -> Some (insertEnv name t env)
+  | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
@@ -1901,7 +1901,7 @@ lang SeqEdgePatEval = SeqEdgePat + SeqAst
         let paired = zipWith pair (concat preTm postTm) (concat pre post) in
         let env = optionFoldlM (lam env. lam pair : (a,b). tryMatch env pair.0 pair.1) env paired in
         match middle with PName name then
-          optionMap (insertEnv name (seq_ tms)) env
+          optionMap (evalEnvInsert name (seq_ tms)) env
         else match middle with PWildcard () then
           env
         else never else never else never
