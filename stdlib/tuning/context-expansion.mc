@@ -354,7 +354,7 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
     in
     dumpTable lookupTable;
     use MExprEval in
-    let s = expr2str (eval { env = mapEmpty nameCmp } res.ast) in
+    let s = expr2str (eval { env = evalEnvEmpty } res.ast) in
 
     -- Clean up and return result
     res.cleanup ();
