@@ -38,7 +38,7 @@ include "ast.mc"
 include "const-dep.mc"
 include "context-expansion.mc"
 
-lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity + MExprANFAll
+lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
   syn AbsVal =
   | AVDHole { id : Name, contexts : Set Int }
