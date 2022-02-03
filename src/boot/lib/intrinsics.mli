@@ -29,6 +29,12 @@ module Mseq : sig
    * complexity of f. *)
   val create_list : int -> (int -> 'a) -> 'a t
 
+  (* Complexity: O(1) *)
+  val is_rope : 'a t -> bool
+
+  (* Complexity: O(1) *)
+  val is_list : 'a t -> bool
+
   (* Defaults to empty_rope, see its documentation. *)
   val empty : 'a t
 

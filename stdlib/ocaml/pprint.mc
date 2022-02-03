@@ -226,6 +226,8 @@ lang OCamlPrettyPrint =
   | CCreate _ -> intrinsicOpSeq "create"
   | CCreateList _ -> intrinsicOpSeq "create_list"
   | CCreateRope _ -> intrinsicOpSeq "create_rope"
+  | CIsList _ -> intrinsicOpSeq "is_list"
+  | CIsRope _ -> intrinsicOpSeq "is_rope"
   | CLength _ -> intrinsicOpSeq "length"
   | CConcat _ -> intrinsicOpSeq "concat"
   | CGet _ -> intrinsicOpSeq "get"

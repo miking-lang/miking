@@ -730,6 +730,8 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CCreate _ -> "create"
   | CCreateList _ -> "createList"
   | CCreateRope _ -> "createRope"
+  | CIsList _ -> "isList"
+  | CIsRope _ -> "isRope"
   | CSplitAt _ -> "splitAt"
   | CSubsequence _ -> "subsequence"
 end

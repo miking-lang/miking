@@ -208,3 +208,7 @@ let holeIntRange_ = use HoleIntRangeAst in
          , inner = HIntRange {min = min, max = max}}
 
 lang HoleAst = HoleAstBase + HoleBoolAst + HoleIntRangeAst end
+
+lang HoleANF = HoleAst + MExprANF end
+
+lang HoleANFAll = HoleAst + MExprANFAll end

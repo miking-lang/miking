@@ -1484,6 +1484,13 @@ output of the above program might be:
 However, the values and order of the thread IDs might be different over
 different runs.
 
+#### Synchronization
+
+Externals for thread synchronization in the form of mutual exclusion locks and
+condition variables are defined in
+[multicore/mutex.mc](stdlib/multicore/mutex.mc) and
+[multicore/cond.mc](stdlib/multicore/cond.mc), respectively.
+
 ### Probability distributions
 Externals for probability distributions are defined in `stdlib/ext/dist-ext.mc`. To use these, you must install the `opam` package `owl` (i.e., `opam install owl`)
 

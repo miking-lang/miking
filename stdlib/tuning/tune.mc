@@ -52,8 +52,8 @@ lang TuneBase = HoleAst
            (file : String) (hole2idx : Map NameInfo (Map [NameInfo] Int)) =
   -- Intentionally left blank
 
-  sem time (table : LookupTable) (runner : Runner) (file : String)
-           (options : TuneOptions) (timeout : Option Float) =
+  sem measure (table : LookupTable) (runner : Runner) (file : String)
+              (options : TuneOptions) (timeout : Option Float) =
   | args ->
     let timeout = if options.exitEarly then timeout else None () in
     tuneFileDumpTable file (None ()) table;
@@ -149,7 +149,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
             case ((Error e, _) | (_, Error e)) then Error e
             end
           in
-          Runtime {time = foldr1 f (map (time table runner file options timeoutVal) input)}
+          Runtime {time = foldr1 f (map (measure table runner file options timeoutVal) input)}
         else error "impossible" in
 
     -- Comparing costs: negative if 't1' is better than 't2'
@@ -585,9 +585,10 @@ lang MExprTune = MExpr + TuneBase end
 let tuneEntry =
   lam binary : String.
   lam options : TuneOptions.
-  lam tuneFile : String.
   lam env : CallCtxEnv.
-  lam table : LookupTable.
+  lam dep : DependencyGraph.
+  lam inst : InstrumentedResult.
+  lam exp : ContextExpanded.
 
     -- Set the random seed?
     (match options.seed with Some seed then randSetSeed seed else ());
@@ -597,7 +598,7 @@ let tuneEntry =
 
     -- Runs the program with a given command-line input and optional timeout
     let runner = lam input : String. lam timeoutMs : Option Float.
-        sysRunCommandWithTimingTimeout (optionMap _ms2s timeoutMs) [binary] input "."
+      sysRunCommandWithTimingTimeout (optionMap _ms2s timeoutMs) [binary] input "."
     in
 
     -- Choose search method
@@ -609,4 +610,4 @@ let tuneEntry =
      case SemiExhaustive {} then use TuneSemiExhaustive in tune
      case BinarySearch {} then use TuneBinarySearch in tune
      end)
-     options runner holes hole2idx tuneFile table
+     options runner holes hole2idx exp.tempFile exp.table

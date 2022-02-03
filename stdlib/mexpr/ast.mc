@@ -699,6 +699,8 @@ lang SeqOpAst = SeqAst
   | CCreate {}
   | CCreateList {}
   | CCreateRope {}
+  | CIsList {}
+  | CIsRope {}
   | CSplitAt {}
   | CSubsequence {}
 end

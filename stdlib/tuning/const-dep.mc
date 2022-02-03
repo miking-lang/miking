@@ -142,6 +142,8 @@ lang SeqOpDep = SeqOpAst
   | CCreate _ -> [_constDepBoth, _constDepBoth]
   | CCreateList _ -> [_constDepBoth, _constDepBoth]
   | CCreateRope _ -> [_constDepData, _constDepBoth]  -- NOTE(Linnea,2021-11-22): Assumes length does not affect creation time of Rope
+  | CIsList _ -> [_constDepData]
+  | CIsRope _ -> [_constDepData]
   | CSplitAt _ -> [_constDepBoth, _constDepBoth]
   | CSubsequence _ -> [_constDepBoth, _constDepBoth, _constDepBoth]
 end

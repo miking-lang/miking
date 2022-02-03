@@ -883,6 +883,14 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCreateRope2 n ->
     let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
     TmSeq {tms = createRope n f, ty = tyunknown_, info = NoInfo()}
+  | CIsList _ ->
+    match arg with TmSeq s then
+      TmConst {val = CBool {val = isList s.tms}, ty = tyunknown_, info = NoInfo()}
+    else error "Argument to isList is not a sequence"
+  | CIsRope _ ->
+    match arg with TmSeq s then
+      TmConst {val = CBool {val = isRope s.tms}, ty = tyunknown_, info = NoInfo()}
+    else error "Argument to isRope is not a sequence"
   | CSubsequence _ ->
     match arg with TmSeq s then
       TmConst {val = CSubsequence2 s.tms, ty = tyunknown_, info = NoInfo()}
@@ -2256,6 +2264,15 @@ utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] using eqExpr in
 let i = nameSym "i" in
 let createAst2 = create_ (int_ 3) (nulam_ i (nvar_ i)) in
 utest eval createAst2 with seq_ [int_ 0, int_ 1, int_ 2] using eqExpr in
+
+-- test createRope, createList, isRope, isList
+let i = nameSym "i" in
+let createList1 = createList_ (int_ 3) (nulam_ i (nvar_ i)) in
+let createRope1 = createRope_ (int_ 3) (nulam_ i (nvar_ i)) in
+utest eval (isList_ createList1) with true_ using eqExpr in
+utest eval (isList_ createRope1) with false_ using eqExpr in
+utest eval (isRope_ createRope1) with true_ using eqExpr in
+utest eval (isRope_ createList1) with false_ using eqExpr in
 
 -- subsequence [3,5,8,6] 2 4 -> [8,6]
 let subseqAst = subsequence_ (seq_ [int_ 3, int_ 5, int_ 8, int_ 6]) (int_ 2) (int_ 4) in

@@ -125,6 +125,8 @@ lang SeqOpArity = SeqOpAst
   | CCreate _ -> 2
   | CCreateList _ -> 2
   | CCreateRope _ -> 2
+  | CIsList _ -> 1
+  | CIsRope _ -> 1
   | CSplitAt _ -> 2
   | CSubsequence _ -> 3
 end

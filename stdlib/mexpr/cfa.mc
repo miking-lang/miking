@@ -711,6 +711,8 @@ lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
   -- | CCreate _ -> []
   -- | CCreateList _ -> []
   -- | CCreateRope _ -> []
+  -- | CIsList _ -> []
+  -- | CIsRope _ -> []
   -- | CSplitAt _ -> []
   -- | CSubsequence _ -> []
 end
