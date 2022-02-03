@@ -15,20 +15,17 @@ include "graph-coloring.mc"
 type LookupTable = [Expr]
 
 type ContextExpanded =
-{ ast : Expr             -- The context-expanded AST
-, table : LookupTable    -- The initial lookup table
+{ table : LookupTable    -- The initial lookup table
 , tempDir : String       -- The temporary directory
 , tempFile : String      -- The file from which hole values are read
 , cleanup : Unit -> Unit -- Removes all temporary files from the disk
-, env : CallCtxEnv       -- Call context environment
 }
 
 -- Generate code for looking up a value of a hole depending on its call history
-let _lookupCallCtx
-  : (Int -> Expr) -> NameInfo -> Name -> CallCtxEnv -> Expr =
-  lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv.
+let contextExpansionLookupCallCtx
+  : (Int -> Expr) -> PTree Name -> Name -> CallCtxEnv -> Expr =
+  lam lookup. lam tree. lam incVarName. lam env.
     use MExprAst in
-    let tree : PTree NameInfo = mapFindExn holeId env.contexts in
     recursive let work : NameInfo -> [PTree NameInfo] -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
@@ -36,8 +33,8 @@ let _lookupCallCtx
         else
           let tmpName = nameSym "tmp" in
           let branches = foldl (lam cases: ([Expr], [Expr]). lam c.
-            match c with Leaf _ then
-              (cons (lookup (callCtxHole2Idx holeId acc env)) cases.0, cases.1)
+            match c with Leaf id then
+              (cons (lookup id) cases.0, cases.1)
             else match c with Node {root = root, children = cs} then
               let root : NameInfo = root in
               let iv = callCtxLbl2Inc root.0 env in
@@ -78,13 +75,11 @@ lang ContextExpand = HoleAst
     let tempDir = sysTempDirMake () in
     let tuneFile = sysJoinPath tempDir ".tune" in
     let ast = _wrapReadFile env tuneFile ast in
-    { ast = ast
-    , table = _initAssignments env
-    , tempDir = tempDir
-    , tempFile = tuneFile
-    , cleanup = sysTempDirDelete tempDir
-    , env = env
-    }
+    ( { table = _initAssignments env
+      , tempDir = tempDir
+      , tempFile = tuneFile
+      , cleanup = sysTempDirDelete tempDir
+      }, ast )
 
   -- 'insert public table t' replaces the holes in expression 't' by the values
   -- in 'table'
@@ -106,7 +101,8 @@ lang ContextExpand = HoleAst
           lookupGlobal t.info
         else
           let iv = callCtxFun2Inc funDefined.0 env in
-          let res = _lookupCallCtx lookup (ident, t.info) iv env in
+          let tree = mapFindExn (ident, t.info) env.contexts in
+          let res = contextExpansionLookupCallCtx lookup tree iv env in
           res
     in TmLet {{t with body = body}
                  with inexpr = _contextExpandWithLookup env lookup t.inexpr}
@@ -317,10 +313,10 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
        printLn (expr2str ast)
      else ());
     match colorCallGraph [] ast with (env, ast) in
-    let res = contextExpand env ast in
+    match contextExpand env ast with (res, ast) in
     (if debug then
        printLn "-------- AFTER CONTEXT EXPANSION --------";
-       printLn (expr2str res.ast)
+       printLn (expr2str ast)
      else ());
 
     -- Convert map to lookup table, use default for no value provided
@@ -354,7 +350,7 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
     in
     dumpTable lookupTable;
     use MExprEval in
-    let s = expr2str (eval { env = mapEmpty nameCmp } res.ast) in
+    let s = expr2str (eval { env = mapEmpty nameCmp } ast) in
 
     -- Clean up and return result
     res.cleanup ();
