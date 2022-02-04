@@ -47,7 +47,7 @@ let tuneFileName = lam file.
   else file
 in concat withoutExtension tuneFileExtension
 
-let _vertexPath : NameInfo -> Int -> Env -> [NameInfo] = lam h : NameInfo. lam i : Int. lam env : CallCtxEnv.
+let _vertexPath : NameInfo -> Int -> CallCtxEnv -> [NameInfo] = lam h : NameInfo. lam i : Int. lam env : CallCtxEnv.
   match env with {verbosePath = verbosePath, hole2fun = hole2fun} then
     let edgePath = mapFindExn i verbosePath in
     match edgePath with [] then

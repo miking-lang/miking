@@ -7,7 +7,6 @@ include "ast-builder.mc"
 include "boot-parser.mc"
 include "builtin.mc"
 include "eq.mc"
-include "eval.mc"
 include "type-annot.mc"
 include "type-lift.mc"
 
@@ -883,7 +882,7 @@ lang MExprUtestTrans = MExprAst
     (symEnv, withUtestRunner utestFunctions t)
 end
 
-lang TestLang = MExprUtestTrans + MExprEq + MExprTypeAnnot + MExprEval
+lang TestLang = MExprUtestTrans + MExprEq + MExprTypeAnnot
 end
 
 mexpr
@@ -916,12 +915,10 @@ let utestu_info_ =
 in
 
 let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) uunit_) in
--- eval {env = builtinEnv} (symbolize (utestGen intNoUsing));
 utest utestStrip intNoUsing with uunit_ using eqExpr in
 
 let intWithUsing = typeAnnot (
   utestu_info_ (int_ 1) (int_ 0) uunit_ (uconst_ (CGeqi{}))) in
--- eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
 utest utestStrip intWithUsing with uunit_ using eqExpr in
 
 let lhs = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
@@ -929,7 +926,6 @@ let rhs = reverse_ (seq_ [
   reverse_ (seq_ [int_ 4, int_ 3]),
   reverse_ (seq_ [int_ 2, int_ 1])]) in
 let nestedSeqInt = typeAnnot (utest_info_ lhs rhs uunit_) in
--- eval {env = builtinEnv} (symbolize (utestGen nestedSeqInt));
 utest utestStrip nestedSeqInt with uunit_ using eqExpr in
 
 let lhs = seq_ [
@@ -943,11 +939,9 @@ let seqEq =
   ulam_ "a"
     (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
 let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs uunit_ seqEq) in
--- eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
 utest utestStrip floatSeqWithUsing with uunit_ using eqExpr in
 
 let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') uunit_) in
--- eval {env = builtinEnv} (symbolize (utestGen charNoUsing));
 utest utestStrip charNoUsing with uunit_ using eqExpr in
 
 let charWithUsing = typeAnnot (bindall_ [
@@ -973,7 +967,6 @@ let charWithUsing = typeAnnot (bindall_ [
           (app_ (var_ "char2lower") (var_ "b"))))),
   utestu_info_ (char_ 'a') (char_ 'A') uunit_ (var_ "charEqIgnoreCase")
 ]) in
--- eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
 
 let baseRecordFields = [
   ("a", int_ 4),
@@ -987,7 +980,6 @@ let baseRecordFields = [
 ] in
 let r = urecord_ baseRecordFields in
 let recordNoUsing = typeAnnot (utest_info_ r r uunit_) in
--- eval {env = builtinEnv} (symbolize (utestGen recordNoUsing));
 utest utestStrip recordNoUsing with uunit_ using eqExpr in
 
 let lhs = urecord_ (cons ("k", int_ 4) baseRecordFields) in
@@ -998,7 +990,6 @@ let recordEq =
   ))
 in
 let recordWithUsing = typeAnnot (utestu_info_ lhs rhs uunit_ recordEq) in
--- eval {env = builtinEnv} (symbolize (utestGen recordWithUsing));
 utest utestStrip recordWithUsing with uunit_ using eqExpr in
 
 ()

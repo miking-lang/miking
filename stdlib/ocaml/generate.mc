@@ -2,7 +2,6 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eq.mc"
-include "mexpr/eval.mc"
 include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
@@ -86,6 +85,49 @@ let lookupRecordFields = use MExprAst in
 type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
                     els : Expr, ty : Type, info : Info}
 
+lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
+  sem generateTops (env : GenerateEnv) =
+  | t ->
+    match generateTopsAndExpr env t with (tops, expr) then
+      snoc tops (OTopExpr { expr = expr })
+    else never
+
+  sem generateTopsAndExpr (env : GenerateEnv) =
+  | TmLet t ->
+    let here = OTopLet { ident = t.ident, tyBody = t.tyBody, body = generate env t.body } in
+    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    (cons here later.0, later.1)
+  | TmRecLets t ->
+    let f = lam binding : RecLetBinding.
+      { ident = binding.ident
+      , tyBody = binding.tyBody
+      , body = generate env binding.body
+      } in
+    let here = OTopRecLets { bindings = map f t.bindings } in
+    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    (cons here later.0, later.1)
+  | TmExt t ->
+    match convertExternalBody env t.ident t.tyIdent t.info with body in
+    let here = OTopLet { ident = t.ident, tyBody = t.tyIdent, body = body } in
+    let later : ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    (cons here later.0, later.1)
+  | t ->
+    ([], generate env t)
+
+  sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Name) =
+  | info ->
+    match mapLookup ident env.exts with Some r then
+      let r : ExternalImpl = head r in
+      match convertData info env (OTmExprExt { expr = r.expr }) r.ty tyIdent
+      with (_, body) in
+      body
+    else
+      infoErrorExit info (join ["No implementation for external ", nameGetStr ident])
+
+  sem generate (env : GenerateEnv) =
+  -- Intentionally left blank
+end
+
 lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem generateDefaultMatchCase (env : GenerateEnv) =
   | t ->
@@ -143,29 +185,6 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
            else
              mapInsert pc.ident [(pc.subpat, t.thn)] acc
          else never) t
-
-  sem generateTops (env : GenerateEnv) =
-  | t ->
-    match generateTopsAndExpr env t with (tops, expr) then
-      snoc tops (OTopExpr { expr = expr })
-    else never
-
-  sem generateTopsAndExpr (env : GenerateEnv) =
-  | TmLet t ->
-    let here = OTopLet { ident = t.ident, tyBody = t.tyBody, body = generate env t.body } in
-    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
-    (cons here later.0, later.1)
-  | TmRecLets t ->
-    let f = lam binding : RecLetBinding.
-      { ident = binding.ident
-      , tyBody = binding.tyBody
-      , body = generate env binding.body
-      } in
-    let here = OTopRecLets { bindings = map f t.bindings } in
-    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
-    (cons here later.0, later.1)
-  | t ->
-    ([], generate env t)
 
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
@@ -275,7 +294,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem generatePat (env : GenerateEnv) (targetName : Name) =
 end
 
-lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExternalNaive
+lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     -- NOTE(vipa, 2021-05-14): Assume that explicit Consts have the same type, since the program wouldn't typecheck otherwise
@@ -396,22 +415,16 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     }
   -- TmExt Generation
   | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
-    match mapLookup ident env.exts with Some r then
-      let r : ExternalImpl = head r in
-      match convertData info env (OTmExprExt { expr = r.expr }) r.ty tyIdent
-      with (_, body) then
-        let inexpr = generate env inexpr in
-        TmLet {
-          ident = ident,
-          tyBody = tyIdent,
-          body = body,
-          inexpr = inexpr,
-          ty = TyUnknown { info = info },
-          info = info
-        }
-      else never
-    else
-      infoErrorExit info (join ["No implementation for external ", nameGetStr ident])
+    match convertExternalBody env ident tyIdent info with body in
+    let inexpr = generate env inexpr in
+    TmLet {
+      ident = ident,
+      tyBody = tyIdent,
+      body = body,
+      inexpr = inexpr,
+      ty = TyUnknown {info = info},
+      info = info
+    }
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
