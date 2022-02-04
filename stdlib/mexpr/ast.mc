@@ -219,15 +219,14 @@ lang LetAst = Ast + VarAst
     else never
 end
 
--- NOTE(dlunde,2021-08-10): The types `Type` and `Expr` are not visible here.
-type RecLetBinding =
-  { ident : Name
-  , tyBody : Type
-  , body : Expr
-  , info : Info }
-
 -- TmRecLets --
 lang RecLetsAst = Ast + VarAst
+  type RecLetBinding = {
+    ident : Name,
+    tyBody : Type,
+    body : Expr,
+    info : Info }
+
   syn Expr =
   | TmRecLets {bindings : [RecLetBinding],
                inexpr : Expr,
@@ -1366,3 +1365,4 @@ lang MExprAst =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
   VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+end

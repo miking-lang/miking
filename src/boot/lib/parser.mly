@@ -208,7 +208,7 @@ toputest:
         Utest (fi,$2,$4,Some $6) }
 
 mlang:
-  | LANG ident lang_includes lang_body
+  | LANG ident lang_includes decls END
     { let fi = if List.length $3 > 0 then
                  mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
                else
@@ -235,11 +235,6 @@ lang_list:
   | ident
     { [$1] }
 
-lang_body:
-  | decls END
-    { $1 }
-  |
-    { [] }
 decls:
   | decl decls
     { $1 :: $2 }
@@ -252,6 +247,9 @@ decl:
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
       Inter (fi, $2.v, $3, $5) }
+  | TYPE type_ident EQ ty
+    { let fi = mkinfo $1.i $3.i in
+      Alias (fi, $2.v, $4) }
 
 constrs:
   | constr constrs

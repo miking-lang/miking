@@ -302,6 +302,7 @@ end
 
 lang TestLang =
   PMExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
+end
 
 mexpr
 

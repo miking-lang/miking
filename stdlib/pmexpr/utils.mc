@@ -65,7 +65,7 @@ let collectAppArguments : Expr -> (Expr, [Expr]) =
   in
   work [] e
 
-lang TestLang = MExprEq + MExprSym + MExprTypeAnnot
+lang TestLang = MExprEq + MExprSym + MExprTypeAnnot end
 
 mexpr
 

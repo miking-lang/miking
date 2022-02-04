@@ -400,7 +400,7 @@ lang MExprSym =
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
-
+end
 
 -----------
 -- TESTS --
@@ -410,6 +410,7 @@ lang MExprSym =
 -- testing in eval.mc also implicitly covers symbolizeExpr.
 
 lang TestLang = MExprSym + MExprPrettyPrint
+end
 
 mexpr
 

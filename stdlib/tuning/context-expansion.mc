@@ -280,10 +280,13 @@ lang ContextExpand = HoleAst
 end
 
 lang MExprHoles = HoleAst + GraphColoring + ContextExpand + MExprSym + MExprANF
+end
 
 lang HolesPrettyPrint = MExprHoles + MExprPrettyPrint
+end
 
 lang TestLang = BootParser + HolesPrettyPrint + MExprEq
+end
 
 mexpr
 

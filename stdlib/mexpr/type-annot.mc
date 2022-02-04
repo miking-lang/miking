@@ -679,6 +679,7 @@ lang MExprTypeAnnot =
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
+end
 
 mexpr
 

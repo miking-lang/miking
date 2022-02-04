@@ -328,6 +328,7 @@ lang BootParser = MExprAst + ConstTransformer
 end
 
 lang BootParserTest = BootParser + MExprPrettyPrint + MExprEq
+end
 
 mexpr
 use BootParserTest in

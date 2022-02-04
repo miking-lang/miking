@@ -113,7 +113,7 @@ end
 -- The keyword maker fragment, that includes all checks
 lang KeywordMaker = KeywordMakerBase + KeywordMakerLam + KeywordMakerLet +
                     KeywordMakerMatch + KeywordMakerData
-
+end
 
 -- A test fragment that is used to test the approach. This
 -- fragment can be used as a template when using the keyword maker.

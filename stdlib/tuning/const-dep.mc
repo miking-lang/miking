@@ -274,6 +274,7 @@ lang MExprConstDep =
   FloatStringConversionDep + SymbDep + CmpSymbDep + SeqOpDep +
   FileOpDep + IODep + RandomNumberGeneratorDep + SysDep + TimeDep +
   ConTagDep + RefOpDep + MapDep + TensorOpDep + BootParserDep
+end
 
 mexpr
 

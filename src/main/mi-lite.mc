@@ -13,6 +13,7 @@ include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
 lang MCoreLiteCompile = BootParser + MExprSym + MExprUtestTrans
+end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.

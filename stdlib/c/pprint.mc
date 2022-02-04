@@ -439,7 +439,7 @@ end
 -----------------------
 lang CPrettyPrint =
   CExprTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint + CTopPrettyPrint
-
+end
 
 ---------------
 -- C PROGRAM --
@@ -467,6 +467,7 @@ end
 ----------------
 
 lang Test = CPrettyPrint + CProgPrettyPrint
+end
 
 mexpr
 use Test in

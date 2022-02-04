@@ -109,7 +109,7 @@ lang HoleCallGraph = LetAst + LamAst + RecLetsAst
 
 end
 
-lang TestLang = HoleCallGraph + MExprSym + MExprANF
+lang TestLang = HoleCallGraph + MExprSym + MExprANF end
 
 mexpr
 

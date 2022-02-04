@@ -18,7 +18,7 @@ lang C
     | TmBar ()
 end
 
-lang AC = A + C
+lang AC = A + C end
 
 mexpr
 let fooA = use A in (TmFoo ()) in

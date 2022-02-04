@@ -214,6 +214,7 @@ end
 
 lang TestLang = DependencyAnalysis + MExprHoleCFA + GraphColoring + BootParser +
                 MExprPrettyPrint + MExprANFAll + MExprSym
+end
 
 mexpr
 use TestLang in

@@ -79,6 +79,7 @@ lang MExprCallGraph = MExprAst
 end
 
 lang TestLang = MExprCallGraph + MExprSym + MExprTypeAnnot
+end
 
 mexpr
 

@@ -11,7 +11,7 @@ include "pprint.mc"
 include "seq.mc"
 
 lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
-
+end
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =

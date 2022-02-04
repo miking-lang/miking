@@ -59,7 +59,7 @@ end
 
 -- Commbined WSAC parser for MExpr
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
-
+end
 
 
 
@@ -477,11 +477,10 @@ lang MExprParserBase = BoolParser + UIntParser + IfParser +
 		                   SeqParser +
 		                   StringParser + CharParser +
 		                   VarParser + FunParser + LetParser
+end
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
-
-
-
+end
 
 mexpr
 

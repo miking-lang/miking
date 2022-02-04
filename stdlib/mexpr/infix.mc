@@ -67,9 +67,10 @@ end
 
 lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed +
                       ExprInfixTestParser
+end
 
 lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint + MExprSym
-
+end
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =

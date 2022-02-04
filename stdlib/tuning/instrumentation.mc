@@ -189,6 +189,7 @@ end
 lang TestLang = Instrumentation + GraphColoring + MExprHoleCFA + ContextExpand +
                 DependencyAnalysis + BootParser + MExprSym + MExprPrettyPrint +
                 MExprANFAll + MExprEval
+end
 
 mexpr
 

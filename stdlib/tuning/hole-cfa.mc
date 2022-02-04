@@ -341,8 +341,10 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 end
 
 lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym + GraphColoring
+end
 
 lang MExpr
+end
 
 mexpr
 use Test in

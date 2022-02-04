@@ -22,27 +22,6 @@ include "cmp.mc"
 -- TYPE LIFTING ENVIRONMENT --
 ------------------------------
 
--- NOTE(dlunde,2021-10-06): The type 'Type' is not visible here.
-type TypeLiftEnv = {
-
-  -- Collects all type bindings encountered in the program in sequence.
-  typeEnv: AssocSeq Name Type,
-
-  -- Record types encountered so far. Uses intrinsic maps as this is
-  -- performance critical.
-  records: Map (Map SID Type) Name,
-
-  -- Sequence types encountered so far. Uses intrinsic maps as this is
-  -- performance critical.
-  seqs: Map Type Name,
-
-  labels: Set [SID],
-
-  -- Variant types and their constructors encountered so far.
-  variants: Map Name (Map Name Type)
-
-}
-
 -- This type is added specifically for the type lifting to allow distinguishing
 -- between variant types in the type environment before their constructors have
 -- been added.
@@ -58,28 +37,44 @@ lang VariantNameTypeAst = Eq
 
 end
 
--- Replaces all variant type names with the variant type they represent. This
--- function is called after going through the program, at which point all
--- variant constructors have been identified.
-let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
-  use VariantTypeAst in
-  use VariantNameTypeAst in
-  let f = lam ty : Type.
-    match ty with TyVariantName {ident = ident} then
-      match mapLookup ident env.variants with Some constrs then
-        TyVariant {constrs = constrs, info = NoInfo ()}
-      else
-        error (join ["No variant type ", nameGetStr ident,
-                     " found in environment"])
-    else ty
-  in
-  assocSeqMap f env.typeEnv
+lang TypeLiftBase = MExprAst + VariantNameTypeAst
+  type TypeLiftEnv = {
+    -- Collects all type bindings encountered in the program in sequence.
+    typeEnv: AssocSeq Name Type,
 
+    -- Record types encountered so far. Uses intrinsic maps as this is
+    -- performance critical.
+    records: Map (Map SID Type) Name,
 
-let _addRecordToEnv =
-  use MExprAst in
-  lam env : TypeLiftEnv. lam name : Option Name. lam ty : Type.
-  match ty with TyRecord {fields = fields, labels = labels, info = info} then
+    -- Sequence types encountered so far. Uses intrinsic maps as this is
+    -- performance critical.
+    seqs: Map Type Name,
+
+    labels: Set [SID],
+
+    -- Variant types and their constructors encountered so far.
+    variants: Map Name (Map Name Type)
+  }
+
+  -- Replaces all variant type names with the variant type they represent. This
+  -- function is called after going through the program, at which point all
+  -- variant constructors have been identified.
+  sem _replaceVariantNamesInTypeEnv =
+  | env ->
+    let env : TypeLiftEnv = env in
+    let f = lam ty : Type.
+      match ty with TyVariantName {ident = ident} then
+        match mapLookup ident env.variants with Some constrs then
+          TyVariant {constrs = constrs, info = NoInfo ()}
+        else
+          error (join ["No variant type ", nameGetStr ident,
+                       " found in environment"])
+      else ty
+    in
+    assocSeqMap f env.typeEnv
+
+  sem _addRecordToEnv (env : TypeLiftEnv) (name : Option Name) =
+  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
     match name with Some name then
       let tycon = TyCon {ident = name, info = info} in
       (env, tycon)
@@ -93,11 +88,12 @@ let _addRecordToEnv =
       in
       (env, tycon)
     else never
-  else error "Expected record type"
+  | _ -> error "Expected record type"
+end
 
 -- This implementation takes record field order into account when populating
 -- the environment
-lang TypeLiftAddRecordToEnvOrdered = RecordTypeAst
+lang TypeLiftAddRecordToEnvOrdered = TypeLiftBase + RecordTypeAst
   sem addRecordToEnv (env : TypeLiftEnv) =
   | TyRecord {fields = fields, labels = labels, info = info} & ty ->
     match (mapLookup fields env.records, setMem labels env.labels)
@@ -110,7 +106,7 @@ end
 
 -- This implementation does not take record field order into account when
 -- populating the environment
-lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
+lang TypeLiftAddRecordToEnvUnOrdered = TypeLiftBase + RecordTypeAst
   sem addRecordToEnv (env : TypeLiftEnv) =
   | TyRecord {fields = fields, labels = labels, info = info} & ty ->
     _addRecordToEnv
@@ -119,7 +115,7 @@ lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
 end
 
 -- Define function for adding sequence types to environment
-lang TypeLiftAddSeqToEnv = SeqTypeAst + ConTypeAst
+lang TypeLiftAddSeqToEnv = TypeLiftBase + SeqTypeAst + ConTypeAst
   sem addSeqToEnv (env: TypeLiftEnv) =
   | TySeq {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.seqs with Some name then
@@ -138,7 +134,7 @@ end
 -- TERMS --
 -----------
 
-lang TypeLift = Cmp
+lang TypeLift = TypeLiftBase + Cmp
 
   sem addRecordToEnv (env : TypeLiftEnv) =
   -- Intentionally left blank
@@ -336,13 +332,16 @@ end
 
 lang MExprTypeLiftOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvOrdered
+end
 
 lang MExprTypeLiftUnOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+end
 
 lang TestLang =
   MExprTypeLiftUnOrderedRecords + SeqTypeTypeLift + MExprSym +
   MExprTypeAnnot + MExprPrettyPrint
+end
 
 -- TODO(dlunde,2021-10-06): No tests for ordered records?
 
