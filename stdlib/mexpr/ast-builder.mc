@@ -290,21 +290,23 @@ let pnot_ = use MExprAst in
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
 
-recursive let bind_ = use MExprAst in
-  lam letexpr. lam expr.
+recursive let bindF_ = use MExprAst in
+  lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
   match letexpr with TmLet t then
-    TmLet {t with inexpr = bind_ t.inexpr expr}
+    TmLet {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmRecLets t then
-    TmRecLets {t with inexpr = bind_ t.inexpr expr}
+    TmRecLets {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmConDef t then
-    TmConDef {t with inexpr = bind_ t.inexpr expr}
+    TmConDef {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmType t then
-    TmType {t with inexpr = bind_ t.inexpr expr}
+    TmType {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmExt t then
-    TmExt {t with inexpr = bind_ t.inexpr expr}
+    TmExt {t with inexpr = bindF_ f t.inexpr expr}
   else
-    expr -- Insert at the end of the chain
+    f letexpr expr -- Insert at the end of the chain
 end
+
+let bind_ = bindF_ (lam. lam expr. expr)
 
 let bindall_ = use MExprAst in
   lam exprs.
@@ -875,6 +877,14 @@ let createRope_ = use MExprAst in
   lam n. lam f.
   appf2_ (uconst_ (CCreateRope ())) n f
 
+let isList_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CIsList ())) s
+
+let isRope_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CIsRope ())) s
+
 let head_ = use MExprAst in
   lam s.
   app_ (uconst_ (CHead ())) s
@@ -1219,3 +1229,5 @@ let mapGetCmpFun_ = use MExprAst in
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2
+
+let bindSemi_ = bindF_ semi_

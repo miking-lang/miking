@@ -164,6 +164,10 @@ let arity = function
       2
   | CcreateRope (Some _) ->
       1
+  | CisList ->
+      1
+  | CisRope ->
+      1
   | Clength ->
       1
   | Cconcat None ->
@@ -775,6 +779,14 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       let createf i = apply f (TmConst (NoInfo, CInt i)) in
       TmSeq (tm_info f, Mseq.create_rope n createf)
   | CcreateRope None, _ ->
+      fail_constapp fi
+  | CisList, TmSeq (fi, s) ->
+      TmConst (fi, CBool (Mseq.is_list s))
+  | CisList, _ ->
+      fail_constapp fi
+  | CisRope, TmSeq (fi, s) ->
+      TmConst (fi, CBool (Mseq.is_rope s))
+  | CisRope, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))

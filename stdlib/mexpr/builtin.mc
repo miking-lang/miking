@@ -48,6 +48,8 @@ let builtin = use MExprAst in
   , ("create", CCreate ())
   , ("createList", CCreateList ())
   , ("createRope", CCreateRope ())
+  , ("isList", CIsList ())
+  , ("isRope", CIsRope ())
   , ("length", CLength ())
   , ("concat", CConcat ())
   , ("get", CGet ())

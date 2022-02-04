@@ -245,6 +245,14 @@ lang RecLetsAst = Ast + VarAst
   sem withType (ty : Type) =
   | TmRecLets t -> TmRecLets {t with ty = ty}
 
+  sem smapAccumL_Expr_Type (f:  acc -> a -> (acc, b)) (acc : acc) =
+  | TmRecLets t ->
+    let bindingFunc = lam acc. lam b: RecLetBinding.
+      match f acc b.tyBody with (acc, tyBody) in
+      (acc, {b with tyBody = tyBody}) in
+    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
+    (acc, TmRecLets {t with bindings = bindings})
+
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
@@ -691,6 +699,8 @@ lang SeqOpAst = SeqAst
   | CCreate {}
   | CCreateList {}
   | CCreateRope {}
+  | CIsList {}
+  | CIsRope {}
   | CSplitAt {}
   | CSubsequence {}
 end

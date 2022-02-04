@@ -2,7 +2,7 @@
 include "benchmarkcommon.mc"
 include "string.mc"
 include "common.mc"
-include "map.ml"
+include "map_n.ml"
 
 mexpr
 

@@ -16,7 +16,6 @@ let printSeq = lam s. print (join s)
 let printSeqLn = lam s. printSeq s; print "\n"; flushStdout ()
 let dprintLn = lam x. dprint x; printLn ""
 
-
 recursive
   let fix = lam f. lam e. f (fix f) e
 end

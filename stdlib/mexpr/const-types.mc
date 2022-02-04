@@ -143,6 +143,8 @@ lang SeqOpTypeAst = SeqOpAst
     tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
   | CCreateRope _ ->
     tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
+  | CIsList _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
+  | CIsRope _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
   | CSplitAt _ ->
     tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_,
                             tytuple_ [tyvarseq_ "a", tyvarseq_ "a"]])

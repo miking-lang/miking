@@ -17,6 +17,7 @@ type Hooks =
   { debugTypeAnnot : Expr -> ()
   , debugGenerate : String -> ()
   , exitBefore : () -> ()
+  , postprocessOcamlTops : [Top] -> [Top]
   , compileOcaml : [String] -> [String] -> String -> a
   }
 
@@ -24,6 +25,7 @@ let emptyHooks : Hooks =
   { debugTypeAnnot = lam. ()
   , debugGenerate = lam. ()
   , exitBefore = lam. ()
+  , postprocessOcamlTops = lam tops. tops
   , compileOcaml = lam. lam. lam. ""
   }
 
@@ -56,6 +58,7 @@ let compileMCore : Expr -> Hooks -> a =
         chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
       in
       let exprTops = generateTops env ast in
+      let exprTops = hooks.postprocessOcamlTops exprTops in
 
       -- List OCaml packages availible on the system.
       let syslibs =

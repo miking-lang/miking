@@ -2,11 +2,10 @@ include "ad/dualnum.mc"
 include "ipopt.mc"
 
 -- for brevity
-let num = dualnumNum
-let primalDeep = dualnumPrimalDeep
-let tset = tensorSetExn
-let tget = tensorGetExn
-let tcreate = tensorCreateCArrayFloat
+let _primalDeep = dualnumPrimalDeep
+let _tset = tensorSetExn
+let _tget = tensorGetExn
+let _tcreate = tensorCreateCArrayFloat
 
 type Vector a = Tensor[a]
 
@@ -15,7 +14,7 @@ type IpoptAdCreateNLPArg = {
   f : Vector Dualnum -> Dualnum,
 
   -- Constraint functions g_i(x).
-  g : Vector Dualnum -> Vector Dualnum,
+  g : Vector Dualnum -> Vector Dualnum -> (),
 
   -- Lower bounds on the variables xL_k.
   lb : Vector Float,
@@ -49,40 +48,40 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
         (tensorHasSameShape arg.constraintsLb arg.constraintsUb)
     then
       -- Pre-allocate some memory.
-      let xd = tensorCreate [nx] (lam. num 0.) in
-      let gd = tensorCreate [ng] (lam. num 0.) in
-      let gradFd = tensorCreate [nx] (lam. num 0.) in
-      let jacGd = tensorCreate [nx, ng] (lam. num 0.) in
+      let xd = tensorCreate [nx] (lam. Primal 0.) in
+      let gd = tensorCreate [ng] (lam. Primal 0.) in
+      let gradFd = tensorCreate [nx] (lam. Primal 0.) in
+      let jacGd = tensorCreate [nx, ng] (lam. Primal 0.) in
       let hij = tensorCreate [ng] (lam. 0.) in
-      let hijd = tensorCreate [ng] (lam. num 0.) in
+      let hijd = tensorCreate [ng] (lam. Primal 0.) in
       -- Computes f(x)
       let evalF = lam x.
-        tensorMapExn (lam x. lam. num x) x xd;
-        primalDeep (arg.f xd)
+        tensorMapExn (lam x. lam. Primal x) x xd;
+        _primalDeep (arg.f xd)
       in
       -- Computes g(x)
       let evalG = lam x. lam g.
-        tensorMapExn (lam x. lam. num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         arg.g xd gd;
-        tensorMapExn (lam x. lam. primalDeep x) gd g;
+        tensorMapExn (lam x. lam. _primalDeep x) gd g;
         ()
       in
       -- Computes 𝛁f(x)
       let evalGradF = lam x. lam gradF.
-        tensorMapExn (lam x. lam. num x) x xd;
-        grad arg.f xd gradFd;
-        tensorMapExn (lam x. lam. primalDeep x) gradFd gradF;
+        tensorMapExn (lam x. lam. Primal x) x xd;
+        dualnumGrad arg.f xd gradFd;
+        tensorMapExn (lam x. lam. _primalDeep x) gradFd gradF;
         ()
       in
-      -- jacT gives us the transpose of the Jacobian.
+      -- dualnumJacT gives us the transpose of the Jacobian.
       let jacGStructure = join (create nx (lam i. create ng (lam j. (j, i)))) in
       let nJacG = muli ng nx in
       -- Computes 𝛁g(x)
       let evalJacG = lam x. lam jacG.
-        tensorMapExn (lam x. lam. num x) x xd;
-        jacT arg.g xd jacGd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
+        dualnumJacT arg.g xd jacGd;
         tensorMapExn
-          (lam x. lam. primalDeep x)
+          (lam x. lam. _primalDeep x)
           (tensorReshapeExn jacGd [nJacG]) jacG;
         ()
       in
@@ -99,15 +98,16 @@ let ipoptAdCreateNLP : IpoptAdCreateNLPArg -> IpoptNLP
       in
       -- Computes σ𝛁^2f(x_k) + Σ_i[λ_i𝛁^2g_i(x_k)]
       let evalH = lam sigma. lam x. lam lambda. lam h.
-        tensorMapExn (lam x. lam. num x) x xd;
+        tensorMapExn (lam x. lam. Primal x) x xd;
         iteri
           (lam k : Int. lam ij : (Int, Int).
             match ij with (i, j) then
-              tset h [k] (mulf sigma (primalDeep (hessij arg.f i j xd)));
-              hessijs arg.g i j xd hijd;
-              tensorMapExn (lam x. lam. primalDeep x) hijd hij;
+              let v = dualnumHessij arg.f xd i j in
+              _tset h [k] (mulf sigma (_primalDeep v));
+              dualnumHessijs arg.g xd i j hijd;
+              tensorMapExn (lam x. lam. _primalDeep x) hijd hij;
               tensorMapExn mulf lambda hij;
-              tset h [k] (tensorFold addf (tget h [k]) hij);
+              _tset h [k] (tensorFold addf (_tget h [k]) hij);
               ()
             else never)
           hStructure;
@@ -155,28 +155,28 @@ utest
   --  1 ≤ x[0], x[1], x[2], x[3] ≤ 5.
 
   let f = lam x.
-    let x0 = tget x [0] in
-    let x1 = tget x [1] in
-    let x2 = tget x [2] in
-    let x3 = tget x [3] in
+    let x0 = _tget x [0] in
+    let x1 = _tget x [1] in
+    let x2 = _tget x [2] in
+    let x3 = _tget x [3] in
     addn (muln x0 (muln x3 (addn x0 (addn x1 x2)))) x2
   in
 
   let g = lam x. lam r.
-    let x0 = tget x [0] in
-    let x1 = tget x [1] in
-    let x2 = tget x [2] in
-    let x3 = tget x [3] in
-    tset r [0] (muln x0 (muln x1 (muln x2 x3)));
-    tset r [1] (addn (muln x0 x0) (addn (muln x1 x1)
+    let x0 = _tget x [0] in
+    let x1 = _tget x [1] in
+    let x2 = _tget x [2] in
+    let x3 = _tget x [3] in
+    _tset r [0] (muln x0 (muln x1 (muln x2 x3)));
+    _tset r [1] (addn (muln x0 x0) (addn (muln x1 x1)
                                   (addn (muln x2 x2) (muln x3 x3))));
     ()
   in
 
-  let lb = tensorOfSeqExn tcreate [4] [1., 1., 1., 1.] in
-  let ub = tensorOfSeqExn tcreate [4] [5., 5., 5., 5.] in
-  let constraintsLb = tensorOfSeqExn tcreate [2] [25., 40.] in
-  let constraintsUb = tensorOfSeqExn tcreate [2] [inf, 40.] in
+  let lb = tensorOfSeqExn _tcreate [4] [1., 1., 1., 1.] in
+  let ub = tensorOfSeqExn _tcreate [4] [5., 5., 5., 5.] in
+  let constraintsLb = tensorOfSeqExn _tcreate [2] [25., 40.] in
+  let constraintsUb = tensorOfSeqExn _tcreate [2] [inf, 40.] in
 
   let p = ipoptAdCreateNLP {
     f = f,
@@ -191,7 +191,7 @@ utest
   ipoptAddStrOption p "mu_strategy" "adaptive";
   ipoptAddStrOption p "derivative_test" "second-order";
 
-  let x = tensorOfSeqExn tcreate [4] [1., 5., 5., 1.] in
+  let x = tensorOfSeqExn _tcreate [4] [1., 5., 5., 1.] in
   testSolve p x;
 
   -- Find consistent initial values for a pendulum model expressed in Carteisan
@@ -213,37 +213,37 @@ utest
   -- x1 = sin(pi/4) and x2 ≤ 0
 
   let f = lam x.
-    let x1 = tget x [0] in
-    let dx1 = tget x [1] in
-    let ddx1 = tget x [2] in
-    let x2 = tget x [3] in
-    let dx2 = tget x [4] in
-    let ddx2 = tget x [5] in
-    let x3 = tget x [6] in
+    let x1 = _tget x [0] in
+    let dx1 = _tget x [1] in
+    let ddx1 = _tget x [2] in
+    let x2 = _tget x [3] in
+    let dx2 = _tget x [4] in
+    let ddx2 = _tget x [5] in
+    let x3 = _tget x [6] in
     let f1 = subn ddx1 (muln x1 x3) in
-    let f2 = addn (subn ddx2 (muln x2 x3)) (num 1.) in
-    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (num 1.) in
-    let df3 = muln (num 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
+    let f2 = addn (subn ddx2 (muln x2 x3)) (Primal 1.) in
+    let f3 = subn (addn (muln x1 x1) (muln x2 x2)) (Primal 1.) in
+    let df3 = muln (Primal 2.) (addn (muln dx1 x1) (muln dx2 x2)) in
     let ddf3 =
       addn
-        (muln (num 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
-        (muln (num 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
+        (muln (Primal 2.) (addn (muln ddx1 x1) (muln ddx2 x2)))
+        (muln (Primal 2.) (addn (muln dx1 dx1) (muln dx2 dx2)))
     in
-    foldl (lam r. lam f. addn r (muln f f)) (num 0.) [f1, f2, f3, df3, ddf3]
+    foldl (lam r. lam f. addn r (muln f f)) (Primal 0.) [f1, f2, f3, df3, ddf3]
   in
 
   let g = lam x. lam r.
-    let x1 = tget x [0] in
-    let x2 = tget x [3] in
-    tset r [0] (subn x1 (sinn (num (divf pi 4.))));
-    tset r [1] x2;
+    let x1 = _tget x [0] in
+    let x2 = _tget x [3] in
+    _tset r [0] (subn x1 (sinn (Primal (divf pi 4.))));
+    _tset r [1] x2;
     ()
   in
 
-  let lb = tcreate [7] (lam. negf inf) in
-  let ub = tcreate [7] (lam. inf) in
-  let constraintsLb = tensorOfSeqExn tcreate [2] [0., negf inf] in
-  let constraintsUb = tensorOfSeqExn tcreate [2] [0., 0.] in
+  let lb = _tcreate [7] (lam. negf inf) in
+  let ub = _tcreate [7] (lam. inf) in
+  let constraintsLb = tensorOfSeqExn _tcreate [2] [0., negf inf] in
+  let constraintsUb = tensorOfSeqExn _tcreate [2] [0., 0.] in
 
   let p = ipoptAdCreateNLP {
     f = f,
@@ -258,9 +258,9 @@ utest
   ipoptAddStrOption p "mu_strategy" "adaptive";
   ipoptAddStrOption p "derivative_test" "second-order";
 
-  let x = tcreate [7] (lam. 0.) in
-  tset x [0] (sin (divf pi 4.));
-  tset x [3] (mulf (negf 1.) (cos (divf pi 4.)));
+  let x = _tcreate [7] (lam. 0.) in
+  _tset x [0] (sin (divf pi 4.));
+  _tset x [3] (mulf (negf 1.) (cos (divf pi 4.)));
   testSolve p x
 with () in
 
