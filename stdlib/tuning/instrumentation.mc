@@ -279,7 +279,7 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   debugPrintLn debug "";
 
   -- Evaluate the program
-  eval { env = mapEmpty nameCmp } ast;
+  eval { env = evalEnvEmpty } ast;
 
   -- Read the profiled data
   let logStr = readFile res.fileName in

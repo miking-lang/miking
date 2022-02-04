@@ -73,7 +73,7 @@ lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint + MExpr
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExprExt in lam t. eval {env = mapEmpty nameCmp} (symbolize t)
+  use MExprExt in lam t. eval {env = evalEnvEmpty} (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =
