@@ -977,6 +977,7 @@ let cGccCompilerNames = concat cCompilerNames [
 ]
 
 lang MExprCCompileGCC = MExprCCompileAlloc + CProgAst
+end
 
 let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
@@ -1024,6 +1025,7 @@ lang Test =
   MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
   MExprTypeLiftUnOrderedRecords + SeqTypeNoStringTypeLift
+end
 
 mexpr
 use Test in

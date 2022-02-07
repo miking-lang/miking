@@ -952,6 +952,7 @@ lang MExprCFA = CFA +
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
   IntPatCFA + CharPatCFA + BoolPatCFA + AndPatCFA + OrPatCFA + NotPatCFA
+end
 
 -----------
 -- TESTS --

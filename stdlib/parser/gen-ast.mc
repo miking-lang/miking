@@ -520,6 +520,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
 end
 
 lang CarriedBasic = CarriedTypeGenerate + CarriedTarget + CarriedSeq + CarriedRecord
+end
 
 mexpr
 

@@ -11,11 +11,11 @@ include "pprint.mc"
 include "seq.mc"
 
 lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
-
+end
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExpr in lam t. eval {env = mapEmpty nameCmp} (symbolize t)
+  use MExpr in lam t. eval {env = evalEnvEmpty} (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =

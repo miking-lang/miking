@@ -12,6 +12,7 @@ lang MExprRemoveTypeAscription = MExprAst
 end
 
 lang TestLang = MExprAst + MExprRemoveTypeAscription + MExprEq
+end
 
 mexpr
 use TestLang in

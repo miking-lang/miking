@@ -241,13 +241,12 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
         Some a
     | Some a, None ->
         Some a
-    | Some (fi1, ty1), Some (fi2, ty2) ->
-        if ty_syntactic_eq ty1 ty2 then Some (fi, ty1)
+    | Some (fi1, ty1), Some (fi2, _) ->
+        if eq_info fi1 fi2 then Some (fi1, ty1)
         else
           raise_error fi1
-            ( "Type alias '" ^ Ustring.to_utf8 name
-            ^ "' is a syntactically different type from previous definition \
-               at "
+            ( "Conflicting definition of type alias '" ^ Ustring.to_utf8 name
+            ^ "' found at "
             ^ Ustring.to_utf8 (info2str fi2) )
   in
   { inters= Record.merge merge_inter i1 i2

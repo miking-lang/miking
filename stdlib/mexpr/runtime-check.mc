@@ -133,6 +133,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
 end
 
 lang TestLang = MExprRuntimeCheck + MExprPrettyPrint + MExprEq
+end
 
 mexpr
 

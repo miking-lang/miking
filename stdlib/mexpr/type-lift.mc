@@ -332,13 +332,16 @@ end
 
 lang MExprTypeLiftOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvOrdered
+end
 
 lang MExprTypeLiftUnOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+end
 
 lang TestLang =
   MExprTypeLiftUnOrderedRecords + SeqTypeTypeLift + MExprSym +
   MExprTypeAnnot + MExprPrettyPrint
+end
 
 -- TODO(dlunde,2021-10-06): No tests for ordered records?
 

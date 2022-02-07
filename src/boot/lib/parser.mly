@@ -208,7 +208,7 @@ toputest:
         Utest (fi,$2,$4,Some $6) }
 
 mlang:
-  | LANG ident lang_includes lang_body
+  | LANG ident lang_includes decls END
     { let fi = if List.length $3 > 0 then
                  mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
                else
@@ -235,11 +235,6 @@ lang_list:
   | ident
     { [$1] }
 
-lang_body:
-  | decls END
-    { $1 }
-  |
-    { [] }
 decls:
   | decl decls
     { $1 :: $2 }

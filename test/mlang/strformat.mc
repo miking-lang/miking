@@ -107,8 +107,9 @@ end
 
 
 lang StandardFormats = FormatInteger + FormatFloat + FormatString + FormatChar
+end
 
-lang StrFormat = StandardFormats + StrFormatBase
+lang StrFormat = StandardFormats + StrFormatBase end
 
 mexpr
 

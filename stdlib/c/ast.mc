@@ -335,7 +335,7 @@ end
 -- COMBINED FRAGMENT --
 -----------------------
 lang CAst = CExprTypeAst + CInitAst + CStmtAst + CTopAst
-
+end
 
 ---------------
 -- C PROGRAM --

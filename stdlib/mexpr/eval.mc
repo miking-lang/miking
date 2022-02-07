@@ -19,7 +19,13 @@ include "pprint.mc"
 
 type Symbol = Int
 
-type Env = Map Name Expr
+type Env = [(Name, Expr)]
+
+let evalEnvEmpty = createList 0 (lam. (nameNoSym "", unit_))
+
+let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEq} id env
+
+let evalEnvInsert = lam id. lam e. lam env. assocSeqInsert id e env
 
 let _eqn =
   lam n1. lam n2.
@@ -73,7 +79,7 @@ end
 lang VarEval = Eval + VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
-    match mapLookup ident ctx.env with Some t then
+    match evalEnvLookup ident ctx.env with Some t then
       match t with TmApp {lhs = TmFix _} then
         eval ctx t
       else t
@@ -94,7 +100,7 @@ lang LamEval = Eval + LamAst + VarEval + AppEval
   | TmClos {ident : Name, body : Expr, env : Env}
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmClos t -> eval {ctx with env = mapInsert t.ident arg t.env} t.body
+  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg t.env} t.body
 
   sem eval (ctx : {env : Env}) =
   | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
@@ -104,7 +110,7 @@ end
 lang LetEval = Eval + LetAst + VarEval
   sem eval (ctx : {env : Env}) =
   | TmLet t ->
-    eval {ctx with env = mapInsert t.ident (eval ctx t.body) ctx.env}
+    eval {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
 
@@ -115,10 +121,10 @@ lang FixEval = Eval + FixAst + LamEval + UnknownTypeAst
       let ident = clos.ident in
       let body = clos.body in
       let env =
-        mapInsert ident (TmApp {lhs = TmFix (),
-                                  rhs = TmClos clos,
-                                  ty = tyunknown_,
-                                  info = NoInfo()}) clos.env in
+        evalEnvInsert ident (TmApp {lhs = TmFix (),
+                                rhs = TmClos clos,
+                                ty = tyunknown_,
+                                info = NoInfo()}) clos.env in
       eval {ctx with env = env} body
     else
       error "Not fixing a function"
@@ -193,10 +199,10 @@ lang RecLetsEval =
                                ty = tyunknown_,
                                info = NoInfo()} in
     eval {ctx with env =
-            mapInsert lst_name (TmApp {lhs = TmFix (),
-                                         rhs = unfixed_tuple,
-                                         ty = tyunknown_,
-                                         info = NoInfo()})
+            evalEnvInsert lst_name (TmApp {lhs = TmFix (),
+                                       rhs = unfixed_tuple,
+                                       ty = tyunknown_,
+                                       info = NoInfo()})
             ctx.env}
          (unpack_from lst_var t.inexpr)
 end
@@ -755,7 +761,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     TmConst {val = CMap2 arg, ty = tyunknown_, info = NoInfo ()}
   | CMap2 f ->
     match arg with TmSeq s then
-      let f = lam x. apply {env = mapEmpty nameCmp} x f in
+      let f = lam x. apply {env = evalEnvEmpty} x f in
       TmSeq {s with tms = map f s.tms}
     else error "Second argument to map not a sequence"
   | CMapi _ ->
@@ -763,15 +769,15 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CMapi2 f ->
     match arg with TmSeq s then
       let f = lam i. lam x.
-        apply {env = mapEmpty nameCmp} x
-          (apply {env = mapEmpty nameCmp} (int_ i) f) in
+        apply {env = evalEnvEmpty} x
+          (apply {env = evalEnvEmpty} (int_ i) f) in
       TmSeq {s with tms = mapi f s.tms}
     else error "Second argument to mapi not a sequence"
   | CIter _ ->
     TmConst {val = CIter2 arg, ty = tyunknown_, info = NoInfo ()}
   | CIter2 f ->
     match arg with TmSeq s then
-      let f = lam x. apply {env = mapEmpty nameCmp} x f in
+      let f = lam x. apply {env = evalEnvEmpty} x f in
       iter f s.tms;
       uunit_
     else error "Second argument to iter not a sequence"
@@ -780,8 +786,8 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CIteri2 f ->
     match arg with TmSeq s then
       let f = lam i. lam x.
-        apply {env = mapEmpty nameCmp} x
-          (apply {env = mapEmpty nameCmp} (int_ i) f) in
+        apply {env = evalEnvEmpty} x
+          (apply {env = evalEnvEmpty} (int_ i) f) in
       iteri f s.tms;
       uunit_
     else error "Second argument to iteri not a sequence"
@@ -792,8 +798,8 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CFoldl3 (f, acc) ->
     match arg with TmSeq s then
       let f = lam acc. lam x.
-        apply {env = mapEmpty nameCmp} x
-          (apply {env = mapEmpty nameCmp} acc f) in
+        apply {env = evalEnvEmpty} x
+          (apply {env = evalEnvEmpty} acc f) in
       foldl f acc s.tms
     else error "Third argument to foldl not a sequence"
   | CFoldr _ ->
@@ -803,8 +809,8 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CFoldr3 (f, acc) ->
     match arg with TmSeq s then
       let f = lam x. lam acc.
-        apply {env = mapEmpty nameCmp} acc
-          (apply {env = mapEmpty nameCmp} x f) in
+        apply {env = evalEnvEmpty} acc
+          (apply {env = evalEnvEmpty} x f) in
       foldr f acc s.tms
     else error "Third argument to foldr not a sequence"
   | CGet _ ->
@@ -867,21 +873,21 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CCreate2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
-    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
+    let f = lam i. apply {env = evalEnvEmpty} (int_ i) arg in
     TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
   | CCreateList _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CCreateList2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreateList2 n ->
-    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
+    let f = lam i. apply {env = evalEnvEmpty} (int_ i) arg in
     TmSeq {tms = createList n f, ty = tyunknown_, info = NoInfo()}
   | CCreateRope _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CCreateRope2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreateRope2 n ->
-    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
+    let f = lam i. apply {env = evalEnvEmpty} (int_ i) arg in
     TmSeq {tms = createRope n f, ty = tyunknown_, info = NoInfo()}
   | CIsList _ ->
     match arg with TmSeq s then
@@ -1164,8 +1170,8 @@ lang MapEval =
   | CMapEmpty _ ->
     let cmp = lam x. lam y.
       let result =
-        apply {env = mapEmpty nameCmp} y
-          (apply {env = mapEmpty nameCmp} x arg) in
+        apply {env = evalEnvEmpty} y
+          (apply {env = evalEnvEmpty} x arg) in
       match result with TmConst {val = CInt {val = i}} then i
       else error "Comparison function of map did not return integer value"
     in
@@ -1203,7 +1209,7 @@ lang MapEval =
              ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
   | CMapFindOrElse3 (elseFn, key) ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      let elseFn = lam. apply {env = mapEmpty nameCmp} unit_ elseFn in
+      let elseFn = lam. apply {env = evalEnvEmpty} unit_ elseFn in
       mapFindOrElse elseFn key m
     else error "Third argument of mapFindOrElse not a map"
   | CMapFindApplyOrElse _ ->
@@ -1217,8 +1223,8 @@ lang MapEval =
              ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
   | CMapFindApplyOrElse4 (fapply, felse, key) ->
     match arg with TmConst {val = CMapVal {val = m}} then
-      let fapply = lam v. apply {env = mapEmpty nameCmp} v fapply in
-      let felse = lam. apply {env = mapEmpty nameCmp} unit_ felse in
+      let fapply = lam v. apply {env = evalEnvEmpty} v fapply in
+      let felse = lam. apply {env = evalEnvEmpty} unit_ felse in
       mapFindApplyOrElse fapply felse key m
     else error "Fourth argument of findApplyOrElse not a map"
   | CMapBindings _ ->
@@ -1237,7 +1243,7 @@ lang MapEval =
   | CMapChooseOrElse2 elseFn ->
     match arg with TmConst {val = CMapVal {val = m}} then
       if gti (mapSize m) 0 then _bindToRecord (mapChooseExn m)
-      else apply {env = mapEmpty nameCmp} unit_ elseFn
+      else apply {env = evalEnvEmpty} unit_ elseFn
     else error "Second argument of mapChooseOrElse not a map"
   | CMapSize _ ->
     match arg with TmConst {val = CMapVal {val = m}} then
@@ -1259,8 +1265,8 @@ lang MapEval =
     match arg with TmConst {val = CMapVal {val = m}} then
       let pred = lam k. lam v.
         let result =
-          apply {env = mapEmpty nameCmp} v
-            (apply {env = mapEmpty nameCmp} k pred) in
+          apply {env = evalEnvEmpty} v
+            (apply {env = evalEnvEmpty} k pred) in
         match result with TmConst {val = CBool {val = b}} then b
         else error "Predicate of mapAny did not return boolean value"
       in
@@ -1272,7 +1278,7 @@ lang MapEval =
              info = NoInfo ()}
   | CMapMap2 f ->
     match arg with TmConst ({val = CMapVal m} & t) then
-      let f = lam x. apply {env = mapEmpty nameCmp} x f in
+      let f = lam x. apply {env = evalEnvEmpty} x f in
       TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
     else error "Second argument of mapMap not a map"
   | CMapMapWithKey _ ->
@@ -1281,8 +1287,8 @@ lang MapEval =
   | CMapMapWithKey2 f ->
     match arg with TmConst ({val = CMapVal m} & t) then
       let f = lam k. lam v.
-        apply {env = mapEmpty nameCmp} v
-          (apply {env = mapEmpty nameCmp} k f) in
+        apply {env = evalEnvEmpty} v
+          (apply {env = evalEnvEmpty} k f) in
       TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
     else error "Second argument of mapMapWithKey not a map"
   | CMapFoldWithKey _ ->
@@ -1294,9 +1300,9 @@ lang MapEval =
   | CMapFoldWithKey3 (f, acc) ->
     match arg with TmConst ({val = CMapVal m} & t) then
       let f = lam acc. lam k. lam v.
-        apply {env = mapEmpty nameCmp} v
-          (apply {env = mapEmpty nameCmp} k
-            (apply {env = mapEmpty nameCmp} acc f)) in
+        apply {env = evalEnvEmpty} v
+          (apply {env = evalEnvEmpty} k
+            (apply {env = evalEnvEmpty} acc f)) in
       mapFoldWithKey f acc m.val
     else error "Third argument of mapFoldWithKey not a map"
   | CMapEq _ ->
@@ -1311,8 +1317,8 @@ lang MapEval =
     match arg with TmConst {val = CMapVal m2} then
       let eq = lam v1. lam v2.
         let result =
-          apply {env = mapEmpty nameCmp} v2
-            (apply {env = mapEmpty nameCmp} v1 eq) in
+          apply {env = evalEnvEmpty} v2
+            (apply {env = evalEnvEmpty} v1 eq) in
         match result with TmConst {val = CBool {val = b}} then b
         else error "Equality function of mapEq did not return boolean"
       in
@@ -1331,8 +1337,8 @@ lang MapEval =
     match arg with TmConst {val = CMapVal m2} then
       let cmp = lam v1. lam v2.
         let result =
-          apply {env = mapEmpty nameCmp} v2
-            (apply {env = mapEmpty nameCmp} v1 cmp) in
+          apply {env = evalEnvEmpty} v2
+            (apply {env = evalEnvEmpty} v1 cmp) in
         match result with TmConst {val = CInt {val = i}} then i
         else error "Comparison function of mapCmp did not return integer"
       in
@@ -1869,7 +1875,7 @@ end
 
 lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PatNamed {ident = PName name} -> Some (mapInsert name t env)
+  | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
@@ -1895,7 +1901,7 @@ lang SeqEdgePatEval = SeqEdgePat + SeqAst
         let paired = zipWith pair (concat preTm postTm) (concat pre post) in
         let env = optionFoldlM (lam env. lam pair : (a,b). tryMatch env pair.0 pair.1) env paired in
         match middle with PName name then
-          optionMap (mapInsert name (seq_ tms)) env
+          optionMap (evalEnvInsert name (seq_ tms)) env
         else match middle with PWildcard () then
           env
         else never else never else never
@@ -2012,6 +2018,7 @@ end
 -----------
 
 lang TestLang = MExprEval + MExprPrettyPrint + MExprEq + MExprSym
+end
 
 mexpr
 
@@ -2019,7 +2026,7 @@ use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize : Expr -> Expr =
-  lam t : Expr. eval {env = mapEmpty nameCmp} t in
+  lam t : Expr. eval {env = evalEnvEmpty} t in
 
 let eval : Expr -> Expr =
   lam t : Expr. evalNoSymbolize (symbolize t) in
