@@ -288,7 +288,8 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
-lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
+lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
+                          PMExprVariableSub
   sem defaultGenerateApp (env : FutharkGenerateEnv) =
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs,
                       ty = generateType env t.ty, info = t.info}
@@ -418,7 +419,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
       let subMap = mapFromSeq nameCmp [
         (accLam, lam info. TmVar {ident = acc, ty = t.ty, info = info,
                                   frozen = false})] in
-      let body = substituteVariables body subMap in
+      let body = substituteVariables subMap body in
       let futBody = generateExpr env body in
       constructForEach futBody x
     else

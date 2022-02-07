@@ -5,7 +5,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 include "pmexpr/utils.mc"
 
-lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
+lang PMExprRewrite = MExprAst + MExprEq + MExprConstType + PMExprVariableSub
   sem rewriteTerm =
   -- cons e seq -> concat [e] seq
   | TmApp ({lhs = TmApp ({lhs = TmConst ({val = CCons _} & cons),
@@ -108,7 +108,7 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType
       (t, lam info. TmApp {
         lhs = makeConstTerm (CTail ()) info,
         rhs = matchTm.target, ty = tyTm matchTm.target, info = info})] in
-    rewriteTerm (substituteVariables matchTm.thn nameMap)
+    rewriteTerm (substituteVariables nameMap matchTm.thn)
   | t -> smap_Expr_Expr rewriteTerm t
 end
 
