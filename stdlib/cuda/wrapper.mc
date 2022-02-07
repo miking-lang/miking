@@ -1,5 +1,7 @@
+include "c/compile.mc"
 include "cuda/ast.mc"
 include "mexpr/ast.mc"
+include "mexpr/cmp.mc"
 include "pmexpr/wrapper.mc"
 
 lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst

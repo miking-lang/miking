@@ -78,7 +78,7 @@ utest printExpr t with "map(f, s)" in
 let cint_ = lam i. CEInt {i = i} in
 let kernelApp = lam args : [CExpr].
   CEKernelApp {
-    fun = nameNoSym "kernel",
+    fun = "kernel",
     gridSize = cint_ 7,
     blockSize = cint_ 5,
     args = args} in
