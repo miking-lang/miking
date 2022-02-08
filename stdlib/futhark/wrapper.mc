@@ -111,7 +111,7 @@ lang CToFutharkWrapper = FutharkCWrapperBase
       (concat accStmts stmts, arg)
     else never
 
-  sem generateCToTargetWrapper =
+  sem generateCToFutharkWrapper =
   | env ->
     let env : CWrapperEnv = env in
     match env.targetEnv with FutharkTargetEnv targetEnv in
@@ -126,7 +126,7 @@ lang CToFutharkWrapper = FutharkCWrapperBase
 end
 
 lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
-  sem generateTargetCall =
+  sem generateFutharkCall =
   | env ->
     let env : CWrapperEnv = env in
     match env.targetEnv with FutharkTargetEnv targetEnv in
@@ -326,7 +326,7 @@ lang FutharkToCWrapper = FutharkCWrapperBase
     (return, join [[dimsStmt], dimInitStmts, [sizeInitStmt, preallocStmt,
                    copyFutharkToCStmt, freeFutharkStmt]])
 
-  sem generateTargetToCWrapper =
+  sem generateFutharkToCWrapper =
   | env ->
     let env : CWrapperEnv = env in
     match env.targetEnv with FutharkTargetEnv targetEnv in
@@ -401,6 +401,15 @@ lang FutharkCWrapper =
       futharkContextIdent = nameSym "ctx"} in
     let env : CWrapperEnv = _emptyWrapperEnv () in
     {env with targetEnv = targetEnv}
+
+  sem generateMarshallingCode =
+  | env ->
+    match generateOCamlToCWrapper env with (env, stmt1) in
+    match generateCToFutharkWrapper env with (env, stmt2) in
+    match generateFutharkCall env with (env, stmt3) in
+    match generateFutharkToCWrapper env with (env, stmt4) in
+    match generateCToOCamlWrapper env with (env, stmt5) in
+    (env, join [stmt1, stmt2, stmt3, stmt4, stmt5])
 
   sem generateWrapperCode =
   | accelerated ->

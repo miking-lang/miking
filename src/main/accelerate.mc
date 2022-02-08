@@ -1,6 +1,8 @@
 include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
+include "cuda/memory.mc"
+include "cuda/pmexpr-ast.mc"
 include "cuda/pprint.mc"
 include "cuda/kernel-translate.mc"
 include "cuda/wrapper.mc"
@@ -55,8 +57,8 @@ lang MExprFutharkCompile =
 end
 
 lang MExprCudaCompile =
-  MExprTypeLift + SeqTypeTypeLift + CudaCompile + CudaKernelTranslate +
-  CudaPrettyPrint + CudaCWrapper
+  CudaPMExprAst + CudaMemoryManagement + MExprTypeLift + SeqTypeTypeLift +
+  CudaCompile + CudaKernelTranslate + CudaPrettyPrint + CudaCWrapper
 end
 
 type AccelerateHooks a b = {
@@ -128,11 +130,13 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam accelerateData. lam ast.
   use MExprCudaCompile in
-  let entryPoints : Set Name = mapMap (lam. ()) accelerateData in
+  let ast = toCudaPMExpr accelerateData ast in
   match typeLift ast with (typeEnv, ast) in
   match compile typeEnv ast with (_, types, tops, _, _) in
-  let cudaTops = translateCudaTops entryPoints (join [types, tops]) in
-  let wrapperProg = generateWrapperCode accelerateData typeEnv in
+  let entryPoints : Set Name = mapMap (lam. ()) accelerateData in
+  let ctops = join [types, tops] in
+  match translateCudaTops entryPoints ctops with (wrapperMap, cudaTops) in
+  let wrapperProg = generateWrapperCode accelerateData wrapperMap typeEnv in
   (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.

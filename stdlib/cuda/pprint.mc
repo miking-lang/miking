@@ -22,6 +22,7 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CEThreadIdx {dim = dim} -> (env, concat "threadIdx." (_printCudaDim dim))
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
+  | CEGridDim {dim = dim} -> (env, concat "gridDim." (_printCudaDim dim))
   | CEKernelApp t ->
     match mapAccumL printCExpr env t.args with (env, args) in
     match printCExpr env t.gridSize with (env, gridSize) in

@@ -49,8 +49,8 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
   sem addMemoryAllocations (env : AllocEnv) =
   | TmVar t ->
     -- NOTE(larshum, 2022-02-03): Ensure that the return variable is allocated
-    -- on the CPU. It must always be a return variable, because the AST is
-    -- assumed to be in ANF.
+    -- on the CPU. Under the assumption that the AST is in ANF, the resulting
+    -- expression must always be a variable.
     match allocEnvLookup t.ident env with Some (Cpu _) then
       TmVar t
     else
@@ -181,18 +181,6 @@ mexpr
 
 use TestLang in
 
-let mem2str = lam mem : AllocMem.
-  match mem with Cpu _ then "cpu"
-  else match mem with Gpu _ then "gpu"
-  else never
-in
-
-let printName = lam id : Name.
-  match nameGetSym id with Some sym then
-    join ["(", nameGetStr id, ", ", int2string (sym2hash sym), ")"]
-  else nameGetStr id
-in
-
 let f = nameSym "f" in
 let g = nameSym "g" in
 let h = nameSym "h" in
@@ -202,8 +190,8 @@ let s3 = nameSym "c" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let main = nameSym "main" in
--- s is a parameter, and the functions f, g and h are declared outside the
--- scope of the "main" accelerate function.
+-- The functions f, g and h are assumed to be declared outside the scope of the
+-- "main" accelerate function.
 let typeVarEnv = mapFromSeq nameCmp [
   (f, tyarrow_ tyint_ tyint_),
   (g, tyarrows_ [tyint_, tyint_, tyint_]),

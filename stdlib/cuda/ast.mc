@@ -24,6 +24,7 @@ lang CudaAst = CAst + MExprAst
   | CEThreadIdx {dim : CudaDimension}
   | CEBlockIdx {dim : CudaDimension}
   | CEBlockDim {dim : CudaDimension}
+  | CEGridDim {dim : CudaDimension}
   | CEKernelApp {fun : String, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 

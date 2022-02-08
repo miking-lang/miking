@@ -20,7 +20,7 @@ let _genCWrapperNames = lam.
   in
   mapFromSeq
     cmpString
-    (map (lam s. (s, nameSym s)) identifiers)
+    (map (lam s. (s, nameNoSym s)) identifiers)
 let getCWrapperNames = lam.
   match deref cWrapperNamesRef with Some names then names
   else
@@ -477,16 +477,6 @@ end
 lang PMExprCWrapper =
   PMExprCWrapperBase + PMExprOCamlToCWrapper + PMExprCToOCamlWrapper
 
-  -- Generate conversion of C data to the data representation of the
-  -- chosen GPU target.
-  sem generateCToTargetWrapper /- CWrapperEnv -> (CWrapperEnv, [CStmt]) -/ =
-
-  -- Generates an invocation of the GPU target code.
-  sem generateTargetCall /- CWrapperEnv -> (CWrapperEnv, [CStmt]) -/ =
-
-  -- Generates conversion of output data from the GPU code to C data.
-  sem generateTargetToCWrapper /- : CWrapperEnv -> (CWrapperEnv, [CStmt]) -/ =
-
   -- Generates an additional wrapper function to be referenced from OCaml. This
   -- function is used when calling from bytecode (hence the name) and also when
   -- the function takes more than five parameters.
@@ -538,6 +528,8 @@ lang PMExprCWrapper =
       cons fstDeclStmt (generateExtraParamDecl remainingArgs)
     else [fstDeclStmt]
 
+  sem generateMarshallingCode =
+
   -- Generates the main function of the wrapper code. This is the function that
   -- manages the marshalling between OCaml and the target GPU language.
   sem generateWrapperFunctionCode (env : CWrapperEnv) =
@@ -559,11 +551,7 @@ lang PMExprCWrapper =
     let camlReturnStmt = CSExpr {expr = CEApp {
       fun = _getIdentExn "CAMLreturn",
       args = [CEVar {id = returnIdent}]}} in
-    match generateOCamlToCWrapper env with (env, stmt1) in
-    match generateCToTargetWrapper env with (env, stmt2) in
-    match generateTargetCall env with (env, stmt3) in
-    match generateTargetToCWrapper env with (env, stmt4) in
-    match generateCToOCamlWrapper env with (env, stmt5) in
+    match generateMarshallingCode env with (env, stmts) in
     let value = _getIdentExn "value" in
     let withValueType = lam arg : (Name, Info, Type).
       (CTyVar {id = value}, arg.0) in
@@ -571,8 +559,7 @@ lang PMExprCWrapper =
         ret = CTyVar {id = value},
         id = data.identifier,
         params = map withValueType data.params,
-        body = join [camlParamStmts, [camlLocalStmt], stmt1, stmt2,
-                     stmt3, stmt4, stmt5, [camlReturnStmt]]}
+        body = join [camlParamStmts, [camlLocalStmt], stmts, [camlReturnStmt]]}
     , bytecodeWrapper ]
 
   sem generateWrapperCodeH (env : CWrapperEnv) =
