@@ -121,8 +121,20 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 
   -- TODO(larshum, 2022-02-08): Support composite types other than 1d sequences.
   sem compileStmt (env : CompileCEnv) (res : Result) =
-  | TmMapKernel t -> (env, [])
-  | TmReduceKernel t -> (env, [])
+  | TmMapKernel t ->
+    match res with RIdent id then
+      -- TODO(larshum, 2022-02-08): Add control of 'opsPerElem' argument
+      let kernelExpr = CEMapKernel {
+        f = compileExpr env t.f, s = compileExpr env t.s,
+        sTy = compileType env (tyTm t.s), retTy = compileType env t.ty,
+        opsPerElem = 10} in
+      let assignExpr = CEBinOp {
+        op = COAssign (),
+        lhs = CEVar {id = id},
+        rhs = kernelExpr} in
+      (env, [CSExpr {expr = assignExpr}])
+    else error "Internal compiler error: invalid map kernel call"
+  | TmReduceKernel t -> error "not implemented yet"
   | TmCopy t ->
     -- NOTE(larshum, 2022-02-07): This must always be an identifier, since the
     -- result of a copy is always stored in a named variable.

@@ -24,10 +24,11 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
   | CEGridDim {dim = dim} -> (env, concat "gridDim." (_printCudaDim dim))
   | CEKernelApp t ->
+    match pprintEnvGetStr env t.fun with (env, fun) in
     match mapAccumL printCExpr env t.args with (env, args) in
     match printCExpr env t.gridSize with (env, gridSize) in
     match printCExpr env t.blockSize with (env, blockSize) in
-    (env, join [t.fun, "<<<", gridSize, ", ", blockSize, ">>>(",
+    (env, join [fun, "<<<", gridSize, ", ", blockSize, ">>>(",
                 strJoin ", " args, ")"])
 
   sem printCudaAttribute (env : PprintEnv) =

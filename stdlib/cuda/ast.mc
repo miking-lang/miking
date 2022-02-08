@@ -25,7 +25,9 @@ lang CudaAst = CAst + MExprAst
   | CEBlockIdx {dim : CudaDimension}
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
-  | CEKernelApp {fun : String, gridSize : CExpr, blockSize : CExpr,
+  | CEMapKernel {f : CExpr, s : CExpr, sTy : CType, retTy : CType,
+                 opsPerElem : Int}
+  | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 
   sem smapAccumLCExprCExpr (f : acc -> a -> (acc, b)) (acc : acc) =
@@ -33,6 +35,10 @@ lang CudaAst = CAst + MExprAst
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
     (acc, CEMap {{t with f = tf} with s = s})
+  | CEMapKernel t ->
+    match f acc t.f with (acc, tf) in
+    match f acc t.s with (acc, s) in
+    (acc, CEMapKernel {{t with f = tf} with s = s})
   | CEKernelApp t ->
     match f acc t.gridSize with (acc, gridSize) in
     match f acc t.blockSize with (acc, blockSize) in
