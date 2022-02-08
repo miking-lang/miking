@@ -7,6 +7,8 @@ include "cuda/pmexpr-ast.mc"
 include "pmexpr/utils.mc"
 
 lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
+  type CudaMemoryEnv = Map Name AllocEnv
+
   type AllocEnv = Map Name AllocMem
 
   sem allocEnvEmpty =
@@ -26,19 +28,26 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
     infoErrorExit info "Internal compiler error: CUDA memory management phase failed"
 
   sem toCudaPMExpr (accelerateData : Map Name AccelerateData) =
+  | t -> toCudaPMExprH accelerateData (mapEmpty nameCmp) t
+
+  sem toCudaPMExprH (accelerateData : Map Name AccelerateData)
+                   (cudaEnv : Map Name AllocEnv) =
   | TmLet t ->
     match mapLookup t.ident accelerateData with Some data then
       let body = generateKernelApplications t.body in
       let env = allocEnvEmpty () in
       match addMemoryAllocations env body with (env, body) in
-      match addFreeOperations env body with (env, body) in
+      match addFreeOperations env body with (_, body) in
       -- TODO(larshum, 2022-02-03): Here we should optimize away unnecessary
       -- operations, like allocating multiple copies of the same variable on
       -- the same memory space.
-      TmLet {{t with body = body}
-                with inexpr = toCudaPMExpr accelerateData t.inexpr}
-    else TmLet {t with inexpr = toCudaPMExpr accelerateData t.inexpr}
-  | t -> smap_Expr_Expr (toCudaPMExpr accelerateData) t
+      let cudaEnv = mapInsert t.ident env cudaEnv in
+      match toCudaPMExprH accelerateData cudaEnv t.inexpr with (cudaEnv, inexpr) in
+      (cudaEnv, TmLet {{t with body = body} with inexpr = inexpr})
+    else
+      match toCudaPMExprH accelerateData cudaEnv t.inexpr with (cudaEnv, inexpr) in
+      (cudaEnv, TmLet {t with inexpr = inexpr})
+  | t -> (cudaEnv, t)
 
   sem generateKernelApplications =
   | TmApp {lhs = TmApp {lhs = TmConst {val = CMap ()}, rhs = f}, rhs = s,
@@ -126,7 +135,8 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
           match ty with TySeq _ then
             match acc with (env, accLets) in
             match allocEnvLookup id env with Some _ then
-              let freeExpr = TmFree {arg = id, mem = mem, ty = ty, info = t.info} in
+              let freeExpr = TmFree {arg = id, tyArg = ty, mem = mem,
+                                     ty = tyunit_, info = t.info} in
               let freeLet = TmLet {
                 ident = nameNoSym "", tyBody = tyunit_, body = freeExpr,
                 inexpr = unit_, ty = t.ty, info = t.info} in

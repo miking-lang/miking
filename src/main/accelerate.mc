@@ -130,12 +130,11 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam accelerateData. lam ast.
   use MExprCudaCompile in
-  let ast = toCudaPMExpr accelerateData ast in
+  match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
   match compile typeEnv ast with (_, types, tops, _, _) in
-  let entryPoints : Set Name = mapMap (lam. ()) accelerateData in
   let ctops = join [types, tops] in
-  match translateCudaTops entryPoints ctops with (wrapperMap, cudaTops) in
+  match translateCudaTops cudaMemEnv ctops with (wrapperMap, cudaTops) in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap typeEnv in
   (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
 

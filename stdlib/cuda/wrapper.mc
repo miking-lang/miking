@@ -64,6 +64,7 @@ lang CToCudaWrapper = CudaCWrapperBase
 
   sem generateCToCudaWrapper =
   | env ->
+    let env : CWrapperEnv = env in
     match mapAccumL (generateCToCudaWrapperArg env) [] env.arguments
     with (cudaCopyStmts, args) in
     ({env with arguments = args}, cudaCopyStmts)
@@ -79,9 +80,6 @@ lang CudaCallWrapper = CudaCWrapperBase
     let return : ArgData = env.return in
     let returnType = return.ty in
     let cudaType = getCudaCType tenv.revTypeEnv returnType in
-    let cudaType =
-      match returnType with TySeq _ then CTyPtr {ty = cudaType}
-      else cudaType in
     let cudaResultIdent = nameSym "cuda_out" in
     let returnDecl = CSDef {
       ty = cudaType, id = Some cudaResultIdent, init = None ()} in
@@ -90,10 +88,7 @@ lang CudaCallWrapper = CudaCWrapperBase
       match mapLookup env.functionIdent tenv.wrapperMap with Some id then id
       else error "Internal compiler error: No function defined for wrapper map" in
     let args : [CExpr] =
-      map (lam arg : ArgData.
-        match arg.ty with TySeq _ then
-          CEUnOp {op = COAddrOf (), arg = CEVar {id = arg.gpuIdent}}
-        else CEVar {id = arg.gpuIdent}) env.arguments in
+      map (lam arg : ArgData. CEVar {id = arg.gpuIdent}) env.arguments in
     let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = cudaResultIdent},
@@ -125,7 +120,7 @@ lang CudaToCWrapper = CudaCWrapperBase
     (return, [])
   | ty & TySeq _ ->
     let fieldAccess = lam key.
-      CEArrow {lhs = CEVar {id = return.gpuIdent}, id = key} in
+      CEMember {lhs = CEVar {id = return.gpuIdent}, id = key} in
     match env.targetEnv with CudaTargetEnv tenv in
     let ctype = head (mexprToCTypes ty) in
     let cIdent = nameSym "c_tmp" in
@@ -138,14 +133,11 @@ lang CudaToCWrapper = CudaCWrapperBase
       CSDef {
         ty = ctype, id = Some cIdent,
         init = Some (CIExpr {expr = fieldAccess _seqKey})} in
-    let freeStmt = CSExpr {expr = CEApp {
-      fun = _getIdentExn "free",
-      args = [CEVar {id = return.gpuIdent}]}} in
 
     let return = {{{return with cTempVars = [(cIdent, ctype)]}
                            with dimIdents = [sizeIdent]}
                            with sizeIdent = sizeIdent} in
-    (return, [getLenStmt, getSeqStmt, freeStmt])
+    (return, [getLenStmt, getSeqStmt])
 
   sem generateCudaToCWrapper =
   | env ->

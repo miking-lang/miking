@@ -17,7 +17,7 @@ lang CudaPMExprAst = PMExprAst
   | TmMapKernel {f : Expr, s : Expr, ty : Type, info : Info}
   | TmReduceKernel {f : Expr, ne : Expr, s : Expr, commutative : Bool, ty : Type, info : Info}
   | TmCopy {arg : Expr, toMem : AllocMem, ty : Type, info : Info}
-  | TmFree {arg : Name, mem : AllocMem, ty : Type, info : Info}
+  | TmFree {arg : Name, tyArg : Type, mem : AllocMem, ty : Type, info : Info}
 
   sem isKernel =
   | TmMapKernel t -> true
@@ -56,6 +56,14 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.arg with (acc, arg) in
     (acc, TmCopy {t with arg = arg})
   | TmFree t -> (acc, TmFree t)
+
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmMapKernel t -> (acc, TmMapKernel t)
+  | TmReduceKernel t -> (acc, TmReduceKernel t)
+  | TmCopy t -> (acc, TmCopy t)
+  | TmFree t ->
+    match f acc t.tyArg with (acc, tyArg) in
+    (acc, TmFree {t with tyArg = tyArg})
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMapKernel t ->
@@ -143,10 +151,10 @@ let copyGpu_ = lam arg.
   use CudaPMExprAst in
   TmCopy {arg = arg, toMem = Gpu (), ty = tyunknown_, info = NoInfo ()}
 
-let freeCpu_ = lam arg.
+let freeCpu_ = lam arg. lam tyArg.
   use CudaPMExprAst in
-  TmFree {arg = arg, mem = Cpu (), ty = tyunknown_, info = NoInfo ()}
+  TmFree {arg = arg, tyArg = tyArg, mem = Cpu (), ty = tyunknown_, info = NoInfo ()}
 
-let freeGpu_ = lam arg.
+let freeGpu_ = lam arg. lam tyArg.
   use CudaPMExprAst in
-  TmFree {arg = arg, mem = Gpu (), ty = tyunknown_, info = NoInfo ()}
+  TmFree {arg = arg, tyArg = tyArg, mem = Gpu (), ty = tyunknown_, info = NoInfo ()}
