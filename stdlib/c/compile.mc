@@ -326,11 +326,13 @@ lang MExprCCompile = MExprAst + CAst
   sem compileType (env: CompileCEnv) =
 
   | TyInt _ ->
-    if env.options.use32BitInts then
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitInts then
       CTyInt32 {}
     else CTyInt64 {}
   | TyFloat _ ->
-    if env.options.use32BitFloats then
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitFloats then
       CTyFloat {}
     else CTyDouble {}
   | TyBool _
