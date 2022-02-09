@@ -16,6 +16,8 @@ type Options = {
   compileAfterTune : Bool,
   accelerate : Bool,
   cpuOnly : Bool,
+  use32BitIntegers : Bool,
+  use32BitFloats : Bool,
   typeCheck : Bool,
   printHelp : Bool,
   output : Option String,

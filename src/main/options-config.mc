@@ -60,6 +60,14 @@ let optionsConfig : ParseConfig = [
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with cpuOnly = true}),
+  ([("--use-32bit-integers", "", "")],
+    "Enables use of 32-bit integers in the C compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with use32BitIntegers = true}),
+  ([("--use-32bit-floats", "", "")],
+    "Enables use of 32-bit floating-point numbers in the C compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with use32BitFloats = true}),
   ([("--typecheck", "", "")],
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.
