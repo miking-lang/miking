@@ -55,6 +55,9 @@ lang CExprTypeAst
   | CTyVar    { id: Name }
   | CTyChar   {}
   | CTyInt    {}
+  | CTyInt32  {}
+  | CTyInt64  {}
+  | CTyFloat  {}
   | CTyDouble {}
   | CTyVoid   {}
   | CTyPtr    { ty: CType }

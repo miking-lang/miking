@@ -81,6 +81,7 @@ let externalIncludes: [String] =
 
 -- Customizable set of includes
 let cIncludes = concat [
+  "<stdint.h>",
   "<stdio.h>"
 ] externalIncludes
 
@@ -104,40 +105,60 @@ con RIdent : Name -> Result
 con RReturn : () -> Result
 con RNone : () -> Result
 
---------------------------
--- COMPILER ENVIRONMENT --
---------------------------
-
-type CompileCEnv = {
-
-  -- Type names accessed through pointers
-  ptrTypes: [Name],
-
-  -- The initial type environment produced by type lifting
-  -- NOTE(dlunde,2021-05-17): I want CompileCEnv to be visible across the whole
-  -- MExprCCompile fragment, which is why it is defined here. A problem,
-  -- however, is that Type is not bound outside the fragment. A solution to
-  -- this would be to define CompileCEnv within the fragment MExprCCompile
-  -- itself, with the requirement that it is visible across all semantic
-  -- functions and types defined with syn. This is currently impossible.
-  typeEnv: [(Name,Type)],
-
-  -- Map from MExpr external names to their C counterparts
-  externals: Map Name Name,
-
-  -- Accumulator for allocations in functions
-  allocs: [CStmt]
-}
-
--- Empty environment
-let compileCEnvEmpty =
-  { ptrTypes = [], typeEnv = [], externals = mapEmpty nameCmp, allocs = [] }
-
 ----------------------------------
 -- MEXPR -> C COMPILER FRAGMENT --
 ----------------------------------
 
 lang MExprCCompile = MExprAst + CAst
+
+  --------------------------
+  -- COMPILER ENVIRONMENT --
+  --------------------------
+
+  type CompileCOptions = {
+    -- Controls whether 32-bit integers should be used. If this is false (which
+    -- is the default setting), the compiler will use 64-bit integers.
+    use32BitInts : Bool,
+
+    -- Controls whether 32-bit floating-point nubmers should be used. If this
+    -- is false (which is the default setting), the compiler will use 64-bit
+    -- floats.
+    use32BitFloats : Bool
+  }
+
+  sem defaultCompileCOptions =
+  | _ -> {use32BitInts = false, use32BitFloats = false}
+
+  type CompileCEnv = {
+
+    -- C Compiler options
+    options : CompileCOptions,
+
+    -- Type names accessed through pointers
+    ptrTypes: [Name],
+
+    -- The initial type environment produced by type lifting
+    -- NOTE(dlunde,2021-05-17): I want CompileCEnv to be visible across the whole
+    -- MExprCCompile fragment, which is why it is defined here. A problem,
+    -- however, is that Type is not bound outside the fragment. A solution to
+    -- this would be to define CompileCEnv within the fragment MExprCCompile
+    -- itself, with the requirement that it is visible across all semantic
+    -- functions and types defined with syn. This is currently impossible.
+    typeEnv: [(Name,Type)],
+
+    -- Map from MExpr external names to their C counterparts
+    externals: Map Name Name,
+
+    -- Accumulator for allocations in functions
+    allocs: [CStmt]
+  }
+
+  -- Empty environment
+  sem compileCEnvEmpty =
+  | compileOptions ->
+    let compileOptions : CompileCOptions = compileOptions in
+    { options = compileOptions, ptrTypes = [], typeEnv = []
+    , externals = mapEmpty nameCmp, allocs = [] }
 
   -- Function that is called when allocation of data is needed. Must be implemented by a concrete C compiler.
   sem alloc (name: Name) =
@@ -148,7 +169,7 @@ lang MExprCCompile = MExprAst + CAst
   -- Intentionally left blank
 
   -- Entry point
-  sem compile (typeEnv: [(Name,Type)]) =
+  sem compile (typeEnv: [(Name,Type)]) (compileOptions : CompileCOptions) =
   | prog ->
 
     -- Find all type names which translates to C structs
@@ -160,7 +181,7 @@ lang MExprCCompile = MExprAst + CAst
     let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
-    let env = {{{ compileCEnvEmpty
+    let env = {{{ compileCEnvEmpty compileOptions
       with ptrTypes = ptrTypes }
       with typeEnv = typeEnv }
       with externals = externals }
@@ -304,8 +325,16 @@ lang MExprCCompile = MExprAst + CAst
 
   sem compileType (env: CompileCEnv) =
 
-  | TyInt _ -> CTyInt {}
-  | TyFloat _ -> CTyDouble {}
+  | TyInt _ ->
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitInts then
+      CTyInt32 {}
+    else CTyInt64 {}
+  | TyFloat _ ->
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitFloats then
+      CTyFloat {}
+    else CTyDouble {}
   | TyBool _
   | TyChar _ -> CTyChar {}
 
@@ -981,38 +1010,37 @@ end
 
 let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
+  lam opts : CompileCOptions.
   lam prog: Expr.
 
-    match compile typeEnv prog with (env, types, tops, inits, _) then
+    match compile typeEnv opts prog with (env, types, tops, inits, _) in
 
-      let mainTy = CTyFun {
-        ret = CTyInt {},
-        params = [
-          CTyInt {},
-          CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
-      in
-      let funWithType = use CAst in
-        lam ty. lam id. lam params. lam body.
-          match ty with CTyFun { ret = ret, params = tyParams } then
-            CTFun {
-              ret = ret,
-              id = id,
-              params =
-                if eqi (length tyParams) (length params) then
-                  zipWith (lam ty. lam p. (ty,p)) tyParams params
-                else
-                  error "Incorrect number of parameters in funWithType",
-              body = body
-            }
-          else error "Non-function type given to funWithType"
-      in
-      let main = funWithType mainTy _main [_argc, _argv] inits in
-      CPProg {
-        includes = cIncludes,
-        tops = join [types, tops, [main]]
-      }
-
-    else never
+    let mainTy = CTyFun {
+      ret = CTyInt {},
+      params = [
+        CTyInt {},
+        CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
+    in
+    let funWithType = use CAst in
+      lam ty. lam id. lam params. lam body.
+        match ty with CTyFun { ret = ret, params = tyParams } then
+          CTFun {
+            ret = ret,
+            id = id,
+            params =
+              if eqi (length tyParams) (length params) then
+                zipWith (lam ty. lam p. (ty,p)) tyParams params
+              else
+                error "Incorrect number of parameters in funWithType",
+            body = body
+          }
+        else error "Non-function type given to funWithType"
+    in
+    let main = funWithType mainTy _main [_argc, _argv] inits in
+    CPProg {
+      includes = cIncludes,
+      tops = join [types, tops, [main]]
+    }
 
 let printCompiledCProg = use CProgPrettyPrint in
   lam cprog: CProg. printCProg cGccCompilerNames cprog
@@ -1030,7 +1058,7 @@ end
 mexpr
 use Test in
 
-let compile: Expr -> CProg = lam prog.
+let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvEmpty prog in
@@ -1048,7 +1076,7 @@ let compile: Expr -> CProg = lam prog.
   let prog = removeTypeAscription prog in
 
   -- Run C compiler
-  let cprog = compileGCC env prog in
+  let cprog = compileGCC env opts prog in
 
   (if false then
     printLn (printCompiledCProg cprog)
@@ -1059,16 +1087,23 @@ let compile: Expr -> CProg = lam prog.
   else never
 in
 
-let testCompile: Expr -> String = lam expr. printCompiledCProg (compile expr) in
+let testCompile: Expr -> String = lam expr.
+  printCompiledCProg (compile (defaultCompileCOptions ()) expr) in
+
+let testCompile32Bit : Expr -> String = lam expr.
+  let opts = {{defaultCompileCOptions () with use32BitInts = true}
+                                         with use32BitFloats = true} in
+  printCompiledCProg (compile opts expr) in
 
 let simpleLet = bindall_ [
   ulet_ "x" (int_ 1),
   int_ 0
 ] in
 utest testCompile simpleLet with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "int x;",
+  "int64_t x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = 1);",
   "  return 0;",
@@ -1082,12 +1117,13 @@ let simpleFun = bindall_ [
   int_ 0
 ] in
 utest testCompile simpleFun with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "int foo(int a, int b) {",
+  "int64_t foo(int64_t a, int64_t b) {",
   "  return (a + b);",
   "}",
-  "int x;",
+  "int64_t x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = foo(1, 2));",
   "  return 0;",
@@ -1112,15 +1148,16 @@ let constants = bindall_ [
   int_ 0
 ] in
 utest testCompile constants with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "void foo() {",
   "  char (*t) = \"Hello, world!\";",
-  "  int t1;",
+  "  int64_t t1;",
   "  (t1 = (1 + 2));",
   "  double t2;",
   "  (t2 = (1. + 2.));",
-  "  int t3;",
+  "  int64_t t3;",
   "  (t3 = (1 * 2));",
   "  double t4;",
   "  (t4 = (1. * 2.));",
@@ -1143,6 +1180,39 @@ utest testCompile constants with strJoin "\n" [
   "}"
 ] using eqString in
 
+utest testCompile32Bit constants with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "void foo() {",
+  "  char (*t) = \"Hello, world!\";",
+  "  int32_t t1;",
+  "  (t1 = (1 + 2));",
+  "  float t2;",
+  "  (t2 = (1. + 2.));",
+  "  int32_t t3;",
+  "  (t3 = (1 * 2));",
+  "  float t4;",
+  "  (t4 = (1. * 2.));",
+  "  float t5;",
+  "  (t5 = (1. / 2.));",
+  "  char t6;",
+  "  (t6 = (1 == 2));",
+  "  char t7;",
+  "  (t7 = (1. == 2.));",
+  "  char t8;",
+  "  (t8 = (1 < 2));",
+  "  char t9;",
+  "  (t9 = (1. < 2.));",
+  "  float t10;",
+  "  (t10 = (-1.));",
+  "  printf(\"%s\", t);",
+  "}",
+  "int main(int argc, char (*argv[])) {",
+  "  return 0;",
+  "}"
+] using eqString in
+
 let factorial = bindall_ [
   reclet_ "factorial" (tyarrow_ tyint_ tyint_)
     (lam_ "n" tyint_
@@ -1154,17 +1224,18 @@ let factorial = bindall_ [
    int_ 0
 ] in
 utest testCompile factorial with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "int factorial(int n) {",
+  "int64_t factorial(int64_t n) {",
   "  char t;",
   "  (t = (n == 0));",
   "  if ((t == 1)) {",
   "    return 1;",
   "  } else {",
-  "    int t1;",
+  "    int64_t t1;",
   "    (t1 = (n - 1));",
-  "    int t2;",
+  "    int64_t t2;",
   "    (t2 = factorial(t1));",
   "    return (n * t2);",
   "  }",
@@ -1198,11 +1269,12 @@ let oddEven = bindall_ [
   int_ 0
 ] in
 utest testCompile oddEven with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "char odd(int);",
-  "char even(int);",
-  "char odd(int x) {",
+  "char odd(int64_t);",
+  "char even(int64_t);",
+  "char odd(int64_t x) {",
   "  char t;",
   "  (t = (x == 1));",
   "  if ((t == 1)) {",
@@ -1213,13 +1285,13 @@ utest testCompile oddEven with strJoin "\n" [
   "    if ((t1 == 1)) {",
   "      return 0;",
   "    } else {",
-  "      int t2;",
+  "      int64_t t2;",
   "      (t2 = (x - 1));",
   "      return even(t2);",
   "    }",
   "  }",
   "}",
-  "char even(int x1) {",
+  "char even(int64_t x1) {",
   "  char t3;",
   "  (t3 = (x1 == 0));",
   "  if ((t3 == 1)) {",
@@ -1230,7 +1302,7 @@ utest testCompile oddEven with strJoin "\n" [
   "    if ((t4 == 1)) {",
   "      return 0;",
   "    } else {",
-  "      int t5;",
+  "      int64_t t5;",
   "      (t5 = (x1 - 1));",
   "      return odd(t5);",
   "    }",
@@ -1258,17 +1330,18 @@ let typedefs = bindall_ [
   int_ 0
 ] in
 utest testCompile typedefs with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "typedef struct Tree Tree;",
-  "typedef int Integer;",
+  "typedef int64_t Integer;",
   "typedef struct Rec {Integer k;} Rec;",
   "typedef Rec MyRec;",
   "typedef struct Rec1 {MyRec k; Tree (*t);} Rec1;",
   "typedef Rec1 (*MyRec2);",
   "typedef Integer Integer2;",
   "typedef struct Rec2 {Integer2 v;} Rec2;",
-  "typedef struct Rec3 {int v; Tree (*l); Tree (*r);} Rec3;",
+  "typedef struct Rec3 {int64_t v; Tree (*l); Tree (*r);} Rec3;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec2 Leaf; Rec3 (*Node);};} Tree;",
   "int main(int argc, char (*argv[])) {",
@@ -1283,9 +1356,10 @@ let alias = bindall_ [
   int_ 0
 ] in
 utest testCompile alias with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Rec {int k;} Rec;",
+  "typedef struct Rec {int64_t k;} Rec;",
   "typedef Rec MyRec;",
   "Rec myRec;",
   "int main(int argc, char (*argv[])) {",
@@ -1301,6 +1375,7 @@ let ext = bindall_ [
   int_ 0
 ] in
 utest testCompile ext with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "double x;",
@@ -1350,11 +1425,12 @@ let trees = bindall_ [
 ] in
 
 utest testCompile trees with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
   "typedef struct Tree Tree;",
-  "typedef struct Rec {int v;} Rec;",
-  "typedef struct Rec1 {int v; Tree (*l); Tree (*r);} Rec1;",
+  "typedef struct Rec {int64_t v;} Rec;",
+  "typedef struct Rec1 {int64_t v; Tree (*l); Tree (*r);} Rec1;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec Leaf; Rec1 (*Node);};} Tree;",
   "Rec t;",
@@ -1371,28 +1447,28 @@ utest testCompile trees with strJoin "\n" [
   "Tree t11[1];",
   "Rec1 t12[1];",
   "Tree tree[1];",
-  "int treeRec(Tree (*t13)) {",
+  "int64_t treeRec(Tree (*t13)) {",
   "  if (((t13->constr) == Node)) {",
-  "    int v1 = ((t13->Node)->v);",
+  "    int64_t v1 = ((t13->Node)->v);",
   "    Tree (*l1) = ((t13->Node)->l);",
   "    Tree (*r1) = ((t13->Node)->r);",
-  "    int t14;",
+  "    int64_t t14;",
   "    (t14 = treeRec(l1));",
-  "    int t15;",
+  "    int64_t t15;",
   "    (t15 = (v1 + t14));",
-  "    int t16;",
+  "    int64_t t16;",
   "    (t16 = treeRec(r1));",
   "    return (t15 + t16);",
   "  } else {",
   "    if (((t13->constr) == Leaf)) {",
-  "      int v2 = ((t13->Leaf).v);",
+  "      int64_t v2 = ((t13->Leaf).v);",
   "      return v2;",
   "    } else {",
   "      ;",
   "    }",
   "  }",
   "}",
-  "int sum;",
+  "int64_t sum;",
   "int main(int argc, char (*argv[])) {",
   "  ((t.v) = 7);",
   "  ((t1->constr) = Leaf);",
@@ -1436,9 +1512,10 @@ let manyAllocs = bindall_ [
 ] in
 
 utest testCompile manyAllocs with strJoin "\n" [
+  "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Rec {int a;} Rec;",
+  "typedef struct Rec {int64_t a;} Rec;",
   "Rec rec;",
   "int main(int argc, char (*argv[])) {",
   "  Rec alloc;",

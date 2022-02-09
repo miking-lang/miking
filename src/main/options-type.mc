@@ -17,6 +17,8 @@ type Options = {
   accelerateCuda : Bool,
   accelerateFuthark : Bool,
   cpuOnly : Bool,
+  use32BitIntegers : Bool,
+  use32BitFloats : Bool,
   typeCheck : Bool,
   printHelp : Bool,
   output : Option String,
