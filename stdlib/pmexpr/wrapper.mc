@@ -7,7 +7,7 @@ include "pmexpr/ast.mc"
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
   let identifiers =
-    ["malloc", "free", "printf", "exit", "value", "size_t", "int64_t",
+    ["malloc", "free", "printf", "exit", "value", "size_t",
     "Long_val", "Bool_val", "Double_val", "Val_long", "Val_bool",
     "caml_copy_double", "Wosize_val", "caml_alloc", "Field", "Store_field",
     "Double_field", "Store_double_field", "Double_array_tag", "CAMLlocal1",
@@ -113,8 +113,8 @@ lang PMExprCWrapperBase = MExprAst + CAst
   -- Converts a given MExpr type to a sequence containing the C type or types
   -- used to represent it in the C wrapper.
   sem mexprToCTypes =
-  | TyInt _ | TyChar _ -> [CTyVar {id = _getIdentExn "int64_t"}]
-  | TyFloat _ -> [CTyDouble {}]
+  | TyInt _ | TyChar _ -> [CTyInt64 ()]
+  | TyFloat _ -> [CTyDouble ()]
   | TySeq {ty = elemTy & !(TySeq _)} ->
     map (lam ty. CTyPtr {ty = ty}) (mexprToCTypes elemTy)
   | TySeq t -> mexprToCTypes t.ty

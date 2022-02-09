@@ -181,7 +181,8 @@ lang MExprCCompile = MExprAst + CAst
     let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
-    let env = {{{ compileCEnvEmpty compileOptions
+    let env : CompileCEnv = compileCEnvEmpty compileOptions in
+    let env = {{{ env
       with ptrTypes = ptrTypes }
       with typeEnv = typeEnv }
       with externals = externals }
@@ -360,6 +361,7 @@ lang MExprCCompile = MExprAst + CAst
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
 
   | TySeq _ & ty ->
+    error "";
     infoErrorExit (infoTy ty)
       "TySeq should not occur in compileType. Did you run type lift?"
 

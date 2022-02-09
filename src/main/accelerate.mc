@@ -127,15 +127,20 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
-  lam accelerateData. lam ast.
+let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
+  lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
   match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
-  match compile typeEnv ast with (_, types, tops, _, _) in
+  let opts : CompileCOptions = {
+    use32BitInts = options.use32BitIntegers,
+    use32BitFloats = options.use32BitFloats
+  } in
+  match compile typeEnv opts ast with (_, types, tops, _, _) in
   let ctops = join [types, tops] in
-  match translateCudaTops cudaMemEnv typeEnv ctops with (wrapperMap, cudaTops) in
-  let wrapperProg = generateWrapperCode accelerateData wrapperMap typeEnv in
+  let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
+  match translateCudaTops cudaMemEnv ccEnv ctops with (wrapperMap, cudaTops) in
+  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
   (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
@@ -357,7 +362,7 @@ let compileAccelerate = lam files. lam options : Options. lam args.
       error "Flag --test may not be used for accelerated code generation"
     else if options.accelerateCuda then
       { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.
-          cudaTranslation accelerateData ast
+          cudaTranslation options accelerateData ast
       , buildAccelerated = buildCuda}
     else if options.accelerateFuthark then
       { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.

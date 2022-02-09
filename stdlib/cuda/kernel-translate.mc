@@ -74,25 +74,26 @@ lang CudaKernelTranslate =
   CudaAst + CudaMemoryManagement + CudaMapKernelTranslate + MExprCCompile
 
   sem translateCudaTops (cudaMemEnv : Map Name AllocEnv)
-                        (typeEnv : AssocSeq Name Type) =
+                        (ccEnv : CompileCEnv) =
   | tops ->
     let emptyEnv = mapEmpty nameCmp in
     let tops = map (translateTopToCudaFormat cudaMemEnv) tops in
-    generateKernels cudaMemEnv typeEnv tops
+    generateKernels cudaMemEnv ccEnv tops
 
   sem generateKernels (cudaMemEnv : Map Name AllocEnv)
-                      (typeEnv : AssocSeq Name Type) =
+                      (ccEnv : CompileCEnv) =
   | tops ->
-    match mapAccumL (generateKernelsTop cudaMemEnv typeEnv) (mapEmpty nameCmp) tops
+    match mapAccumL (generateKernelsTop cudaMemEnv ccEnv)
+                    (mapEmpty nameCmp) tops
     with (wrapperMap, tops) in
     (wrapperMap, join tops)
 
   sem generateKernelsTop (cudaMemEnv : Map Name AllocEnv)
-                         (typeEnv : AssocSeq Name Type)
+                         (ccEnv : CompileCEnv)
                          (wrapperMap : Map Name Name) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapLookup t.id cudaMemEnv with Some _ then
-      match mapAccumL (generateKernelStmt typeEnv) [] t.body
+      match mapAccumL (generateKernelStmt ccEnv) [] t.body
       with (kernelTops, body) in
       let cudaWrapperId = nameSym "cuda_wrap" in
       let wrapperMap = mapInsert t.id cudaWrapperId wrapperMap in
@@ -108,7 +109,7 @@ lang CudaKernelTranslate =
   -- f is a variable containing an identifier. This will not work for closures
   -- or for functions that take additional variables, including those that
   -- capture variables (due to lambda lifting).
-  sem generateKernelStmt (typeEnv : AssocSeq Name Type) (acc : [CuTop]) =
+  sem generateKernelStmt (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr,
                             rhs = CEMapKernel t}} ->
     match generateMapKernel (CEMapKernel t) with (kernelId, kernelTop) in
@@ -138,9 +139,9 @@ lang CudaKernelTranslate =
         -- OPT(larshum, 2022-02-09): We need the type environment as an
         -- associative sequence, so that we can compile the element type to a C
         -- type. However, that also requires a linear-time lookup.
-        match assocSeqLookup {eq=nameEq} seqId typeEnv
+        match assocSeqLookup {eq=nameEq} seqId ccEnv.typeEnv
         with Some (TySeq {ty = elemTy}) then
-          compileType typeEnv elemTy
+          compileType ccEnv elemTy
         else error "Expected output of map kernel to be a sequence"
       else error "Unexpected type of map kernel output" in
     let sizeExpr = CEBinOp {

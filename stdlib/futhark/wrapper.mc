@@ -50,7 +50,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
       futharkContextIdent : Name}
 
   sem getFutharkCType =
-  | TyInt _ | TyChar _ -> CTyVar {id = _getIdentExn "int64_t"}
+  | TyInt _ | TyChar _ -> CTyInt64 ()
   | TyFloat _ -> CTyDouble ()
   | ty & (TySeq _) ->
     let seqTypeStr = getMExprSeqFutharkTypeString ty in
@@ -58,13 +58,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
     CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}}
 
   sem getFutharkElementTypeString =
-  | ty & (CTyVar {id = id}) ->
-    if nameEq id (_getIdentExn "int64_t") then
-      "i64"
-    else
-      let tyStr = use CPrettyPrint in printCType "" pprintEnvEmpty ty in
-      infoErrorExit (infoTy ty) (join ["Terms of type '", tyStr,
-                                       "' cannot be accelerated"])
+  | CTyInt64 _ -> "i64"
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
 end
@@ -151,7 +145,7 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
     let funcId = nameSym (concat "futhark_entry_" functionStr) in
     let returnCodeIdent = nameSym "v" in
     let returnCodeDeclStmt = CSDef {
-      ty = CTyInt (), id = Some returnCodeIdent, init = None ()
+      ty = CTyInt64 (), id = Some returnCodeIdent, init = None ()
     } in
 
     -- Call Futhark entry point and synchronize context afterwards
@@ -250,10 +244,10 @@ lang FutharkToCWrapper = FutharkCWrapperBase
     -- NOTE(larshum, 2021-09-02): We cast away the const because the current C
     -- AST implementation does not support const types.
     let dimsStmt = CSDef {
-      ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
+      ty = CTyPtr {ty = CTyInt64 ()},
       id = Some dimIdent,
       init = Some (CIExpr {expr = CECast {
-        ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
+        ty = CTyPtr {ty = CTyInt64 ()},
         rhs = CEApp {
           fun = futharkShapeIdent,
           args = [
@@ -266,7 +260,7 @@ lang FutharkToCWrapper = FutharkCWrapperBase
       mapi
         (lam i. lam ident.
           CSDef {
-            ty = CTyInt (), id = Some ident,
+            ty = CTyInt64 (), id = Some ident,
             init = Some (CIExpr {expr = CEBinOp {
               op = COSubScript (),
               lhs = CEVar {id = dimIdent},
@@ -282,7 +276,7 @@ lang FutharkToCWrapper = FutharkCWrapperBase
     in
     let sizeIdent = nameSym "n" in
     let sizeInitStmt = CSDef {
-      ty = CTyInt (), id = Some sizeIdent,
+      ty = CTyInt64 (), id = Some sizeIdent,
       init = Some (CIExpr {expr = dimProdExpr})
     } in
 

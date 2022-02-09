@@ -4,7 +4,7 @@ include "mexpr/ast.mc"
 include "mexpr/cmp.mc"
 include "pmexpr/wrapper.mc"
 
-lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst
+lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
   syn TargetWrapperEnv =
   | CudaTargetEnv {
       -- Provides a mapping from the name of the C wrapper function to a CUDA
@@ -13,22 +13,24 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst
       -- will be called from the OCaml code, while that of the CUDA wrapper
       -- does not, since it is called from a function stored in the same file.
       wrapperMap : Map Name Name,
-
+      
       -- Reversed type environment from type lifting. Enables looking up the
       -- name of the replacement of a lifted type.
-      revTypeEnv : Map Type Name}
+      revTypeEnv : Map Type Name,
 
-  sem getCudaCType (revTypeEnv : Map Type Name) =
-  | TyInt _ | TyChar _ -> CTyInt64 ()
-  | TyFloat _ -> CTyDouble ()
-  | ty & TySeq _ ->
-    match mapLookup ty revTypeEnv with Some id then
-      CTyVar {id = id}
-    else error "Internal compiler error: Sequence type was not lifted"
+      -- C compiler environment, used to compile MExpr types to the C
+      -- equivalents.
+      compileCEnv : CompileCEnv}
 
-  sem getCudaCElementType =
-  | CTyPtr t -> getCudaCElementType t.ty
-  | ty -> ty
+  sem getCudaType (env : TargetWrapperEnv) =
+  | TySeq t ->
+    match env with CudaTargetEnv cenv in
+    match mapLookup (TySeq t) cenv.revTypeEnv with Some seqId then
+      CTyVar {id = seqId}
+    else error ""
+  | ty ->
+    match env.targetEnv with CudaTargetEnv cenv in
+    compileType cenv.compileCEnv ty
 end
 
 -- Translate the general C representation to one that is specific to CUDA. This
@@ -42,7 +44,7 @@ lang CToCudaWrapper = CudaCWrapperBase
     match env.targetEnv with CudaTargetEnv cenv in
     let cvars = argument.cTempVars in
     let cvar : (Name, CType) = head cvars in
-    let cudaType = getCudaCType cenv.revTypeEnv ty in
+    let cudaType = getCudaType env.targetEnv ty in
     let gpuIdent = nameSym "cuda_tmp" in
     let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
     -- TODO(larshum, 2022-02-08): Support multi-dimensional sequences.
@@ -79,7 +81,7 @@ lang CudaCallWrapper = CudaCWrapperBase
     -- Declare pointer to return value
     let return : ArgData = env.return in
     let returnType = return.ty in
-    let cudaType = getCudaCType tenv.revTypeEnv returnType in
+    let cudaType = getCudaType env.targetEnv returnType in
     let cudaResultIdent = nameSym "cuda_out" in
     let returnDecl = CSDef {
       ty = cudaType, id = Some cudaResultIdent, init = None ()} in
@@ -114,7 +116,7 @@ lang CudaToCWrapper = CudaCWrapperBase
   sem _generateCudaToCWrapperInner (env : CWrapperEnv) (return : ArgData) =
   | ty & (TyInt _ | TyChar _ | TyFloat _) ->
     match env.targetEnv with CudaTargetEnv tenv in
-    let ctype = getCudaCType tenv.revTypeEnv ty in
+    let ctype = getCudaType env.targetEnv ty in
     let cIdent = return.gpuIdent in
     let return = {return with cTempVars = [(cIdent, ctype)]} in 
     (return, [])
@@ -150,11 +152,13 @@ end
 lang CudaCWrapper = CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
   -- Generates the initial wrapper environment
   sem generateInitWrapperEnv (wrapperMap : Map Name Name) =
-  | typeEnv ->
+  | compileCEnv ->
+    let compileCEnv : CompileCEnv = compileCEnv in
     let tupleSwap = lam t : (a, b). match t with (x, y) in (y, x) in
-    let revTypeEnv = mapFromSeq cmpType (map tupleSwap typeEnv) in
+    let revTypeEnv = mapFromSeq cmpType (map tupleSwap compileCEnv.typeEnv) in
     let targetEnv = CudaTargetEnv {
-      revTypeEnv = revTypeEnv, wrapperMap = wrapperMap} in
+      wrapperMap = wrapperMap, compileCEnv = compileCEnv,
+      revTypeEnv = revTypeEnv} in
     let env : CWrapperEnv = _emptyWrapperEnv () in
     {env with targetEnv = targetEnv}
 
@@ -170,8 +174,8 @@ lang CudaCWrapper = CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
   -- Defines the target-specific generation of wrapper code.
   sem generateWrapperCode (accelerated : Map Name AccelerateData)
                           (wrapperMap : Map Name Name) =
-  | typeEnv ->
-    let env = generateInitWrapperEnv wrapperMap typeEnv in
+  | compileCEnv ->
+    let env = generateInitWrapperEnv wrapperMap compileCEnv in
     match generateWrapperCodeH env accelerated with (env, entryPointWrappers) in
     CuPProg {
       includes = [

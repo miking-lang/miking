@@ -2,12 +2,6 @@ include "c/ast.mc"
 include "mexpr/ast.mc"
 
 lang CudaAst = CAst + MExprAst
-  syn CType =
-  | CTyInt64 ()
-
-  sem smapAccumLCTypeCType (f : acc -> a -> (acc, b)) (acc : acc) =
-  | CTyInt64 _ & ty -> ty
-
   syn CudaDimension =
   | CuDX ()
   | CuDY ()

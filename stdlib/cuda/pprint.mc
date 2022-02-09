@@ -6,9 +6,6 @@ include "cuda/ast.mc"
 let cudaKeywords = concat cKeywords []
 
 lang CudaPrettyPrint = CPrettyPrint + CudaAst
-  sem printCType (decl: String) (env: PprintEnv) =
-  | CTyInt64 _ -> (env, _joinSpace "int64_t" decl)
-
   sem _printCudaDim =
   | CuDX _ -> "x"
   | CuDY _ -> "y"
