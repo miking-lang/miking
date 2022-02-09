@@ -29,7 +29,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
       CTyVar {id = seqId}
     else error ""
   | ty ->
-    match env.targetEnv with CudaTargetEnv cenv in
+    match env with CudaTargetEnv cenv in
     compileType cenv.compileCEnv ty
 end
 

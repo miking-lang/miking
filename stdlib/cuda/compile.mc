@@ -94,8 +94,9 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 
   sem _compileFreeCpu (env : CompileCEnv) (arg : CExpr) =
   | TmFree t ->
-    [CEApp {fun = _free,
-            args = [CEMember {lhs = CEVar {id = t.arg}, id = _seqLenKey}]}]
+    [CSExpr {expr = CEApp {
+      fun = _free,
+      args = [CEMember {lhs = CEVar {id = t.arg}, id = _seqKey}]}}]
 
   sem _compileFreeGpu (env : CompileCEnv) (arg : CExpr) =
   | TmFree t ->

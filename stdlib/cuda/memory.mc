@@ -31,7 +31,7 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
   | t -> toCudaPMExprH accelerateData (mapEmpty nameCmp) t
 
   sem toCudaPMExprH (accelerateData : Map Name AccelerateData)
-                   (cudaEnv : Map Name AllocEnv) =
+                    (cudaEnv : Map Name AllocEnv) =
   | TmLet t ->
     match mapLookup t.ident accelerateData with Some data then
       let body = generateKernelApplications t.body in
@@ -47,6 +47,9 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
     else
       match toCudaPMExprH accelerateData cudaEnv t.inexpr with (cudaEnv, inexpr) in
       (cudaEnv, TmLet {t with inexpr = inexpr})
+  | TmRecLets t ->
+    match toCudaPMExprH accelerateData cudaEnv t.inexpr with (cudaEnv, inexpr) in
+    (cudaEnv, TmRecLets {t with inexpr = inexpr})
   | t -> (cudaEnv, t)
 
   sem generateKernelApplications =
@@ -61,7 +64,7 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
     -- on the CPU. Under the assumption that the AST is in ANF, the resulting
     -- expression must always be a variable.
     match allocEnvLookup t.ident env with Some (Cpu _) then
-      TmVar t
+      (env, TmVar t)
     else
       let cpuId = nameSetNewSym t.ident in
       let varAlloc = TmLet {
