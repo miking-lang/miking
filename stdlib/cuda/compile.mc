@@ -123,7 +123,8 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmMapKernel t ->
     match res with RIdent id then
-      -- TODO(larshum, 2022-02-08): Add control of 'opsPerElem' argument
+      -- TODO(larshum, 2022-02-08): Add a way to control the value of the
+      -- 'opsPerElem' argument from the CUDA PMExpr AST.
       let kernelExpr = CEMapKernel {
         f = compileExpr env t.f, s = compileExpr env t.s,
         sTy = compileType env (tyTm t.s), retTy = compileType env t.ty,

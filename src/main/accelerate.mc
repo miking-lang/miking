@@ -134,7 +134,7 @@ let cudaTranslation : Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   match typeLift ast with (typeEnv, ast) in
   match compile typeEnv ast with (_, types, tops, _, _) in
   let ctops = join [types, tops] in
-  match translateCudaTops cudaMemEnv ctops with (wrapperMap, cudaTops) in
+  match translateCudaTops cudaMemEnv typeEnv ctops with (wrapperMap, cudaTops) in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap typeEnv in
   (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
 

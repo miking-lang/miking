@@ -8,6 +8,7 @@ include "name.mc"
 include "set.mc"
 include "c/compile.mc"
 include "cuda/ast.mc"
+include "cuda/compile.mc"
 include "cuda/memory.mc"
 
 lang CudaMapKernelTranslate = CudaAst + CudaPMExprAst
@@ -70,25 +71,29 @@ lang CudaMapKernelTranslate = CudaAst + CudaPMExprAst
 end
 
 lang CudaKernelTranslate =
-  CudaAst + CudaMemoryManagement + CudaMapKernelTranslate
+  CudaAst + CudaMemoryManagement + CudaMapKernelTranslate + MExprCCompile
 
-  sem translateCudaTops (cudaMemEnv : Map Name AllocEnv) =
+  sem translateCudaTops (cudaMemEnv : Map Name AllocEnv)
+                        (typeEnv : AssocSeq Name Type) =
   | tops ->
     let emptyEnv = mapEmpty nameCmp in
     let tops = map (translateTopToCudaFormat cudaMemEnv) tops in
-    generateKernels cudaMemEnv tops
+    generateKernels cudaMemEnv typeEnv tops
 
-  sem generateKernels (cudaMemEnv : Map Name AllocEnv) =
+  sem generateKernels (cudaMemEnv : Map Name AllocEnv)
+                      (typeEnv : AssocSeq Name Type) =
   | tops ->
-    match mapAccumL (generateKernelsTop cudaMemEnv) (mapEmpty nameCmp) tops
+    match mapAccumL (generateKernelsTop cudaMemEnv typeEnv) (mapEmpty nameCmp) tops
     with (wrapperMap, tops) in
     (wrapperMap, join tops)
 
   sem generateKernelsTop (cudaMemEnv : Map Name AllocEnv)
+                         (typeEnv : AssocSeq Name Type)
                          (wrapperMap : Map Name Name) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapLookup t.id cudaMemEnv with Some _ then
-      match mapAccumL generateKernelStmt [] t.body with (kernelTops, body) in
+      match mapAccumL (generateKernelStmt typeEnv) [] t.body
+      with (kernelTops, body) in
       let cudaWrapperId = nameSym "cuda_wrap" in
       let wrapperMap = mapInsert t.id cudaWrapperId wrapperMap in
       let newTop = CTFun {{t with id = cudaWrapperId}
@@ -103,7 +108,7 @@ lang CudaKernelTranslate =
   -- f is a variable containing an identifier. This will not work for closures
   -- or for functions that take additional variables, including those that
   -- capture variables (due to lambda lifting).
-  sem generateKernelStmt (acc : [CuTop]) =
+  sem generateKernelStmt (typeEnv : AssocSeq Name Type) (acc : [CuTop]) =
   | CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr,
                             rhs = CEMapKernel t}} ->
     match generateMapKernel (CEMapKernel t) with (kernelId, kernelTop) in
@@ -127,12 +132,21 @@ lang CudaKernelTranslate =
         CEMember {lhs = CEVar {id = tempId}, id = _seqLenKey}})} in
 
     -- Pre-allocate memory for the output
-    -- TODO: how do we get the element type from the (output) sequence type,
-    -- without the type environment?
+    let outElemType =
+      match t.retTy with CTyVar {id = seqId} then
+        -- TODO(larshum, 2022-02-09): Only works for 1d sequences.
+        -- OPT(larshum, 2022-02-09): We need the type environment as an
+        -- associative sequence, so that we can compile the element type to a C
+        -- type. However, that also requires a linear-time lookup.
+        match assocSeqLookup {eq=nameEq} seqId typeEnv
+        with Some (TySeq {ty = elemTy}) then
+          compileType typeEnv elemTy
+        else error "Expected output of map kernel to be a sequence"
+      else error "Unexpected type of map kernel output" in
     let sizeExpr = CEBinOp {
       op = COMul (),
       lhs = CEVar {id = lenId},
-      rhs = CESizeOfType {ty = t.retTy}} in
+      rhs = CESizeOfType {ty = outElemType}} in
     let allocTempDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMalloc,
       args = [

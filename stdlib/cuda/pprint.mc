@@ -15,10 +15,6 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuDZ _ -> "z"
 
   sem printCExpr (env: PprintEnv) =
-  | CEMap {f = f, s = s} ->
-    match printCExpr env f with (env, f) in
-    match printCExpr env s with (env, s) in
-    (env, join ["map(", f, ", ", s, ")"])
   | CEThreadIdx {dim = dim} -> (env, concat "threadIdx." (_printCudaDim dim))
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
@@ -74,13 +70,13 @@ utest printExpr t with "blockIdx.y" in
 let t = CEBlockDim {dim = CuDZ ()} in
 utest printExpr t with "blockDim.z" in
 
-let t = CEMap {f = CEVar {id = nameNoSym "f"}, s = CEVar {id = nameNoSym "s"}} in
-utest printExpr t with "map(f, s)" in
+let t = CEGridDim {dim = CuDX ()} in
+utest printExpr t with "gridDim.x" in
 
 let cint_ = lam i. CEInt {i = i} in
 let kernelApp = lam args : [CExpr].
   CEKernelApp {
-    fun = "kernel",
+    fun = nameNoSym "kernel",
     gridSize = cint_ 7,
     blockSize = cint_ 5,
     args = args} in

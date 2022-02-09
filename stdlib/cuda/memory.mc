@@ -217,18 +217,19 @@ let t = typeAnnotExpr typeEnv
 let expected = nulet_ main (nulam_ s (bindall_ [
   ulet_ "t" (copyGpu_ (nvar_ s)),
   nulet_ s2 (mapKernel_ (nvar_ f) (var_ "t")),
-  ulet_ "" (freeGpu_ (nameNoSym "t")),
+  ulet_ "" (freeGpu_ (nameNoSym "t") (tyseq_ tyint_)),
   ulet_ "t3" (copyCpu_ (nvar_ s2)),
   nulet_ y (foldl_ (nvar_ g) (int_ 0) (var_ "t3")),
-  ulet_ "" (freeCpu_ (nameNoSym "t3")),
+  ulet_ "" (freeCpu_ (nameNoSym "t3") (tyseq_ tyint_)),
   nulet_ s3 (mapKernel_ (app_ (nvar_ h) (nvar_ y)) (nvar_ s2)),
-  ulet_ "" (freeGpu_ s2),
+  ulet_ "" (freeGpu_ s2 (tyseq_ tyint_)),
   ulet_ "t6" (copyCpu_ (nvar_ s3)),
-  ulet_ "" (freeGpu_ s3),
+  ulet_ "" (freeGpu_ s3 (tyseq_ tyint_)),
   var_ "t6"])) in
 let accelerateData = mapFromSeq nameCmp [(main,
   { identifier = main, bytecodeWrapperId = nameNoSym "bc"
   , params = [(s, tyseq_ tyint_)], returnType = tyseq_, info = NoInfo ()})] in
-utest toCudaPMExpr accelerateData t with expected using eqExpr in
+match toCudaPMExpr accelerateData t with (_, t) in
+utest t with expected using eqExpr in
 
 ()
