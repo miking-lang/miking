@@ -784,7 +784,7 @@ let _addLOpen
             -- it isn't there already. It will later be made into a
             -- new permanent node, once all its children have been
             -- processed.
-            (match config with (Some child, None _, _, _) | (Some child, _, true, _) then
+            (match (parent, config) with (!TentativeRoot _, _) & ((_, (Some child, None _, _, _)) | (_, (Some child, _, true, _))) then
                match _addRightChildToParent time child parent with Some parent then
                  _addToQueue parent queue
                else ()
