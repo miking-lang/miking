@@ -90,7 +90,11 @@ lang CudaCallWrapper = CudaCWrapperBase
       match mapLookup env.functionIdent tenv.wrapperMap with Some id then id
       else error "Internal compiler error: No function defined for wrapper map" in
     let args : [CExpr] =
-      map (lam arg : ArgData. CEVar {id = arg.gpuIdent}) env.arguments in
+      map
+        (lam arg : ArgData.
+          let var = CEVar {id = arg.gpuIdent} in
+          match arg.ty with TySeq _ then var
+          else CEUnOp {op = CODeref (), arg = var}) env.arguments in
     let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = cudaResultIdent},

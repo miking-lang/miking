@@ -20,7 +20,7 @@ lang CudaAst = CAst + MExprAst
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
   | CEMapKernel {f : CExpr, s : CExpr, sTy : CType, retTy : CType,
-                 opsPerElem : Int}
+                 opsPerThread : Int}
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 

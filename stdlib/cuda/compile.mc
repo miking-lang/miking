@@ -117,8 +117,7 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     [tempDeclStmt, cudaMemcpySeqStmt, cudaFreeGpuDataStmt, cudaFreeGpuSeqStmt]
 
   sem compileOp (t: Expr) (args: [CExpr]) =
-  | CMap _ ->
-    CEMap {f = get args 0, s = get args 1}
+  | CMap _ -> CEMap {f = get args 0, s = get args 1}
 
   -- TODO(larshum, 2022-02-08): Support composite types other than 1d sequences.
   sem compileStmt (env : CompileCEnv) (res : Result) =
@@ -129,7 +128,7 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       let kernelExpr = CEMapKernel {
         f = compileExpr env t.f, s = compileExpr env t.s,
         sTy = compileType env (tyTm t.s), retTy = compileType env t.ty,
-        opsPerElem = 10} in
+        opsPerThread = 10} in
       let assignExpr = CEBinOp {
         op = COAssign (),
         lhs = CEVar {id = id},
