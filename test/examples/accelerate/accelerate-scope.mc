@@ -27,5 +27,5 @@ print "Accelerating the map term      : ";
 timeFunction
   (lam.
     let f2 : Int -> Int = lam x. addi x 1 in
-    let s2 : [Int] = accelerate (map f2 s) in
+    let s2 : [Int] = accelerate ((let m : (Int -> Int) -> [Int] -> [Int] = map in m) f2 s) in
     ())
