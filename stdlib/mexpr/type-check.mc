@@ -102,9 +102,9 @@ lang Unify = MExprAst
   -- checkBeforeUnify is called before a variable `tv' is unified with another type.
   -- Performs three tasks in one traversal:
   -- - Occurs check
-  -- - Update level fields of TVars
+  -- - Update level fields of FlexVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
-  sem checkBeforeUnify (tv : TVarRec) =
+  sem checkBeforeUnify (tv : FlexVarRec) =
   | ty ->
     sfold_Type_Type (lam. lam ty. checkBeforeUnify tv ty) () ty
 end
@@ -183,7 +183,7 @@ lang FlexTypeUnify = Unify + UnifyFields + FlexTypeAst + UnknownTypeAst
      else ());
     modref t1.contents (Link ty2)
 
-  sem checkBeforeUnify (tv : TVarRec) =
+  sem checkBeforeUnify (tv : FlexVarRec) =
   | TyFlex {contents = r} ->
     match deref r with Unbound t then
       if nameEq t.ident tv.ident then
@@ -221,7 +221,7 @@ lang AllTypeUnify = Unify + AllTypeAst
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
-  sem checkBeforeUnify (tv : TVarRec) =
+  sem checkBeforeUnify (tv : FlexVarRec) =
   | TyAll t ->
     match tv.sort with WeakVar _ then
       let msg = join [
@@ -293,11 +293,11 @@ let newflexvar =
   lam sort. lam level. lam info.
   tyFlexUnbound info (nameSym "a") level sort
 
-let newvarWeak = use FlexTypeAst in
+let newvarWeak = use VarSortAst in
   newflexvar (WeakVar ())
-let newvar = use FlexTypeAst in
+let newvar = use VarSortAst in
   newflexvar (TypeVar ())
-let newrecvar = use FlexTypeAst in
+let newrecvar = use VarSortAst in
   lam fields. newflexvar (RecordVar {fields = fields}) 0
 
 lang Generalize = AllTypeAst
@@ -545,8 +545,8 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexTypeAst
     -- NOTE(aathn, 2021-11-06): This prevents generalizing type variables occurring
     -- in record patterns (by setting their level to 0), which is necessary until
     -- we have record polymorphism
-    let tvarrec = {ident = nameSym "_", level = 0, sort = TypeVar ()} in
-    checkBeforeUnify tvarrec (tyTm value);
+    let flexvarrec = {ident = nameSym "_", level = 0, sort = TypeVar ()} in
+    checkBeforeUnify flexvarrec (tyTm value);
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     unify env (tyTm rec) (newrecvar fields (infoTm rec));
     TmRecordUpdate {{{t with rec = rec}

@@ -1233,27 +1233,36 @@ lang VarTypeAst = Ast
 
 end
 
-type Level = Int
-type TVarRec = {ident : Name,
-                level : Level,
-                sort  : VarSort}
-
-lang FlexTypeAst = Ast
-  -- VarSort indicates the sort of type variable and contains related data
-  -- (such as regular type variable or row variable)
+lang VarSortAst
+  -- VarSort indicates the sort of a type variable, like type variable or
+  -- record variable, and contains related data
   syn VarSort =
   | TypeVar ()
   | WeakVar ()
   | RecordVar {fields : Map SID Type}
 
-  syn TVar =
-  | Unbound TVarRec
+  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | RecordVar r ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
+    (acc, RecordVar {r with fields = flds})
+  | s ->
+    (acc, s)
+end
+
+type Level = Int
+type FlexVarRec = {ident : Name,
+                   level : Level,
+                   sort  : VarSort}
+
+lang FlexTypeAst = VarSortAst + Ast
+  syn FlexVar =
+  | Unbound FlexVarRec
   | Link Type
 
   syn Type =
   -- Flexible type variable
   | TyFlex {info     : Info,
-            contents : Ref TVar}
+            contents : Ref FlexVar}
 
   -- Recursively follow links, producing something guaranteed not to be a link.
   sem resolveLink =
@@ -1274,13 +1283,6 @@ lang FlexTypeAst = Ast
 
   sem infoTy =
   | TyFlex {info = info} -> info
-
-  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
-  | RecordVar r ->
-    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
-    (acc, RecordVar {r with fields = flds})
-  | s ->
-    (acc, s)
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyFlex t & ty ->

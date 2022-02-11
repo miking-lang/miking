@@ -623,7 +623,7 @@ lang VarTypeEq = Eq + VarTypeAst
     else None ()
 end
 
-lang FlexTypeEq = Eq + FlexTypeAst
+lang VarSortEq = Eq + VarSortAst
   sem eqVarSort (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
   | (RecordVar l, RecordVar r) ->
       if eqi (mapSize l.fields) (mapSize r.fields) then
@@ -637,7 +637,9 @@ lang FlexTypeEq = Eq + FlexTypeAst
   | (lhs, rhs) ->
     if eqi (constructorTag lhs) (constructorTag rhs) then Some free
     else None ()
+end
 
+lang FlexTypeEq = VarSortEq + FlexTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFlex _ & rhs ->
     match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
