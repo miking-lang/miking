@@ -120,7 +120,7 @@ lang MExprCCompile = MExprAst + CAst
     -- is the default setting), the compiler will use 64-bit integers.
     use32BitInts : Bool,
 
-    -- Controls whether 32-bit floating-point nubmers should be used. If this
+    -- Controls whether 32-bit floating-point numbers should be used. If this
     -- is false (which is the default setting), the compiler will use 64-bit
     -- floats.
     use32BitFloats : Bool
@@ -138,12 +138,6 @@ lang MExprCCompile = MExprAst + CAst
     ptrTypes: [Name],
 
     -- The initial type environment produced by type lifting
-    -- NOTE(dlunde,2021-05-17): I want CompileCEnv to be visible across the whole
-    -- MExprCCompile fragment, which is why it is defined here. A problem,
-    -- however, is that Type is not bound outside the fragment. A solution to
-    -- this would be to define CompileCEnv within the fragment MExprCCompile
-    -- itself, with the requirement that it is visible across all semantic
-    -- functions and types defined with syn. This is currently impossible.
     typeEnv: [(Name,Type)],
 
     -- Map from MExpr external names to their C counterparts
