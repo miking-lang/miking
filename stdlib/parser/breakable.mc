@@ -1183,6 +1183,58 @@ recursive let precTableNoEq
     else []
 in
 
+type Self = {val : Int, pos : Int, str : String} in
+
+type TestToken in
+con TestAtom : { x : Self, input : BreakableInput Ast Self RClosed RClosed } -> TestToken in
+con TestPrefix : { x : Self, input : BreakableInput Ast Self RClosed ROpen } -> TestToken in
+con TestInfix : { x : Self, input : BreakableInput Ast Self ROpen ROpen } -> TestToken in
+con TestPostfix : { x : Self, input : BreakableInput Ast Self ROpen RClosed } -> TestToken in
+
+let selfToTok : Important -> Self -> [(Bool, String)] = lam important. lam x. [(match important with Important _ then true else false, x.str)] in
+
+let testParse
+  : (String -> BreakableInput res self LCLosed RClosed)
+  -> [Int -> TestToken]
+  -> Option (Either (BreakableError Self String) Ast)
+  = lam atom. recursive
+      let workROpen = lam pos. lam st. lam tokens.
+        match tokens with [t] ++ tokens then
+          let t = t pos in
+          let pos = addi 1 pos in
+          match t with TestAtom {x = self, input = input} then
+            workRClosed pos (breakableAddAtom input self st) tokens
+          else match t with TestPrefix {x = self, input = input} then
+            workROpen pos (breakableAddPrefix input self st) tokens
+          else None ()
+        else None ()
+      let workRClosed = lam pos. lam st. lam tokens.
+        match tokens with [t] ++ tokens then
+          let t = t pos in
+          let pos = addi 1 pos in
+          match t with TestInfix {x = self, input = input} then
+            match breakableAddInfix input self st with Some st
+            then workROpen pos st tokens
+            else None ()
+          else match t with TestPostfix {x = self, input = input} then
+            match breakableAddPostfix input self st with Some st
+            then workRClosed pos st tokens
+            else None ()
+          else None ()
+        else optionMap (breakableConstructResult selfToTok {lpar = (true, "("), rpar = (true, ")")} (atom "par")) (breakableFinalizeParse st)
+    in workROpen 0 (breakableInitState ())
+in
+
+-- TODO(vipa, 2022-02-14): Code generation doesn't see the need to
+-- generate a function that compares (Bool, String), even though
+-- they're used and known later in this file, thus this utest is here
+-- to make the requirement explicit until the bug is fixed.
+-- See: https://github.com/miking-lang/miking/issues/542
+utest (true, "foo") with (true, "foo") in
+
+let i : String -> (Bool, String) = lam x. (true, x) in
+let u : String -> (Bool, String) = lam x. (false, x) in
+
 let grammar =
   { productions =
     [ BreakableAtom {label = "int", construct = lam x: Self. IntA {pos = x.pos, val = x.val}}
@@ -1238,19 +1290,11 @@ let grammar =
   , topAllowed = allowAll
   }
 in
-let genned: BreakableGenGrammar Dyn Dyn Dyn = breakableGenGrammar cmpString grammar in
+let genned: BreakableGenGrammar a b c = breakableGenGrammar cmpString grammar in
 let atom = lam label. mapFindExn label genned.atoms in
 let prefix = lam label. mapFindExn label genned.prefixes in
 let infix = lam label. mapFindExn label genned.infixes in
 let postfix = lam label. mapFindExn label genned.postfixes in
-
-type Self = {val : Int, pos : Int, str : String} in
-
-type TestToken in
-con TestAtom : { x : Self, input : BreakableInput Ast Self RClosed RClosed } -> TestToken in
-con TestPrefix : { x : Self, input : BreakableInput Ast Self RClosed ROpen } -> TestToken in
-con TestInfix : { x : Self, input : BreakableInput Ast Self ROpen ROpen } -> TestToken in
-con TestPostfix : { x : Self, input : BreakableInput Ast Self ROpen RClosed } -> TestToken in
 
 let _int =
   let input = atom "int" in
@@ -1277,55 +1321,21 @@ let _nonZero =
   let input = postfix "nonZero" in
   lam pos. TestPostfix {x = {val = 0, pos = pos, str = "?"}, input = input} in
 
-let selfToTok : Important -> Self -> [(Bool, String)] = lam important. lam x. [(match important with Important _ then true else false, x.str)] in
+let test = testParse atom in
 
-let testParse
-  : [Int -> TestToken]
-  -> Option (Either (BreakableError Self String) Ast)
-  = recursive
-      let workROpen = lam pos. lam st. lam tokens.
-        match tokens with [t] ++ tokens then
-          let t = t pos in
-          let pos = addi 1 pos in
-          match t with TestAtom {x = self, input = input} then
-            workRClosed pos (breakableAddAtom input self st) tokens
-          else match t with TestPrefix {x = self, input = input} then
-            workROpen pos (breakableAddPrefix input self st) tokens
-          else None ()
-        else None ()
-      let workRClosed = lam pos. lam st. lam tokens.
-        match tokens with [t] ++ tokens then
-          let t = t pos in
-          let pos = addi 1 pos in
-          match t with TestInfix {x = self, input = input} then
-            match breakableAddInfix input self st with Some st
-            then workROpen pos st tokens
-            else None ()
-          else match t with TestPostfix {x = self, input = input} then
-            match breakableAddPostfix input self st with Some st
-            then workRClosed pos st tokens
-            else None ()
-          else None ()
-        else optionMap (breakableConstructResult selfToTok {lpar = (true, "("), rpar = (true, ")")} (atom "par")) (breakableFinalizeParse st)
-    in workROpen 0 (breakableInitState ())
-in
-
-let i : String -> (Bool, String) = lam x. (true, x) in
-let u : String -> (Bool, String) = lam x. (false, x) in
-
-utest testParse []
+utest test []
 with None ()
 in
 
-utest testParse [_int 4]
+utest test [_int 4]
 with Some (Right (IntA {val = 4,pos = 0}))
 in
 
-utest testParse [_int 4, _plus]
+utest test [_int 4, _plus]
 with None ()
 in
 
-utest testParse [_int 4, _plus, _int 7]
+utest test [_int 4, _plus, _int 7]
 with Some (Right
   (PlusA
     { pos = 1
@@ -1334,7 +1344,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_negate, _int 8]
+utest test [_negate, _int 8]
 with Some (Right
   (NegateA
     { pos = 0
@@ -1342,7 +1352,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_negate, _negate, _int 8]
+utest test [_negate, _negate, _int 8]
 with Some (Right
   (NegateA
     { pos = 0
@@ -1353,7 +1363,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_int 9, _nonZero, _nonZero]
+utest test [_int 9, _nonZero, _nonZero]
 with Some (Right
   (NonZeroA
     { pos = 2
@@ -1363,11 +1373,11 @@ with Some (Right
     }))
 in
 
-utest testParse [_negate, _nonZero]
+utest test [_negate, _nonZero]
 with None ()
 in
 
-utest testParse [_int 1, _plus, _int 2, _times, _int 3]
+utest test [_int 1, _plus, _int 2, _times, _int 3]
 with Some (Right
   (PlusA
     { pos = 1
@@ -1380,7 +1390,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_int 1, _times, _int 2, _plus, _int 3]
+utest test [_int 1, _times, _int 2, _plus, _int 3]
 with Some (Right
   (PlusA
     { pos = 3
@@ -1393,7 +1403,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_int 1, _times, _int 2, _divide, _int 3]
+utest test [_int 1, _times, _int 2, _divide, _int 3]
 with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 0,str = "1"}
     , last = {val = 3,pos = 4,str = "3"}
@@ -1405,7 +1415,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
+utest test [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
 with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 0,str = "1"}
     , last = {val = 3,pos = 4,str = "3"}
@@ -1417,7 +1427,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3]
+utest test [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3]
 with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 2,str = "1"}
     , last = {val = 3,pos = 6,str = "3"}
@@ -1430,20 +1440,20 @@ with Some (Left (Ambiguities (
 in
 
 -- TODO(vipa, 2021-02-15): When we compute elisons we can report two ambiguities here, the nested one is independent
-utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
+utest test [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
 with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "0"}
     , last = {val = 4,pos = 8,str = "4"}
     , partialResolutions =
-    [ [u"0",i"+",i"(",u"1",u"*",u"2",u"/",u"3",i"+",u"4",i")"]
-    , [i"(",u"0",i"+",u"1",u"*",u"2",u"/",u"3",i")",i"+",u"4"]
-    ]
+      [ [u"0",i"+",i"(",u"1",u"*",u"2",u"/",u"3",i"+",u"4",i")"]
+      , [i"(",u"0",i"+",u"1",u"*",u"2",u"/",u"3",i")",i"+",u"4"]
+      ]
     }
   ])))
 in
 
 -- TODO(vipa, 2021-02-15): Do we want to specify the order of the returned ambiguities in some way?
-utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4, _divide, _int 5, _times, _int 6]
+utest test [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4, _divide, _int 5, _times, _int 6]
 with Some (Left (Ambiguities (
   [ { first = {val = 4, pos = 6,str = "4"}
     , last = {val = 6, pos = 10,str = "6"}
@@ -1462,7 +1472,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_if, _int 1]
+utest test [_if, _int 1]
 with Some (Right
   (IfA
     { pos = 0
@@ -1470,7 +1480,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_if, _int 1, _else, _int 2]
+utest test [_if, _int 1, _else, _int 2]
 with Some (Right
   (ElseA
     { pos = 2
@@ -1483,11 +1493,11 @@ with Some (Right
 
 in
 
-utest testParse [_if, _int 1, _else, _int 2, _else, _int 3]
+utest test [_if, _int 1, _else, _int 2, _else, _int 3]
 with None ()
 in
 
-utest testParse [_if, _if, _int 1, _else, _int 2]
+utest test [_if, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "if"}
     , last = {val = 2,pos = 4,str = "2"}
@@ -1499,7 +1509,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_negate, _if, _int 1, _else, _int 2]
+utest test [_negate, _if, _int 1, _else, _int 2]
 with Some (Right
   (NegateA
     { pos = 0
@@ -1514,7 +1524,7 @@ with Some (Right
     }))
 in
 
-utest testParse [_if, _negate, _if, _int 1, _else, _int 2]
+utest test [_if, _negate, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "if"}
     , last = {val = 2,pos = 5,str = "2"}
@@ -1526,7 +1536,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_int 1, _plus, _if, _negate, _if, _int 1, _else, _int 2]
+utest test [_int 1, _plus, _if, _negate, _if, _int 1, _else, _int 2]
 with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 2,str = "if"}
     , last = {val = 2,pos = 7,str = "2"}
@@ -1538,7 +1548,7 @@ with Some (Left (Ambiguities (
   ])))
 in
 
-utest testParse [_int 1, _times, _if, _int 7, _else, _int 12]
+utest test [_int 1, _times, _if, _int 7, _else, _int 12]
 with Some (Right
   (TimesA
     { pos = 1
@@ -1554,15 +1564,19 @@ with Some (Right
     }))
 in
 
-utest testParse [_int 1, _plus, _plus, _int 2]
+utest test [_int 7, _else, _int 12]
 with None ()
 in
 
-utest testParse [_int 1, _plus, _nonZero]
+utest test [_int 1, _plus, _plus, _int 2]
 with None ()
 in
 
-utest testParse [_int 1, _nonZero, _plus, _int 2]
+utest test [_int 1, _plus, _nonZero]
+with None ()
+in
+
+utest test [_int 1, _nonZero, _plus, _int 2]
 with Some (Right
   (PlusA
     { pos = 2
@@ -1572,6 +1586,191 @@ with Some (Right
       })
     , r = (IntA {val = 2,pos = 3})
     }))
+in
+
+let grammar =
+  { productions =
+    [ BreakableAtom {label = "int", construct = lam x: Self. IntA {pos = x.pos, val = x.val}}
+    , BreakableAtom {label = "par", construct = lam x: Self. ParA {pos = x.pos}}
+    , BreakableInfix
+      { label = "plus"
+      , construct = lam x: Self. lam l. lam r. PlusA {pos = x.pos, l = l, r = r}
+      , leftAllow = allowAllBut ["else"]
+      , rightAllow = allowAllBut ["else"]
+      }
+    , BreakableInfix
+      { label = "times"
+      , construct = lam x: Self. lam l. lam r. TimesA {pos = x.pos, l = l, r = r}
+      , leftAllow = allowAllBut ["else"]
+      , rightAllow = allowAllBut ["else"]
+      }
+    , BreakableInfix
+      { label = "divide"
+      , construct = lam x: Self. lam l. lam r. DivideA {pos = x.pos, l = l, r = r}
+      , leftAllow = allowAllBut ["else"]
+      , rightAllow = allowAllBut ["else"]
+      }
+    , BreakablePrefix
+      { label = "negate"
+      , construct = lam x: Self. lam r. NegateA {pos = x.pos, r = r}
+      , rightAllow = allowAllBut ["else"]
+      }
+    , BreakablePrefix
+      { label = "if"
+      , construct = lam x: Self. lam r. IfA {pos = x.pos, r = r}
+      , rightAllow = allowAll
+      }
+    , BreakableInfix
+      { label = "else"
+      , construct = lam x: Self. lam l. lam r. ElseA {pos = x.pos, l = l, r = r}
+      , leftAllow = allowAllBut ["else"]
+      , rightAllow = allowAllBut ["else"]
+      }
+    , BreakablePostfix
+      { label = "nonZero"
+      , construct = lam x: Self. lam l. NonZeroA {pos = x.pos, l = l}
+      , leftAllow = allowAllBut ["else"]
+      }
+    ]
+  , precedences = join
+    [ precTableNoEq
+      [ ["negate"]
+      , ["times", "divide"]
+      , ["plus"]
+      , ["if"]
+      ]
+    ]
+  , topAllowed = allowAllBut ["else"]
+  }
+in
+
+let genned: BreakableGenGrammar a b c = breakableGenGrammar cmpString grammar in
+let atom = lam label. mapFindExn label genned.atoms in
+let prefix = lam label. mapFindExn label genned.prefixes in
+let infix = lam label. mapFindExn label genned.infixes in
+let postfix = lam label. mapFindExn label genned.postfixes in
+
+let _int =
+  let input = atom "int" in
+  lam val. lam pos. TestAtom {x = {val = val, pos = pos, str = int2string val}, input = input} in
+let _plus =
+  let input = infix "plus" in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "+"}, input = input} in
+let _times =
+  let input = infix "times" in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "*"}, input = input} in
+let _divide =
+  let input = infix "divide" in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "/"}, input = input} in
+let _negate =
+  let input = prefix "negate" in
+  lam pos. TestPrefix {x = {val = 0, pos = pos, str = "-"}, input = input} in
+let _if =
+  let input = prefix "if" in
+  lam pos. TestPrefix {x = {val = 0, pos = pos, str = "if"}, input = input} in
+let _else =
+  let input = infix "else" in
+  lam pos. TestInfix {x = {val = 0, pos = pos, str = "else"}, input = input} in
+let _nonZero =
+  let input = postfix "nonZero" in
+  lam pos. TestPostfix {x = {val = 0, pos = pos, str = "?"}, input = input} in
+
+let test = testParse atom in
+
+utest test [_if, _int 1]
+with Some (Right
+  (IfA
+    { pos = 0
+    , r = (IntA {val = 1,pos = 1})
+    }))
+in
+
+utest test [_if, _int 1, _else, _int 2]
+with Some (Right
+  (IfA
+    { pos = 0
+    , r = (ElseA
+      { pos = 2
+      , l = (IntA {val = 1,pos = 1})
+      , r = (IntA {val = 2,pos = 3})
+      })
+    }))
+
+in
+
+utest test [_if, _int 1, _else, _int 2, _else, _int 3]
+with None ()
+in
+
+utest test [_if, _if, _int 1, _else, _int 2]
+with Some (Left (Ambiguities (
+  [ { first = {val = 0,pos = 0,str = "if"}
+    , last = {val = 2,pos = 4,str = "2"}
+    , partialResolutions =
+      [ [i"if",i"(",i"if",u"1",i")",i"else",u"2"]
+      , [i"if",i"(",i"if",u"1",i"else",u"2",i")"]
+      ]
+    }
+  ])))
+in
+
+utest test [_negate, _if, _int 1, _else, _int 2]
+with Some (Right
+  (NegateA
+    { pos = 0
+    , r = (IfA
+      { pos = 1
+      , r = (ElseA
+        { pos = 3
+        , l = (IntA {val = 1,pos = 2})
+        , r = (IntA {val = 2,pos = 4})
+        })
+      })
+    }))
+in
+
+utest test [_if, _negate, _if, _int 1, _else, _int 2]
+with Some (Left (Ambiguities (
+  [ { first = {val = 0,pos = 0,str = "if"}
+    , last = {val = 2,pos = 5,str = "2"}
+    , partialResolutions =
+      [ [i"if",i"(",u"-",i"if",u"1",i")",i"else",u"2"]
+      , [i"if",i"(",u"-",i"if",u"1",i"else",u"2",i")"]
+      ]
+    }
+  ])))
+in
+
+utest test [_int 1, _plus, _if, _negate, _if, _int 1, _else, _int 2]
+with Some (Left (Ambiguities (
+  [ { first = {val = 0,pos = 2,str = "if"}
+    , last = {val = 2,pos = 7,str = "2"}
+    , partialResolutions =
+      [ [i"if",i"(",u"-",i"if",u"1",i")",i"else",u"2"]
+      , [i"if",i"(",u"-",i"if",u"1",i"else",u"2",i")"]
+      ]
+    }
+  ])))
+in
+
+utest test [_int 1, _times, _if, _int 7, _else, _int 12]
+with Some (Right
+  (TimesA
+    { pos = 1
+    , l = (IntA {val = 1,pos = 0})
+    , r = (IfA
+      { pos = 2
+      , r = (ElseA
+        { pos = 4
+        , l = (IntA {val = 7,pos = 3})
+        , r = (IntA {val = 12,pos = 5})
+        })
+      })
+    }))
+in
+
+utest test [_int 7, _else, _int 12]
+with None ()
 in
 
 ()
