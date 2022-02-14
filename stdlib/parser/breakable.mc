@@ -372,8 +372,8 @@ let _isBrokenEdge
   : Bool
   -> PermanentNode res self
   -> Bool
-  = lam isWhitelist. lam node.
-    or isWhitelist (not (_isTopAllowedP node))
+  = lam parenForbidden. lam node.
+    or parenForbidden (not (_isTopAllowedP node))
 let _leftStuffP = lam p.
   switch p
   case InfixP ({ input = InfixI { leftAllow = allows } } & r) then
@@ -957,16 +957,19 @@ type Ambiguity self tokish = {first: self, last: self, partialResolutions: [[tok
 type BreakableError self tokish
 con Ambiguities : [Ambiguity self tokish] -> BreakableError self tokish
 
+type Important
+con Important : () -> Important
+con Unimportant : () -> Important
+
 let breakableConstructResult
-  : (self -> tokish)
-  -> tokish
-  -> tokish
-  -> tokish
+  : (Important -> self -> tokish)
+  -> { lpar : tokish, rpar : tokish }
   -> BreakableInput res self LCLosed RClosed
   -> [PermanentNode res self] -- NonEmpty
   -> Either (BreakableError self tokish) res
-  = lam selfToTok. lam lpar. lam rpar. lam elided. lam parInput. lam nodes.
+  = lam selfToTok. lam tokish. lam parInput. lam nodes.
     let parId = _opIdI parInput in
+    let isParenForbidden : AllowSet OpId -> Bool = lam allows. not (breakableInAllowSet parId allows) in
     -- NOTE(vipa, 2021-02-15): All alternatives for children at the
     -- same point in the tree have the exact same range in the input,
     -- i.e., they will have exactly the same input as first and last
@@ -992,43 +995,56 @@ let breakableConstructResult
         else never
     in
 
+    type IdxSet = [Int] in
+    let leftOf : Int -> IdxSet -> IdxSet = lam idx. lam set. filter (gti idx) set in
+    let rightOf : Int -> IdxSet -> IdxSet = lam idx. lam set. filter (lti idx) set in
+    let inIdxSet : Int -> IdxSet -> Bool = lam idx. lam set. any (eqi idx) set in
+    let idxSetEmpty : IdxSet -> Bool = lam set. null set in
+
+    let isImportant : PermanentNode res self -> IdxSet -> Important = lam p. lam set.
+      if inIdxSet (_opIdxP p) set then Important () else Unimportant () in
+    let idxAndImportant : PermanentNode res self -> IdxSet -> (IdxSet, Important, IdxSet) = lam p. lam set.
+      let idx = _opIdxP p in
+      (leftOf idx set, if inIdxSet idx set then Important () else Unimportant (), rightOf idx set) in
+
     recursive
-      let flattenOne : PermanentNode res self -> [tokish] = lam node.
+      let flattenOne : IdxSet -> PermanentNode res self -> [tokish] = lam important. lam node.
+        let isImportant = isImportant node important in
         switch node
-        case AtomP {self = self} then [selfToTok self]
+        case AtomP {self = self} then selfToTok isImportant self
         case InfixP p then
-          join [flattenMany p.leftChildAlts, [selfToTok p.self], flattenMany p.rightChildAlts]
+          join [flattenMany important p.leftChildAlts, selfToTok isImportant p.self, flattenMany important p.rightChildAlts]
         case PrefixP p then
-          cons (selfToTok p.self) (flattenMany p.rightChildAlts)
+          concat (selfToTok isImportant p.self) (flattenMany important p.rightChildAlts)
         case PostfixP p then
-          snoc (flattenMany p.leftChildAlts) (selfToTok p.self)
+          concat (flattenMany important p.leftChildAlts) (selfToTok isImportant p.self)
         end
-      let flattenMany : [PermanentNode res self] -> [tokish] = lam nodes. -- NonEmpty
+      let flattenMany : IdxSet -> [PermanentNode res self] -> [tokish] = lam important. lam nodes. -- NonEmpty
         match nodes with [n] ++ _ then
-          flattenOne n
+          flattenOne important n
         else never
     in
 
     recursive
-      let resolveTopOne : [Int] -> PermanentNode res self -> [[tokish]] =
+      let resolveTopOne : IdxSet -> PermanentNode res self -> [[tokish]] =
         lam topIdxs. lam p.
-          let idx = _opIdxP p in
+          match idxAndImportant p topIdxs with (lIdxs, selfImportant, rIdxs) in
           let l = match _leftStuffP p with Some (children, allows)
-            then resolveTopMany (filter (gti idx) topIdxs) (_isWhitelist allows) children
+            then resolveTopMany lIdxs (isParenForbidden allows) children
             else [[]] in
           let r = match _rightStuffP p with Some (children, allows)
-            then resolveTopMany (filter (lti idx) topIdxs) (_isWhitelist allows) children
+            then resolveTopMany rIdxs (isParenForbidden allows) children
             else [[]] in
-          let here = [selfToTok (_selfP p)] in
+          let here = selfToTok selfImportant (_selfP p) in
           seqLiftA2 (lam l. lam r. join [l, here, r]) l r
       let resolveTopMany : [Int] -> Bool -> [PermanentNode res self] -> [[tokish]] =
-        lam topIdxs. lam isWhitelist. lam ps.
+        lam topIdxs. lam parenForbidden. lam ps.
           -- TODO(vipa, 2021-11-15): Use `match ... with ... in ...`
-          match partition (_isBrokenEdge isWhitelist) ps with (broken, whole) then
+          match partition (_isBrokenEdge parenForbidden) ps with (broken, whole) then
             let broken = join (map (resolveTopOne topIdxs) broken) in
             let whole = if null whole then [] else
-              let flattened = flattenMany whole in
-              if null topIdxs then [flattened] else [snoc (cons lpar flattened) rpar]
+              let flattened = flattenMany topIdxs whole in
+              if idxSetEmpty topIdxs then [flattened] else [snoc (cons tokish.lpar flattened) tokish.rpar]
             in
             concat broken whole
           else never
@@ -1041,12 +1057,11 @@ let breakableConstructResult
         -> Bool
         -> [PermanentNode res self] -- NonEmpty
         -> Option res
-        = lam brokenParent. lam isWhitelist. lam tops.
+        = lam brokenParent. lam parenForbidden. lam tops.
           match tops with [n] then
-            workOne (if _isBrokenEdge isWhitelist n then Some brokenParent else None ()) n
+            workOne (if _isBrokenEdge parenForbidden n then Some brokenParent else None ()) n
           else match tops with [n] ++ _ then
-            -- TODO(vipa, 2021-11-12): Use `match ... with ... in ...`?
-            let x = match (any (_isBrokenEdge isWhitelist) tops, brokenParent)
+            let x = match (any (_isBrokenEdge parenForbidden) tops, brokenParent)
               with (true, Some parent) then ([parent], range parent)
               else (tops, range n) in
             let tops = x.0 in
@@ -1105,10 +1120,10 @@ let breakableConstructResult
         -> Option res
         = lam brokenParent. lam node.
           let l = match _leftStuffP node with Some (children, allows)
-            then workMany (optionOr brokenParent (Some node)) (_isWhitelist allows) children
+            then workMany (optionOr brokenParent (Some node)) (isParenForbidden allows) children
             else None () in
           let r = match _rightStuffP node with Some (children, allows)
-            then workMany (optionOr brokenParent (Some node)) (_isWhitelist allows) children
+            then workMany (optionOr brokenParent (Some node)) (isParenForbidden allows) children
             else None () in
           switch (node, l, r)
           case (AtomP {self = self, input = AtomI {construct = c}}, _, _) then
@@ -1220,9 +1235,10 @@ let grammar =
       , ["if"]
       ]
     ]
+  , topAllowed = allowAll
   }
 in
-let genned = breakableGenGrammar cmpString grammar in
+let genned: BreakableGenGrammar Dyn Dyn Dyn = breakableGenGrammar cmpString grammar in
 let atom = lam label. mapFindExn label genned.atoms in
 let prefix = lam label. mapFindExn label genned.prefixes in
 let infix = lam label. mapFindExn label genned.infixes in
@@ -1261,7 +1277,7 @@ let _nonZero =
   let input = postfix "nonZero" in
   lam pos. TestPostfix {x = {val = 0, pos = pos, str = "?"}, input = input} in
 
-let selfToTok : Self -> String = lam x. x.str in
+let selfToTok : Important -> Self -> [(Bool, String)] = lam important. lam x. [(match important with Important _ then true else false, x.str)] in
 
 let testParse
   : [Int -> TestToken]
@@ -1290,9 +1306,12 @@ let testParse
             then workRClosed pos st tokens
             else None ()
           else None ()
-        else optionMap (breakableConstructResult selfToTok "(" ")" (atom "par")) (breakableFinalizeParse st)
+        else optionMap (breakableConstructResult selfToTok {lpar = (true, "("), rpar = (true, ")")} (atom "par")) (breakableFinalizeParse st)
     in workROpen 0 (breakableInitState ())
 in
+
+let i : String -> (Bool, String) = lam x. (true, x) in
+let u : String -> (Bool, String) = lam x. (false, x) in
 
 utest testParse []
 with None ()
@@ -1379,8 +1398,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 0,str = "1"}
     , last = {val = 3,pos = 4,str = "3"}
     , partialResolutions =
-      [ ["1", "*", "(", "2", "/", "3", ")"]
-      , ["(", "1", "*", "2", ")", "/", "3"]
+      [ [u"1", i"*", i"(", u"2", i"/", u"3", i")"]
+      , [i"(", u"1", i"*", u"2", i")", i"/", u"3"]
       ]
     }
   ])))
@@ -1391,8 +1410,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 0,str = "1"}
     , last = {val = 3,pos = 4,str = "3"}
     , partialResolutions =
-      [ ["1","*","(","2","/","3",")"]
-      , ["(","1","*","2", ")","/","3"]
+      [ [u"1",i"*",i"(",u"2",i"/",u"3",i")"]
+      , [i"(",u"1",i"*",u"2",i")",i"/",u"3"]
       ]
     }
   ])))
@@ -1403,8 +1422,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 1,pos = 2,str = "1"}
     , last = {val = 3,pos = 6,str = "3"}
     , partialResolutions =
-      [ ["1","*","(","2","/","3",")"]
-      , ["(","1","*","2",")","/","3"]
+      [ [u"1",i"*",i"(",u"2",i"/",u"3",i")"]
+      , [i"(",u"1",i"*",u"2",i")",i"/",u"3"]
       ]
     }
   ])))
@@ -1416,8 +1435,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "0"}
     , last = {val = 4,pos = 8,str = "4"}
     , partialResolutions =
-    [ ["0","+","(","1","*","2","/","3","+","4",")"]
-    , ["(","0","+","1","*","2","/","3",")","+","4"]
+    [ [u"0",i"+",i"(",u"1",u"*",u"2",u"/",u"3",i"+",u"4",i")"]
+    , [i"(",u"0",i"+",u"1",u"*",u"2",u"/",u"3",i")",i"+",u"4"]
     ]
     }
   ])))
@@ -1429,15 +1448,15 @@ with Some (Left (Ambiguities (
   [ { first = {val = 4, pos = 6,str = "4"}
     , last = {val = 6, pos = 10,str = "6"}
     , partialResolutions =
-      [ ["4","/","(","5","*","6",")"]
-      , ["(","4","/","5",")","*","6"]
+      [ [u"4",i"/",i"(",u"5",i"*",u"6",i")"]
+      , [i"(",u"4",i"/",u"5",i")",i"*",u"6"]
       ]
     }
   , { first = {val = 1,pos = 0,str = "1"}
     , last = {val = 3,pos = 4,str = "3"}
     , partialResolutions =
-      [ ["1","*","(","2","/","3",")"]
-      , ["(","1","*","2",")","/","3"]
+      [ [u"1",i"*",i"(",u"2",i"/",u"3",i")"]
+      , [i"(",u"1",i"*",u"2",i")",i"/",u"3"]
       ]
     }
   ])))
@@ -1473,8 +1492,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "if"}
     , last = {val = 2,pos = 4,str = "2"}
     , partialResolutions =
-      [ ["if","(","if","1", "else","2",")"]
-      , ["if","(","if","1", ")","else","2"]
+      [ [i"if",i"(",i"if",u"1",i"else",u"2",i")"]
+      , [i"if",i"(",i"if",u"1",i")",i"else",u"2"]
       ]
     }
   ])))
@@ -1500,8 +1519,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 0,str = "if"}
     , last = {val = 2,pos = 5,str = "2"}
     , partialResolutions =
-      [ ["if","(","-","if", "1","else","2",")"]
-      , ["if","(","-","if", "1",")","else","2"]
+      [ [i"if",i"(",u"-",i"if",u"1",i"else",u"2",i")"]
+      , [i"if",i"(",u"-",i"if",u"1",i")",i"else",u"2"]
       ]
     }
   ])))
@@ -1512,8 +1531,8 @@ with Some (Left (Ambiguities (
   [ { first = {val = 0,pos = 2,str = "if"}
     , last = {val = 2,pos = 7,str = "2"}
     , partialResolutions =
-      [ ["if","(","-","if", "1","else","2",")"]
-      , ["if","(","-","if", "1",")","else","2"]
+      [ [i"if",i"(",u"-",i"if",u"1",i"else",u"2",i")"]
+      , [i"if",i"(",u"-",i"if",u"1",i")",i"else",u"2"]
       ]
     }
   ])))
