@@ -5,7 +5,7 @@ include "cuda/compile.mc"
 include "cuda/pmexpr-ast.mc"
 
 lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
-  sem generateMapKernelFunction =
+  sem generateCudaKernelFunction =
   | CEMapKernel t ->
     let seqIdx = lam seqId. lam idxId.
       CEBinOp {
@@ -16,6 +16,8 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       match t.f with CEVar {id = id} then id
       else error "Cannot compile map with non-trivial function calls" in
     let kernelId = nameSym "mapKernel" in
+    let outTypeId = nameSym "T" in
+    let sTypeId = nameSym "T" in
     let outParamId = nameSym "out" in
     let sParamId = nameSym "s" in
     let indexId = nameSym "idx" in
@@ -56,29 +58,32 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       cond = whileCondExpr,
       body = [mapAssignStmt, indexIncrementStmt]} in
     let stmts = [indexStmt, strideStmt, whileStmt] in
-    let outTy = CTyPtr {ty = t.retTy} in
-    let sTy = CTyPtr {ty = t.sTy} in
+    let outTy = CTyVar {id = outTypeId} in
+    let sTy = CTyVar {id = sTypeId} in
     let top = CuTTop {
+      templates = [outTypeId, sTypeId],
       attrs = [CuAGlobal ()],
       top = CTFun {
         ret = CTyVoid (), id = kernelId,
         params = [(outTy, outParamId), (sTy, sParamId)], body = stmts}} in
     (kernelId, top)
 
-  sem generateMapKernelCall (ccEnv : CompileCEnv) (outExpr : CExpr) =
+  sem generateCudaKernelCall (ccEnv : CompileCEnv) (outExpr : CExpr) =
   | CEMapKernel t ->
-    match generateMapKernelFunction (CEMapKernel t) with (kernelId, kernelTop) in
+    match generateCudaKernelFunction (CEMapKernel t) with (kernelId, kernelTop) in
 
     -- Determine the length of the input sequence. As it is stored on the GPU
     -- at this point, we need to copy the struct (not all data) back to the CPU
     -- to get access to the length field.
     let tempId = nameSym "t" in
-    let tempSeqDeclStmt = CSDef {ty = t.sTy, id = Some tempId, init = None ()} in
+    -- TODO(larshum, 2022-02-14): Eliminate use of 'decltype'?
+    let tempSeqDeclStmt = CSDef {
+      ty = CTyDecltype {e = t.s}, id = Some tempId, init = None ()} in
     let cudaMemcpyStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
         CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}}, t.s,
-        CESizeOfType {ty = t.sTy},
+        CESizeOfType {ty = CTyDecltype {e = t.s}},
         CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let lenId = nameSym "n" in
     let lenStmt = CSDef {
@@ -88,7 +93,7 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
 
     -- Pre-allocate memory for the output
     let outElemType =
-      match t.retTy with CTyVar {id = seqId} then
+      match t.outTy with CTyVar {id = seqId} then
         -- TODO(larshum, 2022-02-09): Only works for 1d sequences.
         -- OPT(larshum, 2022-02-09): We need the type environment as an
         -- associative sequence, so that we can compile the element type to a C
@@ -112,12 +117,12 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       fun = _cudaMalloc,
       args = [
         CEUnOp {op = COAddrOf (), arg = outExpr},
-        CESizeOfType {ty = t.retTy}]}} in
+        CESizeOfType {ty = t.outTy}]}} in
     let memcpySeqStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
         outExpr, CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
-        CESizeOfType {ty = t.retTy},
+        CESizeOfType {ty = t.outTy},
         CEVar {id = _cudaMemcpyHostToDevice}]}} in
 
     -- Compute launch parameters and start kernel

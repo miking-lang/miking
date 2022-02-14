@@ -141,7 +141,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
   match translateCudaTops cudaMemEnv ccEnv ctops with (wrapperMap, cudaTops) in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
-  (CuPProg { includes = cIncludes, tops = cudaTops }, wrapperProg)
+  (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
   match strLastIndex '/' path with Some idx then

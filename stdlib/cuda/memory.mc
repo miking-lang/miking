@@ -56,6 +56,9 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
   | TmApp {lhs = TmApp {lhs = TmConst {val = CMap ()}, rhs = f}, rhs = s,
            ty = ty, info = info} ->
     TmMapKernel {f = f, s = s, ty = ty, info = info}
+  | TmParallelReduce t ->
+    TmReduceKernel {f = t.f, ne = t.ne, s = t.ne, commutative = false,
+                    ty = t.ty, info = t.info}
   | t -> smap_Expr_Expr generateKernelApplications t
 
   sem addMemoryAllocations (env : AllocEnv) =

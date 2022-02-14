@@ -1,5 +1,7 @@
--- Uses the map intrinsic within a function called from the accelerate
--- expression.
+-- Uses the map intrinsic indirectly, by calling a function that uses it from
+-- the accelerate expression.
+include "common.mc"
+include "string.mc"
 
 let f : [Int] -> [Int] = lam s.
   (let m : (Int -> Int) -> [Int] -> [Int] = map in m) (lam x : Int. addi 1 x) s
@@ -15,4 +17,5 @@ let s2 : [Int] = accelerate (f s1) in
 let s3 : [Int] = accelerate (f s2) in
 
 utest addi (sum s2) n with sum s3 in
-()
+printLn (int2string (sum s2));
+printLn (int2string (sum s3))

@@ -96,9 +96,7 @@ lang CExprTypeAst
     match _mapAccumLMem f acc t.mem with (acc, mem) in
     (acc, CTyStruct {t with mem = mem})
   | CTyEnum t -> CTyEnum t
-  | (CTyVar _ | CTyChar _ | CTyInt _ | CTyDouble _ | CTyChar _ | CTyVoid _ |
-     CTyEnum _) & ty ->
-    (acc, ty)
+  | ty -> (acc, ty)
 
   sem smapCTypeCType (f : CType -> b) =
   | p ->

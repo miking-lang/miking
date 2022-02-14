@@ -11,7 +11,15 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuDY _ -> "y"
   | CuDZ _ -> "z"
 
-  sem printCExpr (env: PprintEnv) =
+  sem printCType (decl : String) (env : PprintEnv) =
+  | CTyDecltype t ->
+    match printCExpr env t.e with (env, e) in
+    (env, _joinSpace (join ["decltype", e]) decl)
+  | CTyRmPtr t ->
+    match printCType decl env t.ty with (env, ty) in
+    (env, join ["std::remove_pointer<", _joinSpace ty decl, ">::type"])
+
+  sem printCExpr (env : PprintEnv) =
   | CEThreadIdx {dim = dim} -> (env, concat "threadIdx." (_printCudaDim dim))
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
@@ -31,11 +39,18 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuAExternC _ -> (env, "extern \"C\"")
 
   sem printCudaTop (indent : Int) (env : PprintEnv) =
-  | CuTTop {attrs = attrs, top = top} ->
+  | CuTTop {templates = templates, attrs = attrs, top = top} ->
+    match
+      if null templates then (env, "")
+      else
+        match mapAccumL pprintEnvGetStr env templates with (env, templates) in
+        let templates = map (lam s. concat "typename " s) templates in
+        (env, join ["template <", strJoin ", " templates, ">\n"])
+    with (env, templateStr) in
     match mapAccumL printCudaAttribute env attrs with (env, attrs) in
     let attrs = if null attrs then "" else concat (strJoin " " attrs) " " in
     match printCTop indent env top with (env, top) in
-    (env, join [attrs, top])
+    (env, join [templateStr, attrs, top])
 
   sem printCudaProg (nameInit : [Name]) =
   | CuPProg {includes = includes, tops = tops} ->
@@ -88,18 +103,20 @@ let printCuTop = lam cudaTop : CuTop.
   match printCudaTop 0 pprintEnvEmpty cudaTop with (_, str) in str
 in
 let topDef = CTDef {ty = CTyInt {}, id = Some (nameNoSym "x"), init = None ()} in
-let cuTop = lam attrs : [CudaAttribute].
-  CuTTop {attrs = attrs, top = topDef}
+let cuTop = lam templates : [Name]. lam attrs : [CudaAttribute].
+  CuTTop {templates = templates, attrs = attrs, top = topDef}
 in
-utest printCuTop (cuTop []) with "int x;" in
-utest printCuTop (cuTop [CuAHost ()]) with "__host__ int x;" in
-utest printCuTop (cuTop [CuADevice (), CuAHost ()])
+utest printCuTop (cuTop [] []) with "int x;" in
+utest printCuTop (cuTop [] [CuAHost ()]) with "__host__ int x;" in
+utest printCuTop (cuTop [] [CuADevice (), CuAHost ()])
 with "__device__ __host__ int x;" in
-utest printCuTop (cuTop [CuAGlobal ()]) with "__global__ int x;" in
+utest printCuTop (cuTop [] [CuAGlobal ()]) with "__global__ int x;" in
+let t1 = nameSym "T" in
+utest printCuTop (cuTop [t1] []) with "template <typename T>\nint x;" in
 
 let prog = CuPProg {
   includes = ["<string.h>"],
-  tops = [cuTop [CuADevice ()]]} in
+  tops = [cuTop [] [CuADevice ()]]} in
 utest printCudaProg [] prog with
 "#include <string.h>
 __device__ int x;" in

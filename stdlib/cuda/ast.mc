@@ -13,14 +13,23 @@ lang CudaAst = CAst + MExprAst
   | CuAGlobal ()
   | CuAExternC ()
 
+  syn CType =
+  | CTyDecltype {e : CExpr}
+  | CTyRmPtr {ty : CType}
+
+  sem smapAccumLCTypeCType (f : acc -> CType -> (acc, b)) (acc : acc) =
+  | CTyRmPtr t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyRmPtr {t with ty = ty})
+
   syn CExpr =
   | CEMap {f : CExpr, s : CExpr}
+  | CEFoldl {f : CExpr, acc : CExpr, s : CExpr}
   | CEThreadIdx {dim : CudaDimension}
   | CEBlockIdx {dim : CudaDimension}
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
-  | CEMapKernel {f : CExpr, s : CExpr, sTy : CType, retTy : CType,
-                 opsPerThread : Int}
+  | CEMapKernel {f : CExpr, s : CExpr, outTy : CType, opsPerThread : Int}
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 
@@ -29,6 +38,11 @@ lang CudaAst = CAst + MExprAst
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
     (acc, CEMap {{t with f = tf} with s = s})
+  | CEFoldl t ->
+    match f acc t.f with (acc, tf) in
+    match f acc t.acc with (acc, tacc) in
+    match f acc t.s with (acc, s) in
+    (acc, CEFoldl {{{t with f = tf} with acc = tacc} with s = s})
   | CEMapKernel t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
@@ -43,7 +57,7 @@ lang CudaAst = CAst + MExprAst
   | expr & (CEThreadIdx _ | CEBlockIdx _ | CEBlockDim _) -> (acc, expr)
 
   syn CuTop =
-  | CuTTop {attrs : [CudaAttribute], top : CTop}
+  | CuTTop {templates : [Name], attrs : [CudaAttribute], top : CTop}
 
   syn CudaProg =
   | CuPProg {includes : [String], tops : [CuTop]}

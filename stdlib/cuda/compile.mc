@@ -10,6 +10,10 @@ let _cudaFree = nameNoSym "cudaFree"
 let _malloc = nameNoSym "malloc"
 let _free = nameNoSym "free"
 
+let cudaIncludes = concat cIncludes [
+  "<type_traits>"
+]
+
 lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _getSequenceElemType (env : CompileCEnv) =
   | ty ->
@@ -118,6 +122,7 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 
   sem compileOp (t: Expr) (args: [CExpr]) =
   | CMap _ -> CEMap {f = get args 0, s = get args 1}
+  | CFoldl _ -> CEFoldl {f = get args 0, acc = get args 1, s = get args 2}
 
   -- TODO(larshum, 2022-02-08): Support composite types other than 1d sequences.
   sem compileStmt (env : CompileCEnv) (res : Result) =
@@ -127,8 +132,7 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       -- 'opsPerElem' argument from the CUDA PMExpr AST.
       let kernelExpr = CEMapKernel {
         f = compileExpr env t.f, s = compileExpr env t.s,
-        sTy = compileType env (tyTm t.s), retTy = compileType env t.ty,
-        opsPerThread = 10} in
+        outTy = compileType env t.ty, opsPerThread = 10} in
       let assignExpr = CEBinOp {
         op = COAssign (),
         lhs = CEVar {id = id},
