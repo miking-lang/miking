@@ -295,9 +295,10 @@ let _getParents
   : TentativeNode res self rstyle
   -> Option [TentativeNode res self ROpen] -- NonEmpty
   = lam n.
-    match n with TentativeLeaf{parents = ps} | TentativeMid{parents = ps} then Some ps else
-    match n with TentativeRoot _ then None () else
-    never
+    switch n
+    case TentativeLeaf{parents = ps} | TentativeMid{parents = ps} then Some ps
+    case TentativeRoot _ then None ()
+    end
 let _opIdI
   : BreakableInput res self lstyle rstyle
   -> OpId
@@ -560,11 +561,12 @@ recursive let _maxDistanceFromRoot
   : TentativeNode res self rstyle
   -> Int
   = lam n.
-    match n with TentativeMid {maxDistanceFromRoot = r} then r else
-    match n with TentativeRoot _ then 0 else
-    match n with TentativeLeaf {parents = parents} then maxOrElse (lam. 0) subi (map _maxDistanceFromRoot parents) else
-    dprintLn n;
-    never
+    switch n
+    case TentativeMid {maxDistanceFromRoot = r} then r
+    case TentativeRoot _ then 0
+    case TentativeLeaf {parents = ps} then
+      maxOrElse (lam. 0) subi (map _maxDistanceFromRoot ps)
+    end
 end
 
 let _shallowAllowedLeft
