@@ -249,3 +249,5 @@ utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
 utest strJoin "--" [] with emptyStr
 utest strJoin "--" ["coffee"] with "coffee"
 utest strJoin "water" ["coffee", "tea"] with "coffeewatertea"
+
+utest true with false

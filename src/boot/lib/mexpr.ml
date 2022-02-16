@@ -1652,7 +1652,7 @@ let shape_str = function
 let unittest_failed fi t1 t2 tusing =
   uprint_endline
     ( match fi with
-    | Info (_, l1, _, _, _) ->
+    | Info (file, l1, _, _, _) ->
         let using_str =
           match tusing with
           | Some t ->
@@ -1661,7 +1661,7 @@ let unittest_failed fi t1 t2 tusing =
               us ""
         in
         us "\n ** Unit test FAILED on line "
-        ^. us (string_of_int l1)
+        ^. us (string_of_int l1) ^. us " of file " ^. file
         ^. us " **\n    LHS: " ^. ustring_of_tm t1 ^. us "\n    RHS: "
         ^. ustring_of_tm t2 ^. using_str
     | NoInfo ->

@@ -50,10 +50,6 @@ let int2string = lam n.
   else int2string_rechelper n
 in
 
-let inf =
-  divf 1.0 0.0
-in
-
 recursive
   let strJoin = lam delim. lam strs.
     if eqi (length strs) 0
@@ -86,18 +82,19 @@ let utestTestPassed = lam.
 in
 
 let utestTestFailed =
+  lam file   : String.
   lam line   : String.
   lam lhsStr : String.
   lam rhsStr : String.
   modref numFailed (addi (deref numFailed) 1);
   printLn \"\";
-  printLn (join [\" ** Unit test FAILED on line \", line, \" **\"]);
+  printLn (join [\" ** Unit test FAILED on line \", line, \" of file \", file, \" **\"]);
   printLn (join [\"    LHS: \", lhsStr]);
   printLn (join [\"    RHS: \", rhsStr])
 in
 
 let utestRunner =
-  lam info    : {row : String}.
+  lam info    : {file : String, row : String}.
   lam lpprint : Unknown -> String.
   lam rpprint : Unknown -> String.
   lam eqfunc  : Unknown -> Unknown -> Bool.
@@ -107,7 +104,7 @@ let utestRunner =
   if eqfunc lhs rhs then
     utestTestPassed ()
   else
-    utestTestFailed info.row (lpprint lhs) (rpprint rhs)
+    utestTestFailed info.file info.row (lpprint lhs) (rpprint rhs)
 in
 
 ()
@@ -589,11 +586,12 @@ let generateUtestFunctions =
   else never
 
 let utestRunnerCall =
-  lam info : {row : String}. lam lPprintFunc. lam rPprintFunc.
+  lam info : {file : String, row : String}. lam lPprintFunc. lam rPprintFunc.
   lam eqFunc. lam l. lam r.
   appf6_
     (nvar_ (utestRunnerName ()))
     (urecord_ [
+      ("file", str_ info.file),
       ("row", str_ info.row)])
     lPprintFunc
     rPprintFunc
@@ -687,10 +685,10 @@ let _generateUtest = use MExprTypeAnnot in
     else never
   in
   let utestInfo =
-    match t.info with Info {row1 = row} then
-      {row = int2string row}
+    match t.info with Info {filename = file, row1 = row} then
+      {file = file, row = int2string row}
     else match t.info with NoInfo () then
-      {row = "0"}
+      {file = "", row = "0"}
     else never
   in
   -- NOTE(larshum, 2021-04-12): We only require that the types of the operands
