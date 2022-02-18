@@ -23,14 +23,16 @@ type TCEnv = {
   varEnv: Map Name Type,
   conEnv: Map Name Type,
   tyConEnv: Map Name Type,
-  currentLvl: Level
+  currentLvl: Level,
+  disableRecordPolymorphism: Bool
 }
 
 let _tcEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
   tyConEnv = mapEmpty nameCmp,
-  currentLvl = 1
+  currentLvl = 1,
+  disableRecordPolymorphism = true
 }
 
 let _insertVar = lam name. lam ty. lam env : TCEnv.
@@ -182,21 +184,23 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     modref t1.contents (Link ty2)
 
   sem checkBeforeUnify (tv : FlexVarRec) =
-  | TyFlex {contents = r} ->
-    match deref r with Unbound t then
-      if nameEq t.ident tv.ident then
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound r then
+      if nameEq r.ident tv.ident then
         let msg = "Type check failed: occurs check\n" in
         infoErrorExit (deref errInfo) msg
       else
         let sort =
-          match (tv.sort, t.sort) with (WeakVar _, TypeVar _) then WeakVar ()
-          else t.sort
+          match (tv.sort, r.sort) with (WeakVar _, TypeVar _) then WeakVar ()
+          else
+            sfold_VarSort_Type (lam. lam ty. checkBeforeUnify tv ty) () r.sort;
+            r.sort
         in
-        let updated = Unbound {{t with level = mini t.level tv.level}
+        let updated = Unbound {{r with level = mini r.level tv.level}
                                   with sort  = sort} in
-        modref r updated
-    else match deref r with Link ty in
-    checkBeforeUnify tv ty
+        modref t.contents updated
+    else
+      checkBeforeUnify tv (resolveLink ty)
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -449,10 +453,10 @@ lang LetTypeCheck = TypeCheck + LetAst
       (lam. gen lvl (tyTm body))
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
-        -- TODO(aathn, 2021-11-16): Simply stripping the tyalls is insufficient
-        -- if the annotated type has record bounds. Then, we should instantiate
-        -- the record variables in the annotated type with their bounding record
-        -- types before unifying. For now such annotations are not supported though.
+        -- TODO(aathn, 2021-11-16): Simply stripping the annotated tyalls is
+        -- insufficient if they happen to contains bounds. Then, we should
+        -- instantiate the variables in the annotated type before unifying.
+        -- For now such annotations are not supported though.
         match stripTyAll ty with (_, tyAnnot) in
         unify env tyAnnot (tyTm body);
         ty)
@@ -546,7 +550,19 @@ lang SeqTypeCheck = TypeCheck + SeqAst
               with ty = ityseq_ t.info elemTy}
 end
 
-lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexTypeAst
+lang FlexSetLevel = FlexTypeAst
+  sem setLevel (lvl : Int) =
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound r then
+      modref t.contents (Unbound {r with level = lvl});
+      sfold_VarSort_Type (lam. lam ty. setLevel lvl ty) () r.sort
+    else
+      setLevel lvl (resolveLink ty)
+  | ty ->
+    sfold_Type_Type (lam. lam ty. setLevel lvl ty) () ty
+end
+
+lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexSetLevel
   sem typeCheckBase (env : TCEnv) =
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
@@ -560,6 +576,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexTypeAst
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     unify env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
+    (if env.disableRecordPolymorphism then setLevel 0 (tyTm rec) else ());
     TmRecordUpdate {{{t with rec = rec}
                         with value = value}
                         with ty = tyTm rec}
@@ -677,13 +694,14 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
                           with ty = seqTy})
 end
 
-lang RecordPatTypeCheck = PatTypeCheck + RecordPat
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexSetLevel
   sem typeCheckPat (env : TCEnv) =
   | PatRecord t ->
     let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
     match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
     let env : TCEnv = env in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
+    (if env.disableRecordPolymorphism then setLevel 0 ty else ());
     (env, PatRecord {{t with bindings = bindings}
                         with ty = ty})
 end
@@ -1066,12 +1084,12 @@ let tests = [
            "y" (var_ "y"))))))
      (freeze_ (var_ "f")),
    ty =
-     let fields =  mapInsert (stringToSid "x") a
-                  (mapInsert (stringToSid "y") b
+     let fields =  mapInsert (stringToSid "x") wa
+                  (mapInsert (stringToSid "y") wb
                   (mapEmpty cmpSID))
      in
-     tyalls_ ["a", "b"] (styall_ "r" (RecordVar {fields = fields})
-       (tyarrows_ [tyvar_ "r", a, b, tyvar_ "r"])),
+     let r = newrecvar fields 0 (NoInfo ()) in
+     tyarrows_ [r, wa, wb, r],
    env = []},
 
   {name = "Con1",
