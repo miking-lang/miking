@@ -82,29 +82,29 @@ let utestTestPassed = lam.
 in
 
 let utestTestFailed =
-  lam file   : String.
-  lam line   : String.
+  lam info   : String.
   lam lhsStr : String.
   lam rhsStr : String.
+  lam usingStr : String.
   modref numFailed (addi (deref numFailed) 1);
-  printLn \"\";
-  printLn (join [\" ** Unit test FAILED on line \", line, \" of file \", file, \" **\"]);
-  printLn (join [\"    LHS: \", lhsStr]);
-  printLn (join [\"    RHS: \", rhsStr])
+  printLn (join [
+    \"\n ** Unit test FAILED: \", info, \"**\", \"\n    LHS: \", lhsStr,
+    \"\n    RHS: \", rhsStr, usingStr])
 in
 
 let utestRunner =
-  lam info    : {file : String, row : String}.
-  lam lpprint : Unknown -> String.
-  lam rpprint : Unknown -> String.
-  lam eqfunc  : Unknown -> Unknown -> Bool.
-  lam lhs     : Unknown.
-  lam rhs     : Unknown.
+  lam info     : String.
+  lam usingStr : String.
+  lam lpprint  : Unknown -> String.
+  lam rpprint  : Unknown -> String.
+  lam eqfunc   : Unknown -> Unknown -> Bool.
+  lam lhs      : Unknown.
+  lam rhs      : Unknown.
   -- Comparison
   if eqfunc lhs rhs then
     utestTestPassed ()
   else
-    utestTestFailed info.file info.row (lpprint lhs) (rpprint rhs)
+    utestTestFailed info (lpprint lhs) (rpprint rhs) usingStr
 in
 
 ()
@@ -586,18 +586,10 @@ let generateUtestFunctions =
   else never
 
 let utestRunnerCall =
-  lam info : {file : String, row : String}. lam lPprintFunc. lam rPprintFunc.
+  lam info. lam usingStr. lam lPprintFunc. lam rPprintFunc.
   lam eqFunc. lam l. lam r.
-  appf6_
-    (nvar_ (utestRunnerName ()))
-    (urecord_ [
-      ("file", str_ info.file),
-      ("row", str_ info.row)])
-    lPprintFunc
-    rPprintFunc
-    eqFunc
-    l
-    r
+  appSeq_ (nvar_ (utestRunnerName ()))
+    [str_ info, str_ usingStr, lPprintFunc, rPprintFunc, eqFunc, l, r]
 
 lang UtestViaMatch = Ast + PrettyPrint
   sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
@@ -684,12 +676,11 @@ let _generateUtest = use MExprTypeAnnot in
       tyStr
     else never
   in
-  let utestInfo =
-    match t.info with Info {filename = file, row1 = row} then
-      {file = file, row = int2string row}
-    else match t.info with NoInfo () then
-      {file = "", row = "0"}
-    else never
+  let utestInfo = info2str t.info in
+  let usingStr =
+    match t.tusing with Some expr then
+      use MExprPrettyPrint in concat "\n    Using: " (expr2str expr)
+    else ""
   in
   -- NOTE(larshum, 2021-04-12): We only require that the types of the operands
   -- are compatible if no equality function is provided. Otherwise it should be
@@ -707,7 +698,7 @@ let _generateUtest = use MExprTypeAnnot in
             lam_ "a" lty
               (lam_ "b" rty
                 (appf2_ eqFunc (var_ "a") (var_ "b"))) in
-          utestRunnerCall utestInfo lhsPprintFunc rhsPprintFunc eqFunc
+          utestRunnerCall utestInfo usingStr lhsPprintFunc rhsPprintFunc eqFunc
                           t.test t.expected
         else
           let msg = join [
@@ -741,7 +732,8 @@ let _generateUtest = use MExprTypeAnnot in
       let lName = nameSym "l" in
       let inner = foldl and_ true_ conditions in
       let eqFunc = nulam_ lName (ulam_ "" (match_ (nvar_ lName) pat inner false_)) in
-      utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
+      utestRunnerCall utestInfo usingStr pprintFunc pprintFunc eqFunc t.test
+                      t.expected
     else
       -- NOTE(vipa, 2021-06-14): We couldn't find any useful structure
       -- in the expected field, just use the default equality, if
@@ -757,7 +749,8 @@ let _generateUtest = use MExprTypeAnnot in
           ] in
           infoErrorExit t.info msg
       in
-      utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
+      utestRunnerCall utestInfo usingStr pprintFunc pprintFunc eqFunc t.test
+                      t.expected
   else
     let msg = join [
       "Arguments to utest have incompatible types\n",
