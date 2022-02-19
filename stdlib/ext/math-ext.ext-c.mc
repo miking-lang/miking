@@ -13,6 +13,10 @@ let mathExtMap: ExtMap =
 
     ( "externalPow"
     , { ident = "pow", header = "<math.h>" }
+    ),
+
+    ( "externalSqrt"
+    , { ident = "sqrt", header = "<math.h>" }
     )
 
   ]

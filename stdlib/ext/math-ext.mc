@@ -55,5 +55,5 @@ let pow = lam x: Float. lam y: Float. externalPow x y
 utest pow 3. 2. with 9. using eqf
 
 external externalSqrt : Float -> Float
-let sqrt = lam x. externalSqrt x
+let sqrt: Float -> Float = lam x. externalSqrt x
 utest sqrt 9. with 3. using eqf
