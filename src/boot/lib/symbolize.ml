@@ -105,7 +105,7 @@ let rec symbolize_type env ty =
       TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
-   constructs TmConApp terms from the combination of variables and function applications.  *)
+   constructs TmConApp terms from the combination of variables and function applications. *)
 let rec symbolize (env : sym_env) (t : tm) =
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
@@ -284,7 +284,7 @@ let rec symbolize (env : sym_env) (t : tm) =
       t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
- along with the symbolized term. *)
+   along with the symbolized term. *)
 let rec symbolize_toplevel (env : sym_env) = function
   | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in

@@ -189,16 +189,16 @@ let parseMCoreFile
     reportErrorAndExit e
 
 (* Returns a tuple with the following elements
-   1. ID field
-   2. Info field
-   3. List of list lengths
-   4. List of types
-   5. List of terms
-   6. List of strings
-   7. List of integers
-   8. List of floating-point numbers
-   9. List of const
-  10. List of patterns
+    1. ID field
+    2. Info field
+    3. List of list lengths
+    4. List of types
+    5. List of terms
+    6. List of strings
+    7. List of integers
+    8. List of floating-point numbers
+    9. List of const
+   10. List of patterns
 *)
 
 let getData = function

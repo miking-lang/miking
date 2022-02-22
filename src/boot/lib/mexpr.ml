@@ -1961,7 +1961,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
-  with the evaluated result *)
+   with the evaluated result *)
 let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
       eval_toplevel ((s, eval env t1) :: env) t2
