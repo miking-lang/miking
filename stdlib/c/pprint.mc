@@ -92,6 +92,9 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   | CTyChar {} -> (env, _joinSpace "char" decl)
   | CTyInt {}  -> (env, _joinSpace "int" decl)
+  | CTyInt32 {} -> (env, _joinSpace "int32_t" decl)
+  | CTyInt64 {} -> (env, _joinSpace "int64_t" decl)
+  | CTyFloat {} -> (env, _joinSpace "float" decl)
   | CTyDouble {} -> (env, _joinSpace "double" decl)
   | CTyVoid {} -> (env, _joinSpace "void" decl)
   | CTyPtr { ty = ty } -> printCType (join ["(*", decl, ")"]) env ty
