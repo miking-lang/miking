@@ -193,8 +193,8 @@ let from_uchars a =
     a ;
   ref (Uchars a)
 
-(*   Note: Function should not throw an exception, since only well defined
-         unicode characters are available internally. *)
+(* Note: Function should not throw an exception, since only well defined
+       unicode characters are available internally. *)
 let rec to_utf8 s =
   let calc_size_to_utf8 a =
     Array.fold_left

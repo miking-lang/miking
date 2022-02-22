@@ -33,7 +33,7 @@ jobs:
           sudo apt-get install -y liblapacke-dev libopenblas-dev
 
           # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
 
       - name: Build Miking
         timeout-minutes: 10
@@ -76,7 +76,7 @@ jobs:
           export PKG_CONFIG_PATH=/usr/local/opt/openblas/lib/pkgconfig
 
           # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.16.0
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
 
       - name: Build Miking
         timeout-minutes: 10
