@@ -175,7 +175,7 @@ lang MExprCCompile = MExprAst + CAst
     let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
-    let env = {{{ let e : CompileCOptions = compileCEnvEmpty compileOptions in e
+    let env = {{{ let e : CompileCEnv = compileCEnvEmpty compileOptions in e
       with ptrTypes = ptrTypes }
       with typeEnv = typeEnv }
       with externals = externals }
