@@ -266,7 +266,11 @@ lang SeqEval = Eval + SeqAst
 end
 
 lang NeverEval = Eval + NeverAst
-  --TODO(?,?)
+  sem eval (ctx : {env : Env}) =
+  | TmNever t ->
+    infoErrorExit t.info
+      (join [ "Reached a never term, which should be "
+            , "impossible in a well-typed program."])
 end
 
 -- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
