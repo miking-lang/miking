@@ -49,6 +49,7 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
 
   writeFile (tempfile "program.ml") p;
   writeFile (tempfile "program.mli") "";
+  writeFile (tempfile "dune-project") "(lang dune 2.0)";
   writeFile (tempfile "dune") dunefile;
 
   let command =

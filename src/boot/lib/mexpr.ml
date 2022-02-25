@@ -1651,21 +1651,16 @@ let shape_str = function
 (* Print out error message when a unit test fails *)
 let unittest_failed fi t1 t2 tusing =
   uprint_endline
-    ( match fi with
-    | Info (_, l1, _, _, _) ->
-        let using_str =
-          match tusing with
-          | Some t ->
-              us "\n    Using: " ^. ustring_of_tm t
-          | None ->
-              us ""
-        in
-        us "\n ** Unit test FAILED on line "
-        ^. us (string_of_int l1)
-        ^. us " **\n    LHS: " ^. ustring_of_tm t1 ^. us "\n    RHS: "
-        ^. ustring_of_tm t2 ^. using_str
-    | NoInfo ->
-        us "Unit test FAILED " )
+    (let using_str =
+       match tusing with
+       | Some t ->
+           us "\n    Using: " ^. ustring_of_tm t
+       | None ->
+           us ""
+     in
+     us "\n ** Unit test FAILED: "
+     ^. info2str fi ^. us " **\n    LHS: " ^. ustring_of_tm t1
+     ^. us "\n    RHS: " ^. ustring_of_tm t2 ^. using_str )
 
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
@@ -1961,7 +1956,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
-  with the evaluated result *)
+   with the evaluated result *)
 let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
       eval_toplevel ((s, eval env t1) :: env) t2

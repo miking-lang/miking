@@ -1233,27 +1233,44 @@ lang VarTypeAst = Ast
 
 end
 
-type Level = Int
-type TVarRec = {ident : Name,
-                level : Level,
-                sort  : VarSort}
-
-lang FlexTypeAst = Ast
-  -- VarSort indicates the sort of type variable and contains related data
-  -- (such as regular type variable or row variable)
+lang VarSortAst
+  -- VarSort indicates the sort of a type variable, like type variable or
+  -- record variable, and contains related data
   syn VarSort =
   | TypeVar ()
   | WeakVar ()
   | RecordVar {fields : Map SID Type}
 
-  syn TVar =
-  | Unbound TVarRec
+  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | RecordVar r ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
+    (acc, RecordVar {r with fields = flds})
+  | s ->
+    (acc, s)
+
+  sem smap_VarSort_Type (f : a -> b) =
+  | s ->
+    match smapAccumL_VarSort_Type (lam. lam x. ((), f x)) () s with (_, s) in s
+
+  sem sfold_VarSort_Type (f : acc -> a -> acc) (acc : acc) =
+  | s ->
+    match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
+end
+
+type Level = Int
+type FlexVarRec = {ident : Name,
+                   level : Level,
+                   sort  : VarSort}
+
+lang FlexTypeAst = VarSortAst + Ast
+  syn FlexVar =
+  | Unbound FlexVarRec
   | Link Type
 
   syn Type =
   -- Flexible type variable
   | TyFlex {info     : Info,
-            contents : Ref TVar}
+            contents : Ref FlexVar}
 
   -- Recursively follow links, producing something guaranteed not to be a link.
   sem resolveLink =
@@ -1275,13 +1292,6 @@ lang FlexTypeAst = Ast
   sem infoTy =
   | TyFlex {info = info} -> info
 
-  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
-  | RecordVar r ->
-    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
-    (acc, RecordVar {r with fields = flds})
-  | s ->
-    (acc, s)
-
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
@@ -1292,10 +1302,11 @@ lang FlexTypeAst = Ast
       smapAccumL_Type_Type f acc (resolveLink ty)
 end
 
-lang AllTypeAst = Ast
+lang AllTypeAst = VarSortAst + Ast
   syn Type =
   | TyAll {info  : Info,
            ident : Name,
+           sort  : VarSort,
            ty    : Type}
 
   sem tyWithInfo (info : Info) =
@@ -1306,15 +1317,16 @@ lang AllTypeAst = Ast
 
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TyAll t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, TyAll {t with ty = ty})
-    else never
+    match smapAccumL_VarSort_Type f acc t.sort with (acc, sort) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TyAll {{t with sort = sort}
+                    with ty = ty})
 
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty
 
-  sem stripTyAllBase (vars : [Name]) =
-  | TyAll t -> stripTyAllBase (snoc vars t.ident) t.ty
+  sem stripTyAllBase (vars : [(Name, VarSort)]) =
+  | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.sort)) t.ty
   | ty -> (vars, ty)
 end
 

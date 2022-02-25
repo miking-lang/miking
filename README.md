@@ -1524,7 +1524,7 @@ in the profiling output, given that they are used.
 
 Each line of output consists of five space-separated columns:
 1. A string, denoting the name of the file and the position within the file,
-   encoded as [<start row>:<start col>-<end row>:<end col>], where the function
+   encoded as `[<start row>:<start col>-<end row>:<end col>]`, where the function
    is defined.
 2. A string, denoting the name of the function.
 3. An integer, denoting the number of calls made to the function. The counter
@@ -1885,10 +1885,10 @@ automatically format ocaml source code.
 
 ###  Setup and use `ocamlformat`
 
-We are currently using this package at version `0.16.0`. To pin and/or install
+We are currently using this package at version `0.20.1`. To pin and/or install
 the package at this version using `opam` do
 ```
-opam pin ocamlformat 0.16.0
+opam pin ocamlformat 0.20.1
 ```
 Then you can then run `dune build @fmt` to see a
 diff between your code and the formatted code. To promote the changes run `dune

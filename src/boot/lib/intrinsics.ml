@@ -558,11 +558,22 @@ module IO = struct
           List.init (Obj.size v) (fun i ->
               istr ^ ", " ^ work (indent + 2) (Obj.field v i) )
         in
+        let mstring =
+          try
+            let ints =
+              Array.init (Obj.size v) (fun i ->
+                  let c = Obj.field v i in
+                  if Obj.is_int c then Obj.obj c else raise Not_found )
+            in
+            let str = Ustring.from_uchars ints in
+            us " (as a string: " ^. str ^. us ")" |> Ustring.to_utf8
+          with _ -> ""
+        in
         "{ tag: "
         ^ string_of_tag (Obj.tag v)
         ^ ", size: "
         ^ string_of_int (Obj.size v)
-        ^ "\n" ^ String.concat "" children ^ istr ^ "}\n"
+        ^ mstring ^ "\n" ^ String.concat "" children ^ istr ^ "}\n"
     in
     print_string (work 0 v)
 

@@ -402,19 +402,21 @@ lang VarTypeCmp = Cmp + VarTypeAst
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
 end
 
-lang FlexTypeCmp = Cmp + FlexTypeAst
+lang VarSortCmp = Cmp + VarSortAst
   sem cmpVarSort =
   | (RecordVar l, RecordVar r) ->
     mapCmp cmpType l.fields r.fields
   | (lhs, rhs) ->
     subi (constructorTag lhs) (constructorTag rhs)
+end
 
+lang FlexTypeCmp = VarSortCmp + FlexTypeAst
   sem cmpTypeH =
   | (TyFlex _ & lhs, rhs)
   | (lhs, TyFlex _ & rhs) ->
     match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
     match (lhs, rhs) with (TyFlex t1, TyFlex t2) then
-    match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) in
+      match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) in
       let identDiff = nameCmp n1.ident n2.ident in
       if eqi identDiff 0 then
         cmpVarSort (n1.sort, n2.sort)
@@ -424,11 +426,15 @@ lang FlexTypeCmp = Cmp + FlexTypeAst
     else subi (constructorTag lhs) (constructorTag rhs)
 end
 
-lang AllTypeCmp = Cmp + AllTypeAst
+lang AllTypeCmp = VarSortCmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
-    if eqi identDiff 0 then cmpType t1.ty t2.ty
+    if eqi identDiff 0 then
+      let sortDiff = cmpVarSort (t1.sort, t2.sort) in
+      if eqi sortDiff 0 then
+        cmpType t1.ty t2.ty
+      else sortDiff
     else identDiff
 end
 
