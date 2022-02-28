@@ -21,6 +21,8 @@ include "boot-parser.mc"
 include "ast.mc"
 include "anf.mc"
 include "ast-builder.mc"
+include "cmp.mc"
+include "const-arity.mc"
 
 type GenFun = Expr -> [Constraint]
 type MatchGenFun = Name -> Name -> Pat -> [Constraint]
@@ -363,41 +365,6 @@ lang LamCFA = CFA + InitConstraint + LamAst
 
 end
 
-lang AppCFA = CFA + DirectConstraint + LamCFA + AppAst
-
-  syn Constraint =
-  -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
-  | CstrLamApp { lhs: Name, rhs: Name, res: Name }
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrLamApp r & cstr -> initConstraintName r.lhs graph cstr
-
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
-    match update.1 with AVLam { ident = x, body = b } then
-      -- Add rhs ⊆ x constraint
-      let graph = initConstraint graph (CstrDirect { lhs = rhs, rhs = x }) in
-      -- Add b ⊆ res constraint
-      initConstraint graph (CstrDirect { lhs = b, rhs = res })
-    else graph
-
-  sem constraintToString (env: PprintEnv) =
-  | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    match pprintVarName env res with (env,res) in
-    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< AND >b< ⊆ ", res ])
-
-  sem generateConstraints =
-  | TmLet { ident = ident, body = TmApp app} ->
-    match app.lhs with TmVar l then
-      match app.rhs with TmVar r then
-        [ CstrLamApp { lhs = l.ident, rhs = r.ident, res = ident } ]
-      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
-    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
-
-end
-
 lang LetCFA = CFA + LetAst
   sem exprName =
   | TmLet t -> exprName t.inexpr
@@ -418,17 +385,36 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 
 end
 
-lang ConstCFA = CFA + ConstAst
+lang ConstCFA = CFA + ConstAst + InitConstraint
+
+  syn AbsVal =
+  | AVConst { const : Const, args : [Name] }
+
+  sem absValToString (env: PprintEnv) =
+  | AVConst { const = const, args = args } ->
+    let const = getConstStringCode 0 const in
+    let args = strJoin ", " (map nameGetStr args) in
+    (env, join [const, "(", args, ")"])
+
+  sem cmpAbsValH =
+  | (AVConst lhs, AVConst rhs) ->
+    use ConstCmp in
+    let cmp = cmpConst lhs.const rhs.const in
+    if eqi 0 cmp then subi (length lhs.args) (length rhs.args)
+    else cmp
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmConst t } ->
-    generateConstraintsConst t.info t.val
+    let av = AVConst { const = t.val, args = [] } in
+    cons (CstrInit {lhs = av, rhs = ident})
+      (generateConstraintsConst ident t.info t.val)
 
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | const -> infoErrorExit info "Constant not supported in CFA"
 
 end
 
+-- TODO: move this segment further down
 lang SeqCFA = CFA + InitConstraint + SeqAst
 
   syn AbsVal =
@@ -452,6 +438,88 @@ lang SeqCFA = CFA + InitConstraint + SeqAst
     match mapAccumL pprintVarName env (setToSeq names) with (env,names) in
     let names = strJoin ", " names in
     (env, join ["[{", names, "}]"])
+
+end
+
+lang AppCFA = CFA + ConstCFA + DirectConstraint + LamCFA + AppAst + MExprArity
+            + SeqCFA
+
+  syn Constraint =
+  -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
+  | CstrLamApp { lhs: Name, rhs: Name, res: Name }
+  --
+  | CstrConstApp { lhs: Name, rhs : Name, res: Name }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrLamApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add rhs ⊆ x constraint
+      let graph = initConstraint graph (CstrDirect { lhs = rhs, rhs = x }) in
+      -- Add b ⊆ res constraint
+      initConstraint graph (CstrDirect { lhs = b, rhs = res })
+    else graph
+  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVConst ({ const = const, args = args } & avc) then
+      let arity = constArity const in
+      let args = snoc args rhs in
+      if eqi arity (length args) then
+        -- Last application
+        match const with CHead _ then
+          -- printLn "*** propagateConstraint";
+          -- dprintLn lhs;
+          -- dprintLn rhs;
+          -- dprintLn res;
+          -- dprintLn const;
+          -- exit 0
+          -- let graph = foldl (lam acc. lam av.
+          --     match av with AVConst {const = const}
+          --   ) graph avs
+          -- in
+          -- let hs = dataLookup rhs graph in
+          -- dprintLn (mapBindings avsRhs);
+          -- exit 0
+          let seqNames = setFold (lam acc. lam av.
+              match av with AVSeq {names = names} then
+                concat (setToSeq names) acc
+              else acc
+            ) [] (dataLookup rhs graph)
+          in
+          let graph = foldl (lam graph. lam name.
+              initConstraint graph (CstrDirect {lhs = name, rhs = res})
+            ) graph seqNames
+          in
+          graph
+        else graph
+      else
+        -- Curried application, just add the new argument
+        addData graph (AVConst { avc with args = args }) res
+    else graph
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< AND >b< ⊆ ", res ])
+  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join ["CstrConstApp ", lhs, " ", rhs, " ", res])
+
+  sem generateConstraints =
+  | TmLet { ident = ident, body = TmApp app} ->
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then
+        [ CstrLamApp { lhs = l.ident, rhs = r.ident, res = ident },
+          CstrConstApp { lhs = l.ident, rhs = r.ident, res = ident }
+        ]
+      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
+    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
 
 end
 
@@ -587,12 +655,12 @@ end
 -- generated.
 
 lang IntCFA = CFA + ConstCFA + IntAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CInt _ -> []
 end
 
 lang ArithIntCFA = CFA + ConstCFA + ArithIntAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CAddi _ -> []
   | CSubi _ -> []
   | CMuli _ -> []
@@ -602,19 +670,19 @@ lang ArithIntCFA = CFA + ConstCFA + ArithIntAst
 end
 
 lang ShiftIntCFA = CFA + ConstCFA + ShiftIntAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CSlli _ -> []
   | CSrli _ -> []
   | CSrai _ -> []
 end
 
 lang FloatCFA = CFA + ConstCFA + FloatAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CFloat _ -> []
 end
 
 lang ArithFloatCFA = CFA + ConstCFA + ArithFloatAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CAddf _ -> []
   | CSubf _ -> []
   | CMulf _ -> []
@@ -623,7 +691,7 @@ lang ArithFloatCFA = CFA + ConstCFA + ArithFloatAst
 end
 
 lang FloatIntConversionCFA = CFA + ConstCFA + FloatIntConversionAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CFloorfi _ -> []
   | CCeilfi _ -> []
   | CRoundfi _ -> []
@@ -631,12 +699,12 @@ lang FloatIntConversionCFA = CFA + ConstCFA + FloatIntConversionAst
 end
 
 lang BoolCFA = CFA + ConstCFA + BoolAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CBool _ -> []
 end
 
 lang CmpIntCFA = CFA + ConstCFA + CmpIntAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CEqi _ -> []
   | CNeqi _ -> []
   | CLti _ -> []
@@ -646,7 +714,7 @@ lang CmpIntCFA = CFA + ConstCFA + CmpIntAst
 end
 
 lang CmpFloatCFA = CFA + ConstCFA + CmpFloatAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CEqf _ -> []
   | CLtf _ -> []
   | CLeqf _ -> []
@@ -656,42 +724,42 @@ lang CmpFloatCFA = CFA + ConstCFA + CmpFloatAst
 end
 
 lang CharCFA = CFA + ConstCFA + CharAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CChar _ -> []
 end
 
 lang CmpCharCFA = CFA + ConstCFA + CmpCharAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CEqc _ -> []
 end
 
 lang IntCharConversionCFA = CFA + ConstCFA + IntCharConversionAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CInt2Char _ -> []
   | CChar2Int _ -> []
 end
 
 lang FloatStringConversionCFA = CFA + ConstCFA + FloatStringConversionAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CString2float _ -> []
   | CFloat2string _ -> []
 end
 
 lang SymbCFA = CFA + ConstCFA + SymbAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CSymb _ -> []
   | CGensym _ -> []
   | CSym2hash _ -> []
 end
 
 lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CEqsym _ -> []
 end
 
 -- TODO(dlunde,2021-11-11): Add flow constraints for sequence operations?
 lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   -- | CSet _ -> []
   -- | CGet _ -> []
   -- | CCons _ -> []
@@ -699,7 +767,10 @@ lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
   -- | CConcat _ -> []
   -- | CLength _ -> []
   -- | CReverse _ -> []
-  -- | CHead _ -> []
+  -- | CHead t ->
+  --   let av = AVConst { const = CHead t, args = [] } in
+  --   [ CstrInit { lhs = av, rhs = ident} ]
+  | CHead _ -> []
   -- | CTail _ -> []
   -- | CNull _ -> []
   -- | CMap _ -> []
@@ -718,7 +789,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqOpAst
 end
 
 lang FileOpCFA = CFA + ConstCFA + FileOpAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CFileRead _ -> []
   | CFileWrite _ -> []
   | CFileExists _ -> []
@@ -726,7 +797,7 @@ lang FileOpCFA = CFA + ConstCFA + FileOpAst
 end
 
 lang IOCFA = CFA + ConstCFA + IOAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CPrint _ -> []
   | CPrintError _ -> []
   | CDPrint _ -> []
@@ -737,13 +808,13 @@ lang IOCFA = CFA + ConstCFA + IOAst
 end
 
 lang RandomNumberGeneratorCFA = CFA + ConstCFA + RandomNumberGeneratorAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CRandIntU _ -> []
   | CRandSetSeed _ -> []
 end
 
 lang SysCFA = CFA + ConstCFA + SysAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CExit _ -> []
   | CError _ -> []
   | CArgv _ -> []
@@ -751,20 +822,20 @@ lang SysCFA = CFA + ConstCFA + SysAst
 end
 
 lang TimeCFA = CFA + ConstCFA + TimeAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CWallTimeMs _ -> []
   | CSleepMs _ -> []
 end
 
 lang ConTagCFA = CFA + ConstCFA + ConTagAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CConstructorTag _ -> []
 end
 
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang RefOpCFA = CFA + ConstCFA + RefOpAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   -- | CRef _ -> []
   -- | CModRef _ -> []
   -- | CDeRef _ -> []
@@ -772,7 +843,7 @@ end
 
 -- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
 lang MapCFA = CFA + ConstCFA + MapAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   -- | CMapEmpty _ -> []
   -- | CMapInsert _ -> []
   -- | CMapRemove _ -> []
@@ -796,7 +867,7 @@ end
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   -- | CTensorCreateInt _ -> []
   -- | CTensorCreateFloat _ -> []
   -- | CTensorCreate _ -> []
@@ -815,7 +886,7 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
 end
 
 lang BootParserCFA = CFA + ConstCFA + BootParserAst
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst (ident: Name) (info: Info) =
   | CBootParserParseMExprString _ -> []
   | CBootParserParseMCoreFile _ -> []
   | CBootParserGetId _ -> []
@@ -1000,7 +1071,7 @@ let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
       match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some env) tANF with (Some env,cfaRes) in
+      match cfaDebug (None ()) (Some env) tANF with (Some env,cfaRes) in
       match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -1094,6 +1165,20 @@ let t = _parse "
 utest _test false t ["res","a"] with [
   ("res", ["v","y"]),
   ("a", ["x","z"])
+] using eqTestLam in
+
+-- Sequence operations
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let seq = [f, lam z. z] in
+  let hd = head in
+  let b = hd in
+  let res = hd seq in
+  res
+------------------------" in
+utest _test true t ["res"] with [
+  ("res", ["x","z"])
 ] using eqTestLam in
 
 -- Record
