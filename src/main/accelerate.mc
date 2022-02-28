@@ -255,6 +255,7 @@ let buildFuthark : Options -> String -> [Top] -> CProg -> FutProg -> Unit =
     ("program.mli", ""),
     ("wrap.c", pprintCAst wrapperProg),
     ("gpu.fut", pprintFutharkAst futharkProg),
+    ("dune-project", "(lang dune 2.0)"),
     ("dune", dunefile),
     ("Makefile", makefile)];
   buildBinaryUsingMake sourcePath td
@@ -281,6 +282,7 @@ let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
     ("program.mli", ""),
     ("gpu.cu", pprintCudaAst cudaProg),
     ("dune", dunefile),
+    ("dune-project", "(lang dune 2.0)"),
     ("Makefile", makefile)];
   buildBinaryUsingMake sourcePath td
 
