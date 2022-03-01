@@ -5,6 +5,7 @@ include "cuda/memory.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pprint.mc"
 include "cuda/kernel-translate.mc"
+include "cuda/well-formed.mc"
 include "cuda/wrapper.mc"
 include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
@@ -58,7 +59,8 @@ end
 
 lang MExprCudaCompile =
   CudaPMExprAst + CudaMemoryManagement + MExprTypeLift + SeqTypeTypeLift +
-  CudaCompile + CudaKernelTranslate + CudaPrettyPrint + CudaCWrapper
+  CudaCompile + CudaKernelTranslate + CudaPrettyPrint + CudaCWrapper +
+  CudaWellFormed
 end
 
 type AccelerateHooks a b = {
@@ -114,8 +116,8 @@ let patternTransformation : Expr -> Expr = lam ast.
 
 let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
   use PMExprCompile in
-  reportNestedAccelerate accelerateIds ast ;
-  pmexprWellFormed ast
+  reportNestedAccelerate accelerateIds ast;
+  wellFormed ast
 
 let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
@@ -130,6 +132,7 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
+  wellFormed ast;
   match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
   let opts : CompileCOptions = {
