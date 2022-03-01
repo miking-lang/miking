@@ -76,14 +76,13 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
     -- at this point, we need to copy the struct (not all data) back to the CPU
     -- to get access to the length field.
     let tempId = nameSym "t" in
-    -- TODO(larshum, 2022-02-14): Eliminate use of 'decltype'?
     let tempSeqDeclStmt = CSDef {
-      ty = CTyDecltype {e = t.s}, id = Some tempId, init = None ()} in
+      ty = t.sTy, id = Some tempId, init = None ()} in
     let cudaMemcpyStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
         CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}}, t.s,
-        CESizeOfType {ty = CTyDecltype {e = t.s}},
+        CESizeOfType {ty = t.sTy},
         CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let lenId = nameSym "n" in
     let lenStmt = CSDef {

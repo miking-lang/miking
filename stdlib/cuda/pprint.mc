@@ -11,14 +11,6 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuDY _ -> "y"
   | CuDZ _ -> "z"
 
-  sem printCType (decl : String) (env : PprintEnv) =
-  | CTyDecltype t ->
-    match printCExpr env t.e with (env, e) in
-    (env, _joinSpace (join ["decltype", e]) decl)
-  | CTyRmPtr t ->
-    match printCType decl env t.ty with (env, ty) in
-    (env, join ["std::remove_pointer<", _joinSpace ty decl, ">::type"])
-
   sem printCExpr (env : PprintEnv) =
   | CEThreadIdx {dim = dim} -> (env, concat "threadIdx." (_printCudaDim dim))
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))

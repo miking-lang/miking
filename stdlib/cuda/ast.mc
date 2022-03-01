@@ -13,15 +13,6 @@ lang CudaAst = CAst + MExprAst
   | CuAGlobal ()
   | CuAExternC ()
 
-  syn CType =
-  | CTyDecltype {e : CExpr}
-  | CTyRmPtr {ty : CType}
-
-  sem smapAccumLCTypeCType (f : acc -> CType -> (acc, b)) (acc : acc) =
-  | CTyRmPtr t ->
-    match f acc t.ty with (acc, ty) in
-    (acc, CTyRmPtr {t with ty = ty})
-
   syn CExpr =
   | CEMap {f : CExpr, s : CExpr}
   | CEFoldl {f : CExpr, acc : CExpr, s : CExpr}
@@ -29,7 +20,7 @@ lang CudaAst = CAst + MExprAst
   | CEBlockIdx {dim : CudaDimension}
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
-  | CEMapKernel {f : CExpr, s : CExpr, outTy : CType, opsPerThread : Int}
+  | CEMapKernel {f : CExpr, s : CExpr, sTy : CType, outTy : CType, opsPerThread : Int}
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 
