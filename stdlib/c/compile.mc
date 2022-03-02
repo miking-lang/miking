@@ -273,7 +273,7 @@ lang MExprCCompile = MExprAst + CAst
     let ty = compileType env ty in
     let fields = [
       (CTyPtr { ty = ty }, Some _seqKey),
-      (CTyInt {}, Some _seqLenKey)
+      (getCIntType env, Some _seqLenKey)
     ] in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fields },
@@ -317,20 +317,29 @@ lang MExprCCompile = MExprAst + CAst
       concat [enum,def] acc
   | _ -> acc
 
-  sem compileType (env: CompileCEnv) =
+  sem getCIntType =
+  | env ->
+    let env : CompileCEnv = env in
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitInts then CTyInt32 () else CTyInt64 ()
 
-  | TyInt _ ->
+  sem getCFloatType =
+  | env ->
+    let env : CompileCEnv = env in
     let opts : CompileCOptions = env.options in
-    if opts.use32BitInts then
-      CTyInt32 {}
-    else CTyInt64 {}
-  | TyFloat _ ->
-    let opts : CompileCOptions = env.options in
-    if opts.use32BitFloats then
-      CTyFloat {}
-    else CTyDouble {}
-  | TyBool _
-  | TyChar _ -> CTyChar {}
+    if opts.use32BitFloats then CTyFloat () else CTyDouble ()
+
+  sem getCBoolType =
+  | env -> CTyChar ()
+
+  sem getCCharType =
+  | env -> CTyChar ()
+
+  sem compileType (env: CompileCEnv) =
+  | TyInt _ -> getCIntType env
+  | TyFloat _ -> getCFloatType env
+  | TyBool _ -> getCBoolType env
+  | TyChar _ -> getCCharType env
 
   | TyCon { ident = ident } & ty ->
     -- Pointer types
@@ -675,12 +684,12 @@ lang MExprCCompile = MExprAst + CAst
     match env with { typeEnv = typeEnv } then
       match _unwrapType typeEnv ty with TyVariant { constrs = constrs } then
         match mapLookup ident constrs with Some ty then
-          let cond = (CEBinOp {
+          let cond = CEBinOp {
             op = COEq {},
             lhs = CEArrow { lhs = target, id = _constrKey },
             rhs = CEVar { id = ident }
-          }) in
-          let expr = (CEArrow { lhs = target, id = ident }) in
+          } in
+          let expr = CEArrow { lhs = target, id = ident } in
           compilePat env (snoc conds cond)
             defs expr ty subpat
         else error "Invalid constructor in compilePat"
@@ -856,7 +865,7 @@ lang MExprCCompile = MExprAst + CAst
   -----------------
 
   -- Only a subset of constants can be compiled
-  sem compileOp (t: Expr) (args: [CExpr]) =
+  sem compileOp (env : CompileCEnv) (info : Info) (args: [CExpr]) =
 
   -- Binary operators
   | CAddi _
@@ -888,8 +897,8 @@ lang MExprCCompile = MExprAst + CAst
   -- Not directly mapped to C operators
   | CPrint _ ->
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
-  | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
-  | CFloorfi _ -> CECast { ty = CTyInt {}, rhs = head args }
+  | CInt2float _ -> CECast { ty = getCFloatType env, rhs = head args }
+  | CFloorfi _ -> CECast { ty = getCIntType env, rhs = head args }
 
   -- List operators
   | CGet _ ->
@@ -897,7 +906,7 @@ lang MExprCCompile = MExprAst + CAst
     CEBinOp { op = COSubScript {}, lhs = lhs, rhs = last args }
   | CLength _ -> CEMember { lhs = head args, id = _seqLenKey }
 
-  | c -> infoErrorExit (infoTm t) "Unsupported intrinsic in compileOp"
+  | c -> infoErrorExit info "Unsupported intrinsic in compileOp"
 
 
   sem compileExpr (env: CompileCEnv) =
@@ -928,7 +937,7 @@ lang MExprCCompile = MExprAst + CAst
       -- Intrinsics
       else match fun with TmConst { val = val } then
         let args = map (compileExpr env) args in
-        compileOp fun args val
+        compileOp env (infoTm fun) args val
 
       else error "Unsupported application in compileExpr"
     else never
