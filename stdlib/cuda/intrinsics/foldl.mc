@@ -1,27 +1,25 @@
 -- Defines the CUDA code generation for a foldl expression.
 
-include "cuda/ast.mc"
+include "cuda/compile.mc"
 
-lang CudaFoldlIntrinsic = CudaAst
-  sem generateCudaIntrinsicFunction =
-  | CEFoldl t ->
+lang CudaFoldlIntrinsic = CudaCompile
+  sem generateCudaIntrinsicFunction (ccEnv : CompileCEnv) =
+  | CESeqFoldl t ->
     let fId =
       match t.f with CEVar {id = id} then id
       else error "Cannot compile foldl function argument" in
     let accParamId = nameSym "acc_init" in
     let sParamId = nameSym "s" in
     let accId = nameSym "acc" in
-    -- TODO: How can we figure out the type of acc and s?
-    let accTypeId = nameSym "T" in
-    let sTypeId = nameSym "T" in
-    let accType = CTyVar {id = accTypeId} in
+    let accType = t.ty in
+    let sType = t.sTy in
     let accDefStmt = CSDef {
       ty = accType,
       id = Some accId,
       init = Some (CIExpr {expr = CEVar {id = accParamId}})} in
     let indexId = nameSym "i" in
     let indexDefStmt = CSDef {
-      ty = CTyInt64 (),
+      ty = getCIntType ccEnv,
       id = Some indexId,
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
     let foldStepStmt = CSExpr {expr = CEBinOp {
@@ -51,9 +49,7 @@ lang CudaFoldlIntrinsic = CudaAst
     let retStmt = CSRet {val = Some (CEVar {id = accId})} in
     let stmts = [accDefStmt, indexDefStmt, whileStmt, retStmt] in
     let intrinsicId = nameSym "foldl" in
-    let sType = CTyVar {id = sTypeId} in
     let top = CuTTop {
-      templates = [accTypeId, sTypeId],
       attrs = [CuAHost (), CuADevice ()],
       top = CTFun {
         ret = accType, id = intrinsicId,
@@ -61,9 +57,9 @@ lang CudaFoldlIntrinsic = CudaAst
         body = stmts}} in
     (intrinsicId, top)
 
-  sem generateCudaIntrinsicCall (acc : [CuTop]) (outExpr : CExpr) =
-  | CEFoldl t ->
-    match generateCudaIntrinsicFunction (CEFoldl t) with (id, top) in
+  sem generateCudaIntrinsicCall (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
+  | CESeqFoldl t ->
+    match generateCudaIntrinsicFunction ccEnv (CESeqFoldl t) with (id, top) in
     let foldlCall = CEApp {fun = id, args = [t.acc, t.s]} in
     let acc = cons top acc in
     (acc, _reconstructStmt outExpr foldlCall)

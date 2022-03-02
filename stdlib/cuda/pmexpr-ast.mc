@@ -14,6 +14,8 @@ lang CudaPMExprAst = PMExprAst
   | rhs -> eqi (constructorTag lhs) (constructorTag rhs)
 
   syn Expr =
+  | TmSeqMap {f : Expr, s : Expr, ty : Type, info : Info}
+  | TmSeqFoldl {f : Expr, acc : Expr, s : Expr, ty : Type, info : Info}
   | TmMapKernel {f : Expr, s : Expr, ty : Type, info : Info}
   | TmReduceKernel {f : Expr, ne : Expr, s : Expr, commutative : Bool, ty : Type, info : Info}
   | TmCopy {arg : Expr, toMem : AllocMem, ty : Type, info : Info}
@@ -25,24 +27,47 @@ lang CudaPMExprAst = PMExprAst
   | _ -> false
 
   sem tyTm =
+  | TmSeqMap t -> t.ty
+  | TmSeqFoldl t -> t.ty
   | TmMapKernel t -> t.ty
   | TmReduceKernel t -> t.ty
   | TmCopy t -> t.ty
   | TmFree t -> t.ty
 
   sem infoTm =
+  | TmSeqMap t -> t.info
+  | TmSeqFoldl t -> t.info
   | TmMapKernel t -> t.info
   | TmReduceKernel t -> t.info
   | TmCopy t -> t.info
   | TmFree t -> t.info
 
   sem withType (ty : Type) =
+  | TmSeqMap t -> TmSeqMap {t with ty = ty}
+  | TmSeqFoldl t -> TmSeqFoldl {t with ty = ty}
   | TmMapKernel t -> TmMapKernel {t with ty = ty}
   | TmReduceKernel t -> TmReduceKernel {t with ty = ty}
   | TmCopy t -> TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = ty}
 
+  sem withInfo (info : Info) =
+  | TmSeqMap t -> TmSeqMap {t with info = info}
+  | TmSeqFoldl t -> TmSeqFoldl {t with info = info}
+  | TmMapKernel t -> TmMapKernel {t with info = info}
+  | TmReduceKernel t -> TmReduceKernel {t with info = info}
+  | TmCopy t -> TmCopy {t with info = info}
+  | TmFree t -> TmFree {t with info = info}
+
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmSeqMap t ->
+    match f acc t.f with (acc, tf) in
+    match f acc t.s with (acc, s) in
+    (acc, TmSeqMap {{t with f = tf} with s = s})
+  | TmSeqFoldl t ->
+    match f acc t.f with (acc, tf) in
+    match f acc t.acc with (acc, tacc) in
+    match f acc t.s with (acc, s) in
+    (acc, TmSeqFoldl {{{t with f = tf} with acc = tacc} with s = s})
   | TmMapKernel t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
@@ -58,14 +83,28 @@ lang CudaPMExprAst = PMExprAst
   | TmFree t -> (acc, TmFree t)
 
   sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
-  | TmMapKernel t -> (acc, TmMapKernel t)
-  | TmReduceKernel t -> (acc, TmReduceKernel t)
-  | TmCopy t -> (acc, TmCopy t)
   | TmFree t ->
     match f acc t.tyArg with (acc, tyArg) in
     (acc, TmFree {t with tyArg = tyArg})
 
   sem typeAnnotExpr (env : TypeEnv) =
+  | TmSeqMap t ->
+    let f = typeAnnotExpr env t.f in
+    let s = typeAnnotExpr env t.s in
+    let outElemTy =
+      match tyTm f with TyArrow {to = to} then to
+      else tyunknown_ in
+    TmSeqMap {{{t with f = f}
+                  with s = s}
+                  with ty = tyseq_ outElemTy}
+  | TmSeqFoldl t ->
+    let f = typeAnnotExpr env t.f in
+    let acc = typeAnnotExpr env t.acc in
+    let s = typeAnnotExpr env t.s in
+    TmSeqFoldl {{{{t with f = f}
+                     with acc = acc}
+                     with s = s}
+                     with ty = tyTm acc}
   | TmMapKernel t ->
     let f = typeAnnotExpr env t.f in
     let s = typeAnnotExpr env t.s in
@@ -97,6 +136,20 @@ lang CudaPMExprAst = PMExprAst
   | TmFree t -> TmFree {t with ty = tyunit_}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmSeqMap r ->
+    match lhs with TmSeqMap l then
+      match eqExprH env free l.f r.f with Some free then
+        eqExprH env free l.s r.s
+      else None ()
+    else None ()
+  | TmSeqFoldl r ->
+    match lhs with TmSeqFoldl l then
+      match eqExprH env free l.f r.f with Some free then
+        match eqExprH env free l.acc r.acc with Some free then
+          eqExprH env free l.s r.s
+        else None ()
+      else None ()
+    else None ()
   | TmMapKernel r ->
     match lhs with TmMapKernel l then
       match eqExprH env free l.f r.f with Some free then
@@ -124,6 +177,13 @@ lang CudaPMExprAst = PMExprAst
     else None ()
 
   sem normalize (k : Expr -> Expr) =
+  | TmSeqMap t ->
+    k (TmSeqMap {{t with f = normalizeTerm t.f}
+                    with s = normalizeTerm t.s})
+  | TmSeqFoldl t ->
+    k (TmSeqFoldl {{{t with f = normalizeTerm t.f}
+                       with acc = normalizeTerm t.acc}
+                       with s = normalizeTerm t.s})
   | TmMapKernel t ->
     k (TmMapKernel {{t with f = normalizeTerm t.f}
                        with s = normalizeTerm t.s})
@@ -134,6 +194,14 @@ lang CudaPMExprAst = PMExprAst
   | TmCopy t -> k (TmCopy {t with arg = normalizeTerm t.arg})
   | TmFree t -> k (TmFree t)
 end
+
+let seqMap_ = lam f. lam s.
+  use CudaPMExprAst in
+  TmSeqMap {f = f, s = s, ty = tyunknown_, info = NoInfo ()}
+
+let seqFoldl_ = lam f. lam acc. lam s.
+  use CudaPMExprAst in
+  TmSeqFoldl {f = f, acc = acc, s = s, ty = tyunknown_, info = NoInfo ()}
 
 let mapKernel_ = lam f. lam s.
   use CudaPMExprAst in

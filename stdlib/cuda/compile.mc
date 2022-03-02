@@ -22,6 +22,16 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       compileType env ty
     else infoErrorExit (infoTy ty) "Could not unwrap sequence type"
 
+  sem _getStructDataElemType (env : CompileCEnv) =
+  | cty ->
+    recursive let findTypeId : CType -> Name = lam ty.
+      match ty with CTyPtr t then findTypeId t
+      else match ty with CTyVar {id = id} then id
+      else error "Expected struct type"
+    in
+    let typeId = findTypeId cty in
+    _getSequenceElemType env (TyCon {ident = typeId, info = NoInfo ()})
+
   sem _compileCopyToCpu (env : CompileCEnv) (dstId : Name) (arg : CExpr) =
   | TmCopy t ->
     let seqType = compileType env t.ty in
@@ -120,27 +130,26 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       fun = _cudaFree, args = [arg]}} in
     [tempDeclStmt, cudaMemcpySeqStmt, cudaFreeGpuDataStmt, cudaFreeGpuSeqStmt]
 
-  sem compileOp (t: Expr) (args: [CExpr]) =
-  | CMap _ -> CEMap {f = get args 0, s = get args 1}
-  | CFoldl _ -> CEFoldl {f = get args 0, acc = get args 1, s = get args 2}
-
-  -- TODO(larshum, 2022-02-08): Support composite types other than 1d sequences.
-  sem compileStmt (env : CompileCEnv) (res : Result) =
+  sem compileExpr (env : CompileCEnv) =
+  | TmSeqMap t ->
+    CESeqMap {
+      f = compileExpr env t.f, s = compileExpr env t.s,
+      sTy = compileType env (tyTm t.s), ty = compileType env t.ty}
+  | TmSeqFoldl t ->
+    CESeqFoldl {
+      f = compileExpr env t.f, acc = compileExpr env t.acc,
+      s = compileExpr env t.s, sTy = compileType env (tyTm t.s),
+      ty = compileType env t.ty}
   | TmMapKernel t ->
-    match res with RIdent id then
-      -- TODO(larshum, 2022-02-08): Add a way to control the value of the
-      -- 'opsPerThread' argument from the CUDA PMExpr AST.
-      let kernelExpr = CEMapKernel {
-        f = compileExpr env t.f, s = compileExpr env t.s,
-        sTy = compileType env (tyTm t.s), outTy = compileType env t.ty,
-        opsPerThread = 10} in
-      let assignExpr = CEBinOp {
-        op = COAssign (),
-        lhs = CEVar {id = id},
-        rhs = kernelExpr} in
-      (env, [CSExpr {expr = assignExpr}])
-    else error "Internal compiler error: invalid map kernel call"
+    -- TODO(larshum, 2022-02-08): Add a way to control the value of the
+    -- 'opsPerThread' argument from the CUDA PMExpr AST.
+    CEMapKernel {
+      f = compileExpr env t.f, s = compileExpr env t.s,
+      sTy = compileType env (tyTm t.s), ty = compileType env t.ty,
+      opsPerThread = 10}
   | TmReduceKernel t -> error "not implemented yet"
+
+  sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmCopy t ->
     -- NOTE(larshum, 2022-02-07): This must always be an identifier, since the
     -- result of a copy is always stored in a named variable.

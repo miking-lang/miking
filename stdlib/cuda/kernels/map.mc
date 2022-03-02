@@ -16,10 +16,10 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       match t.f with CEVar {id = id} then id
       else error "Cannot compile map with non-trivial function calls" in
     let kernelId = nameSym "mapKernel" in
-    let outTypeId = nameSym "T" in
-    let sTypeId = nameSym "T" in
     let outParamId = nameSym "out" in
     let sParamId = nameSym "s" in
+    let outTy = t.ty in
+    let sTy = t.sTy in
     let indexId = nameSym "idx" in
     let indexStmt = CSDef {
       ty = CTyInt64 (), id = Some indexId,
@@ -58,10 +58,7 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       cond = whileCondExpr,
       body = [mapAssignStmt, indexIncrementStmt]} in
     let stmts = [indexStmt, strideStmt, whileStmt] in
-    let outTy = CTyVar {id = outTypeId} in
-    let sTy = CTyVar {id = sTypeId} in
     let top = CuTTop {
-      templates = [outTypeId, sTypeId],
       attrs = [CuAGlobal ()],
       top = CTFun {
         ret = CTyVoid (), id = kernelId,
@@ -81,27 +78,18 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
     let cudaMemcpyStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
-        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}}, t.s,
+        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
+        t.s,
         CESizeOfType {ty = t.sTy},
         CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let lenId = nameSym "n" in
     let lenStmt = CSDef {
-      ty = CTyInt64 (), id = Some lenId,
+      ty = getCIntType ccEnv, id = Some lenId,
       init = Some (CIExpr {expr =
         CEMember {lhs = CEVar {id = tempId}, id = _seqLenKey}})} in
 
     -- Pre-allocate memory for the output
-    let outElemType =
-      match t.outTy with CTyVar {id = seqId} then
-        -- TODO(larshum, 2022-02-09): Only works for 1d sequences.
-        -- OPT(larshum, 2022-02-09): We need the type environment as an
-        -- associative sequence, so that we can compile the element type to a C
-        -- type. However, that also requires a linear-time lookup.
-        match assocSeqLookup {eq=nameEq} seqId ccEnv.typeEnv
-        with Some (TySeq {ty = elemTy}) then
-          compileType ccEnv elemTy
-        else error "Expected output of map kernel to be a sequence"
-      else error "Unexpected type of map kernel output" in
+    let outElemType = _getStructDataElemType ccEnv t.ty in
     let sizeExpr = CEBinOp {
       op = COMul (),
       lhs = CEVar {id = lenId},
@@ -116,12 +104,13 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       fun = _cudaMalloc,
       args = [
         CEUnOp {op = COAddrOf (), arg = outExpr},
-        CESizeOfType {ty = t.outTy}]}} in
+        CESizeOfType {ty = t.ty}]}} in
     let memcpySeqStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
-        outExpr, CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
-        CESizeOfType {ty = t.outTy},
+        outExpr,
+        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
+        CESizeOfType {ty = t.ty},
         CEVar {id = _cudaMemcpyHostToDevice}]}} in
 
     -- Compute launch parameters and start kernel
@@ -129,12 +118,13 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
     -- hard-coded. We may want more fine-grained control in the future.
     let tpbId = nameSym "tpb" in
     let tpbStmt = CSDef {
-      ty = CTyInt64 (), id = Some tpbId,
+      ty = getCIntType ccEnv, id = Some tpbId,
       init = Some (CIExpr {expr = CEInt {i = 512}})} in
     -- Each block consists of 'tpb' threads, and each such thread should
     -- process a specified number of elements.
     let operationsPerBlockExpr = CEBinOp {
-      op = COMul (), lhs = CEVar {id = tpbId},
+      op = COMul (),
+      lhs = CEVar {id = tpbId},
       rhs = CEInt {i = t.opsPerThread}} in
     let nblocksId = nameSym "nblocks" in
     let nblocksExpr = CEBinOp {
@@ -148,7 +138,7 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
         rhs = CEInt {i = 1}},
       rhs = operationsPerBlockExpr} in
     let nblocksStmt = CSDef {
-      ty = CTyInt64 (), id = Some nblocksId,
+      ty = getCIntType ccEnv, id = Some nblocksId,
       init = Some (CIExpr {expr = nblocksExpr})} in
     let kernelLaunchStmt = CSExpr {expr = CEKernelApp {
       fun = kernelId,

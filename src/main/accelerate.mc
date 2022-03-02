@@ -1,6 +1,7 @@
 include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
+include "cuda/constant-app.mc"
 include "cuda/memory.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pprint.mc"
@@ -60,7 +61,7 @@ end
 lang MExprCudaCompile =
   CudaPMExprAst + CudaMemoryManagement + MExprTypeLift + SeqTypeTypeLift +
   CudaCompile + CudaKernelTranslate + CudaPrettyPrint + CudaCWrapper +
-  CudaWellFormed
+  CudaWellFormed + CudaConstantApp
 end
 
 type AccelerateHooks a b = {
@@ -133,6 +134,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
   wellFormed ast;
+  let ast = constantAppToExpr ast in
   match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
   let opts : CompileCOptions = {

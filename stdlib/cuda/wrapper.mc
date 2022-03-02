@@ -192,6 +192,6 @@ lang CudaCWrapper = CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
       ],
       tops =
         map
-          (lam top : CTop. CuTTop {templates = [], attrs = [CuAExternC ()], top = top})
+          (lam top : CTop. CuTTop {attrs = [CuAExternC ()], top = top})
           entryPointWrappers}
 end

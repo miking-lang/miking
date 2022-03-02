@@ -11,15 +11,16 @@ include "cuda/ast.mc"
 include "cuda/compile.mc"
 include "cuda/memory.mc"
 include "cuda/intrinsics/foldl.mc"
+include "cuda/intrinsics/map.mc"
 include "cuda/kernels/map.mc"
 
 -- Translates non-kernel intrinsics, which could run either in CPU or GPU code,
 -- to looping constructs.
 lang CudaCpuTranslate =
-  CudaAst + MExprCCompile + CudaFoldlIntrinsic
+  CudaAst + MExprCCompile + CudaMapIntrinsic + CudaFoldlIntrinsic
 
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | t & (CEFoldl _) -> generateCudaIntrinsicCall acc outExpr t
+  | t & (CESeqMap _ | CESeqFoldl _) -> generateCudaIntrinsicCall ccEnv acc outExpr t
 end
 
 -- Translates kernel expressions to GPU kernel calls.
@@ -85,16 +86,16 @@ lang CudaKernelTranslate = CudaCpuTranslate + CudaGpuTranslate
   -- does not include e.g. integer and float literals, since these are not
   -- considered to be "allocated".
   sem translateTopToCudaFormat (cudaMemEnv : Map Name AllocEnv) =
-  | CTTyDef t -> CuTTop {templates = [], attrs = [], top = CTTyDef t}
-  | CTDef t -> CuTTop {templates = [], attrs = [CuAHost (), CuADevice ()], top = CTDef t}
+  | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
+  | CTDef t -> CuTTop {attrs = [CuAHost (), CuADevice ()], top = CTDef t}
   | CTFun t ->
     match mapLookup t.id cudaMemEnv with Some allocEnv then
       let body = map (usePointerToGpuVariablesStmt allocEnv) t.body in
       let cTop = CTFun {t with body = body} in
-      CuTTop {templates = [], attrs = [], top = cTop}
+      CuTTop {attrs = [], top = cTop}
     else
       let attrs = [CuAHost (), CuADevice ()] in
-      CuTTop {templates = [], attrs = attrs, top = CTFun t}
+      CuTTop {attrs = attrs, top = CTFun t}
 
   sem usePointerToGpuVariablesStmt (env : AllocEnv) =
   | CSDef (t & {id = Some id}) ->
