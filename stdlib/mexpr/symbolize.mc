@@ -23,14 +23,16 @@ type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
   tyVarEnv: Map String Name,
-  tyConEnv: Map String Name
+  tyConEnv: Map String Name,
+  strictTypeVars: Bool
 }
 
 let symEnvEmpty =
   {varEnv = mapEmpty cmpString,
    conEnv = mapEmpty cmpString,
    tyVarEnv = mapEmpty cmpString,
-   tyConEnv = mapEmpty cmpString}
+   tyConEnv = mapEmpty cmpString,
+   strictTypeVars = false}
 
 -----------
 -- TERMS --
@@ -151,23 +153,29 @@ end
 lang TypeSym = Sym + TypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmType t ->
-    match env with {tyConEnv = tyConEnv} then
-      let tyIdent = symbolizeType env t.tyIdent in
-      let ty = symbolizeType env t.ty in
-      if nameHasSym t.ident then
-        TmType {{{t with tyIdent = tyIdent}
+    match env with {tyConEnv = tyConEnv, tyVarEnv = tyVarEnv} in
+    let ty = symbolizeType env t.ty in
+    if nameHasSym t.ident then
+      TmType {{{t with tyIdent = symbolizeType env t.tyIdent}
+                  with inexpr = symbolizeExpr env t.inexpr}
+                  with ty = ty}
+    else
+      let params = map nameSetNewSym t.params in
+      let paramStrs = map nameGetStr params in
+      let tyVarEnv =
+        foldl2 (lam e. lam s. lam i. mapInsert s i e) tyVarEnv paramStrs params
+      in
+      let paramEnv = {env with tyVarEnv = tyVarEnv} in
+      let tyIdent = symbolizeType paramEnv t.tyIdent in
+      let ident = nameSetNewSym t.ident in
+      let str = nameGetStr ident in
+      let tyConEnv = mapInsert str ident tyConEnv in
+      let env = {env with tyConEnv = tyConEnv} in
+      TmType {{{{{t with ident = ident}
+                    with params = params}
+                    with tyIdent = tyIdent}
                     with inexpr = symbolizeExpr env t.inexpr}
                     with ty = ty}
-      else
-        let ident = nameSetNewSym t.ident in
-        let str = nameGetStr ident in
-        let tyConEnv = mapInsert str ident tyConEnv in
-        let env = {env with tyConEnv = tyConEnv} in
-        TmType {{{{t with ident = ident}
-                     with tyIdent = tyIdent}
-                     with inexpr = symbolizeExpr env t.inexpr}
-                     with ty = ty}
-    else never
 end
 
 lang RecLetsSym = Sym + RecLetsAst
@@ -274,9 +282,9 @@ lang ConTypeSym = ConTypeAst + UnknownTypeAst
         let str = nameGetStr t.ident in
         match mapLookup str tyConEnv with Some ident then
           TyCon {t with ident = ident}
+        else if env.strictTypeVars then
+          error (concat "Unknown type constructor in symbolizeExpr: " str)
         else
-          -- NOTE(larshum, 2021-03-24): Unknown type variables are symbolized
-          -- as TyUnknown for now.
           TyUnknown {info = t.info}
     else never
 end
@@ -289,24 +297,26 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
       let str = nameGetStr t.ident in
       match mapLookup str env.tyVarEnv with Some ident then
         TyVar {t with ident = ident}
+      else if env.strictTypeVars then
+        error (concat "Unknown type variable in symbolizeExpr: " str)
       else
-        -- NOTE(aathn, 2021-09-29): Unknown type variables are symbolized
-        -- as TyUnknown for now.
         TyUnknown {info = t.info}
 end
 
 lang AllTypeSym = AllTypeAst + VarSortAst
   sem symbolizeType (env : SymEnv) =
   | TyAll t & ty ->
-    if nameHasSym t.ident then ty
-    else
       let sort = smap_VarSort_Type (symbolizeType env) t.sort in
-      let str = nameGetStr t.ident in
-      let ident = nameSetNewSym t.ident in
-      let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
-      TyAll {{{t with ident = ident}
-                 with ty = symbolizeType env t.ty}
-                 with sort = sort}
+      if nameHasSym t.ident then
+        TyAll {{t with ty = symbolizeType env t.ty}
+                  with sort = sort}
+      else
+        let str = nameGetStr t.ident in
+        let ident = nameSetNewSym t.ident in
+        let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
+        TyAll {{{t with ident = ident}
+                   with ty = symbolizeType env t.ty}
+                   with sort = sort}
 end
 
 --------------
