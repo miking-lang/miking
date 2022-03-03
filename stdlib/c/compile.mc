@@ -49,6 +49,20 @@ recursive let _unwrapType = use ConTypeAst in
     else ty
 end
 
+-- Look up the name of a type variable corresponding to a given concrete type
+let _lookupTypeName = use MExprAst in
+  lam tyEnv : AssocSeq Name Type. lam ty : Type.
+  let eqType = lam ty1. lam ty2.
+    use MExprCmp in eqi (cmpType ty1 ty2) 0
+  in
+  recursive let work : Option Name -> Type -> Name = lam id. lam ty.
+    match ty with TyCon {ident = ident} then ident
+    else match assocSeqReverseLookup {eq = eqType} ty tyEnv with Some id then
+      id
+    else infoErrorExit (infoTy ty) "Type not found in type environment"
+  in
+  work (None ()) ty
+
 -- C assignment shorthand
 let _assign: CExpr -> CExpr -> CExpr = use CAst in
   lam lhs. lam rhs.
@@ -87,6 +101,7 @@ let cIncludes = concat [
 
 -- Names used in the compiler for intrinsics
 let _printf = nameSym "printf"
+let _cartesianToLinearIndex = nameSym "cartesian_to_linear_index"
 
 -- C names that must be pretty printed using their exact string
 let cCompilerNames: [Name] = concat [
@@ -97,6 +112,9 @@ let cCompilerNames: [Name] = concat [
 let _constrKey = nameNoSym "constr"
 let _seqKey = nameNoSym "seq"
 let _seqLenKey = nameNoSym "len"
+let _tensorDataKey = nameNoSym "data"
+let _tensorDimsKey = nameNoSym "dims"
+let _tensorOffsetKey = nameNoSym "offset"
 
 -- Used in compileStmt and compileStmts for deciding what action to take in
 -- tail position
@@ -105,11 +123,7 @@ con RIdent : Name -> Result
 con RReturn : () -> Result
 con RNone : () -> Result
 
-----------------------------------
--- MEXPR -> C COMPILER FRAGMENT --
-----------------------------------
-
-lang MExprCCompile = MExprAst + CAst
+lang MExprCCompileBase = MExprAst + CAst
 
   --------------------------
   -- COMPILER ENVIRONMENT --
@@ -154,6 +168,129 @@ lang MExprCCompile = MExprAst + CAst
     { options = compileOptions, ptrTypes = [], typeEnv = []
     , externals = mapEmpty nameCmp, allocs = [] }
 
+  -- Compilation of constant types
+  sem getCIntType =
+  | env ->
+    let env : CompileCEnv = env in
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitInts then CTyInt32 () else CTyInt64 ()
+
+  sem getCFloatType =
+  | env ->
+    let env : CompileCEnv = env in
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitFloats then CTyFloat () else CTyDouble ()
+
+  sem getCBoolType =
+  | env -> CTyChar ()
+
+  sem getCCharType =
+  | env -> CTyChar ()
+
+end
+
+-- Generation of tensor function for computing the linear index given a
+-- sequence of integers representing a cartesian index, and the dimensions of
+-- the tensor.
+lang MExprTensorCCompile = MExprCCompileBase
+  sem hasTensorTypes =
+  | typeEnv ->
+    let isTensorType = lam ty : Type.
+      match ty with TyTensor _ then true else false
+    in
+    any (lam entry : (Name, Type). isTensorType entry.1) typeEnv
+
+  sem cartesianToLinearIndexDef =
+  | env ->
+    let env : CompileCEnv = env in
+    let dimsMExprType = TySeq {ty = TyInt (), info = NoInfo ()} in
+    let dimsName = _lookupTypeName env.typeEnv dimsMExprType in
+    let dimsType = CTyVar {id = dimsName} in
+    let dims = nameSym "dims" in
+    let cidx = nameSym "cartesian_idx" in
+    let tmp = nameSym "tmp" in
+    let lidx = nameSym "linear_idx" in
+    let k = nameSym "k" in
+    let params = [(dimsType, dims), (dimsType, cidx)] in
+    let intType = getCIntType env in
+    let multiplyTmp = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = tmp},
+      rhs = CEBinOp {
+       op = COMul (),
+       lhs = CEVar {id = tmp},
+       rhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEMember {lhs = CEVar {id = dims}, id = _seqKey},
+        rhs = CEVar {id = k}}}}} in
+    let decrementK = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = k},
+      rhs = CEBinOp {
+        op = COSub (),
+        lhs = CEVar {id = k},
+        rhs = CEInt {i = 1}}}} in
+    let stmts = [
+      CSDef {ty = intType, id = Some tmp, init = Some (CIExpr {expr = CEInt {i = 1}})},
+      CSDef {ty = intType, id = Some lidx, init = Some (CIExpr {expr = CEInt {i = 0}})},
+      CSDef {
+        ty = intType, id = Some k,
+        init = Some (CIExpr {expr = CEBinOp {
+          op = COSub (),
+          lhs = CEMember {lhs = CEVar {id = dims}, id = _seqLenKey},
+          rhs = CEInt {i = 1}}})},
+      CSWhile {
+        cond = CEBinOp {
+          op = COGe (),
+          lhs = CEVar {id = k},
+          rhs = CEMember {lhs = CEVar {id = cidx}, id = _seqLenKey}},
+        body = [multiplyTmp, decrementK]},
+      CSWhile {
+        cond = CEBinOp {
+          op = COGe (),
+          lhs = CEVar {id = k},
+          rhs = CEInt {i = 0}},
+        body = [
+          CSExpr {expr = CEBinOp {
+            op = COAssign (),
+            lhs = CEVar {id = lidx},
+            rhs = CEBinOp {
+              op = COAdd (),
+              lhs = CEVar {id = lidx},
+              rhs = CEBinOp {
+                op = COMul (),
+                lhs = CEVar {id = tmp},
+                rhs = CEBinOp {
+                  op = COSubScript (),
+                  lhs = CEMember {lhs = CEVar {id = cidx}, id = _seqKey},
+                  rhs = CEVar {id = k}}}}}},
+          multiplyTmp, decrementK]},
+      CSRet {val = Some (CEVar {id = lidx})}
+    ] in
+    CTFun {ret = intType, id = _cartesianToLinearIndex, params = params, body = stmts}
+
+  -- Computes the linear index given expressions representing the tensor and
+  -- the sequence containing the cartesian coordinates.
+  sem tensorComputeLinearIndex (tensor : CExpr) =
+  | cartesianIndex ->
+    let tensorDims = CEMember {lhs = tensor, id = _tensorDimsKey} in
+    let tensorOffset = CEMember {lhs = tensor, id = _tensorOffsetKey} in
+    let cartToLinear = CEApp {
+      fun = _cartesianToLinearIndex,
+      args = [tensorDims, cartesianIndex]} in
+    CEBinOp {
+      op = COAdd (),
+      lhs = cartToLinear,
+      rhs = tensorOffset
+    }
+end
+
+----------------------------------
+-- MEXPR -> C COMPILER FRAGMENT --
+----------------------------------
+
+lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
+
   -- Function that is called when allocation of data is needed. Must be implemented by a concrete C compiler.
   sem alloc (name: Name) =
   -- Intentionally left blank
@@ -197,7 +334,14 @@ lang MExprCCompile = MExprAst + CAst
     ) [] typeEnv in
 
     -- Run compiler
-    match compileTops env [] [] prog with (tops, inits) then
+    match compileTops env [] [] prog with (tops, inits) in
+
+    -- Generate functions for computing linear index for tensors, if any
+    -- tensor types are used.
+    let tops =
+      if hasTensorTypes typeEnv then cons (cartesianToLinearIndexDef env) tops
+      else tops
+    in
 
     -- Compute return type
     let retTy: CType = compileType env (tyTm prog) in
@@ -206,8 +350,6 @@ lang MExprCCompile = MExprAst + CAst
     -- initialization code (e.g., to put in a main function), and the return
     -- type
     (env, join [decls, defs, postDefs], tops, inits, retTy)
-
-    else never
 
   -----------------------
   -- COLLECT EXTERNALS --
@@ -231,9 +373,10 @@ lang MExprCCompile = MExprAst + CAst
   -- Variants are always accessed through pointer (could potentially be
   -- optimized in the same way as records)
   | TyVariant _ -> true
-  -- Sequences are handled specially, and are not accessed directly through
-  -- pointers
+  -- Sequences and tensors are handled specially, and are not accessed directly
+  -- through pointers
   | TySeq _ -> false
+  | TyTensor _ -> false
   -- Records are only accessed through pointer if they contain pointer types.
   -- This allows for returning small records from functions, but may be
   -- expensive for very large records if it's not handled by the underlying
@@ -280,6 +423,7 @@ lang MExprCCompile = MExprAst + CAst
       id = name
     } in
     cons def acc
+  | TyTensor _ -> acc
   | ty ->
     let def = CTTyDef { ty = compileType env ty, id = name } in
     cons def acc
@@ -315,25 +459,24 @@ lang MExprCCompile = MExprAst + CAst
       }
       in
       concat [enum,def] acc
+  | TyTensor { ty = ty } ->
+    -- NOTE(larshum, 2022-03-03): Tensor types are generated later on because
+    -- they need the sequence of integers type, which is used to contain their
+    -- dimensions, to be defined.
+    let ty = compileType env ty in
+    let dimsType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
+    let dimsName = _lookupTypeName env.typeEnv dimsType in
+    let fields = [
+      (CTyPtr { ty = ty }, Some _tensorDataKey),
+      (CTyVar { id = dimsName }, Some _tensorDimsKey),
+      (getCIntType env, Some _tensorOffsetKey)
+    ] in
+    let def = CTTyDef {
+      ty = CTyStruct { id = Some name, mem = Some fields },
+      id = name
+    } in
+    cons def acc
   | _ -> acc
-
-  sem getCIntType =
-  | env ->
-    let env : CompileCEnv = env in
-    let opts : CompileCOptions = env.options in
-    if opts.use32BitInts then CTyInt32 () else CTyInt64 ()
-
-  sem getCFloatType =
-  | env ->
-    let env : CompileCEnv = env in
-    let opts : CompileCOptions = env.options in
-    if opts.use32BitFloats then CTyFloat () else CTyDouble ()
-
-  sem getCBoolType =
-  | env -> CTyChar ()
-
-  sem getCCharType =
-  | env -> CTyChar ()
 
   sem compileType (env: CompileCEnv) =
   | TyInt _ -> getCIntType env
@@ -363,7 +506,6 @@ lang MExprCCompile = MExprAst + CAst
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
 
   | TySeq _ & ty ->
-    error "";
     infoErrorExit (infoTy ty)
       "TySeq should not occur in compileType. Did you run type lift?"
 
@@ -906,6 +1048,24 @@ lang MExprCCompile = MExprAst + CAst
     CEBinOp { op = COSubScript {}, lhs = lhs, rhs = last args }
   | CLength _ -> CEMember { lhs = head args, id = _seqLenKey }
 
+  -- Tensor operators
+  | CTensorGetExn _ ->
+    let idx = tensorComputeLinearIndex (head args) (last args) in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+  | CTensorSetExn _ ->
+    let idx = tensorComputeLinearIndex (head args) (get args 1) in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      rhs = get args 2
+    }
+  | CTensorRank _ ->
+    let dims = CEMember { lhs = head args, id = _tensorDimsKey } in
+    CEMember { lhs = dims, id = _seqLenKey }
+  | CTensorShape _ -> CEMember { lhs = head args, id = _tensorDimsKey }
+
   | c -> infoErrorExit info "Unsupported intrinsic in compileOp"
 
 
@@ -1056,7 +1216,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 lang Test =
   MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
-  MExprTypeLiftUnOrderedRecords + SeqTypeNoStringTypeLift
+  MExprTypeLiftUnOrderedRecords + SeqTypeNoStringTypeLift + TensorTypeTypeLift
 end
 
 mexpr
@@ -1069,6 +1229,9 @@ let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Type annotate
   let prog = typeAnnot prog in
+
+  -- Remove redundant lets
+  let prog = removeTypeAscription prog in
 
   -- ANF transformation
   let prog = normalizeTerm prog in
@@ -1531,6 +1694,105 @@ utest testCompile manyAllocs with strJoin "\n" [
   "    ((alloc.a) = 2);",
   "    (rec = alloc);",
   "  }",
+  "  return 0;",
+  "}"
+] using eqString in
+
+-- NOTE(larshum, 2022-03-02): We use type-ascriptions so that the intrinsic
+-- functions are treated as monomorphic, even though they are not.
+let seq = bindall_ [
+  let_ "s" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3]),
+  app_
+    (bind_
+      (let_ "len" (tyarrow_ (tyseq_ tyint_) tyint_) (uconst_ (CLength ())))
+      (var_ "len"))
+    (var_ "s")
+] in
+
+utest testCompile seq with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
+  "int64_t seqAlloc[3];",
+  "Seq s;",
+  "int main(int argc, char (*argv[])) {",
+  "  ((seqAlloc[0]) = 1);",
+  "  ((seqAlloc[1]) = 2);",
+  "  ((seqAlloc[2]) = 3);",
+  "  ((s.seq) = seqAlloc);",
+  "  ((s.len) = 3);",
+  "  return (s.len);",
+  "}"
+] using eqString in
+
+let tensor = bindall_ [
+  let_ "update" (tytensorsetexn_ tyint_)
+    (ulam_ "t" (ulam_ "dims" (ulam_ "v"
+      (appSeq_
+        (bind_
+          (let_ "set" (tytensorsetexn_ tyint_) (uconst_ (CTensorSetExn ())))
+          (var_ "set"))
+        [var_ "t", var_ "dims", var_ "v"])))),
+  let_ "access" (tytensorgetexn_ tyfloat_)
+    (ulam_ "t" (ulam_ "dims"
+      (appSeq_
+        (bind_
+          (let_ "get" (tytensorgetexn_ tyfloat_) (uconst_ (CTensorGetExn ())))
+          (var_ "get"))
+        [var_ "t", var_ "dims"]))),
+  let_ "rank" (tytensorrank_ tyint_)
+    (ulam_ "t"
+      (app_
+        (bind_
+          (let_ "r" (tytensorrank_ tyint_) (uconst_ (CTensorRank ())))
+          (var_ "r"))
+        (var_ "t"))),
+  let_ "shape" (tytensorshape_ tyint_)
+    (ulam_ "t"
+      (app_
+        (bind_
+          (let_ "s" (tytensorshape_ tyint_) (uconst_ (CTensorShape ())))
+          (var_ "s"))
+        (var_ "t"))),
+  int_ 0
+] in
+
+utest testCompile tensor with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
+  "typedef struct Tensor {int64_t (*data); Seq dims; int64_t offset;} Tensor;",
+  "typedef struct Tensor1 {double (*data); Seq dims; int64_t offset;} Tensor1;",
+  "int64_t cartesian_to_linear_index(Seq dims1, Seq cartesian_idx) {",
+  "  int64_t tmp = 1;",
+  "  int64_t linear_idx = 0;",
+  "  int64_t k = ((dims1.len) - 1);",
+  "  while ((k >= (cartesian_idx.len))) {",
+  "    (tmp = (tmp * ((dims1.seq)[k])));",
+  "    (k = (k - 1));",
+  "  }",
+  "  while ((k >= 0)) {",
+  "    (linear_idx = (linear_idx + (tmp * ((cartesian_idx.seq)[k]))));",
+  "    (tmp = (tmp * ((dims1.seq)[k])));",
+  "    (k = (k - 1));",
+  "  }",
+  "  return linear_idx;",
+  "}",
+  "void update(Tensor t, Seq dims2, int64_t v) {",
+  "  (((t.data)[(cartesian_to_linear_index((t.dims), dims2) + (t.offset))]) = v);",
+  "}",
+  "double access(Tensor1 t1, Seq dims3) {",
+  "  return ((t1.data)[(cartesian_to_linear_index((t1.dims), dims3) + (t1.offset))]);",
+  "}",
+  "int64_t rank(Tensor t2) {",
+  "  return ((t2.dims).len);",
+  "}",
+  "Seq shape(Tensor t3) {",
+  "  return (t3.dims);",
+  "}",
+  "int main(int argc, char (*argv[])) {",
   "  return 0;",
   "}"
 ] using eqString in

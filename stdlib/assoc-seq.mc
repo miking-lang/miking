@@ -19,6 +19,12 @@ let assocSeqLookup : AssocTraits k -> k -> AssocSeq k v -> Option v =
                 (lam t : (k, v). Some t.1)
                 (find (lam t : (k, v). traits.eq k t.0) s)
 
+let assocSeqReverseLookup : AssocTraits k -> v -> AssocSeq k v -> Option k =
+  lam revTraits : {eq : v -> v -> Bool}. lam v. lam s.
+    optionMapOr (None ())
+                (lam t : (k, v). Some t.0)
+                (find (lam t : (k, v). revTraits.eq v t.1) s)
+
 let assocSeqMap : (v1 -> v2) -> AssocSeq k v1 -> AssocSeq k v2 =
   lam f. lam s.
     map (lam t : (k, v). (t.0, f t.1)) s

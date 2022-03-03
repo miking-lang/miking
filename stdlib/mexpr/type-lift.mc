@@ -50,6 +50,9 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     -- performance critical.
     seqs: Map Type Name,
 
+    -- Tensor types encountered so far.
+    tensors : Map Type Name,
+
     labels: Set [SID],
 
     -- Variant types and their constructors encountered so far.
@@ -130,6 +133,21 @@ lang TypeLiftAddSeqToEnv = TypeLiftBase + SeqTypeAst + ConTypeAst
       (env, tycon)
 end
 
+lang TypeLiftAddTensorToEnv = TypeLiftBase + TensorTypeAst + ConTypeAst
+  sem addTensorToEnv (env : TypeLiftEnv) =
+  | TyTensor {info = info, ty = innerTy} & ty ->
+    match mapLookup innerTy env.tensors with Some name then
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
+    else
+      let name = nameSym "Tensor" in
+      let tycon = TyCon {ident = name, info = info} in
+      let env = {{env with tensors = mapInsert innerTy name env.tensors}
+                      with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tycon)
+end
+
 -----------
 -- TERMS --
 -----------
@@ -179,6 +197,7 @@ lang TypeLift = TypeLiftBase + Cmp
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
       seqs = mapEmpty cmpType,
+      tensors = mapEmpty cmpType,
       labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
@@ -300,6 +319,14 @@ end
 lang SeqTypeNoStringTypeLift = SeqTypeTypeLift + CharTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TySeq {info = _, ty = TyChar _} & ty -> (env,ty)
+end
+
+-- Optional type lifting of tensors (not added to MExprTypeLift by default)
+lang TensorTypeTypeLift = TypeLift + TensorTypeAst + TypeLiftAddTensorToEnv
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyTensor ({info = info, ty = innerTy} & r) ->
+    match typeLiftType env innerTy with (env, innerTy) in
+    addTensorToEnv env (TyTensor {r with ty = innerTy})
 end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
