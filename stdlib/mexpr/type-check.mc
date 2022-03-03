@@ -23,7 +23,8 @@ include "seq.mc"
 type TCEnv = {
   varEnv: Map Name Type,
   conEnv: Map Name Type,
-  tyConEnv: Map Name Type,
+  -- For each type constructor, keep its list of formal parameters and definition
+  tyConEnv: Map Name ([Name], Type),
   currentLvl: Level,
   disableRecordPolymorphism: Bool
 }
@@ -71,19 +72,47 @@ let _fields2str = use RecordTypeAst in
 let _sort2str = use MExprPrettyPrint in
   getVarSortStringCode 0 pprintEnvEmpty
 
-recursive let resolveAlias = use MExprAst in
-  lam env : Map Name Type. lam ty.
-  match ty with TyCon t then
-    match mapLookup t.ident env with Some ty then resolveAlias env ty
+lang VarTypeSubstitute = VarTypeAst
+  sem substituteVars (subst : Map Name Type) =
+  | TyVar t & ty ->
+    match mapLookup t.ident subst with Some tyvar then tyvar
     else ty
-  else ty
+  | ty ->
+    smap_Type_Type (substituteVars subst) ty
+end
+
+lang AppTypeGetArgs = AppTypeAst
+  sem getTypeArgs =
+  | TyApp t ->
+    match getTypeArgs t.lhs with (tycon, args) in
+    (tycon, snoc args t.rhs)
+  | ty ->
+    (ty, [])
+end
+
+lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTypeAst
+  sem resolveAlias (env : Map Name ([Name], Type)) =
+  | ty ->
+    match getTypeArgs ty with (TyCon t, args) then
+      match mapLookup t.ident env with Some (params, def) then
+        let isAlias =
+          match def with TyVariant r then not (mapIsEmpty r.constrs) else true
+        in
+        if isAlias then
+          let subst =
+            foldl2 (lam s. lam v. lam t. mapInsert v t s) (mapEmpty nameCmp) params args
+          in
+          resolveAlias env (substituteVars subst def)
+        else ty
+      else error "Encountered unknown constructor in resolveAlias!"
+    else ty
 end
 
 ----------------------
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst
+lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
   sem unify (env : TCEnv) (ty1 : Type) =
   | ty2 ->
@@ -308,24 +337,20 @@ let newvar = use VarSortAst in
 let newrecvar = use VarSortAst in
   lam fields. newflexvar (RecordVar {fields = fields})
 
-lang Generalize = AllTypeAst
+lang Generalize = AllTypeAst + VarTypeSubstitute
   -- Instantiate the top-level type variables of `ty' with fresh schematic variables.
   sem inst (lvl : Level) =
   | ty ->
     match stripTyAll ty with (vars, ty) in
     if gti (length vars) 0 then
       let inserter = lam subst. lam v : (Name, VarSort).
-        let sort = smap_VarSort_Type (instBase subst) v.1 in
+        let sort = smap_VarSort_Type (substituteVars subst) v.1 in
         mapInsert v.0 (newflexvar sort lvl (infoTy ty)) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
-      instBase subst ty
+      substituteVars subst ty
     else
       ty
-
-  sem instBase (subst : Map Name Type) =
-  | ty ->
-    smap_Type_Type (instBase subst) ty
 
   -- Generalize all flexible (schematic) type variables in `ty'.
   sem gen (lvl : Level) =
@@ -345,13 +370,6 @@ lang Generalize = AllTypeAst
       match genBase lvl ty with (vars2, ty) in
       (concat vars1 vars2, ty)
     ) [] ty
-end
-
-lang VarTypeGeneralize = Generalize + VarTypeAst
-  sem instBase (subst : Map Name Type) =
-  | TyVar {ident = n} & ty ->
-    match mapLookup n subst with Some tyvar then tyvar
-    else ty
 end
 
 lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
@@ -586,12 +604,7 @@ end
 lang TypeTypeCheck = TypeCheck + TypeAst
   sem typeCheckBase (env : TCEnv) =
   | TmType t ->
-    let isAlias =
-      match t.tyIdent with TyVariant {constrs = constrs} then
-        not (mapIsEmpty constrs)
-      else true
-    in
-    let env = if isAlias then _insertTyCon t.ident t.tyIdent env else env in
+    let env = _insertTyCon t.ident (t.params, t.tyIdent) env in
     let inexpr = typeCheckExpr env t.inexpr in
     TmType {{t with inexpr = inexpr}
                with ty = tyTm inexpr}
@@ -775,7 +788,7 @@ lang MExprTypeCheck =
   CharTypeUnify + UnknownTypeUnify + TensorTypeUnify + RecordTypeUnify +
 
   -- Type generalization
-  VarTypeGeneralize + FlexTypeGeneralize +
+  FlexTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
