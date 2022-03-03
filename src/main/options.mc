@@ -21,6 +21,7 @@ let optionsDefault : Options = {
   cpuOnly = false,
   typeCheck = false,
   printHelp = false,
+  toJavaScript = false, -- Compile MExpr to JavaScript
   output = None (),
   tuneOptions = tuneOptionsDefault
 }

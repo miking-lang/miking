@@ -64,6 +64,10 @@ let optionsConfig : ParseConfig = [
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with typeCheck = true}),
+  ([("--to-js", "", "")],
+    "Compile to JavaScript",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with toJavaScript = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

@@ -18,6 +18,7 @@ type Options = {
   cpuOnly : Bool,
   typeCheck : Bool,
   printHelp : Bool,
+  toJavaScript : Bool,
   output : Option String,
   tuneOptions : TuneOptions
 }
