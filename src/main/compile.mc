@@ -18,6 +18,7 @@ include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/wrap-in-try-with.mc"
+include "javascript/compile.mc"
 include "pmexpr/demote.mc"
 
 lang MCoreCompile =
@@ -81,12 +82,14 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
-    compileMCore ast
+    if options.toJavaScript then
+      javascriptCompile ast sourcePath
+    else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
-      , compileOcaml = ocamlCompile options sourcePath
+      , compileOcaml = ocamlCompile sourcePath
       }
 
 -- Main function for compiling a program
