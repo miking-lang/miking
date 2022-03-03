@@ -11,6 +11,7 @@ include "string.mc"
 
 include "ast.mc"
 include "ast-builder.mc"
+include "info.mc"
 include "pprint.mc"
 
 ---------------------------
@@ -74,7 +75,7 @@ lang VarSym = Sym + VarAst
         match mapLookup str varEnv with Some ident then
           TmVar {{t with ident = ident}
                     with ty = symbolizeType env t.ty}
-        else error (concat "Unknown variable in symbolizeExpr: " str)
+        else infoErrorExit t.info (concat "Unknown variable in symbolizeExpr: " str)
     else never
 end
 
@@ -244,7 +245,7 @@ lang DataSym = Sym + DataAst
           TmConApp {{{t with ident = ident}
                         with body = symbolizeExpr env t.body}
                         with ty = ty}
-        else error (concat "Unknown constructor in symbolizeExpr: " str)
+        else infoErrorExit t.info (concat "Unknown constructor in symbolizeExpr: " str)
     else never
 end
 
@@ -270,7 +271,7 @@ lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyVariant t & ty ->
     if eqi (mapLength t.constrs) 0 then ty
-    else error "Symbolizing non-empty variant types not yet supported"
+    else infoErrorExit t.info "Symbolizing non-empty variant types not yet supported"
 end
 
 lang ConTypeSym = ConTypeAst + UnknownTypeAst
@@ -283,7 +284,7 @@ lang ConTypeSym = ConTypeAst + UnknownTypeAst
         match mapLookup str tyConEnv with Some ident then
           TyCon {t with ident = ident}
         else if env.strictTypeVars then
-          error (concat "Unknown type constructor in symbolizeExpr: " str)
+          infoErrorExit t.info (concat "Unknown type constructor in symbolizeExpr: " str)
         else
           TyUnknown {info = t.info}
     else never
@@ -298,7 +299,7 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
       match mapLookup str env.tyVarEnv with Some ident then
         TyVar {t with ident = ident}
       else if env.strictTypeVars then
-        error (concat "Unknown type variable in symbolizeExpr: " str)
+        infoErrorExit t.info (concat "Unknown type variable in symbolizeExpr: " str)
       else
         TyUnknown {info = t.info}
 end
@@ -368,7 +369,7 @@ lang DataPatSym = DataPat
         else
           let str = nameGetStr r.ident in
           match mapLookup str conEnv with Some ident then ident
-          else error (concat "Unknown constructor in symbolizeExpr: " str)
+          else infoErrorExit r.info (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match symbolizePat env patEnv r.subpat with (patEnv, subpat) then
         (patEnv, PatCon {{r with ident = ident} with subpat = subpat})
