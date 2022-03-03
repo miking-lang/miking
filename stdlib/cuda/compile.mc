@@ -140,6 +140,14 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       f = compileExpr env t.f, acc = compileExpr env t.acc,
       s = compileExpr env t.s, sTy = compileType env (tyTm t.s),
       ty = compileType env t.ty}
+  | TmTensorSliceExn t ->
+    CETensorSliceExn {
+      t = compileExpr env t.t, slice = compileExpr env t.slice,
+      ty = compileType env t.ty}
+  | TmTensorSubExn t ->
+    CETensorSubExn {
+      t = compileExpr env t.t, ofs = compileExpr env t.ofs,
+      len = compileExpr env t.len, ty = compileType env t.ty}
   | TmMapKernel t ->
     -- TODO(larshum, 2022-02-08): Add a way to control the value of the
     -- 'opsPerThread' argument from the CUDA PMExpr AST.

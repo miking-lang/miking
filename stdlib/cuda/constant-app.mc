@@ -1,8 +1,8 @@
 include "cuda/pmexpr-ast.mc"
 include "pmexpr/utils.mc"
 
--- Translates certain constant applications to an expression node containing
--- the applied arguments.
+-- Translates constant applications to an expression node which contains the
+-- applied arguments.
 lang CudaConstantApp = CudaPMExprAst
   -- NOTE(larshum, 2022-03-02): At this point, we have applied the
   -- well-formedness check, which guarantees that the constants are fully
@@ -11,6 +11,8 @@ lang CudaConstantApp = CudaPMExprAst
   sem toConstantExpr (args : [Expr]) =
   | CMap _ -> Some (seqMap_ (get args 0) (get args 1))
   | CFoldl _ -> Some (seqFoldl_ (get args 0) (get args 1) (get args 2))
+  | CTensorSliceExn _ -> Some (tensorSliceExn_ (get args 0) (get args 1))
+  | CTensorSubExn _ -> Some (tensorSubExn_ (get args 0) (get args 1) (get args 2))
   | _ -> None ()
 
   sem constantAppToExpr =

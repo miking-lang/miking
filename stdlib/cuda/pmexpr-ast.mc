@@ -16,6 +16,8 @@ lang CudaPMExprAst = PMExprAst
   syn Expr =
   | TmSeqMap {f : Expr, s : Expr, ty : Type, info : Info}
   | TmSeqFoldl {f : Expr, acc : Expr, s : Expr, ty : Type, info : Info}
+  | TmTensorSliceExn {t : Expr, slice : Expr, ty : Type, info : Info}
+  | TmTensorSubExn {t : Expr, ofs : Expr, len : Expr, ty : Type, info : Info}
   | TmMapKernel {f : Expr, s : Expr, ty : Type, info : Info}
   | TmReduceKernel {f : Expr, ne : Expr, s : Expr, commutative : Bool, ty : Type, info : Info}
   | TmCopy {arg : Expr, toMem : AllocMem, ty : Type, info : Info}
@@ -29,6 +31,8 @@ lang CudaPMExprAst = PMExprAst
   sem tyTm =
   | TmSeqMap t -> t.ty
   | TmSeqFoldl t -> t.ty
+  | TmTensorSliceExn t -> t.ty
+  | TmTensorSubExn t -> t.ty
   | TmMapKernel t -> t.ty
   | TmReduceKernel t -> t.ty
   | TmCopy t -> t.ty
@@ -37,6 +41,8 @@ lang CudaPMExprAst = PMExprAst
   sem infoTm =
   | TmSeqMap t -> t.info
   | TmSeqFoldl t -> t.info
+  | TmTensorSliceExn t -> t.info
+  | TmTensorSubExn t -> t.info
   | TmMapKernel t -> t.info
   | TmReduceKernel t -> t.info
   | TmCopy t -> t.info
@@ -45,6 +51,8 @@ lang CudaPMExprAst = PMExprAst
   sem withType (ty : Type) =
   | TmSeqMap t -> TmSeqMap {t with ty = ty}
   | TmSeqFoldl t -> TmSeqFoldl {t with ty = ty}
+  | TmTensorSliceExn t -> TmTensorSliceExn {t with ty = ty}
+  | TmTensorSubExn t -> TmTensorSubExn {t with ty = ty}
   | TmMapKernel t -> TmMapKernel {t with ty = ty}
   | TmReduceKernel t -> TmReduceKernel {t with ty = ty}
   | TmCopy t -> TmCopy {t with ty = ty}
@@ -53,6 +61,8 @@ lang CudaPMExprAst = PMExprAst
   sem withInfo (info : Info) =
   | TmSeqMap t -> TmSeqMap {t with info = info}
   | TmSeqFoldl t -> TmSeqFoldl {t with info = info}
+  | TmTensorSliceExn t -> TmTensorSliceExn {t with info = info}
+  | TmTensorSubExn t -> TmTensorSubExn {t with info = info}
   | TmMapKernel t -> TmMapKernel {t with info = info}
   | TmReduceKernel t -> TmReduceKernel {t with info = info}
   | TmCopy t -> TmCopy {t with info = info}
@@ -68,6 +78,15 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.acc with (acc, tacc) in
     match f acc t.s with (acc, s) in
     (acc, TmSeqFoldl {{{t with f = tf} with acc = tacc} with s = s})
+  | TmTensorSliceExn t ->
+    match f acc t.t with (acc, tt) in
+    match f acc t.slice with (acc, slice) in
+    (acc, TmTensorSliceExn {{t with t = tt} with slice = slice})
+  | TmTensorSubExn t ->
+    match f acc t.t with (acc, tt) in
+    match f acc t.ofs with (acc, ofs) in
+    match f acc t.len with (acc, len) in
+    (acc, TmTensorSubExn {{{t with t = tt} with ofs = ofs} with len = len})
   | TmMapKernel t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
@@ -105,6 +124,20 @@ lang CudaPMExprAst = PMExprAst
                      with acc = acc}
                      with s = s}
                      with ty = tyTm acc}
+  | TmTensorSliceExn t ->
+    let tt = typeAnnotExpr env t.t in
+    let slice = typeAnnotExpr env t.slice in
+    TmTensorSliceExn {{{t with t = tt}
+                          with slice = slice}
+                          with ty = tyTm tt}
+  | TmTensorSubExn t ->
+    let tt = typeAnnotExpr env t.t in
+    let ofs = typeAnnotExpr env t.ofs in
+    let len = typeAnnotExpr env t.len in
+    TmTensorSubExn {{{{t with t = tt}
+                         with ofs = ofs}
+                         with len = len}
+                         with ty = tyTm tt}
   | TmMapKernel t ->
     let f = typeAnnotExpr env t.f in
     let s = typeAnnotExpr env t.s in
@@ -150,6 +183,20 @@ lang CudaPMExprAst = PMExprAst
         else None ()
       else None ()
     else None ()
+  | TmTensorSliceExn r ->
+    match lhs with TmTensorSliceExn l then
+      match eqExprH env free l.t r.t with Some free then
+        eqExprH env free l.slice r.slice
+      else None ()
+    else None ()
+  | TmTensorSubExn r ->
+    match lhs with TmTensorSubExn l then
+      match eqExprH env free l.t r.t with Some free then
+        match eqExprH env free l.ofs r.ofs with Some free then
+          eqExprH env free l.len r.len
+        else None ()
+      else None ()
+    else None ()
   | TmMapKernel r ->
     match lhs with TmMapKernel l then
       match eqExprH env free l.f r.f with Some free then
@@ -184,6 +231,13 @@ lang CudaPMExprAst = PMExprAst
     k (TmSeqFoldl {{{t with f = normalizeTerm t.f}
                        with acc = normalizeTerm t.acc}
                        with s = normalizeTerm t.s})
+  | TmTensorSliceExn t ->
+    k (TmTensorSliceExn {{t with t = normalizeTerm t.t}
+                            with slice = normalizeTerm t.slice})
+  | TmTensorSubExn t ->
+    k (TmTensorSubExn {{{t with t = normalizeTerm t.t}
+                           with ofs = normalizeTerm t.ofs}
+                           with len = normalizeTerm t.len})
   | TmMapKernel t ->
     k (TmMapKernel {{t with f = normalizeTerm t.f}
                        with s = normalizeTerm t.s})
@@ -202,6 +256,14 @@ let seqMap_ = lam f. lam s.
 let seqFoldl_ = lam f. lam acc. lam s.
   use CudaPMExprAst in
   TmSeqFoldl {f = f, acc = acc, s = s, ty = tyunknown_, info = NoInfo ()}
+
+let tensorSliceExn_ = lam t. lam slice.
+  use CudaPMExprAst in
+  TmTensorSliceExn {t = t, slice = slice, ty = tyunknown_, info = NoInfo ()}
+
+let tensorSubExn_ = lam t. lam ofs. lam len.
+  use CudaPMExprAst in
+  TmTensorSubExn {t = t, ofs = ofs, len = len, ty = tyunknown_, info = NoInfo ()}
 
 let mapKernel_ = lam f. lam s.
   use CudaPMExprAst in

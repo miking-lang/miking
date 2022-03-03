@@ -16,6 +16,8 @@ lang CudaAst = CAst + MExprAst
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
+  | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}
+  | CETensorSubExn {t : CExpr, ofs : CExpr, len : CExpr, ty : CType}
   | CEThreadIdx {dim : CudaDimension}
   | CEBlockIdx {dim : CudaDimension}
   | CEBlockDim {dim : CudaDimension}

@@ -12,6 +12,8 @@ include "cuda/compile.mc"
 include "cuda/memory.mc"
 include "cuda/intrinsics/foldl.mc"
 include "cuda/intrinsics/map.mc"
+include "cuda/intrinsics/tensor-slice.mc"
+include "cuda/intrinsics/tensor-sub.mc"
 include "cuda/kernels/map.mc"
 
 -- Translates non-kernel intrinsics, which could run either in CPU or GPU code,
@@ -20,7 +22,8 @@ lang CudaCpuTranslate =
   CudaAst + MExprCCompile + CudaMapIntrinsic + CudaFoldlIntrinsic
 
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | t & (CESeqMap _ | CESeqFoldl _) -> generateCudaIntrinsicCall ccEnv acc outExpr t
+  | t & (CESeqMap _ | CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _) ->
+    generateCudaIntrinsicCall ccEnv acc outExpr t
 end
 
 -- Translates kernel expressions to GPU kernel calls.

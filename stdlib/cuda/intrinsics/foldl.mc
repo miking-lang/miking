@@ -62,9 +62,9 @@ lang CudaFoldlIntrinsic = CudaCompile
     match generateCudaIntrinsicFunction ccEnv (CESeqFoldl t) with (id, top) in
     let foldlCall = CEApp {fun = id, args = [t.acc, t.s]} in
     let acc = cons top acc in
-    (acc, _reconstructStmt outExpr foldlCall)
-
-  sem _reconstructStmt (outExpr : CExpr) =
-  | intrinsicCall ->
-    CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = intrinsicCall}}
+    let stmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = outExpr,
+      rhs = foldlCall}} in
+    (acc, stmt)
 end
