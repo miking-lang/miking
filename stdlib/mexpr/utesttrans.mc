@@ -381,7 +381,7 @@ let _pprintRecord = use MExprAst in
       mapMapWithKey (lam id. lam. pvar_ (sidToString id)) fields
     in
     let recordPattern =
-      PatRecord {bindings = recordBindings, info = NoInfo (), ty = tyunknown_}
+      PatRecord {bindings = recordBindings, info = makeInfo (posVal "utest_pprint" 0 0) (posVal "utest_pprint" 0 0), ty = tyunknown_}
     in
     let pprintSeq =
       match record2tuple fields with Some types then
@@ -425,8 +425,8 @@ let _equalRecord = use MExprAst in
   let rhsPrefix = "rhs_" in
   let matchPattern =
     ptuple_ [
-      PatRecord {bindings = recordBindings lhsPrefix, info = NoInfo (), ty = tyunknown_},
-      PatRecord {bindings = recordBindings rhsPrefix, info = NoInfo (), ty = tyunknown_}] in
+      PatRecord {bindings = recordBindings lhsPrefix, info = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0), ty = tyunknown_},
+      PatRecord {bindings = recordBindings rhsPrefix, info = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0), ty = tyunknown_}] in
   let fieldEquals = lam seq. lam id. lam fieldTy.
     let fieldEqName = getEqualFuncName env fieldTy in
     let lhs = var_ (join [lhsPrefix, sidToString id]) in
@@ -646,7 +646,7 @@ lang UtestViaMatchRecord = UtestViaMatch + RecordAst + RecordTypeAst + RecordPat
     let res: ([Expr], Map SID Pat) = mapMapAccum f [] bindings in
     let pat = PatRecord
       { bindings = res.1
-      , info = NoInfo ()
+      , info = makeInfo (posVal "utest_via_match" 0 0) (posVal "utest_via_match" 0 0)
       , ty = TyRecord
         { info = NoInfo ()
         , fields = mapMap (lam. tyunknown_) res.1
