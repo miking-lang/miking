@@ -229,8 +229,9 @@ let getData = function
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmType (fi, x, _, params, ty, t)) ->
+      let len = List.length params + 1 in
+      (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [])
   | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
       (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmConApp (fi, x, _, t)) ->
