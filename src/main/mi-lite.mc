@@ -12,7 +12,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
-lang MCoreLiteCompile = BootParser + MExprSym + MExprUtestTrans
+lang MCoreLiteCompile = BootParser + MExprSym + MExprTypeAnnot + MExprUtestTrans
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
@@ -61,7 +61,8 @@ let compile : Options -> String -> Unit = lam options. lam file.
   } file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in
+  let hooks = {{emptyHooks with compileOcaml = ocamlCompile options file}
+                           with typeAnnot = typeAnnot} in
   compileMCore ast hooks
 
 mexpr

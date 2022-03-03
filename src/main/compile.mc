@@ -33,11 +33,13 @@ let pprintMcore = lam ast.
   use MExprPrettyPrint in
   expr2str ast
 
-let generateTests = lam ast. lam testsEnabled.
+let generateTests = lam ast. lam testsEnabled. lam typeChecked.
   use MCoreCompile in
   if testsEnabled then
-    let ast = symbolize ast in
-    let ast = typeAnnot ast in
+    let ast =
+      if not typeChecked then typeAnnot (symbolize ast)
+      else ast
+    in
     let ast = removeTypeAscription ast in
     utestGen ast
   else
@@ -67,7 +69,11 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
     in
 
     -- If option --typecheck, type check the AST
-    let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
+    let ast =
+      if options.typeCheck then
+        typeCheck (symbolizeExpr {symEnvEmpty with strictTypeVars = true} ast)
+      else ast
+    in
 
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
@@ -76,13 +82,14 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) in
+    match generateTests ast options.runTests options.typeCheck with (symEnv, ast) in
 
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
     compileMCore ast
-      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+      { typeAnnot = if options.typeCheck then lam ast. ast else typeAnnot
+      , debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
