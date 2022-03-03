@@ -57,7 +57,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
-let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
+let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -115,7 +115,7 @@ let compile = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
 
-    ocamlCompileAstWithUtests options file ast; ()
+    compileWithUtests options file ast; ()
   in
   if options.accelerate then compileAccelerate files options args
   else iter compileFile files
