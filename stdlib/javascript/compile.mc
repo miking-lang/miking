@@ -35,7 +35,7 @@ let _consoleLog = nameSym "console.log"
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = MExprAst + JSAst
+lang MExprJSCompile = MExprAst + JSProgAst
 
   -- Entry point
   sem compile =
@@ -43,7 +43,7 @@ lang MExprJSCompile = MExprAst + JSAst
     -- Run compiler
     match compileExpr prog with exprs then
       -- Return final top level expressions
-      exprs
+      JSPProg { imports = [], exprs = exprs }
     else never
 
   
@@ -166,7 +166,7 @@ let filepathWithoutExtension = lam filename.
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
-let javascriptCompile : Expr -> (CompileJSEnv, JSExpr) =
+let javascriptCompile : Expr -> JSPProg =
   lam ast : Expr.
   use MExprJSCompile in
   compile ast
