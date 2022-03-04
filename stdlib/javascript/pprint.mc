@@ -31,8 +31,8 @@ let jsKeywords = [
 ----------------------------
 lang JSExprPrettyPrint = JSExprTypeAst
 
-  sem printJSDef (env: PprintEnv) (id: String) =
-  | expr -> (env, join [id, " = ", printJSExpr expr, ";"]) -- Should ; be here?
+  sem printJSDef (indent: Int) (env: PprintEnv) (id: String) =
+  | expr -> (env, join [pprintNewline indent, id, " = ", printJSExpr expr, ";"]) -- Should ; be here?
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
@@ -51,7 +51,7 @@ lang JSExprPrettyPrint = JSExprTypeAst
 
   | JSEDef { id = id, expr = expr } ->
     match pprintEnvGetOptStr env id with (env,id) then
-      match printJSDef env id expr with (env,str) then
+      match printJSDef indent env id expr with (env,str) then
         (env, join [str, ";"])
       else never
     else never
@@ -62,7 +62,7 @@ lang JSExprPrettyPrint = JSExprTypeAst
     match pprintEnvGetStr env id with (env,id) then
       let f = lam env. lam t: Name.
         match pprintEnvGetStr env t.1 with (env,t1) then
-          printJSDef env t.0 t1 (None ())
+          printJSDef indent env t.0 t1 (None ())
         else never in
       match mapAccumL f env params with (env,params) then
         let params = join ["(", strJoin ", " params, ")"] in
@@ -76,7 +76,8 @@ lang JSExprPrettyPrint = JSExprTypeAst
   | JSEFloat { f = f } -> (env, float2string f)
   | JSEChar  { c = c } -> (env, ['\'', c, '\''])
 
-  | JSEString { s = s } -> (env, join ["\"", escapeString s, "\""])
+  | JSEString { s = s } ->
+    (env, join ["\"", escapeString s, "\""])
 
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match printJSExpr env lhs with (env,lhs) then
@@ -85,6 +86,15 @@ lang JSExprPrettyPrint = JSExprTypeAst
       else never
     else never
 
+  | JSEUnOp { op = op, rhs = rhs } ->
+    match printJSExpr env rhs with (env,rhs) then
+      (env, _par (printJSUnOp rhs op))
+    else never
+
+  | JSESeq { exprs = exprs, info = info } ->
+    match printJSExprs indent env exprs with (env,exprs) then
+      (env, join [strJoin "; " exprs, ";"])
+    else never
 
   sem printJSBinOp (lhs: String) (rhs: String) =
   | JSOAssign    {} -> join [lhs, " = ", rhs]
@@ -121,8 +131,8 @@ lang JSProgPrettyPrint = JSProgAst + JSExprPrettyPrint
     let indent = 0 in
     let imports = map (lam imp. join ["import '", imp, "';"]) imports in
     let env = pprintEnvEmpty in
-    match mapAccumL (printJSExpr indent env) exprs with (env,code) then
-      strJoin (pprintNewline indent) (join [imports, "", code])
+    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
+      strJoin (pprintNewline indent) (join [imports, "", strJoin "\n" exprs])
     else never
 
 end
