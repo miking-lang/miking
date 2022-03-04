@@ -122,12 +122,20 @@ lang MExprJSCompile = MExprAst + JSAst
     if mapIsEmpty bindings then JSEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
 
-  -- Should not occur after ANF and type lifting.
-  | TmRecordUpdate _ | TmLet _
-  | TmRecLets _ | TmType _ | TmConDef _
-  | TmConApp _ | TmMatch _ | TmUtest _
-  | TmSeq _ | TmExt _ ->
-    error "ERROR: Term cannot be handled in compileExpr."
+  | TmSeq {tms = tms, info = info} ->
+    -- error "Sequence expressions cannot be handled in compileExpr."
+    let tms: [JSExpr] = map compileExpr tms in
+    JSESeq { exprs = tms, info = info }
+
+  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
+  | TmConApp _ -> error "Constructor application in compileExpr."
+  | TmLet _ -> error "Let expressions cannot be handled in compileExpr."
+  | TmRecLets _ -> error "Recursive let expressions cannot be handled in compileExpr."
+  | TmType _ -> error "Type expressions cannot be handled in compileExpr."
+  | TmConDef _ -> error "Constructor definitions cannot be handled in compileExpr."
+  | TmMatch _ -> error "Match expressions cannot be handled in compileExpr."
+  | TmUtest _ -> error "Unit test expressions cannot be handled in compileExpr."
+  | TmExt _ -> error "External expressions cannot be handled in compileExpr."
 
   -- Literals
   | TmConst { val = val } ->
