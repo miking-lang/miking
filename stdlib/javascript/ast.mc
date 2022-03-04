@@ -6,16 +6,16 @@
 lang JSExprTypeAst
 
   syn JSExpr = 
-  | JSEVar       { id: Name }                  -- Variables 
+  | JSEVar       { id: Name }                   -- Variables 
   | JSEApp       { fun: Name, args: [JSExpr] }  -- Function application
   | JSEDef       { id: Name, expr: JSExpr }     -- Definitions
   | JSEFun       { id: Name, params: [Name], body: JSExpr }  -- Functions
-  | JSEInt       { i: Int }                    -- Integer literals
-  | JSEFloat     { f: Float }                  -- Float literals
-  | JSEChar      { c: Char }                   -- Character literals
-  | JSEString    { s: String }                 -- String literals 
+  | JSEInt       { i: Int }                     -- Integer literals
+  | JSEFloat     { f: Float }                   -- Float literals
+  | JSEChar      { c: Char }                    -- Character literals
+  | JSEString    { s: String }                  -- String literals 
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
-  | JSEUnOp       { op: JSUnOp, arg: JSExpr }     -- Unary operators
+  | JSEUnOp      { op: JSUnOp, arg: JSExpr }    -- Unary operators
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs
