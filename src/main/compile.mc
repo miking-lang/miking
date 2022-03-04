@@ -83,7 +83,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = symbolizeExpr symEnv ast in
 
     if options.toJavaScript then
-      javascriptCompile ast sourcePath
+      javascriptCompileFile ast sourcePath
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
