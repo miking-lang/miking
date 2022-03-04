@@ -8,7 +8,8 @@ lang JSExprTypeAst
   syn JSExpr = 
   | JSEVar       { id: Name }                  -- Variables 
   | JSEApp       { fun: Name, args: [JSExpr] }  -- Function application
-  | JSEDef       { id: Name, JSEDef: JSExpr }     -- Defined function
+  | JSEDef       { id: Name, expr: JSExpr }     -- Definitions
+  | JSEFun       { id: Name, params: [Name], body: JSExpr }  -- Functions
   | JSEInt       { i: Int }                    -- Integer literals
   | JSEFloat     { f: Float }                  -- Float literals
   | JSEChar      { c: Char }                   -- Character literals
@@ -33,6 +34,10 @@ lang JSExprTypeAst
   | JSOMod       {} -- lhs % rhs
   -- TODO: Add support for object member access "lhs.rhs"
   -- Otherwise replicateable with JOSubScript.
+
+  syn JSUnOp =
+  | JSONeg       {} -- -arg
+  | JSONot       {} -- !arg
 
 end
 
