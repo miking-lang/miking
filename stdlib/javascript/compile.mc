@@ -176,10 +176,10 @@ let javascriptCompile : Expr -> JSPProg =
 let javascriptCompileFile : Expr -> String -> Bool =
   lam ast : Expr. lam sourcePath: String.
   use JSProgPrettyPrint in
-  -- Create target path
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
-  -- Run JS compiler
-  match javascriptCompile ast with (_, jsprog) then
-    writeFile targetPath (printJSProg jsprog);
-    true
-  else false
+  let jsprog = javascriptCompile ast in   -- Run JS compiler
+  let source = printJSProg jsprog in      -- Pretty print
+  printLn "Here6"
+  printLn concat "Compiled JS program:\n" source;
+  writeFile targetPath source;
+  true
