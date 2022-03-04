@@ -104,8 +104,8 @@ lang JSExprPrettyPrint = JSExprTypeAst
   | JSOMod       {} -> join [lhs, " % ", rhs]
 
   sem printJSUnOp (arg: String) =
-  | JSONeg    {} -> join ["-", arg]
-  | JSONot    {} -> join ["!", arg]
+  | JSONeg       {} -> join ["-", arg]
+  | JSONot       {} -> join ["!", arg]
 
 end
 
@@ -119,10 +119,10 @@ lang JSProgPrettyPrint = JSProgAst + JSExprPrettyPrint
   sem printJSProg =
   | JSPProg { imports = imports, exprs = exprs } ->
     let indent = 0 in
-    let imports = map (lam inc. join ["import '", inc, "';"]) imports in
-    let env = pprintEnvEmpty () in
-    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
-      strJoin (pprintNewline indent) (join [imports, exprs])
+    let imports = map (lam imp. join ["import '", imp, "';"]) imports in
+    let env = pprintEnvEmpty in
+    match mapAccumL (printJSExpr indent env) exprs with (env,code) then
+      strJoin (pprintNewline indent) (join [imports, "", code])
     else never
 
 end
