@@ -78,7 +78,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
 
   -- Unary operators
   | CNegf _
-  | CNegi _ -> JSEUnOp { op = JSONeg {}, arg = head args }
+  | CNegi _ -> JSEUnOp { op = JSONeg {}, rhs = head args }
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->

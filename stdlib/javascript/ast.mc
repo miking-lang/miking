@@ -15,8 +15,8 @@ lang JSExprTypeAst
   | JSEChar      { c: Char }                    -- Character literals
   | JSEString    { s: String }                  -- String literals 
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
-  | JSEUnOp      { op: JSUnOp, arg: JSExpr }    -- Unary operators
-  | JSESeq       {exprs : [JSExpr], info: Info} -- Sequences
+  | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
+  | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs
