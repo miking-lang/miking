@@ -10,7 +10,15 @@ include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal
   sem _mexprToOCamlType =
-  | TySeq t -> OTyArray {info = t.info, ty = _mexprToOCamlType t.ty}
+  | TyRecord {labels = [], info = info} -> OTyTuple {info = info, tys = []}
+  | TySeq {ty = ty, info = info} ->
+    OTyArray {info = info, ty = _mexprToOCamlType ty}
+  | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
+    let layout = OTyBigarrayClayout {info = info} in
+    let elemType =
+      match ty with TyInt _ then OTyBigarrayIntElt {info = info}
+      else OTyBigarrayFloat64Elt {info = info} in
+    OTyBigarrayGenarray {info = info, tys = [ty, elemType, layout]}
   | t -> t
 
   sem wrapInConvertData =

@@ -79,6 +79,11 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
     let env = allocEnvInsert t.ident (Cpu ()) env in
     match addMemoryAllocations env t.body with (env, body) in
     (env, TmLam {t with body = body})
+  | TmLet (t & {body = TmSeq _ | TmRecord _}) ->
+    -- NOTE(larshum, 2022-03-07): Sequence and record literals are allocated on
+    -- the stack in the current C compiler, so they must not be deallocated.
+    match addMemoryAllocations env t.inexpr with (env, inexpr) in
+    (env, TmLet {t with inexpr = inexpr})
   | TmLet t ->
     let toMem = if isKernel t.body then Gpu () else Cpu () in
     let env = allocEnvInsert t.ident toMem env in

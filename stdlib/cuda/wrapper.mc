@@ -23,11 +23,11 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
       compileCEnv : CompileCEnv}
 
   sem getCudaType (env : TargetWrapperEnv) =
-  | TySeq t ->
+  | ty & (TySeq _ | TyTensor _) ->
     match env with CudaTargetEnv cenv in
-    match mapLookup (TySeq t) cenv.revTypeEnv with Some seqId then
-      CTyVar {id = seqId}
-    else error ""
+    match mapLookup ty cenv.revTypeEnv with Some id then
+      CTyVar {id = id}
+    else error "Reverse type lookup failed in CUDA wrapper generation"
   | ty ->
     match env with CudaTargetEnv cenv in
     compileType cenv.compileCEnv ty
@@ -57,6 +57,78 @@ lang CToCudaWrapper = CudaCWrapperBase
       lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _seqKey},
       rhs = CEVar {id = cvar.0}}} in
     ({argument with gpuIdent = gpuIdent}, [declStmt, setLenStmt, setSeqStmt])
+  | ty & TyTensor {ty = TyInt _ | TyFloat _} ->
+    match env.targetEnv with CudaTargetEnv cenv in
+    let cvars = argument.cTempVars in
+    let cvar : (Name, CType) = head cvars in
+    let cudaType = getCudaType env.targetEnv ty in
+    let gpuIdent = nameSym "cuda_tmp" in
+    let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
+    let setTensorDataStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorDataKey},
+      rhs = CEVar {id = cvar.0}}} in
+    let rankIdent = get argument.dimIdents 0 in
+    let dimsIdent = get argument.dimIdents 1 in
+
+    -- NOTE(larshum, 2022-03-07): The current C representation of tensors
+    -- supports at most 3 dimensions, so we check at runtime that the rank is
+    -- not larger than that.
+    let printErrorStmt = CSExpr {expr = CEApp {
+      fun = _printf,
+      args = [
+        CEString {s = "Tensors with rank at most 3 are supported, found %d\n"},
+        CEVar {id = rankIdent}]}} in
+    let exitErrorStmt = CSExpr {expr = CEApp {
+      fun = _getIdentExn "exit",
+      args = [CEInt {i = 1}]}} in
+    let checkRankStmt = CSIf {
+      cond = CEBinOp {
+        op = COLe (),
+        lhs = CEVar {id = rankIdent},
+        rhs = CEInt {i = 3}},
+      thn = [],
+      els = [printErrorStmt, exitErrorStmt]} in
+
+    let setTensorRankStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorRankKey},
+      rhs = CEVar {id = rankIdent}}} in
+    let i = nameSym "i" in
+    let iterInitStmt = CSDef {
+      ty = CTyInt (), id = Some i,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let setTensorDimStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorDimsKey},
+        rhs = CEVar {id = i}},
+      rhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = dimsIdent},
+        rhs = CEVar {id = i}}}} in
+    let iterIncrement = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = i},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = i},
+        rhs = CEInt {i = 1}}}} in
+    let setTensorDimsStmt = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = CEVar {id = i},
+        rhs = CEVar {id = rankIdent}},
+      body = [setTensorDimStmt, iterIncrement]} in
+
+    let setTensorOffsetStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorOffsetKey},
+      rhs = CEInt {i = 0}}} in
+    let stmts = [declStmt, setTensorDataStmt, setTensorRankStmt, iterInitStmt,
+                 checkRankStmt, setTensorDimsStmt, setTensorOffsetStmt] in
+    ({argument with gpuIdent = gpuIdent}, stmts)
 
   sem generateCToCudaWrapperArg (env : CWrapperEnv) (accStmts : [CStmt]) =
   | arg ->
@@ -83,22 +155,30 @@ lang CudaCallWrapper = CudaCWrapperBase
     let returnType = return.ty in
     let cudaType = getCudaType env.targetEnv returnType in
     let cudaResultIdent = nameSym "cuda_out" in
-    let returnDecl = CSDef {
-      ty = cudaType, id = Some cudaResultIdent, init = None ()} in
 
-    let cudaWrapperId =
-      match mapLookup env.functionIdent tenv.wrapperMap with Some id then id
-      else error "Internal compiler error: No function defined for wrapper map" in
     let args : [CExpr] =
       map
         (lam arg : ArgData.
           let var = CEVar {id = arg.gpuIdent} in
-          match arg.ty with TySeq _ then var
+          match arg.ty with TySeq _ | TyTensor _ then var
           else CEUnOp {op = CODeref (), arg = var}) env.arguments in
-    let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = cudaResultIdent},
-      rhs = CEApp {fun = cudaWrapperId, args = args}}} in
+    let cudaWrapperId =
+      match mapLookup env.functionIdent tenv.wrapperMap with Some id then id
+      else error "Internal compiler error: No function defined for wrapper map" in
+    let callStmts =
+      match returnType with TyRecord {labels = []} then
+        let wrapperCallStmt = CSExpr {expr = CEApp {
+          fun = cudaWrapperId, args = args}} in
+        [wrapperCallStmt]
+      else
+        let returnDecl = CSDef {
+          ty = cudaType, id = Some cudaResultIdent, init = None ()} in
+        let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
+          op = COAssign (),
+          lhs = CEVar {id = cudaResultIdent},
+          rhs = CEApp {fun = cudaWrapperId, args = args}}} in
+        [returnDecl, cudaWrapperCallStmt]
+    in
 
     -- Deallocate argument parameters
     let deallocStmts =
@@ -112,7 +192,7 @@ lang CudaCallWrapper = CudaCWrapperBase
 
     let return = {return with gpuIdent = cudaResultIdent} in
 
-    let stmts = concat [returnDecl, cudaWrapperCallStmt] deallocStmts in
+    let stmts = concat callStmts deallocStmts in
     ({env with return = return}, stmts)
 end
 
@@ -124,6 +204,7 @@ lang CudaToCWrapper = CudaCWrapperBase
     let cIdent = return.gpuIdent in
     let return = {return with cTempVars = [(cIdent, ctype)]} in 
     (return, [])
+  | ty & (TyRecord {labels = []}) -> (return, [])
   | ty & TySeq _ ->
     let fieldAccess = lam key.
       CEMember {lhs = CEVar {id = return.gpuIdent}, id = key} in
@@ -131,19 +212,75 @@ lang CudaToCWrapper = CudaCWrapperBase
     let ctype = head (mexprToCTypes ty) in
     let cIdent = nameSym "c_tmp" in
     let sizeIdent = nameSym "d" in
-    let getLenStmt =
-      CSDef {
-        ty = CTyInt64 (), id = Some sizeIdent,
-        init = Some (CIExpr {expr = fieldAccess _seqLenKey})} in
-    let getSeqStmt =
-      CSDef {
-        ty = ctype, id = Some cIdent,
-        init = Some (CIExpr {expr = fieldAccess _seqKey})} in
+    let getLenStmt = CSDef {
+      ty = CTyInt64 (), id = Some sizeIdent,
+      init = Some (CIExpr {expr = fieldAccess _seqLenKey})} in
+    let getSeqStmt = CSDef {
+      ty = ctype, id = Some cIdent,
+      init = Some (CIExpr {expr = fieldAccess _seqKey})} in
 
     let return = {{{return with cTempVars = [(cIdent, ctype)]}
                            with dimIdents = [sizeIdent]}
                            with sizeIdent = sizeIdent} in
     (return, [getLenStmt, getSeqStmt])
+  | ty & TyTensor _ ->
+    let fieldAccess = lam key.
+      CEMember {lhs = CEVar {id = return.gpuIdent}, id = key} in
+    match env.targetEnv with CudaTargetEnv tenv in
+    let ctype = head (mexprToCTypes ty) in
+    let cIdent = nameSym "c_tmp" in
+    let rankIdent = nameSym "rank" in
+    -- NOTE(larshum, 2022-03-07): The pointer to the data is computed by adding
+    -- the offset to the data pointer.
+    let getTensorDataStmt = CSDef {
+      ty = ctype, id = Some cIdent,
+      init = Some (CIExpr {expr = CEBinOp {
+        op = COAdd (),
+        lhs = fieldAccess _tensorDataKey,
+        rhs = fieldAccess _tensorOffsetKey}})} in
+    let getTensorRankStmt = CSDef {
+      ty = CTyInt64 (), id = Some rankIdent,
+      init = Some (CIExpr {expr = fieldAccess _tensorRankKey})} in
+    let dimsIdent = nameSym "dims" in
+    let initTensorDimsStmt = CSDef {
+      ty = CTyArray {ty = CTyInt64 (), size = Some (CEVar {id = rankIdent})},
+      id = Some dimsIdent, init = None ()} in
+
+    let i = nameSym "i" in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (),
+      id = Some i, init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let iterValExpr = CEBinOp {
+      op = COSubScript (),
+      lhs = fieldAccess _tensorDimsKey,
+      rhs = CEVar {id = i}} in
+    let setTensorDimStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = dimsIdent},
+        rhs = CEVar {id = i}},
+      rhs = iterValExpr}} in
+    let incrementIterStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = i},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = i},
+        rhs = CEInt {i = 1}}}} in
+    let getTensorDimsStmt = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = CEVar {id = i},
+        rhs = CEVar {id = rankIdent}},
+      body = [setTensorDimStmt, incrementIterStmt]} in
+
+    let return = {{return with cTempVars = [(cIdent, ctype)]}
+                          with dimIdents = [rankIdent, dimsIdent]} in
+    let stmts = [
+      getTensorDataStmt, getTensorRankStmt, initTensorDimsStmt,
+      iterInitStmt, getTensorDimsStmt] in
+    (return, stmts)
 
   sem generateCudaToCWrapper =
   | env ->
@@ -187,6 +324,7 @@ lang CudaCWrapper = CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
         "<stdlib.h>",
         "<stdio.h>",
         "\"caml/alloc.h\"",
+        "\"caml/bigarray.h\"",
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\""
       ],

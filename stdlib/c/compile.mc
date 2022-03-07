@@ -299,7 +299,7 @@ lang MExprTensorCCompile = MExprCCompileBase
         rhs = CEVar {id = rankId}}},
       CSRet {val = Some (CEVar {id = seqId})}
     ] in
-    CTFun {ret = intType, id = _tensorShape, params = params, body = stmts}
+    CTFun {ret = seqType, id = _tensorShape, params = params, body = stmts}
 
   -- Computes the linear index given expressions representing the tensor and
   -- the sequence containing the cartesian coordinates.
@@ -546,6 +546,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   | TySeq _ & ty ->
     infoErrorExit (infoTy ty)
       "TySeq should not occur in compileType. Did you run type lift?"
+
+  | TyTensor _ & ty ->
+    infoErrorExit (infoTy ty)
+      "TyTensor should not occur in compileType. Did you run type lift?"
 
   | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
   | TyArrow _ & ty ->
@@ -1815,7 +1819,7 @@ utest testCompile tensor with strJoin "\n" [
   "  }",
   "  return linear_idx;",
   "}",
-  "int64_t tensor_shape(int64_t dims2[3], int64_t rank2) {",
+  "Seq tensor_shape(int64_t dims2[3], int64_t rank2) {",
   "  Seq s;",
   "  ((s.seq) = dims2);",
   "  ((s.len) = rank2);",

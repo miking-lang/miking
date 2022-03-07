@@ -22,6 +22,7 @@ include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
@@ -60,8 +61,8 @@ end
 
 lang MExprCudaCompile =
   CudaPMExprAst + CudaMemoryManagement + MExprTypeLift + SeqTypeTypeLift +
-  CudaCompile + CudaKernelTranslate + CudaPrettyPrint + CudaCWrapper +
-  CudaWellFormed + CudaConstantApp
+  TensorTypeTypeLift + CudaCompile + CudaKernelTranslate + CudaPrettyPrint +
+  CudaCWrapper + CudaWellFormed + CudaConstantApp
 end
 
 type AccelerateHooks a b = {
