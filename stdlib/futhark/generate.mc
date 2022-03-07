@@ -159,7 +159,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | t ->
     let tyStr = use MExprPrettyPrint in type2str t in
     infoErrorExit (infoTy t)
-      (join ["Terms of type '" tyStr "' are not supported by the Futhark backend"])
+      (join ["Terms of type '", tyStr, "' are not supported by the Futhark backend"])
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
