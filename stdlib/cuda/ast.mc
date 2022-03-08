@@ -16,6 +16,7 @@ lang CudaAst = CAst + MExprAst
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
+  | CESeqLoop {n : CExpr, f : CExpr}
   | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}
   | CETensorSubExn {t : CExpr, ofs : CExpr, len : CExpr, ty : CType}
   | CEThreadIdx {dim : CudaDimension}
@@ -23,6 +24,7 @@ lang CudaAst = CAst + MExprAst
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
   | CEMapKernel {f : CExpr, s : CExpr, opsPerThread : Int, sTy : CType, ty : CType}
+  | CELoopKernel {n : CExpr, f : CExpr, opsPerThread : Int}
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 
@@ -36,10 +38,18 @@ lang CudaAst = CAst + MExprAst
     match f acc t.acc with (acc, tacc) in
     match f acc t.s with (acc, s) in
     (acc, CESeqFoldl {{{t with f = tf} with acc = tacc} with s = s})
+  | CESeqLoop t ->
+    match f acc t.n with (acc, n) in
+    match f acc t.f with (acc, tf) in
+    (acc, CESeqLoop {{t with n = n} with f = tf})
   | CEMapKernel t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
     (acc, CEMapKernel {{t with f = tf} with s = s})
+  | CELoopKernel t ->
+    match f acc t.n with (acc, n) in
+    match f acc t.f with (acc, tf) in
+    (acc, CELoopKernel {{t with n = n} with f = tf})
   | CEKernelApp t ->
     match f acc t.gridSize with (acc, gridSize) in
     match f acc t.blockSize with (acc, blockSize) in

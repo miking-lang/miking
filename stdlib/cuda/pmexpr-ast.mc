@@ -20,12 +20,14 @@ lang CudaPMExprAst = PMExprAst
   | TmTensorSubExn {t : Expr, ofs : Expr, len : Expr, ty : Type, info : Info}
   | TmMapKernel {f : Expr, s : Expr, ty : Type, info : Info}
   | TmReduceKernel {f : Expr, ne : Expr, s : Expr, commutative : Bool, ty : Type, info : Info}
+  | TmLoopKernel {n : Expr, f : Expr, ty : Type, info : Info}
   | TmCopy {arg : Expr, toMem : AllocMem, ty : Type, info : Info}
   | TmFree {arg : Name, tyArg : Type, mem : AllocMem, ty : Type, info : Info}
 
   sem isKernel =
   | TmMapKernel t -> true
   | TmReduceKernel t -> true
+  | TmLoopKernel t -> true
   | _ -> false
 
   sem tyTm =
@@ -35,6 +37,7 @@ lang CudaPMExprAst = PMExprAst
   | TmTensorSubExn t -> t.ty
   | TmMapKernel t -> t.ty
   | TmReduceKernel t -> t.ty
+  | TmLoopKernel t -> t.ty
   | TmCopy t -> t.ty
   | TmFree t -> t.ty
 
@@ -45,6 +48,7 @@ lang CudaPMExprAst = PMExprAst
   | TmTensorSubExn t -> t.info
   | TmMapKernel t -> t.info
   | TmReduceKernel t -> t.info
+  | TmLoopKernel t -> t.info
   | TmCopy t -> t.info
   | TmFree t -> t.info
 
@@ -55,6 +59,7 @@ lang CudaPMExprAst = PMExprAst
   | TmTensorSubExn t -> TmTensorSubExn {t with ty = ty}
   | TmMapKernel t -> TmMapKernel {t with ty = ty}
   | TmReduceKernel t -> TmReduceKernel {t with ty = ty}
+  | TmLoopKernel t -> TmLoopKernel {t with ty = ty}
   | TmCopy t -> TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = ty}
 
@@ -65,6 +70,7 @@ lang CudaPMExprAst = PMExprAst
   | TmTensorSubExn t -> TmTensorSubExn {t with info = info}
   | TmMapKernel t -> TmMapKernel {t with info = info}
   | TmReduceKernel t -> TmReduceKernel {t with info = info}
+  | TmLoopKernel t -> TmLoopKernel {t with info = info}
   | TmCopy t -> TmCopy {t with info = info}
   | TmFree t -> TmFree {t with info = info}
 
@@ -96,6 +102,10 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.ne with (acc, ne) in
     match f acc t.s with (acc, s) in
     (acc, TmReduceKernel {{{t with f = tf} with ne = ne} with s = s})
+  | TmLoopKernel t ->
+    match f acc t.n with (acc, n) in
+    match f acc t.f with (acc, tf) in
+    (acc, TmLoopKernel {{t with n = n} with f = tf})
   | TmCopy t ->
     match f acc t.arg with (acc, arg) in
     (acc, TmCopy {t with arg = arg})
@@ -162,6 +172,16 @@ lang CudaPMExprAst = PMExprAst
                          with ne = ne}
                          with s = s}
                          with ty = kernelTy}
+  | TmLoopKernel t ->
+    let n = typeAnnotExpr env t.n in
+    let f = typeAnnotExpr env t.f in
+    let ty =
+      match tyTm f with TyArrow {from = TyInt _, to = unit & (TyRecord {labels = []})} then
+        unit
+      else TyUnknown {info = t.info} in
+    TmLoopKernel {{{t with n = n}
+                      with f = f}
+                      with ty = ty}
   | TmCopy t ->
     let arg = typeAnnotExpr env t.arg in
     TmCopy {{t with arg = arg}
@@ -211,6 +231,12 @@ lang CudaPMExprAst = PMExprAst
         else None ()
       else None ()
     else None ()
+  | TmLoopKernel r ->
+    match lhs with TmLoopKernel l then
+      match eqExprH env free l.n r.n with Some free then
+        eqExprH env free l.f r.f
+      else None ()
+    else None ()
   | TmCopy r ->
     match lhs with TmCopy l then
       eqExprH env free l.arg r.arg
@@ -245,6 +271,9 @@ lang CudaPMExprAst = PMExprAst
     k (TmReduceKernel {{{t with f = normalizeTerm t.f}
                            with ne = normalizeTerm t.ne}
                            with s = normalizeTerm t.s})
+  | TmLoopKernel t ->
+    k (TmLoopKernel {{t with n = normalizeTerm t.n}
+                        with f = normalizeTerm t.f})
   | TmCopy t -> k (TmCopy {t with arg = normalizeTerm t.arg})
   | TmFree t -> k (TmFree t)
 end
@@ -272,6 +301,10 @@ let mapKernel_ = lam f. lam s.
 let reduceKernel_ = lam f. lam ne. lam s.
   use CudaPMExprAst in
   TmReduceKernel {f = f, ne = ne, s = s, ty = tyunknown_, info = NoInfo ()}
+
+let loopKernel_ = lam n. lam f.
+  use CudaPMExprAst in
+  TmLoopKernel {n = n, f = f, ty = tyunknown_, info = NoInfo ()}
 
 let copyCpu_ = lam arg.
   use CudaPMExprAst in

@@ -61,7 +61,8 @@ lang MExprFutharkCompile =
 end
 
 lang MExprCudaCompile =
-  CudaPMExprAst + CudaMemoryManagement + MExprTypeLift + SeqTypeTypeLift +
+  MExprRemoveTypeAscription + CudaPMExprAst + CudaMemoryManagement +
+  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + SeqTypeTypeLift +
   TensorTypeTypeLift + CudaCompile + CudaKernelTranslate + CudaPrettyPrint +
   CudaCWrapper + CudaWellFormed + CudaConstantApp
 end
@@ -75,7 +76,9 @@ let parallelKeywords = [
   "accelerate",
   "map2",
   "parallelFlatten",
-  "parallelReduce"
+  "parallelReduce",
+  "loop",
+  "parallelLoop"
 ]
 
 let keywordsSymEnv =
@@ -143,6 +146,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ast = constantAppToExpr ast in
   match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
+  let ast = removeTypeAscription ast in
   let opts : CompileCOptions = {
     use32BitInts = options.use32BitIntegers,
     use32BitFloats = options.use32BitFloats

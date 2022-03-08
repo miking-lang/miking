@@ -56,6 +56,18 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedPattern t.info acc t.pat in
     let acc = cudaWellFormedType t.info acc t.ty in
     sfold_Expr_Expr cudaWellFormedExpr acc (TmMatch t)
+  -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
+  -- extensions, which are allowed to contain an expression of function type.
+  -- This is allowed because they are handled differently from other terms.
+  | TmLoop t
+  | TmParallelLoop t ->
+    let addTypeError = lam. cons (CudaTypeError t.info) acc in
+    match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {labels = []}} then
+      match t.ty with TyRecord {labels = []} then acc
+      else addTypeError ()
+    else addTypeError ()
+  | TmMap2 {info = info}
+  | TmParallelReduce {info = info} -> cons (CudaExprError info) acc
   | t ->
     let info = infoTm t in
     let acc =
@@ -87,7 +99,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ -> true
+  | TmLoop _ | TmParallelLoop _ -> true
   | _ -> false
 
   sem isCudaSupportedType =
@@ -101,6 +114,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | CDivf _ | CModi _ | CEqi _ | CEqf _ | CLti _ | CLtf _ | CGti _ | CGtf _
   | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _ | CNeqf _ -> true
   | CPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _ -> true
+  | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
+  | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false
 
   sem isCudaSupportedPattern =
@@ -170,14 +185,11 @@ let recUpdate =
     (withInfo i (recordupdate_ (var_ "r") "a" (int_ 4))) in
 utest checkWellFormed recUpdate with [CudaExprError i] in
 
-let optionType = withInfo i (type_ "Option" tyunknown_) in
-utest checkWellFormed optionType with [CudaExprError i] in
-
 let conDef = bindall_ [
-  withInfo i (type_ "Option" tyunknown_),
+  type_ "Option" tyunknown_,
   withInfo i (condef_ "Some" (tyarrow_ tyint_ (tyvar_ "Option"))),
   int_ 0] in
-utest checkWellFormed conDef with [CudaExprError i, CudaExprError i] in
+utest checkWellFormed conDef with [CudaExprError i] in
 
 let ext = withInfo i (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
 utest checkWellFormed ext with [CudaExprError i] in

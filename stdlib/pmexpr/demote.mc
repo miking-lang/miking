@@ -119,6 +119,97 @@ lang PMExprDemote = PMExprAst
           rhs = demoteParallel t.f, ty = tyuk, info = t.info},
         rhs = demoteParallel t.ne, ty = tyuk, info = t.info},
       rhs = demoteParallel t.as, ty = tyuk, info = t.info}
+  | TmLoop t
+  | TmParallelLoop t ->
+    let arrowType = lam from. lam to.
+      TyArrow {
+        from = tyWithInfo t.info from,
+        to = tyWithInfo t.info to,
+        info = t.info} in
+    let loopId = nameSym "loop" in
+    let unitTy = TyRecord {fields = mapEmpty cmpSID, labels = [], info = t.info} in
+    let loopTy = arrowType tyint_ (arrowType tyint_ unitTy) in
+    let iIdent = nameSym "i" in
+    let nIdent = nameSym "n" in
+    let i = TmVar {
+      ident = iIdent, ty = TyInt {info = t.info}, info = t.info,
+      frozen = false} in
+    let n = TmVar {
+      ident = nIdent, ty = TyInt {info = t.info}, info = t.info,
+      frozen = false} in
+    let f = demoteParallel t.f in
+    let loopBindingDef = {
+      ident = loopId, tyBody = loopTy,
+      body = TmLam {
+        ident = iIdent, tyIdent = TyInt {info = t.info},
+        body = TmLam {
+          ident = nIdent, tyIdent = TyInt {info = t.info},
+          body = TmMatch {
+            target = TmApp {
+              lhs = TmApp {
+                lhs = TmConst {
+                  val = CLti (),
+                  ty = arrowType tyint_ (arrowType tyint_ unitTy),
+                  info = t.info},
+                rhs = i,
+                ty = arrowType tyint_ unitTy,
+                info = t.info},
+              rhs = n,
+              ty = unitTy, info = t.info},
+            pat = PatBool {val = true, ty = TyBool {info = t.info}, info = t.info},
+            thn = TmLet {
+              ident = nameNoSym "",
+              tyBody = unitTy,
+              body = TmApp {
+                lhs = f,
+                rhs = i,
+                ty = unitTy, info = t.info},
+              inexpr = TmApp {
+                lhs = TmApp {
+                  lhs = TmVar {
+                    ident = loopId, ty = loopTy, info = t.info,
+                    frozen = false},
+                  rhs = TmApp {
+                    lhs = TmApp {
+                      lhs = TmConst {
+                        val = CAddi (),
+                        ty = arrowType tyint_ (arrowType tyint_ tyint_),
+                        info = t.info},
+                      rhs = i,
+                      ty = arrowType tyint_ tyint_,
+                      info = t.info},
+                    rhs = TmConst {
+                      val = CInt {val = 1},
+                      ty = TyInt {info = t.info},
+                      info = t.info},
+                    ty = tyint_,
+                    info = t.info},
+                  ty = arrowType tyint_ unitTy,
+                  info = t.info},
+                rhs = n,
+                ty = unitTy, info = t.info},
+              ty = unitTy, info = t.info},
+            els = TmRecord {bindings = mapEmpty cmpSID, ty = unitTy, info = t.info},
+            ty = unitTy,
+            info = t.info},
+          ty = unitTy, info = t.info},
+        ty = arrowType tyint_ unitTy,
+        info = t.info},
+      info = t.info} in
+    TmRecLets {
+      bindings = [loopBindingDef],
+      inexpr = TmApp {
+        lhs = TmApp {
+          lhs = TmVar {
+            ident = loopId, ty = loopTy, info = t.info, frozen = false},
+          rhs = TmConst {
+            val = CInt {val = 0}, ty = TyInt {info = t.info}, info = t.info},
+          ty = TyArrow {from = TyInt {info = t.info}, to = unitTy, info = t.info},
+          info = t.info},
+        rhs = t.n,
+        ty = unitTy,
+        info = t.info},
+      ty = unitTy, info = t.info}
   | t -> smap_Expr_Expr demoteParallel t
 end
 
@@ -156,5 +247,18 @@ with foldl_ (uconst_ (CAddi ())) (int_ 0) flattenSeqExpr using eqExpr in
 
 utest demoteParallel (accelerate_ (map_ id (flatten_ s)))
 with map_ id (foldl_ (uconst_ (CConcat ())) (seq_ []) s) using eqExpr in
+
+let n = int_ 10 in
+let f = ulam_ "" unit_ in
+let loopDef = bindall_ [
+  ureclet_ "loop" (ulam_ "i" (ulam_ "n"
+    (if_ (lti_ (var_ "i") (var_ "n"))
+      (bind_
+        (ulet_ "" (app_ f (var_ "i")))
+        (appf2_ (var_ "loop") (addi_ (var_ "i") (int_ 1)) (var_ "n")))
+      unit_))),
+  appf2_ (var_ "loop") (int_ 0) n] in
+utest demoteParallel (loop_ n f) with loopDef using eqExpr in
+utest demoteParallel (parallelLoop_ n f) with loopDef using eqExpr in
 
 ()

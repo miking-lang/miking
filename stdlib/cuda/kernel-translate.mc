@@ -19,7 +19,8 @@ include "cuda/kernels/map.mc"
 -- Translates non-kernel intrinsics, which could run either in CPU or GPU code,
 -- to looping constructs.
 lang CudaCpuTranslate =
-  CudaAst + MExprCCompile + CudaMapIntrinsic + CudaFoldlIntrinsic
+  CudaAst + MExprCCompile + CudaMapIntrinsic + CudaFoldlIntrinsic +
+  CudaTensorSliceIntrinsic + CudaTensorSubIntrinsic
 
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
   | t & (CESeqMap _ | CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _) ->

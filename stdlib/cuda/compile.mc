@@ -10,9 +10,7 @@ let _cudaFree = nameNoSym "cudaFree"
 let _malloc = nameNoSym "malloc"
 let _free = nameNoSym "free"
 
-let cudaIncludes = concat cIncludes [
-  "<type_traits>"
-]
+let cudaIncludes = concat cIncludes []
 
 lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _getSequenceElemType (env : CompileCEnv) =
@@ -156,6 +154,14 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       sTy = compileType env (tyTm t.s), ty = compileType env t.ty,
       opsPerThread = 10}
   | TmReduceKernel t -> error "not implemented yet"
+  | TmLoop t
+  | TmParallelLoop t ->
+    -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
+    -- kernel are compiled to sequential loops.
+    CESeqLoop {n = compileExpr env t.n, f = compileExpr env t.f}
+  | TmLoopKernel t ->
+    CELoopKernel {
+      n = compileExpr env t.n, f = compileExpr env t.f, opsPerThread = 10}
 
   sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmCopy t ->

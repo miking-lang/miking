@@ -53,12 +53,13 @@ lang CudaMemoryManagement = CudaPMExprAst + PMExprVariableSub
   | t -> (cudaEnv, t)
 
   sem generateKernelApplications =
-  | TmApp {lhs = TmApp {lhs = TmConst {val = CMap ()}, rhs = f}, rhs = s,
-           ty = ty, info = info} ->
+  | TmSeqMap {f = f, s = s, ty = ty, info = info} ->
     TmMapKernel {f = f, s = s, ty = ty, info = info}
   | TmParallelReduce t ->
     TmReduceKernel {f = t.f, ne = t.ne, s = t.ne, commutative = false,
                     ty = t.ty, info = t.info}
+  | TmParallelLoop {n = n, f = f, ty = ty, info = info} ->
+    TmLoopKernel {n = n, f = f, ty = ty, info = info}
   | t -> smap_Expr_Expr generateKernelApplications t
 
   sem addMemoryAllocations (env : AllocEnv) =
@@ -221,9 +222,9 @@ let typeEnv = {_typeEnvEmpty with varEnv = typeVarEnv} in
 let t = typeAnnotExpr typeEnv
   (nlet_ main (tyarrow_ (tyseq_ tyint_) (tyseq_ tyint_)) (nlam_ s (tyseq_ tyint_)
     (bindall_ [
-      nlet_ s2 (tyseq_ tyint_) (map_ (nvar_ f) (nvar_ s)),
+      nlet_ s2 (tyseq_ tyint_) (seqMap_ (nvar_ f) (nvar_ s)),
       nlet_ y tyint_ (foldl_ (nvar_ g) (int_ 0) (nvar_ s2)),
-      nlet_ s3 (tyseq_ tyint_) (map_ (app_ (nvar_ h) (nvar_ y)) (nvar_ s2)),
+      nlet_ s3 (tyseq_ tyint_) (seqMap_ (app_ (nvar_ h) (nvar_ y)) (nvar_ s2)),
       nvar_ s3]))) in
 let expected = nulet_ main (nulam_ s (bindall_ [
   ulet_ "t" (copyGpu_ (nvar_ s)),
