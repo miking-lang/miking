@@ -34,6 +34,7 @@ include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
+include "pmexpr/pprint.mc"
 include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
@@ -96,6 +97,10 @@ let pprintOCamlTops : [Top] -> String = lam tops.
 let pprintFutharkAst : FutProg -> String = lam ast.
   use FutharkPrettyPrint in
   printFutProg ast
+
+let pprintPMExprAst : Expr -> String = lam ast.
+  use PMExprPrettyPrint in
+  expr2str ast
 
 let pprintCAst : CPProg -> String = lam ast.
   use CPrettyPrint in
