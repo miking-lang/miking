@@ -40,7 +40,7 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
                                         as = get lst 2, ty = TyUnknown {info = info},
                                         info = info})
-  | "loop" ->
+  | "seqLoop" ->
     Some (2, lam lst. TmLoop {n = get lst 0, f = get lst 1,
                               ty = TyUnknown {info = info}, info = info})
   | "parallelLoop" ->
@@ -302,7 +302,7 @@ utest makeKeywords [] expr with map2_ zip_ emptySeq_ emptySeq_ using eqExpr in
 let expr = appf3_ (var_ "parallelReduce") id_ (int_ 0) emptySeq_ in
 utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
 
-let expr = appf2_ (var_ "loop") (int_ 10) unitfn_ in
+let expr = appf2_ (var_ "seqLoop") (int_ 10) unitfn_ in
 utest makeKeywords [] expr with loop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = appf2_ (var_ "parallelLoop") (int_ 10) unitfn_ in
