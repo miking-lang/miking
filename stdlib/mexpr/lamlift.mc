@@ -210,15 +210,12 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             TmApp {lhs = acc, rhs = x, ty = appType, info = info})
           (TmVar {ident = t.ident, ty = tyBody, info = info, frozen = false})
           (reverse fv) in
-      match insertFreeVariablesH solutions subMap body with (subMap, body) then
-        let subMap = mapInsert t.ident subExpr subMap in
-        match insertFreeVariablesH solutions subMap t.inexpr
-        with (subMap, inexpr) then
-          (subMap, TmLet {{{t with tyBody = tyBody}
-                              with body = body}
-                              with inexpr = inexpr})
-        else never
-      else never
+      match insertFreeVariablesH solutions subMap body with (subMap, body) in
+      let subMap = mapInsert t.ident subExpr subMap in
+      match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
+        (subMap, TmLet {{{t with tyBody = tyBody}
+                            with body = body}
+                            with inexpr = inexpr})
     else error (join ["Found no free variable solution for ",
                       nameGetStr t.ident])
   | TmRecLets t ->
@@ -261,17 +258,15 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                                    info = info}})
             bind.body fv in
         let tyBody = tyTm body in
-        match insertFreeVariablesH solutions subMap body with (subMap, body) then
-          (subMap, {{bind with tyBody = tyBody} with body = body})
-        else never
+        match insertFreeVariablesH solutions subMap body with (subMap, body) in
+        (subMap, {{bind with tyBody = tyBody} with body = body})
       else error (join ["Lambda lifting error: No solution found for binding ",
                         nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
     match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in
     match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-    (subMap, TmRecLets {{t with bindings = bindings}
-                           with inexpr = inexpr})
+    (subMap, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
@@ -288,24 +283,19 @@ lang LambdaLiftLiftGlobal = MExprAst
 
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
-    match liftRecursiveBindingH bindings t.body with (bindings, body) then
-      match t.tyBody with TyArrow _ then
-        let bind : RecLetBinding =
-          {ident = t.ident, tyBody = t.tyBody, body = t.body, info = t.info} in
-        let bindings = snoc bindings bind in
-        liftRecursiveBindingH bindings t.inexpr
-      else match liftRecursiveBindingH bindings t.inexpr
-      with (bindings, inexpr) then
-        (bindings, TmLet {{t with body = body}
-                             with inexpr = inexpr})
-      else never
-    else never
+    match liftRecursiveBindingH bindings t.body with (bindings, body) in
+    match t.tyBody with TyArrow _ then
+      let bind : RecLetBinding =
+        {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
+      let bindings = snoc bindings bind in
+      liftRecursiveBindingH bindings t.inexpr
+    else match liftRecursiveBindingH bindings t.inexpr with (bindings, inexpr) in
+      (bindings, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
       lam bindings. lam bind.
-      match liftRecursiveBindingH bindings bind.body with (bindings, body) then
-        snoc bindings {bind with body = body}
-      else never
+      match liftRecursiveBindingH bindings bind.body with (bindings, body) in
+      snoc bindings {bind with body = body}
     in
     let bindings = foldl liftBinding bindings t.bindings in
     liftRecursiveBindingH bindings t.inexpr
@@ -315,39 +305,33 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmRecLets t /- : Expr -> Expr -/ ->
     let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
       lam bindings. lam bind.
-      match liftRecursiveBindingH bindings bind.body with (bindings, body) then
-        snoc bindings {bind with body = body}
-      else never
+      match liftRecursiveBindingH bindings bind.body with (bindings, body) in
+      snoc bindings {bind with body = body}
     in
     let bindings = foldl liftBinding [] t.bindings in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = unit_}
+    TmRecLets {{t with bindings = bindings} with inexpr = unit_}
 
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
-    match liftGlobalH lifted t.body with (lifted, body) then
-      match t.tyBody with TyArrow _ then
-        let lifted = snoc lifted (TmLet {{t with body = body}
-                                            with inexpr = unit_}) in
-        liftGlobalH lifted t.inexpr
-      else match liftGlobalH lifted t.inexpr with (lifted, inexpr) then
-        (lifted, TmLet {{t with body = body}
-                           with inexpr = inexpr})
-      else never
-    else never
+    match liftGlobalH lifted t.body with (lifted, body) in
+    match t.tyBody with TyArrow _ then
+      let lifted = snoc lifted (TmLet {{t with body = body}
+                                          with inexpr = unit_}) in
+      liftGlobalH lifted t.inexpr
+    else match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
+      (lifted, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let lifted = snoc lifted (liftRecursiveBinding (TmRecLets t)) in
-    (lifted, t.inexpr)
+    match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
+    (lifted, inexpr)
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
 
   sem liftGlobal =
   | TmLet t ->
-    match liftGlobalH [] t.body with (lifted, body) then
-      _bindIfNonEmpty
-        lifted
-        (TmLet {{t with body = body}
-                   with inexpr = liftGlobal t.inexpr})
-    else never
+    match liftGlobalH [] t.body with (lifted, body) in
+    _bindIfNonEmpty
+      lifted
+      (TmLet {{t with body = body} with inexpr = liftGlobal t.inexpr})
   | TmRecLets t ->
     let lifted = [liftRecursiveBinding (TmRecLets t)] in
     _bindIfNonEmpty
@@ -356,22 +340,19 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmType t -> TmType {t with inexpr = liftGlobal t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = liftGlobal t.inexpr}
   | TmUtest t ->
-    match liftGlobalH [] t.test with (lifted, test) then
-      match liftGlobalH lifted t.expected with (lifted, expected) then
-        _bindIfNonEmpty
-          lifted
-          (TmUtest {{{t with test = test}
-                        with expected = expected}
-                        with next = liftGlobal t.next})
-      else never
-    else never
+    match liftGlobalH [] t.test with (lifted, test) in
+    match liftGlobalH lifted t.expected with (lifted, expected) in
+    _bindIfNonEmpty
+      lifted
+      (TmUtest {{{t with test = test}
+                    with expected = expected}
+                    with next = liftGlobal t.next})
   | TmExt t -> TmExt {t with inexpr = liftGlobal t.inexpr}
   | t ->
-    match liftGlobalH [] t with (lifted, t) then
-      _bindIfNonEmpty
-        lifted
-        t
-    else never
+    match liftGlobalH [] t with (lifted, t) in
+    _bindIfNonEmpty
+      lifted
+      t
 end
 
 lang MExprLambdaLift =
@@ -379,10 +360,7 @@ lang MExprLambdaLift =
   LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal
 
   sem liftLambdas =
-  | t ->
-    match liftLambdasWithSolutions t with (_, t) then
-      t
-    else never
+  | t -> match liftLambdasWithSolutions t with (_, t) in t
 
   sem liftLambdasWithSolutions =
   | t ->
