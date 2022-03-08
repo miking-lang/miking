@@ -710,6 +710,18 @@ let expected = preprocess (bindall_ [
   appf3_ (var_ "f") (var_ "a") (var_ "b") (int_ 7)]) in
 utest liftLambdas letMultiParam with expected using eqExpr in
 
+let nestedMap = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  map_
+    (ulam_ "s" (map_ (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (var_ "s")))
+    (var_ "s")]) in
+let expected = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "t1" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  ulet_ "t2" (ulam_ "s" (map_ (var_ "t1") (var_ "s"))),
+  map_ (var_ "t2") (var_ "s")]) in
+utest liftLambdas nestedMap with expected using eqExpr in
+
 let nestedAnonymousLambdas = preprocess (bindall_ [
   ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
   ulet_ "x" (int_ 0),
