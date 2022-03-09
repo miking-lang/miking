@@ -9,37 +9,9 @@ include "mexpr/pprint.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/wrapper.mc"
 
-let getMExprSeqFutharkTypeString : Type -> String = use MExprAst in
-  lam ty.
-  recursive let work = lam dim. lam typ.
-    match typ with TySeq {ty = innerTy} then
-      work (addi dim 1) innerTy
-    else match typ with TyInt _ | TyChar _ then
-      (dim, "i64")
-    else match typ with TyFloat _ then
-      (dim, "f64")
-    else
-      let tyStr = use MExprPrettyPrint in type2str typ in
-      infoErrorExit (infoTy typ) (join ["Cannot accelerate sequences with ",
-                                        "elements of type ", tyStr])
-  in
-  match work 0 ty with (dim, elemTyStr) then
-    if eqi dim 0 then
-      elemTyStr
-    else
-      join [elemTyStr, "_", int2string dim, "d"]
-  else never
-
 let getFutharkSeqTypeString : String -> Int -> String =
   lam futharkElementTypeString. lam numDims.
   join [futharkElementTypeString, "_", int2string numDims, "d"]
-
-recursive let getDimensionsOfType : Type -> Int = use MExprAst in
-  lam ty.
-  match ty with TySeq {ty = innerTy} then
-    addi 1 (getDimensionsOfType innerTy)
-  else 0
-end
 
 lang FutharkCWrapperBase = PMExprCWrapper
   -- In the Futhark-specific environment, we store identifiers related to the
@@ -49,92 +21,88 @@ lang FutharkCWrapperBase = PMExprCWrapper
       initContextIdent : Name, futharkContextConfigIdent : Name,
       futharkContextIdent : Name}
 
-  sem getFutharkCType =
-  | TyInt _ | TyChar _ -> CTyInt64 ()
-  | TyFloat _ -> CTyDouble ()
-  | ty & (TySeq _) ->
-    let seqTypeStr = getMExprSeqFutharkTypeString ty in
-    let seqTypeIdent = _getIdentOrInitNew (concat "futhark_" seqTypeStr) in
-    CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}}
-
   sem getFutharkElementTypeString =
-  | CTyInt64 _ -> "i64"
+  | CTyChar _ | CTyInt64 _ -> "i64"
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
+
+  sem getSeqFutharkTypeString =
+  | SeqRepr t ->
+    let elemTyStr = getFutharkElementTypeString t.elemTy in
+    let dims = length t.dimIdents in
+    join [elemTyStr, "_", int2string dims, "d"]
+
+  sem getFutharkCType =
+  | t & (SeqRepr _) ->
+    let seqTypeStr = getSeqFutharkTypeString t in
+    let seqTypeIdent = _getIdentOrInitNew seqTypeStr in
+    CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}}
+  | TensorRepr t -> error "Tensors are not supported in Futhark"
+  | RecordRepr t ->
+    -- TODO(larshum, 2022-03-09): How do we figure out this type?
+    error "Records have not been implemented for Futhark"
+  | BaseTypeRepr t -> t.ty
 end
 
 lang CToFutharkWrapper = FutharkCWrapperBase
-  sem _generateCToFutharkWrapperInner (ctxIdent : Name) (arg : ArgData) =
-  | TyInt _ | TyChar _ | TyFloat _ ->
-    let cvar : (Name, CType) = head arg.cTempVars in
-    ({arg with gpuIdent = cvar.0}, [])
-  | TySeq _ ->
-    let cvars = arg.cTempVars in
-    -- TODO(larshum, 2021-09-01): Add support for records by passing all cvars
-    -- to a Futhark helper function which produces records of appropriate type.
-    -- For now, we assume there is a one-to-one mapping between the OCaml and
-    -- the C identifiers (i.e. non record/tuple types).
-    let cvar : (Name, CType) = head cvars in
-    let futharkElemTypeStr = getFutharkElementTypeString cvar.1 in
-    let numDims = length arg.dimIdents in
-    let futharkSeqTypeStr = getFutharkSeqTypeString futharkElemTypeStr numDims in
+  sem _generateCToFutharkWrapperArgH (ctxIdent : Name) (arg : ArgData) =
+  | SeqRepr t ->
+    let futharkSeqTypeStr = getSeqFutharkTypeString (SeqRepr t) in
     let seqTypeIdent = _getIdentOrInitNew (concat "futhark_" futharkSeqTypeStr) in
     let seqNewIdent = _getIdentOrInitNew (concat "futhark_new_" futharkSeqTypeStr) in
-    let gpuIdent = nameSym "fut_tmp" in
     let allocStmt = CSDef {
       ty = CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}},
-      id = Some gpuIdent,
+      id = Some arg.gpuIdent,
       init = Some (CIExpr {expr = CEApp {
         fun = seqNewIdent,
         args =
           concat
-            [CEVar {id = ctxIdent}, CEVar {id = cvar.0}]
-            (map (lam id. CEVar {id = id}) arg.dimIdents)}})}
-    in
+            [CEVar {id = ctxIdent}, CEVar {id = t.dataIdent}]
+            (map (lam id. CEVar {id = id}) t.dimIdents)}})} in
     let freeCTempStmt = CSExpr {expr = CEApp {
-      fun = _getIdentExn "free", args = [CEVar {id = cvar.0}]}}
-    in
-    let arg = {arg with gpuIdent = gpuIdent} in
-    (arg, [allocStmt, freeCTempStmt])
+      fun = _getIdentExn "free",
+      args = [CEVar {id = t.dataIdent}]}} in
+    [allocStmt, freeCTempStmt]
+  | TensorRepr t -> error "Tensors are not supported in Futhark"
+  | RecordRepr t ->
+    -- TODO(larshum, 2022-03-09): Implement support for passing records to
+    -- Futhark.
+    error "Record parameters have not been implemented for Futhark"
+  | BaseTypeRepr t ->
+    [CSDef {
+      ty = CTyPtr {ty = t.ty}, id = Some arg.gpuIdent,
+      init = Some (CIExpr {expr = CEVar {id = t.ident}})}]
 
   sem _generateCToFutharkWrapperArg (ctxIdent : Name) (accStmts : [CStmt]) =
   | arg ->
     let arg : ArgData = arg in
-    match _generateCToFutharkWrapperInner ctxIdent arg arg.ty
-    with (arg, stmts) then
-      (concat accStmts stmts, arg)
-    else never
+    let stmts = _generateCToFutharkWrapperArgH ctxIdent arg arg.cData in
+    concat accStmts stmts
 
   sem generateCToFutharkWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    match env.targetEnv with FutharkTargetEnv targetEnv in
-    let ctxIdent = targetEnv.futharkContextIdent in
-    let initContextCall =
-      CSExpr {expr = CEApp { fun = targetEnv.initContextIdent, args = []}}
-    in
-    match mapAccumL (_generateCToFutharkWrapperArg ctxIdent) [] env.arguments
-    with (futharkCopyStmts, args) then
-      ({env with arguments = args}, cons initContextCall futharkCopyStmts)
-    else never
+    match env.targetEnv with FutharkTargetEnv fenv in
+    let ctxIdent = fenv.futharkContextIdent in
+    let initContextCall = CSExpr {expr = CEApp {
+      fun = fenv.initContextIdent, args = []}} in
+    cons
+      initContextCall
+      (foldl (_generateCToFutharkWrapperArg ctxIdent) [] env.arguments)
 end
 
 lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
   sem generateFutharkCall =
   | env ->
     let env : CWrapperEnv = env in
-    match env.targetEnv with FutharkTargetEnv targetEnv in
-    let return = env.return in
-    let returnType = return.ty in
+    match env.targetEnv with FutharkTargetEnv fenv in
+    let return : ArgData = env.return in
+    let returnType = return.mexprType in
 
     -- Declare Futhark return value
-    let futReturnCType = getFutharkCType returnType in
-    let futResultIdent = nameSym "fut_ret" in
     let futResultDeclStmt = CSDef {
-      ty = futReturnCType,
-      id = Some futResultIdent,
-      init = None ()
-    } in
+      ty = getFutharkCType return.cData,
+      id = Some return.gpuIdent, init = None ()} in
     -- TODO(larshum, 2021-09-03): This only works under the assumption that the
     -- function name (i.e. the string) is unique.
     let functionStr =
@@ -152,12 +120,10 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
     let args =
       map
         (lam arg : ArgData.
-          match arg.ty with TySeq _ then
-            CEVar {id = arg.gpuIdent}
-          else
-            CEUnOp {op = CODeref (), arg = CEVar {id = arg.gpuIdent}})
-        env.arguments
-    in
+          match arg.cData with BaseTypeRepr _ then
+            CEUnOp {op = CODeref (), arg = CEVar {id = arg.gpuIdent}}
+          else CEVar {id = arg.gpuIdent})
+        env.arguments in
     let functionCallStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = returnCodeIdent},
@@ -165,17 +131,15 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
         fun = funcId,
         args =
           concat
-            [ CEVar {id = targetEnv.futharkContextIdent}
-            , CEUnOp {op = COAddrOf (), arg = CEVar {id = futResultIdent}} ]
-            args}
-    }} in
+            [ CEVar {id = fenv.futharkContextIdent}
+            , CEUnOp {op = COAddrOf (), arg = CEVar {id = return.gpuIdent}} ]
+            args}}} in
     let contextSyncStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = returnCodeIdent},
       rhs = CEApp {
         fun = _getIdentExn "futhark_context_sync",
-        args = [CEVar {id = targetEnv.futharkContextIdent}]}
-    }} in
+        args = [CEVar {id = fenv.futharkContextIdent}]}}} in
 
     -- Handle Futhark errors by printing the error message and exiting
     let errorHandlingStmt = CSIf {
@@ -190,59 +154,46 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
             CEString {s = "Runtime error in generated code: %s\n"},
             CEApp {
               fun = _getIdentExn "futhark_context_get_error",
-              args = [CEVar {id = targetEnv.futharkContextIdent}]}]}},
+              args = [CEVar {id = fenv.futharkContextIdent}]}]}},
         CSExpr {expr = CEApp {
           fun = _getIdentExn "exit",
           args = [CEVar {id = returnCodeIdent}]}}],
-      els = []
-    } in
+      els = []} in
 
     -- Deallocate the Futhark input values
     let deallocStmts =
       join
         (map
           (lam arg : ArgData.
-            match arg.ty with TySeq _ then
-              let futTypeStr = getMExprSeqFutharkTypeString arg.ty in
+            match arg.cData with SeqRepr t then
+              let futTypeStr = getSeqFutharkTypeString (SeqRepr t) in
               let futFreeStr = concat "futhark_free_" futTypeStr in
               let deallocIdent = _getIdentOrInitNew futFreeStr in
               [CSExpr {expr = CEApp {
                 fun = deallocIdent,
                 args = [
-                  CEVar {id = targetEnv.futharkContextIdent},
+                  CEVar {id = fenv.futharkContextIdent},
                   CEVar {id = arg.gpuIdent}]}}]
             else [])
           env.arguments)
     in
 
-    let return = {return with gpuIdent = futResultIdent} in
-    let stmts =
-      concat
-        [futResultDeclStmt, returnCodeDeclStmt, functionCallStmt,
-         errorHandlingStmt, contextSyncStmt, errorHandlingStmt]
-        deallocStmts
-    in
-    ({env with return = return}, stmts)
+    concat
+      [futResultDeclStmt, returnCodeDeclStmt, functionCallStmt,
+       errorHandlingStmt, contextSyncStmt, errorHandlingStmt]
+      deallocStmts
 end
 
 lang FutharkToCWrapper = FutharkCWrapperBase
-  sem _generateFutharkToCWrapperInner (ctxIdent : Name) (return : ArgData) =
-  | ty & (TyInt _ | TyChar _ | TyFloat _) ->
-    let ctype = head (mexprToCTypes ty) in
-    let cIdent = return.gpuIdent in
-    let return = {return with cTempVars = [(cIdent, ctype)]} in
-    (return, [])
-  | ty & (TySeq _) ->
-    let ctype = head (mexprToCTypes ty) in
-    let cIdent = nameSym "c_tmp" in
-    
-    -- Find dimensions of result value through 'futhark_shape_*'
-    let futReturnTypeString = getMExprSeqFutharkTypeString ty in
+  sem _generateFutharkToCWrapperH (ctxIdent : Name) (srcIdent : Name) =
+  | SeqRepr t ->
+    -- Find dimensions of result value through the use of 'futhark_shape_*'
+    let futReturnTypeString = getSeqFutharkTypeString (SeqRepr t) in
     let futharkShapeString = concat "futhark_shape_" futReturnTypeString in
     let futharkShapeIdent = _getIdentOrInitNew futharkShapeString in
+    -- NOTE(larshum, 2022-03-09): We use casting to remove the const of the
+    -- type because the C AST cannot express constant types.
     let dimIdent = nameSym "dim" in
-    -- NOTE(larshum, 2021-09-02): We cast away the const because the current C
-    -- AST implementation does not support const types.
     let dimsStmt = CSDef {
       ty = CTyPtr {ty = CTyInt64 ()},
       id = Some dimIdent,
@@ -252,10 +203,7 @@ lang FutharkToCWrapper = FutharkCWrapperBase
           fun = futharkShapeIdent,
           args = [
             CEVar {id = ctxIdent},
-            CEVar {id = return.gpuIdent}]}}})
-    } in
-    let ndims = getDimensionsOfType ty in
-    let dimIdents = create ndims (lam. nameSym "d") in
+            CEVar {id = srcIdent}]}}})} in
     let dimInitStmts =
       mapi
         (lam i. lam ident.
@@ -265,70 +213,69 @@ lang FutharkToCWrapper = FutharkCWrapperBase
               op = COSubScript (),
               lhs = CEVar {id = dimIdent},
               rhs = CEInt {i = i}}})})
-        dimIdents
-    in
+        t.dimIdents in
     let dimProdExpr =
       foldl
         (lam expr. lam id.
           CEBinOp {op = COMul (), lhs = expr, rhs = CEVar {id = id}})
-        (CEVar {id = head dimIdents})
-        (tail dimIdents)
-    in
-    let sizeIdent = nameSym "n" in
+        (CEVar {id = head t.dimIdents})
+        (tail t.dimIdents) in
     let sizeInitStmt = CSDef {
-      ty = CTyInt64 (), id = Some sizeIdent,
-      init = Some (CIExpr {expr = dimProdExpr})
-    } in
+      ty = CTyInt64 (), id = Some t.sizeIdent,
+      init = Some (CIExpr {expr = dimProdExpr})} in
 
-    -- Preallocate C memory using the size found in previous step
-    let preallocStmt = CSDef {
-      ty = ctype,
-      id = Some cIdent,
+    -- Allocate C memory to contain results.
+    let cType = CTyPtr {ty = t.elemTy} in
+    let cAllocStmt = CSDef {
+      ty = cType, id = Some t.dataIdent,
       init = Some (CIExpr {expr = CECast {
-        ty = ctype,
+        ty = cType,
         rhs = CEApp {
           fun = _getIdentExn "malloc",
           args = [CEBinOp {
             op = COMul (),
-            lhs = CEVar {id = sizeIdent},
-            rhs = CESizeOfType {ty = ctype}}]}}})
-    } in
+            lhs = CEVar {id = t.sizeIdent},
+            rhs = CESizeOfType {ty = cType}}]}}})} in
 
-    -- Copy from Futhark to C using 'futhark_values_*' function
-    let futValuesString = join ["futhark_values_", futReturnTypeString] in
+    -- Copy from Futhark to C using the 'futhark_values_*' function.
+    let futValuesString = concat "futhark_values_" futReturnTypeString in
     let futValuesIdent = _getIdentOrInitNew futValuesString in
     let copyFutharkToCStmt = CSExpr {expr = CEApp {
       fun = futValuesIdent,
       args = [
         CEVar {id = ctxIdent},
-        CEVar {id = return.gpuIdent},
-        CEVar {id = cIdent}]
-    }} in
+        CEVar {id = srcIdent},
+        CEVar {id = t.dataIdent}]}} in
 
     -- Free Futhark memory
-    let futFreeString = join ["futhark_free_", futReturnTypeString] in
+    let futFreeString = concat "futhark_free_" futReturnTypeString in
     let futFreeIdent = _getIdentOrInitNew futFreeString in
     let freeFutharkStmt = CSExpr {expr = CEApp {
       fun = futFreeIdent,
-      args = [CEVar {id = ctxIdent}, CEVar {id = return.gpuIdent}]
-    }} in
+      args = [CEVar {id = ctxIdent}, CEVar {id = srcIdent}]}} in
 
-    let return = {{{return with cTempVars = [(cIdent, ctype)]}
-                           with dimIdents = dimIdents}
-                           with sizeIdent = sizeIdent}
-    in
-    (return, join [[dimsStmt], dimInitStmts, [sizeInitStmt, preallocStmt,
-                   copyFutharkToCStmt, freeFutharkStmt]])
+    join [
+      [dimsStmt], dimInitStmts,
+      [sizeInitStmt, cAllocStmt, copyFutharkToCStmt, freeFutharkStmt]]
+  | TensorRepr t -> error "Tensors are not supported in Futhark"
+  | RecordRepr t ->
+    -- TODO(larshum, 2022-03-09): Implement support for returning records from
+    -- Futhark.
+    error "Record return values have not been implemented for Futhark"
+  | BaseTypeRepr t ->
+    [CSDef {
+      ty = CTyPtr {ty = t.ty}, id = Some t.ident,
+      init = Some (CIExpr {expr = CEUnOp {
+        op = COAddrOf (),
+        arg = CEVar {id = srcIdent}}})}]
 
   sem generateFutharkToCWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    match env.targetEnv with FutharkTargetEnv targetEnv in
-    let futCtx = targetEnv.futharkContextIdent in
-    match _generateFutharkToCWrapperInner futCtx env.return env.return.ty
-    with (return, copyStmts) then
-      ({env with return = return}, copyStmts)
-    else never
+    match env.targetEnv with FutharkTargetEnv fenv in
+    let futCtx = fenv.futharkContextIdent in
+    let return = env.return in
+    _generateFutharkToCWrapperH futCtx return.gpuIdent return.cData
 end
 
 lang FutharkCWrapper =
@@ -347,11 +294,11 @@ lang FutharkCWrapper =
   sem futharkContextInit =
   | env /- : CWrapperEnv -> [CTop] -/ ->
     let env : CWrapperEnv = env in
-    match env.targetEnv with FutharkTargetEnv targetEnv in
+    match env.targetEnv with FutharkTargetEnv fenv in
     let ctxConfigStructId = _getIdentExn "futhark_context_config" in
     let ctxStructId = _getIdentExn "futhark_context" in
-    let ctxConfigIdent = targetEnv.futharkContextConfigIdent in
-    let ctxIdent = targetEnv.futharkContextIdent in
+    let ctxConfigIdent = fenv.futharkContextConfigIdent in
+    let ctxIdent = fenv.futharkContextIdent in
     let initBody = [
       CSIf {
         cond = CEBinOp {
@@ -383,7 +330,7 @@ lang FutharkCWrapper =
         init = None ()},
       CTFun {
         ret = CTyVoid (),
-        id = targetEnv.initContextIdent,
+        id = fenv.initContextIdent,
         params = [],
         body = initBody} ]
 
@@ -398,12 +345,12 @@ lang FutharkCWrapper =
 
   sem generateMarshallingCode =
   | env ->
-    match generateOCamlToCWrapper env with (env, stmt1) in
-    match generateCToFutharkWrapper env with (env, stmt2) in
-    match generateFutharkCall env with (env, stmt3) in
-    match generateFutharkToCWrapper env with (env, stmt4) in
-    match generateCToOCamlWrapper env with (env, stmt5) in
-    (env, join [stmt1, stmt2, stmt3, stmt4, stmt5])
+    let stmt1 = generateOCamlToCWrapper env in
+    let stmt2 = generateCToFutharkWrapper env in
+    let stmt3 = generateFutharkCall env in
+    let stmt4 = generateFutharkToCWrapper env in
+    let stmt5 = generateCToOCamlWrapper env in
+    join [stmt1, stmt2, stmt3, stmt4, stmt5]
 
   sem generateWrapperCode =
   | accelerated ->

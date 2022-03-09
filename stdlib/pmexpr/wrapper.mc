@@ -49,37 +49,37 @@ let _getIdentOrInitNew : String -> Name = lam str.
       id)
     (mapLookup str strIdentMap)
 
-type ArgData = {
-  -- The identifier and the MExpr type of the argument.
-  ident : Name,
-  ty : Type,
-
-  -- The identifiers of the C variable(s) containing values used to represent
-  -- this variable. This is a sequence because the fields of records and tuples
-  -- are placed in one array each.
-  cTempVars : [(Name, CType)],
-
-  -- The identifier of the GPU variable.
-  gpuIdent : Name,
-
-  -- Identifiers of variables containing the dimensions of the array, starting
-  -- with the outermost dimension. This sequence is empty if the type of the
-  -- argument is not a sequence.
-  dimIdents : [Name],
-
-  -- The identifier of a variable containing the full size of the array.
-  sizeIdent : Name
-}
-
-let defaultArgData = use MExprAst in {
-  ident = nameNoSym "", ty = TyUnknown {info = NoInfo ()}, cTempVars = [],
-  gpuIdent = nameNoSym "", dimIdents = [], sizeIdent = nameNoSym ""}
-
-let emptyWrapperEnv = {
-  arguments = [], return = defaultArgData,
-  keywordIdentMap = mapEmpty cmpString, functionIdent = nameNoSym ""}
 
 lang PMExprCWrapperBase = MExprAst + CAst
+  -- Definition of the intermediate representation shapes in C. Note that
+  -- nested sequences are treated as one 'SeqRepr', and that sequences and
+  -- tensor cannot contain records in the current version.
+  syn CDataRepr =
+  | SeqRepr {dataIdent : Name, dimIdents : [Name], sizeIdent : Name, elemTy : CType}
+  | TensorRepr {dataIdent : Name, rankIdent : Name, sizeIdent : Name,
+                dimsIdent : Name, elemTy : CType}
+  | RecordRepr {fields : [CDataRepr]}
+  | BaseTypeRepr {ident : Name, ty : CType}
+
+  type ArgData = {
+    -- The identifier and type of the OCaml value representing the MExpr
+    -- argument.
+    mexprIdent : Name,
+    mexprType : Type,
+
+    -- The intermediate representation of the argument in C.
+    cData : CDataRepr,
+
+    -- The identifier of the argument in the GPU backend. We do not store an
+    -- explicit type of the argument as the type is backend-specific.
+    gpuIdent : Name
+  }
+
+  sem defaultArgData =
+  | () ->
+    { mexprIdent = nameNoSym "", mexprType = tyunknown_
+    , cData = RecordRepr {fields = mapEmpty cmpSID}, gpuIdent = nameNoSym "" }
+
   syn TargetWrapperEnv =
   | EmptyTargetEnv ()
 
@@ -101,485 +101,471 @@ lang PMExprCWrapperBase = MExprAst + CAst
 
   sem _emptyWrapperEnv =
   | () ->
-    { arguments = [], return = defaultArgData
-    , keywordIdentMap = mapEmpty cmpString, functionIdent = nameNoSym ""
+    { arguments = [], return = defaultArgData (), functionIdent = nameNoSym ""
     , targetEnv = EmptyTargetEnv () }
 
   sem _wosize = 
   | id -> CEApp {fun = _getIdentExn "Wosize_val", args = [CEVar {id = id}]}
 
-  -- Converts a given MExpr type to a sequence containing the C type or types
-  -- used to represent it in the C wrapper.
-  sem mexprToCTypes =
-  | TyInt _ | TyChar _ -> [CTyInt64 ()]
-  | TyFloat _ -> [CTyDouble ()]
-  | TySeq {ty = elemTy & !(TySeq _)} ->
-    map (lam ty. CTyPtr {ty = ty}) (mexprToCTypes elemTy)
-  | TySeq t -> mexprToCTypes t.ty
-  | TyTensor {ty = elemTy & (TyInt _ | TyFloat _)} ->
-    map (lam ty. CTyPtr {ty = ty}) (mexprToCTypes elemTy)
+  sem isBaseType =
+  | TyInt _ | TyFloat _ | TyBool _ | TyChar _ -> true
+  | _ -> false
+
+  sem mexprToCType =
+  | TyInt _ -> CTyInt64 ()
+  | TyFloat _ -> CTyDouble ()
+  | TyBool _ -> CTyChar ()
+  | TyChar _ -> CTyChar ()
+  | ty ->
+    let tystr = use MExprPrettyPrint in type2str ty in
+    error (join ["Type ", tystr, " is not supported by C wrapper"])
+
+  sem _generateCDataRepresentation =
+  | TySeq ty ->
+    recursive let findSequenceDimensions = lam n. lam ty.
+      match ty with TySeq t then
+        findSequenceDimensions (addi n 1) t.ty
+      else (n, ty)
+    in
+    match findSequenceDimensions 0 (TySeq ty) with (dims, elemType) in
+    if isBaseType elemType then
+      let dimIdents = create dims (lam. nameSym "d") in
+      SeqRepr {
+        dataIdent = nameSym "c_tmp", dimIdents = dimIdents,
+        sizeIdent = nameSym "n", elemTy = mexprToCType elemType}
+    else
+      let tystr = use MExprPrettyPrint in type2str ty in
+      error (join ["Sequences of ", tystr, " are not supported by C wrapper"])
+  | TyTensor {ty = elemType & (TyInt _ | TyFloat _)} ->
+    TensorRepr {
+      dataIdent = nameSym "c_tmp", rankIdent = nameSym "rank",
+      sizeIdent = nameSym "n", dimsIdent = nameSym "dims",
+      elemTy = mexprToCType elemType}
   | TyRecord t ->
-    infoErrorExit t.info (join ["Records cannot be a free variable in, or ",
-                                "returned from, an accelerated term"])
-  | t ->
-    let tyStr = use MExprPrettyPrint in type2str t in
-    infoErrorExit (infoTy t) (join ["Terms of type '", tyStr,
-                                     "' cannot be accelerated"])
+    let fields : [CDataRepr] =
+      map
+        (lam label : SID.
+          match mapLookup label t.fields with Some ty then
+            _generateCDataRepresentation ty
+          else error "Inconsistent labels in record type")
+        t.labels in
+    RecordRepr {fields = fields}
+  | ty -> BaseTypeRepr {ident = nameSym "c_tmp", ty = mexprToCType ty}
 end
 
 lang PMExprOCamlToCWrapper = PMExprCWrapperBase
-  sem _generateOCamlToCSequenceWrapper (arg : ArgData) (iterIdent : Name) =
-  | whileBody /- : [CStmt] -/ ->
-    let iterDefStmt = CSDef {
-      ty = CTyInt (), id = Some iterIdent,
-      init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    let dimIdent = head arg.dimIdents in
-    [ iterDefStmt
-    , CSWhile {
-        cond = CEBinOp {
-          op = COLt (), lhs = CEVar {id = iterIdent},
-          rhs = CEVar {id = dimIdent}},
-        body = whileBody} ]
+  sem ocamlToCConversionFunctionIdent =
+  | CTyChar _ -> _getIdentExn "Int_val"
+  | CTyInt64 _ -> _getIdentExn "Long_val"
+  | CTyDouble _ -> _getIdentExn "Double_val"
 
-  sem _generateOCamlToCWrapperInner (arg : ArgData) =
-  | TyInt _ | TyChar _ ->
-    let cvar : (Name, Type) = head arg.cTempVars in
-    let cIdent = cvar.0 in
-    [CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEUnOp {op = CODeref (), arg = CEVar {id = cIdent}},
-      rhs = CEApp {fun = _getIdentExn "Long_val",
-                   args = [CEVar {id = arg.ident}]}}}]
-  | TyFloat _ ->
-    let cvar : (Name, Type) = head arg.cTempVars in
-    let cIdent = cvar.0 in
-    [CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEUnOp {op = CODeref (), arg = CEVar {id = cIdent}},
-      rhs = CEApp {fun = _getIdentExn "Double_val",
-                   args = [CEVar {id = arg.ident}]}}}]
-  | TySeq {ty = TyFloat _} ->
-    let cvar : (Name, CType) = head arg.cTempVars in
-    let cIdent = cvar.0 in
-    let dimIdent = head arg.dimIdents in
-    let iterIdent = nameSym "i" in
-    let whileBody = [
-      CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEBinOp {
-          op = COSubScript (),
-          lhs = CEVar {id = cIdent}, rhs = CEVar {id = iterIdent}},
-        rhs = CEApp {fun = _getIdentExn "Double_field",
-                     args = [CEVar {id = arg.ident}, CEVar {id = iterIdent}]}}},
-      CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEVar {id = iterIdent},
-        rhs = CEBinOp {
-          op = COAdd (),
-          lhs = CEVar {id = iterIdent},
-          rhs = CEInt {i = 1}}}}
-    ] in
-    _generateOCamlToCSequenceWrapper arg iterIdent whileBody
-  | TySeq {ty = innerTy} ->
-    let iterIdent = nameSym "i" in
-    let innerSrcIdent = nameSym "x" in
-    let innerCvars = map (lam p : (Name, CType). (nameSym "y", p.1)) arg.cTempVars in
-    let innerCopyStmts =
-      map
-        (lam entry : ((Name, CType), (Name, CType)).
-          let cvar = entry.0 in
-          let innerCvar = entry.1 in
-          let elemTy = cvar.1 in
-          let offset =
-            match innerTy with TySeq _ then
-              CEBinOp {
-                op = COMul (),
-                lhs = CEVar {id = iterIdent},
-                rhs = _wosize innerSrcIdent}
-            else CEVar {id = iterIdent}
-          in
-          CSDef {
-            ty = elemTy, id = Some innerCvar.0,
-            init = Some (CIExpr {expr = CEUnOp {
-              op = COAddrOf (),
-              arg = CEBinOp {
-                op = COSubScript (),
-                lhs = CEVar {id = cvar.0},
-                rhs = offset}}})})
-        (zip arg.cTempVars innerCvars)
-    in
-    let value = _getIdentExn "value" in
-    let field = _getIdentExn "Field" in
-    match arg.dimIdents with [dimIdent] ++ remainingDimIdents in
-    let innerArg : ArgData = {{{arg with ident = innerSrcIdent}
-                                    with cTempVars = innerCvars}
-                                    with dimIdents = remainingDimIdents} in
-    let whileBody = join [
-      [CSDef {
-        ty = CTyVar {id = value}, id = Some innerSrcIdent,
-        init = Some (CIExpr {expr = CEApp {
-          fun = field,
-          args = [CEVar {id = arg.ident}, CEVar {id = iterIdent}]}})}],
-      innerCopyStmts,
-      _generateOCamlToCWrapperInner innerArg innerTy,
-      [CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEVar {id = iterIdent},
-        rhs = CEBinOp {
-          op = COAdd (), lhs = CEVar {id = iterIdent},
-          rhs = CEInt {i = 1}}}}]
-    ] in
-    _generateOCamlToCSequenceWrapper arg iterIdent whileBody
-  | TyTensor {ty = TyInt _ | TyFloat _} ->
-    let cvar : (Name, CType) = head arg.cTempVars in
-    let cIdent = cvar.0 in
-    [CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = cIdent},
-      rhs = CECast {
-        ty = cvar.1,
-        rhs = CEApp {
-          fun = _getIdentExn "Caml_ba_data_val",
-          args = [CEVar {id = arg.ident}]}}}}]
-
-  sem _generateOCamlToCAlloc (arg : ArgData) =
-  | cty & (CTyPtr {ty = elementType}) ->
-    let cIdent = nameSym "c_tmp" in
-    match arg.ty with TySeq _ then
-      let allocStmt = CSDef {
-        ty = cty, id = Some cIdent,
-        init = Some (CIExpr {expr = CECast {
-          ty = cty,
-          rhs = CEApp {
-            fun = _getIdentExn "malloc",
-            args = [CEBinOp {
-              op = COMul (),
-              lhs = CEVar {id = arg.sizeIdent},
-              rhs = CESizeOfType {ty = elementType}}]}}})
-      } in
-      let arg = {arg with cTempVars = snoc arg.cTempVars (cIdent, cty)} in
-      (arg, [allocStmt])
-    else match arg.ty with TyTensor _ then
-      let declStmt = CSDef {ty = cty, id = Some cIdent, init = None ()} in
-      let arg = {arg with cTempVars = snoc arg.cTempVars (cIdent, cty)} in
-      (arg, [declStmt])
-    else
-      let tyStr = use MExprPrettyPrint in type2str arg.ty in
-      error (concat "Unsupported pointer type " tyStr)
-  | cty ->
-    let cIdent = nameSym "c_tmp" in
-    let cPtrIdent = nameSym "c_tmp_ptr" in
-    let allocStmts = [
-      CSDef {ty = cty, id = Some cIdent, init = None ()},
-      CSDef {
-        ty = CTyPtr {ty = cty}, id = Some cPtrIdent,
-        init = Some (CIExpr {expr = CEUnOp {
-          op = COAddrOf (),
-          arg = CEVar {id = cIdent}}})}
-    ] in
-    let arg = {arg with cTempVars = snoc arg.cTempVars (cPtrIdent, cty)} in
-    (arg, allocStmts)
-
-  sem _computeDimensionsH (arg : ArgData) (srcIdent : Name) =
-  | TySeq {ty = innerTy} ->
-    let dimIdent = nameSym "d" in
-    let arg = {arg with dimIdents = snoc arg.dimIdents dimIdent} in
+  sem _computeSequenceDimensions (srcIdent : Name) (idx : Int) =
+  | t & (SeqRepr {dimIdents = dimIdents, sizeIdent = sizeIdent}) ->
+    let dimIdent = get dimIdents idx in
     let initDimStmt = CSDef {
-      ty = CTyInt (), id = Some dimIdent,
+      ty = CTyInt64 (), id = Some dimIdent,
       init = Some (CIExpr {expr = _wosize srcIdent})} in
     let updateSizeStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEVar {id = arg.sizeIdent},
+      lhs = CEVar {id = sizeIdent},
       rhs = CEBinOp {
         op = COMul (),
-        lhs = CEVar {id = arg.sizeIdent},
+        lhs = CEVar {id = sizeIdent},
         rhs = CEVar {id = dimIdent}}}} in
-    match innerTy with TySeq _ then
+    let idx = addi idx 1 in
+    if eqi idx (length dimIdents) then [initDimStmt, updateSizeStmt]
+    else
       let innerSrcIdent = nameSym "t" in
+      -- NOTE(larshum, 2022-03-09): We assume sequences are non-empty here.
       let innerSrcStmt = CSDef {
         ty = CTyVar {id = _getIdentExn "value"},
         id = Some innerSrcIdent,
-        -- NOTE(larshum, 2022-01-18): If a multi-dimensional sequence happens
-        -- to be empty, this will result in a runtime error.
         init = Some (CIExpr {expr = CEApp {
           fun = _getIdentExn "Field",
           args = [CEVar {id = srcIdent}, CEInt {i = 0}]}})} in
-      match _computeDimensionsH arg innerSrcIdent innerTy with (arg, stmts) in
-      (arg, concat [initDimStmt, updateSizeStmt, innerSrcStmt] stmts)
-    else (arg, [initDimStmt, updateSizeStmt])
-  | TyTensor {ty = TyInt _ | TyFloat _} ->
-    let numDimsIdent = nameSym "n" in
-    let numDimsStmt = CSDef {
-      ty = CTyInt (), id = Some numDimsIdent,
-      init = Some (CIExpr {expr = CEArrow {
-        lhs = CEApp {
-          fun = _getIdentExn "Caml_ba_array_val",
-          args = [CEVar {id = arg.ident}]},
-        id = _bigarrayNumDimsKey}})} in
-    let i = nameSym "i" in
-    let initIterIdStmt = CSDef {
-      ty = CTyInt (), id = Some i,
+      let stmts = _computeSequenceDimensions innerSrcIdent idx t in
+      concat [initDimStmt, updateSizeStmt, innerSrcStmt] stmts
+
+  sem _generateForLoop (iterIdent : Name) (dimIdent : Name) =
+  | bodyWithoutIterIncrement ->
+    let iterDefStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterIdent,
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    let dimExpr = lam idxExpr : CExpr.
-      CEBinOp {
-        op = COSubScript (),
-        lhs = CEArrow {
-          lhs = CEApp {
-            fun = _getIdentExn "Caml_ba_array_val",
-            args = [CEVar {id = arg.ident}]},
-          id = _bigarrayDimKey},
-        rhs = idxExpr} in
-    let dimsArrayIdent = nameSym "dims" in
-    let dimsArrayInitStmt = CSDef {
-      ty = CTyArray {ty = CTyInt64 (), size = Some (CEVar {id = numDimsIdent})},
-      id = Some dimsArrayIdent,
-      init = None ()} in
-    -- NOTE(larshum, 2022-03-07): For tensors, we let the dimIdents contain
-    -- identifiers referring to the number of dimensions and to an array
-    -- containing the individual values. This is because we do not know the
-    -- number of dimensions statically.
-    let dimIdents = [numDimsIdent, dimsArrayIdent] in
-    let arg = {arg with dimIdents = dimIdents} in
-
-    let mulSizeStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = arg.sizeIdent},
-      rhs = CEBinOp {
-        op = COMul (),
-        lhs = CEVar {id = arg.sizeIdent},
-        rhs = dimExpr (CEVar {id = i})}}} in
-    let setDimsArrayStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEBinOp {
-        op = COSubScript (),
-        lhs = CEVar {id = dimsArrayIdent},
-        rhs = CEVar {id = i}},
-      rhs = dimExpr (CEVar {id = i})}} in
-    let incrementIterStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = i},
-      rhs = CEBinOp {
-        op = COAdd (),
-        lhs = CEVar {id = i},
-        rhs = CEInt {i = 1}}}} in
-    let setSizeIdentLoopStmt = CSWhile {
-      cond = CEBinOp {
-        op = COLt (),
-        lhs = CEVar {id = i},
-        rhs = CEVar {id = numDimsIdent}},
-      body = [mulSizeStmt, setDimsArrayStmt, incrementIterStmt]} in
-
-    (arg, [numDimsStmt, initIterIdStmt, dimsArrayInitStmt, setSizeIdentLoopStmt])
-  | _ -> (arg, [])
-
-  sem _computeDimensions =
-  | arg ->
-    let arg : ArgData = arg in
-    let arg = {arg with sizeIdent = nameSym "n"} in
-    let initStmt = CSDef {
-      ty = CTyInt (), id = Some arg.sizeIdent,
-      init = Some (CIExpr {expr = CEInt {i = 1}})} in
-    match _computeDimensionsH arg arg.ident arg.ty with (arg, stmts) in
-    (arg, cons initStmt stmts)
-
-  sem _generateOCamlToCWrapperArg (accStmts : [CStmt]) =
-  | arg ->
-    match _computeDimensions arg with (arg, dimStmts) in
-    let arg : ArgData = arg in
-    let cTypes = mexprToCTypes arg.ty in
-    match mapAccumL _generateOCamlToCAlloc arg cTypes with (arg, allocStmts) in
-    let arg : ArgData = arg in
-    let copyStmts = _generateOCamlToCWrapperInner arg arg.ty in
-    (join [accStmts, dimStmts, join allocStmts, copyStmts], arg)
-
-  sem generateOCamlToCWrapper =
-  | env ->
-    let env : CWrapperEnv = env in
-    match mapAccumL _generateOCamlToCWrapperArg [] env.arguments with (stmts, args) in
-    ({env with arguments = args}, stmts)
-end
-
-lang PMExprCToOCamlWrapper = PMExprCWrapperBase
-  sem _generateCToOCamlSequenceWrapper (iterIdent : Name) (dstIdent : Name)
-                                       (dimIdent : Name) (tag : CExpr) =
-  | whileBody /- : [CStmt] -/ ->
-    let incrementIterStmt = CSExpr {expr = CEBinOp {
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = iterIdent},
       rhs = CEBinOp {
         op = COAdd (),
         lhs = CEVar {id = iterIdent},
-        rhs = CEInt {i = 1}}
-    }} in
-    let whileBody = snoc whileBody incrementIterStmt in
-    [ CSDef {
-        ty = CTyInt (), id = Some iterIdent,
-        init = Some (CIExpr {expr = CEInt {i = 0}})}
-    , CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEVar {id = dstIdent},
-        rhs = CEApp {
-          fun = _getIdentExn "caml_alloc",
-          args = [CEVar {id = dimIdent}, tag]}}}
+        rhs = CEInt {i = 1}}}} in
+    [ iterDefStmt
     , CSWhile {
         cond = CEBinOp {
           op = COLt (),
           lhs = CEVar {id = iterIdent},
           rhs = CEVar {id = dimIdent}},
-        body = whileBody} ]
+        body = snoc bodyWithoutIterIncrement iterIncrementStmt} ]
 
-  sem _incrementCounter =
-  | countIdent /- : Name -/ ->
-    CSExpr {expr = CEBinOp {
-      op = COAssign(),
+  sem _allocateSequenceCDataH (elemTy : CType) (srcIdent : Name) (dstIdent : Name) =
+  | [dimIdent] ++ dimIdents ->
+    let iterIdent = nameSym "i" in
+    let innerSrcIdent = nameSym "x" in
+    let innerDstIdent = nameSym "y" in
+    let valueTy = CTyVar {id = _getIdentExn "value"} in
+    let innerSrcInitStmt = CSDef {
+      ty = valueTy, id = Some innerSrcIdent,
+      init = Some (CIExpr {expr = CEApp {
+        fun = _getIdentExn "Field",
+        args = [CEVar {id = srcIdent}, CEVar {id = iterIdent}]}})} in
+    let offsetExpr = CEBinOp {
+      op = COMul (),
+      lhs = CEVar {id = iterIdent},
+      rhs = _wosize innerSrcIdent} in
+    let innerCopyStmt = CSDef {
+      ty = CTyPtr {ty = elemTy}, id = Some innerDstIdent,
+      init = Some (CIExpr {expr = CEUnOp {
+        op = COAddrOf (),
+        arg = CEBinOp {
+          op = COSubScript (),
+          lhs = CEVar {id = dstIdent},
+          rhs = offsetExpr}}})} in
+    let innerStmts = _allocateSequenceCDataH elemTy innerSrcIdent innerDstIdent dimIdents in
+    let loopBodyStmts = concat [innerSrcInitStmt, innerCopyStmt] innerStmts in
+    _generateForLoop iterIdent dimIdent loopBodyStmts
+  | [dimIdent] ->
+    let iterIdent = nameSym "i" in
+    -- NOTE(larshum, 2022-03-09): We need to treat sequences of doubles
+    -- specially, because an OCaml array of floats must be accessed via
+    -- 'Double_field' rather than 'Field' as for other arrays.
+    let fieldAccessExpr =
+      match elemTy with CTyDouble _ then
+        CEApp {
+          fun = _getIdentExn "Double_field",
+          args = [CEVar {id = srcIdent}, CEVar {id = iterIdent}]}
+      else
+        let fieldExpr = CEApp {
+          fun = _getIdentExn "Field",
+          args = [CEVar {id = srcIdent}, CEVar {id = iterIdent}]} in
+        CEApp {
+          fun = ocamlToCConversionFunctionIdent elemTy,
+          args = [fieldExpr]}
+    in
+    let fieldWriteStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = dstIdent},
+        rhs = CEVar {id = iterIdent}},
+      rhs = fieldAccessExpr}} in
+    _generateForLoop iterIdent dimIdent [fieldWriteStmt]
+  | [] -> []
+
+  sem _allocateSequenceCData (srcIdent : Name) =
+  | SeqRepr t ->
+    let cType = CTyPtr {ty = t.elemTy} in
+    let sizeExpr = CEBinOp {
+      op = COMul (),
+      lhs = CEVar {id = t.sizeIdent},
+      rhs = CESizeOfType {ty = t.elemTy}} in
+    let allocStmt = CSDef {
+      ty = cType, id = Some t.dataIdent,
+      init = Some (CIExpr {expr = CECast {
+        ty = cType,
+        rhs = CEApp {
+          fun = _getIdentExn "malloc",
+          args = [sizeExpr]}}})} in
+    cons
+      allocStmt
+      (_allocateSequenceCDataH t.elemTy srcIdent t.dataIdent t.dimIdents)
+
+  sem _computeTensorDimensions (srcIdent : Name) =
+  | TensorRepr t ->
+    let bigarrayValId = _getIdentExn "Caml_ba_array_val" in
+    let dimExpr = lam idx.
+      CEBinOp {
+        op = COSubScript (),
+        lhs = CEArrow {
+          lhs = CEApp {
+            fun = bigarrayValId,
+            args = [CEVar {id = srcIdent}]},
+          id = _bigarrayDimKey},
+        rhs = idx} in
+    let sizeInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some t.sizeIdent,
+      init = Some (CIExpr {expr = CEInt {i = 1}})} in
+    let rankInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some t.rankIdent,
+      init = Some (CIExpr {expr = CEArrow {
+        lhs = CEApp {
+          fun = bigarrayValId,
+          args = [CEVar {id = srcIdent}]},
+        id = _bigarrayNumDimsKey}})} in
+    let dimsInitStmt = CSDef {
+      ty = CTyArray {ty = CTyInt64 (), size = Some (CEVar {id = t.rankIdent})},
+      id = Some t.dimsIdent, init = None ()} in
+    let i = nameSym "i" in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some i,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let mulSizeStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = t.sizeIdent},
+      rhs = CEBinOp {
+        op = COMul (),
+        lhs = CEVar {id = t.sizeIdent},
+        rhs = dimExpr (CEVar {id = i})}}} in
+    let setDimsStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = t.dimsIdent},
+        rhs = CEVar {id = i}},
+      rhs = dimExpr (CEVar {id = i})}} in
+    let incrementIterStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = i},
+      rhs = CEBinOp {op = COAdd (), lhs = CEVar {id = i}, rhs = CEInt {i = 1}}}} in
+    let loopStmt = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = CEVar {id = i},
+        rhs = CEVar {id = t.rankIdent}},
+      body = [mulSizeStmt, setDimsStmt, incrementIterStmt]} in
+    [sizeInitStmt, rankInitStmt, dimsInitStmt, iterInitStmt, loopStmt]
+
+  sem _generateOCamlToCWrapperStmts (srcIdent : Name) =
+  | t & (SeqRepr {sizeIdent = sizeIdent}) ->
+    let initSizeStmt = CSDef {
+      ty = CTyInt64 (), id = Some sizeIdent,
+      init = Some (CIExpr {expr = CEInt {i = 1}})} in
+    let dimStmts = _computeSequenceDimensions srcIdent 0 t in
+    let allocStmts = _allocateSequenceCData srcIdent t in
+    join [[initSizeStmt], dimStmts, allocStmts]
+  | TensorRepr t ->
+    let dimsStmts = _computeTensorDimensions srcIdent (TensorRepr t) in
+    let tensorDataTy = CTyPtr {ty = t.elemTy} in
+    let declStmt = CSDef {
+      ty = tensorDataTy, id = Some t.dataIdent,
+      init = Some (CIExpr {expr = CECast {
+        ty = tensorDataTy,
+        rhs = CEApp {
+          fun = _getIdentExn "Caml_ba_data_val",
+          args = [CEVar {id = srcIdent}]}}})} in
+    snoc dimsStmts declStmt
+  | RecordRepr t ->
+    let generateMarshallingField : [CStmt] -> (CDataRepr, Int) -> [CStmt] =
+      lam acc. lam fieldIdx.
+        match fieldIdx with (field, idx) in
+        let valueType = CTyVar {id = _getIdentExn "value"} in
+        let fieldId =
+          match field with BaseTypeRepr t then t.ident
+          else nameSym "c_tmp" in
+        let fieldValueStmt = CSDef {
+          ty = valueType, id = Some fieldId,
+          init = Some (CIExpr {expr = CEApp {
+            fun = _getIdentExn "Field",
+            args = [CEInt {i = idx}]}})} in
+        let innerStmts = _generateOCamlToCWrapperStmts fieldId field in
+        join [acc, [fieldValueStmt], innerStmts]
+    in
+    let indexedFields = create (length t.fields) (lam i. (get t.fields i, i)) in
+    foldl generateMarshallingField [] indexedFields
+  | BaseTypeRepr t ->
+    let conversionFunctionId : Name = ocamlToCConversionFunctionIdent t.ty in
+    let tmp = nameSym "c_tmp" in
+    [ CSDef {ty = t.ty, id = Some tmp, init = None ()}
+    , CSDef {
+        ty = CTyPtr {ty = t.ty}, id = Some t.ident,
+        init = Some (CIExpr {expr = CEUnOp {
+          op = COAddrOf (),
+          arg = CEVar {id = tmp}}})}
+    , CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = CEUnOp {op = CODeref (), arg = CEVar {id = t.ident}},
+        rhs = CEApp {
+          fun = conversionFunctionId,
+          args = [CEVar {id = srcIdent}]}}} ]
+
+  sem _generateOCamlToCWrapperArg (accStmts : [CStmt]) =
+  | arg ->
+    let arg : ArgData = arg in
+    concat accStmts (_generateOCamlToCWrapperStmts arg.mexprIdent arg.cData)
+
+  sem generateOCamlToCWrapper =
+  | env ->
+    let env : CWrapperEnv = env in
+    foldl _generateOCamlToCWrapperArg [] env.arguments
+end
+
+lang PMExprCToOCamlWrapper = PMExprCWrapperBase
+  sem cToOCamlConversionFunctionIdent =
+  | CTyChar _ -> _getIdentExn "Val_int"
+  | CTyInt64 _ -> _getIdentExn "Val_long"
+  | CTyDouble _ -> _getIdentExn "caml_copy_double"
+
+  sem _generateAllocOCamlLoop (iterIdent : Name) (dstIdent : Name)
+                              (dimIdent : Name) (tag : CExpr) =
+  | bodyStmts ->
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterIdent,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let dstAllocStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = dstIdent},
+      rhs = CEApp {
+        fun = _getIdentExn "caml_alloc",
+        args = [CEVar {id = dimIdent}, tag]}}} in
+    let iterIncrStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = iterIdent},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = iterIdent},
+        rhs = CEInt {i = 1}}}} in
+    let whileBody = snoc bodyStmts iterIncrStmt in
+    let whileStmt = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = CEVar {id = iterIdent},
+        rhs = CEVar {id = dimIdent}},
+      body = whileBody} in
+    [iterInitStmt, dstAllocStmt, whileStmt]
+
+  sem _allocateSequenceOCamlDataH (elemTy : CType) (countIdent : Name)
+                                  (srcIdent : Name) (dstIdent : Name) =
+  | [dimIdent] ++ dimIdents ->
+    let iterIdent = nameSym "i" in
+    let innerDstIdent = nameSym "x" in
+    let innerDstInitStmt = CSDef {
+      ty = CTyVar {id = _getIdentExn "value"}, id = Some innerDstIdent,
+      init = None ()} in
+    let stmts = _allocateSequenceOCamlDataH elemTy countIdent srcIdent
+                                            innerDstIdent dimIdents in
+    let storeFieldStmt = CSExpr {expr = CEApp {
+      fun = _getIdentExn "Store_field",
+      args = [
+        CEVar {id = dstIdent},
+        CEVar {id = iterIdent},
+        CEVar {id = innerDstIdent}]}} in
+    let tagExpr = CEInt {i = 0} in
+    let loopStmts = join [[innerDstInitStmt], stmts, [storeFieldStmt]] in
+    _generateAllocOCamlLoop iterIdent dstIdent dimIdent tagExpr loopStmts
+  | [dimIdent] ->
+    let iterIdent = nameSym "i" in
+    let valueExpr = CEBinOp {
+      op = COSubScript (),
+      lhs = CEVar {id = srcIdent},
+      rhs = CEVar {id = countIdent}} in
+    let fieldStoreExpr =
+      match elemTy with CTyDouble _ then
+        CEApp {
+          fun = _getIdentExn "Store_double_field",
+          args = [
+            CEVar {id = dstIdent},
+            CEVar {id = iterIdent},
+            valueExpr]}
+      else
+        let cExprToValueExpr = CEApp {
+          fun = cToOCamlConversionFunctionIdent elemTy,
+          args = [valueExpr]} in
+        CEApp {
+          fun = _getIdentExn "Store_field",
+          args = [
+            CEVar {id = dstIdent},
+            CEVar {id = iterIdent},
+            cExprToValueExpr]}
+    in
+    let fieldStoreStmt = CSExpr {expr = fieldStoreExpr} in
+    let countIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
       lhs = CEVar {id = countIdent},
       rhs = CEBinOp {
         op = COAdd (),
         lhs = CEVar {id = countIdent},
-        rhs = CEInt {i = 1}}}}
+        rhs = CEInt {i = 1}}}} in
+    let tagExpr =
+      match elemTy with CTyDouble _ then
+        CEVar {id = _getIdentExn "Double_array_tag"}
+      else CEInt {i = 0} in
+    let loopStmts = [fieldStoreStmt, countIncrementStmt] in
+    _generateAllocOCamlLoop iterIdent dstIdent dimIdent tagExpr loopStmts
 
-  sem _generateCToOCamlWrapperInner (countIdent : Name)
-                                    (cvars : [(Name, CType)])
-                                    (dstIdent : Name)
-                                    (dimIdents : [Name]) =
-  | TyInt _ | TyChar _ ->
-    let cvar : (Name, CType) = head cvars in
-    [CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = dstIdent},
-      rhs = CEApp {
-        fun = _getIdentExn "Val_long",
-        args = [CEBinOp {
-          op = COSubScript (),
-          lhs = CEVar {id = cvar.0},
-          rhs = CEVar {id = countIdent}}]}}},
-    _incrementCounter countIdent]
-  | TyFloat _ ->
-    let cvar : (Name, CType) = head cvars in
-    [CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = dstIdent},
-      rhs = CEApp {
-        fun = _getIdentExn "caml_copy_double",
-        args = [CEBinOp {
-          op = COSubScript (),
-          lhs = CEVar {id = cvar.0},
-          rhs = CEVar {id = countIdent}}]}}},
-    _incrementCounter countIdent]
-  | TyRecord {labels = []} -> []
-  | TySeq {ty = TyFloat _} ->
-    let cvar : (Name, CType) = head cvars in
-    let iterIdent = nameSym "i" in
-    let whileBody = [
-      CSExpr {expr = CEApp {
-        fun = _getIdentExn "Store_double_field",
-        args = [
-          CEVar {id = dstIdent},
-          CEVar {id = iterIdent},
-          CEBinOp {
-            op = COSubScript (),
-            lhs = CEVar {id = cvar.0},
-            rhs = CEVar {id = countIdent}}]}},
-      _incrementCounter countIdent
-    ] in
-    let tag = CEVar {id = _getIdentExn "Double_array_tag"} in
-    let dimIdent = head dimIdents in
-    _generateCToOCamlSequenceWrapper iterIdent dstIdent dimIdent tag whileBody
-  | TySeq {ty = innerTy} ->
-    let iterIdent = nameSym "i" in
-    let innerDstIdent = nameSym "x" in
-    let whileBody = join [
-      [CSDef {
-        ty = CTyVar {id = _getIdentExn "value"},
-        id = Some innerDstIdent, init = None ()}],
-      _generateCToOCamlWrapperInner countIdent cvars innerDstIdent
-                                    (tail dimIdents) innerTy,
-      [CSExpr {expr = CEApp {
-        fun = _getIdentExn "Store_field",
-        args = [
-          CEVar {id = dstIdent},
-          CEVar {id = iterIdent},
-          CEVar {id = innerDstIdent}]}}]
-    ] in
-    let tag = CEInt {i = 0} in
-    let dimIdent = head dimIdents in
-    _generateCToOCamlSequenceWrapper iterIdent dstIdent dimIdent tag whileBody
-  | TyTensor {ty = innerTy & (TyInt _ | TyFloat _)} ->
-    let cvar : (Name, CType) = head cvars in
+  | [] -> []
+
+  sem _allocateSequenceOCamlData (srcIdent : Name) (dstIdent : Name) =
+  | SeqRepr t ->
+    let countIdent = nameSym "count" in
+    let countDeclStmt = CSDef {
+      ty = CTyInt64 (), id = Some countIdent,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let freeStmt = CSExpr {expr = CEApp {
+      fun = _getIdentExn "free",
+      args = [CEVar {id = srcIdent}]}} in
+    let allocStmts = _allocateSequenceOCamlDataH t.elemTy countIdent srcIdent
+                                                 dstIdent t.dimIdents in
+    join [[countDeclStmt], allocStmts, [freeStmt]]
+
+  sem _generateCToOCamlWrapperStmts (dstIdent : Name) =
+  | t & (SeqRepr {dataIdent = dataIdent}) ->
+    _allocateSequenceOCamlData dataIdent dstIdent t
+  | TensorRepr t ->
     let bigarrayKind =
-      match innerTy with TyInt _ then CEVar {id = _getIdentExn "CAML_BA_CAML_INT"}
-      else CEVar {id = _getIdentExn "CAML_BA_FLOAT64"} in
+      match t.elemTy with CTyInt64 _ then
+        CEVar {id = _getIdentExn "CAML_BA_CAML_INT"}
+      else match t.elemTy with CTyDouble _ then
+        CEVar {id = _getIdentExn "CAML_BA_FLOAT64"}
+      else never in
     let bigarrayLayoutKind = CEBinOp {
       op = COBOr (),
       lhs = bigarrayKind,
       rhs = CEVar {id = _getIdentExn "CAML_BA_C_LAYOUT"}} in
-    let numDimsIdent = get dimIdents 0 in
-    let dimsIdent = get dimIdents 1 in
-    [CSExpr {expr = CEBinOp {
+    let tensorAllocStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = dstIdent},
       rhs = CEApp {
         fun = _getIdentExn "caml_ba_alloc",
         args = [
           bigarrayLayoutKind,
-          CEVar {id = numDimsIdent},
-          CEVar {id = cvar.0},
-          CEVar {id = dimsIdent}]}}},
-    _incrementCounter countIdent]
+          CEVar {id = t.rankIdent},
+          CEVar {id = t.dataIdent},
+          CEVar {id = t.dimsIdent}]}}} in
+    [tensorAllocStmt]
+  | RecordRepr t ->
+    if null t.fields then []
+    else
+      let wrapField = lam idx : Int. lam field : CDataRepr.
+        let tempDstIdent = nameSym "c_tmp" in
+        let fieldStmts = _generateCToOCamlWrapperStmts tempDstIdent field in
+        let storeStmt = CSExpr {expr = CEApp {
+          fun = _getIdentExn "Store_field",
+          args = [
+            CEVar {id = dstIdent},
+            CEInt {i = idx},
+            CEVar {id = tempDstIdent}]}} in
+        snoc fieldStmts storeStmt
+      in
+      let recordAllocStmt = CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = CEVar {id = dstIdent},
+        rhs = CEApp {
+          fun = _getIdentExn "caml_alloc",
+          args = [CEInt {i = length t.fields}, CEInt {i = 0}]}}} in
+      let fieldStmts = mapi wrapField t.fields in
+      cons recordAllocStmt fieldStmts
+  | BaseTypeRepr t ->
+    let toOCamlStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = dstIdent},
+      rhs = CEApp {
+        fun = cToOCamlConversionFunctionIdent t.ty,
+        args = [CEUnOp {op = CODeref (), arg = CEVar {id = t.ident}}]}}} in
+    [toOCamlStmt]
 
   sem generateCToOCamlWrapper =
   | env ->
     let env : CWrapperEnv = env in
     let return = env.return in
-    let cvars = return.cTempVars in
-    let dimIdents = return.dimIdents in
-    let countIdent = nameSym "count" in
-    let countDeclStmt = CSDef {
-      ty = CTyInt (), id = Some countIdent,
-      init = Some (CIExpr {expr = CEInt {i = 0}})
-    } in
-    let stmts =
-      match return.ty with TyInt _ | TyChar _ | TyFloat _ then
-        let cvar : (Name, CType) = head cvars in
-        let returnPtrIdent = nameSym "ret_ptr" in
-        let returnPtrStmt = CSDef {
-          ty = CTyPtr {ty = cvar.1}, id = Some returnPtrIdent,
-          init = Some (CIExpr {expr = CEUnOp {
-            op = COAddrOf (),
-            arg = CEVar {id = cvar.0}
-          }})
-        } in
-        let cvars = [(returnPtrIdent, CTyPtr {ty = cvar.1})] in
-        join [
-          [countDeclStmt, returnPtrStmt],
-          _generateCToOCamlWrapperInner countIdent cvars return.ident
-                                        dimIdents return.ty]
-      else match return.ty with TyRecord {labels = []} then []
-      else match return.ty with TyTensor _ then
-        let cvar : (Name, CType) = head cvars in
-        cons
-          countDeclStmt
-          (_generateCToOCamlWrapperInner countIdent cvars return.ident
-                                         dimIdents return.ty)
-      else
-        let freeCvars =
-          join (
-            map
-              (lam cvar : (Name, CType).
-                match cvar.1 with CTyPtr _ then
-                  [CSExpr {expr = CEApp {
-                    fun = _getIdentExn "free",
-                    args = [CEVar {id = cvar.0}]}}]
-                else [])
-              cvars)
-        in
-        join [
-          [countDeclStmt],
-          _generateCToOCamlWrapperInner countIdent cvars return.ident
-                                        dimIdents return.ty,
-          freeCvars]
-    in
-    (return, stmts)
+    _generateCToOCamlWrapperStmts return.mexprIdent return.cData
 end
 
 -- Defines an extensible C wrapper generation language fragment. This fragment
@@ -627,7 +613,7 @@ lang PMExprCWrapper =
       let camlParamIdent = _getIdentOrInitNew (concat funStr nargsStr) in
       CSExpr {expr = CEApp {
         fun = camlParamIdent,
-        args = map (lam arg : ArgData. CEVar {id = arg.ident}) args}} in
+        args = map (lam arg : ArgData. CEVar {id = arg.mexprIdent}) args}} in
     let nargs = length args in
     let fstArgs = subsequence args 0 5 in
     let fstDeclStmt = genParamStmt fstArgs "CAMLparam" in
@@ -644,6 +630,10 @@ lang PMExprCWrapper =
       cons fstDeclStmt (generateExtraParamDecl remainingArgs)
     else [fstDeclStmt]
 
+  -- Defines the generation of marshalling code between OCaml and the GPU
+  -- backend, including conversion between C and calls to functions defined by
+  -- the GPU backend. As this generation depends on the GPU backend, it is left
+  -- empty here.
   sem generateMarshallingCode =
 
   -- Generates the main function of the wrapper code. This is the function that
@@ -652,8 +642,11 @@ lang PMExprCWrapper =
   | data ->
     let data : AccelerateData = data in
     let toArgData = lam arg : (Name, Type).
-      {{defaultArgData with ident = arg.0}
-                       with ty = arg.1} in
+      let default : ArgData = defaultArgData () in
+      {{{{default with mexprIdent = arg.0}
+                  with mexprType = arg.1}
+                  with cData = _generateCDataRepresentation arg.1}
+                  with gpuIdent = nameSym "gpu_tmp"} in
     let bytecodeWrapper = generateBytecodeWrapper data in
     let returnIdent = nameSym "out" in
     let returnArg = (returnIdent, data.returnType) in
@@ -661,7 +654,7 @@ lang PMExprCWrapper =
                      with return = toArgData returnArg}
                      with functionIdent = data.identifier} in
     let camlParamStmts = generateCAMLparamDeclarations env.arguments in
-    match generateMarshallingCode env with (env, stmts) in
+    let stmts = generateMarshallingCode env in
     let value = _getIdentExn "value" in
     let stmts =
       match data.returnType with TyRecord {labels = []} then
