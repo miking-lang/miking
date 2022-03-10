@@ -270,12 +270,13 @@ lang TypePropagation = TypeAnnot
   | (_, t) -> t
 end
 
-lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
+lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = match t.tyBody with TyUnknown _ then t.body else
-        propagateExpectedType tyEnv (t.tyBody, t.body) in
+        match stripTyAll t.tyBody with (_, tyBody) in
+        propagateExpectedType tyEnv (tyBody, t.body) in
       let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
@@ -330,7 +331,7 @@ lang ExpTypeAnnot = TypeAnnot + ExtAst
     else never
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst
+lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     -- Add mapping from binding identifier to annotated type before doing type
@@ -345,7 +346,8 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
       let body = match binding.tyBody with TyUnknown _ then binding.body else
-        propagateExpectedType env.tyEnv (binding.tyBody, binding.body) in
+        match stripTyAll binding.tyBody with (_, tyBody) in
+        propagateExpectedType env.tyEnv (tyBody, binding.body) in
       let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
