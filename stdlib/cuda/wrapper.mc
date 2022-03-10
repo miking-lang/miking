@@ -22,11 +22,36 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
       -- equivalents.
       compileCEnv : CompileCEnv}
 
+  sem lookupTypeIdent (env : TargetWrapperEnv) =
+  | TyRecord {labels = []} -> None ()
+  | TyRecord t ->
+    match env with CudaTargetEnv cenv in
+    let fields : Option [(SID, Type)] =
+      optionMapM
+        (lam f : (SID, Type).
+          match f with (key, ty) in
+          match lookupTypeIdent env ty with Some ty then
+            Some (key, ty)
+          else None ())
+        (mapBindings t.fields) in
+    match fields with Some fieldsSeq then
+      let fields = mapFromSeq cmpSID fieldsSeq in
+      let ty = TyRecord {t with fields = fields} in
+      optionMap
+        (lam id. TyCon {ident = id, info = t.info})
+        (mapLookup ty cenv.revTypeEnv)
+    else None ()
+  | ty & (TySeq _ | TyTensor _) ->
+    match env with CudaTargetEnv cenv in
+    match mapLookup ty cenv.revTypeEnv with Some id then
+      Some (TyCon {ident = id, info = infoTy ty})
+    else None ()
+  | ty -> Some ty
+
   sem getCudaType (env : TargetWrapperEnv) =
   | TyRecord {labels = []} -> CTyVoid ()
   | ty & (TySeq _ | TyTensor _ | TyRecord _) ->
-    match env with CudaTargetEnv cenv in
-    match mapLookup ty cenv.revTypeEnv with Some id then
+    match lookupTypeIdent env ty with Some (TyCon {ident = id}) then
       CTyVar {id = id}
     else error "Reverse type lookup failed in CUDA wrapper generation"
   | ty ->
@@ -129,15 +154,17 @@ lang CToCudaWrapper = CudaCWrapperBase
         else error "Record type label not found among fields"
       in
       let fieldCudaType = getCudaType env.targetEnv fieldType in
-      let initTmpIdentStmt = CSDef {
-        ty = fieldCudaType, id = Some tmpIdent, init = None ()} in
       let stmts = _generateCToCudaWrapperArgH env tmpIdent fieldType field in
       let labelId = nameNoSym (sidToString label) in
+      let varExpr =
+        match field with BaseTypeRepr _ then
+          CEUnOp {op = CODeref (), arg = CEVar {id = tmpIdent}}
+        else CEVar {id = tmpIdent} in
       let fieldAssignStmt = CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = labelId},
-        rhs = CEVar {id = tmpIdent}}} in
-      join [[initTmpIdentStmt], stmts, [fieldAssignStmt]]
+        rhs = varExpr}} in
+      snoc stmts fieldAssignStmt
     in
     let cudaType = getCudaType env.targetEnv ty in
     let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in

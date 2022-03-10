@@ -11,7 +11,7 @@ let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
   let identifiers =
     ["malloc", "free", "printf", "exit", "value", "size_t",
-    "Long_val", "Bool_val", "Double_val", "Val_long", "Val_bool",
+    "Long_val", "Int_val", "Double_val", "Val_long", "Val_int",
     "caml_copy_double", "Wosize_val", "caml_alloc", "Field", "Store_field",
     "Double_field", "Store_double_field", "Double_array_tag", "CAMLlocal1",
     "CAMLreturn", "CAMLreturn0", "futhark_context_config",
@@ -357,14 +357,12 @@ lang PMExprOCamlToCWrapper = PMExprCWrapperBase
       lam acc. lam fieldIdx.
         match fieldIdx with (field, idx) in
         let valueType = CTyVar {id = _getIdentExn "value"} in
-        let fieldId =
-          match field with BaseTypeRepr t then t.ident
-          else nameSym "c_tmp" in
+        let fieldId = nameSym "c_tmp" in
         let fieldValueStmt = CSDef {
           ty = valueType, id = Some fieldId,
           init = Some (CIExpr {expr = CEApp {
             fun = _getIdentExn "Field",
-            args = [CEInt {i = idx}]}})} in
+            args = [CEVar {id = srcIdent}, CEInt {i = idx}]}})} in
         let innerStmts = _generateOCamlToCWrapperStmts fieldId field in
         join [acc, [fieldValueStmt], innerStmts]
     in

@@ -359,16 +359,19 @@ lang OCamlPrettyPrint =
       else never
     else never
   | OTopCExternalDecl t ->
-    match pprintVarName env t.ident with (env, ident) then
-      match getTypeStringCode 0 env t.ty with (env, ty) then
-        -- NOTE(larshum, 2021-09-17): We use the string of the names
-        -- directly, as we know it is unique and we do not want it to be
-        -- escaped.
-        (env, join ["external ", ident, " : ", ty, " = ",
-                    "\"", nameGetStr t.bytecodeIdent, "\" ",
-                    "\"", nameGetStr t.nativeIdent, "\";;"])
-      else never
-    else never
+    -- NOTE(larshum, 2022-03-10): Externals are declared before type
+    -- definitions, so we cannot refer to them here. The below function
+    -- produces a type string with the correct number of arguments, but
+    -- otherwise unspecified types.
+    recursive let objTypeString = lam ty.
+      match ty with TyArrow {from = from, to = to} then
+        join [objTypeString from, " -> ", objTypeString to]
+      else "Obj.t" in
+    match pprintVarName env t.ident with (env, ident) in
+    let ty = objTypeString t.ty in
+    (env, join ["external ", ident, " : ", ty, " = ",
+                "\"", nameGetStr t.bytecodeIdent, "\" ",
+                "\"", nameGetStr t.nativeIdent, "\";;"])
   | OTopLet t ->
     let indent = 0 in
     match pprintVarName env t.ident with (env, ident) then
