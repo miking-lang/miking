@@ -440,7 +440,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
         match mapLookup t.ident conEnv with Some lty then
-          match lty with TyArrow {from = from, to = to} then
+          match stripTyAll lty with (_, TyArrow {from = from, to = to}) then
             recursive let tyvar = lam ty.
               match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
@@ -625,11 +625,11 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
 end
 
 lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
-                        FunTypeAst
+                        FunTypeAst + AllTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
-    match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = to}) then
+    match optionMap stripTyAll (mapLookup t.ident env.conEnv)
+    with Some (_, TyArrow {from = argTy, to = to}) then
       match typeAnnotPat env argTy t.subpat with (env, subpat) then
         (env, PatCon {{t with subpat = subpat} with ty = to})
       else never

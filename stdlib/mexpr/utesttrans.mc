@@ -247,7 +247,7 @@ let collectKnownProgramTypes = use MExprAst in
         let acc = {acc with aliases = aliases} in
         sfold_Expr_Expr collectTypes acc expr
     else match expr with TmConDef t then
-      match t.tyIdent with TyArrow {from = argTy, to = to} then
+      match stripTyAll t.tyIdent with (_, TyArrow {from = argTy, to = to}) then
         match unwrapTypeVarIdent to with Some ident then
           let constructors =
             match mapLookup ident acc.variants with Some constructors then
