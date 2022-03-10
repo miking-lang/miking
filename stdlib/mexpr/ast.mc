@@ -830,6 +830,9 @@ lang NamedPat = MatchAst
   sem infoPat =
   | PatNamed r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatNamed r -> PatNamed {r with info = info}
+
   sem tyPat =
   | PatNamed r -> r.ty
 
@@ -845,6 +848,9 @@ lang SeqTotPat = MatchAst
 
   sem infoPat =
   | PatSeqTot r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatSeqTot r -> PatSeqTot {r with info = info}
 
   sem tyPat =
   | PatSeqTot r -> r.ty
@@ -870,6 +876,9 @@ lang SeqEdgePat = MatchAst
   sem infoPat =
   | PatSeqEdge r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatSeqEdge r -> PatSeqEdge {r with info = info}
+
   sem tyPat =
   | PatSeqEdge r -> r.ty
 
@@ -894,6 +903,9 @@ lang RecordPat = MatchAst
   sem infoPat =
   | PatRecord r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatRecord r -> PatRecord {r with info = info}
+
   sem tyPat =
   | PatRecord r -> r.ty
 
@@ -917,6 +929,9 @@ lang DataPat = MatchAst + DataAst
   sem infoPat =
   | PatCon r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatCon r -> PatCon {r with info = info}
+
   sem tyPat =
   | PatCon r -> r.ty
 
@@ -939,6 +954,9 @@ lang IntPat = MatchAst + IntAst
   sem infoPat =
   | PatInt r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatInt r -> PatInt {r with info = info}
+
   sem tyPat =
   | PatInt r -> r.ty
 
@@ -954,6 +972,9 @@ lang CharPat = MatchAst
 
   sem infoPat =
   | PatChar r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatChar r -> PatChar {r with info = info}
 
   sem tyPat =
   | PatChar r -> r.ty
@@ -971,6 +992,9 @@ lang BoolPat = MatchAst + BoolAst
   sem infoPat =
   | PatBool r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatBool r -> PatBool {r with info = info}
+
   sem tyPat =
   | PatBool r -> r.ty
 
@@ -987,6 +1011,9 @@ lang AndPat = MatchAst
 
   sem infoPat =
   | PatAnd r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatAnd r -> PatAnd {r with info = info}
 
   sem tyPat =
   | PatAnd r -> r.ty
@@ -1013,6 +1040,9 @@ lang OrPat = MatchAst
   sem infoPat =
   | PatOr r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatOr r -> PatOr {r with info = info}
+
   sem tyPat =
   | PatOr r -> r.ty
 
@@ -1036,6 +1066,9 @@ lang NotPat = MatchAst
 
   sem infoPat =
   | PatNot r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatNot r -> PatNot {r with info = info}
 
   sem tyPat =
   | PatNot r -> r.ty
