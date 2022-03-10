@@ -39,7 +39,7 @@ lang ParserBase = TokenParser + EOFTokenParser
   | LitSpec t -> t.lit
 end
 
-type Production prodLabel = {nt: NonTerminal, label: prodLabel, rhs: [Symbol], action: Action}
+type Production prodLabel = {nt: NonTerminal, label: prodLabel, rhs: [Symbol], action: Action state}
 type Grammar prodLabel =
   { start: NonTerminal
   , productions: [Production prodLabel]
@@ -72,11 +72,11 @@ lang ParserGenerated = ParserBase
   syn SpecSymbol =
   -- NOTE(vipa, 2021-02-08): The `Ref` here is slightly undesirable, but I see no other way to construct a cyclic data structure
   -- NOTE(vipa, 2021-02-08): The first `SpecSymbol` here should be `ParserBase.SpecSymbol`
-  | NtSym {nt: NonTerminal, table: (Ref (Map SpecSymbol {syms: [SpecSymbol], action: Action, label: prodLabel}))}
+  | NtSym {nt: NonTerminal, table: (Ref (Map SpecSymbol {syms: [SpecSymbol], action: Action state, label: prodLabel}))}
 
   -- NOTE(vipa, 2021-02-08): These should be opaque, and the key
   -- `SpecSymbol` in the `Map` should be `ParserBase.Symbol`
-  type TableProd = {syms: [SpecSymbol], label: prodLabel, action: Action}
+  type TableProd = {syms: [SpecSymbol], label: prodLabel, action: Action state}
   type Table = {start: {nt: NonTerminal, table: (Ref (Map SpecSymbol (TableProd prodLabel)))}, firstOfRhs: [SpecSymbol] -> SymSet, lits: Map String ()}
 
   sem symSpecToStr =
@@ -95,9 +95,9 @@ lang ParserConcrete = ParserBase + ParserGenerated
   | TokParsed Token
   | LitParsed {lit: String, info: Info}
 
-  type Action = [ParsedSymbol] -> Dyn
+  type Action = state -> [ParsedSymbol] -> Dyn
 
-  type FullStackItem = {seen: [ParsedSymbol], rest: [SpecSymbol], label: prodLabel, action: Action}
+  type FullStackItem = {seen: [ParsedSymbol], rest: [SpecSymbol], label: prodLabel, action: Action state}
   type StackItem = {seen: [ParsedSymbol], rest: [SpecSymbol], label: prodLabel}
 
   sem symParsedToStr =
@@ -282,7 +282,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
 
     -- The first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
     let emptyTableTarget = ref (mapEmpty compareSpecSymbol) in
-    let table : Map NonTerminal (Ref (Map SpecSymbol {syms : [SpecSymbol], action: Action})) =
+    let table : Map NonTerminal (Ref (Map SpecSymbol {syms : [SpecSymbol], action: Action state})) =
       mapMap (lam. ref (mapEmpty compareSpecSymbol)) groupedProds in
 
     let specSymToGenSym = lam sym.
@@ -385,7 +385,7 @@ lang LL1Parser = ParserGeneration + ParserConcrete
          }
      else error "Tried to make an LL1 error without having any information to construct one with"
 
-  sem parseWithTable (table : Table parseLabel) (filename : String) =
+  sem parseWithTable (table : Table parseLabel) (filename : String) (state : state) =
   | contents ->
     match table with {start = start, lits = lits, firstOfRhs = firstOfRhs} in
     let lastOpen = ref (None ()) in
@@ -400,14 +400,14 @@ lang LL1Parser = ParserGeneration + ParserConcrete
         modref lastOpen (Some (nt.nt, token, stack));
         let table = deref nt.table in
         match mapLookup (parsedSymToSpecSym token) table with Some r then
-          let r: {syms: [SpecSymbol], action: Action, label: prodLabel} = r in
+          let r: {syms: [SpecSymbol], action: Action state, label: prodLabel} = r in
           work (snoc stack {seen = [], rest = r.syms, action = r.action, label = r.label}) token stream
         else Left (_mkLL1Error firstOfRhs (deref lastOpen) (None ()))
       let work = lam stack : [FullStackItem prodLabel]. lam token. lam stream.
         match stack with stack ++ [curr & {rest = [NtSym nt] ++ rest}] then
           openNt nt token (snoc stack {curr with rest = rest}) stream
         else match stack with stack ++ [above & {seen = seenAbove}, {seen = seen, rest = [], action = action}] then
-          work (snoc stack {above with seen = snoc seenAbove (UserSym (action seen))}) token stream
+          work (snoc stack {above with seen = snoc seenAbove (UserSym (action state seen))}) token stream
         else match stack with oldStack & (stack ++ [curr & {rest = [t] ++ rest, seen = seen}]) then
           if parsedMatchesSpec t token then
             modref lastOpen (None ());
@@ -416,7 +416,7 @@ lang LL1Parser = ParserGeneration + ParserConcrete
           else Left (_mkLL1Error firstOfRhs (deref lastOpen) (Some (t, token, oldStack)))
         else match stack with [{seen = seen, rest = [], action = action}] then
           match token with TokParsed (EOFTok _)
-            then Right (action seen)
+            then Right (action state seen)
             else Left (_mkLL1Error firstOfRhs (deref lastOpen) (Some (TokSpec (EOFRepr ()), token, stack)))
         else print "ERROR: ";
              dprintLn (stack, token, stream);
@@ -465,7 +465,7 @@ let exprPrefixes = nonTerminal "ExpressionPrefixes" in
 
 type Wrapped in
 con Wrapped : {label: String, val: [SpecSymbol]} -> Wrapped in
-let wrap = lam label. lam x. Wrapped {label = label, val = x} in
+let wrap = lam label. lam state: (). lam x. Wrapped {label = label, val = x} in
 
 let gFailOnce : Grammar String =
   { start = top
@@ -560,7 +560,7 @@ let g : Grammar String =
   } in
 
 let table = unwrapTableExc (genParser g) in
-let parse = parseWithTable table "file" in
+let parse = parseWithTable table "file" () in
 
 utest parse "let a = 1"
 with Right
