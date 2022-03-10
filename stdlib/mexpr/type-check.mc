@@ -397,13 +397,27 @@ end
 -- TYPE CHECKING --
 -------------------
 
-lang TypeCheck = Unify + Generalize
-  -- Type check `tm', with FreezeML-style type inference.
+lang ResolveLinks = FlexTypeAst + UnknownTypeAst
+  sem resolveLinks =
+  | ty ->
+    smap_Type_Type resolveLinks (resolveLink ty)
+
+  sem resolveLinksExpr =
+  | tm ->
+    let tm = withType (resolveLinks (tyTm tm)) tm in
+    smap_Expr_Expr resolveLinksExpr tm
+end
+
+lang TypeCheck = Unify + Generalize + ResolveLinks
+  -- Type check `tm', with FreezeML-style type inference. Returns the
+  -- term annotated with its type. The resulting type contains no
+  -- TyFlex links.
   sem typeCheck =
   | tm ->
-    typeCheckExpr _tcEnvEmpty tm
+    resolveLinksExpr (typeCheckExpr _tcEnvEmpty tm)
 
-  -- Type check `expr' under the type environment `env'
+  -- Type check `expr' under the type environment `env'. The resulting
+  -- type may contain TyFlex links.
   sem typeCheckExpr (env : TCEnv) =
   | tm ->
     modref errInfo (infoTm tm);
