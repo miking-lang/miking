@@ -179,7 +179,7 @@ lang TypeSym = Sym + TypeAst
                     with ty = ty}
 end
 
-lang RecLetsSym = Sym + RecLetsAst
+lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmRecLets t ->
     match env with {varEnv = varEnv} then
@@ -202,8 +202,13 @@ lang RecLetsSym = Sym + RecLetsAst
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam bind : RecLetBinding.
-        {{bind with body = symbolizeExpr env bind.body}
-               with tyBody = symbolizeType env bind.tyBody})
+        let tyBody = symbolizeType env bind.tyBody in
+        match stripTyAll tyBody with (vars, _) in
+        let tyVarEnv =
+          foldr (lam v: (Name, VarSort). mapInsert (nameGetStr v.0) v.0)
+            env.tyVarEnv vars in
+        {{bind with body = symbolizeExpr {env with tyVarEnv = tyVarEnv} bind.body}
+               with tyBody = tyBody})
         bindings in
 
     TmRecLets {{t with bindings = bindings}
