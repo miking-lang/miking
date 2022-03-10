@@ -51,7 +51,7 @@ lang CudaKernelTranslate = CudaCpuTranslate + CudaGpuTranslate
     generateIntrinsics cudaMemEnv ccEnv tops
 
   sem generateIntrinsics (cudaMemEnv : Map Name AllocEnv)
-                      (ccEnv : CompileCEnv) =
+                         (ccEnv : CompileCEnv) =
   | tops ->
     match mapAccumL (generateIntrinsicsTop cudaMemEnv ccEnv)
                     (mapEmpty nameCmp) tops
@@ -59,8 +59,8 @@ lang CudaKernelTranslate = CudaCpuTranslate + CudaGpuTranslate
     (wrapperMap, join tops)
 
   sem generateIntrinsicsTop (cudaMemEnv : Map Name AllocEnv)
-                         (ccEnv : CompileCEnv)
-                         (wrapperMap : Map Name Name) =
+                            (ccEnv : CompileCEnv)
+                            (wrapperMap : Map Name Name) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapAccumL (generateIntrinsicStmt ccEnv) [] t.body with (tops, body) in
     match mapLookup t.id cudaMemEnv with Some _ then

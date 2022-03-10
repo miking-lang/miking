@@ -18,8 +18,6 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
     let kernelId = nameSym "mapKernel" in
     let outParamId = nameSym "out" in
     let sParamId = nameSym "s" in
-    let outTy = t.ty in
-    let sTy = t.sTy in
     let indexId = nameSym "idx" in
     let indexStmt = CSDef {
       ty = CTyInt64 (), id = Some indexId,
@@ -58,6 +56,8 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
       cond = whileCondExpr,
       body = [mapAssignStmt, indexIncrementStmt]} in
     let stmts = [indexStmt, strideStmt, whileStmt] in
+    let outTy = CTyPtr {ty = t.ty} in
+    let sTy = CTyPtr {ty = t.sTy} in
     let top = CuTTop {
       attrs = [CuAGlobal ()],
       top = CTFun {

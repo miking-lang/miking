@@ -105,7 +105,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem isCudaSupportedType =
   | TyInt _ | TyFloat _ | TyBool _ | TyChar _ | TyCon _ | TyRecord _
-  | TySeq {ty = !TySeq _} | TyTensor {ty = TyInt _ | TyFloat _} -> true
+  | TyTensor {ty = TyInt _ | TyFloat _}
+  | TySeq {ty = TyInt _ | TyFloat _ | TyBool _ | TyChar _} -> true
+  | TySeq {ty = t & (TySeq _)} -> isCudaSupportedType t
   | _ -> false
 
   sem isCudaSupportedConstant =
