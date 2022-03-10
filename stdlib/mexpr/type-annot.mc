@@ -499,8 +499,8 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
       match tyTm tu with
         TyArrow (ta1 & {from = lty,
                         to = TyArrow (ta2 & {from = rty, to = TyBool _})}) then
-        match compatibleType env (tyTm test) lty with Some lty then
-          match compatibleType env (tyTm expected) rty with Some rty then
+        match compatibleType env.tyEnv (tyTm test) lty with Some lty then
+          match compatibleType env.tyEnv (tyTm expected) rty with Some rty then
             let arrowTy = TyArrow {{ta1 with from = lty}
                                         with to = TyArrow {ta2 with from = rty}} in
             TmUtest {{{{{t with test = withType lty test}
@@ -528,7 +528,7 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
           "Type was inferred to be ", _pprintType (tyTm tu)
         ] in
         infoErrorExit t.info msg
-    else match compatibleType env (tyTm test) (tyTm expected) with Some eTy then
+    else match compatibleType env.tyEnv (tyTm test) (tyTm expected) with Some eTy then
       TmUtest {{{{t with test = withType eTy test}
                     with expected = withType eTy expected}
                     with next = next}
