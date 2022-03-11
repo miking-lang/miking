@@ -69,13 +69,13 @@ let cartesian_to_linear_idx shape idx =
   let rank = Array.length shape in
   let n = Array.length idx in
   let tmp_ofs = ref 0 in
-  let tmp = ref 0 in
-  for k = 0 to n - 1 do
-    tmp := 1 ;
-    for l = k + 1 to rank - 1 do
-      tmp := !tmp * shape.(l)
-    done ;
-    tmp_ofs := !tmp_ofs + (!tmp * idx.(k))
+  let tmp = ref 1 in
+  for k = rank - 1 downto n do
+    tmp := !tmp * shape.(k)
+  done ;
+  for k = n - 1 downto 0 do
+    tmp_ofs := !tmp_ofs + (!tmp * idx.(k)) ;
+    tmp := !tmp * shape.(k)
   done ;
   !tmp_ofs
 
