@@ -4,6 +4,7 @@ include "cuda/compile.mc"
 include "cuda/constant-app.mc"
 include "cuda/memory.mc"
 include "cuda/pmexpr-ast.mc"
+include "cuda/pmexpr-pprint.mc"
 include "cuda/pprint.mc"
 include "cuda/kernel-translate.mc"
 include "cuda/well-formed.mc"
@@ -103,6 +104,10 @@ let pprintFutharkAst : FutProg -> String = lam ast.
 
 let pprintPMExprAst : Expr -> String = lam ast.
   use PMExprPrettyPrint in
+  expr2str ast
+
+let pprintCudaPMExprAst : Expr -> String = lam ast.
+  use CudaPMExprPrettyPrint in
   expr2str ast
 
 let pprintCAst : CPProg -> String = lam ast.
