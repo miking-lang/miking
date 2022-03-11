@@ -1,10 +1,9 @@
 -- Defines the CUDA code generation for a map kernel.
 
-include "cuda/ast.mc"
-include "cuda/compile.mc"
 include "cuda/pmexpr-ast.mc"
+include "cuda/intrinsics/intrinsic.mc"
 
-lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
+lang CudaMapKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
   sem generateCudaKernelFunction =
   | CEMapKernel t ->
     let seqIdx = lam seqId. lam idxId.
@@ -12,9 +11,7 @@ lang CudaMapKernel = CudaAst + CudaPMExprAst + CudaCompile
         op = COSubScript (),
         lhs = CEArrow {lhs = CEVar {id = seqId}, id = _seqKey},
         rhs = CEVar {id = idxId}} in
-    let fId =
-      match t.f with CEVar {id = id} then id
-      else error "Cannot compile map with non-trivial function calls" in
+    match _getFunctionIdAndArgs with (funId, _) in
     let kernelId = nameSym "mapKernel" in
     let outParamId = nameSym "out" in
     let sParamId = nameSym "s" in

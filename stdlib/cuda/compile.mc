@@ -1,6 +1,7 @@
 include "c/compile.mc"
 include "cuda/ast.mc"
 include "cuda/pmexpr-ast.mc"
+include "pmexpr/utils.mc"
 
 let _cudaMalloc = nameNoSym "cudaMalloc"
 let _cudaMemcpy = nameNoSym "cudaMemcpy"
@@ -154,26 +155,36 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       sTy = compileType env (tyTm t.s), ty = compileType env t.ty,
       opsPerThread = 10}
   | TmReduceKernel t -> error "not implemented yet"
-  | TmLoop t
-  | TmParallelLoop t ->
+  | op & (TmLoop t | TmParallelLoop t | TmLoopKernel t) ->
+    let argTypes =
+      match t.f with TmVar _ then []
+      else match t.f with TmApp _ then
+        match collectAppArguments t.f with (_, args) in
+        map (lam arg. compileType env (tyTm arg)) args
+      else
+        infoErrorExit t.info "Unsupported function type"
+    in
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.
-    CESeqLoop {n = compileExpr env t.n, f = compileExpr env t.f}
-  | TmLoopKernel t ->
-    CELoopKernel {
-      n = compileExpr env t.n, f = compileExpr env t.f, opsPerThread = 10}
+    match op with TmLoopKernel _ then
+      CELoopKernel {
+        n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes,
+        opsPerThread = 10}
+    else
+      CESeqLoop {
+        n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes}
 
   sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmCopy t ->
-    -- NOTE(larshum, 2022-02-07): This must always be an identifier, since the
-    -- result of a copy is always stored in a named variable.
-    match res with RIdent dstId in
-    let arg = compileExpr env t.arg in
-    match t.toMem with Cpu _ then
-      (env, _compileCopyToCpu env dstId arg (TmCopy t))
-    else match t.toMem with Gpu _ then
-      (env, _compileCopyToGpu env dstId arg (TmCopy t))
-    else never
+    match res with RReturn _ then (env, [CSRet {val = None ()}])
+    else match res with RNone _ then (env, [])
+    else match res with RIdent dstId in
+      let arg = compileExpr env t.arg in
+      match t.toMem with Cpu _ then
+        (env, _compileCopyToCpu env dstId arg (TmCopy t))
+      else match t.toMem with Gpu _ then
+        (env, _compileCopyToGpu env dstId arg (TmCopy t))
+      else never
   | TmFree t ->
     let arg = CEVar {id = t.arg} in
     match t.mem with Cpu _ then

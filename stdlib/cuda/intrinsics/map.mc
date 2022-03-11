@@ -1,8 +1,8 @@
 -- Defines the CUDA code generation for a (non-kernel) map expression.
 
-include "cuda/compile.mc"
+include "cuda/intrinsics/intrinsic.mc"
 
-lang CudaMapIntrinsic = CudaCompile
+lang CudaMapIntrinsic = CudaIntrinsic
   sem generateCudaIntrinsicFunction (ccEnv : CompileCEnv) =
   | CESeqMap t ->
     let fId =

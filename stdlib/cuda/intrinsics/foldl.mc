@@ -1,8 +1,8 @@
 -- Defines the CUDA code generation for a foldl expression.
 
-include "cuda/compile.mc"
+include "cuda/intrinsics/intrinsic.mc"
 
-lang CudaFoldlIntrinsic = CudaCompile
+lang CudaFoldlIntrinsic = CudaIntrinsic
   sem generateCudaIntrinsicFunction (ccEnv : CompileCEnv) =
   | CESeqFoldl t ->
     let fId =

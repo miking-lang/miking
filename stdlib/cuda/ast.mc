@@ -16,7 +16,7 @@ lang CudaAst = CAst + MExprAst
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
-  | CESeqLoop {n : CExpr, f : CExpr}
+  | CESeqLoop {n : CExpr, f : CExpr, argTypes : [CType]}
   | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}
   | CETensorSubExn {t : CExpr, ofs : CExpr, len : CExpr, ty : CType}
   | CEThreadIdx {dim : CudaDimension}
@@ -24,7 +24,7 @@ lang CudaAst = CAst + MExprAst
   | CEBlockDim {dim : CudaDimension}
   | CEGridDim {dim : CudaDimension}
   | CEMapKernel {f : CExpr, s : CExpr, opsPerThread : Int, sTy : CType, ty : CType}
-  | CELoopKernel {n : CExpr, f : CExpr, opsPerThread : Int}
+  | CELoopKernel {n : CExpr, f : CExpr, argTypes : [CType], opsPerThread : Int}
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 

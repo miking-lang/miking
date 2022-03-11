@@ -1,8 +1,8 @@
 -- Defines the CUDA code generation for a tensorSubExn expression.
 
-include "cuda/compile.mc"
+include "cuda/intrinsics/intrinsic.mc"
 
-lang CudaTensorSubIntrinsic = CudaCompile
+lang CudaTensorSubIntrinsic = CudaIntrinsic
   sem generateCudaIntrinsicFunction (ccEnv : CompileCEnv) =
   | CETensorSubExn t ->
     let tId = nameSym "t" in
