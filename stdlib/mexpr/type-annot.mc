@@ -50,6 +50,8 @@ lang CompatibleType =
   -- be found, `None` is returned.
   sem compatibleType (tyEnv : TypeEnv) (ty1: Type) =
   | ty2 ->
+    let ty1 = reduceTyVar ty1 in
+    let ty2 = reduceTyVar ty2 in
     match compatibleTypeBase tyEnv (ty1, ty2) with Some ty then Some ty
 
     -- NOTE(dlunde,2021-05-05): Temporary hack to make sure that tyapps are
@@ -72,6 +74,12 @@ lang CompatibleType =
 
   sem reduceType (tyEnv: Env) =
   | _ -> None () -- Types cannot be reduced by default
+
+  -- NOTE(aathn,2021-10-27): We convert type variables to TyUnknown using this
+  -- semantic function as a temporary solution to enable typeCheck and typeAnnot
+  -- to be used in tandem.
+  sem reduceTyVar =
+  | ty -> ty
 end
 
 lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
@@ -97,10 +105,17 @@ lang ConCompatibleType = CompatibleType + ConTypeAst
 end
 
 lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
-  | (TyVar _ & ty1, TyVar _) -> Some ty1
-  | (TyVar _, ! (TyUnknown _ | TyVar _) & ty2) -> Some ty2
-  | (! (TyUnknown _ | TyVar _) & ty1, TyVar _) -> Some ty1
+  sem reduceTyVar =
+  | TyVar {info = i} -> TyUnknown {info = i}
+end
+
+lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
+  sem reduceTyVar =
+  | TyFlex {info = i} & ty ->
+    match resolveLink ty with ! TyFlex _ & ty then
+      reduceTyVar ty
+    else
+      TyUnknown {info = i}
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
@@ -689,7 +704,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  AllCompatibleType +
+  FlexCompatibleType + AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
