@@ -88,8 +88,7 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = symbolizeExpr symEnv ast in
 
     compileMCore ast
-      { typeAnnot = if options.typeCheck then lam ast. ast else typeAnnot
-      , debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops

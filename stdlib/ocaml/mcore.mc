@@ -7,13 +7,13 @@ include "ocaml/pprint.mc"
 include "sys.mc"
 
 lang MCoreCompileLang =
-  MExprTypeLift + OCamlPrettyPrint +
-  OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
+  MExprTypeAnnot + MExprTypeLift +
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
+  OCamlGenerateExternalNaive
 end
 
 type Hooks =
-  { typeAnnot : Expr -> Expr
-  , debugTypeAnnot : Expr -> ()
+  { debugTypeAnnot : Expr -> ()
   , debugGenerate : String -> ()
   , exitBefore : () -> ()
   , postprocessOcamlTops : [Top] -> [Top]
@@ -21,8 +21,7 @@ type Hooks =
   }
 
 let emptyHooks : Hooks =
-  { typeAnnot = lam ast. ast
-  , debugTypeAnnot = lam. ()
+  { debugTypeAnnot = lam. ()
   , debugGenerate = lam. ()
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
@@ -46,7 +45,7 @@ let collectLibraries : ExternalNameMap -> Set String -> ([String], [String])
 let compileMCore : Expr -> Hooks -> a =
   lam ast. lam hooks.
   use MCoreCompileLang in
-  let ast = hooks.typeAnnot ast in
+  let ast = typeAnnot ast in
   let ast = removeTypeAscription ast in
 
   -- If option --debug-type-annot, then pretty-print the AST
@@ -91,7 +90,6 @@ let compileMCore : Expr -> Hooks -> a =
 -- will exit.
 let compileRunMCore : String -> [String] -> Expr -> ExecResult =
   lam stdin. lam args. lam ast.
-  use MExprTypeAnnot in
   let compileOcaml = lam libs. lam clibs. lam ocamlProg.
     let options = {optimize = true, libraries = libs, cLibraries = clibs} in
     let cunit : CompileResult = ocamlCompileWithConfig options ocamlProg in
@@ -99,5 +97,4 @@ let compileRunMCore : String -> [String] -> Expr -> ExecResult =
     cunit.cleanup ();
     res
   in
-  compileMCore ast {{emptyHooks with compileOcaml = compileOcaml}
-                                with typeAnnot = typeAnnot}
+  compileMCore ast {emptyHooks with compileOcaml = compileOcaml}
