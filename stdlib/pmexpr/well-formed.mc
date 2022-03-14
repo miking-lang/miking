@@ -28,6 +28,11 @@ lang WellFormed
   sem wellFormedExpr =
   | t -> reverse (wellFormedExprH [] t)
 
+  sem wellFormedTypeH (acc : [WellFormedError]) =
+
+  sem wellFormedType =
+  | t -> reverse (wellFormedTypeH [] t)
+
   sem wellFormed =
   | t ->
     let errors = wellFormedExpr t in
@@ -75,22 +80,21 @@ lang PMExprWellFormed = WellFormed + PMExprAst
   | TyArrow _ -> true
   | t -> if acc then acc else sfold_Type_Type containsFunctionTypeH acc t
 
-  sem pmexprWellFormedType (info : Info) (acc : [WellFormedError]) =
+  sem pmexprWellFormedType (acc : [WellFormedError]) =
   | TySeq t ->
     -- NOTE(larshum, 2021-12-13): An array may not contain elements of a
     -- functional type.
     if containsFunctionType t.ty then
-      let typeInfo = match infoTy t.ty with Info i then Info i else info in
-      cons (PMExprFunctionInArray typeInfo) acc
+      cons (PMExprFunctionInArray (infoTy t.ty)) acc
     else acc
-  | t -> sfold_Type_Type (pmexprWellFormedType info) acc t
+  | t -> sfold_Type_Type pmexprWellFormedType acc t
 
   sem pmexprWellFormedExpr (acc : [WellFormedError]) =
   | TmLet t ->
-    let acc = pmexprWellFormedType t.info acc t.tyBody in
+    let acc = pmexprWellFormedType acc t.tyBody in
     let acc = pmexprWellFormedExpr acc t.body in
     let acc = pmexprWellFormedExpr acc t.inexpr in
-    pmexprWellFormedType t.info acc t.ty
+    pmexprWellFormedType acc t.ty
   | TmMatch t ->
     -- NOTE(larshum, 2021-12-13): An if-expression may not result in a
     -- functional type.
@@ -130,12 +134,15 @@ lang PMExprWellFormed = WellFormed + PMExprAst
       else cons (PMExprParallelReduceType t.info) acc
   | t ->
     let info = infoTm t in
-    let acc = pmexprWellFormedType info acc (tyTm t) in
-    let acc = sfold_Expr_Type (pmexprWellFormedType info) acc t in
+    let acc = pmexprWellFormedType acc (tyTm t) in
+    let acc = sfold_Expr_Type pmexprWellFormedType acc t in
     sfold_Expr_Expr pmexprWellFormedExpr acc t
 
   sem wellFormedExprH (acc : [WellFormedError]) =
   | t -> pmexprWellFormedExpr acc t
+
+  sem wellFormedTypeH (acc : [WellFormedError]) =
+  | t -> pmexprWellFormedType acc t
 end
 
 mexpr

@@ -1,6 +1,8 @@
 -- Defines a well-formedness check specific for the CUDA accelerate backend.
 
 include "cuda/pmexpr-ast.mc"
+include "mexpr/cmp.mc"
+include "mexpr/eq.mc"
 include "pmexpr/well-formed.mc"
 
 lang CudaWellFormed = WellFormed + CudaPMExprAst
@@ -35,20 +37,21 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   -- of the body of a let-expression or a recursive binding.
   sem checkLambdasInBody (acc : [WellFormedError]) =
   | TmLam t ->
-    let acc = cudaWellFormedType t.info acc t.tyIdent in
+    let acc = cudaWellFormedType acc t.tyIdent in
     checkLambdasInBody acc t.body
   | t -> (acc, t)
 
   sem cudaWellFormedExpr (acc : [WellFormedError]) =
   | TmVar t -> acc
   | TmApp t ->
-    let acc = cudaWellFormedType t.info acc t.ty in
-    let acc = cudaWellFormedExpr acc t.rhs in
-    -- NOTE(larshum, 2022-03-01): We only check the well-formedness of the
-    -- left-hand side if it is not another application - otherwise we will find
-    -- a type error (the left-hand side will have an arrow type).
-    match t.lhs with TmApp _ then acc
-    else cudaWellFormedExpr acc t.lhs
+    recursive let checkApp = lam acc : [WellFormedError]. lam e : Expr.
+      match e with TmApp t then
+        let acc = cudaWellFormedExpr acc t.rhs in
+        checkApp acc t.lhs
+      else cudaWellFormedExpr acc e
+    in
+    let acc = cudaWellFormedType acc t.ty in
+    checkApp acc (TmApp t)
   | TmLet t ->
     match checkLambdasInBody acc t.body with (acc, body) in
     let acc = cudaWellFormedExpr acc body in
@@ -64,8 +67,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     cudaWellFormedExpr acc t.inexpr
   | TmConst t -> cudaWellFormedConstant t.info acc t.val
   | TmMatch t ->
-    let acc = cudaWellFormedPattern t.info acc t.pat in
-    let acc = cudaWellFormedType t.info acc t.ty in
+    let acc = cudaWellFormedPattern acc t.pat in
+    let acc = cudaWellFormedType acc t.ty in
     sfold_Expr_Expr cudaWellFormedExpr acc (TmMatch t)
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
@@ -83,17 +86,14 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc =
       if isCudaSupportedExpr t then acc
       else cons (CudaExprError t) acc in
-    let acc = sfold_Type_Type (cudaWellFormedType info) acc (tyTm t) in
+    let acc = sfold_Type_Type cudaWellFormedType acc (tyTm t) in
     sfold_Expr_Expr cudaWellFormedExpr acc t
 
-  sem cudaWellFormedType (info : Info) (acc : [WellFormedError]) =
+  sem cudaWellFormedType (acc : [WellFormedError]) =
   | ty ->
     if isCudaSupportedType ty then
-      sfold_Type_Type (cudaWellFormedType info) acc ty
+      sfold_Type_Type cudaWellFormedType acc ty
     else
-      let ty =
-        match infoTy ty with NoInfo _ then tyWithInfo info ty
-        else ty in
       cons (CudaTypeError ty) acc
 
   sem cudaWellFormedConstant (info : Info) (acc : [WellFormedError]) =
@@ -101,14 +101,11 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     if isCudaSupportedConstant c then acc
     else cons (CudaConstantError (c, info)) acc
 
-  sem cudaWellFormedPattern (info : Info) (acc : [WellFormedError]) =
+  sem cudaWellFormedPattern (acc : [WellFormedError]) =
   | pat ->
     if isCudaSupportedPattern pat then
-      sfold_Pat_Pat (cudaWellFormedPattern info) acc pat
+      sfold_Pat_Pat cudaWellFormedPattern acc pat
     else
-      let pat =
-        match infoPat pat with NoInfo _ then withInfoPat info pat
-        else pat in
       cons (CudaPatternError pat) acc
 
   sem isCudaSupportedExpr =
@@ -140,108 +137,147 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem wellFormedExprH (acc : [WellFormedError]) =
   | t -> cudaWellFormedExpr acc t
+
+  sem wellFormedTypeH (acc : [WellFormedError]) =
+  | t -> cudaWellFormedType acc t
 end
 
 mexpr
 
 use CudaWellFormed in
 
-let checkWellFormed = lam t. wellFormedExpr (typeAnnot (symbolize t)) in
+let eqCudaError = lam lerr : WellFormedError. lam rerr : WellFormedError.
+  use MExprEq in
+  let t = (lerr, rerr) in
+  match t with (CudaExprError le, CudaExprError re) then
+    eqExpr le re
+  else match t with (CudaTypeError lty, CudaTypeError rty) then
+    eqType lty rty
+  else match t with (CudaConstantError (lc, li), CudaConstantError (rc, ri)) then
+    and (eqConst lc rc) (eqi (infoCmp li ri) 0)
+  else match t with (CudaPatternError lpat, CudaPatternError rpat) then
+    let empty = {varEnv = biEmpty, conEnv = biEmpty} in
+    optionIsSome (eqPat empty empty biEmpty lpat rpat)
+  else false
+in
 
-utest checkWellFormed (bind_ (ulet_ "x" (int_ 2)) (var_ "x")) with [] in
+let preprocess = lam t. typeAnnot (symbolize t) in
 
-let t =
-  bind_
+utest wellFormedExpr (bind_ (ulet_ "x" (int_ 2)) (var_ "x")) with []
+using eqSeq eqCudaError in
+
+let t = preprocess
+  (bind_
     (let_ "f" (tyarrow_ tyint_ tyint_)
       (lam_ "x" tyint_ (addi_ (var_ "x") (int_ 1))))
-    (app_ (var_ "f") (int_ 4)) in
-utest checkWellFormed t with [] in
+    (app_ (var_ "f") (int_ 4))) in
+utest wellFormedExpr t with [] using eqSeq eqCudaError in
 
-let rec =
-  bind_
+let rec = preprocess
+  (bind_
     (reclet_ "f" (tyarrow_ tyint_ tyint_)
       (lam_ "n" tyint_
         (if_ (eqi_ (var_ "n") (int_ 0))
           (int_ 1)
           (muli_ (app_ (var_ "f") (subi_ (var_ "n") (int_ 1))) (var_ "n")))))
-    (app_ (var_ "f") (int_ 4)) in
-utest checkWellFormed rec with [] in
+    (app_ (var_ "f") (int_ 4))) in
+utest wellFormedExpr rec with [] using eqSeq eqCudaError in
 
-let seqLit = seq_ [int_ 1, int_ 2, int_ 3] in
-utest checkWellFormed seqLit with [] in
+let seqLit = preprocess (seq_ [int_ 1, int_ 2, int_ 3]) in
+utest wellFormedExpr seqLit with [] using eqSeq eqCudaError in
 
 let i = Info {filename = "", row1 = 0, row2 = 0, col1 = 0, col2 = 0} in
 let arrowType = tyWithInfo i (tyarrow_ tyint_ tyint_) in
-let seqLitArrowType =
-  bind_
+let seqLitArrowType = preprocess
+  (bind_
     (let_ "id" (tyarrow_ tyint_ tyint_) (lam_ "x" tyint_ (var_ "x")))
-    (seq_ [withType arrowType (var_ "id")]) in
-utest checkWellFormed seqLitArrowType with [CudaTypeError i] in
+    (seq_ [withType arrowType (var_ "id")])) in
+utest wellFormedExpr seqLitArrowType with [CudaTypeError arrowType]
+using eqSeq eqCudaError in
 
 let tensorSeqTy = tyseq_ (tytensor_ tyint_) in
-let seqLitTensor = withType tensorSeqTy (withInfo i (seq_ [])) in
-utest checkWellFormed seqLitTensor with [CudaTypeError i] in
+utest wellFormedType tensorSeqTy with [CudaTypeError tensorSeqTy]
+using eqSeq eqCudaError in
 
 let recLit =
   record_
     (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
     [("a", int_ 0), ("b", float_ 0.0)] in
-utest checkWellFormed recLit with [] in
+utest wellFormedExpr recLit with [] using eqSeq eqCudaError in
 
-let recLitArrowType =
-  bind_
-    (let_ "id" (tyarrow_ tyint_ tyint_) (lam_ "x" tyint_ (var_ "x")))
-    (record_ (tyrecord_ [("a", arrowType)])
-             [("a", withType arrowType (var_ "id"))]) in
-utest checkWellFormed recLitArrowType with [CudaTypeError i] in
+let recTy = tyrecord_ [("a", arrowType)] in
+utest wellFormedType recTy with [CudaTypeError arrowType]
+using eqSeq eqCudaError in
 
-let recUpdate =
-  bind_
+let recordUpdateExpr = recordupdate_ (var_ "r") "a" (int_ 4) in
+let recUpdate = preprocess
+  (bind_
     (let_ "r" (tyrecord_ [("a", tyint_)]) (urecord_ [("a", int_ 3)]))
-    (withInfo i (recordupdate_ (var_ "r") "a" (int_ 4))) in
-utest checkWellFormed recUpdate with [CudaExprError i] in
+    recordUpdateExpr) in
+utest wellFormedExpr recUpdate with [CudaExprError recordUpdateExpr]
+using eqSeq eqCudaError in
 
-let conDef = bindall_ [
+let condefExpr = condef_ "Some" (tyarrow_ tyint_ (tyvar_ "Option")) in
+let conDef = preprocess (bindall_ [
   type_ "Option" tyunknown_,
-  withInfo i (condef_ "Some" (tyarrow_ tyint_ (tyvar_ "Option"))),
-  int_ 0] in
-utest checkWellFormed conDef with [CudaExprError i] in
+  condefExpr,
+  int_ 0]) in
+let boundCondef = preprocess (bind_ condefExpr (int_ 0)) in
+utest wellFormedExpr conDef with [CudaExprError boundCondef]
+using eqSeq eqCudaError in
 
-let ext = withInfo i (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
-utest checkWellFormed ext with [CudaExprError i] in
+-- NOTE(larshum, 2022-03-14): We haven't implemented equality for externals, so
+-- we use the comparison operations which do not check for alpha equivalence.
+let ext = preprocess (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
+utest wellFormedExpr ext with [CudaExprError ext]
+using lam a. lam b.
+  match (a,b) with ([CudaExprError a], [CudaExprError b]) then
+    use MExprCmp in
+    eqi (cmpExpr a b) 0
+  else false
+in
 
-let utestTerm = withInfo i (utest_ (int_ 1) (int_ 2) (int_ 0)) in
-utest checkWellFormed ext with [CudaExprError i] in
+let utestTerm = utest_ (int_ 1) (int_ 2) (int_ 0) in
+utest wellFormedExpr utestTerm with [CudaExprError utestTerm]
+using eqSeq eqCudaError in
 
-let fileRead =
-  app_
-    (withInfo i (const_ (tyarrow_ tystr_ tystr_) (CFileRead ())))
-    (str_ "test.txt") in
-utest checkWellFormed fileRead with [CudaConstantError i] in
+let c = CFileRead () in
+let fileRead = preprocess
+  (app_
+    (withInfo i (const_ (tyarrow_ tystr_ tystr_) c))
+    (str_ "test.txt")) in
+utest wellFormedExpr fileRead with [CudaConstantError (c, i)]
+using eqSeq eqCudaError in
 
-let matchBoolPat =
-  bind_
+let matchBoolPat = preprocess
+  (bind_
     (let_ "x" tyint_ (int_ 3))
-    (match_ (gti_ (var_ "x") (int_ 0)) ptrue_ (int_ 1) (int_ 0)) in
-utest checkWellFormed matchBoolPat with [] in
+    (match_ (gti_ (var_ "x") (int_ 0)) ptrue_ (int_ 1) (int_ 0))) in
+utest wellFormedExpr matchBoolPat with []
+using eqSeq eqCudaError in
 
-let matchIntPat =
-  bind_
+let pat = pint_ 4 in
+let matchIntPat = preprocess
+  (bind_
     (let_ "x" tyint_ (int_ 3))
-    (withInfo i (match_ (var_ "x") (pint_ 4) (int_ 1) (int_ 0))) in
-utest checkWellFormed matchIntPat with [CudaPatternError i] in
+    (match_ (var_ "x") pat (int_ 1) (int_ 0))) in
+utest wellFormedExpr matchIntPat with [CudaPatternError pat]
+using eqSeq eqCudaError in
 
-let matchCharPat =
-  bind_ 
+let pat = pchar_ 'x' in
+let matchCharPat = preprocess
+  (bind_
     (let_ "c" tychar_ (char_ 'x'))
-    (withInfo i (match_ (var_ "c") (pchar_ 'x') (int_ 1) (int_ 0))) in
-utest checkWellFormed matchCharPat with [CudaPatternError i] in
+    (match_ (var_ "c") pat (int_ 1) (int_ 0))) in
+utest wellFormedExpr matchCharPat with [CudaPatternError pat]
+using eqSeq eqCudaError in
 
 let recTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
-let matchRecordPat =
-  bind_
+let matchRecordPat = preprocess
+  (bind_
     (let_ "r" recTy (record_ recTy [("a", int_ 2), ("b", float_ 3.0)]))
-    (match_ (var_ "r") (prec_ [("a", pvar_ "a"), ("b", pvarw_)]) (int_ 1) (int_ 0)) in
-utest checkWellFormed matchRecordPat with [] in
+    (match_ (var_ "r") (prec_ [("a", pvar_ "a"), ("b", pvarw_)]) (int_ 1) (int_ 0))) in
+utest wellFormedExpr matchRecordPat with []
+using eqSeq eqCudaError in
 
 ()
