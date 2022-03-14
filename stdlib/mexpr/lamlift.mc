@@ -40,12 +40,13 @@ lang LambdaLiftNameAnonymous = MExprAst
 
   sem nameAnonymousLambdas =
   | TmLam t ->
-    recursive let getLambdaBody = lam t : Expr.
-      match t with TmLam tt then getLambdaBody tt.body
-      else t
+    recursive let recurseInLambdaBody = lam t : Expr.
+      match t with TmLam tt then
+        TmLam {tt with body = recurseInLambdaBody tt.body}
+      else nameAnonymousLambdas t
     in
     let lambdaName = nameSym "t" in
-    let letBody = TmLam {t with body = nameAnonymousLambdas (getLambdaBody t.body)} in
+    let letBody = TmLam {t with body = recurseInLambdaBody t.body} in
     TmLet {ident = lambdaName, tyBody = t.ty, body = letBody,
            inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info, frozen = false},
            ty = t.ty, info = t.info}
@@ -723,5 +724,19 @@ let expected = preprocess (bindall_ [
     var_ "s"])))),
   map_ (appf2_ (var_ "t4") (var_ "s") (var_ "x")) (var_ "s")]) in
 utest liftLambdas nestedAnonymousLambdas with expected using eqExpr in
+
+let nestedMultiArgLambda = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  map_
+    (ulam_ "y"
+      (foldl_ (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e"))))
+              (int_ 0) (var_ "y")))
+    (var_ "s")]) in
+let expected = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "t1" (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e")))),
+  ulet_ "t2" (ulam_ "y" (foldl_ (var_ "t1") (int_ 0) (var_ "y"))),
+  map_ (var_ "t2") (var_ "s")]) in
+utest liftLambdas nestedMultiArgLambda with expected using eqExpr in
 
 ()
