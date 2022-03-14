@@ -11,7 +11,7 @@ lang CudaMapKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
         op = COSubScript (),
         lhs = CEArrow {lhs = CEVar {id = seqId}, id = _seqKey},
         rhs = CEVar {id = idxId}} in
-    match _getFunctionIdAndArgs with (funId, _) in
+    match _getFunctionIdAndArgs t.f with (funId, _) in
     let kernelId = nameSym "mapKernel" in
     let outParamId = nameSym "out" in
     let sParamId = nameSym "s" in
@@ -36,7 +36,7 @@ lang CudaMapKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
       op = COAssign (),
       lhs = seqIdx outParamId indexId,
       rhs = CEApp {
-        fun = fId,
+        fun = funId,
         args = [seqIdx sParamId indexId]}}} in
     let indexIncrementStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),

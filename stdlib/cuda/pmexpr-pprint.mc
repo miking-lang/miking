@@ -24,7 +24,7 @@ lang CudaPMExprPrettyPrint = PMExprPrettyPrint + CudaPMExprAst
     (env, join ["seqFoldl", pprintNewline indent, args])
   | TmTensorSliceExn t ->
     let indent = pprintIncr indent in
-    match printArgs indent env [t.f, t.slice] with (env, args) in
+    match printArgs indent env [t.t, t.slice] with (env, args) in
     (env, join ["tensorSliceExn", pprintNewline indent, args])
   | TmTensorSubExn t ->
     let indent = pprintIncr indent in
