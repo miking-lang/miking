@@ -247,7 +247,7 @@ let collectKnownProgramTypes = use MExprAst in
         let acc = {acc with aliases = aliases} in
         sfold_Expr_Expr collectTypes acc expr
     else match expr with TmConDef t then
-      match t.tyIdent with TyArrow {from = argTy, to = to} then
+      match stripTyAll t.tyIdent with (_, TyArrow {from = argTy, to = to}) then
         match unwrapTypeVarIdent to with Some ident then
           let constructors =
             match mapLookup ident acc.variants with Some constructors then
@@ -682,45 +682,22 @@ let _generateUtest = use MExprTypeAnnot in
       use MExprPrettyPrint in concat "\n    Using: " (expr2str expr)
     else ""
   in
-  -- NOTE(larshum, 2021-04-12): We only require that the types of the operands
-  -- are compatible if no equality function is provided. Otherwise it should be
-  -- possible to compare different types using a custom equality function, but
-  -- this function has to be annotated with explicit types.
+  -- NOTE(aathn, 2022-03-09): We assume that the types of the operands
+  -- have already been annotated and checked by type-check.mc or
+  -- type-annot.mc.
   match t.tusing with Some eqFunc then
-    match tyTm eqFunc with TyArrow {from = lty, to = TyArrow {from = rty, to = TyBool _}} then
-      match compatibleType env.aliases (tyTm t.test) lty with Some lty then
-        match compatibleType env.aliases (tyTm t.expected) rty with Some rty then
-          let lhsPprintName = getPprintFuncName env lty in
-          let rhsPprintName = getPprintFuncName env rty in
-          let lhsPprintFunc = nvar_ lhsPprintName in
-          let rhsPprintFunc = nvar_ rhsPprintName in
-          let eqFunc =
-            lam_ "a" lty
-              (lam_ "b" rty
-                (appf2_ eqFunc (var_ "a") (var_ "b"))) in
-          utestRunnerCall utestInfo usingStr lhsPprintFunc rhsPprintFunc eqFunc
-                          t.test t.expected
-        else
-          let msg = join [
-            "Custom equality function expected right-hand side of type ",
-            pprintTy rty, ", got argument of incompatible type ",
-            pprintTy (tyTm t.expected)
-          ] in
-          infoErrorExit t.info msg
-      else
-        let msg = join [
-          "Custom equality function expected left-hand side of type ",
-          pprintTy lty, ", got argument of incompatible type ",
-          pprintTy (tyTm t.test)
-        ] in
-        infoErrorExit t.info msg
-    else
-      let msg = join [
-        "Equality function was found to have incorrect type.\n",
-        "Type was inferred to be ", pprintTy (tyTm eqFunc)
-      ] in
-      infoErrorExit t.info msg
-  else match compatibleType env.aliases (tyTm t.test) (tyTm t.expected) with Some eTy then
+    let lhsPprintName = getPprintFuncName env (tyTm t.test) in
+    let rhsPprintName = getPprintFuncName env (tyTm t.expected) in
+    let lhsPprintFunc = nvar_ lhsPprintName in
+    let rhsPprintFunc = nvar_ rhsPprintName in
+    let eqFunc =
+      lam_ "a" (tyTm t.test)
+        (lam_ "b" (tyTm t.expected)
+          (appf2_ eqFunc (var_ "a") (var_ "b"))) in
+    utestRunnerCall utestInfo usingStr lhsPprintFunc rhsPprintFunc eqFunc
+                    t.test t.expected
+  else
+    let eTy = tyTm t.test in
     let pprintName = getPprintFuncName env eTy in
     let pprintFunc = nvar_ pprintName in
     use MExprUtestViaMatch in
@@ -751,12 +728,6 @@ let _generateUtest = use MExprTypeAnnot in
       in
       utestRunnerCall utestInfo usingStr pprintFunc pprintFunc eqFunc t.test
                       t.expected
-  else
-    let msg = join [
-      "Arguments to utest have incompatible types\n",
-      "LHS: ", pprintTy (tyTm t.test), "\nRHS: ", pprintTy (tyTm t.expected)
-    ] in
-    infoErrorExit t.info msg
 
 let constructSymbolizeEnv = lam env : UtestTypeEnv.
   let constructorNames = mapFoldWithKey (lam acc. lam. lam constructors.
@@ -927,8 +898,11 @@ let rhs = reverse_ (seq_ [
 ]) in
 let elemEq = uconst_ (CEqf ()) in
 let seqEq =
-  ulam_ "a"
-    (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
+  bind_
+    (let_ "seqEq" (tyarrows_ [tyseq_ tyfloat_, tyseq_ tyfloat_, tybool_])
+      (ulam_ "a" (ulam_ "b"
+        (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b")))))
+    (var_ "seqEq") in
 let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs uunit_ seqEq) in
 utest utestStrip floatSeqWithUsing with uunit_ using eqExpr in
 

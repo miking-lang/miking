@@ -1893,7 +1893,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           ( "Cannot update the term. The term is not a record: "
           ^ Ustring.to_utf8 (ustring_of_tm v) ) )
   (* Type (ignore) *)
-  | TmType (_, _, _, _, t1) ->
+  | TmType (_, _, _, _, _, t1) ->
       eval env t1
   (* Data constructors *)
   | TmConDef (_, _, _, _, t) ->
@@ -1960,7 +1960,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
 let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
       eval_toplevel ((s, eval env t1) :: env) t2
-  | TmType (_, _, _, _, t1) ->
+  | TmType (_, _, _, _, _, t1) ->
       eval_toplevel env t1
   | TmRecLets (_, lst, t2) ->
       let rec env' =
