@@ -236,7 +236,6 @@ let buildConfigCuda : String -> (String, String) = lam dir.
     "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@"] in
   (dunefile, makefile)
 
-
 let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
   let tempfile = lam f. sysJoinPath dir f in
   iter
@@ -304,6 +303,10 @@ let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
     ("dune", dunefile),
     ("dune-project", "(lang dune 2.0)"),
     ("Makefile", makefile)];
+  (if options.debugGenerate then
+    printLn (join ["Output files saved at '", dir, "'"]);
+    exit 0
+  else ());
   buildBinaryUsingMake sourcePath td
 
 let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
