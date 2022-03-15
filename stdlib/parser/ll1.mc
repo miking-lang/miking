@@ -7,6 +7,7 @@ include "map.mc"
 include "string.mc"
 include "either.mc"
 include "common.mc"
+include "error-highlight.mc"
 
 type NonTerminal = String
 
@@ -36,7 +37,7 @@ lang ParserBase = TokenParser + EOFTokenParser
 
   sem symSpecToStr =
   | TokSpec t -> tokReprToStr t
-  | LitSpec t -> t.lit
+  | LitSpec t -> snoc (cons '\'' t.lit) '\''
 end
 
 type Production prodLabel = {nt: NonTerminal, label: prodLabel, rhs: [Symbol], action: Action state}
@@ -425,6 +426,35 @@ lang LL1Parser = ParserGeneration + ParserConcrete
       let stream = {pos = initPos filename, str = contents} in
       match getNextToken stream with {token = token, stream = stream} in
       openNt start token [] stream
+
+  sem highlightsForFound =
+  | TokParsed (EOFTok {info = Info x}) ->
+    let info = Info {{x with row1 = subi x.row1 1} with col1 = 0} in
+    [Irrelevant info, Added {content = tokReprToStr (EOFRepr ()), ensureSurroundedBySpaces = false}]
+  | x -> [Relevant (symParsedInfo x)]
+  sem ll1ToErrorHighlightSpec =
+  | UnexpectedFirst x ->
+    let info = symParsedInfo x.found in
+    { highlight = highlightsForFound x.found, found = parsedSymToSpecSym x.found, expected = x.expected, info = info }
+  | UnexpectedToken x ->
+    let info = symParsedInfo x.found in
+    { highlight = highlightsForFound x.found, found = parsedSymToSpecSym x.found, expected = [x.expected], info = info }
+
+  sem ll1DefaultHighlight (content : String) =
+  | x ->
+    let x: { highlight : [Highlight], found : SpecSymbol, expected : [SpecSymbol], info : Info } = x in
+    let expectedStr = switch map symSpecToStr x.expected
+      case [x] then x
+      case [a, b] then join [a, " or ", b]
+      case rest ++ [b] then join [strJoin ", " rest, ", or ", b]
+      end
+    in
+    let highlight = formatHighlights terminalHighlightErrorConfig content x.highlight in
+    let message = join
+      [ "Unexpected token, found ", symSpecToStr x.found, ", expected ", expectedStr, "\n"
+      , highlight
+      ] in
+    (x.info, message)
 end
 
 lang TestParserLang = LL1Parser + Lexer
