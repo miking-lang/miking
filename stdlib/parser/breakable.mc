@@ -109,7 +109,7 @@ include "map.mc"
 include "set.mc"
 include "either.mc"
 include "common.mc"
-include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the tests, but we can't put an include only there
+include "parser/error-highlight.mc"
 
 type AllowedDirection
 con GNeither : () -> AllowedDirection
@@ -980,3 +980,50 @@ let breakableConstructSimple
           f.constructPostfix p.self (work l)
         end
     in match ns with [n] ++ _ then work n else error "NonEmpty"
+
+type BreakableErrorHighlightConfig self =
+  { parenAllowed : ParenAllowedFunc self
+  , topAllowed : TopAllowedFunc self
+  , terminalInfos : all lstyle. all rstyle. self lstyle rstyle -> [Info]
+  , getInfo : all lstyle. all rstyle. self lstyle rstyle -> Info
+  , lpar : String
+  , rpar : String
+  }
+
+let breakableToErrorHighlightSpec
+  : BreakableErrorHighlightConfig self
+  -> [PermanentNode self] -- NonEmpty
+  -> [{info: Info, partialResolutions: [[Highlight]]}]
+  = lam config. lam tops.
+    let reportConfig =
+      { parenAllowed = config.parenAllowed
+      , topAllowed = config.topAllowed
+      , toTok = lam imp. lam self.
+        match imp with Important _ then
+          map (lam info. Relevant info) (config.terminalInfos self)
+        else [Irrelevant (config.getInfo self)]
+      , leftPos = config.getInfo
+      , rightPos = config.getInfo
+      , lpar = Added {content = config.lpar, ensureSurroundedBySpaces = true}
+      , rpar = Added {content = config.rpar, ensureSurroundedBySpaces = true}
+      } in
+    let res = breakableReportAmbiguities reportConfig tops in
+    let fixup = lam amb: Ambiguity Info Highlight.
+      {info = mergeInfo amb.range.first amb.range.last, partialResolutions = amb.partialResolutions}
+    in map fixup res
+
+let breakableDefaultHighlight
+  : BreakableErrorHighlightConfig self
+  -> String
+  -> [PermanentNode self]
+  -> [(Info, String)]
+  = lam config. lam content. lam tops.
+    let highlightOne = lam amb: {info: Info, partialResolutions: [[Highlight]]}.
+      let alternatives = map (formatHighlights terminalHighlightAddedConfig content) amb.partialResolutions in
+      let body =
+        if match amb.info with Info x then eqi x.row1 x.row2 else false then
+          strJoin "\n" (map (concat "  ") alternatives)
+        else
+          strJoin "\n\n" (mapi (lam i. lam str. join ["Alternative ", int2string (addi i 1), ":\n", str]) alternatives)
+      in (amb.info, join ["Ambiguity error\n", body, "\n"])
+    in map highlightOne (breakableToErrorHighlightSpec config tops)
