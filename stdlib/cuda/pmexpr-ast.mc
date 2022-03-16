@@ -182,7 +182,7 @@ lang CudaPMExprAst = PMExprAst
                       with ty = ty}
   | TmCopy t ->
     let ty =
-      match mapLookup t.ident env.varEnv with Some ty then ty
+      match mapLookup t.arg env.varEnv with Some ty then ty
       else tyunknown_ in
     TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = tyunit_}

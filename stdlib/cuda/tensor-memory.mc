@@ -21,7 +21,9 @@ lang CudaTensorMemoryBase = CudaCompile
     match mty with TyTensor _ then addi acc 1
     else match mty with TyRecord t then
       mapFoldWithKey
-        (lam acc. lam. lam ty. countTensorParams ccEnv acc ty)
+        (lam acc. lam. lam ty.
+          let cty = compileType ccEnv ty in
+          countTensorParams ccEnv acc cty)
         acc t.fields
     else acc
   | ty -> sfoldCTypeCType (countTensorParams ccEnv) acc ty
@@ -339,7 +341,7 @@ lang CudaTensorMemory =
     -- tensors wrapped in records must also be counted.
     let tensorParams =
       foldl
-        (lam acc. lam param : (Name, Type). (countTensorParams ccEnv) acc param.0)
+        (lam acc. lam param : (CType, Name). countTensorParams ccEnv acc param.0)
         0 t.params in
     if gti tensorParams acc then tensorParams else acc
   | t -> acc
