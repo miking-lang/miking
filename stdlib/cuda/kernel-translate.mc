@@ -56,23 +56,18 @@ end
 
 lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTranslate
   sem translateCudaTops (accelerateData : Map Name AccelerateData)
-                        (marked : Set Name)
                         (ccEnv : CompileCEnv) =
   | tops ->
     let tops = map translateTopToCudaFormat tops in
-    generateIntrinsics accelerateData marked ccEnv tops
-
-  sem generateIntrinsics (accelerateData : Map Name AccelerateData)
-                         (marked : Set Name)
-                         (ccEnv : CompileCEnv) =
-  | tops ->
-    let wrapperMap : Map Name Name =
+    let wrapperMap =
       mapMapWithKey (lam key. lam. nameSym "cuda_wrap") accelerateData in
-    let tops = map (generateIntrinsicsTop wrapperMap marked ccEnv) tops in
-    (wrapperMap, join tops)
+    (wrapperMap, generateIntrinsics wrapperMap ccEnv tops)
+
+  sem generateIntrinsics (wrapperMap : Map Name Name)
+                         (ccEnv : CompileCEnv) =
+  | tops -> join (map (generateIntrinsicsTop wrapperMap ccEnv) tops)
 
   sem generateIntrinsicsTop (wrapperMap : Map Name Name)
-                            (marked : Set Name)
                             (ccEnv : CompileCEnv) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapAccumL (generateIntrinsicStmt ccEnv) [] t.body with (tops, body) in
@@ -82,19 +77,26 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
       let cudaTop = CuTTop {{cuTop with attrs = []} with top = newTop} in
       snoc tops cudaTop
     else
-      -- NOTE(larshum, 2022-03-16): Functions that were marked contain no
-      -- kernel calls, so they can run on either CPU (host) or GPU (device).
-      -- Functions containing kernel calls must run on the host, so we
-      -- explicitly annotate them that way to distinguish them from wrapper
-      -- functions (annotating only with host is equivalent to no annotation,
-      -- but we use this to distinguish between them).
+      -- NOTE(larshum, 2022-03-16): Functions that contain a kernel call must
+      -- not be defined on the device (GPU). We give them an explicit host
+      -- attribute to be able to distinguish them from wrapper functions (the
+      -- host attribute is implicit if no other attributes are added).
       let attrs =
-        if setMem t.id marked then [CuAHost (), CuADevice ()]
-        else [CuAHost ()] in
+        if containsKernelCall body then [CuAHost ()]
+        else [CuAHost (), CuADevice ()] in
       let cudaTop = CuTTop {{cuTop with attrs = attrs}
                                    with top = CTFun {t with body = body}} in
       snoc tops cudaTop
   | t -> [t]
+
+  sem containsKernelCall =
+  | stmts -> foldl containsKernelCallH false stmts
+
+  sem containsKernelCallH (acc : Bool) =
+  | CSExpr {expr = CEKernelApp _} -> true
+  | CSComp {stmts = stmts} ->
+    if acc then acc else foldl containsKernelCallH acc stmts
+  | stmt -> acc
 
   sem generateIntrinsicStmt (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | CSExpr {expr = t} ->

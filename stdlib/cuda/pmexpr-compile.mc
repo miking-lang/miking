@@ -13,8 +13,8 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   sem generateKernelApplications =
   | t ->
     let marked = markNonKernelFunctions t in
-    (marked, promoteKernels marked t)
-    
+    promoteKernels marked t
+
   -- Produces a set of identifiers corresponding to the functions that are used
   -- directly or indirectly by a parallel operation. Parallel keywords within
   -- such functions are not promoted to kernels.
@@ -135,51 +135,60 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
     match addMemoryAllocations env t.body with (env, body) in
     (env, TmLam {t with body = body})
   | TmLet t ->
-    match addMemoryAllocations env t.inexpr with (env, inexpr) in
-    (env, TmLet {t with inexpr = inexpr})
-  | TmLet (t & {body = !(TmSeq _ | TmRecord _)}) ->
-    let toMem = if isKernel t.body then Gpu () else Cpu () in
-    let env = allocEnvInsert t.ident toMem env in
-    let vars = collectVarsInExpr env (mapEmpty nameCmp) t.body in
-    let subMap =
-      mapFoldWithKey
-        (lam subMap : [Map Name (Info -> Expr)]. lam id : Name.
-         lam memTy : (AllocMem, Type).
-          match memTy with (mem, ty) in
-          match ty with TyTensor _ | TySeq _ then
-            if eqMem mem toMem then subMap
-            else
-              let altId = nameSetNewSym id in
-              let exprFun = lam info.
-                TmVar {ident = altId, ty = ty, info = info, frozen = false} in
-              mapInsert id exprFun subMap
-          else subMap)
-        (mapEmpty nameCmp) vars in
-    let env =
-      mapFoldWithKey
-        (lam acc : AllocEnv. lam. lam exprF : Info -> Expr.
-          let expr = exprF (NoInfo ()) in
-          match expr with TmVar vt then
-            allocEnvInsert vt.ident toMem acc
-          else cudaMemMgrError t.info)
-        env subMap in
-    match addMemoryAllocations env t.inexpr with (env, inexpr) in
-    let letExpr = TmLet {{t with body = substituteVariables subMap t.body}
-                            with inexpr = inexpr} in
-    let letExpr =
-      mapFoldWithKey
-        (lam acc : Expr. lam id : Name. lam exprF : Info -> Expr.
-          let expr = exprF (infoTm acc) in
-          match expr with TmVar vt then
-            let copyExpr = TmCopy {
-              arg = id, toMem = toMem, ty = tyTm expr, info = infoTm expr} in
-            TmLet {
-              ident = vt.ident, tyBody = tyTm copyExpr, body = copyExpr,
-              inexpr = acc, ty = tyTm acc, info = infoTm acc}
-          else cudaMemMgrError t.info)
-        letExpr subMap in
-    (env, letExpr)
+    if isStackAllocation t.body then
+      match addMemoryAllocations env t.inexpr with (env, inexpr) in
+      (env, TmLet {t with inexpr = inexpr})
+    else
+      let toMem = if isKernel t.body then Gpu () else Cpu () in
+      let env = allocEnvInsert t.ident toMem env in
+      let vars = collectVarsInExpr env (mapEmpty nameCmp) t.body in
+      let subMap =
+        mapFoldWithKey
+          (lam subMap : [Map Name (Info -> Expr)]. lam id : Name.
+           lam memTy : (AllocMem, Type).
+            match memTy with (mem, ty) in
+            match ty with TyTensor _ | TySeq _ then
+              if eqMem mem toMem then subMap
+              else
+                let altId = nameSetNewSym id in
+                let exprFun = lam info.
+                  TmVar {ident = altId, ty = ty, info = info, frozen = false} in
+                mapInsert id exprFun subMap
+            else subMap)
+          (mapEmpty nameCmp) vars in
+      let env =
+        mapFoldWithKey
+          (lam acc : AllocEnv. lam. lam exprF : Info -> Expr.
+            let expr = exprF (NoInfo ()) in
+            match expr with TmVar vt then
+              allocEnvInsert vt.ident toMem acc
+            else cudaMemMgrError t.info)
+          env subMap in
+      match addMemoryAllocations env t.inexpr with (env, inexpr) in
+      let letExpr = TmLet {{t with body = substituteVariables subMap t.body}
+                              with inexpr = inexpr} in
+      let letExpr =
+        mapFoldWithKey
+          (lam acc : Expr. lam id : Name. lam exprF : Info -> Expr.
+            let expr = exprF (infoTm acc) in
+            match expr with TmVar vt then
+              let copyExpr = TmCopy {
+                arg = id, toMem = toMem, ty = tyTm expr, info = infoTm expr} in
+              TmLet {
+                ident = vt.ident, tyBody = tyTm copyExpr, body = copyExpr,
+                inexpr = acc, ty = tyTm acc, info = infoTm acc}
+            else cudaMemMgrError t.info)
+          letExpr subMap in
+      (env, letExpr)
   | t -> smapAccumL_Expr_Expr addMemoryAllocations env t
+
+  sem isStackAllocation =
+  -- NOTE(larshum, 2022-03-16): For now, the tensor shape is represented on the
+  -- stack, so we should not deallocate it.
+  | TmApp {lhs = TmConst {val = CTensorShape _}} -> true
+  | TmSeq _ -> true
+  | TmRecord _ -> true
+  | _ -> false
 
   sem addFreeOperations (env : AllocEnv) =
   | TmVar t -> (allocEnvRemove t.ident env, TmVar t)
@@ -255,7 +264,7 @@ end
 lang CudaPMExprCompile = CudaPMExprKernelCalls + CudaPMExprMemoryManagement
   sem toCudaPMExpr =
   | t ->
-    match generateKernelApplications t with (marked, t) in
+    let t = generateKernelApplications t in
     match insertMemoryOperations (mapEmpty nameCmp) t with (_, t) in
-    (marked, t)
+    t
 end
