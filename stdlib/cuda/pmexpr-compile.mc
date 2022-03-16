@@ -201,7 +201,7 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
               let freeExpr = TmFree {
                 arg = id, tyArg = ty, mem = mem, ty = unitTy, info = t.info} in
               let freeLet = TmLet {
-                ident = nameNoSym "", tyBody = tyTm inexpr, body = freeExpr,
+                ident = nameSym "", tyBody = tyTm inexpr, body = freeExpr,
                 inexpr = unit_, ty = t.ty, info = t.info} in
               (env, snoc freeLets freeLet)
             else acc

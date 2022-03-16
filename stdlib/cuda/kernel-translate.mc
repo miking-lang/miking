@@ -58,7 +58,9 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   sem translateCudaTops (accelerateData : Map Name AccelerateData)
                         (marked : Set Name)
                         (ccEnv : CompileCEnv) =
-  | tops -> generateIntrinsics accelerateData marked ccEnv tops
+  | tops ->
+    let tops = map translateTopToCudaFormat tops in
+    generateIntrinsics accelerateData marked ccEnv tops
 
   sem generateIntrinsics (accelerateData : Map Name AccelerateData)
                          (marked : Set Name)
@@ -85,7 +87,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
       -- Functions containing kernel calls must run on the host, so we
       -- explicitly annotate them that way to distinguish them from wrapper
       -- functions (annotating only with host is equivalent to no annotation,
-      -- but we use the annotation to distinguish between them).
+      -- but we use this to distinguish between them).
       let attrs =
         if setMem t.id marked then [CuAHost (), CuADevice ()]
         else [CuAHost ()] in
@@ -109,4 +111,11 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   -- As above, but for intrinsics that do not return values.
   sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | t -> (acc, CSExpr {expr = t})
+
+  -- Wraps the C top-level terms in the CUDA version of a top-level term, which
+  -- includes a sequence of attributes that can be attached.
+  sem translateTopToCudaFormat =
+  | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
+  | CTDef t -> CuTTop {attrs = [CuAHost (), CuADevice ()], top = CTDef t}
+  | CTFun t -> CuTTop {attrs = [], top = CTFun t}
 end
