@@ -33,20 +33,20 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal + MExprTypeLift
     in
     let uty = unwrapType ty in
     match uty with TyRecord {labels = labels, fields = fields, info = info} then
-      if null labels then OTyTuple {info = info, tys = []}
-      else
-        let ocamlTypedFields =
-          map
-            (lam p : (SID, Type).
-              match p with (sid, ty) in
-              (sidToString sid, _mexprToOCamlType env ty))
-            (mapBindings fields) in
-        OTyRecord {info = info, fields = ocamlTypedFields, tyident = ty}
+      let ocamlTypedFields =
+        map
+          (lam p : (SID, Type).
+            match p with (sid, ty) in
+            (sidToString sid, _mexprToOCamlType env ty))
+          (mapBindings fields) in
+      OTyRecord {info = info, fields = ocamlTypedFields, tyident = ty}
     else match uty with TySeq {ty = ty, info = info} then
       OTyArray {info = info, ty = _mexprToOCamlType uty}
     else match uty with TyTensor _ then
       _tensorToOCamlType uty
     else uty
+  -- NOTE(larshum, 2022-03-16): Empty record types are not type-lifted.
+  | TyRecord {info = info, labels = []} -> OTyTuple {info = info, tys = []}
   | ty & (TyTensor _) -> _tensorToOCamlType ty
   | ty -> ty
 
