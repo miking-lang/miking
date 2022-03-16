@@ -44,7 +44,7 @@ lang CudaPMExprPrettyPrint = PMExprPrettyPrint + CudaPMExprAst
     match printArgs indent env [t.n, t.f] with (env, args) in
     (env, join ["loopKernel", pprintNewline indent, args])
   | TmCopy t ->
-    match printParen indent env t.arg with (env, arg) in
+    match pprintVarName env t.arg with (env, arg) in
     let copyStr =
       match t.toMem with Cpu _ then "copyCpu"
       else match t.toMem with Gpu _ then "copyGpu"

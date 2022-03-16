@@ -23,14 +23,16 @@ lang CudaTensorSliceIntrinsic = CudaIntrinsic
           op = COSub (),
           lhs = CEMember {lhs = tensor, id = _tensorRankKey},
           rhs = CEMember {lhs = slice, id = _seqLenKey}}}},
-      CSDef {ty = intType, id = Some i, init = CIExpr {expr = CEInt {i = 0}}},
+      CSDef {
+        ty = intType, id = Some i,
+        init = Some (CIExpr {expr = CEInt {i = 0}})},
       CSWhile {
         cond = CEBinOp {
           op = COLt (),
           lhs = CEVar {id = i},
           rhs = CEMember {lhs = tensor, id = _tensorRankKey}},
         body = [
-          CEBinOp {
+          CSExpr {expr = CEBinOp {
             op = COAssign (),
             lhs = CEBinOp {
               op = COSubScript (),
@@ -42,14 +44,14 @@ lang CudaTensorSliceIntrinsic = CudaIntrinsic
               rhs = CEBinOp {
                 op = COAdd (),
                 lhs = CEMember {lhs = slice, id = _seqLenKey},
-                rhs = CEVar {id = i}}}},
-          CEBinOp {
+                rhs = CEVar {id = i}}}}},
+          CSExpr {expr = CEBinOp {
             op = COAssign (),
             lhs = CEVar {id = i},
             rhs = CEBinOp {
               op = COAdd (),
               lhs = CEVar {id = i},
-              rhs = CEInt {i = 1}}}]},
+              rhs = CEInt {i = 1}}}}]},
       CSRet {val = Some tensor}
     ] in
     let ifEmptySlice = CSIf {

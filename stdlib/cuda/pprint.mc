@@ -24,11 +24,33 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     (env, join [fun, "<<<", gridSize, ", ", blockSize, ">>>(",
                 strJoin ", " args, ")"])
 
+  sem printCStmt (indent : Int) (env : PprintEnv) =
+  | CSIfMacro {cond = cond, thn = thn, els = els} ->
+    let i = indent in
+    match printCExpr env cond with (env, cond) in
+    match printCStmts i env thn with (env, thn) in
+    match printCStmts i env els with (env, els) in
+    (env, join [
+      "#if (", cond, ")", pprintNewline i, thn, pprintNewline i,
+      "#else", pprintNewline i, els, pprintNewline i, "#endif"])
+  | CSTensorDataCopyCpu t ->
+    match printCExpr env t.src with (env, src) in
+    match pprintEnvGetStr env t.dstId with (env, dstId) in
+    (env, join ["tensorDataCopyCpu(", src, ", ", dstId, ")"])
+  | CSTensorDataCopyGpu t ->
+    match printCExpr env t.src with (env, src) in
+    match pprintEnvGetStr env t.dstId with (env, dstId) in
+    (env, join ["tensorDataCopyGpu(", src, ", ", dstId, ")"])
+  | CSTensorDataFreeGpu t ->
+    match pprintEnvGetStr env t.arg with (env, arg) in
+    (env, join ["tensorDataFreeGpu(", arg, ")"])
+
   sem printCudaAttribute (env : PprintEnv) =
   | CuAHost _ -> (env, "__host__")
   | CuADevice _ -> (env, "__device__")
   | CuAGlobal _ -> (env, "__global__")
   | CuAExternC _ -> (env, "extern \"C\"")
+  | CuAManaged _ -> (env, "__managed__")
 
   sem printCudaTop (indent : Int) (env : PprintEnv) =
   | CuTTop {attrs = attrs, top = top} ->
@@ -84,6 +106,24 @@ utest printExpr (kernelApp []) with kernelStr "()" in
 utest printExpr (kernelApp [cint_ 1]) with kernelStr "(1)" in
 utest printExpr (kernelApp [cint_ 1, cint_ 2]) with kernelStr "(1, 2)" in
 
+let printCStmt = lam stmt : CStmt.
+  match printCStmt 0 pprintEnvEmpty stmt with (_, str) in str
+in
+
+let y = nameNoSym "y" in
+let ifMacroStmt = CSIfMacro {
+  cond = CEApp {
+    fun = nameNoSym "defined", args = [CEVar {id = nameNoSym "x"}]},
+  thn = [CSDef {ty = CTyInt (), id = Some y, init = Some (CIExpr {expr = CEInt {i = 1}})}],
+  els = [CSDef {ty = CTyInt (), id = Some y, init = Some (CIExpr {expr = CEInt {i = 2}})}]} in
+utest printCStmt ifMacroStmt with strJoin "\n" [
+  "#if (defined(x))",
+  "int y = 1;",
+  "#else",
+  "int y = 2;",
+  "#endif"
+] using eqString in
+
 let printCuTop = lam cudaTop : CuTop.
   match printCudaTop 0 pprintEnvEmpty cudaTop with (_, str) in str
 in
@@ -96,6 +136,7 @@ utest printCuTop (cuTop [CuAHost ()]) with "__host__ int x;" in
 utest printCuTop (cuTop [CuADevice (), CuAHost ()])
 with "__device__ __host__ int x;" in
 utest printCuTop (cuTop [CuAGlobal ()]) with "__global__ int x;" in
+utest printCuTop (cuTop [CuAManaged ()]) with "__managed__ int x;" in
 
 let prog = CuPProg {
   includes = ["<string.h>"],

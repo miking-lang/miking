@@ -9,7 +9,7 @@ include "set.mc"
 include "c/compile.mc"
 include "cuda/ast.mc"
 include "cuda/compile.mc"
-include "cuda/memory.mc"
+include "cuda/pmexpr-compile.mc"
 include "cuda/intrinsics/foldl.mc"
 include "cuda/intrinsics/loop-kernel.mc"
 include "cuda/intrinsics/loop.mc"
@@ -35,14 +35,14 @@ end
 
 -- Translates kernel expressions to GPU kernel calls.
 lang CudaGpuTranslate =
-  CudaMemoryManagement + CudaMapKernelIntrinsic + CudaLoopKernelIntrinsic
+  CudaMapKernelIntrinsic + CudaLoopKernelIntrinsic
 
   -- NOTE(larshum, 2022-02-08): We assume that the expression for the function
   -- f is a variable containing an identifier. This will not work for closures
   -- or for functions that take additional variables, including those that
   -- capture variables (due to lambda lifting).
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | t & (CEMapKernel _ | CELoopKernel _) ->
+  | (CEMapKernel _) & t ->
     match generateCudaKernelCall ccEnv outExpr t with (kernelTop, kernelCall) in
     let acc = cons kernelTop acc in
     (acc, kernelCall)
@@ -54,38 +54,45 @@ lang CudaGpuTranslate =
     (acc, kernelCall)
 end
 
-lang CudaKernelTranslate = CudaCpuTranslate + CudaGpuTranslate
-  sem translateCudaTops (cudaMemEnv : Map Name AllocEnv)
+lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTranslate
+  sem translateCudaTops (accelerateData : Map Name AccelerateData)
+                        (marked : Set Name)
                         (ccEnv : CompileCEnv) =
-  | tops ->
-    let emptyEnv = mapEmpty nameCmp in
-    let tops = map (translateTopToCudaFormat cudaMemEnv) tops in
-    generateIntrinsics cudaMemEnv ccEnv tops
+  | tops -> generateIntrinsics accelerateData marked ccEnv tops
 
-  sem generateIntrinsics (cudaMemEnv : Map Name AllocEnv)
+  sem generateIntrinsics (accelerateData : Map Name AccelerateData)
+                         (marked : Set Name)
                          (ccEnv : CompileCEnv) =
   | tops ->
-    match mapAccumL (generateIntrinsicsTop cudaMemEnv ccEnv)
-                    (mapEmpty nameCmp) tops
-    with (wrapperMap, tops) in
+    let wrapperMap : Map Name Name =
+      mapMapWithKey (lam key. lam. nameSym "cuda_wrap") accelerateData in
+    let tops = map (generateIntrinsicsTop wrapperMap marked ccEnv) tops in
     (wrapperMap, join tops)
 
-  sem generateIntrinsicsTop (cudaMemEnv : Map Name AllocEnv)
-                            (ccEnv : CompileCEnv)
-                            (wrapperMap : Map Name Name) =
+  sem generateIntrinsicsTop (wrapperMap : Map Name Name)
+                            (marked : Set Name)
+                            (ccEnv : CompileCEnv) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapAccumL (generateIntrinsicStmt ccEnv) [] t.body with (tops, body) in
-    match mapLookup t.id cudaMemEnv with Some _ then
-      let cudaWrapperId = nameSym "cuda_wrap" in
-      let wrapperMap = mapInsert t.id cudaWrapperId wrapperMap in
+    match mapLookup t.id wrapperMap with Some cudaWrapperId then
       let newTop = CTFun {{t with id = cudaWrapperId}
                              with body = body} in
-      let cudaTop = CuTTop {cuTop with top = newTop} in
-      (wrapperMap, snoc tops cudaTop)
+      let cudaTop = CuTTop {{cuTop with attrs = []} with top = newTop} in
+      snoc tops cudaTop
     else
-      let cudaTop = CuTTop {cuTop with top = CTFun {t with body = body}} in
-      (wrapperMap, snoc tops cudaTop)
-  | t -> (wrapperMap, [t])
+      -- NOTE(larshum, 2022-03-16): Functions that were marked contain no
+      -- kernel calls, so they can run on either CPU (host) or GPU (device).
+      -- Functions containing kernel calls must run on the host, so we
+      -- explicitly annotate them that way to distinguish them from wrapper
+      -- functions (annotating only with host is equivalent to no annotation,
+      -- but we use the annotation to distinguish between them).
+      let attrs =
+        if setMem t.id marked then [CuAHost (), CuADevice ()]
+        else [CuAHost ()] in
+      let cudaTop = CuTTop {{cuTop with attrs = attrs}
+                                   with top = CTFun {t with body = body}} in
+      snoc tops cudaTop
+  | t -> [t]
 
   sem generateIntrinsicStmt (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | CSExpr {expr = t} ->
@@ -102,27 +109,4 @@ lang CudaKernelTranslate = CudaCpuTranslate + CudaGpuTranslate
   -- As above, but for intrinsics that do not return values.
   sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | t -> (acc, CSExpr {expr = t})
-
-  -- Updates the tops to use pointers to GPU-allocated variables inside the
-  -- CUDA wrapper functions, since these cannot be stored on the stack. This
-  -- does not include e.g. integer and float literals, since these are not
-  -- considered to be "allocated".
-  sem translateTopToCudaFormat (cudaMemEnv : Map Name AllocEnv) =
-  | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
-  | CTDef t -> CuTTop {attrs = [CuAHost (), CuADevice ()], top = CTDef t}
-  | CTFun t ->
-    match mapLookup t.id cudaMemEnv with Some allocEnv then
-      let body = map (usePointerToGpuVariablesStmt allocEnv) t.body in
-      let cTop = CTFun {t with body = body} in
-      CuTTop {attrs = [], top = cTop}
-    else
-      let attrs = [CuAHost (), CuADevice ()] in
-      CuTTop {attrs = attrs, top = CTFun t}
-
-  sem usePointerToGpuVariablesStmt (env : AllocEnv) =
-  | CSDef (t & {id = Some id}) ->
-    match allocEnvLookup id env with Some (Gpu _) then
-      CSDef {t with ty = CTyPtr {ty = t.ty}}
-    else CSDef t
-  | stmt -> stmt
 end

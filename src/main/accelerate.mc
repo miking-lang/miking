@@ -2,11 +2,12 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/constant-app.mc"
-include "cuda/memory.mc"
 include "cuda/pmexpr-ast.mc"
+include "cuda/pmexpr-compile.mc"
 include "cuda/pmexpr-pprint.mc"
 include "cuda/pprint.mc"
 include "cuda/kernel-translate.mc"
+include "cuda/tensor-memory.mc"
 include "cuda/well-formed.mc"
 include "cuda/wrapper.mc"
 include "futhark/alias-analysis.mc"
@@ -62,10 +63,10 @@ lang MExprFutharkCompile =
 end
 
 lang MExprCudaCompile =
-  MExprRemoveTypeAscription + CudaPMExprAst + CudaMemoryManagement +
+  MExprRemoveTypeAscription + CudaPMExprAst + CudaPMExprCompile +
   MExprTypeLift + TypeLiftAddRecordToEnvOrdered + SeqTypeTypeLift +
   TensorTypeTypeLift + CudaCompile + CudaKernelTranslate + CudaPrettyPrint +
-  CudaCWrapper + CudaWellFormed + CudaConstantApp
+  CudaCWrapper + CudaWellFormed + CudaConstantApp + CudaTensorMemory
 end
 
 type AccelerateHooks a b = {
@@ -149,7 +150,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   use MExprCudaCompile in
   wellFormed ast;
   let ast = constantAppToExpr ast in
-  match toCudaPMExpr accelerateData ast with (cudaMemEnv, ast) in
+  match toCudaPMExpr ast with (marked, ast) in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
   let opts : CompileCOptions = {
@@ -159,7 +160,9 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   match compile typeEnv opts ast with (_, types, tops, _, _) in
   let ctops = join [types, tops] in
   let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
-  match translateCudaTops cudaMemEnv ccEnv ctops with (wrapperMap, cudaTops) in
+  match translateCudaTops accelerateData marked ccEnv ctops
+  with (wrapperMap, cudaTops) in
+  let cudaTops = addCudaTensorMemoryManagement ccEnv cudaTops in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
@@ -368,7 +371,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.
-  let ast = replaceAccelerate accelerated ast in
+  let ast = replaceAccelerate accelerated env ast in
 
   -- Generate the OCaml AST
   let exprTops = generateTops env ast in

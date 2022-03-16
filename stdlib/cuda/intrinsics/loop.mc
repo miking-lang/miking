@@ -5,7 +5,6 @@ include "cuda/intrinsics/intrinsic.mc"
 lang CudaLoopIntrinsic = CudaIntrinsic
   sem generateCudaIntrinsicCallNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | CESeqLoop t ->
-    dprint t;
     match _getFunctionIdAndArgs t.f with (funId, args) in
     let i = nameSym "i" in
     let iterInitStmt = CSDef {

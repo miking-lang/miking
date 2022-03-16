@@ -21,7 +21,7 @@ lang CudaPMExprAst = PMExprAst
   | TmMapKernel {f : Expr, s : Expr, ty : Type, info : Info}
   | TmReduceKernel {f : Expr, ne : Expr, s : Expr, commutative : Bool, ty : Type, info : Info}
   | TmLoopKernel {n : Expr, f : Expr, ty : Type, info : Info}
-  | TmCopy {arg : Expr, toMem : AllocMem, ty : Type, info : Info}
+  | TmCopy {arg : Name, toMem : AllocMem, ty : Type, info : Info}
   | TmFree {arg : Name, tyArg : Type, mem : AllocMem, ty : Type, info : Info}
 
   sem isKernel =
@@ -106,9 +106,7 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
     (acc, TmLoopKernel {{t with n = n} with f = tf})
-  | TmCopy t ->
-    match f acc t.arg with (acc, arg) in
-    (acc, TmCopy {t with arg = arg})
+  | TmCopy t -> (acc, TmCopy t)
   | TmFree t -> (acc, TmFree t)
 
   sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
@@ -183,9 +181,10 @@ lang CudaPMExprAst = PMExprAst
                       with f = f}
                       with ty = ty}
   | TmCopy t ->
-    let arg = typeAnnotExpr env t.arg in
-    TmCopy {{t with arg = arg}
-               with ty = tyTm arg}
+    let ty =
+      match mapLookup t.ident env.varEnv with Some ty then ty
+      else tyunknown_ in
+    TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = tyunit_}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -239,7 +238,10 @@ lang CudaPMExprAst = PMExprAst
     else None ()
   | TmCopy r ->
     match lhs with TmCopy l then
-      eqExprH env free l.arg r.arg
+      match (env, free) with ({varEnv = varEnv}, {varEnv = freeVarEnv}) in
+      match _eqCheck l.arg r.arg varEnv freeVarEnv with Some freeVarEnv then
+        Some {free with varEnv = freeVarEnv}
+      else None ()
     else None ()
   | TmFree r ->
     match lhs with TmFree l then
@@ -274,7 +276,7 @@ lang CudaPMExprAst = PMExprAst
   | TmLoopKernel t ->
     k (TmLoopKernel {{t with n = normalizeTerm t.n}
                         with f = normalizeTerm t.f})
-  | TmCopy t -> k (TmCopy {t with arg = normalizeTerm t.arg})
+  | TmCopy t -> k (TmCopy t)
   | TmFree t -> k (TmFree t)
 end
 

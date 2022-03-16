@@ -20,7 +20,11 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
 
       -- C compiler environment, used to compile MExpr types to the C
       -- equivalents.
-      compileCEnv : CompileCEnv}
+      compileCEnv : CompileCEnv,
+
+      -- Identifier of a global variable used to give each tensor parameter a
+      -- unique integer identifier.
+      tensorCountId : Name}
 
   sem lookupTypeIdent (env : TargetWrapperEnv) =
   | TyRecord {labels = []} -> None ()
@@ -78,6 +82,7 @@ lang CToCudaWrapper = CudaCWrapperBase
       rhs = CEVar {id = t.dataIdent}}} in
     [declStmt, setLenStmt, setSeqStmt]
   | TensorRepr t ->
+    match env.targetEnv with CudaTargetEnv cenv in
     let cudaType = getCudaType env.targetEnv ty in
     let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
     let setTensorDataStmt = CSExpr {expr = CEBinOp {
@@ -141,8 +146,20 @@ lang CToCudaWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorOffsetKey},
       rhs = CEInt {i = 0}}} in
+    let setTensorIdStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorIdKey},
+      rhs = CEVar {id = cenv.tensorCountId}}} in
+    let incrementTensorCountStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = cenv.tensorCountId},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = cenv.tensorCountId},
+        rhs = CEInt {i = 1}}}} in
     [ declStmt, setTensorDataStmt, setTensorRankStmt, checkRankStmt
-    , iterInitStmt, setTensorDimsLoopStmt, setTensorOffsetStmt ]
+    , iterInitStmt, setTensorDimsLoopStmt, setTensorOffsetStmt, setTensorIdStmt
+    , incrementTensorCountStmt ]
   | RecordRepr t ->
     match ty with TyRecord rec in
     let setField = lam idx : Int. lam fieldLabel : (CDataRepr, SID).
@@ -185,7 +202,13 @@ lang CToCudaWrapper = CudaCWrapperBase
   sem generateCToCudaWrapper =
   | env ->
     let env : CWrapperEnv = env in
-    foldl (generateCToCudaWrapperArg env) [] env.arguments
+    match env.targetEnv with CudaTargetEnv cenv in
+    let initTensorCounterStmt = CSDef {
+      ty = CTyInt64 (), id = Some cenv.tensorCountId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    cons
+      initTensorCounterStmt
+      (foldl (generateCToCudaWrapperArg env) [] env.arguments)
 end
 
 lang CudaCallWrapper = CudaCWrapperBase
@@ -353,7 +376,7 @@ lang CudaCWrapper = CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
     let revTypeEnv = mapFromSeq cmpType (map tupleSwap compileCEnv.typeEnv) in
     let targetEnv = CudaTargetEnv {
       wrapperMap = wrapperMap, compileCEnv = compileCEnv,
-      revTypeEnv = revTypeEnv} in
+      revTypeEnv = revTypeEnv, tensorCountId = nameSym "tensor_count"} in
     let env : CWrapperEnv = _emptyWrapperEnv () in
     {env with targetEnv = targetEnv}
 

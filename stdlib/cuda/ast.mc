@@ -12,6 +12,7 @@ lang CudaAst = CAst + MExprAst
   | CuADevice ()
   | CuAGlobal ()
   | CuAExternC ()
+  | CuAManaged ()
 
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
@@ -58,6 +59,12 @@ lang CudaAst = CAst + MExprAst
                            with blockSize = blockSize}
                            with args = args})
   | expr & (CEThreadIdx _ | CEBlockIdx _ | CEBlockDim _) -> (acc, expr)
+
+  syn CStmt =
+  | CSIfMacro {cond : CExpr, thn : [CStmt], els : [CStmt]}
+  | CSTensorDataCopyCpu {src : CExpr, dstId : Name, dataTy : CType}
+  | CSTensorDataCopyGpu {src : CExpr, dstId : Name, dataTy : CType}
+  | CSTensorDataFreeGpu {arg : CExpr}
 
   syn CuTop =
   | CuTTop {attrs : [CudaAttribute], top : CTop}

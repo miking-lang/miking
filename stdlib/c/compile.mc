@@ -113,6 +113,7 @@ let cCompilerNames: [Name] = concat [
 let _constrKey = nameNoSym "constr"
 let _seqKey = nameNoSym "seq"
 let _seqLenKey = nameNoSym "len"
+let _tensorIdKey = nameNoSym "id"
 let _tensorDataKey = nameNoSym "data"
 let _tensorDimsKey = nameNoSym "dims"
 let _tensorRankKey = nameNoSym "rank"
@@ -469,6 +470,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- dimensions to 3.
     let intType = getCIntType env in
     let fields = [
+      (intType, Some _tensorIdKey),
       (CTyPtr { ty = ty }, Some _tensorDataKey),
       (CTyArray { ty = intType, size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
       (intType, Some _tensorRankKey),
@@ -1801,9 +1803,9 @@ utest testCompile tensor with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Tensor {int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor;",
+  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor;",
   "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
-  "typedef struct Tensor1 {double (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor1;",
+  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor1;",
   "int64_t cartesian_to_linear_index(int64_t dims1[3], int64_t rank1, Seq cartesian_idx) {",
   "  int64_t tmp = 1;",
   "  int64_t linear_idx = 0;",
