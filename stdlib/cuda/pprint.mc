@@ -12,10 +12,42 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuDZ _ -> "z"
 
   sem printCExpr (env : PprintEnv) =
+  | CESeqMap {f = f, s = s} ->
+    match printCExpr env f with (env, f) in
+    match printCExpr env s with (env, s) in
+    (env, join ["seqMap(", f, ", ", s, ")"])
+  | CESeqFoldl {f = f, acc = acc, s = s} ->
+    match printCExpr env f with (env, f) in
+    match printCExpr env acc with (env, acc) in
+    match printCExpr env s with (env, s) in
+    (env, join ["seqFoldl(", f, ", ", acc, ", ", s, ")"])
+  | CESeqLoop {n = n, f = f} ->
+    match printCExpr env n with (env, n) in
+    match printCExpr env f with (env, f) in
+    (env, join ["seqLoop(", n, ", ", f, ")"])
+  | CETensorSliceExn {t = t, slice = slice} ->
+    match printCExpr env t with (env, t) in
+    match printCExpr env slice with (env, slice) in
+    (env, join ["tensorSliceExn(", t, ", ", slice, ")"])
+  | CETensorSubExn {t = t, ofs = ofs, len = len} ->
+    match printCExpr env t with (env, t) in
+    match printCExpr env ofs with (env, ofs) in
+    match printCExpr env len with (env, len) in
+    (env, join ["tensorSubExn(", t, ", ", ofs, ", ", len, ")"])
   | CEThreadIdx {dim = dim} -> (env, concat "threadIdx." (_printCudaDim dim))
   | CEBlockIdx {dim = dim} -> (env, concat "blockIdx." (_printCudaDim dim))
   | CEBlockDim {dim = dim} -> (env, concat "blockDim." (_printCudaDim dim))
   | CEGridDim {dim = dim} -> (env, concat "gridDim." (_printCudaDim dim))
+  | CEMapKernel {f = f, s = s, opsPerThread = opsPerThread} ->
+    match printCExpr env f with (env, f) in
+    match printCExpr env s with (env, s) in
+    let ops = int2string opsPerThread in
+    (env, join ["CEMapKernel(", f, ", ", s, ")[opsPerThread=", ops, "]"])
+  | CELoopKernel {n = n, f = f, opsPerThread = opsPerThread} ->
+    match printCExpr env n with (env, n) in
+    match printCExpr env f with (env, f) in
+    let ops = int2string opsPerThread in
+    (env, join ["CELoopKernel(", n, ", ", f, ")[opsPerThread=", ops, "]"])
   | CEKernelApp t ->
     match pprintEnvGetStr env t.fun with (env, fun) in
     match mapAccumL printCExpr env t.args with (env, args) in
@@ -42,7 +74,7 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     match pprintEnvGetStr env t.dstId with (env, dstId) in
     (env, join ["tensorDataCopyGpu(", src, ", ", dstId, ")"])
   | CSTensorDataFreeGpu t ->
-    match pprintEnvGetStr env t.arg with (env, arg) in
+    match printCExpr env t.arg with (env, arg) in
     (env, join ["tensorDataFreeGpu(", arg, ")"])
 
   sem printCudaAttribute (env : PprintEnv) =
