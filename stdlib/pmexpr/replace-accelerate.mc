@@ -4,13 +4,16 @@
 -- they have a valid OCaml type.
 
 include "mexpr/type-lift.mc"
+include "ocaml/ast.mc"
 include "ocaml/external.mc"
 include "ocaml/generate.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
-lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal + MExprTypeLift
+lang PMExprReplaceAccelerate =
+  PMExprAst + OCamlGenerateExternal + OCamlTopAst
+
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
     let layout = OTyBigarrayClayout {info = info} in
@@ -21,8 +24,8 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal + MExprTypeLift
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 
-  sem _mexprToOCamlType (env : GenerateEnv) =
-  | ty & (TyCon _) ->
+  sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
+  | ty & (TyCon {info = info, ident = ident}) ->
     let unwrapType = lam ty.
       let ty = typeUnwrapAlias env.aliases ty in
       match ty with TyCon {ident = ident} then
@@ -31,53 +34,67 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal + MExprTypeLift
         else ty
       else ty
     in
-    let uty = unwrapType ty in
-    match uty with TyRecord {labels = labels, fields = fields, info = info} then
-      let ocamlTypedFields =
-        map
-          (lam p : (SID, Type).
+    _mexprToOCamlType env acc (unwrapType ty)
+  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
+    match record2tuple fields with Some tys then
+      (acc, OTyTuple {info = info, tys = tys})
+    else
+      match
+        mapAccumL
+          (lam acc. lam p : (SID, Type).
             match p with (sid, ty) in
-            (sidToString sid, _mexprToOCamlType env ty))
-          (mapBindings fields) in
-      OTyRecord {info = info, fields = ocamlTypedFields, tyident = ty}
-    else match uty with TySeq {ty = ty, info = info} then
-      OTyArray {info = info, ty = _mexprToOCamlType uty}
-    else match uty with TyTensor _ then
-      _tensorToOCamlType uty
-    else uty
-  -- NOTE(larshum, 2022-03-16): Empty record types are not type-lifted.
-  | TyRecord {info = info, labels = []} -> OTyTuple {info = info, tys = []}
-  | ty & (TyTensor _) -> _tensorToOCamlType ty
-  | ty -> ty
+            match _mexprToOCamlType env acc ty with (acc, ty) in
+            (acc, (sidToString sid, ty)))
+          acc (mapBindings fields)
+      with (acc, ocamlTypedFields) in
+      -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
+      -- and use it as the target for conversion.
+      let recTyId = nameSym "record" in
+      let tyident = OTyVar {info = info, ident = recTyId, args = []} in
+      let recTy = OTyRecord {
+        info = info, fields = ocamlTypedFields, tyident = tyident} in
+      let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
+      (snoc acc recTyDecl, recTy)
+  | TySeq {info = info, ty = ty} ->
+    (acc, OTyArray {info = info, ty = _mexprToOCamlType ty})
+  | ty & (TyTensor _) -> (acc, _tensorToOCamlType ty)
+  | ty -> (acc, ty)
 
-  sem wrapInConvertData (env : GenerateEnv) =
+  sem wrapInConvertData (env : GenerateEnv) (acc : [Top]) =
   | t ->
     let ty = tyTm t in
-    let ocamlTy = _mexprToOCamlType env ty in
+    match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
     match convertData (infoTm t) env t ty ocamlTy with (_, e) in
-    e
+    (acc, e)
 
-  sem convertAccelerateParametersH (env : GenerateEnv) =
+  sem convertAccelerateParametersH (env : GenerateEnv) (acc : [Top]) =
   | TmApp t ->
-    let lhs = convertAccelerateParametersH env t.lhs in
-    let rhs = wrapInConvertData env t.rhs in
-    TmApp {{t with lhs = lhs} with rhs = rhs}
-  | t -> t
+    match convertAccelerateParametersH env acc t.lhs with (acc, lhs) in
+    match wrapInConvertData env acc t.rhs with (acc, rhs) in
+    (acc, TmApp {{t with lhs = lhs} with rhs = rhs})
+  | t -> (acc, t)
 
-  sem convertAccelerateParameters (env : GenerateEnv) =
+  sem convertAccelerateParameters (env : GenerateEnv) (acc : [Top]) =
   | ast ->
-    let ast = convertAccelerateParametersH env ast in
+    match convertAccelerateParametersH env acc ast with (acc, ast) in
     let ty = tyTm ast in
-    let ocamlTy = _mexprToOCamlType env ty in
-    match convertData (infoTm ast) env ast ocamlTy ty
-    with (_, ast) in
-    ast
+    match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
+    match convertData (infoTm ast) env ast ocamlTy ty with (_, ast) in
+    (acc, ast)
 
   -- We replace the auxilliary acceleration terms in the AST, by removing any
   -- let-expressions involving an accelerate term and updates calls to such
   -- terms to properly convert types of parameters and the return value.
+  --
+  -- The result is a list of OCaml record definitions, needed to handle the
+  -- data conversion of record types, and an AST.
   sem replaceAccelerate (accelerated : Map Name AccelerateData)
                         (env : GenerateEnv) =
+  | t -> replaceAccelerateH accelerated env [] t
+
+  sem replaceAccelerateH (accelerated : Map Name AccelerateData)
+                         (env : GenerateEnv)
+                         (acc : [Top]) =
   | t & (TmApp {lhs = lhs, ty = appTy}) ->
     let appArgs = collectAppArguments t in
     match appArgs with (TmVar {ident = id}, args) then
@@ -86,14 +103,17 @@ lang PMExprReplaceAccelerate = PMExprAst + OCamlGenerateExternal + MExprTypeLift
         -- the only parameter.
         match args with _ ++ [TmConst {val = CInt {val = 0}}] then
           let lhs = withType appTy lhs in
-          convertAccelerateParameters env lhs
-        else convertAccelerateParameters env t
-      else t
-    else t
+          convertAccelerateParameters env acc lhs
+        else convertAccelerateParameters env acc t
+      else (acc, t)
+    else (acc, t)
   | TmLet t ->
     if mapMem t.ident accelerated then
-      replaceAccelerate accelerated env t.inexpr
-    else TmLet {{t with body = replaceAccelerate accelerated env t.body}
-                   with inexpr = replaceAccelerate accelerated env t.inexpr}
-  | t -> smap_Expr_Expr (replaceAccelerate accelerated env) t
+      replaceAccelerateH accelerated env acc t.inexpr
+    else
+      match replaceAccelerateH accelerated env acc t.body with (acc, body) in
+      match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
+      (acc, TmLet {{t with body = body} with inexpr = inexpr})
+  | t ->
+    smapAccumL_Expr_Expr (replaceAccelerateH accelerated env) acc t
 end

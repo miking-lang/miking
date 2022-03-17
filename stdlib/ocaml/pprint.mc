@@ -67,9 +67,7 @@ let noSymConPrefix = "N"
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
-  FunTypePrettyPrint + OCamlTypeAst
-
-  sem pprintLabelString =
+  FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyRecord t ->
@@ -94,6 +92,7 @@ lang OCamlTypePrettyPrint =
       match mapAccumL f env fieldStrs with (env, fields) then
         (env, join ["{", strJoin ";" fields, "}"])
       else never
+  | OTyVar {ident = ident} -> pprintVarName env ident
   | OTyVarExt {ident = ident, args = []} -> (env, ident)
   | OTyVarExt {ident = ident, args = [arg]} ->
     match getTypeStringCode indent env arg with (env, arg) then
@@ -337,6 +336,11 @@ lang OCamlPrettyPrint =
     foldr f pprintEnvEmpty tops
 
   sem pprintTop (env : PprintEnv) =
+  | OTopTypeDecl t ->
+    let indent = 0 in
+    match pprintVarName env t.ident with (env, ident) in
+    match getTypeStringCode indent env t.ty with (env, ty) in
+    (env, join ["type ", ident, " = ", ty, ";;"])
   | OTopVariantTypeDecl t ->
     let indent = 0 in
     let f = lam env. lam ident. lam ty.
