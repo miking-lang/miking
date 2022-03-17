@@ -7,12 +7,13 @@ include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/external.mc"
 include "ocaml/generate.mc"
+include "ocaml/pprint.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
-  PMExprAst + OCamlGenerateExternal + OCamlTopAst
+  PMExprAst + OCamlGenerateExternal + OCamlTopAst + OCamlPrettyPrint
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -44,13 +45,17 @@ lang PMExprReplaceAccelerate =
           (lam acc. lam p : (SID, Type).
             match p with (sid, ty) in
             match _mexprToOCamlType env acc ty with (acc, ty) in
-            (acc, (sidToString sid, ty)))
+            -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
+            -- of the OCaml pretty-printer to ensure the labels of the fields
+            -- match.
+            let str = pprintLabelString (sidToString sid) in
+            (acc, (str, ty)))
           acc (mapBindings fields)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
       let recTyId = nameSym "record" in
-      let tyident = OTyVar {info = info, ident = recTyId, args = []} in
+      let tyident = OTyVar {info = info, ident = recTyId} in
       let recTy = OTyRecord {
         info = info, fields = ocamlTypedFields, tyident = tyident} in
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in

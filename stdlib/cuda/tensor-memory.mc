@@ -96,24 +96,26 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
 
   sem mapTensors (ccEnv : CompileCEnv) (tensorCallFn : CType -> CExpr -> [CStmt]) =
   | (CTyVar {id = tyId}, id) ->
-    let idExpr = CEVar {id = id} in
-    recursive let work = lam ty : Type.
+    recursive let work = lam ty : Type. lam expr : CExpr.
+      let ty = _unwrapType ccEnv.typeEnv ty in
       match ty with TyTensor {ty = elemTy} then
         let cElemTy = compileType ccEnv elemTy in
-        tensorCallFn cElemTy idExpr
+        tensorCallFn cElemTy expr
       else match ty with TyRecord t then
         mapFoldWithKey
-          (lam acc : [CStmt]. lam. lam fieldTy : Type.
-            concat acc (work fieldTy))
+          (lam acc : [CStmt]. lam key : SID. lam fieldTy : Type.
+            let fieldId = nameNoSym (sidToString key) in
+            let fieldExpr = CEMember {lhs = expr, id = fieldId} in
+            concat acc (work fieldTy fieldExpr))
           [] t.fields
       else []
     in
+    let idExpr = CEVar {id = id} in
     let lookupType = TyCon {ident = tyId, info = NoInfo ()} in
-    work (_unwrapType ccEnv.typeEnv lookupType)
+    work lookupType idExpr
   | x -> []
 
-  -- Adds code for initialization and destruction of tensor memory management
-  -- within wrapper functions.
+  -- Adds code for initialization of tensor data within wrapper functions.
   sem addWrapperTensorCode (ccEnv : CompileCEnv) =
   | CuTTop (tt & {attrs = [], top = CTFun t}) ->
     let tensorInitStmts =
@@ -221,7 +223,7 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
     let status = _tensorKeyAccess _tensorStatusKey t.src in
     let assignStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEVar {id = t.dstId},
+      lhs = t.dst,
       rhs = t.src}} in
     let copyCpuToGpuStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
@@ -241,7 +243,7 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
       els = []} in
     let setDstDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = t.dstId}, id = _tensorDataKey},
+      lhs = CEMember {lhs = t.dst, id = _tensorDataKey},
       rhs = CECast {ty = t.dataTy, rhs = cpuData}}} in
     [assignStmt, copyIfInvalidStmt, setDstDataStmt]
   | CSTensorDataCopyGpu t ->
@@ -252,7 +254,7 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
     let null = CEVar {id = nameNoSym "NULL"} in
     let assignStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEVar {id = t.dstId},
+      lhs = t.dst,
       rhs = t.src}} in
     let allocGpuDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMalloc,
@@ -281,7 +283,7 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
       els = []} in
     let setDstDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = t.dstId}, id = _tensorDataKey},
+      lhs = CEMember {lhs = t.dst, id = _tensorDataKey},
       rhs = CECast {ty = t.dataTy, rhs = gpuData}}} in
     [assignStmt, allocIfNullStmt, copyIfInvalidStmt, setDstDataStmt]
   | CSTensorDataFreeGpu t ->

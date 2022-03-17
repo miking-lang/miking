@@ -147,14 +147,12 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
           (lam subMap : [Map Name (Info -> Expr)]. lam id : Name.
            lam memTy : (AllocMem, Type).
             match memTy with (mem, ty) in
-            match ty with TyTensor _ | TySeq _ then
-              if eqMem mem toMem then subMap
-              else
-                let altId = nameSetNewSym id in
-                let exprFun = lam info.
-                  TmVar {ident = altId, ty = ty, info = info, frozen = false} in
-                mapInsert id exprFun subMap
-            else subMap)
+            if eqMem mem toMem then subMap
+            else
+              let altId = nameSetNewSym id in
+              let exprFun = lam info.
+                TmVar {ident = altId, ty = ty, info = info, frozen = false} in
+              mapInsert id exprFun subMap)
           (mapEmpty nameCmp) vars in
       let env =
         mapFoldWithKey

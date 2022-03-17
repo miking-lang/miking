@@ -67,11 +67,11 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
       "#else", pprintNewline i, els, pprintNewline i, "#endif"])
   | CSTensorDataCopyCpu t ->
     match printCExpr env t.src with (env, src) in
-    match pprintEnvGetStr env t.dstId with (env, dstId) in
+    match printCExpr env t.dst with (env, dstId) in
     (env, join ["tensorDataCopyCpu(", src, ", ", dstId, ")"])
   | CSTensorDataCopyGpu t ->
     match printCExpr env t.src with (env, src) in
-    match pprintEnvGetStr env t.dstId with (env, dstId) in
+    match printCExpr env t.dst with (env, dstId) in
     (env, join ["tensorDataCopyGpu(", src, ", ", dstId, ")"])
   | CSTensorDataFreeGpu t ->
     match printCExpr env t.arg with (env, arg) in
