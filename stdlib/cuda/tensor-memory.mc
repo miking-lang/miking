@@ -113,7 +113,61 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
     let idExpr = CEVar {id = id} in
     let lookupType = TyCon {ident = tyId, info = NoInfo ()} in
     work lookupType idExpr
-  | x -> []
+  | _ -> []
+
+  -- NOTE(larshum, 2022-03-18): All tensors are copied back (if needed) and
+  -- freed at the end of the wrapper function.
+  sem tensorFreeCode =
+  | n ->
+    let iterId = nameSym "i" in
+    let iterTensorKey = lam key.
+      CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = key},
+        rhs = CEVar {id = iterId}} in
+    let cpuData = iterTensorKey _tensorCpuDataKey in
+    let gpuData = iterTensorKey _tensorGpuDataKey in
+    let sizeData = iterTensorKey _tensorSizeDataKey in
+    let status = iterTensorKey _tensorStatusKey in
+    let copyDataToCpuStmt = CSExpr {expr = CEApp {
+      fun = _cudaMemcpy,
+      args = [
+        cpuData, gpuData, sizeData,
+        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+    let setStatusOkStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = status,
+      rhs = CEVar {id = _tensorStateOk}}} in
+    let copyDataToCpuIfInvalidStmt = CSIf {
+      cond = CEBinOp {
+        op = COAnd (),
+        lhs = gpuData,
+        rhs = CEBinOp {
+          op = COEq (), lhs = status,
+          rhs = CEVar {id = _tensorStateCpuInvalid}}},
+      thn = [copyDataToCpuStmt, setStatusOkStmt],
+      els = []} in
+    let cudaFreeStmt = CSExpr {expr = CEApp {
+      fun = _cudaFree, args = [gpuData]}} in
+    let null = CEVar {id = nameNoSym "NULL"} in
+    let setToNullStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = gpuData,
+      rhs = null}} in
+    let freeGpuDataStmt = CSIf {
+      cond = gpuData,
+      thn = [cudaFreeStmt, setToNullStmt],
+      els = []} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let loopStmt = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = CEVar {id = iterId},
+        rhs = CEInt {i = n}},
+      body = [copyDataToCpuIfInvalidStmt, freeGpuDataStmt]} in
+    [iterInitStmt, loopStmt]
 
   -- Adds code for initialization of tensor data within wrapper functions.
   sem addWrapperTensorCode (ccEnv : CompileCEnv) =
@@ -127,7 +181,8 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
       foldl
         (lam acc. lam param : (Name, Type). (countTensorParams ccEnv) acc param.0)
         0 t.params in
-    let body = join [tensorInitStmts, t.body] in
+    let tensorFreeStmts = tensorFreeCode ntensors in
+    let body = join [tensorInitStmts, t.body, tensorFreeStmts] in
     CuTTop {tt with top = CTFun {t with body = body}}
   | t -> t
 end
@@ -286,41 +341,6 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
       lhs = CEMember {lhs = t.dst, id = _tensorDataKey},
       rhs = CECast {ty = t.dataTy, rhs = gpuData}}} in
     [assignStmt, allocIfNullStmt, copyIfInvalidStmt, setDstDataStmt]
-  | CSTensorDataFreeGpu t ->
-    let null = CEVar {id = nameNoSym "NULL"} in
-    let cpuData = _tensorKeyAccess _tensorCpuDataKey t.arg in
-    let gpuData = _tensorKeyAccess _tensorGpuDataKey t.arg in
-    let sizeData = _tensorKeyAccess _tensorSizeDataKey t.arg in
-    let status = _tensorKeyAccess _tensorStatusKey t.arg in
-    let copyDataToCpuStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        cpuData, gpuData, sizeData,
-        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-    let setStatusOkStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = status,
-      rhs = CEVar {id = _tensorStateOk}}} in
-    let copyDataToCpuIfInvalidStmt = CSIf {
-      cond = CEBinOp {
-        op = COAnd (),
-        lhs = gpuData,
-        rhs = CEBinOp {
-          op = COEq (), lhs = status,
-          rhs = CEVar {id = _tensorStateCpuInvalid}}},
-      thn = [copyDataToCpuStmt, setStatusOkStmt],
-      els = []} in
-    let cudaFreeStmt = CSExpr {expr = CEApp {
-      fun = _cudaFree, args = [gpuData]}} in
-    let setToNullStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = gpuData,
-      rhs = null}} in
-    let freeGpuDataStmt = CSIf {
-      cond = gpuData,
-      thn = [cudaFreeStmt, setToNullStmt],
-      els = []} in
-    [copyDataToCpuIfInvalidStmt, freeGpuDataStmt]
   | stmt -> [stmt]
 
   sem replaceTensorMemoryOperations =

@@ -201,17 +201,15 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
       mapFoldWithKey
         (lam acc : (AllocEnv, [Expr]). lam id : Name. lam memTy : (AllocMem, Type).
           match memTy with (mem, ty) in
-          match ty with TyTensor _ | TySeq _ then
-            match acc with (env, freeLets) in
-            match allocEnvLookup id env with Some _ then
-              let unitTy = tyWithInfo t.info tyunit_ in
-              let freeExpr = TmFree {
-                arg = id, tyArg = ty, mem = mem, ty = unitTy, info = t.info} in
-              let freeLet = TmLet {
-                ident = nameSym "", tyBody = tyTm inexpr, body = freeExpr,
-                inexpr = unit_, ty = t.ty, info = t.info} in
-              (env, snoc freeLets freeLet)
-            else acc
+          match acc with (env, freeLets) in
+          match allocEnvLookup id env with Some _ then
+            let unitTy = tyWithInfo t.info tyunit_ in
+            let freeExpr = TmFree {
+              arg = id, tyArg = ty, mem = mem, ty = unitTy, info = t.info} in
+            let freeLet = TmLet {
+              ident = nameSym "", tyBody = tyTm inexpr, body = freeExpr,
+              inexpr = unit_, ty = t.ty, info = t.info} in
+            (env, snoc freeLets freeLet)
           else acc)
         (env, [])
         vars

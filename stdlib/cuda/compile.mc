@@ -173,10 +173,6 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     let cudaFreeGpuSeqStmt = CSExpr {expr = CEApp {
       fun = _cudaFree, args = [arg]}} in
     [tempDeclStmt, cudaMemcpySeqStmt, cudaFreeGpuDataStmt, cudaFreeGpuSeqStmt]
-  | TyTensor _ ->
-    -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
-    -- later stage in the compiler.
-    [CSTensorDataFreeGpu {arg = arg}]
   | TyRecord t ->
     mapFoldWithKey
       (lam acc : [CStmt]. lam key : SID. lam ty : Type.
@@ -185,7 +181,7 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
         let fieldArg = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileFreeGpu env fieldArg ty))
       [] t.fields
-  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
+  | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in

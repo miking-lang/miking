@@ -64,7 +64,6 @@ lang CudaAst = CAst + MExprAst
   | CSIfMacro {cond : CExpr, thn : [CStmt], els : [CStmt]}
   | CSTensorDataCopyCpu {src : CExpr, dst : CExpr, dataTy : CType}
   | CSTensorDataCopyGpu {src : CExpr, dst : CExpr, dataTy : CType}
-  | CSTensorDataFreeGpu {arg : CExpr}
 
   syn CuTop =
   | CuTTop {attrs : [CudaAttribute], top : CTop}

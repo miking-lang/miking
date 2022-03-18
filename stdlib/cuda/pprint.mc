@@ -73,9 +73,6 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     match printCExpr env t.src with (env, src) in
     match printCExpr env t.dst with (env, dstId) in
     (env, join ["tensorDataCopyGpu(", src, ", ", dstId, ")"])
-  | CSTensorDataFreeGpu t ->
-    match printCExpr env t.arg with (env, arg) in
-    (env, join ["tensorDataFreeGpu(", arg, ")"])
 
   sem printCudaAttribute (env : PprintEnv) =
   | CuAHost _ -> (env, "__host__")
