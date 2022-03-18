@@ -37,7 +37,9 @@ lang PMExprReplaceAccelerate =
     in
     _mexprToOCamlType env acc (unwrapType ty)
   | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
-    match record2tuple fields with Some tys then
+    if null labels then
+      (acc, OTyTuple {info = info, tys = []})
+    else match record2tuple fields with Some tys then
       (acc, OTyTuple {info = info, tys = tys})
     else
       match

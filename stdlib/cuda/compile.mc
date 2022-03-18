@@ -13,24 +13,7 @@ let _free = nameNoSym "free"
 
 let cudaIncludes = concat cIncludes []
 
-lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
-  sem _getSequenceElemType (env : CompileCEnv) =
-  | ty ->
-    -- TODO(larshum, 2022-02-08): Assumes 1d sequence
-    match _unwrapType env.typeEnv ty with TySeq {ty = ty} then
-      compileType env ty
-    else infoErrorExit (infoTy ty) "Could not unwrap sequence type"
-
-  sem _getStructDataElemType (env : CompileCEnv) =
-  | cty ->
-    recursive let findTypeId : CType -> Name = lam ty.
-      match ty with CTyPtr t then findTypeId t
-      else match ty with CTyVar {id = id} then id
-      else error "Expected struct type"
-    in
-    let typeId = findTypeId cty in
-    _getSequenceElemType env (TyCon {ident = typeId, info = NoInfo ()})
-
+lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _compileCopy (env : CompileCEnv) (dst : CExpr) (arg : CExpr) (ty : CType) =
   | Cpu _ -> _compileCopyToCpu env dst arg ty
   | Gpu _ -> _compileCopyToGpu env dst arg ty
@@ -148,7 +131,9 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     use MExprPrettyPrint in
     let tystr = type2str ty in
     error (concat "Copying CPU -> GPU not implemented for type " tystr)
+end
 
+lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _compileFree (env : CompileCEnv) (arg : CExpr) (tyArg : Type) =
   | Cpu _ -> _compileFreeCpu env arg tyArg
   | Gpu _ -> _compileFreeGpu env arg tyArg
@@ -205,7 +190,9 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     use MExprPrettyPrint in
     let tystr = type2str ty in
     error (concat "Freeing GPU memory not implemented for type " tystr)
+end
 
+lang CudaCompile = CudaCompileCopy + CudaCompileFree
   sem compileExpr (env : CompileCEnv) =
   | TmSeqMap t -> error "not supported yet";
     CESeqMap {
