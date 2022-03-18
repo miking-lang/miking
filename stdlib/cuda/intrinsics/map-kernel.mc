@@ -116,7 +116,7 @@ lang CudaMapKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
     let tpbId = nameSym "tpb" in
     let tpbStmt = CSDef {
       ty = getCIntType ccEnv, id = Some tpbId,
-      init = Some (CIExpr {expr = CEInt {i = 512}})} in
+      init = Some (CIExpr {expr = CEInt {i = 256}})} in
     -- Each block consists of 'tpb' threads, and each such thread should
     -- process a specified number of elements.
     let operationsPerBlockExpr = CEBinOp {

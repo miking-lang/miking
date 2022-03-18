@@ -129,6 +129,9 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
     let gpuData = iterTensorKey _tensorGpuDataKey in
     let sizeData = iterTensorKey _tensorSizeDataKey in
     let status = iterTensorKey _tensorStatusKey in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
     let copyDataToCpuStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
@@ -158,15 +161,19 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
       cond = gpuData,
       thn = [cudaFreeStmt, setToNullStmt],
       els = []} in
-    let iterInitStmt = CSDef {
-      ty = CTyInt64 (), id = Some iterId,
-      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEVar {id = iterId},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = iterId},
+        rhs = CEInt {i = 1}}}} in
     let loopStmt = CSWhile {
       cond = CEBinOp {
         op = COLt (),
         lhs = CEVar {id = iterId},
         rhs = CEInt {i = n}},
-      body = [copyDataToCpuIfInvalidStmt, freeGpuDataStmt]} in
+      body = [copyDataToCpuIfInvalidStmt, freeGpuDataStmt, iterIncrementStmt]} in
     [iterInitStmt, loopStmt]
 
   -- Adds code for initialization of tensor data within wrapper functions.
