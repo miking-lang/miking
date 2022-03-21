@@ -44,7 +44,7 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEVar { id = id } -> pprintEnvGetStr env id
   | JSEApp { fun = fun, args = args } ->
     match pprintEnvGetStr env fun with (env,fun) then
-      match mapAccumL printJSExpr env args with (env,args) then
+      match mapAccumL (printJSExpr indent) env args with (env,args) then
         (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
     else never
@@ -66,7 +66,7 @@ lang JSExprPrettyPrint = JSExprAst
         else never in
       match mapAccumL f env params with (env,params) then
         let params = join ["(", strJoin ", " params, ")"] in
-        match printJSExprs ii env body with (env,body) then
+        match (printJSExpr ii) env body with (env,body) then
           (env, join [id, params, " {", pprintNewline ii, body, pprintNewline i, "}"])
         else never
       else never
@@ -80,19 +80,19 @@ lang JSExprPrettyPrint = JSExprAst
     (env, join ["\"", escapeString s, "\""])
 
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
-    match printJSExpr env lhs with (env,lhs) then
-      match printJSExpr env rhs with (env,rhs) then
+    match (printJSExpr indent) env lhs with (env,lhs) then
+      match (printJSExpr indent) env rhs with (env,rhs) then
         (env, _par (printJSBinOp lhs rhs op))
       else never
     else never
 
   | JSEUnOp { op = op, rhs = rhs } ->
-    match printJSExpr env rhs with (env,rhs) then
+    match (printJSExpr indent) env rhs with (env,rhs) then
       (env, _par (printJSUnOp rhs op))
     else never
 
   | JSESeq { exprs = exprs, info = info } ->
-    match printJSExprs indent env exprs with (env,exprs) then
+    match (printJSExprs indent) env exprs with (env,exprs) then
       (env, join [strJoin "; " exprs, ";"])
     else never
 
