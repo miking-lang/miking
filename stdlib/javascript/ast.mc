@@ -59,7 +59,6 @@ lang JStmtAst = JSExprAst
   | JSSRet     { val: Option JSExpr }
   | JSSCont    {}
   | JSSBreak   {}
-  | JSSNop     {}
 
 end
 
