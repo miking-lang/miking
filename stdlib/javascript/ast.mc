@@ -43,10 +43,30 @@ lang JSExprAst
 
 end
 
+
+------------------
+-- C STATEMENTS --
+------------------
+lang JStmtAst = JSExprAst
+
+  syn JSStmt =
+  -- | JSSDef     { ty: CType, id: Option Name, init: Option CInit }
+  | JSSIf      { cond: JSExpr, thn: [JSStmt], els: [JSStmt] }
+  | JSSSwitch  { cond: JSExpr, body: [(Int, [JSStmt])], default: Option [JSStmt] }
+  | JSSWhile   { cond: JSExpr, body: [JSStmt] }
+  | JSSExpr    { expr: JSExpr }
+  | JSSComp    { stmts: [JSStmt] }
+  | JSSRet     { val: Option JSExpr }
+  | JSSCont    {}
+  | JSSBreak   {}
+  | JSSNop     {}
+
+end
+
 -----------------------
 -- COMBINED FRAGMENT --
 -----------------------
-lang JSAst = JSExprAst -- + JInitAst + JStmtAst + JTopAst
+lang JSAst = JSExprAst + JStmtAst -- + JInitAst + JTopAst
 end
 
 
