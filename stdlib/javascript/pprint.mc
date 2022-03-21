@@ -49,7 +49,6 @@ lang JSExprPrettyPrint = JSExprAst
       else never
     else never
   | JSEMember { expr = expr, id = id } ->
-    printLn "here member";
     match (printJSExpr indent) env expr with (env,expr) then
       match (pprintEnvGetStr env id) with (env,id) then
         (env, join [expr, ".", id])
@@ -82,8 +81,7 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEFloat { f = f } -> (env, float2string f)
   | JSEChar  { c = c } -> (env, [c])
 
-  | JSEString { s = s } ->
-    (env, join ["\"", escapeString s, "\""])
+  | JSEString { s = s } -> (env, join ["\"", escapeString s, "\""])
 
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match (printJSExpr indent) env lhs with (env,lhs) then

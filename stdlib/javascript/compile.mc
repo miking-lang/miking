@@ -180,7 +180,5 @@ let javascriptCompileFile : Expr -> String -> Bool =
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
   let jsprog = javascriptCompile ast in   -- Run JS compiler
   let source = printJSProg jsprog in      -- Pretty print
-  printLn "Here6"
-  printLn concat "Compiled JS program:\n" source;
   writeFile targetPath source;
   true
