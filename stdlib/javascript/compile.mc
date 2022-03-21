@@ -83,7 +83,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
-    JSEApp { fun = _consoleLog, args = [JSEString { s = "%s" }, head args] }
+    JSEApp { fun = _consoleLog, args = args }
 
 
   -----------------
