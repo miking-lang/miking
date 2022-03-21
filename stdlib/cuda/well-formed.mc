@@ -3,6 +3,7 @@
 include "cuda/pmexpr-ast.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
+include "pmexpr/pprint.mc"
 include "pmexpr/well-formed.mc"
 
 lang CudaWellFormed = WellFormed + CudaPMExprAst
@@ -11,13 +12,14 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | CudaTypeError Type
   | CudaConstantError (Const, Info)
   | CudaPatternError Pat
+  | CudaLoopError Expr
 
   sem pprintWellFormedError =
   | CudaExprError expr ->
     use MExprPrettyPrint in
     let info = infoTm expr in
     let exprStr = expr2str expr in
-    infoErrorString info (join ["Expression '", exprStr, "' not supported by CUDA backend"])
+    infoErrorString info (join ["Expression\n", exprStr, "\nnot supported by CUDA backend"])
   | CudaTypeError ty ->
     use MExprPrettyPrint in
     let info = infoTy ty in
@@ -32,6 +34,12 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let info = infoPat pat in
     let patStr = getPatStringCode 0 pprintEnvEmpty pat in
     infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
+ | CudaLoopError expr ->
+    use PMExprPrettyPrint in
+    let info = infoTm expr in
+    let exprStr = expr2str expr in
+    infoErrorString info (join ["Loop expression\n", expr2str expr,
+                                "\nnot supported by CUDA backend"])
 
   -- NOTE(larshum, 2022-03-01): Lambda expressions may only be used at the top
   -- of the body of a let-expression or a recursive binding.
@@ -73,13 +81,21 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.
-  | TmLoop t
-  | TmParallelLoop t ->
-    let addTypeError = lam. cons (CudaTypeError t.ty) acc in
+  | loop & (TmLoop t | TmParallelLoop t) ->
+    let addLoopError = lam. cons (CudaLoopError loop) acc in
     match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {labels = []}} then
       match t.ty with TyRecord {labels = []} then acc
-      else addTypeError ()
-    else addTypeError ()
+      else addLoopError ()
+    else addLoopError ()
+  | loop & (TmLoopFoldl t) ->
+    let addLoopError = lam. cons (CudaLoopError loop) acc in
+    match tyTm t.f with TyArrow {
+      from = accTy1,
+      to = TyArrow {from = TyInt _, to = accTy2}}
+    then
+      if and (eqType accTy1 accTy2) (eqType accTy1 (tyTm t.acc)) then acc
+      else addLoopError ()
+    else addLoopError ()
   | t & (TmMap2 _ | TmParallelReduce _) -> cons (CudaExprError t) acc
   | t ->
     let info = infoTm t in
@@ -111,7 +127,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
   | TmNever _ | TmSeq _ | TmRecord _ | TmType _ -> true
-  | TmLoop _ | TmParallelLoop _ -> true
+  | TmLoop _ | TmLoopFoldl _ | TmParallelLoop _ -> true
   | _ -> false
 
   sem isCudaSupportedType =
@@ -124,8 +140,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   sem isCudaSupportedConstant =
   | CInt _ | CFloat _ | CChar _ | CBool _ -> true
   | CAddi _ | CAddf _ | CSubi _ | CSubf _ | CMuli _ | CMulf _ | CDivi _
-  | CDivf _ | CModi _ | CEqi _ | CEqf _ | CLti _ | CLtf _ | CGti _ | CGtf _
-  | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _ | CNeqf _ -> true
+  | CDivf _ | CModi _ | CNegi _ | CNegf _ | CEqi _ | CEqf _ | CLti _ | CLtf _
+  | CGti _ | CGtf _ | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _
+  | CNeqf _ -> true
   | CPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _ -> true
   | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
   | CTensorSliceExn _ | CTensorSubExn _ -> true

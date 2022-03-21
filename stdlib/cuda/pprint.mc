@@ -25,6 +25,11 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     match printCExpr env n with (env, n) in
     match printCExpr env f with (env, f) in
     (env, join ["seqLoop(", n, ", ", f, ")"])
+  | CESeqLoopFoldl {acc = acc, n = n, f = f} ->
+    match printCExpr env acc with (env, acc) in
+    match printCExpr env n with (env, n) in
+    match printCExpr env f with (env, f) in
+    (env, join ["seqLoopFoldl(", acc, ", ", n, ", ", f, ")"])
   | CETensorSliceExn {t = t, slice = slice} ->
     match printCExpr env t with (env, t) in
     match printCExpr env slice with (env, slice) in

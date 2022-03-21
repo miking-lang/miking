@@ -13,6 +13,7 @@ include "cuda/pmexpr-compile.mc"
 include "cuda/intrinsics/foldl.mc"
 include "cuda/intrinsics/loop-kernel.mc"
 include "cuda/intrinsics/loop.mc"
+include "cuda/intrinsics/loop-foldl.mc"
 include "cuda/intrinsics/map-kernel.mc"
 include "cuda/intrinsics/map.mc"
 include "cuda/intrinsics/tensor-slice.mc"
@@ -22,10 +23,11 @@ include "cuda/intrinsics/tensor-sub.mc"
 -- to looping constructs.
 lang CudaCpuTranslate =
   CudaMapIntrinsic + CudaFoldlIntrinsic + CudaTensorSliceIntrinsic +
-  CudaTensorSubIntrinsic + CudaLoopIntrinsic
+  CudaTensorSubIntrinsic + CudaLoopIntrinsic + CudaLoopFoldlIntrinsic
 
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | (CESeqMap _ | CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _) & t ->
+  | (CESeqMap _ | CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _ |
+     CESeqLoopFoldl _) & t ->
     generateCudaIntrinsicCall ccEnv acc outExpr t
 
   sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =

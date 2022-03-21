@@ -80,6 +80,7 @@ let parallelKeywords = [
   "parallelFlatten",
   "parallelReduce",
   "seqLoop",
+  "seqLoopFoldl",
   "parallelLoop"
 ]
 

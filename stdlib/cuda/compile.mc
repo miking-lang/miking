@@ -189,6 +189,13 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 end
 
 lang CudaCompile = CudaCompileCopy + CudaCompileFree
+  sem _getLoopFunctionArgTypes (env : CompileCEnv) =
+  | TmVar _ -> []
+  | t & (TmApp _) ->
+    match collectAppArguments t with (_, args) in
+    map (lam arg. compileType env (tyTm arg)) args
+  | t -> infoErrorExit (infoTm t) "Unsupported function type"
+
   sem compileExpr (env : CompileCEnv) =
   | TmSeqMap t -> error "not supported yet";
     CESeqMap {
@@ -215,24 +222,23 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
       sTy = compileType env (tyTm t.s), ty = compileType env t.ty,
       opsPerThread = 10}
   | TmReduceKernel t -> error "not implemented yet"
-  | op & (TmLoop t | TmParallelLoop t | TmLoopKernel t) ->
-    let argTypes =
-      match t.f with TmVar _ then []
-      else match t.f with TmApp _ then
-        match collectAppArguments t.f with (_, args) in
-        map (lam arg. compileType env (tyTm arg)) args
-      else
-        infoErrorExit t.info "Unsupported function type"
-    in
+  | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.
-    match op with TmLoopKernel _ then
-      CELoopKernel {
-        n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes,
-        opsPerThread = 10}
-    else
-      CESeqLoop {
-        n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes}
+    let argTypes = _getLoopFunctionArgTypes env t.f in
+    CESeqLoop {
+      n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes}
+  | TmLoopFoldl t ->
+    let argTypes = _getLoopFunctionArgTypes env t.f in
+    CESeqLoopFoldl {
+      acc = compileExpr env t.acc, n = compileExpr env t.n,
+      f = compileExpr env t.f, accTy = compileType env (tyTm t.acc),
+      argTypes = argTypes}
+  | TmLoopKernel t ->
+    let argTypes = _getLoopFunctionArgTypes env t.f in
+    CELoopKernel {
+      n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes,
+      opsPerThread = 10}
 
   sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmCopy {arg = arg, toMem = toMem, ty = ty} ->
