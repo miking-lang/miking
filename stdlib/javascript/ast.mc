@@ -6,8 +6,8 @@
 lang JSExprAst
 
   syn JSExpr = 
-  | JSEVar       { id: Name }                   -- Variables 
-  | JSEApp       { fun: Name, args: [JSExpr] }  -- Function application
+  | JSEVar       { id: Name }                   -- Variables
+  | JSEApp       { fun: JSExpr, args: [JSExpr] }  -- Function application
   | JSEDef       { id: Name, expr: JSExpr }     -- Definitions
   | JSEFun       { id: Name, params: [Name], body: JSExpr }  -- Functions
   | JSEInt       { i: Int }                     -- Integer literals
