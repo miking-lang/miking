@@ -3,7 +3,7 @@
 -- JavaScript TYPES AND EXPRESSIONS --
 --------------------------------------
 
-lang JSExprTypeAst
+lang JSExprAst
 
   syn JSExpr = 
   | JSEVar       { id: Name }                   -- Variables 
@@ -46,7 +46,7 @@ end
 -----------------------
 -- COMBINED FRAGMENT --
 -----------------------
-lang JSAst = JSExprTypeAst -- + JInitAst + JStmtAst + JTopAst
+lang JSAst = JSExprAst -- + JInitAst + JStmtAst + JTopAst
 end
 
 

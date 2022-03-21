@@ -29,7 +29,7 @@ let jsKeywords = [
 ----------------------------
 -- JavaScript EXPRESSIONS --
 ----------------------------
-lang JSExprPrettyPrint = JSExprTypeAst
+lang JSExprPrettyPrint = JSExprAst
 
   sem printJSDef (indent: Int) (env: PprintEnv) (id: String) =
   | expr -> (env, join [pprintNewline indent, id, " = ", printJSExpr expr, ";"]) -- Should ; be here?
