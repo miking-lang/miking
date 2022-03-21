@@ -433,4 +433,5 @@ let result =
   , bind2 = _bind2
   , bind3 = _bind3
   , bind4 = _bind4
+  , mapM = _mapM
   }
