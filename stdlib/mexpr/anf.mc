@@ -150,10 +150,8 @@ end
 lang TypeANF = ANF + TypeAst
 
   sem normalize (k : Expr -> Expr) =
-  | TmType {ident = ident, tyIdent = tyIdent, inexpr = m1, ty = ty, info = info} ->
-    TmType {ident = ident, tyIdent = tyIdent, ty = ty,
-            inexpr = normalizeName k m1, info = info}
-
+  | TmType t ->
+    TmType {t with inexpr = normalizeName k t.inexpr}
 end
 
 lang RecLetsANFBase = ANF + RecLetsAst + LamAst

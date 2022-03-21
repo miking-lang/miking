@@ -154,7 +154,7 @@ tops:
 
 type_params:
   | var_ident type_params
-    { $1 :: $2 }
+    { $1.v :: $2 }
   |
     { [] }
 
@@ -181,13 +181,11 @@ toplet:
 
 toptype:
   | TYPE type_ident type_params
-     // Type parameters are currently ignored
      { let fi = mkinfo $1.i $2.i in
-       Type (fi, $2.v, TyVariant (fi, [])) }
+       Type (fi, $2.v, $3, TyVariant (fi, [])) }
   | TYPE type_ident type_params EQ ty
-     // Type parameters are currently ignored
      { let fi = mkinfo $1.i (ty_info $5) in
-       Type (fi, $2.v, $5) }
+       Type (fi, $2.v, $3, $5) }
 
 topRecLet:
   | REC lets END
@@ -247,9 +245,9 @@ decl:
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
       Inter (fi, $2.v, $3, $5) }
-  | TYPE type_ident EQ ty
-    { let fi = mkinfo $1.i $3.i in
-      Alias (fi, $2.v, $4) }
+  | TYPE type_ident type_params EQ ty
+    { let fi = mkinfo $1.i $4.i in
+      Alias (fi, $2.v, $3, $5) }
 
 constrs:
   | constr constrs
@@ -291,13 +289,11 @@ mexpr:
   | sequence
       { $1 }
   | TYPE type_ident type_params IN mexpr
-      // Type parameters are currently ignored
       { let fi = mkinfo $1.i $4.i in
-        TmType(fi, $2.v, Symb.Helpers.nosym, TyVariant (fi, []), $5) }
+        TmType(fi, $2.v, Symb.Helpers.nosym, $3, TyVariant (fi, []), $5) }
   | TYPE type_ident type_params EQ ty IN mexpr
-      // Type parameters are currently ignored
       { let fi = mkinfo $1.i (tm_info $7) in
-        TmType(fi, $2.v, Symb.Helpers.nosym, $5, $7) }
+        TmType(fi, $2.v, Symb.Helpers.nosym, $3, $5, $7) }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in

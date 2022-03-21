@@ -17,7 +17,7 @@ let symbmap t =
     | TmVar (_, x, s, _) ->
         SymbMap.add s x acc
     | TmLam (_, x, s, _, t)
-    | TmType (_, x, s, _, t)
+    | TmType (_, x, s, _, _, t)
     | TmConDef (_, x, s, _, t)
     | TmConApp (_, x, s, t) ->
         work (SymbMap.add s x acc) t

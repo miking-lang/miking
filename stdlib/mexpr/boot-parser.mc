@@ -134,6 +134,7 @@ lang BootParser = MExprAst + ConstTransformer
                    info = ginfo t 0}
   | 109 /-TmType-/ ->
     TmType {ident = gname t 0,
+            params = map (gname t) (range 1 (glistlen t 0) 1),
             tyIdent = gtype t 0,
             ty = TyUnknown { info = ginfo t 0 },
             inexpr = gterm t 0,

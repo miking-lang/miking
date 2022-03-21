@@ -13,7 +13,8 @@ let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
-let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
+let eqSeq : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool =
+  lam eq. lam s1. lam s2.
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       if eq h1 h2 then work t1 t2
@@ -44,7 +45,8 @@ utest toRope (toList [1,2,3]) with [1,2,3]
 
 -- Maps
 let mapOption
-  : (a -> Option b)
+  : all a. all b.
+     (a -> Option b)
   -> [a]
   -> [b]
   = lam f.
@@ -66,7 +68,8 @@ utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
 let for_
-  : [a]
+  : all a.
+     [a]
   -> (a -> ())
   -> ()
   = lam xs. lam f. iter f xs
@@ -92,12 +95,11 @@ utest foldr cons [] [1,2,3] with [1,2,3]
 utest foldr1 addi [1,2] with 3
 
 recursive
-let unfoldr = lam f. lam b.
-  let fb = f b in
+let unfoldr : all a. all c. (a -> Option (c, a)) -> a -> [c] = lam f. lam b0.
+  let fb = f b0 in
   match fb with None _ then [] else
-  match fb with Some tup then
-    let tup : (Unknown, Unknown) = tup in
-    cons tup.0 (unfoldr f tup.1)
+  match fb with Some (x, b1) then
+    cons x (unfoldr f b1)
   else never
 end
 
@@ -147,14 +149,14 @@ utest zipWith addi [] [] with [] using eqSeq eqi
 let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps
-let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+let mapAccumL : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldl
       (lam tacc : (a, [c]). lam x.
          match f tacc.0 x with (acc, y) then (acc, snoc tacc.1 y) else never)
       (acc, []) seq
 
-let mapAccumR : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+let mapAccumR : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldr
       (lam x. lam tacc : (a, [c]).
@@ -232,7 +234,7 @@ utest join [[],[],[]] with [] using eqSeq eqi
 -- Monadic and Applicative operations
 
 let seqLiftA2
-  : (a -> b -> c) -> [a] -> [b] -> [c]
+  : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c]
   = lam f. lam as. lam bs.
     join (map (lam a. map (f a) bs) as)
 
@@ -262,7 +264,7 @@ utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
 recursive
-  let findMap : (a -> Option b) -> [a] -> Option b = lam f. lam seq.
+  let findMap : all a. all b. (a -> Option b) -> [a] -> Option b = lam f. lam seq.
     match seq with [h] ++ t then
       match f h with Some x then Some x else findMap f t
     else None ()
@@ -435,7 +437,7 @@ utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
 
-let seqCmp : (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
+let seqCmp : all a. (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       let c = cmp h1 h2 in
@@ -465,7 +467,7 @@ utest
   with true
 
 -- Select an index uniformly at random.
-let randIndex : [a] -> Option Int = lam seq.
+let randIndex : all a. [a] -> Option Int = lam seq.
   match seq with [] then None ()
   else Some (randIntU 0 (length seq))
 
@@ -476,7 +478,7 @@ utest
   with true
 
 -- Select an element uniformly at random.
-let randElem : [a] -> Option a = lam seq.
+let randElem : all a. [a] -> Option a = lam seq.
   optionMap (get seq) (randIndex seq)
 
 utest randElem [] with None ()
@@ -488,7 +490,7 @@ utest
 -- Permute the order of elements according to a sequence of integers, which is
 -- assumed to represent the target position of the elements in the permuted
 -- sequence.
-let permute : [a] -> [Int] -> [a] = lam elems. lam permutation.
+let permute : all a. [a] -> [Int] -> [a] = lam elems. lam permutation.
   if eqi (length elems) (length permutation) then
     let ordered = sort (lam x : (a, Int). lam y : (a, Int). subi x.1 y.1)
                        (zip elems permutation) in

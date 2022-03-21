@@ -113,7 +113,7 @@ lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
   sem reduceTyVar =
   | TyFlex {info = i} & ty ->
     match resolveLink ty with ! TyFlex _ & ty then
-      ty
+      reduceTyVar ty
     else
       TyUnknown {info = i}
 end
@@ -285,12 +285,13 @@ lang TypePropagation = TypeAnnot
   | (_, t) -> t
 end
 
-lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
+lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = match t.tyBody with TyUnknown _ then t.body else
-        propagateExpectedType tyEnv (t.tyBody, t.body) in
+        match stripTyAll t.tyBody with (_, tyBody) in
+        propagateExpectedType tyEnv (tyBody, t.body) in
       let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
@@ -345,7 +346,7 @@ lang ExpTypeAnnot = TypeAnnot + ExtAst
     else never
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst
+lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     -- Add mapping from binding identifier to annotated type before doing type
@@ -360,7 +361,8 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
       let body = match binding.tyBody with TyUnknown _ then binding.body else
-        propagateExpectedType env.tyEnv (binding.tyBody, binding.body) in
+        match stripTyAll binding.tyBody with (_, tyBody) in
+        propagateExpectedType env.tyEnv (tyBody, binding.body) in
       let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
@@ -455,7 +457,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
         match mapLookup t.ident conEnv with Some lty then
-          match lty with TyArrow {from = from, to = to} then
+          match stripTyAll lty with (_, TyArrow {from = from, to = to}) then
             recursive let tyvar = lam ty.
               match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
@@ -510,11 +512,50 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
     let expected = typeAnnotExpr env t.expected in
     let next = typeAnnotExpr env t.next in
     let tusing = optionMap (typeAnnotExpr env) t.tusing in
-    TmUtest {{{{{t with test = test}
-                  with expected = expected}
-                  with next = next}
-                  with tusing = tusing}
-                  with ty = tyTm next}
+    match tusing with Some tu then
+      match tyTm tu with
+        TyArrow (ta1 & {from = lty,
+                        to = TyArrow (ta2 & {from = rty, to = TyBool _})}) then
+        match compatibleType env.tyEnv (tyTm test) lty with Some lty then
+          match compatibleType env.tyEnv (tyTm expected) rty with Some rty then
+            let arrowTy = TyArrow {{ta1 with from = lty}
+                                        with to = TyArrow {ta2 with from = rty}} in
+            TmUtest {{{{{t with test = withType lty test}
+                           with expected = withType rty expected}
+                           with next = next}
+                           with tusing = Some (withType arrowTy tu)}
+                           with ty = tyTm next}
+          else
+            let msg = join [
+              "Custom equality function expected right-hand side of type ",
+              _pprintType rty, ", got argument of incompatible type ",
+              _pprintType (tyTm expected)
+            ] in
+            infoErrorExit t.info msg
+        else
+          let msg = join [
+            "Custom equality function expected left-hand side of type ",
+            _pprintType lty, ", got argument of incompatible type ",
+            _pprintType (tyTm test)
+          ] in
+          infoErrorExit t.info msg
+      else
+        let msg = join [
+          "Equality function was found to have incorrect type.\n",
+          "Type was inferred to be ", _pprintType (tyTm tu)
+        ] in
+        infoErrorExit t.info msg
+    else match compatibleType env.tyEnv (tyTm test) (tyTm expected) with Some eTy then
+      TmUtest {{{{t with test = withType eTy test}
+                    with expected = withType eTy expected}
+                    with next = next}
+                    with ty = tyTm next}
+    else
+      let msg = join [
+        "Arguments to utest have incompatible types\n",
+        "LHS: ", _pprintType (tyTm test), "\nRHS: ", _pprintType (tyTm expected)
+      ] in
+      infoErrorExit t.info msg
 end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
@@ -601,11 +642,11 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
 end
 
 lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
-                        FunTypeAst
+                        FunTypeAst + AllTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
-    match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = to}) then
+    match optionMap stripTyAll (mapLookup t.ident env.conEnv)
+    with Some (_, TyArrow {from = argTy, to = to}) then
       match typeAnnotPat env argTy t.subpat with (env, subpat) then
         (env, PatCon {{t with subpat = subpat} with ty = to})
       else never
@@ -816,12 +857,12 @@ utest tyTm matchDistinct with tyunknown_ using eqType in
 else never);
 
 let utestAnnot = typeAnnot (
-  utest_ (int_ 0) false_ (char_ 'c')
+  utest_ (int_ 0) (int_ 1) (char_ 'c')
 ) in
 utest tyTm utestAnnot with tychar_ using eqType in
 (match utestAnnot with TmUtest t then
   utest tyTm t.test with tyint_ using eqType in
-  utest tyTm t.expected with tybool_ using eqType in
+  utest tyTm t.expected with tyint_ using eqType in
   utest tyTm t.next with tychar_ using eqType in
   ()
 else never);

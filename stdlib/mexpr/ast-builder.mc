@@ -348,7 +348,7 @@ let ext_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
+  TmType {ident = n, tyIdent = ty, params = [], ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
