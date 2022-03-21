@@ -41,9 +41,9 @@ lang MExprJSCompile = MExprAst + JSProgAst
   sem compile =
   | prog ->
     -- Run compiler
-    match compileExpr prog with exprs then
+    match compileExpr prog with expr then
       -- Return final top level expressions
-      JSPProg { imports = [], exprs = exprs }
+      JSPProg { imports = [], exprs = [expr] }
     else never
 
   
