@@ -327,6 +327,42 @@ lang TypeDeclOp = DeclOpBase + TypeDeclAst
 end
 
 /-
+prod Token: Decl =
+  "token" name:UName?
+  ( "{"
+    properties:{name:LName "=" val:Expr ","}*
+  "}"
+  )?
+-/
+
+lang TokenDeclAst = SelfhostBaseAst
+  syn Decl =
+  | TokenDecl { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info }
+
+  sem get_Decl_info =
+  | TokenDecl x -> x.info
+
+  sem smapAccumL_Decl_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TokenDecl x ->
+    match mapAccumL (lam acc. lam x. match f acc x.val with (acc, val) in {x with val = val}) acc x.properties with (acc, properties) in
+    (acc, TokenDecl {x with properties = properties})
+end
+
+lang TokenDeclOp = DeclOpBase + TokenDeclAst
+  syn DeclOp =
+  | TokenDeclOp { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info] }
+
+  sem get_DeclOp_terms =
+  | TokenDeclOp x -> x.terms
+
+  sem get_DeclOp_info =
+  | TokenDeclOp x -> x.info
+
+  sem unsplit_DeclOp =
+  | AtomP { self = TokenDeclOp x } -> (x.info, TokenDecl {name = x.name, properties = x.properties, info = x.info})
+end
+
+/-
 prod PrecedenceTable: Decl =
   "precedence" "{"
     levels:{noeq:"~"? operators:UName+ ";"}*
@@ -873,8 +909,8 @@ end
 
 lang SelfhostAst
   = FileAst
-  + TypeDeclAst + PrecedenceTableDeclAst + ProductionDeclAst + InfixDeclAst
-  + PrefixDeclAst + PostfixDeclAst
+  + TypeDeclAst + TokenDeclAst + PrecedenceTableDeclAst + ProductionDeclAst
+  + InfixDeclAst + PrefixDeclAst + PostfixDeclAst
   + RecordRegexAst + EmptyRegexAst + LiteralRegexAst + TokenRegexAst
   + RepeatPlusRegexAst + RepeatStarRegexAst + RepeatQuestionRegexAst
   + NamedRegexAst + AlternativeRegexAst + ConcatRegexAst
@@ -885,7 +921,7 @@ lang ParseSelfhost = SelfhostAst + TokenParser
   + WhitespaceParser + LineCommentParser + MultilineCommentParser + BracketTokenParser + CommaTokenParser + SemiTokenParser
   + FileOpBase + DeclOpBase + RegexOpBase + ExprOpBase
   + FileOp
-  + TypeDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + InfixDeclOp + PrefixDeclOp + PostfixDeclOp
+  + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + InfixDeclOp + PrefixDeclOp + PostfixDeclOp
   + GroupingRegexOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp
   + SelfhostPrecedence1
   + LL1Parser
@@ -1278,6 +1314,26 @@ let _table =
           let prev: {properties : [{name : {v: Name, i: Info}, val : Expr}], terms : [Info]} = prev in
           let prev = {{prev with properties = cons {name = {v = nameNoSym name.val, i = name.info}, val = expr} prev.properties} with terms = concat [name.info, eq.info, comma.info] prev.terms} in
           prev
+        }
+      , { nt = decl_atom
+        , label = "Decl_Token_1"
+        -- NOTE(vipa, 2022-03-21): I'm' reusing decl_Type_1 here,
+        -- since the syntax is identical. This would presumably not be
+        -- done for the actually generated code.
+        , rhs = [litSym "token", tokSym (UIdentRepr ()), ntSym decl_Type_1]
+        , action = lam p. lam seq.
+          match seq with [LitParsed l, TokParsed (UIdentTok name), UserSym prev] in
+          let prev : {name : [{v: Name, i: Info}], properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info]} = prev in
+          let prev = {{{prev
+            with name = cons {v = (nameNoSym name.val), i = name.info} prev.name}
+            with info = mergeInfo l.info (mergeInfo name.info prev.info)}
+            with terms = concat [l.info, name.info] prev.terms} in
+          TokenDeclOp
+            { name = match prev.name with [name] ++ _ then Some name else None ()
+            , properties = prev.properties
+            , info = prev.info
+            , terms = prev.terms
+            }
         }
       , { nt = decl_atom
         , label = "decl_PrecedenceTable"

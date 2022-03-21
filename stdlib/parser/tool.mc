@@ -28,6 +28,8 @@ let pullDefinition
       {env with types = mapInsertWith concat (nameGetStr x.name.v) [(x.name.i, nameSetNewSym x.name.v)] env.types}
     case ProductionDecl x then
       {env with productions = mapInsertWith concat (nameGetStr x.name.v) [(x.name.i, nameSetNewSym x.name.v)] env.productions}
+    case TokenDecl {name = Some n} then
+      {env with types = mapInsertWith concat (nameGetStr n.v) [(n.i, nameSetNewSym n.v)] env.types}
     case _ then
       env
     end
@@ -101,6 +103,10 @@ let resolveDecl
       result.map
         (lam name. TypeDecl {x with name = name})
         (lookupName x.name nameEnv.types)
+    case TokenDecl x then
+      result.map
+        (lam name. TokenDecl {x with name = name})
+        (match x.name with Some name then lookupName name nameEnv.types else result.ok (None ()))
     case PrecedenceTableDecl x then
       let resolveLevel = lam level: {noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}.
         result.map
