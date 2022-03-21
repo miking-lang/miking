@@ -136,7 +136,9 @@ lang JSProgPrettyPrint = JSProgAst + JSExprPrettyPrint
     let imports = map (lam imp. join ["import '", imp, "';"]) imports in
     let env = pprintEnvEmpty in
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
-      strJoin (pprintNewline indent) (join [imports, "", strJoin "\n" exprs])
+      let importsStr = strJoin "\n" imports in
+      let exprsStr = strJoin (pprintNewline indent) exprs in
+      join [importsStr, exprsStr]
     else never
 
 end
