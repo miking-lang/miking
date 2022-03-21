@@ -48,7 +48,13 @@ lang JSExprPrettyPrint = JSExprAst
         (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
     else never
-
+  | JSEMember { expr = expr, id = id } ->
+    printLn "here member";
+    match (printJSExpr indent) env expr with (env,expr) then
+      match (pprintEnvGetStr env id) with (env,id) then
+        (env, join [expr, ".", id])
+      else never
+    else never
   | JSEDef { id = id, expr = expr } ->
     match pprintEnvGetOptStr env id with (env,id) then
       match printJSDef indent env id expr with (env,str) then
