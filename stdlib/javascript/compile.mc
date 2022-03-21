@@ -28,7 +28,8 @@ let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
 -- Names used in the compiler for intrinsics
-let _consoleLog = nameSym "console.log"
+let _consoleLog = use JSAst in
+  JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" } 
 
 
 -------------------------------------------
