@@ -203,6 +203,96 @@ lang MExprTensorCCompile = MExprCCompileBase
     in
     any (lam entry : (Name, Type). isTensorType entry.1) typeEnv
 
+  sem _genIndexErrorStmts (rank : Name) =
+  | nindices ->
+    let errorStr = join [
+      "Accessed tensor of rank %ld using ", int2string nindices, " indices\n"] in
+    [ CSExpr {expr = CEApp {
+        fun = _printf,
+        args = [CEString {s = errorStr}, CEVar {id = rank}]}}
+    , CSRet {val = Some (CEInt {i = negi 1})} ]
+
+  -- TODO(larshum, 2022-03-21): Lots of code duplication here. This code could
+  -- probably be generated in a more reusable way.
+  sem specializedCartesianToLinearDef (dims : Name) (rank : Name) (id : Name) =
+  | 0 ->
+    CTFun {
+      ret = CTyInt64 (), id = id,
+      params = [
+        (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims),
+        (CTyInt64 (), rank)],
+      body = [CSRet {val = Some (CEInt {i = 0})}]}
+  | nindices ->
+    let indexIds = create nindices (lam. nameSym "i") in
+    let indexParams = map (lam id : Name. (CTyInt64 (), id)) indexIds in
+    let params =
+      concat
+        [ (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims)
+        , (CTyInt64 (), rank)]
+        indexParams in
+    let rankEqExpr = lam n : Int.
+      CEBinOp {
+        op = COEq (),
+        lhs = CEVar {id = rank},
+        rhs = CEInt {i = n}} in
+    let dimsExpr = lam n : Int.
+      CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = dims},
+        rhs = CEInt {i = n}} in
+    let mulExpr = lam lhs : CExpr. lam rhs : CExpr.
+      CEBinOp {op = COMul (), lhs = lhs, rhs = rhs} in
+    let addExpr = lam lhs : CExpr. lam rhs : CExpr.
+      CEBinOp {op = COAdd (), lhs = lhs, rhs = rhs} in
+    let retStmt = lam expr : CExpr. CSRet {val = Some expr} in
+    let stmt =
+      match nindices with 1 then
+        let i0 = CEVar {id = get indexIds 0} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [retStmt (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)],
+          els = [
+            CSIf {
+              cond = rankEqExpr 2,
+              thn = [retStmt (mulExpr (dimsExpr 1) i0)],
+              els = [retStmt i0]}]}
+      else match nindices with 2 then
+        let i0 = CEVar {id = get indexIds 0} in
+        let i1 = CEVar {id = get indexIds 1} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [
+            retStmt
+              (addExpr
+                (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)
+                (mulExpr (dimsExpr 2) i1))],
+          els = [
+            CSIf {
+              cond = rankEqExpr 2,
+              thn = [
+                retStmt
+                  (addExpr (mulExpr (dimsExpr 1) i0) i1)],
+              els = _genIndexErrorStmts rank nindices}]}
+      else match nindices with 3 then
+        let i0 = CEVar {id = get indexIds 0} in
+        let i1 = CEVar {id = get indexIds 1} in
+        let i2 = CEVar {id = get indexIds 2} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [
+            retStmt
+              (addExpr
+                (addExpr
+                  (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)
+                  (mulExpr (dimsExpr 2) i1))
+                i2)],
+          els = _genIndexErrorStmts rank nindices}
+      else
+        error
+          (join ["Cannot generate specialized index for ", int2string nindices,
+                 " indices"]) in
+    CTFun {ret = CTyInt64 (), id = id, params = params, body = [stmt]}
+
   sem cartesianToLinearIndexDef =
   | env ->
     let env : CompileCEnv = env in
@@ -212,69 +302,60 @@ lang MExprTensorCCompile = MExprCCompileBase
     let dims = nameSym "dims" in
     let rank = nameSym "rank" in
     let cidx = nameSym "cartesian_idx" in
-    let tmp = nameSym "tmp" in
-    let lidx = nameSym "linear_idx" in
-    let k = nameSym "k" in
-    let intType = getCIntType env in
+
+    -- NOTE(larshum, 2022-03-21): For efficiency reasons, we generate
+    -- specialized functions for a given number of index arguments. Currently,
+    -- as the maximum rank is set to 3, we generate functions for 0, 1, 2, and
+    -- 3 indices.
+    let nspecialized = 4 in
+    let specializedIds =
+      create 4
+        (lam i.
+          nameSym
+            (concat
+              (nameGetStr _cartesianToLinearIndex)
+              (int2string i))) in
+    let specializedTops =
+      create 4
+        (lam i.
+          let id = get specializedIds i in
+          specializedCartesianToLinearDef dims rank id i) in
+
     let params = [
-      (CTyArray {ty = intType, size = Some (CEInt {i = 3})}, dims),
-      (intType, rank), (cidxType, cidx)
-    ] in
-    let multiplyTmp = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = tmp},
-      rhs = CEBinOp {
-       op = COMul (),
-       lhs = CEVar {id = tmp},
-       rhs = CEBinOp {
+      (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims),
+      (CTyInt64 (), rank), (cidxType, cidx)] in
+    let cidxElemExpr = lam n.
+      CEBinOp {
         op = COSubScript (),
-        lhs = CEVar {id = dims},
-        rhs = CEVar {id = k}}}}} in
-    let decrementK = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = k},
-      rhs = CEBinOp {
-        op = COSub (),
-        lhs = CEVar {id = k},
-        rhs = CEInt {i = 1}}}} in
+        lhs = CEMember {lhs = CEVar {id = cidx}, id = _seqKey},
+        rhs = CEInt {i = n}} in
+    let cidxLenExpr = CEMember {lhs = CEVar {id = cidx}, id = _seqLenKey} in
+    let equalIntExpr = lam n : Int.
+      CEBinOp {op = COEq (), lhs = cidxLenExpr, rhs = CEInt {i = n}} in
+    let callSpecializedCToL = lam n : Int.
+      let args =
+        concat
+          [CEVar {id = dims}, CEVar {id = rank}]
+          (create n (lam i. cidxElemExpr i)) in
+      CEApp {fun = get specializedIds n, args = args} in
     let stmts = [
-      CSDef {ty = intType, id = Some tmp, init = Some (CIExpr {expr = CEInt {i = 1}})},
-      CSDef {ty = intType, id = Some lidx, init = Some (CIExpr {expr = CEInt {i = 0}})},
-      CSDef {
-        ty = intType, id = Some k,
-        init = Some (CIExpr {expr = CEBinOp {
-          op = COSub (),
-          lhs = CEVar {id = rank},
-          rhs = CEInt {i = 1}}})},
-      CSWhile {
-        cond = CEBinOp {
-          op = COGe (),
-          lhs = CEVar {id = k},
-          rhs = CEMember {lhs = CEVar {id = cidx}, id = _seqLenKey}},
-        body = [multiplyTmp, decrementK]},
-      CSWhile {
-        cond = CEBinOp {
-          op = COGe (),
-          lhs = CEVar {id = k},
-          rhs = CEInt {i = 0}},
-        body = [
-          CSExpr {expr = CEBinOp {
-            op = COAssign (),
-            lhs = CEVar {id = lidx},
-            rhs = CEBinOp {
-              op = COAdd (),
-              lhs = CEVar {id = lidx},
-              rhs = CEBinOp {
-                op = COMul (),
-                lhs = CEVar {id = tmp},
-                rhs = CEBinOp {
-                  op = COSubScript (),
-                  lhs = CEMember {lhs = CEVar {id = cidx}, id = _seqKey},
-                  rhs = CEVar {id = k}}}}}},
-          multiplyTmp, decrementK]},
-      CSRet {val = Some (CEVar {id = lidx})}
-    ] in
-    CTFun {ret = intType, id = _cartesianToLinearIndex, params = params, body = stmts}
+      CSIf {
+        cond = equalIntExpr 1,
+        thn = [CSRet {val = Some (callSpecializedCToL 1)}],
+        els = [
+          CSIf {
+            cond = equalIntExpr 2,
+            thn = [CSRet {val = Some (callSpecializedCToL 2)}],
+            els = [
+              CSIf {
+                cond = equalIntExpr 3,
+                thn = [CSRet {val = Some (callSpecializedCToL 3)}],
+                els = [CSRet {val = Some (callSpecializedCToL 0)}]}]}]}] in
+    snoc
+      specializedTops
+      (CTFun {
+        ret = CTyInt64 (), id = _cartesianToLinearIndex,
+        params = params, body = stmts})
 
   sem tensorShapeDef =
   | env ->
@@ -283,11 +364,11 @@ lang MExprTensorCCompile = MExprCCompileBase
     let mexprSeqType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
     let seqName = _lookupTypeName env.typeEnv mexprSeqType in
     let seqType = CTyVar {id = seqName} in
-    let dimsType = CTyArray {ty = intType, size = Some (CEInt {i = 3})} in
+    let dimsType = CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})} in
     let dimsId = nameSym "dims" in
     let rankId = nameSym "rank" in
     let seqId = nameSym "s" in
-    let params = [(dimsType, dimsId), (intType, rankId)] in
+    let params = [(dimsType, dimsId), (CTyInt64 (), rankId)] in
     let stmts = [
       CSDef {ty = seqType, id = Some seqId, init = None ()},
       CSExpr {expr = CEBinOp {
@@ -379,7 +460,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- tensor types are used.
     let tops =
       if hasTensorTypes typeEnv then
-        concat [cartesianToLinearIndexDef env, tensorShapeDef env] tops
+        concat (snoc (cartesianToLinearIndexDef env) (tensorShapeDef env)) tops
       else tops
     in
 
@@ -468,13 +549,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     let dimsType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
     -- NOTE(larshum, 2022-03-03): For now, we hard-code the maximum number of
     -- dimensions to 3.
-    let intType = getCIntType env in
     let fields = [
-      (intType, Some _tensorIdKey),
+      (CTyInt64 (), Some _tensorIdKey),
       (CTyPtr { ty = ty }, Some _tensorDataKey),
-      (CTyArray { ty = intType, size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
-      (intType, Some _tensorRankKey),
-      (intType, Some _tensorOffsetKey)
+      (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
+      (CTyInt64 (), Some _tensorRankKey),
+      (CTyInt64 (), Some _tensorOffsetKey)
     ] in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fields },
@@ -963,18 +1043,25 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       else infoErrorExit (infoTm t) "Binding of unit type is not allowed"
     else
       match res with RIdent id then
-        match compileAlloc env (None ()) t with (env, def, init, n) then
-          let env: CompileCEnv = env in
+        match compileAlloc env (None ()) t with (env, def, init, n) in
+        let env: CompileCEnv = env in
+        let def = map (lam d. CSDef d) def in
+        let env = { env with allocs = concat def env.allocs } in
+        (env, join [
+          init,
+          [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
+        ])
+      else match res with RReturn _ then
+        if any (lam ty. isPtrType env.ptrTypes ty) (mapValues bindings) then
+          infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
+        else
+          match compileAlloc env (None ()) t with (env, def, init, n) in
+          let env : CompileCEnv = env in
           let def = map (lam d. CSDef d) def in
-          let env = { env with allocs = concat def env.allocs } in
+          let env = {env with allocs = concat def env.allocs} in
           (env, join [
             init,
-            [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
-          ])
-        else never
-      else match res with RReturn _ then
-        -- TODO(dlunde,2021-10-07) We can return non-pointer records here
-        infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
+            [CSRet {val = Some (CEVar {id = n})}]])
       else
         infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
@@ -1806,20 +1893,54 @@ utest testCompile tensor with strJoin "\n" [
   "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor;",
   "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
   "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor1;",
+  "int64_t cartesian_to_linear_index0(int64_t dims1[3], int64_t rank1) {",
+  "  return 0;",
+  "}",
+  "int64_t cartesian_to_linear_index1(int64_t dims1[3], int64_t rank1, int64_t i) {",
+  "  if ((rank1 == 3)) {",
+  "    return (((dims1[2]) * (dims1[1])) * i);",
+  "  } else {",
+  "    if ((rank1 == 2)) {",
+  "      return ((dims1[1]) * i);",
+  "    } else {",
+  "      return i;",
+  "    }",
+  "  }",
+  "}",
+  "int64_t cartesian_to_linear_index2(int64_t dims1[3], int64_t rank1, int64_t i1, int64_t i2) {",
+  "  if ((rank1 == 3)) {",
+  "    return ((((dims1[2]) * (dims1[1])) * i1) + ((dims1[2]) * i2));",
+  "  } else {",
+  "    if ((rank1 == 2)) {",
+  "      return (((dims1[1]) * i1) + i2);",
+  "    } else {",
+  "      printf(\"Accessed tensor of rank %ld using 2 indices\\n\", rank1);",
+  "      return -1;",
+  "    }",
+  "  }",
+  "}",
+  "int64_t cartesian_to_linear_index3(int64_t dims1[3], int64_t rank1, int64_t i3, int64_t i4, int64_t i5) {",
+  "  if ((rank1 == 3)) {",
+  "    return (((((dims1[2]) * (dims1[1])) * i3) + ((dims1[2]) * i4)) + i5);",
+  "  } else {",
+  "    printf(\"Accessed tensor of rank %ld using 3 indices\\n\", rank1);",
+  "    return -1;",
+  "  }",
+  "}",
   "int64_t cartesian_to_linear_index(int64_t dims1[3], int64_t rank1, Seq cartesian_idx) {",
-  "  int64_t tmp = 1;",
-  "  int64_t linear_idx = 0;",
-  "  int64_t k = (rank1 - 1);",
-  "  while ((k >= (cartesian_idx.len))) {",
-  "    (tmp = (tmp * (dims1[k])));",
-  "    (k = (k - 1));",
+  "  if (((cartesian_idx.len) == 1)) {",
+  "    return cartesian_to_linear_index1(dims1, rank1, ((cartesian_idx.seq)[0]));",
+  "  } else {",
+  "    if (((cartesian_idx.len) == 2)) {",
+  "      return cartesian_to_linear_index2(dims1, rank1, ((cartesian_idx.seq)[0]), ((cartesian_idx.seq)[1]));",
+  "    } else {",
+  "      if (((cartesian_idx.len) == 3)) {",
+  "        return cartesian_to_linear_index3(dims1, rank1, ((cartesian_idx.seq)[0]), ((cartesian_idx.seq)[1]), ((cartesian_idx.seq)[2]));",
+  "      } else {",
+  "        return cartesian_to_linear_index0(dims1, rank1);",
+  "      }",
+  "    }",
   "  }",
-  "  while ((k >= 0)) {",
-  "    (linear_idx = (linear_idx + (tmp * ((cartesian_idx.seq)[k]))));",
-  "    (tmp = (tmp * (dims1[k])));",
-  "    (k = (k - 1));",
-  "  }",
-  "  return linear_idx;",
   "}",
   "Seq tensor_shape(int64_t dims2[3], int64_t rank2) {",
   "  Seq s;",
