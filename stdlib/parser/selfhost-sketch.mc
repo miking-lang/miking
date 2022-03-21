@@ -301,7 +301,7 @@ prod Type: Decl =
 
 lang TypeDeclAst = SelfhostBaseAst
   syn Decl =
-  | TypeDecl { name : Name, properties : [{name : Name, val : Expr}], info : Info }
+  | TypeDecl { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info }
 
   sem get_Decl_info =
   | TypeDecl x -> x.info
@@ -314,7 +314,7 @@ end
 
 lang TypeDeclOp = DeclOpBase + TypeDeclAst
   syn DeclOp =
-  | TypeDeclOp { name : Name, properties : [{name : Name, val : Expr}], info : Info, terms : [Info] }
+  | TypeDeclOp { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | TypeDeclOp x -> x.terms
@@ -340,8 +340,8 @@ prod PrecedenceTable: Decl =
 lang PrecedenceTableDeclAst = SelfhostBaseAst
   syn Decl =
   | PrecedenceTableDecl
-    { levels : [{noeq : Option (), operators : [Name]}]
-    , exceptions : [{lefts : [Name], rights : [Name]}]
+    { levels : [{noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}]
+    , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     }
 
@@ -352,8 +352,8 @@ end
 lang PrecedenceTableDeclOp = DeclOpBase + PrecedenceTableDeclAst
   syn DeclOp =
   | PrecedenceTableDeclOp
-    { levels : [{noeq : Option (), operators : [Name]}]
-    , exceptions : [{lefts : [Name], rights : [Name]}]
+    { levels : [{noeq : Option (), operators : [{v: Name, i: Info}]}]
+    , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     , terms : [Info]
     }
@@ -374,7 +374,7 @@ prod Production: Decl = ("prod" | "infix" | "prefix" | "postfix") assoc:LIdent? 
 
 lang ProductionDeclAst = SelfhostBaseAst
   syn Decl =
-  | ProductionDecl { assoc : Option String, name : Name, nt : Name, regex : Regex, info : Info }
+  | ProductionDecl { assoc : Option {v: String, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
 
   sem get_Decl_info =
   | ProductionDecl x -> x.info
@@ -387,7 +387,7 @@ end
 
 lang ProductionDeclOp = DeclOpBase + ProductionDeclAst
   syn DeclOp =
-  | ProductionDeclOp { assoc : Option Name, name : Name, nt : Name, regex : Regex, info : Info, terms : [Info] }
+  | ProductionDeclOp { assoc : Option {v: Name, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | ProductionDeclOp x -> x.terms
@@ -405,7 +405,7 @@ prod Infix: Decl = "infix" assoc:LIdent? name:UName ":" nt:UName "=" regex:Regex
 
 lang InfixDeclAst = SelfhostBaseAst
   syn Decl =
-  | InfixDecl { assoc : Option Name, name : Name, nt : Name, regex : Regex, info : Info }
+  | InfixDecl { assoc : Option {v: Name, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
 
   sem get_Decl_info =
   | InfixDecl x -> x.info
@@ -418,7 +418,7 @@ end
 
 lang InfixDeclOp = DeclOpBase + InfixDeclAst
   syn DeclOp =
-  | InfixDeclOp { assoc : Option Name, name : Name, nt : Name, regex : Regex, info : Info, terms : [Info] }
+  | InfixDeclOp { assoc : Option {v: Name, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | InfixDeclOp x -> x.terms
@@ -436,7 +436,7 @@ prod Prefix: Decl = "prefix" name:UName ":" nt:UName "=" regex:Regex
 
 lang PrefixDeclAst = SelfhostBaseAst
   syn Decl =
-  | PrefixDecl { name : Name, nt : Name, regex : Regex, info : Info }
+  | PrefixDecl { name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
 
   sem get_Decl_info =
   | PrefixDecl x -> x.info
@@ -449,7 +449,7 @@ end
 
 lang PrefixDeclOp = DeclOpBase + PrefixDeclAst
   syn DeclOp =
-  | PrefixDeclOp { name : Name, nt : Name, regex : Regex, info : Info, terms : [Info] }
+  | PrefixDeclOp { name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | PrefixDeclOp x -> x.terms
@@ -467,7 +467,7 @@ prod Postfix: Decl = "postfix" name:UName ":" nt:UName "=" regex:Regex
 
 lang PostfixDeclAst = SelfhostBaseAst
   syn Decl =
-  | PostfixDecl { name : Name, nt : Name, regex : Regex, info : Info }
+  | PostfixDecl { name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
 
   sem get_Decl_info =
   | PostfixDecl x -> x.info
@@ -480,7 +480,7 @@ end
 
 lang PostfixDeclOp = DeclOpBase + PostfixDeclAst
   syn DeclOp =
-  | PostfixDeclOp { name : Name, nt : Name, regex : Regex, info : Info, terms : [Info] }
+  | PostfixDeclOp { name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | PostfixDeclOp x -> x.terms
@@ -603,7 +603,7 @@ prod Token: Regex = name:UName ("[" arg:Expr "]")?
 
 lang TokenRegexAst = SelfhostBaseAst
   syn Regex =
-  | TokenRegex { name : Name, arg : Option Expr, info : Info }
+  | TokenRegex { name : {v: Name, i: Info}, arg : Option Expr, info : Info }
 
   sem get_Regex_info =
   | TokenRegex x -> x.info
@@ -616,7 +616,7 @@ end
 
 lang TokenRegexOp = RegexOpBase + TokenRegexAst
   syn RegexOp =
-  | TokenRegexOp { name : Name, arg : Option Expr, info : Info, terms : [Info] }
+  | TokenRegexOp { name : {v: Name, i: Info}, arg : Option Expr, info : Info, terms : [Info] }
 
   sem get_RegexOp_terms =
   | TokenRegexOp x -> x.terms
@@ -736,7 +736,7 @@ prefix Named: Regex = name:LName ":"
 
 lang NamedRegexAst = SelfhostBaseAst
   syn Regex =
-  | NamedRegex { name : Name, right : Regex, info : Info }
+  | NamedRegex { name : {v: Name, i: Info}, right : Regex, info : Info }
 
   sem get_Regex_info =
   | NamedRegex x -> x.info
@@ -749,7 +749,7 @@ end
 
 lang NamedRegexOp = RegexOpBase + NamedRegexAst
   syn RegexOp =
-  | NamedRegexOp { name : Name, info : Info, terms : [Info] }
+  | NamedRegexOp { name : {v: Name, i: Info}, info : Info, terms : [Info] }
 
   sem get_RegexOp_terms =
   | NamedRegexOp x -> x.terms
@@ -1186,7 +1186,7 @@ let _table =
         , rhs = [litSym "prod", ntSym decl_Production_1]
         , action = lam. lam seq.
           match seq with [LitParsed prod, UserSym prev] in
-          let prev: {info : Info, terms : [Info], assoc : [String], name : [Name], nt : [Name], regex : [Regex]} = prev in
+          let prev: {info : Info, terms : [Info], assoc : [{v: String, i: Info}], name : [{v: Name, i: Info}], nt : [{v: Name, i: Info}], regex : [Regex]} = prev in
           let prev = {{prev with info = mergeInfo prod.info prev.info} with terms = cons prod.info prev.terms} in
           ProductionDeclOp
             { assoc = match prev.assoc with [x] ++ _ then Some x else None ()
@@ -1207,8 +1207,8 @@ let _table =
         , rhs = [tokSym (LIdentRepr ()), ntSym decl_Production_2]
         , action = lam. lam seq.
           match seq with [TokParsed (LIdentTok tok), UserSym prev] in
-          let prev: {info : Info, terms : [Info], assoc : [String], name : [Name], nt : [Name], regex : [Regex]} = prev in
-          let prev = {{{prev with info = mergeInfo tok.info prev.info} with terms = cons tok.info prev.terms} with assoc = cons tok.val prev.assoc} in
+          let prev: {info : Info, terms : [Info], assoc : [{v: String, i: Info}], name : [{v: Name, i: Info}], nt : [{v: Name, i: Info}], regex : [Regex]} = prev in
+          let prev = {{{prev with info = mergeInfo tok.info prev.info} with terms = cons tok.info prev.terms} with assoc = cons {v = tok.val, i = tok.info} prev.assoc} in
           prev
         }
       , { nt = decl_Production_2
@@ -1219,8 +1219,8 @@ let _table =
           { info = mergeInfo name.info regexInfo
           , terms = [name.info, x1.info, nt.info, x2.info]
           , assoc = []
-          , name = [(nameNoSym) name.val]
-          , nt = [(nameNoSym) nt.val]
+          , name = [{v = (nameNoSym) name.val, i = name.info}]
+          , nt = [{v = (nameNoSym) nt.val, i = nt.info}]
           , regex = [regex]
           }
         }
@@ -1229,8 +1229,11 @@ let _table =
         , rhs = [litSym "type", tokSym (UIdentRepr ()), ntSym decl_Type_1]
         , action = lam p. lam seq.
           match seq with [LitParsed l, TokParsed (UIdentTok name), UserSym prev] in
-          let prev : {name : [Name], properties : [{name : Name, val : Expr}], info : Info, terms : [Info]} = prev in
-          let prev = {{{prev with name = cons (nameNoSym name.val) prev.name} with info = mergeInfo l.info (mergeInfo name.info prev.info)} with terms = concat [l.info, name.info] prev.terms} in
+          let prev : {name : [{v: Name, i: Info}], properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info]} = prev in
+          let prev = {{{prev
+            with name = cons {v = (nameNoSym name.val), i = name.info} prev.name}
+            with info = mergeInfo l.info (mergeInfo name.info prev.info)}
+            with terms = concat [l.info, name.info] prev.terms} in
           TypeDeclOp
             { name = match prev.name with [name] ++ _ in name
             , properties = prev.properties
@@ -1272,8 +1275,8 @@ let _table =
         , rhs = [tokSym (LIdentRepr ()), litSym "=", ntSym expr_top, litSym ",", ntSym decl_Type_2]
         , action = lam p. lam seq.
           match seq with [TokParsed (LIdentTok name), LitParsed eq, UserSym (_, expr), LitParsed comma, UserSym prev] in
-          let prev: {properties : [{name : Name, val : Expr}], terms : [Info]} = prev in
-          let prev = {{prev with properties = cons {name = nameNoSym name.val, val = expr} prev.properties} with terms = concat [name.info, eq.info, comma.info] prev.terms} in
+          let prev: {properties : [{name : {v: Name, i: Info}, val : Expr}], terms : [Info]} = prev in
+          let prev = {{prev with properties = cons {name = {v = nameNoSym name.val, i = name.info}, val = expr} prev.properties} with terms = concat [name.info, eq.info, comma.info] prev.terms} in
           prev
         }
       , { nt = decl_atom
@@ -1284,7 +1287,7 @@ let _table =
         , rhs = [litSym "precedence", litSym "{", ntSym decl_PrecedenceTable_1, litSym "}"]
         , action = lam p. lam seq.
           match seq with [LitParsed prec, LitParsed l, UserSym levels, LitParsed r] in
-          let levels: {levels : [{noeq : Option (), operators : [Name]}], terms : [Info]} = levels in
+          let levels: {levels : [{noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}], terms : [Info]} = levels in
           PrecedenceTableDeclOp
             { info = mergeInfo prec.info r.info
             , terms = snoc (concat [prec.info, l.info] levels.terms) r.info
@@ -1297,11 +1300,11 @@ let _table =
         , rhs = [tokSym (UIdentRepr ()), ntSym decl_PrecedenceTable_2, litSym ";", ntSym decl_PrecedenceTable_1]
         , action = lam p. lam seq.
           match seq with [TokParsed (UIdentTok first), UserSym level, LitParsed semi, UserSym prev] in
-          let level: {terms : [Info], operators : [Name]} = level in
+          let level: {terms : [Info], operators : [{v: Name, i: Info}]} = level in
           let level = {{level
             with terms = snoc (cons first.info level.terms) semi.info}
-            with operators = cons (nameNoSym first.val) level.operators} in
-          let prev: {terms : [Info], levels : [{noeq : Option (), operators : [Name]}]} = prev in
+            with operators = cons {v = nameNoSym first.val, i = first.info} level.operators} in
+          let prev: {terms : [Info], levels : [{noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}]} = prev in
           let prev = {{prev
             with terms = concat level.terms prev.terms}
             with levels = cons {noeq = None (), operators = level.operators} prev.levels} in
@@ -1318,10 +1321,10 @@ let _table =
         , rhs = [tokSym (UIdentRepr ()), ntSym (decl_PrecedenceTable_2)]
         , action = lam p. lam seq.
           match seq with [TokParsed (UIdentTok name), UserSym prev] in
-          let prev: {terms : [Info], operators : [Name]} = prev in
+          let prev: {terms : [Info], operators : [{v: Name, i: Info}]} = prev in
           let prev = {{prev
             with terms = cons name.info prev.terms}
-            with operators = cons (nameNoSym name.val) prev.operators} in
+            with operators = cons {v = nameNoSym name.val, i = name.info} prev.operators} in
           prev
         }
       , { nt = decl_PrecedenceTable_2
@@ -1406,8 +1409,8 @@ let _table =
         , rhs = [TokSpec (UIdentRepr ()), ntSym regex_Token_1]
         , action = lam p. lam seq.
           match seq with [TokParsed (UIdentTok x), UserSym prev] in
-          let prev: {info : Info, terms : [Info], name : [Name], arg : [Expr]} = prev in
-          let prev = {{{prev with info = mergeInfo x.info prev.info} with terms = cons x.info prev.terms} with name = cons (nameNoSym x.val) prev.name} in
+          let prev: {info : Info, terms : [Info], name : [{v: Name, i: Info}], arg : [Expr]} = prev in
+          let prev = {{{prev with info = mergeInfo x.info prev.info} with terms = cons x.info prev.terms} with name = cons {v = nameNoSym x.val, i = x.info} prev.name} in
           TokenRegexOp
             { info = prev.info
             , terms = prev.terms
@@ -1454,7 +1457,7 @@ let _table =
         , rhs = [TokSpec (LIdentRepr ()), litSym ":"]
         , action = lam p. lam seq.
           match seq with [TokParsed (LIdentTok name), LitParsed x] in
-          NamedRegexOp { name = nameNoSym name.val, info = mergeInfo name.info x.info, terms = [name.info, x.info] }
+          NamedRegexOp { name = {v = nameNoSym name.val, i = name.info}, info = mergeInfo name.info x.info, terms = [name.info, x.info] }
         }
       , { nt = regex_infix
         , label = "Regex_Alternative"
@@ -1501,12 +1504,6 @@ let parseSelfhostExn
     end
 
 mexpr
-
-let testParse = lam filename. lam content.
-  switch parseSelfhost filename content
-  case Right x then Some x
-  case Left errs then for_ errs (lam x. match x with (info, msg) in printLn (infoErrorString info msg)); None ()
-  end in
 
 let filename = "blub" in
 let content = join
