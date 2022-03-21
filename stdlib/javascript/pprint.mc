@@ -32,7 +32,7 @@ let jsKeywords = [
 lang JSExprPrettyPrint = JSExprAst
 
   sem printJSDef (indent: Int) (env: PprintEnv) (id: String) =
-  | expr -> (env, join [pprintNewline indent, id, " = ", printJSExpr expr, ";"]) -- Should ; be here?
+  | expr -> (env, join [pprintNewline indent, "let ", id, " = ", printJSExpr expr, ";"]) -- Should ; be here?
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
