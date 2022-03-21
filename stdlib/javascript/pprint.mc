@@ -43,7 +43,7 @@ lang JSExprPrettyPrint = JSExprAst
   sem printJSExpr (indent : Int) (env: PprintEnv) =
   | JSEVar { id = id } -> pprintEnvGetStr env id
   | JSEApp { fun = fun, args = args } ->
-    match pprintEnvGetStr env fun with (env,fun) then
+    match (printJSExpr indent) env fun with (env,fun) then
       match mapAccumL (printJSExpr indent) env args with (env,args) then
         (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
