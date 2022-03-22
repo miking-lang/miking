@@ -106,9 +106,13 @@ lang SelfhostBaseAst
   sem get_Expr_info =
 
   sem smapAccumL_File_File (f : acc -> File -> (acc, File)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_File_Decl (f : acc -> Decl -> (acc, Decl)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_File_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_File_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | x -> (acc, x)
   sem smap_File_File (f : File -> File) =
   | x -> match smapAccumL_File_File (lam. lam x. ((), f x)) () x with (_, x) in x
   sem smap_File_Decl (f : Decl -> Decl) =
@@ -125,9 +129,13 @@ lang SelfhostBaseAst
   | x -> match smapAccumL_File_Expr (lam acc. lam x. (f acc x, x)) acc x with (acc, _) in acc
 
   sem smapAccumL_Decl_File (f : acc -> File -> (acc, File)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Decl_Decl (f : acc -> Decl -> (acc, Decl)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Decl_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Decl_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | x -> (acc, x)
   sem smap_Decl_File (f : File -> File) =
   | x -> match smapAccumL_Decl_File (lam. lam x. ((), f x)) () x with (_, x) in x
   sem smap_Decl_Decl (f : Decl -> Decl) =
@@ -144,9 +152,13 @@ lang SelfhostBaseAst
   | x -> match smapAccumL_Decl_Expr (lam acc. lam x. (f acc x, x)) acc x with (acc, _) in acc
 
   sem smapAccumL_Regex_File (f : acc -> File -> (acc, File)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Regex_Decl (f : acc -> Decl -> (acc, Decl)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Regex_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | x -> (acc, x)
   sem smap_Regex_File (f : File -> File) =
   | x -> match smapAccumL_Regex_File (lam. lam x. ((), f x)) () x with (_, x) in x
   sem smap_Regex_Decl (f : Decl -> Decl) =
@@ -163,9 +175,13 @@ lang SelfhostBaseAst
   | x -> match smapAccumL_Regex_Expr (lam acc. lam x. (f acc x, x)) acc x with (acc, _) in acc
 
   sem smapAccumL_Expr_File (f : acc -> File -> (acc, File)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Expr_Decl (f : acc -> Decl -> (acc, Decl)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Expr_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  | x -> (acc, x)
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | x -> (acc, x)
   sem smap_Expr_File (f : File -> File) =
   | x -> match smapAccumL_Expr_File (lam. lam x. ((), f x)) () x with (_, x) in x
   sem smap_Expr_Decl (f : Decl -> Decl) =
