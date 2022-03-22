@@ -6,7 +6,7 @@ include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
 include "pmexpr/well-formed.mc"
 
-lang CudaWellFormed = WellFormed + CudaPMExprAst
+lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   syn WellFormedError =
   | CudaExprError Expr
   | CudaTypeError Type
@@ -16,26 +16,21 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem pprintWellFormedError =
   | CudaExprError expr ->
-    use MExprPrettyPrint in
     let info = infoTm expr in
     let exprStr = expr2str expr in
     infoErrorString info (join ["Expression\n", exprStr, "\nnot supported by CUDA backend"])
   | CudaTypeError ty ->
-    use MExprPrettyPrint in
     let info = infoTy ty in
     let tyStr = type2str ty in
     infoErrorString info (join ["Type '", tyStr, "' not supported by CUDA backend"])
   | CudaConstantError (c, info) ->
-    use MExprPrettyPrint in
     let constStr = getConstStringCode 0 c in
     infoErrorString info (join ["Constant '", constStr, "' not supported by CUDA backend"])
   | CudaPatternError (pat, info) ->
-    use MExprPrettyPrint in
     let info = infoPat pat in
     let patStr = getPatStringCode 0 pprintEnvEmpty pat in
     infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
  | CudaLoopError expr ->
-    use PMExprPrettyPrint in
     let info = infoTm expr in
     let exprStr = expr2str expr in
     infoErrorString info (join ["Loop expression\n", expr2str expr,
