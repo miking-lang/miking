@@ -107,6 +107,10 @@ let resolveDecl
       result.map
         (lam name. TokenDecl {x with name = name})
         (match x.name with Some name then lookupName name nameEnv.types else result.ok (None ()))
+    case StartDecl x then
+      result.map
+        (lam name. StartDecl {x with name = name})
+        (lookupName x.name nameEnv.types)
     case PrecedenceTableDecl x then
       let resolveLevel = lam level: {noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}.
         result.map
@@ -130,12 +134,46 @@ let resolveDecl
     case decl then result.ok decl
     end
 in
+-- NOTE(vipa, 2022-03-21): We can continue to do some analysis on each
+-- decl individually, so don't merge the list into a single Res yet.
 let decls: [Res Decl] = map resolveDecl decls in
 
-let nts: Res [Name] = result.mapM identity (mapValues nameEnv.types) in
+
+
+-- NOTE(vipa, 2022-03-21): Remaining analysis uses the complete list,
+-- thus we want to merge it into a single Res
+let decls: Res [Decl] = result.mapM identity decls in
+
+-- NOTE(vipa, 2022-03-21): Compute the required sfunctions
+let nts: Res [Name] =
+  let inner = lam x. match x with TypeDecl x then Some x.name.v else None () in
+  result.map (mapOption inner) decls in
 let requestedSFunctions: Res [(SynType, Type)] =
   let mkPair = lam a. lam b. (stringToSynType (nameGetStr a), ntycon_ b) in
   result.map (lam nts. seqLiftA2 mkPair nts nts) nts in
+
+-- NOTE(vipa, 2022-03-22): Find the starting non-terminal
+let start: Res Name =
+  let inner = lam x. match x with StartDecl x then Some (x.info, x.name.v) else None () in
+  let starts: Res [(Info, Name)] = result.map (mapOption inner) decls in
+  result.bind starts
+    (lam starts. switch starts
+      case [] then result.err (infoVal filename 0 0 0 0, "Missing start symbol")
+      case [(_, start)] then result.ok start
+      case starts & ([(info, _)] ++ _) then
+        let highlights = map
+          (lam x. match x with (info, _) in join ["  ", info2str info, simpleHighlight info, "\n"])
+          starts in
+        let msg = join
+          [ "Multiple start symbol definitions:\n"
+          , join highlights
+          ] in
+        result.err (info, msg)
+      end
+    )
+in
+
+-- NOTE(vipa, 2022-03-21): Generate the actual language fragments
 let generated: Res String = result.bind requestedSFunctions
   (lam requestedSFunctions.
     let genInput =
@@ -147,10 +185,7 @@ let generated: Res String = result.bind requestedSFunctions
     in use CarriedTypeGenerate in result.ok (mkLanguages genInput)
   ) in
 
-let currentlyUnused =
-  result.mapM identity decls in
-
-match result.consume (result.withAnnotations currentlyUnused generated) with (warnings, res) in
+match result.consume (result.withAnnotations start generated) with (warnings, res) in
 switch res
 case Left errors then
   for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));

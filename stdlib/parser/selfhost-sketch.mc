@@ -291,6 +291,32 @@ end
 -/
 
 /-
+prod Start: Decl = "start" name:UName
+-/
+
+lang StartDeclAst = SelfhostBaseAst
+  syn Decl =
+  | StartDecl { name : {v: Name, i: Info}, info : Info }
+
+  sem get_Decl_info =
+  | StartDecl x -> x.info
+end
+
+lang StartDeclOp = DeclOpBase + StartDeclAst
+  syn DeclOp =
+  | StartDeclOp { name : {v: Name, i: Info}, info : Info, terms : [Info] }
+
+  sem get_DeclOp_terms =
+  | StartDeclOp x -> x.terms
+
+  sem get_DeclOp_info =
+  | StartDeclOp x -> x.info
+
+  sem unsplit_DeclOp =
+  | AtomP { self = StartDeclOp x } -> (x.info, StartDecl {name = x.name, info = x.info})
+end
+
+/-
 prod Type: Decl =
   "type" name:UName
   ( "{"
@@ -909,7 +935,7 @@ end
 
 lang SelfhostAst
   = FileAst
-  + TypeDeclAst + TokenDeclAst + PrecedenceTableDeclAst + ProductionDeclAst
+  + StartDeclAst + TypeDeclAst + TokenDeclAst + PrecedenceTableDeclAst + ProductionDeclAst
   + InfixDeclAst + PrefixDeclAst + PostfixDeclAst
   + RecordRegexAst + EmptyRegexAst + LiteralRegexAst + TokenRegexAst
   + RepeatPlusRegexAst + RepeatStarRegexAst + RepeatQuestionRegexAst
@@ -921,7 +947,7 @@ lang ParseSelfhost = SelfhostAst + TokenParser
   + WhitespaceParser + LineCommentParser + MultilineCommentParser + BracketTokenParser + CommaTokenParser + SemiTokenParser
   + FileOpBase + DeclOpBase + RegexOpBase + ExprOpBase
   + FileOp
-  + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + InfixDeclOp + PrefixDeclOp + PostfixDeclOp
+  + StartDeclOp + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + InfixDeclOp + PrefixDeclOp + PostfixDeclOp
   + GroupingRegexOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp
   + SelfhostPrecedence1
   + LL1Parser
@@ -1259,6 +1285,17 @@ let _table =
           , nt = [{v = (nameNoSym) nt.val, i = nt.info}]
           , regex = [regex]
           }
+        }
+      , { nt = decl_atom
+        , label = "Decl_Start_1"
+        , rhs = [litSym "start", tokSym (UIdentRepr ())]
+        , action = lam p. lam seq.
+          match seq with [LitParsed l, TokParsed (UIdentTok name)] in
+          StartDeclOp
+            { name = {v = nameNoSym name.val, i = name.info}
+            , info = mergeInfo l.info name.info
+            , terms = [l.info, name.info]
+            }
         }
       , { nt = decl_atom
         , label = "Decl_Type_1"
