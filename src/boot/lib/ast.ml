@@ -253,13 +253,13 @@ and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
   | Inter of info * ustring * param list * (pat * tm) list
-  | Alias of info * ustring * ty
+  | Alias of info * ustring * ustring list * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list
 
 and let_decl = Let of info * ustring * ty * tm
 
-and type_decl = Type of info * ustring * ty
+and type_decl = Type of info * ustring * ustring list * ty
 
 and rec_let_decl = RecLet of info * (info * ustring * ty * tm) list
 
@@ -303,7 +303,8 @@ and tm =
   (* Record update *)
   | TmRecordUpdate of info * tm * ustring * tm
   (* Type let *)
-  | TmType of info * ustring * Symb.t * ty * tm
+  (* NOTE(aathn, 2022-03-02): Type parameters are not symbolized currently *)
+  | TmType of info * ustring * Symb.t * ustring list * ty * tm
   (* Constructor definition *)
   | TmConDef of info * ustring * Symb.t * ty * tm
   (* Constructor application *)
@@ -376,6 +377,7 @@ and ty =
   (* Function type *)
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
+  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyAll of info * ustring * ty
   (* Sequence type *)
   | TySeq of info * ty
@@ -388,8 +390,9 @@ and ty =
   (* Type constructors *)
   | TyCon of info * ustring * Symb.t
   (* Type variables *)
+  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyVar of info * ustring
-  (* Type application, currently only used for documenation purposes *)
+  (* Type application *)
   | TyApp of info * ty * ty
 
 (* Kind of identifier *)
@@ -437,8 +440,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc r
       |> fun (acc, r') ->
       f acc t |> fun (acc, t') -> (acc, TmRecordUpdate (fi, r', l, t'))
-  | TmType (fi, x, s, ty, t) ->
-      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, ty, t'))
+  | TmType (fi, x, s, params, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, params, ty, t'))
   | TmConDef (fi, x, s, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmConDef (fi, x, s, ty, t'))
   | TmConApp (fi, k, s, t) ->
@@ -495,7 +498,7 @@ let tm_info = function
   | TmSeq (fi, _)
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
-  | TmType (fi, _, _, _, _)
+  | TmType (fi, _, _, _, _, _)
   | TmConDef (fi, _, _, _, _)
   | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)

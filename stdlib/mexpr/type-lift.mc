@@ -249,7 +249,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
       else None ()
     in
     let env =
-      match t.tyIdent with TyArrow {from = from, to = to} then
+      match stripTyAll t.tyIdent with (_, TyArrow {from = from, to = to}) then
         match unwrapTypeVarIdent to with Some ident then
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in

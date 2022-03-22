@@ -632,11 +632,15 @@ and print_tm' fmt t =
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
-  | TmType (_, x, s, ty, t1) ->
+  | TmType (_, x, s, params, ty, t1) ->
       let x = string_of_ustring (ustring_of_type x s) in
+      let params =
+        params |> List.map string_of_ustring |> List.cons ""
+        |> String.concat " "
+      in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
-        ty print_tm (Match, t1)
+      fprintf fmt "@[<hov 0>@[<hov %d>type %s%s =@ %s in@]@ %a@]" !ref_indent x
+        params ty print_tm (Match, t1)
   | TmRecLets (_, lst, t2) -> (
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in

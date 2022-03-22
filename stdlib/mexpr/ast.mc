@@ -361,6 +361,7 @@ end
 lang TypeAst = Ast
   syn Expr =
   | TmType {ident : Name,
+            params : [Name],
             tyIdent : Type,
             inexpr : Expr,
             ty : Type,
