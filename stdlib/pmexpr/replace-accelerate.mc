@@ -63,7 +63,8 @@ lang PMExprReplaceAccelerate =
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
       (snoc acc recTyDecl, recTy)
   | TySeq {info = info, ty = ty} ->
-    (acc, OTyArray {info = info, ty = _mexprToOCamlType ty})
+    match _mexprToOCamlType env acc ty with (acc, ty) in
+    (acc, OTyArray {info = info, ty = ty})
   | ty & (TyTensor _) -> (acc, _tensorToOCamlType ty)
   | ty -> (acc, ty)
 
