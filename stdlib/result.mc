@@ -306,6 +306,13 @@ let #var"" =
   utest _prepTest (_mapM work [0, negi 1, negi 2]) with (['a'], Left [0, 0]) in
   ()
 
+-- Convert a Result to an Option, discarding any information present
+-- about warnings or a potential error.
+let _toOption
+  : all w. all e. all a. Result w e a -> Option b
+  = lam r.
+    match r with ResultOk x then Some x.value else None ()
+
 -- Perform a computation only if its input is error free. Preserves
 -- warnings and errors, but if the input is an error then the action
 -- won't run, thus any errors or warnings it would have been produced
@@ -421,6 +428,7 @@ let result =
   , warn = _warn
   -- Destructors
   , consume = _consume
+  , toOption = _toOption
   -- Mapping, action produces no new errors or warnings
   , map = _map
   , map2 = _map2
