@@ -13,6 +13,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CudaConstantError (Const, Info)
   | CudaPatternError Pat
   | CudaLoopError Expr
+  | CudaReduceError Expr
 
   sem pprintWellFormedError =
   | CudaExprError expr ->
@@ -30,11 +31,28 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     let info = infoPat pat in
     let patStr = getPatStringCode 0 pprintEnvEmpty pat in
     infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
- | CudaLoopError expr ->
+  | CudaLoopError (expr & (TmLoop t | TmParallelLoop t)) ->
     let info = infoTm expr in
-    let exprStr = expr2str expr in
-    infoErrorString info (join ["Loop expression\n", expr2str expr,
-                                "\nnot supported by CUDA backend"])
+    infoErrorString info (join [
+      "Loop expression\n", expr2str expr,
+      "\nwith n  : ", type2str (tyTm t.n),
+      "\nwith f  : ", type2str (tyTm t.f),
+      "\nnot supported by CUDA backend"])
+  | CudaLoopError (expr & (TmLoopFoldl t)) ->
+    let info = infoTm expr in
+    infoErrorString info (join [
+      "Loop expression\n", expr2str expr,
+      "\nwith acc : ", type2str (tyTm t.acc),
+      "\nwith n   : ", type2str (tyTm t.n),
+      "\nwith f   : ", type2str (tyTm t.f)])
+  | CudaReduceError (expr & (TmParallelReduce t)) ->
+    let info = infoTm expr in
+    infoErrorString info (join [
+      "Reduce expression\n", expr2str expr,
+      "\nwith f  : ", type2str (tyTm t.f),
+      "\nwith ne : ", type2str (tyTm t.ne),
+      "\nwith as : ", type2str (tyTm t.as),
+      "\nnot supported by CUDA backend"])
 
   -- NOTE(larshum, 2022-03-01): Lambda expressions may only be used at the top
   -- of the body of a let-expression or a recursive binding.
@@ -91,7 +109,17 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
       if and (eqType accTy1 accTy2) (eqType accTy1 (tyTm t.acc)) then acc
       else addLoopError ()
     else addLoopError ()
-  | t & (TmMap2 _ | TmParallelReduce _) -> cons (CudaExprError t) acc
+  | red & (TmParallelReduce t) ->
+    let addReduceError = lam. cons (CudaReduceError red) acc in
+    match tyTm t.f with TyArrow {
+      from = accTy1,
+      to = TyArrow {from = elemTy, to = accTy2}}
+    then
+      if and (eqType accTy1 accTy2) (eqType (tyTm t.as) (tyseq_ elemTy)) then
+        acc
+      else addReduceError ()
+    else addReduceError ()
+  | t & (TmMap2 _) -> cons (CudaExprError t) acc
   | t ->
     let info = infoTm t in
     let acc =
@@ -138,7 +166,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CDivf _ | CModi _ | CNegi _ | CNegf _ | CEqi _ | CEqf _ | CLti _ | CLtf _
   | CGti _ | CGtf _ | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _
   | CNeqf _ -> true
-  | CPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _ -> true
+  | CPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _ | CFoldl _ -> true
   | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
   | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false

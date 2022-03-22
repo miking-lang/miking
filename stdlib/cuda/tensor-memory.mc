@@ -384,7 +384,9 @@ lang CudaTensorMemory =
   sem addCudaTensorMemoryManagement (ccEnv : CompileCEnv) =
   | tops ->
     let maxNumTensorParams = foldl (findMaxNumTensorParams ccEnv) 0 tops in
-    let globalInitTops = generateGlobalTensorTops maxNumTensorParams in
-    let tops = map (applyTopTransformations ccEnv) tops in
-    concat globalInitTops tops
+    if eqi maxNumTensorParams 0 then tops
+    else
+      let globalInitTops = generateGlobalTensorTops maxNumTensorParams in
+      let tops = map (applyTopTransformations ccEnv) tops in
+      concat globalInitTops tops
 end

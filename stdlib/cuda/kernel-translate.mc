@@ -26,8 +26,7 @@ lang CudaCpuTranslate =
   CudaTensorSubIntrinsic + CudaLoopIntrinsic + CudaLoopFoldlIntrinsic
 
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | (CESeqMap _ | CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _ |
-     CESeqLoopFoldl _) & t ->
+  | (CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _ | CESeqLoopFoldl _) & t ->
     generateCudaIntrinsicCall ccEnv acc outExpr t
 
   sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
@@ -39,15 +38,13 @@ end
 lang CudaGpuTranslate =
   CudaMapKernelIntrinsic + CudaLoopKernelIntrinsic
 
-  -- NOTE(larshum, 2022-02-08): We assume that the expression for the function
-  -- f is a variable containing an identifier. This will not work for closures
-  -- or for functions that take additional variables, including those that
-  -- capture variables (due to lambda lifting).
+  -- NOTE(larshum, 2022-03-22): At the moment, no kernels returning a value are
+  -- supported.
   sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
-  | (CEMapKernel _) & t ->
+  /-| t ->
     match generateCudaKernelCall ccEnv outExpr t with (kernelTop, kernelCall) in
     let acc = cons kernelTop acc in
-    (acc, kernelCall)
+    (acc, kernelCall)-/
 
   sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | (CELoopKernel _) & t ->

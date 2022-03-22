@@ -45,8 +45,8 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   -- Adds all function identifiers used in a parallel operation to the set of
   -- marked functions.
   sem markFunctionsBody (marked : Set Name) =
-  | TmSeqMap t -> markFunctionsBodyH marked t.f
-  | TmParallelReduce t -> markFunctionsBodyH marked t.f
+--  | TmSeqMap t -> markFunctionsBodyH marked t.f
+--  | TmParallelReduce t -> markFunctionsBodyH marked t.f
   | TmParallelLoop t -> markFunctionsBodyH marked t.f
   | t -> sfold_Expr_Expr markFunctionsBody marked t
 
@@ -79,14 +79,16 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   | TmExt t -> TmExt {t with inexpr = promoteKernels marked t.inexpr}
   | t -> t
 
+  -- TODO(larshum, 2022-03-22): Add support for sequence map and reduce
+  -- kernels.
   sem promoteKernelsBody =
-  | TmSeqMap {f = f, s = s, ty = ty, info = info} ->
-    TmMapKernel {f = f, s = s, ty = ty, info = info}
-  | TmParallelReduce {f = f, ne = ne, as = as, ty = ty, info = info} ->
-    -- TODO(larshum, 2022-03-14): Add code for determining whether a parallel
-    -- reduce is commutative or not. Perhaps we should have a separate PMExpr
-    -- node for commutative operations?
-    TmReduceKernel {f = f, ne = ne, s = as, commutative = false, ty = ty, info = info}
+--  | TmSeqMap {f = f, s = s, ty = ty, info = info} ->
+--    TmMapKernel {f = f, s = s, ty = ty, info = info}
+--  | TmParallelReduce {f = f, ne = ne, as = as, ty = ty, info = info} ->
+--    -- TODO(larshum, 2022-03-14): Add code for determining whether a parallel
+--    -- reduce is commutative or not. Perhaps we should have a separate PMExpr
+--    -- node for commutative operations?
+--    TmReduceKernel {f = f, ne = ne, s = as, commutative = false, ty = ty, info = info}
   | TmParallelLoop {n = n, f = f, ty = ty, info = info} ->
     TmLoopKernel {n = n, f = f ,ty = ty, info = info}
   | t -> smap_Expr_Expr promoteKernelsBody t

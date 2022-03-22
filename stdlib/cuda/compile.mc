@@ -201,10 +201,17 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
     CESeqMap {
       f = compileExpr env t.f, s = compileExpr env t.s,
       sTy = compileType env (tyTm t.s), ty = compileType env t.ty}
-  | TmSeqFoldl t -> error "not supported yet";
+  | TmSeqFoldl t ->
     CESeqFoldl {
       f = compileExpr env t.f, acc = compileExpr env t.acc,
       s = compileExpr env t.s, sTy = compileType env (tyTm t.s),
+      ty = compileType env t.ty}
+  | TmParallelReduce t ->
+    -- NOTE(larshum, 2022-03-22): Parallel reductions that are not promoted to
+    -- a kernel are compiled to sequential folds.
+    CESeqFoldl {
+      f = compileExpr env t.f, acc = compileExpr env t.ne,
+      s = compileExpr env t.as, sTy = compileType env (tyTm t.as),
       ty = compileType env t.ty}
   | TmTensorSliceExn t ->
     CETensorSliceExn {
