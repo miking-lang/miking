@@ -482,6 +482,9 @@ pat_atom:
       { PatSeqEdge(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
+  | LPAREN pat COMMA RPAREN
+      { let fi = mkinfo $1.i $4.i in
+        PatRecord(fi,Record.singleton (us"0") $2) }
   | LPAREN pat COMMA pat_list RPAREN
       { let fi = mkinfo $1.i $5.i in
         let r = List.fold_left (fun (i,a) x ->
