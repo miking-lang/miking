@@ -4,8 +4,10 @@ include "mexpr/eq.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 
-lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
+lang PMExprAst =
+  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot + MExprTypeCheck
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
@@ -177,6 +179,78 @@ lang PMExprAst = KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot
   | TmParallelSizeEquality t ->
     let ty = tyWithInfo t.info tyunit_ in
     TmParallelSizeEquality {t with ty = ty}
+
+  sem typeCheckBase (env : TCEnv) =
+  | TmAccelerate t ->
+    let e = typeCheckExpr env t.e in
+    TmAccelerate {{t with e = e}
+                     with ty = tyTm e}
+  | TmFlatten t ->
+    let e = typeCheckExpr env t.e in
+    let elemTy = newvar env.currentLvl t.info in
+    unify env (tyTm e) (ityseq_ t.info (ityseq_ t.info elemTy));
+    TmFlatten {{t with e = e}
+                  with ty = TySeq {ty = elemTy, info = t.info}}
+  | TmMap2 t ->
+    let f = typeCheckExpr env t.f in
+    let as = typeCheckExpr env t.as in
+    let bs = typeCheckExpr env t.bs in
+    let aElemTy = newvar env.currentLvl t.info in
+    let bElemTy = newvar env.currentLvl t.info in
+    let outElemTy = newvar env.currentLvl t.info in
+    unify env (tyTm as) (ityseq_ t.info aElemTy);
+    unify env (tyTm bs) (ityseq_ t.info bElemTy);
+    unify env (tyTm f) (ityarrow_ t.info aElemTy (ityarrow_ t.info bElemTy outElemTy));
+    TmMap2 {{{{t with f = f}
+                 with as = as}
+                 with bs = bs}
+                 with ty = TySeq {ty = outElemTy, info = t.info}}
+  | TmParallelReduce t ->
+    let f = typeCheckExpr env t.f in
+    let ne = typeCheckExpr env t.ne in
+    let as = typeCheckExpr env t.as in
+    let accType = tyTm ne in
+    unify env (tyTm as) (ityseq_ t.info accType);
+    unify env (tyTm f) (ityarrow_ t.info accType (ityarrow_ t.info accType accType));
+    TmParallelReduce {{{{t with f = f}
+                           with ne = ne}
+                           with as = as}
+                           with ty = tyTm ne}
+  | TmLoop t ->
+    let n = typeCheckExpr env t.n in
+    let f = typeCheckExpr env t.f in
+    let unitType = tyWithInfo t.info tyunit_ in
+    unify env (tyTm n) (tyWithInfo t.info tyint_);
+    unify env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
+    TmLoop {{{t with n = n}
+                with f = f}
+                with ty = unitType}
+  | TmLoopFoldl t ->
+    let acc = typeCheckExpr env t.acc in
+    let n = typeCheckExpr env t.n in
+    let f = typeCheckExpr env t.f in
+    unify env (tyTm n) (tyWithInfo t.info tyint_);
+    unify env (tyTm f) (ityarrow_ t.info (tyTm acc)
+                                  (ityarrow_ t.info (tyTm n) (tyTm acc)));
+    TmLoopFoldl {{{{t with acc = acc}
+                      with n = n}
+                      with f = f}
+                      with ty = tyTm acc}
+  | TmParallelLoop t ->
+    let n = typeCheckExpr env t.n in
+    let f = typeCheckExpr env t.f in
+    let unitType = tyWithInfo t.info tyunit_ in
+    unify env (tyTm n) (tyWithInfo t.info tyint_);
+    unify env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
+    TmParallelLoop {{{t with n = n}
+                        with f = f}
+                        with ty = unitType}
+  | TmParallelSizeCoercion t ->
+    let e = typeCheckExpr env t.e in
+    TmParallelSizeCoercion {{t with e = e} with ty = tyTm e}
+  | TmParallelSizeEquality t ->
+    TmParallelSizeEquality {t with ty = tyWithInfo t.info tyunit_}
+
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->

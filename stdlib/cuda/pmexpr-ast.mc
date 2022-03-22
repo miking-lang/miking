@@ -187,6 +187,92 @@ lang CudaPMExprAst = PMExprAst
     TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = tyunit_}
 
+  sem typeCheckBase (env : TCEnv) =
+  | TmSeqMap t ->
+    let f = typeCheckExpr env t.f in
+    let s = typeCheckExpr env t.s in
+    let inElemType = newvar env.currentLvl t.info in
+    let outElemType = newvar env.currentLvl t.info in
+    unify env (tyTm s) (ityseq_ t.info inElemType);
+    unify env (tyTm f) (ityarrow_ t.info inElemType outElemType);
+    TmSeqMap {{{t with f = f}
+                  with s = s}
+                  with ty = TySeq {ty = outElemType, info = t.info}}
+  | TmSeqFoldl t ->
+    let f = typeCheckExpr env t.f in
+    let acc = typeCheckExpr env t.acc in
+    let s = typeCheckExpr env t.s in
+    let sElemTy = newvar env.currentLvl t.info in
+    unify env (tyTm s) (ityseq_ t.info sElemTy);
+    unify env (tyTm f) (ityarrow_ t.info (tyTm acc)
+                                  (ityarrow_ t.info sElemTy (tyTm acc)));
+    TmSeqFoldl {{{{t with f = f}
+                     with acc = acc}
+                     with s = s}
+                     with ty = tyTm acc}
+  | TmTensorSliceExn t ->
+    let tt = typeCheckExpr env t.t in
+    let slice = typeCheckExpr env t.slice in
+    let elemTy = newvar env.currentLvl t.info in
+    unify env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
+    unify env (tyTm slice) (ityseq_ t.info (tyWithInfo t.info tyint_));
+    TmTensorSliceExn {{{t with t = tt}
+                          with slice = slice}
+                          with ty = tyTm tt}
+  | TmTensorSubExn t ->
+    let tt = typeCheckExpr env t.t in
+    let ofs = typeCheckExpr env t.ofs in
+    let len = typeCheckExpr env t.len in
+    let elemTy = newvar env.currentLvl t.info in
+    unify env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
+    unify env (tyTm ofs) (tyWithInfo t.info tyint_);
+    unify env (tyTm len) (tyWithInfo t.info tyint_);
+    TmTensorSubExn {{{{t with t = tt}
+                         with ofs = ofs}
+                         with len = len}
+                         with ty = tyTm tt}
+  | TmMapKernel t ->
+    let f = typeCheckExpr env t.f in
+    let s = typeCheckExpr env t.s in
+    let inElemType = newvar env.currentLvl t.info in
+    let outElemType = newvar env.currentLvl t.info in
+    unify env (tyTm s) (ityseq_ t.info inElemType);
+    unify env (tyTm f) (ityarrow_ t.info inElemType outElemType);
+    TmMapKernel {{{t with f = f}
+                     with s = s}
+                     with ty = TySeq {ty = outElemType, info = t.info}}
+  | TmReduceKernel t ->
+    let f = typeCheckExpr env t.f in
+    let ne = typeCheckExpr env t.ne in
+    let s = typeCheckExpr env t.s in
+    let seqElemTy = newvar env.currentLvl t.info in
+    let neTy = tyTm ne in
+    unify env (tyTm s) (ityseq_ t.info neTy);
+    unify env (tyTm f) (ityarrow_ t.info neTy (ityarrow_ t.info neTy neTy));
+    TmReduceKernel {{{{t with f = f}
+                         with ne = ne}
+                         with s = s}
+                         with ty = neTy}
+  | TmLoopKernel t ->
+    let n = typeCheckExpr env t.n in
+    let f = typeCheckExpr env t.f in
+    let unitType = tyWithInfo t.info tyunit_ in
+    unify env (tyTm n) (tyWithInfo t.info tyint_);
+    unify env (tyTm f) (ityarrow_ t.info (tyWithInfo t.info tyint_) unitType);
+    TmLoopKernel {{{t with n = n}
+                      with f = f}
+                      with ty = unitType}
+  | TmCopy t ->
+    match mapLookup t.arg env.varEnv with Some ty then
+      TmCopy {t with ty = ty}
+    else
+      let msg = join [
+        "Type check failed: copy referring to unbound variable: ",
+        nameGetStr t.arg, "\n"] in
+      infoErrorExit t.info msg
+  | TmFree t -> TmFree {t with ty = tyWithInfo t.info tyunit_}
+
+
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmSeqMap r ->
     match lhs with TmSeqMap l then
