@@ -3,6 +3,22 @@
 This file gives a basic runthrough of the in-progress design of a DSL
 for syntax and AST specification.
 
+## Running the tool
+
+The tool is currently not sufficiently annotated to be compilable
+(it's not yet possible to annotate the final argument of a `sem`
+function, I'll fix that once we're a bit further along), thus it can
+presently only be interpreted. Assuming we're currently at the root of
+the `miking` repository:
+
+```bash
+MCORE_STDLIB=`pwd`/stdlib mi eval stdlib/parser/tool.mc -- test/examples/expr.syn
+```
+
+The tool presently only supports a subset of what's described in this
+document, and gives either errors or the generated output on standard
+out.
+
 ## Basic syntax and AST structure
 
 ```
