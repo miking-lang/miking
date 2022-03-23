@@ -124,7 +124,6 @@ lang MExprJSCompile = MExprAst + JSProgAst
     else error "ERROR: Records cannot be handled in compileExpr."
 
   | TmSeq {tms = tms, info = info} ->
-    -- error "Sequence expressions cannot be handled in compileExpr."
     let tms: [JSExpr] = map compileExpr tms in
     JSESeq { exprs = tms, info = info }
 
