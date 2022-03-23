@@ -9,6 +9,7 @@ include "javascript/pprint.mc"
 
 include "sys.mc"
 include "common.mc"
+include "seq.mc"
 
 
 ----------------------
@@ -19,6 +20,21 @@ include "common.mc"
 let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
   else false
+
+let _isCharSeq = use MExprAst in lam tms.
+    forAll (
+      lam c : Expr.
+        match c with TmConst { val = CChar _ } then true
+        else false
+    ) tms
+
+-- First, always check if the terms are characters using _isCharSeq
+let _charSeq2String = use MExprAst in lam tms.
+    let toChar = lam expr.
+      match expr with TmConst { val = CChar { val = val } } then Some val
+      else None ()
+    in
+    optionMapM toChar tms -- String is a list of characters
 
 -- TODO: Extract shared helper functions into a separate files
 
@@ -123,10 +139,18 @@ lang MExprJSCompile = MExprAst + JSProgAst
     if mapIsEmpty bindings then JSEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
 
-  | TmSeq {tms = tms, info = info} ->
-    let tms: [JSExpr] = map compileExpr tms in
-    JSESeq { exprs = tms, info = info }
-
+  | TmSeq {tms = tms, ty = ty, info = info} ->
+    -- Special handling of strings
+    -- Check if sequence of characters, then concatenate them into a string
+    if _isCharSeq tms then
+      match (_charSeq2String tms) with Some str then JSEString { s = str }
+      else infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+    else
+      -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+      -- Else compile each expression in sequence and return a list
+      let tms: [JSExpr] = map compileExpr tms in
+      JSESeq { exprs = tms, info = info }      
+      
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
   | TmConApp _ -> error "Constructor application in compileExpr."
   | TmLet _ -> error "Let expressions cannot be handled in compileExpr."
