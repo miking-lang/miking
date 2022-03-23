@@ -13,6 +13,7 @@ lang JSExprAst
   | JSEMember    { expr: JSExpr, id: Name }  -- Member access
   | JSEInt       { i: Int }                     -- Integer literals
   | JSEFloat     { f: Float }                   -- Float literals
+  | JSEBool      { b: Bool }                    -- Boolean literals
   | JSEChar      { c: Char }                    -- Character literals
   | JSEString    { s: String }                  -- String literals 
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators

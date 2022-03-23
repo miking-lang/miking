@@ -143,9 +143,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     match val      with CInt   { val = val } then JSEInt   { i = val }
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
-    else match val with CBool  { val = val } then
-      let val = match val with true then 1 else 0 in
-        JSEInt { i = val }
+    else match val with CBool  { val = val } then JSEBool  { b = val }
     else error "Unsupported literal"
 
   -- Should not occur
