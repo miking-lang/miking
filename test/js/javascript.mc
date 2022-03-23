@@ -1,1 +1,1 @@
-mexpr print "Hello, world!"
+mexpr print "Hello, world!\n"
