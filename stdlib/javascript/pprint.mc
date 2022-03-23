@@ -99,8 +99,8 @@ lang JSExprPrettyPrint = JSExprAst
     else never
 
   | JSESeq { exprs = exprs, info = info } ->
-    match (printJSExprs indent) env exprs with (env,exprs) then
-      (env, join [strJoin "; " exprs, ";"])
+    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
+      (env, join ["[", strJoin ", " exprs, "]"])
     else never
 
   sem printJSBinOp (lhs: String) (rhs: String) =
