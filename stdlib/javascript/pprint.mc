@@ -80,7 +80,7 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEInt   { i = i } -> (env, int2string i)
   | JSEFloat { f = f } -> (env, float2string f)
   | JSEBool  { b = b } -> (env, if b then "true" else "false")
-  | JSEChar  { c = c } -> (env, [c])
+  | JSEChar  { c = c } -> (env, ['\'', c, '\''])
 
   | JSEString { s = s } -> (env, join ["\"", escapeString s, "\""])
 
