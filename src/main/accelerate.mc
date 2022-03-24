@@ -51,14 +51,15 @@ lang PMExprCompile =
   PMExprAst + MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
   PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
   PMExprRecursionElimination + PMExprExtractAccelerate +
-  PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
-  OCamlGenerate + OCamlTypeDeclGenerate
+  PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
+  PMExprNestedAccelerate + PMExprWellFormed + OCamlGenerate +
+  OCamlTypeDeclGenerate
 end
 
 lang MExprFutharkCompile =
-  PMExprUtestSizeConstraint + FutharkGenerate + FutharkDeadcodeElimination +
-  FutharkSizeParameterize + FutharkCWrapper + FutharkRecordParamLift +
-  FutharkForEachRecordPattern + FutharkAliasAnalysis
+  FutharkGenerate + FutharkDeadcodeElimination + FutharkSizeParameterize +
+  FutharkCWrapper + FutharkRecordParamLift + FutharkForEachRecordPattern +
+  FutharkAliasAnalysis
 end
 
 lang MExprCudaCompile =
@@ -123,6 +124,7 @@ let pprintCudaAst : CuPProg -> String = lam ast.
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
+  let ast = replaceUtestsWithSizeConstraint ast in
   let ast = rewriteTerm ast in
   let ast = tailRecursive ast in
   let ast = cseGlobal ast in
@@ -138,7 +140,8 @@ let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
 let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
   use MExprFutharkCompile in
-  let ast = replaceUtestsWithSizeConstraint ast in
+  let ast = patternTransformation ast in
+  validatePMExprAst entryPoints ast;
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
@@ -149,6 +152,8 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
+  let ast = normalizeTerm ast in
+  validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast;
   let ast = constantAppToExpr ast in
@@ -347,18 +352,9 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   match eliminateDummyParameter solutions accelerated accelerateAst
   with (accelerated, accelerateAst) in
 
-  -- Detect patterns in the accelerate AST to eliminate recursion. The
-  -- result is a PMExpr AST.
-  let pmexprAst = patternTransformation accelerateAst in
-
-  -- Perform validation of the produced PMExpr AST to ensure it is valid
-  -- in terms of the well-formed rules. If it is found to violate these
-  -- constraints, an error is reported.
-  validatePMExprAst accelerateIds pmexprAst;
-
   -- Translate the PMExpr AST into a representation of the GPU code and the
   -- wrapper code.
-  match hooks.generateGpuCode accelerated pmexprAst with (gpuProg, wrapperProg) in
+  match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
 
   -- Eliminate all utests in the MExpr AST
   let ast = utestStrip ast in
