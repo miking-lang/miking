@@ -4,10 +4,10 @@ include "common.mc"
 include "string.mc"
 
 let sum : [Int] -> Int = lam s.
-  (let f : (Int -> Int -> Int) -> Int -> [Int] -> Int = foldl in f) addi 0 s
+  foldl addi 0 s
 
 let sum2d : [[Int]] -> Int = lam s.
-  sum ((let m : ([Int] -> Int) -> [[Int]] -> [Int] = map in m) sum s)
+  sum (map sum s)
 
 mexpr
 

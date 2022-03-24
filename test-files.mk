@@ -12,6 +12,8 @@ src_files_all =\
 sundials_files = $(wildcard stdlib/sundials/*.mc)
 ipopt_files = $(wildcard stdlib/ipopt/*.mc)
 accelerate_files = $(wildcard test/examples/accelerate/*.mc)
+cuda_files = $(wildcard test/examples/accelerate/cuda/*.mc)
+futhark_files = $(wildcard test/examples/accelerate/futhark/*.mc)
 
 special_dependencies_files +=\
 	$(sundials_files)\
