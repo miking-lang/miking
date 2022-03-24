@@ -51,22 +51,22 @@ lang PMExprCompile =
   PMExprAst + MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
   PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
   PMExprRecursionElimination + PMExprExtractAccelerate +
-  PMExprReplaceAccelerate + PMExprNestedAccelerate +
-  PMExprUtestSizeConstraint + PMExprWellFormed +
+  PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
   OCamlGenerate + OCamlTypeDeclGenerate
 end
 
 lang MExprFutharkCompile =
-  FutharkGenerate + FutharkDeadcodeElimination + FutharkSizeParameterize +
-  FutharkCWrapper + FutharkRecordParamLift + FutharkForEachRecordPattern +
-  FutharkAliasAnalysis
+  PMExprUtestSizeConstraint + FutharkGenerate + FutharkDeadcodeElimination +
+  FutharkSizeParameterize + FutharkCWrapper + FutharkRecordParamLift +
+  FutharkForEachRecordPattern + FutharkAliasAnalysis
 end
 
 lang MExprCudaCompile =
-  MExprRemoveTypeAscription + CudaPMExprAst + CudaPMExprCompile +
-  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered + SeqTypeTypeLift +
-  TensorTypeTypeLift + CudaCompile + CudaKernelTranslate + CudaPrettyPrint +
-  CudaCWrapper + CudaWellFormed + CudaConstantApp + CudaTensorMemory
+  MExprUtestTrans + MExprRemoveTypeAscription + CudaPMExprAst +
+  CudaPMExprCompile + MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered +
+  SeqTypeTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
+  CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
+  CudaTensorMemory
 end
 
 type AccelerateHooks a b = {
@@ -123,7 +123,6 @@ let pprintCudaAst : CuPProg -> String = lam ast.
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
-  let ast = replaceUtestsWithSizeConstraint ast in
   let ast = rewriteTerm ast in
   let ast = tailRecursive ast in
   let ast = cseGlobal ast in
@@ -139,6 +138,7 @@ let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
 let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
   use MExprFutharkCompile in
+  let ast = replaceUtestsWithSizeConstraint ast in
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
@@ -149,6 +149,7 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
+  let ast = utestStrip ast in
   wellFormed ast;
   let ast = constantAppToExpr ast in
   let ast = toCudaPMExpr ast in

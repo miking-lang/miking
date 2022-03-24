@@ -96,12 +96,15 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   -- This is allowed because they are handled differently from other terms.
   | loop & (TmLoop t | TmParallelLoop t) ->
     let addLoopError = lam. cons (CudaLoopError loop) acc in
+    let acc = cudaWellFormedExpr acc t.n in
     match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {labels = []}} then
       match t.ty with TyRecord {labels = []} then acc
       else addLoopError ()
     else addLoopError ()
   | loop & (TmLoopFoldl t) ->
     let addLoopError = lam. cons (CudaLoopError loop) acc in
+    let acc = cudaWellFormedExpr acc t.acc in
+    let acc = cudaWellFormedExpr acc t.n in
     match tyTm t.f with TyArrow {
       from = accTy1,
       to = TyArrow {from = TyInt _, to = accTy2}}
@@ -111,6 +114,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     else addLoopError ()
   | red & (TmParallelReduce t) ->
     let addReduceError = lam. cons (CudaReduceError red) acc in
+    let acc = cudaWellFormedExpr acc t.ne in
+    let acc = cudaWellFormedExpr acc t.as in
     match tyTm t.f with TyArrow {
       from = accTy1,
       to = TyArrow {from = elemTy, to = accTy2}}
@@ -119,7 +124,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
         acc
       else addReduceError ()
     else addReduceError ()
-  | t & (TmMap2 _) -> cons (CudaExprError t) acc
   | t ->
     let info = infoTm t in
     let acc =
