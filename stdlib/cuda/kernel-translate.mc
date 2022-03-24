@@ -69,7 +69,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   sem generateIntrinsicsTop (wrapperMap : Map Name Name)
                             (ccEnv : CompileCEnv) =
   | CuTTop (cuTop & {top = CTFun t}) ->
-    match mapAccumL (generateIntrinsicStmt ccEnv) [] t.body with (tops, body) in
+    match mapAccumL (generateIntrinsicStmt ccEnv t.ret) [] t.body with (tops, body) in
     match mapLookup t.id wrapperMap with Some cudaWrapperId then
       let newTop = CTFun {{t with id = cudaWrapperId}
                              with body = body} in
@@ -97,11 +97,18 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
     if acc then acc else foldl containsKernelCallH acc stmts
   | stmt -> acc
 
-  sem generateIntrinsicStmt (ccEnv : CompileCEnv) (acc : [CuTop]) =
+  sem generateIntrinsicStmt (ccEnv : CompileCEnv) (ty : CType) (acc : [CuTop]) =
   | CSExpr {expr = t} ->
     generateIntrinsicExprNoRet ccEnv acc t
   | CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = t}} ->
     generateIntrinsicExpr ccEnv acc outExpr t
+  | CSRet {val = Some t} ->
+    let tempId = nameSym "t" in
+    let temp = CEVar {id = tempId} in
+    let tempDecl = CSDef {ty = ty, id = Some tempId, init = None ()} in
+    match generateIntrinsicExpr ccEnv acc temp t with (acc, stmt) in
+    let tempReturn = CSRet {val = Some temp} in
+    (acc, CSComp {stmts = [tempDecl, stmt, tempReturn]})
   | stmt -> (acc, stmt)
 
   -- Generates an statement for the contained intrinsic, which potentially

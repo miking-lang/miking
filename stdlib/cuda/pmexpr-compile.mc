@@ -7,13 +7,14 @@
 -- kernels.
 
 include "cuda/pmexpr-ast.mc"
+include "cuda/pmexpr-pprint.mc"
 include "pmexpr/utils.mc"
 
 lang CudaPMExprKernelCalls = CudaPMExprAst
   sem generateKernelApplications =
   | t ->
     let marked = markNonKernelFunctions t in
-    promoteKernels marked t
+    (marked, promoteKernels marked t)
 
   -- Produces a set of identifiers corresponding to the functions that are used
   -- directly or indirectly by a parallel operation. Parallel keywords within
@@ -24,18 +25,15 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   sem markNonKernelFunctionsH (functions : Set Name) =
   | TmLet t ->
     let functions = markNonKernelFunctionsH functions t.inexpr in
-    if setMem t.ident functions then markFunctionsBody functions t.body
-    else functions
+    let isMarked = setMem t.ident functions in
+    markFunctionsBody isMarked functions t.body
   | TmRecLets t ->
     let markFunctionsBinding = lam functions. lam bind : RecLetBinding.
-      markFunctionsBody functions bind.body
+      let isMarked = setMem bind.ident functions in
+      markFunctionsBody isMarked functions bind.body
     in
     let functions = markNonKernelFunctionsH functions t.inexpr in
-    -- NOTE(larshum, 2022-03-15): For simplicity, all functions in a recursive
-    -- binding are marked for now.
-    if any (lam bind : RecLetBinding. setMem bind.ident functions) t.bindings then
-      foldl markFunctionsBinding functions t.bindings
-    else functions
+    foldl markFunctionsBinding functions t.bindings
   | TmType t -> markNonKernelFunctionsH functions t.inexpr
   | TmConDef t -> markNonKernelFunctionsH functions t.inexpr
   | TmUtest t -> markNonKernelFunctionsH functions t.next
@@ -43,16 +41,19 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   | t -> functions
 
   -- Adds all function identifiers used in a parallel operation to the set of
-  -- marked functions.
-  sem markFunctionsBody (marked : Set Name) =
+  -- marked functions. If the function to which the body belongs to has been
+  -- marked, we also mark any function calls made from within this function.
+  sem markFunctionsBody (functionIsMarked : Bool) (marked : Set Name) =
+  | TmVar (t & {ty = TyArrow _}) ->
+    if functionIsMarked then setInsert t.ident marked else marked
 --  | TmSeqMap t -> markFunctionsBodyH marked t.f
 --  | TmParallelReduce t -> markFunctionsBodyH marked t.f
   | TmParallelLoop t -> markFunctionsBodyH marked t.f
-  | t -> sfold_Expr_Expr markFunctionsBody marked t
+  | t -> sfold_Expr_Expr (markFunctionsBody functionIsMarked) marked t
 
   sem markFunctionsBodyH (marked : Set Name) =
   | TmVar t ->
-    match t.ty with TyArrow _ then setInsert marked t.ident
+    match t.ty with TyArrow _ then setInsert t.ident marked
     else marked
   | t -> sfold_Expr_Expr markFunctionsBodyH marked t
 
@@ -95,27 +96,40 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
 end
 
 lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
-  type AllocEnv = Map Name AllocMem
+  type AllocEnv = {
+    -- Contains a set of identifiers that have been marked, meaning they may
+    -- be used in parallel operations. We only want to do allocations within
+    -- functions that are known to be used from the CPU.
+    marked : Set Name,
+
+    -- Maps identifiers to the memory they are allocated in.
+    mem : Map Name AllocMem
+  }
 
   sem allocEnvEmpty =
-  | () -> mapEmpty nameCmp
+  | () -> {marked = setEmpty nameCmp, mem = mapEmpty nameCmp}
 
   sem allocEnvInsert (id : Name) (mem : AllocMem) =
-  | env -> mapInsert id mem env
+  | env ->
+    let env : AllocEnv = env in
+    {env with mem = mapInsert id mem env.mem}
 
   sem allocEnvLookup (id : Name) =
-  | env -> mapLookup id env
+  | env ->
+    let env : AllocEnv = env in
+    mapLookup id env.mem
 
   sem allocEnvRemove (id : Name) =
-  | env -> mapRemove id env
+  | env ->
+    let env : AllocEnv = env in
+    {env with mem = mapRemove id env.mem}
 
   sem cudaMemMgrError =
   | info ->
     infoErrorExit info "Internal compiler error: CUDA sequence memory management"
 
-  sem addMemoryOperations =
+  sem addMemoryOperations (env : AllocEnv) =
   | body ->
-    let env = allocEnvEmpty () in
     match addMemoryAllocations env body with (env, body) in
     match addFreeOperations env body with (_, body) in
     (env, body)
@@ -224,14 +238,21 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
 
   sem insertMemoryOperations (env : AllocEnv) =
   | TmLet t ->
-    match addMemoryOperations t.body with (env1, body) in
-    let env = mapUnion env env1 in
-    match insertMemoryOperations env t.inexpr with (env, inexpr) in
-    (env, TmLet {{t with body = body} with inexpr = inexpr})
+    -- NOTE(larshum, 2022-03-22): We should not insert copying within functions
+    -- that may be called from both CPU and GPU code.
+    if setMem t.ident env.marked then
+      match insertMemoryOperations env t.inexpr with (env, inexpr) in
+      (env, TmLet {t with inexpr = inexpr})
+    else
+      match addMemoryOperations env t.body with (env, body) in
+      match insertMemoryOperations env t.inexpr with (env, inexpr) in
+      (env, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let insertMemoryOperationsBinding = lam env : AllocEnv. lam bind : RecLetBinding.
-      match addMemoryOperations bind.body with (env, body) in
-      (env, {bind with body = body})
+      if setMem bind.ident env.marked then (env, bind)
+      else
+        match addMemoryOperations env bind.body with (env, body) in
+        (env, {bind with body = body})
     in
     match mapAccumL insertMemoryOperationsBinding env t.bindings
     with (env, bindings) in
@@ -262,7 +283,9 @@ end
 lang CudaPMExprCompile = CudaPMExprKernelCalls + CudaPMExprMemoryManagement
   sem toCudaPMExpr =
   | t ->
-    let t = generateKernelApplications t in
-    match insertMemoryOperations (mapEmpty nameCmp) t with (_, t) in
+    match generateKernelApplications t with (marked, t) in
+    let allocEnv = {
+      let env : AllocEnv = allocEnvEmpty () in env with marked = marked} in
+    match insertMemoryOperations allocEnv t with (_, t) in
     t
 end

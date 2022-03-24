@@ -20,36 +20,37 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 
   sem _compileCopyToCpu (env : CompileCEnv) (dst : CExpr) (arg : CExpr) =
   | ty & (TySeq {ty = elemType}) ->
-      let seqType = compileType env ty in
-      let copySeqStmt = CSExpr {expr = CEApp {
-        fun = _cudaMemcpy, args = [
-          CEUnOp {op = COAddrOf (), arg = dst}, arg,
-          CESizeOfType {ty = seqType}, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-      let elemType = compileType env elemType in
-      let sizeExpr = CEBinOp {
-        op = COMul (),
-        lhs = CEMember {lhs = dst, id = _seqLenKey},
-        rhs = CESizeOfType {ty = elemType}} in
-      let tempType = CTyPtr {ty = elemType} in
-      let tempId = nameSym "t" in
-      let tempAllocStmt = CSDef {
-        ty = CTyPtr {ty = elemType}, id = Some tempId,
-        init = Some (CIExpr {expr = CECast {
-          ty = tempType,
-          rhs = CEApp {
-            fun = _malloc,
-            args = [sizeExpr]}}})} in
-      let copyDataStmt = CSExpr {expr = CEApp {
-        fun = _cudaMemcpy,
-        args = [
-          CEVar {id = tempId},
-          CEMember {lhs = dst, id = _seqKey},
-          sizeExpr, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-      let outTmpStmt = CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEMember {lhs = dst, id = _seqKey},
-        rhs = CEVar {id = tempId}}} in
-      [copySeqStmt, tempAllocStmt, copyDataStmt, outTmpStmt]
+    let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
+    let seqType = compileType env conType in
+    let copySeqStmt = CSExpr {expr = CEApp {
+      fun = _cudaMemcpy, args = [
+        CEUnOp {op = COAddrOf (), arg = dst}, arg,
+        CESizeOfType {ty = seqType}, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+    let elemType = compileType env elemType in
+    let sizeExpr = CEBinOp {
+      op = COMul (),
+      lhs = CEMember {lhs = dst, id = _seqLenKey},
+      rhs = CESizeOfType {ty = elemType}} in
+    let tempType = CTyPtr {ty = elemType} in
+    let tempId = nameSym "t" in
+    let tempAllocStmt = CSDef {
+      ty = CTyPtr {ty = elemType}, id = Some tempId,
+      init = Some (CIExpr {expr = CECast {
+        ty = tempType,
+        rhs = CEApp {
+          fun = _malloc,
+          args = [sizeExpr]}}})} in
+    let copyDataStmt = CSExpr {expr = CEApp {
+      fun = _cudaMemcpy,
+      args = [
+        CEVar {id = tempId},
+        CEMember {lhs = dst, id = _seqKey},
+        sizeExpr, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+    let outTmpStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = dst, id = _seqKey},
+      rhs = CEVar {id = tempId}}} in
+    [copySeqStmt, tempAllocStmt, copyDataStmt, outTmpStmt]
   | TyTensor {ty = elemType} ->
     -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
     -- later stage in the compiler.
@@ -73,7 +74,8 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
 
   sem _compileCopyToGpu (env : CompileCEnv) (dst : CExpr) (arg : CExpr) =
   | ty & (TySeq {ty = elemType}) ->
-    let seqType = compileType env ty in
+    let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
+    let seqType = compileType env conType in
     let elemType = compileType env elemType in
     let tempId = nameSym "t" in
     let tempSeqDeclStmt = CSDef {ty = seqType, id = Some tempId, init = None ()} in
@@ -255,9 +257,11 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
       else
         let dstId = nameSym "temp" in
         let dst = CEVar {id = dstId} in
+        let defStmt = CSDef {
+          ty = compileType env ty, id = Some dstId, init = None ()} in
         let ty = _unwrapType env.typeEnv ty in
         let copyStmts = _compileCopy env dst arg ty toMem in
-        (env, snoc copyStmts (CSRet {val = Some dst}))
+        (env, join [[defStmt], copyStmts, [CSRet {val = Some dst}]])
     else match res with RNone _ then (env, [])
     else match res with RIdent dstId in
       let dst = CEVar {id = dstId} in
