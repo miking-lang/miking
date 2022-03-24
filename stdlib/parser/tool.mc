@@ -6,7 +6,10 @@ include "seq.mc"
 mexpr
 
 use SelfhostAst in
-match argv with [_, filename] in
+match argv with ![_, _] then
+  printLn "Please provide exactly one argument; a .syn file";
+  exit 0
+else match argv with [_, filename] in
 let content = readFile filename in
 match parseSelfhostExn filename content with File {decls = decls} in
 
