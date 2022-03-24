@@ -203,8 +203,10 @@ lang FileOpBase
 
   sem topAllowed_FileOp =
   | _ -> true
+  sem leftAllowed_FileOp : {parent : FileOp LOpen rstyle1, child : FileOp lstyle rstyle2} -> Bool
   sem leftAllowed_FileOp =
   | {parent = _, child = c} -> topAllowed_FileOp c
+  sem rightAllowed_FileOp : {parent : FileOp lstyle1 ROpen, child : FileOp lstyle2 rstyle} -> Bool
   sem rightAllowed_FileOp =
   | {parent = _, child = c} -> topAllowed_FileOp c
   sem groupingsAllowed_FileOp =
@@ -221,8 +223,10 @@ lang DeclOpBase
 
   sem topAllowed_DeclOp =
   | _ -> true
+  sem leftAllowed_DeclOp : {parent : DeclOp LOpen rstyle1, child : DeclOp lstyle rstyle2} -> Bool
   sem leftAllowed_DeclOp =
   | {parent = _, child = c} -> topAllowed_DeclOp c
+  sem rightAllowed_DeclOp : {parent : DeclOp lstyle1 ROpen, child : DeclOp lstyle2 rstyle} -> Bool
   sem rightAllowed_DeclOp =
   | {parent = _, child = c} -> topAllowed_DeclOp c
   sem groupingsAllowed_DeclOp =
@@ -239,8 +243,10 @@ lang RegexOpBase
 
   sem topAllowed_RegexOp =
   | _ -> true
+  sem leftAllowed_RegexOp : {parent : RegexOp LOpen rstyle1, child : RegexOp lstyle rstyle2} -> Bool
   sem leftAllowed_RegexOp =
   | {parent = _, child = c} -> topAllowed_RegexOp c
+  sem rightAllowed_RegexOp : {parent : RegexOp lstyle1 ROpen, child : RegexOp lstyle2 rstyle} -> Bool
   sem rightAllowed_RegexOp =
   | {parent = _, child = c} -> topAllowed_RegexOp c
   sem groupingsAllowed_RegexOp =
@@ -257,8 +263,10 @@ lang ExprOpBase
 
   sem topAllowed_ExprOp =
   | _ -> true
+  sem leftAllowed_ExprOp : {parent : ExprOp LOpen rstyle1, child : ExprOp lstyle rstyle2} -> Bool
   sem leftAllowed_ExprOp =
   | {parent = _, child = c} -> topAllowed_ExprOp c
+  sem rightAllowed_ExprOp : {parent : ExprOp lstyle1 ROpen, child : ExprOp lstyle2 rstyle} -> Bool
   sem rightAllowed_ExprOp =
   | {parent = _, child = c} -> topAllowed_ExprOp c
   sem groupingsAllowed_ExprOp =
@@ -282,7 +290,7 @@ lang FileAst = SelfhostBaseAst
   sem get_File_info =
   | File x -> x.info
 
-  sem smapAccumL_File_Decl (f : acc -> Decl -> (acc, Decl)) (acc : acc) =
+  sem smapAccumL_File_Decl f acc =
   | File x ->
     match mapAccumL f acc x.decls with (acc, decls) in
     (acc, File {x with decls = decls})
@@ -348,7 +356,7 @@ lang TypeDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | TypeDecl x -> x.info
 
-  sem smapAccumL_Decl_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Decl_Expr f acc =
   | TypeDecl x ->
     match mapAccumL (lam acc. lam x. match f acc x.val with (acc, val) in {x with val = val}) acc x.properties with (acc, properties) in
     (acc, TypeDecl {x with properties = properties})
@@ -384,7 +392,7 @@ lang TokenDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | TokenDecl x -> x.info
 
-  sem smapAccumL_Decl_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Decl_Expr f acc =
   | TokenDecl x ->
     match mapAccumL (lam acc. lam x. match f acc x.val with (acc, val) in {x with val = val}) acc x.properties with (acc, properties) in
     (acc, TokenDecl {x with properties = properties})
@@ -457,7 +465,7 @@ lang ProductionDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | ProductionDecl x -> x.info
 
-  sem smapAccumL_Decl_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Decl_Regex f acc =
   | ProductionDecl x ->
     match f acc x.regex with (acc, regex) in
     (acc, ProductionDecl {x with regex = regex})
@@ -488,7 +496,7 @@ lang InfixDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | InfixDecl x -> x.info
 
-  sem smapAccumL_Decl_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Decl_Regex f acc =
   | InfixDecl x ->
     match f acc x.regex with (acc, regex) in
     (acc, InfixDecl {x with regex = regex})
@@ -519,7 +527,7 @@ lang PrefixDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | PrefixDecl x -> x.info
 
-  sem smapAccumL_Decl_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Decl_Regex f acc =
   | PrefixDecl x ->
     match f acc x.regex with (acc, regex) in
     (acc, PrefixDecl {x with regex = regex})
@@ -550,7 +558,7 @@ lang PostfixDeclAst = SelfhostBaseAst
   sem get_Decl_info =
   | PostfixDecl x -> x.info
 
-  sem smapAccumL_Decl_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Decl_Regex f acc =
   | PostfixDecl x ->
     match f acc x.regex with (acc, regex) in
     (acc, PostfixDecl {x with regex = regex})
@@ -603,7 +611,7 @@ lang RecordRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | RecordRegex x -> x.info
 
-  sem smapAccumL_Regex_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Regex_Expr f acc =
   | RecordRegex x ->
     match f acc x.regex with (acc, regex) in
     (acc, RecordRegex {x with regex = regex})
@@ -686,7 +694,7 @@ lang TokenRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | TokenRegex x -> x.info
 
-  sem smapAccumL_Regex_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Regex_Expr f acc =
   | TokenRegex x ->
     match optionMapAccum f acc x.arg with (acc, arg) in
     (acc, TokenRegex {x with arg = arg })
@@ -717,7 +725,7 @@ lang RepeatPlusRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | RepeatPlusRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | RepeatPlusRegex x ->
     match f acc x.left with (acc, left) in
     (acc, RepeatPlusRegex {x with left = left})
@@ -751,7 +759,7 @@ lang RepeatStarRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | RepeatStarRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | RepeatStarRegex x ->
     match f acc x.left with (acc, left) in
     (acc, RepeatStarRegex {x with left = left})
@@ -785,7 +793,7 @@ lang RepeatQuestionRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | RepeatQuestionRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | RepeatQuestionRegex x ->
     match f acc x.left with (acc, left) in
     (acc, RepeatQuestionRegex {x with left = left})
@@ -819,7 +827,7 @@ lang NamedRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | NamedRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | NamedRegex x ->
     match f acc x.right with (acc, right) in
     (acc, NamedRegex {x with right = right})
@@ -853,7 +861,7 @@ lang AlternativeRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | AlternativeRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | AlternativeRegex x ->
     match f acc x.left with (acc, left) in
     match f acc x.right with (acc, right) in
@@ -892,7 +900,7 @@ lang ConcatRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | ConcatRegex x -> x.info
 
-  sem smapAccumL_Regex_Regex (f : acc -> Regex -> (acc, Regex)) (acc : acc) =
+  sem smapAccumL_Regex_Regex f acc =
   | ConcatRegex x ->
     match f acc x.left with (acc, left) in
     match f acc x.right with (acc, right) in
