@@ -243,6 +243,16 @@ lang CudaTensorStatusUpdate = CudaTensorMemoryBase
           rhs = CEVar {id = statusKey}}}
       in
       let cudaArchVar = CEVar {id = nameNoSym "__CUDA_ARCH__"} in
+      let isFirstThreadExpr = CEBinOp {
+        op = COEq (),
+        lhs = CEBinOp {
+          op = COAdd (),
+          lhs = CEBinOp {
+            op = COMul (),
+            lhs = CEBlockDim {dim = CuDX ()},
+            rhs = CEBlockIdx {dim = CuDX ()}},
+          rhs = CEThreadIdx {dim = CuDX ()}},
+        rhs = CEInt {i = 0}} in
       let statusUpdateMacroStmt = CSIfMacro {
         cond = CEBinOp {
           op = COAnd (),
@@ -251,7 +261,14 @@ lang CudaTensorStatusUpdate = CudaTensorMemoryBase
             op = COGt (),
             lhs = cudaArchVar,
             rhs = CEInt {i = 0}}},
-        thn = [setStatusStmt _tensorStateCpuInvalid],
+        thn = [
+          -- NOTE(larshum, 2022-03-25): We only update the state in the first
+          -- thread, or we will get a big negative performance impact. Probably
+          -- due to multiple threads writing to the same global data.
+          CSIf {
+            cond = isFirstThreadExpr,
+            thn = [setStatusStmt _tensorStateCpuInvalid],
+            els = []}],
         els = [setStatusStmt _tensorStateGpuInvalid]} in
       [stmt, statusUpdateMacroStmt]
     else [stmt]
