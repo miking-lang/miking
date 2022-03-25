@@ -61,7 +61,7 @@ lang PMExprReplaceAccelerate =
       let recTy = OTyRecord {
         info = info, fields = ocamlTypedFields, tyident = tyident} in
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
-      (snoc acc recTyDecl, recTy)
+      (snoc acc recTyDecl, objRepr recTy)
   | TySeq {info = info, ty = ty} ->
     match _mexprToOCamlType env acc ty with (acc, ty) in
     (acc, OTyArray {info = info, ty = ty})
