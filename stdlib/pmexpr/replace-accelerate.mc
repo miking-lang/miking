@@ -61,18 +61,33 @@ lang PMExprReplaceAccelerate =
       let recTy = OTyRecord {
         info = info, fields = ocamlTypedFields, tyident = tyident} in
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
-      (snoc acc recTyDecl, objRepr recTy)
+      (snoc acc recTyDecl, recTy)
   | TySeq {info = info, ty = ty} ->
     match _mexprToOCamlType env acc ty with (acc, ty) in
     (acc, OTyArray {info = info, ty = ty})
   | ty & (TyTensor _) -> (acc, _tensorToOCamlType ty)
   | ty -> (acc, ty)
 
+  -- NOTE(larshum, 2022-03-25): The 'convertData' function is meant to convert
+  -- to a record defined in OCaml. But in our use-case, we want a record
+  -- produced from MExpr, which has to be obj-wrapped.
+  sem addRecordObjWrapping =
+  | OTmRecord t ->
+    let bindings =
+      map
+        (lam bind : (String, Expr).
+          match bind with (s, e) in
+          (s, addRecordObjWrapping e))
+        t.bindings in
+    objRepr (OTmRecord {t with bindings = bindings})
+  | t -> smap_Expr_Expr addRecordObjWrapping t
+
   sem wrapInConvertData (env : GenerateEnv) (acc : [Top]) =
   | t ->
     let ty = tyTm t in
     match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
     match convertData (infoTm t) env t ty ocamlTy with (_, e) in
+    let e = addRecordObjWrapping e in
     (acc, e)
 
   sem convertAccelerateParametersH (env : GenerateEnv) (acc : [Top]) =
