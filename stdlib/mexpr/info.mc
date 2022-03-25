@@ -95,6 +95,9 @@ with Info { filename = "path/to/file.mc",
 let infoErrorString : Info -> String -> String = lam fi. lam str.
     join [info2str fi, "ERROR: ", str]
 
+let infoWarningString : Info -> String -> String = lam fi. lam str.
+    join [info2str fi, "WARNING: ", str]
+
 -- Print an error with info struct info and exit (error code 1)
 let infoErrorExit : Info -> String -> Unknown = lam fi. lam str.
   print (join ["\n", (infoErrorString fi str), "\n"]);
