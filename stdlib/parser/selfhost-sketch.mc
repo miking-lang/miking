@@ -387,7 +387,7 @@ prod Token: Decl =
 
 lang TokenDeclAst = SelfhostBaseAst
   syn Decl =
-  | TokenDecl { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info }
+  | TokenDecl { name : Option {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info }
 
   sem get_Decl_info =
   | TokenDecl x -> x.info
@@ -400,7 +400,7 @@ end
 
 lang TokenDeclOp = DeclOpBase + TokenDeclAst
   syn DeclOp =
-  | TokenDeclOp { name : {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info] }
+  | TokenDeclOp { name : Option {v: Name, i: Info}, properties : [{name : {v: Name, i: Info}, val : Expr}], info : Info, terms : [Info] }
 
   sem get_DeclOp_terms =
   | TokenDeclOp x -> x.terms
@@ -611,7 +611,7 @@ lang RecordRegexAst = SelfhostBaseAst
   sem get_Regex_info =
   | RecordRegex x -> x.info
 
-  sem smapAccumL_Regex_Expr f acc =
+  sem smapAccumL_Regex_Regex f acc =
   | RecordRegex x ->
     match f acc x.regex with (acc, regex) in
     (acc, RecordRegex {x with regex = regex})
@@ -817,12 +817,12 @@ lang RepeatQuestionRegexOp = RegexOpBase + RepeatQuestionRegexAst
 end
 
 /-
-prefix Named: Regex = name:LName ":"
+prefix Named: Regex = name:LIdent ":"
 -/
 
 lang NamedRegexAst = SelfhostBaseAst
   syn Regex =
-  | NamedRegex { name : {v: Name, i: Info}, right : Regex, info : Info }
+  | NamedRegex { name : {v: String, i: Info}, right : Regex, info : Info }
 
   sem get_Regex_info =
   | NamedRegex x -> x.info
@@ -835,7 +835,7 @@ end
 
 lang NamedRegexOp = RegexOpBase + NamedRegexAst
   syn RegexOp =
-  | NamedRegexOp { name : {v: Name, i: Info}, info : Info, terms : [Info] }
+  | NamedRegexOp { name : {v: String, i: Info}, info : Info, terms : [Info] }
 
   sem get_RegexOp_terms =
   | NamedRegexOp x -> x.terms
@@ -846,8 +846,8 @@ lang NamedRegexOp = RegexOpBase + NamedRegexAst
   sem unsplit_RegexOp =
   | PrefixP { self = NamedRegexOp x, rightChildAlts = [right] ++ _ } ->
     match unsplit_RegexOp right with (rinfo, right) in
-    let info = mergeInfo rinfo x.info in
-    (info, NamedRegex { right = right, info = info })
+    let info = mergeInfo x.info rinfo in
+    (info, NamedRegex { name = x.name, right = right, info = info })
 end
 
 /-
@@ -1574,7 +1574,7 @@ let _table =
         , rhs = [TokSpec (LIdentRepr ()), litSym ":"]
         , action = lam p. lam seq.
           match seq with [TokParsed (LIdentTok name), LitParsed x] in
-          NamedRegexOp { name = {v = nameNoSym name.val, i = name.info}, info = mergeInfo name.info x.info, terms = [name.info, x.info] }
+          NamedRegexOp { name = {v = name.val, i = name.info}, info = mergeInfo name.info x.info, terms = [name.info, x.info] }
         }
       , { nt = regex_infix
         , label = "Regex_Alternative"
