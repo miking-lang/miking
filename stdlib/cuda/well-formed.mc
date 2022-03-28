@@ -158,10 +158,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | _ -> false
 
   sem isCudaSupportedType =
-  | TyInt _ | TyFloat _ | TyBool _ | TyChar _ | TyCon _ | TyRecord _
-  | TyTensor {ty = TyInt _ | TyFloat _}
-  | TySeq {ty = TyInt _ | TyFloat _ | TyBool _ | TyChar _} -> true
-  | TySeq {ty = t & (TySeq _)} -> isCudaSupportedType t
+  | TyInt _ | TyFloat _ | TyBool _ | TyChar _ | TyCon _
+  | TyTensor {ty = TyInt _ | TyFloat _} -> true
+  | TySeq {ty = ty} -> isCudaSupportedType ty
+  | TyRecord {fields = fields} -> forAll isCudaSupportedType (mapValues fields)
   | _ -> false
 
   sem isCudaSupportedConstant =
