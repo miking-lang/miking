@@ -244,7 +244,10 @@ decl:
       Data (fi, $2.v, $4) }
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
-      Inter (fi, $2.v, $3, $5) }
+      Inter (fi, $2.v, TyUnknown NoInfo, Some $3, $5) }
+  | SEM var_ident COLON ty
+    { let fi = mkinfo $1.i (ty_info $4) in
+      Inter (fi, $2.v, $4, None, []) }
   | TYPE type_ident type_params EQ ty
     { let fi = mkinfo $1.i $4.i in
       Alias (fi, $2.v, $3, $5) }
@@ -269,6 +272,9 @@ params:
   | LPAREN var_ident COLON ty RPAREN params
     { let fi = mkinfo $1.i $5.i in
       Param (fi, $2.v, $4) :: $6 }
+  | var_ident params
+    { let fi = mkinfo $1.i $1.i in
+      Param (fi, $1.v, TyUnknown fi) :: $2 }
   |
     { [] }
 
