@@ -64,6 +64,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
 
   sem cudaWellFormedExpr (acc : [WellFormedError]) =
   | TmVar t -> acc
+  | TmApp {lhs = TmConst {val = CError _}} ->
+    -- NOTE(larshum, 2022-03-29): Special case to avoid giving well-formedness
+    -- error due to unknown type. Needed to support semantic functions.
+    acc
   | TmApp t ->
     recursive let checkApp = lam acc : [WellFormedError]. lam e : Expr.
       match e with TmApp t then
@@ -153,7 +157,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
   | TmLoop _ | TmLoopFoldl _ | TmParallelLoop _ -> true
   | _ -> false
 
@@ -170,7 +174,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CDivf _ | CModi _ | CNegi _ | CNegf _ | CEqi _ | CEqf _ | CLti _ | CLtf _
   | CGti _ | CGtf _ | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _
   | CNeqf _ -> true
-  | CPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _ | CFoldl _ -> true
+  | CPrint _ | CDPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _
+  | CFoldl _ | CError _ -> true
   | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
   | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false

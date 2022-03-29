@@ -9,6 +9,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
   | CudaSeqRepr {ident : Name, data : CDataRepr, elemTy : CType, ty : CType}
   | CudaTensorRepr {ident : Name, data : CDataRepr, elemTy : CType, ty : CType}
   | CudaRecordRepr {ident : Name, labels : [SID], fields : [CDataRepr], ty : CType}
+  | CudaDataTypeRepr {ident : Name, constrs : Map Name (CType, CDataRepr), ty : CType}
   | CudaBaseTypeRepr {ident : Name, ty : CType}
 
   syn TargetWrapperEnv =
@@ -75,7 +76,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
       infoErrorExit
         (infoTy ty)
         "Reverse type lookup failed when generating CUDA wrapper code"
-  | ty & (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) ->
+  | ty & (TySeq _ | TyTensor _ | TyVariant _) ->
     match lookupTypeIdent env ty with Some (TyCon {ident = id}) then
       CTyVar {id = id}
     else
@@ -111,6 +112,33 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
     CudaRecordRepr {
       ident = nameSym "cuda_rec_tmp", labels = t.labels, fields = fields,
       ty = getCudaType env.targetEnv ty}
+  | ty & (TyCon {ident = ident}) ->
+    -- TODO(larshum, 2022-03-29): This does not work for recursive data types.
+    match env.targetEnv with CudaTargetEnv cenv in
+    let typeEnv = cenv.compileCEnv.typeEnv in
+    match assocSeqLookup {eq=nameEq} ident typeEnv with Some (TyVariant t) then
+      let constrs : Map Name (CType, CDataRepr) =
+        mapMapWithKey
+          (lam constrId : Name. lam constrTy : Type.
+            let constrTy =
+              match constrTy with TyCon {ident = iident} then
+                match assocSeqLookup {eq=nameEq} iident typeEnv with Some ty then
+                  ty
+                else
+                  infoErrorExit (infoTy ty)
+                    (join ["Could not unwrap constructor ", nameGetStr iident,
+                           " of algebraic data type ", nameGetStr ident])
+              else constrTy in
+            ( getCudaType env.targetEnv constrTy
+            , _generateCudaDataRepresentation env constrTy ))
+          t.constrs in
+      CudaDataTypeRepr {
+        ident = nameSym "cuda_adt_tmp", constrs = constrs,
+        ty = getCudaType env.targetEnv ty}
+    else
+      infoErrorExit
+        (infoTy ty)
+        (join ["Invalid algebraic data type ", nameGetStr ident])
   | ty ->
     CudaBaseTypeRepr {
       ident = nameSym "cuda_tmp",
@@ -136,20 +164,24 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
   sem _generateOCamlToCudaWrapperStmts (env : CWrapperEnv) (src : CExpr)
                                        (dstIdent : Name) =
   | CudaSeqRepr t ->
+    match env.targetEnv with CudaTargetEnv cenv in
     let seqDefStmt = CSDef {ty = t.ty, id = Some dstIdent, init = None ()} in
     let dst = CEVar {id = dstIdent} in
     let seqLenExpr = CEMember {lhs = dst, id = _seqLenKey} in
     let setLenStmt = CSExpr {expr = CEBinOp {
       op = COAssign (), lhs = seqLenExpr, rhs = _wosize src}} in
+    let elemTy =
+      match t.data with CudaDataTypeRepr _ then CTyPtr {ty = t.elemTy}
+      else t.elemTy in
     let sizeExpr = CEBinOp {
       op = COMul (),
       lhs = _wosize src,
-      rhs = CESizeOfType {ty = t.elemTy}} in
+      rhs = CESizeOfType {ty = elemTy}} in
     let allocSeqStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEMember {lhs = CEVar {id = dstIdent}, id = _seqKey},
       rhs = CECast {
-        ty = CTyPtr {ty = t.elemTy},
+        ty = CTyPtr {ty = elemTy},
         rhs = CEApp {fun = _getIdentExn "malloc", args = [sizeExpr]}}}} in
 
     let iterIdent = nameSym "i" in
@@ -162,12 +194,12 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       lhs = CEMember {lhs = dst, id = _seqKey},
       rhs = iter} in
     let fieldUpdateStmts =
-      match t.elemTy with CTyFloat _ | CTyDouble _ then
+      match elemTy with CTyFloat _ | CTyDouble _ then
         [ CSExpr {expr = CEBinOp {
             op = COAssign (),
             lhs = fieldDstExpr,
             rhs = CECast {
-              ty = t.elemTy,
+              ty = elemTy,
               rhs = CEApp {
                 fun = _getIdentExn "Double_field",
                 args = [src, iter]}}}} ]
@@ -175,7 +207,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         let fieldId = nameSym "cuda_seq_temp" in
         let fieldExpr = CEApp {fun = _getIdentExn "Field", args = [src, iter]} in
         let fieldDefStmt = CSDef {
-          ty = t.elemTy, id = Some fieldId,
+          ty = elemTy, id = Some fieldId,
           init = Some (CIExpr {expr = fieldExpr})} in
         let stmts = _generateOCamlToCudaWrapperStmts env fieldExpr fieldId t.data in
         let fieldUpdateStmt = CSExpr {expr = CEBinOp {
@@ -284,6 +316,54 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     cons
       recordDeclStmt
       (foldl generateMarshallingField [] indexedFields)
+  | CudaDataTypeRepr t ->
+    let sizeExpr = CESizeOfType {ty = CTyPtr {ty = t.ty}} in
+    let tagValExpr = CEApp {fun = nameNoSym "Tag_val", args = [src]} in
+    let unknownTagStmt = CSExpr {expr = CEApp {
+      fun = _printf,
+      args = [
+        CEString {s = "Unknown constructor with tag %d\n"},
+        tagValExpr]}} in
+    let dst = CEVar {id = dstIdent} in
+    let dstAllocStmt = CSDef {
+      ty = CTyPtr {ty = t.ty}, id = Some dstIdent,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr {ty = t.ty},
+        rhs = CEApp {
+          fun = _malloc,
+          args = [CESizeOfType {ty = t.ty}]}}})} in
+    let dst = CEVar {id = dstIdent} in
+    -- NOTE(larshum, 2022-03-29): Use a counter to keep track of which
+    -- constructor we are currently at.
+    let counter = ref 0 in
+    let constructorInitStmt = mapFoldWithKey
+        (lam acc : CStmt. lam constrId : Name. lam v : (CType, CDataRepr).
+          match v with (constrTy, constrData) in
+          let setConstrStmt = CSExpr {expr = CEBinOp {
+            op = COAssign (),
+            lhs = CEArrow {lhs = dst, id = _constrKey},
+            rhs = CEVar {id = constrId}}} in
+          let innerId = nameSym "cuda_constr_inner_tmp" in
+          let srcExpr =
+            match constrData with CudaRecordRepr _ then src
+            else CEApp {fun = _getIdentExn "Field", args = [src, CEInt {i = 0}]} in
+          let setTempStmts =
+            _generateOCamlToCudaWrapperStmts env srcExpr innerId constrData in
+          let setValueStmt = CSExpr {expr = CEBinOp {
+            op = COAssign (),
+            lhs = CEArrow {lhs = dst, id = constrId},
+            rhs = CEVar {id = innerId}}} in
+          let body = join [[setConstrStmt], setTempStmts, [setValueStmt]] in
+          let count = deref counter in
+          (modref counter (addi count 1));
+          CSIf {
+            cond = CEBinOp {
+              op = COEq (),
+              lhs = tagValExpr,
+              rhs = CEInt {i = count}},
+            thn = body, els = [acc]})
+        unknownTagStmt t.constrs in
+    [dstAllocStmt, constructorInitStmt]
   | CudaBaseTypeRepr t ->
     [ CSDef {ty = t.ty, id = Some dstIdent, init = Some (CIExpr {expr = CEApp {
         fun = ocamlToCConversionFunctionIdent t.ty,
@@ -305,6 +385,79 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     cons
       defTensorCountStmt
       (foldl (_generateOCamlToCudaWrapperArg env) [] env.arguments)
+end
+
+lang CudaCallWrapper = CudaCWrapperBase
+  sem _generateDeallocArg (arg : CExpr) =
+  | CudaSeqRepr t ->
+    let iterId = nameSym "i" in
+    let iter = CEVar {id = iterId} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let innerArg = CEBinOp {
+      op = COSubScript (),
+      lhs = CEMember {lhs = arg, id = _seqKey},
+      rhs = iter} in
+    let innerFreeStmts = _generateDeallocArg innerArg t.data in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = iter,
+      rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
+    let lengthExpr = CEMember {lhs = arg, id = _seqLenKey} in
+    let loopStmt = CSWhile {
+      cond = CEBinOp {op = COLt (), lhs = iter, rhs = lengthExpr},
+      body = snoc innerFreeStmts iterIncrementStmt} in
+    let freeSeqStmt = CSExpr {expr = CEApp {
+      fun = _getIdentExn "free",
+      args = [CEMember {lhs = arg, id = _seqKey}]}} in
+    [ iterInitStmt, loopStmt, freeSeqStmt ]
+  | CudaDataTypeRepr t ->
+    [ CSExpr {expr = CEApp {fun = _getIdentExn "free", args = [arg]}} ]
+  | _ -> []
+
+  sem generateCudaWrapperCall =
+  | env ->
+    let env : CWrapperEnv = env in
+    match env.targetEnv with CudaTargetEnv cenv in
+
+    -- Declare pointer to return value
+    let return : ArgData = env.return in
+    let returnType = return.mexprType in
+    let cudaType = getCudaType env.targetEnv returnType in
+
+    let args : [CExpr] =
+      map
+        (lam arg : ArgData. CEVar {id = arg.gpuIdent})
+        env.arguments in
+    let cudaWrapperId =
+      match mapLookup env.functionIdent cenv.wrapperMap with Some id then id
+      else error "Internal compiler error: No function defined for wrapper map" in
+    let callStmts =
+      match return.cData with CudaRecordRepr {fields = []} then
+        let wrapperCallStmt = CSExpr {expr = CEApp {
+          fun = cudaWrapperId, args = args}} in
+        [wrapperCallStmt]
+      else
+        let returnDecl = CSDef {
+          ty = cudaType, id = Some return.gpuIdent, init = None ()} in
+        let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
+          op = COAssign (),
+          lhs = CEVar {id = return.gpuIdent},
+          rhs = CEApp {fun = cudaWrapperId, args = args}}} in
+        [returnDecl, cudaWrapperCallStmt]
+    in
+
+    -- Deallocate argument parameters
+    let deallocStmts =
+      join
+        (map
+          (lam arg : ArgData.
+            let argExpr = CEVar {id = arg.gpuIdent} in
+            _generateDeallocArg argExpr arg.cData)
+          env.arguments) in
+
+    concat callStmts deallocStmts
 end
 
 lang CudaToOCamlWrapper = CudaCWrapperBase
@@ -392,6 +545,8 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
           args = [CEInt {i = length t.fields}, CEInt {i = 0}]}}} in
       let fieldStmts = join (mapi wrapField t.fields) in
       cons recordAllocStmt fieldStmts
+  | CudaDataTypeRepr t ->
+    error "Data types cannot be returned from accelerated code"
   | CudaBaseTypeRepr t ->
     [ CSExpr {
         expr = CEBinOp {
@@ -410,309 +565,8 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
     _generateCudaToOCamlWrapperH env src dst return.cData
 end
 
--- Translate the general C representation to one that is specific to CUDA. This
--- includes wrapping sequences in structs containing their length.
-lang CToCudaWrapper = CudaCWrapperBase
-  sem _generateCToCudaWrapperArgH (env : CWrapperEnv) (gpuIdent : Name) (ty : Type) =
-  | CudaSeqRepr t ->
-    let cudaType = getCudaType env.targetEnv ty in
-    let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
-    -- TODO(larshum, 2022-03-09): Update this part to add support
-    -- multi-dimensional sequences.
-    let setLenStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _seqLenKey},
-      rhs = CEVar {id = t.sizeIdent}}} in
-    let setSeqStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _seqKey},
-      rhs = CEVar {id = t.dataIdent}}} in
-    [declStmt, setLenStmt, setSeqStmt]
-  | CudaTensorRepr t ->
-    match env.targetEnv with CudaTargetEnv cenv in
-    let cudaType = getCudaType env.targetEnv ty in
-    let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
-    let setTensorDataStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorDataKey},
-      rhs = CEVar {id = t.dataIdent}}} in
-    let setTensorRankStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorRankKey},
-      rhs = CEVar {id = t.rankIdent}}} in
-
-    -- NOTE(larshum, 2022-03-09): The current C representation of tensors
-    -- supports at most 3 dimensions, so we verify that the provided tensor
-    -- does not exceed this at runtime (the tensor rank is not known at
-    -- compile-time).
-    let printErrorStmt = CSExpr {expr = CEApp {
-      fun = _printf,
-      args = [
-        CEString {s = "Tensors with rank at most 3 are supported, found %ld\n"},
-        CEVar {id = t.rankIdent}]}} in
-    let exitErrorStmt = CSExpr {expr = CEApp {
-      fun = _getIdentExn "exit",
-      args = [CEInt {i = 1}]}} in
-    let checkRankStmt = CSIf {
-      cond = CEBinOp {
-        op = COLe (),
-        lhs = CEVar {id = t.rankIdent},
-        rhs = CEInt {i = 3}},
-      thn = [],
-      els = [printErrorStmt, exitErrorStmt]} in
-
-    let i = nameSym "i" in
-    let iterInitStmt = CSDef {
-      ty = CTyInt64 (), id = Some i,
-      init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    let setTensorDimStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEBinOp {
-        op = COSubScript (),
-        lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorDimsKey},
-        rhs = CEVar {id = i}},
-      rhs = CEBinOp {
-        op = COSubScript (),
-        lhs = CEVar {id = t.dimsIdent},
-        rhs = CEVar {id = i}}}} in
-    let iterIncrementStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = i},
-      rhs = CEBinOp {
-        op = COAdd (),
-        lhs = CEVar {id = i},
-        rhs = CEInt {i = 1}}}} in
-    let setTensorDimsLoopStmt = CSWhile {
-      cond = CEBinOp {
-        op = COLt (),
-        lhs = CEVar {id = i},
-        rhs = CEVar {id = t.rankIdent}},
-      body = [setTensorDimStmt, iterIncrementStmt]} in
-
-    let setTensorOffsetStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorOffsetKey},
-      rhs = CEInt {i = 0}}} in
-    let setTensorIdStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = _tensorIdKey},
-      rhs = CEVar {id = cenv.tensorCountId}}} in
-    let incrementTensorCountStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = cenv.tensorCountId},
-      rhs = CEBinOp {
-        op = COAdd (),
-        lhs = CEVar {id = cenv.tensorCountId},
-        rhs = CEInt {i = 1}}}} in
-    [ declStmt, setTensorDataStmt, setTensorRankStmt, checkRankStmt
-    , iterInitStmt, setTensorDimsLoopStmt, setTensorOffsetStmt, setTensorIdStmt
-    , incrementTensorCountStmt ]
-  | CudaRecordRepr t ->
-    match ty with TyRecord rec in
-    let setField = lam idx : Int. lam fieldLabel : (CDataRepr, SID).
-      match fieldLabel with (field, label) in
-      let tmpIdent = nameSym "cuda_tmp" in
-      let fieldType : Type =
-        match mapLookup label rec.fields with Some ty then
-          ty
-        else error "Record type label not found among fields"
-      in
-      let fieldCudaType = getCudaType env.targetEnv fieldType in
-      let stmts = _generateCToCudaWrapperArgH env tmpIdent fieldType field in
-      let labelId = nameNoSym (sidToString label) in
-      let varExpr =
-        match field with CudaBaseTypeRepr _ then
-          CEUnOp {op = CODeref (), arg = CEVar {id = tmpIdent}}
-        else CEVar {id = tmpIdent} in
-      let fieldAssignStmt = CSExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEMember {lhs = CEVar {id = gpuIdent}, id = labelId},
-        rhs = varExpr}} in
-      snoc stmts fieldAssignStmt
-    in
-    let cudaType = getCudaType env.targetEnv ty in
-    let declStmt = CSDef {ty = cudaType, id = Some gpuIdent, init = None ()} in
-    let fieldStmts = join (mapi setField (zip t.fields rec.labels)) in
-    cons declStmt fieldStmts
-  | CudaBaseTypeRepr t ->
-    [CSDef {
-      ty = CTyPtr {ty = t.ty}, id = Some gpuIdent,
-      init = Some (CIExpr {expr = CEVar {id = t.ident}})}]
-
-  sem generateCToCudaWrapperArg (env : CWrapperEnv) (accStmts : [CStmt]) =
-  | arg ->
-    let arg : ArgData = arg in
-    let stmts = _generateCToCudaWrapperArgH env arg.gpuIdent arg.mexprType
-                                            arg.cData in
-    concat accStmts stmts
-
-  sem generateCToCudaWrapper =
-  | env ->
-    let env : CWrapperEnv = env in
-    match env.targetEnv with CudaTargetEnv cenv in
-    let initTensorCounterStmt = CSDef {
-      ty = CTyInt64 (), id = Some cenv.tensorCountId,
-      init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    cons
-      initTensorCounterStmt
-      (foldl (generateCToCudaWrapperArg env) [] env.arguments)
-end
-
-lang CudaCallWrapper = CudaCWrapperBase
-  sem _generateDeallocArg (arg : ArgData) =
-  | CudaSeqRepr t ->
-    [ CSExpr {expr = CEApp {
-        fun = _getIdentExn "free",
-        args = [CEMember {lhs = CEVar {id = arg.gpuIdent}, id = _seqKey}]}} ]
-  | _ -> []
-
-  sem generateCudaWrapperCall =
-  | env ->
-    let env : CWrapperEnv = env in
-    match env.targetEnv with CudaTargetEnv cenv in
-
-    -- Declare pointer to return value
-    let return : ArgData = env.return in
-    let returnType = return.mexprType in
-    let cudaType = getCudaType env.targetEnv returnType in
-
-    let args : [CExpr] =
-      map
-        (lam arg : ArgData. CEVar {id = arg.gpuIdent})
-        env.arguments in
-    let cudaWrapperId =
-      match mapLookup env.functionIdent cenv.wrapperMap with Some id then id
-      else error "Internal compiler error: No function defined for wrapper map" in
-    let callStmts =
-      match return.cData with CudaRecordRepr {fields = []} then
-        let wrapperCallStmt = CSExpr {expr = CEApp {
-          fun = cudaWrapperId, args = args}} in
-        [wrapperCallStmt]
-      else
-        let returnDecl = CSDef {
-          ty = cudaType, id = Some return.gpuIdent, init = None ()} in
-        let cudaWrapperCallStmt = CSExpr {expr = CEBinOp {
-          op = COAssign (),
-          lhs = CEVar {id = return.gpuIdent},
-          rhs = CEApp {fun = cudaWrapperId, args = args}}} in
-        [returnDecl, cudaWrapperCallStmt]
-    in
-
-    -- Deallocate argument parameters
-    let deallocStmts =
-      join
-        (map
-          (lam arg : ArgData. _generateDeallocArg arg arg.cData)
-          env.arguments) in
-
-    concat callStmts deallocStmts
-end
-
-lang CudaToCWrapper = CudaCWrapperBase
-  sem _generateCudaToCWrapperH (env : CWrapperEnv) (srcIdent : Name) (ty : Type) =
-  | CudaSeqRepr t ->
-    let fieldAccess = lam key.
-      CEMember {lhs = CEVar {id = srcIdent}, id = key} in
-    -- TODO(larshum, 2022-03-09): Add support for multi-dimensional sequences.
-    -- This includes setting the dimensions
-    let dimIdent = head t.dimIdents in
-    let dataType = CTyPtr {ty = t.elemTy} in
-    let setDimStmt = CSDef {
-      ty = CTyInt64 (), id = Some dimIdent,
-      init = Some (CIExpr {expr = fieldAccess _seqLenKey})} in
-    let setSizeStmt = CSDef {
-      ty = CTyInt64 (), id = Some t.sizeIdent,
-      init = Some (CIExpr {expr = CEVar {id = dimIdent}})} in
-    let setDataStmt = CSDef {
-      ty = dataType, id = Some t.dataIdent,
-      init = Some (CIExpr {expr = fieldAccess _seqKey})} in
-    [setDimStmt, setSizeStmt, setDataStmt]
-  | CudaTensorRepr t ->
-    let fieldAccess = lam key.
-      CEMember {lhs = CEVar {id = srcIdent}, id = key} in
-    let dataType = CTyPtr {ty = t.elemTy} in
-    let setTensorDataStmt = CSDef {
-      ty = dataType, id = Some t.dataIdent,
-      init = Some (CIExpr {expr = CEBinOp {
-        op = COAdd (),
-        lhs = fieldAccess _tensorDataKey,
-        rhs = fieldAccess _tensorOffsetKey}})} in
-    let setTensorRankStmt = CSDef {
-      ty = CTyInt64 (), id = Some t.rankIdent,
-      init = Some (CIExpr {expr = fieldAccess _tensorRankKey})} in
-    let initTensorDimsStmt = CSDef {
-      ty = CTyArray {ty = CTyInt64 (), size = Some (CEVar {id = t.rankIdent})},
-      id = Some t.dimsIdent, init = None ()} in
-
-    let i = nameSym "i" in
-    let iterInitStmt = CSDef {
-      ty = CTyInt64 (), id = Some i,
-      init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    let subScriptExpr = lam target.
-      CEBinOp {
-        op = COSubScript (),
-        lhs = target,
-        rhs = CEVar {id = i}} in
-    let setTensorDimStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = subScriptExpr (CEVar {id = t.dimsIdent}),
-      rhs = subScriptExpr (fieldAccess _tensorDimsKey)}} in
-    let incrementIterStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = CEVar {id = i},
-      rhs = CEBinOp {
-        op = COAdd (),
-        lhs = CEVar {id = i},
-        rhs = CEInt {i = 1}}}} in
-    let setTensorDimsLoopStmt = CSWhile {
-      cond = CEBinOp {
-        op = COLt (),
-        lhs = CEVar {id = i},
-        rhs = CEVar {id = t.rankIdent}},
-      body = [setTensorDimStmt, incrementIterStmt]} in
-
-    [ setTensorDataStmt, setTensorRankStmt, initTensorDimsStmt, iterInitStmt
-    , setTensorDimsLoopStmt ]
-  | CudaRecordRepr t ->
-    if null t.fields then []
-    else
-      match ty with TyRecord rec in
-      let wrapField = lam idx : Int. lam fieldLabels : (CDataRepr, SID).
-        match fieldLabels with (field, label) in
-        let fieldSrcIdent = nameSym "c_tmp" in
-        let fieldType : Type =
-          match mapLookup label rec.fields with Some ty then
-            ty
-          else error "Record typel abel not found among fields"
-        in
-        let fieldCudaType = getCudaType env.targetEnv fieldType in
-        let labelId = nameNoSym (sidToString label) in
-        let initFieldStmt = CSDef {
-          ty = fieldCudaType, id = Some fieldSrcIdent,
-          init = Some (CIExpr {expr = CEMember {
-            lhs = CEVar {id = srcIdent},
-            id = labelId}})} in
-        let innerStmts = _generateCudaToCWrapperH env fieldSrcIdent fieldType field in
-        cons initFieldStmt innerStmts
-      in
-      join (mapi wrapField (zip t.fields rec.labels))
-  | CudaBaseTypeRepr t ->
-    [CSDef {
-      ty = CTyPtr {ty = t.ty}, id = Some t.ident,
-      init = Some (CIExpr {expr = CEUnOp {
-        op = COAddrOf (),
-        arg = CEVar {id = srcIdent}}})}]
-
-  sem generateCudaToCWrapper =
-  | env ->
-    let env : CWrapperEnv = env in
-    let return = env.return in
-    _generateCudaToCWrapperH env return.gpuIdent return.mexprType return.cData
-end
-
 lang CudaCWrapper =
-  OCamlToCudaWrapper + CudaCallWrapper + CudaToOCamlWrapper +
-  CToCudaWrapper + CudaCallWrapper + CudaToCWrapper + Cmp
+  OCamlToCudaWrapper + CudaCallWrapper + CudaToOCamlWrapper + Cmp
 
   -- Generates the initial wrapper environment
   sem generateInitWrapperEnv (wrapperMap : Map Name Name) =
@@ -732,14 +586,6 @@ lang CudaCWrapper =
     let stmt2 = generateCudaWrapperCall env in
     let stmt3 = generateCudaToOCamlWrapper env in
     join [stmt1, stmt2, stmt3]
-/-
-    let stmt1 = generateOCamlToCWrapper env in
-    let stmt2 = generateCToCudaWrapper env in
-    let stmt3 = generateCudaWrapperCall env in
-    let stmt4 = generateCudaToCWrapper env in
-    let stmt5 = generateCToOCamlWrapper env in
-    join [stmt1, stmt2, stmt3, stmt4, stmt5]
--/
 
   -- Defines the target-specific generation of wrapper code.
   sem generateWrapperCode (accelerated : Map Name AccelerateData)

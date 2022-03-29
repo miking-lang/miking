@@ -110,6 +110,26 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
+  sem _collectPatNamed (bound : Set Name) (used : Set Name) =
+  | PName id -> if setMem id bound then used else setInsert id used
+  | PWildcard _ -> used
+
+  sem collectIdentifiersPat (boundUsed : (Set Name, Set Name)) =
+  | PatNamed t ->
+    match boundUsed with (bound, used) in
+    (bound, _collectPatNamed bound used t.ident)
+  | PatSeqEdge t ->
+    match foldl collectIdentifiersPat boundUsed t.prefix with (bound, used) in
+    let used = _collectPatNamed bound used t.middle in
+    foldl collectIdentifiersPat (bound, used) t.postfix
+  | PatCon t ->
+    match boundUsed with (bound, used) in
+    let used =
+      if setMem t.ident bound then used
+      else setInsert t.ident used in
+    collectIdentifiersPat (bound, used) t.subpat
+  | p -> sfold_Pat_Pat collectIdentifiersPat boundUsed p
+
   sem collectIdentifiersExprH (bound : Set Name) (used : Set Name) =
   | TmVar t ->
     if setMem t.ident bound then used
@@ -117,6 +137,14 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   | TmLam t ->
     let bound = setInsert t.ident bound in
     collectIdentifiersExprH bound used t.body
+  | TmMatch t ->
+    let used = collectIdentifiersExprH bound used t.target in
+    match collectIdentifiersPat (bound, used) t.pat with (bound, used) in
+    let used = collectIdentifiersExprH bound used t.thn in
+    collectIdentifiersExprH bound used t.els
+  | TmConApp t ->
+    if setMem t.ident bound then used
+    else setInsert t.ident used
   | t -> sfold_Expr_Expr (collectIdentifiersExprH bound) used t
 
   sem collectIdentifiersExpr (used : Set Name) =
@@ -181,7 +209,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
     if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
     else (used, inexpr)
-  | TmConDef t -> extractAccelerateTermsH used t.inexpr
+  | TmConDef t ->
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then (used, TmConDef {t with inexpr = inexpr})
+    else (used, inexpr)
   | TmUtest t -> extractAccelerateTermsH used t.next
   | TmExt t -> extractAccelerateTermsH used t.inexpr
   | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},

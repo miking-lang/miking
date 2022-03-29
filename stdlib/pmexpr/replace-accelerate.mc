@@ -35,7 +35,9 @@ lang PMExprReplaceAccelerate =
         else ty
       else ty
     in
-    _mexprToOCamlType env acc (unwrapType ty)
+    let ty = unwrapType ty in
+    match ty with TyCon t then (acc, TyCon t)
+    else _mexprToOCamlType env acc ty
   | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
     if null labels then
       (acc, OTyTuple {info = info, tys = []})

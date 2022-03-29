@@ -101,6 +101,7 @@ let cIncludes = concat [
 
 -- Names used in the compiler for intrinsics
 let _printf = nameSym "printf"
+let _exit = nameSym "exit"
 let _cartesianToLinearIndex = nameSym "cartesian_to_linear_index"
 let _tensorShape = nameSym "tensor_shape"
 
@@ -1170,6 +1171,9 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- Not directly mapped to C operators
   | CPrint _ ->
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
+  | CDPrint _ ->
+    -- TODO(larshum, 2022-03-29): Properly implement dprint support.
+    CEApp { fun = _printf, args = [CEString { s = "" }] }
   | CInt2float _ -> CECast { ty = getCFloatType env, rhs = head args }
   | CFloorfi _ -> CECast { ty = getCIntType env, rhs = head args }
 
@@ -1194,6 +1198,11 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     }
   | CTensorRank _ -> CEMember {lhs = head args, id = _tensorRankKey}
   | CTensorShape _ -> tensorShapeCall (head args)
+
+  -- NOTE(larshum, 2022-03-29): To ensure this construct can be used in GPU
+  -- code, we do not use 'exit' as that is only available from CPU code.
+  | CError _ -> CEApp {fun = _printf, args = [CEString {s = "%s\n"}, head args]}
+
   | c -> infoErrorExit info "Unsupported intrinsic in compileOp"
 
 

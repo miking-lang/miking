@@ -2,6 +2,7 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/constant-app.mc"
+include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-compile.mc"
 include "cuda/pmexpr-pprint.mc"
@@ -65,9 +66,9 @@ end
 lang MExprCudaCompile =
   MExprUtestTrans + MExprRemoveTypeAscription + CudaPMExprAst +
   CudaPMExprCompile + MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered +
-  SeqTypeTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
+  SeqTypeNoStringTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
-  CudaTensorMemory
+  CudaTensorMemory + CudaLanguageFragmentFix
 end
 
 type AccelerateHooks a b = {
@@ -152,6 +153,7 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
+  let ast = fixLanguageFragmentSemanticFunction ast in
   let ast = normalizeTerm ast in
   validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
