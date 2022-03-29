@@ -111,7 +111,7 @@ let transpose create shape get_exn t dim0 dim1 =
 
 module Generic : GENERIC = struct
   type ('a, _) t =
-    {data: 'a array; shape: int array; rank: int; stride: int; size: int}
+    {data: 'a array; shape: int array; rank: int; offset: int; size: int}
 
   let rank t = t.rank
 
@@ -126,24 +126,24 @@ module Generic : GENERIC = struct
 
   let get_exn t idx =
     if Array.length idx = rank t && is_valid_index t.shape idx then
-      let linear_idx = cartesian_to_linear_idx t.shape idx + t.stride in
+      let linear_idx = cartesian_to_linear_idx t.shape idx + t.offset in
       t.data.(linear_idx)
     else raise (Invalid_argument "Tensor.Op_mseq_generic.get_exn")
 
   let set_exn t idx v =
     if is_valid_index t.shape idx then
-      let linear_idx = cartesian_to_linear_idx t.shape idx + t.stride in
+      let linear_idx = cartesian_to_linear_idx t.shape idx + t.offset in
       t.data.(linear_idx) <- v
     else raise (Invalid_argument "Tensor.Op_mseq_generic.set_exn")
 
   let linear_get_exn t linear_idx =
     if linear_idx >= 0 && linear_idx < t.size then
-      t.data.(linear_idx + t.stride)
+      t.data.(linear_idx + t.offset)
     else raise (Invalid_argument "Tensor.Op_mseq_generic.linear_get_exn")
 
   let linear_set_exn t linear_idx v =
     if linear_idx >= 0 && linear_idx < t.size then
-      t.data.(linear_idx + t.stride) <- v
+      t.data.(linear_idx + t.offset) <- v
     else raise (Invalid_argument "Tensor.Op_mseq_generic.linear_set_exn")
 
   let reshape_exn t shape =
@@ -156,19 +156,19 @@ module Generic : GENERIC = struct
     if Array.length slice = 0 then t
     else if is_valid_index t.shape slice then
       let n = Array.length slice in
-      let stride = cartesian_to_linear_idx t.shape slice + t.stride in
+      let offset = cartesian_to_linear_idx t.shape slice + t.offset in
       let rank = t.rank - n in
       let shape = if rank > 0 then Array.sub t.shape n rank else [||] in
       let size = prod shape in
-      {t with stride; rank; shape; size}
+      {t with offset; rank; shape; size}
     else raise (Invalid_argument "Tensor.Dense.slice_exn")
 
   let sub_exn t ofs len =
     if t.rank > 0 && ofs >= 0 && ofs + len <= t.shape.(0) then (
-      let stride = cartesian_to_linear_idx t.shape [|ofs|] + t.stride in
+      let offset = cartesian_to_linear_idx t.shape [|ofs|] + t.offset in
       let shape = Array.copy t.shape in
       shape.(0) <- len ;
-      {t with stride; size= prod shape; shape} )
+      {t with offset; size= prod shape; shape} )
     else raise (Invalid_argument "Tensor.Dense.sub_exn")
 
   (* Adoped from OCaml Bigarray implementation *)
@@ -182,29 +182,29 @@ module Generic : GENERIC = struct
       done
 
   let create shape f =
-    let stride = 0 in
+    let offset = 0 in
     let rank = Array.length shape in
     let size = prod shape in
     if size = 0 then
       let data = [||] in
-      {data; rank; shape; stride; size}
+      {data; rank; shape; offset; size}
     else
       let idx = Array.make rank 0 in
       let x0 = f idx in
       let data = Array.make size x0 in
-      let t = {data; rank; shape; stride; size} in
+      let t = {data; rank; shape; offset; size} in
       if rank = 0 then t
       else (
         loop t (Array.copy idx) idx f 0 shape ;
         t )
 
   let copy t =
-    let data = Array.init t.size (fun i -> t.data.(i + t.stride)) in
+    let data = Array.init t.size (fun i -> t.data.(i + t.offset)) in
     let shape = t.shape in
     let rank = t.rank in
-    let stride = 0 in
+    let offset = 0 in
     let size = t.size in
-    {data; shape; rank; stride; size}
+    {data; shape; rank; offset; size}
 
   let transpose_exn t dim0 dim1 = transpose create shape get_exn t dim0 dim1
 end
