@@ -239,6 +239,8 @@ lang TensorOpDep = TensorOpAst
   | CTensorCreate _ -> error "TensorOpDep not implemented yet"
   | CTensorGetExn _ -> error "TensorOpDep not implemented yet"
   | CTensorSetExn _ -> error "TensorOpDep not implemented yet"
+  | CTensorLinearGetExn _ -> error "TensorOpDep not implemented yet"
+  | CTensorLinearSetExn _ -> error "TensorOpDep not implemented yet"
   | CTensorRank _ -> error "TensorOpDep not implemented yet"
   | CTensorShape _ -> error "TensorOpDep not implemented yet"
   | CTensorReshapeExn _ -> error "TensorOpDep not implemented yet"

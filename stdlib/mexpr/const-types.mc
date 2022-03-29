@@ -263,6 +263,8 @@ lang TensorOpTypeAst = TensorOpAst
   | CTensorCreate _ -> tyall_ "a" (tytensorcreate_ (tyvar_ "a"))
   | CTensorGetExn _ -> tyall_ "a" (tytensorgetexn_ (tyvar_ "a"))
   | CTensorSetExn _ -> tyall_ "a" (tytensorsetexn_ (tyvar_ "a"))
+  | CTensorLinearGetExn _ -> tyall_ "a" (tytensorlineargetexn_ (tyvar_ "a"))
+  | CTensorLinearSetExn _ -> tyall_ "a" (tytensorlinearsetexn_ (tyvar_ "a"))
   | CTensorRank _ -> tyall_ "a" (tytensorrank_ (tyvar_ "a"))
   | CTensorShape _ -> tyall_ "a" (tytensorshape_ (tyvar_ "a"))
   | CTensorReshapeExn _ -> tyall_ "a" (tytensorreshapeexn_ (tyvar_ "a"))

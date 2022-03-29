@@ -7,6 +7,10 @@ module type TENSOR = sig
 
   val set_exn : ('a, 'b) t -> int array -> 'a -> unit
 
+  val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+  val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
   val shape : ('a, 'b) t -> int array
 
   val rank : ('a, 'b) t -> int

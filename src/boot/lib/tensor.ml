@@ -7,6 +7,10 @@ module type TENSOR = sig
 
   val set_exn : ('a, 'b) t -> int array -> 'a -> unit
 
+  val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+  val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
   val shape : ('a, 'b) t -> int array
 
   val rank : ('a, 'b) t -> int
@@ -79,6 +83,17 @@ let cartesian_to_linear_idx shape idx =
   done ;
   !tmp_ofs
 
+let linear_to_cartesian_idx shape linear_idx =
+  let rank = Array.length shape in
+  let idx = Array.make rank 0 in
+  let tmp_k = ref linear_idx in
+  for i = rank - 1 downto 0 do
+    let d = shape.(i) in
+    idx.(i) <- (!tmp_k mod d) ;
+    tmp_k := !tmp_k / d
+  done ;
+  idx
+
 let transpose create shape get_exn t dim0 dim1 =
   let shape' = shape t in
   let rank = Array.length shape' in
@@ -120,6 +135,16 @@ module Generic : GENERIC = struct
       let linear_idx = cartesian_to_linear_idx t.shape idx + t.stride in
       t.data.(linear_idx) <- v
     else raise (Invalid_argument "Tensor.Op_mseq_generic.set_exn")
+
+  let linear_get_exn t linear_idx =
+    if linear_idx >= 0 && linear_idx < t.size then
+      t.data.(linear_idx + t.stride)
+    else raise (Invalid_argument "Tensor.Op_mseq_generic.linear_get_exn")
+
+  let linear_set_exn t linear_idx v =
+    if linear_idx >= 0 && linear_idx < t.size then
+      t.data.(linear_idx + t.stride) <- v
+    else raise (Invalid_argument "Tensor.Op_mseq_generic.linear_set_exn")
 
   let reshape_exn t shape =
     if t.size = prod shape then
@@ -196,6 +221,12 @@ module Barray : BARRAY = struct
   let rank = Genarray.num_dims
 
   let shape = Genarray.dims
+
+  let linear_get_exn t linear_idx =
+    get_exn t (linear_to_cartesian_idx (shape t) linear_idx)
+
+  let linear_set_exn t linear_idx v =
+    set_exn t (linear_to_cartesian_idx (shape t) linear_idx) v
 
   let size t = prod (shape t)
 

@@ -207,6 +207,8 @@ and const =
   | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int Mseq.t option
+  | CtensorLinearGetExn of tm T.t option
+  | CtensorLinearSetExn of tm T.t option * int option
   | CtensorRank
   | CtensorShape
   | CtensorCopy
@@ -677,6 +679,8 @@ let const_has_side_effect = function
   | CtensorCreateCArrayFloat _
   | CtensorGetExn _
   | CtensorSetExn _
+  | CtensorLinearGetExn _
+  | CtensorLinearSetExn _
   | CtensorRank
   | CtensorShape
   | CtensorCopy

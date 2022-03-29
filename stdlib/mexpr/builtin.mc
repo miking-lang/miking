@@ -125,6 +125,8 @@ let builtin = use MExprAst in
   , ("tensorCreateDense", CTensorCreate ())
   , ("tensorGetExn", CTensorGetExn ())
   , ("tensorSetExn", CTensorSetExn ())
+  , ("tensorLinearGetExn", CTensorLinearGetExn ())
+  , ("tensorLinearSetExn", CTensorLinearSetExn ())
   , ("tensorRank", CTensorRank ())
   , ("tensorShape", CTensorShape ())
   , ("tensorReshapeExn", CTensorReshapeExn ())
