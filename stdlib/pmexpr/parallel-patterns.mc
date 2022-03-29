@@ -90,7 +90,7 @@ let getInnerPatterns : AtomicPattern -> Option [AtomicPattern] = lam p.
 -- This function is implemented with the assumption that every pattern has been
 -- given a unique index. If multiple patterns with the same index are found, an
 -- error will be reported.
-let getPatternDependencies : [AtomicPattern] -> Map Int (Set Int) =
+let getPatternDependencies : [AtomicPattern] -> ([AtomicPattern], Map Int (Set Int)) =
   lam atomicPatterns.
   recursive let atomicPatternDependencies = lam dependencies. lam p.
     let id = getPatternIndex p in

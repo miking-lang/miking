@@ -396,7 +396,7 @@ lang NotPatSym = NotPat
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
     -- symbolizeExpr though, constructors must refer to the right symbol.
-    let res : (SymEnv, Pat) = symbolizePat env patEnv p.subpat in
+    let res : (Map String Name, Pat) = symbolizePat env patEnv p.subpat in
     (patEnv, PatNot {p with subpat = res.1})
 end
 
