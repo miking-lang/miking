@@ -244,7 +244,10 @@ decl:
       Data (fi, $2.v, $4) }
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
-      Inter (fi, $2.v, $3, $5) }
+      Inter (fi, $2.v, TyUnknown NoInfo, Some $3, $5) }
+  | SEM var_ident COLON ty
+    { let fi = mkinfo $1.i (ty_info $4) in
+      Inter (fi, $2.v, $4, None, []) }
   | TYPE type_ident type_params EQ ty
     { let fi = mkinfo $1.i $4.i in
       Alias (fi, $2.v, $3, $5) }
@@ -269,6 +272,9 @@ params:
   | LPAREN var_ident COLON ty RPAREN params
     { let fi = mkinfo $1.i $5.i in
       Param (fi, $2.v, $4) :: $6 }
+  | var_ident params
+    { let fi = mkinfo $1.i $1.i in
+      Param (fi, $1.v, TyUnknown fi) :: $2 }
   |
     { [] }
 
@@ -482,6 +488,9 @@ pat_atom:
       { PatSeqEdge(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
+  | LPAREN pat COMMA RPAREN
+      { let fi = mkinfo $1.i $4.i in
+        PatRecord(fi,Record.singleton (us"0") $2) }
   | LPAREN pat COMMA pat_list RPAREN
       { let fi = mkinfo $1.i $5.i in
         let r = List.fold_left (fun (i,a) x ->

@@ -252,7 +252,7 @@ and param = Param of info * ustring * ty
 and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
-  | Inter of info * ustring * param list * (pat * tm) list
+  | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list

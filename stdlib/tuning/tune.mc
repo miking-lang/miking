@@ -48,8 +48,8 @@ let _timingResult2str : TimingResult -> String = lam t.
   end
 
 lang TuneBase = HoleAst
-  sem tune (options : TuneOptions) (run : Runner) (holes : Expr)
-           (file : String) (hole2idx : Map NameInfo (Map [NameInfo] Int)) =
+  sem tune (options : TuneOptions) (runner : Runner) (holes : [Expr])
+           (hole2idx : Map NameInfo (Map [NameInfo] Int)) (file : String) =
   -- Intentionally left blank
 
   sem measure (table : LookupTable) (runner : Runner) (file : String)
