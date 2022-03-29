@@ -89,7 +89,7 @@ let linear_to_cartesian_idx shape linear_idx =
   let tmp_k = ref linear_idx in
   for i = rank - 1 downto 0 do
     let d = shape.(i) in
-    idx.(i) <- (!tmp_k mod d) ;
+    idx.(i) <- !tmp_k mod d ;
     tmp_k := !tmp_k / d
   done ;
   idx
