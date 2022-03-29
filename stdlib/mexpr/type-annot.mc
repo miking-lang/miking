@@ -14,7 +14,7 @@ include "const-types.mc"
 include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
-include "mexpr/type.mc"
+include "type.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,
@@ -25,7 +25,9 @@ type TypeEnv = {
 let _typeEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyEnv  = mapEmpty nameCmp
+  tyEnv  = mapFromSeq nameCmp (
+    map (lam t : (String, [String]). (nameNoSym t.0, tyvariant_ [])) builtinTypes
+  )
 }
 
 let _pprintType = use MExprPrettyPrint in

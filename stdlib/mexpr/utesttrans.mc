@@ -9,6 +9,7 @@ include "builtin.mc"
 include "eq.mc"
 include "type-annot.mc"
 include "type-lift.mc"
+include "type.mc"
 
 include "common.mc"
 
@@ -289,7 +290,9 @@ let collectKnownProgramTypes = use MExprAst in
   in
   let emptyUtestTypeEnv = {
     variants = mapEmpty nameCmp,      -- Map Name Type
-    aliases = mapEmpty nameCmp,       -- Map Name Type
+    aliases = mapFromSeq nameCmp (    -- Map Name Type
+      map (lam t : (String, [String]). (nameNoSym t.0, tyunknown_)) builtinTypes
+    ),
     typeFunctions = use MExprCmp in mapEmpty cmpType -- Map Type (Name, Name)
   } in
   collectTypes emptyUtestTypeEnv expr

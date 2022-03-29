@@ -13,6 +13,7 @@ include "ast.mc"
 include "ast-builder.mc"
 include "info.mc"
 include "pprint.mc"
+include "type.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -32,7 +33,12 @@ let symEnvEmpty =
   {varEnv = mapEmpty cmpString,
    conEnv = mapEmpty cmpString,
    tyVarEnv = mapEmpty cmpString,
-   tyConEnv = mapEmpty cmpString,
+
+   -- Built-in type constructors
+   tyConEnv = mapFromSeq cmpString (
+     map (lam t: (String, [String]). (t.0, nameNoSym t.0)) builtinTypes
+   ),
+
    strictTypeVars = false}
 
 -----------

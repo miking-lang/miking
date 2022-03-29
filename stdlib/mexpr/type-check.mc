@@ -19,6 +19,7 @@ include "info.mc"
 include "math.mc"
 include "pprint.mc"
 include "seq.mc"
+include "type.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -32,7 +33,14 @@ type TCEnv = {
 let _tcEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyConEnv = mapEmpty nameCmp,
+
+  -- Built-in type constructors
+  tyConEnv = mapFromSeq nameCmp (
+    map (lam t : (String, [String]).
+          (nameNoSym t.0, (map nameSym t.1, tyvariant_ [])))
+        builtinTypes
+  ),
+
   currentLvl = 1,
   disableRecordPolymorphism = true
 }
