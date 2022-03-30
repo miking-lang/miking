@@ -245,7 +245,7 @@ utest wellFormedExpr seqLitArrowType with [CudaTypeError arrowType]
 using eqSeq eqCudaError in
 
 let tensorSeqTy = tyseq_ (tytensor_ tyint_) in
-utest wellFormedType tensorSeqTy with [CudaTypeError tensorSeqTy]
+utest wellFormedType tensorSeqTy with []
 using eqSeq eqCudaError in
 
 let recLit =
@@ -255,7 +255,7 @@ let recLit =
 utest wellFormedExpr recLit with [] using eqSeq eqCudaError in
 
 let recTy = tyrecord_ [("a", arrowType)] in
-utest wellFormedType recTy with [CudaTypeError arrowType]
+utest wellFormedType recTy with [CudaTypeError recTy]
 using eqSeq eqCudaError in
 
 let recordUpdateExpr = recordupdate_ (var_ "r") "a" (int_ 4) in
@@ -272,7 +272,7 @@ let conDef = preprocess (bindall_ [
   condefExpr,
   int_ 0]) in
 let boundCondef = preprocess (bind_ condefExpr (int_ 0)) in
-utest wellFormedExpr conDef with [CudaExprError boundCondef]
+utest wellFormedExpr conDef with []
 using eqSeq eqCudaError in
 
 -- NOTE(larshum, 2022-03-14): We haven't implemented equality for externals, so
