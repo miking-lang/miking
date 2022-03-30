@@ -16,6 +16,7 @@ type Options = {
   compileAfterTune : Bool,
   accelerateCuda : Bool,
   accelerateFuthark : Bool,
+  checkCudaWellFormed : Bool,
   cpuOnly : Bool,
   use32BitIntegers : Bool,
   use32BitFloats : Bool,

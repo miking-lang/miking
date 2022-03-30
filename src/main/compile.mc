@@ -111,6 +111,10 @@ let compile = lam files. lam options : Options. lam args.
     } file in
     let ast = makeKeywords [] ast in
 
+    -- Performs a CUDA well-formedness check of the AST, when the
+    -- --check-cuda-well-formed flag is set.
+    (if options.checkCudaWellFormed then checkWellFormedCuda ast else ());
+
     -- Demote parallel constructs to sequential equivalents and remove
     -- accelerate terms
     let ast = demoteParallel ast in

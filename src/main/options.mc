@@ -19,6 +19,7 @@ let optionsDefault : Options = {
   compileAfterTune = false,
   accelerateCuda = false,
   accelerateFuthark = false,
+  checkCudaWellFormed = false,
   cpuOnly = false,
   use32BitIntegers = false,
   use32BitFloats = false,

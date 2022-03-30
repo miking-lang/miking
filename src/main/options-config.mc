@@ -60,6 +60,11 @@ let optionsConfig : ParseConfig = [
     "Compile into an accelerated executable using the Futhark backend",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with accelerateFuthark = true}),
+  ([("--check-cuda-well-formed", "", "")],
+    join ["Runs the well-formedness checks for the CUDA backend, even when ",
+          "compiling without acceleration"],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with checkCudaWellFormed = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.

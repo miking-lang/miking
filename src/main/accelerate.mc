@@ -321,6 +321,27 @@ let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
   else ());
   buildBinaryUsingMake sourcePath td
 
+-- NOTE(larshum, 2022-03-30): For now, we use a very simple solution which runs
+-- the compilation up until the well-formedness checks.
+let checkWellFormedCuda : Expr -> () = lam ast.
+  match
+    use PMExprCompile in
+    let ast = symbolizeExpr keywordsSymEnv ast in
+    let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
+    match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
+    match liftLambdasWithSolutions ast with (solutions, ast) in
+    let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+    let accelerateAst = extractAccelerateTerms accelerateIds ast in
+    eliminateDummyParameter solutions accelerated accelerateAst
+  with (accelerateData, ast) in
+  use MExprCudaCompile in
+  let ast = fixLanguageFragmentSemanticFunction ast in
+  let ast = normalizeTerm ast in
+  validatePMExprAst accelerateData ast;
+  let ast = utestStrip ast in
+  wellFormed ast
+
 let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   lam options. lam hooks. lam file.
   use PMExprCompile in
