@@ -15,7 +15,7 @@ lang PMExprAst =
   | TmMap2 {f : Expr, as : Expr, bs : Expr, ty : Type, info : Info}
   | TmParallelReduce {f : Expr, ne : Expr, as : Expr, ty : Type, info : Info}
   | TmLoop {n : Expr, f : Expr, ty : Type, info : Info}
-  | TmLoopFoldl {acc : Expr, n : Expr, f : Expr, ty : Type, info : Info}
+  | TmLoopAcc {ne : Expr, n : Expr, f : Expr, ty : Type, info : Info}
   | TmParallelLoop {n : Expr, f : Expr, ty : Type, info : Info}
   | TmParallelSizeCoercion {e: Expr, size : Name, ty : Type, info : Info}
   | TmParallelSizeEquality {x1: Name, d1: Int, x2: Name, d2: Int, ty : Type, info : Info}
@@ -26,7 +26,7 @@ lang PMExprAst =
   | TmMap2 _ -> true
   | TmParallelReduce _ -> true
   | TmLoop _ -> true
-  | TmLoopFoldl _ -> true
+  | TmLoopAcc _ -> true
   | TmParallelLoop _ -> true
 
   sem matchKeywordString (info : Info) =
@@ -42,15 +42,16 @@ lang PMExprAst =
                               ty = TyUnknown {info = info}, info = info})
   | "parallelReduce" ->
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
-                                        as = get lst 2, ty = TyUnknown {info = info},
+                                        as = get lst 2,
+                                        ty = TyUnknown {info = info},
                                         info = info})
   | "seqLoop" ->
     Some (2, lam lst. TmLoop {n = get lst 0, f = get lst 1,
                               ty = TyUnknown {info = info}, info = info})
-  | "seqLoopFoldl" ->
-    Some (3, lam lst. TmLoopFoldl {acc = get lst 0, n = get lst 1,
-                                   f = get lst 2, ty = TyUnknown {info = info},
-                                   info = info})
+  | "seqLoopAcc" ->
+    Some (3, lam lst. TmLoopAcc {ne = get lst 0, n = get lst 1,
+                                 f = get lst 2, ty = TyUnknown {info = info},
+                                 info = info})
   | "parallelLoop" ->
     Some (2, lam lst. TmParallelLoop {n = get lst 0, f = get lst 1,
                                       ty = TyUnknown {info = info},
@@ -62,7 +63,7 @@ lang PMExprAst =
   | TmMap2 t -> t.ty
   | TmParallelReduce t -> t.ty
   | TmLoop t -> t.ty
-  | TmLoopFoldl t -> t.ty
+  | TmLoopAcc t -> t.ty
   | TmParallelLoop t -> t.ty
   | TmParallelSizeCoercion t -> t.ty
   | TmParallelSizeEquality t -> t.ty
@@ -73,7 +74,7 @@ lang PMExprAst =
   | TmMap2 t -> t.info
   | TmParallelReduce t -> t.info
   | TmLoop t -> t.info
-  | TmLoopFoldl t -> t.info
+  | TmLoopAcc t -> t.info
   | TmParallelLoop t -> t.info
   | TmParallelSizeCoercion t -> t.info
   | TmParallelSizeEquality t -> t.info
@@ -84,7 +85,7 @@ lang PMExprAst =
   | TmMap2 t -> TmMap2 {t with ty = ty}
   | TmParallelReduce t -> TmParallelReduce {t with ty = ty}
   | TmLoop t -> TmLoop {t with ty = ty}
-  | TmLoopFoldl t -> TmLoopFoldl {t with ty = ty}
+  | TmLoopAcc t -> TmLoopAcc {t with ty = ty}
   | TmParallelLoop t -> TmParallelLoop {t with ty = ty}
   | TmParallelSizeCoercion t -> TmParallelSizeCoercion {t with ty = ty}
   | TmParallelSizeEquality t -> TmParallelSizeEquality {t with ty = ty}
@@ -110,11 +111,11 @@ lang PMExprAst =
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
     (acc, TmLoop {{t with n = n} with f = tf})
-  | TmLoopFoldl t ->
-    match f acc t.acc with (acc, tacc) in
+  | TmLoopAcc t ->
+    match f acc t.ne with (acc, ne) in
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
-    (acc, TmLoopFoldl {{{t with acc = tacc} with n = n} with f = tf})
+    (acc, TmLoopAcc {{{t with ne = ne} with n = n} with f = tf})
   | TmParallelLoop t ->
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
@@ -158,12 +159,12 @@ lang PMExprAst =
     TmLoop {{{t with n = typeAnnotExpr env t.n}
                 with f = typeAnnotExpr env t.f}
                 with ty = ty}
-  | TmLoopFoldl t ->
-    let acc = typeAnnotExpr env t.acc in
-    TmLoopFoldl {{{{t with acc = acc}
-                      with n = typeAnnotExpr env t.n}
-                      with f = typeAnnotExpr env t.f}
-                      with ty = tyTm acc}
+  | TmLoopAcc t ->
+    let ne = typeAnnotExpr env t.ne in
+    TmLoopAcc {{{{t with ne = ne}
+                    with n = typeAnnotExpr env t.n}
+                    with f = typeAnnotExpr env t.f}
+                    with ty = tyTm ne}
   | TmParallelLoop t ->
     let f = typeAnnotExpr env t.f in
     let ty =
@@ -225,17 +226,17 @@ lang PMExprAst =
     TmLoop {{{t with n = n}
                 with f = f}
                 with ty = unitType}
-  | TmLoopFoldl t ->
-    let acc = typeCheckExpr env t.acc in
+  | TmLoopAcc t ->
+    let ne = typeCheckExpr env t.ne in
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
     unify env (tyTm n) (tyWithInfo t.info tyint_);
-    unify env (tyTm f) (ityarrow_ t.info (tyTm acc)
-                                  (ityarrow_ t.info (tyTm n) (tyTm acc)));
-    TmLoopFoldl {{{{t with acc = acc}
-                      with n = n}
-                      with f = f}
-                      with ty = tyTm acc}
+    unify env (tyTm f) (ityarrow_ t.info (tyTm ne)
+                                  (ityarrow_ t.info (tyTm n) (tyTm ne)));
+    TmLoopAcc {{{{t with ne = ne}
+                    with n = n}
+                    with f = f}
+                    with ty = tyTm ne}
   | TmParallelLoop t ->
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
@@ -250,7 +251,6 @@ lang PMExprAst =
     TmParallelSizeCoercion {{t with e = e} with ty = tyTm e}
   | TmParallelSizeEquality t ->
     TmParallelSizeEquality {t with ty = tyWithInfo t.info tyunit_}
-
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->
@@ -283,9 +283,9 @@ lang PMExprAst =
         eqExprH env free l.f r.f
       else None ()
     else None ()
-  | TmLoopFoldl r ->
-    match lhs with TmLoopFoldl l then
-      match eqExprH env free l.acc r.acc with Some free then
+  | TmLoopAcc r ->
+    match lhs with TmLoopAcc l then
+      match eqExprH env free l.ne r.ne with Some free then
         match eqExprH env free l.n r.n with Some free then
           eqExprH env free l.f r.f
         else None ()
@@ -336,10 +336,10 @@ lang PMExprAst =
   | TmLoop t ->
     k (TmLoop {{t with n = normalizeTerm t.n}
                   with f = normalizeTerm t.f})
-  | TmLoopFoldl t ->
-    k (TmLoopFoldl {{{t with acc = normalizeTerm t.acc}
-                        with n = normalizeTerm t.n}
-                        with f = normalizeTerm t.f})
+  | TmLoopAcc t ->
+    k (TmLoopAcc {{{t with ne = normalizeTerm t.ne}
+                      with n = normalizeTerm t.n}
+                      with f = normalizeTerm t.f})
   | TmParallelLoop t ->
     k (TmParallelLoop {{t with n = normalizeTerm t.n}
                           with f = normalizeTerm t.f})
@@ -368,9 +368,9 @@ let loop_ = lam n. lam f.
   use PMExprAst in
   TmLoop {n = n, f = f, ty = tyunknown_, info = NoInfo ()}
 
-let loopFoldl_ = lam acc. lam n. lam f.
+let loopAcc_ = lam ne. lam n. lam f.
   use PMExprAst in
-  TmLoopFoldl {acc = acc, n = n, f = f, ty = tyunknown_, info = NoInfo ()}
+  TmLoopAcc {ne = ne, n = n, f = f, ty = tyunknown_, info = NoInfo ()}
 
 let parallelLoop_ = lam n. lam f.
   use PMExprAst in
@@ -412,8 +412,8 @@ utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqE
 let expr = appf2_ (var_ "seqLoop") (int_ 10) unitfn_ in
 utest makeKeywords [] expr with loop_ (int_ 10) unitfn_ using eqExpr in
 
-let expr = appf3_ (var_ "seqLoopFoldl") (int_ 0) (int_ 10) addfn_ in
-utest makeKeywords [] expr with loopFoldl_ (int_ 0) (int_ 10) addfn_ using eqExpr in
+let expr = appf3_ (var_ "seqLoopAcc") (int_ 0) (int_ 10) addfn_ in
+utest makeKeywords [] expr with loopAcc_ (int_ 0) (int_ 10) addfn_ using eqExpr in
 
 let expr = appf2_ (var_ "parallelLoop") (int_ 10) unitfn_ in
 utest makeKeywords [] expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in

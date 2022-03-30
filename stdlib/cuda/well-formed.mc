@@ -35,16 +35,16 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     let info = infoTm expr in
     infoErrorString info (join [
       "Loop expression\n", expr2str expr,
-      "\nwith n  : ", type2str (tyTm t.n),
-      "\nwith f  : ", type2str (tyTm t.f),
+      "\nwith n : ", type2str (tyTm t.n),
+      "\nwith f : ", type2str (tyTm t.f),
       "\nnot supported by CUDA backend"])
-  | CudaLoopError (expr & (TmLoopFoldl t)) ->
+  | CudaLoopError (expr & (TmLoopAcc t)) ->
     let info = infoTm expr in
     infoErrorString info (join [
       "Loop expression\n", expr2str expr,
-      "\nwith acc : ", type2str (tyTm t.acc),
-      "\nwith n   : ", type2str (tyTm t.n),
-      "\nwith f   : ", type2str (tyTm t.f)])
+      "\nwith ne : ", type2str (tyTm t.ne),
+      "\nwith n  : ", type2str (tyTm t.n),
+      "\nwith f  : ", type2str (tyTm t.f)])
   | CudaReduceError (expr & (TmParallelReduce t)) ->
     let info = infoTm expr in
     infoErrorString info (join [
@@ -105,15 +105,15 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
       match t.ty with TyRecord {labels = []} then acc
       else addLoopError ()
     else addLoopError ()
-  | loop & (TmLoopFoldl t) ->
+  | loop & (TmLoopAcc t) ->
     let addLoopError = lam. cons (CudaLoopError loop) acc in
-    let acc = cudaWellFormedExpr acc t.acc in
+    let acc = cudaWellFormedExpr acc t.ne in
     let acc = cudaWellFormedExpr acc t.n in
     match tyTm t.f with TyArrow {
       from = accTy1,
       to = TyArrow {from = TyInt _, to = accTy2}}
     then
-      if and (eqType accTy1 accTy2) (eqType accTy1 (tyTm t.acc)) then acc
+      if and (eqType accTy1 accTy2) (eqType accTy1 (tyTm t.ne)) then acc
       else addLoopError ()
     else addLoopError ()
   | red & (TmParallelReduce t) ->
@@ -158,7 +158,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
   | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
-  | TmLoop _ | TmLoopFoldl _ | TmParallelLoop _ -> true
+  | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ -> true
   | _ -> false
 
   sem isCudaSupportedType =

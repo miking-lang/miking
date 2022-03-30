@@ -4,10 +4,10 @@
 
 include "cuda/intrinsics/intrinsic.mc"
 
-lang CudaLoopFoldlIntrinsic = CudaIntrinsic
+lang CudaLoopAccIntrinsic = CudaIntrinsic
   sem generateCudaIntrinsicCall (ccEnv : CompileCEnv) (acc : [CuTop])
                                 (outExpr : CExpr) =
-  | CESeqLoopFoldl t ->
+  | CESeqLoopAcc t ->
     match _getFunctionIdAndArgs t.f with (funId, args) in
     let i = nameSym "i" in
     let iterInitStmt = CSDef {
@@ -16,11 +16,11 @@ lang CudaLoopFoldlIntrinsic = CudaIntrinsic
     let initOutStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = outExpr,
-      rhs = t.acc}} in
+      rhs = t.ne}} in
     let accIdent = nameSym "acc" in
     let accInitStmt = CSDef {
-      ty = t.accTy, id = Some accIdent,
-      init = Some (CIExpr {expr = t.acc})} in
+      ty = t.neTy, id = Some accIdent,
+      init = Some (CIExpr {expr = t.ne})} in
     let loopFunAppStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEVar {id = accIdent},

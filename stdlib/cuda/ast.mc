@@ -18,7 +18,7 @@ lang CudaAst = CAst + MExprAst
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqLoop {n : CExpr, f : CExpr, argTypes : [CType]}
-  | CESeqLoopFoldl {acc : CExpr, n : CExpr, f : CExpr, accTy : CType, argTypes : [CType]}
+  | CESeqLoopAcc {ne : CExpr, n : CExpr, f : CExpr, neTy : CType, argTypes : [CType]}
   | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}
   | CETensorSubExn {t : CExpr, ofs : CExpr, len : CExpr, ty : CType}
   | CEThreadIdx {dim : CudaDimension}
@@ -44,11 +44,11 @@ lang CudaAst = CAst + MExprAst
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
     (acc, CESeqLoop {{t with n = n} with f = tf})
-  | CESeqLoopFoldl t ->
-    match f acc t.acc with (acc, tacc) in
+  | CESeqLoopAcc t ->
+    match f acc t.ne with (acc, ne) in
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
-    (acc, CESeqLoopFoldl {{{t with acc = tacc} with n = n} with f = tf})
+    (acc, CESeqLoopAcc {{{t with ne = ne} with n = n} with f = tf})
   | CEMapKernel t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in

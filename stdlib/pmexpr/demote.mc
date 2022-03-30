@@ -145,17 +145,17 @@ lang PMExprDemoteLoop = PMExprAst
       ident = nameNoSym "", tyIdent = unitTy, body = t.f,
       ty = TyArrow {from = unitTy, to = tyTm t.f, info = t.info},
       info = t.info} in
-    let foldlLoop = TmLoopFoldl {
-      acc = acc, n = t.n, f = f, ty = unitTy, info = t.info} in
-    demoteParallel foldlLoop
-  | TmLoopFoldl t ->
+    let accLoop = TmLoopAcc {
+      ne = acc, n = t.n, f = f, ty = unitTy, info = t.info} in
+    demoteParallel accLoop
+  | TmLoopAcc t ->
     let arrowType = lam from. lam to.
       TyArrow {
         from = tyWithInfo t.info from,
         to = tyWithInfo t.info to,
         info = t.info} in
     let loopId = nameSym "loop" in
-    let accTy = tyTm t.acc in
+    let accTy = tyTm t.ne in
     let loopTy = arrowType accTy (arrowType tyint_ accTy) in
     let accIdent = nameSym "acc" in
     let acc = TmVar {
@@ -221,7 +221,7 @@ lang PMExprDemoteLoop = PMExprAst
         lhs = TmApp {
           lhs = TmVar {
             ident = loopId, ty = loopTy, info = t.info, frozen = false},
-          rhs = t.acc,
+          rhs = t.ne,
           ty = arrowType tyint_ accTy, info = t.info},
         rhs = TmConst {
           val = CInt {val = 0}, ty = TyInt {info = t.info}, info = t.info},
@@ -281,10 +281,10 @@ let loopRecLet = lam fn.
         (appf2_ (var_ "loop") (var_ "t") (addi_ (var_ "i") (int_ 1))))
       (var_ "acc")))) in
 
-let foldlLoopDef = bindall_ [
+let accLoopDef = bindall_ [
   loopRecLet foldlFn,
   appf2_ (var_ "loop") acc (int_ 0)] in
-utest demoteParallel (loopFoldl_ acc n foldlFn) with foldlLoopDef using eqExpr in
+utest demoteParallel (loopAcc_ acc n foldlFn) with accLoopDef using eqExpr in
 
 let loopDef = bindall_ [
   loopRecLet (ulam_ "" f),

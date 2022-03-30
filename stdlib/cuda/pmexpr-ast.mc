@@ -258,7 +258,7 @@ lang CudaPMExprAst = PMExprAst
     let f = typeCheckExpr env t.f in
     let unitType = tyWithInfo t.info tyunit_ in
     unify env (tyTm n) (tyWithInfo t.info tyint_);
-    unify env (tyTm f) (ityarrow_ t.info (tyWithInfo t.info tyint_) unitType);
+    unify env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
     TmLoopKernel {{{t with n = n}
                       with f = f}
                       with ty = unitType}

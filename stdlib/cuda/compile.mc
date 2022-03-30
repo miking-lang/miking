@@ -237,11 +237,11 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
     let argTypes = _getLoopFunctionArgTypes env t.f in
     CESeqLoop {
       n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes}
-  | TmLoopFoldl t ->
+  | TmLoopAcc t ->
     let argTypes = _getLoopFunctionArgTypes env t.f in
-    CESeqLoopFoldl {
-      acc = compileExpr env t.acc, n = compileExpr env t.n,
-      f = compileExpr env t.f, accTy = compileType env (tyTm t.acc),
+    CESeqLoopAcc {
+      ne = compileExpr env t.ne, n = compileExpr env t.n,
+      f = compileExpr env t.f, neTy = compileType env (tyTm t.ne),
       argTypes = argTypes}
   | TmLoopKernel t ->
     let argTypes = _getLoopFunctionArgTypes env t.f in

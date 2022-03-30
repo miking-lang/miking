@@ -91,7 +91,7 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
 --    -- node for commutative operations?
 --    TmReduceKernel {f = f, ne = ne, s = as, commutative = false, ty = ty, info = info}
   | TmParallelLoop {n = n, f = f, ty = ty, info = info} ->
-    TmLoopKernel {n = n, f = f ,ty = ty, info = info}
+    TmLoopKernel {n = n, f = f, ty = ty, info = info}
   | t -> smap_Expr_Expr promoteKernelsBody t
 end
 

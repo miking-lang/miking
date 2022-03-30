@@ -8,6 +8,7 @@ lang PMExprPrettyPrint = MExprPrettyPrint + PMExprAst
   | TmMap2 _ -> false
   | TmParallelReduce _ -> false
   | TmLoop _ -> false
+  | TmLoopAcc _ -> false
   | TmParallelLoop _ -> false
   | TmParallelSizeCoercion _ -> false
   | TmParallelSizeEquality _ -> false
@@ -33,9 +34,9 @@ lang PMExprPrettyPrint = MExprPrettyPrint + PMExprAst
     let indent = pprintIncr indent in
     match printArgs indent env [t.n, t.f] with (env, args) in
     (env, join ["loop", pprintNewline indent, args])
-  | TmLoopFoldl t ->
+  | TmLoopAcc t ->
     let indent = pprintIncr indent in
-    match printArgs indent env [t.acc, t.n, t.f] with (env, args) in
+    match printArgs indent env [t.ne, t.n, t.f] with (env, args) in
     (env, join ["loopFoldl", pprintNewline indent, args])
   | TmParallelLoop t ->
     let indent = pprintIncr indent in
