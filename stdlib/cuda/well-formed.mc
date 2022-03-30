@@ -12,6 +12,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CudaTypeError Type
   | CudaConstantError (Const, Info)
   | CudaPatternError Pat
+  | CudaConDefError Expr
   | CudaLoopError Expr
   | CudaReduceError Expr
 
@@ -31,12 +32,12 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     let info = infoPat pat in
     let patStr = getPatStringCode 0 pprintEnvEmpty pat in
     infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
-  | CudaLoopError (expr & (TmLoop t | TmParallelLoop t)) ->
+  | CudaConDefError (expr & (TmConDef t)) ->
     let info = infoTm expr in
     infoErrorString info (join [
-      "Loop expression\n", expr2str expr,
-      "\nwith n : ", type2str (tyTm t.n),
-      "\nwith f : ", type2str (tyTm t.f),
+      "Constructor definition\n",
+      "\nwith ident   : ", nameGetStr t.ident,
+      "\nwith tyIdent : ", type2str t.tyIdent,
       "\nnot supported by CUDA backend"])
   | CudaLoopError (expr & (TmLoopAcc t)) ->
     let info = infoTm expr in
@@ -95,6 +96,23 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     let acc = cudaWellFormedPattern acc t.pat in
     let acc = cudaWellFormedType acc t.ty in
     sfold_Expr_Expr cudaWellFormedExpr acc (TmMatch t)
+  | conDef & (TmConDef t) ->
+    -- NOTE(larshum, 2022-03-30): Recursive data types, and those that have an
+    -- type identifier of unexpected shape, are not considered to be
+    -- well-formed.
+    recursive let containsTypeIdentifier : Name -> Bool -> Type -> Bool =
+      lam conId. lam acc. lam ty.
+      if acc then true
+      else match ty with TyCon {ident = id} then
+        nameEq conId id
+      else sfold_Type_Type (containsTypeIdentifier conId) acc ty
+    in
+    if
+      match t.tyIdent with TyArrow {from = from, to = TyCon {ident = id}} then
+        not (containsTypeIdentifier id false from)
+      else false
+    then acc
+    else cons (CudaConDefError conDef) acc
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.
@@ -157,21 +175,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConApp _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
   | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ -> true
-  | TmConDef t ->
-    -- NOTE(larshum, 2022-03-30): Recursive data types are not considered to be
-    -- well-formed for now.
-    recursive let containsTypeIdentifier : Name -> Bool -> Type -> Bool =
-      lam conId. lam acc. lam ty.
-      if acc then true
-      else match ty with TyCon {ident = id} then
-        nameEq conId id
-      else sfold_Type_Type (containsTypeIdentifier conId) acc ty
-    in
-    match t.tyIdent with TyArrow {from = from, to = TyCon {ident = id}} then
-      not (containsTypeIdentifier id false from)
-    else false
   | _ -> false
 
   sem isCudaSupportedType =
@@ -220,6 +225,8 @@ let eqCudaError = lam lerr : WellFormedError. lam rerr : WellFormedError.
   else match t with (CudaPatternError lpat, CudaPatternError rpat) then
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
     optionIsSome (eqPat empty empty biEmpty lpat rpat)
+  else match t with (CudaConDefError lc, CudaConDefError rc) then
+    eqExpr lc rc
   else false
 in
 
@@ -279,13 +286,14 @@ let recUpdate = preprocess
 utest wellFormedExpr recUpdate with [CudaExprError recordUpdateExpr]
 using eqSeq eqCudaError in
 
-let condefExpr = condef_ "Some" (tyarrow_ tyint_ (tyvar_ "Option")) in
+let t = nameSym "Tree" in
+let recursiveConstructorExpr = condef_ "Con" (tyarrow_ (ntyvar_ t) (ntyvar_ t)) in
 let conDef = preprocess (bindall_ [
-  type_ "Option" tyunknown_,
-  condefExpr,
+  ntype_ t (tyvariant_ []),
+  recursiveConstructorExpr,
   int_ 0]) in
-let boundCondef = preprocess (bind_ condefExpr (int_ 0)) in
-utest wellFormedExpr conDef with []
+let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in
+utest wellFormedExpr conDef with [CudaConDefError expectedExpr]
 using eqSeq eqCudaError in
 
 -- NOTE(larshum, 2022-03-14): We haven't implemented equality for externals, so
