@@ -401,6 +401,30 @@ lang CarriedSeq = CarriedTypeBase
     else None ()
 end
 
+lang CarriedOption = CarriedTypeBase
+  syn CarriedType =
+  | OptionType CarriedType
+
+  sem carriedRepr =
+  | OptionType ty -> tyapp_ (tycon_ "Option") (carriedRepr ty)
+
+  sem carriedSMapAccumL f targetTy =
+  | OptionType ty ->
+    match carriedSMapAccumL f targetTy ty with Some mkNew then Some
+      (lam accName. lam valName.
+        let innerAcc = nameSym "acc" in
+        let innerVal = nameSym "x" in
+        appf3_
+          (var_ "optionMapAccum")
+          (nulam_ innerAcc
+            (nulam_ innerVal
+              (mkNew innerAcc innerVal)))
+          (nvar_ accName)
+          (nvar_ valName)
+      )
+    else None ()
+end
+
 lang CarriedRecord = CarriedTypeBase
   syn CarriedType =
   | RecordType [(String, CarriedType)]
@@ -467,6 +491,11 @@ let seqType
   -> CarriedType
   = lam ty. use CarriedSeq in SeqType ty
 
+let optionType
+  : CarriedType
+  -> CarriedType
+  = lam ty. use CarriedOption in OptionType ty
+
 let recordType
   : [(String, CarriedType)]
   -> CarriedType
@@ -519,7 +548,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
     else never
 end
 
-lang CarriedBasic = CarriedTypeGenerate + CarriedTarget + CarriedSeq + CarriedRecord
+lang CarriedBasic = CarriedTypeGenerate + CarriedTarget + CarriedSeq + CarriedRecord + CarriedOption
 end
 
 mexpr
