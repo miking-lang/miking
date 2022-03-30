@@ -171,8 +171,8 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
-  let cudaTops = addCudaTensorMemoryManagement ccEnv cudaTops in
-  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
+  match addCudaTensorMemoryManagement ccEnv cudaTops with (tensorCountId, cudaTops) in
+  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv tensorCountId in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.

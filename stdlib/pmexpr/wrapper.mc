@@ -108,8 +108,8 @@ lang PMExprCWrapper = MExprAst + CAst
   | TyInt _ | TyFloat _ | TyBool _ | TyChar _ -> true
   | _ -> false
 
-  sem _generateCDataRepresentation (env : CWrapperEnv) =
   -- This implementation is backend-specific
+  sem _generateCDataRepresentation : CWrapperEnv -> Type -> CDataRepr
 
   sem ocamlToCConversionFunctionIdent =
   | CTyChar _ | CTyInt _ -> _getIdentExn "Int_val"
@@ -179,9 +179,9 @@ lang PMExprCWrapper = MExprAst + CAst
 
   -- Defines the generation of marshalling code between OCaml and the GPU
   -- backend, including conversion between C and calls to functions defined by
-  -- the GPU backend. As this generation depends on the GPU backend, it is left
-  -- empty here.
-  sem generateMarshallingCode =
+  -- the GPU backend. As this generation depends on the GPU backend, it is only
+  -- declared here.
+  sem generateMarshallingCode : CWrapperEnv -> [CStmt]
 
   -- Generates the main function of the wrapper code. This is the function that
   -- manages the marshalling between OCaml and the target GPU language.

@@ -157,8 +157,21 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConApp _ -> true
   | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ -> true
+  | TmConDef t ->
+    -- NOTE(larshum, 2022-03-30): Recursive data types are not considered to be
+    -- well-formed for now.
+    recursive let containsTypeIdentifier : Name -> Bool -> Type -> Bool =
+      lam conId. lam acc. lam ty.
+      if acc then true
+      else match ty with TyCon {ident = id} then
+        nameEq conId id
+      else sfold_Type_Type (containsTypeIdentifier conId) acc ty
+    in
+    match t.tyIdent with TyArrow {from = from, to = TyCon {ident = id}} then
+      not (containsTypeIdentifier id false from)
+    else false
   | _ -> false
 
   sem isCudaSupportedType =

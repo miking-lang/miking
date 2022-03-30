@@ -4,6 +4,7 @@ include "cuda/pmexpr-ast.mc"
 include "pmexpr/utils.mc"
 
 let _cudaMalloc = nameNoSym "cudaMalloc"
+let _cudaMallocManaged = nameNoSym "cudaMallocManaged"
 let _cudaMemcpy = nameNoSym "cudaMemcpy"
 let _cudaMemcpyDeviceToHost = nameNoSym "cudaMemcpyDeviceToHost"
 let _cudaMemcpyHostToDevice = nameNoSym "cudaMemcpyHostToDevice"
@@ -22,35 +23,61 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty & (TySeq {ty = elemType}) ->
     let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
     let seqType = compileType env conType in
-    let copySeqStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy, args = [
-        CEUnOp {op = COAddrOf (), arg = dst}, arg,
-        CESizeOfType {ty = seqType}, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-    let elemType = compileType env elemType in
+    let setSeqLenStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEMember {lhs = dst, id = _seqLenKey},
+      rhs = CEMember {lhs = arg, id = _seqLenKey}}} in
+    let cElemType = compileType env elemType in
     let sizeExpr = CEBinOp {
       op = COMul (),
       lhs = CEMember {lhs = dst, id = _seqLenKey},
-      rhs = CESizeOfType {ty = elemType}} in
-    let tempType = CTyPtr {ty = elemType} in
-    let tempId = nameSym "t" in
-    let tempAllocStmt = CSDef {
-      ty = CTyPtr {ty = elemType}, id = Some tempId,
-      init = Some (CIExpr {expr = CECast {
-        ty = tempType,
-        rhs = CEApp {
-          fun = _malloc,
-          args = [sizeExpr]}}})} in
-    let copyDataStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        CEVar {id = tempId},
-        CEMember {lhs = dst, id = _seqKey},
-        sizeExpr, CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-    let outTmpStmt = CSExpr {expr = CEBinOp {
+      rhs = CESizeOfType {ty = cElemType}} in
+    let allocSeqDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEMember {lhs = dst, id = _seqKey},
-      rhs = CEVar {id = tempId}}} in
-    [copySeqStmt, tempAllocStmt, copyDataStmt, outTmpStmt]
+      rhs = CECast {
+        ty = CTyPtr {ty = cElemType},
+        rhs = CEApp {
+          fun = _malloc, args = [sizeExpr]}}}} in
+    let copySeqDataStmt = CSExpr {expr = CEApp {
+      fun = _cudaMemcpy,
+      args = [
+        CEMember {lhs = dst, id = _seqKey},
+        CEMember {lhs = arg, id = _seqKey},
+        sizeExpr,
+        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+
+    let iterId = nameSym "i" in
+    let iter = CEVar {id = iterId} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let innerDstId = nameSym "t" in
+    let innerDst = CEVar {id = innerDstId} in
+    let innerDstInitStmt = CSDef {
+      ty = cElemType, id = Some innerDstId, init = None ()} in
+    let srcExpr = CEBinOp {
+      op = COSubScript (),
+      lhs = CEMember {lhs = dst, id = _seqKey},
+      rhs = iter} in
+    let elemType = _unwrapType env.typeEnv elemType in
+    let copyInnerStmts = _compileCopyToCpu env innerDst srcExpr elemType in
+    let assignInnerStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (), lhs = srcExpr, rhs = innerDst}} in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = iter,
+      rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
+    let copyInnerLoop = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = iter,
+        rhs = CEMember {lhs = dst, id = _seqLenKey}},
+      body = join [ [innerDstInitStmt], copyInnerStmts
+                  , [assignInnerStmt, iterIncrementStmt] ]} in
+
+    [ setSeqLenStmt, allocSeqDataStmt, copySeqDataStmt, iterInitStmt
+    , copyInnerLoop ]
   | TyTensor {ty = elemType} ->
     -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
     -- later stage in the compiler.
@@ -76,43 +103,61 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty & (TySeq {ty = elemType}) ->
     let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
     let seqType = compileType env conType in
-    let elemType = compileType env elemType in
-    let tempId = nameSym "t" in
-    let tempSeqDeclStmt = CSDef {ty = seqType, id = Some tempId, init = None ()} in
-    let tempSetLenStmt = CSExpr {expr = CEBinOp {
+    let cElemType = compileType env elemType in
+    let setSeqLenStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = tempId}, id = _seqLenKey},
+      lhs = CEMember {lhs = dst, id = _seqLenKey},
       rhs = CEMember {lhs = arg, id = _seqLenKey}}} in
     let sizeExpr = CEBinOp {
       op = COMul (),
-      lhs = CEMember {lhs = CEVar {id = tempId}, id = _seqLenKey},
-      rhs = CESizeOfType {ty = elemType}} in
-    let cudaMallocDataStmt = CSExpr {expr = CEApp {
+      lhs = CEMember {lhs = dst, id = _seqLenKey},
+      rhs = CESizeOfType {ty = cElemType}} in
+
+    let tempDataId = nameSym "t" in
+    let tempData = CEVar {id = tempDataId} in
+    let allocTempDataStmt = CSDef {
+      ty = CTyPtr {ty = cElemType}, id = Some tempDataId,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr {ty = cElemType},
+        rhs = CEApp {fun = _malloc, args = [sizeExpr]}}})} in
+    let iterId = nameSym "i" in
+    let iter = CEVar {id = iterId} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let innerDst = CEBinOp {op = COSubScript (), lhs = tempData, rhs = iter} in
+    let innerArg = CEBinOp {
+      op = COSubScript (),
+      lhs = CEMember {lhs = arg, id = _seqKey},
+      rhs = iter} in
+    let elemType = _unwrapType env.typeEnv elemType in
+    let copyInnerStmts = _compileCopyToGpu env innerDst innerArg elemType in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = iter,
+      rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
+    let copyInnerLoop = CSWhile {
+      cond = CEBinOp {
+        op = COLt (),
+        lhs = iter,
+        rhs = CEMember {lhs = dst, id = _seqLenKey}},
+      body = snoc copyInnerStmts iterIncrementStmt} in
+
+    let allocSeqDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMalloc,
       args = [
-        CEUnOp {op = COAddrOf (),
-                arg = CEMember {lhs = CEVar {id = tempId}, id = _seqKey}},
+        CEUnOp {op = COAddrOf (), arg = CEMember {lhs = dst, id = _seqKey}},
         sizeExpr]}} in
-    let cudaMemcpyDataStmt = CSExpr {expr = CEApp {
+    let copySeqDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
-        CEMember {lhs = CEVar {id = tempId}, id = _seqKey},
-        CEMember {lhs = arg, id = _seqKey},
-        sizeExpr, CEVar {id = _cudaMemcpyHostToDevice}]}} in
-    let cudaMallocSeqStmt = CSExpr {expr = CEApp {
-      fun = _cudaMalloc,
-      args = [
-        CEUnOp {op = COAddrOf (), arg = dst},
-        CESizeOfType {ty = seqType}]}} in
-    let cudaMemcpySeqStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        dst,
-        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
-        CESizeOfType {ty = seqType},
+        CEMember {lhs = dst, id = _seqKey},
+        tempData, sizeExpr,
         CEVar {id = _cudaMemcpyHostToDevice}]}} in
-    [ tempSeqDeclStmt, tempSetLenStmt, cudaMallocDataStmt, cudaMemcpyDataStmt
-    , cudaMallocSeqStmt, cudaMemcpySeqStmt ]
+    let freeTempDataStmt = CSExpr {expr = CEApp {
+      fun = _free, args = [tempData]}} in
+    [ setSeqLenStmt, allocTempDataStmt, iterInitStmt, copyInnerLoop
+    , allocSeqDataStmt , copySeqDataStmt , freeTempDataStmt ]
   | TyTensor {ty = elemType} ->
     -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
     -- later stage in the compiler.
@@ -141,10 +186,30 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | Gpu _ -> _compileFreeGpu env arg tyArg
 
   sem _compileFreeCpu (env : CompileCEnv) (arg : CExpr) =
-  | TySeq _ ->
-    [CSExpr {expr = CEApp {
+  | TySeq {ty = elemType} ->
+    let iterId = nameSym "i" in
+    let iter = CEVar {id = iterId} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let innerArg = CEBinOp {
+      op = COSubScript (),
+      lhs = CEMember {lhs = arg, id = _seqKey},
+      rhs = iter} in
+    let elemType = _unwrapType env.typeEnv elemType in
+    let freeInnerStmts = _compileFreeCpu env innerArg elemType in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = iter,
+      rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
+    let lenExpr = CEMember {lhs = arg, id = _seqLenKey} in
+    let freeInnerLoopStmt = CSWhile {
+      cond = CEBinOp {op = COLt (), lhs = iter, rhs = lenExpr},
+      body = snoc freeInnerStmts iterIncrementStmt} in
+    let freeSeqStmt = CSExpr {expr = CEApp {
       fun = _free,
-      args = [CEMember {lhs = arg, id = _seqKey}]}}]
+      args = [CEMember {lhs = arg, id = _seqKey}]}} in
+    [iterInitStmt, freeInnerLoopStmt, freeSeqStmt]
   | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
   | TyRecord t ->
     mapFoldWithKey
@@ -160,21 +225,51 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     error (concat "Freeing CPU memory not implemented for type " tystr)
 
   sem _compileFreeGpu (env : CompileCEnv) (arg : CExpr) =
-  | ty & (TySeq _) ->
+  | ty & (TySeq {ty = elemType}) ->
+    let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
+    let seqType = compileType env conType in
+    let cElemType = compileType env elemType in
+
     let tempId = nameSym "t" in
     let temp = CEVar {id = tempId} in
-    let tempDeclStmt = CSDef {ty = ty, id = Some tempId, init = None ()} in
-    let cudaMemcpySeqStmt = CSExpr {expr = CEApp {
+    let lengthExpr = CEMember {lhs = arg, id = _seqLenKey} in
+    let sizeExpr = CEBinOp {
+      op = COMul (),
+      lhs = lengthExpr,
+      rhs = CESizeOfType {ty = cElemType}} in
+    let tempDefStmt = CSDef {
+      ty = CTyPtr {ty = cElemType}, id = Some tempId,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr {ty = cElemType},
+        rhs = CEApp {fun = _malloc, args = [sizeExpr]}}})} in
+    let copyDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
-        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}}, arg,
-        CESizeOfType {ty = ty},
+        temp,
+        CEMember {lhs = arg, id = _seqKey},
+        sizeExpr,
         CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-    let cudaFreeGpuDataStmt = CSExpr {expr = CEApp {
-      fun = _cudaFree, args = [CEMember {lhs = temp, id = _seqKey}]}} in
-    let cudaFreeGpuSeqStmt = CSExpr {expr = CEApp {
-      fun = _cudaFree, args = [arg]}} in
-    [tempDeclStmt, cudaMemcpySeqStmt, cudaFreeGpuDataStmt, cudaFreeGpuSeqStmt]
+    let iterId = nameSym "i" in
+    let iter = CEVar {id = iterId} in
+    let iterInitStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
+    let innerArg = CEBinOp {op = COSubScript (), lhs = temp, rhs = iter} in
+    let elemType = _unwrapType env.typeEnv elemType in
+    let freeInnerStmts = _compileFreeGpu env innerArg elemType in
+    let iterIncrementStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = iter,
+      rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
+    let freeLoopStmt = CSWhile {
+      cond = CEBinOp {op = COLt (), lhs = iter, rhs = lengthExpr},
+      body = snoc freeInnerStmts iterIncrementStmt} in
+    let freeGpuDataStmt = CSExpr {expr = CEApp {
+      fun = _cudaFree,
+      args = [CEMember {lhs = arg, id = _seqKey}]}} in
+    let freeTempStmt = CSExpr {expr = CEApp {fun = _free, args = [temp]}} in
+    [ tempDefStmt, copyDataStmt, iterInitStmt, freeLoopStmt, freeGpuDataStmt
+    , freeTempStmt ]
   | TyRecord t ->
     mapFoldWithKey
       (lam acc : [CStmt]. lam key : SID. lam ty : Type.

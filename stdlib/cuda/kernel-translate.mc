@@ -124,6 +124,6 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   -- includes a sequence of attributes that can be attached.
   sem translateTopToCudaFormat =
   | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
-  | CTDef t -> CuTTop {attrs = [CuAHost (), CuADevice ()], top = CTDef t}
+  | CTDef t -> CuTTop {attrs = [], top = CTDef t}
   | CTFun t -> CuTTop {attrs = [], top = CTFun t}
 end
