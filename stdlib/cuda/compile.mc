@@ -294,10 +294,7 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
   | t -> infoErrorExit (infoTm t) "Unsupported function type"
 
   sem compileExpr (env : CompileCEnv) =
-  | TmSeqMap t -> error "not supported yet";
-    CESeqMap {
-      f = compileExpr env t.f, s = compileExpr env t.s,
-      sTy = compileType env (tyTm t.s), ty = compileType env t.ty}
+  | TmSeqMap t -> infoErrorExit t.info "Maps are not supported"
   | TmSeqFoldl t ->
     CESeqFoldl {
       f = compileExpr env t.f, acc = compileExpr env t.acc,
@@ -318,13 +315,7 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
     CETensorSubExn {
       t = compileExpr env t.t, ofs = compileExpr env t.ofs,
       len = compileExpr env t.len, ty = compileType env t.ty}
-  | TmMapKernel t -> error "not supported yet";
-    -- TODO(larshum, 2022-02-08): Add a way to control the value of the
-    -- 'opsPerThread' argument from the CUDA PMExpr AST.
-    CEMapKernel {
-      f = compileExpr env t.f, s = compileExpr env t.s,
-      sTy = compileType env (tyTm t.s), ty = compileType env t.ty,
-      opsPerThread = 10}
+  | TmMapKernel t -> infoErrorExit t.info "Maps are not supported"
   | TmReduceKernel t -> error "not implemented yet"
   | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a

@@ -46,8 +46,6 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   sem markFunctionsBody (functionIsMarked : Bool) (marked : Set Name) =
   | TmVar (t & {ty = TyArrow _}) ->
     if functionIsMarked then setInsert t.ident marked else marked
---  | TmSeqMap t -> markFunctionsBodyH marked t.f
---  | TmParallelReduce t -> markFunctionsBodyH marked t.f
   | TmParallelLoop t -> markFunctionsBodyH marked t.f
   | t -> sfold_Expr_Expr (markFunctionsBody functionIsMarked) marked t
 
@@ -83,13 +81,6 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   -- TODO(larshum, 2022-03-22): Add support for sequence map and reduce
   -- kernels.
   sem promoteKernelsBody =
---  | TmSeqMap {f = f, s = s, ty = ty, info = info} ->
---    TmMapKernel {f = f, s = s, ty = ty, info = info}
---  | TmParallelReduce {f = f, ne = ne, as = as, ty = ty, info = info} ->
---    -- TODO(larshum, 2022-03-14): Add code for determining whether a parallel
---    -- reduce is commutative or not. Perhaps we should have a separate PMExpr
---    -- node for commutative operations?
---    TmReduceKernel {f = f, ne = ne, s = as, commutative = false, ty = ty, info = info}
   | TmParallelLoop {n = n, f = f, ty = ty, info = info} ->
     TmLoopKernel {n = n, f = f, ty = ty, info = info}
   | t -> smap_Expr_Expr promoteKernelsBody t
