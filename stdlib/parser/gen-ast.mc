@@ -175,7 +175,8 @@ type Constructor =
 
 type SemanticFunction =
   { name : String
-  , preCaseArgs : [(Name, Type)]
+  , ty : Option Type
+  , preCaseArgs : [(Name, Option Type)]
   , cases : [(Pat, Expr)]
   }
 
@@ -216,13 +217,14 @@ let _pprintSemanticFunction
   : SemanticFunction
   -> String
   = lam func. use MExprPrettyPrint in
-    match func with {name = name, preCaseArgs = preCaseArgs, cases = cases} then
+    match func with {name = name, preCaseArgs = preCaseArgs, cases = cases, ty = ty} then
       let pprintArg = lam env. lam arg.
         match arg with (name, ty) then
           match pprintVarName env name with (env, str) then
-            match getTypeStringCode 2 env ty with (env, ty) then
+            match ty with Some ty then
+              match getTypeStringCode 2 env ty with (env, ty) in
               (env, join [" (", str, " : ", ty, ")"])
-            else never
+            else (env, cons ' ' str)
           else never
         else never in
       let pprintCase = lam env. lam aCase.
@@ -234,16 +236,29 @@ let _pprintSemanticFunction
           else never
         else never in
       let env = pprintEnvEmpty in
-      match mapAccumL pprintArg env preCaseArgs with (env, args) then
-        match mapAccumL pprintCase env cases with (env, cases) then
-          join
+      let temp =
+        match ty with Some ty then
+          match getTypeStringCode 2 env ty with (env, ty) in
+          (env, join ["  sem ", name, " : ", ty, "\n"])
+        else (env, "") in
+      match temp with (env, sig) in
+      let temp =
+        match cases with ![] then
+          match mapAccumL pprintArg env preCaseArgs with (env, args) in
+          match mapAccumL pprintCase env cases with (env, cases) in
+          let str = join
             [ "  sem ", name
             , join args
             , " =\n"
             , join cases
-            ]
-        else never
-      else never
+            ] in
+          (env, str)
+        else (env, "") in
+      match temp with (env, impl) in
+      -- NOTE(vipa, 2022-03-31): In an actual later implementation
+      -- we'd presumably pass on the environment here as well, but for
+      -- now we just return the string
+      concat sig impl
     else never
 
 lang CarriedTypeHelpers = CarriedTypeBase
@@ -292,9 +307,10 @@ lang CarriedTypeHelpers = CarriedTypeBase
         let valName = nameSym "x" in
         Some
           { name = join ["smapAccumL_", _synTypeToString synType, "_", _typeToString targetTy]
+          , ty = None ()
           , preCaseArgs =
-            [ (fName, tyarrows_ [tycon_ "a", targetTy, tytuple_ [tycon_ "a", targetTy]])
-            , (accName, tycon_ "a")
+            [ (fName, None ())
+            , (accName, None ())
             ]
           , cases =
             [ ( npcon_ constructor.name (npvar_ valName)
@@ -315,6 +331,7 @@ let _mkSFuncStubs
   -> Type
   -> [SemanticFunction]
   = lam synType. lam targetTy.
+    let synTy = tycon_ (_synTypeToString synType) in
     let suffix = join ["_", _synTypeToString synType, "_", _typeToString targetTy] in
     let fName = nameSym "f" in
     let accName = nameSym "acc" in
@@ -322,9 +339,15 @@ let _mkSFuncStubs
     let smapAccumL_ = appf3_ (var_ (concat "smapAccumL" suffix)) in
     let smapAccumL =
       { name = concat "smapAccumL" suffix
+      , ty = Some (tyarrows_
+        [ tyarrows_ [tyvar_ "a", targetTy, tytuple_ [tyvar_ "a", targetTy]]
+        , tyvar_ "a"
+        , synTy
+        , tytuple_ [tyvar_ "a", synTy]
+        ])
       , preCaseArgs =
-        [ (fName, tyarrows_ [tycon_ "a", targetTy, tytuple_ [tycon_ "a", targetTy]])
-        , (accName, tycon_ "a")
+        [ (fName, None ())
+        , (accName, None ())
         ]
       , cases =
         [ (npvar_ valName, utuple_ [nvar_ accName, nvar_ valName])
@@ -332,8 +355,13 @@ let _mkSFuncStubs
       } in
     let smap =
       { name = concat "smap" suffix
+      , ty = Some (tyarrows_
+        [ tyarrow_ targetTy targetTy
+        , synTy
+        , synTy
+        ])
       , preCaseArgs =
-        [ (fName, tyarrow_ targetTy targetTy)
+        [ (fName, None ())
         ]
       , cases =
         [ ( npvar_ valName
@@ -347,9 +375,15 @@ let _mkSFuncStubs
       } in
     let sfold =
       { name = concat "sfold" suffix
+      , ty = Some (tyarrows_
+        [ tyarrows_ [tyvar_ "a", targetTy, tyvar_ "a"]
+        , tyvar_ "a"
+        , synTy
+        , tyvar_ "a"
+        ])
       , preCaseArgs =
-        [ (fName, tyarrows_ [tycon_ "a", targetTy, tycon_ "a"])
-        , (accName, tycon_ "a")
+        [ (fName, None ())
+        , (accName, None ())
         ]
       , cases =
         [ ( npvar_ valName
