@@ -39,7 +39,7 @@ For example, we can declare something like `TmRecord` like this:
 ```
 let recordConstructor =
   { name = nameSym "TmRecord"
-  , synType = stringToSynType "Expr"
+  , synType = nameNoSym "Expr"
   , carried = recordType
     [ ("info", targetableType (tycon_ "Info"))
     , ("ty", untargetableType (tycon_ "Type"))
@@ -60,7 +60,7 @@ use CarriedBasic in mkLanguages
   { namePrefix = "MExpr"
   , constructors = [recordConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tycon_ "Expr")
+    [ (nameNoSym "Expr", tycon_ "Expr")
     ]
   , composedName = Some "Composed"
   }
@@ -161,15 +161,9 @@ bootstrap MLang.
 
 -/
 
-type SynType = String
-let stringToSynType = identity
-let _eqSynType = eqString
-let _cmpSynType = cmpString
-let _synTypeToString = identity
-
 type Constructor =
   { name : Name
-  , synType : SynType
+  , synType : Name
   , carried : CarriedType
   }
 
@@ -183,7 +177,7 @@ type SemanticFunction =
 type LanguageFragment =
   { name : String
   , extends : [String]
-  , synTypes : Map SynType [Constructor]
+  , synTypes : Map Name [Constructor]
   , semanticFunctions : [SemanticFunction]
   }
 
@@ -192,7 +186,7 @@ type GenInput =
   , composedName : Option String
   , fragmentName : Name -> String
   , constructors : [Constructor]
-  , requestedSFunctions : [(SynType, Type)]
+  , requestedSFunctions : [(Name, Type)]
   }
 
 lang CarriedTypeBase
@@ -282,7 +276,7 @@ lang CarriedTypeHelpers = CarriedTypeBase
         (lam binding.
           match binding with (synType, constructors) then
             join
-              [ "  syn ", _synTypeToString synType, " ="
+              [ "  syn ", nameGetStr synType, " ="
               , join (map pprintConstructor constructors)
               , "\n"
               ]
@@ -297,16 +291,16 @@ lang CarriedTypeHelpers = CarriedTypeBase
         ]
     else never
 
-  sem _mkSmapAccumL (synType : SynType) (targetTy : Type) =
+  sem _mkSmapAccumL (synType : Name) (targetTy : Type) =
   | constructor ->
     let constructor: Constructor = constructor in
-    if _eqSynType synType constructor.synType then
+    if nameEq synType constructor.synType then
       let fName = nameSym "f" in
       match carriedSMapAccumL (appf2_ (nvar_ fName)) targetTy constructor.carried with Some mkNew then
         let accName = nameSym "acc" in
         let valName = nameSym "x" in
         Some
-          { name = join ["smapAccumL_", _synTypeToString synType, "_", _typeToString targetTy]
+          { name = join ["smapAccumL_", nameGetStr synType, "_", _typeToString targetTy]
           , ty = None ()
           , preCaseArgs =
             [ (fName, None ())
@@ -331,8 +325,8 @@ let _mkSFuncStubs
   -> Type
   -> [SemanticFunction]
   = lam synType. lam targetTy.
-    let synTy = tycon_ (_synTypeToString synType) in
-    let suffix = join ["_", _synTypeToString synType, "_", _typeToString targetTy] in
+    let synTy = ntycon_ synType in
+    let suffix = join ["_", nameGetStr synType, "_", _typeToString targetTy] in
     let fName = nameSym "f" in
     let accName = nameSym "acc" in
     let valName = nameSym "x" in
@@ -547,7 +541,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
   | input ->
     let synTypes = foldl
       (lam acc. lam c: Constructor. mapInsert c.synType [] acc)
-      (mapEmpty _cmpSynType)
+      (mapEmpty nameCmp)
       input.constructors in
     let baseLang =
       { name = input.baseName
@@ -560,7 +554,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
       match constructor with {name = name, synType = synType, carried = carried} then
         { name = input.fragmentName name
         , extends = [input.baseName]
-        , synTypes = mapInsert synType [constructor] (mapEmpty _cmpSynType)
+        , synTypes = mapInsert synType [constructor] (mapEmpty nameCmp)
         , semanticFunctions = mapOption
           (lam request: (Unknown, Unknown). _mkSmapAccumL request.0 request.1 constructor)
           input.requestedSFunctions
@@ -573,7 +567,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
           constructorLangs
           { name = name
           , extends = map (lam x: LanguageFragment. x.name) constructorLangs
-          , synTypes = mapEmpty _cmpSynType
+          , synTypes = mapEmpty nameCmp
           , semanticFunctions = []
           }
       else constructorLangs in
@@ -602,13 +596,13 @@ let tyRecord = recordType
 
 let recordConstructor =
   { name = nameSym "TmRecord"
-  , synType = stringToSynType "Expr"
+  , synType = nameNoSym "Expr"
   , carried = tyRecord
   } in
 
 let varConstructor =
   { name = nameSym "TmVar"
-  , synType = stringToSynType "Expr"
+  , synType = nameNoSym "Expr"
   , carried = recordType
     [ ("info", tyInfo)
     , ("ty", tyType)
@@ -618,7 +612,7 @@ let varConstructor =
 
 let seqConstructor =
   { name = nameSym "TmSeq"
-  , synType = stringToSynType "Expr"
+  , synType = nameNoSym "Expr"
   , carried = recordType
     [ ("info", tyInfo)
     , ("ty", tyType)
@@ -631,9 +625,9 @@ let input =
   , fragmentName = lam s. concat (nameGetStr s) "Ast"
   , constructors = [recordConstructor, varConstructor, seqConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tycon_ "Info")
-    , (stringToSynType "Expr", tycon_ "Expr")
-    , (stringToSynType "Expr", tycon_ "Type")
+    [ (nameNoSym "Expr", tycon_ "Info")
+    , (nameNoSym "Expr", tycon_ "Expr")
+    , (nameNoSym "Expr", tycon_ "Type")
     ]
   , composedName = Some "Composed"
   } in
@@ -643,7 +637,7 @@ let res = mkLanguages input in
 
 let recordConstructor =
   { name = nameSym "TmRecord"
-  , synType = stringToSynType "Expr"
+  , synType = nameNoSym "Expr"
   , carried = recordType
     [ ("info", untargetableType (tycon_ "Info"))
     , ("ty", untargetableType (tycon_ "Type"))
@@ -660,7 +654,7 @@ let res = mkLanguages
   , fragmentName = lam s. concat (nameGetStr s) "Ast"
   , constructors = [recordConstructor]
   , requestedSFunctions =
-    [ (stringToSynType "Expr", tycon_ "Expr")
+    [ (nameNoSym "Expr", tycon_ "Expr")
     ]
   , composedName = Some "Composed"
   } in

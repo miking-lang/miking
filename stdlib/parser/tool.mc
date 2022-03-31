@@ -167,8 +167,8 @@ let decls: [Decl] = mapOption result.toOption decls in
 let nts: [Name] =
   let inner = lam x. match x with TypeDecl x then Some x.name.v else None () in
   mapOption inner decls in
-let requestedSFunctions: [(SynType, Type)] =
-  let mkPair = lam a. lam b. (stringToSynType (nameGetStr a), ntycon_ b) in
+let requestedSFunctions: [(Name, Type)] =
+  let mkPair = lam a. lam b. (a, ntycon_ b) in
   seqLiftA2 mkPair nts nts in
 
 -- NOTE(vipa, 2022-03-22): Find the starting non-terminal
@@ -456,7 +456,7 @@ let constructors : Res [ConstructorInfo] =
       let mkRes = lam name. lam carried.
         { constructor =
           { name = name
-          , synType = stringToSynType (nameGetStr x.nt.v)
+          , synType = x.nt.v
           , carried = carried
           }
         } in
