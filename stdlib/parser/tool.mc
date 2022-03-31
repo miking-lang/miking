@@ -191,13 +191,14 @@ let start: Res Name =
 in
 
 -- NOTE(vipa, 2022-03-28):  Compute type information
-type TypeInfo = {ty : Type} in
+type TypeInfo = {ty : Type, ensureSuffix : Bool} in
 type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
 let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
   let addDecl = lam m. lam decl. switch decl
     case TypeDecl x then
       let info: TypeInfo =
         { ty = ntycon_ x.name.v
+        , ensureSuffix = true
         } in
       mapInsert x.name.v (Left (result.ok info)) m
     case TokenDecl (x & {name = Some n}) then
@@ -421,6 +422,24 @@ let addInfoField
     in mapInsertWith mkError "info" count content
 in
 
+-- NOTE(vipa, 2022-03-31): Fix the name of the constructor, if it should be suffixed
+let computeConstructorName
+  : {constructor : {v: Name, i: Info}, nt : {v: Name, i: Info}} -> Res Name
+  = lam x.
+    switch mapFindExn x.nt.v typeMap
+    case Left config then
+      let mkName = lam config: TypeInfo.
+        if config.ensureSuffix then
+          if isSuffix eqc (nameGetStr x.nt.v) (nameGetStr x.constructor.v)
+          then x.constructor.v
+          else nameSym (concat (nameGetStr x.constructor.v) (nameGetStr x.nt.v))
+        else x.constructor.v
+      in result.map mkName config
+    case Right _ then
+      result.err (x.nt.i, join ["The type of a production must be a type, not a token.\n", simpleHighlight x.nt.i, "\n"])
+    end
+in
+
 -- NOTE(vipa, 2022-03-31): Compute all info for the constructors
 type ConstructorInfo =
   { constructor : Constructor
@@ -428,15 +447,20 @@ type ConstructorInfo =
 let constructors : Res [ConstructorInfo] =
   let check = lam decl. switch decl
     case ProductionDecl x then
+      let name = computeConstructorName {constructor = x.name, nt = x.nt} in
       let regInfo = get_Regex_info x.regex in
       let reg = regexToSRegex x.regex in
       let content = result.map concatted reg in
       let content = result.map (addInfoField x.info) content in
       let carried = result.bind content (reifyRecord regInfo) in
-      let mkRes = lam carried.
-        { constructor = {name = x.name.v, synType = stringToSynType (nameGetStr x.nt.v), carried = carried}
+      let mkRes = lam name. lam carried.
+        { constructor =
+          { name = name
+          , synType = stringToSynType (nameGetStr x.nt.v)
+          , carried = carried
+          }
         } in
-      Some (result.map mkRes carried)
+      Some (result.map2 mkRes name carried)
     case _ then
       None ()
     end in
@@ -447,10 +471,11 @@ in
 let generated: Res String = result.bind constructors -- TODO(vipa, 2022-03-22): Replace this with something appropriate once we're generating more stuff
   (lam constructors : [ConstructorInfo].
     let genInput =
-      { namePrefix = "Selfhost"
+      { baseName = "SelfhostBaseAst"
+      , composedName = Some "SelfhostAst"
+      , fragmentName = lam name. concat (nameGetStr name) "Ast"
       , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
       , requestedSFunctions = requestedSFunctions
-      , composedName = None ()
       }
     in result.ok (mkLanguages genInput)
   ) in

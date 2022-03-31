@@ -187,10 +187,11 @@ type LanguageFragment =
   }
 
 type GenInput =
-  { namePrefix : String
+  { baseName : String
+  , composedName : Option String
+  , fragmentName : Name -> String
   , constructors : [Constructor]
   , requestedSFunctions : [(SynType, Type)]
-  , composedName : Option String
   }
 
 lang CarriedTypeBase
@@ -507,45 +508,42 @@ let tupleType
   = lam fields. recordType (mapi (lam i. lam field. (int2string i, field)) fields)
 
 lang CarriedTypeGenerate = CarriedTypeHelpers
-  sem mkLanguages = /- GenInput -> String -/
+  sem mkLanguages : GenInput -> String
+  sem mkLanguages =
   | input ->
-    let input: GenInput = input in
-    match input with {namePrefix = namePrefix, constructors = constructors, requestedSFunctions = requestedSFunctions, composedName = composedName} then
-      let synTypes = foldl
-        (lam acc. lam c: Constructor. mapInsert c.synType [] acc)
-        (mapEmpty _cmpSynType)
-        constructors in
-      let baseLangName = concat namePrefix "Base" in
-      let baseLang =
-        { name = baseLangName
-        , extends = []
-        , synTypes = synTypes
-        , semanticFunctions = join
-          (map (lam request: (Unknown, Unknown). _mkSFuncStubs request.0 request.1) requestedSFunctions)
-        } in
-      let mkConstructorLang = lam constructor: Constructor.
-        match constructor with {name = name, synType = synType, carried = carried} then
-          { name = concat namePrefix (nameGetStr name)
-          , extends = [baseLangName]
-          , synTypes = mapInsert synType [constructor] (mapEmpty _cmpSynType)
-          , semanticFunctions = mapOption
-            (lam request: (Unknown, Unknown). _mkSmapAccumL request.0 request.1 constructor)
-            requestedSFunctions
+    let synTypes = foldl
+      (lam acc. lam c: Constructor. mapInsert c.synType [] acc)
+      (mapEmpty _cmpSynType)
+      input.constructors in
+    let baseLang =
+      { name = input.baseName
+      , extends = []
+      , synTypes = synTypes
+      , semanticFunctions = join
+        (map (lam request: (Unknown, Unknown). _mkSFuncStubs request.0 request.1) input.requestedSFunctions)
+      } in
+    let mkConstructorLang = lam constructor: Constructor.
+      match constructor with {name = name, synType = synType, carried = carried} then
+        { name = input.fragmentName name
+        , extends = [input.baseName]
+        , synTypes = mapInsert synType [constructor] (mapEmpty _cmpSynType)
+        , semanticFunctions = mapOption
+          (lam request: (Unknown, Unknown). _mkSmapAccumL request.0 request.1 constructor)
+          input.requestedSFunctions
+        }
+      else never in
+    let constructorLangs = map mkConstructorLang input.constructors in
+    let constructorLangs =
+      match input.composedName with Some name then
+        snoc
+          constructorLangs
+          { name = name
+          , extends = map (lam x: LanguageFragment. x.name) constructorLangs
+          , synTypes = mapEmpty _cmpSynType
+          , semanticFunctions = []
           }
-        else never in
-      let constructorLangs = map mkConstructorLang constructors in
-      let constructorLangs =
-        match composedName with Some name then
-          snoc
-            constructorLangs
-            { name = name
-            , extends = map (lam x: LanguageFragment. x.name) constructorLangs
-            , synTypes = mapEmpty _cmpSynType
-            , semanticFunctions = []
-            }
-        else constructorLangs in
-      strJoin "\n\n" (map _pprintLanguageFragment (cons baseLang constructorLangs))
-    else never
+      else constructorLangs in
+    strJoin "\n\n" (map _pprintLanguageFragment (cons baseLang constructorLangs))
 end
 
 lang CarriedBasic = CarriedTypeGenerate + CarriedTarget + CarriedSeq + CarriedRecord + CarriedOption
@@ -595,7 +593,8 @@ let seqConstructor =
   } in
 
 let input =
-  { namePrefix = "MExpr"
+  { baseName = "MExprBase"
+  , fragmentName = lam s. concat (nameGetStr s) "Ast"
   , constructors = [recordConstructor, varConstructor, seqConstructor]
   , requestedSFunctions =
     [ (stringToSynType "Expr", tycon_ "Info")
@@ -623,7 +622,8 @@ let recordConstructor =
     ]
   } in
 let res = mkLanguages
-  { namePrefix = "MExpr"
+  { baseName = "MExprBase"
+  , fragmentName = lam s. concat (nameGetStr s) "Ast"
   , constructors = [recordConstructor]
   , requestedSFunctions =
     [ (stringToSynType "Expr", tycon_ "Expr")
