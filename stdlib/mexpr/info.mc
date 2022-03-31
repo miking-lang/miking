@@ -57,40 +57,6 @@ let info2str : Info -> String = lam fi.
     "-", int2string r.row2, ":", int2string r.col2, " "]
   else never
 
--- Parse an info string into an info
-let str2info : String -> Info = lam str.
-  let errorNotAnInfo = lam.
-    error (join ["Not an info string: '", str, "'"])
-  in
-  let str = strTrim str in
-  match str with "[No file info]" then NoInfo ()
-  else
-    match strSplit " " str with ["FILE", filename, rowcols] then
-      let filename =
-        match filename with ['\"'] ++ filename ++ ['\"'] then filename
-        else errorNotAnInfo ()
-      in
-      let parseRowCol : String -> (Int, Int) = lam rowcol.
-        match strSplit ":" rowcol with [row, col] then
-          (string2int row, string2int col)
-        else errorNotAnInfo ()
-      in
-      match strSplit "-" rowcols with [rowcols1, rowcols2] then
-        match (parseRowCol rowcols1, parseRowCol rowcols2)
-        with ((row1, col1), (row2, col2)) then
-          Info { filename = filename
-               , row1 = row1, col1 = col1
-               , row2 = row2, col2 = col2
-               }
-        else never
-      else errorNotAnInfo ()
-    else errorNotAnInfo ()
-
-utest str2info "   [No file info] " with NoInfo ()
-utest str2info "FILE \"path/to/file.mc\" 123:3-124:4"
-with Info { filename = "path/to/file.mc",
-            row1 = 123, col1 = 3, row2 = 124, col2 = 4 }
-
 -- Generate an info error string
 let infoErrorString : Info -> String -> String = lam fi. lam str.
     join [info2str fi, "ERROR: ", str]
