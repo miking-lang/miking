@@ -477,7 +477,7 @@ let generated: Res String = result.bind constructors -- TODO(vipa, 2022-03-22): 
       , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
       , requestedSFunctions = requestedSFunctions
       }
-    in result.ok (mkLanguages genInput)
+    in result.ok (concat "include \"seq.mc\"\n\n" (mkLanguages genInput))
   ) in
 
 match result.consume (result.withAnnotations start (result.withAnnotations allResolved generated)) with (warnings, res) in
@@ -487,7 +487,7 @@ case Left errors then
   for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));
   exit 1
 case Right res then
-  printLn res;
+  printLn res
   -- dprintLn temp;
-  printLn "Ok"
+  -- printLn "Ok"
 end
