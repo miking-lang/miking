@@ -18,8 +18,7 @@ let transposeSq : [[Int]] -> [[Int]] = lam m.
     let row : [Int] = get m j in
     let cell : Int = get row i in
     cell in
-  let f : Int -> [Int] = lam i.
-    create n (g i) in
+  let f : Int -> [Int] = lam i. create n (g i) in
   let t : [[Int]] = create n f in
   t
 

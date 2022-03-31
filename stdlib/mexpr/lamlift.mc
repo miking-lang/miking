@@ -173,7 +173,7 @@ lang LambdaLiftFindFreeVariables =
     let state = findFreeVariables state t.thn in
     findFreeVariables state t.els
   | TmExt t ->
-    let state = {state with vars = setInsert t.ident state.vars} in
+    let state = {state with funs = setInsert t.ident state.funs} in
     findFreeVariables state t.inexpr
   | t -> sfold_Expr_Expr findFreeVariables state t
 end

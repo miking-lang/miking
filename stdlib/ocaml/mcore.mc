@@ -1,5 +1,6 @@
 -- Defines functions for compiling (and running) an MCore program.
 
+include "mexpr/remove-ascription.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
@@ -7,7 +8,7 @@ include "ocaml/pprint.mc"
 include "sys.mc"
 
 lang MCoreCompileLang =
-  MExprTypeAnnot + MExprTypeLift +
+  MExprTypeAnnot + MExprRemoveTypeAscription + MExprTypeLift +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
   OCamlGenerateExternalNaive
 end

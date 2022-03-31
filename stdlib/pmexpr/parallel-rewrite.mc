@@ -2,7 +2,7 @@ include "pmexpr/pattern-match.mc"
 include "pmexpr/parallel-patterns.mc"
 include "pmexpr/promote.mc"
 
-lang PMExprParallelPattern = PMExprAst + PMExprPromote
+lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
     let binding : RecLetBinding = t in
@@ -74,7 +74,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
             match paramArg with ((id, ty, info), expr) in
             (id, lam info. withInfo info (withType ty expr)))
           (zip params args)) in
-      substituteVariables e substMap
+      substituteVariables substMap e
     in
     match collectAppArguments t with (f, args) in
     let appBody =

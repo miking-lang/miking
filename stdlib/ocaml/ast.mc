@@ -9,6 +9,7 @@ type OCamlTopBinding =
 
 lang OCamlTopAst
   syn Top =
+  | OTopTypeDecl { ident : Name, ty : Type }
   | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
   | OTopCExternalDecl { ident : Name, ty : Type, bytecodeIdent : Name,
                         nativeIdent : Name }
@@ -193,6 +194,7 @@ lang OCamlTypeAst =
   | OTyBigarrayIntElt {info : Info}
   | OTyBigarrayClayout {info : Info}
   | OTyLabel {info : Info, label : String, ty : Type}
+  | OTyVar {info : Info, ident : Name}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
   | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
