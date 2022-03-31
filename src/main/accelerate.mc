@@ -28,6 +28,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
+include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
 include "options.mc"
 include "sys.mc"
@@ -54,7 +55,7 @@ lang PMExprCompile =
   PMExprRecursionElimination + PMExprExtractAccelerate +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + PMExprWellFormed + OCamlGenerate +
-  OCamlTypeDeclGenerate
+  OCamlTypeDeclGenerate + OCamlGenerateExternalNaive
 end
 
 lang MExprFutharkCompile =
@@ -185,15 +186,23 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let duneBuildBase = lam ocamloptFlags.
+let duneBuildBase : [String] -> [String] -> String =
+  lam libs. lam clibs.
+  let libstr = strJoin " " (distinct eqString (cons "boot" libs)) in
+  let flagstr =
+    let clibstr =
+      strJoin " " (map (concat "-cclib -l") (distinct eqString clibs))
+    in
+    concat ":standard -w -a " clibstr
+  in
   strJoin "\n" [
     "(env",
     "  (dev",
-    "    (flags (:standard -w -a))",
+    "    (flags (", flagstr, "))",
     "    (ocamlc_flags (-without-runtime))))",
     "(executable",
     "  (name program)",
-    "  (libraries boot)"]
+    "  (libraries ", libstr, ")"]
 
 let futharkDuneBuildMakeRule = lam.
   strJoin "\n" [
@@ -212,18 +221,20 @@ let futharkCPUBuildMakeRule = lam.
 
 let duneFutharkCFiles = lam. "(foreign_stubs (language c) (names gpu wrap)))"
 
-let buildConfigFutharkCPU : Unit -> (String, String) = lam.
+let buildConfigFutharkCPU : [String] -> [String] -> (String, String) =
+  lam libs. lam clibs.
   let dunefile = strJoin "\n" [
-    duneBuildBase (),
+    duneBuildBase libs clibs,
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
     futharkDuneBuildMakeRule (),
     futharkCPUBuildMakeRule ()] in
   (dunefile, makefile)
 
-let buildConfigFutharkGPU : Unit -> (String, String) = lam.
+let buildConfigFutharkGPU : [String] -> [String] -> (String, String) =
+  lam libs. lam clibs.
   let dunefile = strJoin "\n" [
-    duneBuildBase (),
+    duneBuildBase libs clibs,
     "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
@@ -234,9 +245,10 @@ let buildConfigFutharkGPU : Unit -> (String, String) = lam.
     futharkGPUBuildMakeRule ()] in
   (dunefile, makefile)
 
-let buildConfigCuda : String -> (String, String) = lam dir.
+let buildConfigCuda : String -> [String] -> [String] -> (String, String) =
+  lam dir. lam libs. lam clibs.
   let dunefile = strJoin "\n" [
-    duneBuildBase (),
+    duneBuildBase libs clibs,
     "  (link_flags -I ", dir, " -cclib -lgpu -cclib -lcudart -cclib -lstdc++))"] in
   let makefile = strJoin "\n" [
     "export LIBRARY_PATH=/usr/local/cuda/lib64",
@@ -274,11 +286,13 @@ let buildBinaryUsingMake : String -> String -> Unit =
   sysTempDirDelete td ();
   ()
 
-let buildFuthark : Options -> String -> [Top] -> CProg -> FutProg -> Unit =
-  lam options. lam sourcePath. lam ocamlTops. lam wrapperProg. lam futharkProg.
+let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
+                -> FutProg -> Unit =
+  lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
+  lam wrapperProg. lam futharkProg.
   match
-    if options.cpuOnly then buildConfigFutharkCPU ()
-    else buildConfigFutharkGPU ()
+    if options.cpuOnly then buildConfigFutharkCPU libs clibs
+    else buildConfigFutharkGPU libs clibs
   with (dunefile, makefile) in
   let td = sysTempDirMake () in
   writeFiles (sysTempDirName td) [
@@ -298,15 +312,17 @@ let mergePrograms : CudaProg -> CudaProg -> CudaProg =
   match rprog with CuPProg {includes = rincludes, tops = rtops} in
   CuPProg {includes = concat lincludes rincludes, tops = concat ltops rtops}
 
-let buildCuda : Options -> String -> [Top] -> CudaProg -> CudaProg -> Unit =
-  lam options. lam sourcePath. lam ocamlTops. lam wrapperProg. lam cudaProg.
+let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
+             -> CudaProg -> Unit =
+  lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
+  lam wrapperProg. lam cudaProg.
   let cudaProg = mergePrograms cudaProg wrapperProg in
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   match
     if options.cpuOnly then
       error "CUDA backend does not support CPU compilation"
-    else buildConfigCuda dir
+    else buildConfigCuda dir libs clibs
   with (dunefile, makefile) in
   writeFiles dir [
     ("program.ml", pprintOCamlTops ocamlTops),
@@ -394,15 +410,23 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- data conversion of parameters and result.
   match replaceAccelerate accelerated env ast with (recordDeclTops, ast) in
 
-  -- Generate the OCaml AST
+  -- Generate the OCaml AST (with externals support)
+  let env : GenerateEnv =
+    chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+  in
   let exprTops = generateTops env ast in
+  let syslibs =
+    setOfSeq cmpString
+      (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+  in
+  match collectLibraries env.exts syslibs with (libs, clibs) in
 
   -- Add an external declaration of a C function in the OCaml AST,
   -- for each accelerate term.
   let externalTops = getExternalCDeclarations accelerated in
 
   let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
-  hooks.buildAccelerated options file ocamlTops wrapperProg gpuProg
+  hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
   use PMExprAst in
