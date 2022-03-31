@@ -22,6 +22,18 @@ let simpleHighlight
   = lam info.
     formatHighlights terminalHighlightErrorConfig content [Relevant info]
 in
+let multiHighlight
+  : Info -> [Info] -> String
+  = lam surround. lam infos.
+    let ranges = map (lam x. Relevant x) infos in
+    let ranges =
+      match surround with Info x then
+        let first = infoVal x.filename x.row1 x.col1 x.row1 x.col1 in
+        let last = infoVal x.filename x.row2 x.col2 x.row2 x.col2 in
+        snoc (cons (Irrelevant first) ranges) (Irrelevant last)
+      else ranges in
+    formatHighlights terminalHighlightErrorConfig content ranges
+in
 let simpleMsg
   : Info -> String -> (Info, String)
   = lam info. lam msg.
@@ -185,7 +197,7 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
   let addDecl = lam m. lam decl. switch decl
     case TypeDecl x then
       let info: TypeInfo =
-        { ty = tycon_ (nameGetStr x.name.v)
+        { ty = ntycon_ x.name.v
         } in
       mapInsert x.name.v (Left (result.ok info)) m
     case TokenDecl (x & {name = Some n}) then
@@ -320,6 +332,8 @@ let kleeneContent
     mapMap f c
 in
 
+-- NOTE(vipa, 2022-03-31): Compute the record type implied by a
+-- [SRegex]
 recursive
   let computeRecordType
     : SRegex -> ParseContent (Res CarriedType)
@@ -378,9 +392,8 @@ recursive
         case bindings then
           let typeMsg : (Type, [(Info, CarriedType)]) -> String = lam pair.
             let places = setOfSeq infoCmp (map (lam x. match x with (info, _) in info) pair.1) in
-            let placeToLine = lam info. join ["  ", info2str info, simpleHighlight info, "\n"] in
-            let places = join (map placeToLine (setToSeq places)) in
-            join ["\n  ", type2str pair.0, "\n", places]
+            let places = snoc (multiHighlight info (setToSeq places)) '\n' in
+            join ["\n  These fields imply ", type2str pair.0, "\n", places]
           in
           let types = join (map typeMsg bindings) in
           let msg = join ["The type of field '", field, "' is inconsistent:\n", types] in
@@ -394,40 +407,62 @@ recursive
       in result.map recordType (result.mapM fixField (mapBindings content))
 in
 
-let temp =
+-- NOTE(vipa, 2022-03-31): Add the info field, erroring if it's
+-- already defined
+let addInfoField
+  : Info -> ParseContent (Res CarriedType) -> ParseContent (Res CarriedType)
+  = lam info. lam content.
+    let count = {min = 1, max = Some 1, ty = [(NoInfo (), result.ok (untargetableType (tycon_ "Info")))]} in
+    let mkError : FieldCount (Res CarriedType) -> a -> FieldCount (Res CarriedType) = lam prev. lam.
+      let highlight = multiHighlight info (map (lam x. match x with (info, _) in info) prev.ty) in
+      let msg = join ["The 'info' field is reserved, it must not be manually defined:\n", highlight, "\n"] in
+      let err = result.err (info, msg) in
+      {prev with ty = snoc prev.ty (NoInfo (), err)}
+    in mapInsertWith mkError "info" count content
+in
+
+-- NOTE(vipa, 2022-03-31): Compute all info for the constructors
+type ConstructorInfo =
+  { constructor : Constructor
+  } in
+let constructors : Res [ConstructorInfo] =
   let check = lam decl. switch decl
     case ProductionDecl x then
       let regInfo = get_Regex_info x.regex in
       let reg = regexToSRegex x.regex in
       let content = result.map concatted reg in
+      let content = result.map (addInfoField x.info) content in
       let carried = result.bind content (reifyRecord regInfo) in
-      result.map (lam x. Some (type2str (carriedRepr x))) carried
+      let mkRes = lam carried.
+        { constructor = {name = x.name.v, synType = stringToSynType (nameGetStr x.nt.v), carried = carried}
+        } in
+      Some (result.map mkRes carried)
     case _ then
-      result.ok (None ())
+      None ()
     end in
-  result.mapM check decls
+  result.mapM identity (mapOption check decls)
 in
 
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
-let generated: Res String = result.bind (result.ok requestedSFunctions) -- TODO(vipa, 2022-03-22): Replace this with something appropriate once we're generating more stuff
-  (lam requestedSFunctions.
+let generated: Res String = result.bind constructors -- TODO(vipa, 2022-03-22): Replace this with something appropriate once we're generating more stuff
+  (lam constructors : [ConstructorInfo].
     let genInput =
       { namePrefix = "Selfhost"
-      , constructors = []
+      , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
       , requestedSFunctions = requestedSFunctions
       , composedName = None ()
       }
-    in use CarriedTypeGenerate in result.ok (mkLanguages genInput)
+    in result.ok (mkLanguages genInput)
   ) in
 
-match result.consume (result.withAnnotations (result.withAnnotations temp start) (result.withAnnotations allResolved generated)) with (warnings, res) in
+match result.consume (result.withAnnotations start (result.withAnnotations allResolved generated)) with (warnings, res) in
 for_ warnings (lam x. match x with (info, msg) in printLn (infoWarningString info msg));
 switch res
 case Left errors then
   for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));
   exit 1
 case Right res then
-  -- printLn res;
-  dprintLn temp;
+  printLn res;
+  -- dprintLn temp;
   printLn "Ok"
 end
