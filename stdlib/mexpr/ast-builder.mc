@@ -88,7 +88,7 @@ let tycon_ = lam s.
 
 let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n, info = NoInfo ()}
+  TyVar {ident = n, level = 0, info = NoInfo ()}
 
 let tyvar_ =
   lam s.
@@ -109,13 +109,16 @@ let tyalls_ =
   foldr tyall_ ty strs
 
 let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam sort.
+  lam info. lam ident. lam level. lam sort. lam allowGeneralize.
   TyFlex {info = info,
-          contents = ref (Unbound {ident = ident, level = level, sort = sort})}
+          contents = ref (Unbound {ident = ident,
+                                   level = level,
+                                   sort = sort,
+                                   allowGeneralize = allowGeneralize})}
 
 let tyflexunbound_ = use FlexTypeAst in
   lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ())
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ()) true
 
 let tyflexlink_ = use FlexTypeAst in
   lam ty.

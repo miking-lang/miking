@@ -142,6 +142,7 @@ lang Unify = MExprAst + ResolveAlias
   -- - Occurs check
   -- - Update level fields of FlexVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
+  -- - If `tv' is unified with a bound type variable, ensure no capture occurs
   sem checkBeforeUnify (tv : FlexVarRec) =
   | ty ->
     sfold_Type_Type (lam. lam ty. checkBeforeUnify tv ty) () ty
@@ -176,6 +177,16 @@ lang VarTypeUnify = Unify + VarTypeAst
     if nameEq t1.ident t2.ident then ()
     else if biMem (t1.ident, t2.ident) env.names then ()
     else unificationError (_type2str ty1) (_type2str ty2)
+
+  sem checkBeforeUnify (tv : FlexVarRec) =
+  | TyVar t ->
+    if leqi tv.level t.level then
+      let msg = join [
+        "Type check failed: unification failure\n",
+        "Attempted to unify with type variable escaping its scope!\n"
+      ] in
+      infoErrorExit (deref errInfo) msg
+    else ()
 end
 
 lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
@@ -205,8 +216,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     if not (nameEq r1.ident r2.ident) then
       checkBeforeUnify r1 ty2;
       let updated =
-        Unbound {{r1 with level = mini r1.level r2.level}
-                     with sort = addSorts env (r1.sort, r2.sort)} in
+        Unbound {{{r1 with level = mini r1.level r2.level}
+                      with sort = addSorts env (r1.sort, r2.sort)}
+                      with allowGeneralize = and r1.allowGeneralize r2.allowGeneralize} in
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
@@ -234,8 +246,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
             sfold_VarSort_Type (lam. lam ty. checkBeforeUnify tv ty) () r.sort;
             r.sort
         in
-        let updated = Unbound {{r with level = mini r.level tv.level}
-                                  with sort  = sort} in
+        let updated = Unbound {{{r with level = mini r.level tv.level}
+                                   with sort  = sort}
+                                   with allowGeneralize = and r.allowGeneralize tv.allowGeneralize} in
         modref t.contents updated
     else
       checkBeforeUnify tv (resolveLink ty)
@@ -336,7 +349,7 @@ end
 
 let newflexvar =
   lam sort. lam level. lam info.
-  tyFlexUnbound info (nameSym "a") level sort
+  tyFlexUnbound info (nameSym "a") level sort true
 
 let newvarWeak = use VarSortAst in
   newflexvar (WeakVar ())
@@ -383,15 +396,15 @@ end
 lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
   sem genBase (lvl : Level) =
   | TyFlex t & ty ->
-    match deref t.contents with Unbound {ident = n, level = k, sort = s} then
-      if gti k lvl then
+    match deref t.contents with Unbound {ident = n, level = k, sort = s, allowGeneralize = a} then
+      if and a (gti k lvl) then
         -- Var is free, generalize
         let f = lam vars1. lam ty.
           match genBase lvl ty with (vars2, ty) in
           (concat vars1 vars2, ty)
         in
         match smapAccumL_VarSort_Type f [] s with (vars, sort) in
-        (snoc vars (n, sort), TyVar {info = t.info, ident = n})
+        (snoc vars (n, sort), TyVar {info = t.info, ident = n, level = lvl})
       else
         -- Var is bound in previous let, don't generalize
         ([], ty)
@@ -494,10 +507,6 @@ lang LetTypeCheck = TypeCheck + LetAst
       (lam. gen lvl (tyTm body))
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
-        -- TODO(aathn, 2021-11-16): Simply stripping the annotated tyalls is
-        -- insufficient if they happen to contains bounds. Then, we should
-        -- instantiate the variables in the annotated type before unifying.
-        -- For now such annotations are not supported though.
         match stripTyAll ty with (_, tyAnnot) in
         unify env tyAnnot (tyTm body);
         ty)
@@ -591,19 +600,19 @@ lang SeqTypeCheck = TypeCheck + SeqAst
               with ty = ityseq_ t.info elemTy}
 end
 
-lang FlexSetLevel = FlexTypeAst
-  sem setLevel (lvl : Int) =
+lang FlexDisableGeneralize = FlexTypeAst
+  sem disableGeneralize =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
-      modref t.contents (Unbound {r with level = lvl});
-      sfold_VarSort_Type (lam. lam ty. setLevel lvl ty) () r.sort
+      modref t.contents (Unbound {r with allowGeneralize = false});
+      sfold_VarSort_Type (lam. lam ty. disableGeneralize ty) () r.sort
     else
-      setLevel lvl (resolveLink ty)
+      disableGeneralize (resolveLink ty)
   | ty ->
-    sfold_Type_Type (lam. lam ty. setLevel lvl ty) () ty
+    sfold_Type_Type (lam. lam ty. disableGeneralize ty) () ty
 end
 
-lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexSetLevel
+lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGeneralize
   sem typeCheckBase (env : TCEnv) =
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
@@ -617,7 +626,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexSetLevel
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     unify env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
-    (if env.disableRecordPolymorphism then setLevel 0 (tyTm rec) else ());
+    (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
     TmRecordUpdate {{{t with rec = rec}
                         with value = value}
                         with ty = tyTm rec}
@@ -730,14 +739,14 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
                           with ty = seqTy})
 end
 
-lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexSetLevel
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
   sem typeCheckPat (env : TCEnv) =
   | PatRecord t ->
     let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
     match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
     let env : TCEnv = env in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
-    (if env.disableRecordPolymorphism then setLevel 0 ty else ());
+    (if env.disableRecordPolymorphism then disableGeneralize ty else ());
     (env, PatRecord {{t with bindings = bindings}
                         with ty = ty})
 end

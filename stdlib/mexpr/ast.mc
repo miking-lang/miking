@@ -1255,11 +1255,15 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+-- A Level denotes the nesting level of the let that a type variable is introduced by
+type Level = Int
+
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
   | TyVar  {info     : Info,
-            ident    : Name}
+            ident    : Name,
+            level    : Level}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
@@ -1293,10 +1297,10 @@ lang VarSortAst
     match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-type Level = Int
 type FlexVarRec = {ident : Name,
                    level : Level,
-                   sort  : VarSort}
+                   sort  : VarSort,
+                   allowGeneralize : Bool}
 
 lang FlexTypeAst = VarSortAst + Ast
   syn FlexVar =
