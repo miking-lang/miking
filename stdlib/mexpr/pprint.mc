@@ -824,6 +824,8 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorCreate _ -> "tensorCreateDense"
   | CTensorGetExn _ -> "tensorGetExn"
   | CTensorSetExn _ -> "tensorSetExn"
+  | CTensorLinearGetExn _ -> "tensorLinearGetExn"
+  | CTensorLinearSetExn _ -> "tensorLinearSetExn"
   | CTensorRank _ -> "tensorRank"
   | CTensorShape _ -> "tensorShape"
   | CTensorReshapeExn _ -> "tensorReshapeExn"

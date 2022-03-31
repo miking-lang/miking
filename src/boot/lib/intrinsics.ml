@@ -258,6 +258,10 @@ module T = struct
 
     val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
 
+    val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
     val shape : ('a, 'b) t -> int Mseq.t
 
     val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
@@ -276,6 +280,10 @@ module T = struct
     let get_exn t idx = T.get_exn t (to_arr idx)
 
     let set_exn t idx = T.set_exn t (to_arr idx)
+
+    let linear_get_exn t idx = T.linear_get_exn t idx
+
+    let linear_set_exn t idx = T.linear_set_exn t idx
 
     let shape t = of_arr (T.shape t)
 
@@ -322,6 +330,24 @@ module T = struct
         Op_mseq_barray.set_exn t' idx v
     | TGen t' ->
         Op_mseq_generic.set_exn t' idx v
+
+  let linear_get_exn (type a b) (t : (a, b) u) idx : a =
+    match t with
+    | TInt t' ->
+        Op_mseq_barray.linear_get_exn t' idx
+    | TFloat t' ->
+        Op_mseq_barray.linear_get_exn t' idx
+    | TGen t' ->
+        Op_mseq_generic.linear_get_exn t' idx
+
+  let linear_set_exn (type a b) (t : (a, b) u) idx (v : a) : unit =
+    match t with
+    | TInt t' ->
+        Op_mseq_barray.linear_set_exn t' idx v
+    | TFloat t' ->
+        Op_mseq_barray.linear_set_exn t' idx v
+    | TGen t' ->
+        Op_mseq_generic.linear_set_exn t' idx v
 
   let shape (type a b) (t : (a, b) u) : int Mseq.t =
     match t with

@@ -148,6 +148,16 @@ let tytensorsetexn_ = lam ty.
             , tyseq_ tyint_
             , ty, tyunit_ ]
 
+let tytensorlineargetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
+            , ty ]
+
+let tytensorlinearsetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
+            , ty, tyunit_ ]
+
 let tytensorrank_ = lam ty.
   tyarrow_ (tytensor_ ty) tyint_
 
@@ -1047,6 +1057,18 @@ let tensorSetExn_ = use MExprAst in
   appf3_ (const_ (tytensorsetexn_ ty) (CTensorSetExn ())) t is v
 
 let utensorSetExn_ = tensorSetExn_ tyunknown_
+
+let tensorLinearGetExn_ = use MExprAst in
+  lam ty. lam t. lam i.
+  appf2_ (const_ (tytensorlineargetexn_ ty) (CTensorLinearGetExn ())) t i
+
+let utensorLinearGetExn_ = tensorLinearGetExn_ tyunknown_
+
+let tensorLinearSetExn_ = use MExprAst in
+  lam ty. lam t. lam i. lam v.
+  appf3_ (const_ (tytensorlinearsetexn_ ty) (CTensorLinearSetExn ())) t i v
+
+let utensorLinearSetExn_ = tensorLinearSetExn_ tyunknown_
 
 let tensorRank_ = use MExprAst in
   lam ty. lam t.

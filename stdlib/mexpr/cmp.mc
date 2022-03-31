@@ -737,6 +737,8 @@ utest cmpConst (CTensorCreateFloat {}) (CTensorCreateFloat {}) with 0 in
 utest cmpConst (CTensorCreate {}) (CTensorCreate {}) with 0 in
 utest cmpConst (CTensorGetExn {}) (CTensorGetExn {}) with 0 in
 utest cmpConst (CTensorSetExn {}) (CTensorSetExn {}) with 0 in
+utest cmpConst (CTensorLinearGetExn {}) (CTensorLinearGetExn {}) with 0 in
+utest cmpConst (CTensorLinearSetExn {}) (CTensorLinearSetExn {}) with 0 in
 utest cmpConst (CTensorRank {}) (CTensorRank {}) with 0 in
 utest cmpConst (CTensorShape {}) (CTensorShape {}) with 0 in
 utest cmpConst (CTensorReshapeExn {}) (CTensorReshapeExn {}) with 0 in

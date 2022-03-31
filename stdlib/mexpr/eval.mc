@@ -1361,6 +1361,9 @@ lang TensorOpEval =
   | CTensorGetExn2 T
   | CTensorSetExn2 T
   | CTensorSetExn3 (T, [Int])
+  | CTensorLinearGetExn2 T
+  | CTensorLinearSetExn2 T
+  | CTensorLinearSetExn3 (T, Int)
   | CTensorReshapeExn2 T
   | CTensorTransposeExn2 T
   | CTensorTransposeExn3 (T, Int)
@@ -1541,6 +1544,47 @@ lang TensorOpEval =
       tensorSetExn t is v;
       uunit_
     else error "Tensor and value type does not match in CTensorSetExn"
+  | CTensorLinearGetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorLinearGetExn2 t in
+      uconst_ val
+    else error "First argument to CTensorLinearGetExn not a tensor"
+  | CTensorLinearGetExn2 t ->
+    match arg with TmConst { val = CInt { val = i } } then
+      match t with TInt t then
+        let val = tensorLinearGetExn t i in
+        int_ val
+      else match t with TFloat t then
+        let val = tensorLinearGetExn t i in
+        float_ val
+      else match t with TExpr t then
+        let val = tensorLinearGetExn t i in
+        val
+      else never
+    else error "Second argument to CTensorLinearGetExn not an integer"
+  | CTensorLinearSetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorLinearSetExn2 t in
+      uconst_ val
+    else error "First argument to CTensorLinearSetExn not a tensor"
+  | CTensorLinearSetExn2 t ->
+    match arg with TmConst { val = CInt { val = i } } then
+      let val = CTensorLinearSetExn3 (t, i) in
+      uconst_ val
+    else error "Second argument to CTensorLinearSetExn not an integer"
+  | CTensorLinearSetExn3 (t, i) ->
+    match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else
+    match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else
+    match (t, arg) with (TExpr t, v) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else error "Tensor and value type does not match in CTensorLinearSetExn"
   | CTensorRank _ ->
     match arg with TmTensor { val = t } then
       match t with TInt t | TFloat t | TExpr t then

@@ -143,6 +143,8 @@ let builtin =
   ; ("tensorCreateDense", f (CtensorCreateDense None))
   ; ("tensorGetExn", f (CtensorGetExn None))
   ; ("tensorSetExn", f (CtensorSetExn (None, None)))
+  ; ("tensorLinearGetExn", f (CtensorLinearGetExn None))
+  ; ("tensorLinearSetExn", f (CtensorLinearSetExn (None, None)))
   ; ("tensorRank", f CtensorRank)
   ; ("tensorShape", f CtensorShape)
   ; ("tensorReshapeExn", f (CtensorReshapeExn None))

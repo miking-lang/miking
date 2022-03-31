@@ -292,6 +292,8 @@ lang OCamlPrettyPrint =
   | CTensorShape _ -> intrinsicOpTensor "shape"
   | CTensorGetExn _ -> intrinsicOpTensor "get_exn"
   | CTensorSetExn _ -> intrinsicOpTensor "set_exn"
+  | CTensorLinearGetExn _ -> intrinsicOpTensor "linear_get_exn"
+  | CTensorLinearSetExn _ -> intrinsicOpTensor "linear_set_exn"
   | CTensorReshapeExn _ -> intrinsicOpTensor "reshape_exn"
   | CTensorCopy _ -> intrinsicOpTensor "copy"
   | CTensorTransposeExn _ -> intrinsicOpTensor "transpose_exn"

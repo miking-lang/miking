@@ -786,6 +786,8 @@ lang TensorOpAst = ConstAst
   | CTensorCreate {}
   | CTensorGetExn {}
   | CTensorSetExn {}
+  | CTensorLinearGetExn {}
+  | CTensorLinearSetExn {}
   | CTensorRank {}
   | CTensorShape {}
   | CTensorReshapeExn {}
