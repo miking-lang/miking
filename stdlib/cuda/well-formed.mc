@@ -28,9 +28,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CudaConstantError (c, info) ->
     let constStr = getConstStringCode 0 c in
     infoErrorString info (join ["Constant '", constStr, "' not supported by CUDA backend"])
-  | CudaPatternError (pat, info) ->
+  | CudaPatternError pat ->
     let info = infoPat pat in
-    let patStr = getPatStringCode 0 pprintEnvEmpty pat in
+    match getPatStringCode 0 pprintEnvEmpty pat with (_, patStr) in
     infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
   | CudaConDefError (expr & (TmConDef t)) ->
     let info = infoTm expr in
