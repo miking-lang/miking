@@ -324,27 +324,51 @@ lang PMExprAst =
   | TmAccelerate t ->
     k (TmAccelerate {t with e = normalizeTerm t.e})
   | TmFlatten t ->
-    k (TmFlatten {t with e = normalizeTerm t.e})
+    normalizeName (lam e. k (TmFlatten {t with e = e})) t.e
   | TmMap2 t ->
-    k (TmMap2 {{{t with f = normalizeTerm t.f}
-                   with as = normalizeTerm t.as}
-                   with bs = normalizeTerm t.bs})
+    normalizeNames
+      (lam as.
+        normalizeName
+          (lam bs.
+            k (TmMap2 {{{t with f = normalizeTerm t.f}
+                           with as = as}
+                           with bs = bs}))
+          t.bs)
+      t.as
   | TmParallelReduce t ->
-    k (TmParallelReduce {{{t with f = normalizeTerm t.f}
-                             with ne = normalizeTerm t.ne}
-                             with as = normalizeTerm t.as})
+    normalizeNames
+      (lam ne.
+        normalizeName
+          (lam as.
+            k (TmParallelReduce {{{t with f = normalizeTerm t.f}
+                                     with ne = ne}
+                                     with as = as}))
+          t.as)
+      t.ne
   | TmLoop t ->
-    k (TmLoop {{t with n = normalizeTerm t.n}
-                  with f = normalizeTerm t.f})
+    normalizeName
+      (lam n.
+        k (TmLoop {{t with n = n}
+                      with f = normalizeTerm t.f}))
+      t.n
   | TmLoopAcc t ->
-    k (TmLoopAcc {{{t with ne = normalizeTerm t.ne}
-                      with n = normalizeTerm t.n}
-                      with f = normalizeTerm t.f})
+    normalizeNames
+      (lam ne.
+        normalizeName
+          (lam n.
+            k (TmLoopAcc {{{t with ne = ne}
+                              with n = n}
+                              with f = normalizeTerm t.f}))
+          t.n)
+      t.ne
   | TmParallelLoop t ->
-    k (TmParallelLoop {{t with n = normalizeTerm t.n}
-                          with f = normalizeTerm t.f})
+    normalizeName
+      (lam n.
+        k (TmParallelLoop {{t with n = n}
+                              with f = normalizeTerm t.f}))
+      t.n
   | TmParallelSizeCoercion t ->
-    k (TmParallelSizeCoercion {t with e = normalizeTerm t.e})
+    normalizeName (lam e. k (TmParallelSizeCoercion {t with e = e})) t.e
   | TmParallelSizeEquality t -> k (TmParallelSizeEquality t)
 end
 
