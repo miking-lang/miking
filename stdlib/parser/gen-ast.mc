@@ -177,6 +177,7 @@ type SemanticFunction =
 type LanguageFragment =
   { name : String
   , extends : [String]
+  , aliases : [(Name, Type)]
   , synTypes : Map Name [Constructor]
   , semanticFunctions : [SemanticFunction]
   }
@@ -261,6 +262,7 @@ lang CarriedTypeHelpers = CarriedTypeBase
     match let x: LanguageFragment = x in x with
       { name = name
       , extends = extends
+      , aliases = aliases
       , synTypes = synTypes
       , semanticFunctions = semanticFunctions
       }
@@ -272,6 +274,10 @@ lang CarriedTypeHelpers = CarriedTypeBase
         match constructor with {name = name, carried = carried} then
           join ["\n  | ", nameGetStr name, " ", _typeToString (carriedRepr carried)]
         else never in
+      let aliases = map
+        (lam binding. match binding with (name, ty) in
+          join [ "  type ", nameGetStr name, " = ", _typeToString ty, "\n"])
+        aliases in
       let synDefns = map
         (lam binding.
           match binding with (synType, constructors) then
@@ -284,6 +290,8 @@ lang CarriedTypeHelpers = CarriedTypeBase
         (mapBindings synTypes) in
       join
         [ "lang ", name, extends , "\n"
+        , join aliases
+        , "\n"
         , join synDefns
         , "\n"
         , strJoin "\n" (map _pprintSemanticFunction semanticFunctions)
@@ -546,15 +554,18 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
     let baseLang =
       { name = input.baseName
       , extends = []
+      , aliases = []
       , synTypes = synTypes
       , semanticFunctions = join
         (map (lam request: (Unknown, Unknown). _mkSFuncStubs request.0 request.1) input.requestedSFunctions)
       } in
     let mkConstructorLang = lam constructor: Constructor.
       match constructor with {name = name, synType = synType, carried = carried} then
+        let recordTyName = nameNoSym (concat (nameGetStr name) "Record") in
         { name = input.fragmentName name
         , extends = [input.baseName]
-        , synTypes = mapInsert synType [constructor] (mapEmpty nameCmp)
+        , aliases = [(recordTyName, carriedRepr carried)]
+        , synTypes = mapInsert synType [{constructor with carried = untargetableType (ntycon_ recordTyName)}] (mapEmpty nameCmp)
         , semanticFunctions = mapOption
           (lam request: (Unknown, Unknown). _mkSmapAccumL request.0 request.1 constructor)
           input.requestedSFunctions
@@ -567,6 +578,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
           constructorLangs
           { name = name
           , extends = map (lam x: LanguageFragment. x.name) constructorLangs
+          , aliases = []
           , synTypes = mapEmpty nameCmp
           , semanticFunctions = []
           }
