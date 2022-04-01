@@ -14,11 +14,13 @@ let _free = nameNoSym "free"
 
 let cudaIncludes = concat cIncludes []
 
-lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
+lang CudaCompileBase = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _stripPointer =
   | CTyPtr {ty = ty} -> ty
   | _ -> error "_stripPointer called with non-pointer type argument"
+end
 
+lang CudaCompileCopy = CudaCompileBase
   sem _compileCopy (env : CompileCEnv) (dst : CExpr) (arg : CExpr) (ty : CType) =
   | Cpu _ -> _compileCopyToCpu env dst arg ty
   | Gpu _ -> _compileCopyToGpu env dst arg ty
@@ -251,7 +253,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     join [
       [tempAllocStmt, setTempConstrStmt], innerCopyStmts,
       [allocGpuStmt, copyGpuStmt, freeTempStmt]]
-  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ | TyTensor _ ->
+  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ ->
     [CSExpr {expr = CEBinOp { op = COAssign (), lhs = dst, rhs = arg}}]
   | ty ->
     use MExprPrettyPrint in
@@ -259,7 +261,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     error (concat "Copying CPU -> GPU not implemented for type " tystr)
 end
 
-lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
+lang CudaCompileFree = CudaCompileBase
   sem _compileFree (env : CompileCEnv) (arg : CExpr) (tyArg : Type) =
   | Cpu _ -> _compileFreeCpu env arg tyArg
   | Gpu _ -> _compileFreeGpu env arg tyArg
@@ -377,12 +379,29 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
         let fieldArg = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileFreeGpu env fieldArg ty))
       [] t.fields
-  | TyVariant t ->
+  | ty & (TyVariant t) ->
     let cnt = ref 0 in
+    let conType = TyCon {ident = _lookupTypeName env.typeEnv ty, info = infoTy ty} in
+    let variantType = compileType env conType in
+    let tempId = nameSym "t" in
+    let temp = CEVar {id = tempId} in
+    let sizeExpr = CESizeOfType {ty = _stripPointer variantType} in
+    let allocTempStmt = CSDef {
+      ty = variantType, id = Some tempId,
+      init = Some (CIExpr {expr = CECast {
+        ty = variantType,
+        rhs = CEApp {fun = _malloc, args = [sizeExpr]}}})} in
+    let memcpyStmt = CSExpr {expr = CEApp {
+      fun = _cudaMemcpy,
+      args = [
+        temp,
+        CEUnOp {op = COAddrOf (), arg = arg},
+        sizeExpr,
+        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let freeInnerStmts =
       mapFoldWithKey
         (lam acc : [CStmt]. lam constrId : Name. lam constrTy : Type.
-          let innerArg = CEArrow {lhs = arg, id = constrId} in
+          let innerArg = CEArrow {lhs = temp, id = constrId} in
           let constrTy = _unwrapType env.typeEnv constrTy in
           let freeInnerStmts = _compileFreeGpu env innerArg constrTy in
           let count = deref cnt in
@@ -390,13 +409,17 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
           [ CSIf {
               cond = CEBinOp {
                 op = COEq (),
-                lhs = CEArrow {lhs = arg, id = _constrKey},
+                lhs = CEArrow {lhs = temp, id = _constrKey},
                 rhs = CEInt {i = count}},
               thn = freeInnerStmts,
               els = acc} ])
         [] t.constrs in
     let freeVariantStmt = CSExpr {expr = CEApp {fun = _cudaFree, args = [arg]}} in
-    snoc freeInnerStmts freeVariantStmt
+    let freeTempStmt = CSExpr {expr = CEApp {
+      fun = nameNoSym "free", args = [temp]}} in
+    join [
+      [allocTempStmt, memcpyStmt], freeInnerStmts
+    , [freeVariantStmt, freeTempStmt]]
   | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
   | ty ->
     use MExprPrettyPrint in
