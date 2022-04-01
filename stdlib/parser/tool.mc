@@ -10,6 +10,20 @@ use MExprCmp in
 use MExprPrettyPrint in
 use CarriedBasic in
 use SelfhostAst in
+
+type TypeInfo = {ty : Type, ensureSuffix : Bool} in
+type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
+
+type Terminal in
+con NtTerm : Res TypeInfo -> Terminal in
+con TokenTerm : Res TokenInfo -> Terminal in
+con LitTerm : String -> Terminal in
+type SRegex in
+con TerminalReg : {term: Terminal, info: Info, field: Option (Info, String)} -> SRegex in
+con RecordReg : {content: [SRegex], info: Info, field: Option (Info, String)} -> SRegex in
+con KleeneReg : {content: {v: [SRegex], i: Info}, info: Info} -> SRegex in
+con AltReg : {alts: [[SRegex]]} -> SRegex in
+
 match argv with ![_, _] then
   printLn "Please provide exactly one argument; a .syn file";
   exit 0
@@ -53,6 +67,7 @@ let pullDefinition
     case ProductionDecl x then
       {env with productions = mapInsertWith concat (nameGetStr x.name.v) [(x.name.i, nameSetNewSym x.name.v)] env.productions}
     case TokenDecl {name = Some n} then
+      let n : {v : Name, i : Info} = n in
       {env with types = mapInsertWith concat (nameGetStr n.v) [(n.i, nameSetNewSym n.v)] env.types}
     case _ then
       env
@@ -191,8 +206,6 @@ let start: Res Name =
 in
 
 -- NOTE(vipa, 2022-03-28):  Compute type information
-type TypeInfo = {ty : Type, ensureSuffix : Bool} in
-type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
 let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
   let addDecl = lam m. lam decl. switch decl
     case TypeDecl x then
@@ -203,6 +216,7 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
       mapInsert x.name.v (Left (result.ok info)) m
     case TokenDecl (x & {name = Some n}) then
       -- TODO(vipa, 2022-03-28): get this information in a more principled way
+      let n : {v: Name, i: Info} = n in
       let info: TokenInfo =
         { ty = tycon_ (nameGetStr n.v)
         , repr = conapp_ (concat (nameGetStr n.v) "Repr") unit_
@@ -218,15 +232,6 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
 in
 
 -- NOTE(vipa, 2022-03-28): Compute a canonicalized form of a regex, with embedded type information
-type Terminal in
-con NtTerm : Res TypeInfo -> Terminal in
-con TokenTerm : Res TokenInfo -> Terminal in
-con LitTerm : String -> Terminal in
-type SRegex in
-con TerminalReg : {term: Terminal, info: Info, field: Option (Info, String)} in
-con RecordReg : {content: [SRegex], info: Info, field: Option (Info, String)} -> SRegex in
-con KleeneReg : {content: {v: [SRegex], i: Info}, info: Info} -> SRegex in
-con AltReg : {alts: [[SRegex]]} -> SRegex in
 recursive
   let inner
   : Option (Info, String) -> Regex -> Res [SRegex]

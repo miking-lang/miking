@@ -1002,6 +1002,7 @@ lang ParseSelfhost = SelfhostAst + TokenParser
 end
 
 let _table =
+  type State = {errors : Ref [(Info, String)], content : String} in
   use ParseSelfhost in
   let brFile =
     let config =
@@ -1012,7 +1013,7 @@ let _table =
       , groupingsAllowed = groupingsAllowed_FileOp
       } in
     let mkOptInputFunction = lam addF.
-      lam p. lam x. lam st.
+      lam p : State. lam x. lam st.
       match st with Some st then
         let st = addF config x st in
         (match st with None _ then
@@ -1027,7 +1028,7 @@ let _table =
     , infix = mkOptInputFunction breakableAddInfix
     , prefix = mkInputFunction breakableAddPrefix
     , postfix = mkOptInputFunction breakableAddPostfix
-    , finalize = lam p. lam st.
+    , finalize = lam p : State. lam st.
       let res = optionBind st
         (lam st. match breakableFinalizeParse config st with Some [top] ++ _
           then Some (unsplit_FileOp top)
@@ -1045,7 +1046,7 @@ let _table =
       , groupingsAllowed = groupingsAllowed_DeclOp
       } in
     let mkOptInputFunction = lam addF.
-      lam p. lam x. lam st.
+      lam p : State. lam x. lam st.
       match st with Some st then
         let st = addF config x st in
         (match st with None _ then
@@ -1060,7 +1061,7 @@ let _table =
     , infix = mkOptInputFunction breakableAddInfix
     , prefix = mkInputFunction breakableAddPrefix
     , postfix = mkOptInputFunction breakableAddPostfix
-    , finalize = lam p. lam st.
+    , finalize = lam p : State. lam st.
       let res = optionBind st
         (lam st. match breakableFinalizeParse config st with Some [top] ++ _
           then Some (unsplit_DeclOp top)
@@ -1086,7 +1087,7 @@ let _table =
       , rpar = ")"
       } in
     let mkOptInputFunction = lam addF.
-      lam p. lam x. lam st.
+      lam p : State. lam x. lam st.
       match st with Some st then
         let st = addF config x st in
         (match st with None _ then
@@ -1101,7 +1102,7 @@ let _table =
     , infix = mkOptInputFunction breakableAddInfix
     , prefix = mkInputFunction breakableAddPrefix
     , postfix = mkOptInputFunction breakableAddPostfix
-    , finalize = lam p. lam st.
+    , finalize = lam p : State. lam st.
       let res = optionBind st
         (lam st. match breakableFinalizeParse config st with Some (tops & [top] ++ _)
           then
@@ -1133,7 +1134,7 @@ let _table =
       , rpar = ")"
       } in
     let mkOptInputFunction = lam addF.
-      lam p. lam x. lam st.
+      lam p : State. lam x. lam st.
       match st with Some st then
         let st = addF config x st in
         (match st with None _ then
@@ -1143,12 +1144,12 @@ let _table =
         st
       else st in
     let mkInputFunction =
-      lam addF. lam p. lam x. lam st. optionMap (addF config x) st in
+      lam addF. lam p : State. lam x. lam st. optionMap (addF config x) st in
     { atom = mkInputFunction breakableAddAtom
     , infix = mkOptInputFunction breakableAddInfix
     , prefix = mkInputFunction breakableAddPrefix
     , postfix = mkOptInputFunction breakableAddPostfix
-    , finalize = lam p. lam st.
+    , finalize = lam p : State. lam st.
       let res = optionBind st
         (lam st. match breakableFinalizeParse config st with Some (tops & [top] ++ _)
           then
@@ -1280,6 +1281,7 @@ let _table =
             , nt = match prev.nt with [x] ++ _ in x
             , regex = match prev.regex with [x] ++ _ in x
             , info = prev.info
+            , terms = prev.terms
             }
         }
       , { nt = decl_Production_1
@@ -1353,6 +1355,7 @@ let _table =
         , rhs = [litSym "{", ntSym decl_Type_2, litSym "}"]
         , action = lam p. lam seq.
           match seq with [LitParsed l, UserSym prev, LitParsed r] in
+          let prev : {properties : [{name : {v: Name, i: Info}, val : Expr}], terms : [Info]} = prev in
           { info = mergeInfo l.info r.info
           , name = []
           , properties = prev.properties
