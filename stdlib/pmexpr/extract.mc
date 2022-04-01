@@ -210,8 +210,17 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
     else (used, inexpr)
   | TmConDef t ->
+    -- NOTE(larshum, 2022-04-01): A constructor definition is included either
+    -- if its identifier is used, or if the variant type to which is belongs is
+    -- used. This is very important, as we may otherwise get the constructor
+    -- indexing wrong.
+    let constructorIsUsed = lam used : Set Name.
+      match t.tyIdent with TyArrow {to = TyCon {ident = varTyId}} then
+        or (setMem t.ident used) (setMem varTyId used)
+      else setMem t.ident used
+    in
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmConDef {t with inexpr = inexpr})
+    if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
     else (used, inexpr)
   | TmUtest t -> extractAccelerateTermsH used t.next
   | TmExt t -> extractAccelerateTermsH used t.inexpr
