@@ -1716,8 +1716,8 @@ lang BootParserEval =
   syn Const =
   | CBootParserTree {val : BootParserTree}
   | CBootParserParseMExprString2 [String]
-  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool)
-  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool), [String])
+  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool)
+  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool), [String])
   | CBootParserGetTerm2 BootParserTree
   | CBootParserGetType2 BootParserTree
   | CBootParserGetString2 BootParserTree
@@ -1766,11 +1766,12 @@ lang BootParserEval =
 
   | CBootParserParseMCoreFile _ ->
     match arg with TmRecord {bindings = bs} then
-      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3"]) with [
+      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3", "4"]) with [
         Some (TmConst { val = CBool { val = keepUtests } }),
         Some (TmConst { val = CBool { val = pruneExternalUtests } }),
         Some (TmSeq { tms = externalsExclude }),
-        Some (TmConst { val = CBool { val = warn } })
+        Some (TmConst { val = CBool { val = warn } }),
+        Some (TmConst { val = CBool { val = eliminateDeadCode } })
       ]
       then
         let externalsExclude =
@@ -1784,8 +1785,11 @@ lang BootParserEval =
             externalsExclude
         in
         TmConst {val = CBootParserParseMCoreFile2 (
-                  keepUtests, pruneExternalUtests, externalsExclude, warn
-                 ),
+                  keepUtests,
+                  pruneExternalUtests,
+                  externalsExclude,
+                  warn,
+                  eliminateDeadCode ),
                  ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
       else error "First argument to bootParserParseMCoreFile incorrect record"
     else error "First argument to bootParserParseMCoreFile not a record"

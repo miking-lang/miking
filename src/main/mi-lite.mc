@@ -57,6 +57,7 @@ let compile : Options -> String -> Unit = lam options. lam file.
     pruneExternalUtests = not options.disablePruneExternalUtests,
     pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
     findExternalsExclude = true,
+    eliminateDeadCode = not options.keepDeadCode,
     keywords = []
   } file in
   let ast = utestStrip ast in

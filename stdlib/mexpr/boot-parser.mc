@@ -28,6 +28,9 @@ type BootParserParseMCoreFileArg = {
   -- Warn on pruned external dependent utests
   pruneExternalUtestsWarning : Bool,
 
+  -- Run dead code elimination
+  eliminateDeadCode : Bool,
+
   -- Exclude pruning of utest for externals with whose dependencies are met on
   -- this system.
   externalsExclude : [String],
@@ -40,6 +43,7 @@ let defaultBootParserParseMCoreFileArg = {
   keepUtests = true,
   pruneExternalUtests = false,
   pruneExternalUtestsWarning = true,
+  eliminateDeadCode = true,
   externalsExclude = [],
   keywords = []
 }
@@ -57,7 +61,8 @@ lang BootParser = MExprAst + ConstTransformer
           arg.keepUtests,
           arg.pruneExternalUtests,
           arg.externalsExclude,
-          arg.pruneExternalUtestsWarning
+          arg.pruneExternalUtestsWarning,
+          arg.eliminateDeadCode
         )
         arg.keywords
         filename

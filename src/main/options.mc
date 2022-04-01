@@ -23,6 +23,7 @@ let optionsDefault : Options = {
   cpuOnly = false,
   use32BitIntegers = false,
   use32BitFloats = false,
+  keepDeadCode = false,
   typeCheck = false,
   printHelp = false,
   output = None (),
