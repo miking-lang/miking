@@ -11,7 +11,7 @@ use MExprPrettyPrint in
 use CarriedBasic in
 use SelfhostAst in
 
-type TypeInfo = {ty : Type, ensureSuffix : Bool} in
+type TypeInfo = {ty : Type, ensureSuffix : Bool, commonFields : Map String (Type, Expr)} in
 type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
 
 type Terminal in
@@ -64,6 +64,11 @@ let simpleMsg
   : Info -> String -> (Info, String)
   = lam info. lam msg.
     (info, join [msg, simpleHighlight info, "\n"])
+in
+let multiMsg
+  : Info -> [Info] -> String -> (Info, String)
+  = lam surround. lam infos. lam msg.
+    (surround, join [msg, multiHighlight surround infos])
 in
 
 type Res a = Result (Info, String) (Info, String) a in
@@ -224,6 +229,7 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
       let info: TypeInfo =
         { ty = ntycon_ x.name.v
         , ensureSuffix = true
+        , commonFields = mapEmpty cmpString
         } in
       mapInsert x.name.v (Left (result.ok info)) m
     case TokenDecl (x & {name = Some n}) then
@@ -241,6 +247,19 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
       m
     end in
   foldl addDecl (mapEmpty nameCmp) decls
+in
+
+let requestedFieldAccessors : Res [(Name, String, Type)] =
+  let surfaceTypeInfo = lam x. match x with (n, Left config) then Some (n, config) else None () in
+  let buryName = lam x. match x with (n, config) in result.map (lam x. (n, x)) config in
+  let mkAccessors = lam x. match x with (name, config) in
+    let config: TypeInfo = config in
+    let common = map (lam x. match x with (field, (ty, _)) in (name, field, ty)) (mapBindings config.commonFields) in
+    cons (name, "info", tycon_ "Info") common in
+  let res = mapBindings typeMap in
+  let res = mapOption surfaceTypeInfo res in
+  let res = result.mapM buryName res in
+  result.map (lam xs. join (map mkAccessors xs)) res
 in
 
 -- NOTE(vipa, 2022-03-28): Compute a canonicalized form of a regex, with embedded type information
@@ -439,6 +458,27 @@ let addInfoField
     in mapInsertWith mkError "info" count content
 in
 
+let checkCommonField
+  : ProductionDeclRecord -> ParseContent (Res CarriedType) -> ParseContent (Res CarriedType)
+  = lam x. lam content.
+    match mapFindExn x.nt.v typeMap with Left config then
+      match result.toOption config with Some config then
+        let config: TypeInfo = config in
+        let update = lam field. lam count : FieldCount (Res CarriedType).
+          match mapLookup field config.commonFields with Some _ then
+            let infos = map (lam x. match x with (info, _) in info) count.ty in
+            let msg = join
+              [ "Each ", nameGetStr x.nt.v, " already has a '", field
+              , "' field, you may not redeclare it here.\n"
+              ] in
+            let msg = multiMsg (get_Regex_info x.regex) infos msg in
+            {count with ty = snoc count.ty (NoInfo (), result.err msg)}
+          else count
+        in mapMapWithKey update content
+      else content
+    else content
+in
+
 -- NOTE(vipa, 2022-03-31): Fix the name of the constructor, if it should be suffixed
 let computeConstructorName
   : {constructor : {v: Name, i: Info}, nt : {v: Name, i: Info}} -> Res Name
@@ -515,6 +555,7 @@ let constructors : Res [ConstructorInfo] =
       let reg = regexToSRegex x.regex in
       let content = result.map concatted reg in
       let content = result.map (addInfoField x.info) content in
+      let content = result.map (checkCommonField x) content in
       let carried = result.bind content (reifyRecord regInfo) in
       let operator = result.bind reg (findOperator x) in
       let mkRes = lam name. lam carried. lam operator.
@@ -533,14 +574,15 @@ let constructors : Res [ConstructorInfo] =
 in
 
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
-let generated: Res String = result.bind constructors -- TODO(vipa, 2022-03-22): Replace this with something appropriate once we're generating more stuff
-  (lam constructors : [ConstructorInfo].
+let generated: Res String = result.bind2 constructors requestedFieldAccessors
+  (lam constructors : [ConstructorInfo]. lam requestedFieldAccessors.
     let genInput =
       { baseName = "SelfhostBaseAst"
       , composedName = Some "SelfhostAst"
       , fragmentName = lam name. concat (nameGetStr name) "Ast"
       , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
       , requestedSFunctions = requestedSFunctions
+      , fieldAccessors = requestedFieldAccessors
       }
     in result.ok (concat "include \"seq.mc\"\n\n" (mkLanguages genInput))
   ) in
