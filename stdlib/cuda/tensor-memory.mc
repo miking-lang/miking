@@ -350,7 +350,7 @@ lang CudaTensorReplaceMemoryOperations = CudaAst
       op = COAssign (),
       lhs = t.dst,
       rhs = t.src}} in
-    let copyCpuToGpuStmt = CSExpr {expr = CEApp {
+    let copyGpuToCpuStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
         cpuData, gpuData, sizeData,
@@ -363,8 +363,8 @@ lang CudaTensorReplaceMemoryOperations = CudaAst
       cond = CEBinOp {
         op = COEq (),
         lhs = status,
-        rhs = CEVar {id = _tensorStateGpuInvalid}},
-      thn = [],
+        rhs = CEVar {id = _tensorStateCpuInvalid}},
+      thn = [copyGpuToCpuStmt, setStatusOkStmt],
       els = []} in
     let setDstDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),

@@ -22,38 +22,32 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
   sem markNonKernelFunctions =
   | t -> markNonKernelFunctionsH (setEmpty nameCmp) t
 
-  sem markNonKernelFunctionsH (functions : Set Name) =
+  sem markNonKernelFunctionsH (marked : Set Name) =
   | TmLet t ->
-    let functions = markNonKernelFunctionsH functions t.inexpr in
-    let isMarked = setMem t.ident functions in
-    markFunctionsBody isMarked functions t.body
+    let marked = markNonKernelFunctionsH marked t.inexpr in
+    if setMem t.ident marked then
+      markInBody marked t.body
+    else markInUnmarkedBody marked t.body
   | TmRecLets t ->
-    let markFunctionsBinding = lam functions. lam bind : RecLetBinding.
-      let isMarked = setMem bind.ident functions in
-      markFunctionsBody isMarked functions bind.body
+    let markFunctionsBinding = lam marked. lam bind : RecLetBinding.
+      let marked = setInsert bind.ident marked in
+      markInBody marked bind.body
     in
-    let functions = markNonKernelFunctionsH functions t.inexpr in
-    foldl markFunctionsBinding functions t.bindings
-  | TmType t -> markNonKernelFunctionsH functions t.inexpr
-  | TmConDef t -> markNonKernelFunctionsH functions t.inexpr
-  | TmUtest t -> markNonKernelFunctionsH functions t.next
-  | TmExt t -> markNonKernelFunctionsH functions t.inexpr
-  | t -> functions
+    let marked = markNonKernelFunctionsH marked t.inexpr in
+    foldl markFunctionsBinding marked t.bindings
+  | TmType t -> markNonKernelFunctionsH marked t.inexpr
+  | TmConDef t -> markNonKernelFunctionsH marked t.inexpr
+  | TmUtest t -> markNonKernelFunctionsH marked t.next
+  | TmExt t -> markNonKernelFunctionsH marked t.inexpr
+  | t -> marked
 
-  -- Adds all function identifiers used in a parallel operation to the set of
-  -- marked functions. If the function to which the body belongs to has been
-  -- marked, we also mark any function calls made from within this function.
-  sem markFunctionsBody (functionIsMarked : Bool) (marked : Set Name) =
-  | TmVar (t & {ty = TyArrow _}) ->
-    if functionIsMarked then setInsert t.ident marked else marked
-  | TmParallelLoop t -> markFunctionsBodyH marked t.f
-  | t -> sfold_Expr_Expr (markFunctionsBody functionIsMarked) marked t
+  sem markInUnmarkedBody (marked : Set Name) =
+  | TmParallelLoop t -> markInBody marked t.f
+  | t -> sfold_Expr_Expr markInUnmarkedBody marked t
 
-  sem markFunctionsBodyH (marked : Set Name) =
-  | TmVar t ->
-    match t.ty with TyArrow _ then setInsert t.ident marked
-    else marked
-  | t -> sfold_Expr_Expr markFunctionsBodyH marked t
+  sem markInBody (marked : Set Name) =
+  | TmVar (t & {ty = TyArrow _}) -> setInsert t.ident marked
+  | t -> sfold_Expr_Expr markInBody marked t
 
   -- Promotes parallel operations used in functions that have not been marked
   -- to kernel operations.
