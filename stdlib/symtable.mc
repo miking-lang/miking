@@ -62,7 +62,7 @@ utest symtableSize _r3.table with 2
 
 -- 'symtableRemove n t' returns a new table where names with strings
 -- equal to the string of 'n' are removed from 't'.
-let symtableRemove : Name -> Symtable -> Symtable =
+let symtableRemove : Name -> SymTable -> SymTable =
   lam n. lam t.
     filter (lam n2. not (nameEqStr n n2)) t
 

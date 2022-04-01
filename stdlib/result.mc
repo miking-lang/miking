@@ -56,8 +56,10 @@ type Result w e a
 -- NOTE(vipa, 2022-01-21): These constructors are not intended to be
 -- public, there are invariants that the outside world is unlikely to
 -- preserve.
-con ResultOk : { warnings : Map Symbol w, value : a } -> Result w e a
-con ResultErr : { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
+con ResultOk : all w. all e. all a.
+  { warnings : Map Symbol w, value : a } -> Result w e a
+con ResultErr : all w. all e. all a.
+  { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
 
 let _emptyMap
   : all x. Map Symbol x
@@ -151,8 +153,8 @@ let _map
   : all w. all e. all a. all b. (a -> b) -> Result w e a -> Result w e b
   = lam f. lam start.
     switch start
-    case ResultOk r then ResultOk {r with value = f r.value}
-    case ResultErr _ then start
+    case ResultOk {warnings = w, value = v} then ResultOk {warnings = w, value = f v}
+    case ResultErr r then ResultErr r
     end
 
 utest _prepTest (_map (addi 1) (_ok 3)) with ([], Right 4)
@@ -315,7 +317,7 @@ let _bind
   = lam start. lam f.
     switch start
     case ResultOk r then _warns r.warnings (f r.value)
-    case ResultErr _ then start
+    case ResultErr r then ResultErr r
     end
 
 utest _prepTest (_bind (_err 0) (lam. _err 1)) with ([], Left [0])
