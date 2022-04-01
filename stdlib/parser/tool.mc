@@ -15,7 +15,7 @@ type TypeInfo = {ty : Type, ensureSuffix : Bool} in
 type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
 
 type Terminal in
-con NtTerm : Res TypeInfo -> Terminal in
+con NtTerm : {config : Res TypeInfo, name : Name} -> Terminal in
 con TokenTerm : Res TokenInfo -> Terminal in
 con LitTerm : String -> Terminal in
 type SRegex in
@@ -23,6 +23,18 @@ con TerminalReg : {term: Terminal, info: Info, field: Option (Info, String)} -> 
 con RecordReg : {content: [SRegex], info: Info, field: Option (Info, String)} -> SRegex in
 con KleeneReg : {content: {v: [SRegex], i: Info}, info: Info} -> SRegex in
 con AltReg : {alts: [[SRegex]]} -> SRegex in
+
+type Assoc in
+con NAssoc : () -> Assoc in
+con LAssoc : () -> Assoc in
+con RAssoc : () -> Assoc in
+type Operator =
+  { lfield : Option String
+  , rfield : Option String
+  , mid : [SRegex]
+  , nt : Name
+  , assoc : Assoc
+  } in
 
 match argv with ![_, _] then
   printLn "Please provide exactly one argument; a .syn file";
@@ -255,7 +267,7 @@ recursive
         switch mapFindExn x.name.v typeMap
         case Left config then
           let suggest = suggestLabel "You probably want to save this type to a field.\n" in
-          let res = result.ok [TerminalReg {term = NtTerm config, field = field, info = x.info}] in
+          let res = result.ok [TerminalReg {term = NtTerm {name = x.name.v, config = config}, field = field, info = x.info}] in
           result.withAnnotations suggest res
         case Right config then
           result.ok [TerminalReg {term = TokenTerm config, field = field, info = x.info}]
@@ -348,7 +360,7 @@ recursive
       case TerminalReg x then
         match x.field with Some (info, field) then
           switch x.term
-          case NtTerm config then
+          case NtTerm {config = config} then
             let ty = result.map (lam config: TypeInfo. targetableType config.ty) config in
             singleContent field info ty
           case TokenTerm config then
@@ -445,9 +457,55 @@ let computeConstructorName
     end
 in
 
+-- NOTE(vipa, 2022-04-01): Figure out the operatorness of a production
+let findOperator
+  : ProductionDeclRecord -> [SRegex] -> Res Operator
+  = lam x. lam reg.
+    let temp =
+      match reg with [TerminalReg {field = Some (_, field), term = NtTerm {name = lname}}] ++ rest then
+        if nameEq x.nt.v lname then (Some field, rest) else (None (), reg)
+      else (None (), reg) in
+    match temp with (lfield, reg) in
+    let temp =
+      match reg with rest ++ [TerminalReg {field = Some (_, field), term = NtTerm {name = rname}}] then
+        if nameEq x.nt.v rname then (rest, Some field) else (reg, None ())
+      else (reg, None ()) in
+    match temp with (mid, rfield) in
+    let assoc =
+      match x.assoc with Some id then
+        let id: {v : String, i : Info} = id in
+        let res = switch id.v
+          case "left" then result.ok (LAssoc ())
+          case "right" then result.ok (RAssoc ())
+          case _ then result.err (simpleMsg id.i "Invalid associativity, expected 'left' or 'right'.\n")
+          end in
+        if and (optionIsSome lfield) (optionIsSome rfield)
+        then res
+        else result.withAnnotations
+          (result.err (simpleMsg id.i "Associativity is only valid on an infix operator, i.e., a production that is both left- and right-recursive.\n"))
+          res
+      else result.ok (NAssoc ()) in
+    let fixAssoc = lam assoc.
+      switch (lfield, rfield)
+      case (Some _, None ()) then LAssoc ()
+      case (None (), Some _) then RAssoc ()
+      case _ then assoc
+      end in
+    let assoc = result.map fixAssoc assoc in
+    let mkOperator = lam assoc.
+      { lfield = lfield
+      , rfield = rfield
+      , mid = mid
+      , nt = x.nt.v
+      , assoc = assoc
+      } in
+    result.map mkOperator assoc
+in
+
 -- NOTE(vipa, 2022-03-31): Compute all info for the constructors
 type ConstructorInfo =
   { constructor : Constructor
+  , operator : Operator
   } in
 let constructors : Res [ConstructorInfo] =
   let check = lam decl. switch decl
@@ -458,14 +516,16 @@ let constructors : Res [ConstructorInfo] =
       let content = result.map concatted reg in
       let content = result.map (addInfoField x.info) content in
       let carried = result.bind content (reifyRecord regInfo) in
-      let mkRes = lam name. lam carried.
+      let operator = result.bind reg (findOperator x) in
+      let mkRes = lam name. lam carried. lam operator.
         { constructor =
           { name = name
           , synType = x.nt.v
           , carried = carried
           }
+        , operator = operator
         } in
-      Some (result.map2 mkRes name carried)
+      Some (result.map3 mkRes name carried operator)
     case _ then
       None ()
     end in

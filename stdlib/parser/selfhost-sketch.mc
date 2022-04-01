@@ -459,8 +459,9 @@ prod Production: Decl = ("prod" | "infix" | "prefix" | "postfix") assoc:LIdent? 
 -/
 
 lang ProductionDeclAst = SelfhostBaseAst
+  type ProductionDeclRecord = { assoc : Option {v: String, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
   syn Decl =
-  | ProductionDecl { assoc : Option {v: String, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
+  | ProductionDecl ProductionDeclRecord
 
   sem get_Decl_info =
   | ProductionDecl x -> x.info
