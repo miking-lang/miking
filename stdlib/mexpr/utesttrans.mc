@@ -9,7 +9,6 @@ include "builtin.mc"
 include "eq.mc"
 include "type-annot.mc"
 include "type-lift.mc"
-include "type.mc"
 
 include "common.mc"
 

@@ -10,10 +10,3 @@ recursive let typeUnwrapAlias = use MExprAst in
     else ty
   else ty
 end
-
-let builtinTypes : [(String, [String])] =
-  [ ("Symbol", [])
-  , ("Ref", ["a"])
-  , ("Map", ["k", "v"])
-  , ("BootParseTree", [])
-  ]

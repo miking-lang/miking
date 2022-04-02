@@ -13,13 +13,13 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
 include "const-types.mc"
 include "eq.mc"
 include "info.mc"
 include "math.mc"
 include "pprint.mc"
 include "seq.mc"
-include "type.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,

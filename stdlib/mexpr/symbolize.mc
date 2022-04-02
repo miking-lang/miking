@@ -11,9 +11,9 @@ include "string.mc"
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
 include "info.mc"
 include "pprint.mc"
-include "type.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
