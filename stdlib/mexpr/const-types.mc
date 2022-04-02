@@ -359,15 +359,15 @@ lang TensorOpTypeAst = TensorOpAst
   | CTensorSliceExn _ -> tyall_ "a" (tytensorsliceexn_ (tyvar_ "a"))
   | CTensorSubExn _ -> tyall_ "a" (tytensorsubexn_ (tyvar_ "a"))
   | CTensorIterSlice _ -> tyall_ "a" (tytensoriteri_ (tyvar_ "a"))
-  | CTensorEq _ -> tyall_ "a" (tytensoreq_ (tyvar_ "a") (tyvar_ "a"))
+  | CTensorEq _ -> tyalls_ ["a", "b"] (tytensoreq_ (tyvar_ "a") (tyvar_ "b"))
   | CTensorToString _ -> tyall_ "a" (tytensortostring_ (tyvar_ "a"))
 end
 
 lang BootParserTypeAst = BootParserAst
   sem tyConst =
-  | CBootParserParseMExprString _ -> tyarrow_ tystr_ tybootparsetree_
+  | CBootParserParseMExprString _ -> tyarrows_ [tyseq_ tystr_, tystr_, tybootparsetree_]
   | CBootParserParseMCoreFile _ -> tyarrows_ [
-      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_],
+      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_, tybool_, tybool_],
       tyseq_ tystr_,
       tystr_,
       tybootparsetree_
