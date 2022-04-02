@@ -26,10 +26,12 @@ special_dependencies_files +=\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
-# Programs that should be compiled with type-checking enabled. These are
-# excluded from the default compile rules, so that we don't test them twice.
-compile_files_typecheck_base += test/mlang/type-alias.mc
-compile_files_typecheck_base += $(wildcard stdlib/*.mc)
+
+# Programs that should pass the type checker. The goal is to make this list
+# contain all programs, at which point it can be removed and the type checker
+# can be enabled by default.
+typecheck_files += test/mlang/type-alias.mc
+typecheck_files += $(wildcard stdlib/*.mc)
 
 
 # Programs that we currently cannot compile/test. These are programs written
@@ -53,9 +55,10 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
-# Programs that we should be able to compile/test with type-checking enabled.
+# Programs that should be compiled with type-checking enabled. These are
+# excluded from the default compile rules, so that we don't test them twice.
 compile_files_typecheck =\
-	$(filter-out $(compile_files_exclude), $(compile_files_typecheck_base))
+	$(filter-out $(compile_files_exclude), $(typecheck_files))
 
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
