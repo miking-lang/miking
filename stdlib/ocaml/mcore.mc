@@ -21,12 +21,13 @@ type Hooks a =
   , compileOcaml : [String] -> [String] -> String -> a
   }
 
-let emptyHooks : Hooks ExecResult =
+let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
+  lam compileOcaml.
   { debugTypeAnnot = lam. ()
   , debugGenerate = lam. ()
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
-  , compileOcaml = lam. lam. lam. {stdout = "", stderr = "", returncode = 0}
+  , compileOcaml = compileOcaml
   }
 
 let collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
@@ -98,4 +99,4 @@ let compileRunMCore : String -> [String] -> Expr -> ExecResult =
     cunit.cleanup ();
     res
   in
-  compileMCore ast {emptyHooks with compileOcaml = compileOcaml}
+  compileMCore ast (mkEmptyHooks compileOcaml)

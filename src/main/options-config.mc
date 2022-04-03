@@ -2,7 +2,7 @@ include "arg.mc"
 include "options-type.mc"
 
 -- Options configuration
-let optionsConfig : ParseConfig = [
+let optionsConfig : ParseConfig Options = [
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.

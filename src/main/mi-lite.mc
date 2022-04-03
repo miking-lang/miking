@@ -50,7 +50,7 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
   p.cleanup ();
   destinationFile
 
-let compile : Options -> String -> Unit = lam options. lam file.
+let compile : Options -> String -> () = lam options. lam file.
   use MCoreLiteCompile in
   let ast = parseParseMCoreFile {
     keepUtests = options.runTests,
@@ -62,8 +62,9 @@ let compile : Options -> String -> Unit = lam options. lam file.
   } file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in
-  compileMCore ast hooks
+  let hooks = mkEmptyHooks (ocamlCompile options file) in
+  compileMCore ast hooks;
+  ()
 
 mexpr
 
