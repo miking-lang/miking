@@ -93,7 +93,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     (getTy1 : Type -> Type -> Type)
     (getTy2 : Type -> Type -> Type)
     (t : Expr)
-    (fields : [(String, Type)]) =
+    (fields : Map SID Type) =
   | tys ->
     let ns = create (length tys) (lam. nameSym "t") in
     let pvars =

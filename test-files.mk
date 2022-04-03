@@ -33,6 +33,7 @@ python_files += $(wildcard test/py/*.mc)
 typecheck_files += test/mlang/type-alias.mc
 typecheck_files += $(wildcard stdlib/*.mc)
 typecheck_files += $(wildcard stdlib/mexpr/*.mc)
+typecheck_files += $(wildcard stdlib/ocaml/*.mc)
 
 
 # Programs that we currently cannot compile/test. These are programs written
