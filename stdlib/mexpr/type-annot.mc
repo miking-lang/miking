@@ -50,7 +50,7 @@ lang CompatibleType =
   -- environment.  It is equivalent to type equality, except that unknown types
   -- are considered compatible with any other type. If no compatible type can
   -- be found, `None` is returned.
-  sem compatibleType (tyEnv : TypeEnv) (ty1: Type) =
+  sem compatibleType (tyEnv : Map Name Type) (ty1: Type) =
   | ty2 ->
     let ty1 = reduceTyVar ty1 in
     let ty2 = reduceTyVar ty2 in
@@ -71,10 +71,10 @@ lang CompatibleType =
       compatibleType tyEnv ty1 ty2
     else None ()
 
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  sem compatibleTypeBase (tyEnv: Map Name Type) =
   | _ -> None () -- Types are not compatible by default
 
-  sem reduceType (tyEnv: Env) =
+  sem reduceType (tyEnv: Map Name Type) =
   | _ -> None () -- Types cannot be reduced by default
 
   -- NOTE(aathn,2021-10-27): We convert type variables to TyUnknown using this
@@ -86,7 +86,7 @@ end
 
 lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  sem compatibleTypeBase (tyEnv: Map Name Type) =
   | (TyUnknown _ & ty1, TyUnknown _) -> Some ty1
   | (TyUnknown _, ! TyUnknown _ & ty2) -> Some ty2
   | (! TyUnknown _ & ty1, TyUnknown _) -> Some ty1
@@ -95,11 +95,11 @@ end
 
 lang ConCompatibleType = CompatibleType + ConTypeAst
 
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyCon t1 & ty1, TyCon t2) ->
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
       infoErrorExit info (concat "Unbound TyCon in reduceType: " (nameGetStr id))
@@ -121,45 +121,45 @@ lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyAll t -> Some t.ty
 end
 
 lang AppCompatibleType = CompatibleType + AppTypeAst
 
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   -- TODO(dlunde,2021-05-05): Left out for now for compatibility with original
   -- compatibleTypes
 
   -- NOTE(dlunde,2021-05-05): This is NOT how we want to handle TmApp in the
   -- end. We are now just discarding the RHS of all applications
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyApp t -> Some t.lhs
 
 end
 
 lang BoolCompatibleType = CompatibleType + BoolTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyBool _ & t1, TyBool _) -> Some t1
 end
 
 lang IntCompatibleType = CompatibleType + IntTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyInt _ & t1, TyInt _) -> Some t1
 end
 
 lang FloatCompatibleType = CompatibleType + FloatTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyFloat _ & t1, TyFloat _) -> Some t1
 end
 
 lang CharCompatibleType = CompatibleType + CharTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyChar _ & t1, TyChar _) -> Some t1
 end
 
 lang FunCompatibleType = CompatibleType + FunTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyArrow t1, TyArrow t2) ->
     match compatibleType tyEnv t1.from t2.from with Some a then
       match compatibleType tyEnv t1.to t2.to with Some b then
@@ -169,7 +169,7 @@ lang FunCompatibleType = CompatibleType + FunTypeAst
 end
 
 lang SeqCompatibleType = CompatibleType + SeqTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TySeq t1, TySeq t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {t1 with ty = t})
@@ -177,7 +177,7 @@ lang SeqCompatibleType = CompatibleType + SeqTypeAst
 end
 
 lang TensorCompatibleType = CompatibleType + TensorTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyTensor t1, TyTensor t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TyTensor {t1 with ty = t})
@@ -185,7 +185,7 @@ lang TensorCompatibleType = CompatibleType + TensorTypeAst
 end
 
 lang RecordCompatibleType = CompatibleType + RecordTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyRecord t1, TyRecord t2) ->
     let f = lam acc. lam p.
       match p with (k, ty1) then
@@ -202,7 +202,7 @@ lang RecordCompatibleType = CompatibleType + RecordTypeAst
 end
 
 lang VariantCompatibleType = CompatibleType + VariantTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyVariant t1, TyVariant t2) ->
     let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
       match mapLookup ident t2.constrs with Some ty2 then
@@ -848,7 +848,7 @@ utest tyTm matchInteger with tyint_ using eqType in
 else never);
 
 let matchDistinct = typeAnnot (
-  match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
+  match_ (int_ 0) (npvar_ n) (int_ 0) (char_ '1')
 ) in
 utest tyTm matchDistinct with tyunknown_ using eqType in
 (match matchDistinct with TmMatch t then

@@ -343,7 +343,7 @@ end
 -- PATTERNS --
 --------------
 
-let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
+let _symbolize_patname: Map String Name -> PatName -> (Map String Name, PatName) =
   lam varEnv. lam pname.
     match pname with PName name then
       if nameHasSym name then (varEnv, PName name)

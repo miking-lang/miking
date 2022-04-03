@@ -54,12 +54,12 @@ let tyarrows_ = use FunTypeAst in
   lam tys.
   foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyrecord_ = use RecordTypeAst in
+let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   lam fields.
-  let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, a). stringToSid b.0) fields,
+    labels = map (lam b : (String, Type). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -257,10 +257,11 @@ let pcon_ = use MExprAst in
   lam cs. lam cp.
   npcon_ (nameNoSym cs) cp
 
-let patRecord = use MExprAst in
+let patRecord : [(String, Pat)] -> Info -> Pat =
+  use MExprAst in
   lam bindings : [(String, Pat)].
   lam info : Info.
-  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  let bindingMapFunc = lam b : (String, Pat). (stringToSid b.0, b.1) in
   PatRecord {
     bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
     info = info,
@@ -566,8 +567,9 @@ let record_add = use MExprAst in
   else
       error "record is not a TmRecord construct"
 
-let record_add_bindings = lam bindings. lam record.
-  foldl (lam recacc. lam b : (k, v). record_add b.0 b.1 recacc) record bindings
+let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
+  lam bindings. lam record.
+  foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}

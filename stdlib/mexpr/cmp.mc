@@ -88,7 +88,7 @@ lang LetCmp = Cmp + LetAst
     else identDiff
 end
 
-lang RecLetBindingCmp = Cmp
+lang RecLetBindingCmp = Cmp + RecLetsAst
   sem cmpRecLetBinding (lhs : RecLetBinding) =
   | rhs ->
     let rhs : RecLetBinding = rhs in

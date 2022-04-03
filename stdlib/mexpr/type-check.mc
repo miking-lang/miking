@@ -56,7 +56,7 @@ let _insertTyCon = lam name. lam ty. lam env : TCEnv.
 
 type UnifyEnv = {
   names: BiNameMap,
-  tyConEnv: Map Name Type
+  tyConEnv: Map Name ([Name], Type)
 }
 
 let errInfo = ref (NoInfo ())
@@ -78,7 +78,9 @@ let _fields2str = use RecordTypeAst in
   _type2str (TyRecord {info = NoInfo (), fields = m, labels = mapKeys m})
 
 let _sort2str = use MExprPrettyPrint in
-  getVarSortStringCode 0 pprintEnvEmpty
+  lam ident. lam sort.
+  match getVarSortStringCode 0 pprintEnvEmpty (nameGetStr ident) sort
+  with (_, str) in str
 
 lang VarTypeSubstitute = VarTypeAst
   sem substituteVars (subst : Map Name Type) =
@@ -138,7 +140,7 @@ lang Unify = MExprAst + ResolveAlias
     unificationError (_type2str ty1) (_type2str ty2)
 
   -- checkBeforeUnify is called before a variable `tv' is unified with another type.
-  -- Performs three tasks in one traversal:
+  -- Performs multiple tasks in one traversal:
   -- - Occurs check
   -- - Update level fields of FlexVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
@@ -856,7 +858,7 @@ let idbody_ = ulam_ "y" (var_ "y") in
 let tyid_ = tyall_ "a" (tyarrow_ a a) in
 let id_ = ("id", tyid_) in
 
-let idsbody_ = bind_ id_ (seq_ [freeze_ (var_ "id")]) in
+let idsbody_ = bind_ idbody_ (seq_ [freeze_ (var_ "id")]) in
 let tyids_ = tyseq_ tyid_ in
 let ids_ = ("ids", tyids_) in
 
