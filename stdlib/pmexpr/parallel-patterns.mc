@@ -127,7 +127,7 @@ let getPatternDependencies : [AtomicPattern] -> ([AtomicPattern], Map Int (Set I
 -- checked.
 let withDependencies :
      {atomicPatterns : [AtomicPattern],
-      replacement : (Map VarPattern (Name, Expr)) -> Expr} -> Pattern = lam pat.
+      replacement : Info -> Map VarPattern (Name, Expr) -> Expr} -> Pattern = lam pat.
   recursive let work = lam acc. lam pat.
     let idx = getPatternIndex pat in
     let acc = cons (idx, pat) acc in

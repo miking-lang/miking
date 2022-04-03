@@ -24,7 +24,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
 
   sem _convertEls
     (approxsize : Int)
-    (mapop : String)
+    (mapop : Expr)
     (info : Info)
     (env : GenerateEnv)
     (t : Expr)
@@ -66,10 +66,10 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     else never
 
   sem _convertContainer
-    (op : String)
+    (op : Expr)
     (opcost : Int)
     (approxsize : Int)
-    (mapop : String)
+    (mapop : Expr)
     (info : Info)
     (env : GenerateEnv)
     (t : Expr)
