@@ -99,7 +99,11 @@ lang LambdaLiftFindFreeVariables =
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
-  | TmRecLets t -> findFreeVariablesInBody state fv t.inexpr
+  | TmRecLets t ->
+    let fv = foldl (lam fv. lam bind.
+      findFreeVariablesInBody state fv bind.body
+    ) fv t.bindings in
+    findFreeVariablesInBody state fv t.inexpr
   | t -> sfold_Expr_Expr (findFreeVariablesInBody state) fv t
 
   sem findFreeVariablesReclet (state : LambdaLiftState) =
@@ -768,29 +772,31 @@ let nestedReclets = preprocess (bindall_ [
   appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
   ]) in
 let expected = preprocess (bindall_ [
-  ureclet_ "deep_foo" (ulam_ "mylist" (ulam_ "z" (ulam_ "i" (
-    if_ (eqi_ (var_ "i") (var_ "z"))
-        (unit_)
-        (bindall_ [
-          ulet_ "" (get_ (var_ "mylist") (var_ "i")),
-          appf3_ (var_ "deep_foo")
-                 (var_ "mylist")
-                 (var_ "z")
-                 (addi_ (var_ "i")
-                        (int_ 1))
-        ])
-  )))),
-  ureclet_ "inner_foo" (ulam_ "y" (ulam_ "mylist" (ulam_ "z" (
-            if_ (eqi_ (var_ "y") (var_ "z"))
-                (appf3_ (var_ "inner_foo")
-                        (var_ "y")
-                        (var_ "mylist")
-                        (addi_ (var_ "z") (int_ 1)))
-                (appf3_ (var_ "deep_foo")
-                         (var_ "mylist")
-                         (var_ "z")
-                         (int_ 0))
-  )))),
+  ureclets_ [
+    ("deep_foo", (ulam_ "mylist" (ulam_ "z" (ulam_ "i" (
+      if_ (eqi_ (var_ "i") (var_ "z"))
+          (unit_)
+          (bindall_ [
+            ulet_ "" (get_ (var_ "mylist") (var_ "i")),
+            appf3_ (var_ "deep_foo")
+                   (var_ "mylist")
+                   (var_ "z")
+                   (addi_ (var_ "i")
+                          (int_ 1))
+          ])
+    ))))),
+    ("inner_foo", (ulam_ "y" (ulam_ "mylist" (ulam_ "z" (
+              if_ (eqi_ (var_ "y") (var_ "z"))
+                  (appf3_ (var_ "inner_foo")
+                          (var_ "y")
+                          (var_ "mylist")
+                          (addi_ (var_ "z") (int_ 1)))
+                  (appf3_ (var_ "deep_foo")
+                           (var_ "mylist")
+                           (var_ "z")
+                           (int_ 0))
+    )))))
+  ],
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
     if_ (eqi_ (var_ "x") (int_ 10))
         (unit_)
@@ -798,11 +804,6 @@ let expected = preprocess (bindall_ [
   )))),
   appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
   ]) in
-printLn "-----------------------------------------------------------------";
-printLn (mexprToString (liftLambdas nestedReclets));
-printLn "-----------------------------------------------------------------";
-printLn (mexprToString expected);
-utest true with false in
---utest liftLambdas nestedReclets with expected using eqExpr in
+utest liftLambdas nestedReclets with expected using eqExpr in
 
 ()
