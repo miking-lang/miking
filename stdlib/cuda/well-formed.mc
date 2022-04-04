@@ -6,7 +6,7 @@ include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
 include "pmexpr/well-formed.mc"
 
-lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
+lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   syn WellFormedError =
   | CudaExprError Expr
   | CudaTypeError Type
@@ -113,6 +113,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
       else false
     then acc
     else cons (CudaConDefError conDef) acc
+  | fold & (TmSeqFoldl t) ->
+    let acc = cudaWellFormedExpr acc t.acc in
+    cudaWellFormedExpr acc t.s
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.

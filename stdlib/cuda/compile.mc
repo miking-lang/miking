@@ -426,7 +426,7 @@ lang CudaCompileFree = CudaCompileBase
 end
 
 lang CudaCompile = CudaCompileCopy + CudaCompileFree
-  sem _getLoopFunctionArgTypes (env : CompileCEnv) =
+  sem _getFunctionArgTypes (env : CompileCEnv) =
   | TmVar _ -> []
   | t & (TmApp _) ->
     match collectAppArguments t with (_, args) in
@@ -436,17 +436,19 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
   sem compileExpr (env : CompileCEnv) =
   | TmSeqMap t -> infoErrorExit t.info "Maps are not supported"
   | TmSeqFoldl t ->
+    let argTypes = _getFunctionArgTypes env t.f in
     CESeqFoldl {
       f = compileExpr env t.f, acc = compileExpr env t.acc,
       s = compileExpr env t.s, sTy = compileType env (tyTm t.s),
-      ty = compileType env t.ty}
+      argTypes = argTypes, ty = compileType env t.ty}
   | TmParallelReduce t ->
     -- NOTE(larshum, 2022-03-22): Parallel reductions that are not promoted to
     -- a kernel are compiled to sequential folds.
+    let argTypes = _getFunctionArgTypes env t.f in
     CESeqFoldl {
       f = compileExpr env t.f, acc = compileExpr env t.ne,
       s = compileExpr env t.as, sTy = compileType env (tyTm t.as),
-      ty = compileType env t.ty}
+      argTypes = argTypes, ty = compileType env t.ty}
   | TmTensorSliceExn t ->
     CETensorSliceExn {
       t = compileExpr env t.t, slice = compileExpr env t.slice,
@@ -460,17 +462,17 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
   | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.
-    let argTypes = _getLoopFunctionArgTypes env t.f in
+    let argTypes = _getFunctionArgTypes env t.f in
     CESeqLoop {
       n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes}
   | TmLoopAcc t ->
-    let argTypes = _getLoopFunctionArgTypes env t.f in
+    let argTypes = _getFunctionArgTypes env t.f in
     CESeqLoopAcc {
       ne = compileExpr env t.ne, n = compileExpr env t.n,
       f = compileExpr env t.f, neTy = compileType env (tyTm t.ne),
       argTypes = argTypes}
   | TmLoopKernel t ->
-    let argTypes = _getLoopFunctionArgTypes env t.f in
+    let argTypes = _getFunctionArgTypes env t.f in
     CELoopKernel {
       n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes,
       opsPerThread = 10}

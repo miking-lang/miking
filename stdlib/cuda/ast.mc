@@ -16,7 +16,8 @@ lang CudaAst = CAst + MExprAst
 
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
-  | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
+  | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType,
+                argTypes : [CType], ty : CType}
   | CESeqLoop {n : CExpr, f : CExpr, argTypes : [CType]}
   | CESeqLoopAcc {ne : CExpr, n : CExpr, f : CExpr, neTy : CType, argTypes : [CType]}
   | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}

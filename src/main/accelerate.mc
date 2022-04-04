@@ -155,11 +155,10 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
   let ast = fixLanguageFragmentSemanticFunction ast in
+  let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
-  validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast;
-  let ast = constantAppToExpr ast in
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
@@ -364,8 +363,8 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   with (accelerateData, ast) in
   use MExprCudaCompile in
   let ast = fixLanguageFragmentSemanticFunction ast in
+  let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
-  validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast
 
