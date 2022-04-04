@@ -27,7 +27,8 @@ include "cmp.mc"
 -- been added.
 lang VariantNameTypeAst = Eq
   syn Type =
-  | TyVariantName {ident : Name}
+  | TyVariantName {ident : Name,
+                   info : Info}
 
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariantName {ident = rid} ->
@@ -66,9 +67,9 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
   | env ->
     let env : TypeLiftEnv = env in
     let f = lam ty : Type.
-      match ty with TyVariantName {ident = ident} then
+      match ty with TyVariantName {ident = ident, info = info} then
         match mapLookup ident env.variants with Some constrs then
-          TyVariant {constrs = constrs, info = NoInfo ()}
+          TyVariant {constrs = constrs, info = info/-infoTy ty-/}
         else
           error (join ["No variant type ", nameGetStr ident,
                        " found in environment"])
@@ -213,15 +214,15 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
     let tyIdent =
-      match t.tyIdent with TyUnknown _ then tyvariant_ []
+      match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
       else t.tyIdent
     in
     match typeLiftType env tyIdent with (env, tyIdent) then
       let env : TypeLiftEnv = env in
       let env =
         -- Ignore any existing constructors in the variant type.
-        match tyIdent with TyVariant _ then
-          let variantNameTy = TyVariantName {ident = t.ident} in
+        match tyIdent with TyVariant {info = info} then
+          let variantNameTy = TyVariantName {ident = t.ident, info = info} in
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
         else match tyIdent

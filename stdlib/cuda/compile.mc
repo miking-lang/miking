@@ -222,7 +222,8 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
-    error (concat "Freeing CPU memory not implemented for type " tystr)
+    let infostr = info2str (infoTy ty) in
+    error (join [infostr, "Freeing CPU memory not implemented for type ", tystr])
 
   sem _compileFreeGpu (env : CompileCEnv) (arg : CExpr) =
   | ty & (TySeq {ty = elemType}) ->

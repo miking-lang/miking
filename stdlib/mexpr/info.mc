@@ -9,6 +9,8 @@ type Info
 con Info : {filename: String, row1: Int, col1: Int, row2: Int, col2: Int} -> Info
 con NoInfo : () -> Info
 
+let testinfo_: Info = Info {filename = "testinfo_", row1 = 1, col1 = 5, row2 = 1, col2 = 10}
+
 -- Data structure for a positon value
 type Pos = {filename: String, row: Int, col: Int}
 

@@ -1107,7 +1107,10 @@ lang VariantTypePrettyPrint = VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVariant t ->
     if eqi (mapLength t.constrs) 0 then (env,"<>")
-    else error "Printing of non-empty variant types not yet supported"
+    else (env, join ["Variant<", strJoin ", " (map nameGetStr (mapKeys t.constrs)), ">"])
+    -- NOTE(wikman, 2022-04-04): This pretty printing above is just temporary
+    -- as we do not have syntax for TyVariant. It is necessary however since we
+    -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
 lang ConTypePrettyPrint = ConTypeAst
