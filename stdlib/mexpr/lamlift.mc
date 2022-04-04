@@ -6,7 +6,6 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/call-graph.mc"
 include "mexpr/eq.mc"
-include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
@@ -100,7 +99,7 @@ lang LambdaLiftFindFreeVariables =
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
   | TmRecLets t ->
-    let fv = foldl (lam fv. lam bind.
+    let fv = foldl (lam fv: Map Name Type. lam bind : RecLetBinding.
       findFreeVariablesInBody state fv bind.body
     ) fv t.bindings in
     findFreeVariablesInBody state fv t.inexpr
@@ -376,7 +375,7 @@ lang MExprLambdaLift =
     (state.sols, liftGlobal t)
 end
 
-lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot + MExprPrettyPrint
+lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
 end
 
 mexpr
