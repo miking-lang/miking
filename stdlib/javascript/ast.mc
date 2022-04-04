@@ -47,7 +47,7 @@ end
 
 
 ------------------
--- C STATEMENTS --
+-- JS STATEMENTS --
 ------------------
 lang JStmtAst = JSExprAst
 
