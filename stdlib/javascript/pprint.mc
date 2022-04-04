@@ -7,6 +7,13 @@ include "char.mc"
 include "mexpr/pprint.mc"
 
 
+-------------
+-- HELPERS --
+-------------
+
+-- Surrounds a string with parentheses
+let _par = lam str. join ["(",str,")"]
+
 --------------
 -- KEYWORDs --
 --------------
