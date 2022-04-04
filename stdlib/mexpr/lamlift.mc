@@ -6,6 +6,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/call-graph.mc"
 include "mexpr/eq.mc"
+include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
@@ -371,7 +372,7 @@ lang MExprLambdaLift =
     (state.sols, liftGlobal t)
 end
 
-lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
+lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot + MExprPrettyPrint
 end
 
 mexpr
@@ -738,5 +739,70 @@ let expected = preprocess (bindall_ [
   ulet_ "t2" (ulam_ "y" (foldl_ (var_ "t1") (int_ 0) (var_ "y"))),
   map_ (var_ "t2") (var_ "s")]) in
 utest liftLambdas nestedMultiArgLambda with expected using eqExpr in
+
+let nestedReclets = preprocess (bindall_ [
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
+    if_ (eqi_ (var_ "x") (int_ 10))
+        (unit_)
+        (bindall_ [
+          ureclet_ "inner_foo" (ulam_ "z" (
+            if_ (eqi_ (var_ "y") (var_ "z"))
+                (appf1_ (var_ "inner_foo") (addi_ (var_ "z") (int_ 1)))
+                (bindall_ [
+                  ureclet_ "deep_foo" (ulam_ "i" (bindall_ [
+                    if_ (eqi_ (var_ "i") (var_ "z"))
+                        (unit_)
+                        (bindall_ [
+                          ulet_ "" (get_ (var_ "mylist") (var_ "i")),
+                          appf1_ (var_ "deep_foo")
+                                 (addi_ (var_ "i")
+                                        (int_ 1))
+                        ])
+                  ])),
+                  appf1_ (var_ "deep_foo") (int_ 0)
+                ])
+          )),
+          appf1_ (var_ "inner_foo") (int_ 10)
+        ])
+  )))),
+  appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
+  ]) in
+let expected = preprocess (bindall_ [
+  ureclet_ "deep_foo" (ulam_ "mylist" (ulam_ "z" (ulam_ "i" (
+    if_ (eqi_ (var_ "i") (var_ "z"))
+        (unit_)
+        (bindall_ [
+          ulet_ "" (get_ (var_ "mylist") (var_ "i")),
+          appf3_ (var_ "deep_foo")
+                 (var_ "mylist")
+                 (var_ "z")
+                 (addi_ (var_ "i")
+                        (int_ 1))
+        ])
+  )))),
+  ureclet_ "inner_foo" (ulam_ "y" (ulam_ "mylist" (ulam_ "z" (
+            if_ (eqi_ (var_ "y") (var_ "z"))
+                (appf3_ (var_ "inner_foo")
+                        (var_ "y")
+                        (var_ "mylist")
+                        (addi_ (var_ "z") (int_ 1)))
+                (appf3_ (var_ "deep_foo")
+                         (var_ "mylist")
+                         (var_ "z")
+                         (int_ 0))
+  )))),
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
+    if_ (eqi_ (var_ "x") (int_ 10))
+        (unit_)
+        (appf3_ (var_ "inner_foo") (var_ "y") (var_ "mylist") (int_ 10))
+  )))),
+  appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
+  ]) in
+printLn "-----------------------------------------------------------------";
+printLn (mexprToString (liftLambdas nestedReclets));
+printLn "-----------------------------------------------------------------";
+printLn (mexprToString expected);
+utest true with false in
+--utest liftLambdas nestedReclets with expected using eqExpr in
 
 ()
