@@ -172,8 +172,10 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
-  match addCudaTensorMemoryManagement ccEnv cudaTops with (tensorCountId, cudaTops) in
-  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv tensorCountId in
+  let cudaTops =
+    addCudaTensorMemoryManagement ccEnv cudaTops options.useTensorUnifiedMemory in
+  let wrapperProg =
+    generateWrapperCode accelerateData wrapperMap ccEnv options.useTensorUnifiedMemory in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
@@ -238,9 +240,6 @@ let buildConfigFutharkGPU : [String] -> [String] -> (String, String) =
     "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
-    "export LIBRARY_PATH=/usr/local/cuda/lib64",
-    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
-    "export CPATH=/usr/local/cuda/include",
     futharkDuneBuildMakeRule (),
     futharkGPUBuildMakeRule ()] in
   (dunefile, makefile)
@@ -251,9 +250,6 @@ let buildConfigCuda : String -> [String] -> [String] -> (String, String) =
     duneBuildBase libs clibs,
     "  (link_flags -I ", dir, " -cclib -lgpu -cclib -lcudart -cclib -lstdc++))"] in
   let makefile = strJoin "\n" [
-    "export LIBRARY_PATH=/usr/local/cuda/lib64",
-    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
-    "export CPATH=/usr/local/cuda/include",
     "program.exe: program.ml libgpu.a",
     "\tdune build $@",
     "libgpu.a: gpu.cu",
@@ -306,11 +302,26 @@ let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
   buildBinaryUsingMake sourcePath td
 
 let mergePrograms : CudaProg -> CudaProg -> CudaProg =
-  lam lprog. lam rprog.
+  lam cudaProg. lam wrapperProg.
   use MExprCudaCompile in
-  match lprog with CuPProg {includes = lincludes, tops = ltops} in
-  match rprog with CuPProg {includes = rincludes, tops = rtops} in
-  CuPProg {includes = concat lincludes rincludes, tops = concat ltops rtops}
+  -- NOTE(larshum, 2022-04-01): We split up the tops such that the types
+  -- declarations and global definitions are placed in the left side, and
+  -- function definitions (the wrapper functions) are placed in the right side.
+  recursive let splitWrapperTops : ([CuTop], [CuTop]) -> [CuTop] -> ([CuTop], [CuTop]) =
+    lam acc. lam tops.
+    match tops with [t] ++ tops then
+      match acc with (ltops, rtops) in
+      let acc =
+        match t with CuTTop {attrs = _, top = CTFun _} then
+          (ltops, snoc rtops t)
+        else (snoc ltops t, rtops) in
+      splitWrapperTops acc tops
+    else acc in
+  match cudaProg with CuPProg {includes = lincludes, tops = cudaTops} in
+  match wrapperProg with CuPProg {includes = rincludes, tops = wrapperTops} in
+  match splitWrapperTops ([], []) wrapperTops with (topDecls, topWrapperFunctions) in
+  let mergedTops = join [topDecls, cudaTops, topWrapperFunctions] in
+  CuPProg {includes = concat lincludes rincludes, tops = mergedTops}
 
 let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
              -> CudaProg -> Unit =

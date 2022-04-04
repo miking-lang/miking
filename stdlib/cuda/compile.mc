@@ -394,9 +394,7 @@ lang CudaCompileFree = CudaCompileBase
     let memcpyStmt = CSExpr {expr = CEApp {
       fun = _cudaMemcpy,
       args = [
-        temp,
-        CEUnOp {op = COAddrOf (), arg = arg},
-        sizeExpr,
+        temp, arg, sizeExpr,
         CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let freeInnerStmts =
       mapFoldWithKey

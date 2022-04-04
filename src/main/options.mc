@@ -20,6 +20,7 @@ let optionsDefault : Options = {
   accelerateCuda = false,
   accelerateFuthark = false,
   checkCudaWellFormed = false,
+  useTensorUnifiedMemory = false,
   cpuOnly = false,
   use32BitIntegers = false,
   use32BitFloats = false,
