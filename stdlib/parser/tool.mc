@@ -22,7 +22,7 @@ type SRegex in
 con TerminalReg : {term: Terminal, info: Info, field: Option (Info, String)} -> SRegex in
 con RecordReg : {content: [SRegex], info: Info, field: Option (Info, String)} -> SRegex in
 con KleeneReg : {content: {v: [SRegex], i: Info}, info: Info} -> SRegex in
-con AltReg : {alts: [[SRegex]]} -> SRegex in
+con AltReg : {alts: [{v: [SRegex], i: Info}]} -> SRegex in
 
 type Assoc in
 con NAssoc : () -> Assoc in
@@ -294,10 +294,16 @@ recursive
       case ConcatRegex x then
         result.map2 concat (regexToSRegex x.left) (regexToSRegex x.right)
       case AlternativeRegex x then
-        let sregAlts = lam regs. match regs with [AltReg x]
+        let sregAlts = lam info. lam regs. match regs with [AltReg x]
           then x.alts
-          else [regs] in
-        let combine = lam ls. lam rs. [AltReg {alts = concat (sregAlts ls) (sregAlts rs)}] in
+          else [{v = regs, i = info}] in
+        let combine = lam ls. lam rs.
+          [ AltReg
+            { alts = concat
+              (sregAlts (get_Regex_info x.left) ls)
+              (sregAlts (get_Regex_info x.right) rs)
+            }
+          ] in
         result.map2 combine (regexToSRegex x.left) (regexToSRegex x.right)
       case EmptyRegex _ then
         result.ok []
@@ -310,7 +316,8 @@ recursive
         let mkReg = lam regs. [KleeneReg {content = {v = regs, i = get_Regex_info x.left}, info = x.info}] in
         result.map mkReg (regexToSRegex x.left)
       case RepeatQuestionRegex x then
-        let mkReg = lam regs. [AltReg {alts = [[], regs]}] in
+        let mkReg = lam regs.
+          [AltReg {alts = [{v = [], i = x.info}, {v = regs, i = get_Regex_info x.left}]}] in
         result.map mkReg (regexToSRegex x.left)
       end
     in
@@ -403,7 +410,7 @@ recursive
       case KleeneReg x then
         kleeneContent (concatted x.content.v)
       case AltReg x then
-        match map concatted x.alts with [first] ++ rest in
+        match map (lam x: {v: [SRegex], i: Info}. concatted x.v) x.alts with [first] ++ rest in
         foldl altContent first rest
       end
   let concatted
