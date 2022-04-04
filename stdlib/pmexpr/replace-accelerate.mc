@@ -42,6 +42,7 @@ lang PMExprReplaceAccelerate =
     if null labels then
       (acc, OTyTuple {info = info, tys = []})
     else match record2tuple fields with Some tys then
+      match mapAccumL (_mexprToOCamlType env) acc tys with (acc, tys) in
       (acc, OTyTuple {info = info, tys = tys})
     else
       match
