@@ -511,6 +511,10 @@ let rec print_const fmt = function
       fprintf fmt "tensorGetExn"
   | CtensorSetExn _ ->
       fprintf fmt "tensorSetExn"
+  | CtensorLinearGetExn _ ->
+      fprintf fmt "tensorLinearGetExn"
+  | CtensorLinearSetExn _ ->
+      fprintf fmt "tensorLinearSetExn"
   | CtensorRank ->
       fprintf fmt "tensorRank"
   | CtensorShape ->

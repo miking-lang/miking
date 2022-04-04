@@ -802,6 +802,8 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
   -- | CTensorCreate _ -> []
   -- | CTensorGetExn _ -> []
   -- | CTensorSetExn _ -> []
+  -- | CTensorLinearGetExn _ -> []
+  -- | CTensorLinearSetExn _ -> []
   -- | CTensorRank _ -> []
   -- | CTensorShape _ -> []
   -- | CTensorReshapeExn _ -> []
