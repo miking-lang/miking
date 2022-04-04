@@ -106,8 +106,6 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.n with (acc, n) in
     match f acc t.f with (acc, tf) in
     (acc, TmLoopKernel {{t with n = n} with f = tf})
-  | TmCopy t -> (acc, TmCopy t)
-  | TmFree t -> (acc, TmFree t)
 
   sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmFree t ->
@@ -183,7 +181,7 @@ lang CudaPMExprAst = PMExprAst
   | TmCopy t ->
     let ty =
       match mapLookup t.arg env.varEnv with Some ty then ty
-      else tyunknown_ in
+      else TyUnknown {info = t.info} in
     TmCopy {t with ty = ty}
   | TmFree t -> TmFree {t with ty = tyunit_}
 

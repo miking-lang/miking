@@ -43,18 +43,16 @@ lang CudaPMExprPrettyPrint = PMExprPrettyPrint + CudaPMExprAst
     let indent = pprintIncr indent in
     match printArgs indent env [t.n, t.f] with (env, args) in
     (env, join ["loopKernel", pprintNewline indent, args])
-  | TmCopy t ->
-    match pprintVarName env t.arg with (env, arg) in
-    let copyStr =
-      match t.toMem with Cpu _ then "copyCpu"
-      else match t.toMem with Gpu _ then "copyGpu"
-      else never in
-    (env, join [copyStr, " ", arg])
-  | TmFree t ->
-    match pprintVarName env t.arg with (env, arg) in
-    let freeStr =
-      match t.mem with Cpu _ then "freeCpu"
-      else match t.mem with Gpu _ then "freeGpu"
-      else never in
-    (env, join [freeStr, " ", arg])
+  | TmCopy {arg = arg, toMem = Cpu _} ->
+    match pprintVarName env arg with (env, arg) in
+    (env, concat "copyCpu " arg)
+  | TmCopy {arg = arg, toMem = Gpu _} ->
+    match pprintVarName env arg with (env, arg) in
+    (env, concat "copyGpu " arg)
+  | TmFree {arg = arg, mem = Cpu _} ->
+    match pprintVarName env arg with (env, arg) in
+    (env, concat "freeCpu " arg)
+  | TmFree {arg = arg, mem = Gpu _} ->
+    match pprintVarName env arg with (env, arg) in
+    (env, concat "freeGpu " arg)
 end

@@ -224,7 +224,8 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
   sem insertMemoryOperations (env : AllocEnv) =
   | TmLet t ->
     -- NOTE(larshum, 2022-03-22): We should not insert copying within functions
-    -- that may be called from both CPU and GPU code.
+    -- that may be called from both CPU and GPU code, i.e. those that are
+    -- marked.
     if setMem t.ident env.marked then
       match insertMemoryOperations env t.inexpr with (env, inexpr) in
       (env, TmLet {t with inexpr = inexpr})
