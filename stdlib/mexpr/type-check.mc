@@ -483,8 +483,9 @@ lang LamTypeCheck = TypeCheck + LamAst
     in
     let body = typeCheckExpr (_insertVar t.ident tyX env) t.body in
     let tyLam = ityarrow_ t.info tyX (tyTm body) in
-    TmLam {{t with body = body}
-              with ty = tyLam}
+    TmLam {{{t with body = body}
+               with tyIdent = tyX}
+               with ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -515,9 +516,10 @@ lang LetTypeCheck = TypeCheck + LetAst
       (sremoveUnknown t.tyBody)
     in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-    TmLet {{{t with body = body}
-               with inexpr = inexpr}
-               with ty = tyTm inexpr}
+    TmLet {{{{t with body = body}
+                with tyBody = tyBody}
+                with inexpr = inexpr}
+                with ty = tyTm inexpr}
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsAst
@@ -559,9 +561,9 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
         (lam. gen lvl (tyTm b.body))
         (sremoveUnknown b.tyBody)
       in
-      _insertVar b.ident tyBody acc
+      (_insertVar b.ident tyBody acc, {b with tyBody = tyBody})
     in
-    let env = foldl envIteratee env bindings in
+    match mapAccumL envIteratee env bindings with (env, bindings) in
     let inexpr = typeCheckExpr env t.inexpr in
     TmRecLets {{{t with bindings = bindings}
                    with inexpr = inexpr}
