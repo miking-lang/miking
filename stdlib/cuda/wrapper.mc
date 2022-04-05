@@ -152,6 +152,13 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + MExprCCompile
     CudaBaseTypeRepr {
       ident = nameSym "cuda_tmp",
       ty = getCudaType env.targetEnv ty}
+
+  sem _accessMember : CType -> CExpr -> Name -> CExpr
+  sem _accessMember lhsType lhs =
+  | id ->
+    match lhsType with CTyPtr _ then
+      CEArrow {lhs = lhs, id = id}
+    else CEMember {lhs = lhs, id = id}
 end
 
 lang CudaTensorWrapper = CudaCWrapperBase
@@ -193,13 +200,15 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       thn = [printErrorStmt, exitErrorStmt],
       els = []}
 
-  sem _generateOCamlToCudaWrapperStmts (env : CWrapperEnv) (src : CExpr)
-                                       (dstIdent : Name) =
+  sem _generateOCamlToCudaWrapperStmts : CWrapperEnv -> CExpr -> Name
+                                      -> CDataRepr -> [CStmt]
+  sem _generateOCamlToCudaWrapperStmts env src dstIdent =
   | CudaSeqRepr t ->
+    let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
     let seqDefStmt = CSDef {ty = t.ty, id = Some dstIdent, init = None ()} in
     let dst = CEVar {id = dstIdent} in
-    let seqLenExpr = CEMember {lhs = dst, id = _seqLenKey} in
+    let seqLenExpr = _accessMember t.ty dst _seqLenKey in
     let setLenStmt = CSExpr {expr = CEBinOp {
       op = COAssign (), lhs = seqLenExpr, rhs = _wosize src}} in
     let elemTy = t.elemTy in
@@ -209,7 +218,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       rhs = CESizeOfType {ty = elemTy}} in
     let allocSeqStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = CEVar {id = dstIdent}, id = _seqKey},
+      lhs = _accessMember t.ty dst _seqKey,
       rhs = CECast {
         ty = CTyPtr {ty = elemTy},
         rhs = CEApp {fun = _getIdentExn "malloc", args = [sizeExpr]}}}} in
@@ -221,7 +230,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
     let fieldDstExpr = CEBinOp {
       op = COSubScript (),
-      lhs = CEMember {lhs = dst, id = _seqKey},
+      lhs = _accessMember t.ty dst _seqKey,
       rhs = iter} in
     let fieldUpdateStmts =
       match elemTy with CTyFloat _ | CTyDouble _ then
@@ -254,11 +263,12 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       body = snoc fieldUpdateStmts iterIncrementStmt} in
     [ seqDefStmt, setLenStmt, allocSeqStmt, iterDefStmt, dataCopyLoopStmt ]
   | CudaTensorRepr t ->
+    let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
     let bigarrayValId = _getIdentExn "Caml_ba_array_val" in
     let dst = CEVar {id = dstIdent} in
     let tensorDefStmt = CSDef {ty = t.ty, id = Some dstIdent, init = None ()} in
-    let rankExpr = CEMember {lhs = dst, id = _tensorRankKey} in
+    let rankExpr = _accessMember t.ty dst _tensorRankKey in
     let setTensorRankStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = rankExpr,
@@ -273,11 +283,11 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
 
     let setTensorOffsetStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = dst, id = _tensorOffsetKey},
+      lhs = _accessMember t.ty dst _tensorOffsetKey,
       rhs = CEInt {i = 0}}} in
     let setTensorIdStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = dst, id = _tensorIdKey},
+      lhs = _accessMember t.ty dst _tensorIdKey,
       rhs = CEVar {id = _tensorCountId}}} in
     let incrementTensorCountStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
@@ -306,7 +316,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = CEBinOp {
         op = COSubScript (),
-        lhs = CEMember {lhs = dst, id = _tensorDimsKey},
+        lhs = _accessMember t.ty dst _tensorDimsKey,
         rhs = CEVar {id = i}},
       rhs = dimExpr (CEVar {id = i})}} in
     let setMulSizeStmt = CSExpr {expr = CEBinOp {
@@ -325,7 +335,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       cond = CEBinOp {
         op = COLt (),
         lhs = CEVar {id = i},
-        rhs = CEMember {lhs = dst, id = _tensorRankKey}},
+        rhs = _accessMember t.ty dst _tensorRankKey},
       body = dimLoopBody} in
 
     -- NOTE(larshum, 2022-04-04): If we are using unified memory, we allocate
@@ -348,7 +358,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         CEVar {id = _cudaMemcpyHostToDevice}]}} in
     let setTensorDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
-      lhs = CEMember {lhs = dst, id = _tensorDataKey},
+      lhs = _accessMember t.ty dst _tensorDataKey,
       rhs = CEVar {id = tempId}}} in
 
     [ tensorDefStmt, setTensorRankStmt, rankErrorStmt, setTensorOffsetStmt
@@ -356,6 +366,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     , dimLoopStmt, emptyPtrDeclStmt, allocManagedStmt, copyDataStmt
     , setTensorDataStmt ]
   | CudaRecordRepr t ->
+    let dst = CEVar {id = dstIdent} in
     let generateMarshallingField : [CStmt] -> (CDataRepr, Int) -> [CStmt] =
       lam acc. lam fieldIdx.
       match fieldIdx with (field, idx) in
@@ -368,7 +379,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       let innerStmts = _generateOCamlToCudaWrapperStmts env srcExpr fieldDstIdent field in
       let fieldUpdateStmt = CSExpr {expr = CEBinOp {
         op = COAssign (),
-        lhs = CEMember {lhs = CEVar {id = dstIdent}, id = labelId},
+        lhs = _accessMember t.ty dst labelId,
         rhs = CEVar {id = fieldDstIdent}}} in
       join [acc, innerStmts, [fieldUpdateStmt]]
     in
@@ -530,7 +541,7 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
   sem _generateCudaToOCamlWrapperH (env : CWrapperEnv) (src : CExpr) (dst : CExpr) =
   | CudaSeqRepr t ->
     -- Directly write to the OCaml value... First we need to allocate memory
-    let lengthExpr = CEMember {lhs = src, id = _seqLenKey} in
+    let lengthExpr = _accessMember t.ty src _seqLenKey in
     let tagExpr =
       match t.elemTy with CTyFloat _ | CTyDouble _ then
         CEVar {id = _getIdentExn "Double_array_tag"}
@@ -580,9 +591,9 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
       op = COBOr (),
       lhs = bigarrayKind,
       rhs = CEVar {id = _getIdentExn "CAML_BA_C_LAYOUT"}} in
-    let rankExpr = CEMember {lhs = src, id = _tensorRankKey} in
-    let dataExpr = CEMember {lhs = src, id = _tensorDataKey} in
-    let dimsExpr = CEMember {lhs = src, id = _tensorDimsKey} in
+    let rankExpr = _accessMember t.ty src _tensorRankKey in
+    let dataExpr = _accessMember t.ty src _tensorDataKey in
+    let dimsExpr = _accessMember t.ty src _tensorDimsKey in
     let allocTensorStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = dst,
@@ -594,7 +605,7 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
       lhs = CEBinOp {
         op = COSubScript (),
         lhs = CEVar {id = _tensorStateData},
-        rhs = CEMember {lhs = src, id = _tensorIdKey}},
+        rhs = _accessMember t.ty src _tensorIdKey},
       rhs = CEVar {id = _tensorStateReturned}}} in
     [allocTensorStmt, setTensorStateReturnedStmt]
   | CudaRecordRepr t ->
@@ -602,7 +613,7 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
     else
       let wrapField = lam idx : Int. lam field : CDataRepr.
         let labelId = nameNoSym (sidToString (get t.labels idx)) in
-        let fieldSrcExpr = CEMember {lhs = src, id = labelId} in
+        let fieldSrcExpr = _accessMember t.ty src labelId in
         let tempId = nameSym "cuda_rec_tmp" in
         let temp = CEVar {id = tempId} in
         let fieldStmts = _generateCudaToOCamlWrapperH env fieldSrcExpr temp in
@@ -650,7 +661,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
     let innerArg = CEBinOp {
       op = COSubScript (),
-      lhs = CEMember {lhs = arg, id = _seqKey},
+      lhs = _accessMember t.ty arg _seqKey,
       rhs = iter} in
     let innerOcamlArg = CEApp {
       fun = _getIdentExn "Field", args = [ocamlArg, iter]} in
@@ -659,18 +670,18 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = iter,
       rhs = CEBinOp {op = COAdd (), lhs = iter, rhs = CEInt {i = 1}}}} in
-    let lengthExpr = CEMember {lhs = arg, id = _seqLenKey} in
+    let lengthExpr = _accessMember t.ty arg _seqLenKey in
     let loopStmt = CSWhile {
       cond = CEBinOp {op = COLt (), lhs = iter, rhs = lengthExpr},
       body = snoc innerFreeStmts iterIncrementStmt} in
     let freeSeqStmt = CSExpr {expr = CEApp {
       fun = _getIdentExn "free",
-      args = [CEMember {lhs = arg, id = _seqKey}]}} in
+      args = [_accessMember t.ty arg _seqKey]}} in
     [ iterInitStmt, loopStmt, freeSeqStmt ]
   | CudaTensorRepr t ->
     let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
-    let tensorIdExpr = CEMember {lhs = arg, id = _tensorIdKey} in
+    let tensorIdExpr = _accessMember t.ty arg _tensorIdKey in
     let accessIdx = lam ptrId.
       CEBinOp {
         op = COSubScript (),
@@ -708,7 +719,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
     let generateDeallocField : [CStmt] -> (SID, CDataRepr) -> [CStmt] =
       lam acc. lam sidAndField.
       match sidAndField with (sid, field) in
-      let innerArg = CEMember {lhs = arg, id = nameNoSym (sidToString sid)} in
+      let innerArg = _accessMember t.ty arg (nameNoSym (sidToString sid)) in
       let fieldIdx = deref fieldCounter in
       (modref fieldCounter (addi fieldIdx 1));
       let innerOcamlArg = CEApp {
