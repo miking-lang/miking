@@ -6,8 +6,7 @@ include "cuda/wrapper.mc"
 
 lang CudaTensorMemoryBase = CudaCompile
   type CudaTensorEnv = {
-    ccEnv : CompileCEnv,
-    useTensorUnifiedMemory : Bool
+    ccEnv : CompileCEnv
   }
 end
 
@@ -29,10 +28,7 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
       op = COAssign (),
       lhs = tensorDataAccess _tensorCpuData,
       rhs = CEMember {lhs = tensorExpr, id = _tensorDataKey}}} in
-    let gpuInitExpr =
-      if env.useTensorUnifiedMemory then
-        CEMember {lhs = tensorExpr, id = _tensorDataKey}
-      else CEVar {id = _getIdentExn "NULL"} in
+    let gpuInitExpr = CEMember {lhs = tensorExpr, id = _tensorDataKey} in
     let gpuDataInitStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = tensorDataAccess _tensorGpuData,
@@ -69,9 +65,7 @@ lang CudaTensorGlobalWrapper = CudaTensorMemoryBase
             op = COAdd (),
             lhs = CEVar {id = iterId},
             rhs = CEInt {i = 1}}}}]} in
-    let stateInitExpr =
-      if env.useTensorUnifiedMemory then CEVar {id = _tensorStateOk}
-      else CEVar {id = _tensorStateGpuInvalid} in
+    let stateInitExpr = CEVar {id = _tensorStateOk} in
     let stateInitStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = tensorDataAccess _tensorStateData,
@@ -232,29 +226,11 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
       op = COAssign (),
       lhs = t.dst,
       rhs = t.src}} in
-    let copyGpuToCpuStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        cpuData, gpuData, sizeData,
-        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
-    let setStatusOkStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = status,
-      rhs = CEVar {id = _tensorStateOk}}} in
-    let copyIfInvalidStmt = CSIf {
-      cond = CEBinOp {
-        op = COEq (),
-        lhs = status,
-        rhs = CEVar {id = _tensorStateCpuInvalid}},
-      thn = [copyGpuToCpuStmt, setStatusOkStmt],
-      els = []} in
     let setDstDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEMember {lhs = t.dst, id = _tensorDataKey},
       rhs = CECast {ty = t.dataTy, rhs = cpuData}}} in
-    if env.useTensorUnifiedMemory then
-      concat acc [assignStmt, setDstDataStmt]
-    else concat acc [assignStmt, copyIfInvalidStmt, setDstDataStmt]
+    concat acc [assignStmt, setDstDataStmt]
   | CSTensorDataCopyGpu t ->
     let env : CudaTensorEnv = env in
     let cpuData = _tensorDataAccess _tensorCpuData t.src in
@@ -269,36 +245,11 @@ lang CudaTensorReplaceMemoryOperations = CudaTensorMemoryBase
     let allocGpuDataStmt = CSExpr {expr = CEApp {
       fun = _cudaMalloc,
       args = [CEUnOp {op = COAddrOf (), arg = gpuData}, sizeData]}} in
-    let allocIfNullStmt = CSIf {
-      cond = CEBinOp {
-        op = COEq (),
-        lhs = gpuData,
-        rhs = null},
-      thn = [allocGpuDataStmt],
-      els = []} in
-    let copyCpuToGpuStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        gpuData, cpuData, sizeData, CEVar {id = _cudaMemcpyHostToDevice}]}} in
-    let setStatusOkStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = status,
-      rhs = CEVar {id = _tensorStateOk}}} in
-    let copyIfInvalidStmt = CSIf {
-      cond = CEBinOp {
-        op = COEq (),
-        lhs = status,
-        rhs = CEVar {id = _tensorStateGpuInvalid}},
-      thn = [copyCpuToGpuStmt, setStatusOkStmt],
-      els = []} in
     let setDstDataStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEMember {lhs = t.dst, id = _tensorDataKey},
       rhs = CECast {ty = t.dataTy, rhs = gpuData}}} in
-    if env.useTensorUnifiedMemory then
-      concat acc [assignStmt, setDstDataStmt]
-    else
-      concat acc [assignStmt, allocIfNullStmt, copyIfInvalidStmt, setDstDataStmt]
+    concat acc [assignStmt, setDstDataStmt]
   | CSIf t ->
     snoc acc
       (CSIf {{t with thn = foldl (replaceTensorMemoryOperationStmt env) [] t.thn}
@@ -332,10 +283,9 @@ lang CudaTensorMemory =
   CudaTensorGlobalWrapper + CudaTensorStatusUpdate +
   CudaTensorReplaceMemoryOperations
 
-  sem _constructCudaTensorEnv : CompileCEnv -> Bool -> CudaTensorEnv
-  sem _constructCudaTensorEnv ccEnv =
-  | useTensorUnifiedMemory ->
-    {ccEnv = ccEnv, useTensorUnifiedMemory = useTensorUnifiedMemory}
+  sem _constructCudaTensorEnv : CompileCEnv -> CudaTensorEnv
+  sem _constructCudaTensorEnv =
+  | ccEnv -> {ccEnv = ccEnv}
 
   sem applyTopTransformations : CudaTensorEnv -> CuTop -> CuTop
   sem applyTopTransformations env =
@@ -345,9 +295,9 @@ lang CudaTensorMemory =
     let cudaTop = updateStatusAfterTensorSet cudaTop in
     replaceTensorMemoryOperations env cudaTop
 
-  sem addCudaTensorMemoryManagement : CompileCEnv -> [CuTop] -> Bool -> [CuTop]
-  sem addCudaTensorMemoryManagement ccEnv tops =
-  | useTensorUnifiedMemory ->
-    let env = _constructCudaTensorEnv ccEnv useTensorUnifiedMemory in
+  sem addCudaTensorMemoryManagement : CompileCEnv -> [CuTop] -> [CuTop]
+  sem addCudaTensorMemoryManagement ccEnv =
+  | tops ->
+    let env = _constructCudaTensorEnv ccEnv in
     map (applyTopTransformations env) tops
 end

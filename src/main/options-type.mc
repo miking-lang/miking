@@ -17,7 +17,6 @@ type Options = {
   accelerateCuda : Bool,
   accelerateFuthark : Bool,
   checkCudaWellFormed : Bool,
-  useTensorUnifiedMemory : Bool,
   cpuOnly : Bool,
   use32BitIntegers : Bool,
   use32BitFloats : Bool,

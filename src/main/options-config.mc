@@ -65,11 +65,6 @@ let optionsConfig : ParseConfig Options = [
           "compiling without acceleration"],
     lam p: ArgPart Options.
       let o: Options = p.options in {o with checkCudaWellFormed = true}),
-  ([("--use-tensor-unified-memory", "", "")],
-    join ["Generates CUDA code that allocates tensor data in unified memory, ",
-          "instead of using compiler-generated management."],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with useTensorUnifiedMemory = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.

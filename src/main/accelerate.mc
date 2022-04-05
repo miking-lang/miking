@@ -172,9 +172,9 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
   let cudaTops =
-    addCudaTensorMemoryManagement ccEnv cudaTops options.useTensorUnifiedMemory in
+    addCudaTensorMemoryManagement ccEnv cudaTops in
   let wrapperProg =
-    generateWrapperCode accelerateData wrapperMap ccEnv options.useTensorUnifiedMemory in
+    generateWrapperCode accelerateData wrapperMap ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
