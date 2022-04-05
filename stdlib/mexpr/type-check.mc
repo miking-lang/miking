@@ -428,7 +428,14 @@ lang ResolveLinks = FlexTypeAst + UnknownTypeAst
   sem resolveLinksExpr =
   | tm ->
     let tm = withType (resolveLinks (tyTm tm)) tm in
+    let tm = smap_Expr_Type resolveLinks tm in
+    let tm = smap_Expr_Pat resolveLinksPat tm in
     smap_Expr_Expr resolveLinksExpr tm
+
+  sem resolveLinksPat =
+  | pat ->
+    let pat = withTypePat (resolveLinks (tyPat pat)) pat in
+    smap_Pat_Pat resolveLinksPat pat
 end
 
 lang TypeCheck = Unify + Generalize + ResolveLinks
