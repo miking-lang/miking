@@ -1697,6 +1697,7 @@ utest testCompile ext with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
+  "extern double log(double);",
   "double x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = log(2.));",

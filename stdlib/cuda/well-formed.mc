@@ -1,6 +1,7 @@
 -- Defines a well-formedness check specific for the CUDA accelerate backend.
 
 include "cuda/pmexpr-ast.mc"
+include "cuda/pmexpr-pprint.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
@@ -307,16 +308,9 @@ let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in
 utest wellFormedExpr conDef with [CudaConDefError expectedExpr]
 using eqSeq eqCudaError in
 
--- NOTE(larshum, 2022-03-14): We haven't implemented equality for externals, so
--- we use the comparison operations which do not check for alpha equivalence.
 let ext = preprocess (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
-utest wellFormedExpr ext with [CudaExprError ext]
-using lam a. lam b.
-  match (a,b) with ([CudaExprError a], [CudaExprError b]) then
-    use MExprCmp in
-    eqi (cmpExpr a b) 0
-  else false
-in
+utest wellFormedExpr ext with []
+using eqSeq eqCudaError in
 
 let utestTerm = utest_ (int_ 1) (int_ 2) (int_ 0) in
 utest wellFormedExpr utestTerm with [CudaExprError utestTerm]
