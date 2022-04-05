@@ -75,6 +75,22 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  sem smapAccumL_Expr_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Pat f acc =
+  | p -> (acc, p)
+
+  sem smap_Expr_Pat : (Pat -> Pat) -> Expr -> Expr
+  sem smap_Expr_Pat f =
+  | p ->
+    match smapAccumL_Expr_Pat (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Expr_Pat : all acc. (acc -> Pat -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_Pat f acc =
+  | p ->
+    match smapAccumL_Expr_Pat (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
+
   sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem smapAccumL_Type_Type f acc =
   | p -> (acc, p)
@@ -485,6 +501,11 @@ lang MatchAst = Ast
         else never
       else never
     else never
+
+  sem smapAccumL_Expr_Pat f acc =
+  | TmMatch t ->
+    match f acc t.pat with (acc, pat) in
+    (acc, TmMatch {t with pat = pat})
 end
 
 
