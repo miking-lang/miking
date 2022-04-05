@@ -375,6 +375,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
     pruneExternalUtests = false,
     pruneExternalUtestsWarning = false,
     findExternalsExclude = false,
+    eliminateDeadCode = true,
     keywords = parallelKeywords
   } file in
   let ast = makeKeywords [] ast in

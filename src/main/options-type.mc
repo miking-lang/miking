@@ -21,6 +21,7 @@ type Options = {
   cpuOnly : Bool,
   use32BitIntegers : Bool,
   use32BitFloats : Bool,
+  keepDeadCode : Bool,
   typeCheck : Bool,
   printHelp : Bool,
   output : Option String,

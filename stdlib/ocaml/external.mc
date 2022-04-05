@@ -24,7 +24,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
 
   sem _convertEls
     (approxsize : Int)
-    (mapop : String)
+    (mapop : Expr)
     (info : Info)
     (env : GenerateEnv)
     (t : Expr)
@@ -66,10 +66,10 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     else never
 
   sem _convertContainer
-    (op : String)
+    (op : Expr)
     (opcost : Int)
     (approxsize : Int)
-    (mapop : String)
+    (mapop : Expr)
     (info : Info)
     (env : GenerateEnv)
     (t : Expr)
@@ -93,7 +93,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     (getTy1 : Type -> Type -> Type)
     (getTy2 : Type -> Type -> Type)
     (t : Expr)
-    (fields : [(String, Type)]) =
+    (fields : Map SID Type) =
   | tys ->
     let ns = create (length tys) (lam. nameSym "t") in
     let pvars =

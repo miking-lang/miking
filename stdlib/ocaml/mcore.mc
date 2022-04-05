@@ -13,7 +13,7 @@ lang MCoreCompileLang =
   OCamlGenerateExternalNaive
 end
 
-type Hooks =
+type Hooks a =
   { debugTypeAnnot : Expr -> ()
   , debugGenerate : String -> ()
   , exitBefore : () -> ()
@@ -21,15 +21,16 @@ type Hooks =
   , compileOcaml : [String] -> [String] -> String -> a
   }
 
-let emptyHooks : Hooks =
+let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
+  lam compileOcaml.
   { debugTypeAnnot = lam. ()
   , debugGenerate = lam. ()
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
-  , compileOcaml = lam. lam. lam. ""
+  , compileOcaml = compileOcaml
   }
 
-let collectLibraries : ExternalNameMap -> Set String -> ([String], [String])
+let collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
 = lam extNameMap. lam syslibs.
   let f = lam s. lam str. setInsert str s in
   let g = lam acc : (Set String, Set String). lam impl :  ExternalImpl.
@@ -43,7 +44,7 @@ let collectLibraries : ExternalNameMap -> Set String -> ([String], [String])
     (setToSeq libs, setToSeq clibs)
   else never
 
-let compileMCore : Expr -> Hooks -> a =
+let compileMCore : all a. Expr -> Hooks a -> a =
   lam ast. lam hooks.
   use MCoreCompileLang in
   let ast = typeAnnot ast in
@@ -98,4 +99,4 @@ let compileRunMCore : String -> [String] -> Expr -> ExecResult =
     cunit.cleanup ();
     res
   in
-  compileMCore ast {emptyHooks with compileOcaml = compileOcaml}
+  compileMCore ast (mkEmptyHooks compileOcaml)

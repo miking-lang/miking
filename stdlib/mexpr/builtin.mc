@@ -151,3 +151,10 @@ let builtin = use MExprAst in
   , ("bootParserGetPat", CBootParserGetPat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
   ]
+
+let builtinTypes : [(String, [String])] =
+  [ ("Symbol", [])
+  , ("Ref", ["a"])
+  , ("Map", ["k", "v"])
+  , ("BootParseTree", [])
+  ]

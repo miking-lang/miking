@@ -10,7 +10,7 @@ type CompileOptions = {
 type Program = String -> [String] -> ExecResult
 type CompileResult = {
   run : Program,
-  cleanup : Unit -> Unit,
+  cleanup : () -> (),
   binaryPath : String
 }
 
@@ -76,7 +76,7 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
           concat ["dune", "exec", "./program.exe", "--"] args
         in
         sysRunCommand command stdin (tempfile ""),
-    cleanup = sysTempDirDelete td,
+    cleanup = lam. sysTempDirDelete td (); (),
     binaryPath = tempfile "_build/default/program.exe"
   }
 

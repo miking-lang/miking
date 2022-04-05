@@ -289,7 +289,9 @@ let collectKnownProgramTypes = use MExprAst in
   in
   let emptyUtestTypeEnv = {
     variants = mapEmpty nameCmp,      -- Map Name Type
-    aliases = mapEmpty nameCmp,       -- Map Name Type
+    aliases = mapFromSeq nameCmp (    -- Map Name Type
+      map (lam t : (String, [String]). (nameNoSym t.0, tyunknown_)) builtinTypes
+    ),
     typeFunctions = use MExprCmp in mapEmpty cmpType -- Map Type (Name, Name)
   } in
   collectTypes emptyUtestTypeEnv expr
@@ -736,9 +738,9 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
           (mapKeys constructors)
   ) (mapEmpty cmpString) env.variants in
   let typeNames = mapFoldWithKey (lam acc. lam typeId. lam.
-    mapInsert (nameGetStr typeId) typeId) (mapEmpty cmpString) env.variants in
+    mapInsert (nameGetStr typeId) typeId acc) (mapEmpty cmpString) env.variants in
   let typeNames = mapFoldWithKey (lam acc. lam id. lam.
-    mapInsert (nameGetStr id) id) typeNames env.aliases in
+    mapInsert (nameGetStr id) id acc) typeNames env.aliases in
    {{symEnvEmpty with conEnv = constructorNames}
                  with tyConEnv = typeNames}
 

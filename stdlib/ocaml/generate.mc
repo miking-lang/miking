@@ -25,7 +25,7 @@ include "common.mc"
 -- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
 let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
   let cmp = lam n1 : (Name, Name). lam n2 : (Name, Name).
-    subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
+    subi (sym2hash (optionGetOr _noSymbol (nameGetSym n1.0))) (sym2hash (optionGetOr _noSymbol (nameGetSym n2.0))) in
   match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
     (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
@@ -114,7 +114,7 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   | t ->
     ([], generate env t)
 
-  sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Name) =
+  sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Type) =
   | info ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
@@ -145,8 +145,14 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       else never
     else never
 
-  sem collectNestedMatches (env : GenerateEnv) (isNestedPat : Pat -> Bool)
-                           (acc : a) (addMatchCase : a -> MatchRecord -> a) =
+  sem collectNestedMatches
+    : all acc. GenerateEnv
+            -> (Pat -> Bool)
+            -> acc
+            -> (acc -> MatchRecord -> acc)
+            -> MatchRecord
+            -> (acc, Expr)
+  sem collectNestedMatches env isNestedPat acc addMatchCase =
   | t ->
     let t : MatchRecord = t in
     -- We assume that the target is a variable because otherwise there is no

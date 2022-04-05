@@ -939,7 +939,8 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
-        TmType (fi, syn, Symb.Helpers.nosym, [], TyUnknown NoInfo, tm') )
+        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (NoInfo, []), tm')
+        )
       (USMap.bindings syns)
   in
   let stack = stack @ syntydecl in

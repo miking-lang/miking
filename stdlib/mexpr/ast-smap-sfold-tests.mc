@@ -73,7 +73,7 @@ let tmConst2 = int_ 2 in
 let tmConst3 = int_ 3 in
 let tmApp11 = app_ tmConst1 tmConst2 in
 
-utest smap_Expr_Expr (lam x. 0) tmConst1 with tmConst1 using eqExpr in
+utest smap_Expr_Expr (lam x. int_ 0) tmConst1 with tmConst1 using eqExpr in
 utest sfold_Expr_Expr fold2seq [] tmConst1 with [] using eqSeq eqExpr in
 
 
@@ -86,10 +86,13 @@ let negateBool = lam tm. match tm with TmConst c then
                            else tm
                          else tm
 in
-let countConsts = lam tm. match tm with TmConst _ then 1 else 0 in
+let countConsts = lam tm. match tm with TmConst _ then int_ 1 else int_ 0 in
+let intTm = lam tm. match tm with TmConst {val = CInt {val = v}} then v else 0 in
 
 utest smap_Expr_Expr negateBool ite1 with ite2 using eqExpr in
-utest sfold_Expr_Expr addi 0 (smap_Expr_Expr countConsts ite3) with 3 in
+utest sfold_Expr_Expr
+        (lam i. lam tm. addi i (intTm tm)) 0 (smap_Expr_Expr countConsts ite3)
+with 3 in
 
 let tmSeq = seq_ [tmApp11, tmConst2, tmConst3] in
 
@@ -210,7 +213,10 @@ recursive let topDown = lam f.
   compose (smap_Expr_Expr (lam e. topDown f e)) f
 in
 
-let countNodes = bottomUp (sfold_Expr_Expr addi 1) in
+let countNodes =
+  let addiTm = lam t1. lam t2. int_ (addi (intTm t1) (intTm t2)) in
+  compose intTm (bottomUp (sfold_Expr_Expr addiTm (int_ 1)))
+in
 
 utest bottomUp identity tmVarX with tmVarX using eqExpr in
 utest bottomUp cInt2cChar tmRecordI with tmRecordC using eqExpr in

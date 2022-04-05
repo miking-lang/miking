@@ -376,7 +376,7 @@ mexpr
 
 use TestLang in
 
-let fst = lam x: (a, b). x.0 in
+let fst : all a. all b. (a, b) -> a = lam x. x.0 in
 
 let eqEnv = lam lenv. lam renv.
   use MExprEq in
@@ -555,7 +555,7 @@ match typeLift typeAliases with (env, t) in
 -- Note that records and variants are added to the front of the environment
 -- as they are processed, so the last record in the given term will be first
 -- in the environment.
-let ids = map (lam p: (a, b). p.0) env in
+let ids = map fst env in
 let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
 let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
 let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
