@@ -203,9 +203,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     let seqLenExpr = CEMember {lhs = dst, id = _seqLenKey} in
     let setLenStmt = CSExpr {expr = CEBinOp {
       op = COAssign (), lhs = seqLenExpr, rhs = _wosize src}} in
-    let elemTy =
-      match t.data with CudaDataTypeRepr _ then CTyPtr {ty = t.elemTy}
-      else t.elemTy in
+    let elemTy = t.elemTy in
     let sizeExpr = CEBinOp {
       op = COMul (),
       lhs = _wosize src,
