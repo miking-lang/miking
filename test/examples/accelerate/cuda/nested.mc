@@ -1,9 +1,5 @@
 include "common.mc"
 
-let tensorGetFloat : Tensor[Float] -> [Int] -> Float = lam t. lam idx.
-  (let g : Tensor[Float] -> [Int] -> Float = tensorGetExn in g)
-    t idx
-
 lang NestedDataTypeLang
   syn DataType =
   | Direct Tensor[Float]
@@ -12,12 +8,11 @@ lang NestedDataTypeLang
 
   sem eval : DataType -> Float
   sem eval =
-  | Direct t -> tensorGetFloat t [0]
+  | Direct t -> tensorGetExn t [0]
   | Indirect t ->
     let ta : [Tensor[Float]] = t.a in
-    let t : Tensor[Float] =
-      (let g : [Tensor[Float]] -> Int -> Tensor[Float] = get in g) ta 0 in
-    tensorGetFloat t [0]
+    let t : Tensor[Float] = get ta 0 in
+    tensorGetExn t [0]
   | NonTensor f -> f
 end
 
