@@ -19,6 +19,13 @@ lang CudaCompileBase = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   sem _stripPointer =
   | CTyPtr {ty = ty} -> ty
   | _ -> error "_stripPointer called with non-pointer type argument"
+
+  sem _accessMember : CType -> CExpr -> Name -> CExpr
+  sem _accessMember lhsType lhs =
+  | id ->
+    match lhsType with CTyPtr _ then
+      CEArrow {lhs = lhs, id = id}
+    else CEMember {lhs = lhs, id = id}
 end
 
 lang CudaCompileCopy = CudaCompileBase
@@ -85,11 +92,6 @@ lang CudaCompileCopy = CudaCompileBase
 
     [ setSeqLenStmt, allocSeqDataStmt, copySeqDataStmt, iterInitStmt
     , copyInnerLoop ]
-  | TyTensor {ty = elemType} ->
-    -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
-    -- later stage in the compiler.
-    let tensorDataType = CTyPtr {ty = compileType env elemType} in
-    [CSTensorDataCopyCpu {src = arg, dst = dst, dataTy = tensorDataType}]
   | TyRecord t ->
     mapFoldWithKey
       (lam acc : [CStmt]. lam key : SID. lam ty : Type.
@@ -127,7 +129,7 @@ lang CudaCompileCopy = CudaCompileBase
               els = acc} ])
         [] t.constrs in
     snoc copyVariantStmt copyInnerStmts
-  | TyInt _ | TyChar _ | TyFloat _ | TyBool _ ->
+  | TyInt _ | TyChar _ | TyFloat _ | TyBool _ | TyTensor _ ->
     [CSExpr {expr = CEBinOp {op = COAssign (), lhs = dst, rhs = arg}}]
   | ty ->
     use MExprPrettyPrint in
@@ -193,11 +195,6 @@ lang CudaCompileCopy = CudaCompileBase
       fun = _free, args = [tempData]}} in
     [ setSeqLenStmt, allocTempDataStmt, iterInitStmt, copyInnerLoop
     , allocSeqDataStmt , copySeqDataStmt , freeTempDataStmt ]
-  | TyTensor {ty = elemType} ->
-    -- NOTE(larshum, 2022-03-16): Tensor memory operations are handled at a
-    -- later stage in the compiler.
-    let tensorDataType = CTyPtr {ty = compileType env elemType} in
-    [CSTensorDataCopyGpu {src = arg, dst = dst, dataTy = tensorDataType}]
   | TyRecord t ->
     mapFoldWithKey
       (lam acc : [CStmt]. lam key : SID. lam ty : Type.
@@ -254,7 +251,7 @@ lang CudaCompileCopy = CudaCompileBase
     join [
       [tempAllocStmt, setTempConstrStmt], innerCopyStmts,
       [allocGpuStmt, copyGpuStmt, freeTempStmt]]
-  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ ->
+  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ | TyTensor _ ->
     [CSExpr {expr = CEBinOp { op = COAssign (), lhs = dst, rhs = arg}}]
   | ty ->
     use MExprPrettyPrint in
