@@ -1,14 +1,45 @@
 include "selfhost-sketch.mc"
 include "gen-ast.mc"
+include "gen-op-ast.mc"
 include "result.mc"
 include "seq.mc"
 include "mexpr/cmp.mc"
+
+-- NOTE(vipa, 2022-04-05): A token type only ever intended for
+-- analysis, thus only containing a TokenRepr, no Token. This is used
+-- for all tokens declared with the `token` declaration.
+lang PreToken = TokenParser
+  syn Token =
+  syn TokenRepr =
+  | PreRepr {constructorName : Name}
+
+  sem tokReprToStr =
+  | PreRepr x -> join ["<", nameGetStr x.constructorName, ">"]
+
+  sem tokReprCompare =
+  | (PreRepr l, PreRepr r) -> nameCmp l.constructorName r.constructorName
+end
+
+lang PreLitToken = TokenParser
+  syn TokenRepr =
+  | PreLitRepr {lit : String}
+
+  sem tokReprToStr =
+  | PreLitRepr x -> snoc (cons '\'' x.lit) '\''
+
+  sem tokReprCompare =
+  | (PreLitRepr l, PreLitRepr r) -> cmpString l.lit r.lit
+end
+
+lang LL1Analysis = ParserGeneration + PreToken + PreLitToken
+end
 
 mexpr
 
 use MExprCmp in
 use MExprPrettyPrint in
 use CarriedBasic in
+use LL1Analysis in
 use SelfhostAst in
 
 type TypeInfo = {ty : Type, ensureSuffix : Bool, commonFields : Map String (Type, Expr)} in
@@ -33,8 +64,21 @@ type Operator =
   , rfield : Option String
   , mid : [SRegex]
   , nt : Name
+  , conName : Name
   , assoc : Assoc
   } in
+
+type LabelRegexKind in
+con LRegAtom : () -> LabelRegexKind in
+con LRegInfix : () -> LabelRegexKind in
+con LRegPrefix : () -> LabelRegexKind in
+con LRegPostfix : () -> LabelRegexKind in
+con LRegEnd : () -> LabelRegexKind in
+type GenLabel in
+con TyTop : {v: Name, i: Info} -> GenLabel in
+con TyRegex : {nt: {v: Name, i: Info}, kind: LabelRegexKind} -> GenLabel in
+con ProdTop : {v: Name, i: Info} -> GenLabel in
+con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
 match argv with ![_, _] then
   printLn "Please provide exactly one argument; a .syn file";
@@ -332,33 +376,33 @@ in
 
 -- NOTE(vipa, 2022-03-28): `max` is `None` if there is no upper bound,
 -- i.e., if it's under a kleene star
-type FieldCount a = {min : Int, max : Option Int, ty : [(Info, a)]} in
-type ParseContent a = Map String (FieldCount a) in
-let emptyContent : ParseContent a = mapEmpty cmpString in
-let singleContent : String -> Info -> a -> ParseContent a = lam field. lam info. lam a.
-  mapInsert field {min = 1, max = Some 1, ty = [(info, a)]} emptyContent in
-let concatContent
-  : ParseContent a -> ParseContent a -> ParseContent a
+type FieldInfo = {min : Int, max : Option Int, ty : [(Info, Res CarriedType)]} in
+type RecordInfo = Map String FieldInfo in
+let emptyRecordInfo : RecordInfo = mapEmpty cmpString in
+let singleRecordInfo : String -> Info -> a -> RecordInfo = lam field. lam info. lam a.
+  mapInsert field {min = 1, max = Some 1, ty = [(info, a)]} emptyRecordInfo in
+let concatRecordInfo
+  : RecordInfo -> RecordInfo -> RecordInfo
   = lam l. lam r.
-    let f : FieldCount a -> FieldCount a -> FieldCount a = lam l. lam r.
+    let f : FieldInfo -> FieldInfo -> FieldInfo = lam l. lam r.
       { min = addi l.min r.min
       , max = match (l.max, r.max) with (Some l, Some r) then Some (addi l r) else None ()
       , ty = concat l.ty r.ty
       } in
     foldl (lam acc. lam x. match x with (k, v) in mapInsertWith f k v acc) l (mapBindings r)
 in
-let altContent
-  : ParseContent a -> ParseContent a -> ParseContent a
+let altRecordInfo
+  : RecordInfo -> RecordInfo -> RecordInfo
   = lam l. lam r.
-    let f : FieldCount a -> FieldCount a -> FieldCount a = lam l. lam r.
+    let f : FieldInfo -> FieldInfo -> FieldInfo = lam l. lam r.
       { min = mini l.min r.min
       , max = match (l.max, r.max) with (Some l, Some r) then Some (maxi l r) else None ()
       , ty = concat l.ty r.ty
       } in
-    let minToZero : FieldCount a -> FieldCount a = lam c. {c with min = 0} in
+    let minToZero : FieldInfo -> FieldInfo = lam c. {c with min = 0} in
     -- OPT(vipa, 2022-03-28): Ideally this would use a generalized merging function, roughly:
     -- `merge : (k -> a -> c) -> (k -> a -> b -> c) -> (k -> b -> c) -> Map k a -> Map k b -> Map k c`
-    let isIn : ParseContent a -> (String, FieldCount a) -> Bool = lam m. lam entry.
+    let isIn : RecordInfo -> (String, FieldInfo) -> Bool = lam m. lam entry.
       match mapLookup entry.0 m with Some _ then true else false in
     match partition (isIn r) (mapBindings l) with (lInBoth, lOnly) in
     match partition (isIn l) (mapBindings r) with (rInBoth, rOnly) in
@@ -369,18 +413,54 @@ let altContent
     let res = foldl (lam acc. lam pair. match pair with (k, v) in mapInsert k v acc) res (concat lOnly rOnly) in
     res
 in
-let kleeneContent
-  : ParseContent a -> ParseContent a
+let kleeneRecordInfo
+  : RecordInfo -> RecordInfo
   = lam c.
-    let f : FieldCount a -> FieldCount a = lam c. {{c with min = 0} with max = None ()} in
+    let f : FieldInfo -> FieldInfo = lam c. {{c with min = 0} with max = None ()} in
     mapMap f c
 in
 
--- NOTE(vipa, 2022-03-31): Compute the record type implied by a
--- [SRegex]
+-- NOTE(vipa, 2022-04-04): Create the complete record type implied by
+-- the `RecordInfo` (located at `Info`), failing if there are
+-- inconsistent types for one or more fields. This is what gives each
+-- field an appropriate type depending on how many times it appears.
+let reifyRecord
+  : Info -> RecordInfo -> Res CarriedType
+  = lam info. lam content.
+    let buryInfo : (Info, Res a) -> Res (Info, a) = lam x. result.map (lam a. (x.0, a)) x.1 in
+    let groupByTypeRepr : [(Info, CarriedType)] -> Map Type [(Info, CarriedType)] =
+      foldl
+        (lam m. lam pair : (Info, CarriedType). mapInsertWith concat (carriedRepr pair.1) [pair] m)
+        (mapEmpty cmpType) in
+    let extractUniqueType : String -> (Int, Option Int) -> Map Type [(Info, CarriedType)] -> Res (String, CarriedType) = lam field. lam counts. lam m.
+      switch mapBindings m
+      case [(_, [(_, ty)] ++ _)] then
+        let ty = switch counts
+          case (0, Some 1) then optionType ty
+          case (1, Some 1) then ty
+          case _ then seqType ty
+          end in
+        result.ok (field, ty)
+      case bindings then
+        let typeMsg : (Type, [(Info, CarriedType)]) -> String = lam pair.
+          let places = setOfSeq infoCmp (map (lam x. match x with (info, _) in info) pair.1) in
+          let places = snoc (multiHighlight info (setToSeq places)) '\n' in
+          join ["\n  These fields imply ", type2str pair.0, "\n", places]
+        in
+        let types = join (map typeMsg bindings) in
+        let msg = join ["The type of field '", field, "' is inconsistent:\n", types] in
+        result.err (info, msg)
+      end in
+    let fixField : (String, FieldInfo) -> Res (String, CarriedType) = lam pair.
+      match pair with (field, count) in
+      let tys : Res [(Info, CarriedType)] = result.mapM buryInfo count.ty in
+      let tys : Res (Map Type [(Info, CarriedType)]) = result.map groupByTypeRepr tys in
+      result.bind tys (extractUniqueType field (count.min, count.max))
+    in result.map recordType (result.mapM fixField (mapBindings content))
+in
 recursive
   let computeRecordType
-    : SRegex -> ParseContent (Res CarriedType)
+    : SRegex -> RecordInfo
     = lam reg.
       switch reg
       case TerminalReg x then
@@ -388,16 +468,16 @@ recursive
           switch x.term
           case NtTerm {config = config} then
             let ty = result.map (lam config: TypeInfo. targetableType config.ty) config in
-            singleContent field info ty
+            singleRecordInfo field info ty
           case TokenTerm config then
             let ty = result.map
               (lam config: TokenInfo. untargetableType (tyrecord_ [("v", config.ty), ("i", tycon_ "Info")]))
               config in
-            singleContent field info ty
+            singleRecordInfo field info ty
           case LitTerm _ then
-            singleContent field info (result.ok (untargetableType (tycon_ "Info")))
+            singleRecordInfo field info (result.ok (untargetableType (tycon_ "Info")))
           end
-        else emptyContent
+        else emptyRecordInfo
       case RecordReg x then
         -- NOTE(vipa, 2022-03-30): There's presently no way to pass on
         -- errors discovered in an unlabelled record, which is a bit
@@ -405,59 +485,301 @@ recursive
         -- it's a thing
         match x.field with Some (info, field) then
           let ty = reifyRecord x.info (concatted x.content) in
-          singleContent field info ty
-        else emptyContent
+          singleRecordInfo field info ty
+        else emptyRecordInfo
       case KleeneReg x then
-        kleeneContent (concatted x.content.v)
+        kleeneRecordInfo (concatted x.content.v)
       case AltReg x then
         match map (lam x: {v: [SRegex], i: Info}. concatted x.v) x.alts with [first] ++ rest in
-        foldl altContent first rest
+        foldl altRecordInfo first rest
       end
   let concatted
-    : [SRegex] -> ParseContent (Res CarriedType)
-    = lam regs. foldl concatContent emptyContent (map computeRecordType regs)
-  let reifyRecord
-    : Info -> ParseContent (Res CarriedType) -> Res CarriedType
-    = lam info. lam content.
-      let buryInfo : (Info, Res a) -> Res (Info, a) = lam x. result.map (lam a. (x.0, a)) x.1 in
-      let groupByTypeRepr : [(Info, CarriedType)] -> Map Type [(Info, CarriedType)] =
-        foldl
-          (lam m. lam pair : (Info, CarriedType). mapInsertWith concat (carriedRepr pair.1) [pair] m)
-          (mapEmpty cmpType) in
-      let extractUniqueType : String -> (Int, Option Int) -> Map Type [(Info, CarriedType)] -> Res (String, CarriedType) = lam field. lam counts. lam m.
-        switch mapBindings m
-        case [(_, [(_, ty)] ++ _)] then
-          let ty = switch counts
-            case (0, Some 1) then optionType ty
-            case (1, Some 1) then ty
-            case _ then seqType ty
-            end in
-          result.ok (field, ty)
-        case bindings then
-          let typeMsg : (Type, [(Info, CarriedType)]) -> String = lam pair.
-            let places = setOfSeq infoCmp (map (lam x. match x with (info, _) in info) pair.1) in
-            let places = snoc (multiHighlight info (setToSeq places)) '\n' in
-            join ["\n  These fields imply ", type2str pair.0, "\n", places]
-          in
-          let types = join (map typeMsg bindings) in
-          let msg = join ["The type of field '", field, "' is inconsistent:\n", types] in
-          result.err (info, msg)
-        end in
-      let fixField : (String, FieldCount (Res CarriedType)) -> Res (String, CarriedType) = lam pair.
-        match pair with (field, count) in
-        let tys : Res [(Info, CarriedType)] = result.mapM buryInfo count.ty in
-        let tys : Res (Map Type [(Info, CarriedType)]) = result.map groupByTypeRepr tys in
-        result.bind tys (extractUniqueType field (count.min, count.max))
-      in result.map recordType (result.mapM fixField (mapBindings content))
+    : [SRegex] -> RecordInfo
+    = lam regs. foldl concatRecordInfo emptyRecordInfo (map computeRecordType regs)
+in
+
+let infoFieldLabel : String = "__br_info" in
+let termsFieldLabel : String = "__br_terms" in
+let stateTy = tyrecord_
+  [ ("errors", tyapp_ (tycon_ "Ref") (tyseq_ (tytuple_ [tycon_ "Info", tystr_])))
+  , ("content", tycon_ "String")
+  ] in
+
+let productions
+  : Ref [Res (Expr, Production GenLabel ())] -- Each `Expr` evaluates to a production for ll1.mc
+  = ref []
+in
+
+type PartialSymbol =
+  { repr : Expr
+  , pat : Pat
+  , info : Expr
+  , sym : SpecSymbol
+  } in
+type PartialProduction =
+  { record : RecordInfo
+  -- `repr` evaluates to a `SpecSymbol`, `pat` matches the
+  -- corresponding `ParsedSymbol`, `info` evaluates to a single `Info`
+  -- for the corresponding symbol
+  , symbols : [Res PartialSymbol]
+  , terms : [Res Expr] -- Each `Expr` evaluates to a sequence of `Info`s
+  , fields : Map String [Res Expr] -- Each `Expr` evaluates to a sequence of the underlying type
+  } in
+
+let concatSyntax
+  : PartialProduction -> PartialProduction -> PartialProduction
+  = lam l. lam r.
+    { record = concatRecordInfo l.record r.record
+    , symbols = concat l.symbols r.symbols
+    , terms = concat l.terms r.terms
+    , fields = mapUnionWith concat l.fields r.fields
+    } in
+let concattedSyntax
+  : [PartialProduction] -> PartialProduction
+  = lam regs.
+    foldl concatSyntax { record = emptyRecordInfo, symbols = [], terms = [], fields = mapEmpty cmpString } regs
+in
+let join_ : [Expr] -> Expr = lam exprs. switch exprs
+  case [] then seq_ []
+  case [x] then x
+  case [a, b] then concat_ a b
+  case exprs then app_ (var_ "join") (seq_ exprs)
+  end in
+let mergeInfos_ : [Expr] -> Expr = lam exprs. switch exprs
+  case [] then conapp_ "NoInfo" unit_
+  case [x] then x
+  case [a, b] then appf2_ (var_ "mergeInfo") a b
+  case [first] ++ exprs then appf3_ (var_ "foldl") (var_ "mergeInfo") first (seq_ exprs)
+  end in
+
+let prodToRecordExpr
+  : Bool -> PartialProduction -> Res Expr
+  = lam includeInfo. lam prod.
+    let mkField = lam binding: (String, FieldInfo).
+      match binding with (field, count) in
+      let exprs = match mapLookup field prod.fields with Some exprs
+        then result.mapM identity exprs
+        else result.ok [] in
+      let f = switch (count.min, count.max)
+        case (0, Some 1) then
+          let x = nameSym "x" in
+          lam exprs. match_ (join_ exprs) (pseqedgew_ [npvar_ x] [])
+            (conapp_ "Some" (nvar_ x))
+            (conapp_ "None" unit_)
+        case (1, Some 1) then
+          let x = nameSym "x" in
+          lam exprs. match_ (join_ exprs) (pseqedgew_ [npvar_ x] [])
+            (nvar_ x)
+            never_
+        case _ then
+          lam exprs. join_ exprs
+        end
+      in result.map (lam expr. (field, expr)) (result.map f exprs)
+    in
+    let res = result.mapM mkField (mapBindings prod.record) in
+    let res =
+      if includeInfo then
+        let infos = result.mapM identity prod.symbols in
+        let infos = result.map (map (lam x: PartialSymbol. x.info)) infos in
+        let infos = result.map mergeInfos_ infos in
+        let infos = result.map (lam x. ("info", x)) infos in
+        result.map2 cons infos res
+      else res
+    in result.map urecord_ res
+in
+-- NOTE(vipa, 2022-04-05): Make a partial production consisting of a
+-- single symbol that will parse to a record of sequences.
+let mkRecordOfSeqsSymbol
+  : Name -> RecordInfo -> PartialProduction
+  = lam nt. lam record.
+    let infoName = nameSym "info" in
+    let valName = nameSym "val" in
+    let symbol =
+      { repr = app_ (var_ "ntSym") (nvar_ nt)
+      -- TODO(vipa, 2022-04-05): Compute an appropriate type and
+      -- attach it to the npvar
+      , pat = pcon_ "UserSym" (npvar_ valName)
+      , info = recordproj_ infoFieldLabel (nvar_ valName)
+      , sym = ntSym nt
+      } in
+    { record = record
+    , symbols = [result.ok symbol]
+    , terms = [result.ok (recordproj_ termsFieldLabel (nvar_ valName))]
+    , fields = mapMapWithKey (lam k. lam. [result.ok (recordproj_ k (nvar_ valName))]) record
+    }
+in
+-- NOTE(vipa, 2022-04-05): Make a production that parses something
+-- internal to a production, i.e., its action produces a record with
+-- fields that are all sequences.
+let completeSeqProduction
+  : Name -> GenLabel -> PartialProduction -> Res (Expr, Production GenLabel ())
+  = lam nt. lam label. lam x.
+    let symbols =
+      result.mapM identity x.symbols in
+    let terms = result.mapM identity x.terms in
+    let fields = result.map (mapFromSeq cmpString)
+      (result.mapM
+        (lam pair. match pair with (k, vs) in result.map (lam vs. (k, vs)) (result.mapM identity vs))
+        (mapBindings x.fields)) in
+    let mkProd
+      : [PartialProduction]
+      -> [Expr]
+      -> Map String [Expr]
+      -> (Expr, Production GenLabel ())
+      = lam symbols. lam terms. lam fields.
+        let temp = foldl
+          (lam acc. lam x : PartialSymbol.
+            match acc with (repr, pat, info, sym) in
+            (snoc repr x.repr, snoc pat x.pat, snoc info x.info, snoc sym x.sym))
+          ([], [], [], [])
+          symbols in
+        match temp with (reprs, pats, infos, syms) in
+        let action: Expr =
+          let mkField : String -> (String, Expr) = lam field.
+            let exprs = match mapLookup field fields with Some exprs then exprs else [] in
+            (field, join_ exprs) in
+          let fields : [(String, Expr)] = map mkField (mapKeys x.record) in
+          let fields = concat fields [(infoFieldLabel, mergeInfos_ infos), (termsFieldLabel, join_ terms)] in
+          let stateName = nameSym "state" in
+          let seqName = nameSym "res" in
+          nlam_ stateName stateTy
+            (nulam_ seqName
+              (match_ (nvar_ seqName) (pseqtot_ pats)
+                -- TODO(vipa, 2022-04-05): Add type annotations plucked from the `Pat`s captures
+                (urecord_ fields)
+                never_))
+        in
+        let exprProduction = urecord_
+          [ ("nt", nvar_ nt)
+          , ("label", unit_)
+          , ("rhs", seq_ reprs)
+          , ("action", action)
+          ] in
+        let production =
+          { nt = nt
+          , label = label
+          , rhs = syms
+          , action = lam. lam. ()
+          } in
+        (exprProduction, production)
+    in result.map3 mkProd symbols terms fields
+in
+
+-- NOTE(vipa, 2022-04-11): Process a single terminal, producing the
+-- components to be added to a PartialProduction for that symbol.
+let processTerminal
+  : Terminal -> (Res PartialSymbol, [Res Expr], Res Expr, Res CarriedType)
+  = lam term. switch term
+    case NtTerm conf then
+      let ty = result.map (lam config: TypeInfo. targetableType config.ty) conf.config in
+      let infoName = nameSym "info" in
+      let valName = nameSym "val" in
+      let sym =
+        { repr = app_ (var_ "ntSym") (nvar_ conf.name)
+        , pat = pcon_ "UserSym" (ptuple_ [npvar_ infoName, npvar_ valName])
+        , info = nvar_ infoName
+        , sym = ntSym conf.name
+        } in
+      (result.ok sym, [], result.ok (seq_ [nvar_ valName]), ty)
+
+    case TokenTerm config then
+      let valName = nameSym "x" in
+      let ty = result.map
+        (lam config: TokenInfo. untargetableType (tyrecord_ [("v", config.ty), ("i", tycon_ "Info")]))
+        config in
+      let sym = result.map
+        (lam config: TokenInfo.
+          { repr = app_ (var_ "tokSym") config.repr
+          , pat = pcon_ "TokParsed" (npcon_ config.tokConstructor (npvar_ valName))
+          , info = config.getInfo (nvar_ valName)
+          , sym = tokSym (PreRepr {constructorName = config.tokConstructor})
+          })
+        config in
+      let info = result.map (lam config: TokenInfo. seq_ [config.getInfo (nvar_ valName)]) config in
+      let val = result.map (lam config: TokenInfo. seq_ [config.getValue (nvar_ valName)]) config in
+      (sym, [info], val, ty)
+
+    case LitTerm lit then
+      let valName = nameSym "l" in
+      ( result.ok
+        { repr = app_ (var_ "litSym") (str_ lit)
+        , pat = pcon_ "LitParsed" (npvar_ valName)
+        , info = recordproj_ "info" (nvar_ valName)
+        , sym = tokSym (PreLitRepr {lit = lit})
+        }
+      , [result.ok (seq_ [recordproj_ "info" (nvar_ valName)])]
+      , result.ok (seq_ [recordproj_ "info" (nvar_ valName)])
+      , result.ok (untargetableType (tycon_ "Info"))
+      )
+
+    end in
+
+-- NOTE(vipa, 2022-04-11): Produce a PartialProduction for a given
+-- SRegex, part of the rhs of the production defined through
+-- `prodName`.
+recursive let computeSyntax
+  : {v: Name, i: Info} -> SRegex -> PartialProduction
+  = lam prodName. lam reg. switch reg
+    case TerminalReg x then
+      match processTerminal x.term with (sym, terms, fieldExpr, fieldTy) in
+      let res =
+        { record = emptyRecordInfo
+        , symbols = [sym]
+        , terms = terms
+        , fields = mapEmpty cmpString
+        } in
+      match x.field with Some (info, field) then
+        {{res with record = singleRecordInfo field info fieldTy }
+          with fields = mapInsert field [fieldExpr] res.fields }
+      else res
+
+    case RecordReg x then
+      let res = concattedSyntax (map (computeSyntax prodName) x.content) in
+      match x.field with Some (info, field) then
+        let ty = reifyRecord x.info res.record in
+        let expr = prodToRecordExpr false res in
+        {{res with record = singleRecordInfo field info ty}
+          with fields = mapInsert field [result.map (lam x. seq_ [x]) expr] (mapEmpty cmpString) }
+      else {{res with record = emptyRecordInfo} with fields = mapEmpty cmpString }
+
+    case KleeneReg x then
+      let one = concattedSyntax (map (computeSyntax prodName) x.content.v) in
+      let record = kleeneRecordInfo one.record in
+      let nt = nameSym "kleene" in
+      let sym = mkRecordOfSeqsSymbol nt record in
+      let consProd = completeSeqProduction nt
+        (ProdInternal {name = prodName, info = x.content.i})
+        (concatSyntax one sym) in
+      let nilProd = completeSeqProduction nt
+        (ProdInternal {name = prodName, info = x.info})
+        { record = record, symbols = [], terms = [], fields = mapEmpty cmpString } in
+      modref productions (concat (deref productions) [consProd, nilProd]);
+      sym
+
+    case AltReg x then
+      let alts = map (lam regs: {v: [SRegex], i: Info}. {v = concattedSyntax (map (computeSyntax prodName) regs.v), i = regs.i}) x.alts in
+      let record =
+        match map (lam p: {v: PartialProduction, i: Info}. p.v.record) alts with [first] ++ rest in
+        foldl altRecordInfo first rest in
+      let nt = nameSym "alt" in
+      let prods = map
+        (lam p: {v: PartialProduction, i: Info}.
+          completeSeqProduction nt (ProdInternal {name = prodName, info = p.i})
+            {p.v with record = record})
+        alts in
+      modref productions (concat (deref productions) prods);
+      mkRecordOfSeqsSymbol nt record
+
+    end
 in
 
 -- NOTE(vipa, 2022-03-31): Add the info field, erroring if it's
 -- already defined
 let addInfoField
-  : Info -> ParseContent (Res CarriedType) -> ParseContent (Res CarriedType)
+  : Info -> RecordInfo -> RecordInfo
   = lam info. lam content.
     let count = {min = 1, max = Some 1, ty = [(NoInfo (), result.ok (untargetableType (tycon_ "Info")))]} in
-    let mkError : FieldCount (Res CarriedType) -> a -> FieldCount (Res CarriedType) = lam prev. lam.
+    let mkError : FieldInfo -> a -> FieldInfo = lam prev. lam.
       let highlight = multiHighlight info (map (lam x. match x with (info, _) in info) prev.ty) in
       let msg = join ["The 'info' field is reserved, it must not be manually defined:\n", highlight, "\n"] in
       let err = result.err (info, msg) in
@@ -466,12 +788,12 @@ let addInfoField
 in
 
 let checkCommonField
-  : ProductionDeclRecord -> ParseContent (Res CarriedType) -> ParseContent (Res CarriedType)
+  : ProductionDeclRecord -> RecordInfo -> RecordInfo
   = lam x. lam content.
     match mapFindExn x.nt.v typeMap with Left config then
       match result.toOption config with Some config then
         let config: TypeInfo = config in
-        let update = lam field. lam count : FieldCount (Res CarriedType).
+        let update = lam field. lam count : FieldInfo.
           match mapLookup field config.commonFields with Some _ then
             let infos = map (lam x. match x with (info, _) in info) count.ty in
             let msg = join
@@ -544,15 +866,30 @@ let findOperator
       , rfield = rfield
       , mid = mid
       , nt = x.nt.v
+      , conName = x.name.v
       , assoc = assoc
       } in
     result.map mkOperator assoc
+in
+
+let mkOperatorConstructor
+  : Operator
+  -> PartialProduction
+  -> Res GenOpInput
+  = lam op. lam prod.
+    result.ok
+      { baseConstructorName = op.conName
+      , baseTypeName = op.nt
+      , carried = tyunit_
+      , mkUnsplit = AtomUnsplit (lam. error "not yet implemented")
+      }
 in
 
 -- NOTE(vipa, 2022-03-31): Compute all info for the constructors
 type ConstructorInfo =
   { constructor : Constructor
   , operator : Operator
+  , genOperator : GenOperator
   } in
 let constructors : Res [ConstructorInfo] =
   let check = lam decl. switch decl
@@ -565,19 +902,57 @@ let constructors : Res [ConstructorInfo] =
       let content = result.map (checkCommonField x) content in
       let carried = result.bind content (reifyRecord regInfo) in
       let operator = result.bind reg (findOperator x) in
-      let mkRes = lam name. lam carried. lam operator.
+      let partProd = result.map (lam op: Operator. map (computeSyntax x.name) op.mid) operator in
+      let partProd = result.map concattedSyntax partProd in
+      let genOp = result.bind2 operator partProd mkOperatorConstructor in
+      let mkRes = lam name. lam carried. lam operator. lam genOp.
         { constructor =
           { name = name
           , synType = x.nt.v
           , carried = carried
           }
         , operator = operator
+        , genOperator = genOp
         } in
-      Some (result.map3 mkRes name carried operator)
+      Some (result.map4 mkRes name carried operator genOp)
     case _ then
       None ()
     end in
   result.mapM identity (mapOption check decls)
+in
+
+let productions : Res [(Expr, Production GenLabel ())] = result.mapM identity (deref productions) in
+let ll1Error : Res () =
+  let fst = lam prod: (Expr, Production GenLabel ()). prod.1 in
+  let productions = result.map (map fst) productions in
+  result.bind2 start productions
+    (lam start: Name. lam productions: [Production GenLabel ()].
+      match genParsingTable {start = start, productions = productions} with Left err then
+        let errs : [(SpecSymbol, [GenLabel])] = join (map mapBindings (mapValues err)) in
+        let regexKindToStr = lam x. switch x
+          case LRegAtom _ then "production"
+          case LRegInfix _ then "infix operator"
+          case LRegPrefix _ then "prefix operator"
+          case LRegPostfix _ then "postfix operator"
+          case LRegEnd _ then error "impossible"
+          end in
+        let genLabelToString = lam x. switch x
+          case TyTop x then join ["A ", nameGetStr x.v, "\n"]
+          case TyRegex {nt = nt, kind = LRegEnd _} then join ["Something coming after a ", nameGetStr nt.v, "\n"]
+          case TyRegex x then join ["A ", nameGetStr x.nt.v, " ", regexKindToStr x.kind, "\n"]
+          case ProdTop x then snoc (simpleHighlight x.i) '\n'
+          case ProdInternal x then snoc (simpleHighlight x.info) '\n'
+          end in
+        let mkErr : (SpecSymbol, [GenLabel]) -> Res () = lam pair.
+          let msg = join
+            [ "LL1 conflict when seeing a ", symSpecToStr pair.0
+            , ", it might be the start of one of these:\n"
+            ] in
+          let msg = concat msg (join (map genLabelToString pair.1)) in
+          result.err (NoInfo (), msg)
+        in result.map (lam. ()) (result.mapM mkErr errs)
+      else result.ok ()
+    )
 in
 
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
@@ -590,11 +965,32 @@ let generated: Res String = result.bind2 constructors requestedFieldAccessors
       , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
       , requestedSFunctions = requestedSFunctions
       , fieldAccessors = requestedFieldAccessors
-      }
-    in result.ok (concat "include \"seq.mc\"\n\n" (mkLanguages genInput))
+      } in
+    let genOpInput =
+      { infoFieldLabel = infoFieldLabel
+      , termsFieldLabel = termsFieldLabel
+      , mkSynName = lam name. concat (nameGetStr name) "Op"
+      , mkSynAstBaseName = lam. "SelfhostBaseAst"
+      , mkConName = lam name. concat (nameGetStr name) "Op"
+      , mkConAstName = lam name. concat (nameGetStr name) "Ast"
+      , mkBaseName = lam str. concat str "Base"
+      , composedName = "ParseSelfhost"
+      , operators = map (lam x: ConstructorInfo. x.genOperator) constructors
+      } in
+    result.ok (strJoin "\n\n" ["include \"seq.mc\"", mkLanguages genInput, mkOpLanguages genOpInput])
   ) in
 
-match result.consume (result.withAnnotations start (result.withAnnotations allResolved generated)) with (warnings, res) in
+let prodsToStr = lam prods: [(Expr, a)].
+  let res = map (lam x. match x with (x, _) in x) prods in
+  let res = seq_ res in
+  expr2str res in
+let foo =
+  match result.toOption (result.map prodsToStr productions)
+  with Some str then printLn str
+  else ()
+in
+
+match result.consume (result.withAnnotations ll1Error (result.withAnnotations allResolved generated)) with (warnings, res) in
 for_ warnings (lam x. match x with (info, msg) in printLn (infoWarningString info msg));
 switch res
 case Left errors then
@@ -602,6 +998,7 @@ case Left errors then
   exit 1
 case Right res then
   printLn res
+  -- dprintLn productions
   -- dprintLn temp;
   -- printLn "Ok"
 end

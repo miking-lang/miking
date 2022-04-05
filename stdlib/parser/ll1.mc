@@ -337,7 +337,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
 
     if deref hasLl1Error
       then Left (mapFromSeq nameCmp (filter (lam binding: (Unknown, Unknown). not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
-      else Right {start = {nt = startNt, table = mapFindExn startNt table}, firstOfRhs = firstOfRhs, lits = lits}
+      else Right {start = {nt = startNt, table = optionGetOr emptyTableTarget (mapLookup startNt table)}, firstOfRhs = firstOfRhs, lits = lits}
 end
 
 lang LL1Parser = ParserGeneration + ParserConcrete

@@ -433,6 +433,7 @@ let _mkFieldStubs
   : Name
   -> String
   -> Type
+  -> [SemanticFunction]
   = lam synType. lam field. lam ty.
     let synTy = ntycon_ synType in
     let suffix = join ["_", nameGetStr synType, "_", field] in
