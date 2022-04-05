@@ -24,7 +24,7 @@ include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
@@ -352,7 +352,7 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   match
     use PMExprCompile in
     let ast = symbolizeExpr keywordsSymEnv ast in
-    let ast = typeAnnot ast in
+    let ast = typeCheck ast in
     let ast = removeTypeAscription ast in
     match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -381,7 +381,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   let ast = makeKeywords [] ast in
 
   let ast = symbolizeExpr keywordsSymEnv ast in
-  let ast = typeAnnot ast in
+  let ast = typeCheck ast in
   let ast = removeTypeAscription ast in
 
   -- Translate accelerate terms into functions with one dummy parameter, so

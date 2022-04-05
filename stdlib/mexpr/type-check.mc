@@ -428,6 +428,7 @@ lang ResolveLinks = FlexTypeAst + UnknownTypeAst
   sem resolveLinksExpr =
   | tm ->
     let tm = withType (resolveLinks (tyTm tm)) tm in
+    let tm = smap_Expr_Type resolveLinks tm in
     smap_Expr_Expr resolveLinksExpr tm
 end
 
