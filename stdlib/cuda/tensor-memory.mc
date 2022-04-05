@@ -194,14 +194,7 @@ lang CudaTensorStatusUpdate = CudaTensorMemoryBase
             op = COGt (),
             lhs = cudaArchVar,
             rhs = CEInt {i = 0}}},
-        thn = [
-          -- NOTE(larshum, 2022-03-25): We only update the state in the first
-          -- thread, or we will get a big negative performance impact. Probably
-          -- due to multiple threads writing to the same global data.
-          CSIf {
-            cond = isFirstThreadExpr,
-            thn = [setStateStmt _tensorStateCpuInvalid],
-            els = []}],
+        thn = [setStateStmt _tensorStateCpuInvalid],
         els = [setStateStmt _tensorStateGpuInvalid]} in
       [stmt, stateUpdateMacroStmt]
     else [stmt]

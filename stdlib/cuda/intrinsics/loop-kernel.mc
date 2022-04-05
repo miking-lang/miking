@@ -97,7 +97,11 @@ lang CudaLoopKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
       gridSize = CEVar {id = nblocksId},
       blockSize = CEVar {id = tpbId},
       args = cons t.n args}} in
+    let deviceSynchronizeStmt = CSExpr {expr = CEApp {
+      fun = _cudaDeviceSynchronize, args = []}} in
 
-    let stmts = [iterInitStmt, tpbStmt, nblocksStmt, kernelLaunchStmt] in
+    let stmts =
+      [ iterInitStmt, tpbStmt, nblocksStmt, kernelLaunchStmt
+      , deviceSynchronizeStmt ] in
     (kernelTop, CSComp {stmts = stmts})
 end

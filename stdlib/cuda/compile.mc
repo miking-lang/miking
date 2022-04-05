@@ -9,6 +9,7 @@ let _cudaMemcpy = nameNoSym "cudaMemcpy"
 let _cudaMemcpyDeviceToHost = nameNoSym "cudaMemcpyDeviceToHost"
 let _cudaMemcpyHostToDevice = nameNoSym "cudaMemcpyHostToDevice"
 let _cudaFree = nameNoSym "cudaFree"
+let _cudaDeviceSynchronize = nameNoSym "cudaDeviceSynchronize"
 let _malloc = nameNoSym "malloc"
 let _free = nameNoSym "free"
 
