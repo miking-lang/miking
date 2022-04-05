@@ -313,21 +313,25 @@ lang CTopAst = CExprTypeAst + CInitAst + CStmtAst
   -- Type definitions are supported at this level.
   | CTTyDef { ty: CType, id: Name }
   | CTDef { ty: CType, id: Option Name, init: Option CInit }
+  | CTExt { ret: CType, id: Name, params: [CType] }
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTTyDef _ & t -> t
   | CTDef t -> CTDef { t with init = mapOption f t.init }
+  | CTExt _ & t -> t
   | CTFun t -> CTFun { t with body = map (smap_CStmt_CExpr f) t.body }
 
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
   | CTTyDef _ & t -> t
   | CTDef _ & t -> t
+  | CTExt _ & t -> t
   | CTFun t -> CTFun { t with body = join (map f t.body) }
 
   sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
   | CTTyDef _ -> acc
   | CTDef _ -> acc
+  | CTExt _ -> acc
   | CTFun t -> foldl f acc t.body
 
 end

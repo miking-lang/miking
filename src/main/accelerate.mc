@@ -166,9 +166,8 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
     use32BitInts = options.use32BitIntegers,
     use32BitFloats = options.use32BitFloats
   } in
-  match compile typeEnv opts ast with (_, types, tops, _, _) in
+  match compile typeEnv opts ast with (ccEnv, types, tops, _, _) in
   let ctops = join [types, tops] in
-  let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
   let cudaTops =

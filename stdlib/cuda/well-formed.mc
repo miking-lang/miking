@@ -178,7 +178,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _
+  | TmExt _ -> true
   | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ -> true
   | _ -> false
 

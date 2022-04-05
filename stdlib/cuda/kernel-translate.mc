@@ -121,7 +121,5 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   -- Wraps the C top-level terms in the CUDA version of a top-level term, which
   -- includes a sequence of attributes that can be attached.
   sem translateTopToCudaFormat =
-  | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
-  | CTDef t -> CuTTop {attrs = [], top = CTDef t}
-  | CTFun t -> CuTTop {attrs = [], top = CTFun t}
+  | top -> CuTTop {attrs = [], top = top}
 end

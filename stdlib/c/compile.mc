@@ -890,8 +890,23 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       compileTops env (join [accTop, decls, funs]) accInit inexpr
     else never
 
-  -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileTops env accTop accInit inexpr
+  -- Add an extern declaration for top-level externals
+  | TmExt { ident = ident, tyIdent = tyIdent, inexpr = inexpr } ->
+    recursive let funTypes: [Type] -> Type -> ([Type], Type) =
+      lam acc. lam rest.
+        match rest with TyArrow { from = from, to = rest } then
+          if _isUnitTy from then funTypes acc rest
+          else funTypes (snoc acc from) rest
+        else (acc, rest)
+    in
+    match mapLookup ident env.externals with Some extId then
+      match funTypes [] tyIdent with (paramTypes, retType) in
+      let extTop = CTExt {
+        ret = compileType env retType,
+        id = extId,
+        params = map (compileType env) paramTypes} in
+      compileTops env (snoc accTop extTop) accInit inexpr
+    else error (join ["Unknown external ", nameGetStr ident])
 
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->

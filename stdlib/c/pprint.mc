@@ -416,6 +416,13 @@ lang CTopPrettyPrint =
       else never
     else never
 
+  | CTExt { ret = ret, id = id, params = params } ->
+    match pprintEnvGetStr env id with (env,id) in
+    match mapAccumL (printCType "") env params with (env, params) in
+    let params = join ["(", strJoin "," params, ")"] in
+    match printCType (join [id, params]) env ret with (env,str) in
+    (env, join ["extern ", str, ";"])
+
   | CTFun { ret = ret, id = id, params = params, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in

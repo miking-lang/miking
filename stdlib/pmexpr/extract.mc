@@ -223,7 +223,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
     else (used, inexpr)
   | TmUtest t -> extractAccelerateTermsH used t.next
-  | TmExt t -> extractAccelerateTermsH used t.inexpr
+  | TmExt t ->
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then (used, TmExt {t with inexpr = inexpr})
+    else (used, inexpr)
   | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
                          info = infoTm t})
 
