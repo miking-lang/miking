@@ -262,6 +262,38 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         else TmLet {t with inexpr = inexpr}
       else TmLet {t with inexpr = inexpr}
     else TmLet {t with inexpr = inexpr}
+  | TmRecLets t ->
+    let isAccelerateBinding = lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          true
+        else false
+      else false
+    in
+    let eliminateBinding = lam acc. lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          match
+            if gti (mapSize idSols) 0 then
+              let tyBody = eliminateInnermostParameterType bind.tyBody in
+              let body = eliminateInnermostLambda bind.body in
+              (tyBody, body)
+            else (bind.tyBody, bind.body)
+          with (tyBody, body) in
+          TmLet {
+            ident = bind.ident,
+            tyBody = tyBody,
+            body = body,
+            inexpr = acc,
+            ty = tyTm acc,
+            info = bind.info}
+        else acc
+      else acc
+    in
+    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+    match partition isAccelerateBinding t.bindings with (accelerated, bindings) in
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = foldl eliminateBinding inexpr accelerated}
   | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
 
   sem eliminateInnermostParameterType =

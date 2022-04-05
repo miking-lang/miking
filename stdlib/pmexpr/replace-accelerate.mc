@@ -140,6 +140,20 @@ lang PMExprReplaceAccelerate =
       match replaceAccelerateH accelerated env acc t.body with (acc, body) in
       match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
       (acc, TmLet {{t with body = body} with inexpr = inexpr})
+  | TmRecLets t ->
+    let removeAccelerateBindings : RecLetBinding -> Option RecLetBinding =
+      lam bind.
+      if mapMem bind.ident accelerated then None ()
+      else Some bind
+    in
+    let replaceBindings = lam acc. lam bind : RecLetBinding.
+      match replaceAccelerateH accelerated env acc bind.body with (acc, body) in
+      (acc, {bind with body = body})
+    in
+    match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
+    let bindings = mapOption removeAccelerateBindings t.bindings in
+    match mapAccumL replaceBindings acc bindings with (acc, bindings) in
+    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
   | t ->
     smapAccumL_Expr_Expr (replaceAccelerateH accelerated env) acc t
 end
