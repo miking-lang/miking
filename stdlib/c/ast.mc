@@ -230,17 +230,42 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSBreak   {}
   | CSNop     {}
 
-  sem smap_CStmt_CStmt (f: CStmt -> CStmt) =
-  | CSDef t -> CSDef t
-  | CSIf t -> CSIf {{ t with thn = map f t.thn } with els = map f t.els }
-  | CSSwitch t -> error "TODO"
-  | CSWhile t -> error "TODO"
-  | CSExpr t -> CSExpr t
-  | CSComp t -> error "TODO"
-  | CSRet t -> CSRet t
-  | CSCont t -> CSCont t
-  | CSBreak t -> CSBreak t
-  | CSNop t -> CSNop t
+  sem smapAccumL_CStmt_CStmt : all acc. (acc -> CStmt -> (acc, CStmt)) -> acc
+                                        -> CStmt -> (acc, CStmt)
+  sem smapAccumLCStmtCStmt f acc =
+  | CSIf t ->
+    match mapAccumL f acc t.thn with (acc, thn) in
+    match mapAccumL f acc t.els with (acc, els) in
+    (acc, CSIf {{t with thn = thn} with els = els})
+  | CSSwitch t ->
+    let bodyFn = lam acc. lam caseArg : (Int, [CStmt]).
+      match caseArg with (i, stmts) in
+      match mapAccumL f acc stmts with (acc, stmts) in
+      (acc, (i, stmts))
+    in
+    match mapAccumL bodyFn acc t.body with (acc, body) in
+    match optionMapAccum (mapAccumL f) acc t.default with (acc, default) in
+    (acc, CSSwitch {{t with body = body} with default = default})
+  | CSWhile t ->
+    match mapAccumL f acc t.body with (acc, body) in
+    (acc, CSWhile {t with body = body})
+  | CSComp t ->
+    match mapAccumL f acc t.stmts with (acc, stmts) in
+    (acc, CSComp {t with stmts = stmts})
+  | stmt -> (acc, stmt)
+
+  sem smap_CStmt_CStmt : (CStmt -> CStmt) -> CStmt -> CStmt
+  sem smap_CStmt_CStmt f =
+  | stmt ->
+    match smapAccumLCStmtCStmt (lam. lam a. ((), f a)) () stmt with (_, stmt) in
+    stmt
+
+  sem sfold_CStmt_CStmt : all acc. (acc -> CStmt -> acc) -> acc -> CStmt -> acc
+  sem sfold_CStmt_CStmt f acc =
+  | stmt ->
+    match smapAccumLCStmtCStmt (lam acc. lam a. (f acc a, a)) acc stmt
+    with (acc, _) in
+    acc
 
   sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CSDef t -> optionMapOrElse (lam. acc) (sfold_CInit_CExpr f acc) t.init
@@ -273,18 +298,6 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSCont _ & t -> t
   | CSBreak _ & t -> t
   | CSNop _ & t -> t
-
-  sem sfold_CStmt_CStmt (f: a -> CStmt -> a) (acc: a) =
-  | CSDef t -> acc
-  | CSIf t -> foldl f (foldl f acc t.thn) t.els
-  | CSSwitch t -> error "TODO"
-  | CSWhile t -> error "TODO"
-  | CSExpr t -> acc
-  | CSComp t -> error "TODO"
-  | CSRet t -> acc
-  | CSCont _ -> acc
-  | CSBreak _ -> acc
-  | CSNop _ -> acc
 
   sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
   | CSDef t -> CSDef t

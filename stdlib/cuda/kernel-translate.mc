@@ -107,7 +107,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
     match generateIntrinsicExpr ccEnv acc temp t with (acc, stmt) in
     let tempReturn = CSRet {val = Some temp} in
     (acc, CSComp {stmts = [tempDecl, stmt, tempReturn]})
-  | stmt -> (acc, stmt)
+  | stmt -> smapAccumLCStmtCStmt (generateIntrinsicStmt ccEnv ty) acc stmt
 
   -- Generates an statement for the contained intrinsic, which potentially
   -- replaces the original assignment statement.
