@@ -8,8 +8,7 @@ include "string.mc"
 include "either.mc"
 include "common.mc"
 include "error-highlight.mc"
-
-type NonTerminal = String
+include "name.mc"
 
 -- NOTE(vipa, 2021-02-05): I want to create types that refer to
 -- `Token`, which lives in a language fragment. There is no top-level
@@ -40,24 +39,22 @@ lang ParserBase = TokenParser + EOFTokenParser
   | LitSpec t -> snoc (cons '\'' t.lit) '\''
 end
 
-type Production prodLabel = {nt: NonTerminal, label: prodLabel, rhs: [Symbol], action: Action state}
-type Grammar prodLabel =
-  { start: NonTerminal
-  , productions: [Production prodLabel]
+type Production prodLabel state = {nt: Name, label: prodLabel, rhs: [Symbol], action: Action state}
+type Grammar prodLabel state =
+  { start: Name
+  , productions: [Production prodLabel state]
   }
 
 lang ParserSpec = ParserBase
   syn SpecSymbol =
-  | NtSpec NonTerminal
+  | NtSpec Name
 
   sem symSpecToStr =
   | NtSpec n -> n
 
   sem _compareSpecSymbol =
-  | (NtSpec l, NtSpec r) -> cmpString l r
+  | (NtSpec l, NtSpec r) -> nameCmp l r
 
-  sem string2NonTerminal =
-  | str -> str
   sem ntSym =
   | nt -> NtSpec nt
   sem litSym =
@@ -73,18 +70,18 @@ lang ParserGenerated = ParserBase
   syn SpecSymbol =
   -- NOTE(vipa, 2021-02-08): The `Ref` here is slightly undesirable, but I see no other way to construct a cyclic data structure
   -- NOTE(vipa, 2021-02-08): The first `SpecSymbol` here should be `ParserBase.SpecSymbol`
-  | NtSym {nt: NonTerminal, table: (Ref (Map SpecSymbol {syms: [SpecSymbol], action: Action state, label: prodLabel}))}
+  | NtSym {nt: Name, table: (Ref (Map SpecSymbol {syms: [SpecSymbol], action: Action state, label: prodLabel}))}
 
   -- NOTE(vipa, 2021-02-08): These should be opaque, and the key
   -- `SpecSymbol` in the `Map` should be `ParserBase.Symbol`
   type TableProd = {syms: [SpecSymbol], label: prodLabel, action: Action state}
-  type Table = {start: {nt: NonTerminal, table: (Ref (Map SpecSymbol (TableProd prodLabel)))}, firstOfRhs: [SpecSymbol] -> SymSet, lits: Map String ()}
+  type Table = {start: {nt: Name, table: (Ref (Map SpecSymbol (TableProd prodLabel)))}, firstOfRhs: [SpecSymbol] -> SymSet, lits: Map String ()}
 
   sem symSpecToStr =
   | NtSym t -> t.nt
 
   sem _compareSpecSymbol =
-  | (NtSym l, NtSym r) -> cmpString l.nt r.nt
+  | (NtSym l, NtSym r) -> nameCmp l.nt r.nt
 end
 
 -- NOTE(vipa, 2022-03-02): This is essentially just a language
@@ -129,7 +126,7 @@ let _iterateUntilFixpoint : (a -> a -> Bool) -> (a -> a) -> a -> a =
 
 
 type ParseError prodLabel
-con UnexpectedFirst : {nt : NonTerminal, stack : [StackItem prodLabel], found : ParsedSymbol, expected : [SpecSymbol]} -> ParseError prodLabel
+con UnexpectedFirst : {nt : Name, stack : [StackItem prodLabel], found : ParsedSymbol, expected : [SpecSymbol]} -> ParseError prodLabel
 con UnexpectedToken : {stack : [StackItem prodLabel], found : ParsedSymbol, expected : SpecSymbol} -> ParseError prodLabel
 
 let _sanitizeStack = use ParserConcrete in use ParserSpec in lam stack.
@@ -151,7 +148,7 @@ let _expectedFromStack = use ParserConcrete in lam firstOfRhs: [SpecSymbol] -> S
   in work
 
 
-type GenError prodLabel = Map NonTerminal (Map SpecSymbol [prodLabel])
+type GenError prodLabel = Map Name (Map SpecSymbol [prodLabel])
 
 lang ParserGeneration = ParserSpec + ParserGenerated
   -- NOTE(vipa, 2022-03-02): The type signature is a bit weird here,
@@ -160,7 +157,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
   -- function.
   sem genParsingTable =
   | grammar ->
-    let grammar: Grammar prodLabel = grammar in
+    let grammar: Grammar prodLabel state = grammar in
     match grammar with {productions = productions, start = startNt} in
 
     let emptySymSet = {eps = false, syms = mapEmpty compareSpecSymbol} in
@@ -175,7 +172,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
 
     let eqFirstSet = lam s1. lam s2.
       eqSeq
-        (lam a: (String, SpecSymbol). lam b: (String, SpecSymbol). if eqString a.0 b.0 then eqSymSet a.1 b.1 else false)
+        (lam a: (Name, SpecSymbol). lam b: (Name, SpecSymbol). if nameEq a.0 b.0 then eqSymSet a.1 b.1 else false)
         (mapBindings s1)
         (mapBindings s2) in
 
@@ -186,11 +183,11 @@ lang ParserGeneration = ParserSpec + ParserGenerated
 
     let eqFollowSet = lam s1. lam s2.
       eqSeq
-        (lam a: (String, Unknown). lam b: (String, Unknown). if eqString a.0 b.0 then eqFollowSymSet a.1 b.1 else false)
+        (lam a: (Name, Unknown). lam b: (Name, Unknown). if nameEq a.0 b.0 then eqFollowSymSet a.1 b.1 else false)
         (mapBindings s1)
         (mapBindings s2) in
 
-    let addProdToFirst : Map NonTerminal SymSet -> Production -> SymSet -> SymSet =
+    let addProdToFirst : Map Name SymSet -> Production prodLabel state -> SymSet -> SymSet =
       lam prev. lam prod. lam symset.
         recursive let work = lam symset: SymSet. lam rhs.
           match rhs with [] then {symset with eps = true}
@@ -205,10 +202,10 @@ lang ParserGeneration = ParserSpec + ParserGenerated
           else never
         in work symset prod.rhs in
 
-    let groupedProds : Map NonTerminal [Production] =
+    let groupedProds : Map Name [Production prodLabel state] =
       foldl
-        (lam acc. lam prod: Production. mapInsert prod.nt (snoc (optionGetOr [] (mapLookup prod.nt acc)) prod) acc)
-        (mapEmpty cmpString)
+        (lam acc. lam prod: Production prodLabel state. mapInsert prod.nt (snoc (optionGetOr [] (mapLookup prod.nt acc)) prod) acc)
+        (mapEmpty nameCmp)
         productions in
 
     let addNtToFirstSet = lam prev. lam nt. lam symset.
@@ -227,7 +224,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
     --   let _ = printLn "" in
     --   followSet in
 
-    let firstSet : Map NonTerminal SymSet =
+    let firstSet : Map Name SymSet =
       _iterateUntilFixpoint eqFirstSet
         (lam prev. mapMapWithKey (addNtToFirstSet prev) prev)
         (mapMap (lam. emptySymSet) groupedProds) in
@@ -252,7 +249,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
         else never
       in work emptySymSet in
 
-    let addProdToFollow : Production -> Map NonTerminal (Map SpecSymbol ()) -> Map NonTerminal (Map SpecSymbol ()) = lam prod. lam follow.
+    let addProdToFollow : Production prodLabel state -> Map Name (Map SpecSymbol ()) -> Map Name (Map SpecSymbol ()) = lam prod. lam follow.
       match prod with {nt = prodNt, rhs = rhs} then
         recursive let work = lam follow. lam rhs.
           match rhs with [] then follow
@@ -272,7 +269,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
         in work follow rhs
       else never in
 
-    let followSet : Map NonTerminal (Map SpecSymbol ()) =
+    let followSet : Map Name (Map SpecSymbol ()) =
       _iterateUntilFixpoint eqFollowSet
         (lam prev. foldl (lam prev. lam prod. addProdToFollow prod prev) prev productions)
         (mapInsert startNt (mapInsert (TokSpec (EOFRepr ())) () (mapEmpty compareSpecSymbol))
@@ -283,7 +280,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
 
     -- The first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
     let emptyTableTarget = ref (mapEmpty compareSpecSymbol) in
-    let table : Map NonTerminal (Ref (Map SpecSymbol {syms : [SpecSymbol], action: Action state})) =
+    let table : Map Name (Ref (Map SpecSymbol {syms : [SpecSymbol], action: Action state})) =
       mapMap (lam. ref (mapEmpty compareSpecSymbol)) groupedProds in
 
     let specSymToGenSym = lam sym.
@@ -295,7 +292,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
     let hasLl1Error = ref false in
     let ll1Errors = mapMap (lam. ref (mapEmpty compareSpecSymbol)) groupedProds in
 
-    let addProdToTable = lam prod: Production.
+    let addProdToTable = lam prod: Production prodLabel state.
       let tableRef = mapFindExn prod.nt table in
       let prev = deref tableRef in
       let firstSymset = firstOfRhs prod.rhs in
@@ -328,7 +325,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
         then mapInsert lit () lits
         else lits in
     let lits = foldl
-      (lam acc. lam prod: Production. foldl addLitToLits acc prod.rhs)
+      (lam acc. lam prod: Production prodLabel state. foldl addLitToLits acc prod.rhs)
       (mapEmpty cmpString)
       productions in
 
@@ -339,7 +336,7 @@ lang ParserGeneration = ParserSpec + ParserGenerated
     -- mapMapWithKey dprintTablePair table;
 
     if deref hasLl1Error
-      then Left (mapFromSeq cmpString (filter (lam binding: (Unknown, Unknown). not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
+      then Left (mapFromSeq nameCmp (filter (lam binding: (Unknown, Unknown). not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
       else Right {start = {nt = startNt, table = mapFindExn startNt table}, firstOfRhs = firstOfRhs, lits = lits}
 end
 
@@ -359,11 +356,11 @@ lang LL1Parser = ParserGeneration + ParserConcrete
 
   /-
     : ([SpecSymbol] -> SymSet)
-    -> Option (NonTerminal, ParsedSymbol, [FullStackItem prodLabel])
+    -> Option (Name, ParsedSymbol, [FullStackItem prodLabel])
     -> Option (SpecSymbol, ParsedSymbol, [FullStackItem prodLabel])
     -> ParseError prodLabel
   -/
-  sem _mkLL1Error (firstOfRhs : [SpecSymbol] -> SymSet) (openInfo : Option (NonTerminal, ParsedSymbol, [FullStackItem prodLabel])) =
+  sem _mkLL1Error (firstOfRhs : [SpecSymbol] -> SymSet) (openInfo : Option (Name, ParsedSymbol, [FullStackItem prodLabel])) =
   | workInfo ->
     match openInfo with Some (nt, token, stack) then
       UnexpectedFirst
@@ -397,7 +394,7 @@ lang LL1Parser = ParserGeneration + ParserConcrete
         then {token = TokParsed res.token, stream = res.stream}
         else {token = LitParsed {lit = res.lit, info = res.info}, stream = res.stream} in
     recursive
-      let openNt = lam nt: {nt: NonTerminal, table: Unknown}. lam token. lam stack. lam stream.
+      let openNt = lam nt: {nt: Name, table: Unknown}. lam token. lam stack. lam stream.
         modref lastOpen (Some (nt.nt, token, stack));
         let table = deref nt.table in
         match mapLookup (parsedSymToSpecSym token) table with Some r then
@@ -466,7 +463,7 @@ use TestParserLang in
 
 let genParser = genParsingTable in
 
-let nonTerminal = string2NonTerminal in
+let nonTerminal = nameSym in
 let nt = ntSym in
 let lit = litSym in
 let lident = tokSym (LIdentRepr ()) in
@@ -475,7 +472,7 @@ let int = tokSym (IntRepr ()) in
 
 let errorMapToBindingsExc = lam m.
   match m with Left m then
-    mapBindings (mapMap mapBindings m)
+    map (lam x. match x with (nt, x) in (nameGetStr nt, x)) (mapBindings (mapMap mapBindings m))
   else error "Expected a left result" in
 let unwrapTableExc = lam m.
   match m with Right m then m
@@ -497,7 +494,7 @@ type Wrapped in
 con Wrapped : {label: String, val: [SpecSymbol]} -> Wrapped in
 let wrap = lam label. lam state: (). lam x. Wrapped {label = label, val = x} in
 
-let gFailOnce : Grammar String =
+let gFailOnce : Grammar String () =
   { start = top
   , productions =
     [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
@@ -521,7 +518,7 @@ with [ ( "Declaration"
 ]
 in
 
-let gFailTwice : Grammar String =
+let gFailTwice : Grammar String () =
   { start = top
   , productions =
     [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
@@ -546,7 +543,7 @@ with [ ( "Declaration"
 ]
 in
 
-let gFailLet : Grammar String =
+let gFailLet : Grammar String () =
   { start = top
   , productions =
     [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
@@ -576,7 +573,7 @@ with [ ( "ExpressionFollow"
 ]
 in
 
-let g : Grammar String =
+let g : Grammar String () =
   { start = top
   , productions =
     [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
@@ -749,11 +746,11 @@ utest parse "let"
 with Left (UnexpectedToken
   { expected = (TokSpec (LIdentRepr ()))
   , stack = (
-    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec ("FileFollow"))])}
+    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec topFollow)])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec ("Expression"))])
+      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec expr)])
       }
     ])
   , found = (TokParsed (EOFTok {info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 3})}))
@@ -766,7 +763,7 @@ with Left (UnexpectedFirst
     [ TokSpec (IntRepr ())
     ]
   , stack =
-    [ { label = "toptop" , seen = [] , rest = [NtSpec "FileFollow"]}
+    [ { label = "toptop" , seen = [] , rest = [NtSpec topFollow]}
     , { label = "topdecl" , seen = [] , rest = []}
     , { label = "decllet"
       , seen =
@@ -779,7 +776,7 @@ with Left (UnexpectedFirst
     ]
   , found = TokParsed (EOFTok {info = (Info {filename = "file",row2 = 1,row1 = 1, col2 = 7,col1 = 7})}
     )
-  , nt = "Expression"
+  , nt = expr
   })
 in
 
@@ -787,11 +784,11 @@ utest parse "let let = 4"
 with Left (UnexpectedToken
   { expected = (TokSpec (LIdentRepr ()))
   , stack = (
-    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec ("FileFollow"))])}
+    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec topFollow)])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec ("Expression"))])
+      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec expr)])
       }
     ])
   , found = (LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 4})})
