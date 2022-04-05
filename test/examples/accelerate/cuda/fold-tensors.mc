@@ -13,7 +13,7 @@ let sumTensor : Tensor[Float] -> Float = lam t.
 let addTensor : (Int, Int) -> Float -> Tensor[Float] -> Float =
   lam rc. lam acc. lam t.
   match rc with (row, col) in
-  addf acc (tensorGetFloat t [row, col])
+  addf acc (tensorGetExn t [row, col])
 
 let randFloat : () -> Float = lam.
   let r = randIntU 1 1000 in
@@ -39,7 +39,7 @@ accelerate (
         (lam acc. lam i.
           let t = get s i in
           addf acc (tensorGetExn t [r,c])) in
-    tensorSetFloat out [r,c] x)
+    tensorSetExn out [r,c] x)
 );
 
 let x = sumTensor out in
