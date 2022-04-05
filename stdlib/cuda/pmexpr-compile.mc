@@ -123,6 +123,8 @@ lang CudaPMExprMemoryManagement = CudaPMExprAst + PMExprVariableSub
   | TmVar t ->
     match allocEnvLookup t.ident env with Some (Cpu _) then
       (env, TmVar t)
+    else match t.ty with TyRecord {labels = []} then
+      (env, TmVar t)
     else
       let cpuId = nameSetNewSym t.ident in
       let retExpr = TmVar {t with ident = cpuId} in
