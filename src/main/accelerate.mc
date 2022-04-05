@@ -159,7 +159,6 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast;
-  printLn (pprintCudaPMExprAst ast);
   let ast = constantAppToExpr ast in
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in

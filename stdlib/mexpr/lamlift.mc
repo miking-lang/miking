@@ -217,8 +217,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         (subMap, TmLet {{{t with tyBody = tyBody}
                             with body = body}
                             with inexpr = inexpr})
-    else error (join ["Found no free variable solution for ",
-                      nameGetStr t.ident])
+    else infoErrorExit t.info (join ["Found no free variable solution for ",
+                                     nameGetStr t.ident])
   | TmRecLets t ->
     let addBindingSubExpression =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
@@ -242,8 +242,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             (TmVar {ident = bind.ident, ty = bindType, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
-      else error (join ["Lambda lifting error: No solution found for binding ",
-                        nameGetStr bind.ident])
+      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+                                          nameGetStr bind.ident])
     in
     let insertFreeVarsBinding =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
@@ -261,8 +261,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         let tyBody = tyTm body in
         match insertFreeVariablesH solutions subMap body with (subMap, body) in
         (subMap, {{bind with tyBody = tyBody} with body = body})
-      else error (join ["Lambda lifting error: No solution found for binding ",
-                        nameGetStr bind.ident])
+      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+                                          nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
     match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in

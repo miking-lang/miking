@@ -281,7 +281,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
       match printArgs aindent env (tail apps) with (env,args) then
         (env, join [fun, pprintNewline aindent, args])
       else never
-    else error "Impossible"
+    else infoErrorExit t.info "Impossible"
 end
 
 lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst

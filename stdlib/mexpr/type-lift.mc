@@ -30,6 +30,12 @@ lang VariantNameTypeAst = Eq
   | TyVariantName {ident : Name,
                    info : Info}
 
+  sem tyWithInfo (info : Info) =
+  | TyVariantName t -> TyVariantName {t with info = info}
+
+  sem infoTy =
+  | TyVariantName r -> r.info
+
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariantName {ident = rid} ->
     match lhs with TyVariantName {ident = lid} then
@@ -71,8 +77,8 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
         match mapLookup ident env.variants with Some constrs then
           TyVariant {constrs = constrs, info = info/-infoTy ty-/}
         else
-          error (join ["No variant type ", nameGetStr ident,
-                       " found in environment"])
+          infoErrorExit info (join ["No variant type ", nameGetStr ident,
+                                    " found in environment"])
       else ty
     in
     assocSeqMap f env.typeEnv
@@ -92,7 +98,7 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
       in
       (env, tycon)
     else never
-  | _ -> error "Expected record type"
+  | ty -> infoErrorExit (infoTy ty) "Expected record type"
 end
 
 -- This implementation takes record field order into account when populating
@@ -255,9 +261,9 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in
             let err = lam.
-              error (join ["Constructor ", nameGetStr t.ident,
-                           " defined before referenced variant type ",
-                           nameGetStr ident])
+              infoErrorExit t.info (join ["Constructor ", nameGetStr t.ident,
+                                          " defined before referenced variant type ",
+                                          nameGetStr ident])
             in
             let env : TypeLiftEnv = env in
             let variantMap = mapLookupApplyOrElse f err ident env.variants in

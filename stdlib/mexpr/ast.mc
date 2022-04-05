@@ -23,20 +23,18 @@ lang Ast
   syn Pat =
   -- Intentionally left blank
 
-  sem infoTm =
-  -- Intentionally left blank
+  sem infoTm: Expr -> Info
+  sem tyTm: Expr -> Type
+  sem withInfo: Info -> Expr -> Expr
+  sem withType: Type -> Expr -> Expr
 
-  sem tyTm =
-  -- Intentionally left blank
+  sem infoPat: Pat -> Info
+  sem tyPat: Pat -> Type
+  sem withInfoPat: Info -> Pat -> Pat
+  sem withTypePat: Type -> Pat -> Pat
 
-  sem withType (ty : Type) =
-  -- Intentionally left blank
-
-  sem tyPat =
-  -- Intentionally left blank
-
-  sem withTypePat (ty : Type) =
-  -- Intentionally left blank
+  sem infoTy: Info -> Type
+  sem tyWithInfo: Info -> Type -> Type
 
   -- TODO(vipa, 2021-05-27): Replace smap and sfold with smapAccumL for Expr and Type as well
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
