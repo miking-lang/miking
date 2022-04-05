@@ -270,7 +270,6 @@ lang CudaPMExprAst = PMExprAst
       infoErrorExit t.info msg
   | TmFree t -> TmFree {t with ty = tyWithInfo t.info tyunit_}
 
-
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmSeqMap r ->
     match lhs with TmSeqMap l then
@@ -337,29 +336,62 @@ lang CudaPMExprAst = PMExprAst
 
   sem normalize (k : Expr -> Expr) =
   | TmSeqMap t ->
-    k (TmSeqMap {{t with f = normalizeTerm t.f}
-                    with s = normalizeTerm t.s})
+    normalizeName
+      (lam s.
+        k (TmSeqMap {{t with f = normalizeTerm t.f}
+                        with s = s}))
+      t.s
   | TmSeqFoldl t ->
-    k (TmSeqFoldl {{{t with f = normalizeTerm t.f}
-                       with acc = normalizeTerm t.acc}
-                       with s = normalizeTerm t.s})
+    normalizeNames
+      (lam acc.
+        normalizeName
+          (lam s.
+            k (TmSeqFoldl {{{t with f = normalizeTerm t.f}
+                               with acc = acc}
+                               with s = s}))
+          t.s)
+      t.acc
   | TmTensorSliceExn t ->
-    k (TmTensorSliceExn {{t with t = normalizeTerm t.t}
-                            with slice = normalizeTerm t.slice})
+    normalizeNames
+      (lam tt.
+        normalizeName
+          (lam slice.
+            k (TmTensorSliceExn {{t with t = tt} with slice = slice}))
+          t.slice)
+      t.t
   | TmTensorSubExn t ->
-    k (TmTensorSubExn {{{t with t = normalizeTerm t.t}
-                           with ofs = normalizeTerm t.ofs}
-                           with len = normalizeTerm t.len})
+    normalizeNames
+      (lam tt.
+        normalizeNames
+          (lam ofs.
+            normalizeName
+              (lam len.
+                k (TmTensorSubExn {{{t with t = tt}
+                                       with ofs = ofs}
+                                       with len = len}))
+              t.len)
+          t.ofs)
+      t.t
   | TmMapKernel t ->
-    k (TmMapKernel {{t with f = normalizeTerm t.f}
-                       with s = normalizeTerm t.s})
+    normalizeName
+      (lam s. k (TmMapKernel {{t with f = normalizeTerm t.f} with s = s}))
+      t.s
   | TmReduceKernel t ->
-    k (TmReduceKernel {{{t with f = normalizeTerm t.f}
-                           with ne = normalizeTerm t.ne}
-                           with s = normalizeTerm t.s})
+    normalizeNames
+      (lam ne.
+        normalizeName
+          (lam s.
+            k (TmReduceKernel {{{t with f = normalizeTerm t.f}
+                                   with ne = ne}
+                                   with s = s}))
+          t.s)
+      t.ne
   | TmLoopKernel t ->
-    k (TmLoopKernel {{t with n = normalizeTerm t.n}
-                        with f = normalizeTerm t.f})
+    normalizeName
+      (lam n.
+        k (TmLoopKernel {{t with n = n}
+                            with f = normalizeTerm t.f}))
+      t.n
   | TmCopy t -> k (TmCopy t)
   | TmFree t -> k (TmFree t)
 end

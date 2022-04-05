@@ -113,9 +113,16 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
       else false
     then acc
     else cons (CudaConDefError conDef) acc
-  | fold & (TmSeqFoldl t) ->
+  | TmSeqFoldl t ->
     let acc = cudaWellFormedExpr acc t.acc in
     cudaWellFormedExpr acc t.s
+  | TmTensorSliceExn t ->
+    let acc = cudaWellFormedExpr acc t.t in
+    cudaWellFormedExpr acc t.slice
+  | TmTensorSubExn t ->
+    let acc = cudaWellFormedExpr acc t.t in
+    let acc = cudaWellFormedExpr acc t.ofs in
+    cudaWellFormedExpr acc t.len
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.
