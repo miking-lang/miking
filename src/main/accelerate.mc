@@ -23,6 +23,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
+include "mexpr/resolve-alias.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
@@ -49,13 +50,13 @@ include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot + MExprRemoveTypeAscription + MExprUtestTrans +
-  PMExprAst + MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
-  PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
-  PMExprRecursionElimination + PMExprExtractAccelerate +
-  PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
-  PMExprNestedAccelerate + PMExprWellFormed + OCamlGenerate +
-  OCamlTypeDeclGenerate + OCamlGenerateExternalNaive
+  MExprSym + MExprTypeCheck + MExprRemoveTypeAscription + MExprResolveAlias +
+  MExprUtestTrans + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
+  PMExprTailRecursion + PMExprParallelPattern + PMExprCExternals +
+  MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
+  PMExprExtractAccelerate + PMExprUtestSizeConstraint +
+  PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
+  OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive
 end
 
 lang MExprFutharkCompile =
@@ -383,6 +384,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = typeCheck ast in
   let ast = removeTypeAscription ast in
+  let ast = resolveAliases ast in
 
   -- Translate accelerate terms into functions with one dummy parameter, so
   -- that we can accelerate terms without free variables and so that it is
