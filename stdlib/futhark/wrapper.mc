@@ -44,7 +44,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
   sem getFutharkCType =
   | t & (FutharkSeqRepr _) ->
     let seqTypeStr = getSeqFutharkTypeString t in
-    let seqTypeIdent = _getIdentOrInitNew seqTypeStr in
+    let seqTypeIdent = _getIdentOrInitNew (concat "futhark_" seqTypeStr) in
     CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}}
   | FutharkRecordRepr t ->
     -- TODO(larshum, 2022-03-09): How do we figure out this type?
