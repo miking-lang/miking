@@ -615,22 +615,25 @@ lang OCamlPrettyPrint =
     else never
   | OTmRecord {bindings = bindings, tyident = tyident} ->
     let innerIndent = pprintIncr (pprintIncr indent) in
-    match unzip bindings with (labels, tms) then
-      match mapAccumL (pprintCode innerIndent) env tms with (env, tms) then
-        let strs =
-          mapi
-            (lam i. lam t.
-              join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
-            tms
-        in
-        match getTypeStringCode indent env tyident with (env, tyident) then
-          let merged =
-            strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
-          in
-          (env, join ["({", merged , "} : ", tyident, ")"])
-        else never
-      else never
-    else never
+    match unzip bindings with (labels, tms) in
+    match mapAccumL (pprintCode innerIndent) env tms with (env, tms) in
+    let strs =
+      mapi
+        (lam i. lam t.
+          join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
+        tms
+    in
+    match getTypeStringCode indent env tyident with (env, tystr) in
+    let tystr =
+      -- NOTE(larshum, 2022-04-06): Do not add type annotations for an inlined
+      -- record.
+      match tyident with OTyInlinedRecord _ then ""
+      else concat " : " tystr
+    in
+    let merged =
+      strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
+    in
+    (env, join ["({", merged , "}", tystr, ")"])
   | OTmProject {field = field, tm = tm} ->
     match pprintCode indent env tm with (env, tm) then
       (env, join [tm, ".", field])

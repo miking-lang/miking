@@ -3,6 +3,7 @@
 -- result, and all its arguments, are wrapped in calls to convertAccelerateParameters to ensure
 -- they have a valid OCaml type.
 
+include "c/compile.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/external.mc"
@@ -27,7 +28,8 @@ lang PMExprConvertMExprToOCaml = PMExprReplaceAccelerateBase
   | TyCon {info = info, ident = ident} ->
     let env : ReplaceAccelerateEnv = env in
     match assocSeqLookup {eq=nameEq} ident env.typeLiftEnv with Some ty then
-      _mexprToOCaml env (Some ident) expr ty
+      let id = match id with Some id then id else ident in
+      _mexprToOCaml env (Some id) expr ty
     else infoErrorExit info "CUDA compiler failed to convert MExpr type"
   | tyrec & (TyRecord {info = info, labels = labels, fields = fields}) ->
     if null labels then expr
@@ -101,7 +103,59 @@ lang PMExprConvertMExprToOCaml = PMExprReplaceAccelerateBase
   | TyTensor {info = info, ty = _} ->
     infoErrorExit info "CUDA compiler can only convert tensors of ints or floats"
   | TyVariant {info = info, constrs = constrs} ->
-    infoErrorExit info "Conversion not implemented yet"
+    let env : ReplaceAccelerateEnv = env in
+    let convertConstructor = lam constr : (Name, Type).
+      match constr with (constrId, constrTy) in
+      let varId = nameSym "t" in
+      let constrPat = OPatCon {ident = constrId, args = [npvar_ varId]} in
+      match _unwrapType env.typeLiftEnv constrTy
+      with TyRecord (t & {labels = ![]}) then
+        let tys =
+          map
+            (lam sid.
+              match mapLookup sid t.fields with Some ty then
+                ty
+              else infoErrorExit info "Record type has inconsistent labels/fields")
+            t.labels in
+        let ns = create (length tys) (lam. nameSym "t") in
+        let pvars =
+          mapi
+            (lam i. lam n.
+              PatNamed {ident = PName n, info = info, ty = get tys i})
+            ns in
+        let pat = OPatTuple {pats = pvars} in
+        let tms =
+          mapi
+            (lam i. lam ident : Name.
+              let sid = get t.labels i in
+              let ty = get tys i in
+              let var = TmVar {
+                ident = ident,
+                ty = ty,
+                info = info,
+                frozen = false
+              } in
+              _mexprToOCaml env (None ()) (objMagic var) ty)
+            ns in
+        let labels = map (lam sid. pprintLabelString (sidToString sid)) t.labels in
+        let innerRec = OTmRecord {
+          bindings = zip labels tms,
+          tyident = OTyInlinedRecord {info = info}} in
+        let constr = OTmConApp {
+          ident = constrId,
+          args = [innerRec]} in
+        (constrPat, OTmMatch {target = objMagic expr, arms = [(pat, constr)]})
+      else
+        let constrExpr = TmVar {
+          ident = varId, ty = constrTy, info = info, frozen = false
+        } in
+        let constr = OTmConApp {
+          ident = constrId,
+          args = [_mexprToOCaml env (Some constrId) constrExpr constrTy]} in
+        (constrPat, constr)
+    in
+    let arms : [(Pat, Expr)] = map convertConstructor (mapBindings constrs) in
+    OTmMatch {target = expr, arms = arms}
   | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> expr
   | ty -> infoErrorExit (infoTy ty) "CUDA compiler cannot convert MExpr type"
 end

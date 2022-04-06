@@ -584,8 +584,6 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
             CEApp {fun = _getIdentExn "Field", args = [expr, CEInt {i = 0}]} in
           let srcExpr =
             match constrData with CudaRecordRepr _ then src
-            else match constrData with CudaTensorRepr _ then
-              getFieldFirst (getFieldFirst src)
             else getFieldFirst src in
           let setTempStmts =
             _generateOCamlToCudaWrapperStmts env srcExpr innerId constrData in

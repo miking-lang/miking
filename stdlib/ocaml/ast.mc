@@ -211,6 +211,7 @@ lang OCamlTypeAst =
   | OTyParam {info : Info, ident : String}
   | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
   | OTyString {info: Info}
+  | OTyInlinedRecord {info : Info}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -226,6 +227,7 @@ lang OCamlTypeAst =
   | OTyParam r -> r.info
   | OTyRecord r -> r.info
   | OTyString r -> r.info
+  | OTyInlinedRecord r -> r.info
 
   sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem smapAccumL_Type_Type f acc =
