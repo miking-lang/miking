@@ -864,10 +864,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
           let constrIdx = deref counter in
           (modref counter (addi constrIdx 1));
           let innerArg = CEArrow {lhs = arg, id = constrId} in
-          let innerOcamlArg = CEApp {
-            fun = _getIdentExn "Field",
-            args = [ocamlArg, CEInt {i = constrIdx}]} in
-          let innerFreeStmts = _generateDeallocArg env innerArg innerOcamlArg constrData in
+          let innerFreeStmts = _generateDeallocArg env innerArg ocamlArg constrData in
           [ CSIf {
               cond = CEBinOp {
                 op = COEq (),
