@@ -12,8 +12,193 @@ include "pmexpr/ast.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
+lang PMExprReplaceAccelerateBase =
+  PMExprAst + OCamlTopAst + OCamlPrettyPrint
+
+  type ReplaceAccelerateEnv = {
+    typeLiftEnv : AssocSeq Name Type,
+    generateEnv : GenerateEnv
+  }
+end
+
+lang PMExprConvertMExprToOCaml = PMExprReplaceAccelerateBase
+  sem _mexprToOCaml : ReplaceAccelerateEnv -> Option Name -> Expr -> Type -> Expr
+  sem _mexprToOCaml env id expr =
+  | TyCon {info = info, ident = ident} ->
+    let env : ReplaceAccelerateEnv = env in
+    match assocSeqLookup {eq=nameEq} ident env.typeLiftEnv with Some ty then
+      _mexprToOCaml env (Some ident) expr ty
+    else infoErrorExit info "CUDA compiler failed to convert MExpr type"
+  | tyrec & (TyRecord {info = info, labels = labels, fields = fields}) ->
+    if null labels then expr
+    else
+      let id =
+        match id with Some id then id
+        else infoErrorExit info "Found improperly wrapped record type" in
+      let tys =
+        map
+          (lam sid.
+            match mapLookup sid fields with Some ty then
+              ty
+            else infoErrorExit info "Record type has inconsistent labels/fields")
+          labels in
+      let ns = create (length tys) (lam. nameSym "t") in
+      let pvars =
+        mapi
+          (lam i. lam n.
+            PatNamed {ident = PName n, info = info, ty = get tys i})
+          ns in
+      let pat = OPatTuple {pats = pvars} in
+      let tms =
+        mapi
+          (lam i. lam ident : Name.
+            let sid = get labels i in
+            let ty = get tys i in
+            let var = TmVar {
+              ident = ident,
+              ty = ty,
+              info = info,
+              frozen = false
+            } in
+            _mexprToOCaml env (None ()) (objMagic var) ty)
+          ns in
+      let rec = TmRecord {
+        bindings = mapFromSeq cmpSID (zip labels tms),
+        ty = TyCon {ident = id, info = info}, info = info
+      } in
+      OTmMatch {target = objMagic expr, arms = [(pat, rec)]}
+  | TySeq {info = info, ty = ty} ->
+    let op = OTmVarExt {ident = intrinsicOpSeq "Helpers.to_array_copy"} in
+    let mapop = OTmVarExt {ident = intrinsicOpSeq "map"} in
+    let ident = nameSym "x" in
+    let var = TmVar {
+      ident = ident,
+      ty = TyUnknown {info = info},
+      info = info,
+      frozen = false} in
+    let body = _mexprToOCaml env (None ()) var ty in
+    TmApp {
+      lhs = op,
+      rhs = TmApp {
+        lhs = TmApp {
+          lhs = mapop,
+          rhs = TmLam {
+            ident = ident,
+            tyIdent = TyUnknown {info = info},
+            body = body,
+            ty = TyUnknown {info = info},
+            info = info},
+          ty = TyUnknown {info = info},
+          info = info},
+        rhs = expr,
+        ty = TyUnknown {info = info},
+        info = info},
+      ty = TyUnknown {info = info},
+      info = info}
+  | ty & (TyTensor {info = info, ty = TyInt _ | TyFloat _}) ->
+    let lhs = OTmVarExt {ident = intrinsicOpTensor "Helpers.to_genarray_clayout"} in
+    TmApp {lhs = lhs, rhs = expr, ty = ty, info = info}
+  | TyTensor {info = info, ty = _} ->
+    infoErrorExit info "CUDA compiler can only convert tensors of ints or floats"
+  | TyVariant {info = info, constrs = constrs} ->
+    infoErrorExit info "Conversion not implemented yet"
+  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> expr
+  | ty -> infoErrorExit (infoTy ty) "CUDA compiler cannot convert MExpr type"
+end
+
+lang PMExprConvertOCamlToMExpr = PMExprReplaceAccelerateBase
+  sem _ocamlToMExpr : ReplaceAccelerateEnv -> Option Name -> Expr -> Type -> Expr
+  sem _ocamlToMExpr env id expr =
+  | TyCon {info = info, ident = ident} ->
+    let env : ReplaceAccelerateEnv = env in
+    match assocSeqLookup {eq=nameEq} ident env.typeLiftEnv with Some ty then
+      _ocamlToMExpr env (Some ident) expr ty
+    else infoErrorExit info "CUDA compiler failed to convert MExpr type"
+  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
+    if null labels then expr
+    else
+      let id =
+        match id with Some id then id
+        else infoErrorExit info "Found improperly wrapped record type" in
+      let tys =
+        map
+          (lam sid.
+            match mapLookup sid fields with Some ty then
+              ty
+            else infoErrorExit info "Record type has inconsistent labels/fields")
+          labels in
+      let ns = create (length tys) (lam. nameSym "t") in
+      let pvars =
+        mapi
+          (lam i. lam n.
+            PatNamed { ident = PName n, info = info, ty = get tys i})
+          ns in
+      let tpat = OPatTuple { pats = pvars } in
+      let binds =
+        mapi
+          (lam i. lam n : (Name, Type).
+            match n with (ident, ty) in
+            let sid = stringToSid (int2string i) in
+            let ty = get tys i in
+            let var = TmVar {
+              ident = ident,
+              ty = ty,
+              info = info,
+              frozen = false} in
+            (sid, _ocamlToMExpr env (None ()) var ty))
+          (zip ns tys) in
+      let record = TmRecord {
+        bindings = mapFromSeq cmpSID binds,
+        ty = ty,
+        info = info} in
+      let t = OTmConApp {ident = id, args = [record]} in
+      OTmMatch {target = expr, arms = [(tpat, t)]}
+  | TySeq {info = info, ty = ty} ->
+    let op = OTmVarExt {ident = intrinsicOpSeq "Helpers.of_array_copy"} in
+    let mapop = OTmVarExt {ident = "Array.map"} in
+    let ident = nameSym "x" in
+    let var = TmVar {
+      ident = ident,
+      ty = TyUnknown {info = info},
+      info = info,
+      frozen = false} in
+    let body = _ocamlToMExpr env (None ()) var ty in
+    TmApp {
+      lhs = op,
+      rhs = TmApp {
+        lhs = TmApp {
+          lhs = mapop,
+          rhs = TmLam {
+            ident = ident,
+            tyIdent = TyUnknown {info = info},
+            body = body,
+            ty = TyUnknown {info = info},
+            info = info},
+          ty = TyUnknown {info = info},
+          info = info},
+        rhs = expr,
+        ty = TyUnknown {info = info},
+        info = info},
+      ty = TyUnknown {info = info},
+      info = info}
+  | ty & (TyTensor {info = info, ty = TyInt _ | TyFloat _}) ->
+    let lhs = OTmVarExt {ident = intrinsicOpTensor "Helpers.of_genarray_clayout"} in
+    TmApp {lhs = lhs, rhs = expr, ty = ty, info = info}
+  | TyTensor {info = info, ty = _} ->
+    infoErrorExit info "CUDA compiler can only convert tensors of ints or floats"
+  | TyVariant {info = info, constrs = constrs} ->
+    infoErrorExit info "Conversion not implemented yet"
+  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> expr
+  | ty -> infoErrorExit (infoTy ty) "CUDA compiler cannot convert MExpr type"
+end
+
 lang PMExprReplaceAccelerate =
-  PMExprAst + OCamlGenerateExternal + OCamlTopAst + OCamlPrettyPrint
+  PMExprConvertMExprToOCaml + PMExprConvertOCamlToMExpr
+
+  sem _constructReplaceAccelerateEnv : AssocSeq Name Type -> GenerateEnv
+                                    -> ReplaceAccelerateEnv
+  sem _constructReplaceAccelerateEnv typeLiftEnv =
+  | generateEnv -> {typeLiftEnv = typeLiftEnv, generateEnv = generateEnv}
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -25,102 +210,32 @@ lang PMExprReplaceAccelerate =
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 
-  sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
-  | ty & (TyCon {info = info, ident = ident}) ->
-    let unwrapType = lam ty.
-      let ty = typeUnwrapAlias env.aliases ty in
-      match ty with TyCon {ident = ident} then
-        match mapLookup ident env.constrs with Some ty then
-         ty
-        else ty
-      else ty
-    in
-    let ty = unwrapType ty in
-    match ty with TyCon t then (acc, TyCon t)
-    else _mexprToOCamlType env acc ty
-  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
-    if null labels then
-      (acc, OTyTuple {info = info, tys = []})
-    else match record2tuple fields with Some tys then
-      match mapAccumL (_mexprToOCamlType env) acc tys with (acc, tys) in
-      (acc, OTyTuple {info = info, tys = tys})
-    else
-      match
-        mapAccumL
-          (lam acc. lam p : (SID, Type).
-            match p with (sid, ty) in
-            match _mexprToOCamlType env acc ty with (acc, ty) in
-            -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
-            -- of the OCaml pretty-printer to ensure the labels of the fields
-            -- match.
-            let str = pprintLabelString (sidToString sid) in
-            (acc, (str, ty)))
-          acc (mapBindings fields)
-      with (acc, ocamlTypedFields) in
-      -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
-      -- and use it as the target for conversion.
-      let recTyId = nameSym "record" in
-      let tyident = OTyVar {info = info, ident = recTyId} in
-      let recTy = OTyRecord {
-        info = info, fields = ocamlTypedFields, tyident = tyident} in
-      let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
-      (snoc acc recTyDecl, recTy)
-  | TySeq {info = info, ty = ty} ->
-    match _mexprToOCamlType env acc ty with (acc, ty) in
-    (acc, OTyArray {info = info, ty = ty})
-  | ty & (TyTensor _) -> (acc, _tensorToOCamlType ty)
-  | ty -> (acc, ty)
-
-  -- NOTE(larshum, 2022-03-25): The 'convertData' function is meant to convert
-  -- to a record defined in OCaml. But in our use-case, we want a record
-  -- produced from MExpr, which has to be obj-wrapped.
-  sem addRecordObjWrapping =
-  | OTmRecord t ->
-    let bindings =
-      map
-        (lam bind : (String, Expr).
-          match bind with (s, e) in
-          (s, addRecordObjWrapping e))
-        t.bindings in
-    objRepr (OTmRecord {t with bindings = bindings})
-  | t -> smap_Expr_Expr addRecordObjWrapping t
-
-  sem wrapInConvertData (env : GenerateEnv) (acc : [Top]) =
+  sem wrapInConvertData : ReplaceAccelerateEnv -> Expr -> Expr
+  sem wrapInConvertData env =
   | t ->
     let ty = tyTm t in
-    match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm t) env t ty ocamlTy with (_, e) in
-    let e = addRecordObjWrapping e in
-    (acc, e)
+    _mexprToOCaml env (None ()) t ty
 
-  sem convertAccelerateParametersH (env : GenerateEnv) (acc : [Top]) =
+  sem convertAccelerateParameters : ReplaceAccelerateEnv -> Expr -> Expr
+  sem convertAccelerateParameters env =
   | TmApp t ->
-    match convertAccelerateParametersH env acc t.lhs with (acc, lhs) in
-    match wrapInConvertData env acc t.rhs with (acc, rhs) in
-    (acc, TmApp {{t with lhs = lhs} with rhs = rhs})
-  | t -> (acc, t)
+    let lhs = convertAccelerateParameters env t.lhs in
+    let rhs = wrapInConvertData env t.rhs in
+    TmApp {{t with lhs = convertAccelerateParameters env t.lhs} 
+              with rhs = wrapInConvertData env t.rhs}
+  | t -> t
 
-  sem convertAccelerateParameters (env : GenerateEnv) (acc : [Top]) =
-  | ast ->
-    match convertAccelerateParametersH env acc ast with (acc, ast) in
-    let ty = tyTm ast in
-    match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm ast) env ast ocamlTy ty with (_, ast) in
-    (acc, ast)
+  sem convertAccelerate : ReplaceAccelerateEnv -> Expr -> Expr
+  sem convertAccelerate env =
+  | expr ->
+    let expr = convertAccelerateParameters env expr in
+    let ty = tyTm expr in
+    let expr = _ocamlToMExpr env (None ()) expr ty in
+    expr
 
-  -- We replace the auxilliary acceleration terms in the AST, by removing any
-  -- let-expressions involving an accelerate term and updates calls to such
-  -- terms to properly convert types of parameters and the return value.
-  --
-  -- The result is a list of OCaml record definitions, needed to handle the
-  -- data conversion of record types, and an AST.
-  sem replaceAccelerate (accelerated : Map Name AccelerateData)
-                        (env : GenerateEnv) =
-  | t -> replaceAccelerateH accelerated env [] t
-
-  sem replaceAccelerateH (accelerated : Map Name AccelerateData)
-                         (env : GenerateEnv)
-                         (acc : [Top]) =
+  sem replaceAccelerateH : Map Name AccelerateData -> ReplaceAccelerateEnv
+                        -> Expr -> Expr
+  sem replaceAccelerateH accelerated env =
   | t & (TmApp {lhs = lhs, ty = appTy}) ->
     let appArgs = collectAppArguments t in
     match appArgs with (TmVar {ident = id}, args) then
@@ -129,31 +244,37 @@ lang PMExprReplaceAccelerate =
         -- the only parameter.
         match args with _ ++ [TmConst {val = CInt {val = 0}}] then
           let lhs = withType appTy lhs in
-          convertAccelerateParameters env acc lhs
-        else convertAccelerateParameters env acc t
-      else (acc, t)
-    else (acc, t)
+          convertAccelerate env lhs
+        else convertAccelerate env t
+      else t
+    else t
   | TmLet t ->
     if mapMem t.ident accelerated then
-      replaceAccelerateH accelerated env acc t.inexpr
+      replaceAccelerateH accelerated env t.inexpr
     else
-      match replaceAccelerateH accelerated env acc t.body with (acc, body) in
-      match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
-      (acc, TmLet {{t with body = body} with inexpr = inexpr})
+      TmLet {{t with body = replaceAccelerateH accelerated env t.body}
+                with inexpr = replaceAccelerateH accelerated env t.inexpr}
   | TmRecLets t ->
-    let removeAccelerateBindings : RecLetBinding -> Option RecLetBinding =
+    let replaceAccelerateBindings : RecLetBinding -> Option RecLetBinding =
       lam bind.
       if mapMem bind.ident accelerated then None ()
-      else Some bind
+      else Some {bind with body = replaceAccelerateH accelerated env bind.body}
     in
-    let replaceBindings = lam acc. lam bind : RecLetBinding.
-      match replaceAccelerateH accelerated env acc bind.body with (acc, body) in
-      (acc, {bind with body = body})
-    in
-    match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
-    let bindings = mapOption removeAccelerateBindings t.bindings in
-    match mapAccumL replaceBindings acc bindings with (acc, bindings) in
-    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+    let bindings = mapOption replaceAccelerateBindings t.bindings in
+    TmRecLets {{t with bindings = mapOption replaceAccelerateBindings t.bindings}
+                  with inexpr = replaceAccelerateH accelerated env t.inexpr}
+  | t -> smap_Expr_Expr (replaceAccelerateH accelerated env) t
+
+  -- We replace the auxilliary acceleration terms in the AST, by removing any
+  -- let-expressions involving an accelerate term and updates calls to such
+  -- terms to properly convert types of parameters and the return value.
+  --
+  -- The result is a list of OCaml record definitions, needed to handle the
+  -- data conversion of record types, and an AST.
+  sem replaceAccelerate : Map Name AccelerateData -> AssocSeq Name Type
+                       -> GenerateEnv -> Expr -> Expr
+  sem replaceAccelerate accelerated typeLiftEnv generateEnv =
   | t ->
-    smapAccumL_Expr_Expr (replaceAccelerateH accelerated env) acc t
+    let env = _constructReplaceAccelerateEnv typeLiftEnv generateEnv in
+    replaceAccelerateH accelerated env t
 end

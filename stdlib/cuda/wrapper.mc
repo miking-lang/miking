@@ -566,7 +566,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         ty = t.ty,
         rhs = CEApp {
           fun = _malloc,
-          args = [CESizeOfType {ty = t.ty}]}}})} in
+          args = [CESizeOfType {ty = _stripPointer t.ty}]}}})} in
     let dst = CEVar {id = dstIdent} in
     -- NOTE(larshum, 2022-03-29): Use a counter to keep track of which
     -- constructor we are currently at.

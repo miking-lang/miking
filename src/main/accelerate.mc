@@ -412,17 +412,17 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- been demoted to sequential equivalents
   let ast = demoteParallel ast in
 
-  match typeLift ast with (env, ast) in
-  match generateTypeDecls env with (env, typeTops) in
+  match typeLift ast with (typeLiftEnv, ast) in
+  match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
 
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.
-  match replaceAccelerate accelerated env ast with (recordDeclTops, ast) in
+  let ast = replaceAccelerate accelerated typeLiftEnv generateEnv ast in
 
   -- Generate the OCaml AST (with externals support)
   let env : GenerateEnv =
-    chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+    chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
   in
   let exprTops = generateTops env ast in
   let syslibs =
@@ -435,7 +435,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- for each accelerate term.
   let externalTops = getExternalCDeclarations accelerated in
 
-  let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
+  let ocamlTops = join [externalTops, typeTops, exprTops] in
   hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
