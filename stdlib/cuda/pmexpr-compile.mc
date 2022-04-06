@@ -8,9 +8,10 @@
 
 include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-pprint.mc"
+include "mexpr/call-graph.mc"
 include "pmexpr/utils.mc"
 
-lang CudaPMExprKernelCalls = CudaPMExprAst
+lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
   sem generateKernelApplications =
   | t ->
     let marked = markNonKernelFunctions t in
@@ -29,12 +30,25 @@ lang CudaPMExprKernelCalls = CudaPMExprAst
       markInBody marked t.body
     else markInUnmarkedBody marked t.body
   | TmRecLets t ->
-    let markFunctionsBinding = lam marked. lam bind : RecLetBinding.
-      let marked = setInsert bind.ident marked in
-      markInBody marked bind.body
+    let bindMap : Map Name Expr =
+      mapFromSeq nameCmp
+        (map
+          (lam bind : RecLetBinding. (bind.ident, bind.body))
+          t.bindings) in
+    let markFunctionsInComponent = lam marked. lam comp.
+      if any setMem comp then
+        foldl
+          (lam marked. lam bindId.
+            match mapLookup bindId bindMap with Some bindBody then
+              markInBody marked bindBody
+            else never)
+          marked comp
+      else marked
     in
     let marked = markNonKernelFunctionsH marked t.inexpr in
-    foldl markFunctionsBinding marked t.bindings
+    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let sccs = digraphTarjan g in
+    foldl markFunctionsInComponent marked (reverse sccs)
   | TmType t -> markNonKernelFunctionsH marked t.inexpr
   | TmConDef t -> markNonKernelFunctionsH marked t.inexpr
   | TmUtest t -> markNonKernelFunctionsH marked t.next
