@@ -1211,6 +1211,18 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
       rhs = get args 2
     }
+  | CTensorLinearGetExn _ ->
+    let idx = last args in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+  | CTensorLinearSetExn _ ->
+    let idx = get args 1 in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      rhs = get args 2
+    }
   | CTensorRank _ -> CEMember {lhs = head args, id = _tensorRankKey}
   | CTensorShape _ -> tensorShapeCall (head args)
 

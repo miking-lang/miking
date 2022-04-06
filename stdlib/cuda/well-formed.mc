@@ -206,7 +206,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   | CNeqf _ -> true
   | CPrint _ | CDPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _
   | CFoldl _ | CError _ -> true
-  | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
+  | CTensorGetExn _ | CTensorSetExn _ | CTensorLinearGetExn _
+  | CTensorLinearSetExn _ | CTensorRank _ | CTensorShape _
   | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false
 
