@@ -282,10 +282,21 @@ lang PMExprReplaceAccelerate =
   sem convertAccelerate : ReplaceAccelerateEnv -> Expr -> Expr
   sem convertAccelerate env =
   | expr ->
+    let env : ReplaceAccelerateEnv = env in
     let expr = convertAccelerateParameters env expr in
     let ty = tyTm expr in
     let expr = _ocamlToMExpr env (None ()) expr ty in
-    expr
+    -- NOTE(larshum, 2022-04-06): The code below wraps external calls without
+    -- return types in an extra let-expression, and explicitly returns a unit
+    -- term. This prevents segmentation faults on my machine.
+    match _unwrapType env.generateEnv ty with unit & (TyRecord {labels = []}) then
+      let info = infoTm expr in
+      let unitExpr = TmRecord {
+        bindings = mapEmpty cmpSID, ty = unit, info = info
+      } in
+      TmLet {ident = nameNoSym "", tyBody = unit, body = expr,
+             inexpr = unitExpr, ty = unit, info = info}
+    else expr
 
   sem replaceAccelerateH : Map Name AccelerateData -> ReplaceAccelerateEnv
                         -> Expr -> Expr
