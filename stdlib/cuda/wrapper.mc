@@ -675,7 +675,7 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
         let fieldSrcExpr = _accessMember t.ty src labelId in
         let tempId = nameSym "cuda_rec_tmp" in
         let temp = CEVar {id = tempId} in
-        let fieldStmts = _generateCudaToOCamlWrapperH env fieldSrcExpr temp in
+        let fieldStmts = _generateCudaToOCamlWrapperH env fieldSrcExpr temp field in
         let storeStmt = CSExpr {expr = CEApp {
           fun = _getIdentExn "Store_field",
           args = [dst, CEInt {i = idx}, temp]}} in
