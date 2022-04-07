@@ -119,6 +119,7 @@ let _tensorDataKey = nameNoSym "data"
 let _tensorDimsKey = nameNoSym "dims"
 let _tensorRankKey = nameNoSym "rank"
 let _tensorOffsetKey = nameNoSym "offset"
+let _tensorSizeKey = nameNoSym "size"
 
 -- Used in compileStmt and compileStmts for deciding what action to take in
 -- tail position
@@ -555,7 +556,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       (CTyPtr { ty = ty }, Some _tensorDataKey),
       (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
       (CTyInt64 (), Some _tensorRankKey),
-      (CTyInt64 (), Some _tensorOffsetKey)
+      (CTyInt64 (), Some _tensorOffsetKey),
+      (CTyInt64 (), Some _tensorSizeKey)
     ] in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fields },
@@ -1927,9 +1929,9 @@ utest testCompile tensor with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor;",
+  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor;",
   "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
-  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor1;",
+  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor1;",
   "int64_t cartesian_to_linear_index0(int64_t dims1[3], int64_t rank1) {",
   "  return 0;",
   "}",
