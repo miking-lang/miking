@@ -85,7 +85,8 @@ let parallelKeywords = [
   "parallelReduce",
   "seqLoop",
   "seqLoopAcc",
-  "parallelLoop"
+  "parallelLoop",
+  "printFloat"
 ]
 
 let keywordsSymEnv =

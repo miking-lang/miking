@@ -229,9 +229,21 @@ lang PMExprDemoteLoop = PMExprAst
       ty = accTy, info = t.info}
 end
 
+lang PMExprDemotePrintFloat = PMExprDemoteBase
+  sem demoteParallel =
+  | TmPrintFloat t ->
+    let tyuk = TyUnknown {info = t.info} in
+    TmApp {
+      lhs = TmConst {val = CPrint (), ty = tyuk, info = t.info},
+      rhs = TmApp {
+        lhs = TmConst {val = CFloat2string (), ty = tyuk, info = t.info},
+        rhs = t.e, ty = tyuk, info = t.info},
+      ty = tyuk, info = t.info}
+end
+
 lang PMExprDemote =
   PMExprDemoteAccelerate + PMExprDemoteFlatten + PMExprDemoteMap2 +
-  PMExprDemoteReduce + PMExprDemoteLoop
+  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat
 end
 
 mexpr

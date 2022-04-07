@@ -474,6 +474,11 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
     CELoopKernel {
       n = compileExpr env t.n, f = compileExpr env t.f, argTypes = argTypes,
       opsPerThread = 10}
+  | TmPrintFloat t ->
+    CEApp {
+      fun = _printf, args = [
+        CEString { s = "%f" },
+        compileExpr env t.e]}
 
   sem compileStmt (env : CompileCEnv) (res : Result) =
   | TmCopy {arg = arg, toMem = toMem, ty = ty} ->
