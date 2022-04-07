@@ -11,8 +11,25 @@ include "mexpr/pprint.mc"
 -- HELPERS --
 -------------
 
+-- All helpers are directly taken from pprint.mc for C.
 -- Surrounds a string with parentheses
 let _par = lam str. join ["(",str,")"]
+
+let pprintEnvGetStr = lam env. lam id: Name.
+  -- Set this to true to print names with their symbols (for debugging)
+  if false then
+    (env,join [
+      nameGetStr id,
+      match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
+    ])
+  else
+    let id = nameSetStr id (escapeIdentifier (nameGetStr id)) in
+    pprintEnvGetStr env id -- Note that this is not a recursive call!
+
+-- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
+-- argument. If it is None (), the returned string is "".
+let pprintEnvGetOptStr = lam env. lam id.
+  match id with Some id then pprintEnvGetStr env id else (env,"")
 
 --------------
 -- KEYWORDs --
