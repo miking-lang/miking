@@ -418,7 +418,8 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.
-  let ast = replaceAccelerate accelerated typeLiftEnv generateEnv ast in
+  match replaceAccelerate accelerated generateEnv ast
+  with (recordDeclTops, ast) in
 
   -- Generate the OCaml AST (with externals support)
   let env : GenerateEnv =
@@ -435,7 +436,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- for each accelerate term.
   let externalTops = getExternalCDeclarations accelerated in
 
-  let ocamlTops = join [externalTops, typeTops, exprTops] in
+  let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
   hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
