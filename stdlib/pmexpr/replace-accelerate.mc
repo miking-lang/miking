@@ -127,7 +127,7 @@ lang PMExprReplaceAccelerate =
       if mapMem id accelerated then
         -- NOTE(larshum, 2021-09-17): Remove the dummy parameter if it is not
         -- the only parameter.
-        match args with _ ++ [TmConst {val = CInt {val = 0}}] then
+        match args with _ ++ [_, TmConst {val = CInt {val = 0}}] then
           let lhs = withType appTy lhs in
           convertAccelerateParameters env acc lhs
         else convertAccelerateParameters env acc t
