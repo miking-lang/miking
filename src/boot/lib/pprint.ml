@@ -462,8 +462,11 @@ let rec print_const fmt = function
   | CdeRef ->
       fprintf fmt "deref"
   (* MCore intrinsics: Maps *)
-  | CMap _ ->
-      fprintf fmt "map"
+  | CMap (_, m) ->
+      let binds =
+        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record NoInfo [k; v])
+      in
+      print_tm' fmt (TmSeq (NoInfo, binds))
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
   | CmapSize ->
