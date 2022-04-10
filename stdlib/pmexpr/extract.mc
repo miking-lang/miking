@@ -11,7 +11,7 @@ include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
@@ -308,7 +308,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
 end
 
 lang TestLang =
-  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeAnnot +
+  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeCheck +
   MExprLambdaLift + MExprPrettyPrint
 end
 
@@ -317,7 +317,7 @@ mexpr
 use TestLang in
 
 let preprocess = lam t.
-  typeAnnot (symbolize t)
+  typeCheck (symbolize t)
 in
 
 let extractAccelerate = lam t.

@@ -3,11 +3,10 @@ include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/pprint.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 
 lang PMExprAst =
-  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeAnnot + MExprTypeCheck
+  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeCheck
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}

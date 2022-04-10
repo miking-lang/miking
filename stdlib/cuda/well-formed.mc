@@ -97,23 +97,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
     let acc = cudaWellFormedPattern acc t.pat in
     let acc = cudaWellFormedType acc t.ty in
     sfold_Expr_Expr cudaWellFormedExpr acc (TmMatch t)
-  | conDef & (TmConDef t) ->
-    -- NOTE(larshum, 2022-03-30): Recursive data types, and those that have an
-    -- type identifier of unexpected shape, are not considered to be
-    -- well-formed.
-    recursive let containsTypeIdentifier : Name -> Bool -> Type -> Bool =
-      lam conId. lam acc. lam ty.
-      if acc then true
-      else match ty with TyCon {ident = id} then
-        nameEq conId id
-      else sfold_Type_Type (containsTypeIdentifier conId) acc ty
-    in
-    if
-      match t.tyIdent with TyArrow {from = from, to = TyCon {ident = id}} then
-        not (containsTypeIdentifier id false from)
-      else false
-    then acc
-    else cons (CudaConDefError conDef) acc
   | TmSeqFoldl t ->
     let acc = cudaWellFormedExpr acc t.acc in
     cudaWellFormedExpr acc t.s
@@ -242,7 +225,7 @@ let eqCudaError = lam lerr : WellFormedError. lam rerr : WellFormedError.
   else false
 in
 
-let preprocess = lam t. typeAnnot (symbolize t) in
+let preprocess = lam t. typeCheck (symbolize t) in
 
 utest wellFormedExpr (bind_ (ulet_ "x" (int_ 2)) (var_ "x")) with []
 using eqSeq eqCudaError in
@@ -305,7 +288,7 @@ let conDef = preprocess (bindall_ [
   recursiveConstructorExpr,
   int_ 0]) in
 let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in
-utest wellFormedExpr conDef with [CudaConDefError expectedExpr]
+utest wellFormedExpr conDef with [CudaExprError expectedExpr]
 using eqSeq eqCudaError in
 
 let ext = preprocess (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
