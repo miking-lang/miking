@@ -161,7 +161,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ast = normalizeTerm ast in
   let ast = utestStrip ast in
   wellFormed ast;
-  let ast = toCudaPMExpr ast in
+  match toCudaPMExpr accelerateData ast with (functionEnv, ast) in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
   let opts : CompileCOptions = {
@@ -170,7 +170,7 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   } in
   match compile typeEnv opts ast with (ccEnv, types, tops, _, _) in
   let ctops = join [types, tops] in
-  match translateCudaTops accelerateData ccEnv ctops
+  match translateCudaTops functionEnv accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
   let cudaTops = addCudaTensorMemoryManagement cudaTops in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
