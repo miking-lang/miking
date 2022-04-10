@@ -1009,6 +1009,7 @@ let breakableToErrorHighlightSpec
       } in
     let res = breakableReportAmbiguities reportConfig tops in
     let fixup = lam amb: Ambiguity Info Highlight.
+      let amb: Ambiguity Info Highlight = amb in
       {info = mergeInfo amb.range.first amb.range.last, partialResolutions = amb.partialResolutions}
     in map fixup res
 
