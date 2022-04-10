@@ -97,7 +97,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
-    error (concat "Copying GPU -> CPU not implemented for type " tystr)
+    infoErrorExit (infoTy ty) (concat "Copying GPU -> CPU not implemented for type " tystr)
 
   sem _compileCopyToGpu (env : CompileCEnv) (dst : CExpr) (arg : CExpr) =
   | ty & (TySeq {ty = elemType}) ->
@@ -177,7 +177,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
-    error (concat "Copying CPU -> GPU not implemented for type " tystr)
+    infoErrorExit (infoTy ty) (concat "Copying CPU -> GPU not implemented for type " tystr)
 end
 
 lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
@@ -222,7 +222,7 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
-    error (concat "Freeing CPU memory not implemented for type " tystr)
+    infoErrorExit (infoTy ty) (join ["Freeing CPU memory not implemented for type ", tystr])
 
   sem _compileFreeGpu (env : CompileCEnv) (arg : CExpr) =
   | ty & (TySeq {ty = elemType}) ->
@@ -282,7 +282,7 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
-    error (concat "Freeing GPU memory not implemented for type " tystr)
+    infoErrorExit (infoTy ty) (concat "Freeing GPU memory not implemented for type " tystr)
 end
 
 lang CudaCompile = CudaCompileCopy + CudaCompileFree
@@ -316,7 +316,7 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
       t = compileExpr env t.t, ofs = compileExpr env t.ofs,
       len = compileExpr env t.len, ty = compileType env t.ty}
   | TmMapKernel t -> infoErrorExit t.info "Maps are not supported"
-  | TmReduceKernel t -> error "not implemented yet"
+  | TmReduceKernel t -> infoErrorExit t.info "not implemented yet"
   | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.

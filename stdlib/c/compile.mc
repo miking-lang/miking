@@ -925,7 +925,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       }),
       defs )
 
-  | PatRecord { bindings = bindings } ->
+  | PatRecord { bindings = bindings } & pat ->
     match env with { typeEnv = typeEnv } then
       let f = lam acc. lam sid. lam subpat.
         match acc with (conds, defs) then
@@ -937,17 +937,17 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
                     CEArrow { lhs = target, id = nameNoSym label }
                   else
                     CEMember { lhs = target, id = nameNoSym label }
-                else error "Impossible"
+                else infoErrorExit (infoPat pat) "Impossible scenario"
               in
               compilePat env conds defs expr fTy subpat
-            else error "Label does not match between PatRecord and TyRecord"
-          else error "Type not TyCon for PatRecord in compilePat"
+            else infoErrorExit (infoPat pat) "Label does not match between PatRecord and TyRecord"
+          else infoErrorExit (infoPat pat) "Type not TyCon for PatRecord in compilePat"
         else never
       in
       mapFoldWithKey f (conds, defs) bindings
     else never
 
-  | PatCon { ident = ident, subpat = subpat } ->
+  | PatCon { ident = ident, subpat = subpat } & pat ->
     match env with { typeEnv = typeEnv } then
       match _unwrapType typeEnv ty with TyVariant { constrs = constrs } then
         match mapLookup ident constrs with Some ty then
@@ -959,8 +959,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           let expr = CEArrow { lhs = target, id = ident } in
           compilePat env (snoc conds cond)
             defs expr ty subpat
-        else error "Invalid constructor in compilePat"
-      else error "Not a TyVariant for PatCon in compilePat"
+        else infoErrorExit (infoPat pat) "Invalid constructor in compilePat"
+      else infoErrorExit (infoPat pat) "Not a TyVariant for PatCon in compilePat"
     else never
   | pat -> infoErrorExit (infoPat pat) "Pattern not supported"
 
@@ -1066,7 +1066,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       else
         infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
-  | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
+  | TmRecordUpdate _ & t -> infoErrorExit (infoTm t) "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
   | expr ->
@@ -1210,7 +1210,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
 
   | TmVar { ty = ty, ident = ident } & t->
     if _isUnitTy ty then
-      error "Unit type var in compileExpr"
+      infoErrorExit (infoTm t) "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
       CEVar { id = ext }
     else CEVar { id = ident }
@@ -1236,36 +1236,36 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         let args = map (compileExpr env) args in
         compileOp env (infoTm fun) args val
 
-      else error "Unsupported application in compileExpr"
+      else infoErrorExit (infoTm app) "Unsupported application in compileExpr"
     else never
 
   -- Anonymous function, not allowed.
-  | TmLam _ -> error "Anonymous function in compileExpr."
+  | (TmLam _) & t -> infoErrorExit (infoTm t) "Anonymous function in compileExpr."
 
   -- Unit type is represented by int literal 0.
-  | TmRecord { bindings = bindings } ->
+  | TmRecord { bindings = bindings } & t ->
     if mapIsEmpty bindings then CEInt { i = 0 }
-    else error "ERROR: Records cannot be handled in compileExpr."
+    else infoErrorExit (infoTm t) "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF and type lifting.
-  | TmRecordUpdate _ | TmLet _
-  | TmRecLets _ | TmType _ | TmConDef _
-  | TmConApp _ | TmMatch _ | TmUtest _
-  | TmSeq _ | TmExt _ ->
-    error "ERROR: Term cannot be handled in compileExpr."
+  | (TmRecordUpdate _ | TmLet _
+    | TmRecLets _ | TmType _ | TmConDef _
+    | TmConApp _ | TmMatch _ | TmUtest _
+    | TmSeq _ | TmExt _) & t ->
+    infoErrorExit (infoTm t) "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
-  | TmConst { val = val } ->
+  | TmConst { val = val } & t ->
     match val      with CInt   { val = val } then CEInt   { i = val }
     else match val with CFloat { val = val } then CEFloat { f = val }
     else match val with CChar  { val = val } then CEChar  { c = val }
     else match val with CBool  { val = val } then
       let val = match val with true then 1 else 0 in
       CEInt { i = val }
-    else error "Unsupported literal"
+    else infoErrorExit (infoTm t) "Unsupported literal"
 
   -- Should not occur
-  | TmNever _ -> error "Never term found in compileExpr"
+  | (TmNever _) & t -> infoErrorExit (infoTm t) "Never term found in compileExpr"
 
 end
 
