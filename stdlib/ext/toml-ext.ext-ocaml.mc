@@ -1,8 +1,8 @@
 include "map.mc"
 include "ocaml/ast.mc"
 
-let tyTomlTable_ = otyvarext_ "Toml.Types.table"
-let tyTomlValue_ = otyvarext_ "Toml.Types.value"
+let tyTomlTable_ = otyvarext_ "Toml.Types.table" []
+let tyTomlValue_ = otyvarext_ "Toml.Types.value" []
 
 let impl = lam arg : { expr : String, ty : Type }.
   { expr = arg.expr, ty = arg.ty, libraries = ["toml"], cLibraries = [] }

@@ -1,12 +1,12 @@
 include "option.mc"
 
 type SearchMethod
-con SimulatedAnnealing : Unit -> SearchMethod
-con TabuSearch         : Unit -> SearchMethod
-con RandomWalk         : Unit -> SearchMethod
-con Exhaustive         : Unit -> SearchMethod
-con SemiExhaustive     : Unit -> SearchMethod
-con BinarySearch       : Unit -> SearchMethod
+con SimulatedAnnealing : () -> SearchMethod
+con TabuSearch         : () -> SearchMethod
+con RandomWalk         : () -> SearchMethod
+con Exhaustive         : () -> SearchMethod
+con SemiExhaustive     : () -> SearchMethod
+con BinarySearch       : () -> SearchMethod
 
 let tuneSearchMethodMap =
 [ ("simulated-annealing", SimulatedAnnealing {})
@@ -24,7 +24,7 @@ type TuneOptions =
 , timeoutMs : Option Float
 , warmups : Int
 , method : SearchMethod
-, input : [[String]]
+, input : [String]
 , saInitTemp : Float
 , saDecayFactor : Float
 , tabuSize : Int

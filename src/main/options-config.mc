@@ -2,7 +2,7 @@ include "arg.mc"
 include "options-type.mc"
 
 -- Options configuration
-let optionsConfig : ParseConfig = [
+let optionsConfig : ParseConfig Options = [
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.
@@ -77,6 +77,10 @@ let optionsConfig : ParseConfig = [
     "Enables use of 32-bit floating-point numbers in the C compiler",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with use32BitFloats = true}),
+  ([("--keep-dead-code", "", "")],
+    "Disable dead code elimination pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with keepDeadCode = true}),
   ([("--typecheck", "", "")],
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.

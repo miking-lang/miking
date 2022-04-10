@@ -450,7 +450,7 @@ lang OCamlPrettyPrint =
     else never
   | OTmConAppExt {ident = ident, args = []} -> (env, ident)
   | OTmConAppExt {ident = ident, args = [arg]} ->
-    match printParen ident env arg with (env, arg) then
+    match printParen indent env arg with (env, arg) then
       (env, join [ident, " ", arg])
     else never
   | OTmConAppExt {ident = ident, args = args} ->

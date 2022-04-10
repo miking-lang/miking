@@ -14,60 +14,61 @@ include "string.mc"
 -- transitions are represented as edges in a directed graph
 -- (digraph), where the vertices are states.
 
-type NFA = {
-  graph: Digraph,
-  startState: a,
-  acceptStates: [a]
+type NFA v l  = {
+  graph: Digraph v l,
+  startState: v,
+  acceptStates: [v]
 }
 
 -- get equality function for states
-let nfaGetEqv = lam dfa.
+let nfaGetEqv : all v. all l. NFA v l -> v -> v -> Bool = lam dfa.
   digraphEqv dfa.graph
 
 -- get comparison function for states
-let nfaGetCmp = lam dfa.
+let nfaGetCmp : all v. all l. NFA v l -> v -> v -> Int = lam dfa.
   digraphCmpv dfa.graph
 
 -- get equality functions for labels
-let nfaGetEql = lam dfa.
+let nfaGetEql : all v. all l. NFA v l -> l -> l -> Bool = lam dfa.
   dfa.graph.eql
 
 -- get all states in nfa
-let nfaStates = lam nfa.
+let nfaStates : all v. all l. NFA v l -> [v] = lam nfa.
   digraphVertices nfa.graph
 
 -- get all transitions in nfa
-let nfaTransitions = lam nfa.
+let nfaTransitions : all v. all l. NFA v l -> [DigraphEdge v l] = lam nfa.
   digraphEdges nfa.graph
 
 -- get start state of the nfa
-let nfaStartState = lam nfa.
+let nfaStartState : all v. all l. NFA v l -> v = lam nfa.
   nfa.startState
 
 -- get the accept states in the nfa
-let nfaAcceptStates = lam nfa.
+let nfaAcceptStates : all v. all l. NFA v l -> [v] = lam nfa.
   nfa.acceptStates
 
 -- get all transitions from state s1 to state s2
-let nfaTransitionsBetween = lam s1. lam s2. lam nfa.
+let nfaTransitionsBetween : all v. all l. v -> v -> NFA v l -> [DigraphEdge v l] =
+  lam s1. lam s2. lam nfa.
   digraphEdgesBetween s1 s2 nfa.graph
 
 -- get all predecessor states to state s
-let nfaInStates = lam s. lam nfa.
+let nfaInStates : all v. all l. v -> NFA v l -> [v] = lam s. lam nfa.
   digraphPredeccessors s nfa.graph
 
 -- get all successor states to state s
-let nfaOutStates = lam s. lam nfa.
+let nfaOutStates : all v. all l. v -> NFA v l -> [v] = lam s. lam nfa.
   digraphSuccessors s nfa.graph
 
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
   if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
   else if not (eqsetMem eqv startS s) then error "The start state does not exist"
-  else true
+  else ()
 
 -- States are represented by vertices in a directed graph
-let nfaAddState =  lam nfa. lam state.
+let nfaAddState : all v. all l. NFA v l -> v -> NFA v l =  lam nfa. lam state.
   {
     graph = (digraphAddVertex state nfa.graph),
     startState = nfa.startState,
@@ -75,7 +76,8 @@ let nfaAddState =  lam nfa. lam state.
   }
 
 -- Transitions between two states are represented by edges between vertices
-let nfaAddTransition = lam nfa. lam trans.
+let nfaAddTransition : all v. all l. NFA v l -> DigraphEdge v l -> NFA v l =
+  lam nfa. lam trans.
   let states = nfaStates nfa in
   let from = trans.0 in
   let to = trans.1 in
@@ -87,17 +89,19 @@ let nfaAddTransition = lam nfa. lam trans.
   }
 
 -- returns true if state s is an accepted state in the nfa
-let nfaIsAcceptedState = lam s. lam nfa.
+let nfaIsAcceptedState : all v. all l. v -> NFA v l -> Bool = lam s. lam nfa.
   eqsetMem (digraphEqv nfa.graph) s nfa.acceptStates
 
 -- check if there is a transition with label lbl from state s
-let nfaStateHasTransition = lam s. lam trans. lam lbl.
+let nfaStateHasTransition : all v. all l. v -> Digraph v l -> l -> Bool =
+  lam s. lam trans. lam lbl.
   let neighbors = digraphEdgesFrom s trans in
   --check if lbl is a label in the neighbors list
   eqsetMem trans.eql lbl (map (lam x. x.2) neighbors)
 
 -- get next state from state s with label lbl. Throws error if no transition is found
-let nfaNextStates = lam from. lam graph. lam lbl.
+let nfaNextStates : all v. all l. v -> Digraph v l -> l -> [v] =
+  lam from. lam graph. lam lbl.
   let neighbors = digraphEdgesFrom from graph in
   let matches = filter (lam x. graph.eql x.2 lbl) neighbors in
   let neighboringStates = map (lam x. x.1) matches in
@@ -113,7 +117,9 @@ let pathIsAccepted = lam path.
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
 recursive
-let nfaMakeInputPath = lam i. lam currentState. lam input. lam nfa.
+let nfaMakeInputPath : all v. all l.
+  Int -> v -> [l] -> NFA v l -> [{state : v, index : Int, status : String}] =
+  lam i. lam currentState. lam input. lam nfa.
   if (eqi (length input) 0) then
     if (nfaIsAcceptedState currentState nfa) then [{state = currentState,index = i, status = "accepted"}]
     else [{state = currentState, index = i, status = "not accepted"}]
@@ -129,7 +135,8 @@ let nfaMakeInputPath = lam i. lam currentState. lam input. lam nfa.
 end
 
 recursive
-let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
+let nfaMakeEdgeInputPath : all v. all l. v -> [l] -> NFA v l -> [(v, v)] =
+  lam currentState. lam input. lam nfa.
   if (eqi (length input) 0) then []
   -- check if transition exists. If yes, go to next state
   else if nfaStateHasTransition currentState nfa.graph (head input) then
@@ -142,7 +149,7 @@ end
 -- constructor for the NFA
 let nfaConstr = lam s. lam trans. lam startS. lam accS. lam cmpv. lam eql.
   let eqv = lam v1. lam v2. eqi (cmpv v1 v2) 0 in
-  if nfaCheckValues trans s eqv eql accS startS then
+  nfaCheckValues trans s eqv eql accS startS;
   let emptyDigraph = digraphEmpty cmpv eql in
   let initNfa = {
     graph = emptyDigraph,
@@ -150,7 +157,6 @@ let nfaConstr = lam s. lam trans. lam startS. lam accS. lam cmpv. lam eql.
     acceptStates = accS
   } in
   foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
-  else {}
 
 -- Create an NFA from a Digraph
 let nfaFromDigraph = lam g. lam startS. lam accS.

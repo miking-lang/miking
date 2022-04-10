@@ -7,7 +7,7 @@ include "seq.mc"
   is set to off.
 -/
 
-type Loglevel = Int
+type LogLevel = Int
 let logLevel = {
   off = 0,
   error = 1,
@@ -27,7 +27,7 @@ let _logLevelToString = lam lvl : LogLevel.
   else ""
 
 -- Sets the log level
-let logSetLogLevel = lam lvl : Loglevel. modref _logLevel lvl
+let logSetLogLevel = lam lvl : LogLevel. modref _logLevel lvl
 
 -- `log lvl msg` logs the message `msg` at the log level `lvl`.
 let logMsg = lam lvl : LogLevel. lam msg : String.

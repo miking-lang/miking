@@ -275,14 +275,14 @@ let _opIdxP
     never
 let _addedNodesLeftChildren
   : TentativeNode self ROpen
-  -> [TentativeNode self ROpen] -- NonEmpty
+  -> Ref (TimeStep, Ref [PermanentNode]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesLeftChildren = x} | TentativeMid{addedNodesLeftChildren = x}
     then x
     else never
 let _addedNodesRightChildren
   : TentativeNode self ROpen
-  -> [TentativeNode self ROpen] -- NonEmpty
+  -> Ref (TimeStep, [PermanentNode]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesRightChildren = x} | TentativeMid{addedNodesRightChildren = x}
     then x
