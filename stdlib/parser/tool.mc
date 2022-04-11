@@ -553,11 +553,11 @@ let mergeInfos_ : [Expr] -> Expr = lam exprs. switch exprs
   end in
 
 let prodToRecordExpr
-  : Bool -> PartialProduction -> Res Expr
-  = lam includeInfo. lam prod.
+  : Option [Res Expr] -> RecordInfo -> Map String [Res Expr] -> Res Expr
+  = lam infos. lam record. lam fields.
     let mkField = lam binding: (String, FieldInfo).
       match binding with (field, count) in
-      let exprs = match mapLookup field prod.fields with Some exprs
+      let exprs = match mapLookup field fields with Some exprs
         then result.mapM identity exprs
         else result.ok [] in
       let f = switch (count.min, count.max)
@@ -576,16 +576,30 @@ let prodToRecordExpr
         end
       in result.map (lam expr. (field, expr)) (result.map f exprs)
     in
-    let res = result.mapM mkField (mapBindings prod.record) in
+    let res = result.mapM mkField (mapBindings record) in
     let res =
-      if includeInfo then
-        let infos = result.mapM identity prod.symbols in
-        let infos = result.map (map (lam x: PartialSymbol. x.info)) infos in
+      match infos with Some infos then
+        let infos = result.mapM identity infos in
         let infos = result.map mergeInfos_ infos in
         let infos = result.map (lam x. ("info", x)) infos in
         result.map2 cons infos res
       else res
     in result.map urecord_ res
+in
+let mkRecordOfSeqsTy
+  : RecordInfo -> Res Type
+  = lam record.
+    let f : (String, FieldInfo) -> Res (String, Type) = lam pair.
+      let tys = result.mapM (lam x. match x with (_, x) in x) (pair.1 .ty) in
+      let ty = result.map (lam xs. match xs with [x] ++ _ in x) tys in
+      let ty = result.map carriedRepr ty in
+      result.map (lam ty. (pair.0, tyseq_ ty)) ty
+    in
+    let fields = result.mapM f (mapBindings record) in
+    let fields = result.map
+      (concat [(infoFieldLabel, tycon_ "Info"), (termsFieldLabel, tyseq_ (tycon_ "Info"))])
+      fields in
+    result.map tyrecord_ fields
 in
 -- NOTE(vipa, 2022-04-05): Make a partial production consisting of a
 -- single symbol that will parse to a record of sequences.
@@ -594,16 +608,15 @@ let mkRecordOfSeqsSymbol
   = lam nt. lam record.
     let infoName = nameSym "info" in
     let valName = nameSym "val" in
-    let symbol =
+    let mkSymbol = lam ty.
       { repr = app_ (var_ "ntSym") (nvar_ nt)
-      -- TODO(vipa, 2022-04-05): Compute an appropriate type and
-      -- attach it to the npvar
+      -- TODO(vipa, 2022-04-05): Attach ty to the npvar
       , pat = pcon_ "UserSym" (npvar_ valName)
       , info = recordproj_ infoFieldLabel (nvar_ valName)
       , sym = ntSym nt
       } in
     { record = record
-    , symbols = [result.ok symbol]
+    , symbols = [result.map mkSymbol (mkRecordOfSeqsTy record)]
     , terms = [result.ok (recordproj_ termsFieldLabel (nvar_ valName))]
     , fields = mapMapWithKey (lam k. lam. [result.ok (recordproj_ k (nvar_ valName))]) record
     }
@@ -737,7 +750,7 @@ recursive let computeSyntax
       let res = concattedSyntax (map (computeSyntax prodName) x.content) in
       match x.field with Some (info, field) then
         let ty = reifyRecord x.info res.record in
-        let expr = prodToRecordExpr false res in
+        let expr = prodToRecordExpr (None ()) res.record res.fields in
         {{res with record = singleRecordInfo field info ty}
           with fields = mapInsert field [result.map (lam x. seq_ [x]) expr] (mapEmpty cmpString) }
       else {{res with record = emptyRecordInfo} with fields = mapEmpty cmpString }
@@ -828,8 +841,8 @@ in
 
 -- NOTE(vipa, 2022-04-01): Figure out the operatorness of a production
 let findOperator
-  : ProductionDeclRecord -> [SRegex] -> Res Operator
-  = lam x. lam reg.
+  : ProductionDeclRecord -> Name -> [SRegex] -> Res Operator
+  = lam x. lam name. lam reg.
     let temp =
       match reg with [TerminalReg {field = Some (_, field), term = NtTerm {name = lname}}] ++ rest then
         if nameEq x.nt.v lname then (Some field, rest) else (None (), reg)
@@ -866,7 +879,7 @@ let findOperator
       , rfield = rfield
       , mid = mid
       , nt = x.nt.v
-      , conName = x.name.v
+      , conName = name
       , assoc = assoc
       } in
     result.map mkOperator assoc
@@ -877,12 +890,51 @@ let mkOperatorConstructor
   -> PartialProduction
   -> Res GenOpInput
   = lam op. lam prod.
-    result.ok
+    let mkUnsplit = switch (op.lfield, op.rfield)
+      case (None _, None _) then AtomUnsplit
+        (lam conf : {record : Expr, info : Expr}.
+          let fields =
+            mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
+          let res = prodToRecordExpr (Some [result.ok conf.info]) prod.record fields in
+          match result.toOption res with Some record in
+          nconapp_ op.conName record)
+      case (Some lfield, None _) then PostfixUnsplit
+        (lam conf : {record : Expr, info : Expr, left : Expr}.
+          let fields =
+            mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
+          let fields =
+            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok conf.left] fields in
+          let res = prodToRecordExpr (Some [result.ok conf.info]) prod.record fields in
+          match result.toOption res with Some record in
+          nconapp_ op.conName record)
+      case (None _, Some rfield) then PrefixUnsplit
+        (lam conf : {record : Expr, info : Expr, right : Expr}.
+          let fields =
+            mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
+          let fields =
+            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok conf.right] fields in
+          let res = prodToRecordExpr (Some [result.ok conf.info]) prod.record fields in
+          match result.toOption res with Some record in
+          nconapp_ op.conName record)
+      case (Some lfield, Some rfield) then InfixUnsplit
+        (lam conf : {record : Expr, info : Expr, left : Expr, right : Expr}.
+          let fields =
+            mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
+          let fields =
+            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok conf.left] fields in
+          let fields =
+            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok conf.right] fields in
+          let res = prodToRecordExpr (Some [result.ok conf.info]) prod.record fields in
+          match result.toOption res with Some record in
+          nconapp_ op.conName record)
+      end in
+    let f = lam ty.
       { baseConstructorName = op.conName
       , baseTypeName = op.nt
-      , carried = tyunit_
-      , mkUnsplit = AtomUnsplit (lam. error "not yet implemented")
-      }
+      , carried = ty
+      , mkUnsplit = mkUnsplit
+      } in
+    result.map f (mkRecordOfSeqsTy prod.record)
 in
 
 -- NOTE(vipa, 2022-03-31): Compute all info for the constructors
@@ -901,7 +953,7 @@ let constructors : Res [ConstructorInfo] =
       let content = result.map (addInfoField x.info) content in
       let content = result.map (checkCommonField x) content in
       let carried = result.bind content (reifyRecord regInfo) in
-      let operator = result.bind reg (findOperator x) in
+      let operator = result.bind2 name reg (findOperator x) in
       let partProd = result.map (lam op: Operator. map (computeSyntax x.name) op.mid) operator in
       let partProd = result.map concattedSyntax partProd in
       let genOp = result.bind2 operator partProd mkOperatorConstructor in
