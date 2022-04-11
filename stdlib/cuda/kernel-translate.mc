@@ -52,27 +52,50 @@ lang CudaGpuTranslate =
 end
 
 lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTranslate
-  sem generateIntrinsics : Map Name Name -> CompileCEnv -> [CTop] -> [CuTop]
-  sem generateIntrinsics wrapperMap ccEnv =
+  sem translateCudaTops (accelerateData : Map Name AccelerateData)
+                        (ccEnv : CompileCEnv) =
+  | tops ->
+    let tops = map translateTopToCudaFormat tops in
+    let wrapperMap =
+      mapMapWithKey (lam key. lam. nameSym "cuda_wrap") accelerateData in
+    (wrapperMap, generateIntrinsics wrapperMap ccEnv tops)
+
+  sem generateIntrinsics (wrapperMap : Map Name Name)
+                         (ccEnv : CompileCEnv) =
   | tops -> join (map (generateIntrinsicsTop wrapperMap ccEnv) tops)
 
-  sem generateIntrinsicsTop : Map Name Name -> CompileCEnv -> CuTop -> [CuTop]
-  sem generateIntrinsicsTop wrapperMap ccEnv =
+  sem generateIntrinsicsTop (wrapperMap : Map Name Name)
+                            (ccEnv : CompileCEnv) =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapAccumL (generateIntrinsicStmt ccEnv t.ret) [] t.body with (tops, body) in
-    let cudaTop =
-      match mapLookup t.id wrapperMap with Some cudaWrapperId then
-        let newTop = CTFun {{t with id = cudaWrapperId}
-                               with body = body} in
-        CuTTop {cuTop with top = newTop}
-      else CuTTop {cuTop with top = CTFun {t with body = body}}
-    in
-    snoc tops cudaTop
+    match mapLookup t.id wrapperMap with Some cudaWrapperId then
+      let newTop = CTFun {{t with id = cudaWrapperId}
+                             with body = body} in
+      let cudaTop = CuTTop {{cuTop with attrs = []} with top = newTop} in
+      snoc tops cudaTop
+    else
+      -- NOTE(larshum, 2022-03-16): Functions that contain a kernel call must
+      -- not be defined on the device (GPU). We give them an explicit host
+      -- attribute to be able to distinguish them from wrapper functions (the
+      -- host attribute is implicit if no other attributes are added).
+      let attrs =
+        if containsKernelCall body then [CuAHost ()]
+        else [CuAHost (), CuADevice ()] in
+      let cudaTop = CuTTop {{cuTop with attrs = attrs}
+                                   with top = CTFun {t with body = body}} in
+      snoc tops cudaTop
   | t -> [t]
 
-  sem generateIntrinsicStmt : CompileCEnv -> CType -> [CuTop] -> CStmt
-                           -> ([CuTop], CStmt)
-  sem generateIntrinsicStmt ccEnv ty acc =
+  sem containsKernelCall =
+  | stmts -> foldl containsKernelCallH false stmts
+
+  sem containsKernelCallH (acc : Bool) =
+  | CSExpr {expr = CEKernelApp _} -> true
+  | CSComp {stmts = stmts} ->
+    if acc then acc else foldl containsKernelCallH acc stmts
+  | stmt -> acc
+
+  sem generateIntrinsicStmt (ccEnv : CompileCEnv) (ty : CType) (acc : [CuTop]) =
   | CSExpr {expr = t} ->
     generateIntrinsicExprNoRet ccEnv acc t
   | CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = t}} ->
@@ -88,46 +111,15 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
 
   -- Generates an statement for the contained intrinsic, which potentially
   -- replaces the original assignment statement.
-  sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CStmt
-                           -> ([CuTop], CStmt)
-  sem generateIntrinsicExpr ccEnv acc outExpr =
+  sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
   | t -> (acc, CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = t}})
 
   -- As above, but for intrinsics that do not return values.
-  sem generateIntrinsicExprNoRet : CompileCEnv -> [CuTop] -> CStmt
-                                -> ([CuTop], CStmt)
-  sem generateIntrinsicExprNoRet ccEnv acc =
+  sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
   | t -> (acc, CSExpr {expr = t})
-
-  sem translateCTopsToCuda : FunctionEnv -> [CTop] -> [CuTop]
-  sem translateCTopsToCuda functionEnv =
-  | tops -> map (translateCTopToCuda functionEnv) tops
 
   -- Wraps the C top-level terms in the CUDA version of a top-level term, which
   -- includes a sequence of attributes that can be attached.
-  sem translateCTopToCuda : FunctionEnv -> CTop -> CuTop
-  sem translateCTopToCuda env =
-  | CTFun t ->
-    let attrs = getCudaFunctionAttributes t.id env in
-    CuTTop {attrs = attrs, top = CTFun t}
+  sem translateTopToCudaFormat =
   | top -> CuTTop {attrs = [], top = top}
-
-  sem getCudaFunctionAttributes : Name -> FunctionEnv -> [CudaAttribute]
-  sem getCudaFunctionAttributes id =
-  | env ->
-    match mapLookup id env with Some units then
-      match units with Cpu _ then [CuAHost ()]
-      else match units with Gpu _ then [CuADevice ()]
-      else match units with Both _ then [CuAHost (), CuADevice ()]
-      else []
-    else [CuAHost (), CuADevice ()]
-
-  sem translateCudaTops : FunctionEnv -> Map Name AccelerateData -> CompileCEnv
-                       -> [CTop] -> (Map Name Name, [CuTop])
-  sem translateCudaTops functionEnv accelerateData ccEnv =
-  | tops ->
-    let tops = translateCTopsToCuda functionEnv tops in
-    let wrapperMap =
-      mapMapWithKey (lam. lam. nameSym "cuda_wrap") accelerateData in
-    (wrapperMap, generateIntrinsics wrapperMap ccEnv tops)
 end

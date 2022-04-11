@@ -12,125 +12,89 @@ include "mexpr/call-graph.mc"
 include "pmexpr/utils.mc"
 
 lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
-  syn ProcessingUnits =
-  | Cpu ()
-  | Gpu ()
-  | Both ()
-  | Undef ()
-
-  sem mergeProcessingUnits : ProcessingUnits -> ProcessingUnits -> ProcessingUnits
-  sem mergeProcessingUnits lhs =
-  | rhs -> mergeProcessingUnitsH (lhs, rhs)
-
-  sem mergeProcessingUnitsH : (ProcessingUnits, ProcessingUnits) -> ProcessingUnits
-  sem mergeProcessingUnitsH =
-  | (Undef _, pu) | (pu, Undef _) -> pu
-  | (Cpu _, Cpu _) -> Cpu ()
-  | (Gpu _, Gpu _) -> Gpu ()
-  | _ -> Both ()
-
-  type FunctionEnv = Map Name ProcessingUnits
-
-  sem functionEnvLookup : FunctionEnv -> Name -> ProcessingUnits
-  sem functionEnvLookup env =
-  | id -> optionGetOrElse (lam. Undef ()) (mapLookup id env)
-
-  sem generateKernelApplications : Set Name -> Expr -> (FunctionEnv, Expr)
-  sem generateKernelApplications accelerateIds =
+  sem generateKernelApplications =
   | t ->
-    let env = findFunctionProcessingUnits accelerateIds t in
-    (env, promoteKernels env t)
+    let marked = markNonKernelFunctions t in
+    promoteKernels marked t
 
-  -- Produces a map from function identifiers to the processing units (CPU or
-  -- GPU) it may be used on at runtime. Initially, we know that the accelerate
-  -- functions may only be used on the CPU.
-  sem findFunctionProcessingUnits : Set Name -> Expr -> FunctionEnv
-  sem findFunctionProcessingUnits accelerateIds =
-  | t ->
-    let env = mapMapWithKey (lam id. lam. Cpu ()) accelerateIds in
-    findFunctionProcessingUnitsH env t
+  -- Produces a set of identifiers corresponding to the functions that are used
+  -- directly or indirectly by a parallel operation. Parallel keywords within
+  -- such functions are not promoted to kernels.
+  sem markNonKernelFunctions =
+  | t -> markNonKernelFunctionsH (setEmpty nameCmp) t
 
-  sem findFunctionProcessingUnitsH : FunctionEnv -> Expr -> FunctionEnv
-  sem findFunctionProcessingUnitsH env =
+  sem markNonKernelFunctionsH (marked : Set Name) =
   | TmLet t ->
-    let env = findFunctionProcessingUnitsH env t.inexpr in
-    let units = functionEnvLookup env t.ident in
-    propagateProcessingUnitsInBody units env t.body
+    let marked = markNonKernelFunctionsH marked t.inexpr in
+    if setMem t.ident marked then
+      markInBody marked t.body
+    else markInUnmarkedBody marked t.body
   | TmRecLets t ->
-    let bindMap : Map Name RecLetBinding =
+    let bindMap : Map Name Expr =
       mapFromSeq nameCmp
-        (map (lam bind : RecLetBinding. (bind.ident, bind)) t.bindings)
+        (map
+          (lam bind : RecLetBinding. (bind.ident, bind.body))
+          t.bindings) in
+    let markFunctionsInComponent = lam marked. lam comp.
+      if any setMem comp then
+        foldl
+          (lam marked. lam bindId.
+            match mapLookup bindId bindMap with Some bindBody then
+              markInBody marked bindBody
+            else never)
+          marked comp
+      else marked
     in
-    let findFunctionsBind = lam env. lam bind : RecLetBinding.
-      findFunctionProcessingUnitsH env bind.body
-    in
-    let setFunctionsInComponent = lam env. lam comp.
-      let units =
-        foldl mergeProcessingUnits (Undef ())
-          (map (functionEnvLookup env) comp) in
-      foldl (lam env. lam id. mapInsert id units env) env comp
-    in
-    let propagateBinding = lam env. lam bind : RecLetBinding.
-      let units = functionEnvLookup env bind.ident in
-      propagateProcessingUnitsInBody units env bind.body
-    in
-    let env = findFunctionProcessingUnitsH env t.inexpr in
-    let env = foldl findFunctionsBind env t.bindings in
+    let marked = markNonKernelFunctionsH marked t.inexpr in
     let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
     let sccs = digraphTarjan g in
-    let env = foldl setFunctionsInComponent env (reverse sccs) in
-    foldl propagateBinding env t.bindings
-  | TmType t -> findFunctionProcessingUnitsH env t.inexpr
-  | TmConDef t -> findFunctionProcessingUnitsH env t.inexpr
-  | TmUtest t -> findFunctionProcessingUnitsH env t.next
-  | TmExt t -> findFunctionProcessingUnitsH env t.inexpr
-  | _ -> env
+    foldl markFunctionsInComponent marked (reverse sccs)
+  | TmType t -> markNonKernelFunctionsH marked t.inexpr
+  | TmConDef t -> markNonKernelFunctionsH marked t.inexpr
+  | TmUtest t -> markNonKernelFunctionsH marked t.next
+  | TmExt t -> markNonKernelFunctionsH marked t.inexpr
+  | t -> marked
 
-  sem propagateProcessingUnitsInBody : ProcessingUnits -> FunctionEnv -> Expr
-                                    -> FunctionEnv
-  sem propagateProcessingUnitsInBody units env =
-  | TmVar (t & {ty = TyArrow _}) ->
-    mapInsertWith mergeProcessingUnits t.ident units env
-  | TmParallelLoop t ->
-    let env = propagateProcessingUnitsInBody units env t.n in
-    propagateProcessingUnitsInBody (Gpu ()) env t.f
-  | t -> sfold_Expr_Expr (propagateProcessingUnitsInBody units) env t
+  sem markInUnmarkedBody (marked : Set Name) =
+  | TmParallelLoop t -> markInBody marked t.f
+  | t -> sfold_Expr_Expr markInUnmarkedBody marked t
 
-  -- Promotes parallel keywords in CPU-exclusive functions to their
-  -- corresponding kernel operation.
-  sem promoteKernels : FunctionEnv -> Expr -> Expr
-  sem promoteKernels env =
+  sem markInBody (marked : Set Name) =
+  | TmVar (t & {ty = TyArrow _}) -> setInsert t.ident marked
+  | t -> sfold_Expr_Expr markInBody marked t
+
+  -- Promotes parallel operations used in functions that have not been marked
+  -- to kernel operations.
+  sem promoteKernels (marked : Set Name) =
   | TmLet t ->
-    let inexpr = promoteKernels env t.inexpr in
-    match mapLookup t.ident env with Some (Cpu _) then
-      TmLet {{t with body = promoteKernelsBody t.body}
-                with inexpr = inexpr}
-    else TmLet {t with inexpr = inexpr}
+    let inexpr = promoteKernels marked t.inexpr in
+    if setMem t.ident marked then TmLet {t with inexpr = inexpr}
+    else
+      let body = promoteKernelsBody t.body in
+      TmLet {{t with body = body} with inexpr = inexpr}
   | TmRecLets t ->
-    let promoteBinding = lam bind : RecLetBinding.
-      match mapLookup bind.ident env with Some (Cpu _) then
-        {bind with body = promoteKernelsBody bind.body}
-      else bind
+    let promoteKernelBinding = lam binding : RecLetBinding.
+      if setMem binding.ident marked then binding
+      else {binding with body = promoteKernelsBody binding.body}
     in
-    let inexpr = promoteKernels env t.inexpr in
-    let bindings = map promoteBinding t.bindings in
-    TmRecLets {{t with bindings = bindings} with inexpr = inexpr}
-  | TmType t -> TmType {t with inexpr = promoteKernels env t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = promoteKernels env t.inexpr}
-  | TmUtest t -> TmUtest {t with next = promoteKernels env t.next}
-  | TmExt t -> TmExt {t with inexpr = promoteKernels env t.inexpr}
+    let inexpr = promoteKernels marked t.inexpr in
+    let bindings = map promoteKernelBinding t.bindings in
+    TmRecLets {{t with inexpr = inexpr} with bindings = bindings}
+  | TmType t -> TmType {t with inexpr = promoteKernels marked t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = promoteKernels marked t.inexpr}
+  | TmUtest t -> TmUtest {t with next = promoteKernels marked t.next}
+  | TmExt t -> TmExt {t with inexpr = promoteKernels marked t.inexpr}
   | t -> t
 
+  -- TODO(larshum, 2022-03-22): Add support for sequence map and reduce
+  -- kernels.
   sem promoteKernelsBody =
-  | TmParallelLoop t ->
-    TmLoopKernel {n = t.n, f = t.f, ty = t.ty, info = t.info}
+  | TmParallelLoop {n = n, f = f, ty = ty, info = info} ->
+    TmLoopKernel {n = n, f = f, ty = ty, info = info}
   | t -> smap_Expr_Expr promoteKernelsBody t
 end
 
 lang CudaPMExprCompile = CudaPMExprKernelCalls
-  sem toCudaPMExpr : Map Name AccelerateData -> Expr -> (FunctionEnv, Expr)
-  sem toCudaPMExpr accelerateData =
-  | t ->
-    let accelerateIds = mapMapWithKey (lam. lam. ()) accelerateData in
-    generateKernelApplications accelerateIds t
+  sem toCudaPMExpr =
+  | t -> generateKernelApplications t
 end
