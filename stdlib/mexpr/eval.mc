@@ -1407,6 +1407,10 @@ lang TensorOpEval =
     seq_ tms
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
+  | TmConst { val = CTensorCreateUninitInt () } ->
+    TmTensor { val = TInt (tensorCreateUninitInt arg) }
+  | TmConst { val = CTensorCreateUninitFloat () } ->
+    TmTensor { val = TFloat (tensorCreateUninitFloat arg) }
   | TmConst { val = CTensorCreateInt2 shape } ->
     let f = lam is.
       match apply ctx (_toTmSeq is) arg

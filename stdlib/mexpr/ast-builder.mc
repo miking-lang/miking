@@ -126,6 +126,12 @@ let tyflexlink_ = use FlexTypeAst in
           contents = ref (Link ty)}
 
 -- Tensor OP types
+let tytensorcreateuninitint_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyint_)
+
+let tytensorcreateuninitfloat_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyfloat_)
+
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_
             , tyarrow_ (tyseq_ tyint_) tyint_

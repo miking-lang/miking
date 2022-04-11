@@ -815,6 +815,8 @@ end
 
 lang TensorOpAst = ConstAst
   syn Const =
+  | CTensorCreateUninitInt {}
+  | CTensorCreateUninitFloat {}
   | CTensorCreateInt {}
   | CTensorCreateFloat {}
   | CTensorCreate {}

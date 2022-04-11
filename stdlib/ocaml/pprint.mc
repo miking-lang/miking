@@ -285,6 +285,8 @@ lang OCamlPrettyPrint =
   | CMapCmp _ -> intrinsicOpMap "cmp"
   | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
   | CTensorIterSlice _ -> intrinsicOpTensor "iter_slice"
+  | CTensorCreateUninitInt _ -> intrinsicOpTensor "uninit_int_packed"
+  | CTensorCreateUninitFloat _ -> intrinsicOpTensor "uninit_float_packed"
   | CTensorCreateInt _ -> intrinsicOpTensor "create_int_packed"
   | CTensorCreateFloat _ -> intrinsicOpTensor "create_float_packed"
   | CTensorCreate _ -> intrinsicOpTensor "create_generic_packed"

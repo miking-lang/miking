@@ -138,6 +138,8 @@ let builtin =
   ; ("mapChooseOrElse", f (CmapChooseOrElse None))
   ; ("mapEq", f (CmapEq (None, None)))
   ; ("mapCmp", f (CmapCmp (None, None))) (* MCore intrinsics: Tensors *)
+  ; ("tensorCreateUninitInt", f CtensorCreateUninitInt)
+  ; ("tensorCreateUninitFloat", f CtensorCreateUninitFloat)
   ; ("tensorCreateCArrayInt", f (CtensorCreateCArrayInt None))
   ; ("tensorCreateCArrayFloat", f (CtensorCreateCArrayFloat None))
   ; ("tensorCreateDense", f (CtensorCreateDense None))

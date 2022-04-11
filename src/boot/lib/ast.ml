@@ -203,6 +203,8 @@ and const =
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense of int Mseq.t option
+  | CtensorCreateUninitInt
+  | CtensorCreateUninitFloat
   | CtensorCreateCArrayInt of int Mseq.t option
   | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
@@ -675,6 +677,8 @@ let const_has_side_effect = function
       false
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _
+  | CtensorCreateUninitInt
+  | CtensorCreateUninitFloat
   | CtensorCreateCArrayInt _
   | CtensorCreateCArrayFloat _
   | CtensorGetExn _
