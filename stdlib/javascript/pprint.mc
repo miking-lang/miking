@@ -23,7 +23,7 @@ let pprintEnvGetStr = lam env. lam id: Name.
       match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
     ])
   else
-    let id = nameSetStr id (escapeIdentifier (nameGetStr id)) in
+    let id = nameSetStr id (nameGetStr id) in
     pprintEnvGetStr env id -- Note that this is not a recursive call!
 
 -- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
