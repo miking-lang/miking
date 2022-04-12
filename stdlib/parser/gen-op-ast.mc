@@ -12,6 +12,7 @@ con InfixUnsplit :
 
 type GenOperator =
   { baseConstructorName : Name
+  , opConstructorName : Name
   , baseTypeName : Name
   , carried : Type
   , mkUnsplit : OperatorUnsplitter
@@ -21,7 +22,6 @@ type GenOpInput =
   , termsFieldLabel : String
   , mkSynName : Name -> String
   , mkSynAstBaseName : Name -> String
-  , mkConName : Name -> String
   , mkConAstName : Name -> String
   , mkBaseName : String -> String
   , composedName : String
@@ -131,7 +131,7 @@ let _mkConstructorFragment
   : GenOpInput -> Map Name Name -> GenOperator -> LanguageFragment
   = lam config. lam synNames. lam op.
     let synName = mapFindExn op.baseTypeName synNames in
-    let conName = nameSym (config.mkConName op.baseConstructorName) in
+    let conName = op.opConstructorName in
     let suffix = concat "_" (nameGetStr synName) in
 
     let getInfo =

@@ -64,7 +64,9 @@ type Operator =
   , rfield : Option String
   , mid : [SRegex]
   , nt : Name
+  , definition : {v: Name, i: Info}
   , conName : Name
+  , opConName : Name
   , assoc : Assoc
   } in
 
@@ -505,6 +507,17 @@ let stateTy = tyrecord_
   , ("content", tycon_ "String")
   ] in
 
+let operatorNtNames : Map Name {prefix : Name, infix : Name, postfix : Name, atom : Name} =
+  let f = lam nt.
+    let ntStr = nameGetStr nt in
+    { prefix = nameSym (concat ntStr "Prefix")
+    , infix = nameSym (concat ntStr "Infix")
+    , postfix = nameSym (concat ntStr "Postfix")
+    , atom = nameSym (concat ntStr "Atom")
+    } in
+  mapFromSeq nameCmp
+    (map (lam nt : Name. (nt, f nt)) nts)
+in
 let productions
   : Ref [Res (Expr, Production GenLabel ())] -- Each `Expr` evaluates to a production for ll1.mc
   = ref []
@@ -625,8 +638,8 @@ in
 -- internal to a production, i.e., its action produces a record with
 -- fields that are all sequences.
 let completeSeqProduction
-  : Name -> GenLabel -> PartialProduction -> Res (Expr, Production GenLabel ())
-  = lam nt. lam label. lam x.
+  : (Expr -> Expr) -> Name -> GenLabel -> PartialProduction -> Res (Expr, Production GenLabel ())
+  = lam wrap. lam nt. lam label. lam x.
     let symbols =
       result.mapM identity x.symbols in
     let terms = result.mapM identity x.terms in
@@ -659,7 +672,7 @@ let completeSeqProduction
             (nulam_ seqName
               (match_ (nvar_ seqName) (pseqtot_ pats)
                 -- TODO(vipa, 2022-04-05): Add type annotations plucked from the `Pat`s captures
-                (urecord_ fields)
+                (wrap (urecord_ fields))
                 never_))
         in
         let exprProduction = urecord_
@@ -760,10 +773,10 @@ recursive let computeSyntax
       let record = kleeneRecordInfo one.record in
       let nt = nameSym "kleene" in
       let sym = mkRecordOfSeqsSymbol nt record in
-      let consProd = completeSeqProduction nt
+      let consProd = completeSeqProduction identity nt
         (ProdInternal {name = prodName, info = x.content.i})
         (concatSyntax one sym) in
-      let nilProd = completeSeqProduction nt
+      let nilProd = completeSeqProduction identity nt
         (ProdInternal {name = prodName, info = x.info})
         { record = record, symbols = [], terms = [], fields = mapEmpty cmpString } in
       modref productions (concat (deref productions) [consProd, nilProd]);
@@ -777,7 +790,7 @@ recursive let computeSyntax
       let nt = nameSym "alt" in
       let prods = map
         (lam p: {v: PartialProduction, i: Info}.
-          completeSeqProduction nt (ProdInternal {name = prodName, info = p.i})
+          completeSeqProduction identity nt (ProdInternal {name = prodName, info = p.i})
             {p.v with record = record})
         alts in
       modref productions (concat (deref productions) prods);
@@ -880,7 +893,9 @@ let findOperator
       , mid = mid
       , nt = x.nt.v
       , conName = name
+      , opConName = nameSym (concat (nameGetStr name) "Op")
       , assoc = assoc
+      , definition = x.name
       } in
     result.map mkOperator assoc
 in
@@ -890,6 +905,18 @@ let mkOperatorConstructor
   -> PartialProduction
   -> Res GenOpInput
   = lam op. lam prod.
+    let #var"" =
+      let opNtNames : {prefix : Name, infix : Name, postfix : Name, atom : Name} =
+        mapFindExn op.nt operatorNtNames in
+      let nt = switch (op.lfield, op.rfield)
+        case (None _, None _) then opNtNames.atom
+        case (Some _, None _) then opNtNames.postfix
+        case (None _, Some _) then opNtNames.prefix
+        case (Some _, Some _) then opNtNames.infix
+        end in
+      modref productions
+        (snoc (deref productions)
+          (completeSeqProduction (nconapp_ op.opConName) nt (ProdTop op.definition) prod)) in
     let mkUnsplit = switch (op.lfield, op.rfield)
       case (None _, None _) then AtomUnsplit
         (lam conf : {record : Expr, info : Expr}.
@@ -930,6 +957,7 @@ let mkOperatorConstructor
       end in
     let f = lam ty.
       { baseConstructorName = op.conName
+      , opConstructorName = op.opConName
       , baseTypeName = op.nt
       , carried = ty
       , mkUnsplit = mkUnsplit
@@ -1023,7 +1051,6 @@ let generated: Res String = result.bind2 constructors requestedFieldAccessors
       , termsFieldLabel = termsFieldLabel
       , mkSynName = lam name. concat (nameGetStr name) "Op"
       , mkSynAstBaseName = lam. "SelfhostBaseAst"
-      , mkConName = lam name. concat (nameGetStr name) "Op"
       , mkConAstName = lam name. concat (nameGetStr name) "Ast"
       , mkBaseName = lam str. concat str "Base"
       , composedName = "ParseSelfhost"
