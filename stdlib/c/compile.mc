@@ -1214,11 +1214,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       rhs = get args 2
     }
   | CTensorLinearGetExn _ ->
-    let idx = last args in
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = last args, rhs = offset} in
     let data = CEMember {lhs = head args, id = _tensorDataKey} in
     CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
   | CTensorLinearSetExn _ ->
-    let idx = get args 1 in
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = get args 1, rhs = offset} in
     let data = CEMember {lhs = head args, id = _tensorDataKey} in
     CEBinOp {
       op = COAssign (),
