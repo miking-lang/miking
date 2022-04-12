@@ -754,6 +754,7 @@ let dataEntry : AcceleratedData = {
   identifier = functionIdent,
   bytecodeWrapperId = nameSym "fbyte",
   params = [(nameSym "s", tyseq_ tyint_)],
+  paramCopyStatus = [CopyBoth ()],
   returnType = tyseq_ tyint_,
   info = NoInfo ()
 } in

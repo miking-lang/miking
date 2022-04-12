@@ -1407,10 +1407,6 @@ lang TensorOpEval =
     seq_ tms
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmConst { val = CTensorCreateUninitInt () } ->
-    TmTensor { val = TInt (tensorCreateUninitInt arg) }
-  | TmConst { val = CTensorCreateUninitFloat () } ->
-    TmTensor { val = TFloat (tensorCreateUninitFloat arg) }
   | TmConst { val = CTensorCreateInt2 shape } ->
     let f = lam is.
       match apply ctx (_toTmSeq is) arg
@@ -1500,6 +1496,10 @@ lang TensorOpEval =
     else error "Second argument to CTensorToString not a tensor"
 
   sem delta (arg : Expr) =
+  | CTensorCreateUninitInt _ ->
+    TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq arg)) }
+  | CTensorCreateUninitFloat _ ->
+    TmTensor { val = TFloat (tensorCreateUninitFloat (_ofTmSeq arg)) }
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
     uconst_ val

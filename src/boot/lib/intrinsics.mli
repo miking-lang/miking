@@ -271,11 +271,9 @@ module T : sig
   module Op_mseq_barray :
     OP_MSEQ with type ('a, 'b) t = ('a, 'b) Tensor.Barray.t
 
-  val uninit_int :
-    int Mseq.t -> (int, int_elt) Tensor.Barray.t
+  val uninit_int : int Mseq.t -> (int, int_elt) Tensor.Barray.t
 
-  val uninit_float :
-    int Mseq.t -> (float, float64_elt) Tensor.Barray.t
+  val uninit_float : int Mseq.t -> (float, float64_elt) Tensor.Barray.t
 
   val create_int :
     int Mseq.t -> (int Mseq.t -> int) -> (int, int_elt) Tensor.Barray.t
