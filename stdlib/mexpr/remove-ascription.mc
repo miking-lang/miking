@@ -3,6 +3,7 @@ include "ast-builder.mc"
 include "eq.mc"
 
 lang MExprRemoveTypeAscription = MExprAst
+  sem removeTypeAscription : Expr -> Expr
   sem removeTypeAscription =
   | (TmLet {ident = idLet, body = body, inexpr = TmVar {ident = idExpr}}) & letexpr ->
     if nameEq idLet idExpr then
