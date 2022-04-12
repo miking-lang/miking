@@ -13,7 +13,7 @@ include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
-  PMExprAst + OCamlGenerateExternal + OCamlTopAst + OCamlPrettyPrint
+  PMExprAst + OCamlDataConversionMExpr + OCamlTopAst + OCamlPrettyPrint
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -88,7 +88,7 @@ lang PMExprReplaceAccelerate =
   | t ->
     let ty = tyTm t in
     match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm t) env t ty ocamlTy with (_, e) in
+    match convertData (infoTm t) env t (ty, ocamlTy) with (_, e) in
     let e = addRecordObjWrapping e in
     (acc, e)
 
@@ -104,7 +104,7 @@ lang PMExprReplaceAccelerate =
     match convertAccelerateParametersH env acc ast with (acc, ast) in
     let ty = tyTm ast in
     match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm ast) env ast ocamlTy ty with (_, ast) in
+    match convertData (infoTm ast) env ast (ocamlTy, ty) with (_, ast) in
     (acc, ast)
 
   -- We replace the auxilliary acceleration terms in the AST, by removing any
