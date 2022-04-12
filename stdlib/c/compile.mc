@@ -73,7 +73,7 @@ let _assign: CExpr -> CExpr -> CExpr = use CAst in
 -- COMPILER DEFINITIONS AND EXTERNALS --
 ----------------------------------------
 
-type ExtInfo = { ident: String, header: String }
+type ExtInfo = { ident: String, header: String, ty : CType, argTypes : [CType] }
 
 -- Collect all maps of externals. Should be done automatically at some point,
 -- but for now these files must be manually included and added to this map.
@@ -160,7 +160,7 @@ lang MExprCCompileBase = MExprAst + CAst
     typeEnv: [(Name,Type)],
 
     -- Map from MExpr external names to their C counterparts
-    externals: Map Name Name,
+    externals: Map Name ExtInfo,
 
     -- Accumulator for allocations in functions
     allocs: [CStmt]
@@ -431,7 +431,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     ) [] typeEnv in
 
     -- Construct a map from MCore external names to C names
-    let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
+    let externals: Map Name ExtInfo = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
     let env = {{{ let e : CompileCEnv = compileCEnvEmpty compileOptions in e
@@ -478,12 +478,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- COLLECT EXTERNALS --
   -----------------------
 
-  sem collectExternals (acc: Map Name Name) =
+  sem collectExternals (acc: Map Name ExtInfo) =
   | TmExt t ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
-      let acc = mapInsert t.ident (nameNoSym e.ident) acc in
+      let acc = mapInsert t.ident e acc in
       sfold_Expr_Expr collectExternals acc t.inexpr
     else infoErrorExit (t.info) "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
@@ -894,19 +894,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
 
   -- Add an extern declaration for top-level externals
   | TmExt { ident = ident, tyIdent = tyIdent, inexpr = inexpr } ->
-    recursive let funTypes: [Type] -> Type -> ([Type], Type) =
-      lam acc. lam rest.
-        match rest with TyArrow { from = from, to = rest } then
-          if _isUnitTy from then funTypes acc rest
-          else funTypes (snoc acc from) rest
-        else (acc, rest)
-    in
-    match mapLookup ident env.externals with Some extId then
-      match funTypes [] tyIdent with (paramTypes, retType) in
+    match mapLookup ident env.externals with Some ext then
+      let ext : ExtInfo = ext in
       let extTop = CTExt {
-        ret = compileType env retType,
-        id = extId,
-        params = map (compileType env) paramTypes} in
+        ret = ext.ty,
+        id = nameNoSym ext.ident,
+        params = ext.argTypes} in
       compileTops env (snoc accTop extTop) accInit inexpr
     else error (join ["Unknown external ", nameGetStr ident])
 
@@ -1243,7 +1236,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     if _isUnitTy ty then
       error "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
-      CEVar { id = ext }
+      let ext : ExtInfo = ext in
+      CEVar { id = nameNoSym ext.ident }
     else CEVar { id = ident }
 
   | TmApp _ & app ->
@@ -1257,7 +1251,9 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       -- Function calls
       match fun with TmVar { ident = ident } then
         let ident =
-          match mapLookup ident env.externals with Some ext then ext
+          match mapLookup ident env.externals with Some ext then
+            let ext : ExtInfo = ext in
+            nameNoSym ext.ident
           else ident
         in
         CEApp { fun = ident, args = map (compileExpr env) args }
