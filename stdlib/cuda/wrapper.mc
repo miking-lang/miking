@@ -567,10 +567,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     let env : CWrapperEnv = env in
     let initTensorCountStmt = CSDef {
       ty = CTyInt64 (), id = Some _tensorCountId,
-      init = Some (CIExpr {expr = CEBinOp {
-        op = COAssign (),
-        lhs = CEVar {id = _tensorCountId},
-        rhs = CEInt {i = 0}}})} in
+      init = Some (CIExpr {expr = CEInt {i = 0}})} in
     cons
       initTensorCountStmt
       (foldl (_generateOCamlToCudaWrapperArg env) [] env.arguments)
