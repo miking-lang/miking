@@ -91,9 +91,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
 
   sem containsKernelCallH (acc : Bool) =
   | CSExpr {expr = CEKernelApp _} -> true
-  | CSComp {stmts = stmts} ->
-    if acc then acc else foldl containsKernelCallH acc stmts
-  | stmt -> acc
+  | stmt -> sfold_CStmt_CStmt containsKernelCallH acc stmt
 
   sem generateIntrinsicStmt (ccEnv : CompileCEnv) (ty : CType) (acc : [CuTop]) =
   | CSExpr {expr = t} ->

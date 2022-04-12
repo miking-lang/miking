@@ -45,17 +45,21 @@ lang PMExprReplaceAccelerate =
       match mapAccumL (_mexprToOCamlType env) acc tys with (acc, tys) in
       (acc, OTyTuple {info = info, tys = tys})
     else
+      let getTypeExn = lam sid.
+        match mapLookup sid fields with Some ty then ty
+        else error "Record type label not found among fields"
+      in
       match
         mapAccumL
-          (lam acc. lam p : (SID, Type).
-            match p with (sid, ty) in
+          (lam acc. lam sid.
+            let ty = getTypeExn sid in
             match _mexprToOCamlType env acc ty with (acc, ty) in
             -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
             let str = pprintLabelString (sidToString sid) in
             (acc, (str, ty)))
-          acc (mapBindings fields)
+          acc labels
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
