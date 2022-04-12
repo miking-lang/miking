@@ -287,9 +287,9 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       thn = [printErrorStmt, exitErrorStmt],
       els = []}
 
-  sem _generateOCamlToCudaWrapperStmts : CWrapperEnv -> CExpr -> Name
-                                      -> CDataRepr -> [CStmt]
-  sem _generateOCamlToCudaWrapperStmts env src dstIdent =
+  sem _generateOCamlToCudaWrapperStmts : CWrapperEnv -> CopyStatus -> CExpr
+                                      -> Name -> CDataRepr -> [CStmt]
+  sem _generateOCamlToCudaWrapperStmts env status src dstIdent =
   | CudaSeqRepr t ->
     let env : CWrapperEnv = env in
     let seqInitExpr =
@@ -340,7 +340,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         let fieldDefStmt = CSDef {
           ty = elemTy, id = Some fieldId,
           init = Some (CIExpr {expr = fieldExpr})} in
-        let stmts = _generateOCamlToCudaWrapperStmts env fieldExpr fieldId t.data in
+        let stmts = _generateOCamlToCudaWrapperStmts env status fieldExpr fieldId t.data in
         let fieldUpdateStmt = CSExpr {expr = CEBinOp {
           op = COAssign (),
           lhs = fieldDstExpr,
@@ -434,33 +434,41 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       lhs = _accessMember t.ty dst _tensorSizeKey,
       rhs = CEVar {id = n}}} in
 
-    -- NOTE(larshum, 2022-04-04): If we are using unified memory, we allocate
-    -- managed memory for the tensor and use that. Otherwise, we use the
-    -- bigarray memory directly.
-    let tempId = nameSym "t" in
-    let emptyPtrDeclStmt = CSDef {
-      ty = CTyPtr {ty = t.elemTy}, id = Some tempId, init = None ()} in
-    let allocManagedStmt = CSExpr {expr = CEApp {
-      fun = _cudaMallocManaged,
-      args = [
-        CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
-        CEVar {id = n}]}} in
-    let copyDataStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        CEVar {id = tempId},
-        CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]},
-        CEVar {id = n},
-        CEVar {id = _cudaMemcpyHostToDevice}]}} in
-    let setTensorDataStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = _accessMember t.ty dst _tensorDataKey,
-      rhs = CEVar {id = tempId}}} in
-
-    [ tensorDefStmt, setTensorRankStmt, rankErrorStmt, setTensorOffsetStmt
-    , setTensorIdStmt, incrementTensorCountStmt, iterInitStmt, sizeInitStmt
-    , dimLoopStmt, setTensorSizeStmt, emptyPtrDeclStmt, allocManagedStmt
-    , copyDataStmt , setTensorDataStmt ]
+    -- NOTE(larshum, 2022-04-12): If the tensor data does not need to be
+    -- copied, we just allocate memory.
+    let tensorAllocStmts =
+      [ tensorDefStmt, setTensorRankStmt, rankErrorStmt, setTensorOffsetStmt
+      , setTensorIdStmt, incrementTensorCountStmt, iterInitStmt, sizeInitStmt
+      , dimLoopStmt, setTensorSizeStmt ] in
+    match status with CopyFromAccelerate _ | NoCopy _ then
+      let allocManagedStmt = CSExpr {expr = CEApp {
+        fun = _cudaMallocManaged,
+        args = [
+          CEUnOp {op = COAddrOf (), arg = _accessMember t.ty dst _tensorDataKey},
+          CEVar {id = n}]}} in
+      snoc tensorAllocStmts allocManagedStmt
+    else
+      let tempId = nameSym "t" in
+      let emptyPtrDeclStmt = CSDef {
+        ty = CTyPtr {ty = t.elemTy}, id = Some tempId, init = None ()} in
+      let allocManagedStmt = CSExpr {expr = CEApp {
+        fun = _cudaMallocManaged,
+        args = [
+          CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
+          CEVar {id = n}]}} in
+      let copyDataStmt = CSExpr {expr = CEApp {
+        fun = _cudaMemcpy,
+        args = [
+          CEVar {id = tempId},
+          CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]},
+          CEVar {id = n},
+          CEVar {id = _cudaMemcpyHostToDevice}]}} in
+      let setTensorDataStmt = CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = _accessMember t.ty dst _tensorDataKey,
+        rhs = CEVar {id = tempId}}} in
+      concat tensorAllocStmts
+        [ emptyPtrDeclStmt, allocManagedStmt, copyDataStmt, setTensorDataStmt ]
   | CudaRecordRepr t ->
     let dst = CEVar {id = dstIdent} in
     let generateMarshallingField : [CStmt] -> (CDataRepr, Int) -> [CStmt] =
@@ -472,7 +480,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         args = [src, CEInt {i = idx}]} in
       let labelId : Name = nameNoSym (sidToString (get t.labels idx)) in
       let fieldDstIdent = nameSym "cuda_rec_field" in
-      let innerStmts = _generateOCamlToCudaWrapperStmts env srcExpr fieldDstIdent field in
+      let innerStmts = _generateOCamlToCudaWrapperStmts env status srcExpr fieldDstIdent field in
       let fieldUpdateStmt = CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = _accessMember t.ty dst labelId,
@@ -526,7 +534,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
             match constrData with CudaRecordRepr _ then src
             else getFieldFirst src in
           let setTempStmts =
-            _generateOCamlToCudaWrapperStmts env srcExpr innerId constrData in
+            _generateOCamlToCudaWrapperStmts env status srcExpr innerId constrData in
           let setValueStmt = CSExpr {expr = CEBinOp {
             op = COAssign (),
             lhs = CEArrow {lhs = dst, id = constrId},
@@ -552,7 +560,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
   | arg ->
     let arg : ArgData = arg in
     let src = CEVar {id = arg.mexprIdent} in
-    concat acc (_generateOCamlToCudaWrapperStmts env src arg.gpuIdent arg.cData)
+    concat acc (_generateOCamlToCudaWrapperStmts env arg.copyStatus src arg.gpuIdent arg.cData)
 
   sem generateOCamlToCudaWrapper =
   | env ->
@@ -710,8 +718,9 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
 end
 
 lang CudaDeallocWrapper = CudaCWrapperBase
-  sem _generateDeallocArg : CWrapperEnv -> CExpr -> CExpr -> CDataRepr -> [CStmt]
-  sem _generateDeallocArg env arg ocamlArg =
+  sem _generateDeallocArg : CWrapperEnv -> CopyStatus -> CExpr -> CExpr
+                         -> CDataRepr -> [CStmt]
+  sem _generateDeallocArg env status arg ocamlArg =
   | CudaSeqRepr t ->
     let iterId = nameSym "i" in
     let iter = CEVar {id = iterId} in
@@ -724,7 +733,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       rhs = iter} in
     let innerOcamlArg = CEApp {
       fun = _getIdentExn "Field", args = [ocamlArg, iter]} in
-    let innerFreeStmts = _generateDeallocArg env innerArg innerOcamlArg t.data in
+    let innerFreeStmts = _generateDeallocArg env status innerArg innerOcamlArg t.data in
     let iterIncrementStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = iter,
@@ -774,7 +783,11 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       cond = notReturnedCondExpr,
       thn = [freeDataStmt],
       els = []} in
-    [copyIfUpdatedStmt, freeIfNotReturnedStmt]
+    -- NOTE(larshum, 2022-04-12): We do not have to copy back the data if we
+    -- know it will never be used after the accelerate call.
+    match status with CopyToAccelerate _ | NoCopy _ then
+      [freeIfNotReturnedStmt]
+    else [copyIfUpdatedStmt, freeIfNotReturnedStmt]
   | CudaRecordRepr t ->
     let fieldCounter = ref 0 in
     let generateDeallocField : [CStmt] -> (SID, CDataRepr) -> [CStmt] =
@@ -786,7 +799,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       let innerOcamlArg = CEApp {
         fun = _getIdentExn "Field",
         args = [ocamlArg, CEInt {i = fieldIdx}]} in
-      let innerFreeStmts = _generateDeallocArg env innerArg innerOcamlArg field in
+      let innerFreeStmts = _generateDeallocArg env status innerArg innerOcamlArg field in
       concat acc innerFreeStmts
     in
     let freeFieldStmts = foldl generateDeallocField [] (zip t.labels t.fields) in
@@ -803,7 +816,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
           let constrIdx = deref counter in
           (modref counter (addi constrIdx 1));
           let innerArg = CEArrow {lhs = arg, id = constrId} in
-          let innerFreeStmts = _generateDeallocArg env innerArg ocamlArg constrData in
+          let innerFreeStmts = _generateDeallocArg env status innerArg ocamlArg constrData in
           [ CSIf {
               cond = CEBinOp {
                 op = COEq (),
@@ -829,7 +842,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
           (lam arg : ArgData.
             let argExpr = CEVar {id = arg.gpuIdent} in
             let ocamlExpr = CEVar {id = arg.mexprIdent} in
-            _generateDeallocArg env argExpr ocamlExpr arg.cData)
+            _generateDeallocArg env arg.copyStatus argExpr ocamlExpr arg.cData)
           env.arguments) in
 
     -- Free global tensor state data

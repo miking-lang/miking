@@ -35,6 +35,7 @@ include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
+include "pmexpr/copy-analysis.mc"
 include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
@@ -56,7 +57,8 @@ lang PMExprCompile =
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprUtestSizeConstraint +
   PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
-  OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive
+  OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive +
+  PMExprCopyAnalysis
 end
 
 lang MExprFutharkCompile =
@@ -401,6 +403,9 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- least one free variable parameter.
   match eliminateDummyParameter solutions accelerated accelerateAst
   with (accelerated, accelerateAst) in
+
+  -- Perform analysis to find variables unused after the accelerate call.
+  let accelerated = findUnusedAfterAccelerate accelerated ast in
 
   -- Translate the PMExpr AST into a representation of the GPU code and the
   -- wrapper code.

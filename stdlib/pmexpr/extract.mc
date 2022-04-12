@@ -15,19 +15,6 @@ include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
-type AccelerateData = {
-  identifier : Name,
-  bytecodeWrapperId : Name,
-  params : [(Name, Type)],
-  returnType : Type,
-  info : Info
-}
-
-type AddIdentifierAccelerateEnv = {
-  functions : Map Expr AccelerateData,
-  programIdentifiers : Set SID
-}
-
 -- Generates a random ASCII letter or digit character.
 let _randAlphanum : Unit -> Char = lam.
   -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
@@ -38,6 +25,36 @@ let _randAlphanum : Unit -> Char = lam.
   else int2char (addi r 61)
 
 lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
+  syn CopyStatus =
+  | CopyBoth ()
+  | CopyToAccelerate ()
+  | CopyFromAccelerate ()
+  | NoCopy ()
+
+  sem omitCopyTo =
+  | CopyBoth _ -> CopyFromAccelerate ()
+  | CopyToAccelerate _ -> NoCopy ()
+  | status -> status
+
+  sem omitCopyFrom =
+  | CopyBoth _ -> CopyToAccelerate ()
+  | CopyFromAccelerate _ -> NoCopy ()
+  | status -> status
+
+  type AccelerateData = {
+    identifier : Name,
+    bytecodeWrapperId : Name,
+    params : [(Name, Type)],
+    paramCopyStatus : [CopyStatus],
+    returnType : Type,
+    info : Info
+  }
+
+  type AddIdentifierAccelerateEnv = {
+    functions : Map Expr AccelerateData,
+    programIdentifiers : Set SID
+  }
+
   sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
@@ -88,6 +105,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
       identifier = accelerateIdent,
       bytecodeWrapperId = bytecodeIdent,
       params = [(paramId, paramTy)],
+      paramCopyStatus = [CopyBoth ()],
       returnType = retType,
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
@@ -243,7 +261,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         (lam accId : Name. lam accData : AccelerateData.
           match mapLookup accId solutions with Some fv then
             if gti (mapSize fv) 0 then
-              {accData with params = mapBindings fv}
+              let params = mapBindings fv in
+              let copyStatus = create (length params) (lam. CopyBoth ()) in
+              {{accData with params = params}
+                        with paramCopyStatus = copyStatus}
             else accData
           else accData)
         accelerated in
