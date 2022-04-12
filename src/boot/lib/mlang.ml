@@ -865,7 +865,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
               | Some params ->
                   params
               | None ->
-                  [Param (NoInfo, us "", TyUnknown NoInfo)]
+                  []
             in
             Some
               ( fi
