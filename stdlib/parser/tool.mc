@@ -242,9 +242,11 @@ let allResolved: Res () = result.map (lam. ()) (result.mapM identity decls) in
 let decls: [Decl] = mapOption result.toOption decls in
 
 -- NOTE(vipa, 2022-03-21): Compute the required sfunctions
-let nts: [Name] =
-  let inner = lam x. match x with TypeDecl x then Some x.name.v else None () in
+let ntsWithInfo: [{v: Name, i: Info}] =
+  let inner = lam x. match x with TypeDecl x then Some x.name else None () in
   mapOption inner decls in
+let nts: [Name] =
+  map (lam name: {v: Name, i: Info}. name.v) ntsWithInfo in
 let requestedSFunctions: [(Name, Type)] =
   let mkPair = lam a. lam b. (a, ntycon_ b) in
   seqLiftA2 mkPair nts nts in
@@ -1001,10 +1003,121 @@ let constructors : Res [ConstructorInfo] =
   result.mapM identity (mapOption check decls)
 in
 
+let genOpResult : Res GenOpResult =
+  let mkMirroredProduction
+    : { nt : Name, rhs : [Name], label : label, action : Expr }
+    -> (Expr, Production label)
+    = lam prod.
+      let liftSpec : Name -> Expr = lam sym.
+        (app_ (var_ "ntSym") (nvar_ sym)) in
+      ( urecord_
+        [ ("nt", nvar_ prod.nt)
+        , ("rhs", seq_ (map liftSpec prod.rhs))
+        , ("label", unit_)
+        , ("action", prod.action)
+        ]
+      , { nt = prod.nt
+        , rhs = map ntSym prod.rhs
+        , label = prod.label
+        , action = lam. lam. error "impossible"
+        }
+      )
+  in
+  let f : [ConstructorInfo] -> GenOpResult = lam constructors.
+    let genOpInput =
+      { infoFieldLabel = infoFieldLabel
+      , termsFieldLabel = termsFieldLabel
+      , mkSynName = lam name. concat (nameGetStr name) "Op"
+      , mkSynAstBaseName = lam. "SelfhostBaseAst"
+      , mkConAstName = lam name. concat (nameGetStr name) "Ast"
+      , mkBaseName = lam str. concat str "Base"
+      , composedName = "ParseSelfhost"
+      , syns = nts
+      , operators = map (lam x: ConstructorInfo. x.genOperator) constructors
+      } in
+    let genOpResult : GenOpResult = mkOpLanguages genOpInput in
+    let mkRegexProductions : {v: Name, i: Info} -> [Res (Expr, Production GenLabel ())] = lam original.
+      let lclosed = nameSym (concat (nameGetStr original.v) "_lclosed") in
+      let lopen = nameSym (concat (nameGetStr original.v) "_lopen") in
+      let regexNts : {prefix : Name, infix : Name, postfix : Name, atom : Name} =
+        mapFindExn original.v operatorNtNames in
+      let top = mkMirroredProduction
+        { nt = original.v
+        , label = TyTop original
+        , rhs = [lclosed]
+        , action = ulam_ "" (ulam_ "seq"
+          (match_ (var_ "seq") (pseqtot_ [pcon_ "UserSym" (pvar_ "cont")])
+            (app_ (var_ "cont") (conapp_ "Some" (app_ (var_ "breakableInitState") unit_)))
+            never_
+          ))
+        } in
+      let atom = mkMirroredProduction
+        { nt = lclosed
+        , label = TyRegex {nt = original, kind = LRegAtom ()}
+        , rhs = [regexNts.atom, lopen]
+        , action = ulam_ "p" (ulam_ "seq"
+          (match_ (var_ "seq")
+            (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
+            (ulam_ "st"
+              (app_ (var_ "cont")
+                (genOpResult.addAtomFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            never_))
+        } in
+      let infix = mkMirroredProduction
+        { nt = lopen
+        , label = TyRegex {nt = original, kind = LRegInfix ()}
+        , rhs = [regexNts.infix, lclosed]
+        , action = ulam_ "p" (ulam_ "seq"
+          (match_ (var_ "seq")
+            (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
+            (ulam_ "st"
+              (app_ (var_ "cont")
+                (genOpResult.addInfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            never_))
+        } in
+      let prefix = mkMirroredProduction
+        { nt = lclosed
+        , label = TyRegex {nt = original, kind = LRegPrefix ()}
+        , rhs = [regexNts.prefix, lclosed]
+        , action = ulam_ "p" (ulam_ "seq"
+          (match_ (var_ "seq")
+            (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
+            (ulam_ "st"
+              (app_ (var_ "cont")
+                (genOpResult.addPrefixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            never_))
+        } in
+      let postfix = mkMirroredProduction
+        { nt = lopen
+        , label = TyRegex {nt = original, kind = LRegPostfix ()}
+        , rhs = [regexNts.postfix, lopen]
+        , action = ulam_ "p" (ulam_ "seq"
+          (match_ (var_ "seq")
+            (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
+            (ulam_ "st"
+              (app_ (var_ "cont")
+                (genOpResult.addPostfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            never_))
+        } in
+      let final = mkMirroredProduction
+        { nt = lopen
+        , label = TyRegex {nt = original, kind = LRegEnd ()}
+        , rhs = []
+        , action = ulam_ "p" (ulam_ ""
+          (ulam_ "st" (genOpResult.finalizeFor original.v (var_ "p") (var_ "st"))))
+        } in
+      map result.ok [top, atom, infix, prefix, postfix, final]
+    in
+    let newProds = map mkRegexProductions ntsWithInfo in
+    modref productions (join (cons (deref productions) newProds));
+    genOpResult
+  in result.map f constructors
+in
+
 let productions : Res [(Expr, Production GenLabel ())] = result.mapM identity (deref productions) in
 let ll1Error : Res () =
-  let fst = lam prod: (Expr, Production GenLabel ()). prod.1 in
-  let productions = result.map (map fst) productions in
+  let snd = lam prod: (Expr, Production GenLabel ()). prod.1 in
+  let productions = result.map (map snd) productions in
   result.bind2 start productions
     (lam start: Name. lam productions: [Production GenLabel ()].
       match genParsingTable {start = start, productions = productions} with Left err then
@@ -1035,9 +1148,25 @@ let ll1Error : Res () =
     )
 in
 
+let table : Res String =
+  let f : Name -> GenOpResult -> [(Expr, Production GenLabel ())] -> Expr =
+    lam start. lam genOpResult. lam prods.
+      let prods = map (lam x. match x with (x, _) in x) prods in
+      let grammar = urecord_
+        [ ("start", nvar_ start)
+        , ("productions", genOpResult.wrapProductions (seq_ prods))
+        ] in
+      let table = _uletin_ "target" (app_ (var_ "genParsingTable") grammar)
+        (match_ (var_ "target") (pcon_ "Right" (pvar_ "table"))
+          (var_ "table")
+          never_)
+      in join ["let _table = ", expr2str table]
+  in result.map3 f start genOpResult productions
+in
+
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
-let generated: Res String = result.bind2 constructors requestedFieldAccessors
-  (lam constructors : [ConstructorInfo]. lam requestedFieldAccessors.
+let generated: Res String = result.bind4 constructors requestedFieldAccessors genOpResult table
+  (lam constructors : [ConstructorInfo]. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam table.
     let genInput =
       { baseName = "SelfhostBaseAst"
       , composedName = Some "SelfhostAst"
@@ -1046,28 +1175,8 @@ let generated: Res String = result.bind2 constructors requestedFieldAccessors
       , requestedSFunctions = requestedSFunctions
       , fieldAccessors = requestedFieldAccessors
       } in
-    let genOpInput =
-      { infoFieldLabel = infoFieldLabel
-      , termsFieldLabel = termsFieldLabel
-      , mkSynName = lam name. concat (nameGetStr name) "Op"
-      , mkSynAstBaseName = lam. "SelfhostBaseAst"
-      , mkConAstName = lam name. concat (nameGetStr name) "Ast"
-      , mkBaseName = lam str. concat str "Base"
-      , composedName = "ParseSelfhost"
-      , operators = map (lam x: ConstructorInfo. x.genOperator) constructors
-      } in
-    result.ok (strJoin "\n\n" ["include \"seq.mc\"", mkLanguages genInput, mkOpLanguages genOpInput])
+    result.ok (strJoin "\n\n" ["include \"seq.mc\"", mkLanguages genInput, genOpResult.fragments, table])
   ) in
-
-let prodsToStr = lam prods: [(Expr, a)].
-  let res = map (lam x. match x with (x, _) in x) prods in
-  let res = seq_ res in
-  expr2str res in
-let foo =
-  match result.toOption (result.map prodsToStr productions)
-  with Some str then printLn str
-  else ()
-in
 
 match result.consume (result.withAnnotations ll1Error (result.withAnnotations allResolved generated)) with (warnings, res) in
 for_ warnings (lam x. match x with (info, msg) in printLn (infoWarningString info msg));
