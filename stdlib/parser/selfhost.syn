@@ -56,3 +56,13 @@ precedence {
   Concat;
   Alternative;
 }
+
+prod left App: Expr = left:Expr right:Expr
+prod Con: Expr = name:UName
+prod String: Expr = val:String
+prod Variable: Expr = name:LName
+prod RecordExpr: Expr =
+  "{"
+    (fields:{name:String "=" val:Expr}
+     fields:{"," name:String "=" val:Expr}*)?
+  "}"
