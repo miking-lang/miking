@@ -283,13 +283,36 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
     case TokenDecl (x & {name = Some n}) then
       -- TODO(vipa, 2022-03-28): get this information in a more principled way
       let n : {v: Name, i: Info} = n in
-      let info: TokenInfo =
-        { ty = tycon_ (nameGetStr n.v)
-        , repr = conapp_ (concat (nameGetStr n.v) "Repr") unit_
-        , tokConstructor = nameNoSym (concat (nameGetStr n.v) "Tok")
-        , getInfo = recordproj_ "info"
-        , getValue = recordproj_ "val"
-        } in
+      let info: TokenInfo = switch nameGetStr n.v
+        case "UName" then
+          { ty = tycon_ "Name"
+          , repr = conapp_ "UIdentRepr" unit_
+          , tokConstructor = nameNoSym "UIdentTok"
+          , getInfo = recordproj_ "info"
+          , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
+          }
+        case "LName" then
+          { ty = tycon_ "Name"
+          , repr = conapp_ "LIdentRepr" unit_
+          , tokConstructor = nameNoSym "LIdentTok"
+          , getInfo = recordproj_ "info"
+          , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
+          }
+        case "LIdent" then
+          { ty = tycon_ "String"
+          , repr = conapp_ "LIdentRepr" unit_
+          , tokConstructor = nameNoSym "LIdentTok"
+          , getInfo = recordproj_ "info"
+          , getValue = recordproj_ "val"
+          }
+        case _ then
+          { ty = tycon_ (nameGetStr n.v)
+          , repr = conapp_ (concat (nameGetStr n.v) "Repr") unit_
+          , tokConstructor = nameNoSym (concat (nameGetStr n.v) "Tok")
+          , getInfo = recordproj_ "info"
+          , getValue = recordproj_ "val"
+          }
+        end in
       mapInsert n.v (Right (result.ok info)) m
     case _ then
       m
