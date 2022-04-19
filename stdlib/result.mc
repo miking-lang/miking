@@ -270,6 +270,36 @@ let #var"" =
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. utest _map4 f a b c d with semantics f a b c d using eq in ()))))
 
+-- Perform a computation on the values present in three `Results` if
+-- none is an error. Preserves the errors and warnings of all inputs.
+-- Semantically equivalent with:
+-- let map5 = lam f. lam a. lam b. lam c. lam d. lam e. apply (apply (apply (apply (map f a) b) c) d) e
+let _map5
+  : all w. all e. all a1. all a2. all a3. all a4. all a5. all b. (a1 -> a2 -> a3 -> a4 -> a5 -> b) -> Result w e a1 -> Result w e a2 -> Result w e a3 -> Result w e a4 -> Result w e a5 -> Result w e b
+  = lam f. lam a. lam b. lam c. lam d. lam e.
+    match (a, b, c, d, e) with (ResultOk a, ResultOk b, ResultOk c, ResultOk d, ResultOk e) then
+      ResultOk { warnings = mapUnion (mapUnion (mapUnion (mapUnion a.warnings b.warnings) c.warnings) d.warnings) e.warnings, value = f a.value b.value c.value d.value e.value }
+    else
+      ResultErr (_mergeErrors (_mergeErrors (_mergeErrors (_mergeErrors (_asError a) (_asError b)) (_asError c)) (_asError d)) (_asError e))
+
+-- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
+-- rather exhaustive testing for small number of posibilities
+let #var"" =
+  let semantics = lam f. lam a. lam b. lam c. lam d. lam e. _apply (_apply (_apply (_apply (_map f a) b) c) d) e in
+  let errs = [_err 1, _err 2, _err 3] in
+  let f = lam a. lam b. lam c. lam d. lam e. (a, b, c, d, e) in
+  let eqPair : (Int, Int, Int, Int, Int) -> (Int, Int, Int, Int, Int) -> Bool = lam a. lam b. and (and (and (and (eqi a.0 b.0) (eqi a.1 b.1)) (eqi a.2 b.2)) (eqi a.3 b.3)) (eqi a.4 b.4) in
+  let eq : Result Char Int (Int, Int, Int, Int, Int) -> Result Char Int (Int, Int, Int, Int, Int) -> Bool = lam l. lam r.
+    let l = _prepTest l in
+    let r = _prepTest r in
+    and (eqSeq eqChar l.0 r.0) (eitherEq (eqSeq eqi) eqPair l.1 r.1) in
+  for_ (cons (_ok 1) errs)
+    (lam a. for_ (cons (_ok 2) errs)
+      (lam b. for_ (cons (_ok 3) errs)
+        (lam c. for_ (cons (_ok 4) errs)
+          (lam d. for_ (cons (_ok 5) errs)
+            (lam e. utest _map5 f a b c d e with semantics f a b c d e using eq in ())))))
+
 -- Perform a computation on the values of a list. Produces a non-error
 -- only if all individual computations produce a non-error. Preserves
 -- all errors and warnings.
@@ -423,6 +453,38 @@ let #var"" =
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. utest _bind4 a b c d f with semantics a b c d f using eq in ()))))
 
+-- Perform a computation only if its inputs are error free. Preserves
+-- warnings and errors, but if the inputs have an error then the
+-- action won't run, thus any errors or warnings it would have been
+-- produced are not present in the result.
+-- Semantically equivalent with:
+-- let bind5 = lam a. lam b. lam c. lam d. lam e. lam f. bind (map5 (lam a. lam b. lam c. lam d. lam e. (a, b, c, d, e)) a b c d e) (lam x. f x.0 x.1 x.2 x.3 x.4)
+let _bind5
+  : all w. all e. all a1. all a2. all a3. all a4. all a5. all b. Result w e a1 -> Result w e a2 -> Result w e a3 -> Result w e a4 -> Result w e a5 -> (a1 -> a2 -> a3 -> a4 -> a5 -> Result w e b) -> Result w e b
+  = lam a. lam b. lam c. lam d. lam e. lam f.
+    match (a, b, c, d, e) with (ResultOk a, ResultOk b, ResultOk c, ResultOk d, ResultOk e) then
+      _warns (mapUnion (mapUnion (mapUnion (mapUnion a.warnings b.warnings) c.warnings) d.warnings) e.warnings) (f a.value b.value c.value d.value e.value)
+    else
+      ResultErr (_mergeErrors (_mergeErrors (_mergeErrors (_mergeErrors (_asError a) (_asError b)) (_asError c)) (_asError d)) (_asError e))
+
+-- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
+-- rather exhaustive testing for small number of posibilities
+let #var"" =
+  let semantics = lam a. lam b. lam c. lam d. lam e. lam f. _bind (_map5 (lam a. lam b. lam c. lam d. lam e. (a, b, c, d, e)) a b c d e) (lam x: (Int, Int, Int, Int, Int). f x.0 x.1 x.2 x.3 x.4) in
+  let errs = [_err 1, _err 2, _err 3] in
+  let f = lam a. lam b. lam c. lam d. lam e. _withAnnotations (_warn 'a') (_ok (a, b, c, d, e)) in
+  let eqPair : (Int, Int, Int, Int, Int) -> (Int, Int, Int, Int, Int) -> Bool = lam a. lam b. and (and (and (and (eqi a.0 b.0) (eqi a.1 b.1)) (eqi a.2 b.2)) (eqi a.3 b.3)) (eqi a.4 b.4) in
+  let eq : Result Char Int (Int, Int, Int, Int, Int) -> Result Char Int (Int, Int, Int, Int, Int) -> Bool = lam l. lam r.
+    let l = _prepTest l in
+    let r = _prepTest r in
+    and (eqSeq eqChar l.0 r.0) (eitherEq (eqSeq eqi) eqPair l.1 r.1) in
+  for_ (cons (_ok 1) errs)
+    (lam a. for_ (cons (_ok 2) errs)
+      (lam b. for_ (cons (_ok 3) errs)
+        (lam c. for_ (cons (_ok 4) errs)
+          (lam d. for_ (cons (_ok 5) errs)
+            (lam e. utest _bind5 a b c d e f with semantics a b c d e f using eq in ())))))
+
 let result =
   -- Constructors
   { ok = _ok
@@ -436,6 +498,7 @@ let result =
   , map2 = _map2
   , map3 = _map3
   , map4 = _map4
+  , map5 = _map5
   , apply = _apply
   , withAnnotations = _withAnnotations
   -- Mapping, action can produce new errors and/or warnings
@@ -443,5 +506,6 @@ let result =
   , bind2 = _bind2
   , bind3 = _bind3
   , bind4 = _bind4
+  , bind5 = _bind5
   , mapM = _mapM
   }
