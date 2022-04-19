@@ -1229,9 +1229,42 @@ let table : Res String =
   in result.map3 f start genOpResult productions
 in
 
+let parseFunctions : Res String =
+  let f = lam start. strJoin "\n"
+    [ "\n\nlet parseSelfhost"
+    , concat ": String -> String -> Either [(Info, String)] " (nameGetStr start)
+    , "= lam filename. lam content."
+    , "  use ParseSelfhost in"
+    , "  let config = {errors = ref [], content = content} in"
+    , "  let res = parseWithTable _table filename config content in"
+    , "  let errors = deref config.errors in"
+    , "  let errors ="
+    , "    match res with Left err then"
+    , "      let err = ll1DefaultHighlight content (ll1ToErrorHighlightSpec err) in"
+    , "      snoc errors err"
+    , "    else errors in"
+    , "  if null errors then eitherMapRight (lam x. match x with (_, x) in x) res else Left errors"
+    , ""
+    , "let parseSelfhostExn"
+    , concat ": String -> String -> " (nameGetStr start)
+    , "= lam filename. lam content."
+    , "  switch parseSelfhost filename content"
+    , "  case Left errors then"
+    , "    for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));"
+    , "    exit 1"
+    , "  case Right file then file"
+    , "  end"
+    ] in
+  result.map f start
+in
+
+let tableAndFunctions : Res String =
+  result.map2 concat table parseFunctions
+in
+
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
-let generated: Res String = result.bind5 constructors badConstructors requestedFieldAccessors genOpResult table
-  (lam constructors : [ConstructorInfo]. lam badConstructors. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam table.
+let generated: Res String = result.bind5 constructors badConstructors requestedFieldAccessors genOpResult tableAndFunctions
+  (lam constructors : [ConstructorInfo]. lam badConstructors. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam tableAndFunctions.
     let genInput =
       { baseName = "SelfhostBaseAst"
       , composedName = Some "SelfhostAst"
@@ -1248,7 +1281,7 @@ let generated: Res String = result.bind5 constructors badConstructors requestedF
       , "include \"parser/breakable.mc\""
       , mkLanguages genInput
       , genOpResult.fragments
-      , table
+      , tableAndFunctions
       ])
   ) in
 
