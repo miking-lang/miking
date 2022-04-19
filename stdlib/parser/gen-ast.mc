@@ -350,7 +350,7 @@ lang CarriedTypeHelpers = CarriedTypeBase
         , preCaseArgs = [(valName, None ())]
         , cases =
           [ ( npcon_ constructor.name (npvar_ targetName)
-            , recordupdate_ (nvar_ targetName) field (nvar_ valName)
+            , nconapp_ constructor.name (recordupdate_ (nvar_ targetName) field (nvar_ valName))
             )
           ]
         } in
@@ -521,7 +521,7 @@ lang CarriedSeq = CarriedTypeBase
         appf3_
           (var_ "mapAccumL")
           (nulam_ innerAcc
-            (nulam_ innerVal
+            (nlam_ innerVal (carriedRepr ty)
               (mkNew innerAcc innerVal)))
           (nvar_ accName)
           (nvar_ valName)

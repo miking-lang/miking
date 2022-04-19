@@ -143,7 +143,9 @@ let _mkBaseFragment
 let _mkConstructorFragment
   : GenOpInput -> Map Name {bad : Name, op : Name} -> GenOperator -> LanguageFragment
   = lam config. lam synNames. lam op.
-    let synName = (mapFindExn op.baseTypeName synNames).op in
+    let synName =
+      let tmp : {bad : Name, op : Name} = mapFindExn op.baseTypeName synNames in
+      tmp.op in
     let conName = op.opConstructorName in
     let suffix = concat "_" (nameGetStr synName) in
 
@@ -255,6 +257,30 @@ let _mkConstructorFragment
     , aliases = []
     , synTypes = mapInsert synName [{name = conName, synType = synName, carried = untargetableType op.carried}] (mapEmpty nameCmp)
     , semanticFunctions = [getInfo, getTerms, unsplit]
+    }
+
+let _mkComposedFragment
+  : GenOpInput -> Map Name {bad : Name, op : Name} -> [LanguageFragment] -> LanguageFragment
+  = lam config. lam opTypeNames. lam fragments.
+    let opFragments : [String] = map
+      (lam frag: LanguageFragment. frag.name)
+      fragments in
+    let badFragments : [String] = map
+      (lam name: {bad : Name, op : Name}. config.mkConAstName name.bad)
+      (mapValues opTypeNames) in
+    { name = config.composedName
+    , extends = join
+      [ opFragments
+      , badFragments
+      , [ "LL1Parser"
+        , "UIdentTokenParser"
+        , "LIdentTokenParser"
+        , "StringTokenParser"
+        ]
+      ]
+    , aliases = []
+    , synTypes = mapEmpty nameCmp
+    , semanticFunctions = []
     }
 
 type WrapperInfo =
@@ -422,9 +448,11 @@ let mkOpLanguages
       config.syns in
     let baseFragments = map (_mkBaseFragment config) (mapBindings opTypeNames) in
     let constructorFragments = map (_mkConstructorFragment config opTypeNames) config.operators in
+    let composedFragment = _mkComposedFragment config opTypeNames constructorFragments in
     let fragments = join
       [ baseFragments
       , constructorFragments
+      , [composedFragment]
       ] in
     let res : GenOpResult = _mkBrWrappers config opTypeNames in
     {res with fragments = strJoin "\n\n" (snoc (map _pprintLanguageFragment fragments) res.fragments)}
