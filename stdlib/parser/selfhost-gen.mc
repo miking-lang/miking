@@ -2559,6 +2559,37 @@ lang RecordExprOp = ExprOpBase + RecordExprAst
 end
 
 lang ParseSelfhost = FileOp + StartDeclOp + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp + AppExprOp + ConExprOp + StringExprOp + VariableExprOp + RecordExprOp + BadFileAst + BadDeclAst + BadRegexAst + BadExprAst + LL1Parser + UIdentTokenParser + LIdentTokenParser + StringTokenParser
+     + OperatorTokenParser + CommaTokenParser + SemiTokenParser + BracketTokenParser + LineCommentParser + WhitespaceParser + MultilineCommentParser
+
+  sem groupingsAllowed_RegexOp =
+  | (AlternativeRegexOp _, AlternativeRegexOp _) -> GLeft ()
+  | (ConcatRegexOp _, ConcatRegexOp _) -> GLeft ()
+
+  | (NamedRegexOp _, RepeatPlusRegexOp _) -> GLeft ()
+  | (NamedRegexOp _, RepeatStarRegexOp _) -> GLeft ()
+  | (NamedRegexOp _, RepeatQuestionRegexOp _) -> GLeft ()
+  | (NamedRegexOp _, ConcatRegexOp _) -> GLeft ()
+  | (NamedRegexOp _, AlternativeRegexOp _) -> GLeft ()
+  | (ConcatRegexOp _, RepeatPlusRegexOp _) -> GRight ()
+  | (ConcatRegexOp _, RepeatStarRegexOp _) -> GRight ()
+  | (ConcatRegexOp _, RepeatQuestionRegexOp _) -> GRight ()
+  | (AlternativeRegexOp _, RepeatPlusRegexOp _) -> GRight ()
+  | (AlternativeRegexOp _, RepeatStarRegexOp _) -> GRight ()
+  | (AlternativeRegexOp _, RepeatQuestionRegexOp _) -> GRight ()
+  | (ConcatRegexOp _, AlternativeRegexOp _) -> GLeft ()
+  | (AlternativeRegexOp _, ConcatRegexOp _) -> GRight ()
+
+  syn RegexOp =
+  | GroupingRegexOp { inner : Regex, __br_info : Info, __br_terms : [Info] }
+
+  sem get_RegexOp_terms =
+  | GroupingRegexOp x -> x.__br_terms
+
+  sem get_RegexOp_info =
+  | GroupingRegexOp x -> x.__br_info
+
+  sem unsplit_RegexOp =
+  | AtomP { self = GroupingRegexOp x } -> (x.__br_info, x.inner)
 
 
 
@@ -3484,6 +3515,19 @@ let _table = use ParseSelfhost in let target =
                            (val1.__br_info) }
                    else
                      never },
+           { nt = #var"RegexAtom"
+           , label = {}
+           , rhs = [litSym "(", ntSym #var"Regex", litSym ")"]
+           , action =
+             lam state: {errors: (Ref) ([(Info, [Char])]), content: String}.
+               lam res.
+               match res with [LitParsed l, UserSym (info, val), LitParsed r] in
+               GroupingRegexOp
+                 { __br_terms = [l.info, r.info]
+                 , __br_info = mergeInfo l.info (mergeInfo info r.info)
+                 , inner = val
+                 }
+           },
            { nt =
                kleene,
              label =

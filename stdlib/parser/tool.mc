@@ -1,4 +1,4 @@
-include "selfhost-sketch.mc"
+include "selfhost-gen.mc"
 include "gen-ast.mc"
 include "gen-op-ast.mc"
 include "result.mc"
