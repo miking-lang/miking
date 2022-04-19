@@ -316,7 +316,7 @@ let _mkBrWrappersFor
       (lam_ "p" stateTy (ulam_ "x" (ulam_ "st"
         (match_ (var_ "st") (pcon_ "Some" (pvar_ "st"))
           (_uletin_ "st"
-            (appf3_ (var_ "breakableAddInfix") (nvar_ configName) (var_ "x") (var_ "st"))
+            (appf3_ (nvar_ callee) (nvar_ configName) (var_ "x") (var_ "st"))
             (semi_
               (match_ (var_ "st") (pcon_ "None" pvarw_)
                 (modref_ (recordproj_ "errors" (var_ "p"))

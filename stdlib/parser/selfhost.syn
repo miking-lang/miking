@@ -12,7 +12,7 @@ token LIdent
 
 start File
 
-prod File: File = decl:Decl+
+prod File: File = decls:Decl+
 
 prod Start: Decl = "start" name:UName
 prod Type: Decl =

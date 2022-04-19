@@ -352,7 +352,7 @@ recursive
           }] in
         result.map2 mkReg suggest (regexToSRegex x.regex)
       case LiteralRegex x then
-        result.ok [TerminalReg {term = LitTerm x.val, info = x.info, field = field}]
+        result.ok [TerminalReg {term = LitTerm x.val.v, info = x.info, field = field}]
       case TokenRegex x then
         switch mapFindExn x.name.v typeMap
         case Left config then
@@ -970,7 +970,7 @@ let mkOperatorConstructor
           let fields =
             mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
           let fields =
-            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok conf.left] fields in
+            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok (seq_ [conf.left])] fields in
           let res = prodToRecordExpr (Some [result.ok conf.info]) record fields in
           match result.toOption res with Some record in
           nconapp_ op.conName record)
@@ -979,7 +979,7 @@ let mkOperatorConstructor
           let fields =
             mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
           let fields =
-            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok conf.right] fields in
+            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok (seq_ [conf.right])] fields in
           let res = prodToRecordExpr (Some [result.ok conf.info]) record fields in
           match result.toOption res with Some record in
           nconapp_ op.conName record)
@@ -988,9 +988,9 @@ let mkOperatorConstructor
           let fields =
             mapMapWithKey (lam field. lam. [result.ok (recordproj_ field conf.record)]) prod.fields in
           let fields =
-            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok conf.left] fields in
+            mapInsertWith (lam prev. lam new. concat new prev) lfield [result.ok (seq_ [conf.left])] fields in
           let fields =
-            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok conf.right] fields in
+            mapInsertWith (lam prev. lam new. concat prev new) rfield [result.ok (seq_ [conf.right])] fields in
           let res = prodToRecordExpr (Some [result.ok conf.info]) record fields in
           match result.toOption res with Some record in
           nconapp_ op.conName record)

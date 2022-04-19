@@ -426,7 +426,7 @@ prod PrecedenceTable: Decl =
 lang PrecedenceTableDeclAst = SelfhostBaseAst
   syn Decl =
   | PrecedenceTableDecl
-    { levels : [{noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}]
+    { levels : [{noeq : Option Info, operators : [{v: Name, i: Info}]}]
     , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     }
@@ -438,7 +438,7 @@ end
 lang PrecedenceTableDeclOp = DeclOpBase + PrecedenceTableDeclAst
   syn DeclOp =
   | PrecedenceTableDeclOp
-    { levels : [{noeq : Option (), operators : [{v: Name, i: Info}]}]
+    { levels : [{noeq : Option Info, operators : [{v: Name, i: Info}]}]
     , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     , terms : [Info]
@@ -664,7 +664,7 @@ prod Literal: Regex = val:String
 
 lang LiteralRegexAst = SelfhostBaseAst
   syn Regex =
-  | LiteralRegex { val : String, info : Info }
+  | LiteralRegex { val : {v: String, i: Info}, info : Info }
 
   sem get_Regex_info =
   | LiteralRegex x -> x.info
@@ -672,7 +672,7 @@ end
 
 lang LiteralRegexOp = RegexOpBase + LiteralRegexAst
   syn RegexOp =
-  | LiteralRegexOp { val : String, info : Info, terms : [Info] }
+  | LiteralRegexOp { val : {v: String, i: Info}, info : Info, terms : [Info] }
 
   sem get_RegexOp_terms =
   | LiteralRegexOp x -> x.terms
@@ -1523,7 +1523,7 @@ let _table =
         , rhs = [TokSpec (StringRepr ())]
         , action = lam. lam seq.
           match seq with [TokParsed (StringTok x)] in
-          LiteralRegexOp {info = x.info, val = x.val, terms = [x.info]}
+          LiteralRegexOp {info = x.info, val = {v = x.val, i = x.info}, terms = [x.info]}
         }
       , { nt = regex_atom
         , label = "Regex_Token"
