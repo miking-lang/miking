@@ -839,19 +839,19 @@ let addInfoField
 in
 
 let checkCommonField
-  : ProductionDeclRecord -> RecordInfo -> RecordInfo
-  = lam x. lam content.
-    match mapFindExn x.nt.v typeMap with Left config then
+  : Info -> Name -> RecordInfo -> RecordInfo
+  = lam info. lam nt. lam content.
+    match mapFindExn nt typeMap with Left config then
       match result.toOption config with Some config then
         let config: TypeInfo = config in
         let update = lam field. lam count : FieldInfo.
           match mapLookup field config.commonFields with Some _ then
             let infos = map (lam x. match x with (info, _) in info) count.ty in
             let msg = join
-              [ "Each ", nameGetStr x.nt.v, " already has a '", field
+              [ "Each ", nameGetStr nt, " already has a '", field
               , "' field, you may not redeclare it here.\n"
               ] in
-            let msg = multiMsg (get_Regex_info x.regex) infos msg in
+            let msg = multiMsg info infos msg in
             {count with ty = snoc count.ty (NoInfo (), result.err msg)}
           else count
         in mapMapWithKey update content
@@ -1004,7 +1004,7 @@ let constructors : Res [ConstructorInfo] =
       let reg = regexToSRegex x.regex in
       let content = result.map concatted reg in
       let content = result.map (addInfoField x.info) content in
-      let content = result.map (checkCommonField x) content in
+      let content = result.map (checkCommonField regInfo x.nt.v) content in
       let carried = result.bind content (reifyRecord regInfo) in
       let operator = result.bind2 name reg (findOperator x) in
       let partProd = result.map (lam op: Operator. map (computeSyntax x.name) op.mid) operator in
@@ -1024,6 +1024,20 @@ let constructors : Res [ConstructorInfo] =
       None ()
     end in
   result.mapM identity (mapOption check decls)
+in
+
+let badConstructors =
+  let f = lam nt.
+    let carried = addInfoField (NoInfo ()) emptyRecordInfo in
+    let carried = checkCommonField (NoInfo ()) nt carried in
+    let carried = reifyRecord (NoInfo ()) carried in
+    let f = lam carried.
+      { name = nameSym (concat "Bad" (nameGetStr nt))
+      , synType = nt
+      , carried = carried
+      } in
+    result.map f carried in
+  result.mapM f nts
 in
 
 let genOpResult : Res GenOpResult =
@@ -1046,7 +1060,12 @@ let genOpResult : Res GenOpResult =
         }
       )
   in
-  let f : [ConstructorInfo] -> GenOpResult = lam constructors.
+  let badNames : Res (Name, {bad : Name}) =
+    let f : Constructor -> (Name, {bad : Name}) = lam constructor.
+      (constructor.synType, {bad = constructor.name})
+    in result.map (map f) badConstructors
+  in
+  let f : [(Name, {bad : Name})] -> [ConstructorInfo] -> GenOpResult = lam syns. lam constructors.
     let genOpInput =
       { infoFieldLabel = infoFieldLabel
       , termsFieldLabel = termsFieldLabel
@@ -1055,7 +1074,7 @@ let genOpResult : Res GenOpResult =
       , mkConAstName = lam name. concat (nameGetStr name) "Ast"
       , mkBaseName = lam str. concat str "Base"
       , composedName = "ParseSelfhost"
-      , syns = nts
+      , syns = mapFromSeq nameCmp syns
       , operators = map (lam x: ConstructorInfo. x.genOperator) constructors
       } in
     let genOpResult : GenOpResult = mkOpLanguages genOpInput in
@@ -1134,7 +1153,7 @@ let genOpResult : Res GenOpResult =
     let newProds = map mkRegexProductions ntsWithInfo in
     modref productions (join (cons (deref productions) newProds));
     genOpResult
-  in result.map f constructors
+  in result.map2 f badNames constructors
 in
 
 let productions : Res [(Expr, Production GenLabel ())] = result.mapM identity (deref productions) in
@@ -1174,11 +1193,15 @@ in
 let table : Res String =
   let f : Name -> GenOpResult -> [(Expr, Production GenLabel ())] -> Expr =
     lam start. lam genOpResult. lam prods.
+      let nts = map (lam x: (Expr, Production GenLabel ()). match x with (_, x) in x.nt) prods in
+      let nts = setToSeq (setOfSeq nameCmp nts) in
+      let nts = map (lam name. nulet_ name (app_ (var_ "nameSym") (str_ (nameGetStr name)))) nts in
       let prods = map (lam x. match x with (x, _) in x) prods in
       let grammar = urecord_
         [ ("start", nvar_ start)
         , ("productions", genOpResult.wrapProductions (seq_ prods))
         ] in
+      let grammar = bindall_ (snoc nts grammar) in
       let table = _uletin_ "target" (app_ (var_ "genParsingTable") grammar)
         (match_ (var_ "target") (pcon_ "Right" (pvar_ "table"))
           (var_ "table")
@@ -1188,17 +1211,25 @@ let table : Res String =
 in
 
 -- NOTE(vipa, 2022-03-21): Generate the actual language fragments
-let generated: Res String = result.bind4 constructors requestedFieldAccessors genOpResult table
-  (lam constructors : [ConstructorInfo]. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam table.
+let generated: Res String = result.bind5 constructors badConstructors requestedFieldAccessors genOpResult table
+  (lam constructors : [ConstructorInfo]. lam badConstructors. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam table.
     let genInput =
       { baseName = "SelfhostBaseAst"
       , composedName = Some "SelfhostAst"
       , fragmentName = lam name. concat (nameGetStr name) "Ast"
-      , constructors = map (lam x: ConstructorInfo. x.constructor) constructors
+      , constructors = concat
+        (map (lam x: ConstructorInfo. x.constructor) constructors)
+        badConstructors
       , requestedSFunctions = requestedSFunctions
       , fieldAccessors = requestedFieldAccessors
       } in
-    result.ok (strJoin "\n\n" ["include \"seq.mc\"", mkLanguages genInput, genOpResult.fragments, table])
+    result.ok (strJoin "\n\n"
+      [ "include \"seq.mc\""
+      , "include \"parser/ll1.mc\""
+      , mkLanguages genInput
+      , genOpResult.fragments
+      , table
+      ])
   ) in
 
 match result.consume (result.withAnnotations ll1Error (result.withAnnotations allResolved generated)) with (warnings, res) in

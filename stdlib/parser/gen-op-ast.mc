@@ -20,7 +20,7 @@ type GenOperator =
 type GenOpInput =
   { infoFieldLabel : String
   , termsFieldLabel : String
-  , syns : [Name]
+  , syns : Map Name {bad : Name}
   , mkSynName : Name -> String
   , mkSynAstBaseName : Name -> String
   , mkConAstName : Name -> String
@@ -63,10 +63,10 @@ let _uletin_ : String -> Expr -> Expr -> Expr
     _nletin_ (nameNoSym name) tyunknown_ val body
 
 let _mkBaseFragment
-  : GenOpInput -> (Name, Name) -> LanguageFragment
+  : GenOpInput -> (Name, {bad : Name, op : name}) -> LanguageFragment
   = lam config. lam names.
     let originalName = names.0 in
-    let synName = names.1 in
+    let synName = names.1 .op in
     let suffix = concat "_" (nameGetStr synName) in
 
     let topAllowed =
@@ -141,9 +141,9 @@ let _mkBaseFragment
     }
 
 let _mkConstructorFragment
-  : GenOpInput -> Map Name Name -> GenOperator -> LanguageFragment
+  : GenOpInput -> Map Name {bad : Name, op : Name} -> GenOperator -> LanguageFragment
   = lam config. lam synNames. lam op.
-    let synName = mapFindExn op.baseTypeName synNames in
+    let synName = (mapFindExn op.baseTypeName synNames).op in
     let conName = op.opConstructorName in
     let suffix = concat "_" (nameGetStr synName) in
 
@@ -372,9 +372,8 @@ let _mkBrWrappers
   : GenOpInput -> Map Name Name -> GenOpResult
   = lam config. lam synNames.
     let wrappers = mapMapWithKey
-      (lam original. lam op.
-        let bad = nameSym (concat "Bad" (nameGetStr original)) in
-        _mkBrWrappersFor config {original = original, op = op, bad = bad})
+      (lam original. lam names : {bad : Name, op : Name}.
+        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad})
       synNames in
     let getWrapper : Name -> WrapperInfo = lam name.
       mapFindExn name wrappers in
@@ -417,8 +416,10 @@ let mkOpLanguages
   : GenOpInput -> GenOpResult
   = lam config.
     use CarriedBasic in
-    let opTypeNames : Map Name Name = mapFromSeq nameCmp
-      (map (lam original. (original, nameSym (config.mkSynName original))) config.syns) in
+    let opTypeNames : Map Name {bad : Name, op : Name} = mapMapWithKey
+      (lam original. lam names : {bad : Name}.
+        {bad = names.bad, op = nameSym (config.mkSynName original)})
+      config.syns in
     let baseFragments = map (_mkBaseFragment config) (mapBindings opTypeNames) in
     let constructorFragments = map (_mkConstructorFragment config opTypeNames) config.operators in
     let fragments = join
