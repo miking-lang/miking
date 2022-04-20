@@ -194,7 +194,7 @@ let _map2
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam f. lam a. lam b. _apply (_map f a) b in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. (a, b) in
@@ -206,6 +206,7 @@ let #var"" =
   for_ (cons (_ok 1) errs)
     (lam a. for_ (cons (_ok 2) errs)
       (lam b. utest _map2 f a b with semantics f a b using eq in ()))
+with ()
 
 -- Take all warnings and errors from both inputs, but only the value
 -- in the second input (if neither input has an error).
@@ -227,7 +228,7 @@ let _map3
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam f. lam a. lam b. lam c. _apply (_apply (_map f a) b) c in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. (a, b, c) in
@@ -240,6 +241,7 @@ let #var"" =
     (lam a. for_ (cons (_ok 2) errs)
       (lam b. for_ (cons (_ok 3) errs)
         (lam c. utest _map3 f a b c with semantics f a b c using eq in ())))
+with ()
 
 -- Perform a computation on the values present in three `Results` if
 -- none is an error. Preserves the errors and warnings of all inputs.
@@ -255,7 +257,7 @@ let _map4
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam f. lam a. lam b. lam c. lam d. _apply (_apply (_apply (_map f a) b) c) d in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. lam d. (a, b, c, d) in
@@ -269,6 +271,7 @@ let #var"" =
       (lam b. for_ (cons (_ok 3) errs)
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. utest _map4 f a b c d with semantics f a b c d using eq in ()))))
+with ()
 
 -- Perform a computation on the values present in three `Results` if
 -- none is an error. Preserves the errors and warnings of all inputs.
@@ -284,7 +287,7 @@ let _map5
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam f. lam a. lam b. lam c. lam d. lam e. _apply (_apply (_apply (_apply (_map f a) b) c) d) e in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. lam d. lam e. (a, b, c, d, e) in
@@ -299,6 +302,7 @@ let #var"" =
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. for_ (cons (_ok 5) errs)
             (lam e. utest _map5 f a b c d e with semantics f a b c d e using eq in ())))))
+with ()
 
 -- Perform a computation on the values of a list. Produces a non-error
 -- only if all individual computations produce a non-error. Preserves
@@ -326,7 +330,7 @@ let _mapM
             ResultErr acc
     in workOk _emptyMap []
 
-let #var"" =
+utest
   -- Multiply by 10, error 0 on negative, warn 'a' on 0.
   let work : Int -> Result Char Int Int = lam x.
     if lti x 0 then _err 0 else
@@ -337,6 +341,7 @@ let #var"" =
   utest _prepTest (_mapM work [0, negi 1, 2]) with (['a'], Left [0]) in
   utest _prepTest (_mapM work [0, negi 1, negi 2]) with (['a'], Left [0, 0]) in
   ()
+with ()
 
 -- Convert a Result to an Option, discarding any information present
 -- about warnings or a potential error.
@@ -379,7 +384,7 @@ let _bind2
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam a. lam b. lam f. _bind (_map2 (lam a. lam b. (a, b)) a b) (lam x: (Int, Int). f x.0 x.1) in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. _withAnnotations (_warn 'a') (_ok (a, b)) in
@@ -391,6 +396,7 @@ let #var"" =
   for_ (cons (_ok 1) errs)
     (lam a. for_ (cons (_ok 2) errs)
       (lam b. utest _bind2 a b f with semantics a b f using eq in ()))
+with ()
 
 -- Perform a computation only if its inputs are error free. Preserves
 -- warnings and errors, but if the inputs have an error then the
@@ -408,7 +414,7 @@ let _bind3
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam a. lam b. lam c. lam f. _bind (_map3 (lam a. lam b. lam c. (a, b, c)) a b c) (lam x: (Int, Int, Int). f x.0 x.1 x.2) in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. _withAnnotations (_warn 'a') (_ok (a, b, c)) in
@@ -421,6 +427,7 @@ let #var"" =
     (lam a. for_ (cons (_ok 2) errs)
       (lam b. for_ (cons (_ok 3) errs)
         (lam c. utest _bind3 a b c f with semantics a b c f using eq in ())))
+with ()
 
 -- Perform a computation only if its inputs are error free. Preserves
 -- warnings and errors, but if the inputs have an error then the
@@ -438,7 +445,7 @@ let _bind4
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam a. lam b. lam c. lam d. lam f. _bind (_map4 (lam a. lam b. lam c. lam d. (a, b, c, d)) a b c d) (lam x: (Int, Int, Int, Int). f x.0 x.1 x.2 x.3) in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. lam d. _withAnnotations (_warn 'a') (_ok (a, b, c, d)) in
@@ -452,6 +459,7 @@ let #var"" =
       (lam b. for_ (cons (_ok 3) errs)
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. utest _bind4 a b c d f with semantics a b c d f using eq in ()))))
+with ()
 
 -- Perform a computation only if its inputs are error free. Preserves
 -- warnings and errors, but if the inputs have an error then the
@@ -469,7 +477,7 @@ let _bind5
 
 -- NOTE(vipa, 2022-01-21): Poor man's property based testing, or
 -- rather exhaustive testing for small number of posibilities
-let #var"" =
+utest
   let semantics = lam a. lam b. lam c. lam d. lam e. lam f. _bind (_map5 (lam a. lam b. lam c. lam d. lam e. (a, b, c, d, e)) a b c d e) (lam x: (Int, Int, Int, Int, Int). f x.0 x.1 x.2 x.3 x.4) in
   let errs = [_err 1, _err 2, _err 3] in
   let f = lam a. lam b. lam c. lam d. lam e. _withAnnotations (_warn 'a') (_ok (a, b, c, d, e)) in
@@ -484,6 +492,7 @@ let #var"" =
         (lam c. for_ (cons (_ok 4) errs)
           (lam d. for_ (cons (_ok 5) errs)
             (lam e. utest _bind5 a b c d e f with semantics a b c d e f using eq in ())))))
+with ()
 
 let result =
   -- Constructors
