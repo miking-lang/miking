@@ -43,12 +43,12 @@ prod Record: Regex = "{" regex:Regex "}"
 prod Empty: Regex = "empty"
 prod Literal: Regex = val:String
 prod Token: Regex = name:UName ("[" arg:Expr "]")?
-prod RepeatPlus: Regex = left:Regex "+"
-prod RepeatStar: Regex = left:Regex "*"
-prod RepeatQuestion: Regex = left:Regex "?"
-prod Named: Regex = name:LIdent ":" right:Regex
-prod left Alternative: Regex = left:Regex "|" right:Regex
-prod left Concat: Regex = left:Regex right:Regex
+postfix RepeatPlus: Regex = "+"
+postfix RepeatStar: Regex = "*"
+postfix RepeatQuestion: Regex = "?"
+prefix Named: Regex = name:LIdent ":"
+infix left Alternative: Regex = "|"
+infix left Concat: Regex = empty
 
 precedence {
   Named;
@@ -57,7 +57,7 @@ precedence {
   Alternative;
 }
 
-prod left App: Expr = left:Expr right:Expr
+infix left App: Expr = empty
 prod Con: Expr = name:UName
 prod String: Expr = val:String
 prod Variable: Expr = name:LName

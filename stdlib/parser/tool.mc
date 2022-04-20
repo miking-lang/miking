@@ -119,6 +119,28 @@ in
 
 type Res a = Result (Info, String) (Info, String) a in
 
+let decls : [Decl] =
+  let makeNamedRegex : Info -> {v: Name, i: Info} -> String -> Regex = lam info. lam synName. lam field.
+    NamedRegex
+      { name = {v = field, i = info}
+      , right = TokenRegex {name = synName, info = info, arg = None ()}
+      , info = info
+      } in
+  let desugarProds = lam d.
+    match d with ProductionDecl x then
+      let regexInfo = get_Regex_info x.regex in
+      let regex = x.regex in
+      let regex = match (x.kinf, x.kpostf) with (Some info, _) | (_, Some info)
+        then ConcatRegex {info = regexInfo, left = makeNamedRegex info x.nt "left", right = regex}
+        else regex in
+      let regex = match (x.kinf, x.kpref) with (Some info, _) | (_, Some info)
+        then ConcatRegex {info = regexInfo, left = regex, right = makeNamedRegex info x.nt "right"}
+        else regex in
+      ProductionDecl {x with regex = regex}
+    else d in
+  map desugarProds decls
+in
+
 -- NOTE(vipa, 2022-03-18): Find all definitions in the file
 type PreNameEnv = {types : Map String [(Info, Name)], productions : Map String [(Info, Name)]} in
 let pullDefinition
