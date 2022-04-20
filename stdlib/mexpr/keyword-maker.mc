@@ -148,7 +148,7 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
                                                  arg3 = get lst 2, info = info})
 
   -- smap for the new terms
-  sem smap_Expr_Expr (f : Expr -> a) =
+  sem smap_Expr_Expr (f : Expr -> Expr) =
   | TmNoArgs t -> TmNoArgs t
   | TmOneArg t -> TmOneArg {t with arg1 = f t.arg1}
   | TmTwoArgs t -> TmTwoArgs {{t with arg1 = f t.arg1} with arg2 = f t.arg2}

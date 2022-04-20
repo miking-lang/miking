@@ -12,6 +12,8 @@ src_files_all =\
 sundials_files = $(wildcard stdlib/sundials/*.mc)
 ipopt_files = $(wildcard stdlib/ipopt/*.mc)
 accelerate_files = $(wildcard test/examples/accelerate/*.mc)
+cuda_files = $(wildcard test/examples/accelerate/cuda/*.mc)
+futhark_files = $(wildcard test/examples/accelerate/futhark/*.mc)
 
 special_dependencies_files +=\
 	$(sundials_files)\
@@ -24,17 +26,20 @@ special_dependencies_files +=\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
-# Programs that should be compiled with type-checking enabled. These are
-# excluded from the default compile rules, so that we don't test them twice.
-compile_type_checked += test/mlang/type-alias.mc
+
+# Programs that should pass the type checker. The goal is to make this list
+# contain all programs, at which point it can be removed and the type checker
+# can be enabled by default.
+typecheck_files += test/mlang/type-alias.mc
+typecheck_files += $(wildcard stdlib/*.mc)
+typecheck_files += $(wildcard stdlib/mexpr/*.mc)
+typecheck_files += $(wildcard stdlib/ocaml/*.mc)
 
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
-compile_files_exclude += stdlib/dfa.mc
 compile_files_exclude += stdlib/json.mc
-compile_files_exclude += stdlib/nfa.mc
 compile_files_exclude += stdlib/parser-combinators.mc
 compile_files_exclude += stdlib/regex.mc
 compile_files_exclude += test/mexpr/nestedpatterns.mc
@@ -52,6 +57,10 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
+# Programs that should be compiled with type-checking enabled. These are
+# excluded from the default compile rules, so that we don't test them twice.
+compile_files_typecheck =\
+	$(filter-out $(compile_files_exclude), $(typecheck_files))
 
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
@@ -61,7 +70,7 @@ compile_files_prune =\
 # if all, except the special, external dependencies are met. Excludes files
 # that are to be compiled with type checking enabled.
 compile_files =\
-	$(filter-out $(special_dependencies_files) $(compile_type_checked), $(compile_files_prune))
+	$(filter-out $(special_dependencies_files) $(compile_files_typecheck), $(compile_files_prune))
 
 
 # Programs the we should be able to interpret/test with the interpreter.

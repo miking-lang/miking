@@ -15,4 +15,7 @@ utest ('a',8,"the").2 with "the" in
 
 utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in
 
+-- Singleton tuples
+utest ("foo",) with ("foo",) in
+
 ()

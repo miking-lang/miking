@@ -357,7 +357,7 @@ let parse = lam str.
   let ast = makeKeywords [] ast in
   symbolize ast
 in
-let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameInfo] Int))] =
+let test: Bool -> Expr -> [String] -> [(String,Set AbsVal,Map NameInfo (Map [NameInfo] Int))] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in

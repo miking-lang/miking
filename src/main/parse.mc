@@ -15,6 +15,9 @@ type ParseOptions = {
   -- Warn if there are pruned utests
   pruneExternalUtestsWarning : Bool,
 
+  -- Run dead code elimination
+  eliminateDeadCode : Bool,
+
   -- Additional keywords
   keywords : [String]
 }
@@ -24,6 +27,7 @@ let defaultParseOptions = {
   pruneExternalUtests = false,
   pruneExternalUtestsWarning = true,
   findExternalsExclude = false,
+  eliminateDeadCode = true,
   keywords = []
 }
 
@@ -40,6 +44,7 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
       pruneExternalUtests = true,
       externalsExclude = externalsExclude,
       pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning,
+      eliminateDeadCode = opt.eliminateDeadCode,
       keywords = opt.keywords
     } file
   else
@@ -48,5 +53,6 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
       pruneExternalUtests = false,
       externalsExclude = [],
       pruneExternalUtestsWarning = false,
+      eliminateDeadCode = opt.eliminateDeadCode,
       keywords = opt.keywords
   } file

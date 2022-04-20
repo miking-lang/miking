@@ -7,7 +7,7 @@ let impl = lam arg : { expr : String, ty : Type }.
 let tyrealarray = otyvarext_ "Sundials.RealArray.t" []
 let tyidatriple = otyvarext_ "Ida.triple"
 let tyidajacobianargra =
-  otyvarext_ "Ida.jacobian_arg" [tyidatriple tyrealarray, tyrealarray]
+  otyvarext_ "Ida.jacobian_arg" [tyidatriple [tyrealarray], tyrealarray]
 
 let tyidajacf =
   tyarrows_ [

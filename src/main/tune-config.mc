@@ -3,7 +3,7 @@ include "options-type.mc"
 include "assoc.mc"
 include "tuning/tune-options.mc"
 
-let tuneOptionsConfig : ParseConfig = concat optionsConfig [
+let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
   ([("--verbose", "", "")],
     "Print the search state during tuning",
     lam p: ArgPart Options.
@@ -91,7 +91,7 @@ let tuneOptionsConfig : ParseConfig = concat optionsConfig [
     lam p: ArgPart Options.
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with seed = argToInt p}}),
+      {o with tuneOptions = {to with seed = Some (argToInt p)}}),
   ([("--dependency-analysis", "", "")],
     "Perform dependency analysis",
     lam p: ArgPart Options.

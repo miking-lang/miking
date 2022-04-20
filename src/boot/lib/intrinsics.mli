@@ -254,6 +254,10 @@ module T : sig
 
     val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
 
+    val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
     val shape : ('a, 'b) t -> int Mseq.t
 
     val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
@@ -286,6 +290,10 @@ module T : sig
   val get_exn : ('a, 'b) u -> int Mseq.t -> 'a
 
   val set_exn : ('a, 'b) u -> int Mseq.t -> 'a -> unit
+
+  val linear_get_exn : ('a, 'b) u -> int -> 'a
+
+  val linear_set_exn : ('a, 'b) u -> int -> 'a -> unit
 
   val shape : ('a, 'b) u -> int Mseq.t
 

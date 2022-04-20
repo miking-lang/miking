@@ -67,6 +67,47 @@ lang CExprTypeAst
   | CTyUnion  { id: Option Name, mem: Option [(CType,Option Name)] }
   | CTyEnum   { id: Option Name, mem: Option [Name] }
 
+  sem _mapAccumLMem (f : acc -> CType -> (acc, b)) (acc : acc) =
+  | mem ->
+    let fMem = lam acc. lam memEntry : (CType, Option Name).
+      match memEntry with (ty, optId) in
+      match f acc ty with (acc, ty) in
+      (acc, (ty, optId)) in
+    match mem with Some mem then
+      match mapAccumL fMem acc mem with (acc, mem) in
+      (acc, Some mem)
+    else (acc, mem)
+
+  sem smapAccumLCTypeCType (f : acc -> CType -> (acc, b)) (acc : acc) =
+  | CTyPtr t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyPtr {t with ty = ty})
+  | CTyFun t ->
+    match f acc t.ret with (acc, ret) in
+    match mapAccumL f acc t.params with (acc, params) in
+    (acc, CTyFun {{t with ret = ret} with params = params})
+  | CTyArray t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyArray {t with ty = ty})
+  | CTyStruct t ->
+    match _mapAccumLMem f acc t.mem with (acc, mem) in
+    (acc, CTyStruct {t with mem = mem})
+  | CTyUnion t ->
+    match _mapAccumLMem f acc t.mem with (acc, mem) in
+    (acc, CTyStruct {t with mem = mem})
+  | CTyEnum t -> CTyEnum t
+  | ty -> (acc, ty)
+
+  sem smapCTypeCType (f : CType -> b) =
+  | p ->
+    match smapAccumLCTypeCType (lam. lam a. ((), f a)) () p with (_, p) in p
+
+  sem sfoldCTypeCType (f : acc -> CType -> acc) (acc : acc) =
+  | p ->
+    match smapAccumLCTypeCType (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in
+    acc
+
   syn CExpr =
   | CEVar        /- Variables -/            { id: Name }
   | CEApp        /- Function application -/ { fun: Name, args: [CExpr] }
@@ -83,33 +124,38 @@ lang CExprTypeAst
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
-  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
-  | CEVar _        -> acc
-  | CEApp t        -> foldl f acc t.args
-  | CEInt _        -> acc
-  | CEFloat _      -> acc
-  | CEChar _       -> acc
-  | CEString _     -> acc
-  | CEBinOp t      -> f (f acc t.lhs) t.rhs
-  | CEUnOp t       -> f acc t.arg
-  | CEMember t     -> f acc t.lhs
-  | CEArrow t      -> f acc t.lhs
-  | CECast t       -> f acc t.rhs
-  | CESizeOfType _ -> acc
+  sem smapAccumLCExprCExpr (f : acc -> CExpr -> (acc, b)) (acc : acc) =
+  | CEApp t ->
+    match mapAccumL f acc t.args with (acc, args) in
+    (acc, CEApp {t with args = args})
+  | CEBinOp t ->
+    match f acc t.lhs with (acc, lhs) in
+    match f acc t.rhs with (acc, rhs) in
+    (acc, CEBinOp {{t with lhs = lhs} with rhs = rhs})
+  | CEUnOp t ->
+    match f acc t.arg with (acc, arg) in
+    (acc, CEUnOp {t with arg = arg})
+  | CEMember t ->
+    match f acc t.lhs with (acc, lhs) in
+    (acc, CEMember {t with lhs = lhs})
+  | CEArrow t ->
+    match f acc t.lhs with (acc, lhs) in
+    (acc, CEArrow {t with lhs = lhs})
+  | CECast t ->
+    match f acc t.rhs with (acc, rhs) in
+    (acc, CECast {t with rhs = rhs})
+  | (CEVar _ | CEInt _ | CEFloat _ | CEChar _ | CEString _ | CESizeOfType _) & ty ->
+    (acc, ty)
 
   sem smap_CExpr_CExpr (f: CExpr -> CExpr) =
-  | CEVar _ & t        -> t
-  | CEApp t            -> CEApp { t with args = map f t.args }
-  | CEInt _ & t        -> t
-  | CEFloat _ & t      -> t
-  | CEChar _ & t       -> t
-  | CEString _ & t     -> t
-  | CEBinOp t          -> CEBinOp { { t with lhs = f t.lhs } with rhs = f t.rhs }
-  | CEUnOp t           -> CEUnOp { t with arg = f t.arg }
-  | CEMember t         -> CEMember { t with lhs = f t.lhs }
-  | CEArrow t          -> CEArrow { t with lhs = f t.lhs }
-  | CECast t           -> CECast { t with rhs = f t.rhs }
-  | CESizeOfType _ & t -> t
+  | p ->
+    match smapAccumLCExprCExpr (lam. lam a. ((), f a)) () p with (_, p) in p
+
+  sem sfold_CExpr_CExpr (f : a -> CExpr -> a) (acc : a) =
+  | p ->
+    match smapAccumLCExprCExpr (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in
+    acc
 
   syn CBinOp =
   | COAssign    /- lhs = rhs -/  {}

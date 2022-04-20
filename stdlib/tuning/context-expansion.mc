@@ -302,7 +302,7 @@ let parse = lam str.
 in
 
 --let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
-let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
+let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
   lam debug: Bool. lam ast: Expr. lam lookupMap: Map String (Map [String] Expr).
     (if debug then
        printLn "-------- BEFORE ANF --------";

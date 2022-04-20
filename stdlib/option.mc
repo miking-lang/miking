@@ -32,13 +32,15 @@ utest optionMap (addi 1) (None ()) with (None ()) using optionEq eqi
 utest optionMap (addi 1) (Some 1) with (Some 2) using optionEq eqi
 
 let optionMapAccum: all a. all b. all acc.
-  (a -> (acc, b)) -> acc -> Option a -> (acc, Option b) =
+  (acc -> a -> (acc, b)) -> acc -> Option a -> (acc, Option b) =
   lam f. lam acc. lam o.
     match o with Some a then
       match f acc a with (acc, b) then
         (acc, Some b)
       else never
-    else (acc, o)
+    else (acc, None ())
+
+utest optionMapAccum (lam acc. lam a. (acc, a)) () (Some 5) with ((), Some 5)
 
 -- TODO(vipa, 2021-05-28): Write tests for optionMapAccum
 

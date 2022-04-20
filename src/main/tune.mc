@@ -47,6 +47,7 @@ let tune = lam files. lam options : Options. lam args.
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
+      eliminateDeadCode = not options.keepDeadCode,
       keywords = holeKeywords
     } file in
     let ast = makeKeywords [] ast in

@@ -77,7 +77,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
           unit_
           (app_ (nvar_ errId) (concat_ (var_ infoId) (str_ cond.0)))) in
     recursive let addParam = lam acc : Expr. lam paramId : Name.
-      ulam_ paramId acc in
+      nulam_ paramId acc in
     let conditions = intrinsicRuntimeConditions intrinsic in
     let arity = constArity intrinsic in
     let intrinsicArgs = create arity (lam i. int2string i) in

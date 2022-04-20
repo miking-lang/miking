@@ -25,8 +25,8 @@ lang MCoreCompile =
   BootParser +
   PMExprDemote +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprTypeCheck + MExprUtestTrans +
-  MExprRuntimeCheck + MExprProfileInstrument +
+  MExprSym + MExprTypeAnnot + MExprRemoveTypeAscription + MExprTypeCheck +
+  MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
   OCamlTryWithWrap
 end
 
@@ -110,9 +110,14 @@ let compile = lam files. lam options : Options. lam args.
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
+      eliminateDeadCode = not options.keepDeadCode,
       keywords = concat holeKeywords parallelKeywords
     } file in
     let ast = makeKeywords [] ast in
+
+    -- Performs a CUDA well-formedness check of the AST, when the
+    -- --check-cuda-well-formed flag is set.
+    (if options.checkCudaWellFormed then checkWellFormedCuda ast else ());
 
     -- Demote parallel constructs to sequential equivalents and remove
     -- accelerate terms
@@ -126,5 +131,6 @@ let compile = lam files. lam options : Options. lam args.
 
     compileWithUtests options file ast; ()
   in
-  if options.accelerate then compileAccelerate files options args
+  if or options.accelerateCuda options.accelerateFuthark then
+    compileAccelerate files options args
   else iter compileFile files

@@ -40,8 +40,14 @@ lang LambdaLiftNameAnonymous = MExprAst
 
   sem nameAnonymousLambdas =
   | TmLam t ->
+    recursive let recurseInLambdaBody = lam t : Expr.
+      match t with TmLam tt then
+        TmLam {tt with body = recurseInLambdaBody tt.body}
+      else nameAnonymousLambdas t
+    in
     let lambdaName = nameSym "t" in
-    TmLet {ident = lambdaName, tyBody = t.ty, body = TmLam t,
+    let letBody = TmLam {t with body = recurseInLambdaBody t.body} in
+    TmLet {ident = lambdaName, tyBody = t.ty, body = letBody,
            inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info, frozen = false},
            ty = t.ty, info = t.info}
   | TmLet t ->
@@ -92,7 +98,11 @@ lang LambdaLiftFindFreeVariables =
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
-  | TmRecLets t -> findFreeVariablesInBody state fv t.inexpr
+  | TmRecLets t ->
+    let fv = foldl (lam fv: Map Name Type. lam bind : RecLetBinding.
+      findFreeVariablesInBody state fv bind.body
+    ) fv t.bindings in
+    findFreeVariablesInBody state fv t.inexpr
   | t -> sfold_Expr_Expr (findFreeVariablesInBody state) fv t
 
   sem findFreeVariablesReclet (state : LambdaLiftState) =
@@ -167,7 +177,7 @@ lang LambdaLiftFindFreeVariables =
     let state = findFreeVariables state t.thn in
     findFreeVariables state t.els
   | TmExt t ->
-    let state = {state with vars = setInsert t.ident state.vars} in
+    let state = {state with funs = setInsert t.ident state.funs} in
     findFreeVariables state t.inexpr
   | t -> sfold_Expr_Expr findFreeVariables state t
 end
@@ -205,17 +215,14 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             TmApp {lhs = acc, rhs = x, ty = appType, info = info})
           (TmVar {ident = t.ident, ty = tyBody, info = info, frozen = false})
           (reverse fv) in
-      match insertFreeVariablesH solutions subMap body with (subMap, body) then
-        let subMap = mapInsert t.ident subExpr subMap in
-        match insertFreeVariablesH solutions subMap t.inexpr
-        with (subMap, inexpr) then
-          (subMap, TmLet {{{t with tyBody = tyBody}
-                              with body = body}
-                              with inexpr = inexpr})
-        else never
-      else never
-    else error (join ["Found no free variable solution for ",
-                      nameGetStr t.ident])
+      match insertFreeVariablesH solutions subMap body with (subMap, body) in
+      let subMap = mapInsert t.ident subExpr subMap in
+      match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
+        (subMap, TmLet {{{t with tyBody = tyBody}
+                            with body = body}
+                            with inexpr = inexpr})
+    else infoErrorExit t.info (join ["Found no free variable solution for ",
+                                     nameGetStr t.ident])
   | TmRecLets t ->
     let addBindingSubExpression =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
@@ -239,8 +246,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             (TmVar {ident = bind.ident, ty = bindType, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
-      else error (join ["Lambda lifting error: No solution found for binding ",
-                        nameGetStr bind.ident])
+      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+                                          nameGetStr bind.ident])
     in
     let insertFreeVarsBinding =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
@@ -256,17 +263,15 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                                    info = info}})
             bind.body fv in
         let tyBody = tyTm body in
-        match insertFreeVariablesH solutions subMap body with (subMap, body) then
-          (subMap, {{bind with tyBody = tyBody} with body = body})
-        else never
-      else error (join ["Lambda lifting error: No solution found for binding ",
-                        nameGetStr bind.ident])
+        match insertFreeVariablesH solutions subMap body with (subMap, body) in
+        (subMap, {{bind with tyBody = tyBody} with body = body})
+      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+                                          nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
     match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in
     match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-    (subMap, TmRecLets {{t with bindings = bindings}
-                           with inexpr = inexpr})
+    (subMap, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
@@ -283,24 +288,19 @@ lang LambdaLiftLiftGlobal = MExprAst
 
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
-    match liftRecursiveBindingH bindings t.body with (bindings, body) then
-      match t.tyBody with TyArrow _ then
-        let bind : RecLetBinding =
-          {ident = t.ident, tyBody = t.tyBody, body = t.body, info = t.info} in
-        let bindings = snoc bindings bind in
-        liftRecursiveBindingH bindings t.inexpr
-      else match liftRecursiveBindingH bindings t.inexpr
-      with (bindings, inexpr) then
-        (bindings, TmLet {{t with body = body}
-                             with inexpr = inexpr})
-      else never
-    else never
+    match liftRecursiveBindingH bindings t.body with (bindings, body) in
+    match t.tyBody with TyArrow _ then
+      let bind : RecLetBinding =
+        {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
+      let bindings = snoc bindings bind in
+      liftRecursiveBindingH bindings t.inexpr
+    else match liftRecursiveBindingH bindings t.inexpr with (bindings, inexpr) in
+      (bindings, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
       lam bindings. lam bind.
-      match liftRecursiveBindingH bindings bind.body with (bindings, body) then
-        snoc bindings {bind with body = body}
-      else never
+      match liftRecursiveBindingH bindings bind.body with (bindings, body) in
+      snoc bindings {bind with body = body}
     in
     let bindings = foldl liftBinding bindings t.bindings in
     liftRecursiveBindingH bindings t.inexpr
@@ -310,39 +310,33 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmRecLets t /- : Expr -> Expr -/ ->
     let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
       lam bindings. lam bind.
-      match liftRecursiveBindingH bindings bind.body with (bindings, body) then
-        snoc bindings {bind with body = body}
-      else never
+      match liftRecursiveBindingH bindings bind.body with (bindings, body) in
+      snoc bindings {bind with body = body}
     in
     let bindings = foldl liftBinding [] t.bindings in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = unit_}
+    TmRecLets {{t with bindings = bindings} with inexpr = unit_}
 
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
-    match liftGlobalH lifted t.body with (lifted, body) then
-      match t.tyBody with TyArrow _ then
-        let lifted = snoc lifted (TmLet {{t with body = body}
-                                            with inexpr = unit_}) in
-        liftGlobalH lifted t.inexpr
-      else match liftGlobalH lifted t.inexpr with (lifted, inexpr) then
-        (lifted, TmLet {{t with body = body}
-                           with inexpr = inexpr})
-      else never
-    else never
+    match liftGlobalH lifted t.body with (lifted, body) in
+    match t.tyBody with TyArrow _ then
+      let lifted = snoc lifted (TmLet {{t with body = body}
+                                          with inexpr = unit_}) in
+      liftGlobalH lifted t.inexpr
+    else match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
+      (lifted, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let lifted = snoc lifted (liftRecursiveBinding (TmRecLets t)) in
-    (lifted, t.inexpr)
+    match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
+    (lifted, inexpr)
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
 
   sem liftGlobal =
   | TmLet t ->
-    match liftGlobalH [] t.body with (lifted, body) then
-      _bindIfNonEmpty
-        lifted
-        (TmLet {{t with body = body}
-                   with inexpr = liftGlobal t.inexpr})
-    else never
+    match liftGlobalH [] t.body with (lifted, body) in
+    _bindIfNonEmpty
+      lifted
+      (TmLet {{t with body = body} with inexpr = liftGlobal t.inexpr})
   | TmRecLets t ->
     let lifted = [liftRecursiveBinding (TmRecLets t)] in
     _bindIfNonEmpty
@@ -351,22 +345,19 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmType t -> TmType {t with inexpr = liftGlobal t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = liftGlobal t.inexpr}
   | TmUtest t ->
-    match liftGlobalH [] t.test with (lifted, test) then
-      match liftGlobalH lifted t.expected with (lifted, expected) then
-        _bindIfNonEmpty
-          lifted
-          (TmUtest {{{t with test = test}
-                        with expected = expected}
-                        with next = liftGlobal t.next})
-      else never
-    else never
+    match liftGlobalH [] t.test with (lifted, test) in
+    match liftGlobalH lifted t.expected with (lifted, expected) in
+    _bindIfNonEmpty
+      lifted
+      (TmUtest {{{t with test = test}
+                    with expected = expected}
+                    with next = liftGlobal t.next})
   | TmExt t -> TmExt {t with inexpr = liftGlobal t.inexpr}
   | t ->
-    match liftGlobalH [] t with (lifted, t) then
-      _bindIfNonEmpty
-        lifted
-        t
-    else never
+    match liftGlobalH [] t with (lifted, t) in
+    _bindIfNonEmpty
+      lifted
+      t
 end
 
 lang MExprLambdaLift =
@@ -374,10 +365,7 @@ lang MExprLambdaLift =
   LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal
 
   sem liftLambdas =
-  | t ->
-    match liftLambdasWithSolutions t with (_, t) then
-      t
-    else never
+  | t -> match liftLambdasWithSolutions t with (_, t) in t
 
   sem liftLambdasWithSolutions =
   | t ->
@@ -704,5 +692,117 @@ let expected = preprocess (bindall_ [
     addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))))),
   appf3_ (var_ "f") (var_ "a") (var_ "b") (int_ 7)]) in
 utest liftLambdas letMultiParam with expected using eqExpr in
+
+let nestedMap = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  map_
+    (ulam_ "s" (map_ (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (var_ "s")))
+    (var_ "s")]) in
+let expected = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "t1" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  ulet_ "t2" (ulam_ "s" (map_ (var_ "t1") (var_ "s"))),
+  map_ (var_ "t2") (var_ "s")]) in
+utest liftLambdas nestedMap with expected using eqExpr in
+
+let nestedAnonymousLambdas = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "x" (int_ 0),
+  map_
+    (ulam_ "y" (bindall_ [
+      ulet_ "s" (map_ (ulam_ "x" (addi_ (var_ "x") (var_ "y"))) (var_ "s")),
+      ulet_ "s" (map_ (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) (var_ "s")),
+      ulet_ "s" (map_ (ulam_ "z" (addi_ (var_ "z") (int_ 1))) (var_ "s")),
+      var_ "s"]))
+    (var_ "s")]) in
+let expected = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "x" (int_ 0),
+  ulet_ "t1" (ulam_ "y" (ulam_ "x" (addi_ (var_ "x") (var_ "y")))),
+  ulet_ "t2" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
+  ulet_ "t3" (ulam_ "z" (addi_ (var_ "z") (int_ 1))),
+  ulet_ "t4" (ulam_ "s" (ulam_ "x" (ulam_ "y" (bindall_ [
+    ulet_ "s" (map_ (app_ (var_ "t1") (var_ "y")) (var_ "s")),
+    ulet_ "s" (map_ (app_ (var_ "t2") (var_ "x")) (var_ "s")),
+    ulet_ "s" (map_ (var_ "t3") (var_ "s")),
+    var_ "s"])))),
+  map_ (appf2_ (var_ "t4") (var_ "s") (var_ "x")) (var_ "s")]) in
+utest liftLambdas nestedAnonymousLambdas with expected using eqExpr in
+
+let nestedMultiArgLambda = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  map_
+    (ulam_ "y"
+      (foldl_ (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e"))))
+              (int_ 0) (var_ "y")))
+    (var_ "s")]) in
+let expected = preprocess (bindall_ [
+  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "t1" (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e")))),
+  ulet_ "t2" (ulam_ "y" (foldl_ (var_ "t1") (int_ 0) (var_ "y"))),
+  map_ (var_ "t2") (var_ "s")]) in
+utest liftLambdas nestedMultiArgLambda with expected using eqExpr in
+
+let nestedReclets = preprocess (bindall_ [
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
+    if_ (eqi_ (var_ "x") (int_ 10))
+        (unit_)
+        (bindall_ [
+          ureclet_ "inner_foo" (ulam_ "z" (
+            if_ (eqi_ (var_ "y") (var_ "z"))
+                (appf1_ (var_ "inner_foo") (addi_ (var_ "z") (int_ 1)))
+                (bindall_ [
+                  ureclet_ "deep_foo" (ulam_ "i" (bindall_ [
+                    if_ (eqi_ (var_ "i") (var_ "z"))
+                        (unit_)
+                        (bindall_ [
+                          ulet_ "" (get_ (var_ "mylist") (var_ "i")),
+                          appf1_ (var_ "deep_foo")
+                                 (addi_ (var_ "i")
+                                        (int_ 1))
+                        ])
+                  ])),
+                  appf1_ (var_ "deep_foo") (int_ 0)
+                ])
+          )),
+          appf1_ (var_ "inner_foo") (int_ 10)
+        ])
+  )))),
+  appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
+  ]) in
+let expected = preprocess (bindall_ [
+  ureclets_ [
+    ("deep_foo", (ulam_ "mylist" (ulam_ "z" (ulam_ "i" (
+      if_ (eqi_ (var_ "i") (var_ "z"))
+          (unit_)
+          (bindall_ [
+            ulet_ "" (get_ (var_ "mylist") (var_ "i")),
+            appf3_ (var_ "deep_foo")
+                   (var_ "mylist")
+                   (var_ "z")
+                   (addi_ (var_ "i")
+                          (int_ 1))
+          ])
+    ))))),
+    ("inner_foo", (ulam_ "y" (ulam_ "mylist" (ulam_ "z" (
+              if_ (eqi_ (var_ "y") (var_ "z"))
+                  (appf3_ (var_ "inner_foo")
+                          (var_ "y")
+                          (var_ "mylist")
+                          (addi_ (var_ "z") (int_ 1)))
+                  (appf3_ (var_ "deep_foo")
+                           (var_ "mylist")
+                           (var_ "z")
+                           (int_ 0))
+    )))))
+  ],
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
+    if_ (eqi_ (var_ "x") (int_ 10))
+        (unit_)
+        (appf3_ (var_ "inner_foo") (var_ "y") (var_ "mylist") (int_ 10))
+  )))),
+  appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
+  ]) in
+utest liftLambdas nestedReclets with expected using eqExpr in
 
 ()

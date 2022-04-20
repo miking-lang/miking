@@ -41,7 +41,7 @@ optionsHelpString optionsConfig,
 ]
 in
 
-let subMenu = lam sub : String. lam config : ParseConfig. join
+let subMenu = lam sub : String. lam config : ParseConfig Options. join
 [
 "Usage: mi ",
 sub,
@@ -63,7 +63,7 @@ in
 type SubConfig = {
   name : String,
   cmd : [String] -> Options -> [String] -> Unit,
-  config : ParseConfig
+  config : ParseConfig Options
 } in
 
 -- Commands map, maps command strings to functions.

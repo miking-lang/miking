@@ -60,7 +60,8 @@ type case =
 
 type inter_data =
   { info: info
-  ; params: param list
+  ; ty: ty
+  ; params: param list option
   ; (* We represent each case by the location of its pattern *)
     cases: (info * case) list
   ; (* We store the DAG of subset relations as a list of pairs (a, b),
@@ -113,6 +114,73 @@ let compute_order fi
       ^ string_of_pat only2
       |> raise_error fi
 
+let merge_inter fi name a b =
+  match (a, b) with
+  | None, None ->
+      None
+  | None, Some a ->
+      Some {a with info= fi}
+  | Some a, None ->
+      Some a
+  | ( Some ({info= fi1; ty= ty1; params= p1; cases= c1; subsets= s1} as data)
+    , Some {info= fi2; ty= ty2; params= p2; cases= c2; subsets= s2} ) ->
+      if eq_info fi1 fi2 then Some data
+      else
+        let param_lengths_differ =
+          match (p1, p2) with
+          | Some p1, Some p2 ->
+              List.length p1 <> List.length p2
+          | _ ->
+              false
+        in
+        if param_lengths_differ then
+          raise_error fi1
+            ( "Different number of parameters for interpreter '"
+            ^ Ustring.to_utf8 name ^ "' compared to previous definition at "
+            ^ Ustring.to_utf8 (info2str fi2) )
+        else
+          let c2 =
+            List.filter
+              (fun (fi, _) ->
+                List.exists (fun (fi2, _) -> eq_info fi fi2) c1 |> not )
+              c2
+          in
+          let subsets =
+            add_new_by
+              (fun (a1, a2) (b1, b2) -> eq_info a1 b1 && eq_info a2 b2)
+              s2 s1
+          in
+          let subsets =
+            liftA2 (fun a b -> (a, b)) c1 c2
+            |> fold_map
+                 ~fold:(fun a b -> List.rev_append b a)
+                 ~map:(compute_order fi1) subsets
+          in
+          let ty = match ty1 with TyUnknown _ -> ty2 | _ -> ty1 in
+          (* TODO(vipa, 2022-03-24): Perform capture avoiding substitution properly *)
+          let params =
+            match (p1, p2) with
+            | Some p1, Some p2 ->
+                if
+                  List.equal
+                    (fun (Param (_, n1, _)) (Param (_, n2, _)) -> n1 =. n2)
+                    p1 p2
+                then Some p1
+                else
+                  raise_error fi
+                    ( "Parameters are named differently for interpreter '"
+                    ^ Ustring.to_utf8 name
+                    ^ "' compared to previous definition at "
+                    ^ Ustring.to_utf8 (info2str fi2) )
+            | Some p1, None ->
+                Some p1
+            | None, Some p2 ->
+                Some p2
+            | None, None ->
+                None
+          in
+          Some {data with subsets; ty; params; cases= List.rev_append c2 c1}
+
 (* Check that a single language fragment is self-consistent; it has compatible patterns,
  * no duplicate definitions, etc. Does not consider included languages at all.
  *)
@@ -129,11 +197,13 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
   let add_new_sem name fi data = function
     | None ->
         Some data
-    | Some {info; _} ->
-        raise_error fi
-          ( "Duplicate definition of '" ^ Ustring.to_utf8 name
-          ^ "', previously defined at "
-          ^ Ustring.to_utf8 (info2str info) )
+    | Some old_data ->
+        if Option.is_some old_data.params = Option.is_some data.params then
+          raise_error fi
+            ( "Duplicate definition of '" ^ Ustring.to_utf8 name
+            ^ "', previously defined at "
+            ^ Ustring.to_utf8 (info2str old_data.info) )
+        else merge_inter fi name (Some old_data) (Some data)
   in
   let add_new_alias name ((fi, _, _) as data) = function
     | None ->
@@ -149,7 +219,7 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
         { lang_data with
           syns= Record.update name (add_new_syn name (fi, cons)) lang_data.syns
         }
-    | Inter (fi, name, params, cases) ->
+    | Inter (fi, name, ty, params, cases) ->
         let mk_case (pat, rhs) =
           let pos_pat = pat_to_normpat pat in
           ( pat_info pat
@@ -162,7 +232,7 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
                ~fold:(fun a b -> List.rev_append b a)
                ~map:(compute_order info) []
         in
-        let inter_data = {info= fi; params; cases; subsets} in
+        let inter_data = {info= fi; ty; params; cases; subsets} in
         { lang_data with
           inters=
             Record.update name
@@ -198,42 +268,6 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
               (fun c1 -> List.exists (eq_cons c1) old_cons |> not)
               cons )
   in
-  let merge_inter name a b =
-    match (a, b) with
-    | None, None ->
-        None
-    | None, Some a ->
-        Some {a with info= fi}
-    | Some a, None ->
-        Some a
-    | ( Some ({info= fi1; params= p1; cases= c1; subsets= s1} as data)
-      , Some {info= fi2; params= p2; cases= c2; subsets= s2} ) ->
-        if eq_info fi1 fi2 then Some data
-        else if List.length p1 <> List.length p2 then
-          raise_error fi1
-            ( "Different number of parameters for interpreter '"
-            ^ Ustring.to_utf8 name ^ "' compared to previous definition at "
-            ^ Ustring.to_utf8 (info2str fi2) )
-        else
-          let c2 =
-            List.filter
-              (fun (fi, _) ->
-                List.exists (fun (fi2, _) -> eq_info fi fi2) c1 |> not )
-              c2
-          in
-          let subsets =
-            add_new_by
-              (fun (a1, a2) (b1, b2) -> eq_info a1 b1 && eq_info a2 b2)
-              s2 s1
-          in
-          let subsets =
-            liftA2 (fun a b -> (a, b)) c1 c2
-            |> fold_map
-                 ~fold:(fun a b -> List.rev_append b a)
-                 ~map:(compute_order fi1) subsets
-          in
-          Some {data with subsets; cases= List.rev_append c2 c1}
-  in
   let merge_alias name a b =
     match (a, b) with
     | None, None ->
@@ -250,7 +284,7 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
             ^ "' found at "
             ^ Ustring.to_utf8 (info2str fi2) )
   in
-  { inters= Record.merge merge_inter i1 i2
+  { inters= Record.merge (merge_inter fi) i1 i2
   ; syns= Record.merge merge_syn s1 s2
   ; aliases= Record.merge merge_alias a1 a2 }
 
@@ -283,7 +317,7 @@ let data_to_lang info name includes {inters; syns; aliases} : mlang =
     Record.bindings syns
     |> List.map (fun (syn_name, (fi, cons)) -> Data (fi, syn_name, cons))
   in
-  let sort_inter name {info; params; cases; subsets} =
+  let sort_inter name {info; ty; params; cases; subsets} =
     let mk_case fi =
       let case = info_assoc fi cases in
       (case.pat, case.rhs)
@@ -291,7 +325,7 @@ let data_to_lang info name includes {inters; syns; aliases} : mlang =
     let cases =
       List.map fst cases |> topo_sort eq_info subsets |> List.map mk_case
     in
-    Inter (info, name, params, cases)
+    Inter (info, name, ty, params, cases)
   in
   let inters =
     Record.bindings inters
@@ -436,7 +470,8 @@ let lang_is_subsumed_by l1 l2 =
   match (l1, l2) with
   | Lang (fi, _, _, decls1), Lang (_, _, _, decls2) ->
       let decl_is_subsumed_by = function
-        | Inter (_, n1, _, cases1), Inter (_, n2, _, cases2) when n1 =. n2 ->
+        | Inter (_, n1, _, _, cases1), Inter (_, n2, _, _, cases2)
+          when n1 =. n2 ->
             let mk_pos_neg (pat, _) =
               let pos_pat = pat_to_normpat pat in
               let neg_pat = normpat_complement pos_pat in
@@ -773,7 +808,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
             ( { constructors= USMap.add_seq new_constructors constructors
               ; normals }
             , USMap.add name fi syns )
-        | Inter (_, name, _, _) | Alias (_, name, _, _) ->
+        | Inter (_, name, _, _, _) | Alias (_, name, _, _) ->
             ( {normals= USMap.add name (mangle name) normals; constructors}
             , syns )
       in
@@ -824,12 +859,19 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
         (* TODO: pass new subs here? *)
       in
       let translate_inter = function
-        | Inter (fi, name, params, cases) ->
+        | Inter (fi, name, ty, params, cases) ->
+            let params =
+              match params with
+              | Some params ->
+                  params
+              | None ->
+                  [Param (NoInfo, us "", TyUnknown NoInfo)]
+            in
             Some
               ( fi
               , mangle name
               , Symb.Helpers.nosym
-              , TyUnknown NoInfo
+              , ty
               , inter_to_tm name fi params cases )
         | _ ->
             None
@@ -897,7 +939,8 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
-        TmType (fi, syn, Symb.Helpers.nosym, [], TyUnknown NoInfo, tm') )
+        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (NoInfo, []), tm')
+        )
       (USMap.bindings syns)
   in
   let stack = stack @ syntydecl in
