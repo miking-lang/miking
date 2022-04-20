@@ -11,7 +11,7 @@ con InfixUnsplit :
   ({record : Expr, info : Expr, left : Expr, right : Expr} -> Expr) -> OperatorUnsplitter
 
 type GenOperator =
-  { baseConstructorName : Name
+  { baseConstructorName : Option Name
   , opConstructorName : Name
   , baseTypeName : Name
   , carried : Type
@@ -20,7 +20,7 @@ type GenOperator =
 type GenOpInput =
   { infoFieldLabel : String
   , termsFieldLabel : String
-  , syns : Map Name {bad : Name}
+  , syns : Map Name {bad : Name, grouping : Option (String, String)}
   , mkSynName : Name -> String
   , mkSynAstBaseName : Name -> String
   , mkConAstName : Name -> String
@@ -63,7 +63,7 @@ let _uletin_ : String -> Expr -> Expr -> Expr
     _nletin_ (nameNoSym name) tyunknown_ val body
 
 let _mkBaseFragment
-  : GenOpInput -> (Name, {bad : Name, op : name}) -> LanguageFragment
+  : GenOpInput -> (Name, {bad : Name, op : Name, grouping : Option (String, String)}) -> LanguageFragment
   = lam config. lam names.
     let originalName = names.0 in
     let synName = names.1 .op in
@@ -141,10 +141,10 @@ let _mkBaseFragment
     }
 
 let _mkConstructorFragment
-  : GenOpInput -> Map Name {bad : Name, op : Name} -> GenOperator -> LanguageFragment
+  : GenOpInput -> Map Name {bad : Name, op : Name, grouping : Option (String, String)} -> GenOperator -> LanguageFragment
   = lam config. lam synNames. lam op.
     let synName =
-      let tmp : {bad : Name, op : Name} = mapFindExn op.baseTypeName synNames in
+      let tmp : {bad : Name, op : Name, grouping : Option (String, String)} = mapFindExn op.baseTypeName synNames in
       tmp.op in
     let conName = op.opConstructorName in
     let suffix = concat "_" (nameGetStr synName) in
@@ -250,23 +250,22 @@ let _mkConstructorFragment
       } in
 
     { name = nameGetStr conName
-    , extends =
-      [ config.mkBaseName (nameGetStr synName)
-      , config.mkConAstName op.baseConstructorName
-      ]
+    , extends = cons
+      (config.mkBaseName (nameGetStr synName))
+      (match op.baseConstructorName with Some n then [config.mkConAstName n] else [])
     , aliases = []
     , synTypes = mapInsert synName [{name = conName, synType = synName, carried = untargetableType op.carried}] (mapEmpty nameCmp)
     , semanticFunctions = [getInfo, getTerms, unsplit]
     }
 
 let _mkComposedFragment
-  : GenOpInput -> Map Name {bad : Name, op : Name} -> [LanguageFragment] -> LanguageFragment
+  : GenOpInput -> Map Name {bad : Name, op : Name, grouping : Option (String, String)} -> [LanguageFragment] -> LanguageFragment
   = lam config. lam opTypeNames. lam fragments.
     let opFragments : [String] = map
       (lam frag: LanguageFragment. frag.name)
       fragments in
     let badFragments : [String] = map
-      (lam name: {bad : Name, op : Name}. config.mkConAstName name.bad)
+      (lam name: {bad : Name, op : Name, grouping : Option (String, String)}. config.mkConAstName name.bad)
       (mapValues opTypeNames) in
     { name = config.composedName
     , extends = join
@@ -293,12 +292,13 @@ type WrapperInfo =
   }
 
 let _mkBrWrappersFor
-  : GenOpInput -> {original: Name, op: Name, bad: Name} -> WrapperInfo
+  : GenOpInput -> {original: Name, op: Name, bad: Name, grouping: Option (String, String)} -> WrapperInfo
   = lam config. lam name.
     let stateTy = tyrecord_
       [ ("errors", tyapp_ (tycon_ "Ref") (tyseq_ (tytuple_ [tycon_ "Info", tystr_])))
       , ("content", tycon_ "String")
       ] in
+    match match name.grouping with Some x then x else ("(", ")") with (lparStr, rparStr) in
     let suffix = concat "_" (nameGetStr name.op) in
     let configName = nameSym "config" in
     let reportConfigName = nameSym "reportConfig" in
@@ -343,8 +343,8 @@ let _mkBrWrappersFor
           , ("topAllowed", var_ (concat "topAllowed" suffix))
           , ("terminalInfos", var_ (join ["get", suffix, "_terms"]))
           , ("getInfo", var_ (join ["get", suffix, "_info"]))
-          , ("lpar", str_ "(")
-          , ("rpar", str_ ")")
+          , ("lpar", str_ lparStr)
+          , ("rpar", str_ rparStr)
           ])
       , nulet_ addAtomName (mkTotalFunc (nameNoSym "breakableAddAtom"))
       , nulet_ addInfixName (mkPartialFunc (nameNoSym "breakableAddInfix"))
@@ -398,8 +398,8 @@ let _mkBrWrappers
   : GenOpInput -> Map Name Name -> GenOpResult
   = lam config. lam synNames.
     let wrappers = mapMapWithKey
-      (lam original. lam names : {bad : Name, op : Name}.
-        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad})
+      (lam original. lam names : {bad : Name, op : Name, grouping : Option (String, String)}.
+        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad, grouping = names.grouping})
       synNames in
     let getWrapper : Name -> WrapperInfo = lam name.
       mapFindExn name wrappers in
@@ -442,9 +442,9 @@ let mkOpLanguages
   : GenOpInput -> GenOpResult
   = lam config.
     use CarriedBasic in
-    let opTypeNames : Map Name {bad : Name, op : Name} = mapMapWithKey
-      (lam original. lam names : {bad : Name}.
-        {bad = names.bad, op = nameSym (config.mkSynName original)})
+    let opTypeNames : Map Name {bad : Name, op : Name, grouping : Option (String, String)} = mapMapWithKey
+      (lam original. lam names : {bad : Name, grouping : Option (String, String)}.
+        {bad = names.bad, op = nameSym (config.mkSynName original), grouping = names.grouping})
       config.syns in
     let baseFragments = map (_mkBaseFragment config) (mapBindings opTypeNames) in
     let constructorFragments = map (_mkConstructorFragment config opTypeNames) config.operators in

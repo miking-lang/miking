@@ -34,16 +34,44 @@ end
 lang LL1Analysis = ParserGeneration + PreToken + PreLitToken
 end
 
+lang DesugaredTypeDeclAst = SelfhostBaseAst
+  type TypeDeclDesugaredRecord =
+    { info : Info
+    , name : {v: Name, i: Info}
+    , grouping : Option ({v: Either Name String, i: Info}, {v: Either Name String, i: Info})
+    }
+
+  syn Decl =
+  | TypeDeclDesugared TypeDeclDesugaredRecord
+
+  sem get_Decl_info =
+  | TypeDeclDesugared x -> x.info
+end
+
+lang DesugaredAst = SelfhostAst + DesugaredTypeDeclAst
+end
+
 mexpr
 
 use MExprCmp in
 use MExprPrettyPrint in
 use CarriedBasic in
 use LL1Analysis in
-use SelfhostAst in
+use DesugaredAst in
 
-type TypeInfo = {ty : Type, ensureSuffix : Bool, commonFields : Map String (Type, Expr)} in
-type TokenInfo = {ty : Type, repr : Expr, tokConstructor : Name, getInfo : Expr -> Expr, getValue : Expr -> Expr} in
+type TypeInfo =
+  { ty : Type
+  , ensureSuffix : Bool
+  , commonFields : Map String (Type, Expr)
+  , grouping : Option ({v: Either Name String, i: Info}, {v: Either Name String, i: Info})
+  } in
+type TokenInfo =
+  { ty : Type
+  , repr : Expr
+  , tokConstructor : Name
+  , getInfo : Expr -> Expr
+  , getValue : Expr -> Expr
+  } in
 
 type Terminal in
 con NtTerm : {config : Res TypeInfo, name : Name} -> Terminal in
@@ -79,6 +107,7 @@ con LRegEnd : () -> LabelRegexKind in
 type GenLabel in
 con TyTop : {v: Name, i: Info} -> GenLabel in
 con TyRegex : {nt: {v: Name, i: Info}, kind: LabelRegexKind} -> GenLabel in
+con TyGrouping : {left: Info, right: Info} -> GenLabel in
 con ProdTop : {v: Name, i: Info} -> GenLabel in
 con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
@@ -215,18 +244,137 @@ recursive let resolveRegex
       smapM resolveRegex other
     end
 in
+type TypeDeclPropertyMass =
+  { grouping : [(Info, Res ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}))]
+  , unknown : [Info]
+  } in
+let emptyTypeDeclPropertyMass =
+  { grouping = [], unknown = [] } in
+let mergeTypeDeclPropertyMass
+  : TypeDeclPropertyMass -> TypeDeclPropertyMass -> TypeDeclPropertyMass
+  = lam l. lam r.
+    { grouping = concat l.grouping r.grouping
+    , unknown = concat l.unknown r.unknown
+    } in
+let resolveTypeProperty
+  : {name: {v: String, i: Info}, val: Expr} -> TypeDeclPropertyMass
+  = lam prop.
+    let field = prop.name in
+    let value = prop.val in
+    switch field.v
+    case "grouping" then
+      let mkParen : Expr -> Res {v: Either Name String, i: Info} = lam e. switch e
+        case ConExpr c then
+          result.map
+            (lam name. {v = Left name, i = c.name.i})
+            (lookupName c.name nameEnv.types)
+        case StringExpr s then
+          result.ok {v = Right s.val.v, i = s.val.i}
+        case e then
+          result.err (simpleMsg (get_Expr_info e) "Expected a string literal or token name.")
+        end in
+      let res = match value with AppExpr x
+        then result.map2 (lam a. lam b. (a, b)) (mkParen x.left) (mkParen x.right)
+        else result.err (simpleMsg (get_Expr_info value) "Grouping must be two tokens (string literals or token names).")
+      in {emptyTypeDeclPropertyMass with grouping = [(field.i, res)]}
+    case _ then
+      {emptyTypeDeclPropertyMass with unknown = [field.i]}
+    end
+in
+let desugarAndResolveTypeDecl
+  : Res {v: Name, i: Info} -> TypeDeclRecord -> Res TypeDeclDesugaredRecord
+  = lam name. lam x.
+    let getSingleDef : all a. String -> [(Info, Res a)] -> Res (Option a) = lam prop. lam defs.
+      let multi =
+        match defs with [_, _] ++ _ then
+          let infos = (map (lam x. match x with (x, _) in x) defs) in
+          let msg = join ["Multiple definitions of '", prop, "'"] in
+          result.err (multiMsg x.info infos msg)
+        else result.ok () in
+      let defs = result.mapM (lam x. match x with (_, x) in x) defs in
+      let defs = result.map (lam x. match x with [x] ++ _ then Some x else None ()) defs in
+      result.withAnnotations multi defs in
+    let mass: TypeDeclPropertyMass = foldl mergeTypeDeclPropertyMass emptyTypeDeclPropertyMass
+      (map resolveTypeProperty x.properties) in
+    let unknownError = match mass.unknown with [] then result.ok () else
+      let msg = match mass.unknown with [_] then "Unknown property:\n" else "Unknown properties:\n" in
+      result.err (multiMsg x.info mass.unknown msg) in
+    let grouping = getSingleDef "grouping" mass.grouping in
+    result.withAnnotations
+      unknownError
+      (result.map2
+        (lam name. lam grouping.
+          { info = x.info
+          , name = name
+          , grouping = grouping
+          })
+        name
+        grouping)
+in
+let typeMap : Ref (Map Name (Either (Res TypeInfo) (Res TokenInfo))) = ref (mapEmpty nameCmp) in
 let resolveDecl
   : Decl -> Res Decl
   = lam decl.
     switch decl
     case TypeDecl x then
-      result.map
-        (lam name. TypeDecl {x with name = name})
-        (lookupName x.name nameEnv.types)
+      let name = lookupName x.name nameEnv.types in
+      let record = desugarAndResolveTypeDecl name x in
+      let f = lam x: TypeDeclDesugaredRecord.
+        { ty = ntycon_ x.name.v
+        , ensureSuffix = true
+        , commonFields = mapEmpty cmpString
+        , grouping = x.grouping
+        }
+        in
+      (match result.toOption name with Some name then
+        let name: {v: Name, i: Info} = name in
+        modref typeMap (mapInsert name.v (Left (result.map f record)) (deref typeMap))
+       else ()
+      );
+      result.map (lam x. TypeDeclDesugared x) record
     case TokenDecl x then
+      let name = match x.name with Some name
+        then result.map (lam x. Some x) (lookupName name nameEnv.types)
+        else result.ok (None ()) in
+      (match result.toOption name with Some (Some name) then
+        let name: {v: Name, i: Info} = name in
+        -- TODO(vipa, 2022-03-28): get this information in a more principled way
+        let tinfo = switch nameGetStr name.v
+          case "UName" then
+            { ty = tycon_ "Name"
+            , repr = conapp_ "UIdentRepr" unit_
+            , tokConstructor = nameNoSym "UIdentTok"
+            , getInfo = recordproj_ "info"
+            , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
+            }
+          case "LName" then
+            { ty = tycon_ "Name"
+            , repr = conapp_ "LIdentRepr" unit_
+            , tokConstructor = nameNoSym "LIdentTok"
+            , getInfo = recordproj_ "info"
+            , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
+            }
+          case "LIdent" then
+            { ty = tycon_ "String"
+            , repr = conapp_ "LIdentRepr" unit_
+            , tokConstructor = nameNoSym "LIdentTok"
+            , getInfo = recordproj_ "info"
+            , getValue = recordproj_ "val"
+            }
+          case _ then
+            { ty = tycon_ (nameGetStr name.v)
+            , repr = conapp_ (concat (nameGetStr name.v) "Repr") unit_
+            , tokConstructor = nameNoSym (concat (nameGetStr name.v) "Tok")
+            , getInfo = recordproj_ "info"
+            , getValue = recordproj_ "val"
+            }
+          end in
+        modref typeMap (mapInsert name.v (Right (result.ok tinfo)) (deref typeMap))
+       else ()
+      );
       result.map
         (lam name. TokenDecl {x with name = name})
-        (match x.name with Some name then result.map (lam x. Some x) (lookupName name nameEnv.types) else result.ok (None ()))
+        name
     case StartDecl x then
       result.map
         (lam name. StartDecl {x with name = name})
@@ -262,10 +410,11 @@ in
 let decls: [Res Decl] = map resolveDecl decls in
 let allResolved: Res () = result.map (lam. ()) (result.mapM identity decls) in
 let decls: [Decl] = mapOption result.toOption decls in
+let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) = deref typeMap in
 
 -- NOTE(vipa, 2022-03-21): Compute the required sfunctions
 let ntsWithInfo: [{v: Name, i: Info}] =
-  let inner = lam x. match x with TypeDecl x then Some x.name else None () in
+  let inner = lam x. match x with TypeDeclDesugared x then Some x.name else None () in
   mapOption inner decls in
 let nts: [Name] =
   map (lam name: {v: Name, i: Info}. name.v) ntsWithInfo in
@@ -290,56 +439,6 @@ let start: Res Name =
       ] in
     result.err (info, msg)
   end
-in
-
--- NOTE(vipa, 2022-03-28):  Compute type information
-let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) =
-  let addDecl = lam m. lam decl. switch decl
-    case TypeDecl x then
-      let info: TypeInfo =
-        { ty = ntycon_ x.name.v
-        , ensureSuffix = true
-        , commonFields = mapEmpty cmpString
-        } in
-      mapInsert x.name.v (Left (result.ok info)) m
-    case TokenDecl (x & {name = Some n}) then
-      -- TODO(vipa, 2022-03-28): get this information in a more principled way
-      let n : {v: Name, i: Info} = n in
-      let info: TokenInfo = switch nameGetStr n.v
-        case "UName" then
-          { ty = tycon_ "Name"
-          , repr = conapp_ "UIdentRepr" unit_
-          , tokConstructor = nameNoSym "UIdentTok"
-          , getInfo = recordproj_ "info"
-          , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
-          }
-        case "LName" then
-          { ty = tycon_ "Name"
-          , repr = conapp_ "LIdentRepr" unit_
-          , tokConstructor = nameNoSym "LIdentTok"
-          , getInfo = recordproj_ "info"
-          , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
-          }
-        case "LIdent" then
-          { ty = tycon_ "String"
-          , repr = conapp_ "LIdentRepr" unit_
-          , tokConstructor = nameNoSym "LIdentTok"
-          , getInfo = recordproj_ "info"
-          , getValue = recordproj_ "val"
-          }
-        case _ then
-          { ty = tycon_ (nameGetStr n.v)
-          , repr = conapp_ (concat (nameGetStr n.v) "Repr") unit_
-          , tokConstructor = nameNoSym (concat (nameGetStr n.v) "Tok")
-          , getInfo = recordproj_ "info"
-          , getValue = recordproj_ "val"
-          }
-        end in
-      mapInsert n.v (Right (result.ok info)) m
-    case _ then
-      m
-    end in
-  foldl addDecl (mapEmpty nameCmp) decls
 in
 
 let requestedFieldAccessors : Res [(Name, String, Type)] =
@@ -1018,7 +1117,7 @@ let mkOperatorConstructor
           nconapp_ op.conName record)
       end in
     let f = lam ty.
-      { baseConstructorName = op.conName
+      { baseConstructorName = Some op.conName
       , opConstructorName = op.opConName
       , baseTypeName = op.nt
       , carried = ty
@@ -1063,7 +1162,7 @@ let constructors : Res [ConstructorInfo] =
   result.mapM identity (mapOption check decls)
 in
 
-let badConstructors =
+let badConstructors : Res [Constructor] =
   let f = lam nt.
     let carried = addInfoField (NoInfo ()) emptyRecordInfo in
     let carried = checkCommonField (NoInfo ()) nt carried in
@@ -1075,6 +1174,87 @@ let badConstructors =
       } in
     result.map f carried in
   result.mapM f nts
+in
+
+let groupingOperators : Res [GenOperator] =
+  let f = lam nt.
+    match mapFindExn nt typeMap with Left tinfo in
+    let f : TypeInfo -> Res (Option GenOperator) = lam tinfo.
+      match tinfo.grouping with Some (lpar, rpar) then
+        let lpar: {v: Either Name String, i: Info} = lpar in
+        let rpar: {v: Either Name String, i: Info} = rpar in
+        let carried = tyrecord_
+          [ (infoFieldLabel, tycon_ "Info")
+          , (termsFieldLabel, tyseq_ (tycon_ "Info"))
+          , ("inner", tinfo.ty)
+          ] in
+        let parToTerminal : {v: Either Name String, i: Info} -> Terminal = lam sym.
+          switch sym.v
+          case Left name then
+            match mapFindExn name typeMap with Right config in
+            TokenTerm config
+          case Right lit then
+            LitTerm lit
+          end in
+        let ntTerminal : Terminal = NtTerm
+          { config = match mapFindExn nt typeMap with Left config in config
+          , name = nt
+          } in
+        match processTerminal (parToTerminal lpar) with (lPartSym, _, _, _) in
+        match processTerminal ntTerminal with (ntSym, _, ntVal, _) in
+        match processTerminal (parToTerminal rpar) with (rPartSym, _, _, _) in
+        let f : PartialSymbol -> PartialSymbol -> PartialSymbol -> Res Expr -> GenOperator
+          = lam lPartSym. lam ntSym. lam rPartSym. lam ntVal.
+            let conName = nameSym (concat (nameGetStr nt) "Grouping") in
+            let atomNt =
+              let opNames: {prefix : Name, infix : Name, postfix : Name, atom : Name} =
+                mapFindExn nt operatorNtNames in
+              opNames.atom
+            in
+            let action =
+              let seqName = nameSym "seq" in
+              let pats = pseqtot_ [lPartSym.pat, ntSym.pat, rPartSym.pat] in
+              let toRebind = map
+                (lam pair. match pair with (name, ty) in nlet_ name ty (nvar_ name))
+                (collectNamesWithTypes pats) in
+              ulam_ ""
+                (nulam_ seqName
+                  (match_ (nvar_ seqName) pats
+                    (bindall_
+                      (snoc toRebind
+                        (nconapp_ conName
+                          (urecord_
+                            [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
+                            , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
+                            , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
+                            ]))))
+                    never_))
+            in
+            let prod =
+              ( urecord_
+                [ ("nt", nvar_ atomNt)
+                , ("label", unit_)
+                , ("rhs", seq_ [lPartSym.repr, ntSym.repr, rPartSym.repr])
+                , ("action", action)
+                ]
+              , { nt = atomNt
+                , label = TyGrouping {left = lpar.i, right = rpar.i}
+                , rhs = [lPartSym.sym, ntSym.sym, rPartSym.sym]
+                , action = lam. lam. ()
+                }
+              ) in
+            modref productions (snoc (deref productions) (result.ok prod));
+            { baseConstructorName = None ()
+            , opConstructorName = conName
+            , baseTypeName = nt
+            , carried = carried
+            , mkUnsplit = AtomUnsplit
+              (lam x: {record : Expr, info : Expr}. recordproj_ "inner" x.record)
+            }
+        in result.map (lam x. Some x) (result.map4 f lPartSym ntSym rPartSym ntVal)
+      else result.ok (None ())
+    in result.bind tinfo f
+  in result.map (mapOption identity) (result.mapM f nts)
 in
 
 let genOpResult : Res GenOpResult =
@@ -1097,12 +1277,21 @@ let genOpResult : Res GenOpResult =
         }
       )
   in
-  let badNames : Res (Name, {bad : Name}) =
-    let f : Constructor -> (Name, {bad : Name}) = lam constructor.
-      (constructor.synType, {bad = constructor.name})
-    in result.map (map f) badConstructors
+  let synInfo : Res (Name, {bad : Name, grouping : Option (String, String)}) =
+    let f : Constructor -> Res (Name, {bad : Name, grouping : Option (String, String)}) = lam constructor.
+      match mapFindExn constructor.synType typeMap with Left tinfo in
+      let f : TypeInfo -> (Name, {bad : Name, grouping : Option (String, String)}) = lam tinfo.
+        let parToStr : {v: Either Name String, i: Info} -> String = lam x. switch x.v
+          case Left n then snoc (cons '<' nameGetStr n) '>'
+          case Right lit then lit
+          end in
+        let parsToStr : ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}) -> (String, String) = lam pair.
+          (parToStr pair.0, parToStr pair.1) in
+        (constructor.synType, {bad = constructor.name, grouping = optionMap parsToStr tinfo.grouping})
+      in result.map f tinfo
+    in result.bind badConstructors (result.mapM f)
   in
-  let f : [(Name, {bad : Name})] -> [ConstructorInfo] -> GenOpResult = lam syns. lam constructors.
+  let f : [(Name, {bad : Name, grouping : Option (String, String)})] -> [ConstructorInfo] -> [GenOperator] -> GenOpResult = lam syns. lam constructors. lam groupingOperators.
     let genOpInput =
       { infoFieldLabel = infoFieldLabel
       , termsFieldLabel = termsFieldLabel
@@ -1112,7 +1301,9 @@ let genOpResult : Res GenOpResult =
       , mkBaseName = lam str. concat str "Base"
       , composedName = "ParseSelfhost"
       , syns = mapFromSeq nameCmp syns
-      , operators = map (lam x: ConstructorInfo. x.genOperator) constructors
+      , operators = concat
+        (map (lam x: ConstructorInfo. x.genOperator) constructors)
+        groupingOperators
       } in
     let genOpResult : GenOpResult = mkOpLanguages genOpInput in
     let mkRegexProductions : {v: Name, i: Info} -> [Res (Expr, Production GenLabel ())] = lam original.
@@ -1190,7 +1381,7 @@ let genOpResult : Res GenOpResult =
     let newProds = map mkRegexProductions ntsWithInfo in
     modref productions (join (cons (deref productions) newProds));
     genOpResult
-  in result.map2 f badNames constructors
+  in result.map3 f synInfo constructors groupingOperators
 in
 
 let productions : Res [(Expr, Production GenLabel ())] = result.mapM identity (deref productions) in
@@ -1212,6 +1403,7 @@ let ll1Error : Res () =
           case TyTop x then join ["A ", nameGetStr x.v, "\n"]
           case TyRegex {nt = nt, kind = LRegEnd _} then join ["Something coming after a ", nameGetStr nt.v, "\n"]
           case TyRegex x then join ["A ", nameGetStr x.nt.v, " ", regexKindToStr x.kind, "\n"]
+          case TyGrouping x then snoc (multiHighlight (NoInfo ()) [x.left, x.right]) '\n'
           case ProdTop x then snoc (simpleHighlight x.i) '\n'
           case ProdInternal x then snoc (simpleHighlight x.info) '\n'
           end in

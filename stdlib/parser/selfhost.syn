@@ -2,8 +2,12 @@
 -- TODO(vipa, 2022-03-25): add grouping for Expr once we support it
 type File
 type Decl
-type Regex
-type Expr
+type Regex {
+  grouping = "(" ")",
+}
+type Expr {
+  grouping = "(" ")",
+}
 
 token String
 token UName
@@ -18,13 +22,13 @@ prod Start: Decl = "start" name:UName
 prod Type: Decl =
   "type" name:UName
   ( "{"
-    properties:{name:LName "=" val:Expr ","}*
+    properties:{name:LIdent "=" val:Expr ","}*
   "}"
   )?
 prod TokenDecl: Decl =
   "token" name:UName?
   ( "{"
-    properties:{name:LName "=" val:Expr ","}*
+    properties:{name:LIdent "=" val:Expr ","}*
   "}"
   )?
 prod PrecedenceTable: Decl =

@@ -654,7 +654,7 @@ lang StartDeclAst = SelfhostBaseAst
 end
 
 lang TypeDeclAst = SelfhostBaseAst
-  type TypeDeclRecord = {info: Info, name: {v: Name, i: Info}, properties: [{val: Expr, name: {v: Name, i: Info}}]}
+  type TypeDeclRecord = {info: Info, name: {v: Name, i: Info}, properties: [{val: Expr, name: {v: String, i: Info}}]}
 
   syn Decl =
   | TypeDecl TypeDeclRecord
@@ -668,7 +668,7 @@ lang TypeDeclAst = SelfhostBaseAst
         in
         mapAccumL
           (lam acc1.
-             lam x1: {val: Expr, name: {v: Name, i: Info}}.
+             lam x1: {val: Expr, name: {v: String, i: Info}}.
                match
                  let val =
                    x1.val
@@ -719,7 +719,7 @@ lang TypeDeclAst = SelfhostBaseAst
 end
 
 lang TokenDeclAst = SelfhostBaseAst
-  type TokenDeclRecord = {info: Info, name: (Option) ({v: Name, i: Info}), properties: [{val: Expr, name: {v: Name, i: Info}}]}
+  type TokenDeclRecord = {info: Info, name: (Option) ({v: Name, i: Info}), properties: [{val: Expr, name: {v: String, i: Info}}]}
 
   syn Decl =
   | TokenDecl TokenDeclRecord
@@ -733,7 +733,7 @@ lang TokenDeclAst = SelfhostBaseAst
         in
         mapAccumL
           (lam acc1.
-             lam x1: {val: Expr, name: {v: Name, i: Info}}.
+             lam x1: {val: Expr, name: {v: String, i: Info}}.
                match
                  let val =
                    x1.val
@@ -1786,7 +1786,7 @@ end
 lang TypeDeclOp = DeclOpBase + TypeDeclAst
 
   syn DeclOp =
-  | TypeDeclOp {__br_terms: [Info], __br_info: Info, name: [{v: Name, i: Info}], properties: [{val: Expr, name: {v: Name, i: Info}}]}
+  | TypeDeclOp {__br_terms: [Info], __br_info: Info, name: [{v: Name, i: Info}], properties: [{val: Expr, name: {v: String, i: Info}}]}
 
   sem get_DeclOp_info =
   | TypeDeclOp x ->
@@ -1818,7 +1818,7 @@ end
 lang TokenDeclOp = DeclOpBase + TokenDeclAst
 
   syn DeclOp =
-  | TokenDeclOp {__br_terms: [Info], __br_info: Info, name: [{v: Name, i: Info}], properties: [{val: Expr, name: {v: Name, i: Info}}]}
+  | TokenDeclOp {__br_terms: [Info], __br_info: Info, name: [{v: Name, i: Info}], properties: [{val: Expr, name: {v: String, i: Info}}]}
 
   sem get_DeclOp_info =
   | TokenDeclOp x ->
@@ -2558,7 +2558,45 @@ lang RecordExprOp = ExprOpBase + RecordExprAst
 
 end
 
-lang ParseSelfhost = FileOp + StartDeclOp + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp + AppExprOp + ConExprOp + StringExprOp + VariableExprOp + RecordExprOp + BadFileAst + BadDeclAst + BadRegexAst + BadExprAst + LL1Parser + UIdentTokenParser + LIdentTokenParser + StringTokenParser
+lang RegexGrouping = RegexOpBase
+
+  syn RegexOp =
+  | RegexGrouping {__br_terms: [Info], __br_info: Info, inner: Regex}
+
+  sem get_RegexOp_info =
+  | RegexGrouping x ->
+    x.__br_info
+
+  sem get_RegexOp_terms =
+  | RegexGrouping x ->
+    x.__br_terms
+
+  sem unsplit_RegexOp =
+  | AtomP {self = RegexGrouping x} ->
+    (x.__br_info, x.inner)
+
+end
+
+lang ExprGrouping = ExprOpBase
+
+  syn ExprOp =
+  | ExprGrouping {__br_terms: [Info], __br_info: Info, inner: Expr}
+
+  sem get_ExprOp_info =
+  | ExprGrouping x ->
+    x.__br_info
+
+  sem get_ExprOp_terms =
+  | ExprGrouping x ->
+    x.__br_terms
+
+  sem unsplit_ExprOp =
+  | AtomP {self = ExprGrouping x} ->
+    (x.__br_info, x.inner)
+
+end
+
+lang ParseSelfhost = FileOp + StartDeclOp + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp + AppExprOp + ConExprOp + StringExprOp + VariableExprOp + RecordExprOp + RegexGrouping + ExprGrouping + BadFileAst + BadDeclAst + BadRegexAst + BadExprAst + LL1Parser + UIdentTokenParser + LIdentTokenParser + StringTokenParser
      + OperatorTokenParser + CommaTokenParser + SemiTokenParser + BracketTokenParser + LineCommentParser + WhitespaceParser + MultilineCommentParser
 
   sem groupingsAllowed_RegexOp =
@@ -2578,18 +2616,6 @@ lang ParseSelfhost = FileOp + StartDeclOp + TypeDeclOp + TokenDeclOp + Precedenc
   | (AlternativeRegexOp _, RepeatQuestionRegexOp _) -> GRight ()
   | (ConcatRegexOp _, AlternativeRegexOp _) -> GLeft ()
   | (AlternativeRegexOp _, ConcatRegexOp _) -> GRight ()
-
-  syn RegexOp =
-  | GroupingRegexOp { inner : Regex, __br_info : Info, __br_terms : [Info] }
-
-  sem get_RegexOp_terms =
-  | GroupingRegexOp x -> x.__br_terms
-
-  sem get_RegexOp_info =
-  | GroupingRegexOp x -> x.__br_info
-
-  sem unsplit_RegexOp =
-  | AtomP { self = GroupingRegexOp x } -> (x.__br_info, x.inner)
 
 
 
@@ -3515,19 +3541,6 @@ let _table = use ParseSelfhost in let target =
                            (val1.__br_info) }
                    else
                      never },
-           { nt = #var"RegexAtom"
-           , label = {}
-           , rhs = [litSym "(", ntSym #var"Regex", litSym ")"]
-           , action =
-             lam state: {errors: (Ref) ([(Info, [Char])]), content: String}.
-               lam res.
-               match res with [LitParsed l, UserSym (info, val), LitParsed r] in
-               GroupingRegexOp
-                 { __br_terms = [l.info, r.info]
-                 , __br_info = mergeInfo l.info (mergeInfo info r.info)
-                 , inner = val
-                 }
-           },
            { nt =
                kleene,
              label =
@@ -3649,7 +3662,7 @@ let _table = use ParseSelfhost in let target =
                        LitParsed l2,
                        UserSym val4 ]
                    then
-                     let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val4
                      in
                      { __br_terms =
@@ -3680,8 +3693,7 @@ let _table = use ParseSelfhost in let target =
                                name =
                                  match
                                    [ { v =
-                                         nameNoSym
-                                           (x1.val),
+                                         x1.val,
                                        i =
                                          x1.info } ]
                                  with
@@ -3760,7 +3772,7 @@ let _table = use ParseSelfhost in let target =
                        UserSym val4,
                        LitParsed l4 ]
                    then
-                     let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val4
                      in
                      { __br_terms =
@@ -3800,7 +3812,7 @@ let _table = use ParseSelfhost in let target =
                        TokParsed (UIdentTok x4),
                        UserSym val5 ]
                    then
-                     let val5: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val5: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val5
                      in
                      TypeDeclOp
@@ -3904,7 +3916,7 @@ let _table = use ParseSelfhost in let target =
                        LitParsed l7,
                        UserSym val7 ]
                    then
-                     let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val7
                      in
                      { __br_terms =
@@ -3935,8 +3947,7 @@ let _table = use ParseSelfhost in let target =
                                name =
                                  match
                                    [ { v =
-                                         nameNoSym
-                                           (x6.val),
+                                         x6.val,
                                        i =
                                          x6.info } ]
                                  with
@@ -4015,7 +4026,7 @@ let _table = use ParseSelfhost in let target =
                        UserSym val7,
                        LitParsed l9 ]
                    then
-                     let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val7
                      in
                      { __br_terms =
@@ -4057,7 +4068,7 @@ let _table = use ParseSelfhost in let target =
                      let val8: {__br_terms: [Info], __br_info: Info, name: [{v: Name, i: Info}]} =
                        val8
                      in
-                     let val9: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: Name, i: Info}}]} =
+                     let val9: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val9
                      in
                      TokenDeclOp
@@ -5555,6 +5566,90 @@ let _table = use ParseSelfhost in let target =
                    else
                      never },
            { nt =
+               #var"RegexAtom",
+             label =
+               {},
+             rhs =
+               [ litSym
+                   "(",
+                 ntSym
+                   #var"Regex",
+                 litSym
+                   ")" ],
+             action =
+               lam #var"".
+                 lam seq.
+                   match
+                     seq
+                   with
+                     [ LitParsed l42,
+                       UserSym (info9, val27),
+                       LitParsed l43 ]
+                   then
+                     RegexGrouping
+                       { __br_terms =
+                           [ l42.info,
+                             l43.info ],
+                         __br_info =
+                           foldl
+                             mergeInfo
+                             (l42.info)
+                             [ info9,
+                               l43.info ],
+                         inner =
+                           match
+                             [ val27 ]
+                           with
+                             [ x31 ]
+                           then
+                             x31
+                           else
+                             never }
+                   else
+                     never },
+           { nt =
+               #var"ExprAtom",
+             label =
+               {},
+             rhs =
+               [ litSym
+                   "(",
+                 ntSym
+                   #var"Expr",
+                 litSym
+                   ")" ],
+             action =
+               lam #var"".
+                 lam seq1.
+                   match
+                     seq1
+                   with
+                     [ LitParsed l44,
+                       UserSym (info10, val28),
+                       LitParsed l45 ]
+                   then
+                     ExprGrouping
+                       { __br_terms =
+                           [ l44.info,
+                             l45.info ],
+                         __br_info =
+                           foldl
+                             mergeInfo
+                             (l44.info)
+                             [ info10,
+                               l45.info ],
+                         inner =
+                           match
+                             [ val28 ]
+                           with
+                             [ x31 ]
+                           then
+                             x31
+                           else
+                             never }
+                   else
+                     never },
+           { nt =
                #var"File",
              label =
                {},
@@ -5563,9 +5658,9 @@ let _table = use ParseSelfhost in let target =
                    #var"File_lclosed" ],
              action =
                lam #var"".
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym cont ]
                    then
@@ -5586,9 +5681,9 @@ let _table = use ParseSelfhost in let target =
                    #var"File_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5612,9 +5707,9 @@ let _table = use ParseSelfhost in let target =
                    #var"File_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5638,9 +5733,9 @@ let _table = use ParseSelfhost in let target =
                    #var"File_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5664,9 +5759,9 @@ let _table = use ParseSelfhost in let target =
                    #var"File_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5701,9 +5796,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Decl_lclosed" ],
              action =
                lam #var"".
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym cont ]
                    then
@@ -5724,9 +5819,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Decl_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5750,9 +5845,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Decl_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5776,9 +5871,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Decl_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5802,9 +5897,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Decl_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5839,9 +5934,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Regex_lclosed" ],
              action =
                lam #var"".
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym cont ]
                    then
@@ -5862,9 +5957,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Regex_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5888,9 +5983,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Regex_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5914,9 +6009,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Regex_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5940,9 +6035,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Regex_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -5977,9 +6072,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Expr_lclosed" ],
              action =
                lam #var"".
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym cont ]
                    then
@@ -6000,9 +6095,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Expr_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -6026,9 +6121,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Expr_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -6052,9 +6147,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Expr_lclosed" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
@@ -6078,9 +6173,9 @@ let _table = use ParseSelfhost in let target =
                    #var"Expr_lopen" ],
              action =
                lam p.
-                 lam seq.
+                 lam seq2.
                    match
-                     seq
+                     seq2
                    with
                      [ UserSym x31,
                        UserSym cont ]
