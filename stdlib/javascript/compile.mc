@@ -45,7 +45,7 @@ let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 -- Names used in the compiler for intrinsics
 let _consoleLog = use JSAst in
-  JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" } 
+  JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
 
 
 -------------------------------------------
@@ -63,7 +63,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
       JSPProg { imports = [], exprs = [expr] }
     else never
 
-  
+
 
   ---------------
   -- OPERATORS --
@@ -139,7 +139,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     if mapIsEmpty bindings then JSEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
 
-  | TmSeq {tms = tms, ty = ty, info = info} ->
+  | TmSeq {tms = tms, ty = ty, info = info} & t ->
     -- Special handling of strings
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
@@ -149,8 +149,8 @@ lang MExprJSCompile = MExprAst + JSProgAst
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
       let tms: [JSExpr] = map compileExpr tms in
-      JSESeq { exprs = tms, info = info }      
-      
+      JSESeq { exprs = tms, info = info }
+
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
   | TmConApp _ -> error "Constructor application in compileExpr."
   | TmLet _ -> error "Let expressions cannot be handled in compileExpr."
@@ -193,7 +193,7 @@ let javascriptCompile : Expr -> JSPProg =
   use MExprJSCompile in
   compile ast
 
-  
+
 
 let javascriptCompileFile : Expr -> String -> Bool =
   lam ast : Expr. lam sourcePath: String.
