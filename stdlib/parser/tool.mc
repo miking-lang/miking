@@ -20,6 +20,12 @@ lang PreToken = TokenParser
   | (PreRepr l, PreRepr r) -> nameCmp l.constructorName r.constructorName
 end
 
+-- NOTE(vipa, 2022-04-25): Similar to PreToken, these are only
+-- intended for analysis. We cannot use normal LitSpec constructed
+-- through `litSym` since it will check that the literal lexes as a
+-- single token, which it only would if we have the appropriate
+-- language fragments included, which we don't have in the
+-- *generating* code, we only have that in the *generated* code.
 lang PreLitToken = TokenParser
   syn TokenRepr =
   | PreLitRepr {lit : String}
@@ -65,11 +71,6 @@ con TerminalReg : {term: Terminal, info: Info, field: Option (Info, String)} -> 
 con RecordReg : {content: [SRegex], info: Info, field: Option (Info, String)} -> SRegex in
 con KleeneReg : {content: {v: [SRegex], i: Info}, info: Info} -> SRegex in
 con AltReg : {alts: [{v: [SRegex], i: Info}]} -> SRegex in
-
-type Assoc in
-con NAssoc : () -> Assoc in
-con LAssoc : () -> Assoc in
-con RAssoc : () -> Assoc in
 type Operator =
   { lfield : Option String
   , rfield : Option String
@@ -1310,19 +1311,21 @@ let mkOperatorConstructor
       , baseTypeName = op.nt
       , carried = ty
       , mkUnsplit = mkUnsplit
+      , assoc = op.assoc
       } in
     result.map f (mkRecordOfSeqsTy prod.record)
 in
 
 -- NOTE(vipa, 2022-03-31): Compute all info for the constructors
+let operators : Ref (Map Name (Res Operator)) = ref (mapEmpty nameCmp) in
 type ConstructorInfo =
   { constructor : Constructor
   , operator : Operator
   , genOperator : GenOperator
   } in
 let constructors : Res [ConstructorInfo] =
-  let check = lam decl. switch decl
-    case ProductionDecl x then
+  let check = lam decl.
+    match decl with ProductionDecl x then
       let name = computeConstructorName {constructor = x.name, nt = x.nt} in
       let regInfo = get_Regex_info x.regex in
       let reg = regexToSRegex x.regex in
@@ -1343,11 +1346,158 @@ let constructors : Res [ConstructorInfo] =
         , operator = operator
         , genOperator = genOp
         } in
+      modref operators (mapInsert x.name.v operator (deref operators));
       Some (result.map4 mkRes name carried operator genOp)
-    case _ then
+    else
       None ()
-    end in
+    in
   result.mapM identity (mapOption check decls)
+in
+
+let foldWithLater
+  : (a -> acc -> a -> acc) -> acc -> [a] -> acc
+  = lam f.
+    recursive let work = lam acc. lam seq.
+      match seq with [a] ++ seq then
+        work (foldl (f a) acc seq) seq
+      else acc
+    in work
+in
+
+let operators : Map Name (Res Operator) = deref operators in
+let cmpNamePair = lam a: (Name, Name). lam b: (Name, Name).
+  let res = nameCmp a.0 b.0 in
+  match res with 0 then nameCmp a.1 b.1 else res in
+let precedences : Res (Map Name (Map (Name, Name) Ordering)) =
+  type OrderDef = {ordering: Ordering, surround: Info, i1: Info, i2: Info} in
+  type Acc = (Map Name (Map (Name, Name) Ordering), Res ()) in
+  let addPrec : (Name, Name) -> OrderDef -> Map (Name, Name) OrderDef -> Map (Name, Name) [OrderDef]
+    = lam pair. lam def. if leqi (nameCmp pair.0 pair.1) 0
+      then mapInsertWith concat pair [def]
+      else mapInsertWith concat (pair.1, pair.0) [{def with ordering = flipOrdering def.ordering}]
+  in
+  let computeOrders : Acc -> Decl -> Acc = lam acc. lam decl.
+    match decl with PrecedenceTableDecl x then
+      let ensureNonAtomic : Info -> Operator -> Res Operator = lam info. lam op.
+        match (op.lfield, op.rfield) with !(None _, None _) then result.ok op else
+        result.err (simpleMsg info "This is not an operator") in
+      let levels : [{noeq: Option Info, operators: [{v: Res Operator, i: Info}]}] = map
+        (lam level: {noeq: Option Info, operators: [{v: Name, i: Info}]}.
+          {level with operators = mapOption
+            (lam n: {v: Name, i: Info}. match mapLookup n.v operators with Some op
+              then Some {n with v = result.bind op (ensureNonAtomic n.i)}
+              else None ())
+            level.operators})
+        x.levels in
+      let exceptions : [(Set Name, Set Name)] = map
+        (lam x: {lefts: [{v: Name, i: Info}], rights: [{v: Name, i: Info}]}.
+          let getName: {v: Name, i: Info} -> Name = lam x. x.v in
+          ( setOfSeq nameCmp (map getName x.lefts)
+          , setOfSeq nameCmp (map getName x.rights)
+          ))
+        x.exceptions in
+      let isException : (Name, Name) -> Bool = lam pair. any
+        (lam row: (Set Name, Set Name).
+          if (if setMem pair.0 row.0 then setMem pair.1 row.1 else false) then true
+          else (if setMem pair.1 row.0 then setMem pair.0 row.1 else false))
+        exceptions in
+      let maybeAddPrec : Name -> (Name, Name) -> OrderDef -> Acc -> Acc =
+        lam nt. lam n. lam def. lam m. if isException n then m else
+          let inner = match mapLookup nt m with Some m then m else mapEmpty cmpNamePair in
+          let inner = addPrec n def inner in
+          mapInsert nt inner m in
+      recursive let foldNames
+        : all acc. (acc -> {v: Res Operator, i: Info} -> acc)
+        -> acc
+        -> [{noeq: Option Info, operators: [{v: Res Operator, i: Info}]}]
+        -> acc
+        = lam f. lam acc. lam levels.
+          match levels with [level] ++ levels then
+            foldNames f (foldl f acc level.operators) levels
+          else acc
+      in
+      recursive let processLevel
+        : Acc
+        -> [{noeq: Option Info, operators: [{v: Res Operator, i: Info}]}]
+        -> Acc
+        = lam acc. lam levels.
+          match levels with [level] ++ levels then
+            let f
+              : Ordering
+              -> {v: Res Operator, i: Info}
+              -> Acc
+              -> {v: Res Operator, i: Info}
+              -> Acc
+              = lam ordering. lam op1. lam acc. lam op2.
+                let mkAddDef = lam rop1: Operator. lam rop2: Operator.
+                  maybeAddPrec rop1.nt (rop1.conName, rop2.conName) {ordering = ordering, surround = x.info, i1 = op1.i, i2 = op2.i}
+                in
+                let res = result.map2 mkAddDef op1.v op2.v in
+                let defs = match result.toOption res with Some f then f acc.0 else acc.0 in
+                (defs, result.withAnnotations res acc.1) in
+            let acc =
+              match level.noeq with None _ then
+                foldWithLater (f (EQ ())) acc level.operators
+              else acc in
+            let acc = foldl
+              (lam acc. lam op1. foldNames (f (GT ()) op1) acc levels)
+              acc
+              level.operators
+            in processLevel acc levels
+          else acc
+      in
+      match processLevel acc levels with (orders, res) in
+      let types: Map Name [Info] = foldNames
+        (lam acc. lam rop: {v: Res Operator, i: Info}.
+          match result.toOption rop.v with Some op then
+            let op: Operator = op in
+            mapInsertWith concat op.nt [rop.i] acc
+          else acc)
+        (mapEmpty nameCmp)
+        levels in
+      let res =
+        match mapBindings types with types & ([_, _] ++ _) then
+          let f : (Name, [Info]) -> String = lam binding.
+            let theOps = match binding.1 with [_] then "This operator has type " else "These operators have type " in
+            join [theOps, nameGetStr binding.0, ":\n", multiHighlight x.info binding.1, "\n"] in
+          let msg = join (cons "A precedence table must not mix types\n" (map f types)) in
+          let here = result.err (x.info, msg) in
+          result.withAnnotations here res
+        else res in
+      (orders, res)
+    else acc
+  in
+  match foldl computeOrders (mapEmpty nameCmp, result.ok ()) decls with (orders, res) in
+  let findUnique : ((Name, Name), [OrderDef]) -> Res ((Name, Name), Ordering) = lam binding.
+    let groupByOrdering: [OrderDef] -> Map Ordering [OrderDef] =
+      foldl
+        (lam m. lam def: OrderDef. mapInsertWith concat (def.ordering) [def] m)
+        (mapEmpty (lam l. lam r. subi (constructorTag l) (constructorTag r))) in
+    switch mapBindings (groupByOrdering binding.1)
+    case [(ordering, _)] then result.ok (binding.0, ordering)
+    case orderings then
+      let f : (Ordering, [OrderDef]) -> String = lam pair.
+        let ordToStr : Ordering -> String = lam x. switch x
+          case LT _ then " < "
+          case GT _ then " > "
+          case EQ _ then " = "
+          end in
+        let theseImply = match pair.1 with [_, _] ++ _ then "These definitions imply " else "This definition implies " in
+        let msg = join [theseImply, nameGetStr binding.0 .0, ordToStr pair.0, nameGetStr binding.0 .1, "\n"] in
+        let f : OrderDef -> String = lam def. join
+          [ info2str def.surround, "\n"
+          , multiHighlight def.surround [def.i1, def.i2], "\n"
+          ] in
+        concat msg (join (map f pair.1)) in
+      result.err (NoInfo (), concat "Inconsistent precedence\n" (join (map f orderings)))
+    end in
+  let orders = result.map (mapFromSeq nameCmp)
+    (result.mapM
+      (lam inner: (Name, Map (Name, Name) [OrderDef]). result.map
+        (lam m. (inner.0, mapFromSeq cmpNamePair m))
+        (result.mapM findUnique (mapBindings inner.1)))
+      (mapBindings orders)) in
+  result.withAnnotations res orders
 in
 
 let badConstructors : Res [Constructor] =
@@ -1438,6 +1588,7 @@ let groupingOperators : Res [GenOperator] =
             , carried = carried
             , mkUnsplit = AtomUnsplit
               (lam x: {record : Expr, info : Expr}. recordproj_ "inner" x.record)
+            , assoc = NAssoc ()
             }
         in result.map (lam x. Some x) (result.map4 f lPartSym ntSym rPartSym ntVal)
       else result.ok (None ())
@@ -1470,19 +1621,20 @@ let genOpResult : Res GenOpResult =
         }
       )
   in
-  let synInfo : Res (Name, {bad : Name, grouping : Option (String, String)}) =
-    let f : Constructor -> Res (Name, {bad : Name, grouping : Option (String, String)}) = lam constructor.
+  let synInfo : Res (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) =
+    let f : Map Name (Map (Name, Name) Ordering) -> Constructor -> Res (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) = lam precedence. lam constructor.
+      let precedence = mapLookupOrElse (lam. mapEmpty cmpNamePair) constructor.synType precedence in
       match mapFindExn constructor.synType typeMap with Left tinfo in
-      let f : TypeInfo -> (Name, {bad : Name, grouping : Option (String, String)}) = lam tinfo.
+      let f : TypeInfo -> (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) = lam tinfo.
         let parToStr : {v: Either Name String, i: Info} -> String = lam x. switch x.v
           case Left n then snoc (cons '<' nameGetStr n) '>'
           case Right lit then lit
           end in
         let parsToStr : ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}) -> (String, String) = lam pair.
           (parToStr pair.0, parToStr pair.1) in
-        (constructor.synType, {bad = constructor.name, grouping = optionMap parsToStr tinfo.grouping})
+        (constructor.synType, {bad = constructor.name, grouping = optionMap parsToStr tinfo.grouping, precedence = precedence})
       in result.map f tinfo
-    in result.bind badConstructors (result.mapM f)
+    in result.bind2 precedences badConstructors (lam precedences. lam cs. result.mapM (f precedences) cs)
   in
   let f : [(Name, {bad : Name, grouping : Option (String, String)})] -> [ConstructorInfo] -> [GenOperator] -> [String] -> GenOpResult = lam syns. lam constructors. lam groupingOperators. lam extraFragments.
     let genOpInput =

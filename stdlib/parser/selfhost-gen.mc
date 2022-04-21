@@ -2392,6 +2392,11 @@ lang AlternativeRegexOp = RegexOpBase + AlternativeRegexAst
     else
       never
 
+  sem groupingsAllowed_RegexOp =
+  | (AlternativeRegexOp _, AlternativeRegexOp _) ->
+    GLeft
+      {}
+
 end
 
 lang ConcatRegexOp = RegexOpBase + ConcatRegexAst
@@ -2447,6 +2452,11 @@ lang ConcatRegexOp = RegexOpBase + ConcatRegexAst
     else
       never
 
+  sem groupingsAllowed_RegexOp =
+  | (ConcatRegexOp _, ConcatRegexOp _) ->
+    GLeft
+      {}
+
 end
 
 lang AppExprOp = ExprOpBase + AppExprAst
@@ -2501,6 +2511,11 @@ lang AppExprOp = ExprOpBase + AppExprAst
               never })
     else
       never
+
+  sem groupingsAllowed_ExprOp =
+  | (AppExprOp _, AppExprOp _) ->
+    GLeft
+      {}
 
 end
 
@@ -2657,23 +2672,49 @@ end
 
 lang ParseSelfhost = FileOp + StartDeclOp + IncludeDeclOp + TypeDeclOp + TokenDeclOp + PrecedenceTableDeclOp + ProductionDeclOp + RecordRegexOp + EmptyRegexOp + LiteralRegexOp + TokenRegexOp + RepeatPlusRegexOp + RepeatStarRegexOp + RepeatQuestionRegexOp + NamedRegexOp + AlternativeRegexOp + ConcatRegexOp + AppExprOp + ConExprOp + StringExprOp + VariableExprOp + RecordExprOp + RegexGrouping + ExprGrouping + BadFileAst + BadDeclAst + BadRegexAst + BadExprAst + LL1Parser + SemiTokenParser + CommaTokenParser + WhitespaceParser + LIdentTokenParser + LineCommentParser + StringTokenParser + UIdentTokenParser + BracketTokenParser + OperatorTokenParser + MultilineCommentParser
 
-  sem groupingsAllowed_RegexOp =
-  | (AlternativeRegexOp _, AlternativeRegexOp _) -> GLeft ()
-  | (ConcatRegexOp _, ConcatRegexOp _) -> GLeft ()
 
-  | (NamedRegexOp _, RepeatPlusRegexOp _) -> GLeft ()
-  | (NamedRegexOp _, RepeatStarRegexOp _) -> GLeft ()
-  | (NamedRegexOp _, RepeatQuestionRegexOp _) -> GLeft ()
-  | (NamedRegexOp _, ConcatRegexOp _) -> GLeft ()
-  | (NamedRegexOp _, AlternativeRegexOp _) -> GLeft ()
-  | (ConcatRegexOp _, RepeatPlusRegexOp _) -> GRight ()
-  | (ConcatRegexOp _, RepeatStarRegexOp _) -> GRight ()
-  | (ConcatRegexOp _, RepeatQuestionRegexOp _) -> GRight ()
-  | (AlternativeRegexOp _, RepeatPlusRegexOp _) -> GRight ()
-  | (AlternativeRegexOp _, RepeatStarRegexOp _) -> GRight ()
-  | (AlternativeRegexOp _, RepeatQuestionRegexOp _) -> GRight ()
-  | (ConcatRegexOp _, AlternativeRegexOp _) -> GLeft ()
-  | (AlternativeRegexOp _, ConcatRegexOp _) -> GRight ()
+
+
+  sem groupingsAllowed_RegexOp =
+  | (NamedRegexOp _, RepeatPlusRegexOp _) ->
+    GLeft
+      {}
+  | (AlternativeRegexOp _, RepeatPlusRegexOp _) ->
+    GRight
+      {}
+  | (ConcatRegexOp _, RepeatPlusRegexOp _) ->
+    GRight
+      {}
+  | (NamedRegexOp _, RepeatStarRegexOp _) ->
+    GLeft
+      {}
+  | (AlternativeRegexOp _, RepeatStarRegexOp _) ->
+    GRight
+      {}
+  | (ConcatRegexOp _, RepeatStarRegexOp _) ->
+    GRight
+      {}
+  | (NamedRegexOp _, RepeatQuestionRegexOp _) ->
+    GLeft
+      {}
+  | (AlternativeRegexOp _, RepeatQuestionRegexOp _) ->
+    GRight
+      {}
+  | (ConcatRegexOp _, RepeatQuestionRegexOp _) ->
+    GRight
+      {}
+  | (NamedRegexOp _, AlternativeRegexOp _) ->
+    GLeft
+      {}
+  | (NamedRegexOp _, ConcatRegexOp _) ->
+    GLeft
+      {}
+  | (AlternativeRegexOp _, ConcatRegexOp _) ->
+    GRight
+      {}
+  | (ConcatRegexOp _, AlternativeRegexOp _) ->
+    GLeft
+      {}
 
 
 end
