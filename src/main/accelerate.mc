@@ -2,6 +2,7 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/constant-app.mc"
+include "cuda/gpu-utils.mc"
 include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-compile.mc"
@@ -339,6 +340,7 @@ let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
     ("program.ml", pprintOCamlTops ocamlTops),
     ("program.mli", ""),
     ("gpu.cu", pprintCudaAst cudaProg),
+    ("gpu-utils.cu", gpu_utils_code),
     ("dune", dunefile),
     ("dune-project", "(lang dune 2.0)"),
     ("Makefile", makefile)];

@@ -16,6 +16,13 @@ let _tensorCountId = nameSym "tensor_count"
 let _tensorStateData = nameSym "t_state"
 let _stateEnumId = nameSym "tensor_state"
 
+let _cudaErrorCheckStmt =
+  use CudaAst in
+  CSExpr {expr = CEApp {
+    fun = _GPU_UTILS_CHECK_CUDA_ERROR,
+    args = []
+  }}
+
 lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   syn CDataRepr =
   | CudaSeqRepr {ident : Name, data : CDataRepr, elemTy : CType, ty : CType}
@@ -270,7 +277,7 @@ lang CudaTensorWrapper = CudaCWrapperBase
             op = COMul (),
             lhs = CEVar {id = _tensorCountId},
             rhs = CESizeOfType {ty = stateEnumType}}]}} in
-    [allocTensorStateDataStmt]
+    [allocTensorStateDataStmt, _cudaErrorCheckStmt]
 
   sem generateCudaTensorDataWrapper : CWrapperEnv -> [CStmt]
   sem generateCudaTensorDataWrapper =
@@ -363,7 +370,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     let dataCopyLoopStmt = CSWhile {
       cond = CEBinOp {op = COLt (), lhs = iter, rhs = seqLenExpr},
       body = snoc fieldUpdateStmts iterIncrementStmt} in
-    [ seqDefStmt, setLenStmt, allocSeqStmt, iterDefStmt, dataCopyLoopStmt ]
+    [ seqDefStmt, setLenStmt, allocSeqStmt, _cudaErrorCheckStmt, iterDefStmt, dataCopyLoopStmt ]
   | CudaTensorRepr t ->
     let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
@@ -456,7 +463,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         args = [
           CEUnOp {op = COAddrOf (), arg = _accessMember t.ty dst _tensorDataKey},
           CEVar {id = n}]}} in
-      snoc tensorAllocStmts allocManagedStmt
+      concat tensorAllocStmts [allocManagedStmt, _cudaErrorCheckStmt]
     else
       let tempId = nameSym "t" in
       let emptyPtrDeclStmt = CSDef {
@@ -524,7 +531,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         lhs = _accessMember t.ty dst _tensorDataKey,
         rhs = CEVar {id = tempId}}} in
       concat tensorAllocStmts
-        [ emptyPtrDeclStmt, allocManagedStmt,
+        [ emptyPtrDeclStmt, allocManagedStmt, _cudaErrorCheckStmt,
           tensorArrPtrStmt, counterDeclStmt, iterLimitDeclStmt,
           copyDataStmt, setTensorDataStmt ]
   | CudaRecordRepr t ->
@@ -802,8 +809,8 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       args = [_accessMember t.ty arg _seqKey]}} in
     match t.ty with CTyPtr {ty = ty} then
       let freeSeqStmt = CSExpr {expr = CEApp {fun = _cudaFree, args = [arg]}} in
-      [iterInitStmt, loopStmt, freeSeqDataStmt, freeSeqStmt]
-    else [iterInitStmt, loopStmt, freeSeqDataStmt]
+      [iterInitStmt, loopStmt, freeSeqDataStmt, _cudaErrorCheckStmt, freeSeqStmt, _cudaErrorCheckStmt]
+    else [iterInitStmt, loopStmt, freeSeqDataStmt, _cudaErrorCheckStmt]
   | CudaTensorRepr t ->
     let env : CWrapperEnv = env in
     let tensorIdExpr = _accessMember t.ty arg _tensorIdKey in
@@ -882,7 +889,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
       rhs = CEVar {id = _tensorStateReturned}} in
     let freeIfNotReturnedStmt = CSIf {
       cond = notReturnedCondExpr,
-      thn = [freeDataStmt],
+      thn = [freeDataStmt, _cudaErrorCheckStmt],
       els = []} in
     -- NOTE(larshum, 2022-04-12): We do not have to copy back the data if we
     -- know it will never be used after the accelerate call.
@@ -950,7 +957,7 @@ lang CudaDeallocWrapper = CudaCWrapperBase
     let freeTensorStateDataStmt = CSExpr {expr = CEApp {
       fun = _cudaFree, args = [CEVar {id = _tensorStateData}]}} in
 
-    snoc deallocStmts freeTensorStateDataStmt
+    concat deallocStmts [freeTensorStateDataStmt, _cudaErrorCheckStmt]
 end
 
 lang CudaCWrapper =
@@ -999,7 +1006,8 @@ lang CudaCWrapper =
         "\"caml/alloc.h\"",
         "\"caml/bigarray.h\"",
         "\"caml/memory.h\"",
-        "\"caml/mlvalues.h\""
+        "\"caml/mlvalues.h\"",
+        "\"gpu-utils.cu\""
       ],
       tops = concat tensorTops entryPointTops}
 end
