@@ -231,6 +231,11 @@ let decls : [Decl] =
   map desugarProds decls
 in
 
+let includes : [String] = mapOption
+  (lam x. match x with IncludeDecl x then Some x.path.v else None ())
+  decls
+in
+
 -- NOTE(vipa, 2022-03-18): Find all definitions in the file
 type PreNameEnv = {types : Map String [(Info, Name)], productions : Map String [(Info, Name)]} in
 let pullDefinition
@@ -1836,13 +1841,17 @@ let generated: Res String = result.bind5 constructors badConstructors requestedF
       , fieldAccessors = requestedFieldAccessors
       } in
     result.ok (strJoin "\n\n"
-      [ "include \"seq.mc\""
-      , "include \"parser/ll1.mc\""
-      , "include \"parser/breakable.mc\""
-      , mkLanguages genInput
-      , genOpResult.fragments
-      , tableAndFunctions
-      ])
+      (join
+        [ [ "include \"seq.mc\""
+          , "include \"parser/ll1.mc\""
+          , "include \"parser/breakable.mc\""
+          ]
+        , map (lam str. join ["include \"", str, "\""]) includes
+        , [ mkLanguages genInput
+          , genOpResult.fragments
+          , tableAndFunctions
+          ]
+        ]))
   ) in
 
 match result.consume (result.withAnnotations ll1Error (result.withAnnotations allResolved generated)) with (warnings, res) in
