@@ -34,30 +34,13 @@ end
 lang LL1Analysis = ParserGeneration + PreToken + PreLitToken
 end
 
-lang DesugaredTypeDeclAst = SelfhostBaseAst
-  type TypeDeclDesugaredRecord =
-    { info : Info
-    , name : {v: Name, i: Info}
-    , grouping : Option ({v: Either Name String, i: Info}, {v: Either Name String, i: Info})
-    }
-
-  syn Decl =
-  | TypeDeclDesugared TypeDeclDesugaredRecord
-
-  sem get_Decl_info =
-  | TypeDeclDesugared x -> x.info
-end
-
-lang DesugaredAst = SelfhostAst + DesugaredTypeDeclAst
-end
-
 mexpr
 
 use MExprCmp in
 use MExprPrettyPrint in
 use CarriedBasic in
 use LL1Analysis in
-use DesugaredAst in
+use SelfhostAst in
 
 type TypeInfo =
   { ty : Type
@@ -148,6 +131,83 @@ in
 
 type Res a = Result (Info, String) (Info, String) a in
 
+-- NOTE(vipa, 2022-04-21): The `Expr` type defined in the `.syn`
+-- format is similar to, but not precisely like, MExpr, and thus it
+-- needs a bit of conversion to create proper MExpr code (though most
+-- of it is just switching from XExpr to TmX).
+recursive let exprToMExpr
+  : Expr -> Res Expr
+  = lam e. switch e
+    case AppExpr (x & {left = ConExpr c}) then
+      result.map
+        (lam r. TmConApp
+          { ident = c.name.v
+          , body = r
+          , ty = tyunknown_
+          , info = x.info
+          })
+        (exprToMExpr x.right)
+    case AppExpr x then
+      result.map2
+        (lam l. lam r. TmApp
+          { lhs = l
+          , rhs = r
+          , ty = tyunknown_
+          , info = x.info
+          })
+        (exprToMExpr x.left)
+        (exprToMExpr x.right)
+    case ConExpr x then
+      result.err (simpleMsg x.info "A constructor must be applied to an argument.")
+    case StringExpr x then
+      result.ok (withInfo x.info (str_ x.val.v))
+    case VariableExpr x then
+      result.ok (TmVar
+        { ident = x.name.v
+        , ty = tyunknown_
+        , info = x.info
+        , frozen = false
+        })
+    case RecordExpr x then
+      let f : {name : {v: String, i: Info}, val: Expr} -> Res (String, Expr) = lam field.
+        result.map (lam e. (field.name.v, e)) (exprToMExpr field.val) in
+      result.map (lam pairs. withInfo x.info (urecord_ pairs)) (result.mapM f x.fields)
+    end
+in
+
+-- NOTE(vipa, 2022-04-21): The `Expr` type is also designed to overlap
+-- syntactically as much as possible with `Type` in MExpr, so a
+-- similar approach to exprToMExpr is needed for conversion.
+recursive let exprToMExprTy
+  : Expr -> Res Expr
+  = lam e. switch e
+    case AppExpr x then
+      result.map2
+        (lam l. lam r. TyApp
+          { lhs = l
+          , rhs = r
+          , info = x.info
+          })
+        (exprToMExprTy x.left)
+        (exprToMExprTy x.right)
+    case ConExpr x then
+      result.ok (TyCon
+        { ident = x.name.v
+        , info = x.info
+        })
+    case VariableExpr x then
+      result.ok (TyVar
+        { ident = x.name.v
+        , info = x.info
+        , level = 0
+        })
+    case RecordExpr (x & {fields = []}) then
+      result.ok (tyWithInfo x.info tyunit_)
+    case RecordExpr x then
+      result.err (simpleMsg x.info "Non-unit record types are not yet supported.")
+    end
+in
+
 let decls : [Decl] =
   let makeNamedRegex : Info -> {v: Name, i: Info} -> String -> Regex = lam info. lam synName. lam field.
     NamedRegex
@@ -220,6 +280,9 @@ let lookupName
     result.map (lam v. {name with v = v}) res
 in
 
+let typeMap : Ref (Map Name (Either (Res TypeInfo) (Res TokenInfo))) = ref (mapEmpty nameCmp) in
+let fragments : Ref [Res String] = ref [] in
+
 -- NOTE(vipa, 2022-03-18): Do name resolution in all declarations
 -- NOTE(vipa, 2022-03-21): This does not do name resolution inside
 -- expressions in regexes. Presumably I should call out to
@@ -244,6 +307,167 @@ recursive let resolveRegex
       smapM resolveRegex other
     end
 in
+-- NOTE(vipa, 2022-04-21): Take a property in a property mass and
+-- extract the single definition, if possible.
+let getSingleDef : all a. Info -> String -> [(Info, Res a)] -> Res (Option (Info, a)) = lam surround. lam prop. lam defs.
+  let multi =
+    match defs with [_, _] ++ _ then
+      let infos = (map (lam x. match x with (x, _) in x) defs) in
+      let msg = join ["Multiple definitions of '", prop, "'"] in
+      result.err (multiMsg surround infos msg)
+    else result.ok () in
+  let defs = result.mapM (lam x. match x with (info, x) in result.map (lam x. (info, x)) x) defs in
+  let defs = result.map (lam x. match x with [x] ++ _ then Some x else None ()) defs in
+  result.withAnnotations multi defs
+in
+type TokenDeclDesugaredRecord =
+  { repr : Option (Info, Expr)
+  , constructor : Option (Info, {v: Name, i: Info})
+  , fragment : Option (Info, {v: String, i: Info})
+  , ty : Option (Info, Type)
+  , base : Option (Info, {v: Name, i: Info})
+  , wrap : Option (Info, Expr)
+  } in
+type TokenDeclPropertyMass =
+  { repr : [(Info, Res Expr)]
+  , constructor : [(Info, Res {v: Name, i: Info})]
+  , fragment : [(Info, Res {v: String, i: Info})]
+  , ty : [(Info, Res Type)]
+  , base : [(Info, Res {v: Name, i: Info})]
+  , wrap : [(Info, Res Expr)]
+  , unknown : [Info]
+  } in
+let emptyTokenDeclPropertyMass : TokenDeclPropertyMass =
+  { repr = []
+  , constructor = []
+  , fragment = []
+  , ty = []
+  , base = []
+  , wrap = []
+  , unknown = []
+  } in
+let mergeTokenDeclPropertyMass
+  : TokenDeclPropertyMass -> TokenDeclPropertyMass -> TokenDeclPropertyMass
+  = lam a. lam b.
+    { repr = concat a.repr b.repr
+    , constructor = concat a.constructor b.constructor
+    , fragment = concat a.fragment b.fragment
+    , ty = concat a.ty b.ty
+    , base = concat a.base b.base
+    , wrap = concat a.wrap b.wrap
+    , unknown = concat a.unknown b.unknown
+    } in
+let resolveTokenProperty
+  : {name: {v: String, i: Info}, val: Expr} -> TokenDeclPropertyMass
+  = lam prop.
+    let field = prop.name in
+    let value = prop.val in
+    switch field.v
+    case "repr" then {emptyTokenDeclPropertyMass with repr = [(field.i, exprToMExpr value)]}
+    case "constructor" then
+      let res = match value with ConExpr x
+        then result.ok x.name
+        else result.err (simpleMsg (get_Expr_info value) "The constructor must be a single constructor name.")
+      in {emptyTokenDeclPropertyMass with constructor = [(field.i, res)]}
+    case "fragment" then
+      let res = match value with ConExpr x
+        then result.ok {v = nameGetStr x.name.v, i = x.name.i}
+        else result.err (simpleMsg (get_Expr_info value) "The language fragment must be a single fragment name.")
+      in {emptyTokenDeclPropertyMass with fragment = [(field.i, res)]}
+    case "ty" then {emptyTokenDeclPropertyMass with ty = [(field.i, exprToMExprTy value)]}
+    case "base" then
+      let res = match value with ConExpr x
+        then result.ok x.name
+        else result.err (simpleMsg (get_Expr_info value) "The base token must be a single token name.")
+      in {emptyTokenDeclPropertyMass with base = [(field.i, res)]}
+    case "wrap" then {emptyTokenDeclPropertyMass with wrap = [(field.i, exprToMExpr value)]}
+    case _ then
+      {emptyTokenDeclPropertyMass with unknown = [field.i]}
+    end
+in
+let desugarAndResolveTokenDecl
+  : TokenDeclRecord -> Res TokenDeclDesugaredRecord
+  = lam x.
+    let mass: TokenDeclPropertyMass = foldl mergeTokenDeclPropertyMass emptyTokenDeclPropertyMass
+      (map resolveTokenProperty x.properties) in
+    let unknownError = match mass.unknown with [] then result.ok () else
+      let msg = match mass.unknown with [_] then "Unknown property:\n" else "Unknown properties:\n" in
+      result.err (multiMsg x.info mass.unknown msg) in
+    let repr = getSingleDef x.info "repr" mass.repr in
+    let constructor = getSingleDef x.info "constructor" mass.constructor in
+    let fragment = getSingleDef x.info "fragment" mass.fragment in
+    let ty = getSingleDef x.info "ty" mass.ty in
+    let base = getSingleDef x.info "base" mass.base in
+    let wrap = getSingleDef x.info "wrap" mass.wrap in
+    result.withAnnotations
+      unknownError
+      (result.apply
+        (result.map5
+          (lam repr. lam constructor. lam fragment. lam ty. lam base. lam wrap.
+            { repr = repr
+            , constructor = constructor
+            , fragment = fragment
+            , ty = ty
+            , base = base
+            , wrap = wrap
+            })
+          repr constructor fragment ty base)
+          wrap)
+in
+let desugaredTokenToTokenInfo
+  : Info -> Option {v: Name, i: Info} -> TokenDeclDesugaredRecord -> (Option (Res String), Option (Res TokenInfo))
+  = lam surround. lam name. lam record.
+    -- TODO(vipa, 2022-04-21): It would be nice to warn about unused
+    -- properties, but it's annoying to implement atm
+    let frag = match record.fragment with Some (_, str)
+      then let str: {v: String, i: Info} = str in Some (result.ok str.v)
+      else None () in
+    match name with Some name then
+      let name: {v: Name, i: Info} = name in
+      let wrap: (Expr -> Expr) -> Expr -> Expr = match record.wrap with Some (_, f)
+        then lam inner. lam e. app_ f (inner e)
+        else lam f. f in
+      switch (record.repr, record.constructor, record.base)
+      case (Some (_, repr), Some (_, constructor), None ()) then
+        let constructor: {v: Name, i: Info} = constructor in
+        let tinfo =
+          { ty = match record.ty with Some (_, ty)
+            then ty
+            else tyWithInfo name.i (ntycon_ name.v)
+          , repr = repr
+          , tokConstructor = constructor.v
+          , getInfo = recordproj_ "info"
+          -- TODO(vipa, 2022-04-21): Provide a more principled way to extract `info` and `val`
+          , getValue = wrap (recordproj_ "val")
+          } in
+        (frag, Some (result.ok tinfo))
+      case (None (), None (), Some (_, base)) then
+        let base: {v: Name, i: Info} = base in
+        let base: Res {v: Name, i: Info} = lookupName base nameEnv.types in
+        let f: {v: Name, i: Info} -> Res TokenInfo = lam name.
+          match mapLookup name.v (deref typeMap) with Some tinfo then
+            match tinfo with Right tinfo then
+              result.map
+                (lam tinfo: TokenInfo.
+                  {{tinfo
+                     with ty = match record.ty with Some (_, ty) then ty else tinfo.ty}
+                     with getValue = wrap tinfo.getValue})
+                tinfo
+            else result.err (simpleMsg name.i "This name refers to a type; it must be a token.\n")
+          else result.err (simpleMsg name.i "The base token must be defined earlier in the file.\n")
+        in (frag, Some (result.bind base f))
+      case _ then
+        (frag, Some (result.err (simpleMsg surround "A named token declaration must have both 'repr' and 'constructor', or 'base'.\n")))
+      end
+    else match record.fragment with Some _ then
+      (frag, None ())
+    else
+      let fragErr = (result.err (simpleMsg surround "A token declaration without a name must have a 'fragment' property.\n")) in
+      (Some fragErr, None ())
+in
+type TypeDeclDesugaredRecord =
+  { grouping : Option (Info, ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}))
+  } in
 type TypeDeclPropertyMass =
   { grouping : [(Info, Res ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}))]
   , unknown : [Info]
@@ -282,96 +506,60 @@ let resolveTypeProperty
     end
 in
 let desugarAndResolveTypeDecl
-  : Res {v: Name, i: Info} -> TypeDeclRecord -> Res TypeDeclDesugaredRecord
-  = lam name. lam x.
-    let getSingleDef : all a. String -> [(Info, Res a)] -> Res (Option a) = lam prop. lam defs.
-      let multi =
-        match defs with [_, _] ++ _ then
-          let infos = (map (lam x. match x with (x, _) in x) defs) in
-          let msg = join ["Multiple definitions of '", prop, "'"] in
-          result.err (multiMsg x.info infos msg)
-        else result.ok () in
-      let defs = result.mapM (lam x. match x with (_, x) in x) defs in
-      let defs = result.map (lam x. match x with [x] ++ _ then Some x else None ()) defs in
-      result.withAnnotations multi defs in
+  : TypeDeclRecord -> Res TypeDeclDesugaredRecord
+  = lam x.
     let mass: TypeDeclPropertyMass = foldl mergeTypeDeclPropertyMass emptyTypeDeclPropertyMass
       (map resolveTypeProperty x.properties) in
     let unknownError = match mass.unknown with [] then result.ok () else
       let msg = match mass.unknown with [_] then "Unknown property:\n" else "Unknown properties:\n" in
       result.err (multiMsg x.info mass.unknown msg) in
-    let grouping = getSingleDef "grouping" mass.grouping in
+    let grouping = getSingleDef x.info "grouping" mass.grouping in
     result.withAnnotations
       unknownError
-      (result.map2
-        (lam name. lam grouping.
-          { info = x.info
-          , name = name
-          , grouping = grouping
+      (result.map
+        (lam grouping.
+          { grouping = grouping
           })
-        name
         grouping)
 in
-let typeMap : Ref (Map Name (Either (Res TypeInfo) (Res TokenInfo))) = ref (mapEmpty nameCmp) in
 let resolveDecl
   : Decl -> Res Decl
   = lam decl.
     switch decl
     case TypeDecl x then
       let name = lookupName x.name nameEnv.types in
-      let record = desugarAndResolveTypeDecl name x in
-      let f = lam x: TypeDeclDesugaredRecord.
-        { ty = ntycon_ x.name.v
+      let record = desugarAndResolveTypeDecl x in
+      let f = lam name: {v: Name, i: Info}. lam x: TypeDeclDesugaredRecord.
+        { ty = ntycon_ name.v
         , ensureSuffix = true
         , commonFields = mapEmpty cmpString
-        , grouping = x.grouping
+        , grouping = optionMap (lam x. match x with (_, x) in x) x.grouping
         }
         in
       (match result.toOption name with Some name then
         let name: {v: Name, i: Info} = name in
-        modref typeMap (mapInsert name.v (Left (result.map f record)) (deref typeMap))
+        modref typeMap (mapInsert name.v (Left (result.map (f name) record)) (deref typeMap))
        else ()
       );
-      result.map (lam x. TypeDeclDesugared x) record
+      result.withAnnotations
+        record
+        (result.map (lam name. TypeDecl {x with name = name}) name)
     case TokenDecl x then
       let name = match x.name with Some name
         then result.map (lam x. Some x) (lookupName name nameEnv.types)
         else result.ok (None ()) in
+      let record = desugarAndResolveTokenDecl x in
+      let tinfo = result.map2 (desugaredTokenToTokenInfo x.info) name record in
       (match result.toOption name with Some (Some name) then
         let name: {v: Name, i: Info} = name in
-        -- TODO(vipa, 2022-03-28): get this information in a more principled way
-        let tinfo = switch nameGetStr name.v
-          case "UName" then
-            { ty = tycon_ "Name"
-            , repr = conapp_ "UIdentRepr" unit_
-            , tokConstructor = nameNoSym "UIdentTok"
-            , getInfo = recordproj_ "info"
-            , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
-            }
-          case "LName" then
-            { ty = tycon_ "Name"
-            , repr = conapp_ "LIdentRepr" unit_
-            , tokConstructor = nameNoSym "LIdentTok"
-            , getInfo = recordproj_ "info"
-            , getValue = lam expr. app_ (var_ "nameNoSym") (recordproj_ "val" expr)
-            }
-          case "LIdent" then
-            { ty = tycon_ "String"
-            , repr = conapp_ "LIdentRepr" unit_
-            , tokConstructor = nameNoSym "LIdentTok"
-            , getInfo = recordproj_ "info"
-            , getValue = recordproj_ "val"
-            }
-          case _ then
-            { ty = tycon_ (nameGetStr name.v)
-            , repr = conapp_ (concat (nameGetStr name.v) "Repr") unit_
-            , tokConstructor = nameNoSym (concat (nameGetStr name.v) "Tok")
-            , getInfo = recordproj_ "info"
-            , getValue = recordproj_ "val"
-            }
-          end in
-        modref typeMap (mapInsert name.v (Right (result.ok tinfo)) (deref typeMap))
-       else ()
-      );
+        let tinfo = result.bind tinfo (lam x. match x with (_, Some tinfo) in tinfo) in
+        modref typeMap (mapInsert name.v (Right tinfo) (deref typeMap))
+       else ());
+      result.map
+        (lam x. match x with (Some frag, _) then
+            modref fragments (snoc (deref fragments) frag)
+           else ())
+        tinfo;
       result.map
         (lam name. TokenDecl {x with name = name})
         name
@@ -414,7 +602,7 @@ let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) = deref typeMap in
 
 -- NOTE(vipa, 2022-03-21): Compute the required sfunctions
 let ntsWithInfo: [{v: Name, i: Info}] =
-  let inner = lam x. match x with TypeDeclDesugared x then Some x.name else None () in
+  let inner = lam x. match x with TypeDecl x then Some x.name else None () in
   mapOption inner decls in
 let nts: [Name] =
   map (lam name: {v: Name, i: Info}. name.v) ntsWithInfo in
@@ -1257,6 +1445,11 @@ let groupingOperators : Res [GenOperator] =
   in result.map (mapOption identity) (result.mapM f nts)
 in
 
+let extraFragments : Res [String] =
+  result.map (lam ss. setToSeq (setOfSeq cmpString ss))
+    (result.mapM identity (deref fragments))
+in
+
 let genOpResult : Res GenOpResult =
   let mkMirroredProduction
     : { nt : Name, rhs : [Name], label : label, action : Expr }
@@ -1291,7 +1484,7 @@ let genOpResult : Res GenOpResult =
       in result.map f tinfo
     in result.bind badConstructors (result.mapM f)
   in
-  let f : [(Name, {bad : Name, grouping : Option (String, String)})] -> [ConstructorInfo] -> [GenOperator] -> GenOpResult = lam syns. lam constructors. lam groupingOperators.
+  let f : [(Name, {bad : Name, grouping : Option (String, String)})] -> [ConstructorInfo] -> [GenOperator] -> [String] -> GenOpResult = lam syns. lam constructors. lam groupingOperators. lam extraFragments.
     let genOpInput =
       { infoFieldLabel = infoFieldLabel
       , termsFieldLabel = termsFieldLabel
@@ -1304,6 +1497,7 @@ let genOpResult : Res GenOpResult =
       , operators = concat
         (map (lam x: ConstructorInfo. x.genOperator) constructors)
         groupingOperators
+      , extraFragments = extraFragments
       } in
     let genOpResult : GenOpResult = mkOpLanguages genOpInput in
     let mkRegexProductions : {v: Name, i: Info} -> [Res (Expr, Production GenLabel ())] = lam original.
@@ -1381,7 +1575,7 @@ let genOpResult : Res GenOpResult =
     let newProds = map mkRegexProductions ntsWithInfo in
     modref productions (join (cons (deref productions) newProds));
     genOpResult
-  in result.map3 f synInfo constructors groupingOperators
+  in result.map4 f synInfo constructors groupingOperators extraFragments
 in
 
 let productions : Res [(Expr, Production GenLabel ())] = result.mapM identity (deref productions) in

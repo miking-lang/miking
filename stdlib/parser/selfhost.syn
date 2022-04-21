@@ -1,5 +1,3 @@
--- TODO(vipa, 2022-03-25): add grouping for Regex once we support it
--- TODO(vipa, 2022-03-25): add grouping for Expr once we support it
 type File
 type Decl
 type Regex {
@@ -9,16 +7,48 @@ type Expr {
   grouping = "(" ")",
 }
 
-token String
-token UName
-token LName
-token LIdent
+token String {
+  repr = StringRepr {},
+  constructor = StringTok,
+  fragment = StringTokenParser,
+}
+token LIdent {
+  repr = LIdentRepr {},
+  constructor = LIdentTok,
+  fragment = LIdentTokenParser,
+  ty = String,
+}
+token UIdent {
+  repr = UIdentRepr {},
+  constructor = UIdentTok,
+  fragment = UIdentTokenParser,
+  ty = String,
+}
+token UName {
+  base = UIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token LName {
+  base = LIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+
+token {fragment = OperatorTokenParser,}
+token {fragment = CommaTokenParser,}
+token {fragment = SemiTokenParser,}
+token {fragment = BracketTokenParser,}
+token {fragment = LineCommentParser,}
+token {fragment = MultilineCommentParser,}
+token {fragment = WhitespaceParser,}
 
 start File
 
 prod File: File = decls:Decl+
 
 prod Start: Decl = "start" name:UName
+prod Include: Decl = "include" path:String
 prod Type: Decl =
   "type" name:UName
   ( "{"
@@ -67,6 +97,6 @@ prod String: Expr = val:String
 prod Variable: Expr = name:LName
 prod RecordExpr: Expr =
   "{"
-    (fields:{name:String "=" val:Expr}
-     fields:{"," name:String "=" val:Expr}*)?
+    (fields:{name:LIdent "=" val:Expr}
+     fields:{"," name:LIdent "=" val:Expr}*)?
   "}"

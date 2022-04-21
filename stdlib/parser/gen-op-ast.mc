@@ -27,6 +27,7 @@ type GenOpInput =
   , mkBaseName : String -> String
   , composedName : String
   , operators : [GenOperator]
+  , extraFragments : [String]
   }
 
 let _allowedDirectionTy = ntycon_ (nameSym "AllowedDirection")
@@ -271,11 +272,8 @@ let _mkComposedFragment
     , extends = join
       [ opFragments
       , badFragments
-      , [ "LL1Parser"
-        , "UIdentTokenParser"
-        , "LIdentTokenParser"
-        , "StringTokenParser"
-        ]
+      , ["LL1Parser"]
+      , config.extraFragments
       ]
     , aliases = []
     , synTypes = mapEmpty nameCmp
