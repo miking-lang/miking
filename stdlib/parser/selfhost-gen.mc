@@ -582,7 +582,7 @@ lang SelfhostBaseAst
 end
 
 lang FileAst = SelfhostBaseAst
-  type FileRecord = {decls: [Decl], info: Info}
+  type FileRecord = {info: Info, decls: [Decl], name: {v: String, i: Info}}
 
   syn File =
   | File FileRecord
@@ -824,7 +824,7 @@ lang PrecedenceTableDeclAst = SelfhostBaseAst
 end
 
 lang ProductionDeclAst = SelfhostBaseAst
-  type ProductionDeclRecord = {nt: {v: Name, i: Info}, info: Info, name: {v: Name, i: Info}, kinf: (Option) (Info), kpref: (Option) (Info), kprod: (Option) (Info), kpostf: (Option) (Info), assoc: (Option) ({v: String, i: Info}), regex: Regex}
+  type ProductionDeclRecord = {info: Info, nt: {v: Name, i: Info}, name: {v: Name, i: Info}, kinf: (Option) (Info), kpref: (Option) (Info), kprod: (Option) (Info), kpostf: (Option) (Info), assoc: (Option) ({v: String, i: Info}), regex: Regex}
 
   syn Decl =
   | ProductionDecl ProductionDeclRecord
@@ -1753,7 +1753,7 @@ end
 lang FileOp = FileOpBase + FileAst
 
   syn FileOp =
-  | FileOp {__br_terms: [Info], decls: [Decl], __br_info: Info}
+  | FileOp {__br_terms: [Info], decls: [Decl], __br_info: Info, name: [{v: String, i: Info}]}
 
   sem get_FileOp_info =
   | FileOp x ->
@@ -1766,10 +1766,19 @@ lang FileOp = FileOpBase + FileAst
   sem unsplit_FileOp =
   | AtomP {self = FileOp x} ->
     (x.__br_info, File
-      { decls =
+      { info =
+          x.__br_info,
+        decls =
           x.decls,
-        info =
-          x.__br_info })
+        name =
+          match
+            x.name
+          with
+            [ x1 ] ++ _ ++ ""
+          then
+            x1
+          else
+            never })
 
 end
 
@@ -1940,7 +1949,9 @@ lang ProductionDeclOp = DeclOpBase + ProductionDeclAst
   sem unsplit_DeclOp =
   | AtomP {self = ProductionDeclOp x} ->
     (x.__br_info, ProductionDecl
-      { nt =
+      { info =
+          x.__br_info,
+        nt =
           match
             x.nt
           with
@@ -1949,8 +1960,6 @@ lang ProductionDeclOp = DeclOpBase + ProductionDeclAst
             x1
           else
             never,
-        info =
-          x.__br_info,
         name =
           match
             x.name
@@ -2081,7 +2090,7 @@ end
 lang LiteralRegexOp = RegexOpBase + LiteralRegexAst
 
   syn RegexOp =
-  | LiteralRegexOp {__br_terms: [Info], __br_info: Info, val: [{v: String, i: Info}]}
+  | LiteralRegexOp {val: [{v: String, i: Info}], __br_terms: [Info], __br_info: Info}
 
   sem get_RegexOp_info =
   | LiteralRegexOp x ->
@@ -2528,7 +2537,7 @@ end
 lang StringExprOp = ExprOpBase + StringExprAst
 
   syn ExprOp =
-  | StringExprOp {__br_terms: [Info], __br_info: Info, val: [{v: String, i: Info}]}
+  | StringExprOp {val: [{v: String, i: Info}], __br_terms: [Info], __br_info: Info}
 
   sem get_ExprOp_info =
   | StringExprOp x ->
@@ -2888,17 +2897,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addFileOpAtom =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddAtom
                       config
-                      x32)
+                      x33)
                    st
          in
          let addFileOpInfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -2908,7 +2917,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddInfix
                        config
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -2922,7 +2931,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_FileOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -2931,17 +2940,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addFileOpPrefix =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddPrefix
                       config
-                      x32)
+                      x33)
                    st
          in
          let addFileOpPostfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -2951,7 +2960,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddPostfix
                        config
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -2965,7 +2974,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_FileOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3062,17 +3071,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addDeclOpAtom =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddAtom
                       config1
-                      x32)
+                      x33)
                    st
          in
          let addDeclOpInfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3082,7 +3091,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddInfix
                        config1
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3096,7 +3105,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_DeclOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3105,17 +3114,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addDeclOpPrefix =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddPrefix
                       config1
-                      x32)
+                      x33)
                    st
          in
          let addDeclOpPostfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3125,7 +3134,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddPostfix
                        config1
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3139,7 +3148,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_DeclOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3236,17 +3245,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addRegexOpAtom =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddAtom
                       config2
-                      x32)
+                      x33)
                    st
          in
          let addRegexOpInfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3256,7 +3265,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddInfix
                        config2
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3270,7 +3279,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_RegexOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3279,17 +3288,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addRegexOpPrefix =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddPrefix
                       config2
-                      x32)
+                      x33)
                    st
          in
          let addRegexOpPostfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3299,7 +3308,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddPostfix
                        config2
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3313,7 +3322,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_RegexOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3410,17 +3419,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addExprOpAtom =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddAtom
                       config3
-                      x32)
+                      x33)
                    st
          in
          let addExprOpInfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3430,7 +3439,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddInfix
                        config3
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3444,7 +3453,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_ExprOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3453,17 +3462,17 @@ let _table = use ParseSelfhost in let target =
          in
          let addExprOpPrefix =
            lam #var"".
-             lam x32.
+             lam x33.
                lam st.
                  optionMap
                    (breakableAddPrefix
                       config3
-                      x32)
+                      x33)
                    st
          in
          let addExprOpPostfix =
            lam p: {errors: (Ref) ([(Info, [Char])]), content: String}.
-             lam x32.
+             lam x33.
                lam st.
                  match
                    st
@@ -3473,7 +3482,7 @@ let _table = use ParseSelfhost in let target =
                    let st =
                      breakableAddPostfix
                        config3
-                       x32
+                       x33
                        st
                    in
                    (match
@@ -3487,7 +3496,7 @@ let _table = use ParseSelfhost in let target =
                              (deref
                                 (p.errors))
                              (get_ExprOp_info
-                               x32, "Invalid input"))
+                               x33, "Invalid input"))
                       else
                         {})
                    ;st
@@ -3617,7 +3626,12 @@ let _table = use ParseSelfhost in let target =
              label =
                {},
              rhs =
-               [ ntSym
+               [ litSym
+                   "language",
+                 tokSym
+                   (UIdentRepr
+                      {}),
+                 ntSym
                    #var"Decl",
                  ntSym
                    kleene ],
@@ -3627,7 +3641,9 @@ let _table = use ParseSelfhost in let target =
                    match
                      res2
                    with
-                     [ UserSym (info1, val2),
+                     [ LitParsed l,
+                       TokParsed (UIdentTok x),
+                       UserSym (info1, val2),
                        UserSym val1 ]
                    then
                      let val1: {__br_terms: [Info], decls: [Decl], __br_info: Info} =
@@ -3635,15 +3651,26 @@ let _table = use ParseSelfhost in let target =
                      in
                      FileOp
                        { __br_terms =
-                           val1.__br_terms,
+                           join
+                             [ [ l.info ],
+                               [ x.info ],
+                               val1.__br_terms ],
                          decls =
                            concat
                              [ val2 ]
                              (val1.decls),
                          __br_info =
-                           mergeInfo
-                             info1
-                             (val1.__br_info) }
+                           foldl
+                             mergeInfo
+                             (l.info)
+                             [ x.info,
+                               info1,
+                               val1.__br_info ],
+                         name =
+                           [ { v =
+                                 x.val,
+                               i =
+                                 x.info } ] }
                    else
                      never },
            { nt =
@@ -3662,24 +3689,24 @@ let _table = use ParseSelfhost in let target =
                    match
                      res3
                    with
-                     [ LitParsed l,
-                       TokParsed (UIdentTok x) ]
+                     [ LitParsed l1,
+                       TokParsed (UIdentTok x1) ]
                    then
                      StartDeclOp
                        { __br_terms =
                            concat
-                             [ l.info ]
-                             [ x.info ],
+                             [ l1.info ]
+                             [ x1.info ],
                          __br_info =
                            mergeInfo
-                             (l.info)
-                             (x.info),
+                             (l1.info)
+                             (x1.info),
                          name =
                            [ { v =
                                  nameNoSym
-                                   (x.val),
+                                   (x1.val),
                                i =
-                                 x.info } ] }
+                                 x1.info } ] }
                    else
                      never },
            { nt =
@@ -3698,23 +3725,23 @@ let _table = use ParseSelfhost in let target =
                    match
                      res4
                    with
-                     [ LitParsed l1,
-                       TokParsed (StringTok x1) ]
+                     [ LitParsed l2,
+                       TokParsed (StringTok x2) ]
                    then
                      IncludeDeclOp
                        { __br_terms =
                            concat
-                             [ l1.info ]
-                             [ x1.info ],
+                             [ l2.info ]
+                             [ x2.info ],
                          __br_info =
                            mergeInfo
-                             (l1.info)
-                             (x1.info),
+                             (l2.info)
+                             (x2.info),
                          path =
                            [ { v =
-                                 x1.val,
+                                 x2.val,
                                i =
-                                 x1.info } ] }
+                                 x2.info } ] }
                    else
                      never },
            { nt =
@@ -3739,10 +3766,10 @@ let _table = use ParseSelfhost in let target =
                    match
                      res5
                    with
-                     [ TokParsed (LIdentTok x2),
-                       LitParsed l2,
-                       UserSym (info2, val3),
+                     [ TokParsed (LIdentTok x3),
                        LitParsed l3,
+                       UserSym (info2, val3),
+                       LitParsed l4,
                        UserSym val4 ]
                    then
                      let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
@@ -3750,17 +3777,17 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          join
-                           [ [ x2.info ],
-                             [ l2.info ],
+                           [ [ x3.info ],
                              [ l3.info ],
+                             [ l4.info ],
                              val4.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (x2.info)
-                           [ l2.info,
+                           (x3.info)
+                           [ l3.info,
                              info2,
-                             l3.info,
+                             l4.info,
                              val4.__br_info ],
                        properties =
                          concat
@@ -3768,21 +3795,21 @@ let _table = use ParseSelfhost in let target =
                                  match
                                    [ val3 ]
                                  with
-                                   [ x3 ] ++ _ ++ ""
+                                   [ x4 ] ++ _ ++ ""
                                  then
-                                   x3
+                                   x4
                                  else
                                    never,
                                name =
                                  match
                                    [ { v =
-                                         x2.val,
+                                         x3.val,
                                        i =
-                                         x2.info } ]
+                                         x3.info } ]
                                  with
-                                   [ x4 ] ++ _ ++ ""
+                                   [ x5 ] ++ _ ++ ""
                                  then
-                                   x4
+                                   x5
                                  else
                                    never } ]
                            (val4.properties) }
@@ -3851,24 +3878,24 @@ let _table = use ParseSelfhost in let target =
                    match
                      res8
                    with
-                     [ LitParsed l4,
+                     [ LitParsed l5,
                        UserSym val4,
-                       LitParsed l5 ]
+                       LitParsed l6 ]
                    then
                      let val4: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val4
                      in
                      { __br_terms =
                          join
-                           [ [ l4.info ],
+                           [ [ l5.info ],
                              val4.__br_terms,
-                             [ l5.info ] ],
+                             [ l6.info ] ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (l4.info)
+                           (l5.info)
                            [ val4.__br_info,
-                             l5.info ],
+                             l6.info ],
                        properties =
                          val4.properties }
                    else
@@ -3891,8 +3918,8 @@ let _table = use ParseSelfhost in let target =
                    match
                      res9
                    with
-                     [ LitParsed l6,
-                       TokParsed (UIdentTok x5),
+                     [ LitParsed l7,
+                       TokParsed (UIdentTok x6),
                        UserSym val5 ]
                    then
                      let val5: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
@@ -3901,21 +3928,21 @@ let _table = use ParseSelfhost in let target =
                      TypeDeclOp
                        { __br_terms =
                            join
-                             [ [ l6.info ],
-                               [ x5.info ],
+                             [ [ l7.info ],
+                               [ x6.info ],
                                val5.__br_terms ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l6.info)
-                             [ x5.info,
+                             (l7.info)
+                             [ x6.info,
                                val5.__br_info ],
                          name =
                            [ { v =
                                  nameNoSym
-                                   (x5.val),
+                                   (x6.val),
                                i =
-                                 x5.info } ],
+                                 x6.info } ],
                          properties =
                            val5.properties }
                    else
@@ -3957,18 +3984,18 @@ let _table = use ParseSelfhost in let target =
                    match
                      res11
                    with
-                     [ TokParsed (UIdentTok x6) ]
+                     [ TokParsed (UIdentTok x7) ]
                    then
                      { __br_terms =
-                         [ x6.info ],
+                         [ x7.info ],
                        __br_info =
-                         x6.info,
+                         x7.info,
                        name =
                          [ { v =
                                nameNoSym
-                                 (x6.val),
+                                 (x7.val),
                              i =
-                               x6.info } ] }
+                               x7.info } ] }
                    else
                      never },
            { nt =
@@ -3993,10 +4020,10 @@ let _table = use ParseSelfhost in let target =
                    match
                      res12
                    with
-                     [ TokParsed (LIdentTok x7),
-                       LitParsed l7,
-                       UserSym (info3, val6),
+                     [ TokParsed (LIdentTok x8),
                        LitParsed l8,
+                       UserSym (info3, val6),
+                       LitParsed l9,
                        UserSym val7 ]
                    then
                      let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
@@ -4004,17 +4031,17 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          join
-                           [ [ x7.info ],
-                             [ l7.info ],
+                           [ [ x8.info ],
                              [ l8.info ],
+                             [ l9.info ],
                              val7.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (x7.info)
-                           [ l7.info,
+                           (x8.info)
+                           [ l8.info,
                              info3,
-                             l8.info,
+                             l9.info,
                              val7.__br_info ],
                        properties =
                          concat
@@ -4022,21 +4049,21 @@ let _table = use ParseSelfhost in let target =
                                  match
                                    [ val6 ]
                                  with
-                                   [ x8 ] ++ _ ++ ""
+                                   [ x9 ] ++ _ ++ ""
                                  then
-                                   x8
+                                   x9
                                  else
                                    never,
                                name =
                                  match
                                    [ { v =
-                                         x7.val,
+                                         x8.val,
                                        i =
-                                         x7.info } ]
+                                         x8.info } ]
                                  with
-                                   [ x9 ] ++ _ ++ ""
+                                   [ x10 ] ++ _ ++ ""
                                  then
-                                   x9
+                                   x10
                                  else
                                    never } ]
                            (val7.properties) }
@@ -4105,24 +4132,24 @@ let _table = use ParseSelfhost in let target =
                    match
                      res15
                    with
-                     [ LitParsed l9,
+                     [ LitParsed l10,
                        UserSym val7,
-                       LitParsed l10 ]
+                       LitParsed l11 ]
                    then
                      let val7: {__br_terms: [Info], __br_info: Info, properties: [{val: Expr, name: {v: String, i: Info}}]} =
                        val7
                      in
                      { __br_terms =
                          join
-                           [ [ l9.info ],
+                           [ [ l10.info ],
                              val7.__br_terms,
-                             [ l10.info ] ],
+                             [ l11.info ] ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (l9.info)
+                           (l10.info)
                            [ val7.__br_info,
-                             l10.info ],
+                             l11.info ],
                        properties =
                          val7.properties }
                    else
@@ -4144,7 +4171,7 @@ let _table = use ParseSelfhost in let target =
                    match
                      res16
                    with
-                     [ LitParsed l11,
+                     [ LitParsed l12,
                        UserSym val8,
                        UserSym val9 ]
                    then
@@ -4157,13 +4184,13 @@ let _table = use ParseSelfhost in let target =
                      TokenDeclOp
                        { __br_terms =
                            join
-                             [ [ l11.info ],
+                             [ [ l12.info ],
                                val8.__br_terms,
                                val9.__br_terms ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l11.info)
+                             (l12.info)
                              [ val8.__br_info,
                                val9.__br_info ],
                          name =
@@ -4208,14 +4235,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      res18
                    with
-                     [ LitParsed l12 ]
+                     [ LitParsed l13 ]
                    then
                      { __br_terms =
-                         [ l12.info ],
+                         [ l13.info ],
                        __br_info =
-                         l12.info,
+                         l13.info,
                        noeq =
-                         [ l12.info ] }
+                         [ l13.info ] }
                    else
                      never },
            { nt =
@@ -4234,7 +4261,7 @@ let _table = use ParseSelfhost in let target =
                    match
                      res19
                    with
-                     [ TokParsed (UIdentTok x10),
+                     [ TokParsed (UIdentTok x11),
                        UserSym val10 ]
                    then
                      let val10: {__br_terms: [Info], __br_info: Info, operators: [{v: Name, i: Info}]} =
@@ -4242,19 +4269,19 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          concat
-                           [ x10.info ]
+                           [ x11.info ]
                            (val10.__br_terms),
                        __br_info =
                          mergeInfo
-                           (x10.info)
+                           (x11.info)
                            (val10.__br_info),
                        operators =
                          concat
                            [ { v =
                                  nameNoSym
-                                   (x10.val),
+                                   (x11.val),
                                i =
-                                 x10.info } ]
+                                 x11.info } ]
                            (val10.operators) }
                    else
                      never },
@@ -4304,9 +4331,9 @@ let _table = use ParseSelfhost in let target =
                      res21
                    with
                      [ UserSym val11,
-                       TokParsed (UIdentTok x11),
+                       TokParsed (UIdentTok x12),
                        UserSym val10,
-                       LitParsed l13,
+                       LitParsed l14,
                        UserSym val12 ]
                    then
                      let val11: {__br_terms: [Info], __br_info: Info, noeq: [Info]} =
@@ -4321,17 +4348,17 @@ let _table = use ParseSelfhost in let target =
                      { __br_terms =
                          join
                            [ val11.__br_terms,
-                             [ x11.info ],
+                             [ x12.info ],
                              val10.__br_terms,
-                             [ l13.info ],
+                             [ l14.info ],
                              val12.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
                            (val11.__br_info)
-                           [ x11.info,
+                           [ x12.info,
                              val10.__br_info,
-                             l13.info,
+                             l14.info,
                              val12.__br_info ],
                        levels =
                          concat
@@ -4339,10 +4366,10 @@ let _table = use ParseSelfhost in let target =
                                  match
                                    val11.noeq
                                  with
-                                   [ x12 ] ++ _ ++ ""
+                                   [ x13 ] ++ _ ++ ""
                                  then
                                    Some
-                                     x12
+                                     x13
                                  else
                                    None
                                      {},
@@ -4350,9 +4377,9 @@ let _table = use ParseSelfhost in let target =
                                  concat
                                    [ { v =
                                          nameNoSym
-                                           (x11.val),
+                                           (x12.val),
                                        i =
-                                         x11.info } ]
+                                         x12.info } ]
                                    (val10.operators) } ]
                            (val12.levels) }
                    else
@@ -4396,7 +4423,7 @@ let _table = use ParseSelfhost in let target =
                    match
                      res23
                    with
-                     [ TokParsed (UIdentTok x13),
+                     [ TokParsed (UIdentTok x14),
                        UserSym val13 ]
                    then
                      let val13: {__br_terms: [Info], __br_info: Info, lefts: [{v: Name, i: Info}]} =
@@ -4404,19 +4431,19 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          concat
-                           [ x13.info ]
+                           [ x14.info ]
                            (val13.__br_terms),
                        __br_info =
                          mergeInfo
-                           (x13.info)
+                           (x14.info)
                            (val13.__br_info),
                        lefts =
                          concat
                            [ { v =
                                  nameNoSym
-                                   (x13.val),
+                                   (x14.val),
                                i =
-                                 x13.info } ]
+                                 x14.info } ]
                            (val13.lefts) }
                    else
                      never },
@@ -4459,7 +4486,7 @@ let _table = use ParseSelfhost in let target =
                    match
                      res25
                    with
-                     [ TokParsed (UIdentTok x14),
+                     [ TokParsed (UIdentTok x15),
                        UserSym val14 ]
                    then
                      let val14: {__br_terms: [Info], __br_info: Info, rights: [{v: Name, i: Info}]} =
@@ -4467,19 +4494,19 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          concat
-                           [ x14.info ]
+                           [ x15.info ]
                            (val14.__br_terms),
                        __br_info =
                          mergeInfo
-                           (x14.info)
+                           (x15.info)
                            (val14.__br_info),
                        rights =
                          concat
                            [ { v =
                                  nameNoSym
-                                   (x14.val),
+                                   (x15.val),
                                i =
-                                 x14.info } ]
+                                 x15.info } ]
                            (val14.rights) }
                    else
                      never },
@@ -4533,12 +4560,12 @@ let _table = use ParseSelfhost in let target =
                    match
                      res27
                    with
-                     [ TokParsed (UIdentTok x15),
+                     [ TokParsed (UIdentTok x16),
                        UserSym val13,
-                       LitParsed l14,
-                       TokParsed (UIdentTok x16),
-                       UserSym val14,
                        LitParsed l15,
+                       TokParsed (UIdentTok x17),
+                       UserSym val14,
+                       LitParsed l16,
                        UserSym val15 ]
                    then
                      let val13: {__br_terms: [Info], __br_info: Info, lefts: [{v: Name, i: Info}]} =
@@ -4552,22 +4579,22 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          join
-                           [ [ x15.info ],
+                           [ [ x16.info ],
                              val13.__br_terms,
-                             [ l14.info ],
-                             [ x16.info ],
-                             val14.__br_terms,
                              [ l15.info ],
+                             [ x17.info ],
+                             val14.__br_terms,
+                             [ l16.info ],
                              val15.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (x15.info)
+                           (x16.info)
                            [ val13.__br_info,
-                             l14.info,
-                             x16.info,
-                             val14.__br_info,
                              l15.info,
+                             x17.info,
+                             val14.__br_info,
+                             l16.info,
                              val15.__br_info ],
                        exceptions =
                          concat
@@ -4575,17 +4602,17 @@ let _table = use ParseSelfhost in let target =
                                  concat
                                    [ { v =
                                          nameNoSym
-                                           (x15.val),
+                                           (x16.val),
                                        i =
-                                         x15.info } ]
+                                         x16.info } ]
                                    (val13.lefts),
                                rights =
                                  concat
                                    [ { v =
                                          nameNoSym
-                                           (x16.val),
+                                           (x17.val),
                                        i =
-                                         x16.info } ]
+                                         x17.info } ]
                                    (val14.rights) } ]
                            (val15.exceptions) }
                    else
@@ -4655,27 +4682,27 @@ let _table = use ParseSelfhost in let target =
                    match
                      res30
                    with
-                     [ LitParsed l16,
-                       LitParsed l17,
+                     [ LitParsed l17,
+                       LitParsed l18,
                        UserSym val15,
-                       LitParsed l18 ]
+                       LitParsed l19 ]
                    then
                      let val15: {__br_terms: [Info], __br_info: Info, exceptions: [{lefts: [{v: Name, i: Info}], rights: [{v: Name, i: Info}]}]} =
                        val15
                      in
                      { __br_terms =
                          join
-                           [ [ l16.info ],
-                             [ l17.info ],
+                           [ [ l17.info ],
+                             [ l18.info ],
                              val15.__br_terms,
-                             [ l18.info ] ],
+                             [ l19.info ] ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (l16.info)
-                           [ l17.info,
+                           (l17.info)
+                           [ l18.info,
                              val15.__br_info,
-                             l18.info ],
+                             l19.info ],
                        exceptions =
                          val15.exceptions }
                    else
@@ -4701,10 +4728,10 @@ let _table = use ParseSelfhost in let target =
                    match
                      res31
                    with
-                     [ LitParsed l19,
-                       LitParsed l20,
-                       UserSym val12,
+                     [ LitParsed l20,
                        LitParsed l21,
+                       UserSym val12,
+                       LitParsed l22,
                        UserSym val16 ]
                    then
                      let val12: {__br_terms: [Info], __br_info: Info, levels: [{noeq: (Option) (Info), operators: [{v: Name, i: Info}]}]} =
@@ -4716,18 +4743,18 @@ let _table = use ParseSelfhost in let target =
                      PrecedenceTableDeclOp
                        { __br_terms =
                            join
-                             [ [ l19.info ],
-                               [ l20.info ],
-                               val12.__br_terms,
+                             [ [ l20.info ],
                                [ l21.info ],
+                               val12.__br_terms,
+                               [ l22.info ],
                                val16.__br_terms ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l19.info)
-                             [ l20.info,
+                             (l20.info)
+                             [ l21.info,
                                val12.__br_info,
-                               l21.info,
+                               l22.info,
                                val16.__br_info ],
                          levels =
                            val12.levels,
@@ -4748,18 +4775,18 @@ let _table = use ParseSelfhost in let target =
                    match
                      res32
                    with
-                     [ LitParsed l22 ]
+                     [ LitParsed l23 ]
                    then
                      { __br_terms =
-                         [ l22.info ],
+                         [ l23.info ],
                        __br_info =
-                         l22.info,
+                         l23.info,
                        kinf =
                          "",
                        kpref =
                          "",
                        kprod =
-                         [ l22.info ],
+                         [ l23.info ],
                        kpostf =
                          "" }
                    else
@@ -4777,14 +4804,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      res33
                    with
-                     [ LitParsed l23 ]
+                     [ LitParsed l24 ]
                    then
                      { __br_terms =
-                         [ l23.info ],
+                         [ l24.info ],
                        __br_info =
-                         l23.info,
+                         l24.info,
                        kinf =
-                         [ l23.info ],
+                         [ l24.info ],
                        kpref =
                          "",
                        kprod =
@@ -4806,16 +4833,16 @@ let _table = use ParseSelfhost in let target =
                    match
                      res34
                    with
-                     [ LitParsed l24 ]
+                     [ LitParsed l25 ]
                    then
                      { __br_terms =
-                         [ l24.info ],
+                         [ l25.info ],
                        __br_info =
-                         l24.info,
+                         l25.info,
                        kinf =
                          "",
                        kpref =
-                         [ l24.info ],
+                         [ l25.info ],
                        kprod =
                          "",
                        kpostf =
@@ -4835,12 +4862,12 @@ let _table = use ParseSelfhost in let target =
                    match
                      res35
                    with
-                     [ LitParsed l25 ]
+                     [ LitParsed l26 ]
                    then
                      { __br_terms =
-                         [ l25.info ],
+                         [ l26.info ],
                        __br_info =
-                         l25.info,
+                         l26.info,
                        kinf =
                          "",
                        kpref =
@@ -4848,7 +4875,7 @@ let _table = use ParseSelfhost in let target =
                        kprod =
                          "",
                        kpostf =
-                         [ l25.info ] }
+                         [ l26.info ] }
                    else
                      never },
            { nt =
@@ -4888,17 +4915,17 @@ let _table = use ParseSelfhost in let target =
                    match
                      res37
                    with
-                     [ TokParsed (LIdentTok x17) ]
+                     [ TokParsed (LIdentTok x18) ]
                    then
                      { __br_terms =
-                         [ x17.info ],
+                         [ x18.info ],
                        __br_info =
-                         x17.info,
+                         x18.info,
                        assoc =
                          [ { v =
-                               x17.val,
+                               x18.val,
                              i =
-                               x17.info } ] }
+                               x18.info } ] }
                    else
                      never },
            { nt =
@@ -4930,10 +4957,10 @@ let _table = use ParseSelfhost in let target =
                    with
                      [ UserSym val17,
                        UserSym val18,
-                       TokParsed (UIdentTok x18),
-                       LitParsed l26,
                        TokParsed (UIdentTok x19),
                        LitParsed l27,
+                       TokParsed (UIdentTok x20),
+                       LitParsed l28,
                        UserSym (info4, val19) ]
                    then
                      let val17: {__br_terms: [Info], __br_info: Info, kinf: [Info], kpref: [Info], kprod: [Info], kpostf: [Info]} =
@@ -4947,32 +4974,32 @@ let _table = use ParseSelfhost in let target =
                            join
                              [ val17.__br_terms,
                                val18.__br_terms,
-                               [ x18.info ],
-                               [ l26.info ],
                                [ x19.info ],
-                               [ l27.info ] ],
+                               [ l27.info ],
+                               [ x20.info ],
+                               [ l28.info ] ],
                          __br_info =
                            foldl
                              mergeInfo
                              (val17.__br_info)
                              [ val18.__br_info,
-                               x18.info,
-                               l26.info,
                                x19.info,
                                l27.info,
+                               x20.info,
+                               l28.info,
                                info4 ],
                          nt =
+                           [ { v =
+                                 nameNoSym
+                                   (x20.val),
+                               i =
+                                 x20.info } ],
+                         name =
                            [ { v =
                                  nameNoSym
                                    (x19.val),
                                i =
                                  x19.info } ],
-                         name =
-                           [ { v =
-                                 nameNoSym
-                                   (x18.val),
-                               i =
-                                 x18.info } ],
                          kinf =
                            val17.kinf,
                          kpref =
@@ -5004,21 +5031,21 @@ let _table = use ParseSelfhost in let target =
                    match
                      res39
                    with
-                     [ LitParsed l28,
+                     [ LitParsed l29,
                        UserSym (info5, val20),
-                       LitParsed l29 ]
+                       LitParsed l30 ]
                    then
                      RecordRegexOp
                        { __br_terms =
                            concat
-                             [ l28.info ]
-                             [ l29.info ],
+                             [ l29.info ]
+                             [ l30.info ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l28.info)
+                             (l29.info)
                              [ info5,
-                               l29.info ],
+                               l30.info ],
                          regex =
                            [ val20 ] }
                    else
@@ -5036,13 +5063,13 @@ let _table = use ParseSelfhost in let target =
                    match
                      res40
                    with
-                     [ LitParsed l30 ]
+                     [ LitParsed l31 ]
                    then
                      EmptyRegexOp
                        { __br_terms =
-                           [ l30.info ],
+                           [ l31.info ],
                          __br_info =
-                           l30.info }
+                           l31.info }
                    else
                      never },
            { nt =
@@ -5059,18 +5086,18 @@ let _table = use ParseSelfhost in let target =
                    match
                      res41
                    with
-                     [ TokParsed (StringTok x20) ]
+                     [ TokParsed (StringTok x21) ]
                    then
                      LiteralRegexOp
-                       { __br_terms =
-                           [ x20.info ],
-                         __br_info =
-                           x20.info,
-                         val =
+                       { val =
                            [ { v =
-                                 x20.val,
+                                 x21.val,
                                i =
-                                 x20.info } ] }
+                                 x21.info } ],
+                         __br_terms =
+                           [ x21.info ],
+                         __br_info =
+                           x21.info }
                    else
                      never },
            { nt =
@@ -5113,20 +5140,20 @@ let _table = use ParseSelfhost in let target =
                    match
                      res43
                    with
-                     [ LitParsed l31,
+                     [ LitParsed l32,
                        UserSym (info6, val21),
-                       LitParsed l32 ]
+                       LitParsed l33 ]
                    then
                      { __br_terms =
                          concat
-                           [ l31.info ]
-                           [ l32.info ],
+                           [ l32.info ]
+                           [ l33.info ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (l31.info)
+                           (l32.info)
                            [ info6,
-                             l32.info ],
+                             l33.info ],
                        arg =
                          [ val21 ] }
                    else
@@ -5147,7 +5174,7 @@ let _table = use ParseSelfhost in let target =
                    match
                      res44
                    with
-                     [ TokParsed (UIdentTok x21),
+                     [ TokParsed (UIdentTok x22),
                        UserSym val22 ]
                    then
                      let val22: {__br_terms: [Info], __br_info: Info, arg: [Expr]} =
@@ -5156,18 +5183,18 @@ let _table = use ParseSelfhost in let target =
                      TokenRegexOp
                        { __br_terms =
                            concat
-                             [ x21.info ]
+                             [ x22.info ]
                              (val22.__br_terms),
                          __br_info =
                            mergeInfo
-                             (x21.info)
+                             (x22.info)
                              (val22.__br_info),
                          name =
                            [ { v =
                                  nameNoSym
-                                   (x21.val),
+                                   (x22.val),
                                i =
-                                 x21.info } ],
+                                 x22.info } ],
                          arg =
                            val22.arg }
                    else
@@ -5185,13 +5212,13 @@ let _table = use ParseSelfhost in let target =
                    match
                      res45
                    with
-                     [ LitParsed l33 ]
+                     [ LitParsed l34 ]
                    then
                      RepeatPlusRegexOp
                        { __br_terms =
-                           [ l33.info ],
+                           [ l34.info ],
                          __br_info =
-                           l33.info }
+                           l34.info }
                    else
                      never },
            { nt =
@@ -5207,13 +5234,13 @@ let _table = use ParseSelfhost in let target =
                    match
                      res46
                    with
-                     [ LitParsed l34 ]
+                     [ LitParsed l35 ]
                    then
                      RepeatStarRegexOp
                        { __br_terms =
-                           [ l34.info ],
+                           [ l35.info ],
                          __br_info =
-                           l34.info }
+                           l35.info }
                    else
                      never },
            { nt =
@@ -5229,13 +5256,13 @@ let _table = use ParseSelfhost in let target =
                    match
                      res47
                    with
-                     [ LitParsed l35 ]
+                     [ LitParsed l36 ]
                    then
                      RepeatQuestionRegexOp
                        { __br_terms =
-                           [ l35.info ],
+                           [ l36.info ],
                          __br_info =
-                           l35.info }
+                           l36.info }
                    else
                      never },
            { nt =
@@ -5254,23 +5281,23 @@ let _table = use ParseSelfhost in let target =
                    match
                      res48
                    with
-                     [ TokParsed (LIdentTok x22),
-                       LitParsed l36 ]
+                     [ TokParsed (LIdentTok x23),
+                       LitParsed l37 ]
                    then
                      NamedRegexOp
                        { __br_terms =
                            concat
-                             [ x22.info ]
-                             [ l36.info ],
+                             [ x23.info ]
+                             [ l37.info ],
                          __br_info =
                            mergeInfo
-                             (x22.info)
-                             (l36.info),
+                             (x23.info)
+                             (l37.info),
                          name =
                            [ { v =
-                                 x22.val,
+                                 x23.val,
                                i =
-                                 x22.info } ] }
+                                 x23.info } ] }
                    else
                      never },
            { nt =
@@ -5286,13 +5313,13 @@ let _table = use ParseSelfhost in let target =
                    match
                      res49
                    with
-                     [ LitParsed l37 ]
+                     [ LitParsed l38 ]
                    then
                      AlternativeRegexOp
                        { __br_terms =
-                           [ l37.info ],
+                           [ l38.info ],
                          __br_info =
-                           l37.info }
+                           l38.info }
                    else
                      never },
            { nt =
@@ -5353,19 +5380,19 @@ let _table = use ParseSelfhost in let target =
                    match
                      res52
                    with
-                     [ TokParsed (UIdentTok x23) ]
+                     [ TokParsed (UIdentTok x24) ]
                    then
                      ConExprOp
                        { __br_terms =
-                           [ x23.info ],
+                           [ x24.info ],
                          __br_info =
-                           x23.info,
+                           x24.info,
                          name =
                            [ { v =
                                  nameNoSym
-                                   (x23.val),
+                                   (x24.val),
                                i =
-                                 x23.info } ] }
+                                 x24.info } ] }
                    else
                      never },
            { nt =
@@ -5382,18 +5409,18 @@ let _table = use ParseSelfhost in let target =
                    match
                      res53
                    with
-                     [ TokParsed (StringTok x24) ]
+                     [ TokParsed (StringTok x25) ]
                    then
                      StringExprOp
-                       { __br_terms =
-                           [ x24.info ],
-                         __br_info =
-                           x24.info,
-                         val =
+                       { val =
                            [ { v =
-                                 x24.val,
+                                 x25.val,
                                i =
-                                 x24.info } ] }
+                                 x25.info } ],
+                         __br_terms =
+                           [ x25.info ],
+                         __br_info =
+                           x25.info }
                    else
                      never },
            { nt =
@@ -5410,19 +5437,19 @@ let _table = use ParseSelfhost in let target =
                    match
                      res54
                    with
-                     [ TokParsed (LIdentTok x25) ]
+                     [ TokParsed (LIdentTok x26) ]
                    then
                      VariableExprOp
                        { __br_terms =
-                           [ x25.info ],
+                           [ x26.info ],
                          __br_info =
-                           x25.info,
+                           x26.info,
                          name =
                            [ { v =
                                  nameNoSym
-                                   (x25.val),
+                                   (x26.val),
                                i =
-                                 x25.info } ] }
+                                 x26.info } ] }
                    else
                      never },
            { nt =
@@ -5447,9 +5474,9 @@ let _table = use ParseSelfhost in let target =
                    match
                      res55
                    with
-                     [ LitParsed l38,
-                       TokParsed (LIdentTok x26),
-                       LitParsed l39,
+                     [ LitParsed l39,
+                       TokParsed (LIdentTok x27),
+                       LitParsed l40,
                        UserSym (info7, val23),
                        UserSym val24 ]
                    then
@@ -5458,16 +5485,16 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          join
-                           [ [ l38.info ],
-                             [ x26.info ],
-                             [ l39.info ],
+                           [ [ l39.info ],
+                             [ x27.info ],
+                             [ l40.info ],
                              val24.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (l38.info)
-                           [ x26.info,
-                             l39.info,
+                           (l39.info)
+                           [ x27.info,
+                             l40.info,
                              info7,
                              val24.__br_info ],
                        fields =
@@ -5476,21 +5503,21 @@ let _table = use ParseSelfhost in let target =
                                  match
                                    [ val23 ]
                                  with
-                                   [ x27 ] ++ _ ++ ""
+                                   [ x28 ] ++ _ ++ ""
                                  then
-                                   x27
+                                   x28
                                  else
                                    never,
                                name =
                                  match
                                    [ { v =
-                                         x26.val,
+                                         x27.val,
                                        i =
-                                         x26.info } ]
+                                         x27.info } ]
                                  with
-                                   [ x28 ] ++ _ ++ ""
+                                   [ x29 ] ++ _ ++ ""
                                  then
-                                   x28
+                                   x29
                                  else
                                    never } ]
                            (val24.fields) }
@@ -5562,8 +5589,8 @@ let _table = use ParseSelfhost in let target =
                    match
                      res58
                    with
-                     [ TokParsed (LIdentTok x29),
-                       LitParsed l40,
+                     [ TokParsed (LIdentTok x30),
+                       LitParsed l41,
                        UserSym (info8, val25),
                        UserSym val24 ]
                    then
@@ -5572,14 +5599,14 @@ let _table = use ParseSelfhost in let target =
                      in
                      { __br_terms =
                          join
-                           [ [ x29.info ],
-                             [ l40.info ],
+                           [ [ x30.info ],
+                             [ l41.info ],
                              val24.__br_terms ],
                        __br_info =
                          foldl
                            mergeInfo
-                           (x29.info)
-                           [ l40.info,
+                           (x30.info)
+                           [ l41.info,
                              info8,
                              val24.__br_info ],
                        fields =
@@ -5588,21 +5615,21 @@ let _table = use ParseSelfhost in let target =
                                  match
                                    [ val25 ]
                                  with
-                                   [ x30 ] ++ _ ++ ""
+                                   [ x31 ] ++ _ ++ ""
                                  then
-                                   x30
+                                   x31
                                  else
                                    never,
                                name =
                                  match
                                    [ { v =
-                                         x29.val,
+                                         x30.val,
                                        i =
-                                         x29.info } ]
+                                         x30.info } ]
                                  with
-                                   [ x31 ] ++ _ ++ ""
+                                   [ x32 ] ++ _ ++ ""
                                  then
-                                   x31
+                                   x32
                                  else
                                    never } ]
                            (val24.fields) }
@@ -5625,9 +5652,9 @@ let _table = use ParseSelfhost in let target =
                    match
                      res59
                    with
-                     [ LitParsed l41,
+                     [ LitParsed l42,
                        UserSym val26,
-                       LitParsed l42 ]
+                       LitParsed l43 ]
                    then
                      let val26: {__br_terms: [Info], __br_info: Info, fields: [{val: Expr, name: {v: String, i: Info}}]} =
                        val26
@@ -5635,15 +5662,15 @@ let _table = use ParseSelfhost in let target =
                      RecordExprOp
                        { __br_terms =
                            join
-                             [ [ l41.info ],
+                             [ [ l42.info ],
                                val26.__br_terms,
-                               [ l42.info ] ],
+                               [ l43.info ] ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l41.info)
+                             (l42.info)
                              [ val26.__br_info,
-                               l42.info ],
+                               l43.info ],
                          fields =
                            val26.fields }
                    else
@@ -5665,27 +5692,27 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq
                    with
-                     [ LitParsed l43,
+                     [ LitParsed l44,
                        UserSym (info9, val27),
-                       LitParsed l44 ]
+                       LitParsed l45 ]
                    then
                      RegexGrouping
                        { __br_terms =
-                           [ l43.info,
-                             l44.info ],
+                           [ l44.info,
+                             l45.info ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l43.info)
+                             (l44.info)
                              [ info9,
-                               l44.info ],
+                               l45.info ],
                          inner =
                            match
                              [ val27 ]
                            with
-                             [ x32 ]
+                             [ x33 ]
                            then
-                             x32
+                             x33
                            else
                              never }
                    else
@@ -5707,27 +5734,27 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq1
                    with
-                     [ LitParsed l45,
+                     [ LitParsed l46,
                        UserSym (info10, val28),
-                       LitParsed l46 ]
+                       LitParsed l47 ]
                    then
                      ExprGrouping
                        { __br_terms =
-                           [ l45.info,
-                             l46.info ],
+                           [ l46.info,
+                             l47.info ],
                          __br_info =
                            foldl
                              mergeInfo
-                             (l45.info)
+                             (l46.info)
                              [ info10,
-                               l46.info ],
+                               l47.info ],
                          inner =
                            match
                              [ val28 ]
                            with
-                             [ x32 ]
+                             [ x33 ]
                            then
-                             x32
+                             x33
                            else
                              never }
                    else
@@ -5768,14 +5795,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addFileOpAtom
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5794,14 +5821,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addFileOpInfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5820,14 +5847,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addFileOpPrefix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5846,14 +5873,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addFileOpPostfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5906,14 +5933,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addDeclOpAtom
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5932,14 +5959,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addDeclOpInfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5958,14 +5985,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addDeclOpPrefix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -5984,14 +6011,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addDeclOpPostfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6044,14 +6071,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addRegexOpAtom
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6070,14 +6097,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addRegexOpInfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6096,14 +6123,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addRegexOpPrefix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6122,14 +6149,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addRegexOpPostfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6182,14 +6209,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addExprOpAtom
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6208,14 +6235,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addExprOpInfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6234,14 +6261,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addExprOpPrefix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },
@@ -6260,14 +6287,14 @@ let _table = use ParseSelfhost in let target =
                    match
                      seq2
                    with
-                     [ UserSym x32,
+                     [ UserSym x33,
                        UserSym cont ]
                    then
                      lam st.
                        cont
                          (addExprOpPostfix
                             p
-                            x32
+                            x33
                             st)
                    else
                      never },

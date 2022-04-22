@@ -1,3 +1,7 @@
+language Selfhost
+
+start File
+
 type File
 type Decl
 type Regex {
@@ -7,6 +11,7 @@ type Expr {
   grouping = "(" ")",
 }
 
+-- Basic tokens
 token String {
   repr = StringRepr {},
   constructor = StringTok,
@@ -24,6 +29,8 @@ token UIdent {
   fragment = UIdentTokenParser,
   ty = String,
 }
+
+-- Wrapping tokens that just change the type in the AST
 token UName {
   base = UIdent,
   wrap = nameNoSym,
@@ -35,17 +42,20 @@ token LName {
   ty = Name,
 }
 
+-- Token types only used through literals
 token {fragment = OperatorTokenParser,}
 token {fragment = CommaTokenParser,}
 token {fragment = SemiTokenParser,}
 token {fragment = BracketTokenParser,}
+
+-- Whitespace and comments
 token {fragment = LineCommentParser,}
 token {fragment = MultilineCommentParser,}
 token {fragment = WhitespaceParser,}
 
-start File
-
-prod File: File = decls:Decl+
+prod File: File =
+  "language" name:UIdent
+  decls:Decl+
 
 prod Start: Decl = "start" name:UName
 prod Include: Decl = "include" path:String

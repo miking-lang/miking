@@ -99,7 +99,7 @@ match argv with ![_, _] then
   exit 0
 else match argv with [_, filename] in
 let content = readFile filename in
-match parseSelfhostExn filename content with File {decls = decls} in
+match parseSelfhostExn filename content with File {decls = decls, name = {v = langName}} in
 
 let simpleHighlight
   : Info -> String
@@ -1489,10 +1489,10 @@ let genOpResult : Res GenOpResult =
       { infoFieldLabel = infoFieldLabel
       , termsFieldLabel = termsFieldLabel
       , mkSynName = lam name. concat (nameGetStr name) "Op"
-      , mkSynAstBaseName = lam. "SelfhostBaseAst"
+      , mkSynAstBaseName = lam. concat langName "BaseAst"
       , mkConAstName = lam name. concat (nameGetStr name) "Ast"
       , mkBaseName = lam str. concat str "Base"
-      , composedName = "ParseSelfhost"
+      , composedName = concat "Parse" langName
       , syns = mapFromSeq nameCmp syns
       , operators = concat
         (map (lam x: ConstructorInfo. x.genOperator) constructors)
@@ -1633,16 +1633,16 @@ let table : Res String =
         (match_ (var_ "target") (pcon_ "Right" (pvar_ "table"))
           (var_ "table")
           never_)
-      in join ["let _table = use ParseSelfhost in ", expr2str table]
+      in join ["let _table = use Parse", langName, " in ", expr2str table]
   in result.map3 f start genOpResult productions
 in
 
 let parseFunctions : Res String =
   let f = lam start. strJoin "\n"
-    [ "\n\nlet parseSelfhost"
+    [ concat "\n\nlet parse" langName
     , concat ": String -> String -> Either [(Info, String)] " (nameGetStr start)
     , "= lam filename. lam content."
-    , "  use ParseSelfhost in"
+    , join ["  use Parse", langName, " in"]
     , "  let config = {errors = ref [], content = content} in"
     , "  let res = parseWithTable _table filename config content in"
     , "  let errors = deref config.errors in"
@@ -1653,10 +1653,10 @@ let parseFunctions : Res String =
     , "    else errors in"
     , "  if null errors then eitherMapRight (lam x. match x with (_, x) in x) res else Left errors"
     , ""
-    , "let parseSelfhostExn"
+    , join ["let parse", langName, "Exn"]
     , concat ": String -> String -> " (nameGetStr start)
     , "= lam filename. lam content."
-    , "  switch parseSelfhost filename content"
+    , join ["  switch parse", langName, " filename content"]
     , "  case Left errors then"
     , "    for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));"
     , "    exit 1"
@@ -1674,8 +1674,8 @@ in
 let generated: Res String = result.bind5 constructors badConstructors requestedFieldAccessors genOpResult tableAndFunctions
   (lam constructors : [ConstructorInfo]. lam badConstructors. lam requestedFieldAccessors. lam genOpResult : GenOpResult. lam tableAndFunctions.
     let genInput =
-      { baseName = "SelfhostBaseAst"
-      , composedName = Some "SelfhostAst"
+      { baseName = concat langName "BaseAst"
+      , composedName = Some (concat langName "Ast")
       , fragmentName = lam name. concat (nameGetStr name) "Ast"
       , constructors = concat
         (map (lam x: ConstructorInfo. x.constructor) constructors)
