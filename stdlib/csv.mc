@@ -9,8 +9,6 @@ include "string.mc"
 lang CSV
   syn CSVRow =
 
-  sem csvRowNbrColumns : CSVRow -> Int
-
   sem csvHeader : CSVRow -> [String]
 
   sem csvRow2string : CSVRow -> [String]
@@ -42,9 +40,6 @@ end
 lang _testCSV = CSV
   syn CSVRow =
   | Data {col1: Int, col2: Float}
-
-  sem csvRowNbrColumns =
-  | Data _ -> 2
 
   sem csvRow2string =
   | Data {col1 = col1, col2 = col2} ->
