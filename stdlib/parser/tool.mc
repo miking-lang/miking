@@ -95,10 +95,10 @@ con TyGrouping : {left: Info, right: Info} -> GenLabel in
 con ProdTop : {v: Name, i: Info} -> GenLabel in
 con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
-match argv with ![_, _] then
-  printLn "Please provide exactly one argument; a .syn file";
+match argv with ![_, _, _] then
+  printLn "Please provide exactly two argument; a .syn file and the output .mc file";
   exit 0
-else match argv with [_, filename] in
+else match argv with [_, filename, destinationFile] in
 let content = readFile filename in
 match parseSelfhostExn filename content with File {decls = decls, name = {v = langName}} in
 
@@ -1852,8 +1852,7 @@ case Left errors then
   for_ errors (lam x. match x with (info, msg) in printLn (infoErrorString info msg));
   exit 1
 case Right res then
-  printLn res
-  -- dprintLn productions
-  -- dprintLn temp;
-  -- printLn "Ok"
+  printLn (join ["Writing the generated code to file '", destinationFile, "'"]);
+  writeFile destinationFile res;
+  printLn "Done"
 end
