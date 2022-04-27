@@ -320,6 +320,16 @@ lang NeverEq = Eq + NeverAst
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
+lang ExtEq = Eq + ExtAst
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmExt {ident = i2, inexpr = ie2} ->
+    match lhs with TmExt {ident = i1, inexpr = ie1} then
+      match env with {varEnv = varEnv} in
+      let varEnv = biInsert (i1,i2) varEnv in
+      eqExprH {env with varEnv = varEnv} free ie1 ie2
+    else None ()
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -686,7 +696,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  MatchEq + UtestEq + SeqEq + NeverEq
+  MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
@@ -1165,6 +1175,13 @@ utest eqExpr (seq_ [c1]) (seq_ [c2]) with false in
 -- Never
 utest never_ with never_ using eqExpr in
 utest eqExpr never_ true_ with false in
+
+-- Ext
+let ext1 = bind_ (ext_ "x" false tyunit_) a1 in
+let ext2 = bind_ (ext_ "y" false tyunit_) a2 in
+let ext3 = bind_ (ext_ "x" false tyunit_) lam1 in
+utest ext1 with ext2 using eqExpr in
+utest eqExpr ext1 ext3 with false in
 
 -- Symbolized (and partially symbolized) terms are also supported.
 let sm = symbolize in
