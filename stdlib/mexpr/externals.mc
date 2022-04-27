@@ -7,6 +7,7 @@ include "eq.mc"
 
 include "map.mc"
 include "name.mc"
+include "sys.mc"
 
 let _error = "Error in externals.mc: not an external in externalsMap"
 
@@ -52,9 +53,12 @@ lang MExprExternals = Externals + BootParser
   sem readExternalsFromFile : String -> Map String Expr
   sem readExternalsFromFile =
   | filename ->
-    collectExternals (parseMCoreFile
+    let tmpFile = sysTempFileMake () in
+    writeFile tmpFile (join ["include \"", filename, "\""];
+    let r = collectExternals (parseMCoreFile
       { defaultBootParserParseMCoreFileArg
-        with eliminateDeadCode = false } filename)
+        with eliminateDeadCode = false } tmpFile) in
+    sysDeleteFile tmpFile; r
 
 end
 
