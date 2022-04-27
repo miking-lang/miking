@@ -48,6 +48,7 @@ let generateTests = lam ast. lam testsEnabled. lam typeChecked.
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   use MCoreCompile in
+  let ast = stripTuneAnnotations ast in
   if options.useTuned then
     let tuneFile = tuneFileName file in
     if fileExists tuneFile then

@@ -255,18 +255,18 @@ end
 
 lang BootParserDep = BootParserAst
   sem constDep =
-  | CBootParserParseMExprString _ -> error "BootParserDep not implemented yet"
-  | CBootParserParseMCoreFile _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetId _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetTerm _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetType _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetString _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetInt _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetFloat _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetListLength _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetConst _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetPat _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetInfo _ -> error "BootParserDep not implemented yet"
+  | CBootParserParseMExprString _ -> []
+  | CBootParserParseMCoreFile _ -> []
+  | CBootParserGetId _ -> []
+  | CBootParserGetTerm _ -> []
+  | CBootParserGetType _ -> []
+  | CBootParserGetString _ -> []
+  | CBootParserGetInt _ -> []
+  | CBootParserGetFloat _ -> []
+  | CBootParserGetListLength _ -> []
+  | CBootParserGetConst _ -> []
+  | CBootParserGetPat _ -> []
+  | CBootParserGetInfo _ -> []
 end
 
 lang MExprConstDep =

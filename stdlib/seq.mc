@@ -335,50 +335,59 @@ end
 
 let sort = quickSort
 
-utest quickSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest quickSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest quickSort subi [3,4,8,9,20] with [3,4,8,9,20]
+utest quickSort subi [9,8,4,20,3] with [3,4,8,9,20]
 utest quickSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
 utest quickSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest quickSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest quickSort subi [] with [] using eqSeq eqi
 
-utest mergeSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest mergeSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest mergeSort subi [3,4,8,9,20] with [3,4,8,9,20]
+utest mergeSort subi [9,8,4,20,3] with [3,4,8,9,20]
 utest mergeSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
 utest mergeSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest mergeSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest mergeSort subi [] with [] using eqSeq eqi
 
 
 -- Max/Min
-let min = lam cmp. lam seq.
-  recursive let work = lam e. lam seq.
-    if null seq then Some e
+let minIdx : all a. (a -> a -> Int) -> [a] -> Option (Int, a) =
+  lam cmp : a -> a -> Int. lam seq : [a].
+    if null seq then None ()
     else
-      let h = head seq in
-      let t = tail seq in
-      if lti (cmp e h) 0 then work e t else work h t
-  in
-  if null seq then None () else work (head seq) (tail seq)
+      match foldl (
+        lam acc : (Int, Int, a). lam e : a.
+          match acc with (curi, mini, m) in
+          if lti (cmp m e) 0 then (addi curi 1, mini, m)
+          else (addi curi 1, curi, e)
+        ) (1, 0, head seq) (tail seq)
+      with (_,i,m) in Some (i,m)
 
-utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 using optionEq eqi
-utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 using optionEq eqi
-utest min (lam l. lam r. subi l r) [] with None () using optionEq eqi
+utest minIdx subi [3,4,8,9,20] with Some (0,3)
+utest minIdx subi [9,8,4,20,3] with Some (4,3)
+utest minIdx subi [] with None ()
+
+let min : all a. (a -> a -> Int) -> [a] -> Option a = lam cmp. lam seq.
+  optionMap (lam r. match r with (_,m) in m) (minIdx cmp seq)
+
+utest min subi [3,4,8,9,20] with Some 3
+utest min subi [9,8,4,20,3] with Some 3
+utest min subi [] with None ()
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
-utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 using optionEq eqi
-utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 using optionEq eqi
-utest max (lam l. lam r. subi l r) [] with None () using optionEq eqi
+utest max subi [3,4,8,9,20] with Some 20
+utest max subi [9,8,4,20,3] with Some 20
+utest max subi [] with None ()
 
 let minOrElse = lam d. lam cmp. lam seq.
   optionGetOrElse d (min cmp seq)
 
-utest minOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
-utest minOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
+utest minOrElse (lam. 0) subi [3,4,8,9,20] with 3
+utest minOrElse (lam. 0) subi [9,8,4,20,3] with 3
 
 let maxOrElse = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
 
-utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 20
-utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 20
+utest maxOrElse (lam. 0) subi [3,4,8,9,20] with 20
+utest maxOrElse (lam. 0) subi [9,8,4,20,3] with 20
 
 -- First index in seq that satifies pred
 let index = lam pred. lam seq.
@@ -503,3 +512,33 @@ utest permute "abc" [1, 2, 0] with "cab"
 utest permute "xy" [0, 1] with "xy"
 utest permute "abcd" [0, 3, 1, 2] with "acdb"
 utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
+
+-- 'product seqs' computes the Cartesian product of the sequences in 'seqs'.
+recursive let product : all a. [[a]] -> [[a]] = lam seqs.
+  recursive let work = lam acc. lam s1. lam s2.
+    if null s1 then acc
+    else if null s2 then acc
+    else match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) in
+      let acc = cons (cons h1 h2) acc in
+      let acc = work acc t1 s2 in
+      work acc [h1] t2
+  in
+  if null seqs then []
+  else match seqs with [s] then
+    map (lam x. [x]) s
+  else
+    let t = product (tail seqs) in
+    work [] (head seqs) t
+end
+
+let _productEq : all a. (a -> a -> Int) -> [[a]] -> [[a]] -> Bool =
+  lam cmp : a -> a -> Int. lam p1 : [[a]]. lam p2 : [[a]].
+    let p1 = sort (seqCmp cmp) p1 in
+    let p2 = sort (seqCmp cmp) p1 in
+    let eq = lam s1. lam s2. eqi (seqCmp cmp s1 s2) 0 in
+    eqSeq eq p1 p2
+
+utest product [[],[1,2,3]] with [] using _productEq subi
+utest product [[1,2,3]] with [[1],[2],[3]] using _productEq subi
+utest product [[1,2,3],[4,5]] with [[1,4],[1,5],[2,4],[2,5],[3,4],[3,5]] using _productEq subi
+utest product [[1],[2,3],[4]] with [[1,2,4],[1,3,4]] using _productEq subi

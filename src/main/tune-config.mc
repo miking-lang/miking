@@ -40,33 +40,19 @@ let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
       else
         modref p.fail (Some (ParseTypeGeneric ("Unknown search method", p.str)));
         o),
-  ([("--input", " ", "<s>")],
-    "Input data to the tuned program. Note that several inputs can be given by providing several --input",
+  ([("--args", " ", "<s>")],
+    "Command line arguments (space-separated) to provide to the the tuned program. Note that several inputs can be given by providing several --args.",
     lam p: ArgPart Options.
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with input = snoc to.input p.str}}),
-  ([("--sa-init-temp", " ", "<t>")],
-    join ["If --method simulated-annealing is used, this gives the initial temperature (default ",
-          float2string tuneOptionsDefault.saInitTemp, ")"],
+      {o with tuneOptions = {to with args = snoc to.args p.str}}),
+  ([("--epsilon-ms", " ", "<n>")],
+    join ["Threshold value for execution time difference (default ",
+          float2string tuneOptionsDefault.epsilonMs, ")"],
     lam p: ArgPart Options.
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with saInitTemp = argToFloatMin p 0.0}}),
-  ([("--sa-decay-factor", " ", "<d>")],
-    join ["If --method simulated-annealing is used, this gives the decay factor (default ",
-          float2string tuneOptionsDefault.saDecayFactor, ")"],
-    lam p: ArgPart Options.
-      let o: Options = p.options in
-      let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with saDecayFactor = argToFloatMin p 0.0}}),
-  ([("--tabu-size", " ", "<n>")],
-    join ["If --method tabu-search is used, this gives the number of configurations to keep in the tabu list (default ",
-          int2string tuneOptionsDefault.tabuSize, ")"],
-    lam p: ArgPart Options.
-      let o: Options = p.options in
-      let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with tabuSize = argToIntMin p 0}}),
+      {o with tuneOptions = {to with epsilonMs = argToFloatMin p 0.0}}),
   ([("--step-size", " ", "<n>")],
     join ["Step size for integer ranges (default ",
           int2string tuneOptionsDefault.stepSize, ")"],
@@ -98,6 +84,31 @@ let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
       {o with tuneOptions = {to with dependencyAnalysis = true}}),
+  ([("--debug-dependency-analysis", "", "")],
+    "Debug dependency analysis",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with debugDependencyAnalysis = true}}),
+  ([("--debug-instrumentation", "", "")],
+    "Debug instrumentation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with debugInstrumentation = true}}),
+  ([("--seq-transform", "", "")],
+    "Transform sequence literals into create function choosing between rope and list",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with seqTransform = true}}),
+  ([("--reduce-dependencies", " ", "<t>")],
+    join ["Reduce the dependency graph by filtering out measuring points with runtimes below this threshold value (default ",
+          float2string tuneOptionsDefault.reduceDependencies, ")"],
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with reduceDependencies = argToFloatMin p 0.0}}),
   ([("--enable-cleanup", "", "")],
     "Clean up tune file after tuning",
     lam p: ArgPart Options.
