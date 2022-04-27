@@ -72,6 +72,18 @@ utest concat [1] [3] with [1,3] in
 utest concat [] [3,10] with [3,10] in
 utest concat ['a','b'] [] with ['a','b'] in
 
+-- concat preserves the representation if the inputs agree, otherwise
+-- the result is a list
+utest isRope (concat (createRope 3 (lam i. i)) (createRope 3 (lam i. i))) with true in
+utest isRope (concat (createList 3 (lam i. i)) (createRope 3 (lam i. i))) with false in
+utest isList (concat (createList 3 (lam i. i)) (createRope 3 (lam i. i))) with true in
+utest isList (concat (createRope 3 (lam i. i)) (createList 3 (lam i. i))) with true in
+utest isList (concat (createList 3 (lam i. i)) (createList 3 (lam i. i))) with true in
+
+-- Lists and ropes are otherwise indistinguishable
+utest createList 3 (lam i. i) with [0, 1, 2] in
+utest createList 3 (lam i. i) with [0, 1, 2] using eqSeq eqi in
+
 -- 'get s n' returns element with index 'n' from sequence 's'
 -- [a] -> Int -> a
 utest get [1,3,9] 2 with 9 in

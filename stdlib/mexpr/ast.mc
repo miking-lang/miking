@@ -34,7 +34,7 @@ lang Ast
   sem withInfoPat: Info -> Pat -> Pat
   sem withTypePat: Type -> Pat -> Pat
 
-  sem infoTy: Info -> Type
+  sem infoTy: Type -> Info
   sem tyWithInfo: Info -> Type -> Type
 
   -- TODO(vipa, 2021-05-27): Replace smap and sfold with smapAccumL for Expr and Type as well

@@ -118,7 +118,7 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   | info ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
-      match convertData info env (OTmExprExt { expr = r.expr }) r.ty tyIdent
+      match convertData info env (OTmExprExt { expr = r.expr }) (r.ty, tyIdent)
       with (_, body) in
       body
     else
