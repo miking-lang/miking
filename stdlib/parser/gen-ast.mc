@@ -740,6 +740,7 @@ let input =
     , (nameNoSym "Expr", tycon_ "Type")
     ]
   , composedName = Some "Composed"
+  , fieldAccessors = []
   } in
 
 let res = mkLanguages input in
@@ -767,6 +768,7 @@ let res = mkLanguages
     [ (nameNoSym "Expr", tycon_ "Expr")
     ]
   , composedName = Some "Composed"
+  , fieldAccessors = []
   } in
 -- printLn res;
 
