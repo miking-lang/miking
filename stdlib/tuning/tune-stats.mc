@@ -16,11 +16,12 @@ lang MeasPointCSV = CSV
                ident: String,
                context: [String],
                deps: [Int],
-               searchSpace: Float}
+               searchSpace: Float,
+               cc: Int}
 
   sem csvHeader =
   | MeasPoint _ ->
-    ["id", "ident", "context", "deps", "searchSpace"]
+    ["id", "ident", "context", "deps", "searchSpace", "connectedComponent"]
 
   sem csvRow2string =
   | MeasPoint m ->
@@ -29,6 +30,7 @@ lang MeasPointCSV = CSV
     , strJoin "|" m.context
     , strJoin "|" (map int2string m.deps)
     , float2string m.searchSpace
+    , int2string m.cc
     ]
 
   sem csvString2Row =
@@ -39,6 +41,7 @@ lang MeasPointCSV = CSV
     , context = strSplit "|" row 2
     , deps = map string2int (strSplit "|" (get row 3))
     , searchSpace = string2float (get row 4)
+    , cc = string2int (get row 5)
     }
 end
 
@@ -48,11 +51,12 @@ lang HoleCSV = CSV
           ident: String,
           context: [String],
           deps: [Int],
-          domainSize: Int}
+          domainSize: Int,
+          cc: Int}
 
   sem csvHeader =
   | Hole _ ->
-    ["id", "ident", "context", "deps", "domainSize"]
+    ["id", "ident", "context", "deps", "domainSize", "connectedComponent"]
 
   sem csvRow2string =
   | Hole h ->
@@ -61,6 +65,7 @@ lang HoleCSV = CSV
     , strJoin "|" h.context
     , strJoin "|" (map int2string h.deps)
     , int2string h.domainSize
+    , int2string h.cc
     ]
 
   sem csvString2Row =
@@ -71,7 +76,58 @@ lang HoleCSV = CSV
     , context = strSplit "|" row 2
     , deps = map string2int (strSplit "|" (get row 3))
     , domainSize = string2int (get row 4)
+    , cc = string2int (get row 5)
     }
+end
+
+lang ConnectedComponentCSV = CSV
+  syn CSVRow =
+  | CC {id: Int,
+        deps: [Int],
+        size: Float}
+
+  sem csvHeader =
+  | CC _ ->
+    ["id", "deps", "size"]
+
+  sem csvRow2string =
+  | CC c ->
+    [ int2string c.id
+    , strJoin "|" (map int2string c.deps)
+    , float2string c.size
+    ]
+
+  sem csvString2Row =
+  | row ->
+    CC
+    { id = string2int (get row 0)
+    , deps = map string2int (strSplit "|" (get row 1))
+    , size = string2float (get row 2)
+    }
+
+end
+
+lang SizeCSV = CSV
+  syn CSVRow =
+  | Size {total: Float, reduced: Float}
+
+  sem csvHeader =
+  | Size _ ->
+    ["total", "reduced"]
+
+  sem csvRow2string =
+  | Size s ->
+    [ float2string s.total
+    , float2string s.reduced
+    ]
+
+  sem csvString2Row =
+  | row ->
+    Size
+    { total = string2float (get row 0)
+    , reduced = string2float (get row 0)
+    }
+
 end
 
 lang TuneStats = DependencyAnalysis
@@ -109,18 +165,35 @@ lang TuneStats = DependencyAnalysis
     let contexts = map (lam t: (Int,String,[String]). t.2) idStrContext in
     let deps = map (lam id. graphNeighbors id graph.graph) ids in
     let sizes = map (lam id. mapFindExn id searchSpace.measuringPoints) ids in
+    let ccs =
+      let findCC = lam id.
+        match
+          foldl (lam acc. lam c: ([Int],Float).
+              match acc with (Some _, _) then acc
+              else
+                match acc with (_, i) in
+                match find (eqi id) c.0 with Some _ then (Some i, i)
+                else (None (), addi i 1)
+            ) (None (), 0) searchSpace.connectedComponents
+        with (Some i, _) then i
+        else error "impossible"
+      in
+      map findCC ids
+    in
     recursive let mkRow =
-      lam acc. lam ids. lam idents. lam contexts. lam deps. lam sizes.
+      lam acc. lam ids. lam idents. lam contexts. lam deps. lam sizes. lam ccs.
       match ids with [] then acc
       else
         let acc = cons (MeasPoint {id = head ids,
                                    ident = head idents,
                                    context = head contexts,
                                    deps = head deps,
-                                   searchSpace = head sizes}) acc in
-        mkRow acc (tail ids) (tail idents) (tail contexts) (tail deps) (tail sizes)
+                                   searchSpace = head sizes,
+                                   cc = head ccs}) acc in
+        mkRow acc (tail ids) (tail idents) (tail contexts) (tail deps)
+              (tail sizes) (tail ccs)
     in
-    let rows = mkRow [] ids idents contexts deps sizes in
+    let rows = mkRow [] ids idents contexts deps sizes ccs in
     -- Sort the rows according to id
     let rows = sort (lam h1: CSVRow. lam h2: CSVRow.
         match (h1, h2) with (MeasPoint {id = id1}, MeasPoint {id = id2}) in
@@ -130,8 +203,9 @@ lang TuneStats = DependencyAnalysis
     csvWrite "," rows
 
   sem tuneStatsHoles
-  : DependencyGraph -> TuneOptions -> CallCtxEnv -> PprintEnv -> String
-  sem tuneStatsHoles graph options callCtx =
+  : DependencyGraph -> SearchSpaceSize -> TuneOptions -> CallCtxEnv -> PprintEnv
+  -> String
+  sem tuneStatsHoles graph searchSpace options callCtx =
   | env ->
     use HoleCSV in
     let idNameContext: [(Int,Name,[Name])] =
@@ -168,24 +242,63 @@ lang TuneStats = DependencyAnalysis
         domainSize options.stepSize (get callCtx.idx2hole id)
       ) ids
     in
+    let ccs =
+      let findCC = lam id.
+        match
+          foldl (lam acc. lam c: ([Int],Float).
+              match acc with (Some _, _) then acc
+              else
+                match acc with (_, i) in
+                match find (eqi id) c.0 with Some _ then (Some i, i)
+                else (None (), addi i 1)
+            ) (None (), 0) searchSpace.connectedComponents
+        with (Some i, _) then i
+        else negi 1
+      in
+      map findCC ids
+    in
     recursive let mkRow =
-      lam acc. lam ids. lam idents. lam contexts. lam deps. lam sizes.
+      lam acc. lam ids. lam idents. lam contexts. lam deps. lam sizes. lam ccs.
       match ids with [] then acc
       else
         let acc = cons (Hole {id = head ids,
                               ident = head idents,
                               context = head contexts,
                               deps = head deps,
-                              domainSize = head sizes}) acc in
-        mkRow acc (tail ids) (tail idents) (tail contexts) (tail deps) (tail sizes)
+                              domainSize = head sizes,
+                              cc = head ccs}) acc in
+        mkRow acc (tail ids) (tail idents) (tail contexts) (tail deps)
+              (tail sizes) (tail ccs)
     in
-    let rows = mkRow [] ids idents contexts deps sizes in
+    let rows = mkRow [] ids idents contexts deps sizes ccs in
     -- Sort the rows according to id
     let rows = sort (lam h1: CSVRow. lam h2: CSVRow.
         match (h1, h2) with (Hole {id = id1}, Hole {id = id2}) in
         subi id1 id2
       ) rows
     in
+    csvWrite "," rows
+
+  sem tuneStatsCC : SearchSpaceSize -> String
+  sem tuneStatsCC =
+  | ss ->
+    use ConnectedComponentCSV in
+    let idIdsSize: [(Int,[Int],Float)] = mapi (lam i: Int. lam t:([Int],Float).
+        match t with (ids, size) in
+        (i,ids,size)
+      ) ss.connectedComponents
+    in
+    let rows = map (lam t: (Int,[Int],Float).
+        CC {id=t.0, deps=t.1, size=t.2}
+      ) idIdsSize
+    in
+    csvWrite "," rows
+
+  sem tuneStatsSize : SearchSpaceSize -> String
+  sem tuneStatsSize =
+  | ss ->
+    use SizeCSV in
+    let rows = [Size {total = ss.sizeTotal, reduced = ss.sizeReduced}] in
     csvWrite "," rows
 
   sem tuneStats
@@ -196,8 +309,11 @@ lang TuneStats = DependencyAnalysis
     -- Populate the pretty print environment
     match pprintCode 0 pprintEnvEmpty ast with (pprintEnv, _) in
     let measPoints: String = tuneStatsMeasPoints graph searchSpace pprintEnv in
-    let holes: String = tuneStatsHoles graph options env pprintEnv in
-    join [measPoints, "\n", holes]
+    let holes: String = tuneStatsHoles graph searchSpace options env pprintEnv in
+    let ccs: String = tuneStatsCC searchSpace in
+    let size: String = tuneStatsSize searchSpace in
+    --join [measPoints, "\n", holes, "\n", ccs]
+    strJoin "\n" [measPoints, holes, ccs, size]
 
 end
 
@@ -251,11 +367,17 @@ let m = if h then true else false in
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace
-1,m,,0,2.
+"id,ident,context,deps,searchSpace,connectedComponent
+1,m,,0,2.,0
 
-id,ident,context,deps,domainSize
-0,h,,1,2
+id,ident,context,deps,domainSize,connectedComponent
+0,h,,1,2,0
+
+id,deps,size
+0,0|1,2.
+
+total,reduced
+2.,2.
 "
 in
 
@@ -278,12 +400,46 @@ let g2 = g h2 in
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace
-2,m,,0|1,4.
+"id,ident,context,deps,searchSpace,connectedComponent
+2,m,,0|1,4.,0
 
-id,ident,context,deps,domainSize
-0,hh,h1,2,2
-1,hh,h2,2,2
+id,ident,context,deps,domainSize,connectedComponent
+0,hh,h1,2,2,0
+1,hh,h2,2,2,0
+
+id,deps,size
+0,0|1|2,4.
+
+total,reduced
+4.,4.
+"
+in
+
+-- Different connected components
+let t = parse
+"
+let h1 = hole (IntRange {default = 0, min = 0, max = 1}) in
+let m1 = sleepMs h1 in
+let h2 = hole (IntRange {default = 0, min = 0, max = 1}) in
+let m2 = sleepMs h2 in
+()
+" in
+
+utest test debug t with
+"id,ident,context,deps,searchSpace,connectedComponent
+2,m1,,0,2.,1
+3,m2,,1,2.,0
+
+id,ident,context,deps,domainSize,connectedComponent
+0,h1,,2,2,1
+1,h2,,3,2,0
+
+id,deps,size
+0,1|3,2.
+1,0|2,2.
+
+total,reduced
+4.,2.
 "
 in
 
@@ -311,14 +467,20 @@ e ()
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace
-4,m,,0|1,4.
+"id,ident,context,deps,searchSpace,connectedComponent
+4,m,,0|1,4.,0
 
-id,ident,context,deps,domainSize
-0,hh,h1,4,2
-1,hh,h2,4,2
-2,dummy,g1,,2
-3,dummy,g2,,2
+id,ident,context,deps,domainSize,connectedComponent
+0,hh,h1,4,2,0
+1,hh,h2,4,2,0
+2,dummy,g1,,2,-1
+3,dummy,g2,,2,-1
+
+id,deps,size
+0,0|1|4,4.
+
+total,reduced
+16.,4.
 "
 in
 
