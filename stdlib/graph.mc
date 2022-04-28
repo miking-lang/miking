@@ -26,11 +26,11 @@ let graphEmpty = digraphEmpty
 let graphVertices = digraphVertices
 
 -- Get comparison function for vertices.
-let graphCmpv = lam g : Graph v l.
-  mapGetCmpFun g.adj
+let graphCmpv : all v. all l. Graph v l -> v -> v -> Int =
+  lam g. mapGetCmpFun g.adj
 
-let graphEdgeEq =
-lam g : Graph v l. lam e1 : DigraphEdge v l. lam e2: DigraphEdge v l.
+let graphEdgeEq : all v. all l. Graph v l -> DigraphEdge v l -> DigraphEdge v l -> Bool =
+  lam g. lam e1. lam e2.
   let eqv = digraphEqv g in
   and (or (and (eqv e1.0 e2.0) (eqv e1.1 e2.1))
           (and (eqv e1.1 e2.0) (eqv e1.0 e2.1)))

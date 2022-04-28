@@ -15,7 +15,7 @@ let programPosLCP : ProgramPos -> ProgramPos -> ProgramPos =
   lam t1. lam t2.
   -- We use binary search to find the longest common prefix for which both
   -- sequences have the same positional indices.
-  recursive let binarySearch : Int -> Int -> PosPreds = lam lo. lam hi.
+  recursive let binarySearch : Int -> Int -> ProgramPos = lam lo. lam hi.
     if geqi (addi lo 1) hi then subsequence t1 0 hi
     else
       let mid = addi (divi (subi hi lo) 2) lo in

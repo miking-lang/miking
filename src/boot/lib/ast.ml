@@ -207,6 +207,8 @@ and const =
   | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int Mseq.t option
+  | CtensorLinearGetExn of tm T.t option
+  | CtensorLinearSetExn of tm T.t option * int option
   | CtensorRank
   | CtensorShape
   | CtensorCopy
@@ -221,7 +223,7 @@ and const =
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
-      (bool * bool * int Mseq.t Mseq.t * bool) option
+      (bool * bool * int Mseq.t Mseq.t * bool * bool) option
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
@@ -252,7 +254,7 @@ and param = Param of info * ustring * ty
 and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
-  | Inter of info * ustring * param list * (pat * tm) list
+  | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list
@@ -677,6 +679,8 @@ let const_has_side_effect = function
   | CtensorCreateCArrayFloat _
   | CtensorGetExn _
   | CtensorSetExn _
+  | CtensorLinearGetExn _
+  | CtensorLinearSetExn _
   | CtensorRank
   | CtensorShape
   | CtensorCopy

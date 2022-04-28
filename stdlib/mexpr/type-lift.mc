@@ -27,7 +27,14 @@ include "cmp.mc"
 -- been added.
 lang VariantNameTypeAst = Eq
   syn Type =
-  | TyVariantName {ident : Name}
+  | TyVariantName {ident : Name,
+                   info : Info}
+
+  sem tyWithInfo (info : Info) =
+  | TyVariantName t -> TyVariantName {t with info = info}
+
+  sem infoTy =
+  | TyVariantName r -> r.info
 
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariantName {ident = rid} ->
@@ -50,6 +57,9 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     -- performance critical.
     seqs: Map Type Name,
 
+    -- Tensor types encountered so far.
+    tensors : Map Type Name,
+
     labels: Set [SID],
 
     -- Variant types and their constructors encountered so far.
@@ -63,12 +73,12 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
   | env ->
     let env : TypeLiftEnv = env in
     let f = lam ty : Type.
-      match ty with TyVariantName {ident = ident} then
+      match ty with TyVariantName {ident = ident, info = info} then
         match mapLookup ident env.variants with Some constrs then
-          TyVariant {constrs = constrs, info = NoInfo ()}
+          TyVariant {constrs = constrs, info = info/-infoTy ty-/}
         else
-          error (join ["No variant type ", nameGetStr ident,
-                       " found in environment"])
+          infoErrorExit info (join ["No variant type ", nameGetStr ident,
+                                    " found in environment"])
       else ty
     in
     assocSeqMap f env.typeEnv
@@ -88,7 +98,7 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
       in
       (env, tycon)
     else never
-  | _ -> error "Expected record type"
+  | ty -> infoErrorExit (infoTy ty) "Expected record type"
 end
 
 -- This implementation takes record field order into account when populating
@@ -125,6 +135,21 @@ lang TypeLiftAddSeqToEnv = TypeLiftBase + SeqTypeAst + ConTypeAst
       let name = nameSym "Seq" in
       let tycon = TyCon {ident = name, info = info} in
       let env = {{env with seqs = mapInsert innerTy name env.seqs}
+                      with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tycon)
+end
+
+lang TypeLiftAddTensorToEnv = TypeLiftBase + TensorTypeAst + ConTypeAst
+  sem addTensorToEnv (env : TypeLiftEnv) =
+  | TyTensor {info = info, ty = innerTy} & ty ->
+    match mapLookup innerTy env.tensors with Some name then
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
+    else
+      let name = nameSym "Tensor" in
+      let tycon = TyCon {ident = name, info = info} in
+      let env = {{env with tensors = mapInsert innerTy name env.tensors}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
       (env, tycon)
@@ -179,6 +204,7 @@ lang TypeLift = TypeLiftBase + Cmp
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
       seqs = mapEmpty cmpType,
+      tensors = mapEmpty cmpType,
       labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
@@ -194,15 +220,15 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
     let tyIdent =
-      match t.tyIdent with TyUnknown _ then tyvariant_ []
+      match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
       else t.tyIdent
     in
     match typeLiftType env tyIdent with (env, tyIdent) then
       let env : TypeLiftEnv = env in
       let env =
         -- Ignore any existing constructors in the variant type.
-        match tyIdent with TyVariant _ then
-          let variantNameTy = TyVariantName {ident = t.ident} in
+        match tyIdent with TyVariant {info = info} then
+          let variantNameTy = TyVariantName {ident = t.ident, info = info} in
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
         else match tyIdent
@@ -235,9 +261,9 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in
             let err = lam.
-              error (join ["Constructor ", nameGetStr t.ident,
-                           " defined before referenced variant type ",
-                           nameGetStr ident])
+              infoErrorExit t.info (join ["Constructor ", nameGetStr t.ident,
+                                          " defined before referenced variant type ",
+                                          nameGetStr ident])
             in
             let env : TypeLiftEnv = env in
             let variantMap = mapLookupApplyOrElse f err ident env.variants in
@@ -302,6 +328,14 @@ lang SeqTypeNoStringTypeLift = SeqTypeTypeLift + CharTypeAst
   | TySeq {info = _, ty = TyChar _} & ty -> (env,ty)
 end
 
+-- Optional type lifting of tensors (not added to MExprTypeLift by default)
+lang TensorTypeTypeLift = TypeLift + TensorTypeAst + TypeLiftAddTensorToEnv
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyTensor ({info = info, ty = innerTy} & r) ->
+    match typeLiftType env innerTy with (env, innerTy) in
+    addTensorToEnv env (TyTensor {r with ty = innerTy})
+end
+
 lang AppTypeTypeLift = TypeLift + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TyApp t ->
@@ -349,7 +383,7 @@ mexpr
 
 use TestLang in
 
-let fst = lam x: (a, b). x.0 in
+let fst : all a. all b. (a, b) -> a = lam x. x.0 in
 
 let eqEnv = lam lenv. lam renv.
   use MExprEq in
@@ -528,7 +562,7 @@ match typeLift typeAliases with (env, t) in
 -- Note that records and variants are added to the front of the environment
 -- as they are processed, so the last record in the given term will be first
 -- in the environment.
-let ids = map (lam p: (a, b). p.0) env in
+let ids = map fst env in
 let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
 let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
 let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]

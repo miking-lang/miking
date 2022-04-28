@@ -802,6 +802,8 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
   -- | CTensorCreate _ -> []
   -- | CTensorGetExn _ -> []
   -- | CTensorSetExn _ -> []
+  -- | CTensorLinearGetExn _ -> []
+  -- | CTensorLinearSetExn _ -> []
   -- | CTensorRank _ -> []
   -- | CTensorShape _ -> []
   -- | CTensorReshapeExn _ -> []
@@ -875,7 +877,7 @@ lang RecordPatCFA = MatchCFA + RecordCFA + RecordPat
     -- Check if record pattern is compatible with abstract value record
     let compatible = mapAllWithKey (lam k. lam. mapMem k abindings) pbindings in
     if compatible then
-      mapFoldWithKey (lam graph: CFAGraph. lam k. lam pb: Pattern.
+      mapFoldWithKey (lam graph: CFAGraph. lam k. lam pb: Pat.
         let ab: Name = mapFindExn k abindings in
         let cstrs = foldl (lam acc. lam f. concat (f id ab pb) acc)
           [] graph.mcgfs in
@@ -1000,7 +1002,7 @@ let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
       match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some env) tANF with (Some env,cfaRes) in
+      match cfaDebug (None ()) (Some env) tANF with (Some env,cfaRes) in
       match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;

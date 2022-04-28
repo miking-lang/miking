@@ -90,7 +90,7 @@ let getInnerPatterns : AtomicPattern -> Option [AtomicPattern] = lam p.
 -- This function is implemented with the assumption that every pattern has been
 -- given a unique index. If multiple patterns with the same index are found, an
 -- error will be reported.
-let getPatternDependencies : [AtomicPattern] -> Map Int (Set Int) =
+let getPatternDependencies : [AtomicPattern] -> ([AtomicPattern], Map Int (Set Int)) =
   lam atomicPatterns.
   recursive let atomicPatternDependencies = lam dependencies. lam p.
     let id = getPatternIndex p in
@@ -127,7 +127,7 @@ let getPatternDependencies : [AtomicPattern] -> Map Int (Set Int) =
 -- checked.
 let withDependencies :
      {atomicPatterns : [AtomicPattern],
-      replacement : (Map VarPattern (Name, Expr)) -> Expr} -> Pattern = lam pat.
+      replacement : Info -> Map VarPattern (Name, Expr) -> Expr} -> Pattern = lam pat.
   recursive let work = lam acc. lam pat.
     let idx = getPatternIndex pat in
     let acc = cons (idx, pat) acc in
@@ -178,7 +178,7 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
 -- Definition of the map pattern
 let mapPatRef : Ref (Option Pattern) = ref (None ())
 let mapPattern : () -> Pattern =
-  use PMExprAst in
+  use PMExprVariableSub in
   lam.
   let s = nameSym "s" in
   let acc = nameSym "acc" in
@@ -213,7 +213,7 @@ let mapPattern : () -> Pattern =
             TmVar {ident = x, ty = tyWithInfo info (tyTm headExpr),
                    info = info, frozen = false})
         ] in
-        let els = substituteVariables els subMap in
+        let els = substituteVariables subMap els in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
         let fType = TyArrow {
           from = tyTm headExpr, to = tyTm els, info = infoTm els} in
@@ -256,7 +256,7 @@ let getMapPattern = lam.
 -- Definition of the 'parallelMap2' pattern
 let map2PatRef : Ref (Option Pattern) = ref (None ())
 let map2Pattern : () -> Pattern =
-  use PMExprAst in
+  use PMExprVariableSub in
   lam.
   let s1 = nameSym "s1" in
   let s2 = nameSym "s2" in
@@ -306,7 +306,7 @@ let map2Pattern : () -> Pattern =
             TmVar {ident = y, ty = tyWithInfo info (tyTm headSndExpr),
                    info = info, frozen = false})
         ] in
-        let els = substituteVariables els subMap in
+        let els = substituteVariables subMap els in
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
         TmMap2 {
           f = TmLam {
@@ -346,6 +346,7 @@ let getMap2Pattern = lam.
 -- Definition of the fold pattern
 let reducePatRef : Ref (Option Pattern) = ref (None ())
 let reducePattern : () -> Pattern =
+  use PMExprVariableSub in
   use PMExprFunctionProperties in
   lam.
   let s = nameSym "s" in
@@ -413,7 +414,7 @@ let reducePattern : () -> Pattern =
           TmVar {ident = y, ty = tyWithInfo info (tyTm headExpr), info = info,
                  frozen = false})
       ] in
-      let els = substituteVariables els subMap in
+      let els = substituteVariables subMap els in
       let fResultVar = TmVar {ident = fResultId, ty = tyTm fResultExpr,
                               info = infoTm fResultExpr, frozen = false} in
       let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in

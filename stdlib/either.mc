@@ -8,8 +8,8 @@ include "seq.mc"
 include "string.mc"
 
 type Either a b
-con Left: a -> Either a b
-con Right: b -> Either a b
+con Left: all a. all b. a -> Either a b
+con Right: all a. all b. b -> Either a b
 
 --  *-
 --  * .brief Checks equality between two Either values.
@@ -22,7 +22,8 @@ con Right: b -> Either a b
 --  * .return Whether e1 and e2 are equal based on the provided equaliy
 --  *         functions.
 -- -*
-let eitherEq: (a -> c -> Bool) -> (b -> d -> Bool) -> Either a b -> Either c d -> Bool =
+let eitherEq: all a. all b. all c. all d.
+  (a -> c -> Bool) -> (b -> d -> Bool) -> Either a b -> Either c d -> Bool =
   lam eql. lam eqr. lam e1. lam e2.
   match (e1,e2) with (Left c1, Left c2) then
     eql c1 c2
@@ -47,7 +48,7 @@ utest eitherEq eqi eqi (Right 4321) (Left 4321) with false
 --  *
 --  * .return The value that was extracted from the case analysis.
 -- -*
-let eitherEither: (a -> c) -> (b -> c) -> Either a b -> c =
+let eitherEither: all a. all b. all c. (a -> c) -> (b -> c) -> Either a b -> c =
   lam lf. lam rf. lam e.
   match e with Left content then
     lf content
@@ -68,7 +69,8 @@ utest eitherEither (eqi 1) (eqf 0.5) (Right 0.5) with true
 --  * .return The map result as an Either type, concealing which case that was
 --  *         actually mapped on.
 -- -*
-let eitherBiMap: (a -> c) -> (b -> d) -> Either a b -> Either c d =
+let eitherBiMap: all a. all b. all c. all d.
+  (a -> c) -> (b -> d) -> Either a b -> Either c d =
   lam lf. lam rf. lam e.
   match e with Left content then
     Left (lf content)
@@ -90,7 +92,8 @@ with Right "achoo" using eitherEq eqi eqString
 --  * .return The map result as an Either type, in the Left case containing
 --  *         the mapped value and in the Right case staying the same.
 -- -*
-let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. eitherBiMap f (lam x. x)
+let eitherMapLeft: all a. all b. all c.
+  (a -> c) -> Either a b -> Either c b = lam f. eitherBiMap f (lam x. x)
 
 utest eitherMapLeft (cons 'a') (Right 5) with Right 5 using eitherEq eqString eqi
 utest eitherMapLeft (cons 'a') (Left "choo")
@@ -105,7 +108,8 @@ with Left "achoo" using eitherEq eqString eqi
 --  * .return The map result as an Either type, in the Right case containing
 --  *         the mapped value and in the Left case staying the same.
 -- -*
-let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. eitherBiMap (lam x. x) f
+let eitherMapRight: all a. all b. all c.
+  (b -> c) -> Either a b -> Either a c = lam f. eitherBiMap (lam x. x) f
 
 utest eitherMapRight (addi 2) (Right 40) with Right 42 using eitherEq eqString eqi
 utest eitherMapRight (addi 2) (Left "foo")
@@ -122,7 +126,7 @@ with Left "foo" using eitherEq eqString eqi
 --  *         value to the passed function. If it is the Right case, then it is
 --  *         returned as is.
 -- -*
-let eitherBindLeft: Either a b -> (a -> Either c b) -> Either c b =
+let eitherBindLeft: all a. all b. all c. Either a b -> (a -> Either c b) -> Either c b =
   lam e. lam bf.
   match e with Left content then
     bf content
@@ -148,7 +152,8 @@ with Right 42 using eitherEq eqc eqi
 --  *         value to the passed function. If it is the Left case, then it is
 --  *         returned as is.
 -- -*
-let eitherBindRight: Either a b -> (b -> Either a c) -> Either a c =
+let eitherBindRight: all a. all b. all c.
+  Either a b -> (b -> Either a c) -> Either a c =
   lam e. lam bf.
   match e with Left content then
     Left content
@@ -173,7 +178,7 @@ with Left "c" using eitherEq eqString eqi
 --  *         second element containing the Right values, preserving order in
 --  *         relation to the input list.
 -- -*
-let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
+let eitherPartition: all a. all b. [Either a b] -> ([a],[b]) = lam es.
   foldl (lam acc : ([a], [b]). lam e.
     match e with Left content then
       (snoc acc.0 content, acc.1)
@@ -182,7 +187,9 @@ let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
     else never
   ) ([],[]) es
 
-let eqSeqTuple = lam eqSeql. lam eqSeqr. lam t1 : ([a], [b]). lam t2 : ([a], [b]).
+let eqSeqTuple : all a. all b.
+  ([a] -> [a] -> Bool) -> ([b] -> [b] -> Bool) -> ([a], [b]) -> ([a], [b]) -> Bool =
+  lam eqSeql. lam eqSeqr. lam t1. lam t2.
   and (eqSeql t1.0 t2.0) (eqSeqr t1.1 t2.1)
 
 utest eitherPartition [] with ([], []) using eqSeqTuple (eqSeq eqi) (eqSeq eqi)
@@ -199,7 +206,7 @@ with (["42"], [5.0, 1.0]) using eqSeqTuple (eqSeq eqString) (eqSeq eqf)
 --  * .return The extracted Left values, appearing in the same order as in the
 --  *         input list.
 -- -*
-let eitherLefts: [Either a b] -> [a] = lam es. (eitherPartition es).0
+let eitherLefts: all a. all b. [Either a b] -> [a] = lam es. (eitherPartition es).0
 
 utest eitherLefts [] with [] using eqSeq eqi
 utest eitherLefts [Right 1, Right 5] with [] using eqSeq eqi
@@ -214,7 +221,7 @@ using eqSeq eqString
 --  * .return The extracted Right values, appearing in the same order as in the
 --  *         input list.
 -- -*
-let eitherRights: [Either a b] -> [b] = lam es. (eitherPartition es).1
+let eitherRights: all a. all b. [Either a b] -> [b] = lam es. (eitherPartition es).1
 
 utest eitherRights [] with [] using eqSeq eqi
 utest eitherRights [Left "1", Left "5"] with [] using eqSeq eqi
@@ -228,7 +235,7 @@ using eqSeq eqi
 --  *
 --  * .return True iff the Either value is the Left case.
 -- -*
-let eitherIsLeft: Either a b -> Bool = lam e.
+let eitherIsLeft: all a. all b. Either a b -> Bool = lam e.
   match e with Left _ then true else false
 
 utest eitherIsLeft (Left 5) with true
@@ -243,7 +250,7 @@ utest eitherIsLeft (Right (Left 1)) with false
 --  *
 --  * .return True iff the Either value is the Right case.
 -- -*
-let eitherIsRight: Either a b -> Bool = lam e.
+let eitherIsRight: all a. all b. Either a b -> Bool = lam e.
   match e with Right _ then true else false
 
 utest eitherIsRight (Left 5) with false
@@ -260,7 +267,8 @@ utest eitherIsRight (Right (Left 1)) with true
 --  *
 --  * .return The Left case value or the default value.
 -- -*
-let eitherFromLeft: a -> Either a b -> a = lam v. eitherEither (lam x. x) (lam. v)
+let eitherFromLeft: all a. all b. a -> Either a b -> a =
+  lam v. eitherEither (lam x. x) (lam. v)
 
 utest eitherFromLeft "a" (Right 5) with "a"
 utest eitherFromLeft "a" (Left "foo") with "foo"
@@ -274,7 +282,8 @@ utest eitherFromLeft "a" (Left "foo") with "foo"
 --  *
 --  * .return The Right case value or the default value.
 -- -*
-let eitherFromRight: b -> Either a b -> b = lam v. eitherEither (lam. v) (lam x. x)
+let eitherFromRight: all a. all b. b -> Either a b -> b =
+  lam v. eitherEither (lam. v) (lam x. x)
 
 utest eitherFromRight 0 (Left "foo") with 0
 utest eitherFromRight 0 (Right 42) with 42
@@ -287,7 +296,7 @@ utest eitherFromRight 0 (Right 42) with 42
 --  * .return In the Left case, an Option containing the Left value is
 --  *         returned. Otherwise `None ()` is returned.
 -- -*
-let eitherGetLeft: Either a b -> Option a = lam e.
+let eitherGetLeft: all a. all b. Either a b -> Option a = lam e.
   match e with Left content then
     Some content
   else
@@ -304,7 +313,7 @@ utest eitherGetLeft (Right 42) with None () using optionEq eqi
 --  * .return In the Right case, an Option containing the Right value is
 --  *         returned. Otherwise `None ()` is returned.
 -- -*
-let eitherGetRight: Either a b -> Option b = lam e.
+let eitherGetRight: all a. all b. Either a b -> Option b = lam e.
   match e with Right content then
     Some content
   else

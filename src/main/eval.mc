@@ -23,8 +23,9 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprTypeCheck + MExprTypeLift +
-  MExprUtestTrans + MExprProfileInstrument + MExprEval
+  BootParser + MExpr + MExprTypeAnnot + MExprRemoveTypeAscription +
+  MExprTypeCheck + MExprTypeLift + MExprUtestTrans + MExprProfileInstrument +
+  MExprEval
 
   sem updateArgv (args : [String]) =
   | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
@@ -57,7 +58,8 @@ let eval = lam files. lam options : Options. lam args.
       keywords = [],
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
-      findExternalsExclude = false -- the interpreter does not support externals
+      findExternalsExclude = false, -- the interpreter does not support externals
+      eliminateDeadCode = not options.keepDeadCode
     } file in
 
     -- If option --debug-parse, then pretty print the AST

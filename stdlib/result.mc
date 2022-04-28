@@ -56,8 +56,10 @@ type Result w e a
 -- NOTE(vipa, 2022-01-21): These constructors are not intended to be
 -- public, there are invariants that the outside world is unlikely to
 -- preserve.
-con ResultOk : { warnings : Map Symbol w, value : a } -> Result w e a
-con ResultErr : { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
+con ResultOk : all w. all e. all a.
+  { warnings : Map Symbol w, value : a } -> Result w e a
+con ResultErr : all w. all e. all a.
+  { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
 
 let _emptyMap
   : all x. Map Symbol x
@@ -151,8 +153,8 @@ let _map
   : all w. all e. all a. all b. (a -> b) -> Result w e a -> Result w e b
   = lam f. lam start.
     switch start
-    case ResultOk r then ResultOk {r with value = f r.value}
-    case ResultErr _ then start
+    case ResultOk {warnings = w, value = v} then ResultOk {warnings = w, value = f v}
+    case ResultErr r then ResultErr r
     end
 
 utest _prepTest (_map (addi 1) (_ok 3)) with ([], Right 4)
@@ -306,6 +308,13 @@ let #var"" =
   utest _prepTest (_mapM work [0, negi 1, negi 2]) with (['a'], Left [0, 0]) in
   ()
 
+-- Convert a Result to an Option, discarding any information present
+-- about warnings or a potential error.
+let _toOption
+  : all w. all e. all a. Result w e a -> Option b
+  = lam r.
+    match r with ResultOk x then Some x.value else None ()
+
 -- Perform a computation only if its input is error free. Preserves
 -- warnings and errors, but if the input is an error then the action
 -- won't run, thus any errors or warnings it would have been produced
@@ -315,7 +324,7 @@ let _bind
   = lam start. lam f.
     switch start
     case ResultOk r then _warns r.warnings (f r.value)
-    case ResultErr _ then start
+    case ResultErr r then ResultErr r
     end
 
 utest _prepTest (_bind (_err 0) (lam. _err 1)) with ([], Left [0])
@@ -421,6 +430,7 @@ let result =
   , warn = _warn
   -- Destructors
   , consume = _consume
+  , toOption = _toOption
   -- Mapping, action produces no new errors or warnings
   , map = _map
   , map2 = _map2
@@ -433,4 +443,5 @@ let result =
   , bind2 = _bind2
   , bind3 = _bind3
   , bind4 = _bind4
+  , mapM = _mapM
   }

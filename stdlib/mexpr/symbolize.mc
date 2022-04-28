@@ -11,6 +11,7 @@ include "string.mc"
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
 include "info.mc"
 include "pprint.mc"
 
@@ -23,8 +24,9 @@ include "pprint.mc"
 type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
-  tyVarEnv: Map String Name,
+  tyVarEnv: Map String (Name, Level),
   tyConEnv: Map String Name,
+  currentLvl : Level,
   strictTypeVars: Bool
 }
 
@@ -32,7 +34,13 @@ let symEnvEmpty =
   {varEnv = mapEmpty cmpString,
    conEnv = mapEmpty cmpString,
    tyVarEnv = mapEmpty cmpString,
-   tyConEnv = mapEmpty cmpString,
+
+   -- Built-in type constructors
+   tyConEnv = mapFromSeq cmpString (
+     map (lam t: (String, [String]). (t.0, nameNoSym t.0)) builtinTypes
+   ),
+
+   currentLvl = 1,
    strictTypeVars = false}
 
 -----------
@@ -110,9 +118,11 @@ lang LetSym = Sym + LetAst + AllTypeAst
       let body =
         match stripTyAll tyBody with (vars, _) in
         let tyVarEnv =
-          foldr (lam v: (Name, VarSort). mapInsert (nameGetStr v.0) v.0)
+          foldr (lam v: (Name, VarSort).
+              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
             env.tyVarEnv vars in
-        symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
+        symbolizeExpr {{env with tyVarEnv = tyVarEnv}
+                            with currentLvl = addi 1 env.currentLvl} t.body
       in
       if nameHasSym t.ident then
         TmLet {{{{t with tyBody = tyBody}
@@ -164,7 +174,7 @@ lang TypeSym = Sym + TypeAst
       let params = map nameSetNewSym t.params in
       let paramStrs = map nameGetStr params in
       let tyVarEnv =
-        foldl2 (lam e. lam s. lam i. mapInsert s i e) tyVarEnv paramStrs params
+        foldl2 (lam e. lam s. lam i. mapInsert s (i, env.currentLvl) e) tyVarEnv paramStrs params
       in
       let paramEnv = {env with tyVarEnv = tyVarEnv} in
       let tyIdent = symbolizeType paramEnv t.tyIdent in
@@ -205,9 +215,12 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
         let tyBody = symbolizeType env bind.tyBody in
         match stripTyAll tyBody with (vars, _) in
         let tyVarEnv =
-          foldr (lam v: (Name, VarSort). mapInsert (nameGetStr v.0) v.0)
+          foldr (lam v: (Name, VarSort).
+              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
             env.tyVarEnv vars in
-        {{bind with body = symbolizeExpr {env with tyVarEnv = tyVarEnv} bind.body}
+        {{bind with body = symbolizeExpr
+                             {{env with tyVarEnv = tyVarEnv}
+                                   with currentLvl = addi 1 env.currentLvl} bind.body}
                with tyBody = tyBody})
         bindings in
 
@@ -301,8 +314,9 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
     if nameHasSym t.ident then ty
     else
       let str = nameGetStr t.ident in
-      match mapLookup str env.tyVarEnv with Some ident then
-        TyVar {t with ident = ident}
+      match mapLookup str env.tyVarEnv with Some (ident, lvl) then
+        TyVar {{t with ident = ident}
+                  with level = lvl}
       else if env.strictTypeVars then
         infoErrorExit t.info (concat "Unknown type variable in symbolizeExpr: " str)
       else
@@ -319,7 +333,7 @@ lang AllTypeSym = AllTypeAst + VarSortAst
       else
         let str = nameGetStr t.ident in
         let ident = nameSetNewSym t.ident in
-        let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
+        let env = {env with tyVarEnv = mapInsert str (ident, env.currentLvl) env.tyVarEnv} in
         TyAll {{{t with ident = ident}
                    with ty = symbolizeType env t.ty}
                    with sort = sort}
@@ -329,7 +343,7 @@ end
 -- PATTERNS --
 --------------
 
-let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
+let _symbolize_patname: Map String Name -> PatName -> (Map String Name, PatName) =
   lam varEnv. lam pname.
     match pname with PName name then
       if nameHasSym name then (varEnv, PName name)
@@ -390,7 +404,7 @@ lang NotPatSym = NotPat
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
     -- symbolizeExpr though, constructors must refer to the right symbol.
-    let res : (SymEnv, Pat) = symbolizePat env patEnv p.subpat in
+    let res : (Map String Name, Pat) = symbolizePat env patEnv p.subpat in
     (patEnv, PatNot {p with subpat = res.1})
 end
 

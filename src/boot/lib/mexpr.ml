@@ -406,6 +406,16 @@ let arity = function
       2
   | CtensorSetExn (_, Some _) ->
       1
+  | CtensorLinearGetExn None ->
+      2
+  | CtensorLinearGetExn (Some _) ->
+      1
+  | CtensorLinearSetExn (None, None) ->
+      3
+  | CtensorLinearSetExn (_, None) ->
+      2
+  | CtensorLinearSetExn (_, Some _) ->
+      1
   | CtensorRank ->
       1
   | CtensorShape ->
@@ -1269,6 +1279,44 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
       fail_constapp fi
+  | CtensorLinearGetExn None, TmTensor (_, t) ->
+      TmConst (fi, CtensorLinearGetExn (Some t))
+  | CtensorLinearGetExn (Some t), TmConst (_, CInt idx) -> (
+    try
+      t
+      |> function
+      | T.TBootInt t' ->
+          TmConst (fi, CInt (T.Op_mseq_barray.linear_get_exn t' idx))
+      | T.TBootFloat t' ->
+          TmConst (fi, CFloat (T.Op_mseq_barray.linear_get_exn t' idx))
+      | T.TBootGen t' ->
+          T.Op_mseq_generic.linear_get_exn t' idx
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorLinearGetExn _, _ ->
+      fail_constapp fi
+  | CtensorLinearSetExn (None, None), TmTensor (_, t) ->
+      TmConst (fi, CtensorLinearSetExn (Some t, None))
+  | CtensorLinearSetExn (Some t, None), TmConst (_, CInt idx) ->
+      TmConst (fi, CtensorLinearSetExn (Some t, Some idx))
+  | CtensorLinearSetExn (Some (T.TBootInt t), Some idx), TmConst (_, CInt n)
+    -> (
+    try
+      T.Op_mseq_barray.linear_set_exn t idx n ;
+      tm_unit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorLinearSetExn (Some (T.TBootFloat t), Some idx), TmConst (_, CFloat r)
+    -> (
+    try
+      T.Op_mseq_barray.linear_set_exn t idx r ;
+      tm_unit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorLinearSetExn (Some (T.TBootGen t), Some idx), tm -> (
+    try
+      T.Op_mseq_generic.linear_set_exn t idx tm ;
+      tm_unit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorLinearSetExn _, _ ->
+      fail_constapp fi
   | CtensorRank, TmTensor (_, t) ->
       let n =
         t
@@ -1484,12 +1532,14 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
         ( Record.find (us "0") r
         , Record.find (us "1") r
         , Record.find (us "2") r
-        , Record.find (us "3") r )
+        , Record.find (us "3") r
+        , Record.find (us "4") r )
       with
       | ( TmConst (_, CBool keep_utests)
         , TmConst (_, CBool prune_external_utests)
         , TmSeq (_, externals_exclude)
-        , TmConst (_, CBool warn) ) ->
+        , TmConst (_, CBool warn)
+        , TmConst (_, CBool eliminate_deadcode) ) ->
           let externals_exclude =
             Mseq.map
               (function
@@ -1504,7 +1554,8 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
                     ( keep_utests
                     , prune_external_utests
                     , externals_exclude
-                    , warn )
+                    , warn
+                    , eliminate_deadcode )
                 , None ) )
       | _ ->
           fail_constapp fi

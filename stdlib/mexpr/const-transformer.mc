@@ -31,7 +31,7 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + Named
       --dprint t2;
       t2
 
-  sem ctWorker (env: Map String Expr) =
+  sem ctWorker (env: Map String (Option Expr)) =
   | TmLet r ->
     let env = mapInsert (nameGetStr r.ident) (None()) env in
     let t1 = ctWorker env r.body in
