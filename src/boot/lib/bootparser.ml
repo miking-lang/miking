@@ -276,7 +276,7 @@ let getData = function
   | PTreeTy (TyTensor (fi, ty)) ->
       (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyRecord (fi, tymap)) ->
-      let (slst, tylst) = List.split (Record.bindings tymap) in
+      let slst, tylst = List.split (Record.bindings tymap) in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
   | PTreeTy (TyVariant (fi, lst)) ->

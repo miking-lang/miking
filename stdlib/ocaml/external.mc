@@ -537,10 +537,7 @@ lang OCamlDataConversionMExpr = OCamlDataConversion + OCamlAst + MExprAst
   + OCamlDataConversionList
   + OCamlDataConversionArray
   + OCamlDataConversionTuple
-  -- NOTE(johnwikman, 2022-04-28): This is temporarily commented out until a
-  -- system for mapping "unordered" labels in MExpr to ordered labels in OCaml
-  -- is implemented.
-  --+ OCamlDataConversionRecords
+  + OCamlDataConversionRecords
   + OCamlDataConversionBigArray
 end
 
