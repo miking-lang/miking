@@ -109,6 +109,12 @@ let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
       {o with tuneOptions = {to with reduceDependencies = argToFloatMin p 0.0}}),
+  ([("--print-stats", "", "")],
+    "Output detailed information about measuring points",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with printStats = true}}),
   ([("--enable-cleanup", "", "")],
     "Clean up tune file after tuning",
     lam p: ArgPart Options.

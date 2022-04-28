@@ -84,10 +84,13 @@ lang TuneStats = DependencyAnalysis
     let idNameContext: [(Int,Name,[Name])] =
       mapFoldWithKey (lam acc. lam name: Name. lam tree: PTree NameInfo.
         let binds: [(Int,[NameInfo])] = prefixTreeBindings tree in
-        concat acc
-        (map (lam b: (Int,[NameInfo]).
-            (b.0, name, map nameInfoGetName b.1)
-          ) binds)
+        let res = foldl (lam acc. lam b: (Int,[NameInfo]).
+            if setMem b.0 graph.alive then
+              cons (b.0, name, map nameInfoGetName b.1) acc
+            else acc
+          ) [] binds
+        in
+        concat acc res
       ) [] graph.measuringPoints
     in
     let idStrContext: [(Int,String,[String])] = map (lam t: (Int,Name,[Name]).
