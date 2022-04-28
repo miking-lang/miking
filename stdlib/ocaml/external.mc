@@ -49,13 +49,17 @@ lang OCamlDataConversionBase = OCamlDataConversion + OCamlAst
 end
 
 lang OCamlDataConversionOpaque = OCamlDataConversion + OCamlAst
-  + ConTypeAst + AppTypeAst + UnknownTypeAst
+  + ConTypeAst + AppTypeAst + UnknownTypeAst + AllTypeAst + VarTypeAst
 
   sem convertDataInner info env t =
-  | (TyUnknown _, _) | (_, TyUnknown _)
-  | (TyCon {ident = ident}, _) | (_, TyCon {ident = ident})
-  | (TyApp {lhs = TyCon _}, _) | (_, TyApp {lhs = TyCon _})
+  | (TyUnknown _ | TyVar _, !(TyAll _)) | (!(TyAll _), TyUnknown _ | TyVar _)
+  | (TyCon {ident = ident}, !(TyAll _)) | (!(TyAll _), TyCon {ident = ident})
+  | (TyApp {lhs = TyCon _}, !(TyAll _)) | (!(TyAll _), TyApp {lhs = TyCon _})
   -> (0, t)
+  | (TyAll {ty = ty1}, TyAll {ty = ty2})
+  | (TyAll {ty = ty1}, ty2)
+  | (ty1, TyAll {ty = ty2})
+  -> convertData info env t (ty1, ty2)
 end
 
 lang OCamlDataConversionFun =
