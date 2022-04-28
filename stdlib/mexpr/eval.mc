@@ -1166,7 +1166,6 @@ lang MapEval =
     TmRecord {
       bindings = bindings,
       ty = TyRecord {
-        labels = labels,
         fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
         info = NoInfo ()},
       info = NoInfo ()}

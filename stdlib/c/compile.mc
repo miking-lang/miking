@@ -524,11 +524,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- Generate type definitions.
   sem genTyDefs (env: CompileCEnv) (acc: [CTop]) (name: Name) =
   | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
-  | TyRecord { fields = fields } ->
+  | TyRecord { fields = fields } & ty ->
+    let labels = tyRecordOrderedLabels ty in
     let fieldsLs: [(CType,Name)] =
-      mapFoldWithKey (lam acc. lam k. lam ty.
+      foldl (lam acc. lam k.
+        let ty = mapFindExn k fields in
         let ty = compileType env ty in
-        snoc acc (ty, Some (nameNoSym (sidToString k)))) [] fields in
+        snoc acc (ty, Some (nameNoSym (sidToString k)))) [] labels in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fieldsLs },
       id = name

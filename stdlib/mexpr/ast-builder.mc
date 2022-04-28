@@ -59,7 +59,6 @@ let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, Type). stringToSid b.0) fields,
     info = NoInfo ()
   }
 

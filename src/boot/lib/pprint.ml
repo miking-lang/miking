@@ -176,14 +176,13 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
-  | TyRecord (_, r, _) when r = Record.empty ->
+  | TyRecord (_, r) when r = Record.empty ->
       us "()"
-  | TyRecord (_, r, ls) ->
-      let pprint_ty_label l =
-        let ty = Record.find l r in
+  | TyRecord (_, r) ->
+      let pprint_ty_label (l, ty) =
         pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label ls) ^. us "}"
+      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label r.bindings) ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->

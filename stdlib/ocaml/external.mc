@@ -1,4 +1,5 @@
 include "mexpr/type.mc"
+include "mexpr/record.mc"
 include "stringid.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/ast.mc"
@@ -301,7 +302,8 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
   | (OTyRecord {fields = fields1} & ty1,
     TyCon {ident = ident} & ty2) ->
     match mapLookup ident env.constrs
-    with Some (TyRecord {fields = fields2, labels = labels2}) then
+    with Some (TyRecord {fields = fields2} & ty) then
+      let labels2 = tyRecordOrderedLabels ty in
       let costsTms =
         zipWith
           (lam l2. lam field : (String, Type).
@@ -334,7 +336,8 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
   | (TyCon {ident = ident} & ty1,
     OTyRecord {tyident = tyident, fields = fields2} & ty2) ->
     match mapLookup ident env.constrs
-    with Some (TyRecord {fields = fields1, labels = labels1}) then
+    with Some (TyRecord {fields = fields1} & ty) then
+      let labels1 = tyRecordOrderedLabels ty in
       match mapLookup (ocamlTypedFields fields1) env.records
       with Some id then
         let ns = create (length labels1) (lam. nameSym "r") in
@@ -534,7 +537,10 @@ lang OCamlDataConversionMExpr = OCamlDataConversion + OCamlAst + MExprAst
   + OCamlDataConversionList
   + OCamlDataConversionArray
   + OCamlDataConversionTuple
-  + OCamlDataConversionRecords
+  -- NOTE(johnwikman, 2022-04-28): This is temporarily commented out until a
+  -- system for mapping "unordered" labels in MExpr to ordered labels in OCaml
+  -- is implemented.
+  --+ OCamlDataConversionRecords
   + OCamlDataConversionBigArray
 end
 

@@ -85,15 +85,17 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     [CSTensorDataCopyCpu {src = arg, dst = dst, dataTy = tensorDataType}]
   | TyInt _ | TyChar _ | TyFloat _ | TyBool _ ->
     [CSExpr {expr = CEBinOp {op = COAssign (), lhs = dst, rhs = arg}}]
-  | TyRecord t ->
-    mapFoldWithKey
-      (lam acc : [CStmt]. lam key : SID. lam ty : Type.
+  | TyRecord t & ty ->
+    let labels = tyRecordOrderedLabels ty in
+    foldl
+      (lam acc : [CStmt]. lam key : SID.
+        let ty = mapFindExn key t.fields in
         let ty = _unwrapType env.typeEnv ty in
         let fieldId = nameNoSym (sidToString key) in
         let dstField = CEMember {lhs = dst, id = fieldId} in
         let argField = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileCopyToCpu env dstField argField ty))
-      [] t.fields
+      [] labels
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
@@ -163,15 +165,17 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     -- later stage in the compiler.
     let tensorDataType = CTyPtr {ty = compileType env elemType} in
     [CSTensorDataCopyGpu {src = arg, dst = dst, dataTy = tensorDataType}]
-  | TyRecord t ->
-    mapFoldWithKey
-      (lam acc : [CStmt]. lam key : SID. lam ty : Type.
+  | TyRecord t & ty ->
+    let labels = tyRecordOrderedLabels ty in
+    foldl
+      (lam acc : [CStmt]. lam key : SID.
+        let ty = mapFindExn key t.fields in
         let ty = _unwrapType env.typeEnv ty in
         let fieldId = nameNoSym (sidToString key) in
         let dstField = CEMember {lhs = dst, id = fieldId} in
         let argField = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileCopyToGpu env dstField argField ty))
-      [] t.fields
+      [] labels
   | TyInt _ | TyFloat _ | TyChar _ | TyBool _ ->
     [CSExpr {expr = CEBinOp { op = COAssign (), lhs = dst, rhs = arg}}]
   | ty ->
@@ -211,14 +215,16 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       args = [CEMember {lhs = arg, id = _seqKey}]}} in
     [iterInitStmt, freeInnerLoopStmt, freeSeqStmt]
   | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
-  | TyRecord t ->
-    mapFoldWithKey
-      (lam acc : [CStmt]. lam key : SID. lam ty : Type.
+  | TyRecord t & ty ->
+    let labels = tyRecordOrderedLabels ty in
+    foldl
+      (lam acc : [CStmt]. lam key : SID.
+        let ty = mapFindExn key t.fields in
         let ty = _unwrapType env.typeEnv ty in
         let fieldId = nameNoSym (sidToString key) in
         let fieldArg = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileFreeCpu env fieldArg ty))
-      [] t.fields
+      [] labels
   | ty ->
     use MExprPrettyPrint in
     let tystr = type2str ty in
@@ -270,14 +276,16 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     let freeTempStmt = CSExpr {expr = CEApp {fun = _free, args = [temp]}} in
     [ tempDefStmt, copyDataStmt, iterInitStmt, freeLoopStmt, freeGpuDataStmt
     , freeTempStmt ]
-  | TyRecord t ->
-    mapFoldWithKey
-      (lam acc : [CStmt]. lam key : SID. lam ty : Type.
+  | TyRecord t & ty ->
+    let labels = tyRecordOrderedLabels ty in
+    foldl
+      (lam acc : [CStmt]. lam key : SID.
+        let ty = mapFindExn key t.fields in
         let ty = _unwrapType env.typeEnv ty in
         let fieldId = nameNoSym (sidToString key) in
         let fieldArg = CEMember {lhs = arg, id = fieldId} in
         concat acc (_compileFreeGpu env fieldArg ty))
-      [] t.fields
+      [] labels
   | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
   | ty ->
     use MExprPrettyPrint in
@@ -339,7 +347,13 @@ lang CudaCompile = CudaCompileCopy + CudaCompileFree
   | TmCopy {arg = arg, toMem = toMem, ty = ty} ->
     let arg = CEVar {id = arg} in
     match res with RReturn _ then
-      match ty with TyRecord {labels = []} then (env, [])
+      let tyIsEmptyRecord =
+        match ty with TyRecord {fields = fields} then
+          mapIsEmpty fields
+        else
+          false
+      in
+      if tyIsEmptyRecord then (env, [])
       else
         let dstId = nameSym "temp" in
         let dst = CEVar {id = dstId} in

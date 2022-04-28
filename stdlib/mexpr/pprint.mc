@@ -10,6 +10,7 @@ include "map.mc"
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "record.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -1072,7 +1073,7 @@ end
 
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyRecord t ->
+  | TyRecord t & ty ->
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
         let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) (mapBindings t.fields) in
@@ -1090,17 +1091,16 @@ lang RecordTypePrettyPrint = RecordTypeAst
         else None ()
       in
       match tuple with Some tuple then
-        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple)
-        then (env, join ["(", strJoin ", " tuple, ")"])
-        else never
+        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
+        (env, join ["(", strJoin ", " tuple, ")"])
       else
-        let f = lam env. lam. lam v. getTypeStringCode indent env v in
-        match mapMapAccum f env t.fields with (env, fields) then
-          let fields =
-            map (lam b : (SID,String). (sidToString b.0, b.1)) (mapBindings fields) in
-          let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
-          (env,join ["{", strJoin ", " (map conventry fields), "}"])
-        else never
+        let f = lam env. lam v: (SID,Type). getTypeStringCode indent env (v.0, v.1) in
+        let orderedFields = tyRecordOrderedFields ty in
+        match mapAccumL f env orderedFields with (env, fields) in
+        let fields =
+          map (lam b : (SID,String). (sidToString b.0, b.1)) fields in
+        let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
+        (env,join ["{", strJoin ", " (map conventry fields), "}"])
 end
 
 lang VariantTypePrettyPrint = VariantTypeAst

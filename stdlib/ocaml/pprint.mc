@@ -2,6 +2,7 @@ include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/symbolize.mc"
 include "mexpr/pprint.mc"
+include "mexpr/record.mc"
 include "char.mc"
 include "name.mc"
 include "intrinsics-ops.mc"
@@ -70,38 +71,27 @@ lang OCamlTypePrettyPrint =
   FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
+      let orderedFields = tyRecordOrderedFields ty in
       let f = lam env. lam field : (String, Type).
-        match field with (str, ty) then
-          match getTypeStringCode indent env ty with (env,ty) then
-            let str = pprintLabelString str in
-            (env, join [str, ": ", ty])
-          else never
-        else never
+        match field with (str, ty) in
+        match getTypeStringCode indent env ty with (env,ty) in
+        let str = pprintLabelString str in
+        (env, join [str, ": ", ty])
       in
-      let fieldStrs =
-        match record2tuple t.fields with Some tupleFields then
-          mapi (lam i. lam f. (int2string i, f)) tupleFields
-        else
-          map
-            (lam f : (SID, Type).
-              (sidToString f.0, f.1))
-            (mapBindings t.fields) in
-      match mapAccumL f env fieldStrs with (env, fields) then
-        (env, join ["{", strJoin ";" fields, "}"])
-      else never
+      let fieldStrs = map (lam x: (SID, Type). (sidToString x.0, x.1)) orderedFields in
+      match mapAccumL f env fieldStrs with (env, fields) in
+      (env, join ["{", strJoin ";" fields, "}"])
   | OTyVar {ident = ident} -> pprintVarName env ident
   | OTyVarExt {ident = ident, args = []} -> (env, ident)
   | OTyVarExt {ident = ident, args = [arg]} ->
-    match getTypeStringCode indent env arg with (env, arg) then
-      (env, join [arg, " ", ident])
-    else never
+    match getTypeStringCode indent env arg with (env, arg) in
+    (env, join [arg, " ", ident])
   | OTyVarExt {ident = ident, args = args} ->
-    match mapAccumL (getTypeStringCode indent) env args with (env, args) then
-      (env, join ["(", strJoin ", " args, ") ", ident])
-    else never
+    match mapAccumL (getTypeStringCode indent) env args with (env, args) in
+    (env, join ["(", strJoin ", " args, ") ", ident])
   | _ -> (env, "Obj.t")
 end
 

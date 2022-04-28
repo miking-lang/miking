@@ -275,8 +275,8 @@ let getData = function
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
       (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
-  | PTreeTy (TyRecord (fi, tymap, slst)) ->
-      let tylst = List.map (fun s -> Record.find s tymap) slst in
+  | PTreeTy (TyRecord (fi, tymap)) ->
+      let (slst, tylst) = List.split (Record.bindings tymap) in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
   | PTreeTy (TyVariant (fi, lst)) ->

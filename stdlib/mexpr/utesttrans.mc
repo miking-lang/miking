@@ -652,7 +652,6 @@ lang UtestViaMatchRecord = UtestViaMatch + RecordAst + RecordTypeAst + RecordPat
       , ty = TyRecord
         { info = NoInfo ()
         , fields = mapMap (lam. tyunknown_) res.1
-        , labels = mapKeys res.1
         }
       } in
     (res.0, pat)

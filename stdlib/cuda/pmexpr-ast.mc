@@ -174,8 +174,9 @@ lang CudaPMExprAst = PMExprAst
     let n = typeAnnotExpr env t.n in
     let f = typeAnnotExpr env t.f in
     let ty =
-      match tyTm f with TyArrow {from = TyInt _, to = unit & (TyRecord {labels = []})} then
-        unit
+      match tyTm f with TyArrow {from = TyInt _, to = unit & (TyRecord {fields = fields})} then
+        if mapIsEmpty fields then unit
+        else TyUnknown {info = t.info}
       else TyUnknown {info = t.info} in
     TmLoopKernel {{{t with n = n}
                       with f = f}
