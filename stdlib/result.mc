@@ -311,7 +311,7 @@ let #var"" =
 -- Convert a Result to an Option, discarding any information present
 -- about warnings or a potential error.
 let _toOption
-  : all w. all e. all a. Result w e a -> Option b
+  : all w. all e. all a. Result w e a -> Option a
   = lam r.
     match r with ResultOk x then Some x.value else None ()
 

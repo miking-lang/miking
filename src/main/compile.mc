@@ -95,7 +95,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
-      , compileOcaml = ocamlCompile sourcePath
+      , compileOcaml = ocamlCompile options sourcePath
       }
 
 -- Main function for compiling a program

@@ -31,8 +31,10 @@ module Mseq = struct
         Rope (Rope.concat_array s1 s2)
     | List s1, List s2 ->
         List (s1 @ s2)
-    | _ ->
-        raise (Invalid_argument "Mseq.concat")
+    | List s1, Rope s2 ->
+        List (s1 @ Rope.Convert.to_list_array s2)
+    | Rope s1, List s2 ->
+        List (Rope.foldr_array List.cons s1 s2)
 
   let get s = match s with Rope s -> Rope.get_array s | List s -> List.nth s
 
@@ -141,6 +143,12 @@ module Mseq = struct
         List (List.mapi f s)
 
   module Helpers = struct
+    let to_seq = function
+      | Rope s ->
+          Array.to_seq (Rope.Convert.to_array_array s)
+      | List s ->
+          List.to_seq s
+
     let of_list_rope l = Rope (Rope.Convert.of_list_array l)
 
     let of_list_list l = List l
@@ -186,7 +194,16 @@ module Mseq = struct
       | List s1, List s2 ->
           List.equal f s1 s2
       | _ ->
-          raise (Invalid_argument "Mseq.equal")
+          let rec seq_equal l r =
+            match (l (), r ()) with
+            | Seq.Nil, Seq.Nil ->
+                true
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                f lx rx && seq_equal l r
+            | _ ->
+                false
+          in
+          seq_equal (to_seq s1) (to_seq s2)
 
     let fold_left f a = function
       | Rope s ->
@@ -207,7 +224,14 @@ module Mseq = struct
       | List s1, List s2 ->
           List (List.combine s1 s2)
       | _ ->
-          raise (Invalid_argument "Mseq.combine")
+          let rec seq_combine_to_list s1 s2 =
+            match (s1 (), s2 ()) with
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                (lx, rx) :: seq_combine_to_list l r
+            | _ ->
+                []
+          in
+          List (seq_combine_to_list (to_seq s1) (to_seq s2))
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with
@@ -216,7 +240,14 @@ module Mseq = struct
       | List s1, List s2 ->
           List.fold_right2 f s1 s2 a
       | _ ->
-          raise (Invalid_argument "Mseq.fold_right2")
+          let rec seq_fold_right2 s1 s2 =
+            match (s1 (), s2 ()) with
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                f lx rx (seq_fold_right2 l r)
+            | _ ->
+                a
+          in
+          seq_fold_right2 (to_seq s1) (to_seq s2)
 
     let map_accum_left f a = function
       | Rope s ->

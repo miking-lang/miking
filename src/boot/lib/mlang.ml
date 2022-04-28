@@ -861,11 +861,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let translate_inter = function
         | Inter (fi, name, ty, params, cases) ->
             let params =
-              match params with
-              | Some params ->
-                  params
-              | None ->
-                  [Param (NoInfo, us "", TyUnknown NoInfo)]
+              match params with Some params -> params | None -> []
             in
             Some
               ( fi

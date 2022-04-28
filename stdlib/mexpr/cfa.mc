@@ -913,20 +913,21 @@ end
 
 lang AndPatCFA = MatchCFA + AndPat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatAnd p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatAnd p, av) ->
+    let graph = propagateMatchConstraint graph id (p.lpat, av) in
+    propagateMatchConstraint graph id (p.rpat, av)
 end
 
 lang OrPatCFA = MatchCFA + OrPat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatOr p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatOr p, av) ->
+    let graph = propagateMatchConstraint graph id (p.lpat, av) in
+    propagateMatchConstraint graph id (p.rpat, av)
 end
 
 lang NotPatCFA = MatchCFA + NotPat
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
-  | (PatNot p, _) ->
-    infoErrorExit p.info "Pattern currently unsupported in CFA"
+  | (PatNot p, _) -> graph
 end
 
 ---------------
@@ -1148,6 +1149,61 @@ let t = _parse "
 utest _test false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
+] using eqTestLam in
+
+-- And pattern
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let res =
+    match f with a & b then a g
+    else (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res", "a", "b"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"]),
+  ("b", ["x"])
+] using eqTestLam in
+
+-- Or pattern
+let t = _parse "
+  type T in
+  con C1: (a -> a) -> T in
+  con C2: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = (C1 f, f) in
+  let res =
+    match h with (C1 _, rhs) | (C2 _, rhs) then rhs g
+    else (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res", "rhs"] with [
+  ("res", ["y","z"]),
+  ("rhs", ["x"])
+] using eqTestLam in
+
+-- Not pattern
+let t = _parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = (C f, f) in
+  let res =
+    match h with ! (C _, rhs) then (lam yy. yy)
+    else (lam z. z)
+  in
+  let res2 =
+    match h with ! (C _, rhs) & (_, p) then (lam k. k)
+    else (lam w. w)
+  in res
+------------------------" in
+utest _test false t ["res", "res2", "p"] with [
+  ("res", ["yy","z"]),
+  ("res2", ["k","w"]),
+  ("p", ["x"])
 ] using eqTestLam in
 
 ()
