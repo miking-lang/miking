@@ -82,6 +82,9 @@ let tune = lam files. lam options : Options. lam args.
     -- Context expand the holes
     match contextExpand env ast with (r, ast) in
 
+    -- If option --debug-expansion, then pretty print the expanded AST
+    (if tuneOptions.debugExpansion then printLn (expr2str ast) else ());
+
     -- If option --tuned is given, then use tune file as defaults
     let table =
       if options.useTuned then tableFromFile (tuneFileName file) else r.table in

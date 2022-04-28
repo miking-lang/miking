@@ -96,6 +96,12 @@ let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
       {o with tuneOptions = {to with debugInstrumentation = true}}),
+  ([("--debug-expansion", "", "")],
+    "Debug context expansion",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      let to : TuneOptions = o.tuneOptions in
+      {o with tuneOptions = {to with debugExpansion = true}}),
   ([("--seq-transform", "", "")],
     "Transform sequence literals into create function choosing between rope and list",
     lam p: ArgPart Options.
