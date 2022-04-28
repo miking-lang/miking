@@ -191,7 +191,7 @@ lang OCamlDataConversionHelpers =
      in
      (addi cost opcost, t)
 
-  -- Helper function to convert to and from OCaml tuples to/from MExpr records.
+  -- Helper function to convert OCaml tuples to/from MExpr records.
   sem convertTuple
   : Info                        -- File info.
   -> GenerateEnv                -- The environment.
@@ -299,11 +299,18 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
   + RecordTypeAst + ConTypeAst + UnknownTypeAst
 
   sem convertDataInner info env t =
-  | (OTyRecord {fields = fields1} & ty1,
+  | (OTyRecordExt {fields = fields1} & ty1,
     TyCon {ident = ident} & ty2) ->
     match mapLookup ident env.constrs
     with Some (TyRecord {fields = fields2} & ty) then
-      let labels2 = tyRecordOrderedLabels ty in
+      let fields1Labels2 =
+        map
+          (lam f : { label : String, asLabel : String, ty : Type}.
+            match f with {label = label, asLabel = asLabel, ty = ty} in
+            ((label, ty), stringToSid asLabel))
+          fields1
+      in
+      match unzip fields1Labels2 with (fields1, labels2) in
       let costsTms =
         zipWith
           (lam l2. lam field : (String, Type).
@@ -311,7 +318,11 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
             match mapLookup l2 fields2 with Some ty2 then
               convertData
                 info env (OTmProject { field = l1, tm = t }) (ty1, ty2)
-            else infoErrorExit info "impossible")
+            else
+              infoErrorExit
+                info
+                (join
+                  ["Field \"", sidToString l2, "\" not found in record type"]))
           labels2 fields1
       in
       match unzip costsTms with (costs, tms) in
@@ -334,10 +345,17 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
       else infoErrorExit info "impossible"
     else infoErrorExit info "Cannot convert record"
   | (TyCon {ident = ident} & ty1,
-    OTyRecord {tyident = tyident, fields = fields2} & ty2) ->
+    OTyRecordExt {tyident = tyident, fields = fields2} & ty2) ->
     match mapLookup ident env.constrs
     with Some (TyRecord {fields = fields1} & ty) then
-      let labels1 = tyRecordOrderedLabels ty in
+      let fields2Labels1 =
+        map
+          (lam f : {label : String, asLabel : String, ty : Type}.
+            match f with {label = label, asLabel = asLabel, ty = ty} in
+            ((label, ty), stringToSid asLabel))
+          fields2
+      in
+      match unzip fields2Labels1 with (fields2, labels1) in
       match mapLookup (ocamlTypedFields fields1) env.records
       with Some id then
         let ns = create (length labels1) (lam. nameSym "r") in
@@ -356,10 +374,9 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
         in
         match unzip fields2 with (labels2, tys2) in
         let costsTms =
-          mapi
-            (lam i. lam x : (Name, Type).
-              match x with (ident, ty2) in
-              let l1 = get labels1 i in
+          zipWith
+            (lam ident : Name. lam x : (SID, Type).
+              match x with (l1, ty2) in
               match mapLookup l1 fields1 with Some ty1 then
                 let var =
                   TmVar {
@@ -370,8 +387,12 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
                   }
                 in
                 convertData info env (objMagic var) (ty1, ty2)
-              else infoErrorExit info "impossible")
-            (zip ns tys2)
+              else
+                infoErrorExit
+                  info
+                  (join
+                    ["Field \"", sidToString l1, "\" not found in record type"]))
+            ns (zip labels1 tys2)
         in
         match unzip costsTms with (costs, tms) in
         let rec =

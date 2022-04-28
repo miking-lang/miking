@@ -210,6 +210,11 @@ lang OCamlTypeAst =
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
   | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
+  | OTyRecordExt {
+      info : Info,
+      fields : [{label : String, asLabel : String, ty : Type}],
+      tyident : Type
+    }
   | OTyString {info: Info}
 
   sem infoTy =
@@ -225,49 +230,50 @@ lang OCamlTypeAst =
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
   | OTyRecord r -> r.info
+  | OTyRecordExt r -> r.info
   | OTyString r -> r.info
 
   sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem smapAccumL_Type_Type f acc =
   | OTyList t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyList {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyList {t with ty = ty})
   | OTyArray t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyArray {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyArray {t with ty = ty})
   | OTyTuple t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyTuple {t with tys = tys})
-    else never
+    match mapAccumL f acc t.tys with (acc, tys) in
+    (acc, OTyTuple {t with tys = tys})
   | OTyBigarrayGenarray t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyBigarrayGenarray {t with tys = tys})
-    else never
+    match mapAccumL f acc t.tys with (acc, tys) in
+    (acc, OTyBigarrayGenarray {t with tys = tys})
   | OTyBigarrayArray t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyBigarrayArray {t with tys = tys})
-    else never
+    match mapAccumL f acc t.tys with (acc, tys) in
+    (acc, OTyBigarrayArray {t with tys = tys})
   | OTyLabel t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyLabel {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyLabel {t with ty = ty})
   | OTyVarExt t ->
-    match mapAccumL f acc t.args with (acc, args) then
-      (acc, OTyVarExt {t with args = args})
-    else never
+    match mapAccumL f acc t.args with (acc, args) in
+    (acc, OTyVarExt {t with args = args})
   | OTyRecord t ->
     let fieldFun = lam acc. lam field : (String, Type).
-      match f acc field.1 with (acc, ty) then
-        (acc, (field.0, ty))
-      else never in
-    match mapAccumL fieldFun acc t.fields with (acc, fields) then
-      match f acc t.tyident with (acc, tyident) then
-        (acc, OTyRecord {{t with fields = fields}
-                            with tyident = tyident})
-      else never
-    else never
+      match f acc field.1 with (acc, ty) in
+      (acc, (field.0, ty))
+    in
+    match mapAccumL fieldFun acc t.fields with (acc, fields) in
+    match f acc t.tyident with (acc, tyident) in
+    (acc, OTyRecord {{t with fields = fields}
+                        with tyident = tyident})
+  | OTyRecordExt t ->
+    let fieldFun = lam acc. lam field : {label : String, asLabel : String, ty : Type}.
+      match f acc field.ty with (acc, ty) in
+      (acc, { field with ty = ty })
+    in
+    match mapAccumL fieldFun acc t.fields with (acc, fields) in
+    match f acc t.tyident with (acc, tyident) in
+    (acc, OTyRecordExt {{t with fields = fields}
+                           with tyident = tyident})
 end
 
 lang OCamlAst =
@@ -343,6 +349,10 @@ let otylabel_ = use OCamlAst in
 let otyrecord_ = use OCamlAst in
   lam tyident. lam fields.
     OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
+
+let otyrecordext_ = use OCamlAst in
+  lam tyident. lam fields.
+    OTyRecordExt {info = NoInfo (), tyident = tyident, fields = fields}
 
 let otystring_ = use OCamlAst in
   OTyString {info = NoInfo ()}
