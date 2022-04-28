@@ -182,7 +182,7 @@ let rec ustring_of_ty = function
       let pprint_ty_label (l, ty) =
         pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label r.bindings) ^. us "}"
+      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label (Record.bindings r)) ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->

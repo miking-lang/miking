@@ -8,7 +8,7 @@ let recordOrderedLabels = lam labels: [SID].
   let isTupleLabel = lam sid.
     let l = sidToString sid in
     if null l then false
-    else if eqChar (get l 0) '0' then eqi (length l 1)
+    else if eqChar (get l 0) '0' then eqi (length l) 1
     else forAll (lam c. and (geqChar c '0') (leqChar c '9')) l
   in
   -- NOTE(johnwikman, 2022-04-27): cmpString uses shortlex ordering, so this

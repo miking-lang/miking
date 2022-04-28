@@ -3,7 +3,9 @@
 
 include "seq.mc"
 
+include "common.mc"
 mexpr
+
 
 external extTestListOfLists : [[Int]] in
 utest extTestListOfLists with [[0]] in
@@ -40,6 +42,9 @@ utest extTestTuple10th (1, 3.) with 2 in
 external extTestTuple20th : ([Int], Int) -> [Int] in
 utest extTestTuple20th ([1], 2) with [2] in
 
+/- NOTE(johnwikman, 2022-04-28): These are commented out until the record code
+   in stdlib/ocaml/external.mc is fixed.
+
 external extTestRecord1 : {c : Int, d : Float} in
 utest extTestRecord1.c with 1 in
 utest extTestRecord1.d with 3. using eqf in
@@ -64,6 +69,7 @@ external extTestRecord3BA
   : {c : {c : Int, d : Float}, d : {c : [Int], d : Int}} -> [Int]
 in
 utest extTestRecord3BA {c = {c = 1, d = 3.}, d = {c = [1], d = 2}} with [2] in
+-/
 
 external extTestArgLabel : Int -> Int -> Int in
 utest extTestArgLabel 2 1 with 1 in

@@ -182,7 +182,6 @@ lang TypeLift = TypeLiftBase + Cmp
       records = mapEmpty (mapCmp cmpType),
       seqs = mapEmpty cmpType,
       tensors = mapEmpty cmpType,
-      labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
 
@@ -329,19 +328,13 @@ lang MExprTypeLift =
   TypeTypeLift + DataTypeLift + MatchTypeLift +
 
   -- Non-default implementations (Types)
-  RecordTypeTypeLift + AppTypeTypeLift
-end
+  RecordTypeTypeLift + AppTypeTypeLift +
 
-lang MExprTypeLiftOrderedRecords =
-  MExprTypeLift + TypeLiftAddRecordToEnvOrdered
-end
-
-lang MExprTypeLiftUnOrderedRecords =
-  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+  TypeLiftAddRecordToEnv
 end
 
 lang TestLang =
-  MExprTypeLiftUnOrderedRecords + SeqTypeTypeLift + MExprSym +
+  MExprTypeLift + SeqTypeTypeLift + MExprSym +
   MExprTypeAnnot + MExprPrettyPrint
 end
 

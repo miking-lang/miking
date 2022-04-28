@@ -85,7 +85,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     [CSTensorDataCopyCpu {src = arg, dst = dst, dataTy = tensorDataType}]
   | TyInt _ | TyChar _ | TyFloat _ | TyBool _ ->
     [CSExpr {expr = CEBinOp {op = COAssign (), lhs = dst, rhs = arg}}]
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     foldl
       (lam acc : [CStmt]. lam key : SID.
@@ -165,7 +165,7 @@ lang CudaCompileCopy = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     -- later stage in the compiler.
     let tensorDataType = CTyPtr {ty = compileType env elemType} in
     [CSTensorDataCopyGpu {src = arg, dst = dst, dataTy = tensorDataType}]
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     foldl
       (lam acc : [CStmt]. lam key : SID.
@@ -215,7 +215,7 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       args = [CEMember {lhs = arg, id = _seqKey}]}} in
     [iterInitStmt, freeInnerLoopStmt, freeSeqStmt]
   | TyTensor _ | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> []
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     foldl
       (lam acc : [CStmt]. lam key : SID.
@@ -276,7 +276,7 @@ lang CudaCompileFree = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     let freeTempStmt = CSExpr {expr = CEApp {fun = _free, args = [temp]}} in
     [ tempDefStmt, copyDataStmt, iterInitStmt, freeLoopStmt, freeGpuDataStmt
     , freeTempStmt ]
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     foldl
       (lam acc : [CStmt]. lam key : SID.

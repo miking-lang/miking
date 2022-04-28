@@ -86,7 +86,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
         (join ["Sequences of ", tystr, " are not supported in Futhark wrapper"])
   | TyTensor {info = info} ->
     infoErrorExit info "Tensors are not supported in Futhark wrapper"
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     let fields : [CDataRepr] =
       map

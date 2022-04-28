@@ -1073,7 +1073,7 @@ end
 
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyRecord t & ty ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
         let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) (mapBindings t.fields) in
@@ -1094,7 +1094,11 @@ lang RecordTypePrettyPrint = RecordTypeAst
         match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
         (env, join ["(", strJoin ", " tuple, ")"])
       else
-        let f = lam env. lam v: (SID,Type). getTypeStringCode indent env (v.0, v.1) in
+        let f = lam env. lam field.
+          match field with (sid, ty) in
+          match getTypeStringCode indent env ty with (env, tyStr) in
+          (env, (sid, tyStr))
+        in
         let orderedFields = tyRecordOrderedFields ty in
         match mapAccumL f env orderedFields with (env, fields) in
         let fields =
@@ -1132,7 +1136,7 @@ lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   | WeakVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
-      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+      TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
 end

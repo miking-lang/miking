@@ -691,15 +691,14 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
+lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecls =
   | env ->
     let env : AssocSeq Name Type = env in
     let typeLiftEnvMap = mapFromSeq nameCmp env in
     let topDecls = _makeTypeDeclarations typeLiftEnvMap env in
-    match topDecls with (tops, recordFieldsToName) then
+    match topDecls with (tops, recordFieldsToName) in
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
                                                   env recordFieldsToName in
       (generateEnv, tops)
-    else never
 end

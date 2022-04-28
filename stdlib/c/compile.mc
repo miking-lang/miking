@@ -524,7 +524,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- Generate type definitions.
   sem genTyDefs (env: CompileCEnv) (acc: [CTop]) (name: Name) =
   | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
-  | TyRecord { fields = fields } & ty ->
+  | (TyRecord { fields = fields }) & ty ->
     let labels = tyRecordOrderedLabels ty in
     let fieldsLs: [(CType,Name)] =
       foldl (lam acc. lam k.
@@ -1355,7 +1355,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 lang Test =
   MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
-  MExprTypeLiftUnOrderedRecords + SeqTypeNoStringTypeLift + TensorTypeTypeLift
+  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
 end
 
 mexpr
@@ -1647,7 +1647,7 @@ utest testCompile typedefs with strJoin "\n" [
   "typedef Rec1 (*MyRec2);",
   "typedef Integer Integer2;",
   "typedef struct Rec2 {Integer2 v;} Rec2;",
-  "typedef struct Rec3 {int64_t v; Tree (*l); Tree (*r);} Rec3;",
+  "typedef struct Rec3 {Tree (*l); Tree (*r); int64_t v;} Rec3;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec2 Leaf; Rec3 (*Node);};} Tree;",
   "int main(int argc, char (*argv[])) {",
@@ -1736,7 +1736,7 @@ utest testCompile trees with strJoin "\n" [
   "#include <math.h>",
   "typedef struct Tree Tree;",
   "typedef struct Rec {int64_t v;} Rec;",
-  "typedef struct Rec1 {int64_t v; Tree (*l); Tree (*r);} Rec1;",
+  "typedef struct Rec1 {Tree (*l); Tree (*r); int64_t v;} Rec1;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec Leaf; Rec1 (*Node);};} Tree;",
   "Rec t;",
