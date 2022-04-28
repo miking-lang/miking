@@ -54,7 +54,7 @@ lang MExprExternals = Externals + BootParser
   sem readExternalsFromFile =
   | filename ->
     let tmpFile = sysTempFileMake () in
-    writeFile tmpFile (join ["include \"", filename, "\""];
+    writeFile tmpFile (join ["include \"", filename, "\""]);
     let r = collectExternals (parseMCoreFile
       { defaultBootParserParseMCoreFileArg
         with eliminateDeadCode = false } tmpFile) in
