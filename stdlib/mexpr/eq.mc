@@ -325,8 +325,10 @@ lang ExtEq = Eq + ExtAst
   | TmExt {ident = i2, inexpr = ie2} ->
     match lhs with TmExt {ident = i1, inexpr = ie1} then
       match env with {varEnv = varEnv} in
-      let varEnv = biInsert (i1,i2) varEnv in
-      eqExprH {env with varEnv = varEnv} free ie1 ie2
+      if nameEqStr i1 i2 then -- Externals are a bit special, as the string component of their names are required to be identical
+        let varEnv = biInsert (i1,i2) varEnv in
+        eqExprH {env with varEnv = varEnv} free ie1 ie2
+      else None ()
     else None ()
 end
 
@@ -1179,9 +1181,8 @@ utest eqExpr never_ true_ with false in
 -- Ext
 let ext1 = bind_ (ext_ "x" false tyunit_) a1 in
 let ext2 = bind_ (ext_ "y" false tyunit_) a2 in
-let ext3 = bind_ (ext_ "x" false tyunit_) lam1 in
-utest ext1 with ext2 using eqExpr in
-utest eqExpr ext1 ext3 with false in
+utest ext1 with ext1 using eqExpr in
+utest eqExpr ext1 ext2 with false in
 
 -- Symbolized (and partially symbolized) terms are also supported.
 let sm = symbolize in
