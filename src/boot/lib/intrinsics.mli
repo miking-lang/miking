@@ -150,6 +150,8 @@ module Mseq : sig
   val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 
   module Helpers : sig
+    val to_seq : 'a t -> 'a Seq.t
+
     val of_list : 'a list -> 'a t
 
     val of_list_list : 'a list -> 'a t
