@@ -121,7 +121,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     match rec [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = ident, args = map compileExpr args }
+        JSEApp { fun = JSEVar { id = ident }, args = map compileExpr args }
 
       -- Intrinsics
       else match fun with TmConst { val = val } then
