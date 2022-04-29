@@ -17,8 +17,8 @@ let myrecty1 = otyrecordext_
 let myrecty2 = otyrecordext_
   (otyvarext_ "Boot.Exttest.myrec2_t" [])
   [
-    { label = "a", asLabel = "c", ty = otylist_ tyint_ },
-    { label = "b", asLabel = "d", ty = tyint_ }
+    { label = "b", asLabel = "d", ty = tyint_ },
+    { label = "a", asLabel = "c", ty = otylist_ tyint_ }
   ]
 
 let myrecty3 = otyrecordext_
