@@ -115,6 +115,10 @@ lang ParserConcrete = ParserBase + ParserGenerated
   sem parsedMatchesSpec (spec : SpecSymbol) =
   | TokParsed t -> match spec with TokSpec repr then tokKindEq repr t else false
   | LitParsed x -> match spec with LitSpec s then eqString x.lit s.lit else false
+
+  syn ParseError =
+  | UnexpectedFirst {nt : Name, stack : [StackItem prodLabel], found : ParsedSymbol, expected : [SpecSymbol]}
+  | UnexpectedToken {stack : [StackItem prodLabel], found : ParsedSymbol, expected : SpecSymbol}
 end
 
 let _iterateUntilFixpoint : (a -> a -> Bool) -> (a -> a) -> a -> a =
@@ -123,11 +127,6 @@ let _iterateUntilFixpoint : (a -> a -> Bool) -> (a -> a) -> a -> a =
       let next = f a in
       if eq a next then a else work next
     in work
-
-
-type ParseError prodLabel
-con UnexpectedFirst : {nt : Name, stack : [StackItem prodLabel], found : ParsedSymbol, expected : [SpecSymbol]} -> ParseError prodLabel
-con UnexpectedToken : {stack : [StackItem prodLabel], found : ParsedSymbol, expected : SpecSymbol} -> ParseError prodLabel
 
 let _sanitizeStack = use ParserConcrete in use ParserSpec in lam stack.
   let genSymToSym = lam sym.
@@ -742,28 +741,29 @@ with Right
   )
 in
 
-utest parse "let"
+utest parse "let" with () using lam l. lam. match l
 with Left (UnexpectedToken
   { expected = (TokSpec (LIdentRepr ()))
   , stack = (
-    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec topFollow)])}
+    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec _)])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec expr)])
+      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec _)])
       }
     ])
   , found = (TokParsed (EOFTok {info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 3})}))
   })
+then true else false
 in
 
-utest parse "let x ="
+utest parse "let x =" with () using lam l. lam. match l
 with Left (UnexpectedFirst
   { expected =
     [ TokSpec (IntRepr ())
     ]
   , stack =
-    [ { label = "toptop" , seen = [] , rest = [NtSpec topFollow]}
+    [ { label = "toptop" , seen = [] , rest = [NtSpec _]}
     , { label = "topdecl" , seen = [] , rest = []}
     , { label = "decllet"
       , seen =
@@ -776,23 +776,25 @@ with Left (UnexpectedFirst
     ]
   , found = TokParsed (EOFTok {info = (Info {filename = "file",row2 = 1,row1 = 1, col2 = 7,col1 = 7})}
     )
-  , nt = expr
+  , nt = _
   })
+then true else false
 in
 
-utest parse "let let = 4"
-with Left (UnexpectedToken
+utest parse "let let = 4" with ()
+using lam l. lam. match l with Left (UnexpectedToken
   { expected = (TokSpec (LIdentRepr ()))
   , stack = (
-    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec topFollow)])}
+    [ {label = ("toptop"),seen = ([]),rest = ([(NtSpec _)])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec expr)])
+      , rest = ([(TokSpec (LIdentRepr ())),(LitSpec {lit = ("=")}),(NtSpec _)])
       }
     ])
   , found = (LitParsed {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 4})})
   })
+then true else false
 in
 
 ()
