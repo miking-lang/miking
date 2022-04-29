@@ -75,7 +75,7 @@ let _type2str = use MExprPrettyPrint in
 
 let _fields2str = use RecordTypeAst in
   lam m.
-  _type2str (TyRecord {info = NoInfo (), fields = m, labels = mapKeys m})
+  _type2str (TyRecord {info = NoInfo (), fields = m})
 
 let _sort2str = use MExprPrettyPrint in
   lam ident. lam sort.
@@ -628,8 +628,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
-    let labels = mapKeys t.bindings in
-    let ty = TyRecord {fields = bindingTypes, labels = labels, info = t.info} in
+    let ty = TyRecord {fields = bindingTypes, info = t.info} in
     TmRecord {{t with bindings = bindings}
                  with ty = ty}
   | TmRecordUpdate t ->

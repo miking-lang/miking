@@ -86,12 +86,14 @@ lang CudaTensorGlobalWrapper = CudaCompile
         let cElemTy = compileType ccEnv elemTy in
         tensorCallFn cElemTy expr
       else match ty with TyRecord t then
-        mapFoldWithKey
-          (lam acc : [CStmt]. lam key : SID. lam fieldTy : Type.
+        let labels = tyRecordOrderedLabels ty in
+        foldl
+          (lam acc : [CStmt]. lam key : SID.
+            let fieldTy = mapFindExn key t.fields in
             let fieldId = nameNoSym (sidToString key) in
             let fieldExpr = CEMember {lhs = expr, id = fieldId} in
             concat acc (work fieldTy fieldExpr))
-          [] t.fields
+          [] labels
       else match ty with TySeq t then
         -- TODO(larshum, 2022-03-30): Only generate a loop for sequences that
         -- could contain tensors.

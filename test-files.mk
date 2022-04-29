@@ -35,6 +35,7 @@ typecheck_files += $(wildcard stdlib/*.mc)
 typecheck_files += $(wildcard stdlib/mexpr/*.mc)
 typecheck_files += $(wildcard stdlib/ocaml/*.mc)
 typecheck_files += $(wildcard stdlib/tuning/*.mc)
+typecheck_files += stdlib/ext/ext-test.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written

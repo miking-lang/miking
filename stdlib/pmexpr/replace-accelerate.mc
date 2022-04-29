@@ -21,7 +21,7 @@ lang PMExprReplaceAccelerate =
     let elemType =
       match ty with TyInt _ then OTyBigarrayIntElt {info = info}
       else OTyBigarrayFloat64Elt {info = info} in
-    OTyBigarrayGenarray {info = info, tys = [ty, elemType, layout]}
+    OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 
@@ -38,8 +38,8 @@ lang PMExprReplaceAccelerate =
     let ty = unwrapType ty in
     match ty with TyCon t then (acc, TyCon t)
     else _mexprToOCamlType env acc ty
-  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
-    if null labels then
+  | ty & (TyRecord {info = info, fields = fields}) ->
+    if mapIsEmpty fields then
       (acc, OTyTuple {info = info, tys = []})
     else match record2tuple fields with Some tys then
       (acc, OTyTuple {info = info, tys = tys})
@@ -54,7 +54,7 @@ lang PMExprReplaceAccelerate =
             -- match.
             let str = pprintLabelString (sidToString sid) in
             (acc, (str, ty)))
-          acc (mapBindings fields)
+          acc (tyRecordOrderedFields ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.

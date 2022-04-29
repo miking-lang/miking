@@ -155,7 +155,7 @@ lang PMExprAst =
                            with as = typeAnnotExpr env t.as}
                            with ty = tyTm ne}
   | TmLoop t ->
-    let ty = TyRecord {fields = mapEmpty cmpSID, labels = [], info = t.info} in
+    let ty = TyRecord {fields = mapEmpty cmpSID, info = t.info} in
     TmLoop {{{t with n = typeAnnotExpr env t.n}
                 with f = typeAnnotExpr env t.f}
                 with ty = ty}
@@ -168,8 +168,10 @@ lang PMExprAst =
   | TmParallelLoop t ->
     let f = typeAnnotExpr env t.f in
     let ty =
-      match tyTm f with TyArrow {from = TyInt _, to = unit & (TyRecord {labels = []})} then
-        unit
+      match tyTm f with TyArrow {from = TyInt _, to = unit & (TyRecord t2)} then
+        if mapIsEmpty t2.fields then
+          unit
+        else TyUnknown {info = t.info}
       else TyUnknown {info = t.info} in
     TmParallelLoop {{{t with n = typeAnnotExpr env t.n}
                         with f = f}
