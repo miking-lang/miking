@@ -27,7 +27,8 @@ lang OCamlRecord
   syn Pat =
   | OPatRecord {bindings : Map SID Pat}
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmRecord t ->
     let bindFunc = lam acc. lam bind : (String, Expr).
@@ -42,7 +43,8 @@ lang OCamlRecord
       (acc, OTmProject {t with tm = tm})
     else never
 
-  sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
   | OPatRecord t ->
     match mapMapAccum (lam acc. lam. lam p. f acc p) acc t.bindings
@@ -60,7 +62,8 @@ lang OCamlMatch
 
   syn Pat =
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmMatch t ->
     let armsFunc = lam acc. lam arm : (Pat, Expr).
@@ -79,7 +82,8 @@ lang OCamlArray
   syn Expr =
   | OTmArray {tms : [Expr]}
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmArray t ->
     match mapAccumL f acc t.tms with (acc, tms) then
@@ -94,14 +98,16 @@ lang OCamlTuple
   syn Pat =
   | OPatTuple { pats : [Pat] }
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmTuple t ->
     match mapAccumL f acc t.values with (acc, values) then
       (acc, OTmTuple {t with values = values})
     else never
 
-  sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
   | OPatTuple t ->
     match mapAccumL f acc t.pats with (acc, pats) then
@@ -116,14 +122,16 @@ lang OCamlData
   syn Pat =
   | OPatCon { ident : Name, args : [Pat] }
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmConApp t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OTmConApp {t with args = args})
     else never
 
-  sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
   | OPatCon t ->
     match mapAccumL f acc t.args with (acc, args) then
@@ -153,14 +161,16 @@ lang OCamlExternal
   syn Pat =
   | OPatConExt { ident : String, args : [Pat] }
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmConAppExt t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OTmConAppExt {t with args = args})
     else never
 
-  sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
   | OPatConExt t ->
     match mapAccumL f acc t.args with (acc, args) then
@@ -172,7 +182,8 @@ lang OCamlLabel
   syn Expr =
   | OTmLabel { label : String, arg : Expr }
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmLabel t ->
     match f acc t.arg with (acc, arg) then
@@ -184,7 +195,8 @@ lang OCamlLam
   syn Expr =
   | OTmLam {label : Option String, ident : Name, body : Expr}
 
-  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | OTmLam t ->
     match f acc t.body with (acc, body) then
@@ -235,7 +247,8 @@ lang OCamlTypeAst =
   | OTyRecordExt r -> r.info
   | OTyString r -> r.info
 
-  sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
+  sem smapAccumL_Type_Type
+    : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem smapAccumL_Type_Type f acc =
   | OTyList t ->
     match f acc t.ty with (acc, ty) in
@@ -276,9 +289,10 @@ lang OCamlTypeAst =
     (acc, OTyRecord {{t with fields = fields}
                         with tyident = tyident})
   | OTyRecordExt t ->
-    let fieldFun = lam acc. lam field : {label : String, asLabel : String, ty : Type}.
-      match f acc field.ty with (acc, ty) in
-      (acc, { field with ty = ty })
+    let fieldFun =
+      lam acc. lam field : {label : String, asLabel : String, ty : Type}.
+        match f acc field.ty with (acc, ty) in
+        (acc, { field with ty = ty })
     in
     match mapAccumL fieldFun acc t.fields with (acc, fields) in
     match f acc t.tyident with (acc, tyident) in
