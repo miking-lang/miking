@@ -672,6 +672,10 @@ let asc_ = use MExprAst in
 
 -- Constants --
 
+let unsafeCoerce_ = use MExprAst in
+  lam e.
+  app_ (uconst_ (CUnsafeCoerce ())) e
+
 let int_ = use MExprAst in
   lam i.
   uconst_ (CInt {val = i})

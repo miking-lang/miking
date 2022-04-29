@@ -5,7 +5,8 @@ include "set.mc"
 include "stringid.mc"
 
 let builtin = use MExprAst in
-  [ ("addi", CAddi ())
+  [ ("unsafeCoerce", CUnsafeCoerce ())
+  , ("addi", CAddi ())
   , ("subi", CSubi ())
   , ("muli", CMuli ())
   , ("divi", CDivi ())

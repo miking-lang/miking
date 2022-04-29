@@ -168,6 +168,7 @@ lang OCamlPrettyPrint =
   | OPatConExt _ -> false
 
   sem getConstStringCode (indent : Int) =
+  | CUnsafeCoerce _ -> "(fun x -> x)"
   | CInt {val = i} -> int2string i
   | CAddi _ -> "Int.add"
   | CSubi _ -> "Int.sub"

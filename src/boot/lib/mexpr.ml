@@ -17,6 +17,8 @@ let program_output = ref uprint_string
 
 (* Returns the number of expected arguments of a constant *)
 let arity = function
+  | CunsafeCoerce ->
+      1
   (* MCore intrinsics: Booleans *)
   | CBool _ ->
       0
@@ -555,6 +557,8 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
         fail_constapp fi
   in
   match (c, v) with
+  | CunsafeCoerce, v ->
+      v
   (* MCore intrinsics: Booleans *)
   | CBool _, _ ->
       fail_constapp fi

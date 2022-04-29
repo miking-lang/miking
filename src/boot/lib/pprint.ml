@@ -221,6 +221,8 @@ type prec = Match | Lam | Semicolon | If | Tup | App | Atom
  *  TODO(dlunde,?): Precendece?
  *  TODO(dlunde,?): Break hints? *)
 let rec print_const fmt = function
+  | CunsafeCoerce ->
+      fprintf fmt "unsafeCoerce"
   (* MCore intrinsics: Booleans *)
   | CBool b ->
       fprintf fmt "%B" b
