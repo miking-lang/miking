@@ -21,7 +21,7 @@ lang PMExprReplaceAccelerate =
     let elemType =
       match ty with TyInt _ then OTyBigarrayIntElt {info = info}
       else OTyBigarrayFloat64Elt {info = info} in
-    OTyBigarrayGenarray {info = info, tys = [ty, elemType, layout]}
+    OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 

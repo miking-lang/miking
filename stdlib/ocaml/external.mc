@@ -414,37 +414,47 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
 
   sem convertDataInner info env t =
   | (OTyBigarrayGenarray
-      {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]}
+      {ty = TyInt _, elty = OTyBigarrayIntElt _, layout = OTyBigarrayClayout _}
     ,OTyBigarrayGenarray
-      {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]})
-  | (OTyBigarrayGenarray
-      {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]}
-    ,OTyBigarrayGenarray
-      {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]})
+      {ty = TyInt _, elty = OTyBigarrayIntElt _, layout = OTyBigarrayClayout _})
+  | (OTyBigarrayGenarray {
+      ty = TyFloat _,
+      elty = OTyBigarrayFloat64Elt _,
+      layout = OTyBigarrayClayout _
+    }
+    ,OTyBigarrayGenarray {
+      ty = TyFloat _,
+      elty = OTyBigarrayFloat64Elt _,
+      layout = OTyBigarrayClayout _
+    })
   ->
     (0, t)
   | (OTyBigarrayArray {
         rank = rank1,
-        tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
+        ty = TyInt _, elty = OTyBigarrayIntElt _, layout = OTyBigarrayClayout _
       }
     ,OTyBigarrayArray {
         rank = rank2,
-        tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
+        ty = TyInt _, elty = OTyBigarrayIntElt _, layout = OTyBigarrayClayout _
       })
   | (OTyBigarrayArray {
         rank = rank1,
-        tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+        ty = TyFloat _,
+        elty = OTyBigarrayFloat64Elt _,
+        layout = OTyBigarrayClayout _
       }
     ,OTyBigarrayArray {
         rank = rank2,
-        tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+        ty = TyFloat _,
+        elty = OTyBigarrayFloat64Elt _,
+        layout = OTyBigarrayClayout _
       })
   ->
     if eqi rank1 rank2 then (0, t)
     else infoErrorExit info "Bigarray rank mismatch"
   | (TyTensor {ty = elty1} & ty1
     ,OTyBigarrayGenarray
-      {tys = [elty2, elty3, OTyBigarrayClayout _]})
+      {ty = elty2, elty = elty3, layout = OTyBigarrayClayout _})
   ->
     match (elty1, elty2, elty3) with
       (TyInt _, TyInt _, OTyBigarrayIntElt _) |
@@ -468,7 +478,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
   | (TyTensor {ty = elty1} & ty1
     ,OTyBigarrayArray {
         rank = rank,
-        tys = [elty2, elty3, OTyBigarrayClayout _]
+        ty = elty2, elty = elty3, layout = OTyBigarrayClayout _
       })
    ->
     match (elty1, elty2, elty3) with
@@ -498,17 +508,17 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
     else
       infoErrorExit info "Cannot convert to bigarray"
   | (OTyBigarrayGenarray
-      {tys = [elty1, elty3, OTyBigarrayClayout _]}
+      {ty = elty1, elty = elty3, layout = OTyBigarrayClayout _}
     ,TyTensor {ty = elty2} & ty2)
   ->
     let op =
-      let elt = (elty1, elty2, elty3) in
-      match elt with (TyInt _, TyInt _, OTyBigarrayIntElt _) then
+      switch (elty1, elty2, elty3)
+      case (TyInt _, TyInt _, OTyBigarrayIntElt _) then
         "Helpers.of_genarray_clayout"
-      else match elt with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _)
-      then
+      case (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _) then
         "Helpers.of_genarray_clayout"
-      else infoErrorExit info "Cannot convert bigarray"
+      case (_, _, _) then infoErrorExit info "Cannot convert bigarray"
+      end
     in
     let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
     let t =
@@ -522,25 +532,22 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
     (_tensorToGenarrayCost, t)
   | (OTyBigarrayArray {
       rank = rank,
-      tys = [elty1, elty3, OTyBigarrayClayout _]
+      ty = elty1, elty = elty3, layout = OTyBigarrayClayout _
      }
     ,TyTensor {ty = elty2} & ty2)
   ->
     let op =
-      let eltr = (elty1, elty2, elty3, rank) in
-      match eltr
-      with (TyInt _, TyInt _, OTyBigarrayIntElt _, 1) then
+      switch (elty1, elty2, elty3, rank)
+      case (TyInt _, TyInt _, OTyBigarrayIntElt _, 1) then
         "Helpers.of_array1_clayout"
-      else match eltr
-      with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 1) then
+      case (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 1) then
         "Helpers.of_array1_clayout"
-      else match eltr
-      with (TyInt _, TyInt _, OTyBigarrayIntElt _, 2) then
+      case (TyInt _, TyInt _, OTyBigarrayIntElt _, 2) then
         "Helpers.of_array2_clayout"
-      else match eltr
-      with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 2) then
+      case (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 2) then
         "Helpers.of_array2_clayout"
-      else infoErrorExit info "Cannot convert bigarray"
+      case (_, _, _, _) then infoErrorExit info "Cannot convert bigarray"
+      end
     in
     let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
     let t =

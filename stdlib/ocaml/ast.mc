@@ -200,8 +200,10 @@ lang OCamlTypeAst =
   | OTyList {info : Info, ty : Type}
   | OTyArray {info : Info, ty : Type}
   | OTyTuple {info : Info, tys : [Type]}
-  | OTyBigarrayGenarray {info : Info, tys : [Type]}
-  | OTyBigarrayArray {info : Info, rank : Int, tys : [Type]}
+  | OTyBigarrayGenarray {info : Info, layout : Type, elty : Type, ty : Type}
+  | OTyBigarrayArray {
+      info : Info, rank : Int,  layout : Type, elty : Type, ty : Type
+    }
   | OTyBigarrayFloat64Elt {info : Info}
   | OTyBigarrayIntElt {info : Info}
   | OTyBigarrayClayout {info : Info}
@@ -245,11 +247,19 @@ lang OCamlTypeAst =
     match mapAccumL f acc t.tys with (acc, tys) in
     (acc, OTyTuple {t with tys = tys})
   | OTyBigarrayGenarray t ->
-    match mapAccumL f acc t.tys with (acc, tys) in
-    (acc, OTyBigarrayGenarray {t with tys = tys})
+    match t with {ty = ty, elty = elty, layout = layout} in
+    match f acc ty with (acc, ty) in
+    match f acc elty with (acc, elty) in
+    match f acc layout with (acc, layout) in
+    let t = {{{t with ty = ty} with elty = elty} with layout = layout} in
+    (acc, OTyBigarrayGenarray t)
   | OTyBigarrayArray t ->
-    match mapAccumL f acc t.tys with (acc, tys) in
-    (acc, OTyBigarrayArray {t with tys = tys})
+    match t with {ty = ty, elty = elty, layout = layout} in
+    match f acc ty with (acc, ty) in
+    match f acc elty with (acc, elty) in
+    match f acc layout with (acc, layout) in
+    let t = {{{t with ty = ty} with elty = elty} with layout = layout} in
+    (acc, OTyBigarrayArray t)
   | OTyLabel t ->
     match f acc t.ty with (acc, ty) in
     (acc, OTyLabel {t with ty = ty})
@@ -308,29 +318,34 @@ let otyarray_ = use OCamlAst in
   lam ty. OTyArray {info = NoInfo (), ty = ty}
 
 let otygenarray_ = use OCamlAst in
-  lam tys. OTyBigarrayGenarray {info = NoInfo (), tys = tys}
+  lam ty. lam elty. lam layout.
+    OTyBigarrayGenarray {
+      info = NoInfo (), layout = layout, elty = elty, ty = ty
+    }
 
 let otybaarray_ = use OCamlAst in
-  lam rank. lam tys.
-    OTyBigarrayArray {info = NoInfo (), rank = rank, tys = tys}
+  lam rank. lam ty. lam elty. lam layout.
+    OTyBigarrayArray {
+      info = NoInfo (), rank = rank, layout = layout, elty = elty, ty = ty
+    }
 
 let oclayout_ = use OCamlAst in
   OTyBigarrayClayout {info = NoInfo ()}
 
 let otygenarrayclayoutint_ = use OCamlAst in
-  otygenarray_ [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+  otygenarray_ tyint_ (OTyBigarrayIntElt {info = NoInfo ()}) oclayout_
 
 let otygenarrayclayoutfloat_ = use OCamlAst in
-  otygenarray_ [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+  otygenarray_ tyfloat_ (OTyBigarrayFloat64Elt {info = NoInfo ()}) oclayout_
 
 let otybaarrayclayoutint_ = use OCamlAst in
   lam rank.
-    otybaarray_ rank [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+    otybaarray_ rank tyint_ (OTyBigarrayIntElt {info = NoInfo ()}) oclayout_
 
 let otybaarrayclayoutfloat_ = use OCamlAst in
   lam rank.
     otybaarray_
-      rank [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+      rank tyfloat_ (OTyBigarrayFloat64Elt {info = NoInfo ()}) oclayout_
 
 let otytuple_ = use OCamlAst in
   lam tys. OTyTuple {info = NoInfo (), tys = tys}
