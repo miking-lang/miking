@@ -1,4 +1,5 @@
 include "map.mc"
+include "c/externals.mc"
 
 let mathExtMap: ExtMap =
   mapFromSeq cmpString [

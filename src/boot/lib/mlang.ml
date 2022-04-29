@@ -257,8 +257,8 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
     match (a, b) with
     | None, None ->
         None
-    | None, Some _ ->
-        Some (NoInfo, [])
+    | None, Some (fi,_) ->
+        Some (fi, [])
     | Some a, None ->
         Some a
     | Some (fi, cons), Some (_, old_cons) ->
@@ -364,29 +364,29 @@ let flatten prg : program = snd (flatten_with_env Record.empty prg)
  ***************)
 
 module AstHelpers = struct
-  let var x = TmVar (NoInfo, x, Symb.Helpers.nosym, false)
+  let var fi x = TmVar (fi, x, Symb.Helpers.nosym, false)
 
-  let app l r = TmApp (NoInfo, l, r)
+  let app fi l r = TmApp (fi, l, r)
 
-  let let_ x s e body = TmLet (NoInfo, x, s, TyUnknown NoInfo, e, body)
+  let let_ fi x s e body = TmLet (fi, x, s, TyUnknown fi, e, body)
 end
 
 open AstHelpers
 
-let translate_cases f target cases =
+let translate_cases fi f target cases =
   let translate_case (pat, handler) inner =
     TmMatch (pat_info pat, target, pat, handler, inner)
   in
   let msg =
     Mseq.map
-      (fun c -> TmConst (NoInfo, CChar c))
+      (fun c -> TmConst (fi, CChar c))
       (us "No matching case for function " ^. f |> Mseq.Helpers.of_ustring)
   in
   let no_match =
-    let_ (us "_") Symb.Helpers.nosym
+    let_ fi (us "_") Symb.Helpers.nosym
       (* TODO(?,?): we should probably have a special sort for let with wildcards *)
-      (app (TmConst (NoInfo, Cdprint)) target)
-      (app (TmConst (NoInfo, Cerror)) (TmSeq (NoInfo, msg)))
+      (app fi (TmConst (fi, Cdprint)) target)
+      (app fi (TmConst (fi, Cerror)) (TmSeq (fi, msg)))
   in
   List.fold_right translate_case cases no_match
 
@@ -398,7 +398,7 @@ let emptyMlangEnv = {constructors= USMap.empty; normals= USMap.empty}
 
 (* Compute the intersection of a and b, by overwriting names in a with the names
    in b *)
-let intersect_env_overwrite a b =
+let intersect_env_overwrite fi a b =
   let merger = function
     | None, None ->
         None
@@ -407,7 +407,7 @@ let intersect_env_overwrite a b =
     | None, Some _ ->
         None
     | Some l, None ->
-        raise_error NoInfo
+        raise_error fi
           ( "Binding '" ^ Ustring.to_utf8 l
           ^ "' exists only in the subsumed language, which should be \
              impossible.\n" )
@@ -763,7 +763,7 @@ let rec desugar_tm nss env subs =
           | Some subsumer ->
               (* Use namespace from subsumer, but prune bindings that are not
                  defined in the subsumed namespace *)
-              intersect_env_overwrite ns (USMap.find subsumer nss)
+              intersect_env_overwrite fi ns (USMap.find subsumer nss)
         in
         desugar_tm nss (merge_env_overwrite env intersected_ns) subs body )
   (* Simple recursions *)
@@ -792,7 +792,7 @@ let rec desugar_tm nss env subs =
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
 let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
-  | TopLang (Lang (_, langName, includes, decls) as lang) ->
+  | TopLang (Lang (fi, langName, includes, decls) as lang) ->
       let default d = function Some x -> x | None -> d in
       let add_lang ns lang =
         USMap.find_opt lang nss |> default emptyMlangEnv
@@ -820,9 +820,9 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           , mangle cname
           , Symb.Helpers.nosym
           , TyArrow
-              ( NoInfo
+              ( fi
               , desugar_ty ns ty
-              , TyCon (NoInfo, ty_name, Symb.Helpers.nosym) )
+              , TyCon (fi, ty_name, Symb.Helpers.nosym) )
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
@@ -852,8 +852,8 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           ( fi
           , target
           , Symb.Helpers.nosym
-          , TyUnknown NoInfo
-          , translate_cases fname (var target) cases )
+          , TyUnknown fi
+          , translate_cases fi fname (var fi target) cases )
         |> List.fold_right wrap_param params
         |> desugar_tm nss ns subs
         (* TODO: pass new subs here? *)
@@ -874,7 +874,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       in
       (* put translated inters in a single letrec, then wrap in cons, then done *)
       let wrap tm =
-        TmRecLets (NoInfo, List.filter_map translate_inter decls, tm)
+        TmRecLets (fi, List.filter_map translate_inter decls, tm)
         |> List.fold_right wrap_data decls
       in
       let new_langs = USMap.add langName lang langs in
@@ -935,7 +935,7 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
-        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (NoInfo, []), tm')
+        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (fi, []), tm')
         )
       (USMap.bindings syns)
   in
