@@ -34,6 +34,10 @@ let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
   foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
         l (mapBindings r)
 
+let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v = lam f. lam l. lam r.
+  foldl (lam acc. lam binding : (k, v). mapInsertWith f binding.0 binding.1 acc)
+        l (mapBindings r)
+
 let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
   lam cmp. lam bindings.
   foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
@@ -117,6 +121,15 @@ utest mapLookup 4 merged with Some "44" using optionEq eqString in
 utest mapLookup (negi 1) merged with Some "-1" using optionEq eqString in
 utest mapLookup 5 merged with None () using optionEq eqString in
 
+let m3 = mapFromSeq subi [(1, "m1"), (4, "m4"), (negi 1, "-1")] in
+let mergedWith = mapUnionWith concat m m3 in
+utest mapLookup 1 mergedWith with Some "1m1" using optionEq eqString in
+utest mapLookup 2 mergedWith with Some "2" using optionEq eqString in
+utest mapLookup 3 mergedWith with Some "3" using optionEq eqString in
+utest mapLookup 4 mergedWith with Some "m4" using optionEq eqString in
+utest mapLookup (negi 1) mergedWith with Some "-1" using optionEq eqString in
+utest mapLookup 5 mergedWith with None () using optionEq eqString in
+
 utest mapFoldlOption (lam acc. lam k. lam v. Some v) "0" m
 with Some "3" using optionEq eqString in
 utest mapFoldlOption
@@ -141,10 +154,10 @@ utest mapValues m2 with ["1blub","2"] in
 utest mapToSeq m2 with [(1,"1blub"), (2,"2")] in
 
 utest
-match mapMapAccum (lam acc. lam k. lam v. ((addi k acc), concat "x" v)) 0 merged
-with (acc, m)
-then (acc, mapBindings m)
-else never
+  match mapMapAccum (lam acc. lam k. lam v. ((addi k acc), concat "x" v)) 0 merged
+  with (acc, m)
+  then (acc, mapBindings m)
+  else never
 with (9,[(negi 1,("x-1")),(1,("x1")),(2,("x22")),(3,("x3")),(4,("x44"))]) in
 
 let m = mapFromSeq subi

@@ -426,7 +426,7 @@ prod PrecedenceTable: Decl =
 lang PrecedenceTableDeclAst = SelfhostBaseAst
   syn Decl =
   | PrecedenceTableDecl
-    { levels : [{noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}]
+    { levels : [{noeq : Option Info, operators : [{v: Name, i: Info}]}]
     , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     }
@@ -438,7 +438,7 @@ end
 lang PrecedenceTableDeclOp = DeclOpBase + PrecedenceTableDeclAst
   syn DeclOp =
   | PrecedenceTableDeclOp
-    { levels : [{noeq : Option (), operators : [{v: Name, i: Info}]}]
+    { levels : [{noeq : Option Info, operators : [{v: Name, i: Info}]}]
     , exceptions : [{lefts : [{v: Name, i: Info}], rights : [{v: Name, i: Info}]}]
     , info : Info
     , terms : [Info]
@@ -459,8 +459,9 @@ prod Production: Decl = ("prod" | "infix" | "prefix" | "postfix") assoc:LIdent? 
 -/
 
 lang ProductionDeclAst = SelfhostBaseAst
+  type ProductionDeclRecord = { assoc : Option {v: String, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
   syn Decl =
-  | ProductionDecl { assoc : Option {v: String, i: Info}, name : {v: Name, i: Info}, nt : {v: Name, i: Info}, regex : Regex, info : Info }
+  | ProductionDecl ProductionDeclRecord
 
   sem get_Decl_info =
   | ProductionDecl x -> x.info
@@ -663,7 +664,7 @@ prod Literal: Regex = val:String
 
 lang LiteralRegexAst = SelfhostBaseAst
   syn Regex =
-  | LiteralRegex { val : String, info : Info }
+  | LiteralRegex { val : {v: String, i: Info}, info : Info }
 
   sem get_Regex_info =
   | LiteralRegex x -> x.info
@@ -671,7 +672,7 @@ end
 
 lang LiteralRegexOp = RegexOpBase + LiteralRegexAst
   syn RegexOp =
-  | LiteralRegexOp { val : String, info : Info, terms : [Info] }
+  | LiteralRegexOp { val : {v: String, i: Info}, info : Info, terms : [Info] }
 
   sem get_RegexOp_terms =
   | LiteralRegexOp x -> x.terms
@@ -1166,39 +1167,39 @@ let _table =
     } in
   let brState = lam. Some (breakableInitState ()) in
 
-  let file_top = string2NonTerminal "File_Top" in
-  let file_lclosed = string2NonTerminal "File_LClosed" in
-  let file_lopen = string2NonTerminal "File_LOpen" in
-  let file_atom = string2NonTerminal "File_Atom" in
-  let file_File_cont = string2NonTerminal "File_File_Cont" in
+  let file_top = nameSym "File_Top" in
+  let file_lclosed = nameSym "File_LClosed" in
+  let file_lopen = nameSym "File_LOpen" in
+  let file_atom = nameSym "File_Atom" in
+  let file_File_cont = nameSym "File_File_Cont" in
 
-  let decl_top = string2NonTerminal "Decl_Top" in
-  let decl_lclosed = string2NonTerminal "Decl_LClosed" in
-  let decl_lopen = string2NonTerminal "Decl_LOpen" in
-  let decl_atom = string2NonTerminal "Decl_Atom" in
-  let decl_Production_1 = string2NonTerminal "Decl_Production_1" in
-  let decl_Production_2 = string2NonTerminal "Decl_Production_2" in
-  let decl_Type_1 = string2NonTerminal "Decl_Type_1" in
-  let decl_Type_2 = string2NonTerminal "Decl_Type_2" in
-  let decl_PrecedenceTable_1 = string2NonTerminal "Decl_PrecedenceTable_1" in
-  let decl_PrecedenceTable_2 = string2NonTerminal "Decl_PrecedenceTable_2" in
+  let decl_top = nameSym "Decl_Top" in
+  let decl_lclosed = nameSym "Decl_LClosed" in
+  let decl_lopen = nameSym "Decl_LOpen" in
+  let decl_atom = nameSym "Decl_Atom" in
+  let decl_Production_1 = nameSym "Decl_Production_1" in
+  let decl_Production_2 = nameSym "Decl_Production_2" in
+  let decl_Type_1 = nameSym "Decl_Type_1" in
+  let decl_Type_2 = nameSym "Decl_Type_2" in
+  let decl_PrecedenceTable_1 = nameSym "Decl_PrecedenceTable_1" in
+  let decl_PrecedenceTable_2 = nameSym "Decl_PrecedenceTable_2" in
 
-  let regex_top = string2NonTerminal "Regex_Top" in
-  let regex_lclosed = string2NonTerminal "Regex_LClosed" in
-  let regex_lopen = string2NonTerminal "Regex_LOpen" in
-  let regex_atom = string2NonTerminal "Regex_Atom" in
-  let regex_prefix = string2NonTerminal "Regex_Prefix" in
-  let regex_postfix = string2NonTerminal "Regex_Postfix" in
-  let regex_infix = string2NonTerminal "Regex_Infix" in
-  let regex_Token_1 = string2NonTerminal "Regex_Token_1" in
+  let regex_top = nameSym "Regex_Top" in
+  let regex_lclosed = nameSym "Regex_LClosed" in
+  let regex_lopen = nameSym "Regex_LOpen" in
+  let regex_atom = nameSym "Regex_Atom" in
+  let regex_prefix = nameSym "Regex_Prefix" in
+  let regex_postfix = nameSym "Regex_Postfix" in
+  let regex_infix = nameSym "Regex_Infix" in
+  let regex_Token_1 = nameSym "Regex_Token_1" in
 
-  let expr_top = string2NonTerminal "Expr_Top" in
-  let expr_lclosed = string2NonTerminal "Expr_LClosed" in
-  let expr_lopen = string2NonTerminal "Expr_LOpen" in
-  let expr_atom = string2NonTerminal "Expr_Atom" in
-  let expr_prefix = string2NonTerminal "Expr_Prefix" in
-  let expr_postfix = string2NonTerminal "Expr_Postfix" in
-  let expr_infix = string2NonTerminal "Expr_Infix" in
+  let expr_top = nameSym "Expr_Top" in
+  let expr_lclosed = nameSym "Expr_LClosed" in
+  let expr_lopen = nameSym "Expr_LOpen" in
+  let expr_atom = nameSym "Expr_Atom" in
+  let expr_prefix = nameSym "Expr_Prefix" in
+  let expr_postfix = nameSym "Expr_Postfix" in
+  let expr_infix = nameSym "Expr_Infix" in
 
   let grammar =
     { start = file_top
@@ -1522,7 +1523,7 @@ let _table =
         , rhs = [TokSpec (StringRepr ())]
         , action = lam. lam seq.
           match seq with [TokParsed (StringTok x)] in
-          LiteralRegexOp {info = x.info, val = x.val, terms = [x.info]}
+          LiteralRegexOp {info = x.info, val = {v = x.val, i = x.info}, terms = [x.info]}
         }
       , { nt = regex_atom
         , label = "Regex_Token"
