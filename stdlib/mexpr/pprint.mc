@@ -10,6 +10,7 @@ include "map.mc"
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "record.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -281,7 +282,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
       match printArgs aindent env (tail apps) with (env,args) then
         (env, join [fun, pprintNewline aindent, args])
       else never
-    else error "Impossible"
+    else infoErrorExit t.info "Impossible"
 end
 
 lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
@@ -1074,7 +1075,7 @@ end
 
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
         let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) (mapBindings t.fields) in
@@ -1092,24 +1093,30 @@ lang RecordTypePrettyPrint = RecordTypeAst
         else None ()
       in
       match tuple with Some tuple then
-        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple)
-        then (env, join ["(", strJoin ", " tuple, ")"])
-        else never
+        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
+        (env, join ["(", strJoin ", " tuple, ")"])
       else
-        let f = lam env. lam. lam v. getTypeStringCode indent env v in
-        match mapMapAccum f env t.fields with (env, fields) then
-          let fields =
-            map (lam b : (SID,String). (sidToString b.0, b.1)) (mapBindings fields) in
-          let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
-          (env,join ["{", strJoin ", " (map conventry fields), "}"])
-        else never
+        let f = lam env. lam field.
+          match field with (sid, ty) in
+          match getTypeStringCode indent env ty with (env, tyStr) in
+          (env, (sid, tyStr))
+        in
+        let orderedFields = tyRecordOrderedFields ty in
+        match mapAccumL f env orderedFields with (env, fields) in
+        let fields =
+          map (lam b : (SID,String). (sidToString b.0, b.1)) fields in
+        let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
+        (env,join ["{", strJoin ", " (map conventry fields), "}"])
 end
 
 lang VariantTypePrettyPrint = VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVariant t ->
     if eqi (mapLength t.constrs) 0 then (env,"<>")
-    else error "Printing of non-empty variant types not yet supported"
+    else (env, join ["Variant<", strJoin ", " (map nameGetStr (mapKeys t.constrs)), ">"])
+    -- NOTE(wikman, 2022-04-04): This pretty printing above is just temporary
+    -- as we do not have syntax for TyVariant. It is necessary however since we
+    -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
 lang ConTypePrettyPrint = ConTypeAst
@@ -1131,7 +1138,7 @@ lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   | WeakVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
-      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+      TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
 end

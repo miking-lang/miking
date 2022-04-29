@@ -1,0 +1,58 @@
+-- TODO(vipa, 2022-03-25): add grouping for Regex once we support it
+-- TODO(vipa, 2022-03-25): add grouping for Expr once we support it
+type File
+type Decl
+type Regex
+type Expr
+
+token String
+token UName
+token LName
+token LIdent
+
+start File
+
+prod File: File = decl:Decl+
+
+prod Start: Decl = "start" name:UName
+prod Type: Decl =
+  "type" name:UName
+  ( "{"
+    properties:{name:LName "=" val:Expr ","}*
+  "}"
+  )?
+prod TokenDecl: Decl =
+  "token" name:UName?
+  ( "{"
+    properties:{name:LName "=" val:Expr ","}*
+  "}"
+  )?
+prod PrecedenceTable: Decl =
+  "precedence" "{"
+    levels:{noeq:"~"? operators:UName+ ";"}*
+  "}"
+  ( "except" "{"
+    exceptions:{lefts:UName+ "?" rights:UName+ ";"}*
+  "}"
+  )?
+prod Production: Decl =
+  (kprod:"prod" | kinf:"infix" | kpref:"prefix" | kpostf:"postfix")
+  assoc:LIdent? name:UName ":" nt:UName "=" regex:Regex
+
+prod Record: Regex = "{" regex:Regex "}"
+prod Empty: Regex = "empty"
+prod Literal: Regex = val:String
+prod Token: Regex = name:UName ("[" arg:Expr "]")?
+prod RepeatPlus: Regex = left:Regex "+"
+prod RepeatStar: Regex = left:Regex "*"
+prod RepeatQuestion: Regex = left:Regex "?"
+prod Named: Regex = name:LIdent ":" right:Regex
+prod left Alternative: Regex = left:Regex "|" right:Regex
+prod left Concat: Regex = left:Regex right:Regex
+
+precedence {
+  Named;
+  RepeatPlus RepeatStar RepeatQuestion;
+  Concat;
+  Alternative;
+}

@@ -388,7 +388,7 @@ and ty =
   (* Tensor type *)
   | TyTensor of info * ty
   (* Record type *)
-  | TyRecord of info * ty Record.t * ustring list
+  | TyRecord of info * ty Record.t
   (* Variant type *)
   | TyVariant of info * (ustring * Symb.t) list
   (* Type constructors *)
@@ -412,7 +412,7 @@ and ident =
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
-let ty_unit fi = TyRecord (fi, Record.empty, [])
+let ty_unit fi = TyRecord (fi, Record.empty)
 
 (* smap accumulate left for terms *)
 let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
@@ -540,7 +540,7 @@ let ty_info = function
   | TyAll (fi, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
-  | TyRecord (fi, _, _)
+  | TyRecord (fi, _)
   | TyVariant (fi, _)
   | TyCon (fi, _, _)
   | TyVar (fi, _)
@@ -749,7 +749,7 @@ let tuplety2recordty fi lst =
       (fun (i, a) x -> (i + 1, Record.add (ustring_of_int i) x a))
       (0, Record.empty) lst
   in
-  TyRecord (fi, r, List.init (Record.cardinal r) ustring_of_int)
+  TyRecord (fi, r)
 
 (* Converts a record map to an optional list of terms. Returns Some list if
    the record represents a tuple, None otherwise. *)

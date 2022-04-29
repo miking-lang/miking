@@ -129,7 +129,11 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
   | CTyFloat _ | CTyDouble _ -> _getIdentExn "caml_copy_double"
 
   sem _getCReturnType =
-  | TyRecord {labels = []} -> CTyVoid ()
+  | TyRecord t ->
+    if mapIsEmpty t.fields then
+      CTyVoid ()
+    else
+      CTyVar {id = _getIdentExn "value"}
   | _ -> CTyVar {id = _getIdentExn "value"}
 
   -- Generates an additional wrapper function to be referenced from OCaml. This
@@ -214,7 +218,11 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
     let stmts = generateMarshallingCode env in
     let value = _getIdentExn "value" in
     let stmts =
-      match data.returnType with TyRecord {labels = []} then
+      let returnTypeIsEmptyRecord =
+        match data.returnType with TyRecord t then mapIsEmpty t.fields
+        else false
+      in
+      if returnTypeIsEmptyRecord then
         let camlReturnStmt = CSExpr {expr = CEVar {
           id = _getIdentExn "CAMLreturn0"
         }} in

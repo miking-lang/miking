@@ -49,8 +49,9 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       compileCEnv : CompileCEnv}
 
   sem lookupTypeIdent (env : TargetWrapperEnv) =
-  | TyRecord {labels = []} -> None ()
   | TyRecord t ->
+    if mapIsEmpty t.fields then None ()
+    else
     match env with CudaTargetEnv cenv in
     let fields : Option [(SID, Type)] =
       optionMapM
@@ -87,9 +88,9 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   | ty -> Some ty
 
   sem getCudaType (env : TargetWrapperEnv) =
-  | ty & (TyRecord {labels = labels}) ->
+  | ty & (TyRecord {fields = fields}) ->
     match env with CudaTargetEnv cenv in
-    if null labels then CTyVoid ()
+    if mapIsEmpty fields then CTyVoid ()
     else match lookupTypeIdent env ty with Some (TyCon {ident = id}) then
       if any (nameEq id) cenv.compileCEnv.ptrTypes then
         CTyPtr {ty = CTyVar {id = id}}
@@ -140,6 +141,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       ty = getCudaType env.targetEnv ty}
   | ty & (TyRecord t) ->
     match env.targetEnv with CudaTargetEnv cenv in
+    let labels = tyRecordOrderedLabels ty in
     let fields : [CDataRepr] =
       map
         (lam label : SID.
@@ -147,9 +149,9 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
             let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
             _generateCudaDataRepresentation env ty
           else infoErrorExit t.info "Inconsistent labels in record type")
-        t.labels in
+        labels in
     CudaRecordRepr {
-      ident = nameSym "cuda_rec_tmp", labels = t.labels, fields = fields,
+      ident = nameSym "cuda_rec_tmp", labels = labels, fields = fields,
       ty = getCudaType env.targetEnv ty}
   | ty & (TyVariant t) ->
     match env.targetEnv with CudaTargetEnv cenv in

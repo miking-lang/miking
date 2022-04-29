@@ -13,7 +13,7 @@ include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
-  PMExprAst + OCamlGenerateExternal + OCamlTopAst + OCamlPrettyPrint
+  PMExprAst + OCamlDataConversionMExpr + OCamlTopAst + OCamlPrettyPrint
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -21,7 +21,7 @@ lang PMExprReplaceAccelerate =
     let elemType =
       match ty with TyInt _ then OTyBigarrayIntElt {info = info}
       else OTyBigarrayFloat64Elt {info = info} in
-    OTyBigarrayGenarray {info = info, tys = [ty, elemType, layout]}
+    OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 
@@ -38,8 +38,8 @@ lang PMExprReplaceAccelerate =
     let ty = unwrapType ty in
     match ty with TyCon t then (acc, TyCon t)
     else _mexprToOCamlType env acc ty
-  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
-    if null labels then
+  | ty & (TyRecord {info = info, fields = fields}) ->
+    if mapIsEmpty fields then
       (acc, OTyTuple {info = info, tys = []})
     else match record2tuple fields with Some tys then
       match mapAccumL (_mexprToOCamlType env) acc tys with (acc, tys) in
@@ -59,7 +59,7 @@ lang PMExprReplaceAccelerate =
             -- match.
             let str = pprintLabelString (sidToString sid) in
             (acc, (str, ty)))
-          acc labels
+          acc (tyRecordOrderedFields ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
@@ -93,7 +93,7 @@ lang PMExprReplaceAccelerate =
   | t ->
     let ty = tyTm t in
     match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm t) env t ty ocamlTy with (_, e) in
+    match convertData (infoTm t) env t (ty, ocamlTy) with (_, e) in
     let e = addRecordObjWrapping e in
     (acc, e)
 
@@ -109,7 +109,7 @@ lang PMExprReplaceAccelerate =
     match convertAccelerateParametersH env acc ast with (acc, ast) in
     let ty = tyTm ast in
     match _mexprToOCamlType env acc ty with (acc, ocamlTy) in
-    match convertData (infoTm ast) env ast ocamlTy ty with (_, ast) in
+    match convertData (infoTm ast) env ast (ocamlTy, ty) with (_, ast) in
     (acc, ast)
 
   -- We replace the auxilliary acceleration terms in the AST, by removing any

@@ -70,7 +70,7 @@ end
 
 lang MExprCudaCompile =
   MExprUtestTrans + MExprRemoveTypeAscription + CudaPMExprAst +
-  CudaPMExprCompile + MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered +
+  CudaPMExprCompile + MExprTypeLift +
   SeqTypeNoStringTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
   CudaTensorMemory + CudaLanguageFragmentFix

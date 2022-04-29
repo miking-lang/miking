@@ -244,7 +244,7 @@ decl:
       Data (fi, $2.v, $4) }
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
-      Inter (fi, $2.v, TyUnknown NoInfo, Some $3, $5) }
+      Inter (fi, $2.v, TyUnknown fi, Some $3, $5) }
   | SEM var_ident COLON ty
     { let fi = mkinfo $1.i (ty_info $4) in
       Inter (fi, $2.v, $4, None, []) }
@@ -559,8 +559,7 @@ ty_atom:
                       (fun acc (k,v) -> Record.add k v acc)
                       Record.empty
       in
-      let ls = List.map (fun (l, _) -> l) $2 in
-        TyRecord(mkinfo $1.i $3.i, r, ls) }
+      TyRecord(mkinfo $1.i $3.i, r) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN

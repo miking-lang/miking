@@ -625,8 +625,8 @@ let rec desugar_ty env = function
       TySeq (fi, desugar_ty env ty)
   | TyTensor (fi, ty) ->
       TyTensor (fi, desugar_ty env ty)
-  | TyRecord (fi, bindings, labels) ->
-      TyRecord (fi, Record.map (desugar_ty env) bindings, labels)
+  | TyRecord (fi, bindings) ->
+      TyRecord (fi, Record.map (desugar_ty env) bindings)
   | TyVariant (fi, constrs) ->
       TyVariant (fi, constrs)
   | TyCon (fi, id, symb) ->
@@ -861,11 +861,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let translate_inter = function
         | Inter (fi, name, ty, params, cases) ->
             let params =
-              match params with
-              | Some params ->
-                  params
-              | None ->
-                  [Param (NoInfo, us "", TyUnknown NoInfo)]
+              match params with Some params -> params | None -> []
             in
             Some
               ( fi

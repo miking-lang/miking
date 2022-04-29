@@ -75,7 +75,7 @@ let tune = lam files. lam options : Options. lam args.
       if options.useTuned then tableFromFile (tuneFileName file) else r.table in
 
     -- Compile the program and write to temporary directory
-    let binary = ocamlCompileAstWithUtests
+    let binary = compileWithUtests
       {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
 
     -- Do the tuning

@@ -60,7 +60,7 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
       t = compileExpr env t.t, ofs = compileExpr env t.ofs,
       len = compileExpr env t.len, ty = compileType env t.ty}
   | TmMapKernel t -> infoErrorExit t.info "Maps are not supported"
-  | TmReduceKernel t -> error "not implemented yet"
+  | TmReduceKernel t -> infoErrorExit t.info "not implemented yet"
   | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.

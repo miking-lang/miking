@@ -139,7 +139,7 @@ end
 lang PMExprDemoteLoop = PMExprAst
   sem demoteParallel =
   | TmLoop t | TmParallelLoop t ->
-    let unitTy = TyRecord {fields = mapEmpty cmpSID, labels = [], info = t.info} in
+    let unitTy = TyRecord {fields = mapEmpty cmpSID, info = t.info} in
     let acc = TmRecord {bindings = mapEmpty cmpSID, ty = unitTy, info = t.info} in
     let f = TmLam {
       ident = nameNoSym "", tyIdent = unitTy, body = t.f,

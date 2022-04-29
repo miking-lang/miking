@@ -113,8 +113,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   | loop & (TmLoop t | TmParallelLoop t) ->
     let addLoopError = lam. cons (CudaLoopError loop) acc in
     let acc = cudaWellFormedExpr acc t.n in
-    match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {labels = []}} then
-      match t.ty with TyRecord {labels = []} then acc
+    match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {fields = fFields}} then
+      match t.ty with TyRecord {fields = tyFields} then
+        if and (mapIsEmpty fFields) (mapIsEmpty tyFields) then acc
+        else addLoopError ()
       else addLoopError ()
     else addLoopError ()
   | loop & (TmLoopAcc t) ->

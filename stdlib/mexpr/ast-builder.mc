@@ -59,7 +59,6 @@ let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, Type). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -424,7 +423,7 @@ let nreclets_add = use MExprAst in
     let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
-    error "reclets is not a TmRecLets construct"
+    infoErrorExit (infoTm reclets) "reclets is not a TmRecLets construct"
 
 let reclets_add = use MExprAst in
   lam s. lam ty. lam body. lam reclets.
@@ -466,7 +465,7 @@ let var_ = use MExprAst in
 let freeze_ = use MExprAst in
   lam var.
   match var with TmVar t then TmVar {t with frozen = true}
-  else error "var is not a TmVar construct"
+  else infoErrorExit (infoTm var) "var is not a TmVar construct"
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
@@ -571,7 +570,7 @@ let record_add = use MExprAst in
   match record with TmRecord t then
       TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
-      error "record is not a TmRecord construct"
+      infoErrorExit (infoTm record) "record is not a TmRecord construct"
 
 let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
@@ -590,7 +589,7 @@ let matchall_ = use MExprAst in
     foldr1 (lam m. lam acc.
       match m with TmMatch t then
         TmMatch {t with els = acc}
-      else error "expected match expression")
+      else infoErrorExit (infoTm m) "expected match expression")
       matches
 
 let nrecordproj_ = use MExprAst in
