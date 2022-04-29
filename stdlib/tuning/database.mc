@@ -147,7 +147,7 @@ lang Database = MExprEq + MExprCmp + Instrumentation
 
       let domainSeqs : [[Expr]] = map setToSeq (mapValues domains) in
 
-      let tuples = product domainSeqs in
+      let tuples = searchSpaceProduct domainSeqs in
       let costs : [Option Float] = map tupleCost tuples in
       let someCosts : [(Float, [Expr])] = foldl (lam acc. lam costTuple.
           match costTuple with (c, tuple) in

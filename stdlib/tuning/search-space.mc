@@ -21,6 +21,37 @@ type SearchSpaceSize = {
   sizeReduced : Float
 }
 
+-- Computes the Cartesian product of the sequences in 'seqs', ordering
+-- unspecified.
+recursive let searchSpaceProduct : all a. [[a]] -> [[a]] = lam seqs.
+  recursive let work = lam acc. lam s1. lam s2.
+    if null s1 then acc
+    else if null s2 then acc
+    else match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) in
+      let acc = cons (cons h1 h2) acc in
+      let acc = work acc t1 s2 in
+      work acc [h1] t2
+  in
+  if null seqs then []
+  else match seqs with [s] then
+    map (lam x. [x]) s
+  else
+    let t = searchSpaceProduct (tail seqs) in
+    work [] (head seqs) t
+end
+
+let _productEq : all a. (a -> a -> Int) -> [[a]] -> [[a]] -> Bool =
+  lam cmp : a -> a -> Int. lam p1 : [[a]]. lam p2 : [[a]].
+    let p1 = sort (seqCmp cmp) p1 in
+    let p2 = sort (seqCmp cmp) p1 in
+    let eq = lam s1. lam s2. eqi (seqCmp cmp s1 s2) 0 in
+    eqSeq eq p1 p2
+
+utest searchSpaceProduct [[],[1,2,3]] with [] using _productEq subi
+utest searchSpaceProduct [[1,2,3]] with [[1],[2],[3]] using _productEq subi
+utest searchSpaceProduct [[1,2,3],[4,5]] with [[1,4],[1,5],[2,4],[2,5],[3,4],[3,5]] using _productEq subi
+utest searchSpaceProduct [[1],[2,3],[4]] with [[1,2,4],[1,3,4]] using _productEq subi
+
 let _searchSpaceTestEq = lam lhs: Map Int Float. lam rhs: [(Int,Float)].
   eqSeq (lam t1: (Int,Float). lam t2: (Int,Float).
     and (eqi t1.0 t2.0) (eqf t1.1 t2.1)
@@ -109,7 +140,7 @@ lang SearchSpace = DependencyAnalysis
     let tables = map (lam m.
       let holes = graphNeighbors m graph in
       let doms = map (get domains) holes in
-      let prod = product doms in
+      let prod = searchSpaceProduct doms in
       (holes, prod)
     ) mp
     in tables
