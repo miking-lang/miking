@@ -86,9 +86,9 @@ let rec symbolize_type env ty =
       TySeq (fi, symbolize_type env ty)
   | TyTensor (fi, ty) ->
       TyTensor (fi, symbolize_type env ty)
-  | TyRecord (fi, r, ls) ->
+  | TyRecord (fi, r) ->
       let r = Record.map (fun ty -> symbolize_type env ty) r in
-      TyRecord (fi, r, ls)
+      TyRecord (fi, r)
   | TyVariant (_, tys) when tys = [] ->
       ty
   | TyVariant _ ->

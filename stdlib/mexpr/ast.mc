@@ -1240,9 +1240,8 @@ end
 
 lang RecordTypeAst = Ast
   syn Type =
-  | TyRecord {info    : Info,
-              fields  : Map SID Type,
-              labels  : [SID]}
+  | TyRecord {info   : Info,
+              fields : Map SID Type}
 
   sem tyWithInfo (info : Info) =
   | TyRecord t -> TyRecord {t with info = info}
