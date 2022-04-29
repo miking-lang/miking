@@ -13,8 +13,9 @@ include "tuning/instrumentation.mc"
 include "tuning/tune.mc"
 
 lang MCoreTune =
-  BootParser +
-  MExprHoles + MExprHoleCFA + DependencyAnalysis + Instrumentation + MExprTune
+  BootParser + MExprTypeAnnot +
+  MExprHoles + MExprHoleCFA + NestedMeasuringPoints + DependencyAnalysis +
+  Instrumentation + MExprTune
 end
 
 let tableFromFile = lam file.
@@ -30,9 +31,17 @@ let dependencyAnalysis
   lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.dependencyAnalysis then
+      let ast = typeAnnot ast in
       let ast = use HoleANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
+      let cfaRes = analyzeNested env cfaRes ast in
       let dep = analyzeDependency env cfaRes ast in
+      (if options.debugDependencyAnalysis then
+         match pprintCode 0 pprintEnvEmpty ast with (pprintEnv, astStr) in
+         printLn astStr;
+         match cfaGraphToString pprintEnv cfaRes with (pprintEnv, resStr) in
+         printLn resStr
+       else ());
       (dep, ast)
     else assumeFullDependency env ast
 
@@ -67,12 +76,18 @@ let tune = lam files. lam options : Options. lam args.
     -- Instrument the program
     match instrument env dep ast with (instRes, ast) in
 
+    -- If option --debug-instrumentation, then pretty print the instrumented AST
+    (if tuneOptions.debugInstrumentation then printLn (expr2str ast) else ());
+
     -- Context expand the holes
     match contextExpand env ast with (r, ast) in
 
     -- If option --tuned is given, then use tune file as defaults
     let table =
       if options.useTuned then tableFromFile (tuneFileName file) else r.table in
+
+    -- Strip annotations before compiling
+    let ast = stripTuneAnnotations ast in
 
     -- Compile the program and write to temporary directory
     let binary = compileWithUtests
