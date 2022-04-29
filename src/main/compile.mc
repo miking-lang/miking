@@ -18,6 +18,7 @@ include "ocaml/ast.mc"
 include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/wrap-in-try-with.mc"
+include "javascript/compile.mc"
 include "pmexpr/demote.mc"
 
 lang MCoreCompile =
@@ -59,7 +60,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
-let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
+let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -87,7 +88,9 @@ let ocamlCompileAstWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
-    compileMCore ast
+    if options.toJavaScript then
+      javascriptCompileFile ast sourcePath
+    else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
@@ -126,7 +129,7 @@ let compile = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
 
-    ocamlCompileAstWithUtests options file ast; ()
+    compileWithUtests options file ast; ()
   in
   if or options.accelerateCuda options.accelerateFuthark then
     compileAccelerate files options args
