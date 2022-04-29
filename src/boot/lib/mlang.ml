@@ -257,7 +257,7 @@ let merge_lang_data fi {inters= i1; syns= s1; aliases= a1}
     match (a, b) with
     | None, None ->
         None
-    | None, Some (fi,_) ->
+    | None, Some (fi, _) ->
         Some (fi, [])
     | Some a, None ->
         Some a
@@ -820,9 +820,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
           , mangle cname
           , Symb.Helpers.nosym
           , TyArrow
-              ( fi
-              , desugar_ty ns ty
-              , TyCon (fi, ty_name, Symb.Helpers.nosym) )
+              (fi, desugar_ty ns ty, TyCon (fi, ty_name, Symb.Helpers.nosym))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
@@ -935,8 +933,7 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
-        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (fi, []), tm')
-        )
+        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (fi, []), tm') )
       (USMap.bindings syns)
   in
   let stack = stack @ syntydecl in
