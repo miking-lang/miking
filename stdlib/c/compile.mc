@@ -14,7 +14,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
@@ -1354,7 +1354,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 -----------
 
 lang Test =
-  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
+  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeCheck +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
   MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
 end
@@ -1367,8 +1367,8 @@ let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvEmpty prog in
 
-  -- Type annotate
-  let prog = typeAnnot prog in
+  -- Type check and annotate
+  let prog = typeCheck prog in
 
   -- Remove redundant lets
   let prog = removeTypeAscription prog in
