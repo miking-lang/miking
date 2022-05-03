@@ -2,20 +2,23 @@ include "mexpr/ast.mc"
 include "mexpr/anf.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/type-annot.mc"
 
 -- Defines AST nodes for holes.
 
-let holeKeywords = ["hole", "Boolean", "IntRange"]
+let holeKeywords = ["hole", "Boolean", "IntRange", "independent"]
 
-let _lookupExit = lam info : Info. lam s : String. lam m : Map String a.
-  mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
+let _lookupExit : all a. Info -> String -> Map String a -> a =
+  lam info : Info. lam s : String. lam m : Map String a.
+    mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
 
-let _expectConstInt = lam info : Info. lam s. lam i.
-  use IntAst in
-  match i with TmConst {val = CInt {val = i}} then i
-  else infoErrorExit info (concat "Expected a constant integer: " s)
+let _expectConstInt : Info -> String -> Expr -> Int =
+  lam info : Info. lam s. lam i.
+    use IntAst in
+    match i with TmConst {val = CInt {val = i}} then i
+    else infoErrorExit info (concat "Expected a constant integer: " s)
 
-lang HoleAstBase = IntAst + ANF + KeywordMaker
+lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot
   syn Hole =
 
   syn Expr =
@@ -31,6 +34,9 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker
   sem tyTm =
   | TmHole {ty = ty} -> ty
 
+  sem withType (ty : Type) =
+  | TmHole t -> TmHole {t with ty = ty}
+
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
 
@@ -43,7 +49,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker
 
   sem pprintHole =
 
-  sem pprintCode (indent : Int) (env : SymEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmHole t ->
     match pprintCode indent env t.default with (env, default) then
       match pprintHole t.inner with (keyword, bindings) then
@@ -68,11 +74,23 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker
 
   sem hnext (last : Option Expr) (stepSize : Int) =
 
-  sem sample =
+  sem domainSize (stepSize : Int) =
   | TmHole {inner = inner} ->
-    hsample inner
+    hdomainSize stepSize inner
 
-  sem hsample =
+  sem hdomainSize (stepSize : Int) =
+
+  sem domain (stepSize : Int) =
+  | TmHole {inner = inner} ->
+    hdomain stepSize inner
+
+  sem hdomain (stepSize : Int) =
+
+  sem sample (stepSize : Int) =
+  | TmHole {inner = inner} ->
+    hsample stepSize inner
+
+  sem hsample (stepSize : Int) =
 
   sem normalize (k : Expr -> Expr) =
   | TmHole ({default = default} & t) ->
@@ -89,7 +107,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker
   | arg ->
     use RecordAst in
     match arg with TmRecord {bindings = bindings} then
-      let bindings = mapFromSeq cmpString
+      let bindings: Map String Expr = mapFromSeq cmpString
         (map (lam t : (SID, Expr). (sidToString t.0, t.1))
            (mapBindings bindings)) in
       let default = _lookupExit info "default" bindings in
@@ -101,14 +119,24 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker
                 , ty = hty
                 , inner = holeMap bindings})
     else error "impossible"
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmHole t ->
+    let default = typeAnnotExpr env t.default in
+    let ty = hty t.inner in
+    TmHole {{t with default = default}
+               with ty = ty}
+
+  sem hty : Hole -> Type
+
 end
 
 -- A Boolean hole.
-lang HoleBoolAst = BoolAst + HoleAstBase
+lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
   syn Hole =
   | BoolHole {}
 
-  sem hsample =
+  sem hsample (stepSize : Int) =
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
@@ -120,6 +148,12 @@ lang HoleBoolAst = BoolAst + HoleAstBase
     else match last with Some (TmConst {val = CBool {val = true}}) then
       None ()
     else never
+
+  sem hdomainSize (stepSize : Int) =
+  | BoolHole {} -> 2
+
+  sem hdomain (stepSize : Int) =
+  | BoolHole {} -> [true_, false_]
 
   sem fromString =
   | "true" -> true
@@ -139,17 +173,22 @@ lang HoleBoolAst = BoolAst + HoleAstBase
   sem pprintHole =
   | BoolHole {} ->
     ("Boolean", [])
+
+  sem hty =
+  | BoolHole {} -> TyBool {info = NoInfo ()}
 end
 
 -- An integer hole (range of integers).
-lang HoleIntRangeAst = IntAst + HoleAstBase
+lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
   syn Hole =
   | HIntRange {min : Int,
-              max : Int}
+               max : Int}
 
-  sem hsample =
-  | HIntRange {min = min, max = max} ->
-    int_ (randIntU min (addi max 1))
+  sem hsample (stepSize : Int) =
+  | HIntRange h ->
+    let size = hdomainSize stepSize (HIntRange h) in
+    let i = randIntU 0 size in
+    int_ (addi h.min (muli i stepSize))
 
   sem hnext (last : Option Expr) (stepSize : Int) =
   | HIntRange {min = min, max = max} ->
@@ -164,6 +203,18 @@ lang HoleIntRangeAst = IntAst + HoleAstBase
         else None ()
     else never
 
+  sem hdomainSize (stepSize : Int) =
+  | HIntRange {min = min, max = max} ->
+    let len = addi (subi max min) 1 in
+    let r = divi len stepSize in
+    let m = if eqi 0 (modi len stepSize) then 0 else 1 in
+    addi r m
+
+  sem hdomain (stepSize : Int) =
+  | HIntRange ({min = min} & h) ->
+    map (lam i. int_ (addi min (muli i stepSize)))
+      (create (hdomainSize stepSize (HIntRange h)) (lam i. i))
+
   sem matchKeywordString (info : Info) =
   | "IntRange" ->
     Some (1,
@@ -177,7 +228,7 @@ lang HoleIntRangeAst = IntAst + HoleAstBase
         else infoErrorExit info "Not a hole" in
 
       lam lst. _mkHole info tyint_
-        (lam m.
+        (lam m: Map String Expr.
            let min = _expectConstInt info "min" (_lookupExit info "min" m) in
            let max = _expectConstInt info "max" (_lookupExit info "max" m) in
            if leqi min max then
@@ -189,26 +240,142 @@ lang HoleIntRangeAst = IntAst + HoleAstBase
   sem pprintHole =
   | HIntRange {min = min, max = max} ->
     ("IntRange", [("min", int2string min), ("max", int2string max)])
+
+  sem hty =
+  | HIntRange {} -> TyInt {info = NoInfo ()}
 end
 
-let holeBool_ = use HoleBoolAst in
+lang HoleAnnotation = Ast
+  sem stripTuneAnnotations =
+  | t -> smap_Expr_Expr stripTuneAnnotations t
+end
+
+-- Independency annotation
+lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint + TypeAnnot
+  syn Expr =
+  | TmIndependent {lhs : Expr,
+                   rhs : Expr,
+                   info: Info,
+                   ty : Type}
+
+  sem stripTuneAnnotations =
+  | TmIndependent t -> t.lhs
+
+  sem isKeyword =
+  | TmIndependent _ -> true
+
+  sem matchKeywordString (info : Info) =
+  | "independent" -> Some (2, lam lst.
+    let e1 = get lst 0 in
+    let e2 = get lst 1 in
+    TmIndependent {lhs = e1, rhs = e2, info = info, ty = tyTm e1})
+
+  sem normalize (k : Expr -> Expr) =
+  | TmIndependent t ->
+    normalizeName (lam l.
+      normalizeName (lam r.
+        k (TmIndependent {{t with lhs = l}
+                             with rhs = r})
+        )
+      t.rhs)
+    t.lhs
+
+  sem infoTm =
+  | TmIndependent {info = info} -> info
+
+  sem tyTm =
+  | TmIndependent {ty = ty} -> ty
+
+  sem withType (ty : Type) =
+  | TmIndependent t -> TmIndependent {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmIndependent t ->
+    match f acc t.lhs with (acc, lhs) then
+      match f acc t.rhs with (acc, rhs) then
+        (acc, TmIndependent {{t with lhs = lhs} with rhs = rhs})
+      else never
+    else never
+
+  sem pprintCode (indent : Int) (env : PprintEnv) =
+  | TmIndependent t ->
+    match printParen indent env t.lhs with (env, lhs) in
+    let aindent = pprintIncr indent in
+    match printParen aindent env t.rhs with (env, rhs) in
+    (env, join ["independent ", lhs, pprintNewline aindent, rhs])
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmIndependent t ->
+    let lhs = typeAnnotExpr env t.lhs in
+    TmIndependent {t with lhs = lhs}
+end
+
+let holeBool_ : Bool -> Int -> Expr =
+  use HoleBoolAst in
   lam default. lam depth.
-  TmHole { default = default
+  TmHole { default = bool_ default
          , depth = depth
          , ty = tybool_
          , info = NoInfo ()
          , inner = BoolHole {}}
 
-let holeIntRange_ = use HoleIntRangeAst in
+let holeIntRange_ : Int -> Int -> Int -> Int -> Expr =
+  use HoleIntRangeAst in
   lam default. lam depth. lam min. lam max.
-  TmHole { default = default
+  TmHole { default = int_ default
          , depth = depth
          , ty = tyint_
          , info = NoInfo ()
-         , inner = HIntRange {min = min, max = max}}
+         , inner = HIntRange {min = min, max = max}
+         }
 
-lang HoleAst = HoleAstBase + HoleBoolAst + HoleIntRangeAst end
+lang HoleAst = HoleAstBase + HoleBoolAst + HoleIntRangeAst + IndependentAst end
 
 lang HoleANF = HoleAst + MExprANF end
 
 lang HoleANFAll = HoleAst + MExprANFAll end
+
+lang Test = HoleAst + MExprEq end
+
+mexpr
+
+use Test in
+
+let h = holeBool_ true 0 in
+utest domainSize 100 h with 2 in
+
+let h = holeIntRange_ 5 0 1 10 in
+utest domainSize 2 h with 5 in
+utest domain 2 h with [int_ 1, int_ 3, int_ 5, int_ 7, int_ 9] using eqSeq eqExpr in
+
+let h = holeIntRange_ 5 0 2 10 in
+utest domainSize 2 h with 5 in
+utest domain 2 h with [int_ 2, int_ 4, int_ 6, int_ 8, int_ 10] using eqSeq eqExpr in
+
+let h = holeIntRange_ 5 0 2 9 in
+utest domainSize 2 h with 4 in
+utest domain 2 h with [int_ 2, int_ 4, int_ 6, int_ 8] using eqSeq eqExpr in
+
+let h = holeIntRange_ 5 0 5 5 in
+utest domainSize 100 h with 1 in
+utest domain 100 h with [int_ 5] using eqSeq eqExpr in
+
+let h = holeIntRange_ 2 0 1 3 in
+utest
+  let s = create 1000 (lam. sample 1 h) in
+  [ optionIsSome (find (eqExpr (int_ 1)) s)
+  , optionIsSome (find (eqExpr (int_ 2)) s)
+  , optionIsSome (find (eqExpr (int_ 3)) s)
+  ]
+with [true, true, true] in
+
+let h = holeIntRange_ 2 0 1 3 in
+utest
+  let s = create 1000 (lam. sample 2 h) in
+  [ optionIsSome (find (eqExpr (int_ 1)) s)
+  , optionIsSome (find (eqExpr (int_ 2)) s)
+  , optionIsSome (find (eqExpr (int_ 3)) s)
+  ]
+with [true, false, true] in
+
+()

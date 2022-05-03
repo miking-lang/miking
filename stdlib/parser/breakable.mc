@@ -134,14 +134,14 @@ type ROpen
 type RClosed
 
 type WrappedSelf
-con WAtom : self LClosed RClosed -> WrappedSelf
-con WInfix : self LOpen ROpen -> WrappedSelf
-con WPrefix : self LClosed ROpen -> WrappedSelf
-con WPostfix : self LOpen RClosed -> WrappedSelf
+con WAtom : all self. self LClosed RClosed -> WrappedSelf
+con WInfix : all self. self LOpen ROpen -> WrappedSelf
+con WPrefix : all self. self LClosed ROpen -> WrappedSelf
+con WPostfix : all self. self LOpen RClosed -> WrappedSelf
 
 type LOpenSelf
-con LInfix : self LOpen ROpen -> LOpenSelf
-con LPostfix : self LOpen RClosed -> LOpenSelf
+con LInfix : all self. self LOpen ROpen -> LOpenSelf
+con LPostfix : all self. self LOpen RClosed -> LOpenSelf
 
 -- NOTE(vipa, 2021-02-12): Many sequences in this file have an extra
 -- comment after them: NonEmpty. In the original implementation this
@@ -156,25 +156,25 @@ con LPostfix : self LOpen RClosed -> LOpenSelf
 -- pattern match on it, typically to construct an AST), but not to
 -- construct a new SPPF.
 type PermanentNode self
-con AtomP :
+con AtomP : all self.
   { id : PermanentId
   , idx : Int
   , self : self LClosed RClosed
   } -> PermanentNode self
-con InfixP :
+con InfixP : all self.
   { id : PermanentId
   , idx : Int
   , self : self LOpen ROpen
   , leftChildAlts : [PermanentNode self] -- NonEmpty
   , rightChildAlts : [PermanentNode self] -- NonEmpty
   } -> PermanentNode self
-con PrefixP :
+con PrefixP : all self.
   { id : PermanentId
   , idx : Int
   , self : self LClosed ROpen
   , rightChildAlts : [PermanentNode self] -- NonEmpty
   } -> PermanentNode self
-con PostfixP :
+con PostfixP : all self.
   { id : PermanentId
   , idx : Int
   , self : self LOpen ROpen
@@ -184,12 +184,12 @@ con PostfixP :
 -- This is the data carried by tentative nodes, nodes that don't yet
 -- have all their children known
 type TentativeData self
-con InfixT :
+con InfixT : all self.
   { idx : Int
   , self : self LOpen ROpen
   , leftChildAlts : [PermanentNode self] -- NonEmpty
   } -> TentativeData self
-con PrefixT :
+con PrefixT : all self.
   { idx : Int
   , self : self LClosed ROpen
   } -> TentativeData self
@@ -230,18 +230,18 @@ type TimeStep = Int
 -- references each iteration of the algorithm). We parse left to
 -- right, thus all tentative nodes are left-closed
 type TentativeNode self rstyle
-con TentativeLeaf :
+con TentativeLeaf : all self.
   { parents : [TentativeNode self ROpen] -- NonEmpty
   , node : PermanentNode self
   } -> TentativeNode self RClosed
-con TentativeMid :
+con TentativeMid : all self.
   { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
   , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
   , parents : [TentativeNode self ROpen] -- NonEmpty
   , tentativeData : TentativeData self
   , maxDistanceFromRoot : Int
   } -> TentativeNode self ROpen
-con TentativeRoot :
+con TentativeRoot : all self.
   { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
   , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
   } -> TentativeNode self ROpen
@@ -257,7 +257,7 @@ let _firstTimeStep : TimeStep = 0
 let _isBefore : TimeStep -> TimeStep -> Bool = lti
 let _uniqueID : () -> PermanentId = gensym
 let _getParents
-  : TentativeNode self rstyle
+  : all self. all rstyle. TentativeNode self rstyle
   -> Option [TentativeNode self ROpen] -- NonEmpty
   = lam n.
     switch n
@@ -265,7 +265,7 @@ let _getParents
     case TentativeRoot _ then None ()
     end
 let _opIdxP
-  : PermanentNode self
+  : all self. PermanentNode self
   -> Int
   = lam node.
     match node with AtomP {idx = idx} then idx else
@@ -274,21 +274,21 @@ let _opIdxP
     match node with PostfixP {idx = idx} then idx else
     never
 let _addedNodesLeftChildren
-  : TentativeNode self ROpen
+  : all self. TentativeNode self ROpen
   -> Ref (TimeStep, Ref [PermanentNode]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesLeftChildren = x} | TentativeMid{addedNodesLeftChildren = x}
     then x
     else never
 let _addedNodesRightChildren
-  : TentativeNode self ROpen
+  : all self. TentativeNode self ROpen
   -> Ref (TimeStep, [PermanentNode]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesRightChildren = x} | TentativeMid{addedNodesRightChildren = x}
     then x
     else never
 let _callWithSelfP
-  : (all lstyle. all rstyle. self lstyle rstyle -> x)
+  : all self. all x. (all lstyle. all rstyle. self lstyle rstyle -> x)
   -> PermanentNode self
   -> x
   = lam f. lam p.
@@ -300,7 +300,7 @@ let _callWithSelfP
   end
 
 let _isBrokenEdge
-  : TopAllowedFunc self
+  : all self. TopAllowedFunc self
   -> Bool
   -> PermanentNode self
   -> Bool
@@ -324,7 +324,7 @@ let _rightChildrenP = lam p.
   end
 
 let _brokenIdxesP
-  : TopAllowedFunc self
+  : all self. TopAllowedFunc self
   -> ParenAllowedFunc self
   -> PermanentNode self
   -> [Int]
@@ -342,7 +342,7 @@ let _brokenIdxesP
       else []
     in work false
 let _brokenChildrenP
-  : TopAllowedFunc self
+  : all self. TopAllowedFunc self
   -> ParenAllowedFunc self
   -> PermanentNode self
   -> [PermanentNode self]
@@ -360,7 +360,7 @@ let _brokenChildrenP
       else [p]
     in work false
 
-let breakableInitState : () -> State self ROpen
+let breakableInitState : all self. () -> State self ROpen
   = lam.
     let timestep = ref _firstTimeStep in
     let nextIdx = ref 0 in
@@ -373,7 +373,7 @@ let breakableInitState : () -> State self ROpen
     }
 
 recursive let _maxDistanceFromRoot
-  : TentativeNode self rstyle
+  : all self. all rstyle. TentativeNode self rstyle
   -> Int
   = lam n.
     switch n
@@ -385,7 +385,7 @@ recursive let _maxDistanceFromRoot
 end
 
 let _shallowAllowedLeft
-  : LeftAllowedFunc self
+  : all self. LeftAllowedFunc self
   -> LOpenSelf self
   -> TentativeNode self RClosed
   -> Option (PermanentNode self)
@@ -402,7 +402,7 @@ let _shallowAllowedLeft
     else never
 
 let _shallowAllowedRight
-  : TopAllowedFunc self
+  : all self. TopAllowedFunc self
   -> RightAllowedFunc self
   -> TentativeNode self ROpen
   -> TentativeNode self RClosed
@@ -424,7 +424,7 @@ let _shallowAllowedRight
     else never
 
 let _addRightChildren
-  : State self rstyle
+  : all self. all rstyle. State self rstyle
   -> TentativeNode self ROpen
   -> [PermanentNode self] -- NonEmpty
   -> TentativeNode self RClosed
@@ -443,7 +443,7 @@ let _addRightChildren
     else never
 
 let _addLeftChildren
-  : State self rstyle2
+  : all self. all rstyle. all rstyle2. State self rstyle2
   -> LOpenSelf self
   -> [PermanentNode self] -- NonEmpty
   -> [TentativeNode self ROpen] -- NonEmpty
@@ -470,7 +470,7 @@ let _addLeftChildren
     else never
 
 let _addRightChildToParent
-  : TimeStep
+  : all self. TimeStep
   -> PermanentNode self
   -> TentativeNode self ROpen
   -> Option (TentativeNode self ROpen)
@@ -486,10 +486,10 @@ let _addRightChildToParent
     else never
 
 let _addLeftChildToParent
-  : TimeStep
+  : all self. TimeStep
   -> PermanentNode self
   -> [TentativeNode self ROpen] -- NonEmpty
-  -> Option (NonEmpty (TentativeNode self ROpen))
+  -> Option [TentativeNode self ROpen] -- NonEmpty
   = lam time. lam child. lam parents.
     match parents with [p] ++ _ then
       let target = _addedNodesLeftChildren p in
@@ -505,7 +505,7 @@ let _addLeftChildToParent
     else never -- TODO(vipa, 2021-02-12): this isn't technically never for the typesystem, since we're matching against a possibly empty list. However, the list will never be empty, by the comment about NonEmpty above
 
 let _getAllowedGroupings
-  : GroupingsAllowedFunc self
+  : all self. GroupingsAllowedFunc self
   -> TentativeNode self ROpen
   -> LOpenSelf self
   -> (Bool, Bool)
@@ -525,14 +525,14 @@ let _getAllowedGroupings
 -- NOTE(vipa, 2021-02-15): This should be a private type, and/or replaced with some standard library type at a later point in time
 type BreakableQueue self = [Ref [TentativeNode self ROpen]]
 let _newQueueFromFrontier
-  : [TentativeNode self rstyle]
+  : all self. all rstyle. [TentativeNode self rstyle]
   -> BreakableQueue self
   = lam frontier.
     (create
       (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
       (lam. ref []))
 let _addToQueue
-  : TentativeNode self ROpen
+  : all self. TentativeNode self ROpen
   -> BreakableQueue self
   -> ()
   = lam node. lam queue.
@@ -540,7 +540,7 @@ let _addToQueue
     let target = get queue dist in
     modref target (snoc (deref target) node)
 recursive let _popFromQueue
-  : BreakableQueue
+  : all self. BreakableQueue
   -> Option (TentativeNode self ROpen)
   = lam queue.
     match queue with queue ++ [target] then
@@ -556,7 +556,7 @@ end
 -- that type variables are scoped, e.g., `rstyle` on `makeNewParents`
 -- is the same `rstyle` as the one in the top-level type-signature
 let _addLOpen
-  : Config self
+  : all self. all rstyle. Config self
   -> LOpenSelf self
   -> State self RClosed
   -> Option (State self rstyle)
@@ -569,7 +569,7 @@ let _addLOpen
       -> TentativeNode self rstyle
       = lam parents.
         match parents with [p] ++ _ then
-          let snd: (a, b) -> b = lam x. x.1 in
+          let snd: all a. all b. (a, b) -> b = lam x. x.1 in
           let cs = deref (snd (deref (_addedNodesLeftChildren p))) in
           match cs with [_] ++ _ then
             _addLeftChildren st lself cs parents
@@ -662,7 +662,7 @@ let _addLOpen
       None ()
 
 let breakableAddPrefix
-  : Config self
+  : all self. Config self
   -> self LClosed ROpen
   -> State self ROpen
   -> State self ROpen
@@ -685,7 +685,7 @@ let breakableAddPrefix
     }
 
 let breakableAddInfix
-  : Config self
+  : all self. Config self
   -> self LOpen ROpen
   -> State self RClosed
   -> Option (State self ROpen)
@@ -695,7 +695,7 @@ let breakableAddInfix
     res
 
 let breakableAddPostfix
-  : Config self
+  : all self. Config self
   -> self LOpen RClosed
   -> State self RClosed
   -> Option (State self RClosed)
@@ -705,7 +705,7 @@ let breakableAddPostfix
     res
 
 let breakableAddAtom
-  : Config self
+  : all self. Config self
   -> self LClosed RClosed
   -> State self ROpen
   -> State self RClosed
@@ -727,7 +727,7 @@ let breakableAddAtom
 -- be a single cause of the failure that is easy to find
 -- algorithmically
 let breakableFinalizeParse
-  : Config self
+  : all self. Config self
   -> State self RClosed
   -> Option [PermanentNode self] -- NonEmpty
   = lam config. lam st.
@@ -755,7 +755,7 @@ let breakableFinalizeParse
       -> [PermanentNode self]
       = lam queue.
         match _popFromQueue queue with Some p then
-          let snd: (a, b) -> b = lam x. x.1 in
+          let snd: all a. all b. (a, b) -> b = lam x. x.1 in
           let children = (snd (deref (_addedNodesRightChildren p))) in
           match p with TentativeRoot _ then children
           else match (p, children) with (TentativeMid _, [_] ++ _) then
@@ -783,7 +783,8 @@ con Unimportant : () -> Important
 -- implies that `leftChildAlts` and `rightChildAlts` are singleton
 -- lists throughout the entire SPPF.
 let breakableReportAmbiguities
-  : { parenAllowed : ParenAllowedFunc self
+  : all self. all pos. all tokish.
+    { parenAllowed : ParenAllowedFunc self
     , topAllowed : TopAllowedFunc self
     , toTok : all lstyle. all rstyle. Important -> self lstyle rstyle -> [tokish]
     , leftPos : all rstyle. self LClosed rstyle -> pos
@@ -959,7 +960,8 @@ let breakableReportAmbiguities
     deref ambiguities
 
 let breakableConstructSimple
-  : { constructAtom : self LClosed RClosed -> res
+  : all self. all res.
+    { constructAtom : self LClosed RClosed -> res
     , constructInfix : self LOpen ROpen -> res -> res -> res
     , constructPrefix : self LClosed ROpen -> res -> res
     , constructPostfix : self LOpen RClosed -> res -> res
@@ -991,7 +993,7 @@ type BreakableErrorHighlightConfig self =
   }
 
 let breakableToErrorHighlightSpec
-  : BreakableErrorHighlightConfig self
+  : all self. BreakableErrorHighlightConfig self
   -> [PermanentNode self] -- NonEmpty
   -> [{info: Info, partialResolutions: [[Highlight]]}]
   = lam config. lam tops.
@@ -1014,7 +1016,7 @@ let breakableToErrorHighlightSpec
     in map fixup res
 
 let breakableDefaultHighlight
-  : BreakableErrorHighlightConfig self
+  : all self. BreakableErrorHighlightConfig self
   -> String
   -> [PermanentNode self]
   -> [(Info, String)]

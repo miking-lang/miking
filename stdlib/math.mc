@@ -13,6 +13,16 @@ utest absf 0. with 0. using eqf
 utest absf 1. with 1. using eqf
 utest absf (negf 1.) with 1. using eqf
 
+let cmpfApprox : Float -> Float -> Float -> Int =
+  lam epsilon. lam l. lam r.
+    if eqfApprox epsilon l r then 0
+    else if ltf l r then subi 0 1
+    else 1
+
+utest cmpfApprox 0.1 0. 0.1 with 0
+utest cmpfApprox 0. 0.1 0.2 with subi 0 1
+utest cmpfApprox 0.1 0.4 0.2 with 1
+
 -- Int stuff
 let maxi = lam r. lam l. if gti r l then r else l
 let mini = lam r. lam l. if lti r l then r else l

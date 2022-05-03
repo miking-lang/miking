@@ -635,7 +635,7 @@ end
 lang HashStringTokenParser = TokenParser
   syn Token =
   | HashStringTok {info : Info, hash : String, val : String}
-  syn TokenRepr=
+  syn TokenRepr =
   | HashStringRepr {hash : String}
 
   sem parseToken (pos : Pos) =
