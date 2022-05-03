@@ -511,7 +511,8 @@ lang LetTypeCheck = TypeCheck + LetAst
   sem typeCheckBase (env : TCEnv) =
   | TmLet t ->
     let lvl = env.currentLvl in
-    let body = typeCheckExpr {env with currentLvl = addi 1 lvl} t.body in
+    let body = optionMapOr t.body (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyBody) in
+    let body = typeCheckExpr {env with currentLvl = addi 1 lvl} body in
     let tyBody = optionMapOrElse
       -- No type annotation: generalize the inferred type
       (lam. gen lvl (tyTm body))
@@ -527,6 +528,14 @@ lang LetTypeCheck = TypeCheck + LetAst
                 with tyBody = tyBody}
                 with inexpr = inexpr}
                 with ty = tyTm inexpr}
+
+  sem propagateTyAnnot =
+  | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
+  | (TmLam l, TyArrow a) ->
+    let body = propagateTyAnnot (l.body, a.to) in
+    let ty = optionGetOr a.from (sremoveUnknown l.tyIdent) in
+    TmLam {{l with body = body} with tyIdent = ty}
+  | (tm, ty) -> tm
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsAst
@@ -1204,4 +1213,3 @@ iter runTest tests;
 -- Report a "stack trace" when encountering a unification failure
 
 -- TODO(aathn, 2021-09-28): Value restriction
-
