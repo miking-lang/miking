@@ -230,8 +230,8 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSBreak   {}
   | CSNop     {}
 
-  sem smapAccumL_CStmt_CStmt : all acc. (acc -> CStmt -> (acc, CStmt)) -> acc
-                                        -> CStmt -> (acc, CStmt)
+  sem smapAccumLCStmtCStmt : all acc. (acc -> CStmt -> (acc, CStmt)) -> acc
+                                      -> CStmt -> (acc, CStmt)
   sem smapAccumLCStmtCStmt f acc =
   | CSIf t ->
     match mapAccumL f acc t.thn with (acc, thn) in
