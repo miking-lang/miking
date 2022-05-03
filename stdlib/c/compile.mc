@@ -741,11 +741,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- TODO(dlunde,2021-10-07): Handle this how?
     infoErrorExit (infoTm t) "Empty bindings in TmRecord in compileAlloc"
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
+    let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
     let cTy = compileType env ty in
     if any (nameEq ident) env.ptrTypes then
       let def = alloc n cTy in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEArrow {
@@ -753,11 +755,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
     else
       let def = [{ ty = cTy, id = Some n, init = None ()}] in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEMember {
@@ -765,8 +768,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
 
   | TmSeq {tms = tms, ty = ty} & t ->
     let uTy = _unwrapType (env.typeEnv) ty in

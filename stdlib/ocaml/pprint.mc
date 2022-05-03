@@ -482,15 +482,16 @@ lang OCamlPrettyPrint =
     if mapIsEmpty t.bindings then (env, "()")
     else
       let innerIndent = pprintIncr (pprintIncr indent) in
+      let orderedLabels = recordOrderedLabels (mapKeys t.bindings) in
       match
-        mapMapAccum (lam env. lam k. lam v.
+        mapAccumL (lam env. lam k.
+          let v = mapFindExn k t.bindings in
           let k = sidToString k in
           match pprintCode innerIndent env v with (env, str) then
             (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
                         "(", str, ")"])
-          else never) env t.bindings
+          else never) env orderedLabels
       with (env, binds) then
-        let binds = mapValues binds in
         let merged =
           strJoin (concat ";" (pprintNewline (pprintIncr indent))) binds
         in

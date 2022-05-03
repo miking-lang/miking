@@ -2,6 +2,7 @@ include "cuda/ast.mc"
 include "cuda/compile.mc"
 include "mexpr/ast.mc"
 include "mexpr/cmp.mc"
+include "mexpr/record.mc"
 include "pmexpr/wrapper.mc"
 
 let _tensorStateOk = nameSym "STATE_OK"
@@ -49,7 +50,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       compileCEnv : CompileCEnv}
 
   sem lookupTypeIdent (env : TargetWrapperEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & tyrec ->
     if mapIsEmpty t.fields then None ()
     else
     match env with CudaTargetEnv cenv in
@@ -60,7 +61,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
           match lookupTypeIdent env ty with Some ty then
             Some (key, ty)
           else None ())
-        (mapBindings t.fields) in
+        (tyRecordOrderedFields tyrec) in
     match fields with Some fieldsSeq then
       let fields = mapFromSeq cmpSID fieldsSeq in
       let ty = TyRecord {t with fields = fields} in

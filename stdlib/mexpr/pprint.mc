@@ -1077,8 +1077,9 @@ lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
+      let orderedFields = tyRecordOrderedFields ty in
       let tuple =
-        let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) (mapBindings t.fields) in
+        let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) orderedFields in
         if forAll (lam t : (String,Type). stringIsInt t.0) seq then
           let seq = map (lam t : (String,Type). (string2int t.0, t.1)) seq in
           let seq : [(Int,Type)] = sort (lam l : (Int,Type). lam r : (Int,Type). subi l.0 r.0) seq in
@@ -1101,7 +1102,6 @@ lang RecordTypePrettyPrint = RecordTypeAst
           match getTypeStringCode indent env ty with (env, tyStr) in
           (env, (sid, tyStr))
         in
-        let orderedFields = tyRecordOrderedFields ty in
         match mapAccumL f env orderedFields with (env, fields) in
         let fields =
           map (lam b : (SID,String). (sidToString b.0, b.1)) fields in
