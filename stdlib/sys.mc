@@ -24,6 +24,9 @@ let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. la
        , ["\'}"]
        ]
 
+let sysFileExists: String -> Bool = lam file.
+  if eqi (_commandList ["test", "-e", file]) 0 then true else false
+
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
@@ -104,5 +107,12 @@ let sysRunCommand : [String] -> String -> String -> ExecResult =
 
 let sysCommandExists : String -> Bool = lam cmd.
   eqi 0 (command (join ["which ", cmd, " >/dev/null 2>&1"]))
+
+let sysGetCwd : () -> String = lam. strTrim (sysRunCommand ["pwd"] "" ".").stdout
+
+let sysGetEnv : String -> Option String = lam env.
+  let res = strTrim (sysRunCommand ["echo", concat "$" env] "" ".").stdout in
+  if null res then None ()
+  else Some res
 
 utest sysCommandExists "ls" with true
