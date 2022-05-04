@@ -1,6 +1,6 @@
-let maxf = lam r. lam l. if gtf r l then r else l
+let maxf: Float -> Float -> Float = lam r. lam l. if gtf r l then r else l
 
-let absf = lam f. maxf f (negf f)
+let absf: Float -> Float = lam f. maxf f (negf f)
 
 let eqfApprox = lam epsilon. lam r. lam l.
   if leqf (absf (subf r l)) epsilon then true else false
@@ -55,5 +55,5 @@ let pow = lam x: Float. lam y: Float. externalPow x y
 utest pow 3. 2. with 9. using eqf
 
 external externalSqrt : Float -> Float
-let sqrt = lam x. externalSqrt x
+let sqrt: Float -> Float = lam x. externalSqrt x
 utest sqrt 9. with 3. using eqf

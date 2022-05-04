@@ -14,7 +14,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
@@ -73,8 +73,6 @@ let _assign: CExpr -> CExpr -> CExpr = use CAst in
 -- COMPILER DEFINITIONS AND EXTERNALS --
 ----------------------------------------
 
-type ExtInfo = { ident: String, header: String }
-
 -- Collect all maps of externals. Should be done automatically at some point,
 -- but for now these files must be manually included and added to this map.
 let externalsMap: Map String ExtInfo = foldl1 mapUnion [
@@ -82,7 +80,7 @@ let externalsMap: Map String ExtInfo = foldl1 mapUnion [
 ]
 
 -- Retrieve names used for externals. Used for making sure these names are printed without modification during C code generation.
-let externalNames: [String] =
+let externalNames: [Name] =
   map nameNoSym
     (mapFoldWithKey (lam acc. lam. lam v: ExtInfo. cons v.ident acc)
        [] externalsMap)
@@ -127,22 +125,25 @@ con RIdent : Name -> Result
 con RReturn : () -> Result
 con RNone : () -> Result
 
+
+-- TODO(dlunde,2022-04-29): A bug in the MLang transformation currently
+-- prevents this fragment from being put in MExprCCompileBase
+type CompileCOptions = {
+  -- Controls whether 32-bit integers should be used. If this is false (which
+  -- is the default setting), the compiler will use 64-bit integers.
+  use32BitInts : Bool,
+
+  -- Controls whether 32-bit floating-point numbers should be used. If this
+  -- is false (which is the default setting), the compiler will use 64-bit
+  -- floats.
+  use32BitFloats : Bool
+}
+
 lang MExprCCompileBase = MExprAst + CAst
 
   --------------------------
   -- COMPILER ENVIRONMENT --
   --------------------------
-
-  type CompileCOptions = {
-    -- Controls whether 32-bit integers should be used. If this is false (which
-    -- is the default setting), the compiler will use 64-bit integers.
-    use32BitInts : Bool,
-
-    -- Controls whether 32-bit floating-point numbers should be used. If this
-    -- is false (which is the default setting), the compiler will use 64-bit
-    -- floats.
-    use32BitFloats : Bool
-  }
 
   sem defaultCompileCOptions =
   | _ -> {use32BitInts = false, use32BitFloats = false}
@@ -526,7 +527,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
   | (TyRecord { fields = fields }) & ty ->
     let labels = tyRecordOrderedLabels ty in
-    let fieldsLs: [(CType,Name)] =
+    let fieldsLs: [(CType,Option Name)] =
       foldl (lam acc. lam k.
         let ty = mapFindExn k fields in
         let ty = compileType env ty in
@@ -1055,7 +1056,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
         ])
       else match res with RReturn _ then
-        if any (lam ty. isPtrType env.ptrTypes ty) (mapValues bindings) then
+        if isPtrType env.ptrTypes ty then
           infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
         else
           match compileAlloc env (None ()) t with (env, def, init, n) in
@@ -1353,7 +1354,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 -----------
 
 lang Test =
-  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot +
+  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeCheck +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
   MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
 end
@@ -1366,8 +1367,8 @@ let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvEmpty prog in
 
-  -- Type annotate
-  let prog = typeAnnot prog in
+  -- Type check and annotate
+  let prog = typeCheck prog in
 
   -- Remove redundant lets
   let prog = removeTypeAscription prog in

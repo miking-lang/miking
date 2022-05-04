@@ -45,6 +45,7 @@
 
 include "name.mc"
 include "option.mc"
+include "externals.mc"
 
 -----------------------------
 -- C TYPES AND EXPRESSIONS --
@@ -67,7 +68,10 @@ lang CExprTypeAst
   | CTyUnion  { id: Option Name, mem: Option [(CType,Option Name)] }
   | CTyEnum   { id: Option Name, mem: Option [Name] }
 
-  sem _mapAccumLMem (f : acc -> CType -> (acc, b)) (acc : acc) =
+  sem _mapAccumLMem
+    : all acc. (acc -> CType -> (acc, CType)) -> acc
+      -> Option [(CType,Option Name)] -> (acc, Option [(CType,Option Name)])
+  sem _mapAccumLMem f acc =
   | mem ->
     let fMem = lam acc. lam memEntry : (CType, Option Name).
       match memEntry with (ty, optId) in
@@ -78,7 +82,9 @@ lang CExprTypeAst
       (acc, Some mem)
     else (acc, mem)
 
-  sem smapAccumLCTypeCType (f : acc -> CType -> (acc, b)) (acc : acc) =
+  sem smapAccumLCTypeCType
+    : all acc. (acc -> CType -> (acc, CType)) -> acc -> CType -> (acc, CType)
+  sem smapAccumLCTypeCType f acc =
   | CTyPtr t ->
     match f acc t.ty with (acc, ty) in
     (acc, CTyPtr {t with ty = ty})
@@ -95,14 +101,15 @@ lang CExprTypeAst
   | CTyUnion t ->
     match _mapAccumLMem f acc t.mem with (acc, mem) in
     (acc, CTyStruct {t with mem = mem})
-  | CTyEnum t -> CTyEnum t
   | ty -> (acc, ty)
 
-  sem smapCTypeCType (f : CType -> b) =
+  sem smapCTypeCType : (CType -> CType) -> CType -> CType
+  sem smapCTypeCType f =
   | p ->
     match smapAccumLCTypeCType (lam. lam a. ((), f a)) () p with (_, p) in p
 
-  sem sfoldCTypeCType (f : acc -> CType -> acc) (acc : acc) =
+  sem sfoldCTypeCType : all acc. (acc -> CType -> acc) -> acc -> CType -> acc
+  sem sfoldCTypeCType f acc =
   | p ->
     match smapAccumLCTypeCType (lam acc. lam a. (f acc a, a)) acc p
     with (acc, _) in
@@ -124,7 +131,9 @@ lang CExprTypeAst
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
-  sem smapAccumLCExprCExpr (f : acc -> CExpr -> (acc, b)) (acc : acc) =
+  sem smapAccumLCExprCExpr
+    : all acc. (acc -> CExpr -> (acc, CExpr)) -> acc -> CExpr -> (acc, CExpr)
+  sem smapAccumLCExprCExpr f acc =
   | CEApp t ->
     match mapAccumL f acc t.args with (acc, args) in
     (acc, CEApp {t with args = args})
@@ -151,7 +160,8 @@ lang CExprTypeAst
   | p ->
     match smapAccumLCExprCExpr (lam. lam a. ((), f a)) () p with (_, p) in p
 
-  sem sfold_CExpr_CExpr (f : a -> CExpr -> a) (acc : a) =
+  sem sfold_CExpr_CExpr : all acc. (acc -> CExpr -> acc) -> acc -> CExpr -> acc
+  sem sfold_CExpr_CExpr f acc =
   | p ->
     match smapAccumLCExprCExpr (lam acc. lam a. (f acc a, a)) acc p
     with (acc, _) in
@@ -198,13 +208,14 @@ lang CInitAst = CExprTypeAst
   | CIExpr { expr: CExpr }
   | CIList { inits: [CInit] }
 
-  sem sfold_CInit_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CInit_CExpr : all acc. (acc -> CExpr -> acc) -> acc -> CInit -> acc
+  sem sfold_CInit_CExpr f acc =
   | CIExpr t -> f acc t.expr
   | CIList t -> foldl (sfold_CInit_CExpr f) acc t.inits
 
   sem smap_CInit_CExpr (f: CExpr -> CExpr) =
   | CIExpr t -> CIExpr { t with expr = f t.expr }
-  | CIList t -> CIList { t with inits = smap_CInit_CExpr f t.inits }
+  | CIList t -> CIList { t with inits = map (smap_CInit_CExpr f) t.inits }
 
 end
 
@@ -242,7 +253,8 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSBreak t -> CSBreak t
   | CSNop t -> CSNop t
 
-  sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
+  sem sfold_CStmt_CExpr : all acc. (acc -> CExpr -> acc) -> acc -> CStmt -> acc
+  sem sfold_CStmt_CExpr f acc =
   | CSDef t -> optionMapOrElse (lam. acc) (sfold_CInit_CExpr f acc) t.init
   | CSIf t ->
     let sf = sfold_CStmt_CExpr f in
@@ -274,7 +286,8 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSBreak _ & t -> t
   | CSNop _ & t -> t
 
-  sem sfold_CStmt_CStmt (f: a -> CStmt -> a) (acc: a) =
+  sem sfold_CStmt_CStmt : all acc. (acc -> CStmt -> acc) -> acc -> CStmt -> acc
+  sem sfold_CStmt_CStmt f acc =
   | CSDef t -> acc
   | CSIf t -> foldl f (foldl f acc t.thn) t.els
   | CSSwitch t -> error "TODO"
@@ -317,7 +330,7 @@ lang CTopAst = CExprTypeAst + CInitAst + CStmtAst
 
   sem smap_CTop_CExpr (f: CExpr -> CExpr) =
   | CTTyDef _ & t -> t
-  | CTDef t -> CTDef { t with init = mapOption f t.init }
+  | CTDef t -> CTDef { t with init = optionMap (smap_CInit_CExpr f) t.init }
   | CTFun t -> CTFun { t with body = map (smap_CStmt_CExpr f) t.body }
 
   sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
@@ -325,7 +338,8 @@ lang CTopAst = CExprTypeAst + CInitAst + CStmtAst
   | CTDef _ & t -> t
   | CTFun t -> CTFun { t with body = join (map f t.body) }
 
-  sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
+  sem sfold_CTop_CStmt : all acc. (acc -> CStmt -> acc) -> acc -> CTop -> acc
+  sem sfold_CTop_CStmt f acc =
   | CTTyDef _ -> acc
   | CTDef _ -> acc
   | CTFun t -> foldl f acc t.body
