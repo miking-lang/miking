@@ -127,7 +127,7 @@ let pprintCAst : CPProg -> String = lam ast.
 
 let pprintCudaAst : CuPProg -> String = lam ast.
   use CudaPrettyPrint in
-  printCudaProg [] ast
+  printCudaProg cCompilerNames ast
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in

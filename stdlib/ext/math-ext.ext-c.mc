@@ -1,33 +1,31 @@
 include "map.mc"
-include "c/ast.mc"
+include "c/externals.mc"
 
 let mathExtMap: ExtMap =
-  use CExprTypeAst in
   mapFromSeq cmpString [
 
     ( "externalExp"
-    , { ident = "exp", header = "<math.h>", ty = CTyDouble ()
-      , argTypes = [CTyDouble ()] }
+    , { ident = "exp", header = "<math.h>" }
     ),
 
     ( "externalLog"
-    , { ident = "log", header = "<math.h>", ty = CTyDouble ()
-      , argTypes = [CTyDouble ()] }
+    , { ident = "log", header = "<math.h>" }
     ),
 
     ( "externalPow"
-    , { ident = "pow", header = "<math.h>", ty = CTyDouble ()
-      , argTypes = [CTyDouble (), CTyDouble ()] }
+    , { ident = "pow", header = "<math.h>" }
+    ),
+
+    ( "externalSqrt"
+    , { ident = "sqrt", header = "<math.h>" }
     ),
 
     ( "externalSin"
-    , { ident = "sin", header = "<math.h>", ty = CTyDouble ()
-      , argTypes = [CTyDouble ()] }
+    , { ident = "sin", header = "<math.h>" }
     ),
 
     ( "externalCos"
-    , { ident = "cos", header = "<math.h>", ty = CTyDouble ()
-      , argTypes = [CTyDouble ()] }
+    , { ident = "cos", header = "<math.h>" }
     )
 
   ]
