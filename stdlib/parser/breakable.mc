@@ -105,6 +105,52 @@ breakableConstructSimple or manual traversal of the SPPF.
 
 -/
 
+/-
+NOTE(vipa, 2022-05-05): This file uses GADTs, even though the current
+typechecker doesn't support them. The external API is largely
+unaffected, the relevant types can be expressed properly, but the
+internals need some uses of `unsafeCoerce`. The issue we're working
+around is as follows:
+
+type Foo a in
+con FooInt : Int -> Foo Int in
+con FooChar : Char -> Foo Char in
+let f : all a. Foo a -> Foo a = lam foo.
+  -- This branch ends up unifying `a` with `Int`
+  match foo with FooInt i then FooInt i else
+  -- This branch ends up unifying `a` with `Char`
+  match foo with FooChar c then FooChar c else
+  -- Both of the unifications "leak" out of the branches, but with
+  -- GADTs they should "return" to being just `a` when we return
+  -- from them.
+  never in
+f (FooInt 2)
+
+
+The workaround we use changes the above to this:
+type Foo a in
+con FooInt : Int -> Foo Int in
+con FooChar : Char -> Foo Char in
+let f : all a. Foo a -> Foo a = lam foo.
+  -- Create a function that forgets that we have a `Foo a`
+  let unlink : all b. Foo a -> Foo b = unsafeCoerce in
+  match unlink foo with FooInt i then
+    -- Create a function that forgets that we know that we have a
+    -- `Foo Int` and instead remembers that it's a `Foo a`.
+    let return : Foo Int -> Foo a = unsafeCoerce in
+    return (FooInt i)
+  else match unlink foo with FooChar c then
+    -- Create a function that forgets that we know that we have a
+    -- `Foo Char` and instead remembers that it's a `Foo a`.
+    let return : Foo Char -> Foo a = unsafeCoerce in
+    return (FooChar c)
+  else never in
+f (FooInt 2)
+
+The `unlink` and `return` functions are safe to use as long as they
+follow precisely this pattern, otherwise they are decidedly unsafe.
+-/
+
 include "map.mc"
 include "set.mc"
 include "either.mc"
@@ -139,9 +185,9 @@ con WInfix : all self. self LOpen ROpen -> WrappedSelf
 con WPrefix : all self. self LClosed ROpen -> WrappedSelf
 con WPostfix : all self. self LOpen RClosed -> WrappedSelf
 
-type LOpenSelf
-con LInfix : all self. self LOpen ROpen -> LOpenSelf
-con LPostfix : all self. self LOpen RClosed -> LOpenSelf
+type LOpenSelf self rstyle
+con LInfix : all self. self LOpen ROpen -> LOpenSelf self ROpen
+con LPostfix : all self. self LOpen RClosed -> LOpenSelf self RClosed
 
 -- NOTE(vipa, 2021-02-12): Many sequences in this file have an extra
 -- comment after them: NonEmpty. In the original implementation this
@@ -177,7 +223,7 @@ con PrefixP : all self.
 con PostfixP : all self.
   { id : PermanentId
   , idx : Int
-  , self : self LOpen ROpen
+  , self : self LOpen RClosed
   , leftChildAlts : [PermanentNode self] -- NonEmpty
   } -> PermanentNode self
 
@@ -235,15 +281,15 @@ con TentativeLeaf : all self.
   , node : PermanentNode self
   } -> TentativeNode self RClosed
 con TentativeMid : all self.
-  { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
-  , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
+  { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode self])
+  , addedNodesRightChildren : Ref (TimeStep, [PermanentNode self])
   , parents : [TentativeNode self ROpen] -- NonEmpty
   , tentativeData : TentativeData self
   , maxDistanceFromRoot : Int
   } -> TentativeNode self ROpen
 con TentativeRoot : all self.
-  { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode])
-  , addedNodesRightChildren : Ref (TimeStep, [PermanentNode])
+  { addedNodesLeftChildren : Ref (TimeStep, Ref [PermanentNode self])
+  , addedNodesRightChildren : Ref (TimeStep, [PermanentNode self])
   } -> TentativeNode self ROpen
 
 -- The data we carry along while parsing
@@ -260,10 +306,12 @@ let _getParents
   : all self. all rstyle. TentativeNode self rstyle
   -> Option [TentativeNode self ROpen] -- NonEmpty
   = lam n.
-    switch n
-    case TentativeLeaf{parents = ps} | TentativeMid{parents = ps} then Some ps
-    case TentativeRoot _ then None ()
-    end
+    let unlink : all r. TentativeNode self rstyle -> TentativeNode self r
+      = unsafeCoerce in
+    match unlink n with TentativeLeaf {parents = ps} then Some ps else
+    match unlink n with TentativeMid {parents = ps} then Some ps else
+    match unlink n with TentativeRoot _ then None () else
+    never
 let _opIdxP
   : all self. PermanentNode self
   -> Int
@@ -275,14 +323,14 @@ let _opIdxP
     never
 let _addedNodesLeftChildren
   : all self. TentativeNode self ROpen
-  -> Ref (TimeStep, Ref [PermanentNode]) -- NonEmpty
+  -> Ref (TimeStep, Ref [PermanentNode self]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesLeftChildren = x} | TentativeMid{addedNodesLeftChildren = x}
     then x
     else never
 let _addedNodesRightChildren
   : all self. TentativeNode self ROpen
-  -> Ref (TimeStep, [PermanentNode]) -- NonEmpty
+  -> Ref (TimeStep, [PermanentNode self]) -- NonEmpty
   = lam node.
     match node with TentativeRoot{addedNodesRightChildren = x} | TentativeMid{addedNodesRightChildren = x}
     then x
@@ -305,8 +353,9 @@ let _isBrokenEdge
   -> PermanentNode self
   -> Bool
   = lam isTopAllowed. lam parenAllowed. lam node.
-    or (not parenAllowed) (not (_callWithSelfP isTopAllowed node))
-let _leftChildrenP = lam p.
+    or (not parenAllowed) (not (_callWithSelfP #frozen"isTopAllowed" node))
+let _leftChildrenP
+  : all self. PermanentNode self -> Option [PermanentNode self] = lam p.
   switch p
   case InfixP r then
     Some r.leftChildAlts
@@ -314,7 +363,8 @@ let _leftChildrenP = lam p.
     Some r.leftChildAlts
   case _ then None ()
   end
-let _rightChildrenP = lam p.
+let _rightChildrenP
+  : all self. PermanentNode self -> Option [PermanentNode self] = lam p.
   switch p
   case InfixP r then
     Some r.rightChildAlts
@@ -330,8 +380,8 @@ let _brokenIdxesP
   -> [Int]
   = lam isTopAllowed. lam parenAllowedDirs.
     recursive let work = lam parenAllowed. lam p.
-      if _isBrokenEdge isTopAllowed parenAllowed p then
-        let parAllowed = _callWithSelfP parenAllowedDirs p in
+      if _isBrokenEdge #frozen"isTopAllowed" #frozen"parenAllowed" p then
+        let parAllowed = _callWithSelfP #frozen"parenAllowedDirs" p in
         let l = match _leftChildrenP p with Some children
           then join (map (work (_includesLeft parAllowed)) children)
           else [] in
@@ -348,8 +398,8 @@ let _brokenChildrenP
   -> [PermanentNode self]
   = lam isTopAllowed. lam parenAllowedDirs.
     recursive let work = lam parenAllowed. lam p.
-      if _isBrokenEdge isTopAllowed parenAllowed p then
-        let parAllowed = _callWithSelfP parenAllowedDirs p in
+      if _isBrokenEdge #frozen"isTopAllowed" parenAllowed p then
+        let parAllowed = _callWithSelfP #frozen"parenAllowedDirs" p in
         let l = match _leftChildrenP p with Some children
           then join (map (work (_includesLeft parAllowed)) children)
           else [] in
@@ -373,30 +423,33 @@ let breakableInitState : all self. () -> State self ROpen
     }
 
 recursive let _maxDistanceFromRoot
-  : all self. all rstyle. TentativeNode self rstyle
+  : all self. all rstyle.
+  TentativeNode self rstyle
   -> Int
   = lam n.
-    switch n
-    case TentativeMid {maxDistanceFromRoot = r} then r
-    case TentativeRoot _ then 0
-    case TentativeLeaf {parents = ps} then
+    let unlink : all r. TentativeNode self rstyle -> TentativeNode self r
+      = unsafeCoerce in
+    match unlink n with TentativeMid {maxDistanceFromRoot = r} then r else
+    match unlink n with TentativeRoot _ then 0 else
+    match unlink n with  TentativeLeaf {parents = ps} then
       maxOrElse (lam. 0) subi (map _maxDistanceFromRoot ps)
-    end
+    else never
 end
 
 let _shallowAllowedLeft
-  : all self. LeftAllowedFunc self
-  -> LOpenSelf self
+  : all self. all rstyle.
+  LeftAllowedFunc self
+  -> LOpenSelf self rstyle
   -> TentativeNode self RClosed
   -> Option (PermanentNode self)
   = lam allowedLeft. lam parent. lam child.
     match child with TentativeLeaf {node = node} then
       let helper = lam self.
-        switch parent
-        case LInfix parent then allowedLeft {parent = parent, child = self}
-        case LPostfix parent then allowedLeft {parent = parent, child = self}
-        end in
-      if _callWithSelfP helper node
+        let unlink : all r. LOpenSelf self rstyle -> LOpenSelf self r = unsafeCoerce in
+        match unlink parent with LInfix parent then allowedLeft {parent = parent, child = self} else
+        match unlink parent with LPostfix parent then allowedLeft {parent = parent, child = self} else
+        never in
+      if _callWithSelfP #frozen"helper" node
       then Some node
       else None ()
     else never
@@ -411,15 +464,17 @@ let _shallowAllowedRight
     match child with TentativeLeaf {node = node} then
       switch parent
       case TentativeMid {tentativeData = InfixT {self = parent}} then
-        if _callWithSelfP (lam child. rightAllowed {parent = parent, child = child}) node
+        let f = lam child. rightAllowed {parent = parent, child = child} in
+        if _callWithSelfP #frozen"f" node
         then Some node
         else None ()
       case TentativeMid {tentativeData = PrefixT {self = parent}} then
-        if _callWithSelfP (lam child. rightAllowed {parent = parent, child = child}) node
+        let f = lam child. rightAllowed {parent = parent, child = child} in
+        if _callWithSelfP #frozen"f" node
         then Some node
         else None ()
       case TentativeRoot _ then
-        if _callWithSelfP topAllowed node then Some node else None ()
+        if _callWithSelfP #frozen"topAllowed" node then Some node else None ()
       end
     else never
 
@@ -443,30 +498,36 @@ let _addRightChildren
     else never
 
 let _addLeftChildren
-  : all self. all rstyle. all rstyle2. State self rstyle2
-  -> LOpenSelf self
+  : all self. all rstyle. all rstyle2.
+  State self rstyle2
+  -> LOpenSelf self rstyle
   -> [PermanentNode self] -- NonEmpty
   -> [TentativeNode self ROpen] -- NonEmpty
   -> TentativeNode self rstyle
   = lam st. lam lself. lam leftChildren. lam parents.
     let idx = deref st.nextIdx in
-    match lself with LInfix self then
+    let unlink : all r. LOpenSelf self rstyle -> LOpenSelf self r = unsafeCoerce in
+    match unlink lself with LInfix self then
+      let return : TentativeNode self ROpen -> TentativeNode self rstyle = unsafeCoerce in
       let time = deref st.timestep in
       let addedLeft = ref (_firstTimeStep, ref []) in
       let addedRight = ref (_firstTimeStep, []) in
-      TentativeMid
+      let res = TentativeMid
         { parents = parents
         , addedNodesLeftChildren = addedLeft
         , addedNodesRightChildren = addedRight
         , maxDistanceFromRoot = addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot parents))
         , tentativeData = InfixT {idx = idx, self = self, leftChildAlts = leftChildren}
-        }
-    else match lself with LPostfix self then
+        } in
+      return res
+    else match unlink lself with LPostfix self then
+      let return : TentativeNode self RClosed -> TentativeNode self rstyle = unsafeCoerce in
       let id = _uniqueID () in
-      TentativeLeaf
+      let res = TentativeLeaf
         { parents = parents
         , node = PostfixP {id = id, idx = idx, self = self, leftChildAlts = leftChildren}
-        }
+        } in
+      return res
     else never
 
 let _addRightChildToParent
@@ -505,20 +566,22 @@ let _addLeftChildToParent
     else never -- TODO(vipa, 2021-02-12): this isn't technically never for the typesystem, since we're matching against a possibly empty list. However, the list will never be empty, by the comment about NonEmpty above
 
 let _getAllowedGroupings
-  : all self. GroupingsAllowedFunc self
+  : all self. all rstyle.
+  GroupingsAllowedFunc self
   -> TentativeNode self ROpen
-  -> LOpenSelf self
+  -> LOpenSelf self rstyle
   -> (Bool, Bool)
   = lam groupings. lam l. lam r.
     switch l
     case TentativeRoot _ then (false, true)
     case TentativeMid l then
-      let dirs = switch (l.tentativeData, r)
-        case (InfixT l, LInfix r) then groupings (l.self, r)
-        case (PrefixT l, LInfix r) then groupings (l.self, r)
-        case (InfixT l, LPostfix r) then groupings (l.self, r)
-        case (PrefixT l, LPostfix r) then groupings (l.self, r)
-        end
+      let dirs =
+        let unlink : all r. LOpenSelf self rstyle -> LOpenSelf self r = unsafeCoerce in
+        match (l.tentativeData, unlink r) with (InfixT l, LInfix r) then groupings (l.self, r) else
+        match (l.tentativeData, unlink r) with (PrefixT l, LInfix r) then groupings (l.self, r) else
+        match (l.tentativeData, unlink r) with (InfixT l, LPostfix r) then groupings (l.self, r) else
+        match (l.tentativeData, unlink r) with (PrefixT l, LPostfix r) then groupings (l.self, r) else
+        never
       in (_includesLeft dirs, _includesRight dirs)
     end
 
@@ -540,7 +603,7 @@ let _addToQueue
     let target = get queue dist in
     modref target (snoc (deref target) node)
 recursive let _popFromQueue
-  : all self. BreakableQueue
+  : all self. BreakableQueue self
   -> Option (TentativeNode self ROpen)
   = lam queue.
     match queue with queue ++ [target] then
@@ -557,7 +620,7 @@ end
 -- is the same `rstyle` as the one in the top-level type-signature
 let _addLOpen
   : all self. all rstyle. Config self
-  -> LOpenSelf self
+  -> LOpenSelf self rstyle
   -> State self RClosed
   -> Option (State self rstyle)
   = lam config. lam lself. lam st.
@@ -584,6 +647,10 @@ let _addLOpen
       -> Option [TentativeNode self ROpen] -- NonEmpty
       = lam queue. lam child.
         match _getParents child with Some parents then
+          let lallowed : LeftAllowedFunc self = config.leftAllowed in
+          let rallowed : RightAllowedFunc self = config.rightAllowed in
+          let tallowed : TopAllowedFunc self = config.topAllowed in
+          let gallowed : GroupingsAllowedFunc self = config.groupingsAllowed in
           -- NOTE(vipa, 2021-11-30): `_shallowAllowedLeft` and
           -- `_shallowAllowedRight` do two things: they check if the
           -- child is allowed as a left or right child, respectively,
@@ -594,10 +661,10 @@ let _addLOpen
           -- NOTE(vipa, 2021-11-30): This means that if both
           -- `shallowLeft` and `shallowRight` are `Some`, then
           -- `shallowLeft = shallowRight`.
-          let shallowRight = _shallowAllowedLeft config.leftAllowed lself child in
+          let shallowRight = _shallowAllowedLeft #frozen"lallowed" lself child in
           let f = lam parent.
-            let shallowLeft = _shallowAllowedRight config.topAllowed config.rightAllowed parent child in
-            match _getAllowedGroupings config.groupingsAllowed parent lself with (precLeft, precRight) in
+            let shallowLeft = _shallowAllowedRight #frozen"tallowed" #frozen"rallowed" parent child in
+            match _getAllowedGroupings #frozen"gallowed" parent lself with (precLeft, precRight) in
             let config = (shallowLeft, shallowRight, precLeft, precRight) in
             -- NOTE(vipa, 2021-11-30): Grouping to the left is done by
             -- telling the parent that it should have `child` as a
@@ -657,7 +724,11 @@ let _addLOpen
     let newParents = mapOption (handleLeaf queue) frontier in
     let newParents = work queue newParents in
     match map makeNewParents newParents with frontier & ([_] ++ _) then
-      Some {st with frontier = frontier}
+      -- NOTE(vipa, 2022-05-05): The typechecker currently requires
+      -- that {x with foo = ...} does not change the type of `foo`,
+      -- which this code needs to do (the type of `frontier` changes),
+      -- thus we reconstruct the entire record for the moment.
+      Some {timestep = st.timestep, nextIdx = st.nextIdx, frontier = frontier}
     else
       None ()
 
@@ -713,7 +784,13 @@ let breakableAddAtom
     let idx = deref st.nextIdx in
     modref st.nextIdx (addi 1 idx);
     let id = _uniqueID () in
-    { st with frontier =
+    -- NOTE(vipa, 2022-05-05): The typechecker currently requires that
+    -- {x with foo = ...} does not change the type of `foo`, which
+    -- this code needs to do (the type of `frontier` changes), thus we
+    -- reconstruct the entire record for the moment.
+    { timestep = st.timestep
+    , nextIdx = st.nextIdx
+    , frontier =
       [ TentativeLeaf
         { parents = st.frontier
         , node = AtomP {id = id, idx = idx, self = self}
@@ -733,6 +810,8 @@ let breakableFinalizeParse
   = lam config. lam st.
     let time = addi 1 (deref st.timestep) in
     modref st.timestep time;
+    let rallowed : RightAllowedFunc self = config.rightAllowed in
+    let tallowed : TopAllowedFunc self = config.topAllowed in
 
     let handleLeaf
       : BreakableQueue self
@@ -742,7 +821,7 @@ let breakableFinalizeParse
         match _getParents child with Some parents then
           for_ parents
             (lam parent.
-              match _shallowAllowedRight config.topAllowed config.rightAllowed parent child with Some child then
+              match _shallowAllowedRight #frozen"tallowed" #frozen"rallowed" parent child with Some child then
                 match _addRightChildToParent time child parent with Some parent then
                   _addToQueue parent queue
                 else ()
@@ -794,6 +873,8 @@ let breakableReportAmbiguities
   -> [PermanentNode self] -- NonEmpty
   -> [Ambiguity pos tokish]
   = lam info. lam nodes.
+    let pallowed : ParenAllowedFunc self = info.parenAllowed in
+    let tallowed : TopAllowedFunc self = info.topAllowed in
     -- NOTE(vipa, 2021-02-15): All alternatives for children at the
     -- same point in the tree have the exact same range in the input,
     -- i.e., they will have exactly the same input as first and last
@@ -857,18 +938,19 @@ let breakableReportAmbiguities
       let resolveTopOne : IdxSet -> PermanentNode self -> [[tokish]] =
         lam topIdxs. lam p.
           match idxAndImportant p topIdxs with (lIdxs, selfImportant, rIdxs) in
-          let parAllowed = _callWithSelfP info.parenAllowed p in
+          let parAllowed = _callWithSelfP #frozen"pallowed" p in
           let l = match _leftChildrenP p with Some children
             then resolveTopMany lIdxs (_includesLeft parAllowed) children
             else [[]] in
           let r = match _rightChildrenP p with Some children
             then resolveTopMany rIdxs (_includesRight parAllowed) children
             else [[]] in
-          let here = _callWithSelfP (info.toTok selfImportant) p in
+          let f = info.toTok selfImportant in
+          let here = _callWithSelfP #frozen"f" p in
           seqLiftA2 (lam l. lam r. join [l, here, r]) l r
       let resolveTopMany : [Int] -> Bool -> [PermanentNode self] -> [[tokish]] =
         lam topIdxs. lam parenAllowed. lam ps.
-          match partition (_isBrokenEdge info.topAllowed parenAllowed) ps with (broken, whole) in
+          match partition (_isBrokenEdge #frozen"tallowed" parenAllowed) ps with (broken, whole) in
           let broken = join (map (resolveTopOne topIdxs) broken) in
           let whole = if null whole then [] else
             let flattened = flattenMany topIdxs whole in
@@ -886,9 +968,9 @@ let breakableReportAmbiguities
         -> ()
         = lam brokenParent. lam parenAllowed. lam tops.
           match tops with [n] then
-            workOne (if _isBrokenEdge info.topAllowed parenAllowed n then brokenParent else None ()) n
+            workOne (if _isBrokenEdge #frozen"tallowed" parenAllowed n then brokenParent else None ()) n
           else match tops with [n] ++ _ then
-            let x = match (any (_isBrokenEdge info.topAllowed parenAllowed) tops, brokenParent)
+            let x = match (any (_isBrokenEdge #frozen"tallowed" parenAllowed) tops, brokenParent)
               with (true, Some parent) then ([parent], range parent)
               else (tops, range n) in
             let tops = x.0 in
@@ -901,7 +983,7 @@ let breakableReportAmbiguities
             -- NOTE(vipa, 2021-11-12): Find all nodes that can be at
             -- the root, including nodes that are part of the same
             -- broken production
-            let topIdxs = setOfSeq subi (join (map (_brokenIdxesP info.topAllowed info.parenAllowed) tops)) in
+            let topIdxs = setOfSeq subi (join (map (_brokenIdxesP #frozen"tallowed" #frozen"pallowed") tops)) in
             -- NOTE(vipa, 2021-11-12): Some nodes will be in the top
             -- broken production in some alternatives but not in
             -- others. If we cover these in those alternatives then we
@@ -920,14 +1002,14 @@ let breakableReportAmbiguities
             -- OPT(vipa, 2021-11-15): It should be sufficient to check
             -- children along the edges only, not all descendants.
             recursive let addChildMaybe = lam acc. lam c.
-              let idxs = _brokenIdxesP info.topAllowed info.parenAllowed c in
+              let idxs = _brokenIdxesP #frozen"tallowed" #frozen"pallowed" c in
               let acc = if any (lam x. setMem x topIdxs) idxs
                 then foldl (lam acc. lam x. setInsert x acc) acc idxs
                 else acc in
-              foldl addChildMaybe acc (_brokenChildrenP info.topAllowed info.parenAllowed c)
+              foldl addChildMaybe acc (_brokenChildrenP #frozen"tallowed" #frozen"pallowed" c)
             in
             let addChildrenMaybe = lam acc. lam top.
-              foldl addChildMaybe acc (_brokenChildrenP info.topAllowed info.parenAllowed top) in
+              foldl addChildMaybe acc (_brokenChildrenP #frozen"tallowed" #frozen"pallowed" top) in
             let mergeRootIdxs = foldl addChildrenMaybe (setEmpty subi) tops in
 
             -- OPT(vipa, 2021-10-11): This should probably be a set that supports
@@ -946,7 +1028,7 @@ let breakableReportAmbiguities
         -> PermanentNode self
         -> ()
         = lam brokenParent. lam node.
-          let parAllowed = _callWithSelfP info.parenAllowed node in
+          let parAllowed = _callWithSelfP #frozen"pallowed" node in
           (match _leftChildrenP node with Some children
             then workMany (optionOr brokenParent (Some node)) (_includesLeft parAllowed) children
             else ());
@@ -997,15 +1079,20 @@ let breakableToErrorHighlightSpec
   -> [PermanentNode self] -- NonEmpty
   -> [{info: Info, partialResolutions: [[Highlight]]}]
   = lam config. lam tops.
+    let pallowed : ParenAllowedFunc self = config.parenAllowed in
+    let tallowed : TopAllowedFunc self = config.topAllowed in
+    let linfo : all rstyle. self LClosed rstyle -> Info = config.getInfo in
+    let rinfo : all lstyle. self lstyle RClosed -> Info = config.getInfo in
+    let totok : all lstyle. all rstyle. Important -> self lstyle rstyle -> [Highlight] = lam imp. lam self.
+      match imp with Important _ then
+        map (lam info. Relevant info) (config.terminalInfos self)
+      else [Irrelevant (config.getInfo self)] in
     let reportConfig =
-      { parenAllowed = config.parenAllowed
-      , topAllowed = config.topAllowed
-      , toTok = lam imp. lam self.
-        match imp with Important _ then
-          map (lam info. Relevant info) (config.terminalInfos self)
-        else [Irrelevant (config.getInfo self)]
-      , leftPos = config.getInfo
-      , rightPos = config.getInfo
+      { parenAllowed = #frozen"pallowed"
+      , topAllowed = #frozen"tallowed"
+      , toTok = #frozen"totok"
+      , leftPos = #frozen"linfo"
+      , rightPos = #frozen"rinfo"
       , lpar = Added {content = config.lpar, ensureSurroundedBySpaces = true}
       , rpar = Added {content = config.rpar, ensureSurroundedBySpaces = true}
       } in
