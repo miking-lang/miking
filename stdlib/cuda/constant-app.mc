@@ -18,9 +18,10 @@ lang CudaConstantApp = CudaPMExprAst
   sem constantAppToExpr =
   | TmApp t ->
     match collectAppArguments (TmApp t) with (TmConst {val = c}, args) then
+      let args = map constantAppToExpr args in
       match toConstantExpr args c with Some expr then
         withInfo t.info (withType t.ty expr)
-      else TmApp t
-    else TmApp t
+      else smap_Expr_Expr constantAppToExpr (TmApp t)
+    else smap_Expr_Expr constantAppToExpr (TmApp t)
   | t -> smap_Expr_Expr constantAppToExpr t
 end

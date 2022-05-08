@@ -75,7 +75,7 @@ let _assign: CExpr -> CExpr -> CExpr = use CAst in
 
 -- Collect all maps of externals. Should be done automatically at some point,
 -- but for now these files must be manually included and added to this map.
-let externalsMap: Map String ExtInfo = foldl1 mapUnion [
+let externalsMap: ExtMap = foldl1 mapUnion [
   mathExtMap
 ]
 
@@ -117,6 +117,7 @@ let _tensorDataKey = nameNoSym "data"
 let _tensorDimsKey = nameNoSym "dims"
 let _tensorRankKey = nameNoSym "rank"
 let _tensorOffsetKey = nameNoSym "offset"
+let _tensorSizeKey = nameNoSym "size"
 
 -- Used in compileStmt and compileStmts for deciding what action to take in
 -- tail position
@@ -160,7 +161,7 @@ lang MExprCCompileBase = MExprAst + CAst
     typeEnv: [(Name,Type)],
 
     -- Map from MExpr external names to their C counterparts
-    externals: Map Name Name,
+    externals: Map Name ExtInfo,
 
     -- Accumulator for allocations in functions
     allocs: [CStmt]
@@ -431,7 +432,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     ) [] typeEnv in
 
     -- Construct a map from MCore external names to C names
-    let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
+    let externals: Map Name ExtInfo = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
     let env = {{{ let e : CompileCEnv = compileCEnvEmpty compileOptions in e
@@ -478,12 +479,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- COLLECT EXTERNALS --
   -----------------------
 
-  sem collectExternals (acc: Map Name Name) =
+  sem collectExternals (acc: Map Name ExtInfo) =
   | TmExt t ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
-      let acc = mapInsert t.ident (nameNoSym e.ident) acc in
+      let acc = mapInsert t.ident e acc in
       sfold_Expr_Expr collectExternals acc t.inexpr
     else infoErrorExit (t.info) "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
@@ -558,7 +559,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       (CTyPtr { ty = ty }, Some _tensorDataKey),
       (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
       (CTyInt64 (), Some _tensorRankKey),
-      (CTyInt64 (), Some _tensorOffsetKey)
+      (CTyInt64 (), Some _tensorOffsetKey),
+      (CTyInt64 (), Some _tensorSizeKey)
     ] in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fields },
@@ -740,11 +742,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- TODO(dlunde,2021-10-07): Handle this how?
     infoErrorExit (infoTm t) "Empty bindings in TmRecord in compileAlloc"
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
+    let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
     let cTy = compileType env ty in
     if any (nameEq ident) env.ptrTypes then
       let def = alloc n cTy in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEArrow {
@@ -752,11 +756,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
     else
       let def = [{ ty = cTy, id = Some n, init = None ()}] in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEMember {
@@ -764,8 +769,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
 
   | TmSeq {tms = tms, ty = ty} & t ->
     let uTy = _unwrapType (env.typeEnv) ty in
@@ -1199,6 +1204,20 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
       rhs = get args 2
     }
+  | CTensorLinearGetExn _ ->
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = last args, rhs = offset} in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+  | CTensorLinearSetExn _ ->
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = get args 1, rhs = offset} in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      rhs = get args 2
+    }
   | CTensorRank _ -> CEMember {lhs = head args, id = _tensorRankKey}
   | CTensorShape _ -> tensorShapeCall (head args)
 
@@ -1215,7 +1234,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     if _isUnitTy ty then
       infoErrorExit (infoTm t) "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
-      CEVar { id = ext }
+      let ext : ExtInfo = ext in
+      CEVar { id = nameNoSym ext.ident }
     else CEVar { id = ident }
 
   | TmApp _ & app ->
@@ -1229,7 +1249,9 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       -- Function calls
       match fun with TmVar { ident = ident } then
         let ident =
-          match mapLookup ident env.externals with Some ext then ext
+          match mapLookup ident env.externals with Some ext then
+            let ext : ExtInfo = ext in
+            nameNoSym ext.ident
           else ident
         in
         CEApp { fun = ident, args = map (compileExpr env) args }
@@ -1783,9 +1805,9 @@ utest testCompile trees with strJoin "\n" [
   "  ((t2.v) = 6);",
   "  ((t3->constr) = Leaf);",
   "  ((t3->Leaf) = t2);",
-  "  ((t4->v) = 5);",
   "  ((t4->l) = t3);",
   "  ((t4->r) = t1);",
+  "  ((t4->v) = 5);",
   "  ((t5->constr) = Node);",
   "  ((t5->Node) = t4);",
   "  ((t6.v) = 4);",
@@ -1794,14 +1816,14 @@ utest testCompile trees with strJoin "\n" [
   "  ((t8.v) = 3);",
   "  ((t9->constr) = Leaf);",
   "  ((t9->Leaf) = t8);",
-  "  ((t10->v) = 2);",
   "  ((t10->l) = t9);",
   "  ((t10->r) = t7);",
+  "  ((t10->v) = 2);",
   "  ((t11->constr) = Node);",
   "  ((t11->Node) = t10);",
-  "  ((t12->v) = 1);",
   "  ((t12->l) = t11);",
   "  ((t12->r) = t5);",
+  "  ((t12->v) = 1);",
   "  ((tree->constr) = Node);",
   "  ((tree->Node) = t12);",
   "  (sum = treeRec(tree));",
@@ -1902,9 +1924,9 @@ utest testCompile tensor with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor;",
+  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor;",
   "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
-  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset;} Tensor1;",
+  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor1;",
   "int64_t cartesian_to_linear_index0(int64_t dims1[3], int64_t rank1) {",
   "  return 0;",
   "}",

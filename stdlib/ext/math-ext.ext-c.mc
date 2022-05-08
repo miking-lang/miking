@@ -18,6 +18,14 @@ let mathExtMap: ExtMap =
 
     ( "externalSqrt"
     , { ident = "sqrt", header = "<math.h>" }
+    ),
+
+    ( "externalSin"
+    , { ident = "sin", header = "<math.h>" }
+    ),
+
+    ( "externalCos"
+    , { ident = "cos", header = "<math.h>" }
     )
 
   ]

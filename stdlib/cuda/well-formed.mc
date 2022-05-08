@@ -1,12 +1,13 @@
 -- Defines a well-formedness check specific for the CUDA accelerate backend.
 
 include "cuda/pmexpr-ast.mc"
+include "cuda/pmexpr-pprint.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
 include "pmexpr/well-formed.mc"
 
-lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
+lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   syn WellFormedError =
   | CudaExprError Expr
   | CudaTypeError Type
@@ -96,23 +97,16 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
     let acc = cudaWellFormedPattern acc t.pat in
     let acc = cudaWellFormedType acc t.ty in
     sfold_Expr_Expr cudaWellFormedExpr acc (TmMatch t)
-  | conDef & (TmConDef t) ->
-    -- NOTE(larshum, 2022-03-30): Recursive data types, and those that have an
-    -- type identifier of unexpected shape, are not considered to be
-    -- well-formed.
-    recursive let containsTypeIdentifier : Name -> Bool -> Type -> Bool =
-      lam conId. lam acc. lam ty.
-      if acc then true
-      else match ty with TyCon {ident = id} then
-        nameEq conId id
-      else sfold_Type_Type (containsTypeIdentifier conId) acc ty
-    in
-    if
-      match t.tyIdent with TyArrow {from = from, to = TyCon {ident = id}} then
-        not (containsTypeIdentifier id false from)
-      else false
-    then acc
-    else cons (CudaConDefError conDef) acc
+  | TmSeqFoldl t ->
+    let acc = cudaWellFormedExpr acc t.acc in
+    cudaWellFormedExpr acc t.s
+  | TmTensorSliceExn t ->
+    let acc = cudaWellFormedExpr acc t.t in
+    cudaWellFormedExpr acc t.slice
+  | TmTensorSubExn t ->
+    let acc = cudaWellFormedExpr acc t.t in
+    let acc = cudaWellFormedExpr acc t.ofs in
+    cudaWellFormedExpr acc t.len
   -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.
@@ -177,8 +171,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
 
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
-  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmConDef _ | TmConApp _ -> true
-  | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ -> true
+  | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmExt _ -> true
+  | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ | TmPrintFloat _ -> true
   | _ -> false
 
   sem isCudaSupportedType =
@@ -196,7 +190,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + PMExprPrettyPrint
   | CNeqf _ -> true
   | CPrint _ | CDPrint _ | CInt2float _ | CFloorfi _ | CGet _ | CLength _
   | CFoldl _ | CError _ -> true
-  | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
+  | CTensorGetExn _ | CTensorSetExn _ | CTensorLinearGetExn _
+  | CTensorLinearSetExn _ | CTensorRank _ | CTensorShape _
   | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false
 
@@ -232,7 +227,7 @@ let eqCudaError = lam lerr : WellFormedError. lam rerr : WellFormedError.
   else false
 in
 
-let preprocess = lam t. typeAnnot (symbolize t) in
+let preprocess = lam t. typeCheck (symbolize t) in
 
 utest wellFormedExpr (bind_ (ulet_ "x" (int_ 2)) (var_ "x")) with []
 using eqSeq eqCudaError in
@@ -295,19 +290,12 @@ let conDef = preprocess (bindall_ [
   recursiveConstructorExpr,
   int_ 0]) in
 let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in
-utest wellFormedExpr conDef with [CudaConDefError expectedExpr]
+utest wellFormedExpr conDef with [CudaExprError expectedExpr]
 using eqSeq eqCudaError in
 
--- NOTE(larshum, 2022-03-14): We haven't implemented equality for externals, so
--- we use the comparison operations which do not check for alpha equivalence.
 let ext = preprocess (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
-utest wellFormedExpr ext with [CudaExprError ext]
-using lam a. lam b.
-  match (a,b) with ([CudaExprError a], [CudaExprError b]) then
-    use MExprCmp in
-    eqi (cmpExpr a b) 0
-  else false
-in
+utest wellFormedExpr ext with []
+using eqSeq eqCudaError in
 
 let utestTerm = utest_ (int_ 1) (int_ 2) (int_ 0) in
 utest wellFormedExpr utestTerm with [CudaExprError utestTerm]

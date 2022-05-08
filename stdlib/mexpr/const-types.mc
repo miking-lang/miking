@@ -344,6 +344,8 @@ end
 
 lang TensorOpTypeAst = TensorOpAst
   sem tyConst =
+  | CTensorCreateUninitInt _ -> tytensorcreateuninitint_
+  | CTensorCreateUninitFloat _ -> tytensorcreateuninitfloat_
   | CTensorCreateInt _ -> tytensorcreateint_
   | CTensorCreateFloat _ -> tytensorcreatefloat_
   | CTensorCreate _ -> tyall_ "a" (tytensorcreate_ (tyvar_ "a"))

@@ -120,6 +120,8 @@ let builtin = use MExprAst in
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors
+  , ("tensorCreateUninitInt", CTensorCreateUninitInt ())
+  , ("tensorCreateUninitFloat", CTensorCreateUninitFloat ())
   , ("tensorCreateCArrayInt", CTensorCreateInt ())
   , ("tensorCreateCArrayFloat", CTensorCreateFloat ())
   , ("tensorCreateDense", CTensorCreate ())

@@ -1,5 +1,6 @@
 include "c/ast.mc"
 include "pmexpr/ast.mc"
+include "pmexpr/extract.mc"
 
 let _bigarrayNumDimsKey = nameNoSym "num_dims"
 let _bigarrayDimKey = nameNoSym "dim"
@@ -52,7 +53,7 @@ let _getIdentOrInitNew : String -> Name = lam str.
 -- Defines an extensible C wrapper generation language fragment. This fragment
 -- can be extended to implement the target-specific parts of the wrapper, while
 -- allowing reuse of the parts that all targets will have in common.
-lang PMExprCWrapper = MExprAst + CAst
+lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
   -- Defines a representation of a certain data type, with the specifics
   -- defined per backend.
   syn CDataRepr =
@@ -63,6 +64,11 @@ lang PMExprCWrapper = MExprAst + CAst
     -- argument.
     mexprIdent : Name,
     mexprType : Type,
+
+    -- A status used to determine whether copying a parameter can be omitted,
+    -- when copying between OCaml and the accelerate backend. Currently only
+    -- used for tensors in the CUDA backend.
+    copyStatus : CopyStatus,
 
     -- The intermediate representation of the argument in C.
     cData : CDataRepr,
@@ -75,7 +81,8 @@ lang PMExprCWrapper = MExprAst + CAst
   sem defaultArgData =
   | () ->
     { mexprIdent = nameNoSym "", mexprType = tyunknown_
-    , cData = PlaceholderRepr (), gpuIdent = nameNoSym "" }
+    , copyStatus = CopyBoth () , cData = PlaceholderRepr ()
+    , gpuIdent = nameNoSym "" }
 
   syn TargetWrapperEnv =
   | EmptyTargetEnv ()
@@ -192,17 +199,20 @@ lang PMExprCWrapper = MExprAst + CAst
   sem generateWrapperFunctionCode (env : CWrapperEnv) =
   | data ->
     let data : AccelerateData = data in
-    let toArgData = lam arg : (Name, Type).
+    let toArgData = lam x : (CopyStatus, (Name, Type)).
+      match x with (status, (id, ty)) in
       let default : ArgData = defaultArgData () in
-      {{{{default with mexprIdent = arg.0}
-                  with mexprType = arg.1}
-                  with cData = _generateCDataRepresentation env arg.1}
-                  with gpuIdent = nameSym "gpu_tmp"} in
+      {{{{{default with mexprIdent = id}
+                   with mexprType = ty}
+                   with copyStatus = status}
+                   with cData = _generateCDataRepresentation env ty}
+                   with gpuIdent = nameSym "gpu_tmp"} in
     let bytecodeWrapper = generateBytecodeWrapper data in
     let returnIdent = nameSym "out" in
     let returnArg = (returnIdent, data.returnType) in
-    let env = {{{env with arguments = map toArgData data.params}
-                     with return = toArgData returnArg}
+    let arguments = map toArgData (zip data.paramCopyStatus data.params) in
+    let env = {{{env with arguments = arguments}
+                     with return = toArgData (CopyBoth (), returnArg)}
                      with functionIdent = data.identifier} in
     let camlParamStmts = generateCAMLparamDeclarations env.arguments in
     let stmts = generateMarshallingCode env in

@@ -12,7 +12,7 @@
 
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/utils.mc"
@@ -302,14 +302,14 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
 end
 
 lang TestLang =
-  PMExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
+  PMExprTailRecursion + MExprTypeCheck + MExprSym + MExprEq + MExprPrettyPrint
 end
 
 mexpr
 
 use TestLang in
 
-let preprocess = lam e. typeAnnot (symbolize e) in
+let preprocess = lam e. typeCheck (symbolize e) in
 
 let fact = preprocess (bindall_ [
   ureclets_ [

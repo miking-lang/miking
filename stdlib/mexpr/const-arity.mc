@@ -206,6 +206,8 @@ end
 
 lang TensorOpArity = TensorOpAst
   sem constArity =
+  | CTensorCreateUninitInt _ -> 1
+  | CTensorCreateUninitFloat _ -> 1
   | CTensorCreateInt _ -> 2
   | CTensorCreateFloat _ -> 2
   | CTensorCreate _ -> 2

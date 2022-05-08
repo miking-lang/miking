@@ -1499,6 +1499,10 @@ lang TensorOpEval =
     else error "Second argument to CTensorToString not a tensor"
 
   sem delta (arg : Expr) =
+  | CTensorCreateUninitInt _ ->
+    TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq arg)) }
+  | CTensorCreateUninitFloat _ ->
+    TmTensor { val = TFloat (tensorCreateUninitFloat (_ofTmSeq arg)) }
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
     uconst_ val

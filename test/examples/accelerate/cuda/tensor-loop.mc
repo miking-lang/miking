@@ -23,14 +23,9 @@ accelerate (
       let y = modi (divi i 5) 5 in
       let z = modi (divi i 25) 5 in
       let sh = [x,y,z] in
-      let fst : Float =
-        (let get : Tensor[Float] -> [Int] -> Float = tensorGetExn in get)
-          a sh in
-      let snd : Float =
-        (let get : Tensor[Float] -> [Int] -> Float = tensorGetExn in get)
-          b sh in
-      (let set : Tensor[Float] -> [Int] -> Float -> () = tensorSetExn in set)
-        c sh (addf fst snd))
+      let fst : Float = tensorGetExn a sh in
+      let snd : Float = tensorGetExn b sh in
+      tensorSetExn c sh (addf fst snd))
 );
 
 printLn (concat "Sum on CPU: " (float2string (tensorSum c)));
@@ -45,14 +40,9 @@ accelerate (
       let y = modi (divi i 5) 5 in
       let z = modi (divi i 25) 5 in
       let sh = [x,y,z] in
-      let fst : Float =
-        (let get : Tensor[Float] -> [Int] -> Float = tensorGetExn in get)
-          a sh in
-      let snd : Float =
-        (let get : Tensor[Float] -> [Int] -> Float = tensorGetExn in get)
-          b sh in
-      (let set : Tensor[Float] -> [Int] -> Float -> () = tensorSetExn in set)
-        c sh (addf fst snd))
+      let fst : Float = tensorGetExn a sh in
+      let snd : Float = tensorGetExn b sh in
+      tensorSetExn c sh (addf fst snd))
 );
 
 printLn (concat "Sum on GPU: " (float2string (tensorSum c)))

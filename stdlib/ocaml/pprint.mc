@@ -275,6 +275,8 @@ lang OCamlPrettyPrint =
   | CMapCmp _ -> intrinsicOpMap "cmp"
   | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
   | CTensorIterSlice _ -> intrinsicOpTensor "iter_slice"
+  | CTensorCreateUninitInt _ -> intrinsicOpTensor "uninit_int_packed"
+  | CTensorCreateUninitFloat _ -> intrinsicOpTensor "uninit_float_packed"
   | CTensorCreateInt _ -> intrinsicOpTensor "create_int_packed"
   | CTensorCreateFloat _ -> intrinsicOpTensor "create_float_packed"
   | CTensorCreate _ -> intrinsicOpTensor "create_generic_packed"
@@ -480,15 +482,16 @@ lang OCamlPrettyPrint =
     if mapIsEmpty t.bindings then (env, "()")
     else
       let innerIndent = pprintIncr (pprintIncr indent) in
+      let orderedLabels = recordOrderedLabels (mapKeys t.bindings) in
       match
-        mapMapAccum (lam env. lam k. lam v.
+        mapAccumL (lam env. lam k.
+          let v = mapFindExn k t.bindings in
           let k = sidToString k in
           match pprintCode innerIndent env v with (env, str) then
             (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
                         "(", str, ")"])
-          else never) env t.bindings
+          else never) env orderedLabels
       with (env, binds) then
-        let binds = mapValues binds in
         let merged =
           strJoin (concat ";" (pprintNewline (pprintIncr indent))) binds
         in
@@ -605,22 +608,25 @@ lang OCamlPrettyPrint =
     else never
   | OTmRecord {bindings = bindings, tyident = tyident} ->
     let innerIndent = pprintIncr (pprintIncr indent) in
-    match unzip bindings with (labels, tms) then
-      match mapAccumL (pprintCode innerIndent) env tms with (env, tms) then
-        let strs =
-          mapi
-            (lam i. lam t.
-              join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
-            tms
-        in
-        match getTypeStringCode indent env tyident with (env, tyident) then
-          let merged =
-            strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
-          in
-          (env, join ["({", merged , "} : ", tyident, ")"])
-        else never
-      else never
-    else never
+    match unzip bindings with (labels, tms) in
+    match mapAccumL (pprintCode innerIndent) env tms with (env, tms) in
+    let strs =
+      mapi
+        (lam i. lam t.
+          join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
+        tms
+    in
+    match getTypeStringCode indent env tyident with (env, tystr) in
+    let tystr =
+      -- NOTE(larshum, 2022-04-06): Do not add type annotations for an inlined
+      -- record.
+      match tyident with OTyInlinedRecord _ then ""
+      else concat " : " tystr
+    in
+    let merged =
+      strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
+    in
+    (env, join ["({", merged , "}", tystr, ")"])
   | OTmProject {field = field, tm = tm} ->
     match pprintCode indent env tm with (env, tm) then
       (env, join [tm, ".", field])

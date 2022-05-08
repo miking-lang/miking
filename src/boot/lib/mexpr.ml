@@ -388,6 +388,10 @@ let arity = function
       2
   | CtensorCreateDense (Some _) ->
       1
+  | CtensorCreateUninitInt ->
+      1
+  | CtensorCreateUninitFloat ->
+      1
   | CtensorCreateCArrayInt None ->
       2
   | CtensorCreateCArrayInt (Some _) ->
@@ -1204,6 +1208,16 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CmapCmp _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
+  | CtensorCreateUninitInt, TmSeq (_, seq) ->
+      let shape = tm_seq2int_seq fi seq in
+      T.uninit_int shape |> fun t -> TmTensor (fi, T.TBootInt t)
+  | CtensorCreateUninitInt, _ ->
+      fail_constapp fi
+  | CtensorCreateUninitFloat, TmSeq (_, seq) ->
+      let shape = tm_seq2int_seq fi seq in
+      T.uninit_float shape |> fun t -> TmTensor (fi, T.TBootFloat t)
+  | CtensorCreateUninitFloat, _ ->
+      fail_constapp fi
   | CtensorCreateCArrayInt None, TmSeq (_, seq) ->
       let shape = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorCreateDense (Some shape))
