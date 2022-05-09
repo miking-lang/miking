@@ -1551,13 +1551,15 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
         , Record.find (us "1") r
         , Record.find (us "2") r
         , Record.find (us "3") r
-        , Record.find (us "4") r )
+        , Record.find (us "4") r
+        , Record.find (us "5") r )
       with
       | ( TmConst (_, CBool keep_utests)
         , TmConst (_, CBool prune_external_utests)
         , TmSeq (_, externals_exclude)
         , TmConst (_, CBool warn)
-        , TmConst (_, CBool eliminate_deadcode) ) ->
+        , TmConst (_, CBool eliminate_deadcode)
+        , TmConst (_, CBool parse_only) ) ->
           let externals_exclude =
             Mseq.map
               (function
@@ -1573,7 +1575,8 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
                     , prune_external_utests
                     , externals_exclude
                     , warn
-                    , eliminate_deadcode )
+                    , eliminate_deadcode
+                    , parse_only )
                 , None ) )
       | _ ->
           fail_constapp fi
