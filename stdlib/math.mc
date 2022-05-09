@@ -3,7 +3,7 @@ include "ext/math-ext.mc"
 -- Float stuff
 let inf = divf 1.0 0.0
 let nan = mulf 0. inf
-let minf = lam r. lam l. if ltf r l then r else l
+let minf: Float -> Float -> Float = lam r. lam l. if ltf r l then r else l
 
 utest minf 0. 0. with 0. using eqf
 utest minf 1. 0. with 0. using eqf
@@ -12,6 +12,16 @@ utest minf 0. 1. with 0. using eqf
 utest absf 0. with 0. using eqf
 utest absf 1. with 1. using eqf
 utest absf (negf 1.) with 1. using eqf
+
+let cmpfApprox : Float -> Float -> Float -> Int =
+  lam epsilon. lam l. lam r.
+    if eqfApprox epsilon l r then 0
+    else if ltf l r then subi 0 1
+    else 1
+
+utest cmpfApprox 0.1 0. 0.1 with 0
+utest cmpfApprox 0. 0.1 0.2 with subi 0 1
+utest cmpfApprox 0.1 0.4 0.2 with 1
 
 -- Int stuff
 let maxi = lam r. lam l. if gti r l then r else l

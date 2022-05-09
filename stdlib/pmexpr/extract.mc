@@ -11,22 +11,9 @@ include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
-
-type AccelerateData = {
-  identifier : Name,
-  bytecodeWrapperId : Name,
-  params : [(Name, Type)],
-  returnType : Type,
-  info : Info
-}
-
-type AddIdentifierAccelerateEnv = {
-  functions : Map Expr AccelerateData,
-  programIdentifiers : Set SID
-}
 
 -- Generates a random ASCII letter or digit character.
 let _randAlphanum : Unit -> Char = lam.
@@ -38,6 +25,36 @@ let _randAlphanum : Unit -> Char = lam.
   else int2char (addi r 61)
 
 lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
+  syn CopyStatus =
+  | CopyBoth ()
+  | CopyToAccelerate ()
+  | CopyFromAccelerate ()
+  | NoCopy ()
+
+  sem omitCopyTo =
+  | CopyBoth _ -> CopyFromAccelerate ()
+  | CopyToAccelerate _ -> NoCopy ()
+  | status -> status
+
+  sem omitCopyFrom =
+  | CopyBoth _ -> CopyToAccelerate ()
+  | CopyFromAccelerate _ -> NoCopy ()
+  | status -> status
+
+  type AccelerateData = {
+    identifier : Name,
+    bytecodeWrapperId : Name,
+    params : [(Name, Type)],
+    paramCopyStatus : [CopyStatus],
+    returnType : Type,
+    info : Info
+  }
+
+  type AddIdentifierAccelerateEnv = {
+    functions : Map Expr AccelerateData,
+    programIdentifiers : Set SID
+  }
+
   sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
@@ -88,6 +105,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
       identifier = accelerateIdent,
       bytecodeWrapperId = bytecodeIdent,
       params = [(paramId, paramTy)],
+      paramCopyStatus = [CopyBoth ()],
       returnType = retType,
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
@@ -110,6 +128,26 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
+  sem _collectPatNamed (bound : Set Name) (used : Set Name) =
+  | PName id -> if setMem id bound then used else setInsert id used
+  | PWildcard _ -> used
+
+  sem collectIdentifiersPat (boundUsed : (Set Name, Set Name)) =
+  | PatNamed t ->
+    match boundUsed with (bound, used) in
+    (bound, _collectPatNamed bound used t.ident)
+  | PatSeqEdge t ->
+    match foldl collectIdentifiersPat boundUsed t.prefix with (bound, used) in
+    let used = _collectPatNamed bound used t.middle in
+    foldl collectIdentifiersPat (bound, used) t.postfix
+  | PatCon t ->
+    match boundUsed with (bound, used) in
+    let used =
+      if setMem t.ident bound then used
+      else setInsert t.ident used in
+    collectIdentifiersPat (bound, used) t.subpat
+  | p -> sfold_Pat_Pat collectIdentifiersPat boundUsed p
+
   sem collectIdentifiersExprH (bound : Set Name) (used : Set Name) =
   | TmVar t ->
     if setMem t.ident bound then used
@@ -117,6 +155,14 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   | TmLam t ->
     let bound = setInsert t.ident bound in
     collectIdentifiersExprH bound used t.body
+  | TmMatch t ->
+    let used = collectIdentifiersExprH bound used t.target in
+    match collectIdentifiersPat (bound, used) t.pat with (bound, used) in
+    let used = collectIdentifiersExprH bound used t.thn in
+    collectIdentifiersExprH bound used t.els
+  | TmConApp t ->
+    if setMem t.ident bound then used
+    else setInsert t.ident used
   | t -> sfold_Expr_Expr (collectIdentifiersExprH bound) used t
 
   sem collectIdentifiersExpr (used : Set Name) =
@@ -138,7 +184,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     if setMem t.ident used then
       let used = collectIdentifiersType used t.tyBody in
       let used = collectIdentifiersExpr used t.body in
-      (used, TmLet {t with inexpr = inexpr})
+      (used, TmLet {{t with inexpr = inexpr}
+                       with ty = tyTm inexpr})
     else (used, inexpr)
   | TmRecLets t ->
     let bindingIdents = map (lam bind : RecLetBinding. bind.ident) t.bindings in
@@ -180,9 +227,24 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
     if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
     else (used, inexpr)
-  | TmConDef t -> extractAccelerateTermsH used t.inexpr
+  | TmConDef t ->
+    -- NOTE(larshum, 2022-04-01): A constructor definition is included either
+    -- if its identifier is used, or if the variant type to which is belongs is
+    -- used. This is very important, as we may otherwise get the constructor
+    -- indexing wrong.
+    let constructorIsUsed = lam used : Set Name.
+      match t.tyIdent with TyArrow {to = TyCon {ident = varTyId}} then
+        or (setMem t.ident used) (setMem varTyId used)
+      else setMem t.ident used
+    in
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
+    else (used, inexpr)
   | TmUtest t -> extractAccelerateTermsH used t.next
-  | TmExt t -> extractAccelerateTermsH used t.inexpr
+  | TmExt t ->
+    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
+    if setMem t.ident used then (used, TmExt {t with inexpr = inexpr})
+    else (used, inexpr)
   | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
                          info = infoTm t})
 
@@ -199,7 +261,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         (lam accId : Name. lam accData : AccelerateData.
           match mapLookup accId solutions with Some fv then
             if gti (mapSize fv) 0 then
-              {accData with params = mapBindings fv}
+              let params = mapBindings fv in
+              let copyStatus = create (length params) (lam. CopyBoth ()) in
+              {{accData with params = params}
+                        with paramCopyStatus = copyStatus}
             else accData
           else accData)
         accelerated in
@@ -218,6 +283,38 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         else TmLet {t with inexpr = inexpr}
       else TmLet {t with inexpr = inexpr}
     else TmLet {t with inexpr = inexpr}
+  | TmRecLets t ->
+    let isAccelerateBinding = lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          true
+        else false
+      else false
+    in
+    let eliminateBinding = lam acc. lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          match
+            if gti (mapSize idSols) 0 then
+              let tyBody = eliminateInnermostParameterType bind.tyBody in
+              let body = eliminateInnermostLambda bind.body in
+              (tyBody, body)
+            else (bind.tyBody, bind.body)
+          with (tyBody, body) in
+          TmLet {
+            ident = bind.ident,
+            tyBody = tyBody,
+            body = body,
+            inexpr = acc,
+            ty = tyTm acc,
+            info = bind.info}
+        else acc
+      else acc
+    in
+    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+    match partition isAccelerateBinding t.bindings with (accelerated, bindings) in
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = foldl eliminateBinding inexpr accelerated}
   | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
 
   sem eliminateInnermostParameterType =
@@ -232,7 +329,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
 end
 
 lang TestLang =
-  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeAnnot +
+  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeCheck +
   MExprLambdaLift + MExprPrettyPrint
 end
 
@@ -241,7 +338,7 @@ mexpr
 use TestLang in
 
 let preprocess = lam t.
-  typeAnnot (symbolize t)
+  typeCheck (symbolize t)
 in
 
 let extractAccelerate = lam t.

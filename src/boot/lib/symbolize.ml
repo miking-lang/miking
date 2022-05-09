@@ -86,16 +86,14 @@ let rec symbolize_type env ty =
       TySeq (fi, symbolize_type env ty)
   | TyTensor (fi, ty) ->
       TyTensor (fi, symbolize_type env ty)
-  | TyRecord (fi, r, ls) ->
+  | TyRecord (fi, r) ->
       let r = Record.map (fun ty -> symbolize_type env ty) r in
-      TyRecord (fi, r, ls)
+      TyRecord (fi, r)
   | TyVariant (_, tys) when tys = [] ->
       ty
   | TyVariant _ ->
       failwith "Symbolizing non-empty variant types not yet supported"
   | TyCon (fi, x, s) ->
-      (* TODO(aathn,2021-09-25): This should not be needed anymore, since
-         the unbound type variables are now TyVar and this is TyCon *)
       (* NOTE(dlunde,2020-11-24): Currently, unbound type variables are heavily
          used for documentation purposes. Hence, we simply ignore these for
          now. *)
@@ -209,7 +207,7 @@ let rec symbolize (env : sym_env) (t : tm) =
         , symbolize_type env ty
         , symbolize env t1
         , symbolize (addsym (IdVar (sid_of_ustring x)) s env) t2 )
-  | TmType (fi, x, _, ty, t1) ->
+  | TmType (fi, x, _, params, ty, t1) ->
       (* TODO(dlunde,2020-11-23): Should type lets be recursive? Right now,
          they are not.*)
       let s = Symb.gensym () in
@@ -217,6 +215,7 @@ let rec symbolize (env : sym_env) (t : tm) =
         ( fi
         , x
         , s
+        , params
         , symbolize_type env ty
         , symbolize (addsym (IdType (sid_of_ustring x)) s env) t1 )
   | TmRecLets (fi, lst, tm) ->
@@ -293,12 +292,12 @@ let rec symbolize_toplevel (env : sym_env) = function
       in
       ( new_env
       , TmLet (fi, x, s, symbolize_type env ty, symbolize env t1, new_t2) )
-  | TmType (fi, x, _, ty, t1) ->
+  | TmType (fi, x, _, params, ty, t1) ->
       let s = Symb.gensym () in
       let new_env, new_t1 =
         symbolize_toplevel (addsym (IdType (sid_of_ustring x)) s env) t1
       in
-      (new_env, TmType (fi, x, s, symbolize_type env ty, new_t1))
+      (new_env, TmType (fi, x, s, params, symbolize_type env ty, new_t1))
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left

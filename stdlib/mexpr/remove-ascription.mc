@@ -2,18 +2,17 @@ include "ast.mc"
 include "ast-builder.mc"
 include "eq.mc"
 
-recursive
-let removeTypeAscription = use MExprAst in
-  lam expr.
-    match expr with TmLet {ident = idLet, body = body, inexpr = inexpr} then
-      match inexpr with TmVar {ident = idExpr} then
-        if nameEq idLet idExpr then removeTypeAscription body
-        else smap_Expr_Expr removeTypeAscription expr
-      else smap_Expr_Expr removeTypeAscription expr
-    else smap_Expr_Expr removeTypeAscription expr
+lang MExprRemoveTypeAscription = MExprAst
+  sem removeTypeAscription : Expr -> Expr
+  sem removeTypeAscription =
+  | (TmLet {ident = idLet, body = body, inexpr = TmVar {ident = idExpr}}) & letexpr ->
+    if nameEq idLet idExpr then
+      removeTypeAscription body
+    else smap_Expr_Expr removeTypeAscription letexpr
+  | expr -> smap_Expr_Expr removeTypeAscription expr
 end
 
-lang TestLang = MExprAst + MExprEq
+lang TestLang = MExprAst + MExprRemoveTypeAscription + MExprEq
 end
 
 mexpr

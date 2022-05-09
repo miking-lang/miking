@@ -26,11 +26,11 @@ let graphEmpty = digraphEmpty
 let graphVertices = digraphVertices
 
 -- Get comparison function for vertices.
-let graphCmpv = lam g : Graph v l.
-  mapGetCmpFun g.adj
+let graphCmpv : all v. all l. Graph v l -> v -> v -> Int =
+  lam g. mapGetCmpFun g.adj
 
-let graphEdgeEq =
-lam g : Graph v l. lam e1 : DigraphEdge v l. lam e2: DigraphEdge v l.
+let graphEdgeEq : all v. all l. Graph v l -> DigraphEdge v l -> DigraphEdge v l -> Bool =
+  lam g. lam e1. lam e2.
   let eqv = digraphEqv g in
   and (or (and (eqv e1.0 e2.0) (eqv e1.1 e2.1))
           (and (eqv e1.1 e2.0) (eqv e1.0 e2.1)))
@@ -54,7 +54,7 @@ let graphHasVertices = digraphHasVertices
 
 let graphNeighbors = digraphSuccessors
 
-let graphIsAdjecent = digraphIsSuccessor
+let graphIsAdjacent = digraphIsSuccessor
 
 -- Add vertices and edges
 let graphAddVertex = digraphAddVertex
@@ -63,6 +63,32 @@ let graphMaybeAddVertex = digraphMaybeAddVertex
 
 let graphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdge v1 v2 l (digraphAddEdge v2 v1 l g)
+
+let graphAddVertices = lam vs. lam g.
+  foldl (lam g. lam v. graphAddVertex v g) g vs
+
+let graphAddEdges : all v. all l. [DigraphEdge v l] -> Graph v l -> Graph v l =
+  lam es. lam g.
+    foldl (lam g. lam e : DigraphEdge v l. graphAddEdge e.0 e.1 e.2 g) g es
+
+let graphConnectedComponents : all v. all l. Graph v l -> [[v]] = lam g.
+  let cs : [Map v Int] = foldl (
+    lam acc: [Map v Int]. lam v: v.
+      if any (mapMem v) acc then acc
+      else cons (digraphBFS v g) acc
+    ) [] (graphVertices g)
+  in map mapKeys cs
+
+let graphRemoveVertex: all v. all l. v -> Graph v l -> Graph v l = lam v. lam g.
+  -- Remove all edges containing 'v'
+  let edges = graphEdgesFrom v g in
+  let g: Graph v l = foldl (lam acc. lam e: (v, v, l).
+      let acc = digraphRemoveEdge e.0 e.1 e.2 acc in
+      digraphRemoveEdge e.1 e.0 e.2 acc
+    ) g edges
+  in
+  -- Remove 'v' itself
+  {g with adj = mapRemove v g.adj}
 
 mexpr
 
@@ -102,15 +128,15 @@ let l1 = gensym () in
 let g = graphAddVertex 1 (graphAddVertex 2 (graphAddVertex 3 empty)) in
 let g1 = graphAddEdge 1 2 l1 g in
 utest graphNeighbors 1 g1 with [2] in
-utest graphIsAdjecent 2 1 g1 with true in
-utest graphIsAdjecent 1 2 g1 with true in
+utest graphIsAdjacent 2 1 g1 with true in
+utest graphIsAdjacent 1 2 g1 with true in
 utest any (eqsym l1) (graphLabels 1 2 g1) with true in
 utest any (eqsym l1) (graphLabels 1 2 g1) with true in
 
 let l3 = gensym () in
 let g2 = graphAddEdge 3 2 l3 g1 in
-utest graphIsAdjecent 2 3 g2 with true in
-utest graphIsAdjecent 3 2 g2 with true in
+utest graphIsAdjacent 2 3 g2 with true in
+utest graphIsAdjacent 3 2 g2 with true in
 utest any (eqsym l3) (graphLabels 3 2 g2) with true in
 
 let compsEq = eqsetEqual (eqsetEqual eqi) in
@@ -148,5 +174,27 @@ let g3 = graphAddEdge 8 1 (gensym ()) g3 in
 let g3 = graphAddEdge 8 7 (gensym ()) g3 in
 
 utest compsEq (digraphStrongConnects g3) [[1,2,8,3,4,5,7,6]] with true in
+
+let gcc = graphAddEdges
+  [ (0,4,gensym ())
+  , (1,4,gensym ())
+  , (1,5,gensym ())
+  , (2,6,gensym ())
+  , (3,6,gensym ())
+  ] (graphAddVertices [0,1,2,3,4,5,6] empty)
+in
+
+utest graphConnectedComponents gcc with [[0,1,4,5],[2,3,6]] using compsEq in
+
+utest
+  let g = graphAddEdges
+  [ (0,1,gensym ())
+  , (0,2,gensym ())
+  , (1,2,gensym ())
+  ] (graphAddVertices [0,1,2] empty)
+  in
+  let g = graphRemoveVertex 0 g in
+  (graphVertices g, graphCountEdges g, graphIsAdjacent 1 2 g)
+with ([1,2], 1, true) in
 
 ()

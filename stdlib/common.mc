@@ -7,7 +7,8 @@ let const = lam x. lam. x
 let apply = lam f. lam x. f x
 let compose = lam f. lam g. lam x. f (g x)
 let curry = lam f. lam x. lam y. f(x, y)
-let uncurry = lam f. lam t : (a, b). f t.0 t.1
+let uncurry : all a. all b. all c. (a -> b -> c) -> (a, b) -> c =
+  lam f. lam t : (a, b). f t.0 t.1
 let flip = lam f. lam x. lam y. f y x
 
 -- Printing stuff
@@ -17,15 +18,17 @@ let printSeqLn = lam s. printSeq s; print "\n"; flushStdout ()
 let dprintLn = lam x. dprint x; printLn ""
 
 recursive
-  let fix = lam f. lam e. f (fix f) e
+  let fix : all a. all b. ((a -> b) -> a -> b) -> a -> b =
+    lam f. lam e. f (fix f) e
 end
 
 -- Fixpoint computation for mutual recursion. Thanks Oleg Kiselyov!
 -- (http://okmij.org/ftp/Computation/fixed-point-combinators.html)
-let fixMutual =
+let fixMutual : all a. all b. [[a -> b] -> a -> b] -> [a -> b] =
   lam l.
     let l = map (lam li. (li,)) l in
-    fix (lam self. lam l. map (lam li : {#label"0": a -> b -> c}. lam x. li.0 (self l) x) l) l
+    fix (lam self. lam l.
+      map (lam li : {#label"0" : [a -> b] -> a -> b}. lam x. li.0 (self l) x) l) l
 
 
 mexpr

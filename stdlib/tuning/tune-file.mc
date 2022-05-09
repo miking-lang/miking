@@ -110,7 +110,7 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
   in
   let taggedEntries =
     mapFoldWithKey
-      (lam acc : [String]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
+      (lam acc : [(Int, String)]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
          concat acc (map (lam b : ([NameInfo], Int). (b.1, entry2str h b.0 b.1)) (mapBindings pathMap)))
       [] hole2idx
   in

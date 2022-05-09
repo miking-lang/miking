@@ -176,14 +176,15 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
-  | TyRecord (_, r, _) when r = Record.empty ->
+  | TyRecord (_, r) when r = Record.empty ->
       us "()"
-  | TyRecord (_, r, ls) ->
-      let pprint_ty_label l =
-        let ty = Record.find l r in
+  | TyRecord (_, r) ->
+      let pprint_ty_label (l, ty) =
         pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label ls) ^. us "}"
+      us "{"
+      ^. Ustring.concat (us ",") (List.map pprint_ty_label (Record.bindings r))
+      ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->
@@ -462,8 +463,11 @@ let rec print_const fmt = function
   | CdeRef ->
       fprintf fmt "deref"
   (* MCore intrinsics: Maps *)
-  | CMap _ ->
-      fprintf fmt "map"
+  | CMap (_, m) ->
+      let binds =
+        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record NoInfo [k; v])
+      in
+      print_tm' fmt (TmSeq (NoInfo, binds))
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
   | CmapSize ->
@@ -503,6 +507,10 @@ let rec print_const fmt = function
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _ ->
       fprintf fmt "tensorCreateDense"
+  | CtensorCreateUninitInt ->
+      fprintf fmt "tensorCreateUninitInt"
+  | CtensorCreateUninitFloat ->
+      fprintf fmt "tensorCreateUninitFloat"
   | CtensorCreateCArrayInt _ ->
       fprintf fmt "tensorCreateCArrayInt"
   | CtensorCreateCArrayFloat _ ->
@@ -511,6 +519,10 @@ let rec print_const fmt = function
       fprintf fmt "tensorGetExn"
   | CtensorSetExn _ ->
       fprintf fmt "tensorSetExn"
+  | CtensorLinearGetExn _ ->
+      fprintf fmt "tensorLinearGetExn"
+  | CtensorLinearSetExn _ ->
+      fprintf fmt "tensorLinearSetExn"
   | CtensorRank ->
       fprintf fmt "tensorRank"
   | CtensorShape ->
@@ -632,11 +644,15 @@ and print_tm' fmt t =
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
-  | TmType (_, x, s, ty, t1) ->
+  | TmType (_, x, s, params, ty, t1) ->
       let x = string_of_ustring (ustring_of_type x s) in
+      let params =
+        params |> List.map string_of_ustring |> List.cons ""
+        |> String.concat " "
+      in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
-        ty print_tm (Match, t1)
+      fprintf fmt "@[<hov 0>@[<hov %d>type %s%s =@ %s in@]@ %a@]" !ref_indent x
+        params ty print_tm (Match, t1)
   | TmRecLets (_, lst, t2) -> (
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in

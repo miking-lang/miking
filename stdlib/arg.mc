@@ -9,19 +9,10 @@ include "seq.mc"
 include "char.mc"
 include "math.mc"
 
-type ArgResult = {
+type ArgResult a = {
   strings : [String],
   options : a
 }
-
-type ArgPart = {
-  options : a,
-  fail : Ref (Option ArgResult),
-  str : String
-}
-
-type ParseOption = (String, String, String)
-type ParseConfig = [([ParseOption], String, ArgPart -> a)]
 
 type ParseType
 con ParseTypeInt : String -> ParseType
@@ -30,11 +21,20 @@ con ParseTypeFloat : String -> ParseType
 con ParseTypeFloatMin : (String, Float) -> ParseType
 con ParseTypeGeneric : (String, String) -> ParseType
 
-type ParseResult
-con ParseOK : ArgResult -> ParseResult
-con ParseFailUnknownOption : String -> ParseResult
-con ParseFailMissingOpArg : String -> ParseResult
-con ParseFailConversion : (ParseType, String) -> ParseResult
+type ArgPart a = {
+  options : a,
+  fail : Ref (Option ParseType),
+  str : String
+}
+
+type ParseOption = (String, String, String)
+type ParseConfig a = [([ParseOption], String, ArgPart a -> a)]
+
+type ParseResult a
+con ParseOK : all a. ArgResult a -> ParseResult a
+con ParseFailUnknownOption : all a. String -> ParseResult a
+con ParseFailMissingOpArg : all a. String -> ParseResult a
+con ParseFailConversion : all a. (ParseType, String) -> ParseResult a
 
 -- Creates a new string with new lines, and breaks between words.
 -- Assumes that the string is currently at 'startPos', and
@@ -77,9 +77,9 @@ let argHelpOptions_defaults = {
   spaceToText = 2
 }
 
-let argHelpOptions_general =
-  lam options : Options_argHelpOptions.
-  lam opConfig : a.
+let argHelpOptions_general : all a.
+  Options_argHelpOptions -> ParseConfig a -> String =
+  lam options. lam opConfig.
   let opStrings = map (lam e.
     match e with (lst, _, _) then
       let s2 = map (lam triple. match triple with (s1,s2,s3) then join [s1,s2,s3] else never) lst in
@@ -104,19 +104,18 @@ let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
 
 -- argument value conversion --
 
-let argToString = lam p : ArgPart.
+let argToString : all a. ArgPart a -> String = lam p.
   p.str
 
-let argToInt = lam p : ArgPart.
-  let v = string2int p.str in
+let argToInt : all a. ArgPart a -> Int = lam p.
   if stringIsInt p.str then string2int p.str
   else modref p.fail (Some (ParseTypeInt p.str)); 0
 
-let argToFloat = lam p : ArgPart.
+let argToFloat : all a. ArgPart a -> Float = lam p.
   if stringIsFloat p.str then string2float p.str
   else modref p.fail (Some (ParseTypeFloat p.str)); 0.
 
-let argToIntMin = lam p : ArgPart. lam minVal.
+let argToIntMin : all a. ArgPart a -> Int -> Int = lam p. lam minVal.
   let v = argToInt p in
   match deref p.fail with None () then
     if lti v minVal then
@@ -126,7 +125,7 @@ let argToIntMin = lam p : ArgPart. lam minVal.
   else
     v
 
-let argToFloatMin = lam p : ArgPart. lam minVal.
+let argToFloatMin : all a. ArgPart a -> Float -> Float = lam p. lam minVal.
   let v = argToFloat p in
   match deref p.fail with None () then
     if ltf v minVal then
@@ -154,11 +153,11 @@ let argParse_defaults = {
 
 
 -- Main argument parsing function.
-let argParse_general =
+let argParse_general : all a. Options_argParse -> a -> ParseConfig a -> ParseResult a =
   lam options : Options_argParse. lam argParseDefaults. lam argParseConfig.
   recursive
     -- Match one option
-    let matchOption = lam str. lam confLst : ParseConfig.
+    let matchOption = lam str. lam confLst : ParseConfig a.
      match confLst with [(opLst, _, f)] ++ rest then
        match find (lam x. match x with (s, _, _)
                           then isPrefix eqChar s str else never) opLst
@@ -281,19 +280,19 @@ let default = {
 let config = [
   ([("--foo", "", "")],
     "This is a boolean option. ",
-    lam p : ArgPart. let o : Options = p.options in {o with foo = true}),
+    lam p : ArgPart Options. let o : Options = p.options in {o with foo = true}),
   ([("--len", " ", "<value>")],
     "A named argument followed by a space and then the integer value.",
-    lam p : ArgPart. let o : Options = p.options in {o with len = argToIntMin p 1}),
+    lam p : ArgPart Options. let o : Options = p.options in {o with len = argToIntMin p 1}),
   ([("-m", " ", "<msg>"),("--message", " ", "<msg>")],
     "A string argument, with both short and long form arguments.",
-    lam p : ArgPart. let o : Options = p.options in {o with message = argToString p}),
+    lam p : ArgPart Options. let o : Options = p.options in {o with message = argToString p}),
   ([("--real", " ", "<value>")],
     "A named argument followed by space and then the float value.",
-    lam p : ArgPart. let o : Options = p.options in {o with real = argToFloat p }),
+    lam p : ArgPart Options. let o : Options = p.options in {o with real = argToFloat p }),
   ([("--complex", " ", "<value>")],
     "A complex argument with a custom parser and error message.",
-    lam p : ArgPart.
+    lam p : ArgPart Options.
       let o : Options = p.options in
       let strSplitTrim = lam delim. lam s. map strTrim (strSplit delim s) in
       match strSplitTrim "+i" p.str with [re, im] then
@@ -326,7 +325,7 @@ let testOptions = {
   ]
 } in
 let argParseCustom = argParse_general testOptions in
-let res : ArgResult =
+let res : ArgResult Options =
   match argParseCustom default config with ParseOK r then r
   else error "Incorrect type"
 in

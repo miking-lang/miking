@@ -17,8 +17,6 @@ include "pprint.mc"
 -- EVALUATION ENVIRONMENT --
 ----------------------------
 
-type Symbol = Int
-
 type Env = [(Name, Expr)]
 
 let evalEnvEmpty = createList 0 (lam. (nameNoSym "", unit_))
@@ -152,10 +150,11 @@ lang RecLetsEval =
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
-    let foldli = lam f. lam init. lam seq.
-      let foldres : (Int, b) = foldl (lam acc : (Int, b). lam x.
-                                       (addi acc.0 1, f acc.0 acc.1 x))
-                                     (0, init) seq in
+    let foldli : all a. all acc. (Int -> acc -> a -> acc) -> acc -> [a] -> acc =
+      lam f. lam init. lam seq.
+      let foldres : (Int, acc) = foldl (lam acc : (Int, acc). lam x.
+                                         (addi acc.0 1, f acc.0 acc.1 x))
+                                       (0, init) seq in
       foldres.1
     in
     utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x)
@@ -241,7 +240,7 @@ lang MatchEval = Eval + MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = Eval + Eq + UtestAst
+lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -251,7 +250,9 @@ lang UtestEval = Eval + Eq + UtestAst
     let v2 = eval ctx t.expected in
     let tusing = optionMap (eval ctx) t.tusing in
     let result = match tusing with Some tusing then
-      tusing v1 v2
+      match apply ctx v2 (apply ctx v1 tusing)
+      with TmConst {val = CBool {val = b}} then b
+      else error "Invalid utest equivalence function"
     else
       eqExpr v1 v2 in
     (if result then print "Test passed\n" else print "Test failed\n");
@@ -266,13 +267,17 @@ lang SeqEval = Eval + SeqAst
 end
 
 lang NeverEval = Eval + NeverAst
-  --TODO(?,?)
+  sem eval (ctx : {env : Env}) =
+  | TmNever t ->
+    infoErrorExit t.info
+      (join [ "Reached a never term, which should be "
+            , "impossible in a well-typed program."])
 end
 
 -- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
 lang RefEval = Eval
   syn Expr =
-  | TmRef {ref : Ref}
+  | TmRef {ref : Ref Expr}
 
   sem eval (ctx : {env : Env}) =
   | TmRef r -> TmRef r
@@ -682,7 +687,7 @@ end
 
 lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
-  | CEqsym2 Symb
+  | CEqsym2 Symbol
 
   sem constArity =
   | CEqsym2 _ -> 1
@@ -777,7 +782,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     TmConst {val = CIter2 arg, ty = tyunknown_, info = NoInfo ()}
   | CIter2 f ->
     match arg with TmSeq s then
-      let f = lam x. apply {env = evalEnvEmpty} x f in
+      let f = lam x. apply {env = evalEnvEmpty} x f; () in
       iter f s.tms;
       uunit_
     else error "Second argument to iter not a sequence"
@@ -787,7 +792,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     match arg with TmSeq s then
       let f = lam i. lam x.
         apply {env = evalEnvEmpty} x
-          (apply {env = evalEnvEmpty} (int_ i) f) in
+          (apply {env = evalEnvEmpty} (int_ i) f); () in
       iteri f s.tms;
       uunit_
     else error "Second argument to iteri not a sequence"
@@ -1069,7 +1074,7 @@ end
 
 lang RefOpEval = RefOpAst + RefEval + IntAst
   syn Const =
-  | CModRef2 Ref
+  | CModRef2 (Ref Expr)
 
   sem constArity =
   | CModRef2 _ -> 1
@@ -1109,27 +1114,27 @@ lang MapEval =
   SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval
 
   syn Const =
-  | CMapVal {cmp : Expr -> Expr -> Expr, val : Map K V}
+  | CMapVal {cmp : Expr, val : Map Expr Expr}
   | CMapInsert2 Expr
   | CMapInsert3 (Expr, Expr)
   | CMapRemove2 Expr
   | CMapFindExn2 Expr
-  | CMapFindOrElse2 (Expr -> Expr)
-  | CMapFindOrElse3 (Expr -> Expr, Expr)
-  | CMapFindApplyOrElse2 (Expr -> Expr)
-  | CMapFindApplyOrElse3 (Expr -> Expr, Expr -> Expr)
-  | CMapFindApplyOrElse4 (Expr -> Expr, Expr -> Expr, Expr)
+  | CMapFindOrElse2 Expr
+  | CMapFindOrElse3 (Expr, Expr)
+  | CMapFindApplyOrElse2 Expr
+  | CMapFindApplyOrElse3 (Expr, Expr)
+  | CMapFindApplyOrElse4 (Expr, Expr, Expr)
   | CMapMem2 Expr
-  | CMapAny2 (Expr -> Expr -> Expr)
-  | CMapMap2 (Expr -> Expr)
-  | CMapMapWithKey2 (Expr -> Expr -> Expr)
-  | CMapFoldWithKey2 (Expr -> Expr -> Expr -> Expr)
-  | CMapFoldWithKey3 (Expr -> Expr -> Expr -> Expr, Expr)
+  | CMapAny2 Expr
+  | CMapMap2 Expr
+  | CMapMapWithKey2 Expr
+  | CMapFoldWithKey2 Expr
+  | CMapFoldWithKey3 (Expr, Expr)
   | CMapChooseOrElse2 Expr
-  | CMapEq2 (Expr -> Expr -> Expr)
-  | CMapEq3 (Expr -> Expr -> Expr, Map K V)
-  | CMapCmp2 (Expr -> Expr -> Expr)
-  | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
+  | CMapEq2 Expr
+  | CMapEq3 (Expr, Map Expr Expr)
+  | CMapCmp2 Expr
+  | CMapCmp3 (Expr, Map Expr Expr)
 
   sem constArity =
   | CMapVal _ -> 0
@@ -1161,7 +1166,6 @@ lang MapEval =
     TmRecord {
       bindings = bindings,
       ty = TyRecord {
-        labels = labels,
         fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
         info = NoInfo ()},
       info = NoInfo ()}
@@ -1361,6 +1365,9 @@ lang TensorOpEval =
   | CTensorGetExn2 T
   | CTensorSetExn2 T
   | CTensorSetExn3 (T, [Int])
+  | CTensorLinearGetExn2 T
+  | CTensorLinearSetExn2 T
+  | CTensorLinearSetExn3 (T, Int)
   | CTensorReshapeExn2 T
   | CTensorTransposeExn2 T
   | CTensorTransposeExn3 (T, Int)
@@ -1446,35 +1453,34 @@ lang TensorOpEval =
     else error "Second argument to CTensorIterSlice not a tensor"
   | TmConst { val = CTensorEq3 (eq, t1) } ->
     match arg with TmTensor { val = t2 } then
-    let mkeq = lam wrapx. lam wrapy.
-      lam x. lam y.
+    let mkeq : all a. all b. (a -> Expr) -> (b -> Expr) -> Tensor[a] -> Tensor[b] -> Bool =
+      lam wrapx. lam wrapy. lam t1. lam t2.
+      let eq = lam x. lam y.
         match apply ctx (wrapy y) (apply ctx (wrapx x) eq) with
           TmConst { val = CBool { val = b } }
         then b else error "Invalid equality function"
+      in
+      tensorEq eq t1 t2
     in
-    let eq =
-      match t1 with TInt _ then
-        match t2 with TInt _ then mkeq int_ int_
-        else match t2 with TFloat _ then mkeq int_ float_
-        else match t2 with TExpr _ then mkeq int_ (lam x. x)
+    let result =
+      match t1 with TInt t1 then
+        match t2 with TInt t2 then mkeq int_ int_ t1 t2
+        else match t2 with TFloat t2 then mkeq int_ float_ t1 t2
+        else match t2 with TExpr t2 then mkeq int_ (lam x. x) t1 t2
         else never
-      else match t1 with TFloat _ then
-        match t2 with TInt _ then mkeq float_ int_
-        else match t2 with TFloat _ then mkeq float_ float_
-        else match t2 with TExpr _ then mkeq float_ (lam x. x)
+      else match t1 with TFloat t1 then
+        match t2 with TInt t2 then mkeq float_ int_ t1 t2
+        else match t2 with TFloat t2 then mkeq float_ float_ t1 t2
+        else match t2 with TExpr t2 then mkeq float_ (lam x. x) t1 t2
         else never
-      else match t1 with TExpr _ then
-        match t2 with TInt _ then mkeq (lam x. x) int_
-        else match t2 with TFloat _ then mkeq (lam x. x) float_
-        else match t2 with TExpr _ then mkeq (lam x. x) (lam x. x)
+      else match t1 with TExpr t1 then
+        match t2 with TInt t2 then mkeq (lam x. x) int_ t1 t2
+        else match t2 with TFloat t2 then mkeq (lam x. x) float_ t1 t2
+        else match t2 with TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
         else never
       else never
     in
-    match (t1, t2) with
-      (TInt t1 | TFloat t1 | TExpr t1, TInt t2 | TFloat t2 | TExpr t2)
-    then
-      bool_ (tensorEq eq t1 t2)
-    else never
+    bool_ result
     else error "Third argument to CTensorEq not a tensor"
   | TmConst { val = CTensorToString2 el2str } ->
     match arg with TmTensor { val = t } then
@@ -1493,6 +1499,10 @@ lang TensorOpEval =
     else error "Second argument to CTensorToString not a tensor"
 
   sem delta (arg : Expr) =
+  | CTensorCreateUninitInt _ ->
+    TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq arg)) }
+  | CTensorCreateUninitFloat _ ->
+    TmTensor { val = TFloat (tensorCreateUninitFloat (_ofTmSeq arg)) }
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
     uconst_ val
@@ -1541,6 +1551,47 @@ lang TensorOpEval =
       tensorSetExn t is v;
       uunit_
     else error "Tensor and value type does not match in CTensorSetExn"
+  | CTensorLinearGetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorLinearGetExn2 t in
+      uconst_ val
+    else error "First argument to CTensorLinearGetExn not a tensor"
+  | CTensorLinearGetExn2 t ->
+    match arg with TmConst { val = CInt { val = i } } then
+      match t with TInt t then
+        let val = tensorLinearGetExn t i in
+        int_ val
+      else match t with TFloat t then
+        let val = tensorLinearGetExn t i in
+        float_ val
+      else match t with TExpr t then
+        let val = tensorLinearGetExn t i in
+        val
+      else never
+    else error "Second argument to CTensorLinearGetExn not an integer"
+  | CTensorLinearSetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorLinearSetExn2 t in
+      uconst_ val
+    else error "First argument to CTensorLinearSetExn not a tensor"
+  | CTensorLinearSetExn2 t ->
+    match arg with TmConst { val = CInt { val = i } } then
+      let val = CTensorLinearSetExn3 (t, i) in
+      uconst_ val
+    else error "Second argument to CTensorLinearSetExn not an integer"
+  | CTensorLinearSetExn3 (t, i) ->
+    match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else
+    match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else
+    match (t, arg) with (TExpr t, v) then
+      tensorLinearSetExn t i v;
+      uunit_
+    else error "Tensor and value type does not match in CTensorLinearSetExn"
   | CTensorRank _ ->
     match arg with TmTensor { val = t } then
       match t with TInt t | TFloat t | TExpr t then
@@ -1670,19 +1721,19 @@ lang BootParserEval =
   RecordAst
 
   syn Const =
-  | CBootParserTree {val : BootParserTree}
+  | CBootParserTree {val : BootParseTree}
   | CBootParserParseMExprString2 [String]
-  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool)
-  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool), [String])
-  | CBootParserGetTerm2 BootParserTree
-  | CBootParserGetType2 BootParserTree
-  | CBootParserGetString2 BootParserTree
-  | CBootParserGetInt2 BootParserTree
-  | CBootParserGetFloat2 BootParserTree
-  | CBootParserGetListLength2 BootParserTree
-  | CBootParserGetConst2 BootParserTree
-  | CBootParserGetPat2 BootParserTree
-  | CBootParserGetInfo2 BootParserTree
+  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool)
+  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool), [String])
+  | CBootParserGetTerm2 BootParseTree
+  | CBootParserGetType2 BootParseTree
+  | CBootParserGetString2 BootParseTree
+  | CBootParserGetInt2 BootParseTree
+  | CBootParserGetFloat2 BootParseTree
+  | CBootParserGetListLength2 BootParseTree
+  | CBootParserGetConst2 BootParseTree
+  | CBootParserGetPat2 BootParseTree
+  | CBootParserGetInfo2 BootParseTree
 
   sem constArity =
   | CBootParserTree _ -> 0
@@ -1722,11 +1773,12 @@ lang BootParserEval =
 
   | CBootParserParseMCoreFile _ ->
     match arg with TmRecord {bindings = bs} then
-      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3"]) with [
+      match map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3", "4"]) with [
         Some (TmConst { val = CBool { val = keepUtests } }),
         Some (TmConst { val = CBool { val = pruneExternalUtests } }),
         Some (TmSeq { tms = externalsExclude }),
-        Some (TmConst { val = CBool { val = warn } })
+        Some (TmConst { val = CBool { val = warn } }),
+        Some (TmConst { val = CBool { val = eliminateDeadCode } })
       ]
       then
         let externalsExclude =
@@ -1740,8 +1792,11 @@ lang BootParserEval =
             externalsExclude
         in
         TmConst {val = CBootParserParseMCoreFile2 (
-                  keepUtests, pruneExternalUtests, externalsExclude, warn
-                 ),
+                  keepUtests,
+                  pruneExternalUtests,
+                  externalsExclude,
+                  warn,
+                  eliminateDeadCode ),
                  ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
       else error "First argument to bootParserParseMCoreFile incorrect record"
     else error "First argument to bootParserParseMCoreFile not a record"
@@ -1884,7 +1939,7 @@ lang SeqTotPatEval = SeqTotPat + SeqAst
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
       if eqi (length tms) (length pats) then
-        optionFoldlM (lam env. lam pair : (a,b). tryMatch env pair.0 pair.1) env
+        optionFoldlM (lam env. lam pair : (Expr,Pat). tryMatch env pair.0 pair.1) env
           (zipWith (lam a. lam b. (a, b)) tms pats)
       else None ()
     else None ()
@@ -1899,7 +1954,7 @@ lang SeqEdgePatEval = SeqEdgePat + SeqAst
         match splitAt tms (subi (length tms) (length post)) with (tms, postTm) then
         let pair = lam a. lam b. (a, b) in
         let paired = zipWith pair (concat preTm postTm) (concat pre post) in
-        let env = optionFoldlM (lam env. lam pair : (a,b). tryMatch env pair.0 pair.1) env paired in
+        let env = optionFoldlM (lam env. lam pair : (Expr,Pat). tryMatch env pair.0 pair.1) env paired in
         match middle with PName name then
           optionMap (evalEnvInsert name (seq_ tms)) env
         else match middle with PWildcard () then
@@ -2758,7 +2813,7 @@ utest eval (mapCmp_ cmpf m3 m5) with int_ 0 using eqExpr in
 utest eval (mapGetCmpFun_ m1) with uconst_ (CSubi ()) using eqExpr in
 
 -- Tensors
-let testTensors = lam tcreate_. lam v : (a,a,a).
+let testTensors = lam tcreate_. lam v : (Expr, Expr, Expr).
   let t0 = eval (tcreate_ (seq_ []) (ulam_ "x" v.0)) in
   let t1 = eval (tcreate_ (seq_ [int_ 4]) (ulam_ "x" v.0)) in
   let t2 = eval (tcreate_ (seq_ [int_ 4]) (ulam_ "x" v.1)) in

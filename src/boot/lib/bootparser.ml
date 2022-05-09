@@ -151,8 +151,11 @@ let parseMExprString keywords str =
     reportErrorAndExit e
 
 let parseMCoreFile
-    (keep_utests, prune_external_utests, externals_exclude, warn) keywords
-    filename =
+    ( keep_utests
+    , prune_external_utests
+    , externals_exclude
+    , warn
+    , eliminate_deadcode ) keywords filename =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
@@ -172,6 +175,11 @@ let parseMCoreFile
       Intrinsics.Mseq.Helpers.to_list
         (Mseq.map Intrinsics.Mseq.Helpers.to_ustring externals_exclude)
     in
+    let deadcode_elimination =
+      if eliminate_deadcode then
+        Deadcode.elimination builtin_sym2term name2sym symKeywords
+      else fun x -> x
+    in
     PTreeTm
       ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
       |> Utils.normalize_path |> Parserutils.parse_mcore_file |> Mlang.flatten
@@ -180,11 +188,11 @@ let parseMCoreFile
       |> Symbolize.symbolize name2sym
       |> Parserutils.raise_parse_error_on_partially_applied_external
       |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
-      |> Deadcode.elimination builtin_sym2term name2sym symKeywords
+      |> deadcode_elimination
       |> Parserutils.prune_external_utests
            ~enable:(keep_utests && prune_external_utests)
            ~externals_exclude ~warn
-      |> Deadcode.elimination builtin_sym2term name2sym symKeywords )
+      |> deadcode_elimination )
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 
@@ -229,8 +237,9 @@ let getData = function
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmType (fi, x, _, params, ty, t)) ->
+      let len = List.length params + 1 in
+      (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [])
   | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
       (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmConApp (fi, x, _, t)) ->
@@ -266,8 +275,8 @@ let getData = function
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
       (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
-  | PTreeTy (TyRecord (fi, tymap, slst)) ->
-      let tylst = List.map (fun s -> Record.find s tymap) slst in
+  | PTreeTy (TyRecord (fi, tymap)) ->
+      let slst, tylst = List.split (Record.bindings tymap) in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
   | PTreeTy (TyVariant (fi, lst)) ->

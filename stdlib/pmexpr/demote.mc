@@ -4,20 +4,27 @@
 
 include "mexpr/ast-builder.mc"
 include "pmexpr/ast.mc"
+include "pmexpr/pprint.mc"
 
-lang PMExprDemote = PMExprAst
-  -- Helper function to update expressions without info fields to use the info
-  -- field of the original expression.
+lang PMExprDemoteBase = PMExprAst
   sem _insertExprInfo (info : Info) =
   | expr ->
     let expr =
-      match infoTm expr with NoInfo () then
-        withInfo info expr
+      match infoTm expr with NoInfo () then withInfo info expr
       else expr in
     smap_Expr_Expr (_insertExprInfo info) expr
 
   sem demoteParallel =
+  | t -> smap_Expr_Expr demoteParallel t
+end
+
+lang PMExprDemoteAccelerate = PMExprDemoteBase
+  sem demoteParallel =
   | TmAccelerate t -> demoteParallel t.e
+end
+
+lang PMExprDemoteFlatten = PMExprDemoteBase
+  sem demoteParallel =
   | TmFlatten t ->
     let tyuk = TyUnknown {info = t.info} in
     TmApp {
@@ -31,6 +38,10 @@ lang PMExprDemote = PMExprAst
         ty = tyuk, info = t.info},
       rhs = demoteParallel t.e,
       ty = tyuk, info = t.info}
+end
+
+lang PMExprDemoteMap2 = PMExprDemoteBase
+  sem demoteParallel =
   | TmMap2 t ->
     let tyuk = TyUnknown {info = t.info} in
     let lty = match tyTm t.as with TySeq {ty = elemTy} then elemTy else tyuk in
@@ -110,6 +121,10 @@ lang PMExprDemote = PMExprAst
       rhs = TmVar {ident = tid, ty = tyseqtuple, info = t.info, frozen = false},
       ty = TySeq {ty = tyuk, info = t.info}, info = t.info} in
     bindall_ [aExpr, bExpr, tExpr, mapExpr]
+end
+
+lang PMExprDemoteReduce = PMExprAst
+  sem demoteParallel =
   | TmParallelReduce t ->
     let tyuk = TyUnknown {info = t.info} in
     TmApp {
@@ -119,7 +134,116 @@ lang PMExprDemote = PMExprAst
           rhs = demoteParallel t.f, ty = tyuk, info = t.info},
         rhs = demoteParallel t.ne, ty = tyuk, info = t.info},
       rhs = demoteParallel t.as, ty = tyuk, info = t.info}
-  | t -> smap_Expr_Expr demoteParallel t
+end
+
+lang PMExprDemoteLoop = PMExprAst
+  sem demoteParallel =
+  | TmLoop t | TmParallelLoop t ->
+    let unitTy = TyRecord {fields = mapEmpty cmpSID, info = t.info} in
+    let acc = TmRecord {bindings = mapEmpty cmpSID, ty = unitTy, info = t.info} in
+    let f = TmLam {
+      ident = nameNoSym "", tyIdent = unitTy, body = t.f,
+      ty = TyArrow {from = unitTy, to = tyTm t.f, info = t.info},
+      info = t.info} in
+    let accLoop = TmLoopAcc {
+      ne = acc, n = t.n, f = f, ty = unitTy, info = t.info} in
+    demoteParallel accLoop
+  | TmLoopAcc t ->
+    let arrowType = lam from. lam to.
+      TyArrow {
+        from = tyWithInfo t.info from,
+        to = tyWithInfo t.info to,
+        info = t.info} in
+    let loopId = nameSym "loop" in
+    let accTy = tyTm t.ne in
+    let loopTy = arrowType accTy (arrowType tyint_ accTy) in
+    let accIdent = nameSym "acc" in
+    let acc = TmVar {
+      ident = accIdent, ty = accTy, info = t.info, frozen = false} in
+    let iIdent = nameSym "i" in
+    let i = TmVar {
+      ident = iIdent, ty = TyInt {info = t.info}, info = t.info,
+      frozen = false} in
+    let f = demoteParallel t.f in
+    let loopCompareExpr = TmApp {
+      lhs = TmApp {
+        lhs = TmConst {
+          val = CLti (),
+          ty = arrowType tyint_ (arrowType tyint_ tybool_),
+          info = t.info},
+        rhs = i, ty = arrowType tyint_ tybool_, info = t.info},
+      rhs = t.n, ty = tybool_, info = t.info} in
+    let incrementIterExpr = TmApp {
+      lhs = TmApp {
+        lhs = TmConst {
+          val = CAddi (),
+          ty = arrowType tyint_ (arrowType tyint_ tyint_),
+          info = t.info},
+        rhs = i, ty = arrowType tyint_ tyint_, info = t.info},
+      rhs = TmConst {
+        val = CInt {val = 1},
+        ty = TyInt {info = t.info},
+        info = t.info},
+      ty = tyint_, info = t.info} in
+    let tIdent = nameSym "t" in
+    let tVar = TmVar {ident = tIdent, ty = accTy, info = t.info, frozen = false} in
+    let thnExpr = TmLet {
+      ident = tIdent,
+      tyBody = accTy,
+      body = TmApp {
+        lhs = TmApp {
+          lhs = f, rhs = acc, ty = arrowType tyint_ accTy, info = t.info},
+        rhs = i, ty = accTy, info = t.info},
+      inexpr = TmApp {
+        lhs = TmApp {
+          lhs = TmVar {ident = loopId, ty = loopTy, info = t.info, frozen = false},
+          rhs = tVar, ty = arrowType tyint_ accTy, info = t.info},
+        rhs = incrementIterExpr,
+        ty = accTy, info = t.info},
+      ty = accTy, info = t.info} in
+    let loopBindingDef = {
+      ident = loopId, tyBody = loopTy, info = t.info,
+      body = TmLam {
+        ident = accIdent, tyIdent = accTy,
+        body = TmLam {
+          ident = iIdent, tyIdent = TyInt {info = t.info},
+          body = TmMatch {
+            target = loopCompareExpr,
+            pat = PatBool {val = true, ty = TyBool {info = t.info}, info = t.info},
+            thn = thnExpr,
+            els = acc,
+            ty = accTy, info = t.info},
+          ty = arrowType tyint_ accTy, info = t.info},
+        ty = loopTy, info = t.info}} in
+    TmRecLets {
+      bindings = [loopBindingDef],
+      inexpr = TmApp {
+        lhs = TmApp {
+          lhs = TmVar {
+            ident = loopId, ty = loopTy, info = t.info, frozen = false},
+          rhs = t.ne,
+          ty = arrowType tyint_ accTy, info = t.info},
+        rhs = TmConst {
+          val = CInt {val = 0}, ty = TyInt {info = t.info}, info = t.info},
+        ty = accTy, info = t.info},
+      ty = accTy, info = t.info}
+end
+
+lang PMExprDemotePrintFloat = PMExprDemoteBase
+  sem demoteParallel =
+  | TmPrintFloat t ->
+    let tyuk = TyUnknown {info = t.info} in
+    TmApp {
+      lhs = TmConst {val = CPrint (), ty = tyuk, info = t.info},
+      rhs = TmApp {
+        lhs = TmConst {val = CFloat2string (), ty = tyuk, info = t.info},
+        rhs = t.e, ty = tyuk, info = t.info},
+      ty = tyuk, info = t.info}
+end
+
+lang PMExprDemote =
+  PMExprDemoteAccelerate + PMExprDemoteFlatten + PMExprDemoteMap2 +
+  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat
 end
 
 mexpr
@@ -156,5 +280,28 @@ with foldl_ (uconst_ (CAddi ())) (int_ 0) flattenSeqExpr using eqExpr in
 
 utest demoteParallel (accelerate_ (map_ id (flatten_ s)))
 with map_ id (foldl_ (uconst_ (CConcat ())) (seq_ []) s) using eqExpr in
+
+let acc = int_ 0 in
+let n = int_ 10 in
+let f = ulam_ "" unit_ in
+let foldlFn = ulam_ "acc" (ulam_ "x" (addi_ (var_ "acc") (var_ "x"))) in
+let loopRecLet = lam fn.
+  ureclet_ "loop" (ulam_ "acc" (ulam_ "i"
+    (if_ (lti_ (var_ "i") (int_ 10))
+      (bind_
+        (ulet_ "t" (appf2_ fn (var_ "acc") (var_ "i")))
+        (appf2_ (var_ "loop") (var_ "t") (addi_ (var_ "i") (int_ 1))))
+      (var_ "acc")))) in
+
+let accLoopDef = bindall_ [
+  loopRecLet foldlFn,
+  appf2_ (var_ "loop") acc (int_ 0)] in
+utest demoteParallel (loopAcc_ acc n foldlFn) with accLoopDef using eqExpr in
+
+let loopDef = bindall_ [
+  loopRecLet (ulam_ "" f),
+  appf2_ (var_ "loop") unit_ (int_ 0)] in
+utest demoteParallel (loop_ n f) with loopDef using eqExpr in
+utest demoteParallel (parallelLoop_ n f) with loopDef using eqExpr in
 
 ()

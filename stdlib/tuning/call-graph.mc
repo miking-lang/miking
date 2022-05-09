@@ -11,7 +11,7 @@ include "name-info.mc"
 
 -- Assumes that the AST is symbolized and in ANF.
 
-type CallGraph = DiGraph NameInfo NameInfo
+type CallGraph = Digraph NameInfo NameInfo
 
 let callGraphNames = lam cg.
   map (lam t : NameInfo. t.0) (digraphVertices cg)
@@ -30,8 +30,8 @@ type Binding = {ident : Name, body : Expr, info : Info}
 let _handleLetVertex = use LamAst in
   lam f. lam letexpr : Binding.
     match letexpr.body with TmLam lm then
-      cons (letexpr.ident, letexpr.info) (f lm.body)
-    else f letexpr.body
+      cons (letexpr.ident, letexpr.info) (f [] lm.body)
+    else f [] letexpr.body
 
 let _handleApps = use AppAst in use VarAst in
   lam id. lam f. lam prev. lam g. lam name2info. lam app.
@@ -42,12 +42,12 @@ let _handleApps = use AppAst in use VarAst in
             let correctInfo : Info = mapFindExn v.ident name2info in
             [(prev, (v.ident, correctInfo), id)]
           else []
-        in concat resLhs (f g prev name2info rhs)
+        in concat resLhs (f g prev name2info [] rhs)
       else match app with TmApp {lhs = TmApp a, rhs = rhs} then
         let resLhs = appHelper g (TmApp a) in
-        concat resLhs (f g prev name2info rhs)
+        concat resLhs (f g prev name2info [] rhs)
       else match app with TmApp a then
-        concat (f g prev name2info a.lhs) (f g prev name2info a.rhs)
+        concat (f g prev name2info [] a.lhs) (f g prev name2info [] a.rhs)
       else never
   in appHelper g app
 
@@ -61,17 +61,17 @@ lang HoleCallGraph = LetAst + LamAst + RecLetsAst
   | arg ->
     let gempty = digraphAddVertex callGraphTop
       (digraphEmpty nameInfoCmp nameInfoEq) in
-    let g = digraphAddVertices (_findVertices arg) gempty in
+    let g = digraphAddVertices (_findVertices [] arg) gempty in
     let infoMap = mapFromSeq nameCmp (digraphVertices g) in
-    let edges = _findEdges g callGraphTop infoMap arg in
+    let edges = _findEdges g callGraphTop infoMap [] arg in
     digraphAddEdges edges g
 
-  sem _findVertices =
+  sem _findVertices (vertices: [NameInfo]) =
   | TmLet t ->
     concat
       (_handleLetVertex _findVertices
         {ident = t.ident, body = t.body, info = t.info})
-      (_findVertices t.inexpr)
+      (_findVertices vertices t.inexpr)
 
   | TmRecLets t ->
     let res =
@@ -80,32 +80,34 @@ lang HoleCallGraph = LetAst + LamAst + RecLetsAst
                  (_handleLetVertex _findVertices
                    {ident = b.ident, body = b.body, info = b.info}))
             [] t.bindings
-    in concat res (_findVertices t.inexpr)
+    in concat res (_findVertices vertices t.inexpr)
 
   | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
+--    sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
+    sfold_Expr_Expr _findVertices vertices tm
 
-  sem _findEdges (cg : CallGraph) (prev : NameInfo) (name2info : Map Name Info) =
+  sem _findEdges (cg : CallGraph) (prev : NameInfo) (name2info : Map Name Info)
+                 (edges : [(NameInfo, NameInfo, NameInfo)]) =
   | TmLet ({body = TmApp a} & t) ->
     let resBody = _handleApps (t.ident, t.info) _findEdges prev cg name2info t.body in
-    concat resBody (_findEdges cg prev name2info t.inexpr)
+    concat resBody (_findEdges cg prev name2info edges t.inexpr)
 
   | TmLet ({body = TmLam lm} & t) ->
-    let resBody = _findEdges cg (t.ident, t.info) name2info lm.body in
-    concat resBody (_findEdges cg prev name2info t.inexpr)
+    let resBody = _findEdges cg (t.ident, t.info) name2info edges lm.body in
+    concat resBody (_findEdges cg prev name2info [] t.inexpr)
 
   | TmRecLets t ->
     let res =
       let handleBinding = lam g. lam b : RecLetBinding.
         match b with { body = TmLam { body = lambody }, ident = ident, info = info } then
-          _findEdges g (ident, info) name2info lambody
+          _findEdges g (ident, info) name2info [] lambody
         else
-          _findEdges g prev name2info b.body
+          _findEdges g prev name2info [] b.body
       in foldl (lam acc. lam b. concat acc (handleBinding cg b)) [] t.bindings
-    in concat res (_findEdges cg prev name2info t.inexpr)
+    in concat res (_findEdges cg prev name2info edges t.inexpr)
 
   | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr (_findEdges cg prev name2info) tm)
+    sfold_Expr_Expr (_findEdges cg prev name2info) edges tm
 
 end
 

@@ -10,6 +10,7 @@ include "map.mc"
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "record.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -133,7 +134,7 @@ let pprintConString = lam str.
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
 let record2tuple
-  : Map SID a
+  : all a. Map SID a
   -> Option [a]
   = lam bindings.
     let keys = map sidToString (mapKeys bindings) in
@@ -281,7 +282,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
       match printArgs aindent env (tail apps) with (env,args) then
         (env, join [fun, pprintNewline aindent, args])
       else never
-    else error "Impossible"
+    else infoErrorExit t.info "Impossible"
 end
 
 lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
@@ -409,14 +410,17 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
   | TmType t ->
     match pprintEnvGetStr env t.ident with (env,str) then
       let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
+      match mapAccumL pprintEnvGetStr env t.params with (env, params) in
+      let paramStr = strJoin " " (cons "" params) in
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
           match t.tyIdent with TyUnknown _ then
-            (env, join ["type ", ident, pprintNewline indent,
+            (env, join ["type ", ident, paramStr, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
           else
-            (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
+            (env, join ["type ", ident, paramStr, " =",
+                      pprintNewline (pprintIncr indent),
                       tyIdent, pprintNewline indent,
                       "in", pprintNewline indent,
                       inexpr])
@@ -816,11 +820,15 @@ end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
+  | CTensorCreateUninitInt _ -> "tensorCreateUninitInt"
+  | CTensorCreateUninitFloat _ -> "tensorCreateUninitFloat"
   | CTensorCreateInt _ -> "tensorCreateCArrayInt"
   | CTensorCreateFloat _ -> "tensorCreateCArrayFloat"
   | CTensorCreate _ -> "tensorCreateDense"
   | CTensorGetExn _ -> "tensorGetExn"
   | CTensorSetExn _ -> "tensorSetExn"
+  | CTensorLinearGetExn _ -> "tensorLinearGetExn"
+  | CTensorLinearSetExn _ -> "tensorLinearSetExn"
   | CTensorRank _ -> "tensorRank"
   | CTensorShape _ -> "tensorShape"
   | CTensorReshapeExn _ -> "tensorReshapeExn"
@@ -1067,42 +1075,48 @@ end
 
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
+      let orderedFields = tyRecordOrderedFields ty in
       let tuple =
-        let seq = map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings t.fields) in
-        if forAll (lam t : (a,b). stringIsInt t.0) seq then
-          let seq = map (lam t : (a,b). (string2int t.0, t.1)) seq in
-          let seq : [(a,b)] = sort (lam l : (a,b). lam r : (a,b). subi l.0 r.0) seq in
-          let fst = lam x: (a, b). x.0 in
+        let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) orderedFields in
+        if forAll (lam t : (String,Type). stringIsInt t.0) seq then
+          let seq = map (lam t : (String,Type). (string2int t.0, t.1)) seq in
+          let seq : [(Int,Type)] = sort (lam l : (Int,Type). lam r : (Int,Type). subi l.0 r.0) seq in
+          let fst = lam x: (Int, Type). x.0 in
           let first = fst (head seq) in
           let last = fst (last seq) in
           if eqi first 0 then
             if eqi last (subi (length seq) 1) then
-              Some (map (lam t : (a,b). t.1) seq)
+              Some (map (lam t : (Int,Type). t.1) seq)
             else None ()
           else None ()
         else None ()
       in
       match tuple with Some tuple then
-        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple)
-        then (env, join ["(", strJoin ", " tuple, ")"])
-        else never
+        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
+        (env, join ["(", strJoin ", " tuple, ")"])
       else
-        let f = lam env. lam. lam v. getTypeStringCode indent env v in
-        match mapMapAccum f env t.fields with (env, fields) then
-          let fields =
-            map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings fields) in
-          let conventry = lam entry : (a,b). join [entry.0, ": ", entry.1] in
-          (env,join ["{", strJoin ", " (map conventry fields), "}"])
-        else never
+        let f = lam env. lam field.
+          match field with (sid, ty) in
+          match getTypeStringCode indent env ty with (env, tyStr) in
+          (env, (sid, tyStr))
+        in
+        match mapAccumL f env orderedFields with (env, fields) in
+        let fields =
+          map (lam b : (SID,String). (sidToString b.0, b.1)) fields in
+        let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
+        (env,join ["{", strJoin ", " (map conventry fields), "}"])
 end
 
 lang VariantTypePrettyPrint = VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVariant t ->
     if eqi (mapLength t.constrs) 0 then (env,"<>")
-    else error "Printing of non-empty variant types not yet supported"
+    else (env, join ["Variant<", strJoin ", " (map nameGetStr (mapKeys t.constrs)), ">"])
+    -- NOTE(wikman, 2022-04-04): This pretty printing above is just temporary
+    -- as we do not have syntax for TyVariant. It is necessary however since we
+    -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
 lang ConTypePrettyPrint = ConTypeAst
@@ -1124,7 +1138,7 @@ lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   | WeakVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
-      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+      TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
 end

@@ -17,19 +17,25 @@ let optionsDefault : Options = {
   disableOptimizations = false,
   useTuned = false,
   compileAfterTune = false,
-  accelerate = false,
+  accelerateCuda = false,
+  accelerateFuthark = false,
+  checkCudaWellFormed = false,
   cpuOnly = false,
+  use32BitIntegers = false,
+  use32BitFloats = false,
+  keepDeadCode = false,
   typeCheck = false,
   printHelp = false,
+  toJavaScript = false, -- Compile MExpr to JavaScript
   output = None (),
   tuneOptions = tuneOptionsDefault
 }
 
 -- Get the help string for options
-let optionsHelpString : ParseConfig -> String = lam config.
+let optionsHelpString : ParseConfig Options -> String = lam config.
   argHelpOptions config
 
-let parseOptions : [String] -> ParseConfig -> ArgResult Options = lam args. lam config.
+let parseOptions : [String] -> ParseConfig Options -> ArgResult Options = lam args. lam config.
   let result =
     argParse_general {args = args, optionsStartWith = ["--"]} optionsDefault config
   in

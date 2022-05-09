@@ -184,6 +184,14 @@ utest match {blue = {red = true}} with {blue = {}} then true else false with tru
 utest match {blue = true, red = true} with {blue = _} & {red = _} then true else false with true in
 --utest match {blue = true} with {blue = _} & {red = _} then true else false with false in
 
+-- Matching with tuples
+utest match ("foo", "bar") with ("foo", "bar") then true else false with true in
+utest match ("foo", "bar") with ("foo", _) then true else false with true in
+utest match ("foo", "bar") with (_, "foo") then true else false with false in
+utest match ("foo",) with ("foo",) then true else false with true in
+utest match ("foo",) with (_,) then true else false with true in
+utest match ("foo",) with ("bar",) then true else false with false in
+
 -- Matching with "&", "|", "!"
 utest match true with !_ then true else false with false in
 utest match (1, 2) with (a, _) & (_, b) then (a, b) else (0, 0) with (1, 2) in

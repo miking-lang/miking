@@ -4,7 +4,7 @@ include test-files.mk
 
 all: $(src_files_all)
 
-selected: $(compile_type_checked)
+selected: $(compile_files_typecheck)
 
 $(src_files_all):
 	@./make compile-test $@ "build/mi compile --test --disable-optimizations --disable-prune-utests --typecheck"

@@ -7,6 +7,10 @@ module type TENSOR = sig
 
   val set_exn : ('a, 'b) t -> int array -> 'a -> unit
 
+  val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+  val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
   val shape : ('a, 'b) t -> int array
 
   val rank : ('a, 'b) t -> int
@@ -32,6 +36,10 @@ end
 
 module type BARRAY = sig
   include TENSOR
+
+  val uninit_int : int array -> (int, Bigarray.int_elt) t
+
+  val uninit_float : int array -> (float, Bigarray.float64_elt) t
 
   val create_int : int array -> (int array -> int) -> (int, Bigarray.int_elt) t
 

@@ -203,10 +203,14 @@ and const =
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense of int Mseq.t option
+  | CtensorCreateUninitInt
+  | CtensorCreateUninitFloat
   | CtensorCreateCArrayInt of int Mseq.t option
   | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int Mseq.t option
+  | CtensorLinearGetExn of tm T.t option
+  | CtensorLinearSetExn of tm T.t option * int option
   | CtensorRank
   | CtensorShape
   | CtensorCopy
@@ -221,7 +225,7 @@ and const =
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
-      (bool * bool * int Mseq.t Mseq.t * bool) option
+      (bool * bool * int Mseq.t Mseq.t * bool * bool) option
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
@@ -252,14 +256,14 @@ and param = Param of info * ustring * ty
 and decl =
   (* TODO(?,?): Local? *)
   | Data of info * ustring * cdecl list
-  | Inter of info * ustring * param list * (pat * tm) list
-  | Alias of info * ustring * ty
+  | Inter of info * ustring * ty * param list option * (pat * tm) list
+  | Alias of info * ustring * ustring list * ty
 
 and mlang = Lang of info * ustring * ustring list * decl list
 
 and let_decl = Let of info * ustring * ty * tm
 
-and type_decl = Type of info * ustring * ty
+and type_decl = Type of info * ustring * ustring list * ty
 
 and rec_let_decl = RecLet of info * (info * ustring * ty * tm) list
 
@@ -303,7 +307,8 @@ and tm =
   (* Record update *)
   | TmRecordUpdate of info * tm * ustring * tm
   (* Type let *)
-  | TmType of info * ustring * Symb.t * ty * tm
+  (* NOTE(aathn, 2022-03-02): Type parameters are not symbolized currently *)
+  | TmType of info * ustring * Symb.t * ustring list * ty * tm
   (* Constructor definition *)
   | TmConDef of info * ustring * Symb.t * ty * tm
   (* Constructor application *)
@@ -376,20 +381,22 @@ and ty =
   (* Function type *)
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
+  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyAll of info * ustring * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)
   | TyTensor of info * ty
   (* Record type *)
-  | TyRecord of info * ty Record.t * ustring list
+  | TyRecord of info * ty Record.t
   (* Variant type *)
   | TyVariant of info * (ustring * Symb.t) list
   (* Type constructors *)
   | TyCon of info * ustring * Symb.t
   (* Type variables *)
+  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyVar of info * ustring
-  (* Type application, currently only used for documenation purposes *)
+  (* Type application *)
   | TyApp of info * ty * ty
 
 (* Kind of identifier *)
@@ -405,7 +412,7 @@ and ident =
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
-let ty_unit fi = TyRecord (fi, Record.empty, [])
+let ty_unit fi = TyRecord (fi, Record.empty)
 
 (* smap accumulate left for terms *)
 let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
@@ -437,8 +444,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc r
       |> fun (acc, r') ->
       f acc t |> fun (acc, t') -> (acc, TmRecordUpdate (fi, r', l, t'))
-  | TmType (fi, x, s, ty, t) ->
-      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, ty, t'))
+  | TmType (fi, x, s, params, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, params, ty, t'))
   | TmConDef (fi, x, s, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmConDef (fi, x, s, ty, t'))
   | TmConApp (fi, k, s, t) ->
@@ -495,7 +502,7 @@ let tm_info = function
   | TmSeq (fi, _)
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
-  | TmType (fi, _, _, _, _)
+  | TmType (fi, _, _, _, _, _)
   | TmConDef (fi, _, _, _, _)
   | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)
@@ -533,7 +540,7 @@ let ty_info = function
   | TyAll (fi, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
-  | TyRecord (fi, _, _)
+  | TyRecord (fi, _)
   | TyVariant (fi, _)
   | TyCon (fi, _, _)
   | TyVar (fi, _)
@@ -670,10 +677,14 @@ let const_has_side_effect = function
       false
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _
+  | CtensorCreateUninitInt
+  | CtensorCreateUninitFloat
   | CtensorCreateCArrayInt _
   | CtensorCreateCArrayFloat _
   | CtensorGetExn _
   | CtensorSetExn _
+  | CtensorLinearGetExn _
+  | CtensorLinearSetExn _
   | CtensorRank
   | CtensorShape
   | CtensorCopy
@@ -738,7 +749,7 @@ let tuplety2recordty fi lst =
       (fun (i, a) x -> (i + 1, Record.add (ustring_of_int i) x a))
       (0, Record.empty) lst
   in
-  TyRecord (fi, r, List.init (Record.cardinal r) ustring_of_int)
+  TyRecord (fi, r)
 
 (* Converts a record map to an optional list of terms. Returns Some list if
    the record represents a tuple, None otherwise. *)

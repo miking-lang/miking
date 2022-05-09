@@ -78,7 +78,9 @@ lang ConstSideEffect = MExprAst
   | CMapMapWithKey _ | CMapFoldWithKey _ | CMapEq _ | CMapCmp _
   | CMapGetCmpFun _ -> true
   | CTensorCreateInt _ | CTensorCreateFloat _ | CTensorCreate _
-  | CTensorGetExn _ | CTensorSetExn _ | CTensorRank _ | CTensorShape _
+  | CTensorGetExn _ | CTensorSetExn _
+  | CTensorLinearGetExn _ | CTensorLinearSetExn _
+  | CTensorRank _ | CTensorShape _
   | CTensorReshapeExn _ | CTensorCopy _ | CTensorTransposeExn _
   | CTensorSliceExn _ | CTensorSubExn _ | CTensorIterSlice _ |  CTensorEq _
   | CTensorToString _ -> true

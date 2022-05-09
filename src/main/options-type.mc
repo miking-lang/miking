@@ -14,10 +14,16 @@ type Options = {
   disableOptimizations : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
-  accelerate : Bool,
+  accelerateCuda : Bool,
+  accelerateFuthark : Bool,
+  checkCudaWellFormed : Bool,
   cpuOnly : Bool,
+  use32BitIntegers : Bool,
+  use32BitFloats : Bool,
+  keepDeadCode : Bool,
   typeCheck : Bool,
   printHelp : Bool,
+  toJavaScript : Bool,
   output : Option String,
   tuneOptions : TuneOptions
 }

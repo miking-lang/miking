@@ -2,7 +2,7 @@ include "arg.mc"
 include "options-type.mc"
 
 -- Options configuration
-let optionsConfig : ParseConfig = [
+let optionsConfig : ParseConfig Options = [
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.
@@ -52,18 +52,43 @@ let optionsConfig : ParseConfig = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
-  ([("--accelerate", "", "")],
-    "Compile into an accelerated executable",
+  ([("--accelerate-cuda", "", "")],
+    "Compile into an accelerated executable using the CUDA backend",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerate = true}),
+      let o: Options = p.options in {o with accelerateCuda = true}),
+  ([("--accelerate-futhark", "", "")],
+    "Compile into an accelerated executable using the Futhark backend",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with accelerateFuthark = true}),
+  ([("--check-cuda-well-formed", "", "")],
+    join ["Runs the well-formedness checks for the CUDA backend, even when ",
+          "compiling without acceleration"],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with checkCudaWellFormed = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with cpuOnly = true}),
+  ([("--use-32bit-integers", "", "")],
+    "Enables use of 32-bit integers in the C compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with use32BitIntegers = true}),
+  ([("--use-32bit-floats", "", "")],
+    "Enables use of 32-bit floating-point numbers in the C compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with use32BitFloats = true}),
+  ([("--keep-dead-code", "", "")],
+    "Disable dead code elimination pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with keepDeadCode = true}),
   ([("--typecheck", "", "")],
     "Type check the program before evaluation or compilation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with typeCheck = true}),
+  ([("--to-js", "", "")],
+    "Compile to JavaScript",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with toJavaScript = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

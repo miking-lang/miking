@@ -153,6 +153,21 @@ run_test_boot() {
   run_test_prototype "build/boot eval src/main/mi.mc -- run --test --disable-prune-warning" $1
 }
 
+type_check() {
+  set +e
+  msg="Type checking $1..."
+  output="$(build/mi --test --keep-dead-code --disable-prune-utests --typecheck --exit-before $1 2>&1)"
+  exit_code=$?
+  if [ $exit_code -eq 0 ]
+  then
+      echo "$msg OK\n"
+  else
+      echo "$msg FAILED with output\n$output\n"
+      exit 1
+  fi
+  set -e
+}
+
 case $1 in
     boot)
         build_boot
@@ -174,6 +189,9 @@ case $1 in
         ;;
     compile-test)
         compile_test "$2" "$3"
+        ;;
+    type-check)
+        type_check "$2"
         ;;
     lint)
         lint

@@ -14,7 +14,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
@@ -49,6 +49,20 @@ recursive let _unwrapType = use ConTypeAst in
     else ty
 end
 
+-- Look up the name of a type variable corresponding to a given concrete type
+let _lookupTypeName = use MExprAst in
+  lam tyEnv : AssocSeq Name Type. lam ty : Type.
+  let eqType = lam ty1. lam ty2.
+    use MExprCmp in eqi (cmpType ty1 ty2) 0
+  in
+  recursive let work : Option Name -> Type -> Name = lam id. lam ty.
+    match ty with TyCon {ident = ident} then ident
+    else match assocSeqReverseLookup {eq = eqType} ty tyEnv with Some id then
+      id
+    else infoErrorExit (infoTy ty) "Type not found in type environment"
+  in
+  work (None ()) ty
+
 -- C assignment shorthand
 let _assign: CExpr -> CExpr -> CExpr = use CAst in
   lam lhs. lam rhs.
@@ -59,16 +73,14 @@ let _assign: CExpr -> CExpr -> CExpr = use CAst in
 -- COMPILER DEFINITIONS AND EXTERNALS --
 ----------------------------------------
 
-type ExtInfo = { ident: String, header: String }
-
 -- Collect all maps of externals. Should be done automatically at some point,
 -- but for now these files must be manually included and added to this map.
-let externalsMap: Map String ExtInfo = foldl1 mapUnion [
+let externalsMap: ExtMap = foldl1 mapUnion [
   mathExtMap
 ]
 
 -- Retrieve names used for externals. Used for making sure these names are printed without modification during C code generation.
-let externalNames: [String] =
+let externalNames: [Name] =
   map nameNoSym
     (mapFoldWithKey (lam acc. lam. lam v: ExtInfo. cons v.ident acc)
        [] externalsMap)
@@ -87,6 +99,9 @@ let cIncludes = concat [
 
 -- Names used in the compiler for intrinsics
 let _printf = nameSym "printf"
+let _exit = nameSym "exit"
+let _cartesianToLinearIndex = nameSym "cartesian_to_linear_index"
+let _tensorShape = nameSym "tensor_shape"
 
 -- C names that must be pretty printed using their exact string
 let cCompilerNames: [Name] = concat [
@@ -97,6 +112,12 @@ let cCompilerNames: [Name] = concat [
 let _constrKey = nameNoSym "constr"
 let _seqKey = nameNoSym "seq"
 let _seqLenKey = nameNoSym "len"
+let _tensorIdKey = nameNoSym "id"
+let _tensorDataKey = nameNoSym "data"
+let _tensorDimsKey = nameNoSym "dims"
+let _tensorRankKey = nameNoSym "rank"
+let _tensorOffsetKey = nameNoSym "offset"
+let _tensorSizeKey = nameNoSym "size"
 
 -- Used in compileStmt and compileStmts for deciding what action to take in
 -- tail position
@@ -105,26 +126,25 @@ con RIdent : Name -> Result
 con RReturn : () -> Result
 con RNone : () -> Result
 
-----------------------------------
--- MEXPR -> C COMPILER FRAGMENT --
-----------------------------------
 
-lang MExprCCompile = MExprAst + CAst
+-- TODO(dlunde,2022-04-29): A bug in the MLang transformation currently
+-- prevents this fragment from being put in MExprCCompileBase
+type CompileCOptions = {
+  -- Controls whether 32-bit integers should be used. If this is false (which
+  -- is the default setting), the compiler will use 64-bit integers.
+  use32BitInts : Bool,
+
+  -- Controls whether 32-bit floating-point numbers should be used. If this
+  -- is false (which is the default setting), the compiler will use 64-bit
+  -- floats.
+  use32BitFloats : Bool
+}
+
+lang MExprCCompileBase = MExprAst + CAst
 
   --------------------------
   -- COMPILER ENVIRONMENT --
   --------------------------
-
-  type CompileCOptions = {
-    -- Controls whether 32-bit integers should be used. If this is false (which
-    -- is the default setting), the compiler will use 64-bit integers.
-    use32BitInts : Bool,
-
-    -- Controls whether 32-bit floating-point numbers should be used. If this
-    -- is false (which is the default setting), the compiler will use 64-bit
-    -- floats.
-    use32BitFloats : Bool
-  }
 
   sem defaultCompileCOptions =
   | _ -> {use32BitInts = false, use32BitFloats = false}
@@ -141,7 +161,7 @@ lang MExprCCompile = MExprAst + CAst
     typeEnv: [(Name,Type)],
 
     -- Map from MExpr external names to their C counterparts
-    externals: Map Name Name,
+    externals: Map Name ExtInfo,
 
     -- Accumulator for allocations in functions
     allocs: [CStmt]
@@ -153,6 +173,246 @@ lang MExprCCompile = MExprAst + CAst
     let compileOptions : CompileCOptions = compileOptions in
     { options = compileOptions, ptrTypes = [], typeEnv = []
     , externals = mapEmpty nameCmp, allocs = [] }
+
+  -- Compilation of constant types
+  sem getCIntType =
+  | env ->
+    let env : CompileCEnv = env in
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitInts then CTyInt32 () else CTyInt64 ()
+
+  sem getCFloatType =
+  | env ->
+    let env : CompileCEnv = env in
+    let opts : CompileCOptions = env.options in
+    if opts.use32BitFloats then CTyFloat () else CTyDouble ()
+
+  sem getCBoolType =
+  | env -> CTyChar ()
+
+  sem getCCharType =
+  | env -> CTyChar ()
+
+end
+
+-- Generation of tensor function for computing the linear index given a
+-- sequence of integers representing a cartesian index, and the dimensions of
+-- the tensor.
+lang MExprTensorCCompile = MExprCCompileBase
+  sem hasTensorTypes =
+  | typeEnv ->
+    let isTensorType = lam ty : Type.
+      match ty with TyTensor _ then true else false
+    in
+    any (lam entry : (Name, Type). isTensorType entry.1) typeEnv
+
+  sem _genIndexErrorStmts (rank : Name) =
+  | nindices ->
+    let errorStr = join [
+      "Accessed tensor of rank %ld using ", int2string nindices, " indices\n"] in
+    [ CSExpr {expr = CEApp {
+        fun = _printf,
+        args = [CEString {s = errorStr}, CEVar {id = rank}]}}
+    , CSRet {val = Some (CEInt {i = negi 1})} ]
+
+  -- TODO(larshum, 2022-03-21): Lots of code duplication here. This code could
+  -- probably be generated in a more reusable way.
+  sem specializedCartesianToLinearDef (dims : Name) (rank : Name) (id : Name) =
+  | 0 ->
+    CTFun {
+      ret = CTyInt64 (), id = id,
+      params = [
+        (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims),
+        (CTyInt64 (), rank)],
+      body = [CSRet {val = Some (CEInt {i = 0})}]}
+  | nindices ->
+    let indexIds = create nindices (lam. nameSym "i") in
+    let indexParams = map (lam id : Name. (CTyInt64 (), id)) indexIds in
+    let params =
+      concat
+        [ (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims)
+        , (CTyInt64 (), rank)]
+        indexParams in
+    let rankEqExpr = lam n : Int.
+      CEBinOp {
+        op = COEq (),
+        lhs = CEVar {id = rank},
+        rhs = CEInt {i = n}} in
+    let dimsExpr = lam n : Int.
+      CEBinOp {
+        op = COSubScript (),
+        lhs = CEVar {id = dims},
+        rhs = CEInt {i = n}} in
+    let mulExpr = lam lhs : CExpr. lam rhs : CExpr.
+      CEBinOp {op = COMul (), lhs = lhs, rhs = rhs} in
+    let addExpr = lam lhs : CExpr. lam rhs : CExpr.
+      CEBinOp {op = COAdd (), lhs = lhs, rhs = rhs} in
+    let retStmt = lam expr : CExpr. CSRet {val = Some expr} in
+    let stmt =
+      match nindices with 1 then
+        let i0 = CEVar {id = get indexIds 0} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [retStmt (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)],
+          els = [
+            CSIf {
+              cond = rankEqExpr 2,
+              thn = [retStmt (mulExpr (dimsExpr 1) i0)],
+              els = [retStmt i0]}]}
+      else match nindices with 2 then
+        let i0 = CEVar {id = get indexIds 0} in
+        let i1 = CEVar {id = get indexIds 1} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [
+            retStmt
+              (addExpr
+                (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)
+                (mulExpr (dimsExpr 2) i1))],
+          els = [
+            CSIf {
+              cond = rankEqExpr 2,
+              thn = [
+                retStmt
+                  (addExpr (mulExpr (dimsExpr 1) i0) i1)],
+              els = _genIndexErrorStmts rank nindices}]}
+      else match nindices with 3 then
+        let i0 = CEVar {id = get indexIds 0} in
+        let i1 = CEVar {id = get indexIds 1} in
+        let i2 = CEVar {id = get indexIds 2} in
+        CSIf {
+          cond = rankEqExpr 3,
+          thn = [
+            retStmt
+              (addExpr
+                (addExpr
+                  (mulExpr (mulExpr (dimsExpr 2) (dimsExpr 1)) i0)
+                  (mulExpr (dimsExpr 2) i1))
+                i2)],
+          els = _genIndexErrorStmts rank nindices}
+      else
+        error
+          (join ["Cannot generate specialized index for ", int2string nindices,
+                 " indices"]) in
+    CTFun {ret = CTyInt64 (), id = id, params = params, body = [stmt]}
+
+  sem cartesianToLinearIndexDef =
+  | env ->
+    let env : CompileCEnv = env in
+    let intSeqType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
+    let cidxName = _lookupTypeName env.typeEnv intSeqType in
+    let cidxType = CTyVar {id = cidxName} in
+    let dims = nameSym "dims" in
+    let rank = nameSym "rank" in
+    let cidx = nameSym "cartesian_idx" in
+
+    -- NOTE(larshum, 2022-03-21): For efficiency reasons, we generate
+    -- specialized functions for a given number of index arguments. Currently,
+    -- as the maximum rank is set to 3, we generate functions for 0, 1, 2, and
+    -- 3 indices.
+    let nspecialized = 4 in
+    let specializedIds =
+      create 4
+        (lam i.
+          nameSym
+            (concat
+              (nameGetStr _cartesianToLinearIndex)
+              (int2string i))) in
+    let specializedTops =
+      create 4
+        (lam i.
+          let id = get specializedIds i in
+          specializedCartesianToLinearDef dims rank id i) in
+
+    let params = [
+      (CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})}, dims),
+      (CTyInt64 (), rank), (cidxType, cidx)] in
+    let cidxElemExpr = lam n.
+      CEBinOp {
+        op = COSubScript (),
+        lhs = CEMember {lhs = CEVar {id = cidx}, id = _seqKey},
+        rhs = CEInt {i = n}} in
+    let cidxLenExpr = CEMember {lhs = CEVar {id = cidx}, id = _seqLenKey} in
+    let equalIntExpr = lam n : Int.
+      CEBinOp {op = COEq (), lhs = cidxLenExpr, rhs = CEInt {i = n}} in
+    let callSpecializedCToL = lam n : Int.
+      let args =
+        concat
+          [CEVar {id = dims}, CEVar {id = rank}]
+          (create n (lam i. cidxElemExpr i)) in
+      CEApp {fun = get specializedIds n, args = args} in
+    let stmts = [
+      CSIf {
+        cond = equalIntExpr 1,
+        thn = [CSRet {val = Some (callSpecializedCToL 1)}],
+        els = [
+          CSIf {
+            cond = equalIntExpr 2,
+            thn = [CSRet {val = Some (callSpecializedCToL 2)}],
+            els = [
+              CSIf {
+                cond = equalIntExpr 3,
+                thn = [CSRet {val = Some (callSpecializedCToL 3)}],
+                els = [CSRet {val = Some (callSpecializedCToL 0)}]}]}]}] in
+    snoc
+      specializedTops
+      (CTFun {
+        ret = CTyInt64 (), id = _cartesianToLinearIndex,
+        params = params, body = stmts})
+
+  sem tensorShapeDef =
+  | env ->
+    let env : CompileCEnv = env in
+    let intType = getCIntType env in
+    let mexprSeqType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
+    let seqName = _lookupTypeName env.typeEnv mexprSeqType in
+    let seqType = CTyVar {id = seqName} in
+    let dimsType = CTyArray {ty = CTyInt64 (), size = Some (CEInt {i = 3})} in
+    let dimsId = nameSym "dims" in
+    let rankId = nameSym "rank" in
+    let seqId = nameSym "s" in
+    let params = [(dimsType, dimsId), (CTyInt64 (), rankId)] in
+    let stmts = [
+      CSDef {ty = seqType, id = Some seqId, init = None ()},
+      CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = CEMember {lhs = CEVar {id = seqId}, id = _seqKey},
+        rhs = CEVar {id = dimsId}}},
+      CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = CEMember {lhs = CEVar {id = seqId}, id = _seqLenKey},
+        rhs = CEVar {id = rankId}}},
+      CSRet {val = Some (CEVar {id = seqId})}
+    ] in
+    CTFun {ret = seqType, id = _tensorShape, params = params, body = stmts}
+
+  -- Computes the linear index given expressions representing the tensor and
+  -- the sequence containing the cartesian coordinates.
+  sem tensorComputeLinearIndex (tensor : CExpr) =
+  | cartesianIndex ->
+    let tensorDims = CEMember {lhs = tensor, id = _tensorDimsKey} in
+    let tensorRank = CEMember {lhs = tensor, id = _tensorRankKey} in
+    let tensorOffset = CEMember {lhs = tensor, id = _tensorOffsetKey} in
+    let cartToLinear = CEApp {
+      fun = _cartesianToLinearIndex,
+      args = [tensorDims, tensorRank, cartesianIndex]} in
+    CEBinOp {
+      op = COAdd (),
+      lhs = cartToLinear,
+      rhs = tensorOffset}
+
+  sem tensorShapeCall =
+  | tensor /- CExpr -/ ->
+    let tensorDims = CEMember {lhs = tensor, id = _tensorDimsKey} in
+    let tensorRank = CEMember {lhs = tensor, id = _tensorRankKey} in
+    CEApp {fun = _tensorShape, args = [tensorDims, tensorRank]}
+end
+
+----------------------------------
+-- MEXPR -> C COMPILER FRAGMENT --
+----------------------------------
+
+lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
 
   -- Function that is called when allocation of data is needed. Must be implemented by a concrete C compiler.
   sem alloc (name: Name) =
@@ -172,7 +432,7 @@ lang MExprCCompile = MExprAst + CAst
     ) [] typeEnv in
 
     -- Construct a map from MCore external names to C names
-    let externals: Map Name Name = collectExternals (mapEmpty nameCmp) prog in
+    let externals: Map Name ExtInfo = collectExternals (mapEmpty nameCmp) prog in
 
     -- Set up initial environment
     let env = {{{ let e : CompileCEnv = compileCEnvEmpty compileOptions in e
@@ -197,7 +457,15 @@ lang MExprCCompile = MExprAst + CAst
     ) [] typeEnv in
 
     -- Run compiler
-    match compileTops env [] [] prog with (tops, inits) then
+    match compileTops env [] [] prog with (tops, inits) in
+
+    -- Generate functions for computing linear index for tensors, if any
+    -- tensor types are used.
+    let tops =
+      if hasTensorTypes typeEnv then
+        concat (snoc (cartesianToLinearIndexDef env) (tensorShapeDef env)) tops
+      else tops
+    in
 
     -- Compute return type
     let retTy: CType = compileType env (tyTm prog) in
@@ -207,18 +475,16 @@ lang MExprCCompile = MExprAst + CAst
     -- type
     (env, join [decls, defs, postDefs], tops, inits, retTy)
 
-    else never
-
   -----------------------
   -- COLLECT EXTERNALS --
   -----------------------
 
-  sem collectExternals (acc: Map Name Name) =
+  sem collectExternals (acc: Map Name ExtInfo) =
   | TmExt t ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
-      let acc = mapInsert t.ident (nameNoSym e.ident) acc in
+      let acc = mapInsert t.ident e acc in
       sfold_Expr_Expr collectExternals acc t.inexpr
     else infoErrorExit (t.info) "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
@@ -231,9 +497,10 @@ lang MExprCCompile = MExprAst + CAst
   -- Variants are always accessed through pointer (could potentially be
   -- optimized in the same way as records)
   | TyVariant _ -> true
-  -- Sequences are handled specially, and are not accessed directly through
-  -- pointers
+  -- Sequences and tensors are handled specially, and are not accessed directly
+  -- through pointers
   | TySeq _ -> false
+  | TyTensor _ -> false
   -- Records are only accessed through pointer if they contain pointer types.
   -- This allows for returning small records from functions, but may be
   -- expensive for very large records if it's not handled by the underlying
@@ -259,11 +526,13 @@ lang MExprCCompile = MExprAst + CAst
   -- Generate type definitions.
   sem genTyDefs (env: CompileCEnv) (acc: [CTop]) (name: Name) =
   | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
-  | TyRecord { fields = fields } ->
-    let fieldsLs: [(CType,Name)] =
-      mapFoldWithKey (lam acc. lam k. lam ty.
+  | (TyRecord { fields = fields }) & ty ->
+    let labels = tyRecordOrderedLabels ty in
+    let fieldsLs: [(CType,Option Name)] =
+      foldl (lam acc. lam k.
+        let ty = mapFindExn k fields in
         let ty = compileType env ty in
-        snoc acc (ty, Some (nameNoSym (sidToString k)))) [] fields in
+        snoc acc (ty, Some (nameNoSym (sidToString k)))) [] labels in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fieldsLs },
       id = name
@@ -273,7 +542,25 @@ lang MExprCCompile = MExprAst + CAst
     let ty = compileType env ty in
     let fields = [
       (CTyPtr { ty = ty }, Some _seqKey),
-      (CTyInt {}, Some _seqLenKey)
+      (getCIntType env, Some _seqLenKey)
+    ] in
+    let def = CTTyDef {
+      ty = CTyStruct { id = Some name, mem = Some fields },
+      id = name
+    } in
+    cons def acc
+  | TyTensor { ty = ty } ->
+    let ty = compileType env ty in
+    let dimsType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
+    -- NOTE(larshum, 2022-03-03): For now, we hard-code the maximum number of
+    -- dimensions to 3.
+    let fields = [
+      (CTyInt64 (), Some _tensorIdKey),
+      (CTyPtr { ty = ty }, Some _tensorDataKey),
+      (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
+      (CTyInt64 (), Some _tensorRankKey),
+      (CTyInt64 (), Some _tensorOffsetKey),
+      (CTyInt64 (), Some _tensorSizeKey)
     ] in
     let def = CTTyDef {
       ty = CTyStruct { id = Some name, mem = Some fields },
@@ -318,19 +605,10 @@ lang MExprCCompile = MExprAst + CAst
   | _ -> acc
 
   sem compileType (env: CompileCEnv) =
-
-  | TyInt _ ->
-    let opts : CompileCOptions = env.options in
-    if opts.use32BitInts then
-      CTyInt32 {}
-    else CTyInt64 {}
-  | TyFloat _ ->
-    let opts : CompileCOptions = env.options in
-    if opts.use32BitFloats then
-      CTyFloat {}
-    else CTyDouble {}
-  | TyBool _
-  | TyChar _ -> CTyChar {}
+  | TyInt _ -> getCIntType env
+  | TyFloat _ -> getCFloatType env
+  | TyBool _ -> getCBoolType env
+  | TyChar _ -> getCCharType env
 
   | TyCon { ident = ident } & ty ->
     -- Pointer types
@@ -356,6 +634,10 @@ lang MExprCCompile = MExprAst + CAst
   | TySeq _ & ty ->
     infoErrorExit (infoTy ty)
       "TySeq should not occur in compileType. Did you run type lift?"
+
+  | TyTensor _ & ty ->
+    infoErrorExit (infoTy ty)
+      "TyTensor should not occur in compileType. Did you run type lift?"
 
   | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
   | TyArrow _ & ty ->
@@ -460,11 +742,13 @@ lang MExprCCompile = MExprAst + CAst
     -- TODO(dlunde,2021-10-07): Handle this how?
     infoErrorExit (infoTm t) "Empty bindings in TmRecord in compileAlloc"
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
+    let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
     let cTy = compileType env ty in
     if any (nameEq ident) env.ptrTypes then
       let def = alloc n cTy in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEArrow {
@@ -472,11 +756,12 @@ lang MExprCCompile = MExprAst + CAst
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
     else
       let def = [{ ty = cTy, id = Some n, init = None ()}] in
-      let init = mapMapWithKey (lam sid. lam expr.
+      let init = map (lam sid.
+        let expr = mapFindExn sid bindings in
         CSExpr {
           expr = _assign
             (CEMember {
@@ -484,8 +769,8 @@ lang MExprCCompile = MExprAst + CAst
             })
             (compileExpr env expr)
         }
-      ) bindings in
-      (env, def, mapValues init, n)
+      ) orderedLabels in
+      (env, def, init, n)
 
   | TmSeq {tms = tms, ty = ty} & t ->
     let uTy = _unwrapType (env.typeEnv) ty in
@@ -648,7 +933,7 @@ lang MExprCCompile = MExprAst + CAst
       }),
       defs )
 
-  | PatRecord { bindings = bindings } ->
+  | PatRecord { bindings = bindings } & pat ->
     match env with { typeEnv = typeEnv } then
       let f = lam acc. lam sid. lam subpat.
         match acc with (conds, defs) then
@@ -660,30 +945,30 @@ lang MExprCCompile = MExprAst + CAst
                     CEArrow { lhs = target, id = nameNoSym label }
                   else
                     CEMember { lhs = target, id = nameNoSym label }
-                else error "Impossible"
+                else infoErrorExit (infoPat pat) "Impossible scenario"
               in
               compilePat env conds defs expr fTy subpat
-            else error "Label does not match between PatRecord and TyRecord"
-          else error "Type not TyCon for PatRecord in compilePat"
+            else infoErrorExit (infoPat pat) "Label does not match between PatRecord and TyRecord"
+          else infoErrorExit (infoPat pat) "Type not TyCon for PatRecord in compilePat"
         else never
       in
       mapFoldWithKey f (conds, defs) bindings
     else never
 
-  | PatCon { ident = ident, subpat = subpat } ->
+  | PatCon { ident = ident, subpat = subpat } & pat ->
     match env with { typeEnv = typeEnv } then
       match _unwrapType typeEnv ty with TyVariant { constrs = constrs } then
         match mapLookup ident constrs with Some ty then
-          let cond = (CEBinOp {
+          let cond = CEBinOp {
             op = COEq {},
             lhs = CEArrow { lhs = target, id = _constrKey },
             rhs = CEVar { id = ident }
-          }) in
-          let expr = (CEArrow { lhs = target, id = ident }) in
+          } in
+          let expr = CEArrow { lhs = target, id = ident } in
           compilePat env (snoc conds cond)
             defs expr ty subpat
-        else error "Invalid constructor in compilePat"
-      else error "Not a TyVariant for PatCon in compilePat"
+        else infoErrorExit (infoPat pat) "Invalid constructor in compilePat"
+      else infoErrorExit (infoPat pat) "Not a TyVariant for PatCon in compilePat"
     else never
   | pat -> infoErrorExit (infoPat pat) "Pattern not supported"
 
@@ -767,22 +1052,29 @@ lang MExprCCompile = MExprAst + CAst
       else infoErrorExit (infoTm t) "Binding of unit type is not allowed"
     else
       match res with RIdent id then
-        match compileAlloc env (None ()) t with (env, def, init, n) then
-          let env: CompileCEnv = env in
+        match compileAlloc env (None ()) t with (env, def, init, n) in
+        let env: CompileCEnv = env in
+        let def = map (lam d. CSDef d) def in
+        let env = { env with allocs = concat def env.allocs } in
+        (env, join [
+          init,
+          [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
+        ])
+      else match res with RReturn _ then
+        if isPtrType env.ptrTypes ty then
+          infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
+        else
+          match compileAlloc env (None ()) t with (env, def, init, n) in
+          let env : CompileCEnv = env in
           let def = map (lam d. CSDef d) def in
-          let env = { env with allocs = concat def env.allocs } in
+          let env = {env with allocs = concat def env.allocs} in
           (env, join [
             init,
-            [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
-          ])
-        else never
-      else match res with RReturn _ then
-        -- TODO(dlunde,2021-10-07) We can return non-pointer records here
-        infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
+            [CSRet {val = Some (CEVar {id = n})}]])
       else
         infoErrorExit (infoTm t) "Type error, should have been caught previously"
 
-  | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
+  | TmRecordUpdate _ & t -> infoErrorExit (infoTm t) "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
   | expr ->
@@ -855,7 +1147,7 @@ lang MExprCCompile = MExprAst + CAst
   -----------------
 
   -- Only a subset of constants can be compiled
-  sem compileOp (t: Expr) (args: [CExpr]) =
+  sem compileOp (env : CompileCEnv) (info : Info) (args: [CExpr]) =
 
   -- Binary operators
   | CAddi _
@@ -864,7 +1156,9 @@ lang MExprCCompile = MExprAst + CAst
   | CSubf _ -> CEBinOp { op = COSub {}, lhs = head args, rhs = last args }
   | CMuli _
   | CMulf _ -> CEBinOp { op = COMul {}, lhs = head args, rhs = last args }
+  | CDivi _
   | CDivf _ -> CEBinOp { op = CODiv {}, lhs = head args, rhs = last args }
+  | CModi _ -> CEBinOp { op = COMod {}, lhs = head args, rhs = last args }
   | CEqi _
   | CEqf _  -> CEBinOp { op = COEq {},  lhs = head args, rhs = last args }
   | CLti _
@@ -885,8 +1179,11 @@ lang MExprCCompile = MExprAst + CAst
   -- Not directly mapped to C operators
   | CPrint _ ->
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
-  | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
-  | CFloorfi _ -> CECast { ty = CTyInt {}, rhs = head args }
+  | CDPrint _ ->
+    -- TODO(larshum, 2022-03-29): Properly implement dprint support.
+    CEApp { fun = _printf, args = [CEString { s = "" }] }
+  | CInt2float _ -> CECast { ty = getCFloatType env, rhs = head args }
+  | CFloorfi _ -> CECast { ty = getCIntType env, rhs = head args }
 
   -- List operators
   | CGet _ ->
@@ -894,16 +1191,51 @@ lang MExprCCompile = MExprAst + CAst
     CEBinOp { op = COSubScript {}, lhs = lhs, rhs = last args }
   | CLength _ -> CEMember { lhs = head args, id = _seqLenKey }
 
-  | c -> infoErrorExit (infoTm t) "Unsupported intrinsic in compileOp"
+  -- Tensor operators
+  | CTensorGetExn _ ->
+    let idx = tensorComputeLinearIndex (head args) (last args) in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+  | CTensorSetExn _ ->
+    let idx = tensorComputeLinearIndex (head args) (get args 1) in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      rhs = get args 2
+    }
+  | CTensorLinearGetExn _ ->
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = last args, rhs = offset} in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+  | CTensorLinearSetExn _ ->
+    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
+    let idx = CEBinOp {op = COAdd (), lhs = get args 1, rhs = offset} in
+    let data = CEMember {lhs = head args, id = _tensorDataKey} in
+    CEBinOp {
+      op = COAssign (),
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      rhs = get args 2
+    }
+  | CTensorRank _ -> CEMember {lhs = head args, id = _tensorRankKey}
+  | CTensorShape _ -> tensorShapeCall (head args)
+
+  -- NOTE(larshum, 2022-03-29): To ensure this construct can be used in GPU
+  -- code, we do not use 'exit' as that is only available from CPU code.
+  | CError _ -> CEApp {fun = _printf, args = [CEString {s = "%s\n"}, head args]}
+
+  | c -> infoErrorExit info "Unsupported intrinsic in compileOp"
 
 
   sem compileExpr (env: CompileCEnv) =
 
   | TmVar { ty = ty, ident = ident } & t->
     if _isUnitTy ty then
-      error "Unit type var in compileExpr"
+      infoErrorExit (infoTm t) "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
-      CEVar { id = ext }
+      let ext : ExtInfo = ext in
+      CEVar { id = nameNoSym ext.ident }
     else CEVar { id = ident }
 
   | TmApp _ & app ->
@@ -917,7 +1249,9 @@ lang MExprCCompile = MExprAst + CAst
       -- Function calls
       match fun with TmVar { ident = ident } then
         let ident =
-          match mapLookup ident env.externals with Some ext then ext
+          match mapLookup ident env.externals with Some ext then
+            let ext : ExtInfo = ext in
+            nameNoSym ext.ident
           else ident
         in
         CEApp { fun = ident, args = map (compileExpr env) args }
@@ -925,38 +1259,38 @@ lang MExprCCompile = MExprAst + CAst
       -- Intrinsics
       else match fun with TmConst { val = val } then
         let args = map (compileExpr env) args in
-        compileOp fun args val
+        compileOp env (infoTm fun) args val
 
-      else error "Unsupported application in compileExpr"
+      else infoErrorExit (infoTm app) "Unsupported application in compileExpr"
     else never
 
   -- Anonymous function, not allowed.
-  | TmLam _ -> error "Anonymous function in compileExpr."
+  | (TmLam _) & t -> infoErrorExit (infoTm t) "Anonymous function in compileExpr."
 
   -- Unit type is represented by int literal 0.
-  | TmRecord { bindings = bindings } ->
+  | TmRecord { bindings = bindings } & t ->
     if mapIsEmpty bindings then CEInt { i = 0 }
-    else error "ERROR: Records cannot be handled in compileExpr."
+    else infoErrorExit (infoTm t) "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF and type lifting.
-  | TmRecordUpdate _ | TmLet _
-  | TmRecLets _ | TmType _ | TmConDef _
-  | TmConApp _ | TmMatch _ | TmUtest _
-  | TmSeq _ | TmExt _ ->
-    error "ERROR: Term cannot be handled in compileExpr."
+  | (TmRecordUpdate _ | TmLet _
+    | TmRecLets _ | TmType _ | TmConDef _
+    | TmConApp _ | TmMatch _ | TmUtest _
+    | TmSeq _ | TmExt _) & t ->
+    infoErrorExit (infoTm t) "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
-  | TmConst { val = val } ->
+  | TmConst { val = val } & t ->
     match val      with CInt   { val = val } then CEInt   { i = val }
     else match val with CFloat { val = val } then CEFloat { f = val }
     else match val with CChar  { val = val } then CEChar  { c = val }
     else match val with CBool  { val = val } then
       let val = match val with true then 1 else 0 in
       CEInt { i = val }
-    else error "Unsupported literal"
+    else infoErrorExit (infoTm t) "Unsupported literal"
 
   -- Should not occur
-  | TmNever _ -> error "Never term found in compileExpr"
+  | (TmNever _) & t -> infoErrorExit (infoTm t) "Never term found in compileExpr"
 
 end
 
@@ -1042,9 +1376,9 @@ let printCompiledCProg = use CProgPrettyPrint in
 -----------
 
 lang Test =
-  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
-  + SeqTypeNoStringTypeLift
+  MExprCCompileAlloc + MExprPrettyPrint + MExprTypeCheck +
+  MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
+  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
 end
 
 mexpr
@@ -1055,8 +1389,11 @@ let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvEmpty prog in
 
-  -- Type annotate
-  let prog = typeAnnot prog in
+  -- Type check and annotate
+  let prog = typeCheck prog in
+
+  -- Remove redundant lets
+  let prog = removeTypeAscription prog in
 
   -- ANF transformation
   let prog = normalizeTerm prog in
@@ -1333,7 +1670,7 @@ utest testCompile typedefs with strJoin "\n" [
   "typedef Rec1 (*MyRec2);",
   "typedef Integer Integer2;",
   "typedef struct Rec2 {Integer2 v;} Rec2;",
-  "typedef struct Rec3 {int64_t v; Tree (*l); Tree (*r);} Rec3;",
+  "typedef struct Rec3 {Tree (*l); Tree (*r); int64_t v;} Rec3;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec2 Leaf; Rec3 (*Node);};} Tree;",
   "int main(int argc, char (*argv[])) {",
@@ -1422,7 +1759,7 @@ utest testCompile trees with strJoin "\n" [
   "#include <math.h>",
   "typedef struct Tree Tree;",
   "typedef struct Rec {int64_t v;} Rec;",
-  "typedef struct Rec1 {int64_t v; Tree (*l); Tree (*r);} Rec1;",
+  "typedef struct Rec1 {Tree (*l); Tree (*r); int64_t v;} Rec1;",
   "enum constrs {Leaf, Node};",
   "typedef struct Tree {enum constrs constr; union {Rec Leaf; Rec1 (*Node);};} Tree;",
   "Rec t;",
@@ -1468,9 +1805,9 @@ utest testCompile trees with strJoin "\n" [
   "  ((t2.v) = 6);",
   "  ((t3->constr) = Leaf);",
   "  ((t3->Leaf) = t2);",
-  "  ((t4->v) = 5);",
   "  ((t4->l) = t3);",
   "  ((t4->r) = t1);",
+  "  ((t4->v) = 5);",
   "  ((t5->constr) = Node);",
   "  ((t5->Node) = t4);",
   "  ((t6.v) = 4);",
@@ -1479,14 +1816,14 @@ utest testCompile trees with strJoin "\n" [
   "  ((t8.v) = 3);",
   "  ((t9->constr) = Leaf);",
   "  ((t9->Leaf) = t8);",
-  "  ((t10->v) = 2);",
   "  ((t10->l) = t9);",
   "  ((t10->r) = t7);",
+  "  ((t10->v) = 2);",
   "  ((t11->constr) = Node);",
   "  ((t11->Node) = t10);",
-  "  ((t12->v) = 1);",
   "  ((t12->l) = t11);",
   "  ((t12->r) = t5);",
+  "  ((t12->v) = 1);",
   "  ((tree->constr) = Node);",
   "  ((tree->Node) = t12);",
   "  (sum = treeRec(tree));",
@@ -1519,6 +1856,145 @@ utest testCompile manyAllocs with strJoin "\n" [
   "    ((alloc.a) = 2);",
   "    (rec = alloc);",
   "  }",
+  "  return 0;",
+  "}"
+] using eqString in
+
+-- NOTE(larshum, 2022-03-02): We use type-ascriptions so that the intrinsic
+-- functions are treated as monomorphic, even though they are not.
+let seq = bindall_ [
+  let_ "s" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3]),
+  app_
+    (bind_
+      (let_ "len" (tyarrow_ (tyseq_ tyint_) tyint_) (uconst_ (CLength ())))
+      (var_ "len"))
+    (var_ "s")
+] in
+
+utest testCompile seq with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
+  "int64_t seqAlloc[3];",
+  "Seq s;",
+  "int main(int argc, char (*argv[])) {",
+  "  ((seqAlloc[0]) = 1);",
+  "  ((seqAlloc[1]) = 2);",
+  "  ((seqAlloc[2]) = 3);",
+  "  ((s.seq) = seqAlloc);",
+  "  ((s.len) = 3);",
+  "  return (s.len);",
+  "}"
+] using eqString in
+
+let tensor = bindall_ [
+  let_ "update" (tytensorsetexn_ tyint_)
+    (ulam_ "t" (ulam_ "dims" (ulam_ "v"
+      (appSeq_
+        (bind_
+          (let_ "set" (tytensorsetexn_ tyint_) (uconst_ (CTensorSetExn ())))
+          (var_ "set"))
+        [var_ "t", var_ "dims", var_ "v"])))),
+  let_ "access" (tytensorgetexn_ tyfloat_)
+    (ulam_ "t" (ulam_ "dims"
+      (appSeq_
+        (bind_
+          (let_ "get" (tytensorgetexn_ tyfloat_) (uconst_ (CTensorGetExn ())))
+          (var_ "get"))
+        [var_ "t", var_ "dims"]))),
+  let_ "rank" (tytensorrank_ tyint_)
+    (ulam_ "t"
+      (app_
+        (bind_
+          (let_ "r" (tytensorrank_ tyint_) (uconst_ (CTensorRank ())))
+          (var_ "r"))
+        (var_ "t"))),
+  let_ "shape" (tytensorshape_ tyint_)
+    (ulam_ "t"
+      (app_
+        (bind_
+          (let_ "s" (tytensorshape_ tyint_) (uconst_ (CTensorShape ())))
+          (var_ "s"))
+        (var_ "t"))),
+  int_ 0
+] in
+
+utest testCompile tensor with strJoin "\n" [
+  "#include <stdint.h>",
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor;",
+  "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
+  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor1;",
+  "int64_t cartesian_to_linear_index0(int64_t dims1[3], int64_t rank1) {",
+  "  return 0;",
+  "}",
+  "int64_t cartesian_to_linear_index1(int64_t dims1[3], int64_t rank1, int64_t i) {",
+  "  if ((rank1 == 3)) {",
+  "    return (((dims1[2]) * (dims1[1])) * i);",
+  "  } else {",
+  "    if ((rank1 == 2)) {",
+  "      return ((dims1[1]) * i);",
+  "    } else {",
+  "      return i;",
+  "    }",
+  "  }",
+  "}",
+  "int64_t cartesian_to_linear_index2(int64_t dims1[3], int64_t rank1, int64_t i1, int64_t i2) {",
+  "  if ((rank1 == 3)) {",
+  "    return ((((dims1[2]) * (dims1[1])) * i1) + ((dims1[2]) * i2));",
+  "  } else {",
+  "    if ((rank1 == 2)) {",
+  "      return (((dims1[1]) * i1) + i2);",
+  "    } else {",
+  "      printf(\"Accessed tensor of rank %ld using 2 indices\\n\", rank1);",
+  "      return -1;",
+  "    }",
+  "  }",
+  "}",
+  "int64_t cartesian_to_linear_index3(int64_t dims1[3], int64_t rank1, int64_t i3, int64_t i4, int64_t i5) {",
+  "  if ((rank1 == 3)) {",
+  "    return (((((dims1[2]) * (dims1[1])) * i3) + ((dims1[2]) * i4)) + i5);",
+  "  } else {",
+  "    printf(\"Accessed tensor of rank %ld using 3 indices\\n\", rank1);",
+  "    return -1;",
+  "  }",
+  "}",
+  "int64_t cartesian_to_linear_index(int64_t dims1[3], int64_t rank1, Seq cartesian_idx) {",
+  "  if (((cartesian_idx.len) == 1)) {",
+  "    return cartesian_to_linear_index1(dims1, rank1, ((cartesian_idx.seq)[0]));",
+  "  } else {",
+  "    if (((cartesian_idx.len) == 2)) {",
+  "      return cartesian_to_linear_index2(dims1, rank1, ((cartesian_idx.seq)[0]), ((cartesian_idx.seq)[1]));",
+  "    } else {",
+  "      if (((cartesian_idx.len) == 3)) {",
+  "        return cartesian_to_linear_index3(dims1, rank1, ((cartesian_idx.seq)[0]), ((cartesian_idx.seq)[1]), ((cartesian_idx.seq)[2]));",
+  "      } else {",
+  "        return cartesian_to_linear_index0(dims1, rank1);",
+  "      }",
+  "    }",
+  "  }",
+  "}",
+  "Seq tensor_shape(int64_t dims2[3], int64_t rank2) {",
+  "  Seq s;",
+  "  ((s.seq) = dims2);",
+  "  ((s.len) = rank2);",
+  "  return s;",
+  "}",
+  "void update(Tensor t, Seq dims3, int64_t v) {",
+  "  (((t.data)[(cartesian_to_linear_index((t.dims), (t.rank), dims3) + (t.offset))]) = v);",
+  "}",
+  "double access(Tensor1 t1, Seq dims4) {",
+  "  return ((t1.data)[(cartesian_to_linear_index((t1.dims), (t1.rank), dims4) + (t1.offset))]);",
+  "}",
+  "int64_t rank3(Tensor t2) {",
+  "  return (t2.rank);",
+  "}",
+  "Seq shape(Tensor t3) {",
+  "  return tensor_shape((t3.dims), (t3.rank));",
+  "}",
+  "int main(int argc, char (*argv[])) {",
   "  return 0;",
   "}"
 ] using eqString in

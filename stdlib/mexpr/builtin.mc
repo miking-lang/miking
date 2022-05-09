@@ -120,11 +120,15 @@ let builtin = use MExprAst in
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors
+  , ("tensorCreateUninitInt", CTensorCreateUninitInt ())
+  , ("tensorCreateUninitFloat", CTensorCreateUninitFloat ())
   , ("tensorCreateCArrayInt", CTensorCreateInt ())
   , ("tensorCreateCArrayFloat", CTensorCreateFloat ())
   , ("tensorCreateDense", CTensorCreate ())
   , ("tensorGetExn", CTensorGetExn ())
   , ("tensorSetExn", CTensorSetExn ())
+  , ("tensorLinearGetExn", CTensorLinearGetExn ())
+  , ("tensorLinearSetExn", CTensorLinearSetExn ())
   , ("tensorRank", CTensorRank ())
   , ("tensorShape", CTensorShape ())
   , ("tensorReshapeExn", CTensorReshapeExn ())
@@ -148,4 +152,11 @@ let builtin = use MExprAst in
   , ("bootParserGetConst", CBootParserGetConst ())
   , ("bootParserGetPat", CBootParserGetPat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
+  ]
+
+let builtinTypes : [(String, [String])] =
+  [ ("Symbol", [])
+  , ("Ref", ["a"])
+  , ("Map", ["k", "v"])
+  , ("BootParseTree", [])
   ]

@@ -38,7 +38,7 @@ lang FunCPS = LamSym + LamEq + UnknownTypeAst + UnknownTypeEq
       t.lhs
 
   sem cpsM =
-  | TmApp t -> error "CPS: TmApp is not atomic"
+  | TmApp t -> infoErrorExit t.info "CPS: TmApp is not atomic"
   | TmVar t -> TmVar t
   | TmLam t ->
     let k = nameSym "k" in

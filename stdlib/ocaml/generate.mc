@@ -25,7 +25,7 @@ include "common.mc"
 -- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
 let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
   let cmp = lam n1 : (Name, Name). lam n2 : (Name, Name).
-    subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
+    subi (sym2hash (optionGetOr _noSymbol (nameGetSym n1.0))) (sym2hash (optionGetOr _noSymbol (nameGetSym n2.0))) in
   match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
     (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
@@ -114,11 +114,11 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   | t ->
     ([], generate env t)
 
-  sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Name) =
+  sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Type) =
   | info ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
-      match convertData info env (OTmExprExt { expr = r.expr }) r.ty tyIdent
+      match convertData info env (OTmExprExt { expr = r.expr }) (r.ty, tyIdent)
       with (_, body) in
       body
     else
@@ -145,8 +145,14 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       else never
     else never
 
-  sem collectNestedMatches (env : GenerateEnv) (isNestedPat : Pat -> Bool)
-                           (acc : a) (addMatchCase : a -> MatchRecord -> a) =
+  sem collectNestedMatches
+    : all acc. GenerateEnv
+            -> (Pat -> Bool)
+            -> acc
+            -> (acc -> MatchRecord -> acc)
+            -> MatchRecord
+            -> (acc, Expr)
+  sem collectNestedMatches env isNestedPat acc addMatchCase =
   | t ->
     let t : MatchRecord = t in
     -- We assume that the target is a variable because otherwise there is no
@@ -310,7 +316,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
     else
       let ty = typeUnwrapAlias env.aliases t.ty in
       match ty with TyCon {ident = ident} then
-        match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+        match mapLookup ident env.constrs with Some (TyRecord {fields = fields} & ty) then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some id then
             let bindings = mapMap (lam e. objRepr (generate env e)) t.bindings in
@@ -319,8 +325,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
               args = [TmRecord {t with bindings = bindings}]
             }
           else never
-        else never
-      else never
+        else infoErrorExit (infoTy ty) "env.constrs lookup failed"
+      else infoErrorExit (infoTy ty) "expected TyCon"
   | TmRecordUpdate t ->
     let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyCon {ident = ident} then
@@ -685,15 +691,14 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
+lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecls =
   | env ->
     let env : AssocSeq Name Type = env in
     let typeLiftEnvMap = mapFromSeq nameCmp env in
     let topDecls = _makeTypeDeclarations typeLiftEnvMap env in
-    match topDecls with (tops, recordFieldsToName) then
+    match topDecls with (tops, recordFieldsToName) in
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
                                                   env recordFieldsToName in
       (generateEnv, tops)
-    else never
 end

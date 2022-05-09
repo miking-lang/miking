@@ -6,23 +6,25 @@ let impl = lam arg : { expr : String, ty : Type }.
 
 let tyrealarray = otyvarext_ "Sundials.RealArray.t" []
 let tyidatriple = otyvarext_ "Ida.triple"
-let tyidajacobianargra =
-  otyvarext_ "Ida.jacobian_arg" [tyidatriple tyrealarray, tyrealarray]
+let tyidajacobianarg =
+  otyvarext_ "Ida.jacobian_arg" [tyidatriple [tyrealarray], tyrealarray]
 
 let tyidajacf =
   tyarrows_ [
-    otyrecord_
-      tyidajacobianargra
+    otyrecordext_
+      tyidajacobianarg
       [
-        ("jac_t", tyfloat_),
-        ("jac_y", otybaarrayclayoutfloat_ 1),
-        ("jac_y'", otybaarrayclayoutfloat_ 1),
-        ("jac_res", otybaarrayclayoutfloat_ 1),
-        ("jac_coef", tyfloat_),
-        ("jac_tmp", otytuple_
-                      [otybaarrayclayoutfloat_ 1,
-                       otybaarrayclayoutfloat_ 1,
-                       otybaarrayclayoutfloat_ 1])
+        { label = "jac_t", asLabel = "t", ty = tyfloat_ },
+        { label = "jac_y", asLabel = "y", ty = otybaarrayclayoutfloat_ 1 },
+        { label = "jac_y'", asLabel = "yp", ty = otybaarrayclayoutfloat_ 1 },
+        { label = "jac_res", asLabel = "res", ty = otybaarrayclayoutfloat_ 1 },
+        { label = "jac_coef", asLabel = "c", ty = tyfloat_ },
+        { label = "jac_tmp", asLabel = "tmp",
+          ty = otytuple_ [
+            otybaarrayclayoutfloat_ 1,
+            otybaarrayclayoutfloat_ 1,
+            otybaarrayclayoutfloat_ 1
+        ] }
       ],
     otyopaque_,
     otyunit_

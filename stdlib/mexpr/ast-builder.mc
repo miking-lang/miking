@@ -54,12 +54,11 @@ let tyarrows_ = use FunTypeAst in
   lam tys.
   foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyrecord_ = use RecordTypeAst in
+let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   lam fields.
-  let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, a). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -88,7 +87,7 @@ let tycon_ = lam s.
 
 let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n, info = NoInfo ()}
+  TyVar {ident = n, level = 0, info = NoInfo ()}
 
 let tyvar_ =
   lam s.
@@ -109,13 +108,16 @@ let tyalls_ =
   foldr tyall_ ty strs
 
 let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam sort.
+  lam info. lam ident. lam level. lam sort. lam allowGeneralize.
   TyFlex {info = info,
-          contents = ref (Unbound {ident = ident, level = level, sort = sort})}
+          contents = ref (Unbound {ident = ident,
+                                   level = level,
+                                   sort = sort,
+                                   allowGeneralize = allowGeneralize})}
 
 let tyflexunbound_ = use FlexTypeAst in
   lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ())
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ()) true
 
 let tyflexlink_ = use FlexTypeAst in
   lam ty.
@@ -123,6 +125,12 @@ let tyflexlink_ = use FlexTypeAst in
           contents = ref (Link ty)}
 
 -- Tensor OP types
+let tytensorcreateuninitint_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyint_)
+
+let tytensorcreateuninitfloat_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyfloat_)
+
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_
             , tyarrow_ (tyseq_ tyint_) tyint_
@@ -146,6 +154,16 @@ let tytensorgetexn_ = lam ty.
 let tytensorsetexn_ = lam ty.
   tyarrows_ [ tytensor_ ty
             , tyseq_ tyint_
+            , ty, tyunit_ ]
+
+let tytensorlineargetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
+            , ty ]
+
+let tytensorlinearsetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
             , ty, tyunit_ ]
 
 let tytensorrank_ = lam ty.
@@ -244,10 +262,11 @@ let pcon_ = use MExprAst in
   lam cs. lam cp.
   npcon_ (nameNoSym cs) cp
 
-let patRecord = use MExprAst in
+let patRecord : [(String, Pat)] -> Info -> Pat =
+  use MExprAst in
   lam bindings : [(String, Pat)].
   lam info : Info.
-  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  let bindingMapFunc = lam b : (String, Pat). (stringToSid b.0, b.1) in
   PatRecord {
     bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
     info = info,
@@ -348,7 +367,7 @@ let ext_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
+  TmType {ident = n, tyIdent = ty, params = [], ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
@@ -404,7 +423,7 @@ let nreclets_add = use MExprAst in
     let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
-    error "reclets is not a TmRecLets construct"
+    infoErrorExit (infoTm reclets) "reclets is not a TmRecLets construct"
 
 let reclets_add = use MExprAst in
   lam s. lam ty. lam body. lam reclets.
@@ -446,7 +465,7 @@ let var_ = use MExprAst in
 let freeze_ = use MExprAst in
   lam var.
   match var with TmVar t then TmVar {t with frozen = true}
-  else error "var is not a TmVar construct"
+  else infoErrorExit (infoTm var) "var is not a TmVar construct"
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
@@ -551,10 +570,11 @@ let record_add = use MExprAst in
   match record with TmRecord t then
       TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
-      error "record is not a TmRecord construct"
+      infoErrorExit (infoTm record) "record is not a TmRecord construct"
 
-let record_add_bindings = lam bindings. lam record.
-  foldl (lam recacc. lam b : (k, v). record_add b.0 b.1 recacc) record bindings
+let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
+  lam bindings. lam record.
+  foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
@@ -569,7 +589,7 @@ let matchall_ = use MExprAst in
     foldr1 (lam m. lam acc.
       match m with TmMatch t then
         TmMatch {t with els = acc}
-      else error "expected match expression")
+      else infoErrorExit (infoTm m) "expected match expression")
       matches
 
 let nrecordproj_ = use MExprAst in
@@ -1047,6 +1067,18 @@ let tensorSetExn_ = use MExprAst in
   appf3_ (const_ (tytensorsetexn_ ty) (CTensorSetExn ())) t is v
 
 let utensorSetExn_ = tensorSetExn_ tyunknown_
+
+let tensorLinearGetExn_ = use MExprAst in
+  lam ty. lam t. lam i.
+  appf2_ (const_ (tytensorlineargetexn_ ty) (CTensorLinearGetExn ())) t i
+
+let utensorLinearGetExn_ = tensorLinearGetExn_ tyunknown_
+
+let tensorLinearSetExn_ = use MExprAst in
+  lam ty. lam t. lam i. lam v.
+  appf3_ (const_ (tytensorlinearsetexn_ ty) (CTensorLinearSetExn ())) t i v
+
+let utensorLinearSetExn_ = tensorLinearSetExn_ tyunknown_
 
 let tensorRank_ = use MExprAst in
   lam ty. lam t.
