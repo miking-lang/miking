@@ -40,9 +40,9 @@ let jsKeywords = [
     "await", "break", "case", "catch", "class", "const", "continue",
     "debugger", "default", "delete", "do", "else", "enum", "export",
     "extends", "false", "finally", "for", "function", "if", "import",
-    "in", "instanceof", "new", "null", "return", "super", "switch",
+    "in", "instanceof", "new", "null", "undefined", "return", "super", "switch",
     "this", "throw", "true", "try", "typeof", "var", "void", "while",
-    "with", "yield",
+    "with", "yield", "function",
     -- Extra reserved words (Not in spec)
     "console", "document", "window", "global", "localStorage", "sessionStorage",
     "location", "navigator", "history"
