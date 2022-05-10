@@ -9,7 +9,7 @@ lang JSExprAst
   | JSEVar       { id: Name }                   -- Variables
   | JSEApp       { fun: JSExpr, args: [JSExpr] }  -- Function application
   | JSEDef       { id: Name, expr: JSExpr }     -- Definitions
-  | JSEFun       { id: Name, params: [Name], body: JSExpr }  -- Functions
+  | JSEFun       { param: Name, body: JSExpr }  -- Functions
   | JSEMember    { expr: JSExpr, id: Name }  -- Member access
   | JSEInt       { i: Int }                     -- Integer literals
   | JSEFloat     { f: Float }                   -- Float literals
