@@ -1,2 +1,5 @@
 include "string.mc"
-mexpr join ["This", "Is", "A", "Test"]
+mexpr (
+let this = "This" in
+join [this, "Is", "A", "Test"]
+)
