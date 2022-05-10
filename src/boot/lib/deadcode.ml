@@ -2,6 +2,7 @@ open Ast
 open Symbutils
 open Ustring.Op
 open Printf
+open Intrinsics
 
 (* Can be used when debugging symbol maps *)
 let _symbmap = ref SymbMap.empty
@@ -225,6 +226,9 @@ let elimination builtin_sym2term builtin_name2sym symKeywords t =
     (* Collect all lets and store a graph in 'nmap' and free variable in 'free' *)
     let nmap = make_builtin_nmap builtin_sym2term in
     let nmap = add_keywords nmap symKeywords in
+    (* The below line ensures that free variables are treated as having a side
+     * effect (as it is unknown) *)
+    let nmap = add_keywords nmap [Symb.Helpers.nosym] in
     let nmap, free = collect_lets nmap t in
     if !enable_debug_dead_code_info then (
       print_endline "-- Dead code info: collected lets --" ;

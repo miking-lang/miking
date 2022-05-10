@@ -1763,8 +1763,8 @@ lang BootParserEval =
   syn Const =
   | CBootParserTree {val : BootParseTree}
   | CBootParserParseMExprString2 [String]
-  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool)
-  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool), [String])
+  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool, Bool)
+  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool, Bool), [String])
   | CBootParserGetTerm2 BootParseTree
   | CBootParserGetType2 BootParseTree
   | CBootParserGetString2 BootParseTree
@@ -1829,7 +1829,8 @@ lang BootParserEval =
         Some (TmConst { val = CBool { val = pruneExternalUtests } }),
         Some (TmSeq { tms = externalsExclude }),
         Some (TmConst { val = CBool { val = warn } }),
-        Some (TmConst { val = CBool { val = eliminateDeadCode } })
+        Some (TmConst { val = CBool { val = eliminateDeadCode } }),
+        Some (TmConst { val = CBool { val = allowFree } })
       ]
       then
         let externalsExclude =
@@ -1850,7 +1851,8 @@ lang BootParserEval =
                   pruneExternalUtests,
                   externalsExclude,
                   warn,
-                  eliminateDeadCode ),
+                  eliminateDeadCode,
+                  allowFree ),
                  ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
       else
         infoErrorExit info

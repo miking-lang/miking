@@ -271,7 +271,7 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
            mapInsert (nameGetStr bind.ident) bind.ident varEnv)
         env.varEnv t.bindings
     in
-    addTopNames {env with varEnv = varEnv} t.inexpr in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang DataSym = Sym + DataAst

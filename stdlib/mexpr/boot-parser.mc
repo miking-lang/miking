@@ -36,7 +36,9 @@ type BootParserParseMCoreFileArg = {
   externalsExclude : [String],
 
   -- Additional keywords
-  keywords : [String]
+  keywords : [String],
+
+  allowFree : Bool
 }
 
 let defaultBootParserParseMCoreFileArg = {
@@ -45,7 +47,8 @@ let defaultBootParserParseMCoreFileArg = {
   pruneExternalUtestsWarning = true,
   eliminateDeadCode = true,
   externalsExclude = [],
-  keywords = []
+  keywords = [],
+  allowFree = false
 }
 
 lang BootParser = MExprAst + ConstTransformer
@@ -62,7 +65,8 @@ lang BootParser = MExprAst + ConstTransformer
           arg.pruneExternalUtests,
           arg.externalsExclude,
           arg.pruneExternalUtestsWarning,
-          arg.eliminateDeadCode
+          arg.eliminateDeadCode,
+          arg.allowFree
         )
         arg.keywords
         filename
