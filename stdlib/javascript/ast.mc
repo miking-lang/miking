@@ -58,7 +58,7 @@ lang JStmtAst = JSExprAst
   | JSSWhile   { cond: JSExpr, body: [JSStmt] }
   | JSSExpr    { expr: JSExpr }
   | JSSComp    { stmts: [JSStmt] }
-  | JSSRet     { val: Option JSExpr }
+  | JSSRet     { val: Option JSExpr } -- Return
   | JSSCont    {}
   | JSSBreak   {}
 
