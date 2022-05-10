@@ -155,8 +155,7 @@ let parseMCoreFile
     , prune_external_utests
     , externals_exclude
     , warn
-    , eliminate_deadcode
-    , parse_only ) keywords filename =
+    , eliminate_deadcode ) keywords filename =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
@@ -182,23 +181,18 @@ let parseMCoreFile
       else fun x -> x
     in
     PTreeTm
-      (let ast =
-         filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
-         |> Utils.normalize_path |> Parserutils.parse_mcore_file
-         |> Mlang.flatten |> Mlang.desugar_post_flatten
-       in
-       if parse_only then ast
-       else
-         ast |> Parserutils.raise_parse_error_on_non_unique_external_id
-         |> Symbolize.symbolize name2sym
-         |> Parserutils.raise_parse_error_on_partially_applied_external
-         |> (fun t ->
-              if keep_utests then t else Parserutils.remove_all_utests t )
-         |> deadcode_elimination
-         |> Parserutils.prune_external_utests
-              ~enable:(keep_utests && prune_external_utests)
-              ~externals_exclude ~warn
-         |> deadcode_elimination )
+      ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
+      |> Utils.normalize_path |> Parserutils.parse_mcore_file |> Mlang.flatten
+      |> Mlang.desugar_post_flatten
+      |> Parserutils.raise_parse_error_on_non_unique_external_id
+      |> Symbolize.symbolize name2sym
+      |> Parserutils.raise_parse_error_on_partially_applied_external
+      |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
+      |> deadcode_elimination
+      |> Parserutils.prune_external_utests
+           ~enable:(keep_utests && prune_external_utests)
+           ~externals_exclude ~warn
+      |> deadcode_elimination )
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 

@@ -226,7 +226,7 @@ and const =
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
-      (bool * bool * int Mseq.t Mseq.t * bool * bool * bool) option
+      (bool * bool * int Mseq.t Mseq.t * bool * bool) option
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
