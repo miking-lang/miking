@@ -83,9 +83,9 @@ lang JSExprPrettyPrint = JSExprAst
       else never
     else never
   | JSEDef { id = id, expr = expr } ->
-    match pprintEnvGetOptStr env id with (env,id) then
-      match printJSDef indent env id expr with (env,str) then
-        (env, join [str, ";"])
+    match pprintEnvGetStr env id with (env,id) then
+      match (printJSDef indent env id) expr with (env,str) then
+        (env, concat str ";")
       else never
     else never
 
