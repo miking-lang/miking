@@ -101,7 +101,6 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEFloat { f = f } -> (env, float2string f)
   | JSEBool  { b = b } -> (env, if b then "true" else "false")
   | JSEChar  { c = c } -> (env, ['\'', c, '\''])
-
   | JSEString { s = s } -> (env, join ["\"", escapeString s, "\""])
 
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
@@ -120,6 +119,19 @@ lang JSExprPrettyPrint = JSExprAst
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       (env, join ["[", strJoin ", " exprs, "]"])
     else never
+  | JSEBlock { exprs = exprs, closed = closed } ->
+    let i = indent in
+    let ii = pprintIncr indent in
+    if closed then
+      match mapAccumL (printJSExpr ii) env exprs with (env,exprs) then
+        (env, join [pprintNewline i, "{",
+                    pprintNewline ii, strJoin (pprintNewline ii) exprs,
+                    pprintNewline i, "}"])
+      else never
+    else
+      match mapAccumL (printJSExpr i) env exprs with (env,exprs) then
+        (env, strJoin (pprintNewline i) exprs)
+      else never
 
   sem printJSBinOp (lhs: String) (rhs: String) =
   | JSOAssign    {} -> join [lhs, " = ", rhs]
