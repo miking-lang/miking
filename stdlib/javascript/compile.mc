@@ -164,13 +164,13 @@ lang MExprJSCompile = MExprAst + JSProgAst
       error "Unsupported literal"
 
   | TmLet { ident = id, body = expr, inexpr = e } ->
-  JSEBlock {
-    exprs = [
-      JSEDef { id = id, expr = compileExpr expr },
-      compileExpr e
-    ],
-    closed = false
-  }
+    JSEBlock {
+      exprs = [
+        JSEDef { id = id, expr = compileExpr expr },
+        compileExpr e
+      ],
+      closed = false
+    }
   | TmRecLets { bindings = bindings, inexpr = e } ->
     match head bindings with { ident = ident, body = body } then
       JSEBlock {
