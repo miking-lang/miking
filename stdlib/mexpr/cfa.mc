@@ -823,6 +823,9 @@ lang SeqOpCFA = CFA + ConstCFA + AppCFA + SeqCFA + SeqOpAst
   | CIsRope _ ->
     utest length args with 1 in
     graph
+  | CSubsequence _ ->
+    utest length args with 3 in
+    initConstraint graph (CstrDirect {lhs = head args, rhs = res})
   | ( CMap _
     | CMapi _
     | CIter _
@@ -832,10 +835,8 @@ lang SeqOpCFA = CFA + ConstCFA + AppCFA + SeqCFA + SeqOpAst
     | CCreate _
     | CCreateList _
     | CCreateRope _
+    | CSplitAt _
     ) -> infoErrorExit info "Sequence intrinsic not supported in CFA"
-
-  -- | CSplitAt _ -> graph
-  -- | CSubsequence _ -> graph
 end
 
 lang FileOpCFA = CFA + ConstCFA + FileOpAst
@@ -1245,6 +1246,8 @@ let t = _parse "
   let resNull = null s1 in
   let resIsList = isList s1 in
   let resIsRope = isRope s1 in
+  let s8 = subsequence s1 0 0 in
+  let resSubsequence = head s8 in
   ()
 ------------------------" in
 utest _test false t [
@@ -1259,7 +1262,8 @@ utest _test false t [
   "resTail",
   "resNull",
   "resIsList",
-  "resIsRope"
+  "resIsRope",
+  "resSubsequence"
 ] with [
   ("resHead", ["x","z"]),
   ("resConcat", ["x","z","v"]),
@@ -1272,7 +1276,8 @@ utest _test false t [
   ("resTail", ["x","z"]),
   ("resNull", []),
   ("resIsList", []),
-  ("resIsRope", [])
+  ("resIsRope", []),
+  ("resSubsequence", ["x", "z"])
 ] using eqTestLam in
 
 -- Record
