@@ -19,6 +19,7 @@ lang JSExprAst
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
   | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
+  | JSEBlock     { exprs : [JSExpr], closed: Bool } -- Blocks with optional surrounding (closing) braces
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs
