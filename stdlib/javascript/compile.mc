@@ -153,14 +153,24 @@ lang MExprJSCompile = MExprAst + JSProgAst
       let tms: [JSExpr] = map compileExpr tms in
       JSESeq { exprs = tms, info = info }
 
+  -- Literals
+  | TmConst { val = val } ->
+    match val      with CInt   { val = val } then JSEInt   { i = val }
+    else match val with CFloat { val = val } then JSEFloat { f = val }
+    else match val with CChar  { val = val } then JSEChar  { c = val }
+    else match val with CBool  { val = val } then JSEBool  { b = val }
+    else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
+    else
+      error "Unsupported literal"
+
   | TmLet { ident = id, body = expr, inexpr = e } ->
-    JSEBlock {
-      exprs = [
-        JSEDef { id = id, expr = compileExpr expr },
-        compileExpr e
-      ],
-      closed = false
-    }
+  JSEBlock {
+    exprs = [
+      JSEDef { id = id, expr = compileExpr expr },
+      compileExpr e
+    ],
+    closed = false
+  }
   | TmRecLets { bindings = bindings, inexpr = e } ->
     match head bindings with { ident = ident, body = body } then
       JSEBlock {
@@ -178,16 +188,6 @@ lang MExprJSCompile = MExprAst + JSProgAst
   | TmMatch _ -> error "Match expressions cannot be handled in compileExpr."
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileExpr."
-
-  -- Literals
-  | TmConst { val = val } ->
-    match val      with CInt   { val = val } then JSEInt   { i = val }
-    else match val with CFloat { val = val } then JSEFloat { f = val }
-    else match val with CChar  { val = val } then JSEChar  { c = val }
-    else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
-    else
-      error "Unsupported literal"
 
   -- Should not occur
   | TmNever _ -> error "Never term found in compileExpr"
