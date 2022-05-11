@@ -164,13 +164,31 @@ lang MExprJSCompile = MExprAst + JSProgAst
       error "Unsupported literal"
 
   | TmLet { ident = id, body = expr, inexpr = e } ->
-    JSEBlock {
-      exprs = [
-        JSSDef { id = id, expr = compileExpr expr },
+    -- Check if identifier is the ignore identifier (_, or [])
+    -- If so, ignore the expression unless it is a function application
+    match nameGetStr id with [] then
+      match expr with TmApp { } then
+        -- Inline the function call
+        JSEBlock {
+          exprs = [
+            compileExpr expr,
+            compileExpr e
+          ],
+          closed = false
+        }
+      else
+        -- Ignore the expression
         compileExpr e
-      ],
-      closed = false
-    }
+    else
+      -- Normal let binding
+      JSEBlock {
+        exprs = [
+          JSSDef { id = id, expr = compileExpr expr },
+          compileExpr e
+        ],
+        closed = false
+      }
+
   | TmRecLets { bindings = bindings, inexpr = e } ->
     match head bindings with { ident = ident, body = body } then
       JSEBlock {
