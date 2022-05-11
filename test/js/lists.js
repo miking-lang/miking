@@ -1,2 +1,2 @@
-var this2 = "This";
-console.log(this2)
+var first = "This";
+console.log(first, "second", "last")
