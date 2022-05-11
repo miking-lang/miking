@@ -44,7 +44,7 @@ let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
 -- Names used in the compiler for intrinsics
-let _consoleLog = use JSAst in
+let _consoleLog = use JSExprAst in
   JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
 
 
@@ -166,7 +166,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
   | TmLet { ident = id, body = expr, inexpr = e } ->
     JSEBlock {
       exprs = [
-        JSEDef { id = id, expr = compileExpr expr },
+        JSSDef { id = id, expr = compileExpr expr },
         compileExpr e
       ],
       closed = false
@@ -175,7 +175,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     match head bindings with { ident = ident, body = body } then
       JSEBlock {
         exprs = [
-          JSEDef { id = ident, expr = compileExpr body },
+          JSSDef { id = ident, expr = compileExpr body },
           compileExpr e
         ],
         closed = false

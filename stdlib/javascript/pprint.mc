@@ -11,9 +11,6 @@ include "mexpr/pprint.mc"
 -- HELPERS --
 -------------
 
--- All helpers are directly taken from pprint.mc for C.
--- Surrounds a string with parentheses
-let _par = lam str. join ["(",str,")"]
 
 let pprintEnvGetStr = lam env. lam id: Name.
   -- Set this to true to print names with their symbols (for debugging)
@@ -50,17 +47,32 @@ let jsKeywords = [
 
 
 
-----------------------------
--- JavaScript EXPRESSIONS --
-----------------------------
-lang JSExprPrettyPrint = JSExprAst
+-------------------------------------------
+-- JavaScript EXPRESSIONS and STATEMENTS --
+-------------------------------------------
+lang JSPrettyPrint = JSExprAst + JSStmtAst
 
-  sem printJSDef (indent: Int) (env: PprintEnv) (id: String) =
-  | expr ->
-    match (printJSExpr indent env) expr with (env, str) then
-      (env, join ["var ", id, " = ", str])
+  sem printJSStmt (indent: Int) (env: PprintEnv) =
+  | JSSDef { id = id, expr = expr } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match (printJSExpr indent env) expr with (env, str) then
+        (env, join ["var ", id, " = ", str, ";"])
+      else never
     else never
-    -- (env, join [pprintNewline indent, "var ", id, " = ", printJSExpr expr])
+  | JSSIf { cond = cond, thn = thn, els = els } ->
+    let i = indent in
+    let ii = pprintIncr indent in 
+    match (printJSExpr 0 env) cond with (env, cond) then
+      match (printJSStmt ii env) thn with (env, thn) then
+        match (printJSStmt ii env) els with (env, els) then
+          let ifBlock = join ["if (", cond, ") {", pprintNewline ii, thn, pprintNewline i, "}"] in
+          let elseBlock = join ["else {", pprintNewline ii, els, pprintNewline i, "}"] in
+          (env, join [ifBlock, " ", elseBlock])
+        else never
+      else never
+    else never
+  | expr -> printJSExpr indent env expr
+
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
@@ -81,12 +93,6 @@ lang JSExprPrettyPrint = JSExprAst
     match (printJSExpr indent) env expr with (env,expr) then
       match (pprintEnvGetStr env id) with (env,id) then
         (env, join [expr, ".", id])
-      else never
-    else never
-  | JSEDef { id = id, expr = expr } ->
-    match pprintEnvGetStr env id with (env,id) then
-      match (printJSDef indent env id) expr with (env,str) then
-        (env, concat str ";")
       else never
     else never
 
@@ -112,13 +118,13 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match (printJSExpr indent) env lhs with (env,lhs) then
       match (printJSExpr indent) env rhs with (env,rhs) then
-        (env, _par (printJSBinOp lhs rhs op))
+        (env, join ["(", printJSBinOp lhs rhs op, ")"])
       else never
     else never
 
   | JSEUnOp { op = op, rhs = rhs } ->
     match (printJSExpr indent) env rhs with (env,rhs) then
-      (env, _par (printJSUnOp rhs op))
+      (env, join ["(", printJSUnOp rhs op, ")"])
     else never
 
   | JSESeq { exprs = exprs, info = info } ->
@@ -129,13 +135,13 @@ lang JSExprPrettyPrint = JSExprAst
     let i = indent in
     let ii = pprintIncr indent in
     if closed then
-      match mapAccumL (printJSExpr ii) env exprs with (env,exprs) then
+      match mapAccumL (printJSStmt ii) env exprs with (env,exprs) then
         (env, join [pprintNewline i, "{",
                     pprintNewline ii, strJoin (pprintNewline ii) exprs,
                     pprintNewline i, "}"])
       else never
     else
-      match mapAccumL (printJSExpr i) env exprs with (env,exprs) then
+      match mapAccumL (printJSStmt i) env exprs with (env,exprs) then
         (env, strJoin (pprintNewline i) exprs)
       else never
 
@@ -167,14 +173,14 @@ end
 ------------------------
 -- JavaScript PROGRAM --
 ------------------------
-lang JSProgPrettyPrint = JSProgAst + JSExprPrettyPrint
+lang JSProgPrettyPrint = JSProgAst + JSPrettyPrint
 
   sem printJSProg =
   | JSPProg { imports = imports, exprs = exprs } ->
     let indent = 0 in
     let imports = map (lam imp. join ["import '", imp, "';"]) imports in
     let env = pprintEnvEmpty in
-    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
+    match mapAccumL (printJSStmt indent) env exprs with (env,exprs) then
       let importsStr = strJoin "\n" imports in
       let exprsStr = strJoin (pprintNewline indent) exprs in
       join [importsStr, exprsStr]
