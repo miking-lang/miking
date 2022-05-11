@@ -151,7 +151,14 @@ lang MExprJSCompile = MExprAst + JSProgAst
       let tms: [JSExpr] = map compileExpr tms in
       JSESeq { exprs = tms, info = info }
 
-  | TmLet { ident = id, body = expr } -> JSEDef { id = id, expr = compileExpr expr } -- error "Let expressions cannot be handled in compileExpr."
+  | TmLet { ident = id, body = expr, inexpr = e } ->
+    JSEBlock {
+      exprs = [
+        JSEDef { id = id, expr = compileExpr expr },
+        compileExpr e
+      ],
+      closed = false
+    }
   | TmRecLets _ -> error "Recursive let expressions cannot be handled in compileExpr."
   | TmType { inexpr = e } -> compileExpr e -- no op (Skip type declaration)
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
