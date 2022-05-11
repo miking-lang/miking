@@ -108,8 +108,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
 
   sem compileExpr =
 
-  | TmVar { ty = ty, ident = ident } & t->
-    error "Not implemented"
+  | TmVar { ident = id } -> JSEVar { id = id }
 
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
