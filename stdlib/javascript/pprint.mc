@@ -71,8 +71,14 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
         else never
       else never
     else never
-  | expr -> printJSExpr indent env expr
-
+  | expr ->
+    match (printJSExpr indent env) expr with (env, str) then
+      -- Detect outmost function call
+      match expr with JSEApp { } then
+        (env, concat str ";")
+      else (env, str)
+    else error "printJSStmt: unexpected expression"
+    
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
