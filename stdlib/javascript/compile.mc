@@ -93,6 +93,8 @@ lang MExprJSCompile = MExprAst + JSProgAst
   | CNeqi _
   | CNeqf _ -> JSEBinOp { op = JSONeq {}, lhs = head args, rhs = last args }
 
+  -- Sequential operators (SeqOpAst)
+  | CConcat _ -> JSEBinOp { op = JSOAdd {}, lhs = head args, rhs = last args }
   -- Unary operators
   | CNegf _
   | CNegi _ -> JSEUnOp { op = JSONeg {}, rhs = head args }
@@ -174,7 +176,9 @@ lang MExprJSCompile = MExprAst + JSProgAst
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else error "Unsupported literal"
+    else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
+    else
+      error "Unsupported literal"
 
   -- Should not occur
   | TmNever _ -> error "Never term found in compileExpr"
