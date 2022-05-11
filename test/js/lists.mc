@@ -1,5 +1,6 @@
 include "string.mc"
 mexpr (
-let this = "This" in
-join [this, "Is", "A", "Test"]
+let this2 = "This" in
+print this2
+-- join [this, "Is", "A", "Test"]
 )
