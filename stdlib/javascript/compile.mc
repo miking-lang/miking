@@ -55,7 +55,7 @@ let _consoleLog = use JSAst in
 lang MExprJSCompile = MExprAst + JSProgAst
 
   -- Entry point
-  sem compile =
+  sem compileProg =
   | prog ->
     -- Run compiler
     match compileExpr prog with expr then
@@ -211,7 +211,7 @@ let filepathWithoutExtension = lam filename.
 let javascriptCompile : Expr -> JSPProg =
   lam ast : Expr.
   use MExprJSCompile in
-  compile ast
+  compileProg ast
 
 
 
