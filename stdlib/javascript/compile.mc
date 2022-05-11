@@ -99,7 +99,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
-    JSEApp { fun = _consoleLog, args = args }
+    JSEApp { fun = _consoleLog, args = args, curried = false }
 
 
   -----------------
@@ -120,7 +120,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     match rec [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = JSEVar { id = ident }, args = map compileExpr args }
+        JSEApp { fun = JSEVar { id = ident }, args = map compileExpr args, curried = true }
 
       -- Intrinsics
       else match fun with TmConst { val = val } then
@@ -131,8 +131,8 @@ lang MExprJSCompile = MExprAst + JSProgAst
     else never
 
   -- Anonymous function, not allowed.
-  | TmLam { ident = id, body = body } ->
-    JSEFun { param = id, body = compileExpr body } -- error "Anonymous function in compileExpr."
+  | TmLam { ident = arg, body = body } ->
+    JSEFun { param = arg, body = compileExpr body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->

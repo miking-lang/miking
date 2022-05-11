@@ -70,10 +70,11 @@ lang JSExprPrettyPrint = JSExprAst
 
   sem printJSExpr (indent : Int) (env: PprintEnv) =
   | JSEVar { id = id } -> pprintEnvGetStr env id
-  | JSEApp { fun = fun, args = args } ->
+  | JSEApp { fun = fun, args = args, curried = curried } ->
     match (printJSExpr indent) env fun with (env,fun) then
       match mapAccumL (printJSExpr indent) env args with (env,args) then
-        (env, join [fun, "(", (strJoin ", " args), ")"])
+        let joinArgs = if curried then (strJoin ")(") else (strJoin ", ") in
+        (env, join [fun, "(", joinArgs args, ")"])
       else never
     else never
   | JSEMember { expr = expr, id = id } ->
@@ -92,9 +93,14 @@ lang JSExprPrettyPrint = JSExprAst
   | JSEFun { param = param, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match (printJSExpr ii) env body with (env,body) then
-      (env, "function() { return 42; }")
-      -- (env, join ["function (", param, ") {", pprintNewline ii, body, pprintNewline i, "}"])
+    match pprintEnvGetStr env param with (env,param) then
+      match (printJSExpr ii) env body with (env,body) then
+        -- ES6 arrow functions (released 2015)
+        -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
+        -- Comparison to anonymous functions:
+        -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
+        (env, join [param, " => ", body])
+      else never
     else never
 
   | JSEInt   { i = i } -> (env, int2string i)
