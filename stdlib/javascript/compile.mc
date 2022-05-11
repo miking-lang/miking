@@ -161,7 +161,16 @@ lang MExprJSCompile = MExprAst + JSProgAst
       ],
       closed = false
     }
-  | TmRecLets _ -> error "Recursive let expressions cannot be handled in compileExpr."
+  | TmRecLets { bindings = bindings, inexpr = e } ->
+    match head bindings with { ident = ident, body = body } then
+      JSEBlock {
+        exprs = [
+          JSEDef { id = ident, expr = compileExpr body },
+          compileExpr e
+        ],
+        closed = false
+      }
+    else error "ERROR: TmRecLets must have at least one binding."
   | TmType { inexpr = e } -> compileExpr e -- no op (Skip type declaration)
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
   | TmConApp _ -> error "Constructor application in compileExpr."
