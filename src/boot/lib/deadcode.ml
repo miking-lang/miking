@@ -209,7 +209,11 @@ let extend_symb_map_builtin builtin_name2sym symbmap =
   List.fold_left f symbmap builtin_name2sym
 
 (* Add keywords from the keyword maker to nmap, indicating sideeffect so that
-   they do not disappear *)
+ * they do not disappear.
+ * NOTE(dlunde,2022-05-11): Is this really what we want in general? It seems
+ * likely that some keywords may not have side-effects and should therefore not
+ * affect the dead code elimination.
+ *)
 let add_keywords nmap symKeywords =
   let f acc s = SymbMap.add s (SymbSet.empty, false, true, 0) acc in
   List.fold_left f nmap symKeywords

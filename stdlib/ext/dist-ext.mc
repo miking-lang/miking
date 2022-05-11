@@ -11,12 +11,12 @@ let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int.
   externalBinomialLogPmf x p n
 let binomialSample = lam p:Float. lam n:Int.
   externalBinomialSample p n
-let bernoulliPmf = lam p:Float. lam x:Int.
-  if eqi x 0 then subf 1. p else p
-let bernoulliLogPmf = lam p:Float. lam x:Int.
+let bernoulliPmf = lam p:Float. lam x:Bool.
+  if x then p else subf 1. p
+let bernoulliLogPmf = lam p:Float. lam x:Bool.
   log (bernoulliPmf p x)
 let bernoulliSample = lam p:Float.
-  externalBinomialSample p 1
+  if eqi 1 (externalBinomialSample p 1) then true else false
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
@@ -65,8 +65,16 @@ let dirichletPdf : [Float] -> [Float] -> Float =
 let dirichletSample : [Float] -> [Float] =
   lam alpha. externalDirichletSample alpha
 
--- Uniform (continuous)
+-- Uniform (continuous between 0 and 1)
 external uniformSample ! : Unit -> Float
+
+-- Uniform (continuous between a and b)
+let uniformContinuousSample = lam a. lam b.
+  addf a (mulf (subf b a) (uniformSample ()))
+let uniformContinuousLogPdf = lam a. lam b.
+  subf (log 1.0) (log (subf b a))
+let uniformContinuousPdf = lam a. lam b.
+  divf 1.0 (subf b a)
 
 -- Random (discrete)
 external externalRandomSample ! : Int -> Int -> Int

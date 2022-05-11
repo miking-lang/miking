@@ -402,7 +402,7 @@ lang ExtPrettyPrint = PrettyPrint + ExtAst + UnknownTypeAst
     else never
 end
 
-lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
+lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst + VariantTypeAst
   sem isAtomic =
   | TmType _ -> false
 
@@ -414,7 +414,7 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
       let paramStr = strJoin " " (cons "" params) in
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
-          match t.tyIdent with TyUnknown _ then
+          match t.tyIdent with TyUnknown _ | TyVariant _ then
             (env, join ["type ", ident, paramStr, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
