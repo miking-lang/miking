@@ -131,7 +131,8 @@ lang MExprJSCompile = MExprAst + JSProgAst
     else never
 
   -- Anonymous function, not allowed.
-  | TmLam { ident = id, body = body } -> JSEFun { param = id, body = body } -- error "Anonymous function in compileExpr."
+  | TmLam { ident = id, body = body } ->
+    JSEFun { param = id, body = compileExpr body } -- error "Anonymous function in compileExpr."
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
