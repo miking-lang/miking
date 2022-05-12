@@ -101,7 +101,7 @@ lang AppTypeGetArgs = AppTypeAst
 end
 
 lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTypeAst
-  sem resolveAlias (env : Map Name ([Name], Type)) =
+  sem tryResolveAlias (env : Map Name ([Name], Type)) =
   | ty ->
     match getTypeArgs ty with (TyCon t, args) then
       match mapLookup t.ident env with Some (params, def) then
@@ -112,10 +112,14 @@ lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTyp
           let subst =
             foldl2 (lam s. lam v. lam t. mapInsert v t s) (mapEmpty nameCmp) params args
           in
-          resolveAlias env (substituteVars subst def)
-        else ty
+          let ty = substituteVars subst def in
+          optionOr (tryResolveAlias env ty) (Some ty)
+        else None ()
       else error "Encountered unknown constructor in resolveAlias!"
-    else ty
+    else None ()
+
+  sem resolveAlias (env : Map Name ([Name], Type)) =
+  | ty -> optionGetOr ty (tryResolveAlias env ty)
 end
 
 ----------------------
@@ -360,11 +364,21 @@ let newvar = use VarSortAst in
 let newrecvar = use VarSortAst in
   lam fields. newflexvar (RecordVar {fields = fields})
 
-lang Generalize = AllTypeAst + VarTypeSubstitute
-  -- Instantiate the top-level type variables of `ty' with fresh schematic variables.
-  sem inst (lvl : Level) =
+lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
+  sem stripTyAllAlias (env : Map Name ([Name], Type)) =
+  | ty -> stripTyAllBaseAlias env [] (resolveLink ty)
+
+  sem stripTyAllBaseAlias (env : Map Name ([Name], Type)) (vars : [(Name, VarSort)]) =
+  | TyAll t -> stripTyAllBaseAlias env (snoc vars (t.ident, t.sort)) t.ty
   | ty ->
-    match stripTyAll ty with (vars, ty) in
+    match tryResolveAlias env (resolveLink ty) with Some ty
+    then stripTyAllBaseAlias env vars ty
+    else (vars, ty)
+
+  -- Instantiate the top-level type variables of `ty' with fresh schematic variables.
+  sem inst (env : Map Name ([Name], Type)) (lvl : Level) =
+  | ty ->
+    match stripTyAllAlias env ty with (vars, ty) in
     if gti (length vars) 0 then
       let inserter = lam subst. lam v : (Name, VarSort).
         let sort = smap_VarSort_Type (substituteVars subst) v.1 in
@@ -468,7 +482,7 @@ lang VarTypeCheck = TypeCheck + VarAst
     match mapLookup t.ident env.varEnv with Some ty then
       let ty =
         if t.frozen then ty
-        else inst env.currentLvl ty
+        else inst env.tyConEnv env.currentLvl ty
       in
       TmVar {t with ty = ty}
     else
@@ -511,13 +525,14 @@ lang LetTypeCheck = TypeCheck + LetAst
   sem typeCheckBase (env : TCEnv) =
   | TmLet t ->
     let lvl = env.currentLvl in
-    let body = typeCheckExpr {env with currentLvl = addi 1 lvl} t.body in
+    let body = optionMapOr t.body (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyBody) in
+    let body = typeCheckExpr {env with currentLvl = addi 1 lvl} body in
     let tyBody = optionMapOrElse
       -- No type annotation: generalize the inferred type
       (lam. gen lvl (tyTm body))
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
-        match stripTyAll ty with (_, tyAnnot) in
+        match stripTyAll (resolveAlias env.tyConEnv ty) with (_, tyAnnot) in
         unify env tyAnnot (tyTm body);
         ty)
       (sremoveUnknown t.tyBody)
@@ -527,6 +542,14 @@ lang LetTypeCheck = TypeCheck + LetAst
                 with tyBody = tyBody}
                 with inexpr = inexpr}
                 with ty = tyTm inexpr}
+
+  sem propagateTyAnnot =
+  | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
+  | (TmLam l, TyArrow a) ->
+    let body = propagateTyAnnot (l.body, a.to) in
+    let ty = optionGetOr a.from (sremoveUnknown l.tyIdent) in
+    TmLam {{l with body = body} with tyIdent = ty}
+  | (tm, ty) -> tm
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsAst
@@ -597,7 +620,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
   sem typeCheckBase (env : TCEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = inst env.currentLvl (f (tyConst t.val)) in
+    let ty = inst env.tyConEnv env.currentLvl (f (tyConst t.val)) in
     TmConst {t with ty = ty}
 end
 
@@ -660,7 +683,7 @@ lang DataTypeCheck = TypeCheck + DataAst
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
-      match inst env.currentLvl lty with TyArrow {from = from, to = to} in
+      match inst env.tyConEnv env.currentLvl lty with TyArrow {from = from, to = to} in
       unify env (tyTm body) from;
       TmConApp {{t with body = body}
                    with ty   = to}
@@ -765,7 +788,7 @@ lang DataPatTypeCheck = TypeCheck + DataPat
   sem typeCheckPat (env : TCEnv) =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
-      match inst env.currentLvl ty with TyArrow {from = from, to = to} in
+      match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env t.subpat with (env, subpat) in
       unify env (tyPat subpat) from;
       (env, PatCon {{t with subpat = subpat}
@@ -1204,4 +1227,3 @@ iter runTest tests;
 -- Report a "stack trace" when encountering a unification failure
 
 -- TODO(aathn, 2021-09-28): Value restriction
-

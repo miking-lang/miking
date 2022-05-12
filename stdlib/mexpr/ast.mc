@@ -607,6 +607,11 @@ end
 -- CONSTANTS --
 ---------------
 
+lang UnsafeCoerceAst = ConstAst
+  syn Const =
+  | CUnsafeCoerce {}
+end
+
 lang IntAst = ConstAst
   syn Const =
   | CInt {val : Int}
@@ -1443,7 +1448,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst +
+  TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

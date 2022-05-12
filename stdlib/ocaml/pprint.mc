@@ -96,7 +96,7 @@ lang OCamlTypePrettyPrint =
 end
 
 lang OCamlPrettyPrint =
-  VarPrettyPrint + ConstPrettyPrint + OCamlAst +
+  ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
@@ -159,6 +159,7 @@ lang OCamlPrettyPrint =
   | OTmRecord _ -> true
   | OTmProject _ -> true
   | OTmLam _ -> false
+  | TmVar _ -> true
 
   sem patIsAtomic =
   | OPatRecord _ -> false
@@ -168,6 +169,7 @@ lang OCamlPrettyPrint =
   | OPatConExt _ -> false
 
   sem getConstStringCode (indent : Int) =
+  | CUnsafeCoerce _ -> "(fun x -> x)"
   | CInt {val = i} -> int2string i
   | CAddi _ -> "Int.add"
   | CSubi _ -> "Int.sub"
@@ -425,6 +427,7 @@ lang OCamlPrettyPrint =
 
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmVar {ident = ident} -> pprintVarName env ident
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmExprExt {expr = expr} -> (env, expr)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident

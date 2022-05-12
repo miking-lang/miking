@@ -307,6 +307,11 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
+lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEval
+  sem delta (arg : Expr) =
+  | CUnsafeCoerce _ -> arg
+end
+
 lang ArithIntEval = ArithIntAst + ConstEval
   syn Const =
   | CAddi2 Int
@@ -2057,7 +2062,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval + BootParserEval
+  ConTagEval + MapEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

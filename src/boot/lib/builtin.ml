@@ -25,7 +25,8 @@ let argv_boot, argv_prog =
 let builtin =
   let f c = TmConst (NoInfo, c) in
   (* MCore intrinsics: Integers *)
-  [ ("addi", f (Caddi None))
+  [ ("unsafeCoerce", f CunsafeCoerce)
+  ; ("addi", f (Caddi None))
   ; ("subi", f (Csubi None))
   ; ("muli", f (Cmuli None))
   ; ("divi", f (Cdivi None))

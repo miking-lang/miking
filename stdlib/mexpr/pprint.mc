@@ -609,6 +609,11 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
+lang UnsafeCoercePrettyPrint = UnsafeCoerceAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CUnsafeCoerce _ -> "unsafeCoerce"
+end
+
 lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CInt t -> int2string t.val
@@ -1200,7 +1205,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint +
+  BootParserPrettyPrint + UnsafeCoercePrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
