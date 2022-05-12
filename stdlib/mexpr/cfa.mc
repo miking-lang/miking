@@ -269,7 +269,6 @@ lang InitConstraint = CFA
     match pprintVarName env rhs with (env,rhs) in
     (env, join ["{", lhs, "}", " ⊆ ", rhs])
 
-
 end
 
 lang DirectConstraintOptions = CFA
@@ -397,7 +396,11 @@ end
 lang ConstCFA = CFA + ConstAst + InitConstraint
 
   syn AbsVal =
-  | AVConst { const : Const, info : Info, args : [Name] }
+  -- Abstract representation of constants. Contains the constant and the
+  -- arguments applied to it. Currently, not all constants are supported by
+  -- basic 0-CFA, so we include the info field in order to use `infoErrorExit`
+  -- on those.
+  | AVConst { const: Const, info: Info, args: [Name] }
 
   sem absValToString (env: PprintEnv) =
   | AVConst { const = const, args = args } ->
@@ -516,18 +519,12 @@ lang RecordCFA = CFA + InitConstraint + RecordAst
 
 end
 
-lang SeqCFA = CFA + InitConstraint + DirectConstraint + SeqAst + AppCFA
+lang SeqCFA = CFA + InitConstraint + SeqAst
 
   syn AbsVal =
   -- Abstract representation of sequences. Contains a set of names that may
   -- flow to the sequence.
   | AVSeq { names: Set Name }
-
-  syn Constraint =
-  -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
-  | CstrSeq {lhs : Name, rhs : Name}
-  -- [{names}] ⊆ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
-  | CstrSeqUnion {lhs : Name, rhs : Name, res : Name}
 
   sem cmpAbsValH =
   | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
@@ -545,35 +542,6 @@ lang SeqCFA = CFA + InitConstraint + DirectConstraint + SeqAst + AppCFA
     match mapAccumL pprintVarName env (setToSeq names) with (env,names) in
     let names = strJoin ", " names in
     (env, join ["[{", names, "}]"])
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrSeqUnion r & cstr -> initConstraintName r.lhs graph cstr
-
-  sem constraintToString (env: PprintEnv) =
-  | CstrSeq { lhs = lhs, rhs = rhs } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    (env, join [ "[{names}] ⊆ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
-  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    match pprintVarName env res with (env,res) in
-    (env, join [
-        "[{names}] ⊆ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
-      ])
-
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrSeq { lhs = lhs, rhs = rhs } ->
-    match update.1 with AVSeq { names = names } then
-      setFold (lam graph. lam name.
-        initConstraint graph (CstrDirect {lhs = name, rhs = rhs})
-      ) graph names
-    else graph
-  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
-    match update.1 with AVSeq { names = names } then
-      addData graph (AVSeq {names = setInsert rhs names}) res
-    else graph
 end
 
 lang TypeCFA = CFA + TypeAst
@@ -778,7 +746,43 @@ lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
   | CEqsym _ -> graph
 end
 
-lang SeqOpCFA = CFA + ConstCFA + AppCFA + SeqCFA + SeqOpAst
+lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + DirectConstraint
+
+  syn Constraint =
+  -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
+  | CstrSeq {lhs : Name, rhs : Name}
+  -- [{names}] ⊆ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
+  | CstrSeqUnion {lhs : Name, rhs : Name, res : Name}
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrSeqUnion r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem constraintToString (env: PprintEnv) =
+  | CstrSeq { lhs = lhs, rhs = rhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    (env, join [ "[{names}] ⊆ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
+  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [
+        "[{names}] ⊆ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
+      ])
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrSeq { lhs = lhs, rhs = rhs } ->
+    match update.1 with AVSeq { names = names } then
+      setFold (lam graph. lam name.
+          initConstraint graph (CstrDirect {lhs = name, rhs = rhs})
+        ) graph names
+    else graph
+  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVSeq { names = names } then
+      addData graph (AVSeq {names = setInsert rhs names}) res
+    else graph
+
   sem propagateConstraintConst res args graph info =
   | CSet _ ->
     utest length args with 3 in
