@@ -43,7 +43,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   syn AbsVal =
   | AVDHole { id : Name, contexts : Set Int }
   | AVEHole { id : Name, contexts : Set Int }
-  | AVConst { const : Const, args : [Name] }
+  | AVConstHole { const : Const, args : [Name] }
 
   syn GraphData =
   | CtxInfo { contextMap : Map Name (Set Int),
@@ -58,7 +58,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     | AVEHole {id = id, contexts = contexts} ) & av ->
     (env, join [absValToStringH av, "hole", "(", nameGetStr id, ",{",
        strJoin "," (map int2string (setToSeq contexts)), "}", ")"])
-  | AVConst { const = const, args = args } ->
+  | AVConstHole { const = const, args = args } ->
     let const = getConstStringCode 0 const in
     let args = strJoin ", " (map nameGetStr args) in
     (env, join [const, "(", args, ")"])
@@ -84,7 +84,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
        AVEHole {id = id2, contexts = ctxs2}) ) ->
     let ncmp = nameCmp id1 id2 in
     if eqi 0 ncmp then setCmp ctxs1 ctxs2 else ncmp
-  | (AVConst lhs, AVConst rhs) ->
+  | (AVConstHole lhs, AVConstHole rhs) ->
     use ConstCmp in
     let cmp = cmpConst lhs.const rhs.const in
     if eqi 0 cmp then subi (length lhs.args) (length rhs.args)
@@ -105,7 +105,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     -- AND
     -- ({const with args = args} ⊆ lhs AND |args| < arity(const)-1
     --    ⇒ {const with args = snoc args rhs } ⊆ res)
-  | CstrConstApp { lhs: Name, rhs : Name, res: Name }
+  | CstrHoleConstApp { lhs: Name, rhs : Name, res: Name }
     -- {dhole} ⊆ lhs ⇒ {ehole} ⊆ res
   | CstrHoleMatch { lhs: Name, res: Name }
     -- {dhole} ⊆ lhs ⇒ {dhole} ⊄ rhs
@@ -117,7 +117,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | CstrHoleApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleDirectData r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleDirectExe r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrHoleConstApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleMatch r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleIndependent r & cstr -> initConstraintName r.lhs graph cstr
 
@@ -135,9 +135,11 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     match update.1 with AVDHole {id = id, contexts = contexts}
     then addData graph (AVEHole {id = id, contexts = contexts}) res
     else graph
-  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+  -- OPT(Linnea,20222-05-10): Hook in to propagateConstraint for CstrConstApp in
+  -- cfa.mc.
+  | CstrHoleConstApp { lhs = lhs, rhs = rhs, res = res } ->
     use MExprConstDep in
-    match update.1 with AVConst ({ const = const, args = args } & avc) then
+    match update.1 with AVConstHole ({ const = const, args = args } & avc) then
       let arity = constArity const in
       let args = snoc args rhs in
       if eqi arity (length args) then
@@ -164,7 +166,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
         graph
       else
         -- Curried application, just add the new argument
-        addData graph (AVConst { avc with args = args }) res
+        addData graph (AVConstHole { avc with args = args }) res
     else graph
   | CstrHoleIndependent { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVDHole _ & av then
@@ -189,13 +191,13 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { const = c, args = [] }, rhs = ident }
+    else [ CstrInit { lhs = AVConstHole { const = c, args = [] }, rhs = ident }
          ]
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
         CstrHoleApp { lhs = l.ident, res = ident},
-        CstrConstApp { lhs = l.ident, rhs = r.ident, res = ident }
+        CstrHoleConstApp { lhs = l.ident, rhs = r.ident, res = ident }
       ]
       else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
     else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
@@ -225,7 +227,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     match pprintVarName env res with (env,res) in
     (env, join [
       "{dhole} ⊆ ", lhs, " ⇒ {ehole} ⊆ ", res ])
-  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+  | CstrHoleConstApp { lhs = lhs, rhs = rhs, res = res } ->
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env res with (env,res) in
@@ -273,10 +275,11 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   -- are used in the graph coloring. By construction, these references
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
-  sem generateConstraintsConst (info: Info) =
-  | CRef _ -> []
-  | CModRef _ -> []
-  | CDeRef _ -> []
+  sem propagateConstraintConst (res : Name) (args: [Name]) (graph: CFAGraph)
+                               (info: Info) =
+  | CRef _ -> graph
+  | CModRef _ -> graph
+  | CDeRef _ -> graph
 
   sem generateHoleMatchConstraints (id: Name) (target: Name) =
   | pat ->
