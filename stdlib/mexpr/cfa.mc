@@ -410,7 +410,7 @@ lang ConstCFA = CFA + ConstAst + InitConstraint
 
   sem cmpAbsValH =
   | (AVConst lhs, AVConst rhs) ->
-    use ConstCmp in
+    use MExprCmp in
     let cmp = cmpConst lhs.const rhs.const in
     if eqi 0 cmp then subi (length lhs.args) (length rhs.args)
     else cmp
