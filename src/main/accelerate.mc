@@ -2,6 +2,7 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/constant-app.mc"
+include "cuda/gpu-utils.mc"
 include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-compile.mc"
@@ -23,8 +24,9 @@ include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
+include "mexpr/resolve-alias.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/generate.mc"
@@ -34,6 +36,7 @@ include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/c-externals.mc"
+include "pmexpr/copy-analysis.mc"
 include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
@@ -49,13 +52,14 @@ include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot + MExprRemoveTypeAscription + MExprUtestTrans +
-  PMExprAst + MExprANF + PMExprDemote + PMExprRewrite + PMExprTailRecursion +
-  PMExprParallelPattern + PMExprCExternals + MExprLambdaLift + MExprCSE +
-  PMExprRecursionElimination + PMExprExtractAccelerate +
-  PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
-  PMExprNestedAccelerate + PMExprWellFormed + OCamlGenerate +
-  OCamlTypeDeclGenerate + OCamlGenerateExternalNaive
+  MExprSym + MExprTypeCheck + MExprRemoveTypeAscription + MExprResolveAlias +
+  MExprUtestTrans + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
+  PMExprTailRecursion + PMExprParallelPattern + PMExprCExternals +
+  MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
+  PMExprExtractAccelerate + PMExprUtestSizeConstraint +
+  PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
+  OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive +
+  PMExprCopyAnalysis
 end
 
 lang MExprFutharkCompile =
@@ -66,7 +70,7 @@ end
 
 lang MExprCudaCompile =
   MExprUtestTrans + MExprRemoveTypeAscription + CudaPMExprAst +
-  CudaPMExprCompile + MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered +
+  CudaPMExprCompile + MExprTypeLift +
   SeqTypeNoStringTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
   CudaTensorMemory + CudaLanguageFragmentFix
@@ -84,7 +88,8 @@ let parallelKeywords = [
   "parallelReduce",
   "seqLoop",
   "seqLoopAcc",
-  "parallelLoop"
+  "parallelLoop",
+  "printFloat"
 ]
 
 let keywordsSymEnv =
@@ -122,7 +127,7 @@ let pprintCAst : CPProg -> String = lam ast.
 
 let pprintCudaAst : CuPProg -> String = lam ast.
   use CudaPrettyPrint in
-  printCudaProg [] ast
+  printCudaProg cCompilerNames ast
 
 let patternTransformation : Expr -> Expr = lam ast.
   use PMExprCompile in
@@ -155,11 +160,10 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   lam options. lam accelerateData. lam ast.
   use MExprCudaCompile in
   let ast = fixLanguageFragmentSemanticFunction ast in
+  let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
-  validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast;
-  let ast = constantAppToExpr ast in
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
@@ -167,13 +171,12 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
     use32BitInts = options.use32BitIntegers,
     use32BitFloats = options.use32BitFloats
   } in
-  match compile typeEnv opts ast with (_, types, tops, _, _) in
+  match compile typeEnv opts ast with (ccEnv, types, tops, _, _) in
   let ctops = join [types, tops] in
-  let ccEnv = {compileCEnvEmpty opts with typeEnv = typeEnv} in
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
-  match addCudaTensorMemoryManagement ccEnv cudaTops with (tensorCountId, cudaTops) in
-  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv tensorCountId in
+  let cudaTops = addCudaTensorMemoryManagement cudaTops in
+  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let filename = lam path.
@@ -238,9 +241,6 @@ let buildConfigFutharkGPU : [String] -> [String] -> (String, String) =
     "  (link_flags -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)",
     duneFutharkCFiles ()] in
   let makefile = strJoin "\n" [
-    "export LIBRARY_PATH=/usr/local/cuda/lib64",
-    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
-    "export CPATH=/usr/local/cuda/include",
     futharkDuneBuildMakeRule (),
     futharkGPUBuildMakeRule ()] in
   (dunefile, makefile)
@@ -251,9 +251,6 @@ let buildConfigCuda : String -> [String] -> [String] -> (String, String) =
     duneBuildBase libs clibs,
     "  (link_flags -I ", dir, " -cclib -lgpu -cclib -lcudart -cclib -lstdc++))"] in
   let makefile = strJoin "\n" [
-    "export LIBRARY_PATH=/usr/local/cuda/lib64",
-    "export LD_LIBRARY_PATH=/usr/local/cuda/lib64/",
-    "export CPATH=/usr/local/cuda/include",
     "program.exe: program.ml libgpu.a",
     "\tdune build $@",
     "libgpu.a: gpu.cu",
@@ -306,11 +303,26 @@ let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
   buildBinaryUsingMake sourcePath td
 
 let mergePrograms : CudaProg -> CudaProg -> CudaProg =
-  lam lprog. lam rprog.
+  lam cudaProg. lam wrapperProg.
   use MExprCudaCompile in
-  match lprog with CuPProg {includes = lincludes, tops = ltops} in
-  match rprog with CuPProg {includes = rincludes, tops = rtops} in
-  CuPProg {includes = concat lincludes rincludes, tops = concat ltops rtops}
+  -- NOTE(larshum, 2022-04-01): We split up the tops such that the types
+  -- declarations and global definitions are placed in the left side, and
+  -- function definitions (the wrapper functions) are placed in the right side.
+  recursive let splitWrapperTops : ([CuTop], [CuTop]) -> [CuTop] -> ([CuTop], [CuTop]) =
+    lam acc. lam tops.
+    match tops with [t] ++ tops then
+      match acc with (ltops, rtops) in
+      let acc =
+        match t with CuTTop {attrs = _, top = CTFun _} then
+          (ltops, snoc rtops t)
+        else (snoc ltops t, rtops) in
+      splitWrapperTops acc tops
+    else acc in
+  match cudaProg with CuPProg {includes = lincludes, tops = cudaTops} in
+  match wrapperProg with CuPProg {includes = rincludes, tops = wrapperTops} in
+  match splitWrapperTops ([], []) wrapperTops with (topDecls, topWrapperFunctions) in
+  let mergedTops = join [topDecls, cudaTops, topWrapperFunctions] in
+  CuPProg {includes = concat lincludes rincludes, tops = mergedTops}
 
 let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
              -> CudaProg -> Unit =
@@ -328,6 +340,7 @@ let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
     ("program.ml", pprintOCamlTops ocamlTops),
     ("program.mli", ""),
     ("gpu.cu", pprintCudaAst cudaProg),
+    ("gpu-utils.cu", gpu_utils_code),
     ("dune", dunefile),
     ("dune-project", "(lang dune 2.0)"),
     ("Makefile", makefile)];
@@ -343,7 +356,7 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   match
     use PMExprCompile in
     let ast = symbolizeExpr keywordsSymEnv ast in
-    let ast = typeAnnot ast in
+    let ast = typeCheck ast in
     let ast = removeTypeAscription ast in
     match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -353,8 +366,8 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   with (accelerateData, ast) in
   use MExprCudaCompile in
   let ast = fixLanguageFragmentSemanticFunction ast in
+  let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
-  validatePMExprAst accelerateData ast;
   let ast = utestStrip ast in
   wellFormed ast
 
@@ -372,8 +385,9 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   let ast = makeKeywords [] ast in
 
   let ast = symbolizeExpr keywordsSymEnv ast in
-  let ast = typeAnnot ast in
+  let ast = typeCheck ast in
   let ast = removeTypeAscription ast in
+  let ast = resolveAliases ast in
 
   -- Translate accelerate terms into functions with one dummy parameter, so
   -- that we can accelerate terms without free variables and so that it is
@@ -392,6 +406,9 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   match eliminateDummyParameter solutions accelerated accelerateAst
   with (accelerated, accelerateAst) in
 
+  -- Perform analysis to find variables unused after the accelerate call.
+  let accelerated = findUnusedAfterAccelerate accelerated ast in
+
   -- Translate the PMExpr AST into a representation of the GPU code and the
   -- wrapper code.
   match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
@@ -403,17 +420,18 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   -- been demoted to sequential equivalents
   let ast = demoteParallel ast in
 
-  match typeLift ast with (env, ast) in
-  match generateTypeDecls env with (env, typeTops) in
+  match typeLift ast with (typeLiftEnv, ast) in
+  match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
 
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.
-  match replaceAccelerate accelerated env ast with (recordDeclTops, ast) in
+  match replaceAccelerate accelerated generateEnv ast
+  with (recordDeclTops, ast) in
 
   -- Generate the OCaml AST (with externals support)
   let env : GenerateEnv =
-    chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+    chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
   in
   let exprTops = generateTops env ast in
   let syslibs =

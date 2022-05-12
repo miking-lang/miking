@@ -307,6 +307,11 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
+lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEval
+  sem delta (arg : Expr) =
+  | CUnsafeCoerce _ -> arg
+end
+
 lang ArithIntEval = ArithIntAst + ConstEval
   syn Const =
   | CAddi2 Int
@@ -1166,7 +1171,6 @@ lang MapEval =
     TmRecord {
       bindings = bindings,
       ty = TyRecord {
-        labels = labels,
         fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
         info = NoInfo ()},
       info = NoInfo ()}
@@ -1500,6 +1504,10 @@ lang TensorOpEval =
     else error "Second argument to CTensorToString not a tensor"
 
   sem delta (arg : Expr) =
+  | CTensorCreateUninitInt _ ->
+    TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq arg)) }
+  | CTensorCreateUninitFloat _ ->
+    TmTensor { val = TFloat (tensorCreateUninitFloat (_ofTmSeq arg)) }
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
     uconst_ val
@@ -2054,7 +2062,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval + BootParserEval
+  ConTagEval + MapEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

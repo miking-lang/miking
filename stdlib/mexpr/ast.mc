@@ -607,6 +607,11 @@ end
 -- CONSTANTS --
 ---------------
 
+lang UnsafeCoerceAst = ConstAst
+  syn Const =
+  | CUnsafeCoerce {}
+end
+
 lang IntAst = ConstAst
   syn Const =
   | CInt {val : Int}
@@ -813,6 +818,8 @@ end
 
 lang TensorOpAst = ConstAst
   syn Const =
+  | CTensorCreateUninitInt {}
+  | CTensorCreateUninitFloat {}
   | CTensorCreateInt {}
   | CTensorCreateFloat {}
   | CTensorCreate {}
@@ -1240,9 +1247,8 @@ end
 
 lang RecordTypeAst = Ast
   syn Type =
-  | TyRecord {info    : Info,
-              fields  : Map SID Type,
-              labels  : [SID]}
+  | TyRecord {info   : Info,
+              fields : Map SID Type}
 
   sem tyWithInfo (info : Info) =
   | TyRecord t -> TyRecord {t with info = info}
@@ -1442,7 +1448,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst +
+  TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

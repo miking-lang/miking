@@ -670,7 +670,7 @@ let eqTest = lam lhs: (LookupTable, Option SearchState). lam rhs : TestResult.
 in
 
 let opt = {{tuneOptionsDefault with verbose = debug}
-                               with outputStats = debug} in
+                               with printStats = debug} in
 
 -- No holes
 let t = parse

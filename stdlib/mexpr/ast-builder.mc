@@ -59,7 +59,6 @@ let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, Type). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -126,6 +125,12 @@ let tyflexlink_ = use FlexTypeAst in
           contents = ref (Link ty)}
 
 -- Tensor OP types
+let tytensorcreateuninitint_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyint_)
+
+let tytensorcreateuninitfloat_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyfloat_)
+
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_
             , tyarrow_ (tyseq_ tyint_) tyint_
@@ -672,6 +677,10 @@ let asc_ = use MExprAst in
   bind_ (let_ "x" ty expr) (var_ "x")
 
 -- Constants --
+
+let unsafeCoerce_ = use MExprAst in
+  lam e.
+  app_ (uconst_ (CUnsafeCoerce ())) e
 
 let int_ = use MExprAst in
   lam i.

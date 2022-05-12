@@ -10,8 +10,6 @@ lang CudaPMExprPrettyPrint = PMExprPrettyPrint + CudaPMExprAst
   | TmMapKernel _ -> false
   | TmReduceKernel _ -> false
   | TmLoopKernel _ -> false
-  | TmCopy _ -> false
-  | TmFree _ -> false
 
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmSeqMap t ->
@@ -43,18 +41,4 @@ lang CudaPMExprPrettyPrint = PMExprPrettyPrint + CudaPMExprAst
     let indent = pprintIncr indent in
     match printArgs indent env [t.n, t.f] with (env, args) in
     (env, join ["loopKernel", pprintNewline indent, args])
-  | TmCopy t ->
-    match pprintVarName env t.arg with (env, arg) in
-    let copyStr =
-      match t.toMem with Cpu _ then "copyCpu"
-      else match t.toMem with Gpu _ then "copyGpu"
-      else never in
-    (env, join [copyStr, " ", arg])
-  | TmFree t ->
-    match pprintVarName env t.arg with (env, arg) in
-    let freeStr =
-      match t.mem with Cpu _ then "freeCpu"
-      else match t.mem with Gpu _ then "freeGpu"
-      else never in
-    (env, join [freeStr, " ", arg])
 end

@@ -44,7 +44,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
   sem getFutharkCType =
   | t & (FutharkSeqRepr _) ->
     let seqTypeStr = getSeqFutharkTypeString t in
-    let seqTypeIdent = _getIdentOrInitNew seqTypeStr in
+    let seqTypeIdent = _getIdentOrInitNew (concat "futhark_" seqTypeStr) in
     CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}}
   | FutharkRecordRepr t ->
     -- TODO(larshum, 2022-03-09): How do we figure out this type?
@@ -86,7 +86,8 @@ lang FutharkCWrapperBase = PMExprCWrapper
         (join ["Sequences of ", tystr, " are not supported in Futhark wrapper"])
   | TyTensor {info = info} ->
     infoErrorExit info "Tensors are not supported in Futhark wrapper"
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
+    let labels = tyRecordOrderedLabels ty in
     let fields : [CDataRepr] =
       map
         (lam label : SID.
@@ -94,7 +95,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
             _generateFutharkDataRepresentation ty
           else
             infoErrorExit t.info "Inconsistent labels in record type")
-        t.labels in
+        labels in
     FutharkRecordRepr {fields = fields}
   | ty -> FutharkBaseTypeRepr {ident = nameSym "c_tmp", ty = mexprToCType ty}
 end
@@ -754,6 +755,7 @@ let dataEntry : AcceleratedData = {
   identifier = functionIdent,
   bytecodeWrapperId = nameSym "fbyte",
   params = [(nameSym "s", tyseq_ tyint_)],
+  paramCopyStatus = [CopyBoth ()],
   returnType = tyseq_ tyint_,
   info = NoInfo ()
 } in

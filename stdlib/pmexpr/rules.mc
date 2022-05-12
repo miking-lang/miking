@@ -2,7 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprRewrite = MExprAst + MExprEq + MExprConstType + PMExprVariableSub
@@ -112,7 +112,7 @@ lang PMExprRewrite = MExprAst + MExprEq + MExprConstType + PMExprVariableSub
   | t -> smap_Expr_Expr rewriteTerm t
 end
 
-lang TestLang = PMExprRewrite + MExprTypeAnnot + MExprEq + MExprPrettyPrint end
+lang TestLang = PMExprRewrite + MExprTypeCheck + MExprEq + MExprPrettyPrint end
 
 mexpr
 

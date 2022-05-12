@@ -16,7 +16,8 @@ lang CudaAst = CAst + MExprAst
 
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
-  | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType, ty : CType}
+  | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType,
+                argTypes : [CType], ty : CType}
   | CESeqLoop {n : CExpr, f : CExpr, argTypes : [CType]}
   | CESeqLoopAcc {ne : CExpr, n : CExpr, f : CExpr, neTy : CType, argTypes : [CType]}
   | CETensorSliceExn {t : CExpr, slice : CExpr, ty : CType}
@@ -30,7 +31,7 @@ lang CudaAst = CAst + MExprAst
   | CEKernelApp {fun : Name, gridSize : CExpr, blockSize : CExpr,
                  args : [CExpr]}
 
-  sem smapAccumLCExprCExpr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumLCExprCExpr f acc =
   | CESeqMap t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
@@ -68,8 +69,12 @@ lang CudaAst = CAst + MExprAst
 
   syn CStmt =
   | CSIfMacro {cond : CExpr, thn : [CStmt], els : [CStmt]}
-  | CSTensorDataCopyCpu {src : CExpr, dst : CExpr, dataTy : CType}
-  | CSTensorDataCopyGpu {src : CExpr, dst : CExpr, dataTy : CType}
+
+  sem smapAccumLCStmtCStmt f acc =
+  | CSIfMacro t ->
+    match mapAccumL f acc t.thn with (acc, thn) in
+    match mapAccumL f acc t.els with (acc, els) in
+    (acc, CSIfMacro {{t with thn = thn} with els = els})
 
   syn CuTop =
   | CuTTop {attrs : [CudaAttribute], top : CTop}

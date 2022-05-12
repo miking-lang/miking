@@ -409,7 +409,7 @@ let f = nameSym "f" in
 let s = nameSym "s" in
 let h = nameSym "h" in
 let t = nameSym "t" in
-let expr = typeAnnot (preprocess (nreclets_ [
+let expr = typeCheck (preprocess (nreclets_ [
   (map, tyunknown_, nlam_ f (tyarrow_ tyint_ tyint_) (nulam_ s (
     match_ (nvar_ s)
       (pseqtot_ [])

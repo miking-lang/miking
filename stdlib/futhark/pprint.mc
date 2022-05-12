@@ -1,6 +1,7 @@
 include "ast-builder.mc"
 include "common.mc"
 include "ocaml/pprint.mc"
+include "mexpr/record.mc"
 
 -- Converts a given float to a string that uses a valid representation in
 -- Futhark. This is needed because the 'float2string' intrinsic emits the
@@ -122,15 +123,15 @@ lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
       else never
     else never
   | FTyRecord {fields = fields} ->
-    let pprintField = lam env. lam k. lam ty.
+    let labels = recordOrderedLabels (mapKeys fields) in
+    let pprintField = lam env. lam k.
+      let ty = mapFindExn k fields in
       let str = pprintLabelString k in
-      match pprintType indent env ty with (env, tyStr) then
-        (env, join [str, " : ", tyStr])
-      else never
+      match pprintType indent env ty with (env, tyStr) in
+      (env, join [str, " : ", tyStr])
     in
-    match mapMapAccum pprintField env fields with (env, fields) then
-      (env, join ["{", strJoin "," (mapValues fields), "}"])
-    else never
+    match mapAccumL pprintField env labels with (env, fields) in
+    (env, join ["{", strJoin "," fields, "}"])
   | FTyArrow {from = from, to = to} ->
     match pprintType indent env from with (env, from) then
       match pprintType indent env to with (env, to) then

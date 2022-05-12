@@ -10,6 +10,7 @@ include "map.mc"
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "record.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -608,6 +609,11 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
+lang UnsafeCoercePrettyPrint = UnsafeCoerceAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CUnsafeCoerce _ -> "unsafeCoerce"
+end
+
 lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CInt t -> int2string t.val
@@ -819,6 +825,8 @@ end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
+  | CTensorCreateUninitInt _ -> "tensorCreateUninitInt"
+  | CTensorCreateUninitFloat _ -> "tensorCreateUninitFloat"
   | CTensorCreateInt _ -> "tensorCreateCArrayInt"
   | CTensorCreateFloat _ -> "tensorCreateCArrayFloat"
   | CTensorCreate _ -> "tensorCreateDense"
@@ -1072,10 +1080,11 @@ end
 
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
+      let orderedFields = tyRecordOrderedFields ty in
       let tuple =
-        let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) (mapBindings t.fields) in
+        let seq = map (lam b : (SID,Type). (sidToString b.0, b.1)) orderedFields in
         if forAll (lam t : (String,Type). stringIsInt t.0) seq then
           let seq = map (lam t : (String,Type). (string2int t.0, t.1)) seq in
           let seq : [(Int,Type)] = sort (lam l : (Int,Type). lam r : (Int,Type). subi l.0 r.0) seq in
@@ -1090,17 +1099,19 @@ lang RecordTypePrettyPrint = RecordTypeAst
         else None ()
       in
       match tuple with Some tuple then
-        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple)
-        then (env, join ["(", strJoin ", " tuple, ")"])
-        else never
+        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
+        (env, join ["(", strJoin ", " tuple, ")"])
       else
-        let f = lam env. lam. lam v. getTypeStringCode indent env v in
-        match mapMapAccum f env t.fields with (env, fields) then
-          let fields =
-            map (lam b : (SID,String). (sidToString b.0, b.1)) (mapBindings fields) in
-          let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
-          (env,join ["{", strJoin ", " (map conventry fields), "}"])
-        else never
+        let f = lam env. lam field.
+          match field with (sid, ty) in
+          match getTypeStringCode indent env ty with (env, tyStr) in
+          (env, (sid, tyStr))
+        in
+        match mapAccumL f env orderedFields with (env, fields) in
+        let fields =
+          map (lam b : (SID,String). (sidToString b.0, b.1)) fields in
+        let conventry = lam entry : (String,String). join [entry.0, ": ", entry.1] in
+        (env,join ["{", strJoin ", " (map conventry fields), "}"])
 end
 
 lang VariantTypePrettyPrint = VariantTypeAst
@@ -1132,7 +1143,7 @@ lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   | WeakVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
-      TyRecord {info = NoInfo (), fields = r.fields, labels = mapKeys r.fields} in
+      TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
 end
@@ -1194,7 +1205,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint +
+  BootParserPrettyPrint + UnsafeCoercePrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

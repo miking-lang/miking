@@ -60,8 +60,6 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     -- Tensor types encountered so far.
     tensors : Map Type Name,
 
-    labels: Set [SID],
-
     -- Variant types and their constructors encountered so far.
     variants: Map Name (Map Name Type)
   }
@@ -82,45 +80,24 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
       else ty
     in
     assocSeqMap f env.typeEnv
+end
 
-  sem _addRecordToEnv (env : TypeLiftEnv) (name : Option Name) =
-  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
-    match name with Some name then
+lang TypeLiftAddRecordToEnv = TypeLiftBase + RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, info = info} & ty ->
+    switch mapLookup fields env.records
+    case Some name then
       let tycon = TyCon {ident = name, info = info} in
       (env, tycon)
-    else match name with None _ then
+    case None _ then
       let name = nameSym "Rec" in
       let tycon = TyCon {ident = name, info = info} in
-      let env = {{{env
-                    with records = mapInsert fields name env.records}
-                    with labels = setInsert labels env.labels}
-                    with typeEnv = assocSeqInsert name ty env.typeEnv}
+      let env = {{env
+                  with records = mapInsert fields name env.records}
+                  with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
       (env, tycon)
-    else never
-  | ty -> infoErrorExit (infoTy ty) "Expected record type"
-end
-
--- This implementation takes record field order into account when populating
--- the environment
-lang TypeLiftAddRecordToEnvOrdered = TypeLiftBase + RecordTypeAst
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
-    match (mapLookup fields env.records, setMem labels env.labels)
-    with (name, true) then
-      _addRecordToEnv env name ty
-    else
-      _addRecordToEnv env (None ()) ty
-  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
-end
-
--- This implementation does not take record field order into account when
--- populating the environment
-lang TypeLiftAddRecordToEnvUnOrdered = TypeLiftBase + RecordTypeAst
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
-    _addRecordToEnv
-      env (mapLookup fields env.records) ty
+    end
   -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
@@ -205,7 +182,6 @@ lang TypeLift = TypeLiftBase + Cmp
       records = mapEmpty (mapCmp cmpType),
       seqs = mapEmpty cmpType,
       tensors = mapEmpty cmpType,
-      labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
 
@@ -223,28 +199,24 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
       match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
       else t.tyIdent
     in
-    match typeLiftType env tyIdent with (env, tyIdent) then
-      let env : TypeLiftEnv = env in
-      let env =
-        -- Ignore any existing constructors in the variant type.
-        match tyIdent with TyVariant {info = info} then
-          let variantNameTy = TyVariantName {ident = t.ident, info = info} in
-          {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
-                with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
-        else match tyIdent
-        with TyRecord {fields = fields} & ty then
-          let f = lam env. lam. lam ty. typeLiftType env ty in
-          match mapMapAccum f env fields with (env, fields) then
-            match addRecordToEnv env ty with (env, _) then
-              env
-            else never
-          else never
-        else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
-      in
-      match typeLiftExpr env t.inexpr with (env, inexpr) then
-        (env, inexpr)
-      else never
-    else never
+    match typeLiftType env tyIdent with (env, tyIdent) in
+    let env : TypeLiftEnv = env in
+    let env =
+      -- Ignore any existing constructors in the variant type.
+      match tyIdent with TyVariant {info = info} then
+        let variantNameTy = TyVariantName {ident = t.ident, info = info} in
+        {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
+              with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
+      else match tyIdent
+      with TyRecord {fields = fields} & ty then
+        let f = lam env. lam. lam ty. typeLiftType env ty in
+        match mapMapAccum f env fields with (env, _) in
+        match addRecordToEnv env ty with (env, _) in
+        env
+      else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
+    in
+    match typeLiftExpr env t.inexpr with (env, inexpr) in
+    (env, inexpr)
 end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
@@ -280,21 +252,16 @@ end
 lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
-    match typeLiftExpr env t.target with (env, target) then
-      match typeLiftPat env t.pat with (env, pat) then
-        match typeLiftExpr env t.thn with (env, thn) then
-          match typeLiftExpr env t.els with (env, els) then
-            match typeLiftType env t.ty with (env, ty) then
-              (env, TmMatch {{{{{t with target = target}
-                                   with pat = pat}
-                                   with thn = thn}
-                                   with els = els}
-                                   with ty = ty})
-            else never
-          else never
-        else never
-      else never
-    else never
+    match typeLiftExpr env t.target with (env, target) in
+    match typeLiftPat env t.pat with (env, pat) in
+    match typeLiftExpr env t.thn with (env, thn) in
+    match typeLiftExpr env t.els with (env, els) in
+    match typeLiftType env t.ty with (env, ty) in
+    (env, TmMatch {{{{{t with target = target}
+                         with pat = pat}
+                         with thn = thn}
+                         with els = els}
+                         with ty = ty})
 end
 
 -----------
@@ -361,19 +328,13 @@ lang MExprTypeLift =
   TypeTypeLift + DataTypeLift + MatchTypeLift +
 
   -- Non-default implementations (Types)
-  RecordTypeTypeLift + AppTypeTypeLift
-end
+  RecordTypeTypeLift + AppTypeTypeLift +
 
-lang MExprTypeLiftOrderedRecords =
-  MExprTypeLift + TypeLiftAddRecordToEnvOrdered
-end
-
-lang MExprTypeLiftUnOrderedRecords =
-  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+  TypeLiftAddRecordToEnv
 end
 
 lang TestLang =
-  MExprTypeLiftUnOrderedRecords + SeqTypeTypeLift + MExprSym +
+  MExprTypeLift + SeqTypeTypeLift + MExprSym +
   MExprTypeAnnot + MExprPrettyPrint
 end
 

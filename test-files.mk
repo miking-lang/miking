@@ -34,7 +34,11 @@ typecheck_files += test/mlang/type-alias.mc
 typecheck_files += $(wildcard stdlib/*.mc)
 typecheck_files += $(wildcard stdlib/mexpr/*.mc)
 typecheck_files += $(wildcard stdlib/ocaml/*.mc)
+typecheck_files += $(wildcard stdlib/c/*.mc)
 typecheck_files += $(wildcard stdlib/tuning/*.mc)
+typecheck_files += stdlib/parser/lexer.mc
+typecheck_files += stdlib/parser/breakable.mc
+typecheck_files += stdlib/ext/ext-test.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written

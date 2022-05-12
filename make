@@ -160,9 +160,9 @@ type_check() {
   exit_code=$?
   if [ $exit_code -eq 0 ]
   then
-      echo "$msg Ok"
+      echo "$msg OK\n"
   else
-      echo "$msg FAILED with output\n$output"
+      echo "$msg FAILED with output\n$output\n"
       exit 1
   fi
   set -e

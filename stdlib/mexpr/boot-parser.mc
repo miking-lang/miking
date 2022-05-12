@@ -209,7 +209,6 @@ lang BootParser = MExprAst + ConstTransformer
   | 207 /-TyRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
     TyRecord {info = ginfo t 0,
-              labels = map (lam b : (String, Type). stringToSid b.0) lst,
               fields =
                 mapFromSeq cmpSID
                   (map (lam b : (String,Type). (stringToSid b.0, b.1)) lst)}
