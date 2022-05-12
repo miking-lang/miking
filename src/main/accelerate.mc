@@ -19,6 +19,7 @@ include "futhark/generate.mc"
 include "futhark/pprint.mc"
 include "futhark/record-lift.mc"
 include "futhark/size-parameterize.mc"
+include "futhark/well-formed.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
@@ -47,7 +48,6 @@ include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utest-size-constraint.mc"
-include "pmexpr/well-formed.mc"
 include "parse.mc"
 
 lang PMExprCompile =
@@ -57,15 +57,14 @@ lang PMExprCompile =
   PMExprTailRecursion + PMExprParallelPattern + PMExprCExternals +
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprUtestSizeConstraint +
-  PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
-  OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive +
-  PMExprCopyAnalysis
+  PMExprReplaceAccelerate + PMExprNestedAccelerate + OCamlGenerate +
+  OCamlTypeDeclGenerate + OCamlGenerateExternalNaive + PMExprCopyAnalysis
 end
 
 lang MExprFutharkCompile =
   FutharkGenerate + FutharkDeadcodeElimination + FutharkSizeParameterize +
   FutharkCWrapper + FutharkRecordParamLift + FutharkForEachRecordPattern +
-  FutharkAliasAnalysis
+  FutharkAliasAnalysis + FutharkWellFormed
 end
 
 lang MExprCudaCompile =
@@ -139,16 +138,12 @@ let patternTransformation : Expr -> Expr = lam ast.
   let ast = parallelPatternRewrite parallelPatterns ast in
   eliminateRecursion ast
 
-let validatePMExprAst : Set Name -> Expr -> () = lam accelerateIds. lam ast.
-  use PMExprCompile in
-  reportNestedAccelerate accelerateIds ast;
-  wellFormed ast
-
 let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
   use MExprFutharkCompile in
   let ast = patternTransformation ast in
-  validatePMExprAst entryPoints ast;
+  (use PMExprNestedAccelerate in reportNestedAccelerate entryPoints ast);
+  wellFormed ast;
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
@@ -162,7 +157,6 @@ let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuP
   let ast = fixLanguageFragmentSemanticFunction ast in
   let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
-  let ast = utestStrip ast in
   wellFormed ast;
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in
