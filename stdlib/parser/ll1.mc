@@ -12,6 +12,9 @@ include "name.mc"
 
 type Dyn
 
+let asDyn : all a. a -> Dyn = unsafeCoerce
+let fromDyn : all a. Dyn -> a = unsafeCoerce
+
 type SpecSymbol tok repr state prodLabel
 type ParsedSymbol tok
 type Action tok state = state -> [ParsedSymbol tok] -> Dyn
@@ -122,6 +125,7 @@ lang ParserConcrete = ParserBase
   | TokParsed t -> tokInfo t
   | LitParsed t -> t.info
 
+  sem parsedSymToSpecSym : all state. all prodLabel. ParsedSymbol Token -> SpecSymbol Token TokenRepr state prodLabel
   sem parsedSymToSpecSym =
   | TokParsed t -> TokSpec (tokToRepr t)
   | LitParsed x -> LitSpec {lit = x.lit}
@@ -457,6 +461,13 @@ lang LL1Parser = ParserGeneration + ParserConcrete
     let info = Info {{x with row1 = subi x.row1 1} with col1 = 0} in
     [Irrelevant info, Added {content = tokReprToStr (EOFRepr ()), ensureSurroundedBySpaces = false}]
   | x -> [Relevant (symParsedInfo x)]
+  sem ll1ToErrorHighlightSpec : all state. all prodLabel.
+    ParseError Token TokenRepr state prodLabel
+    -> { highlight : [Highlight]
+       , found : SpecSymbol Token TokenRepr state prodLabel
+       , expected : [SpecSymbol Token TokenRepr state prodLabel]
+       , info : Info
+       }
   sem ll1ToErrorHighlightSpec =
   | UnexpectedFirst x ->
     let info = symParsedInfo x.found in

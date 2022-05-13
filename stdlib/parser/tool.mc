@@ -95,8 +95,11 @@ con TyGrouping : {left: Info, right: Info} -> GenLabel in
 con ProdTop : {v: Name, i: Info} -> GenLabel in
 con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
+let asDyn_ : Expr -> Expr = app_ (var_ "asDyn") in
+let fromDyn_ : Expr -> Expr = app_ (var_ "fromDyn") in
+
 match argv with ![_, _, _] then
-  printLn "Please provide exactly two argument; a .syn file and the output .mc file";
+  printLn "Please provide exactly two arguments; a .syn file and the output .mc file";
   exit 0
 else match argv with [_, filename, destinationFile] in
 let content = readFile filename in
@@ -1017,14 +1020,14 @@ let completeSeqProduction
           let seqName = nameSym "res" in
           let pats = pseqtot_ pats in
           let toRebind = map
-            (lam pair. match pair with (name, ty) in nlet_ name ty (nvar_ name))
+            (lam pair. match pair with (name, ty) in nlet_ name ty (fromDyn_ (nvar_ name)))
             (collectNamesWithTypes pats) in
           nlam_ stateName stateTy
             (nulam_ seqName
               (match_ (nvar_ seqName) pats
                 (bindall_
                   (snoc toRebind
-                    (wrap (urecord_ fields))))
+                    (asDyn_ (wrap (urecord_ fields)))))
                 never_))
         in
         let exprProduction = urecord_
@@ -1050,15 +1053,15 @@ let processTerminal
   = lam term. switch term
     case NtTerm conf then
       let ty = result.map (lam config: TypeInfo. targetableType config.ty) conf.config in
-      let infoName = nameSym "info" in
-      let valName = nameSym "val" in
+      let pairName = nameSym "ntVal" in
+      let pairPat = withTypePat (tytuple_ [tycon_ "Info", ntycon_ conf.name]) (npvar_ pairName) in
       let sym =
         { repr = app_ (var_ "ntSym") (nvar_ conf.name)
-        , pat = pcon_ "UserSym" (ptuple_ [npvar_ infoName, npvar_ valName])
-        , info = nvar_ infoName
+        , pat = pcon_ "UserSym" pairPat
+        , info = tupleproj_ 0 (nvar_ pairName)
         , sym = ntSym conf.name
         } in
-      (result.ok sym, [], result.ok (seq_ [nvar_ valName]), ty)
+      (result.ok sym, [], result.ok (seq_ [tupleproj_ 1 (nvar_ pairName)]), ty)
 
     case TokenTerm config then
       let valName = nameSym "x" in
@@ -1558,19 +1561,20 @@ let groupingOperators : Res [GenOperator] =
               let seqName = nameSym "seq" in
               let pats = pseqtot_ [lPartSym.pat, ntSym.pat, rPartSym.pat] in
               let toRebind = map
-                (lam pair. match pair with (name, ty) in nlet_ name ty (nvar_ name))
+                (lam pair. match pair with (name, ty) in nlet_ name ty (fromDyn_ (nvar_ name)))
                 (collectNamesWithTypes pats) in
               ulam_ ""
                 (nulam_ seqName
                   (match_ (nvar_ seqName) pats
                     (bindall_
                       (snoc toRebind
-                        (nconapp_ conName
-                          (urecord_
-                            [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
-                            , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
-                            , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
-                            ]))))
+                        (asDyn_
+                          (nconapp_ conName
+                            (urecord_
+                              [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
+                              , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
+                              , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
+                              ])))))
                     never_))
             in
             let prod =
@@ -1668,7 +1672,7 @@ let genOpResult : Res GenOpResult =
         , rhs = [lclosed]
         , action = ulam_ "" (ulam_ "seq"
           (match_ (var_ "seq") (pseqtot_ [pcon_ "UserSym" (pvar_ "cont")])
-            (app_ (var_ "cont") (conapp_ "Some" (app_ (var_ "breakableInitState") unit_)))
+            (app_ (fromDyn_ (var_ "cont")) (conapp_ "Some" (app_ (var_ "breakableInitState") unit_)))
             never_
           ))
         } in
@@ -1679,9 +1683,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addAtomFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addAtomFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let infix = mkMirroredProduction
@@ -1691,9 +1696,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addInfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addInfixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let prefix = mkMirroredProduction
@@ -1703,9 +1709,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addPrefixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addPrefixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let postfix = mkMirroredProduction
@@ -1715,9 +1722,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addPostfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addPostfixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let final = mkMirroredProduction
@@ -1725,7 +1733,7 @@ let genOpResult : Res GenOpResult =
         , label = TyRegex {nt = original, kind = LRegEnd ()}
         , rhs = []
         , action = ulam_ "p" (ulam_ ""
-          (ulam_ "st" (genOpResult.finalizeFor original.v (var_ "p") (var_ "st"))))
+          (asDyn_ (ulam_ "st" (genOpResult.finalizeFor original.v (var_ "p") (var_ "st")))))
         } in
       map result.ok [top, atom, infix, prefix, postfix, final]
     in
@@ -1802,13 +1810,15 @@ let parseFunctions : Res String =
     , join ["  use Parse", langName, " in"]
     , "  let config = {errors = ref [], content = content} in"
     , "  let res = parseWithTable _table filename config content in"
-    , "  let errors = deref config.errors in"
-    , "  let errors ="
-    , "    match res with Left err then"
-    , "      let err = ll1DefaultHighlight content (ll1ToErrorHighlightSpec err) in"
-    , "      snoc errors err"
-    , "    else errors in"
-    , "  if null errors then eitherMapRight (lam x. match x with (_, x) in x) res else Left errors"
+    , "  switch (res, deref config.errors)"
+    , "  case (Right dyn, []) then"
+    , "    match fromDyn dyn with (_, res) in Right res"
+    , "  case (Left err, errors) then"
+    , "    let err = ll1DefaultHighlight content (ll1ToErrorHighlightSpec err) in"
+    , "    Left (snoc errors err)"
+    , "  case (_, errors) then"
+    , "    Left errors"
+    , "  end"
     , ""
     , join ["let parse", langName, "Exn"]
     , concat ": String -> String -> " (nameGetStr start)
