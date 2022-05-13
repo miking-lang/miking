@@ -240,8 +240,8 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
     let els: JSStmt = compileMExpr els in
     JSSIf {
       cond = pat,
-      thn = thn,
-      els = els
+      thn = ensureBlockOrStmt thn,
+      els = ensureBlockOrStmt els
     }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
@@ -249,6 +249,11 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   -- Should not occur
   | TmNever _ -> error "Never term found in compileMExpr"
 
+  sem ensureBlockOrStmt =
+  | (JSSBlock _) & block -> block
+  | JSSSeq { stmts = stmts } & stmt ->
+    JSSBlock { stmts = stmts }
+  | stmt -> stmt
 end
 
 

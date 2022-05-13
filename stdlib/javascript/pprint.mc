@@ -61,12 +61,11 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     else never
   | JSSIf { cond = cond, thn = thn, els = els } ->
     let i = indent in
-    let ii = pprintIncr indent in 
     match (printJSExpr 0 env) cond with (env, cond) then
-      match (printJSStmt ii env) thn with (env, thn) then
-        match (printJSStmt ii env) els with (env, els) then
-          let ifBlock = join ["if (", cond, ") {", pprintNewline ii, thn, pprintNewline i, "}"] in
-          let elseBlock = join ["else {", pprintNewline ii, els, pprintNewline i, "}"] in
+      match (printJSStmt i env) thn with (env, thn) then
+        match (printJSStmt i env) els with (env, els) then
+          let ifBlock = join ["if (", cond, ") ", thn] in
+          let elseBlock = join ["else ", els] in
           (env, join [ifBlock, " ", elseBlock])
         else never
       else never
@@ -75,7 +74,7 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     let i = indent in
     let ii = pprintIncr indent in
     match mapAccumL (printJSStmt ii) env stmts with (env,stmts) then
-      (env, join [pprintNewline i, "{",
+      (env, join [pprintSpacing i, "{",
                   pprintNewline ii, strJoin (pprintNewline ii) stmts,
                   pprintNewline i, "}"])
     else never
