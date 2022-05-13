@@ -35,36 +35,38 @@ recursive
       (s, pos)
 
   let _jsonEatInt: [Char] -> String -> Int -> (String, String, Int) =
-    lam revacc. lam s. lam pos.
+    lam acc. lam s. lam pos.
     match s with [c] ++ ws then
       if and (geqChar c '0') (leqChar c '9') then
-        _jsonEatInt (cons c revacc) ws (addi pos 1)
+        _jsonEatInt (snoc acc c) ws (addi pos 1)
       else
-        (reverse revacc, s, pos)
+        (acc, s, pos)
     else
-      (reverse revacc, s, pos)
+      (acc, s, pos)
 
   let _jsonParse: String -> Int -> Either (JsonValue, String, Int) String =
     lam s. lam pos.
     match _jsonEatWhitespace s pos with (s, pos) in
-    match s with ['{'] ++ ws then
+    switch s
+    case ['{'] ++ ws then
       _jsonParseObject ws (addi pos 1)
-    else match s with ['['] ++ ws then
+    case ['['] ++ ws then
       _jsonParseArray ws (addi pos 1)
-    else match s with ['\"'] ++ ws then
-      _jsonParseString (toList []) ws (addi pos 1)
-    else match s with ['-'] ++ ws then
+    case ['\"'] ++ ws then
+      _jsonParseString [] ws (addi pos 1)
+    case ['-'] ++ ws then
       _jsonParseNegativeNumber ws (addi pos 1)
-    else match s with ['0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'] ++ _ then
+    case ['0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'] ++ _ then
       _jsonParseNumber s pos
-    else match s with "true" ++ ws then
+    case "true" ++ ws then
       Left (JsonBool true, ws, addi pos 4)
-    else match s with "false" ++ ws then
+    case "false" ++ ws then
       Left (JsonBool false, ws, addi pos 5)
-    else match s with "null" ++ ws then
+    case "null" ++ ws then
       Left (JsonNull (), ws, addi pos 4)
-    else
+    case _ then
       _jsonError pos "Invalid start to a JSON value."
+    end
 
   let _jsonParseObject: String -> Int -> Either (JsonValue, String, Int) String =
     lam s. lam pos.
@@ -112,17 +114,17 @@ recursive
       _jsonParseArrayContents [] s pos
 
   let _jsonParseArrayContents: [JsonValue] -> String -> Int -> Either (JsonValue, String, Int) String =
-    lam revacc. lam s. lam pos.
+    lam acc. lam s. lam pos.
     match _jsonEatWhitespace s pos with (s, pos) in
     let result = _jsonParse s pos in
     switch result
     case Left (value, s, pos) then
-      let revacc = cons value revacc in
+      let acc = snoc acc value in
       match _jsonEatWhitespace s pos with (s, pos) in
       match s with [','] ++ ws then
-        _jsonParseArrayContents revacc ws (addi pos 1)
+        _jsonParseArrayContents acc ws (addi pos 1)
       else match s with [']'] ++ ws then
-        Left (JsonArray (reverse revacc), ws, addi pos 1)
+        Left (JsonArray acc, ws, addi pos 1)
       else
         _jsonError pos "Expected comma or closing bracket of JSON array."
     case Right err then
@@ -130,21 +132,21 @@ recursive
     end
 
   let _jsonParseString: [Char] -> String -> Int -> Either (JsonValue, String, Int) String =
-    lam revacc. lam s. lam pos.
+    lam acc. lam s. lam pos.
     match s with ['\\', c] ++ ws then
       -- NOTE(johnwikman, 2022-05-13): Might look wierd to match at two
       -- characters at the same time, but since we know that the following
       -- character cannot terminate a string, we will anyways get an error if s
       -- was just the singleton string ['\\']
       switch c
-      case '\"' then _jsonParseString (cons ('\"') revacc) ws (addi pos 2)
-      case '\\' then _jsonParseString (cons ('\\') revacc) ws (addi pos 2)
-      case '/'  then _jsonParseString (cons ('/') revacc) ws (addi pos 2)
-      case 'b'  then _jsonParseString (cons (int2char 8) revacc) ws (addi pos 2)
-      case 'f'  then _jsonParseString (cons (int2char 12) revacc) ws (addi pos 2)
-      case 'n'  then _jsonParseString (cons ('\n') revacc) ws (addi pos 2)
-      case 'r'  then _jsonParseString (cons ('\r') revacc) ws (addi pos 2)
-      case 't'  then _jsonParseString (cons ('\t') revacc) ws (addi pos 2)
+      case '\"' then _jsonParseString (snoc acc ('\"')) ws (addi pos 2)
+      case '\\' then _jsonParseString (snoc acc ('\\')) ws (addi pos 2)
+      case '/'  then _jsonParseString (snoc acc ('/')) ws (addi pos 2)
+      case 'b'  then _jsonParseString (snoc acc (int2char 8)) ws (addi pos 2)
+      case 'f'  then _jsonParseString (snoc acc (int2char 12)) ws (addi pos 2)
+      case 'n'  then _jsonParseString (snoc acc ('\n')) ws (addi pos 2)
+      case 'r'  then _jsonParseString (snoc acc ('\r')) ws (addi pos 2)
+      case 't'  then _jsonParseString (snoc acc ('\t')) ws (addi pos 2)
       case 'u' then
         match ws with [h3, h2, h1, h0] ++ ws then
           let hex2int: Char -> Option Int = lam hc.
@@ -165,7 +167,7 @@ recursive
             else None ()
           ) (Some 0) [h3, h2, h1, h0] in
           match conv with Some v then
-            _jsonParseString (cons (int2char v) revacc) ws (addi pos 6)
+            _jsonParseString (snoc acc (int2char v)) ws (addi pos 6)
           else
             _jsonError (addi pos 2) "Expected 4 hexadecimal characters"
         else
@@ -177,9 +179,9 @@ recursive
         ])
       end
     else match s with ['\"'] ++ ws then
-      Left (JsonString (reverse revacc), ws, addi pos 1)
+      Left (JsonString acc, ws, addi pos 1)
     else match s with [c] ++ ws then
-      _jsonParseString (cons c revacc) ws (addi pos 1)
+      _jsonParseString (snoc acc c) ws (addi pos 1)
     else
       _jsonError pos "Non-terminated string."
 
