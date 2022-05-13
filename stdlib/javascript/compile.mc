@@ -82,7 +82,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
   ---------------
 
   -- Only a subset of constants can be compiled
-  sem compileOp (t: Expr) (args: [JSExpr]) =
+  sem compileCOp (t: Expr) (args: [JSExpr]) =
 
   -- Binary operators
   | CAddi _
@@ -139,7 +139,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
       -- Intrinsics
       else match fun with TmConst { val = val } then
         let args = map compileMExpr args in
-        compileOp fun args val
+        compileCOp fun args val
 
       else error "Unsupported application in compileMExpr"
     else never
@@ -171,7 +171,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
+    else match compileCOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileCOp
     else
       error "Unsupported literal"
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
