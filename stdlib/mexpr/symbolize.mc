@@ -91,7 +91,7 @@ lang Sym = Ast
     symbolizeTopExpr env expr
 
   -- Symbolize with builtin environment and ignore errors
-  sem symbolizeallowFree =
+  sem symbolizeAllowFree =
   | expr ->
     let env = { symEnvEmpty with allowFree = true } in
     symbolizeExpr env expr

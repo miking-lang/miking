@@ -224,7 +224,7 @@ and const =
   | Ctensor2string of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
-  | CbootParserParseMExprString of int Mseq.t Mseq.t option
+  | CbootParserParseMExprString of bool option * int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
       (bool * bool * int Mseq.t Mseq.t * bool * bool * bool) option
       * int Mseq.t Mseq.t option

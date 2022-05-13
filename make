@@ -115,7 +115,8 @@ compile_test () {
   set +e
   binary=$(mktemp)
   output=$1
-  output="$output\n$($2 --output $binary $1 2>&1)"
+  compile="$2 --output $binary"
+  output="$output\n$($compile $1 2>&1)"
   exit_code=$?
   if [ $exit_code -eq 0 ]
   then
@@ -128,7 +129,7 @@ compile_test () {
         exit 1
     fi
   else
-      echo "ERROR: command '$2 $1 2>&1' exited with $exit_code"
+      echo "ERROR: command '$compile $1 2>&1' exited with $exit_code"
       exit 1
   fi
   echo "$output\n"

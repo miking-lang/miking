@@ -136,17 +136,23 @@ let reportErrorAndExit err =
   Printf.fprintf stderr "%s\n" error_string ;
   exit 1
 
-let parseMExprString keywords str =
+let parseMExprString allow_free keywords str =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
-    PTreeTm
-      ( str |> Intrinsics.Mseq.Helpers.to_ustring
-      |> Parserutils.parse_mexpr_string
-      |> Parserutils.raise_parse_error_on_non_unique_external_id
-      |> Symbolize.symbolize
-           (Symbolize.merge_sym_envs_pick_left builtin_name2sym
-              (symbolizeEnvWithKeywords keywords) )
-      |> Parserutils.raise_parse_error_on_partially_applied_external )
+    let allow_free_prev = !Symbolize.allow_free in
+    Symbolize.allow_free := allow_free ;
+    let r =
+      PTreeTm
+        ( str |> Intrinsics.Mseq.Helpers.to_ustring
+        |> Parserutils.parse_mexpr_string
+        |> Parserutils.raise_parse_error_on_non_unique_external_id
+        |> Symbolize.symbolize
+             (Symbolize.merge_sym_envs_pick_left builtin_name2sym
+                (symbolizeEnvWithKeywords keywords) )
+        |> Parserutils.raise_parse_error_on_partially_applied_external )
+    in
+    Symbolize.allow_free := allow_free_prev ;
+    r
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 

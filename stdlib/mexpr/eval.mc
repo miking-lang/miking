@@ -1762,7 +1762,8 @@ lang BootParserEval =
 
   syn Const =
   | CBootParserTree {val : BootParseTree}
-  | CBootParserParseMExprString2 [String]
+  | CBootParserParseMExprString2 (Bool)
+  | CBootParserParseMExprString3 (Bool, [String])
   | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool, Bool)
   | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool, Bool), [String])
   | CBootParserGetTerm2 BootParseTree
@@ -1777,7 +1778,8 @@ lang BootParserEval =
 
   sem constArity =
   | CBootParserTree _ -> 0
-  | CBootParserParseMExprString2 _ -> 1
+  | CBootParserParseMExprString2 _ -> 2
+  | CBootParserParseMExprString3 _ -> 3
   | CBootParserParseMCoreFile2 _ -> 2
   | CBootParserParseMCoreFile3 _ -> 3
   | CBootParserGetTerm2 _ -> 1
@@ -1792,6 +1794,22 @@ lang BootParserEval =
 
   sem delta info arg =
   | CBootParserParseMExprString _ ->
+    match arg with TmRecord {bindings = bs} then
+      match
+        map (lam b. mapLookup b bs) (map stringToSid ["0"])
+      with [
+        Some (TmConst { val = CBool { val = allowFree } })
+      ]
+      then
+        TmConst {val = CBootParserParseMExprString2 ( allowFree ),
+                 ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+      else
+        infoErrorExit info
+          "First argument to bootParserParseMExprString incorrect record"
+    else
+      infoErrorExit info
+        "First argument to bootParserParseMExprString not a record"
+  | CBootParserParseMExprString2 options ->
     match arg with TmSeq {tms = seq} then
       let keywords =
         map
@@ -1805,15 +1823,15 @@ lang BootParserEval =
                   "bootParserParseMExprString not a sequence"
                 ]))
           seq in
-      TmConst {val = CBootParserParseMExprString2 keywords,
+      TmConst {val = CBootParserParseMExprString3 (options,keywords),
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else
       infoErrorExit info
         "First argument to bootParserParseMExprString not a sequence"
-  | CBootParserParseMExprString2 keywords ->
+  | CBootParserParseMExprString3 (options, keywords) ->
     match arg with TmSeq {tms = seq} then
       let t =
-        bootParserParseMExprString keywords (_evalSeqOfCharsToString info seq)
+        bootParserParseMExprString options keywords (_evalSeqOfCharsToString info seq)
       in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}

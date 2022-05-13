@@ -991,7 +991,7 @@ mexpr
 use Test in
 
 -- Test functions --
-let _parse = parseMExprString [] in
+let _parse = parseMExprStringKeywords [] in
 let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
   lam env: Option PprintEnv. lam t: Expr.
     match env with Some env then

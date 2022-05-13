@@ -1146,7 +1146,8 @@ let utensor2string_ = tensor2string_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
+  lam options. lam key. lam str.
+    appf3_ (uconst_ (CBootParserParseMExprString ())) options key str
 
 let bootParserParseMCoreFile_ = use MExprAst in
   lam pruneArgs.

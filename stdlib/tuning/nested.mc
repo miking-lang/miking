@@ -335,7 +335,7 @@ use TestLang in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
+  let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in
