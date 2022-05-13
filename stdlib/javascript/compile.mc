@@ -162,6 +162,12 @@ lang MExprJSCompile = MExprAst + JSProgAst
     else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
     else
       error "Unsupported literal"
+  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
+
+
+  ----------------
+  -- STATEMENTS --
+  ----------------
 
   | TmLet { ident = id, body = expr, inexpr = e } ->
     -- Check if identifier is the ignore identifier (_, or [])
@@ -200,7 +206,6 @@ lang MExprJSCompile = MExprAst + JSProgAst
       }
     else error "ERROR: TmRecLets must have at least one binding."
   | TmType { inexpr = e } -> compileExpr e -- no op (Skip type declaration)
-  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
   | TmConApp _ -> error "Constructor application in compileExpr."
   | TmConDef { inexpr = e } -> compileExpr e -- no op (Skip type constructor definitions)
   | TmMatch _ -> error "Match expressions cannot be handled in compileExpr."
