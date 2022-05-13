@@ -275,11 +275,10 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   -- are used in the graph coloring. By construction, these references
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
-  sem propagateConstraintConst (res : Name) (args: [Name]) (graph: CFAGraph)
-                               (info: Info) =
-  | CRef _ -> graph
-  | CModRef _ -> graph
-  | CDeRef _ -> graph
+  sem generateConstraintsConst info ident =
+  | CRef _ -> []
+  | CModRef _ -> []
+  | CDeRef _ -> []
 
   sem generateHoleMatchConstraints (id: Name) (target: Name) =
   | pat ->
