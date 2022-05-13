@@ -43,16 +43,33 @@ let _charSeq2String = use MExprAst in lam tms.
 let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
+-- Ensure that a JS Block expression is closed
+let ensureClosed = lam e. match e with JSEBlock { }
+  then { e with closed = true }
+  else e in
+
 -- Names used in the compiler for intrinsics
 let _consoleLog = use JSExprAst in
   JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
 
+------------------------------------
+-- Pattern -> JavaScript FRAGMENT --
+------------------------------------
+
+lang PatJSCompile = NamedPat + SeqTotPat + SeqEdgePat +
+                    RecordPat + DataPat + IntPat + OrPat +
+                    CharPat + BoolPat + AndPat + NotPat
+  sem compilePat =
+  | NamedPat { name = name, pat = pat } ->
+    let (env, str) = compilePat pat in
+    (env, join [name, " = ", str])
+end
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = MExprAst + JSProgAst
+lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
 
   -- Entry point
   sem compileProg =
@@ -208,7 +225,21 @@ lang MExprJSCompile = MExprAst + JSProgAst
   | TmType { inexpr = e } -> compileExpr e -- no op (Skip type declaration)
   | TmConApp _ -> error "Constructor application in compileExpr."
   | TmConDef { inexpr = e } -> compileExpr e -- no op (Skip type constructor definitions)
-  | TmMatch _ -> error "Match expressions cannot be handled in compileExpr."
+  | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
+    let target: JSExpr = compileExpr target in
+    let pat: JSExpr = compilePat pat in
+    let thn: JSExpr = ensureClosed compileExpr thn in
+    let els: JSExpr = ensureClosed compileExpr els in
+    JSEBlock {
+      exprs = [
+        JSSIf {
+          cond = JSEBinOp { op = JSOAssign {}, lhs = pat, rhs = target },
+          thn = thn,
+          els = els
+        }
+      ],
+      closed = false
+    }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileExpr."
 
