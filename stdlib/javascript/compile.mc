@@ -231,14 +231,10 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
     let pat: JSExpr = compilePat target pat in
     let thn: JSStmt = compileMExpr thn in
     let els: JSStmt = compileMExpr els in
-    JSSSeq {
-      stmts = [
-        JSSIf {
-          cond = JSEBinOp { op = JSOAssign {}, lhs = pat, rhs = target },
-          thn = thn,
-          els = els
-        }
-      ]
+    JSSIf {
+      cond = pat,
+      thn = thn,
+      els = els
     }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
