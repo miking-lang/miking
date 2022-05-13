@@ -51,20 +51,26 @@ let _consoleLog = use JSExprAst in
 -- Pattern -> JavaScript FRAGMENT --
 ------------------------------------
 
-lang PatJSCompile = NamedPat + SeqTotPat + SeqEdgePat +
+lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
                     RecordPat + DataPat + IntPat + OrPat +
                     CharPat + BoolPat + AndPat + NotPat
-  sem compilePat =
-  | NamedPat { name = name, pat = pat } ->
-    let (env, str) = compilePat pat in
-    (env, join [name, " = ", str])
+  sem compilePat (target: JSExpr) =
+  | PatNamed { ident = name } ->
+    match name with PName name then
+      JSEBinOp {
+        op = JSOAssign {},
+        lhs = JSEVar { id = name },
+        rhs = target
+      }
+    else -- Whildcard pattern
+      JSEBool { b = true }
 end
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
+lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
 
   -- Entry point
   sem compileProg =
@@ -219,7 +225,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
   | TmConDef { inexpr = e } -> compileMExpr e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = compileMExpr target in
-    let pat: JSExpr = compilePat pat in
+    let pat: JSExpr = compilePat target pat in
     let thn: JSStmt = compileMExpr thn in
     let els: JSStmt = compileMExpr els in
     JSSSeq {
