@@ -43,11 +43,6 @@ let _charSeq2String = use MExprAst in lam tms.
 let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
--- Ensure that a JS Block expression is closed
-let ensureClosed = lam e. match e with JSEBlock { }
-  then { e with closed = true }
-  else e in
-
 -- Names used in the compiler for intrinsics
 let _consoleLog = use JSExprAst in
   JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
@@ -75,7 +70,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
   sem compileProg =
   | prog ->
     -- Run compiler
-    match compileExpr prog with expr then
+    match compileMExpr prog with expr then
       -- Return final top level expressions
       JSPProg { imports = [], exprs = [expr] }
     else never
@@ -125,7 +120,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
   -- EXPRESSIONS --
   -----------------
 
-  sem compileExpr =
+  sem compileMExpr =
 
   | TmVar { ident = id } -> JSEVar { id = id }
 
@@ -139,24 +134,24 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
     match rec [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = JSEVar { id = ident }, args = map compileExpr args, curried = true }
+        JSEApp { fun = JSEVar { id = ident }, args = map compileMExpr args, curried = true }
 
       -- Intrinsics
       else match fun with TmConst { val = val } then
-        let args = map compileExpr args in
+        let args = map compileMExpr args in
         compileOp fun args val
 
-      else error "Unsupported application in compileExpr"
+      else error "Unsupported application in compileMExpr"
     else never
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
-    JSEFun { param = arg, body = compileExpr body }
+    JSEFun { param = arg, body = compileMExpr body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     if mapIsEmpty bindings then JSEInt { i = 0 }
-    else error "ERROR: Records cannot be handled in compileExpr."
+    else error "ERROR: Records cannot be handled in compileMExpr."
 
   | TmSeq {tms = tms, ty = ty, info = info} & t ->
     -- Special handling of strings
@@ -167,7 +162,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
     else
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
-      let tms: [JSExpr] = map compileExpr tms in
+      let tms: [JSExpr] = map compileMExpr tms in
       JSESeq { exprs = tms, info = info }
 
   -- Literals
@@ -179,7 +174,7 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
     else match compileOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileOp
     else
       error "Unsupported literal"
-  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileExpr."
+  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
@@ -192,59 +187,55 @@ lang MExprJSCompile = PatJSCompile + MExprAst + JSProgAst
     match nameGetStr id with [] then
       match expr with TmApp { } then
         -- Inline the function call
-        JSEBlock {
-          exprs = [
-            compileExpr expr,
-            compileExpr e
-          ],
-          closed = false
+        JSSSeq {
+          stmts = [
+            compileMExpr expr,
+            compileMExpr e
+          ]
         }
       else
         -- Ignore the expression
-        compileExpr e
+        compileMExpr e
     else
       -- Normal let binding
-      JSEBlock {
-        exprs = [
-          JSSDef { id = id, expr = compileExpr expr },
-          compileExpr e
-        ],
-        closed = false
+      JSSSeq {
+        stmts = [
+          JSSDef { id = id, expr = compileMExpr expr },
+          compileMExpr e
+        ]
       }
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
     match head bindings with { ident = ident, body = body } then
-      JSEBlock {
-        exprs = [
-          JSSDef { id = ident, expr = compileExpr body },
-          compileExpr e
-        ],
-        closed = false
+      JSSSeq {
+        stmts = [
+          JSSDef { id = ident, expr = compileMExpr body },
+          compileMExpr e
+        ]
       }
     else error "ERROR: TmRecLets must have at least one binding."
-  | TmType { inexpr = e } -> compileExpr e -- no op (Skip type declaration)
-  | TmConApp _ -> error "Constructor application in compileExpr."
-  | TmConDef { inexpr = e } -> compileExpr e -- no op (Skip type constructor definitions)
+  | TmType { inexpr = e } -> compileMExpr e -- no op (Skip type declaration)
+  | TmConApp _ -> error "Constructor application in compileMExpr."
+  | TmConDef { inexpr = e } -> compileMExpr e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
-    let target: JSExpr = compileExpr target in
+    let target: JSExpr = compileMExpr target in
     let pat: JSExpr = compilePat pat in
-    let thn: JSExpr = ensureClosed compileExpr thn in
-    let els: JSExpr = ensureClosed compileExpr els in
-    JSEBlock {
-      exprs = [
+    let thn: JSStmt = compileMExpr thn in
+    let els: JSStmt = compileMExpr els in
+    JSSSeq {
+      stmts = [
         JSSIf {
           cond = JSEBinOp { op = JSOAssign {}, lhs = pat, rhs = target },
           thn = thn,
           els = els
         }
-      ],
-      closed = false
+      ]
     }
-  | TmUtest _ -> error "Unit test expressions cannot be handled in compileExpr."
-  | TmExt _ -> error "External expressions cannot be handled in compileExpr."
+  | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
+  | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
 
   -- Should not occur
-  | TmNever _ -> error "Never term found in compileExpr"
+  | TmNever _ -> error "Never term found in compileMExpr"
 
 end
 
