@@ -1,5 +1,5 @@
 mexpr
     match { b = 1 } with a then
-        true
+        print a
     else
-        false
+        print false

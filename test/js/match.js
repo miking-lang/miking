@@ -1,5 +1,5 @@
 if ((a = {b: 1})) {
-  true
+  console.log(a);
 } else {
-  false
+  console.log(false);
 }
