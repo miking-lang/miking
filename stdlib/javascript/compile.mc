@@ -58,12 +58,18 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
   | PatNamed { ident = name } ->
     match name with PName name then
       JSEBinOp {
-        op = JSOAssign {},
+        op  = JSOAssign {},
         lhs = JSEVar { id = name },
         rhs = target
       }
     else -- Whildcard pattern
       JSEBool { b = true }
+  | PatInt { val = val } ->
+    JSEBinOp {
+      op = JSOEq {},
+      lhs = JSEInt { i = val },
+      rhs = target
+    }
   | _ -> error "compilePat: Unsupported pattern"
 end
 
