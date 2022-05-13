@@ -376,7 +376,7 @@ let norm : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
 let parseMExprStringKeywords = lam ks.
-  parseMExprString { defaultBootParserParseMCoreFileArg with keywords = ks }
+  parseMExprString { defaultBootParserParseMExprStringArg with keywords = ks }
 in
 
 -- Test the combination of parsing and pretty printing

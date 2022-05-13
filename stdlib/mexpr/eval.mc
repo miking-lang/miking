@@ -1831,7 +1831,7 @@ lang BootParserEval =
   | CBootParserParseMExprString3 (options, keywords) ->
     match arg with TmSeq {tms = seq} then
       let t =
-        bootParserParseMExprString options keywords (_evalSeqOfCharsToString info seq)
+        bootParserParseMExprString (options,) keywords (_evalSeqOfCharsToString info seq)
       in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
