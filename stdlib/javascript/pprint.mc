@@ -71,6 +71,25 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
         else never
       else never
     else never
+  | JSSBlock { stmts = stmts } ->
+    let i = indent in
+    let ii = pprintIncr indent in
+    match mapAccumL (printJSStmt ii) env stmts with (env,stmts) then
+      (env, join [pprintNewline i, "{",
+                  pprintNewline ii, strJoin (pprintNewline ii) stmts,
+                  pprintNewline i, "}"])
+    else never
+  | JSSSeq { stmts = stmts } ->
+    let i = indent in
+    match mapAccumL (printJSStmt i) env stmts with (env,stmts) then
+      (env, strJoin (pprintNewline i) stmts)
+    else never
+  | JSSRet { val = val } ->
+    match val with Some val then
+      match (printJSExpr 0 env) val with (env, val) then
+        (env, join ["return ", val, ";"])
+      else never
+    else (env, "return")
   | expr ->
     match (printJSExpr indent env) expr with (env, str) then
       -- Detect outmost function call
@@ -79,6 +98,9 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
       else (env, str)
     else error "printJSStmt: unexpected expression"
     
+
+
+
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
@@ -137,19 +159,6 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       (env, join ["[", strJoin ", " exprs, "]"])
     else never
-  | JSEBlock { exprs = exprs, closed = closed } ->
-    let i = indent in
-    let ii = pprintIncr indent in
-    if closed then
-      match mapAccumL (printJSStmt ii) env exprs with (env,exprs) then
-        (env, join [pprintNewline i, "{",
-                    pprintNewline ii, strJoin (pprintNewline ii) exprs,
-                    pprintNewline i, "}"])
-      else never
-    else
-      match mapAccumL (printJSStmt i) env exprs with (env,exprs) then
-        (env, strJoin (pprintNewline i) exprs)
-      else never
 
   sem printJSBinOp (lhs: String) (rhs: String) =
   | JSOAssign    {} -> join [lhs, " = ", rhs]
