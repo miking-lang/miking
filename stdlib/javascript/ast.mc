@@ -18,7 +18,6 @@ lang JSExprAst
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
   | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
-  | JSEBlock     { exprs : [JSExpr], closed: Bool } -- Blocks with optional surrounding (closing) braces
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs
@@ -52,16 +51,17 @@ end
 lang JSStmtAst = JSExprAst
 
   syn JSStmt =
-  | JSSDef       { id: Name, expr: JSExpr }     -- Definitions
+  | JSSDef     { id: Name, expr: JSExpr }     -- Definitions
   | JSSIf      { cond: JSExpr, thn: JSStmt, els: JSStmt }
   | JSSSwitch  { cond: JSExpr, body: [(Int, [JSStmt])], default: Option [JSStmt] }
-  | JSSWhile   { cond: JSExpr, body: JSStmt }
-  | JSSExpr    { expr: JSExpr }
-  | JSSComp    { stmts: JSStmt }
+  | JSSWhile   { cond: JSExpr, body: JSStmt } -- While loop
   | JSSRet     { val: Option JSExpr } -- Return
-  | JSSCont    {}
-  | JSSBreak   {}
+  | JSSCont    { } -- Continue
+  | JSSBreak   { } -- Break
   | JSSDelete  { ident: Name } -- Delete variable
+  | JSSExpr    { expr: JSExpr } -- Expression statement
+  | JSSBlock   { stmts: [JSStmt] } -- Block statement (With surrounding closing braces)
+  | JSSSeq     { stmts: [JSStmt] } -- Sequence of statements
 
 end
 
