@@ -55,20 +55,19 @@ let _insertTyCon = lam name. lam ty. lam env : TCEnv.
   {env with tyConEnv = mapInsert name ty env.tyConEnv}
 
 type UnifyEnv = {
+  info: Info,  -- The info of the expression triggering the unification
   names: BiNameMap,
   tyConEnv: Map Name ([Name], Type)
 }
 
-let errInfo = ref (NoInfo ())
-
 let unificationError =
-  lam lhs. lam rhs.
+  lam info. lam lhs. lam rhs.
   let msg = join [
     "Type check failed: unification failure\n",
     "LHS: ", lhs, "\n",
     "RHS: ", rhs, "\n"
   ] in
-  infoErrorExit (deref errInfo) msg
+  infoErrorExit info msg
 
 let _type2str = use MExprPrettyPrint in
   type2str
@@ -128,9 +127,9 @@ end
 
 lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
-  sem unify (env : TCEnv) (ty1 : Type) =
+  sem unify (info : Info) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
-    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv} in
+    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info} in
     unifyTypes env (ty1, ty2)
 
   sem unifyTypes (env : UnifyEnv) =
@@ -141,7 +140,7 @@ lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
   | (ty1, ty2) ->
-    unificationError (_type2str ty1) (_type2str ty2)
+    unificationError env.info (_type2str ty1) (_type2str ty2)
 
   -- checkBeforeUnify is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
@@ -149,9 +148,9 @@ lang Unify = MExprAst + ResolveAlias
   -- - Update level fields of FlexVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
   -- - If `tv' is unified with a bound type variable, ensure no capture occurs
-  sem checkBeforeUnify (tv : FlexVarRec) =
+  sem checkBeforeUnify (info : Info) (tv : FlexVarRec) =
   | ty ->
-    sfold_Type_Type (lam. lam ty. checkBeforeUnify tv ty) () ty
+    sfold_Type_Type (lam. lam ty. checkBeforeUnify info tv ty) () ty
 end
 
 -- Helper language providing functions to unify fields of record-like types
@@ -164,7 +163,7 @@ lang UnifyFields = Unify
       match mapLookup k m2 with Some tyfield2 then
         unifyTypes env (tyfield1, tyfield2)
       else
-        unificationError (_fields2str m1) (_fields2str m2)
+        unificationError env.info (_fields2str m1) (_fields2str m2)
     in
     iter f (mapBindings m1)
 
@@ -174,7 +173,7 @@ lang UnifyFields = Unify
     if eqi (mapSize m1) (mapSize m2) then
       unifyFields env m1 m2
     else
-      unificationError (_fields2str m1) (_fields2str m2)
+      unificationError env.info (_fields2str m1) (_fields2str m2)
 end
 
 lang VarTypeUnify = Unify + VarTypeAst
@@ -182,16 +181,16 @@ lang VarTypeUnify = Unify + VarTypeAst
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
     else if biMem (t1.ident, t2.ident) env.names then ()
-    else unificationError (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (_type2str ty1) (_type2str ty2)
 
-  sem checkBeforeUnify (tv : FlexVarRec) =
+  sem checkBeforeUnify (info : Info) (tv : FlexVarRec) =
   | TyVar t ->
     if leqi tv.level t.level then
       let msg = join [
         "Type check failed: unification failure\n",
         "Attempted to unify with type variable escaping its scope!\n"
       ] in
-      infoErrorExit (deref errInfo) msg
+      infoErrorExit info msg
     else ()
 end
 
@@ -220,7 +219,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     -- resolves any potential links, so TyFlexes are always unbound here.
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
     if not (nameEq r1.ident r2.ident) then
-      checkBeforeUnify r1 ty2;
+      checkBeforeUnify env.info r1 ty2;
       let updated =
         Unbound {{{r1 with level = mini r1.level r2.level}
                       with sort = addSorts env (r1.sort, r2.sort)}
@@ -231,25 +230,25 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
   | (TyFlex t1 & ty1, !(TyUnknown _ | TyFlex _) & ty2)
   | (!(TyUnknown _ | TyFlex _) & ty2, TyFlex t1 & ty1) ->
     match deref t1.contents with Unbound tv in
-    checkBeforeUnify tv ty2;
+    checkBeforeUnify env.info tv ty2;
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
        unifyFields env r1.fields r2.fields
      else match tv.sort with RecordVar _ then
-       unificationError (_type2str ty1) (_type2str ty2)
+       unificationError env.info (_type2str ty1) (_type2str ty2)
      else ());
     modref t1.contents (Link ty2)
 
-  sem checkBeforeUnify (tv : FlexVarRec) =
+  sem checkBeforeUnify (info : Info) (tv : FlexVarRec) =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
       if nameEq r.ident tv.ident then
         let msg = "Type check failed: occurs check\n" in
-        infoErrorExit (deref errInfo) msg
+        infoErrorExit info msg
       else
         let sort =
           match (tv.sort, r.sort) with (WeakVar _, TypeVar _) then WeakVar ()
           else
-            sfold_VarSort_Type (lam. lam ty. checkBeforeUnify tv ty) () r.sort;
+            sfold_VarSort_Type (lam. lam ty. checkBeforeUnify info tv ty) () r.sort;
             r.sort
         in
         let updated = Unbound {{{r with level = mini r.level tv.level}
@@ -257,7 +256,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
                                    with allowGeneralize = and r.allowGeneralize tv.allowGeneralize} in
         modref t.contents updated
     else
-      checkBeforeUnify tv (resolveLink ty)
+      checkBeforeUnify info tv (resolveLink ty)
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -280,28 +279,28 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
     (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
        unifyFieldsStrict env r1.fields r2.fields
      else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
-     else unificationError (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
+     else unificationError env.info (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
-  sem checkBeforeUnify (tv : FlexVarRec) =
+  sem checkBeforeUnify (info : Info) (tv : FlexVarRec) =
   | TyAll t ->
     match tv.sort with WeakVar _ then
       let msg = join [
         "Type check failed: unification failure\n",
         "Attempted to unify monomorphic type variable with polymorphic type!\n"
       ] in
-      infoErrorExit (deref errInfo) msg
+      infoErrorExit info msg
     else
-      sfold_VarSort_Type (lam. lam ty. checkBeforeUnify tv ty) () t.sort;
-      checkBeforeUnify tv t.ty
+      sfold_VarSort_Type (lam. lam ty. checkBeforeUnify info tv ty) () t.sort;
+      checkBeforeUnify info tv t.ty
 end
 
 lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
-    else unificationError (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (_type2str ty1) (_type2str ty2)
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -464,7 +463,6 @@ lang TypeCheck = Unify + Generalize + ResolveLinks
   -- type may contain TyFlex links.
   sem typeCheckExpr (env : TCEnv) =
   | tm ->
-    modref errInfo (infoTm tm);
     typeCheckBase env tm
 
   sem typeCheckBase (env : TCEnv) =
@@ -515,7 +513,7 @@ lang AppTypeCheck = TypeCheck + AppAst
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
     let tyRes = newvar env.currentLvl t.info in
-    unify env (tyTm lhs) (ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
+    unify t.info env (tyTm lhs) (ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
                with ty = tyRes}
@@ -533,7 +531,7 @@ lang LetTypeCheck = TypeCheck + LetAst
       -- Type annotation: unify the annotated type with the inferred one
       (lam ty.
         match stripTyAll (resolveAlias env.tyConEnv ty) with (_, tyAnnot) in
-        unify env tyAnnot (tyTm body);
+        unify t.info env tyAnnot (tyTm body);
         ty)
       (sremoveUnknown t.tyBody)
     in
@@ -575,11 +573,11 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
         -- inferred type of the binding
         (lam.
           match mapLookup b.ident recLetEnv.varEnv with Some ty in
-          unify env ty (tyTm body))
+          unify (infoTm body) env ty (tyTm body))
         -- Type annotation: unify the inferred type of the body with the annotated one
         (lam ty.
           match stripTyAll ty with (_, tyAnnot) in
-          unify env tyAnnot (tyTm body))
+          unify (infoTm body) env tyAnnot (tyTm body))
         (sremoveUnknown b.tyBody);
       {b with body = body}
     in
@@ -605,10 +603,10 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env t.pat with (thnEnv, pat) in
-    unify env (tyTm target) (tyPat pat);
+    unify (infoTm target) env (tyTm target) (tyPat pat);
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr env t.els in
-    unify env (tyTm thn) (tyTm els);
+    unify (infoTm els) env (tyTm thn) (tyTm els);
     TmMatch {{{{{t with target = target}
                    with thn = thn}
                    with els = els}
@@ -629,7 +627,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
-    iter (compose (unify env elemTy) tyTm) tms;
+    iter (lam tm. unify (infoTm tm) env elemTy (tyTm tm)) tms;
     TmSeq {{t with tms = tms}
               with ty = ityseq_ t.info elemTy}
 end
@@ -658,7 +656,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
-    unify env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
+    unify (infoTm rec) env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
     (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
     TmRecordUpdate {{{t with rec = rec}
                         with value = value}
@@ -684,7 +682,7 @@ lang DataTypeCheck = TypeCheck + DataAst
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
       match inst env.tyConEnv env.currentLvl lty with TyArrow {from = from, to = to} in
-      unify env (tyTm body) from;
+      unify (infoTm body) env (tyTm body) from;
       TmConApp {{t with body = body}
                    with ty   = to}
     else
@@ -703,9 +701,9 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckExpr env t.next in
     let tusing = optionMap (typeCheckExpr env) t.tusing in
     (match tusing with Some tu then
-       unify env (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
+       unify (infoTm tu) env (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
      else
-       unify env (tyTm test) (tyTm expected));
+       unify (infoTm expected) env (tyTm test) (tyTm expected));
     TmUtest {{{{{t with test = test}
                    with expected = expected}
                    with next = next}
@@ -748,7 +746,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL typeCheckPat env t.pats with (env, pats) in
-    iter (compose (unify env elemTy) tyPat) pats;
+    iter (lam pat. unify (infoPat pat) env elemTy (tyPat pat)) pats;
     (env, PatSeqTot {{t with pats = pats}
                         with ty = ityseq_ t.info elemTy})
 end
@@ -758,7 +756,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
-    let unifyPat = compose (unify env elemTy) tyPat in
+    let unifyPat = lam pat. unify (infoPat pat) env elemTy (tyPat pat) in
     match mapAccumL typeCheckPat env t.prefix with (env, prefix) in
     iter unifyPat prefix;
     match mapAccumL typeCheckPat env t.postfix with (env, postfix) in
@@ -790,7 +788,7 @@ lang DataPatTypeCheck = TypeCheck + DataPat
     match mapLookup t.ident env.conEnv with Some ty then
       match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env t.subpat with (env, subpat) in
-      unify env (tyPat subpat) from;
+      unify (infoPat subpat) env (tyPat subpat) from;
       (env, PatCon {{t with subpat = subpat}
                        with ty = to})
     else
@@ -821,7 +819,7 @@ lang AndPatTypeCheck = PatTypeCheck + AndPat
   | PatAnd t ->
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
-    unify env (tyPat lpat) (tyPat rpat);
+    unify (infoPat rpat) env (tyPat lpat) (tyPat rpat);
     (env, PatAnd {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
 end
 
@@ -832,7 +830,7 @@ lang OrPatTypeCheck = PatTypeCheck + OrPat
   | PatOr t ->
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
-    unify env (tyPat lpat) (tyPat rpat);
+    unify (infoPat rpat) env (tyPat lpat) (tyPat rpat);
     (env, PatOr {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
 end
 
