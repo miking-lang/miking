@@ -52,6 +52,7 @@ end
 lang JSStmtAst = JSExprAst
 
   syn JSStmt =
+  | JSSExpr    { expr: JSExpr } -- Expression statement
   | JSSDef     { id: Name, expr: JSExpr }     -- Definitions
   | JSSIf      { cond: JSExpr, thn: JSStmt, els: JSStmt }
   | JSSSwitch  { cond: JSExpr, body: [(Int, [JSStmt])], default: Option [JSStmt] }
@@ -60,7 +61,6 @@ lang JSStmtAst = JSExprAst
   | JSSCont    { } -- Continue
   | JSSBreak   { } -- Break
   | JSSDelete  { ident: Name } -- Delete variable
-  | JSSExpr    { expr: JSExpr } -- Expression statement
   | JSSBlock   { stmts: [JSStmt] } -- Block statement (With surrounding closing braces)
   | JSSSeq     { stmts: [JSStmt] } -- Sequence of statements
 
