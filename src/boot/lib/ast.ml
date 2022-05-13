@@ -250,13 +250,13 @@ and ptree =
   | PTreeInfo of info
 
 (* Terms in MLang *)
-and cdecl = CDecl of info * ustring * ty
+and cdecl = CDecl of info * ustring list * ustring * ty
 
 and param = Param of info * ustring * ty
 
 and decl =
   (* TODO(?,?): Local? *)
-  | Data of info * ustring * cdecl list
+  | Data of info * ustring * int * cdecl list
   | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 
