@@ -805,17 +805,18 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + DirectConstraint
     | CIsRope _
     ) -> []
 
-  | ( CMap _
-    | CMapi _
-    | CIter _
-    | CIteri _
-    | CFoldl _
-    | CFoldr _
-    | CCreate _
-    | CCreateList _
-    | CCreateRope _
-    | CSplitAt _
-    ) -> infoErrorExit info "Sequence operation not supported in CFA"
+  -- TODO(Linnea, 2022-05-13): Add flow constraints to all sequence operations
+  -- | ( CMap _
+  --   | CMapi _
+  --   | CIter _
+  --   | CIteri _
+  --   | CFoldl _
+  --   | CFoldr _
+  --   | CCreate _
+  --   | CCreateList _
+  --   | CCreateRope _
+  --   | CSplitAt _
+  --   ) -> []
 
   sem propagateConstraintConst res args graph =
   | CSet _ ->
