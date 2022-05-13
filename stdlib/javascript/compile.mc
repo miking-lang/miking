@@ -64,6 +64,7 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       }
     else -- Whildcard pattern
       JSEBool { b = true }
+  | _ -> error "compilePat: Unsupported pattern"
 end
 
 -------------------------------------------
