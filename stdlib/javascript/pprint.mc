@@ -159,6 +159,16 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       (env, join ["[", strJoin ", " exprs, "]"])
     else never
+  | JSEObject { fields = fields } ->
+    let printPair = lam field. match field with (n, e)
+      then match (printJSExpr 0) env e with (env,e) then
+          join [n, ": ", e]
+        else never
+      else never in
+    match map (printPair) fields with prs then
+      dprint prs;
+      (env, join ["{", strJoin ", " prs, "}"])
+    else never
 
   sem printJSBinOp (lhs: String) (rhs: String) =
   | JSOAssign    {} -> join [lhs, " = ", rhs]

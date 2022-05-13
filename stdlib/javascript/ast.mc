@@ -18,6 +18,7 @@ lang JSExprAst
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
   | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
+  | JSEObject    { fields: [(String, JSExpr)] } -- Objects
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs

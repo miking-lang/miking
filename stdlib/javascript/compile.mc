@@ -156,8 +156,11 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
-    if mapIsEmpty bindings then JSEInt { i = 0 }
-    else error "ERROR: Records cannot be handled in compileMExpr."
+    let fieldSeq = mapToSeq bindings in
+    let compileField = lam f. match f with (sid, expr)
+      then (sidToString sid, compileMExpr expr)
+      else never in
+    JSEObject { fields = map compileField fieldSeq }
 
   | TmSeq {tms = tms, ty = ty, info = info} & t ->
     -- Special handling of strings
