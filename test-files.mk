@@ -44,7 +44,6 @@ typecheck_files += stdlib/ext/ext-test.mc
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
-compile_files_exclude += stdlib/json.mc
 compile_files_exclude += stdlib/parser-combinators.mc
 compile_files_exclude += stdlib/regex.mc
 compile_files_exclude += test/mexpr/nestedpatterns.mc
