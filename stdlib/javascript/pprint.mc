@@ -166,7 +166,6 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
         else never
       else never in
     match map (printPair) fields with prs then
-      dprint prs;
       (env, join ["{", strJoin ", " prs, "}"])
     else never
 
