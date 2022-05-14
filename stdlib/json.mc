@@ -280,12 +280,12 @@ recursive let json2string: JsonValue -> String = lam value.
   case JsonArray values then
     cons '[' (snoc (strJoin "," (map json2string values)) ']')
   case JsonString s then
-    let escape: [Char] -> Char -> String = lam revacc. lam c.
+    let escape: [Char] -> Char -> String = lam acc. lam c.
       let cval: Int = char2int c in
       if eqi cval 8 then
-        cons 'b' (cons '\\' revacc)
+        concat acc "\\b"
       else if eqi cval 12 then
-        cons 'f' (cons '\\' revacc)
+        concat acc "\\f"
       else if or (lti cval 20) (eqi cval 127) then
         let tohex: Int -> Char = lam x.
           if lti x 10 then
@@ -293,24 +293,22 @@ recursive let json2string: JsonValue -> String = lam value.
           else
             int2char (addi (subi x 10) (char2int 'a'))
         in
-        cons (tohex (modi cval 16)) (
-          cons (tohex (divi cval 16)) (
-            cons '0' (cons '0' (cons 'u' (cons '\\' revacc)))))
+        concat acc ['\\', 'u', '0', '0', tohex (divi cval 16), tohex (modi cval 16)]
       else
         switch c
-        case '\"' then cons '\"' (cons '\\' revacc)
-        case '\\' then cons '\\' (cons '\\' revacc)
-        case '/' then cons '/' (cons '\\' revacc)
-        case '\n' then cons 'n' (cons '\\' revacc)
-        case '\r' then cons 'r' (cons '\\' revacc)
-        case '\t' then cons 't' (cons '\\' revacc)
+        case '\"' then concat acc "\\\""
+        case '\\' then concat acc "\\\\"
+        case '/' then concat acc "\\/"
+        case '\n' then concat acc "\\n"
+        case '\r' then concat acc "\\r"
+        case '\t' then concat acc "\\t"
         case _ then
           -- NOTE(johnwikman, 2022-05-13): Ignoring the upper bound on JSON
           -- character size here.
-          cons c revacc
+          snoc acc c
         end
     in
-    reverse (cons '\"' (foldl escape ['\"'] s))
+    (snoc (foldl escape "\"" s) '\"')
   case JsonFloat f then
     -- TODO(johnwikman, 2022-05-13): Verify that this 2string method actually
     -- conforms to JSON. ".01" and "13." are not valid floats in JSON.
@@ -379,6 +377,7 @@ utest json2string (JsonObject (mapFromSeq cmpString [("list", JsonArray [JsonObj
 utest jsonParse "[{\n}\n,[\n{\t}]\n]" with Left (JsonArray [JsonObject (mapEmpty cmpString), JsonArray [JsonObject (mapEmpty cmpString)]]) using eitherEq jsonEq eqString in
 utest json2string (JsonArray [JsonObject (mapEmpty cmpString), JsonArray [JsonObject (mapEmpty cmpString)]]) with "[{},[{}]]" in
 
+utest jsonParse " [5, \"a\\nb\"]\t" with Left (JsonArray [JsonInt 5, JsonString "a\nb"]) in
 
 utest jsonParse "{\"mystr\" : foo}" with Right "Error at position 11: Invalid start to a JSON value." using eitherEq jsonEq eqString in
 
