@@ -17,8 +17,13 @@ def sizetype(v):
 parser = argparse.ArgumentParser()
 parser.add_argument("size", type=sizetype,
                     help="Number of elements to include in the blob.")
+parser.add_argument("--seed", metavar="VALUE", dest="seed",
+                    type=int, default=None,
+                    help="Seed to use for the randomization.")
 
 args = parser.parse_args()
+if args.seed is not None:
+    random.seed(args.seed)
 
 state = {"remaining": args.size}
 
