@@ -550,7 +550,7 @@ lang LetTypeCheck = TypeCheck + LetAst
   | (tm, ty) -> tm
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsAst
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
   sem typeCheckBase env =
   | TmRecLets t ->
     let lvl = env.currentLvl in
@@ -567,7 +567,8 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b : RecLetBinding.
-      let body = typeCheckExpr {recLetEnv with currentLvl = addi 1 lvl} b.body in
+      let body = optionMapOr b.body (lam ty. propagateTyAnnot (b.body, ty)) (sremoveUnknown b.tyBody) in
+      let body = typeCheckExpr {recLetEnv with currentLvl = addi 1 lvl} body in
       optionMapOrElse
         -- No type annotation: unify the inferred type of the body with the
         -- inferred type of the binding
