@@ -353,6 +353,9 @@ utest json2string (JsonInt 1233) with "1233" in
 utest jsonParse "-1233" with Left (JsonInt (negi 1233)) in
 utest json2string (JsonInt (negi 1233)) with "-1233" in
 
+utest jsonParse "\"foo\\u0020bar\"" with Left (JsonString "foo bar") in
+utest json2string (JsonString "foo bar") with "\"foo bar\"" in
+
 utest jsonParse "true" with Left (JsonBool true) in
 utest json2string (JsonBool true) with "true" in
 
