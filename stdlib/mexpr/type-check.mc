@@ -56,16 +56,21 @@ let _insertTyCon = lam name. lam ty. lam env : TCEnv.
 
 type UnifyEnv = {
   info: Info,  -- The info of the expression triggering the unification
+  originalLhs: Type,
+  originalRhs: Type,
   names: BiNameMap,
   tyConEnv: Map Name ([Name], Type)
 }
 
 let unificationError =
-  lam info. lam lhs. lam rhs.
+  lam info. lam originalLhs. lam originalRhs. lam lhs. lam rhs.
   let msg = join [
     "Type check failed: unification failure\n",
     "LHS: ", lhs, "\n",
-    "RHS: ", rhs, "\n"
+    "RHS: ", rhs, "\n",
+    "while unifying these:\n",
+    "LHS: ", originalLhs, "\n",
+    "RHS: ", originalRhs, "\n"
   ] in
   infoErrorExit info msg
 
@@ -129,7 +134,7 @@ lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
   sem unify (info : Info) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
-    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info} in
+    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info, originalLhs = ty1, originalRhs = ty2} in
     unifyTypes env (ty1, ty2)
 
   sem unifyTypes (env : UnifyEnv) =
@@ -140,7 +145,7 @@ lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
   | (ty1, ty2) ->
-    unificationError env.info (_type2str ty1) (_type2str ty2)
+    unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
 
   -- checkBeforeUnify is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
@@ -163,7 +168,7 @@ lang UnifyFields = Unify
       match mapLookup k m2 with Some tyfield2 then
         unifyTypes env (tyfield1, tyfield2)
       else
-        unificationError env.info (_fields2str m1) (_fields2str m2)
+        unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
     in
     iter f (mapBindings m1)
 
@@ -173,7 +178,7 @@ lang UnifyFields = Unify
     if eqi (mapSize m1) (mapSize m2) then
       unifyFields env m1 m2
     else
-      unificationError env.info (_fields2str m1) (_fields2str m2)
+      unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
 end
 
 lang VarTypeUnify = Unify + VarTypeAst
@@ -181,7 +186,7 @@ lang VarTypeUnify = Unify + VarTypeAst
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
     else if biMem (t1.ident, t2.ident) env.names then ()
-    else unificationError env.info (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
 
   sem checkBeforeUnify (info : Info) (tv : FlexVarRec) =
   | TyVar t ->
@@ -234,7 +239,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
        unifyFields env r1.fields r2.fields
      else match tv.sort with RecordVar _ then
-       unificationError env.info (_type2str ty1) (_type2str ty2)
+       unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
      else ());
     modref t1.contents (Link ty2)
 
@@ -279,7 +284,7 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
     (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
        unifyFieldsStrict env r1.fields r2.fields
      else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
-     else unificationError env.info (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
+     else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
@@ -300,7 +305,7 @@ lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
-    else unificationError env.info (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
