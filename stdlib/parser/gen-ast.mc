@@ -560,13 +560,13 @@ lang CarriedRecord = CarriedTypeBase
   sem carriedRepr =
   | RecordType tys -> tyrecord_
     (map
-      (lam x: (a, CarriedType). (x.0, carriedRepr x.1))
+      (lam x. (x.0, carriedRepr x.1))
       tys)
 
   sem carriedSMapAccumL (f : Expr -> Expr -> Expr) (targetTy : Type) =
   | RecordType fields ->
     let mappingFields = mapOption
-      (lam x: (a, CarriedType). optionMap (lam y. (x.0, y)) (carriedSMapAccumL f targetTy x.1))
+      (lam x. optionMap (lam y. (x.0, y)) (carriedSMapAccumL f targetTy x.1))
       fields in
     match mappingFields with [] then None ()
     else Some

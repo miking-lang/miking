@@ -475,29 +475,6 @@ let _mkBrWrappersFor
     , finalize_ = appf2_ (nvar_ finalizeName)
     }
 
-let _mkBrWrappers
-  : GenOpInput -> Map Name Name -> GenOpResult
-  = lam config. lam synNames.
-    let wrappers = mapMapWithKey
-      (lam original. lam names : {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}.
-        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad, grouping = names.grouping, precedence = names.precedence})
-      synNames in
-    let getWrapper : Name -> WrapperInfo = lam name.
-      mapFindExn name wrappers in
-    { fragments = ""
-    , addAtomFor = lam name. (getWrapper name).addAtom_
-    , addInfixFor = lam name. (getWrapper name).addInfix_
-    , addPrefixFor = lam name. (getWrapper name).addPrefix_
-    , addPostfixFor = lam name. (getWrapper name).addPostfix_
-    , finalizeFor = lam name. (getWrapper name).finalize_
-    , wrapProductions = lam expr.
-      let definitions = mapFoldWithKey
-        (lam acc. lam. lam wrapper: WrapperInfo. concat acc wrapper.definitions)
-        []
-        wrappers in
-      bindall_ (snoc definitions expr)
-    }
-
 type GenOpResult =
   { fragments : String
   -- NOTE(vipa, 2022-04-12): This function wraps an expression such
@@ -518,6 +495,29 @@ type GenOpResult =
   -- Expr (the operator sequence already encountered)
   , finalizeFor : Name -> Expr -> Expr -> Expr
   }
+
+let _mkBrWrappers
+  : GenOpInput -> Map Name {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering} -> GenOpResult
+  = lam config. lam synNames.
+    let wrappers = mapMapWithKey
+      (lam original. lam names : {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}.
+        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad, grouping = names.grouping, precedence = names.precedence})
+      synNames in
+    let getWrapper : Name -> WrapperInfo = lam name.
+      mapFindExn name wrappers in
+    { fragments = ""
+    , addAtomFor = lam name. (getWrapper name).addAtom_
+    , addInfixFor = lam name. (getWrapper name).addInfix_
+    , addPrefixFor = lam name. (getWrapper name).addPrefix_
+    , addPostfixFor = lam name. (getWrapper name).addPostfix_
+    , finalizeFor = lam name. (getWrapper name).finalize_
+    , wrapProductions = lam expr.
+      let definitions = mapFoldWithKey
+        (lam acc. lam. lam wrapper: WrapperInfo. concat acc wrapper.definitions)
+        []
+        wrappers in
+      bindall_ (snoc definitions expr)
+    }
 
 let mkOpLanguages
   : GenOpInput -> GenOpResult
