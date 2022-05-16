@@ -1010,7 +1010,7 @@ lang CudaCWrapper =
         "\"caml/bigarray.h\"",
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\"",
-        "\"gpu-utils.cu\""
+        "\"gpu-utils.cuh\""
       ],
       tops = concat tensorTops entryPointTops}
 end

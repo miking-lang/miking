@@ -334,7 +334,7 @@ let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
     ("program.ml", pprintOCamlTops ocamlTops),
     ("program.mli", ""),
     ("gpu.cu", pprintCudaAst cudaProg),
-    ("gpu-utils.cu", gpu_utils_code),
+    ("gpu-utils.cuh", gpuUtilsCode),
     ("dune", dunefile),
     ("dune-project", "(lang dune 2.0)"),
     ("Makefile", makefile)];
