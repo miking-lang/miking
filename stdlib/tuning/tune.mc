@@ -351,6 +351,12 @@ lang TuneDep = TuneLocalSearch + Database
           cmpfApprox 0. t1.2 t2.2) idRunsTotalMs
         in
 
+        -- Print the result
+        (if d.options.printStats then
+          use TuneStats in
+          printLn (tuneStatsTime sorted)
+         else ());
+
         -- Collect those id's that are below the threshold. Multiply by nbrRuns so
         -- that we are considering the mean.
         let threshold = mulf d.options.reduceDependencies (int2float nbrRandRuns) in

@@ -21,7 +21,7 @@ lang MeasPointCSV = CSV
 
   sem csvHeader =
   | MeasPoint _ ->
-    ["id", "ident", "context", "deps", "searchSpace", "connectedComponent"]
+    ["id-meas", "ident", "context", "deps", "searchSpace", "connectedComponent"]
 
   sem csvRow2string =
   | MeasPoint m ->
@@ -56,7 +56,7 @@ lang HoleCSV = CSV
 
   sem csvHeader =
   | Hole _ ->
-    ["id", "ident", "context", "deps", "domainSize", "connectedComponent"]
+    ["id-hole", "ident", "context", "deps", "domainSize", "connectedComponent"]
 
   sem csvRow2string =
   | Hole h ->
@@ -88,7 +88,7 @@ lang ConnectedComponentCSV = CSV
 
   sem csvHeader =
   | CC _ ->
-    ["id", "deps", "size"]
+    ["id-cc", "deps", "size"]
 
   sem csvRow2string =
   | CC c ->
@@ -125,9 +125,33 @@ lang SizeCSV = CSV
   | row ->
     Size
     { total = string2float (get row 0)
-    , reduced = string2float (get row 0)
+    , reduced = string2float (get row 1)
     }
 
+end
+
+lang RunCSV = CSV
+  syn CSVRow =
+  | Run {id: Int, nbrRuns: Int, time: Float}
+
+  sem csvHeader =
+  | Run _ ->
+    ["id-meas", "nbrRuns", "time"]
+
+  sem csvRow2string =
+  | Run r ->
+    [ int2string r.id
+    , int2string r.nbrRuns
+    , float2string r.time
+    ]
+
+  sem csvString2Row =
+  | row ->
+    Run
+    { id = string2int (get row 0)
+    , nbrRuns = string2int (get row 1)
+    , time = string2float (get row 2)
+    }
 end
 
 lang TuneStats = DependencyAnalysis
@@ -312,8 +336,17 @@ lang TuneStats = DependencyAnalysis
     let holes: String = tuneStatsHoles graph searchSpace options env pprintEnv in
     let ccs: String = tuneStatsCC searchSpace in
     let size: String = tuneStatsSize searchSpace in
-    --join [measPoints, "\n", holes, "\n", ccs]
     strJoin "\n" [measPoints, holes, ccs, size]
+
+  sem tuneStatsTime: [(Int,Int,Float)] -> String
+  sem tuneStatsTime =
+  | res ->
+    use RunCSV in
+    let rows = map (lam t: (Int,Int,Float).
+        Run {id= t.0, nbrRuns= t.1, time= t.2}
+      ) res
+    in
+    csvWrite "," rows
 
 end
 
@@ -367,13 +400,13 @@ let m = if h then true else false in
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace,connectedComponent
+"id-meas,ident,context,deps,searchSpace,connectedComponent
 1,m,,0,2.,0
 
-id,ident,context,deps,domainSize,connectedComponent
+id-hole,ident,context,deps,domainSize,connectedComponent
 0,h,,1,2,0
 
-id,deps,size
+id-cc,deps,size
 0,0|1,2.
 
 total,reduced
@@ -400,14 +433,14 @@ let g2 = g h2 in
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace,connectedComponent
+"id-meas,ident,context,deps,searchSpace,connectedComponent
 2,m,,0|1,4.,0
 
-id,ident,context,deps,domainSize,connectedComponent
+id-hole,ident,context,deps,domainSize,connectedComponent
 0,hh,h1,2,2,0
 1,hh,h2,2,2,0
 
-id,deps,size
+id-cc,deps,size
 0,0|1|2,4.
 
 total,reduced
@@ -426,15 +459,15 @@ let m2 = sleepMs h2 in
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace,connectedComponent
+"id-meas,ident,context,deps,searchSpace,connectedComponent
 2,m1,,0,2.,1
 3,m2,,1,2.,0
 
-id,ident,context,deps,domainSize,connectedComponent
+id-hole,ident,context,deps,domainSize,connectedComponent
 0,h1,,2,2,1
 1,h2,,3,2,0
 
-id,deps,size
+id-cc,deps,size
 0,1|3,2.
 1,0|2,2.
 
@@ -444,7 +477,6 @@ total,reduced
 in
 
 -- Context-sensitivity
--- TODO: why isn't m context sensitive?
 let t = parse
 "
 let f = lam.
@@ -467,16 +499,16 @@ e ()
 " in
 
 utest test debug t with
-"id,ident,context,deps,searchSpace,connectedComponent
+"id-meas,ident,context,deps,searchSpace,connectedComponent
 4,m,,0|1,4.,0
 
-id,ident,context,deps,domainSize,connectedComponent
+id-hole,ident,context,deps,domainSize,connectedComponent
 0,hh,h1,4,2,0
 1,hh,h2,4,2,0
 2,dummy,g1,,2,-1
 3,dummy,g2,,2,-1
 
-id,deps,size
+id-cc,deps,size
 0,0|1|4,4.
 
 total,reduced
@@ -484,5 +516,11 @@ total,reduced
 "
 in
 
+utest tuneStatsTime [(1,2,3.),(4,5,6.)] with
+"id-meas,nbrRuns,time
+1,2,3.
+4,5,6.
+"
+in
 
 ()
