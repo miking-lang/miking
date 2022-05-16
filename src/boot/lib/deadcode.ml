@@ -231,7 +231,7 @@ let elimination builtin_sym2term builtin_name2sym symKeywords t =
     let nmap = make_builtin_nmap builtin_sym2term in
     let nmap = add_keywords nmap symKeywords in
     (* The below line ensures that free variables are treated as having a side
-     * effect (as it is unknown) *)
+     * effect (as they are unknown) *)
     let nmap = add_keywords nmap [Symb.Helpers.nosym] in
     let nmap, free = collect_lets nmap t in
     if !enable_debug_dead_code_info then (

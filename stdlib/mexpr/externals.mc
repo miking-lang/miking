@@ -1,9 +1,9 @@
 -- Various functions for manipulating externals in MExpr ASTs
 
 include "ast.mc"
+include "boot-parser.mc"
 include "ast-builder.mc"
 include "eq.mc"
-include "boot-parser.mc"
 
 include "map.mc"
 include "name.mc"
