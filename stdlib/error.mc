@@ -1,5 +1,6 @@
 include "seq.mc"
 include "char.mc"
+include "map.mc"
 include "mexpr/info.mc"
 
 type Highlight
@@ -164,6 +165,83 @@ let terminalHighlightErrorConfig: HighlightConfig =
   , relevant = lam str. concat (concat "[31m" str) "[0m"
   , added = lam str. concat (concat "[31m" str) "[0m"
   }
+
+type ErrorSection = {msg : String, multi : String, info : Info, infos : [Info]}
+let errorDefault : ErrorSection = {msg = "", multi = "", info = NoInfo (), infos = []}
+let infoToSection : Info -> ErrorSection = lam info. {errorDefault with info = info}
+
+let _cachedContent : Ref (Map String String) = ref (mapEmpty cmpString)
+let _readContent : String -> Option String = lam filename.
+  match mapLookup filename (deref _cachedContent) with c & Some content then c else
+  -- TODO(vipa, 2022-05-17): This is technically a race condition, the
+  -- file could be removed in-between the check and the read, but
+  -- there's no better way to handle it atm.
+  if fileExists filename then
+    let content = readFile filename in
+    modref _cachedContent (mapInsert filename content (deref _cachedContent));
+    Some content
+  else None ()
+
+let _emptyOrNewlineTerm : String -> String = lam str.
+  switch str
+  case "" then str
+  case _ ++ "\n" then str
+  case str then snoc str '\n'
+  end
+
+let _highlightSection
+  : ErrorSection -> (Info, String)
+  = lam section.
+    let info = match section.info with NoInfo ()
+      then foldl mergeInfo (NoInfo ()) section.infos
+      else section.info in
+    let infos = match section.infos with []
+      then [section.info]
+      else section.infos in
+    let infos = map (lam x. Relevant x) infos in
+    let infos =
+      match section.info with Info x then
+        let first = infoVal x.filename x.row1 x.col1 x.row1 x.col1 in
+        let last = infoVal x.filename x.row2 x.col2 x.row2 x.col2 in
+        snoc (cons (Irrelevant first) infos) (Irrelevant last)
+      else infos in
+    let msg = match section.infos with ![] & ![_]
+      then match section.multi with !"" then section.multi else section.msg
+      else section.msg in
+    let msg = _emptyOrNewlineTerm msg in
+    let msg =
+      match info with Info {filename = filename} then
+        match _readContent filename with Some content
+        then concat msg (formatHighlights terminalHighlightErrorConfig content infos)
+        else join [msg, "<Couldn't read '", filename, "', no highlight available>"]
+      else msg in
+    (info, _emptyOrNewlineTerm msg)
+
+let errorMsg
+  : [ErrorSection] -> {single: String, multi: String} -> (Info, String)
+  = lam sections. lam msg.
+    switch map _highlightSection sections
+    case [(info, inner)] then (info, concat (_emptyOrNewlineTerm msg.single) inner)
+    case sections then
+      let msg = match msg.multi with !"" then msg.multi else msg.single in
+      match unzip sections with (infos, inners) in
+      let info = foldl mergeInfo (NoInfo ()) infos in
+      let msg = strJoin "\n" (cons (_emptyOrNewlineTerm msg) inners) in
+      (info, msg)
+    end
+
+let _die : all a. (Info, String) -> a = lam msg.
+  printError (join ["\n", infoErrorString msg.0 msg.1, "\n"]);
+  flushStderr ();
+  exit 1
+let errorGeneral : all a. [ErrorSection] -> {single: String, multi: String} -> a
+  = lam sections. lam msg. _die (errorMsg sections msg)
+let errorSingle : all a. [Info] -> String -> a
+  = lam infos. lam msg.
+    _die (errorMsg [{errorDefault with infos = infos, msg = msg}] {single = "", multi = ""})
+let errorMulti : all a. [(Info, String)] -> String -> a
+  = lam sections. lam msg.
+    _die (errorMsg (map (lam sec. {errorDefault with info = sec.0, msg = sec.1}) sections) {single = msg, multi = ""})
 
 mexpr
 

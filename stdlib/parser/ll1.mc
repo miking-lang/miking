@@ -7,7 +7,7 @@ include "map.mc"
 include "string.mc"
 include "either.mc"
 include "common.mc"
-include "error-highlight.mc"
+include "error.mc"
 include "name.mc"
 
 type Dyn
