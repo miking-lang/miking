@@ -36,6 +36,8 @@ typecheck_files += $(wildcard stdlib/mexpr/*.mc)
 typecheck_files += $(wildcard stdlib/ocaml/*.mc)
 typecheck_files += $(wildcard stdlib/c/*.mc)
 typecheck_files += $(wildcard stdlib/tuning/*.mc)
+typecheck_files += stdlib/parser/lexer.mc
+typecheck_files += stdlib/parser/breakable.mc
 typecheck_files += stdlib/ext/ext-test.mc
 
 

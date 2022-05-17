@@ -79,6 +79,7 @@ end
 type env = (Symb.t * tm) list
 
 and const =
+  | CunsafeCoerce
   (* MCore intrinsics: Booleans *)
   | CBool of bool
   (* MCore intrinsics: Integers *)
@@ -550,6 +551,7 @@ let ty_info = function
 (* Checks if a constant _may_ have a side effect. It is conservative
    and returns only false if it is _sure_ to not have a side effect *)
 let const_has_side_effect = function
+  | CunsafeCoerce
   | CBool _
   | CInt _
   | Caddi _

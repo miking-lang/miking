@@ -1,5 +1,10 @@
 include "ast.mc"
 
+lang UnsafeCoerceArity = UnsafeCoerceAst
+  sem constArity =
+  | CUnsafeCoerce _ -> 1
+end
+
 lang IntArity = IntAst
   sem constArity =
   | CInt _ -> 0
@@ -249,7 +254,8 @@ lang MExprArity =
   CharArity + CmpCharArity + IntCharConversionArity +
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
-  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity
+  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity +
+  UnsafeCoerceArity
 end
 
 mexpr
