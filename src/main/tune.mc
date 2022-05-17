@@ -13,7 +13,7 @@ include "tuning/instrumentation.mc"
 include "tuning/tune.mc"
 
 lang MCoreTune =
-  BootParser + MExprTypeAnnot +
+  BootParser + MExprTypeAnnot + MExprTypeCheck +
   MExprHoles + MExprHoleCFA + NestedMeasuringPoints + DependencyAnalysis +
   Instrumentation + MExprTune
 end
@@ -27,16 +27,16 @@ let dumpTable = lam file. lam env. lam table.
   tuneFileDumpTable destination env table
 
 let dependencyAnalysis
-  : TuneOptions -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
-  lam options : TuneOptions. lam env : CallCtxEnv. lam ast.
+  : Options -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
+  lam options : Options. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
-    if options.dependencyAnalysis then
-      let ast = typeAnnot ast in
+    if options.tuneOptions.dependencyAnalysis then
+      let ast = (if options.typeCheck then typeCheck else typeAnnot) ast in
       let ast = use HoleANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
       let cfaRes = analyzeNested env cfaRes ast in
       let dep = analyzeDependency env cfaRes ast in
-      (if options.debugDependencyAnalysis then
+      (if options.tuneOptions.debugDependencyAnalysis then
          match pprintCode 0 pprintEnvEmpty ast with (pprintEnv, astStr) in
          printLn astStr;
          match cfaGraphToString pprintEnv cfaRes with (pprintEnv, resStr) in
@@ -71,7 +71,7 @@ let tune = lam files. lam options : Options. lam args.
     match colorCallGraph [] ast with (env, ast) in
 
     -- Perform dependency analysis
-    match dependencyAnalysis tuneOptions env ast with (dep, ast) in
+    match dependencyAnalysis options env ast with (dep, ast) in
 
     -- Instrument the program
     match instrument env dep ast with (instRes, ast) in
