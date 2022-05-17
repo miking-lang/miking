@@ -3,6 +3,7 @@ include "mexpr/anf.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 
 -- Defines AST nodes for holes.
 

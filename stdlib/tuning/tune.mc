@@ -299,7 +299,7 @@ lang TuneDep = TuneLocalSearch + Database
     else never
 
   sem initData (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
-               (dep : DependencyGraph) (inst : InstrumentedResult) =
+               (dep : DependencyGraph) (instrumentedResult : InstrumentedResult) =
   | t ->
     -- Compute size of the search space
     let searchSpace =
@@ -322,7 +322,7 @@ lang TuneDep = TuneLocalSearch + Database
       run = run,
       env = env,
       dep = dep,
-      inst = inst,
+      inst = instrumentedResult,
       database = database,
       searchSpace = searchSpace
     }
@@ -602,7 +602,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     with (dep, ast) in
 
     -- Do instrumentation
-    match instrument env dep ast with (inst, ast) in
+    match instrument env dep ast with (instrumented, ast) in
 
     -- Context expansion
     match contextExpand env ast with (exp, ast) in
@@ -625,7 +625,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     -- Run tuning
     let cleanup = lam.
       exp.cleanup ();
-      inst.cleanup ();
+      instrumented.cleanup ();
       cunit.cleanup ()
     in
     use TuneDep in
@@ -634,7 +634,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       case Exhaustive () then use TuneDepExhaustive in tuneDebug
       end
     in
-    let res = tune options runner env dep inst exp.tempFile cleanup exp.table ast in
+    let res = tune options runner env dep instrumented exp.tempFile cleanup exp.table ast in
     cleanup ();
     res
 in
