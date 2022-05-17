@@ -339,8 +339,6 @@ end
 
 mexpr
 
-jsonParseExn "{\"list\":[{},{}]}";
-
 utest jsonParse "123.45" with Left (JsonFloat 123.45) in
 utest json2string (JsonFloat 123.45) with "123.45" in
 
