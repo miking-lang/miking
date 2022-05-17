@@ -1549,8 +1549,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       |> fun str -> TmSeq (fi, ustring2tmseq fi str)
   | Ctensor2string _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString (Some options, Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString options keywords (tmseq2seq_of_int fi seq) in
+  | CbootParserParseMExprString (Some options, Some keywords), TmSeq (fi, seq)
+    ->
+      let t =
+        Bootparser.parseMExprString options keywords (tmseq2seq_of_int fi seq)
+      in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
