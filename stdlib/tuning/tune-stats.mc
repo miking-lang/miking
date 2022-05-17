@@ -32,17 +32,6 @@ lang MeasPointCSV = CSV
     , float2string m.searchSpace
     , int2string m.cc
     ]
-
-  sem csvString2Row =
-  | row ->
-    MeasPoint
-    { id = string2int (get row 0)
-    , ident = get row 1
-    , context = strSplit "|" row 2
-    , deps = map string2int (strSplit "|" (get row 3))
-    , searchSpace = string2float (get row 4)
-    , cc = string2int (get row 5)
-    }
 end
 
 lang HoleCSV = CSV
@@ -67,17 +56,6 @@ lang HoleCSV = CSV
     , int2string h.domainSize
     , int2string h.cc
     ]
-
-  sem csvString2Row =
-  | row ->
-    Hole
-    { id = string2int (get row 0)
-    , ident = get row 1
-    , context = strSplit "|" row 2
-    , deps = map string2int (strSplit "|" (get row 3))
-    , domainSize = string2int (get row 4)
-    , cc = string2int (get row 5)
-    }
 end
 
 lang ConnectedComponentCSV = CSV
@@ -96,15 +74,6 @@ lang ConnectedComponentCSV = CSV
     , strJoin "|" (map int2string c.deps)
     , float2string c.size
     ]
-
-  sem csvString2Row =
-  | row ->
-    CC
-    { id = string2int (get row 0)
-    , deps = map string2int (strSplit "|" (get row 1))
-    , size = string2float (get row 2)
-    }
-
 end
 
 lang SizeCSV = CSV
@@ -120,14 +89,6 @@ lang SizeCSV = CSV
     [ float2string s.total
     , float2string s.reduced
     ]
-
-  sem csvString2Row =
-  | row ->
-    Size
-    { total = string2float (get row 0)
-    , reduced = string2float (get row 1)
-    }
-
 end
 
 lang RunCSV = CSV
@@ -144,14 +105,6 @@ lang RunCSV = CSV
     , int2string r.nbrRuns
     , float2string r.time
     ]
-
-  sem csvString2Row =
-  | row ->
-    Run
-    { id = string2int (get row 0)
-    , nbrRuns = string2int (get row 1)
-    , time = string2float (get row 2)
-    }
 end
 
 lang TuneStats = DependencyAnalysis
