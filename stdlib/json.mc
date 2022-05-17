@@ -331,7 +331,7 @@ recursive let jsonEq: JsonValue -> JsonValue -> Bool =
   case (JsonFloat lv, JsonFloat rv) then eqf lv rv
   case (JsonInt lv, JsonInt rv) then eqi lv rv
   case (JsonBool lv, JsonBool rv) then eqBool lv rv
-  case (JsonNull lv, JsonNull rv) then true
+  case (JsonNull (), JsonNull ()) then true
   case _ then false
   end
 end
