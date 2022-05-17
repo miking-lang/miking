@@ -1,3 +1,48 @@
+/-
+
+This module provides functions for highlighting sections of a file,
+primarily intended for error reporting in a compiler.
+
+The underlying workhorse is `formatHighlights`, which takes the source
+of a file and a sequence of ranges to highlight (`Highlight`s,
+essentially `Info`s with some extra information).
+
+There is also a high-level interface for reporting errors and
+immediately exiting. This centers around the `ErrorSection` type:
+
+```
+type ErrorSection = {msg : String, multi : String, info : Info, infos : [Info]}
+let err : ErrorSection = {msg = "", multi = "", info = NoInfo (), infos = []}
+```
+
+An `ErrorSection` represents a single contiguous range in a file,
+possibly with multiple sub-ranges to highlight, and with an optional
+related message. Typically you would construct this through record
+updates on `err`, since most fields are optional:
+
+- `infos`: The ranges to highlight. Default to [`info`] if absent.
+- `info`: The complete section to display. Defaults to `foldl
+  mergeInfo (NoInfo ()) infos` if absent.
+- `msg`: The message to display above the highlighted section, if any.
+- `multi`: Used instead of `msg` if present and `infos` contains at
+  least two elements (useful for pluralizing messages).
+
+There are three functions for displaying an error and immediately
+exiting:
+- `errorGeneral` takes a sequence of `ErrorSection`s and a record with
+  two fields (both are optional):
+  - `single`: The message to display if only one `ErrorSection` is
+    given.
+  - `multi`: The message to display if more than one `ErrorSection` is
+    given. Defaults to `single` if absent.
+- `errorSingle` is a helper for when you have only one section; it
+  takes a sequence of `Info`s and the error message as a `String`.
+- `errorMulti` correspondingly handles the simplest case with multiple
+  sections; it takes a sequence of `(Info, String)`, treating each as
+  a section, as well as the error message as a `String`.
+
+-/
+
 include "seq.mc"
 include "char.mc"
 include "map.mc"
