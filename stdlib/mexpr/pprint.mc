@@ -558,15 +558,20 @@ lang UtestPrettyPrint = PrettyPrint + UtestAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmUtest t ->
-    match pprintCode indent env t.test with (env,test) then
-      match pprintCode indent env t.expected with (env,expected) then
-        match pprintCode indent env t.next with (env,next) then
-          (env,join ["utest ", test, pprintNewline indent,
-                 "with ", expected, pprintNewline indent,
-                 "in", pprintNewline indent, next])
-        else never
-      else never
-    else never
+    match pprintCode indent env t.test with (env,test) in
+    match pprintCode indent env t.expected with (env,expected) in
+    match pprintCode indent env t.next with (env,next) in
+    match
+      optionMapOr (env,"") (
+        lam tusing.
+          match pprintCode indent env tusing with (env,tusing) in
+          (env,join ["using ", tusing, pprintNewline indent])
+        ) t.tusing
+    with (env,tusingStr) in
+    (env,join ["utest ", test, pprintNewline indent,
+               "with ", expected, pprintNewline indent,
+               tusingStr,
+               "in", pprintNewline indent, next])
 end
 
 lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
