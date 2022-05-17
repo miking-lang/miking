@@ -126,7 +126,14 @@ let poissonSample = lam lambda:Float.
     else x
   in rec x prod
 
--- TODO Add exponential
+-- Add exponential
+external externalExponentialSample ! : Float -> Float
+let exponentialSample = lam lambda:Float.
+  externalExponentialSample lambda
+let exponentialLogPdf : Float -> Float -> Float = lam lambda. lam x.
+  subf (log lambda) (mulf lambda x)
+let exponentialPdf : Float -> Float -> Float = lam lambda. lam x.
+  exp (exponentialLogPdf lambda x)
 
 mexpr
 
@@ -202,5 +209,10 @@ utest uniformDiscretePdf 1 2 1 with 0.5 using _eqf in
 utest poissonPmf 2.0 2 with 0.270670566473 using _eqf in
 utest exp (poissonLogPmf 3.0 2) with 0.224041807655 using _eqf in
 utest poissonSample 2.0 with 3 using intRange 0 100000 in
+
+-- Testing Exponential
+utest exponentialSample 1.0 with 0. using floatRange 0. inf in
+utest exp (exponentialLogPdf 1.0 2.0) with 0.135335283237 using _eqf in
+utest exponentialPdf 2.0 2.0 with 0.0366312777775 using _eqf in
 
 ()

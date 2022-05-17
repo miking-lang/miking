@@ -7,6 +7,13 @@ let distExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
+    ("externalExponentialSample", [
+      { expr = "Owl_stats.exponential_rvs",
+        ty = tyarrows_ [otylabel_ "lambda" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
     ("externalGammaLogPdf", [
       { expr = "Owl_stats.gamma_logpdf",
         ty = tyarrows_ [tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
