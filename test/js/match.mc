@@ -1,11 +1,5 @@
 mexpr
-    (match { b = 1 } with a then
-        print a
-    else
-        print false);
-    
-    let a = 1 in
-    match a with 1 then
-        print a
+    match (addi 2 1) with 3 then
+        print true
     else
         print false

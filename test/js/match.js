@@ -1,2 +1,1 @@
-var a = 1;
-if ((1 == a)) console.log(a); else console.log(false);
+if ((3 == (2 + 1))) console.log(true); else console.log(false);
