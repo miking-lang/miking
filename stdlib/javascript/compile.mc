@@ -55,9 +55,10 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
                     RecordPat + DataPat + IntPat + OrPat +
                     CharPat + BoolPat + AndPat + NotPat
   sem compilePat (target: JSExpr) =
-  | PatNamed { ident = name } ->
-    match name with PName name then
-      JSEBinOp {
+  | PatNamed { ident = ident } ->
+	dprint "Entered PatNamed";
+    match ident with PName name then
+		JSEBinOp {
         op  = JSOAssign {},
         lhs = JSEVar { id = name },
         rhs = target
@@ -70,7 +71,19 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       lhs = JSEInt { i = val },
       rhs = target
     }
-  | _ -> error "compilePat: Unsupported pattern"
+  | PatRecord { bindings = bindings } ->
+	let fieldSeq = mapToSeq bindings in
+	let compileField = lam f. match f with (sid, expr)
+		then
+		dprint "Compiling field";
+		dprint expr;
+		(sidToString sid, compilePat expr)
+		else never in
+	JSPObject { fields = map compileField fieldSeq }
+
+  | unsup ->
+  	dprint unsup;
+ 	error "compilePat: Unsupported pattern"
 end
 
 -------------------------------------------
@@ -105,12 +118,12 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   | CMuli _
   | CMulf _ -> JSEBinOp { op = JSOMul {}, lhs = head args, rhs = last args }
   | CDivf _ -> JSEBinOp { op = JSODiv {}, lhs = head args, rhs = last args }
-  | CEqi _
-  | CEqf _  -> JSEBinOp { op = JSOEq {},  lhs = head args, rhs = last args }
-  | CLti _
-  | CLtf _  -> JSEBinOp { op = JSOLt {},  lhs = head args, rhs = last args }
-  | CGti _
-  | CGtf _  -> JSEBinOp { op = JSOGt {},  lhs = head args, rhs = last args }
+  | CEqi  _
+  | CEqf  _ -> JSEBinOp { op = JSOEq {},  lhs = head args, rhs = last args }
+  | CLti  _
+  | CLtf  _ -> JSEBinOp { op = JSOLt {},  lhs = head args, rhs = last args }
+  | CGti  _
+  | CGtf  _ -> JSEBinOp { op = JSOGt {},  lhs = head args, rhs = last args }
   | CLeqi _
   | CLeqf _ -> JSEBinOp { op = JSOLe {},  lhs = head args, rhs = last args }
   | CGeqi _
@@ -222,7 +235,8 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
       }
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
-    match head bindings with { ident = ident, body = body } then
+  	let fst : RecLetBinding = head bindings in
+	match fst with { ident = ident, body = body } then
       JSSSeq {
         stmts = [
           JSSDef { id = ident, expr = compileMExpr body },

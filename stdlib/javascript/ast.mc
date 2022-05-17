@@ -14,11 +14,16 @@ lang JSExprAst
   | JSEFloat     { f: Float }                   -- Float literals
   | JSEBool      { b: Bool }                    -- Boolean literals
   | JSEChar      { c: Char }                    -- Character literals
-  | JSEString    { s: String }                  -- String literals 
+  | JSEString    { s: String }                  -- String literals
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
   | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
   | JSEObject    { fields: [(String, JSExpr)] } -- Objects
+
+  syn JSPattern =
+  | JSPVar		 { id: Name }
+  | JSPArray	 { elms: [JSPattern] }
+  | JSPObject	 { fields: [(Name, Option JSPattern)] }
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs
