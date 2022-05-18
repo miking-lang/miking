@@ -62,51 +62,54 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
     	JSEVar { id = name }
     else -- Wildcard pattern name
       JSEBool { b = true }
+  | PatInt { val = val } -> JSEInt { i = val }
+  | PatRecord { bindings = bindings } ->
+    let fieldSeq = mapToSeq bindings in
+    -- dprintLn "FieldSeq: ";
+    -- dprintLn fieldSeq;
+    let compileField = lam f. match f with (sid, expr)
+      then
+        -- dprint "Compiling field: ";
+        -- dprint (sidToString sid);
+        -- dprint " with expr: ";
+        -- dprintLn expr;
+        (sidToString sid, compileSinglePattern expr)
+      else never in
+    -- dprint "Dprinting fields";
+    -- dprint fields;
+    JSEObject {
+      fields = map (compileField) fieldSeq
+    }
+  | unsup ->
+    dprint unsup;
+    error "compileSinglePattern: Unsupported pattern"
 
 
   sem compileBindingPattern (target: JSExpr) =
-  | PatNamed { ident = ident } & patNamed ->
-    dprint "Entered PatNamed";
-    match ident with PName name then
-      JSEBinOp {
-        op  = JSOAssign {},
-        lhs = JSEVar { id = name },
-        rhs = target
-      }
-      else -- Whildcard pattern
-        JSEBool { b = true }
-  | PatInt { val = val } ->
+  | PatInt _ & pat ->
     JSEBinOp {
       op = JSOEq {},
-      lhs = JSEInt { i = val },
+      lhs = compileSinglePattern pat,
       rhs = target
     }
-  | PatRecord { bindings = bindings } ->
-    let fieldSeq = mapToSeq bindings in
-    dprintLn "FieldSeq: ";
-    dprintLn fieldSeq;
-    let compileField = lam f. match f with (sid, expr)
-      then
-        dprint "Compiling field: ";
-        dprint (sidToString sid);
-        dprint " with expr: ";
-        dprintLn expr;
-        (sidToString sid, compileSinglePattern expr)
-      else never in
-    let fields = map (compileField) fieldSeq in
-    dprint "Dprinting fields";
-    dprint fields;
+  | PatNamed _ & pat  ->
+    let patExpr = compileSinglePattern pat in
+    match patExpr with JSEVar _ then
+      JSEBinOp {
+        op  = JSOAssign {},
+        lhs = patExpr,
+        rhs = target
+		  }
+    else -- Whildcard pattern
+      patExpr -- No assignment needed, just return "true"
+
+  | pat -> -- Otherwise: Assign the target to the pattern
     JSEBinOp {
       op  = JSOAssign {},
-      lhs = JSEObject {
-        fields = fields
-      },
+      lhs = compileSinglePattern pat,
       rhs = target
     }
 
-  | unsup ->
-  	dprint unsup;
- 	error "compileBindingPattern: Unsupported pattern"
 end
 
 -------------------------------------------
