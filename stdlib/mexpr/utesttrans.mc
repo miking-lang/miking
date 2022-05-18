@@ -118,7 +118,7 @@ let utestRunner = lam.
   match deref _utestRunnerCode with Some t then t
   else
     use BootParser in
-    let code = parseMExprString [] _utestRunnerStr in
+    let code = parseMExprStringKeywords [] _utestRunnerStr in
     modref _utestRunnerCode (Some code);
     code
 
@@ -153,7 +153,7 @@ let findName : String -> Expr -> Option Name = use MExprAst in
 
 let _expr =
   use BootParser in
-  parseMExprString [] "let foo = lam. 42 in ()"
+  parseMExprStringKeywords [] "let foo = lam. 42 in ()"
 utest
   match findName "foo" _expr
   with Some n
@@ -163,7 +163,7 @@ with true
 
 let _expr =
   use BootParser in
-  parseMExprString [] "recursive let foo = lam. 42 in ()"
+  parseMExprStringKeywords [] "recursive let foo = lam. 42 in ()"
 utest
   match findName "foo" _expr
   with Some n
@@ -173,7 +173,7 @@ with true
 
 let _expr =
   use BootParser in
-  parseMExprString [] "external foo : () in ()"
+  parseMExprStringKeywords [] "external foo : () in ()"
 utest
   match findName "foo" _expr
   with Some n

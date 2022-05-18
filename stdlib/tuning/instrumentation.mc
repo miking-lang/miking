@@ -203,7 +203,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
        in\n"
     , "()\n"
     ] in
-    let ex = use BootParser in parseMExprString [] str in
+    let ex = use BootParser in parseMExprStringKeywords [] str in
     let str2name = lam str.
       match findName str ex with Some n then n
       else error (concat str " not found in instrumentation header")
@@ -307,7 +307,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
       in"
     , "()\n"
     ] in
-    let ex = use BootParser in parseMExprString [] str in
+    let ex = use BootParser in parseMExprStringKeywords [] str in
     let fun = match findName "dumpLog" ex with Some n then n else error "impossible" in
     (ex, fun)
 
@@ -353,7 +353,7 @@ let debugPrintLn = lam debug.
 in
 
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
+  let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in
