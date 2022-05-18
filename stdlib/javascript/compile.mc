@@ -54,17 +54,27 @@ let _consoleLog = use JSExprAst in
 lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
                     RecordPat + DataPat + IntPat + OrPat +
                     CharPat + BoolPat + AndPat + NotPat
-  sem compilePat (target: JSExpr) =
+
+  -- Compile a single pattern without any binding operations.
+  sem compileSinglePattern =
   | PatNamed { ident = ident } ->
-	dprint "Entered PatNamed";
     match ident with PName name then
-		JSEBinOp {
+    	JSEVar { id = name }
+    else -- Wildcard pattern name
+      JSEBool { b = true }
+
+
+  sem compileBindingPattern (target: JSExpr) =
+  | PatNamed { ident = ident } & patNamed ->
+    dprint "Entered PatNamed";
+    match ident with PName name then
+      JSEBinOp {
         op  = JSOAssign {},
         lhs = JSEVar { id = name },
         rhs = target
       }
-    else -- Whildcard pattern
-      JSEBool { b = true }
+      else -- Whildcard pattern
+        JSEBool { b = true }
   | PatInt { val = val } ->
     JSEBinOp {
       op = JSOEq {},
@@ -72,18 +82,31 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       rhs = target
     }
   | PatRecord { bindings = bindings } ->
-	let fieldSeq = mapToSeq bindings in
-	let compileField = lam f. match f with (sid, expr)
-		then
-		dprint "Compiling field";
-		dprint expr;
-		(sidToString sid, compilePat expr)
-		else never in
-	JSPObject { fields = map compileField fieldSeq }
+    let fieldSeq = mapToSeq bindings in
+    dprintLn "FieldSeq: ";
+    dprintLn fieldSeq;
+    let compileField = lam f. match f with (sid, expr)
+      then
+        dprint "Compiling field: ";
+        dprint (sidToString sid);
+        dprint " with expr: ";
+        dprintLn expr;
+        (sidToString sid, compileSinglePattern expr)
+      else never in
+    let fields = map (compileField) fieldSeq in
+    dprint "Dprinting fields";
+    dprint fields;
+    JSEBinOp {
+      op  = JSOAssign {},
+      lhs = JSEObject {
+        fields = fields
+      },
+      rhs = target
+    }
 
   | unsup ->
   	dprint unsup;
- 	error "compilePat: Unsupported pattern"
+ 	error "compileBindingPattern: Unsupported pattern"
 end
 
 -------------------------------------------
@@ -249,7 +272,7 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   | TmConDef { inexpr = e } -> compileMExpr e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = compileMExpr target in
-    let pat: JSExpr = compilePat target pat in
+    let pat: JSExpr = compileBindingPattern target pat in
     let thn: JSStmt = compileMExpr thn in
     let els: JSStmt = compileMExpr els in
     JSSIf {
