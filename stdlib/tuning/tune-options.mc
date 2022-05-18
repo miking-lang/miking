@@ -24,8 +24,10 @@ type TuneOptions =
 , cleanup : Bool
 , debugDependencyAnalysis : Bool
 , debugInstrumentation : Bool
+, debugExpansion : Bool
 , reduceDependencies : Float
 , seqTransform : Bool
+, printStats : Bool
 }
 
 -- Default options
@@ -44,7 +46,9 @@ let tuneOptionsDefault : TuneOptions =
 , dependencyAnalysis = false
 , debugDependencyAnalysis = false
 , debugInstrumentation = false
+, debugExpansion = false
 , seqTransform = false
 , reduceDependencies = 0.0
 , cleanup = false
+, printStats = false
 }

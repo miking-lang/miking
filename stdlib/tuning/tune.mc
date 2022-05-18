@@ -10,6 +10,7 @@ include "tune-options.mc"
 include "tune-file.mc"
 include "search-space.mc"
 include "database.mc"
+include "tune-stats.mc"
 
 -- Included for testing
 include "ocaml/mcore.mc"
@@ -48,7 +49,7 @@ con Timeout : {ms : Float} -> TimingResult
 
 lang TuneBase = HoleAst
   sem tune : TuneOptions -> Runner -> CallCtxEnv -> DependencyGraph
-           -> InstrumentedResult -> String -> (() -> ()) -> LookupTable
+           -> InstrumentedResult -> String -> (() -> ()) -> LookupTable -> Expr
            -> LookupTable
 
   sem measure (table : LookupTable) (runner : Runner) (file : String)
@@ -146,7 +147,9 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   | _ -> defaultTable
 
   -- By default, the search space is not reduced
-  sem reduceSearchSpace (costF : Option Solution -> Assignment -> Cost) =
+  sem reduceSearchSpace
+  : (Option Solution -> Assignment -> Cost) -> Expr -> LSData -> LSData
+  sem reduceSearchSpace costF t =
   | d -> d
 
   -- Check if the search space is empty
@@ -156,24 +159,25 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   -- Entry point for tuning
   sem tune (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
            (dep : DependencyGraph) (inst : InstrumentedResult)
-           (tuneFile : String) (onFailure : () -> ()) =
-  | defaultTable ->
-    match tuneDebug options run env dep inst tuneFile onFailure defaultTable
+           (tuneFile : String) (onFailure : () -> ()) (defaultTable: LookupTable) =
+  | t ->
+    match tuneDebug options run env dep inst tuneFile onFailure defaultTable t
     with (table, _) in table
 
   -- Like 'tune', but also returns the final search state (for testing)
   sem tuneDebug (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
                 (dep : DependencyGraph) (inst : InstrumentedResult)
-                (tuneFile : String) (onFailure : () -> ()) =
-  | defaultTable ->
+                (tuneFile : String) (onFailure : () -> ())
+                (defaultTable : LookupTable) =
+  | t ->
     -- Nothing to tune?
     if null defaultTable then ([], None ()) else
 
-    let data = initData options run env dep inst in
+    let data = initData options run env dep inst t in
     let costF : Option Solution -> Assignment -> Cost =
       costFun run tuneFile options (programInput options) data onFailure
     in
-    let data = reduceSearchSpace costF data in
+    let data = reduceSearchSpace costF t data in
     if emptySearchSpace data then
       (if options.verbose then
          printLn "Empty search space detected, tuning will use the default configuration for the program holes.";
@@ -198,7 +202,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       (optimalLookupTable searchState, Some searchState)
 
   sem initData : TuneOptions -> Runner -> CallCtxEnv -> DependencyGraph
-               -> InstrumentedResult -> LSData
+               -> InstrumentedResult -> Expr -> LSData
 
   sem costFun : Runner -> String -> TuneOptions -> [String] -> LSData
               -> (() -> ()) -> (Option Solution) -> Assignment -> Cost
@@ -295,8 +299,8 @@ lang TuneDep = TuneLocalSearch + Database
     else never
 
   sem initData (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
-               (dep : DependencyGraph) =
-  | instrumentedResult ->
+               (dep : DependencyGraph) (instrumentedResult : InstrumentedResult) =
+  | t ->
     -- Compute size of the search space
     let searchSpace =
       use SearchSpace in
@@ -308,6 +312,11 @@ lang TuneDep = TuneLocalSearch + Database
     -- include data from _all_ measuring points.
     let database = databaseEmpty dep.offset dep.nbrMeas in
 
+    (if options.printStats then
+       use TuneStats in
+       printLn (tuneStats options dep searchSpace env t)
+     else ());
+
     TuneData {
       options = options,
       run = run,
@@ -318,7 +327,7 @@ lang TuneDep = TuneLocalSearch + Database
       searchSpace = searchSpace
     }
 
-  sem reduceSearchSpace (costF: Option Solution -> Assignment -> Cost) =
+  sem reduceSearchSpace costF t =
   | TuneData d ->
     -- Do a number of measurement with randomized tables
     let data =
@@ -342,6 +351,12 @@ lang TuneDep = TuneLocalSearch + Database
           cmpfApprox 0. t1.2 t2.2) idRunsTotalMs
         in
 
+        -- Print the result
+        (if d.options.printStats then
+          use TuneStats in
+          printLn (tuneStatsTime sorted)
+         else ());
+
         -- Collect those id's that are below the threshold. Multiply by nbrRuns so
         -- that we are considering the mean.
         let threshold = mulf d.options.reduceDependencies (int2float nbrRandRuns) in
@@ -363,7 +378,7 @@ lang TuneDep = TuneLocalSearch + Database
         in
         let dep = {d.dep with alive = alive} in
         -- Re-initialize the data from the updated graph
-        initData d.options d.run d.env dep d.inst
+        initData d.options d.run d.env dep d.inst t
       else TuneData d
     in
     data
@@ -587,7 +602,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     with (dep, ast) in
 
     -- Do instrumentation
-    match instrument env dep ast with (inst, ast) in
+    match instrument env dep ast with (instrumented, ast) in
 
     -- Context expansion
     match contextExpand env ast with (exp, ast) in
@@ -610,7 +625,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     -- Run tuning
     let cleanup = lam.
       exp.cleanup ();
-      inst.cleanup ();
+      instrumented.cleanup ();
       cunit.cleanup ()
     in
     use TuneDep in
@@ -619,7 +634,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       case Exhaustive () then use TuneDepExhaustive in tuneDebug
       end
     in
-    let res = tune options runner env dep inst exp.tempFile cleanup exp.table in
+    let res = tune options runner env dep instrumented exp.tempFile cleanup exp.table ast in
     cleanup ();
     res
 in
@@ -660,7 +675,8 @@ let eqTest = lam lhs: (LookupTable, Option SearchState). lam rhs : TestResult.
   else error "expected tune data"
 in
 
-let opt = {tuneOptionsDefault with verbose = debug} in
+let opt = {{tuneOptionsDefault with verbose = debug}
+                               with printStats = debug} in
 
 -- No holes
 let t = parse
