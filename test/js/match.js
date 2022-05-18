@@ -1,2 +1,2 @@
 var a = 1;
-if ((b = a)) console.log(b); else console.log(false);
+if (({c: c} = {c: a, b: 2})) console.log(c); else console.log(false);
