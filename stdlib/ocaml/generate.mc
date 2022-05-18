@@ -476,6 +476,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
     let tempName = nameSym "_splitTemp" in
     let midName = nameSym "_middle" in
     let postName = nameSym "_postfix" in
+    let lenName = nameSym "_len" in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
       match generatePat env n pat with (names, innerWrap) then
@@ -485,21 +486,33 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
             (innerWrap cont)
         in (names, wrap)
       else never in
-    match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) then
-      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) then
-        let names = foldl mergeNames assocEmpty (concat preNames postNames) in
-        let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
-        let wrap = lam cont.
-          _if (lti_ (length_ (nvar_ targetName)) (int_ minLen))
-            _none
-            (_tuplet [npvar_ preName, npvar_ tempName]
-              (splitat_ (nvar_ targetName) (int_ (length prefix)))
-              (_tuplet [npvar_ midName, npvar_ postName]
-                (splitat_ (nvar_ tempName) (subi_ (length_ (nvar_ tempName)) (int_ (length postfix))))
-                (foldr apply (foldr apply cont postWraps) preWraps))) in
-        (names, wrap)
-      else never
-    else never
+    match
+      match prefix with [] then (identity, [], targetName) else
+      match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) in
+      let wrap = lam cont.
+        _tuplet [npvar_ preName, npvar_ tempName]
+          (splitat_ (nvar_ targetName) (int_ (length prefix)))
+          (foldr apply cont preWraps) in
+      (wrap, preNames, tempName)
+    with (preWrap, preNames, tempName) in
+    match
+      match postfix with [] then (identity, [], tempName) else
+      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) in
+      let wrap = lam cont.
+        _tuplet [npvar_ midName, npvar_ postName]
+          (splitat_ (nvar_ tempName) (subi_ (nvar_ lenName) (int_ minLen)))
+          (foldr apply cont postWraps) in
+      (wrap, postNames, midName)
+    with (postWrap, postNames, midName) in
+    let wrap = lam cont.
+      bind_
+        (nulet_ lenName (length_ (nvar_ targetName)))
+        (_if (lti_ (nvar_ lenName) (int_ minLen))
+          _none
+          (preWrap (postWrap cont))) in
+    let names = foldl mergeNames assocEmpty (concat preNames postNames) in
+    let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
+    (names, wrap)
   | PatOr {lpat = lpat, rpat = rpat} ->
     match generatePat env targetName lpat with (lnames, lwrap) then
       match generatePat env targetName rpat with (rnames, rwrap) then
