@@ -407,8 +407,10 @@ atom:
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, Record.empty)}
-  | LBRACKET mexpr WITH label_ident EQ mexpr RBRACKET
-      { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
+  | LBRACKET mexpr WITH labels RBRACKET
+      { List.fold_left (fun acc (k,v) ->
+          TmRecordUpdate (mkinfo $1.i $5.i, acc, k, v)
+        ) $2 $4}
 
 proj_label:
   | UINT
