@@ -5,7 +5,7 @@
 
 lang JSExprAst
 
-  syn JSExpr = 
+  syn JSExpr =
   | JSEVar       { id: Name }                   -- Variables
   | JSEApp       { fun: JSExpr, args: [JSExpr], curried: Bool }  -- Function application
   | JSEFun       { param: Name, body: JSExpr} -- Functions
@@ -19,11 +19,6 @@ lang JSExprAst
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
   | JSEArray     { exprs : [JSExpr] } -- Sequences
   | JSEObject    { fields: [(String, JSExpr)] } -- Objects
-
-  syn JSPattern =
-  | JSPVar		 { id: Name }
-  | JSPArray	 { elms: [JSPattern] }
-  | JSPObject	 { fields: [(Name, Option JSPattern)] }
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs

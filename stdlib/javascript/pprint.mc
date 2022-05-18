@@ -191,20 +191,6 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
   | JSONeg       {} -> join ["-", arg]
   | JSONot       {} -> join ["!", arg]
 
-  sem printJSPattern (indent: Int) (env: PprintEnv) =
-  | JSPVar { id = id } -> pprintEnvGetStr env id
-  | JSPObject { fields = fields } ->
-	let printPair = lam field.
-	dprint "Printing: ";
-	dprint field;
-	match field with (n, e)
-	then match (printJSExpr 0) env e with (env,e) then
-		join [n, ": ", e]
-		else never
-	else never in
-	match map (printPair) fields with prs then
-		(env, join ["{", strJoin ", " prs, "}"])
-	else never
 end
 
 
