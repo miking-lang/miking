@@ -17,7 +17,7 @@ lang JSExprAst
   | JSEString    { s: String }                  -- String literals
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
-  | JSESeq       { exprs : [JSExpr], info: Info } -- Sequences
+  | JSEArray     { exprs : [JSExpr] } -- Sequences
   | JSEObject    { fields: [(String, JSExpr)] } -- Objects
 
   syn JSPattern =

@@ -192,7 +192,7 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
       let tms: [JSExpr] = map compileMExpr tms in
-      JSESeq { exprs = tms, info = info }
+      JSEArray { exprs = tms, info = info }
 
   -- Literals
   | TmConst { val = val } ->

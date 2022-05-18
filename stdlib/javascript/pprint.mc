@@ -153,7 +153,7 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
       (env, join ["(", printJSUnOp rhs op, ")"])
     else never
 
-  | JSESeq { exprs = exprs, info = info } ->
+  | JSEArray { exprs = exprs, info = info } ->
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       (env, join ["[", strJoin ", " exprs, "]"])
     else never
