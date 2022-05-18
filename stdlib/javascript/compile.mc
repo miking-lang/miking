@@ -51,6 +51,14 @@ let _consoleLog = use JSExprAst in
 -- Pattern -> JavaScript FRAGMENT --
 ------------------------------------
 
+let _assign = use JSExprAst in
+  lam lhs. lam rhs.
+    JSEBinOp {
+      op  = JSOAssign {},
+      lhs = lhs,
+      rhs = rhs
+    }
+
 lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
                     RecordPat + DataPat + IntPat + OrPat +
                     CharPat + BoolPat + AndPat + NotPat
@@ -63,6 +71,7 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
     else -- Wildcard pattern name
       JSEBool { b = true }
   | PatInt { val = val } -> JSEInt { i = val }
+  | PatBool { val = val } -> JSEBool { b = val }
   | PatRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
     let compileField = lam f. match f with (sid, expr) then
@@ -77,7 +86,9 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
 
 
   sem compileBindingPattern (target: JSExpr) =
-  | PatInt _ & pat ->
+  | ( PatInt _
+	| PatBool _
+	) & pat ->
     JSEBinOp {
       op = JSOEq {},
       lhs = compileSinglePattern pat,
@@ -86,20 +97,11 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
   | PatNamed _ & pat  ->
     let patExpr = compileSinglePattern pat in
     match patExpr with JSEVar _ then
-      JSEBinOp {
-        op  = JSOAssign {},
-        lhs = patExpr,
-        rhs = target
-		  }
-    else -- Whildcard pattern
+      _assign patExpr target
+    else      -- Whildcard pattern
       patExpr -- No assignment needed, just return "true"
-
   | pat -> -- Otherwise: Assign the target to the pattern
-    JSEBinOp {
-      op  = JSOAssign {},
-      lhs = compileSinglePattern pat,
-      rhs = target
-    }
+    _assign (compileSinglePattern pat) target
 
 end
 
@@ -134,7 +136,9 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   | CSubf _ -> JSEBinOp { op = JSOSub {}, lhs = head args, rhs = last args }
   | CMuli _
   | CMulf _ -> JSEBinOp { op = JSOMul {}, lhs = head args, rhs = last args }
+  | CDivi _
   | CDivf _ -> JSEBinOp { op = JSODiv {}, lhs = head args, rhs = last args }
+  | CModi _ -> JSEBinOp { op = JSOMod {}, lhs = head args, rhs = last args }
   | CEqi  _
   | CEqf  _ -> JSEBinOp { op = JSOEq {},  lhs = head args, rhs = last args }
   | CLti  _
@@ -148,11 +152,42 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   | CNeqi _
   | CNeqf _ -> JSEBinOp { op = JSONeq {}, lhs = head args, rhs = last args }
 
-  -- Sequential operators (SeqOpAst)
-  | CConcat _ -> JSEBinOp { op = JSOAdd {}, lhs = head args, rhs = last args }
   -- Unary operators
   | CNegf _
   | CNegi _ -> JSEUnOp { op = JSONeg {}, rhs = head args }
+
+  -- Sequential operators (SeqOpAst)
+  | CConcat _ -> JSEBinOp { op = JSOAdd {}, lhs = head args, rhs = last args }
+  | CCons _ -> -- Tuple -> JavaScript array/list
+    JSEArray { elems = args }
+  | CFoldl _ ->
+    match args with [func, init, seq] then
+      -- Compile a reduce function
+      JSEApp {
+        fun = JSEMember {
+          expr = seq,
+          id = nameSym "reduce"
+        },
+        args = [ func, init ]
+      }
+    else
+      error "compileCOp: Invalid arguments to foldl"
+
+  -- Convert operations
+  | CChar2Int _ -> JSEApp {
+      fun = JSEMember {
+        expr = head args,
+        id = nameSym "charCodeAt"
+      },
+      args = [ JSEInt { i = 0 } ]
+    }
+  | CInt2Char _ -> JSEApp {
+      fun = JSEMember {
+        expr = JSEVar { id = nameSym "String" },
+        id = nameSym "fromCharCode"
+      },
+      args = [ head args ]
+    }
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
