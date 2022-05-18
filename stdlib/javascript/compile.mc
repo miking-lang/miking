@@ -65,18 +65,9 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
   | PatInt { val = val } -> JSEInt { i = val }
   | PatRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
-    -- dprintLn "FieldSeq: ";
-    -- dprintLn fieldSeq;
-    let compileField = lam f. match f with (sid, expr)
-      then
-        -- dprint "Compiling field: ";
-        -- dprint (sidToString sid);
-        -- dprint " with expr: ";
-        -- dprintLn expr;
+    let compileField = lam f. match f with (sid, expr) then
         (sidToString sid, compileSinglePattern expr)
       else never in
-    -- dprint "Dprinting fields";
-    -- dprint fields;
     JSEObject {
       fields = map (compileField) fieldSeq
     }
