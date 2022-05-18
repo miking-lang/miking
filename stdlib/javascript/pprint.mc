@@ -159,8 +159,6 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     else never
   | JSEObject { fields = fields } ->
     let printPair = lam field.
-      dprint "Printing: ";
-      dprint field;
       match field with (n, e)
       then match (printJSExpr 0) env e with (env,e) then
           join [n, ": ", e]
