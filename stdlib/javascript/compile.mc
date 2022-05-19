@@ -110,11 +110,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | CGti  _ & t
   | CGtf  _ & t -> optimizedOpIntrinsicGen t "gt" args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedOpIntrinsicGen t "leq" args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedOpIntrinsicGen t "le" args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedOpIntrinsicGen t "geq" args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedOpIntrinsicGen t "ge" args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedOpIntrinsicGen t "neq" args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedOpIntrinsicGen t "ne" args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
@@ -134,7 +134,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
     else
       -- Warning about inconsistent behaviour
-      printLn "Warning: CPrint might behave unexpectedly when targeting the web or generic JS";
+      printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
       intrinsicGen "print" args
 
 

@@ -11,11 +11,11 @@ const MExpr_JS_Intrinsics = Object.freeze({
   le: lhs => rhs => lhs <= rhs,
   gt: lhs => rhs => lhs > rhs,
   ge: lhs => rhs => lhs >= rhs,
-  and: lhs => rhs => lhs && rhs,
-  or: lhs => rhs => lhs || rhs,
-  not: lhs => !lhs,
+  // and: lhs => rhs => lhs && rhs, // Unused
+  // or: lhs => rhs => lhs || rhs,  // Unused
+  // not: lhs => !lhs,              // Unused
   neg: lhs => -lhs,
-  abs: lhs => Math.abs(lhs),
+  // abs: lhs => Math.abs(lhs),     // Unused
 
   // Built-in MExpr -> JS Functions
   print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(msg)),
