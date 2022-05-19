@@ -54,6 +54,19 @@ let _consoleLog = use JSExprAst in
 
 
 
+-- Supported JS runtime targets
+type CompileJSTargetPlatform = Int
+con CompileJSTP_Normal : () -> CompileJSTargetPlatform
+con CompileJSTP_Web    : () -> CompileJSTargetPlatform
+con CompileJSTP_Node   : () -> CompileJSTargetPlatform
+
+-- JS Compiler options
+type CompileJSOptions = {
+  targetPlatform : CompileJSTargetPlatform,
+  debugMode : Bool
+}
+
+
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
@@ -76,77 +89,53 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- OPERATORS --
   ---------------
 
-  -- Can compile fully and partially applied intrinsic operators and optimize them
+  -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
-  -- as a partially applied curried intrinsic functions
-  sem compileCOp (args: [JSExpr]) =
+  -- as a partially applied curried intrinsicGen functions
+  sem compileCOp (opts: CompileJSOptions) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedIntrinsic t "add" args (_binOp (JSOAdd {}))
+  | CAddf _ & t -> optimizedOpIntrinsicGen t "add" args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedIntrinsic t "sub" args (_binOp (JSOSub {}))
+  | CSubf _ & t -> optimizedOpIntrinsicGen t "sub" args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedIntrinsic t "mul" args (_binOp (JSOMul {}))
+  | CMulf _ & t -> optimizedOpIntrinsicGen t "mul" args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedIntrinsic t "div" args (_binOp (JSODiv {}))
-  | CModi _ & t -> optimizedIntrinsic t "mod" args (_binOp (JSOMod {}))
+  | CDivf _ & t -> optimizedOpIntrinsicGen t "div" args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedOpIntrinsicGen t "mod" args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedIntrinsic t "eq" args (_binOp (JSOEq {}))
+  | CEqf  _ & t -> optimizedOpIntrinsicGen t "eq" args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedIntrinsic t "lt" args (_binOp (JSOLt {}))
+  | CLtf  _ & t -> optimizedOpIntrinsicGen t "lt" args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedIntrinsic t "gt" args (_binOp (JSOGt {}))
+  | CGtf  _ & t -> optimizedOpIntrinsicGen t "gt" args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedIntrinsic t "leq" args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedOpIntrinsicGen t "leq" args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedIntrinsic t "geq" args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedOpIntrinsicGen t "geq" args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedIntrinsic t "neq" args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedOpIntrinsicGen t "neq" args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedIntrinsic t "neg" args (_unOp (JSONeg {}))
+  | CNegi _ & t -> optimizedOpIntrinsicGen t "neg" args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
-  | CConcat _ -> JSEBinOp { op = JSOAdd {}, lhs = head args, rhs = last args }
-  | CCons _ -> -- Tuple -> JavaScript array/list
-    JSEArray { elems = args }
-  | CFoldl _ ->
-    match args with [func, init, seq] then
-      dprintLn "Foldl:";
-      dprintLn func;
-      dprintLn init;
-      dprintLn seq;
-      -- Compile a reduce function
-      JSEApp {
-        fun = JSEMember {
-          expr = seq,
-          id = nameSym "reduce"
-        },
-        args = [ func, init ]
-      }
-    else
-      error "compile operator: Invalid arguments to foldl"
+  | CConcat _ -> intrinsicGen "concat" args
+  | CCons _ -> intrinsicGen "cons" args
+  | CFoldl _ -> intrinsicGen "foldl" args
 
   -- Convert operations
-  | CChar2Int _ -> JSEApp {
-      fun = JSEMember {
-        expr = head args,
-        id = nameSym "charCodeAt"
-      },
-      args = [ JSEInt { i = 0 } ]
-    }
-  | CInt2Char _ -> JSEApp {
-      fun = JSEMember {
-        expr = JSEVar { id = nameSym "String" },
-        id = nameSym "fromCharCode"
-      },
-      args = [ head args ]
-    }
+  | CChar2Int _ -> intrinsicGen "char2int" args
+  | CInt2Char _ -> intrinsicGen "int2char" args
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
-    JSEApp { fun = _consoleLog, args = args, curried = false }
+    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
+    else
+      -- Warning about inconsistent behaviour
+      printLn "Warning: CPrint might behave unexpectedly when targeting the web or generic JS";
+      intrinsicGen "print" args
 
 
   -----------------
@@ -172,7 +161,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       -- Intrinsics
       else match fun with TmConst { val = val } then
         let args = map (compileMExpr opts) args in
-        compileCOp args val
+        compileCOp opts args val
 
       else error "Unsupported application in compileMExpr"
     else never
@@ -207,12 +196,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else
-      dprintLn "Trying to compile TmConst using compile C Op:";
-      dprintLn val;
-      match compileCOp [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
-    else
-      error "Unsupported literal"
+    else match compileCOp opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else error "Unsupported literal"
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
 
 
@@ -290,22 +275,10 @@ let filepathWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
--- Supported JS Runtime Mode
-type CompileJSTargetPlatform = Int
-con CompileJSTP_Normal : () -> CompileJSTargetPlatform
-con CompileJSTP_Web    : () -> CompileJSTargetPlatform
-con CompileJSTP_Node   : () -> CompileJSTargetPlatform
-
-type CompileJSOptions = {
-  targetPlatform : CompileJSTargetPlatform,
-  debugMode : Bool
-}
-
 let defaultCompileJSOptions : CompileJSOptions = {
   targetPlatform = CompileJSTP_Normal (),
   debugMode = false
 }
-
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.

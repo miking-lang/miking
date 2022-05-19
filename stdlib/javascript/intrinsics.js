@@ -18,10 +18,13 @@ const MExpr_JS_Intrinsics = Object.freeze({
   abs: lhs => Math.abs(lhs),
 
   // Built-in MExpr -> JS Functions
-  printLn: msg => console.log(msg),
+  print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(msg)),
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => [elm].concat(list),
   foldl: fun => init => list => list.reduce(fun, init),
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
+
+  // Helper Functions
+  trimLastNewline: str => str[str.length-1] === '\n' ? str.slice(0, -1) : str,
 });
