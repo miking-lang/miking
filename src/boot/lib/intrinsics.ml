@@ -25,6 +25,22 @@ module Mseq = struct
     | List s ->
         List.length s
 
+  let is_length_at_least s i =
+    match s with
+    | Rope s ->
+        Rope.length_array s >= i
+    | List s ->
+        let rec work j s =
+          match (j, s) with
+          | 0, _ ->
+              true
+          | _, [] ->
+              false
+          | _, _ :: t ->
+              work (j - 1) t
+        in
+        work i s
+
   let concat s1 s2 =
     match (s1, s2) with
     | Rope s1, Rope s2 ->
