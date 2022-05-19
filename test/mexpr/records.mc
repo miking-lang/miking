@@ -27,4 +27,16 @@ let nested = {a = {b = 1}} in
 let arec = {nested.a with b = addi nested.a.b 1} in
 utest arec.b with 2 in
 
+-- test order of evaluation for record expressions by observing side effects
+let v = ref 0 in
+let r5 = {x = 10, y = 11, z = 12, a = 13} in
+let r5mod = {r5 with
+	z = modref v (addi (deref v) 1); addi r5.z (deref v),
+	x = modref v (addi (deref v) 1); addi r5.x (deref v),
+	y = modref v (addi (deref v) 1); addi r5.y (deref v),
+	a = modref v (addi (deref v) 1); addi r5.a (deref v)
+} in
+
+utest r5mod with {x = 12, y = 14, z = 13, a = 17} in
+
 ()
