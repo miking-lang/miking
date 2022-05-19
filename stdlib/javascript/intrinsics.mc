@@ -8,7 +8,7 @@ lang CompileJSOptimizedIntrinsics = JSExprAst + MExprAst + MExprArity
 end
 
 -- Compile intrinsic function template (MExpr_JS_Intrinsics.[name])
-let intrinsic : String -> String -> [JSExpr] -> JSExpr =
+let intrinsic : Name -> String -> [JSExpr] -> JSExpr =
   use CompileJSOptimizedIntrinsics in
   lam runtime. lam name. lam args.
     -- If there is at least one argument, apply the intrinsic function
@@ -16,7 +16,7 @@ let intrinsic : String -> String -> [JSExpr] -> JSExpr =
     if gti (length args) 0 then
       JSEApp {
         fun = JSEMember {
-          expr = JSEVar { name = runtime },
+          expr = JSEVar { id = runtime },
           id = nameSym name
         },
         args = args,
@@ -24,11 +24,11 @@ let intrinsic : String -> String -> [JSExpr] -> JSExpr =
       }
     else -- No arguments, return the function itself
       JSEMember {
-        expr = JSEVar { name = runtime },
+        expr = JSEVar { id = runtime },
         id = nameSym name
       }
 
-let optimizedOpIntrinsic : String -> Const -> String -> [JSExpr] -> ([JSExpr] -> JSEBinOp) -> JSExpr =
+let optimizedOpIntrinsic : Name -> Const -> String -> [JSExpr] -> ([JSExpr] -> JSEBinOp) -> JSExpr =
   use CompileJSOptimizedIntrinsics in
   lam runtime. lam const. lam name. lam args. lam opFun.
     -- Check if the arguments is fully applied (have the same length as constArity(const))
@@ -42,9 +42,9 @@ let optimizedOpIntrinsic : String -> Const -> String -> [JSExpr] -> ([JSExpr] ->
 --- Namespaces for the exisitng runtime targets ---
 ---------------------------------------------------
 
-let intrGenNS = "MExpr_JS_Intrinsics"
-let intrWebNS = "MExpr_Web_JS_Intrinsics"
-let intrNodeNS = "MExpr_Node_JS_Intrinsics"
+let intrGenNS = nameSym "MExpr_JS_Intrinsics"
+let intrWebNS = nameSym "MExpr_Web_JS_Intrinsics"
+let intrNodeNS = nameSym "MExpr_Node_JS_Intrinsics"
 
 let intrinsicGen = intrinsic intrGenNS
 let intrinsicWeb = intrinsic intrWebNS
