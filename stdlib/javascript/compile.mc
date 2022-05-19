@@ -298,5 +298,11 @@ let javascriptCompileFile : CompileJSOptions -> Expr -> String -> Bool =
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
   let jsprog = javascriptCompile opts ast in   -- Run JS compiler
   let source = printJSProg jsprog in      -- Pretty print
-  writeFile targetPath source;
+  let intrinsics = join [readFile jsIntrinsicsFile_generic, (
+    switch opts.targetPlatform
+    case CompileJSTP_Web () then readFile jsIntrinsicsFile_web
+    case CompileJSTP_Node () then readFile jsIntrinsicsFile_node
+    case _ then "" end
+  ), "\n"] in
+  writeFile targetPath (concat intrinsics source);
   true

@@ -46,6 +46,10 @@ let intrGenNS = nameSym "MExpr_JS_Intrinsics"
 let intrWebNS = nameSym "MExpr_Web_JS_Intrinsics"
 let intrNodeNS = nameSym "MExpr_Node_JS_Intrinsics"
 
+let jsIntrinsicsFile_generic = "stdlib/javascript/intrinsics.js"
+let jsIntrinsicsFile_web = "stdlib/javascript/web/intrinsics.js"
+let jsIntrinsicsFile_node = "stdlib/javascript/node/intrinsics.js"
+
 let intrinsicGen = intrinsic intrGenNS
 let intrinsicWeb = intrinsic intrWebNS
 let intrinsicNode = intrinsic intrNodeNS
