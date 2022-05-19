@@ -25,8 +25,8 @@ lang JSExprAst
   | JSOSubScript {} -- lhs[rhs]
   | JSOOr        {} -- lhs || rhs
   | JSOAnd       {} -- lhs && rhs
-  | JSOEq        {} -- lhs == rhs
-  | JSONeq       {} -- lhs != rhs
+  | JSOEq        {} -- lhs === rhs
+  | JSONeq       {} -- lhs !== rhs
   | JSOLt        {} -- lhs < rhs
   | JSOGt        {} -- lhs > rhs
   | JSOLe        {} -- lhs <= rhs

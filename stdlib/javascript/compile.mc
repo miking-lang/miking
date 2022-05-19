@@ -109,7 +109,7 @@ end
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
+lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Entry point
   sem compileProg (opts: CompileJSOptions) =
@@ -319,10 +319,10 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   | TmNever _ -> error "Never term found in compileMExpr"
 
   sem ensureBlockOrStmt =
-  | (JSSBlock _) & block -> block
-  | JSSSeq { stmts = stmts } & stmt ->
+  | JSSSeq { stmts = stmts } ->
     JSSBlock { stmts = stmts }
   | stmt -> stmt
+
 end
 
 

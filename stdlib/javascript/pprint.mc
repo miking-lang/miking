@@ -110,7 +110,7 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
   | JSEVar { id = id } -> pprintEnvGetStr env id
   | JSEApp { fun = fun, args = args, curried = curried } ->
     match (printJSExpr indent) env fun with (env,fun) then
-      match mapAccumL (printJSExpr indent) env args with (env,args) then
+      match mapAccumL (printJSExpr 0) env args with (env,args) then
         let joinArgs = if curried then (strJoin ")(") else (strJoin ", ") in
         (env, join [fun, "(", joinArgs args, ")"])
       else never
