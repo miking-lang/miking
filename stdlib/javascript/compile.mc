@@ -6,6 +6,7 @@ include "mexpr/ast.mc"
 
 include "javascript/ast.mc"
 include "javascript/pprint.mc"
+include "javascript/patterns.mc"
 
 include "sys.mc"
 include "common.mc"
@@ -55,63 +56,8 @@ let _unOp : JSUnOp -> [JSExpr] -> JSEUnOp = use JSExprAst in
 let _consoleLog = use JSExprAst in
   JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
 
-------------------------------------
--- Pattern -> JavaScript FRAGMENT --
-------------------------------------
-
-let _assign = use JSExprAst in
-  lam lhs. lam rhs.
-    JSEBinOp {
-      op  = JSOAssign {},
-      lhs = lhs,
-      rhs = rhs
-    }
-
-lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
-                    RecordPat + DataPat + IntPat + OrPat +
-                    CharPat + BoolPat + AndPat + NotPat
-
-  -- Compile a single pattern without any binding operations.
-  sem compileSinglePattern =
-  | PatNamed { ident = ident } ->
-    match ident with PName name then
-    	JSEVar { id = name }
-    else -- Wildcard pattern name
-      JSEBool { b = true }
-  | PatInt { val = val } -> JSEInt { i = val }
-  | PatBool { val = val } -> JSEBool { b = val }
-  | PatRecord { bindings = bindings } ->
-    let fieldSeq = mapToSeq bindings in
-    let compileField = lam f. match f with (sid, expr) then
-        (sidToString sid, compileSinglePattern expr)
-      else never in
-    JSEObject {
-      fields = map (compileField) fieldSeq
-    }
-  | unsup ->
-    dprint unsup;
-    error "compileSinglePattern: Unsupported pattern"
 
 
-  sem compileBindingPattern (target: JSExpr) =
-  | ( PatInt _
-	| PatBool _
-	) & pat ->
-    JSEBinOp {
-      op = JSOEq {},
-      lhs = compileSinglePattern pat,
-      rhs = target
-    }
-  | PatNamed _ & pat  ->
-    let patExpr = compileSinglePattern pat in
-    match patExpr with JSEVar _ then
-      _assign patExpr target
-    else      -- Whildcard pattern
-      patExpr -- No assignment needed, just return "true"
-  | pat -> -- Otherwise: Assign the target to the pattern
-    _assign (compileSinglePattern pat) target
-
-end
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
