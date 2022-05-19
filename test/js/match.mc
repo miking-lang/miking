@@ -1,7 +1,9 @@
+include "string.mc"
+
 mexpr
 	let a = 1 in
 	match {c = {b = a}, b = 2} with {c = {b = b}} then
-		print b;
-		print a
+		printLn join [int2string b, " == ", int2string a];
+		printLn eqi a b
 	else
-		print false
+		printLn false
