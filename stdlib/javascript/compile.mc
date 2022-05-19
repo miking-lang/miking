@@ -82,30 +82,30 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   sem compileCOp (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedIntrinsic t "add" args (_binOp JSOAdd {})
+  | CAddf _ & t -> optimizedIntrinsic t "add" args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedIntrinsic t "sub" args (_binOp JSOSub {})
+  | CSubf _ & t -> optimizedIntrinsic t "sub" args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedIntrinsic t "mul" args (_binOp JSOmul {})
+  | CMulf _ & t -> optimizedIntrinsic t "mul" args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedIntrinsic t "div" args (_binOp JSODiv {})
-  | CModi _ & t -> optimizedIntrinsic t "mod" args (_binOp JSOMod {})
+  | CDivf _ & t -> optimizedIntrinsic t "div" args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedIntrinsic t "mod" args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedIntrinsic t "eq" args (_binOp JSOEq {})
+  | CEqf  _ & t -> optimizedIntrinsic t "eq" args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedIntrinsic t "lt" args (_binOp JSOLt {})
+  | CLtf  _ & t -> optimizedIntrinsic t "lt" args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedIntrinsic t "gt" args (_binOp JSOGt {})
+  | CGtf  _ & t -> optimizedIntrinsic t "gt" args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedIntrinsic t "leq" args (_binOp JSOLe {})
+  | CLeqf _ & t -> optimizedIntrinsic t "leq" args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedIntrinsic t "geq" args (_binOp JSOGe {})
+  | CGeqf _ & t -> optimizedIntrinsic t "geq" args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedIntrinsic t "neq" args (_binOp JSONeq {})
+  | CNeqf _ & t -> optimizedIntrinsic t "neq" args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedIntrinsic t "neg" args (_unOp JSONeg {})
+  | CNegi _ & t -> optimizedIntrinsic t "neg" args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
   | CConcat _ -> JSEBinOp { op = JSOAdd {}, lhs = head args, rhs = last args }

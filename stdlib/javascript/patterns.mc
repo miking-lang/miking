@@ -29,7 +29,7 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
   sem compileBindingPattern (target: JSExpr) =
   | ( PatInt _
 	  | PatBool _
-	  ) & pat -> _binOp JSOEq {} [compileSinglePattern pat, target]
+	  ) & pat -> _binOp (JSOEq {}) [compileSinglePattern pat, target]
   | PatNamed _ & pat  ->
     let patExpr = compileSinglePattern pat in
     match patExpr with JSEVar _ then _assign patExpr target

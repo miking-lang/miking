@@ -2,6 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/const-arity.mc"
 include "javascript/ast.mc"
 
+
 -- Fragments used by the intrinsic functions
 lang CompileJSOptimizedIntrinsics = JSExprAst + MExprAst + MExprArity
 end
@@ -34,4 +35,4 @@ let optimizedIntrinsic : Const -> String -> [JSExpr] -> ([JSExpr] -> JSEBinOp) -
     -- If so, then optimize the intrinsic and return an in-place operation
     -- Otherwise, return a partially applied intrinsic
     if eqi (length args) (constArity const) then opFun args
-    else _intrinsic name args
+    else intrinsic name args
