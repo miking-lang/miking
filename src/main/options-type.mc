@@ -24,6 +24,7 @@ type Options = {
   typeCheck : Bool,
   printHelp : Bool,
   toJavaScript : Bool,
+  jsTarget : String,
   output : Option String,
   tuneOptions : TuneOptions
 }

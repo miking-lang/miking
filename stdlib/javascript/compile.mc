@@ -112,10 +112,10 @@ end
 lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
 
   -- Entry point
-  sem compileProg =
+  sem compileProg (opts: CompileJSOptions) =
   | prog ->
     -- Run compiler
-    match compileMExpr prog with expr then
+    match (compileMExpr opts) prog with expr then
       -- Return final top level expressions
       JSPProg { imports = [], exprs = [expr] }
     else never
@@ -171,7 +171,7 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
         args = [ func, init ]
       }
     else
-      error "compileCOp: Invalid arguments to foldl"
+      error "compile operator: Invalid arguments to foldl"
 
   -- Convert operations
   | CChar2Int _ -> JSEApp {
@@ -198,7 +198,7 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
   -- EXPRESSIONS --
   -----------------
 
-  sem compileMExpr =
+  sem compileMExpr (opts: CompileJSOptions) =
 
   | TmVar { ident = id } -> JSEVar { id = id }
 
@@ -212,25 +212,25 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
     match rec [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = JSEVar { id = ident }, args = map compileMExpr args, curried = true }
+        JSEApp { fun = JSEVar { id = ident }, args = map (compileMExpr opts) args, curried = true }
 
       -- Intrinsics
       else match fun with TmConst { val = val } then
-        let args = map compileMExpr args in
-        compileCOp fun args val
+        let args = map (compileMExpr opts) args in
+        compileCOp args val
 
       else error "Unsupported application in compileMExpr"
     else never
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
-    JSEFun { param = arg, body = compileMExpr body }
+    JSEFun { param = arg, body = (compileMExpr opts) body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
     let compileField = lam f. match f with (sid, expr)
-      then (sidToString sid, compileMExpr expr)
+      then (sidToString sid, (compileMExpr opts) expr)
       else never in
     JSEObject { fields = map compileField fieldSeq }
 
@@ -243,7 +243,7 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
     else
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
-      let tms: [JSExpr] = map compileMExpr tms in
+      let tms: [JSExpr] = map (compileMExpr opts) tms in
       JSEArray { exprs = tms, info = info }
 
   -- Literals
@@ -252,7 +252,10 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileCOp val with jsexpr then jsexpr -- SeqOpAst Consts are handled in compileCOp
+    else
+      dprintLn "Trying to compile TmConst using compile C Op:";
+      dprintLn val;
+      match compileCOp [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else
       error "Unsupported literal"
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
@@ -270,19 +273,19 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
         -- Inline the function call
         JSSSeq {
           stmts = [
-            compileMExpr expr,
-            compileMExpr e
+            (compileMExpr opts) expr,
+            (compileMExpr opts) e
           ]
         }
       else
         -- Ignore the expression
-        compileMExpr e
+        (compileMExpr opts) e
     else
       -- Normal let binding
       JSSSeq {
         stmts = [
-          JSSDef { id = id, expr = compileMExpr expr },
-          compileMExpr e
+          JSSDef { id = id, expr = (compileMExpr opts) expr },
+          (compileMExpr opts) e
         ]
       }
 
@@ -291,19 +294,19 @@ lang MExprJSCompile = JSProgAst + MExprAst + PatJSCompile
 	match fst with { ident = ident, body = body } then
       JSSSeq {
         stmts = [
-          JSSDef { id = ident, expr = compileMExpr body },
-          compileMExpr e
+          JSSDef { id = ident, expr = (compileMExpr opts) body },
+          (compileMExpr opts) e
         ]
       }
     else error "ERROR: TmRecLets must have at least one binding."
-  | TmType { inexpr = e } -> compileMExpr e -- no op (Skip type declaration)
+  | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
   | TmConApp _ -> error "Constructor application in compileMExpr."
-  | TmConDef { inexpr = e } -> compileMExpr e -- no op (Skip type constructor definitions)
+  | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
-    let target: JSExpr = compileMExpr target in
+    let target: JSExpr = (compileMExpr opts) target in
     let pat: JSExpr = compileBindingPattern target pat in
-    let thn: JSStmt = compileMExpr thn in
-    let els: JSStmt = compileMExpr els in
+    let thn: JSStmt = (compileMExpr opts) thn in
+    let els: JSStmt = (compileMExpr opts) els in
     JSSIf {
       cond = pat,
       thn = ensureBlockOrStmt thn,
@@ -332,22 +335,40 @@ let filepathWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
+-- Supported JS Runtime Mode
+type CompileJSTargetPlatform = Int
+con CompileJSTP_Normal : () -> CompileJSTargetPlatform
+con CompileJSTP_Web    : () -> CompileJSTargetPlatform
+con CompileJSTP_Node   : () -> CompileJSTargetPlatform
+
+type CompileJSOptions = {
+  targetPlatform : CompileJSTargetPlatform,
+  debugMode : Bool
+}
+
+let defaultCompileJSOptions : CompileJSOptions = {
+  targetPlatform = CompileJSTP_Normal (),
+  debugMode = false
+}
 
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
-let javascriptCompile : Expr -> JSPProg =
+let javascriptCompile : CompileJSOptions -> Expr -> JSPProg =
+  lam opts : CompileJSOptions.
   lam ast : Expr.
   use MExprJSCompile in
-  compileProg ast
+  compileProg opts ast
 
 
 
-let javascriptCompileFile : Expr -> String -> Bool =
-  lam ast : Expr. lam sourcePath: String.
+let javascriptCompileFile : CompileJSOptions -> Expr -> String -> Bool =
+  lam opts : CompileJSOptions.
+  lam ast : Expr.
+  lam sourcePath: String.
   use JSProgPrettyPrint in
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
-  let jsprog = javascriptCompile ast in   -- Run JS compiler
+  let jsprog = javascriptCompile opts ast in   -- Run JS compiler
   let source = printJSProg jsprog in      -- Pretty print
   writeFile targetPath source;
   true

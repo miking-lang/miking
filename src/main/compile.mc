@@ -89,7 +89,15 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = symbolizeExpr symEnv ast in
 
     if options.toJavaScript then
-      javascriptCompileFile ast sourcePath
+      let runtimePrint = lam s. printLn (join ["Compiling to JavaScript targeting ", s, " environment..."]) in
+      let target = switch options.jsTarget
+        case Some ("node") then runtimePrint "the node"; CompileJSTP_Node ()
+        case Some ("web")  then runtimePrint "a web browser"; CompileJSTP_Web  ()
+        case Some ("generic") then runtimePrint "a generic"; CompileJSTP_Normal ()
+        case Some (e) then error (join ["Invalid value for --js-target: '", e, "'"])
+        case _ then runtimePrint "a generic"; CompileJSTP_Normal ()
+      end in
+      javascriptCompileFile {defaultCompileJSOptions with targetPlatform = target} ast sourcePath
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
