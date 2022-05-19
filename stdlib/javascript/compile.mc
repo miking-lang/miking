@@ -43,6 +43,14 @@ let _charSeq2String = use MExprAst in lam tms.
 let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
+-- Helper constructors for JSExpr operators
+let _binOp : JSBinOp -> [JSExpr] -> JSEBinOp = use JSExprAst in
+  lam op. lam args. JSEBinOp { op = op, lhs = head args, rhs = last args }
+
+let _unOp : JSUnOp -> [JSExpr] -> JSEUnOp = use JSExprAst in
+  lam op. lam args. JSEUnOp { op = op, rhs = head args }
+
+
 -- Names used in the compiler for intrinsics
 let _consoleLog = use JSExprAst in
   JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
