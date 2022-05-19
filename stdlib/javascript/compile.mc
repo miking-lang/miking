@@ -8,6 +8,7 @@ include "javascript/ast.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
 include "javascript/intrinsics.mc"
+include "javascript/operators.mc"
 
 include "sys.mc"
 include "common.mc"
@@ -45,12 +46,6 @@ let _charSeq2String = use MExprAst in lam tms.
 let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
--- Helper constructors for JSExpr operators
-let _binOp : JSBinOp -> [JSExpr] -> JSEBinOp = use JSExprAst in
-  lam op. lam args. JSEBinOp { op = op, lhs = head args, rhs = last args }
-
-let _unOp : JSUnOp -> [JSExpr] -> JSEUnOp = use JSExprAst in
-  lam op. lam args. JSEUnOp { op = op, rhs = head args }
 
 
 -- Names used in the compiler for intrinsics

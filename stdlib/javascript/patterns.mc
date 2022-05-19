@@ -1,15 +1,6 @@
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
-
-
-
-----------------------
--- HELPER FUNCTIONS --
-----------------------
-
-let _assign : JSExpr -> JSExpr -> JSEBinOp = use JSExprAst in
-  lam lhs. lam rhs. JSEBinOp { op  = JSOAssign {}, lhs = lhs, rhs = rhs }
-
+include "javascript/operators.mc"
 
 ------------------------------------
 -- Pattern -> JavaScript FRAGMENT --
