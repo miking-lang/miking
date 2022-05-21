@@ -169,7 +169,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
-    JSEFun { param = arg, body = (compileMExpr opts) body }
+    let body = compileMExpr opts body in
+    dprintLn "Compiling lambda";
+    dprintLn body;
+    JSEFun { param = arg, body = ensureStmt body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
@@ -263,6 +266,26 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | JSSSeq { stmts = stmts } ->
     JSSBlock { stmts = stmts }
   | stmt -> stmt
+
+  sem ensureStmt =
+  | (JSSExpr _
+    | JSSDef _
+    | JSSIf _
+    | JSSSwitch _
+    | JSSWhile _
+    | JSSRet _
+    | JSSCont _
+    | JSSBreak _
+    | JSSDelete _
+    | JSSBlock _
+    | JSSSeq _
+    ) & stmt ->
+      dprintLn "Ensuring statement -> statement";
+      stmt
+  | expr ->
+    dprintLn "Ensuring expression -> statement";
+    JSSExpr { expr = expr }
+
 
 end
 

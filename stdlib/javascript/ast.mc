@@ -8,7 +8,7 @@ lang JSExprAst
   syn JSExpr =
   | JSEVar       { id: Name }                   -- Variables
   | JSEApp       { fun: JSExpr, args: [JSExpr], curried: Bool }  -- Function application
-  | JSEFun       { param: Name, body: JSExpr} -- Functions
+  | JSEFun       { param: Name, body: JSStmt} -- Functions
   | JSEMember    { expr: JSExpr, id: Name }  -- Member access
   | JSEInt       { i: Int }                     -- Integer literals
   | JSEFloat     { f: Float }                   -- Float literals
