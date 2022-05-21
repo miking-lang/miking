@@ -63,6 +63,7 @@ lang JSStmtAst = JSExprAst
   | JSSDelete  { ident: Name } -- Delete variable
   | JSSBlock   { stmts: [JSStmt] } -- Block statement (With surrounding closing braces)
   | JSSSeq     { stmts: [JSStmt] } -- Sequence of statements
+  | JSSNop     { } -- No-op
 
 end
 

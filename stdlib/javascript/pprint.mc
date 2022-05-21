@@ -89,13 +89,16 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
         (env, join ["return ", val, ";"])
       else never
     else (env, "return")
-  | ( ((JSEApp _) & expr) -- Outmost calls are valid statements
-    | (JSSExpr {expr = expr})
+  | JSSNop _ -> (env, "")
+  | ( JSEApp _ & expr -- Outmost calls are valid statements
+    | JSSExpr {expr = expr}
     ) ->
     match (printJSExpr indent env) expr with (env, str) then
       (env, concat str ";")
     else never
-  | _ -> error "printJSStmt: unexpected expression"
+  | e ->
+    dprintLn e;
+    error "printJSStmt: unexpected expression"
 
 
 

@@ -136,6 +136,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       -- Warning about inconsistent behaviour
       printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
       intrinsicGen "print" args
+  | CFlushStdout _ -> JSSNop { }
 
 
   -----------------
