@@ -86,6 +86,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       JSPProg { imports = [], exprs = exprs }
     else never
 
+
+
+  -- Helper functions
   sem flattenBlockHelper =
   | JSEBlock { exprs = exprs, ret = ret } ->
     -- If the return value is a block, concat the expressions in that block with the
@@ -108,7 +111,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else never
   | expr -> expr
 
-
+  sem immediatelyInvokeBlock =
+  | JSEBlock _ & block -> JSEIIFE { body = block }
+  | expr -> expr
 
 
 
@@ -272,8 +277,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     let els = (compileMExpr opts) els in
     JSETernary {
       cond = pat,
-      thn = thn,
-      els = els
+      thn = immediatelyInvokeBlock thn,
+      els = immediatelyInvokeBlock els
     }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
