@@ -78,10 +78,32 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   sem compileProg (opts: CompileJSOptions) =
   | prog ->
     -- Run compiler
-    match (compileMExpr opts) prog with expr then
+    match compileMExpr opts prog with expr then
+      let exprs = match expr with JSEBlock { exprs = exprs, ret = ret } then concat exprs [ret]
+      else [expr] in
       -- Return final top level expressions
-      JSPProg { imports = [], exprs = [expr] }
+      JSPProg { imports = [], exprs = exprs }
     else never
+
+  sem flattenBlockHelper =
+  | JSEBlock { exprs = exprs, ret = ret } ->
+    -- If an expression in expr is a block, flatten it
+    -- If ret is a block, flatten it and get the nested return
+    match flattenBlockHelper exprs with (expr, ret) then
+      let expr: JSExpr = flattenBlockHelper expr in
+      let ret: JSExpr = flattenBlockHelper ret in
+      let flat = flattenBlock [expr, ret] in
+      ()
+    else ()
+  | expr -> expr
+
+  sem flattenBlock =
+  | JSEBlock { expr = expr, ret = ret } ->
+    let flat = flattenBlock [expr, ret] in
+    JSEBlock { expr = flat, ret = ret }
+  | expr -> expr
+
+
 
 
 
@@ -136,7 +158,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       -- Warning about inconsistent behaviour
       printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
       intrinsicGen "print" args
-  | CFlushStdout _ -> JSSNop { }
+  | CFlushStdout _ -> JSENop { }
 
 
   -----------------
@@ -169,10 +191,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
-    let body = compileMExpr opts body in
-    dprintLn "Compiling lambda";
-    dprintLn body;
-    JSEFun { param = arg, body = ensureStmt body }
+    let body = (compileMExpr opts) body in
+    -- dprintLn "Compiling lambda";
+    -- dprintLn body;
+    JSEFun { param = arg, body = body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
@@ -215,33 +237,25 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match nameGetStr id with [] then
       match expr with TmApp { } then
         -- Inline the function call
-        JSSSeq {
-          stmts = [
-            (compileMExpr opts) expr,
-            (compileMExpr opts) e
-          ]
+        JSEBlock {
+          exprs = [(compileMExpr opts) expr],
+          ret = (compileMExpr opts) e
         }
       else
         -- Ignore the expression
         (compileMExpr opts) e
     else
       -- Normal let binding
-      JSSSeq {
-        stmts = [
-          JSSDef { id = id, expr = (compileMExpr opts) expr },
-          (compileMExpr opts) e
-        ]
+      JSEBlock {
+        exprs = [JSEDef { id = id, expr = (compileMExpr opts) expr }],
+        ret = (compileMExpr opts) e
       }
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
   	let fst : RecLetBinding = head bindings in
-	match fst with { ident = ident, body = body } then
-      JSSSeq {
-        stmts = [
-          JSSDef { id = ident, expr = (compileMExpr opts) body },
-          (compileMExpr opts) e
-        ]
-      }
+	  match fst with { ident = ident, body = body } then
+      dprintLn (concat "Compiling recursive let: " (nameGetStr ident));
+      compileMExpr opts (TmLet { ident = ident, body = body, inexpr = e })
     else error "ERROR: TmRecLets must have at least one binding."
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
   | TmConApp _ -> error "Constructor application in compileMExpr."
@@ -249,12 +263,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
     let pat: JSExpr = compileBindingPattern target pat in
-    let thn: JSStmt = (compileMExpr opts) thn in
-    let els: JSStmt = (compileMExpr opts) els in
-    JSSIf {
+    let thn = (compileMExpr opts) thn in
+    let els = (compileMExpr opts) els in
+    JSETernary {
       cond = pat,
-      thn = ensureBlockOrStmt thn,
-      els = ensureBlockOrStmt els
+      thn = thn,
+      els = els
     }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
@@ -262,29 +276,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- Should not occur
   | TmNever _ -> error "Never term found in compileMExpr"
 
-  sem ensureBlockOrStmt =
-  | JSSSeq { stmts = stmts } ->
-    JSSBlock { stmts = stmts }
-  | stmt -> stmt
-
-  sem ensureStmt =
-  | (JSSExpr _
-    | JSSDef _
-    | JSSIf _
-    | JSSSwitch _
-    | JSSWhile _
-    | JSSRet _
-    | JSSCont _
-    | JSSBreak _
-    | JSSDelete _
-    | JSSBlock _
-    | JSSSeq _
-    ) & stmt ->
-      dprintLn "Ensuring statement -> statement";
-      stmt
-  | expr ->
-    dprintLn "Ensuring expression -> statement";
-    JSSExpr { expr = expr }
 
 
 end
