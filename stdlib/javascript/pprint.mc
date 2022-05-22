@@ -120,11 +120,14 @@ lang JSPrettyPrint = JSExprAst + JSStmtAst
     else never
   | JSEMember { expr = expr, id = id } ->
     match (printJSExpr indent) env expr with (env,expr) then
-      match (pprintEnvGetStr env id) with (env,id) then
-        (env, join [expr, ".", id])
+      (env, join [expr, ".", id])
+    else never
+  | JSEDef { id = id, expr = expr } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match (printJSExpr indent env) expr with (env, str) then
+        (env, join ["let ", id, " = ", str, ";"])
       else never
     else never
-
   | JSEFun { param = param, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
