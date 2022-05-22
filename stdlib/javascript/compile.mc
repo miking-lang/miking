@@ -87,20 +87,24 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   sem flattenBlockHelper =
   | JSEBlock { exprs = exprs, ret = ret } ->
-    -- If an expression in expr is a block, flatten it
-    -- If ret is a block, flatten it and get the nested return
-    match flattenBlockHelper exprs with (expr, ret) then
-      let expr: JSExpr = flattenBlockHelper expr in
-      let ret: JSExpr = flattenBlockHelper ret in
-      let flat = flattenBlock [expr, ret] in
-      ()
-    else ()
-  | expr -> expr
+    -- If the return value is a block, concat the expressions in that block with the
+    -- expressions in the current block and set the return value to the return value
+    -- of the current block
+    -- Call flattenBlockHelper recursively on the return value
+    let flatRet = flattenBlockHelper ret in
+    match flatRet with (retExprs, retRet) then
+      (concat exprs retExprs, retRet)
+    else
+      -- Normal expressions are returned as is, thus concat them with the expressions
+      -- in the current block
+      (concat exprs [flatRet], ret)
+  | expr -> ([], expr)
 
   sem flattenBlock =
-  | JSEBlock { expr = expr, ret = ret } ->
-    let flat = flattenBlock [expr, ret] in
-    JSEBlock { expr = flat, ret = ret }
+  | JSEBlock _ & block ->
+    match flattenBlockHelper block with (exprs, ret) then
+      JSEBlock { exprs = exprs, ret = ret }
+    else never
   | expr -> expr
 
 
@@ -237,19 +241,19 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match nameGetStr id with [] then
       match expr with TmApp { } then
         -- Inline the function call
-        JSEBlock {
+        flattenBlock (JSEBlock {
           exprs = [(compileMExpr opts) expr],
           ret = (compileMExpr opts) e
-        }
+        })
       else
         -- Ignore the expression
         (compileMExpr opts) e
     else
       -- Normal let binding
-      JSEBlock {
+      flattenBlock (JSEBlock {
         exprs = [JSEDef { id = id, expr = (compileMExpr opts) expr }],
         ret = (compileMExpr opts) e
-      }
+      })
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
   	let fst : RecLetBinding = head bindings in
