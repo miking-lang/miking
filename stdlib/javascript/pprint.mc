@@ -94,7 +94,7 @@ lang JSPrettyPrint = JSExprAst
     let i = indent in
     let ii = pprintIncr indent in
     match (printJSExpr ii) env body with (env,body) then
-      (env, join ["(() => {", body, "})();"])
+      (env, join ["(() => ", body, ")()"])
     else never
 
   | JSEInt   { i = i } -> (env, int2string i)
@@ -144,7 +144,7 @@ lang JSPrettyPrint = JSExprAst
     match mapAccumL (printJSExpr ii) env exprs with (env, exprs) then
       let ret = match (printJSExpr 0 env) ret with (env, val) then
           join [pprintNewline ii, "return ", val, ";"]
-        else "undefined" in
+        else "" in
       (env, join ["{",
         pprintNewline ii, strJoin (concat ";" (pprintNewline ii)) exprs,
         ret,
