@@ -79,8 +79,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | prog ->
     -- Run compiler
     match compileMExpr opts prog with expr then
-      let exprs = match expr with JSEBlock { exprs = exprs, ret = ret } then concat exprs [ret]
-      else [expr] in
+      let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
+        then concat exprs [ret]
+        else [expr] in
       -- Return final top level expressions
       JSPProg { imports = [], exprs = exprs }
     else never
