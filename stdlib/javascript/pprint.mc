@@ -187,8 +187,6 @@ lang JSProgPrettyPrint = JSProgAst + JSPrettyPrint
     let indent = 0 in
     let imports = map (lam imp. join ["import '", imp, "';"]) imports in
     let env = pprintEnvEmpty in
-    dprintLn "Printing program:";
-    dprintLn exprs;
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       let importsStr = strJoin "\n" imports in
       let exprsStr = strJoin (pprintNewline indent) exprs in
