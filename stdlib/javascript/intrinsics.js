@@ -24,6 +24,9 @@ const MExpr_JS_Intrinsics = Object.freeze({
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
+  ref: value => { return { value: value } },
+  modref: ref => value => { ref.value = value; return ref; },
+  deref: ref => ref.value,
 
   // Helper Functions
   trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,

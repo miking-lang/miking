@@ -177,6 +177,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | CChar2Int _ -> intrinsicGen "char2int" args
   | CInt2Char _ -> intrinsicGen "int2char" args
 
+  -- References
+  | CRef _ -> intrinsicGen "ref" args
+  | CModRef _ -> intrinsicGen "modref" args
+  | CDeRef _ -> intrinsicGen "deref" args
+
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
     match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
