@@ -18,21 +18,23 @@ const MExpr_JS_Intrinsics = Object.freeze({
   // abs: lhs => Math.abs(lhs),     // Unused
 
   // Built-in MExpr -> JS Functions
-  print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(msg)),
-  concat: lhs => rhs => {
-    console.log("concat: '", lhs, "' and '", rhs, "'");
-    return lhs.concat(rhs)
-  },
+  print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
+  concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => [elm].concat(list),
-  foldl: fun => init => list => list.reduce((acc, e, i) => fun(acc)(e), init),
+  foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
 
   // Helper Functions
-  trimLastNewline: str => str[str.length-1] === '\n' ? str.slice(0, -1) : str,
+  trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,
+  ensureString: x => (Array.isArray(x)) ? x.join('') : x.toString(),
 });
 
 let join = seqs => MExpr_JS_Intrinsics.foldl(MExpr_JS_Intrinsics.concat)("")(seqs);
+let printLn = s => {
+    MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
+  };
+let a = 1;
 let int2string = n => {
     let int2string_rechelper = n1 => ((true === (n1 < 10)) ? [MExpr_JS_Intrinsics.int2char((n1 + MExpr_JS_Intrinsics.char2int('0')))] : (() => {
           let d = [MExpr_JS_Intrinsics.int2char(((n1 % 10) + MExpr_JS_Intrinsics.char2int('0')))];
@@ -40,12 +42,7 @@ let int2string = n => {
         })());
     return ((true === (n < 0)) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper((-n))) : int2string_rechelper(n));
   };
-let printLn = s => {
-    MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"))
-    return ;
-  };
-let a = 1;
 (({c: {b: b}} = {b: 2, c: {b: a}}) ? (() => {
-    printLn(join([int2string(b), " == ", int2string(a)]))
-    return printLn((a === b));
-  })() : printLn(false))
+    printLn(join([int2string(b), " == ", int2string(a)]));
+    return printLn(((true === (a === b)) ? "true" : "false"));
+  })() : printLn(false));
