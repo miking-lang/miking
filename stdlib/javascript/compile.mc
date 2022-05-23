@@ -235,7 +235,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       else never in
     JSEObject { fields = map compileField fieldSeq }
 
-  | TmSeq {tms = tms, ty = ty, info = info} & t ->
+  | TmSeq {tms = tms, ty = ty} & t ->
     -- Special handling of strings
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
@@ -245,7 +245,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
       let tms: [JSExpr] = map (compileMExpr opts) tms in
-      JSEArray { exprs = tms, info = info }
+      JSEArray { exprs = tms }
 
   -- Literals
   | TmConst { val = val } ->
