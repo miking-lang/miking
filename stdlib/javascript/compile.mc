@@ -50,7 +50,7 @@ let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 -- Names used in the compiler for intrinsics
 let _consoleLog = use JSExprAst in
-  JSEMember { expr = JSEVar { id = nameSym "console" }, id = nameSym "log" }
+  JSEMember { expr = JSEVar { id = nameSym "console" }, id = "log" }
 
 
 
@@ -78,10 +78,58 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   sem compileProg (opts: CompileJSOptions) =
   | prog ->
     -- Run compiler
-    match (compileMExpr opts) prog with expr then
+    match compileMExpr opts prog with expr then
+      let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
+        then concat exprs [ret]
+        else [expr] in
       -- Return final top level expressions
-      JSPProg { imports = [], exprs = [expr] }
+      JSPProg { imports = [], exprs = exprs }
     else never
+
+
+
+  -- Helper functions
+  sem flattenBlockHelper =
+  | JSEBlock { exprs = exprs, ret = ret } ->
+    -- If the return value is a block, concat the expressions in that block with the
+    -- expressions in the current block and set the return value to the return value
+    -- of the current block
+    -- For each expression in the current block, if it is a block, flatten it
+    let flatExprs = filterNops (foldl (
+      lam acc. lam e.
+        let flatE = flattenBlockHelper e in
+        match flatE with (flatEExprs, flatERet) then
+          concat (concat acc flatEExprs) [flatERet]
+        else concat acc [flatE]
+    ) [] exprs) in
+
+    -- Call flattenBlockHelper recursively on the return value
+    let flatRet = flattenBlockHelper ret in
+    match flatRet with (retExprs, retRet) then
+      (concat flatExprs retExprs, retRet)
+    else
+      -- Normal expressions are returned as is, thus concat them with the expressions
+      -- in the current block
+      (concat flatExprs [flatRet], ret)
+  | expr -> ([], expr)
+
+  sem flattenBlock =
+  | JSEBlock _ & block ->
+    match flattenBlockHelper block with (exprs, ret) then
+      JSEBlock { exprs = exprs, ret = ret }
+    else never
+  | expr -> expr
+
+  sem immediatelyInvokeBlock =
+  | JSEBlock _ & block -> JSEIIFE { body = block }
+  | expr -> expr
+
+  sem filterNops : [JSExpr] -> [JSExpr]
+  sem filterNops =
+  | lst -> foldl (
+    lam acc. lam e.
+      match e with JSENop { } then acc else cons e acc
+  ) [] lst
 
 
 
@@ -129,6 +177,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | CChar2Int _ -> intrinsicGen "char2int" args
   | CInt2Char _ -> intrinsicGen "int2char" args
 
+  -- References
+  | CRef _ -> intrinsicGen "ref" args
+  | CModRef _ -> intrinsicGen "modref" args
+  | CDeRef _ -> intrinsicGen "deref" args
+
   -- Not directly mapped to JavaScript operators
   | CPrint _ ->
     match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
@@ -136,6 +189,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       -- Warning about inconsistent behaviour
       printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
       intrinsicGen "print" args
+  | CFlushStdout _ -> JSENop { }
 
 
   -----------------
@@ -168,7 +222,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
-    JSEFun { param = arg, body = (compileMExpr opts) body }
+    let body = (compileMExpr opts) body in
+    -- dprintLn "Compiling lambda";
+    -- dprintLn body;
+    JSEFun { param = arg, body = body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
@@ -208,60 +265,53 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmLet { ident = id, body = expr, inexpr = e } ->
     -- Check if identifier is the ignore identifier (_, or [])
     -- If so, ignore the expression unless it is a function application
-    match nameGetStr id with [] then
-      match expr with TmApp { } then
-        -- Inline the function call
-        JSSSeq {
-          stmts = [
-            (compileMExpr opts) expr,
-            (compileMExpr opts) e
-          ]
-        }
-      else
-        -- Ignore the expression
-        (compileMExpr opts) e
-    else
-      -- Normal let binding
-      JSSSeq {
-        stmts = [
-          JSSDef { id = id, expr = (compileMExpr opts) expr },
-          (compileMExpr opts) e
-        ]
-      }
+    let data = (match nameGetStr id with [] then
+      match expr with TmApp { } then -- Inline the function call
+        ([(compileMExpr opts) expr], (compileMExpr opts) e)
+      else -- Ignore the expression
+        ([], (compileMExpr opts) e)
+    else -- Normal let binding
+      ([JSEDef { id = id, expr = (compileMExpr opts) expr }], (compileMExpr opts) e)
+    ) in
+    match data with (exprs, ret) then
+      flattenBlock (JSEBlock {
+        exprs = exprs,
+        ret = ret
+      })
+    else never
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
-  	let fst : RecLetBinding = head bindings in
-	match fst with { ident = ident, body = body } then
-      JSSSeq {
-        stmts = [
-          JSSDef { id = ident, expr = (compileMExpr opts) body },
-          (compileMExpr opts) e
-        ]
-      }
-    else error "ERROR: TmRecLets must have at least one binding."
+    -- Todo: Compile each binding as a let expression
+    flattenBlock (JSEBlock {
+      exprs = map (
+        lam bind : RecLetBinding.
+        match bind with { ident = ident, body = body } then
+          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = JSENop { } })
+        else never
+        ) bindings,
+      ret = (compileMExpr opts) e
+    })
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
   | TmConApp _ -> error "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
     let pat: JSExpr = compileBindingPattern target pat in
-    let thn: JSStmt = (compileMExpr opts) thn in
-    let els: JSStmt = (compileMExpr opts) els in
-    JSSIf {
+    let thn = (compileMExpr opts) thn in
+    let els = (compileMExpr opts) els in
+    JSETernary {
       cond = pat,
-      thn = ensureBlockOrStmt thn,
-      els = ensureBlockOrStmt els
+      thn = immediatelyInvokeBlock thn,
+      els = immediatelyInvokeBlock els
     }
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
 
   -- Should not occur
   | TmNever _ -> error "Never term found in compileMExpr"
+  | JSENop _ -> JSENop { }
 
-  sem ensureBlockOrStmt =
-  | JSSSeq { stmts = stmts } ->
-    JSSBlock { stmts = stmts }
-  | stmt -> stmt
+
 
 end
 

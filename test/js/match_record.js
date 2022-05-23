@@ -32,3 +32,20 @@ const MExpr_JS_Intrinsics = Object.freeze({
   trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,
   ensureString: x => (Array.isArray(x)) ? x.join('') : x.toString(),
 });
+
+let join = seqs => MExpr_JS_Intrinsics.foldl(MExpr_JS_Intrinsics.concat)("")(seqs);
+let printLn = s => {
+  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
+};
+let a = 1;
+let int2string = n => {
+  let int2string_rechelper = n1 => ((true === (n1 < 10)) ? [MExpr_JS_Intrinsics.int2char((n1 + MExpr_JS_Intrinsics.char2int('0')))] : (() => {
+      let d = [MExpr_JS_Intrinsics.int2char(((n1 % 10) + MExpr_JS_Intrinsics.char2int('0')))];
+      return MExpr_JS_Intrinsics.concat(int2string_rechelper((n1 / 10)))(d);
+    })());
+  return ((true === (n < 0)) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper((-n))) : int2string_rechelper(n));
+};
+(({c: {b: b}} = {b: 2, c: {b: a}}) ? (() => {
+    printLn(join([int2string(b), " == ", int2string(a)]));
+    return printLn(((true === (a === b)) ? "true" : "false"));
+  })() : printLn(false));

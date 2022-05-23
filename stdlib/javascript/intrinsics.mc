@@ -17,7 +17,7 @@ let intrinsic : Name -> String -> [JSExpr] -> JSExpr =
       JSEApp {
         fun = JSEMember {
           expr = JSEVar { id = runtime },
-          id = nameSym name
+          id = name
         },
         args = args,
         curried = true
@@ -25,7 +25,7 @@ let intrinsic : Name -> String -> [JSExpr] -> JSExpr =
     else -- No arguments, return the function itself
       JSEMember {
         expr = JSEVar { id = runtime },
-        id = nameSym name
+        id = name
       }
 
 let optimizedOpIntrinsic : Name -> Const -> String -> [JSExpr] -> ([JSExpr] -> JSEBinOp) -> JSExpr =
