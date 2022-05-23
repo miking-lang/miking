@@ -83,9 +83,8 @@ lang JSPrettyPrint = JSExprAst
     else never
   | JSEFun { param = param, body = body } ->
     let i = indent in
-    let ii = pprintIncr indent in
     match pprintEnvGetStr env param with (env,param) then
-      match (printJSExpr ii) env body with (env,body) then
+      match (printJSExpr i) env body with (env,body) then
         -- ES6 arrow functions (released 2015)
         -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
         -- Comparison to anonymous functions:
