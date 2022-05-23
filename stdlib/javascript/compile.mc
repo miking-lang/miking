@@ -260,29 +260,32 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmLet { ident = id, body = expr, inexpr = e } ->
     -- Check if identifier is the ignore identifier (_, or [])
     -- If so, ignore the expression unless it is a function application
-    match nameGetStr id with [] then
-      match expr with TmApp { } then
-        -- Inline the function call
-        flattenBlock (JSEBlock {
-          exprs = [(compileMExpr opts) expr],
-          ret = (compileMExpr opts) e
-        })
-      else
-        -- Ignore the expression
-        (compileMExpr opts) e
-    else
-      -- Normal let binding
+    let data = (match nameGetStr id with [] then
+      match expr with TmApp { } then -- Inline the function call
+        ([(compileMExpr opts) expr], (compileMExpr opts) e)
+      else -- Ignore the expression
+        ([], (compileMExpr opts) e)
+    else -- Normal let binding
+      ([JSEDef { id = id, expr = (compileMExpr opts) expr }], (compileMExpr opts) e)
+    ) in
+    match data with (exprs, ret) then
       flattenBlock (JSEBlock {
-        exprs = [JSEDef { id = id, expr = (compileMExpr opts) expr }],
-        ret = (compileMExpr opts) e
+        exprs = exprs,
+        ret = ret
       })
+    else never
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
-  	let fst : RecLetBinding = head bindings in
-	  match fst with { ident = ident, body = body } then
-      dprintLn (concat "Compiling recursive let: " (nameGetStr ident));
-      compileMExpr opts (TmLet { ident = ident, body = body, inexpr = e })
-    else error "ERROR: TmRecLets must have at least one binding."
+    -- Todo: Compile each binding as a let expression
+    flattenBlock (JSEBlock {
+      exprs = map (
+        lam bind : RecLetBinding.
+        match bind with { ident = ident, body = body } then
+          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = JSENop { } })
+        else never
+        ) bindings,
+      ret = (compileMExpr opts) e
+    })
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
   | TmConApp _ -> error "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
