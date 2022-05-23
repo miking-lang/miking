@@ -123,10 +123,10 @@ lang JSPrettyPrint = JSExprAst
 
   | JSEUnOp { op = op, rhs = rhs } ->
     match (printJSExpr indent) env rhs with (env,rhs) then
-      (env, join ["(", printJSUnOp rhs op, ")"])
+      (env, printJSUnOp rhs op)
     else never
 
-  | JSEArray { exprs = exprs, info = info } ->
+  | JSEArray { exprs = exprs } ->
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       (env, join ["[", strJoin ", " exprs, "]"])
     else never
