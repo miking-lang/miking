@@ -28,6 +28,9 @@ let pprintEnvGetStr = lam env. lam id: Name.
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
+let joinAsStatements = lam indent. lam seq.
+  concat (strJoin (concat ";" (pprintNewline indent)) seq) ";"
+
 --------------
 -- KEYWORDs --
 --------------
@@ -75,7 +78,7 @@ lang JSPrettyPrint = JSExprAst
   | JSEDef { id = id, expr = expr } ->
     match pprintEnvGetStr env id with (env,id) then
       match (printJSExpr indent env) expr with (env, str) then
-        (env, join ["let ", id, " = ", str, ";"])
+        (env, join ["let ", id, " = ", str])
       else never
     else never
   | JSEFun { param = param, body = body } ->
@@ -143,10 +146,11 @@ lang JSPrettyPrint = JSExprAst
     let ii = pprintIncr indent in
     match mapAccumL (printJSExpr ii) env exprs with (env, exprs) then
       let ret = match (printJSExpr 0 env) ret with (env, val) then
-          join [pprintNewline ii, "return ", val, ";"]
+          match val with "" then ""
+          else join [pprintNewline ii, "return ", val, ";"]
         else "" in
       (env, join ["{",
-        pprintNewline ii, strJoin (concat ";" (pprintNewline ii)) exprs,
+        pprintNewline ii, joinAsStatements ii exprs,
         ret,
         pprintNewline i, "}"])
     else never
@@ -189,7 +193,7 @@ lang JSProgPrettyPrint = JSProgAst + JSPrettyPrint
     let env = pprintEnvEmpty in
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
       let importsStr = strJoin "\n" imports in
-      let exprsStr = strJoin (pprintNewline indent) exprs in
+      let exprsStr = joinAsStatements indent exprs in
       join [importsStr, exprsStr]
     else never
 
