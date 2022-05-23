@@ -241,6 +241,10 @@ let seqLiftA2
 utest seqLiftA2 addi [10, 20, 30] [1, 2, 3]
 with [11, 12, 13, 21, 22, 23, 31, 32, 33]
 
+let seqMapM
+  : all a. all b. (a -> [b]) -> [a] -> [[b]]
+  = lam f. foldr (lam a. lam acc. seqLiftA2 cons (f a) acc) [[]]
+
 -- Searching
 recursive
   let filter = lam p. lam seq.
