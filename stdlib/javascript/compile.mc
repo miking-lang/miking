@@ -55,7 +55,7 @@ let _consoleLog = use JSExprAst in
 
 
 -- Supported JS runtime targets
-type CompileJSTargetPlatform = Int
+type CompileJSTargetPlatform
 con CompileJSTP_Normal : () -> CompileJSTargetPlatform
 con CompileJSTP_Web    : () -> CompileJSTargetPlatform
 con CompileJSTP_Node   : () -> CompileJSTargetPlatform
@@ -235,17 +235,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       else never in
     JSEObject { fields = map compileField fieldSeq }
 
-  | TmSeq {tms = tms, ty = ty} & t ->
-    -- Special handling of strings
+  | TmSeq {tms = tms} ->
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
       match (_charSeq2String tms) with Some str then JSEString { s = str }
-      else infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+      else never
     else
-      -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
-      -- Else compile each expression in sequence and return a list
-      let tms: [JSExpr] = map (compileMExpr opts) tms in
-      JSEArray { exprs = tms }
+      JSEArray { exprs = map (compileMExpr opts) tms }
 
   -- Literals
   | TmConst { val = val } ->
@@ -286,7 +282,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       exprs = map (
         lam bind : RecLetBinding.
         match bind with { ident = ident, body = body } then
-          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = JSENop { } })
+          let nop = TmConst { val = CFlushStdout { } } in
+          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop })
         else never
         ) bindings,
       ret = (compileMExpr opts) e
@@ -309,7 +306,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Should not occur
   | TmNever _ -> error "Never term found in compileMExpr"
-  | JSENop _ -> JSENop { }
 
 
 
