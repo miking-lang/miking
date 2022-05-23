@@ -70,14 +70,6 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     (env, join [
       "#if (", cond, ")", pprintNewline i, thn, pprintNewline i,
       "#else", pprintNewline i, els, pprintNewline i, "#endif"])
-  | CSTensorDataCopyCpu t ->
-    match printCExpr env t.src with (env, src) in
-    match printCExpr env t.dst with (env, dstId) in
-    (env, join ["tensorDataCopyCpu(", src, ", ", dstId, ")"])
-  | CSTensorDataCopyGpu t ->
-    match printCExpr env t.src with (env, src) in
-    match printCExpr env t.dst with (env, dstId) in
-    (env, join ["tensorDataCopyGpu(", src, ", ", dstId, ")"])
 
   sem printCudaAttribute (env : PprintEnv) =
   | CuAHost _ -> (env, "__host__")

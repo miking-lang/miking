@@ -34,12 +34,16 @@ typecheck_files += test/mlang/type-alias.mc
 typecheck_files += $(wildcard stdlib/*.mc)
 typecheck_files += $(wildcard stdlib/mexpr/*.mc)
 typecheck_files += $(wildcard stdlib/ocaml/*.mc)
+typecheck_files += $(wildcard stdlib/c/*.mc)
+typecheck_files += $(wildcard stdlib/tuning/*.mc)
+typecheck_files += stdlib/parser/lexer.mc
+typecheck_files += stdlib/parser/breakable.mc
+typecheck_files += stdlib/ext/ext-test.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
-compile_files_exclude += stdlib/json.mc
 compile_files_exclude += stdlib/parser-combinators.mc
 compile_files_exclude += stdlib/regex.mc
 compile_files_exclude += test/mexpr/nestedpatterns.mc

@@ -11,6 +11,11 @@ let tybootparsetree_ = tycon_ "BootParseTree"
 
 let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
 
+lang UnsafeCoerceTypeAst = UnsafeCoerceAst
+  sem tyConst =
+  | CUnsafeCoerce _ -> tyall_ "a" (tyall_ "b" (tyarrow_ (tyvar_ "a") (tyvar_ "b")))
+end
+
 lang LiteralTypeAst = IntAst + FloatAst + BoolAst + CharAst
   sem tyConst =
   | CInt _ -> tyint_
@@ -344,6 +349,8 @@ end
 
 lang TensorOpTypeAst = TensorOpAst
   sem tyConst =
+  | CTensorCreateUninitInt _ -> tytensorcreateuninitint_
+  | CTensorCreateUninitFloat _ -> tytensorcreateuninitfloat_
   | CTensorCreateInt _ -> tytensorcreateint_
   | CTensorCreateFloat _ -> tytensorcreatefloat_
   | CTensorCreate _ -> tyall_ "a" (tytensorcreate_ (tyvar_ "a"))
@@ -365,9 +372,14 @@ end
 
 lang BootParserTypeAst = BootParserAst
   sem tyConst =
-  | CBootParserParseMExprString _ -> tyarrows_ [tyseq_ tystr_, tystr_, tybootparsetree_]
+  | CBootParserParseMExprString _ -> tyarrows_ [
+      tytuple_ [tybool_],
+      tyseq_ tystr_,
+      tystr_,
+      tybootparsetree_
+    ]
   | CBootParserParseMCoreFile _ -> tyarrows_ [
-      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_, tybool_, tybool_],
+      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_, tybool_, tybool_, tybool_],
       tyseq_ tystr_,
       tystr_,
       tybootparsetree_
@@ -390,5 +402,5 @@ lang MExprConstType =
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
-  MapTypeAst + TensorOpTypeAst + BootParserTypeAst
+  MapTypeAst + TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst
 end

@@ -110,7 +110,7 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
   in
   let taggedEntries =
     mapFoldWithKey
-      (lam acc : [String]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
+      (lam acc : [(Int, String)]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
          concat acc (map (lam b : ([NameInfo], Int). (b.1, entry2str h b.0 b.1)) (mapBindings pathMap)))
       [] hole2idx
   in
@@ -145,4 +145,4 @@ let tuneFileReadTable : String -> LookupTable = lam file.
   let n = string2int (head rows) in
   let strVals = subsequence rows 1 n in
   let strVals = map (lam x. get (strSplit ": " x) 1) strVals in
-  map (parseMExprString []) strVals
+  map (parseMExprStringKeywords []) strVals

@@ -22,6 +22,12 @@ recursive
     lam f. lam e. f (fix f) e
 end
 
+-- Function repetition (for side-effects)
+let repeat : (() -> ()) -> Int -> () = lam f. lam n.
+  recursive let rec = lam n.
+    if leqi n 0 then () else (f (); rec (subi n 1))
+  in rec n
+
 -- Fixpoint computation for mutual recursion. Thanks Oleg Kiselyov!
 -- (http://okmij.org/ftp/Computation/fixed-point-combinators.html)
 let fixMutual : all a. all b. [[a -> b] -> a -> b] -> [a -> b] =
@@ -41,4 +47,11 @@ let sum_tuple = lam t : (Int, Int). addi t.0 t.1 in
 utest (curry sum_tuple) 3 2 with 5 in
 utest (uncurry addi) (3,2) with 5 in
 utest curry (uncurry addi) 3 2 with (uncurry (curry sum_tuple)) (3,2) using eqi in
+
+let r = ref 0 in
+let f = lam. modref r (addi (deref r) 1) in
+utest modref r 0; repeat f 4; deref r with 4 in
+utest modref r 0; repeat f 0; deref r with 0 in
+utest modref r 0; repeat f (negi 5); deref r with 0 in
+
 ()

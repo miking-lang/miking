@@ -3,7 +3,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 
 -- Gets the return type of the body of a function.
@@ -63,22 +63,32 @@ let collectAppArguments : Expr -> (Expr, [Expr]) =
   in
   work [] e
 
-lang TestLang = MExprEq + MExprSym + MExprTypeAnnot + PMExprVariableSub
+lang TestLang = MExprEq + MExprSym + MExprTypeCheck + PMExprVariableSub
 end
 
 mexpr
 
 use TestLang in
 
-let t = typeAnnot (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
+let typeCheckEnv = lam env : [(Name, Type)]. lam expr.
+  let tcEnv =
+    foldl
+      (lam env. lam x : (Name, Type).
+        match x with (id, ty) in
+        _insertVar id ty env)
+      _tcEnvEmpty env in
+  resolveLinksExpr (typeCheckExpr tcEnv expr)
+in
+
+let t = typeCheck (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
 utest functionBodyReturnType t with tychar_ using eqType in
-let t = typeAnnot (symbolize (lam_ "x" tyint_ (uconst_ (CAddi ())))) in
+let t = typeCheck (symbolize (lam_ "x" tyint_ (uconst_ (CAddi ())))) in
 utest functionBodyReturnType t with tyarrows_ [tyint_, tyint_, tyint_] using eqType in
 
 let x = nameSym "x" in
 let y = nameSym "y" in
-let t = typeAnnot (nlam_ x tyint_ (char_ 'c')) in
-let newBody = typeAnnot (nlam_ y tyint_ (addi_ (nvar_ x) (nvar_ y))) in
+let t = typeCheck (nlam_ x tyint_ (char_ 'c')) in
+let newBody = typeCheckEnv [(x, tyint_)] (nlam_ y tyint_ (addi_ (nvar_ x) (nvar_ y))) in
 let b = replaceFunctionBody t newBody in
 utest b with nulam_ x newBody using eqExpr in
 utest tyTm b with tyarrows_ [tyint_, tyint_, tyint_] using eqType in

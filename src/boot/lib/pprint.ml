@@ -176,14 +176,15 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
-  | TyRecord (_, r, _) when r = Record.empty ->
+  | TyRecord (_, r) when r = Record.empty ->
       us "()"
-  | TyRecord (_, r, ls) ->
-      let pprint_ty_label l =
-        let ty = Record.find l r in
+  | TyRecord (_, r) ->
+      let pprint_ty_label (l, ty) =
         pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label ls) ^. us "}"
+      us "{"
+      ^. Ustring.concat (us ",") (List.map pprint_ty_label (Record.bindings r))
+      ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->
@@ -220,6 +221,8 @@ type prec = Match | Lam | Semicolon | If | Tup | App | Atom
  *  TODO(dlunde,?): Precendece?
  *  TODO(dlunde,?): Break hints? *)
 let rec print_const fmt = function
+  | CunsafeCoerce ->
+      fprintf fmt "unsafeCoerce"
   (* MCore intrinsics: Booleans *)
   | CBool b ->
       fprintf fmt "%B" b
@@ -462,8 +465,11 @@ let rec print_const fmt = function
   | CdeRef ->
       fprintf fmt "deref"
   (* MCore intrinsics: Maps *)
-  | CMap _ ->
-      fprintf fmt "map"
+  | CMap (_, m) ->
+      let binds =
+        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record NoInfo [k; v])
+      in
+      print_tm' fmt (TmSeq (NoInfo, binds))
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
   | CmapSize ->
@@ -503,6 +509,10 @@ let rec print_const fmt = function
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _ ->
       fprintf fmt "tensorCreateDense"
+  | CtensorCreateUninitInt ->
+      fprintf fmt "tensorCreateUninitInt"
+  | CtensorCreateUninitFloat ->
+      fprintf fmt "tensorCreateUninitFloat"
   | CtensorCreateCArrayInt _ ->
       fprintf fmt "tensorCreateCArrayInt"
   | CtensorCreateCArrayFloat _ ->

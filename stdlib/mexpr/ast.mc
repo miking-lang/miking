@@ -54,6 +54,39 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  sem mapAccumLPre_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem mapAccumLPre_Expr_Expr f acc =
+  | expr ->
+    match f acc expr with (acc,expr) in
+    smapAccumL_Expr_Expr (mapAccumLPre_Expr_Expr f) acc expr
+
+  sem mapAccumLPost_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem mapAccumLPost_Expr_Expr f acc =
+  | expr ->
+    match smapAccumL_Expr_Expr (mapAccumLPost_Expr_Expr f) acc expr with (acc,expr) in
+    f acc expr
+
+  sem mapPre_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
+  sem mapPre_Expr_Expr f =
+  | expr ->
+    let expr = f expr in
+    smap_Expr_Expr (mapPre_Expr_Expr f) expr
+
+  sem mapPost_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
+  sem mapPost_Expr_Expr f =
+  | expr -> f (smap_Expr_Expr (mapPost_Expr_Expr f) expr)
+
+  sem foldPre_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem foldPre_Expr_Expr f acc =
+  | expr ->
+    let acc = f acc expr in
+    sfold_Expr_Expr (foldPre_Expr_Expr f) acc expr
+
+  sem foldPost_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem foldPost_Expr_Expr f acc =
+  | expr ->
+    f (sfold_Expr_Expr (foldPost_Expr_Expr f) acc expr) expr
+
   -- NOTE(vipa, 2021-05-28): This function *does not* touch the `ty`
   -- field. It only covers nodes in the AST, so to speak, not
   -- annotations thereof.
@@ -607,6 +640,11 @@ end
 -- CONSTANTS --
 ---------------
 
+lang UnsafeCoerceAst = ConstAst
+  syn Const =
+  | CUnsafeCoerce {}
+end
+
 lang IntAst = ConstAst
   syn Const =
   | CInt {val : Int}
@@ -813,6 +851,8 @@ end
 
 lang TensorOpAst = ConstAst
   syn Const =
+  | CTensorCreateUninitInt {}
+  | CTensorCreateUninitFloat {}
   | CTensorCreateInt {}
   | CTensorCreateFloat {}
   | CTensorCreate {}
@@ -1240,9 +1280,8 @@ end
 
 lang RecordTypeAst = Ast
   syn Type =
-  | TyRecord {info    : Info,
-              fields  : Map SID Type,
-              labels  : [SID]}
+  | TyRecord {info   : Info,
+              fields : Map SID Type}
 
   sem tyWithInfo (info : Info) =
   | TyRecord t -> TyRecord {t with info = info}
@@ -1442,7 +1481,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst +
+  TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

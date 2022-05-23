@@ -39,7 +39,7 @@ let iteratorNext : all a. all b. Iterator a b -> (Iterator a b, Option b) = lam 
   let it = iteratorStep it in
   (it, iteratorGet it)
 
--- 'iteratorFromSeq it' converts 'it' into a sequence.
+-- 'iteratorToSeq it' converts 'it' into a sequence.
 let iteratorToSeq : all a. all b. Iterator a b -> [b] = lam it.
   recursive let work = lam acc. lam it.
     let n = iteratorNext it in

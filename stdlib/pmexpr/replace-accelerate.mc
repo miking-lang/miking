@@ -21,7 +21,7 @@ lang PMExprReplaceAccelerate =
     let elemType =
       match ty with TyInt _ then OTyBigarrayIntElt {info = info}
       else OTyBigarrayFloat64Elt {info = info} in
-    OTyBigarrayGenarray {info = info, tys = [ty, elemType, layout]}
+    OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
     infoErrorExit t.info "Cannot convert tensor of unsupported type"
 
@@ -38,29 +38,35 @@ lang PMExprReplaceAccelerate =
     let ty = unwrapType ty in
     match ty with TyCon t then (acc, TyCon t)
     else _mexprToOCamlType env acc ty
-  | ty & (TyRecord {info = info, labels = labels, fields = fields}) ->
-    if null labels then
+  | ty & (TyRecord {info = info, fields = fields}) ->
+    if mapIsEmpty fields then
       (acc, OTyTuple {info = info, tys = []})
     else match record2tuple fields with Some tys then
+      match mapAccumL (_mexprToOCamlType env) acc tys with (acc, tys) in
       (acc, OTyTuple {info = info, tys = tys})
     else
+      let getTypeExn = lam sid.
+        match mapLookup sid fields with Some ty then ty
+        else error "Record type label not found among fields"
+      in
       match
         mapAccumL
-          (lam acc. lam p : (SID, Type).
-            match p with (sid, ty) in
+          (lam acc. lam sid.
+            let ty = getTypeExn sid in
             match _mexprToOCamlType env acc ty with (acc, ty) in
             -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
-            let str = pprintLabelString (sidToString sid) in
-            (acc, (str, ty)))
-          acc (mapBindings fields)
+            let str = sidToString sid in
+            let asStr = pprintLabelString str in
+            (acc, {label = asStr, asLabel = str, ty = ty}))
+          acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
       let recTyId = nameSym "record" in
       let tyident = OTyVar {info = info, ident = recTyId} in
-      let recTy = OTyRecord {
+      let recTy = OTyRecordExt {
         info = info, fields = ocamlTypedFields, tyident = tyident} in
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
       (snoc acc recTyDecl, recTy)
@@ -126,7 +132,7 @@ lang PMExprReplaceAccelerate =
       if mapMem id accelerated then
         -- NOTE(larshum, 2021-09-17): Remove the dummy parameter if it is not
         -- the only parameter.
-        match args with _ ++ [TmConst {val = CInt {val = 0}}] then
+        match args with _ ++ [_, TmConst {val = CInt {val = 0}}] then
           let lhs = withType appTy lhs in
           convertAccelerateParameters env acc lhs
         else convertAccelerateParameters env acc t
@@ -139,6 +145,20 @@ lang PMExprReplaceAccelerate =
       match replaceAccelerateH accelerated env acc t.body with (acc, body) in
       match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
       (acc, TmLet {{t with body = body} with inexpr = inexpr})
+  | TmRecLets t ->
+    let removeAccelerateBindings : RecLetBinding -> Option RecLetBinding =
+      lam bind.
+      if mapMem bind.ident accelerated then None ()
+      else Some bind
+    in
+    let replaceBindings = lam acc. lam bind : RecLetBinding.
+      match replaceAccelerateH accelerated env acc bind.body with (acc, body) in
+      (acc, {bind with body = body})
+    in
+    match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
+    let bindings = mapOption removeAccelerateBindings t.bindings in
+    match mapAccumL replaceBindings acc bindings with (acc, bindings) in
+    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
   | t ->
     smapAccumL_Expr_Expr (replaceAccelerateH accelerated env) acc t
 end

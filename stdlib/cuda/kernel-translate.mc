@@ -91,9 +91,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
 
   sem containsKernelCallH (acc : Bool) =
   | CSExpr {expr = CEKernelApp _} -> true
-  | CSComp {stmts = stmts} ->
-    if acc then acc else foldl containsKernelCallH acc stmts
-  | stmt -> acc
+  | stmt -> sfold_CStmt_CStmt containsKernelCallH acc stmt
 
   sem generateIntrinsicStmt (ccEnv : CompileCEnv) (ty : CType) (acc : [CuTop]) =
   | CSExpr {expr = t} ->
@@ -107,7 +105,7 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
     match generateIntrinsicExpr ccEnv acc temp t with (acc, stmt) in
     let tempReturn = CSRet {val = Some temp} in
     (acc, CSComp {stmts = [tempDecl, stmt, tempReturn]})
-  | stmt -> (acc, stmt)
+  | stmt -> smapAccumLCStmtCStmt (generateIntrinsicStmt ccEnv ty) acc stmt
 
   -- Generates an statement for the contained intrinsic, which potentially
   -- replaces the original assignment statement.
@@ -121,7 +119,5 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
   -- Wraps the C top-level terms in the CUDA version of a top-level term, which
   -- includes a sequence of attributes that can be attached.
   sem translateTopToCudaFormat =
-  | CTTyDef t -> CuTTop {attrs = [], top = CTTyDef t}
-  | CTDef t -> CuTTop {attrs = [], top = CTDef t}
-  | CTFun t -> CuTTop {attrs = [], top = CTFun t}
+  | top -> CuTTop {attrs = [], top = top}
 end

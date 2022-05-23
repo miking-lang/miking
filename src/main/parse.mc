@@ -22,15 +22,6 @@ type ParseOptions = {
   keywords : [String]
 }
 
-let defaultParseOptions = {
-  keepUtests = true,
-  pruneExternalUtests = false,
-  pruneExternalUtestsWarning = true,
-  findExternalsExclude = false,
-  eliminateDeadCode = true,
-  keywords = []
-}
-
 let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
   use BootParser in
   if opt.pruneExternalUtests then
@@ -39,20 +30,18 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
         mapKeys (externalGetSupportedExternalImpls ())
       else []
     in
-    parseMCoreFile {
-      keepUtests = opt.keepUtests,
-      pruneExternalUtests = true,
-      externalsExclude = externalsExclude,
-      pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning,
-      eliminateDeadCode = opt.eliminateDeadCode,
-      keywords = opt.keywords
-    } file
+    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+      with keepUtests = opt.keepUtests }
+      with pruneExternalUtests = true }
+      with externalsExclude = externalsExclude }
+      with pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning }
+      with eliminateDeadCode = opt.eliminateDeadCode }
+      with keywords = opt.keywords } file
   else
-    parseMCoreFile {
-      keepUtests = opt.keepUtests,
-      pruneExternalUtests = false,
-      externalsExclude = [],
-      pruneExternalUtestsWarning = false,
-      eliminateDeadCode = opt.eliminateDeadCode,
-      keywords = opt.keywords
-  } file
+    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+      with keepUtests = opt.keepUtests }
+      with pruneExternalUtests = false }
+      with externalsExclude = [] }
+      with pruneExternalUtestsWarning = false }
+      with eliminateDeadCode = opt.eliminateDeadCode }
+      with keywords = opt.keywords } file

@@ -39,6 +39,10 @@ module type BARRAY = sig
 
   include TENSOR
 
+  val uninit_int : int array -> (int, int_elt) t
+
+  val uninit_float : int array -> (float, float64_elt) t
+
   val create_int : int array -> (int array -> int) -> (int, int_elt) t
 
   val create_float :
@@ -249,6 +253,10 @@ module Barray : BARRAY = struct
       Genarray.set t shape (f shape) ;
       t )
     else Genarray.init kind c_layout shape f
+
+  let uninit_int = Genarray.create Bigarray.int c_layout
+
+  let uninit_float = Genarray.create Bigarray.float64 c_layout
 
   let create_int = create Bigarray.int
 

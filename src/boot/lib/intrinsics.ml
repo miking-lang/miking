@@ -326,6 +326,10 @@ module T = struct
   module Op_mseq_generic = Op_mseq (Tensor.Generic)
   module Op_mseq_barray = Op_mseq (Tensor.Barray)
 
+  let uninit_int shape = Tensor.Barray.uninit_int (to_arr shape)
+
+  let uninit_float shape = Tensor.Barray.uninit_float (to_arr shape)
+
   let create_int shape f =
     Tensor.Barray.create_int (to_arr shape) (fun idx ->
         f (of_arr (Array.copy idx)) )
@@ -337,6 +341,10 @@ module T = struct
   let create_generic shape f =
     Tensor.Generic.create (to_arr shape) (fun idx ->
         f (of_arr (Array.copy idx)) )
+
+  let uninit_int_packed shape = TInt (uninit_int shape)
+
+  let uninit_float_packed shape = TFloat (uninit_float shape)
 
   let create_int_packed shape f = TInt (create_int shape f)
 

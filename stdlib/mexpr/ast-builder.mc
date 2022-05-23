@@ -59,7 +59,6 @@ let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, Type). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -126,6 +125,12 @@ let tyflexlink_ = use FlexTypeAst in
           contents = ref (Link ty)}
 
 -- Tensor OP types
+let tytensorcreateuninitint_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyint_)
+
+let tytensorcreateuninitfloat_ =
+  tyarrow_ (tyseq_ tyint_) (tytensor_ tyfloat_)
+
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_
             , tyarrow_ (tyseq_ tyint_) tyint_
@@ -673,6 +678,10 @@ let asc_ = use MExprAst in
 
 -- Constants --
 
+let unsafeCoerce_ = use MExprAst in
+  lam e.
+  app_ (uconst_ (CUnsafeCoerce ())) e
+
 let int_ = use MExprAst in
   lam i.
   uconst_ (CInt {val = i})
@@ -1137,7 +1146,8 @@ let utensor2string_ = tensor2string_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
+  lam options. lam key. lam str.
+    appf3_ (uconst_ (CBootParserParseMExprString ())) options key str
 
 let bootParserParseMCoreFile_ = use MExprAst in
   lam pruneArgs.
