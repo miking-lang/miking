@@ -24,7 +24,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
-  ref: value => { return { value: value } },
+  ref: value => ({ value: value }),
   modref: ref => value => { ref.value = value; return ref; },
   deref: ref => ref.value,
 
@@ -40,18 +40,14 @@ let int2string = n => {
     })());
   return ((true === (n < 0)) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
 };
+let s = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 let printLn = s1 => {
   MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s1)("\n"));
 };
-
-let s = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-
-((([a, x, b, ...mid] = s) && ([c, y] = mid.slice().reverse())) ? (() => {
+(([h, ...t] = s) ? printLn(int2string(h)) : ((([1, x, true, ...mid] = s) && ([5, y] = mid.slice().reverse())) ? (() => {
     printLn(int2string(x));
     return printLn(int2string(y));
-  })() :
-((([...rest] = s) && ([b, a] = rest.slice().reverse())) ? (() => {
+  })() : ((([...rest] = s) && ([b, a] = rest.slice().reverse())) ? (() => {
     printLn(int2string(a));
     return printLn(int2string(b));
-  })() : printLn("nothing")));
+  })() : printLn("nothing"))));
