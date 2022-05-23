@@ -7,7 +7,6 @@
 
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/extract.mc"
 

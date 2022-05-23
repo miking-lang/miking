@@ -18,15 +18,15 @@ type ContextExpanded =
 { table : LookupTable    -- The initial lookup table
 , tempDir : String       -- The temporary directory
 , tempFile : String      -- The file from which hole values are read
-, cleanup : Unit -> Unit -- Removes all temporary files from the disk
+, cleanup : () -> ()     -- Removes all temporary files from the disk
 }
 
 -- Generate code for looking up a value of a hole depending on its call history
-let contextExpansionLookupCallCtx
-  : (Int -> Expr) -> PTree Name -> Name -> CallCtxEnv -> Expr =
-  lam lookup. lam tree. lam incVarName. lam env.
+let contextExpansionLookupCallCtx =
+  use Ast in
+  lam lookup: (Int -> Expr). lam tree: PTree NameInfo. lam incVarName: Name. lam env: CallCtxEnv.
     use MExprAst in
-    recursive let work : NameInfo -> [PTree NameInfo] -> [NameInfo] -> Expr =
+    recursive let work : Name -> Map NameInfo (PTree NameInfo) -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
         match children with [] then never_
@@ -78,7 +78,7 @@ lang ContextExpand = HoleAst
     ( { table = _initAssignments env
       , tempDir = tempDir
       , tempFile = tuneFile
-      , cleanup = sysTempDirDelete tempDir
+      , cleanup = lam. sysTempDirDelete tempDir (); ()
       }, ast )
 
   -- 'insert public table t' replaces the holes in expression 't' by the values
@@ -99,11 +99,13 @@ lang ContextExpand = HoleAst
         if nameInfoEq funDefined callGraphTop then
           -- Context-sensitive hole on top-level: handle as a global hole
           lookupGlobal t.info
-        else
-          let iv = callCtxFun2Inc funDefined.0 env in
+        else match callCtxFunLookup funDefined.0 env with Some iv then
           let tree = mapFindExn (ident, t.info) env.contexts in
           let res = contextExpansionLookupCallCtx lookup tree iv env in
           res
+        else
+          -- Context-sensitive hole without any incoming calls
+          lookupGlobal t.info
     in TmLet {{t with body = body}
                  with inexpr = _contextExpandWithLookup env lookup t.inexpr}
 
@@ -119,7 +121,7 @@ lang ContextExpand = HoleAst
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
     use BootParser in
-    let impl = parseMExprString [] "
+    let impl = parseMExprStringKeywords [] "
     let or: Bool -> Bool -> Bool =
       lam a. lam b. if a then true else b in
 
@@ -296,14 +298,15 @@ let anf = compose normalizeTerm symbolize in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
+  let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in
 
 --let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
-let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
-  lam debug: Bool. lam ast: Expr. lam lookupMap: Map String (Map [String] Expr).
+-- let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
+let test : Bool -> Expr -> [(String, [([String],Expr)])] -> String =
+  lam debug: Bool. lam ast: Expr. lam lookupMap: [(String, [([String],Expr)])].
     (if debug then
        printLn "-------- BEFORE ANF --------";
        printLn (expr2str ast)
@@ -323,7 +326,7 @@ let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
      else ());
 
     -- Convert map to lookup table, use default for no value provided
-    let lookupMap : [(String, Map [String] Expr)] = map (lam t : (String, [([String],Expr)]).
+    let lookupMap: [(String, Map [String] Expr)] = map (lam t : (String, [([String],Expr)]).
       (t.0, mapFromSeq (seqCmp cmpString) t.1)) lookupMap in
     let lookupMap : Map String (Map [String] Expr) = mapFromSeq cmpString lookupMap in
 
@@ -449,5 +452,20 @@ map f [1,2,3]
 utest test debug t
 [ ("h", [ (["a"], int_ 1) ]) ]
 with "[2,3,4]" using eqTest in
+
+
+-- Context-sensitive hole that is not used (dead code). Use default value.
+let t = parse
+"
+let f = lam x.
+  let h = hole (Boolean {depth = 1, default = true}) in
+  h
+in
+1
+" in
+
+utest test debug t
+[ ("h", [ ([], true_) ]) ]
+with "1" using eqTest in
 
 ()

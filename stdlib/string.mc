@@ -68,6 +68,9 @@ utest gtString "xy" "y" with false
 -- String comparison giving a total ordering of strings.
 -- cmpString s1 s2 returns >0 or <0 if s1 lexicographically
 -- greater respectively smaller than s2, else 0.
+-- NOTE(johnwikman, 2022-04-27): This specifically uses "shortlex" ordering
+-- where the length of the strings have precedence in the comparison, before
+-- any of the characters are compared. See utest below.
 let cmpString : String -> String -> Int = seqCmp cmpChar
 
 utest cmpString "" "" with 0
@@ -80,6 +83,10 @@ utest
   with true
 utest
   match lti (cmpString "aaa" "aab") 0 with true then true else false
+  with true
+utest
+  -- Shortlex example
+  match lti (cmpString "aab" "aaaa") 0 with true then true else false
   with true
 
 let str2upper = lam s. map char2upper s

@@ -559,8 +559,7 @@ ty_atom:
                       (fun acc (k,v) -> Record.add k v acc)
                       Record.empty
       in
-      let ls = List.map (fun (l, _) -> l) $2 in
-        TyRecord(mkinfo $1.i $3.i, r, ls) }
+      TyRecord(mkinfo $1.i $3.i, r) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN

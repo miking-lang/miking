@@ -43,7 +43,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   syn AbsVal =
   | AVDHole { id : Name, contexts : Set Int }
   | AVEHole { id : Name, contexts : Set Int }
-  | AVConst { const : Const, args : [Name] }
+  | AVConstHole { const : Const, args : [Name] }
 
   syn GraphData =
   | CtxInfo { contextMap : Map Name (Set Int),
@@ -58,7 +58,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     | AVEHole {id = id, contexts = contexts} ) & av ->
     (env, join [absValToStringH av, "hole", "(", nameGetStr id, ",{",
        strJoin "," (map int2string (setToSeq contexts)), "}", ")"])
-  | AVConst { const = const, args = args } ->
+  | AVConstHole { const = const, args = args } ->
     let const = getConstStringCode 0 const in
     let args = strJoin ", " (map nameGetStr args) in
     (env, join [const, "(", args, ")"])
@@ -84,7 +84,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
        AVEHole {id = id2, contexts = ctxs2}) ) ->
     let ncmp = nameCmp id1 id2 in
     if eqi 0 ncmp then setCmp ctxs1 ctxs2 else ncmp
-  | (AVConst lhs, AVConst rhs) ->
+  | (AVConstHole lhs, AVConstHole rhs) ->
     use ConstCmp in
     let cmp = cmpConst lhs.const rhs.const in
     if eqi 0 cmp then subi (length lhs.args) (length rhs.args)
@@ -92,7 +92,9 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
   syn Constraint =
     -- {dhole} ⊆ lhs ⇒ {dhole} ⊆ rhs
-  | CstrHoleDirect { lhs: Name, rhs: Name }
+  | CstrHoleDirectData { lhs: Name, rhs: Name }
+    -- {dhole} ⊆ lhs ⇒ {ehole} ⊆ rhs
+  | CstrHoleDirectExe { lhs: Name, rhs: Name }
     -- {dhole} ⊆ lhs ⇒ ({dhole} ⊆ res) AND ({ehole} ⊆ res)
   | CstrHoleApp { lhs: Name, res: Name }
     -- ({const with args = args} ⊆ lhs AND |args| = arity(const)-1
@@ -103,19 +105,27 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     -- AND
     -- ({const with args = args} ⊆ lhs AND |args| < arity(const)-1
     --    ⇒ {const with args = snoc args rhs } ⊆ res)
-  | CstrConstApp { lhs: Name, rhs : Name, res: Name }
+  | CstrHoleConstApp { lhs: Name, rhs : Name, res: Name }
     -- {dhole} ⊆ lhs ⇒ {ehole} ⊆ res
   | CstrHoleMatch { lhs: Name, res: Name }
+    -- {dhole} ⊆ lhs ⇒ {dhole} ⊄ rhs
+    -- lhs \ {dhole : dhole ∈ rhs} ⊆ res
+  | CstrHoleIndependent { lhs: Name, rhs: Name, res: Name }
+
 
   sem initConstraint (graph : CFAGraph) =
   | CstrHoleApp r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrHoleDirect r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrHoleDirectData r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrHoleDirectExe r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrHoleConstApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleMatch r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrHoleIndependent r & cstr -> initConstraintName r.lhs graph cstr
 
   sem propagateConstraint (update : (Name, AbsVal)) (graph : CFAGraph) =
-  | CstrHoleDirect { lhs = lhs, rhs = rhs } ->
+  | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->
     match update.1 with AVDHole _ & av then addData graph av rhs else graph
+  | CstrHoleDirectExe { lhs = lhs, rhs = rhs } ->
+    match update.1 with AVDHole a then addData graph (AVEHole a) rhs else graph
   | CstrHoleApp { lhs = lhs, res = res } ->
     match update.1 with AVDHole {id = id, contexts = contexts} & av then
       let graph = addData graph av res in
@@ -125,9 +135,11 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     match update.1 with AVDHole {id = id, contexts = contexts}
     then addData graph (AVEHole {id = id, contexts = contexts}) res
     else graph
-  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+  -- OPT(Linnea,20222-05-10): Hook in to propagateConstraint for CstrConstApp in
+  -- cfa.mc.
+  | CstrHoleConstApp { lhs = lhs, rhs = rhs, res = res } ->
     use MExprConstDep in
-    match update.1 with AVConst ({ const = const, args = args } & avc) then
+    match update.1 with AVConstHole ({ const = const, args = args } & avc) then
       let arity = constArity const in
       let args = snoc args rhs in
       if eqi arity (length args) then
@@ -138,32 +150,31 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
           let dep = argDep.1 in
           let isDataDep = dep.0 in
           let isExeDep = dep.1 in
-          let s = dataLookup arg graph in
-          let avHoles : [(Name, Set Int)] = setFold (lam acc. lam e.
-            match e with AVDHole {id=id, contexts=ctxs} then cons (id, ctxs) acc
-            else acc) [] s
-          in
           -- Add data dependencies to the result
           let graph =
             if isDataDep then
-              foldl (lam acc. lam idCtxs.
-                match idCtxs with (id, ctxs) in
-                addData acc (AVDHole {id=id, contexts=ctxs}) res
-              ) graph avHoles
+              initConstraint graph (CstrHoleDirectData {lhs = arg, rhs = res})
             else graph
           in
           -- Add execution time dependencies the result
-          if isExeDep then
-            foldl (lam acc. lam idCtxs.
-              match idCtxs with (id, ctxs) in
-              addData acc (AVEHole {id=id, contexts=ctxs}) res
-            ) graph avHoles
-          else graph) graph (zip args cdeps) in
+          let graph =
+            if isExeDep then
+              initConstraint graph (CstrHoleDirectExe {lhs = arg, rhs = res})
+            else graph
+          in
+          graph) graph (zip args cdeps) in
         graph
       else
         -- Curried application, just add the new argument
-        addData graph (AVConst { avc with args = args }) res
+        addData graph (AVConstHole { avc with args = args }) res
     else graph
+  | CstrHoleIndependent { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVDHole _ & av then
+      -- Only add the dependency if it is not part of rhs
+      let d = dataLookup rhs graph in
+      if setMem av d then graph
+      else propagateDirectConstraint res graph av
+    else propagateDirectConstraint res graph update.1
 
   sem generateHoleConstraints (graph: CFAGraph) =
   | _ -> []
@@ -176,27 +187,36 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
           contexts=mapFindExn ident contextMap
         }, rhs=ident } ]
     else
-      dprintLn graphData;
       error "Expected context information"
   | TmLet { ident = ident, body = TmConst { val = c } } ->
     let arity = constArity c in
     if eqi arity 0 then []
-    else [ CstrInit { lhs = AVConst { const = c, args = [] }, rhs = ident }
+    else [ CstrInit { lhs = AVConstHole { const = c, args = [] }, rhs = ident }
          ]
   | TmLet { ident = ident, body = TmApp app} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then [
         CstrHoleApp { lhs = l.ident, res = ident},
-        CstrConstApp { lhs = l.ident, rhs = r.ident, res = ident }
+        CstrHoleConstApp { lhs = l.ident, rhs = r.ident, res = ident }
       ]
       else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
     else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
+  | TmLet { ident = ident, body = TmIndependent t} ->
+    match t.lhs with TmVar lhs then
+      match t.rhs with TmVar rhs then
+        [ CstrHoleIndependent {lhs = lhs.ident, rhs = rhs.ident, res = ident} ]
+      else infoErrorExit (infoTm t.rhs) "Not a TmVar in independent annotation"
+    else infoErrorExit (infoTm t.lhs) "Not a TmVar in independent annotation"
 
   sem constraintToString (env: PprintEnv) =
-  | CstrHoleDirect { lhs = lhs, rhs = rhs } ->
+  | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env lhs with (env,lhs) in
     (env, join [ "{dhole} ⊆ ", lhs, " ⇒ {dhole} ⊆ ", rhs ])
+  | CstrHoleDirectExe { lhs = lhs, rhs = rhs } ->
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env lhs with (env,lhs) in
+    (env, join [ "{dhole} ⊆ ", lhs, " ⇒ {ehole} ⊆ ", rhs ])
   | CstrHoleApp { lhs = lhs, res = res } ->
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env res with (env,res) in
@@ -207,7 +227,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     match pprintVarName env res with (env,res) in
     (env, join [
       "{dhole} ⊆ ", lhs, " ⇒ {ehole} ⊆ ", res ])
-  | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
+  | CstrHoleConstApp { lhs = lhs, rhs = rhs, res = res } ->
     match pprintVarName env lhs with (env,lhs) in
     match pprintVarName env rhs with (env,rhs) in
     match pprintVarName env res with (env,res) in
@@ -221,6 +241,12 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       "({const with args = args} ⊆ ", lhs, " AND |args| < arity(const)-1\n",
       "  ⇒ {const with args = snoc args ", rhs, "} ⊆ ", res, ")"
     ])
+  | CstrHoleIndependent { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    match pprintVarName env res with (env,res) in
+    (env, join [lhs, " \\ {dhole : dhole ∈ ", rhs, "} ⊆ ", res])
+
 
   sem generateHoleMatchResConstraints (id: Name) (target: Name) =
   | ( PatSeqTot _
@@ -231,20 +257,25 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     | PatBool _
     | PatRecord _
     ) & pat -> [
-      CstrHoleDirect { lhs = target, rhs = id },
+      CstrHoleDirectData { lhs = target, rhs = id },
       CstrHoleMatch { lhs = target, res = id }
     ]
-  | ( PatAnd p
-    | PatOr p
-    | PatNot p
-    ) -> infoErrorExit p.info "Pattern currently not supported"
+  | PatAnd p ->
+    let lres = generateHoleMatchResConstraints id target p.lpat in
+    let rres = generateHoleMatchResConstraints id target p.rpat in
+    concat lres rres
+  | PatOr p ->
+    let lres = generateHoleMatchResConstraints id target p.lpat in
+    let rres = generateHoleMatchResConstraints id target p.rpat in
+    concat lres rres
+  | PatNot p  -> []
   | _ -> []
 
   -- NOTE(Linnea, 2021-12-17): We need to handle references, since references
   -- are used in the graph coloring. By construction, these references
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
-  sem generateConstraintsConst (info: Info) =
+  sem generateConstraintsConst info ident =
   | CRef _ -> []
   | CModRef _ -> []
   | CDeRef _ -> []
@@ -259,7 +290,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     in
     let pnames = f [] pat in
     foldl (lam acc. lam name.
-      cons (CstrHoleDirect { lhs = target, rhs = name }) acc
+      cons (CstrHoleDirectData { lhs = target, rhs = name }) acc
     ) [] pnames
 
   -- Type: Expr -> CFAGraph
@@ -333,7 +364,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       mapFoldWithKey
         (lam acc : Map Name (Map Name (Set Int)).
          lam nameInfo : NameInfo.
-         lam tree : Ptree NameInfo.
+         lam tree : PTree NameInfo.
            mapInsert nameInfo.0 (treeToCallSiteCtxUnion tree) acc
         ) (mapEmpty nameCmp) env.contexts
     in
@@ -353,11 +384,11 @@ use Test in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
+  let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in
-let test: Bool -> Expr -> [String] -> [(String,Set AbsVal,Map NameInfo (Map [NameInfo] Int))] =
+let test: Bool -> Expr -> [String] -> [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
@@ -384,7 +415,7 @@ let test: Bool -> Expr -> [String] -> [(String,Set AbsVal,Map NameInfo (Map [Nam
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
       let cfaRes : CFAGraph = cfaRes in
-      let avs : [(String, Set AbsVal, Map NameInfo (Map [NameInfo] Int))] =
+      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
         map (lam var: String.
           let binds = mapBindings cfaRes.data in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
@@ -397,7 +428,7 @@ let test: Bool -> Expr -> [String] -> [(String,Set AbsVal,Map NameInfo (Map [Nam
     else
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData graphData tANF in
-      let avs : [(String, Set AbsVal, Map NameInfo (Map [NameInfo] Int))] =
+      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
         map (lam var: String.
           let binds = mapBindings cfaRes.data in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
@@ -447,8 +478,8 @@ let eqTestHole = eqSeq
        let deps : Dep = t2.1 in
        -- Comparison of names
        let namesEq =
-         let dataStrs = map (lam e : (String,[Int]). e.0) data in
-         let exeStrs = map (lam e : (String,[Int]). e.0) exe in
+         let dataStrs = map (lam e : (String,Set Int). e.0) data in
+         let exeStrs = map (lam e : (String,Set Int). e.0) exe in
          let depDataStrs = map (lam e : (String,[[String]]). e.0) deps.d in
          let depExeStrs = map (lam e : (String,[[String]]). e.0) deps.e in
          if setEq (setOfSeq cmpString dataStrs) (setOfSeq cmpString depDataStrs) then
@@ -457,16 +488,16 @@ let eqTestHole = eqSeq
        in
        -- Comparison of contexts
        if namesEq then
-         let dataCtxs : [(String, [Int])] = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) data in
-         let dataCtxPaths : [[String]] = map (lam e : (String, [Int]). map (index2Path e.0) e.1) dataCtxs in
-         let dataCtxPaths : [Set [String]] = map (setOfSeq (seqCmp cmpString)) dataCtxPaths in
+         let dataCtxs: [(String,[Int])] = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) data in
+         let dataCtxPaths = map (lam e : (String, [Int]). map (index2Path e.0) e.1) dataCtxs in
+         let dataCtxPaths = map (setOfSeq (seqCmp cmpString)) dataCtxPaths in
 
-         let exeCtxs : [(String, [Int])] = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) exe in
-         let exeCtxPaths : [[String]] = map (lam e : (String, [Int]). map (index2Path e.0) e.1) exeCtxs in
-         let exeCtxPaths : [Set [String]] = map (setOfSeq (seqCmp cmpString)) exeCtxPaths in
+         let exeCtxs = map (lam e : (String,Set Int). (e.0, setToSeq e.1)) exe in
+         let exeCtxPaths = map (lam e : (String, [Int]). map (index2Path e.0) e.1) exeCtxs in
+         let exeCtxPaths = map (setOfSeq (seqCmp cmpString)) exeCtxPaths in
 
-         let depDataCtxs : [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.d in
-         let depExeCtxs : [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.e in
+         let depDataCtxs: [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.d in
+         let depExeCtxs: [Set [String]] = map (lam e : (String,[[String]]). setOfSeq (seqCmp cmpString) e.1) deps.e in
 
          if setEq (setOfSeq setCmp dataCtxPaths) (setOfSeq setCmp depDataCtxs) then
            setEq (setOfSeq setCmp exeCtxPaths) (setOfSeq setCmp depExeCtxs)
@@ -637,6 +668,47 @@ in
 utest test debug t ["x", "z"]
 with [ ("x", {d=[gbl "h"],e=[]})
      , ("z", {d=[gbl "h"],e=[gbl "h"]})
+     ]
+using eqTestHole in
+
+
+let t = parse
+"
+let h = hole (Boolean {default = true}) in
+let res = match h with a & b then 1 else 2 in
+let res2 = match h with c & true then 1 else 2 in
+()
+"
+in
+
+utest test debug t ["a", "b", "c", "res", "res2"]
+with [ ("a", {d=[gbl "h"],e=[]})
+     , ("b", {d=[gbl "h"],e=[]})
+     , ("c", {d=[gbl "h"],e=[]})
+     , ("res", {d=[],e=[]})
+     , ("res2", {d=[gbl "h"],e=[gbl "h"]})
+     ]
+using eqTestHole in
+
+
+let t = parse
+"
+type T in
+con C: Bool -> t in
+let h = hole (Boolean {default = true}) in
+let p = C h in
+let res = match h with a | true then 1 else 2 in
+let res2 = match p with C true | C false then 1 else 2 in
+let res3 = match p with C aa | (C true & aa) then 1 else 2 in
+()
+"
+in
+
+utest test debug t ["res", "res2", "res3", "aa"]
+with [ ("res", {d=[gbl "h"],e=[gbl "h"]})
+     , ("res2", {d=[gbl "h"],e=[gbl "h"]})
+     , ("res3", {d=[gbl "h"],e=[gbl "h"]})
+     , ("aa", {d=[gbl "h"],e=[]})
      ]
 using eqTestHole in
 
@@ -863,5 +935,68 @@ with
 ]
 using eqTestHole
 in
+
+-- Tests for independency annotation
+let t = parse
+"
+let x = hole (Boolean {default = true}) in
+let y = if x then 1 else 2 in
+let z = independent y x in
+()
+"
+in
+
+utest test debug t ["x","y","z"] with
+[ ("x", {d=[gbl "x"],e=[]})
+, ("y", {d=[gbl "x"],e=[gbl "x"]})
+, ("z", {d=[],e=[]})
+]
+using eqTestHole in
+
+
+let t = parse
+"
+let and: Bool -> Bool -> Bool =
+  lam a. lam b. if a then b else false
+in
+
+let x1 = hole (Boolean {default = true}) in
+let x2 = hole (Boolean {default = true}) in
+let y = if and x1 x2 then 1 else 2 in
+let z1 = independent y x1 in
+let z2 = independent y x2 in
+let z3 = independent z1 x2 in
+let z4 = independent z1 x1 in
+()
+"
+in
+
+utest test debug t ["x1", "x2", "y", "z1", "z2", "z3", "z4"] with
+[ ("x1", {d=[gbl "x1"],e=[]})
+, ("x2", {d=[gbl "x2"],e=[]})
+, ("y", {d=[gbl "x1", gbl "x2"],e=[gbl "x1", gbl "x2"]})
+, ("z1", {d=[gbl "x2"],e=[]})
+, ("z2", {d=[gbl "x1"],e=[]})
+, ("z3", {d=[],e=[]})
+, ("z4", {d=[gbl "x2"],e=[]})
+]
+using eqTestHole in
+
+
+let t = parse
+"
+let x = hole (Boolean {default = true}) in
+let f = lam y. x in
+let i = independent f x in
+let r = i 1 in
+()
+"
+in
+
+utest test debug t ["i", "r"] with
+[ ("i", {d=[],e=[]})
+, ("r", {d=[gbl "x"],e=[]})
+]
+using eqTestHole in
 
 ()

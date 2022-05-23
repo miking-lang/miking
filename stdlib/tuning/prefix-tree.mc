@@ -9,16 +9,18 @@ include "common.mc"
 -- The type of a prefix tree. A node has an element, the set of id's rooted in
 -- that subtree, and a set of children. A leaf has an identifier.
 type PTree a
-con Node : { root : a, ids : [Int], children : Map a PTree } -> PTree a
-con Leaf : Int -> PTree a
+con Node : all a. { root : a, ids : [Int], children : Map a (PTree a)} -> PTree a
+con Leaf : all a. Int -> PTree a
 
 -- 'prefixTreeEmpty cmp sentinel' creates an empty prefix tree, where 'sentinel' may
 -- not be used as value in any string to be added to the tree.
-let prefixTreeEmpty = lam cmp : a -> a -> Int. lam sentinel : a.
-  Node {root = sentinel, children = mapEmpty cmp, ids = []}
+let prefixTreeEmpty : all a. (a -> a -> Int) -> a -> PTree a =
+  lam cmp : a -> a -> Int. lam sentinel : a.
+    Node {root = sentinel, children = mapEmpty cmp, ids = []}
 
 -- 'prefixTreeInsert cmp tree id path' inserts 'path' into the 'tree'.
-let prefixTreeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
+let prefixTreeInsert: all a. (a -> a -> Int) -> PTree a -> Int -> [a] -> PTree a =
+  lam cmp. lam tree. lam id : Int. lam path : [a].
   match tree with Node t then
     -- Use sentinel value as leaf key as this will never be used as a key in a
     -- map
@@ -43,7 +45,8 @@ let prefixTreeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
 else error "missing sentinel node"
 
 -- 'prefixTreeInsertMany cmp tree ids paths' inserts the 'paths' into the 'tree'.
-let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
+let prefixTreeInsertMany: all a. (a -> a -> Int) -> PTree a -> [Int] -> [[a]] -> PTree a =
+  lam cmp. lam tree. lam ids : [Int]. lam paths.
   -- Faster zip for Rope implementation
   let zip = lam l. lam r.
     mapi (lam i. lam x. (x, get r i)) l
@@ -51,7 +54,7 @@ let prefixTreeInsertMany = lam cmp. lam tree. lam ids : [Int]. lam paths.
   utest zip [1,2,3] [4,5,6] with [(1,4),(2,5),(3,6)] in
 
   let z = zip ids paths in
-  foldl (lam acc. lam idPath : (Int, a). prefixTreeInsert cmp acc idPath.0 idPath.1) tree z
+  foldl (lam acc. lam idPath : (Int, [a]). prefixTreeInsert cmp acc idPath.0 idPath.1) tree z
 
 -- 'prefixTreeGetId tree path' returns an option with the id of 'path' in
 -- 'tree' if it exists, otherwise None ().
@@ -74,7 +77,9 @@ let prefixTreeGetId = lam tree. lam path.
 
 -- 'prefixTreeGetIds tree path' returns the id's that are prefixed by 'path'
 -- in 'tree'.
-let prefixTreeGetIds = lam tree. lam path.
+let prefixTreeGetIds
+  : all a. PTree a -> [a] -> [Int]
+  = lam tree. lam path.
   match tree with Node {root = root, children = children, ids = ids} then
     let treeLeafKey = root in
     let n = length path in
@@ -93,7 +98,8 @@ let prefixTreeGetIds = lam tree. lam path.
 -- already exist. Returns both the (updated) tree and a Boolean representing if
 -- the insert was done or not (true if path was inserted, false if it already
 -- existed).
-let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
+let prefixTreeMaybeInsert: all a. (a -> a -> Int) -> PTree a -> Int -> [a] -> (Bool, PTree a) =
+  lam cmp. lam tree. lam id : Int. lam path : [a].
   match tree with Node t then
     -- Use sentinel value as leaf key as this will never be used as a key in a
     -- map
@@ -128,11 +134,11 @@ let prefixTreeMaybeInsert = lam cmp. lam tree. lam id : Int. lam path : [a].
       (true, Node {{t with children = children} with ids = cons id t.ids})
     case (false, _) then (false, tree)
     end
-else error "missing sentinel node"
+  else error "missing sentinel node"
 
 -- 'prefixTreeGetPathExn tree id' returns the path with 'id' in 'tree', and
 -- throws an error if 'id' is not stored in 'tree'.
-let prefixTreeGetPathExn : PTree a -> Int -> [a] = lam tree. lam id.
+let prefixTreeGetPathExn : all a. PTree a -> Int -> [a] = lam tree. lam id.
   match tree with Node {children = cs, ids = ids} then
     recursive let findPath = lam children. lam ids. lam path.
       -- Is the id among the id's?
@@ -153,14 +159,14 @@ let prefixTreeGetPathExn : PTree a -> Int -> [a] = lam tree. lam id.
   else error "missing sentinel node"
 
 -- 'prefixTreeBindings tree' returns the pairs of id-paths stored in the tree.
-let prefixTreeBindings : PTree a -> [(Int,[a])] = lam tree.
+let prefixTreeBindings : all a. PTree a -> [(Int,[a])] = lam tree.
   let ids = prefixTreeGetIds tree [] in
   foldl (lam acc. lam id.
     let path = prefixTreeGetPathExn tree id in
     cons (id, path) acc) [] ids
 
 -- Debug printing of a prefix tree.
-let prefixTreeDebug = lam toStr. lam tree : PTree a.
+let prefixTreeDebug: all a. (a -> String) -> PTree a -> () = lam toStr. lam tree : PTree a.
   match tree with Node {children = cs, ids = ids} in
   recursive let work = lam ind. lam children.
     mapMapWithKey (lam root. lam subtree.
@@ -170,7 +176,7 @@ let prefixTreeDebug = lam toStr. lam tree : PTree a.
       else match subtree with Node {ids = ids, children = children} in
         printLn (join [make ind ' ', "ids: ", strJoin ", " (map int2string ids)]);
         work (addi ind 2) children
-    ) children
+    ) children; ()
   in
   work 0 cs
 

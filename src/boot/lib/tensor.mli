@@ -37,6 +37,10 @@ end
 module type BARRAY = sig
   include TENSOR
 
+  val uninit_int : int array -> (int, Bigarray.int_elt) t
+
+  val uninit_float : int array -> (float, Bigarray.float64_elt) t
+
   val create_int : int array -> (int array -> int) -> (int, Bigarray.int_elt) t
 
   val create_float :

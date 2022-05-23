@@ -2,6 +2,7 @@
 -- verified to follow certain properties.
 
 include "mexpr/ast-builder.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/ast.mc"
 
@@ -64,7 +65,7 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
   | t -> smap_Expr_Expr promote t
 end
 
-lang TestLang = PMExprPromote end
+lang TestLang = PMExprPromote + MExprTypeCheck end
 
 mexpr
 
@@ -73,7 +74,7 @@ use TestLang in
 -- We include symbolize and type annot as part of the promote for the sake of
 -- testing.
 let promote = lam ast.
-  promote (typeAnnot (symbolize ast)) in
+  promote (typeCheck (symbolize ast)) in
 
 let f1 = const_ (tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)) (CAddi ()) in
 let f2 = lam_ "x" tyint_ (lam_ "y" tyint_ (addi_ (var_ "x") (var_ "y"))) in

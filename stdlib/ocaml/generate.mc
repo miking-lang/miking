@@ -316,7 +316,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
     else
       let ty = typeUnwrapAlias env.aliases t.ty in
       match ty with TyCon {ident = ident} then
-        match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+        match mapLookup ident env.constrs with Some (TyRecord {fields = fields} & ty) then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some id then
             let bindings = mapMap (lam e. objRepr (generate env e)) t.bindings in
@@ -325,8 +325,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
               args = [TmRecord {t with bindings = bindings}]
             }
           else never
-        else never
-      else never
+        else infoErrorExit (infoTy ty) "env.constrs lookup failed"
+      else infoErrorExit (infoTy ty) "expected TyCon"
   | TmRecordUpdate t ->
     let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyCon {ident = ident} then
@@ -691,15 +691,14 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
+lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecls =
   | env ->
     let env : AssocSeq Name Type = env in
     let typeLiftEnvMap = mapFromSeq nameCmp env in
     let topDecls = _makeTypeDeclarations typeLiftEnvMap env in
-    match topDecls with (tops, recordFieldsToName) then
+    match topDecls with (tops, recordFieldsToName) in
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
                                                   env recordFieldsToName in
       (generateEnv, tops)
-    else never
 end

@@ -139,7 +139,7 @@ end
 lang PMExprDemoteLoop = PMExprAst
   sem demoteParallel =
   | TmLoop t | TmParallelLoop t ->
-    let unitTy = TyRecord {fields = mapEmpty cmpSID, labels = [], info = t.info} in
+    let unitTy = TyRecord {fields = mapEmpty cmpSID, info = t.info} in
     let acc = TmRecord {bindings = mapEmpty cmpSID, ty = unitTy, info = t.info} in
     let f = TmLam {
       ident = nameNoSym "", tyIdent = unitTy, body = t.f,
@@ -229,9 +229,21 @@ lang PMExprDemoteLoop = PMExprAst
       ty = accTy, info = t.info}
 end
 
+lang PMExprDemotePrintFloat = PMExprDemoteBase
+  sem demoteParallel =
+  | TmPrintFloat t ->
+    let tyuk = TyUnknown {info = t.info} in
+    TmApp {
+      lhs = TmConst {val = CPrint (), ty = tyuk, info = t.info},
+      rhs = TmApp {
+        lhs = TmConst {val = CFloat2string (), ty = tyuk, info = t.info},
+        rhs = t.e, ty = tyuk, info = t.info},
+      ty = tyuk, info = t.info}
+end
+
 lang PMExprDemote =
   PMExprDemoteAccelerate + PMExprDemoteFlatten + PMExprDemoteMap2 +
-  PMExprDemoteReduce + PMExprDemoteLoop
+  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat
 end
 
 mexpr

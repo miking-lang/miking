@@ -1225,13 +1225,8 @@ without overhead. The same is true for arrow types. The fields in Miking records
 are un-ordered while they are ordered in OCaml so there is some overhead
 involved when converting records as each field of the Miking records needs to be
 projected to form an new OCaml records, and vice versa. The fields of the Miking
-record are associated with the fields of the OCaml record syntactically by
-position when defining the external. As an example, if the external
-```
-external myRecord : {a : Int, b: Float}
-```
-has an OCaml implementation with type `{c : int; d : float}` then the field `a` is
-associated with the field `c` and the field `b` with the field `d`.
+record are associated with the fields of the OCaml record by an explicit mapping
+defined in the `*.ext-ocaml.mc` file.
 
 If the Miking type is abstract, i.e. we define it as 
 ```
