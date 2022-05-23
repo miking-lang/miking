@@ -94,14 +94,23 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     -- If the return value is a block, concat the expressions in that block with the
     -- expressions in the current block and set the return value to the return value
     -- of the current block
+    -- For each expression in the current block, if it is a block, flatten it
+    let flatExprs = foldl (
+      lam acc. lam e.
+        let flatE = flattenBlockHelper e in
+        match flatE with (flatEExprs, flatERet) then
+          concat (concat acc flatEExprs) [flatERet]
+        else concat acc [flatE]
+    ) [] exprs in
+
     -- Call flattenBlockHelper recursively on the return value
     let flatRet = flattenBlockHelper ret in
     match flatRet with (retExprs, retRet) then
-      (concat exprs retExprs, retRet)
+      (concat flatExprs retExprs, retRet)
     else
       -- Normal expressions are returned as is, thus concat them with the expressions
       -- in the current block
-      (concat exprs [flatRet], ret)
+      (concat flatExprs [flatRet], ret)
   | expr -> ([], expr)
 
   sem flattenBlock =
