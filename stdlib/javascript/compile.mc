@@ -301,6 +301,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Should not occur
   | TmNever _ -> error "Never term found in compileMExpr"
+  | JSENop _ -> JSENop { }
 
 
 
