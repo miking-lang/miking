@@ -95,13 +95,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     -- expressions in the current block and set the return value to the return value
     -- of the current block
     -- For each expression in the current block, if it is a block, flatten it
-    let flatExprs = foldl (
+    let flatExprs = filterNops (foldl (
       lam acc. lam e.
         let flatE = flattenBlockHelper e in
         match flatE with (flatEExprs, flatERet) then
           concat (concat acc flatEExprs) [flatERet]
         else concat acc [flatE]
-    ) [] exprs in
+    ) [] exprs) in
 
     -- Call flattenBlockHelper recursively on the return value
     let flatRet = flattenBlockHelper ret in
@@ -123,6 +123,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   sem immediatelyInvokeBlock =
   | JSEBlock _ & block -> JSEIIFE { body = block }
   | expr -> expr
+
+  sem filterNops : [JSExpr] -> [JSExpr]
+  sem filterNops =
+  | lst -> foldl (
+    lam acc. lam e.
+      match e with JSENop { } then acc else cons e acc
+  ) [] lst
 
 
 
