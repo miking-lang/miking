@@ -175,6 +175,7 @@ lang JSPrettyPrint = JSExprAst
   sem printJSUnOp (arg: String) =
   | JSONeg       {} -> join ["-", arg]
   | JSONot       {} -> join ["!", arg]
+  | JSOSpread    {} -> join ["...", arg]
 
 end
 

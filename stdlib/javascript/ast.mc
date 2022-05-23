@@ -47,6 +47,7 @@ lang JSExprAst
   syn JSUnOp =
   | JSONeg       {} -- -arg
   | JSONot       {} -- !arg
+  | JSOSpread    {} -- ...arg
 
 end
 
