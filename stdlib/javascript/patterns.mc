@@ -42,13 +42,6 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
     let hasPostfix = not (null postfix) in
-    printLn "compileBindingPattern: SeqEdge";
-    dprint hasPrefix;
-    dprintLn prefix;
-    dprint hasMiddle;
-    dprintLn middle;
-    dprint hasPostfix;
-    dprintLn postfix;
     let prefixExprs: [JSExpr] = map compileSinglePattern prefix in
     let middleExpr: JSExpr = compileSinglePattern (PatNamed { ident = middle }) in
     let postfixExprs: [JSExpr] = map compileSinglePattern postfix in
