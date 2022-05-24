@@ -166,7 +166,7 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
 
   sem generateCAMLparamDeclarations =
   | args /- : [ArgData] -/ ->
-    let genParamStmt : [ArgData] -> String -> CExpr = lam args. lam funStr.
+    let genParamStmt : [ArgData] -> String -> CStmt = lam args. lam funStr.
       let nargsStr = int2string (length args) in
       let camlParamIdent = _getIdentOrInitNew (concat funStr nargsStr) in
       CSExpr {expr = CEApp {
@@ -235,7 +235,7 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
           fun = _getIdentExn "CAMLreturn",
           args = [CEVar {id = returnIdent}]}} in
         join [camlParamStmts, [camlLocalStmt], stmts, [camlReturnStmt]] in
-    let withValueType = lam arg : (Name, Info, Type).
+    let withValueType = lam arg : (Name, Type).
       (CTyVar {id = value}, arg.0) in
     [ CTFun {
         ret = _getCReturnType data.returnType,

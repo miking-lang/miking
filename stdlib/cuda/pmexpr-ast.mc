@@ -39,7 +39,7 @@ lang CudaPMExprAst = PMExprAst
   | TmReduceKernel t -> t.info
   | TmLoopKernel t -> t.info
 
-  sem withType (ty : Type) =
+  sem withType ty =
   | TmSeqMap t -> TmSeqMap {t with ty = ty}
   | TmSeqFoldl t -> TmSeqFoldl {t with ty = ty}
   | TmTensorSliceExn t -> TmTensorSliceExn {t with ty = ty}
@@ -48,7 +48,7 @@ lang CudaPMExprAst = PMExprAst
   | TmReduceKernel t -> TmReduceKernel {t with ty = ty}
   | TmLoopKernel t -> TmLoopKernel {t with ty = ty}
 
-  sem withInfo (info : Info) =
+  sem withInfo info =
   | TmSeqMap t -> TmSeqMap {t with info = info}
   | TmSeqFoldl t -> TmSeqFoldl {t with info = info}
   | TmTensorSliceExn t -> TmTensorSliceExn {t with info = info}
@@ -57,7 +57,7 @@ lang CudaPMExprAst = PMExprAst
   | TmReduceKernel t -> TmReduceKernel {t with info = info}
   | TmLoopKernel t -> TmLoopKernel {t with info = info}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmSeqMap t ->
     match f acc t.f with (acc, tf) in
     match f acc t.s with (acc, s) in
@@ -90,7 +90,7 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.f with (acc, tf) in
     (acc, TmLoopKernel {{t with n = n} with f = tf})
 
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmSeqMap t ->
     let f = typeCheckExpr env t.f in
     let s = typeCheckExpr env t.s in
@@ -166,7 +166,7 @@ lang CudaPMExprAst = PMExprAst
                       with f = f}
                       with ty = unitType}
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH env free lhs =
   | TmSeqMap r ->
     match lhs with TmSeqMap l then
       match eqExprH env free l.f r.f with Some free then

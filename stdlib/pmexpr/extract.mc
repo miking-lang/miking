@@ -16,7 +16,7 @@ include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
 -- Generates a random ASCII letter or digit character.
-let _randAlphanum : Unit -> Char = lam.
+let _randAlphanum : () -> Char = lam.
   -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
   -- (lower- and upper-case) is 10 + 26 + 26 = 62.
   let r = randIntU 0 62 in

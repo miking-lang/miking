@@ -25,7 +25,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
     promote t
 
   sem parallelPatternRewriteH (patterns : [Pattern])
-                              (replacements : Map Name ([Name], Expr)) =
+                              (replacements : Map Name ([(Name, Type, Info)], Expr)) =
   | TmRecLets t ->
     -- Collect the parameters
     let replacements =
@@ -99,7 +99,13 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
                     info = info})
                 expr
                 extraNames in
-            let args = concat args (reverse extraNames) in
+            let extraVars =
+              map
+                (lam id : Name.
+                  TmVar {ident = id, ty = TyUnknown {info = info},
+                         info = info, frozen = false})
+                extraNames in
+            let args = concat args (reverse extraVars) in
             Some (performSubstitution exprWrappedInLambdas params args)
           else if eqi nargs nparams then
             Some (performSubstitution expr params args)

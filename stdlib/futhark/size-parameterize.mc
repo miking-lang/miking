@@ -392,7 +392,7 @@ let t = FProg {decls = [
     params = [(s, futSizedArrayTy_ (futSizedArrayTy_ futIntTy_ n2) n1)],
     ret = futSizedArrayTy_ futIntTy_ n3,
     body = futBindall_ [
-      nuFutLet_ "" (futSizeEquality_ s 1 (nameNoSym "") 1),
+      uFutLet_ "" (futSizeEquality_ s 1 (nameNoSym "") 1),
       futMap_ (nFutVar_ g) (nFutVar_ s)],
     info = NoInfo ()}]} in
 let expected = FProg {decls = [
