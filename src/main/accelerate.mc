@@ -60,6 +60,11 @@ lang PMExprCompile =
   PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
   OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive +
   PMExprCopyAnalysis
+
+  type AccelerateHooks a b = {
+    generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
+    buildAccelerated : Options -> String -> [Top] -> a -> b -> ()
+  }
 end
 
 lang MExprFutharkCompile =
@@ -75,11 +80,6 @@ lang MExprCudaCompile =
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
   CudaTensorMemory + CudaLanguageFragmentFix
 end
-
-type AccelerateHooks a b = {
-  generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
-  buildAccelerated : Options -> String -> [Top] -> a -> b -> Unit
-}
 
 let parallelKeywords = [
   "accelerate",
@@ -104,29 +104,30 @@ let parallelPatterns = [
   getReducePattern ()
 ]
 
-let pprintOCamlTops : [Top] -> String = lam tops.
-  use OCamlPrettyPrint in
+let pprintOCamlTops = use OCamlPrettyPrint in
+  lam tops : [Top].
   pprintOcamlTops tops
 
-let pprintFutharkAst : FutProg -> String = lam ast.
-  use FutharkPrettyPrint in
+let pprintFutharkAst = use FutharkPrettyPrint in
+  lam ast : FutProg.
   printFutProg ast
 
-let pprintPMExprAst : Expr -> String = lam ast.
-  use PMExprPrettyPrint in
+let pprintPMExprAst = use PMExprPrettyPrint in
+  lam ast : Expr.
   expr2str ast
 
-let pprintCudaPMExprAst : Expr -> String = lam ast.
-  use CudaPMExprPrettyPrint in
+let pprintCudaPMExprAst = use CudaPMExprPrettyPrint in
+  lam ast : Expr.
   expr2str ast
 
-let pprintCAst : CPProg -> String = lam ast.
+let pprintCAst =
   use CPrettyPrint in
   use CProgPrettyPrint in
+  lam ast : CProg.
   printCProg [] ast
 
-let pprintCudaAst : CuPProg -> String = lam ast.
-  use CudaPrettyPrint in
+let pprintCudaAst = use CudaPrettyPrint in
+  lam ast : CudaProg.
   printCudaProg cCompilerNames ast
 
 let patternTransformation : Expr -> Expr = lam ast.
@@ -156,9 +157,9 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
-  lam options. lam accelerateData. lam ast.
+let cudaTranslation =
   use MExprCudaCompile in
+  lam options : Options. lam accelerateData : Map Name AccelerateData. lam ast : Expr.
   let ast = fixLanguageFragmentSemanticFunction ast in
   let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
@@ -257,7 +258,7 @@ let buildConfigCuda : String -> [String] -> [String] -> (String, String) =
     "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@"] in
   (dunefile, makefile)
 
-let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
+let writeFiles : String -> [(String, String)] -> () = lam dir. lam fileStrs.
   let tempfile = lam f. sysJoinPath dir f in
   iter
     (lam fstr : (String, String).
@@ -267,7 +268,7 @@ let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
 
 -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
 -- it because dune cannot set environment variables.
-let buildBinaryUsingMake : String -> String -> Unit =
+let buildBinaryUsingMake : String -> String -> () =
   lam sourcePath. lam td.
   let dir = sysTempDirName td in
   let r = sysRunCommand ["make"] "" dir in
@@ -284,7 +285,7 @@ let buildBinaryUsingMake : String -> String -> Unit =
   ()
 
 let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
-                -> FutProg -> Unit =
+                -> FutProg -> () =
   lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
   lam wrapperProg. lam futharkProg.
   match
@@ -325,7 +326,7 @@ let mergePrograms : CudaProg -> CudaProg -> CudaProg =
   CuPProg {includes = concat lincludes rincludes, tops = mergedTops}
 
 let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
-             -> CudaProg -> Unit =
+             -> CudaProg -> () =
   lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
   lam wrapperProg. lam cudaProg.
   let cudaProg = mergePrograms cudaProg wrapperProg in
@@ -371,9 +372,9 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   let ast = utestStrip ast in
   wellFormed ast
 
-let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
-  lam options. lam hooks. lam file.
+let compileAccelerated =
   use PMExprCompile in
+  lam options : Options. lam hooks : AccelerateHooks. lam file : String.
   let ast = parseParseMCoreFile {
     keepUtests = true,
     pruneExternalUtests = false,
@@ -448,7 +449,7 @@ let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
   hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
 
 let compileAccelerate = lam files. lam options : Options. lam args.
-  use PMExprAst in
+  use PMExprCompile in
   let hooks =
     if options.runTests then
       error "Flag --test may not be used for accelerated code generation"

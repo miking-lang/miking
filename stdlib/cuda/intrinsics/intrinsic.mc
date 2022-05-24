@@ -15,7 +15,7 @@ lang CudaIntrinsic = CudaAst + CudaCompile
   sem _getStructDataElemType (env : CompileCEnv) =
   | cty ->
     recursive let findTypeId : CType -> Name = lam ty.
-      match ty with CTyPtr t then findTypeId t
+      match ty with CTyPtr t then findTypeId t.ty
       else match ty with CTyVar {id = id} then id
       else error "Expected struct type"
     in

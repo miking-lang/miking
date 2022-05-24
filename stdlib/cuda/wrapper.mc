@@ -972,7 +972,7 @@ lang CudaCWrapper =
   sem generateInitWrapperEnv wrapperMap =
   | compileCEnv ->
     let compileCEnv : CompileCEnv = compileCEnv in
-    let tupleSwap = lam t : (a, b). match t with (x, y) in (y, x) in
+    let tupleSwap = lam t : (Name, Type). match t with (x, y) in (y, x) in
     let revTypeEnv = mapFromSeq cmpType (map tupleSwap compileCEnv.typeEnv) in
     let targetEnv = CudaTargetEnv {
       wrapperMap = wrapperMap, compileCEnv = compileCEnv,

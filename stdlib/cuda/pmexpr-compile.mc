@@ -36,7 +36,7 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
           (lam bind : RecLetBinding. (bind.ident, bind.body))
           t.bindings) in
     let markFunctionsInComponent = lam marked. lam comp.
-      if any setMem comp then
+      if any (lam e. setMem e marked) comp then
         foldl
           (lam marked. lam bindId.
             match mapLookup bindId bindMap with Some bindBody then
