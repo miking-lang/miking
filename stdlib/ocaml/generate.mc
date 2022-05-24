@@ -48,6 +48,10 @@ let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. _omatch_ cond [(ptrue_, thn), (pfalse_, els)]
 let _tuplet = use OCamlAst in lam pats. lam val. lam body. _omatch_ val [(OPatTuple {pats = pats}, body)]
 
+let _isLengthAtLeastName = intrinsicOpSeq "is_length_at_least"
+let _isLengthAtLeast = use OCamlAst in
+  appf2_ (OTmVarExt {ident = _isLengthAtLeastName})
+
 let _builtinNameMap : Map String Name =
   let builtinStrs =
     match unzip builtin with (strs, _) then
@@ -452,22 +456,45 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   | PatSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env n pat with (names, innerWrap) then
-        let wrap = lam cont.
-          bind_
-            (nulet_ n (get_ (nvar_ targetName) (int_ i)))
-            (innerWrap cont)
-        in (names, wrap)
-      else never in
-    match unzip (mapi genOne pats) with (allNames, allWraps) then
+      match generatePat env n pat with (names, innerWrap) in
       let wrap = lam cont.
-        _if (eqi_ (length_ (nvar_ targetName)) (int_ (length pats)))
-          (foldr (lam f. lam v. f v) cont allWraps)
-          _none in
-      ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
-      , wrap
-      )
-    else never
+        bind_
+          (nulet_ n (get_ (nvar_ targetName) (int_ i)))
+          (innerWrap cont)
+      in (names, wrap) in
+    match unzip (mapi genOne pats) with (allNames, allWraps) in
+    let cond =
+      if null pats then _if (null_ (nvar_ targetName))
+      else _if (eqi_ (length_ (nvar_ targetName)) (int_ (length pats))) in
+    let wrap = lam cont.
+      cond
+        (foldr (lam f. lam v. f v) cont allWraps)
+        _none in
+    ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
+    , wrap
+    )
+  | PatSeqEdge {prefix = [head], middle = middle, postfix = []} ->
+    let apply = lam f. lam x. f x in
+    let headName = nameSym "_hd" in
+    let tailName = nameSym "_tl" in
+    match generatePat env headName head with (headNames, headWrap) in
+    match middle with PName mid then
+      let tl = PatNamed {ident = middle, info = NoInfo (), ty = tyunknown_} in
+      match generatePat env tailName tl with (tailNames, tailWrap) in
+      let wrap = lam cont.
+        _if (null_ (nvar_ targetName))
+          _none
+          (bindall_ [
+            nulet_ headName (head_ (nvar_ targetName)),
+            nulet_ tailName (tail_ (nvar_ targetName)),
+            headWrap (tailWrap cont)]) in
+      (assocMergePreferRight {eq=nameEqSym} headNames tailNames, wrap)
+    else
+      let wrap = lam cont.
+        _if (null_ (nvar_ targetName))
+          _none
+          (bind_ (nulet_ headName (head_ (nvar_ targetName))) (headWrap cont)) in
+      (headNames, wrap)
   | PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
     let apply = lam f. lam x. f x in
     let mergeNames = assocMergePreferRight {eq=nameEqSym} in
@@ -476,30 +503,47 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
     let tempName = nameSym "_splitTemp" in
     let midName = nameSym "_middle" in
     let postName = nameSym "_postfix" in
+    let lenName = nameSym "_len" in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env n pat with (names, innerWrap) then
-        let wrap = lam cont.
-          bind_
-            (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
-            (innerWrap cont)
-        in (names, wrap)
-      else never in
-    match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) then
-      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) then
-        let names = foldl mergeNames assocEmpty (concat preNames postNames) in
-        let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
-        let wrap = lam cont.
-          _if (lti_ (length_ (nvar_ targetName)) (int_ minLen))
+      match generatePat env n pat with (names, innerWrap) in
+      let wrap = lam cont.
+        bind_
+          (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
+          (innerWrap cont)
+      in (names, wrap) in
+    match
+      match prefix with [] then (identity, [], targetName) else
+      match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) in
+      let wrap = lam cont.
+        _tuplet [npvar_ preName, npvar_ tempName]
+          (splitat_ (nvar_ targetName) (int_ (length prefix)))
+          (foldr apply cont preWraps) in
+      (wrap, preNames, tempName)
+    with (preWrap, preNames, tempName) in
+    match
+      match postfix with [] then (identity, [], tempName) else
+      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) in
+      let wrap = lam cont.
+        _tuplet [npvar_ midName, npvar_ postName]
+          (splitat_ (nvar_ tempName) (subi_ (nvar_ lenName) (int_ minLen)))
+          (foldr apply cont postWraps) in
+      (wrap, postNames, midName)
+    with (postWrap, postNames, midName) in
+    let wrap = lam cont.
+      match postfix with [] then
+        _if (_isLengthAtLeast (nvar_ targetName) (int_ minLen))
+          (preWrap (postWrap cont))
+          _none
+      else
+        bind_
+          (nulet_ lenName (length_ (nvar_ targetName)))
+          (_if (lti_ (nvar_ lenName) (int_ minLen))
             _none
-            (_tuplet [npvar_ preName, npvar_ tempName]
-              (splitat_ (nvar_ targetName) (int_ (length prefix)))
-              (_tuplet [npvar_ midName, npvar_ postName]
-                (splitat_ (nvar_ tempName) (subi_ (length_ (nvar_ tempName)) (int_ (length postfix))))
-                (foldr apply (foldr apply cont postWraps) preWraps))) in
-        (names, wrap)
-      else never
-    else never
+            (preWrap (postWrap cont))) in
+    let names = foldl mergeNames assocEmpty (concat preNames postNames) in
+    let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
+    (names, wrap)
   | PatOr {lpat = lpat, rpat = rpat} ->
     match generatePat env targetName lpat with (lnames, lwrap) then
       match generatePat env targetName rpat with (rnames, rwrap) then
