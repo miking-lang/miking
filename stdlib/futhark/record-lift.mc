@@ -14,22 +14,6 @@ include "futhark/ast.mc"
 include "futhark/ast-builder.mc"
 include "futhark/pprint.mc"
 
-type ParamData = (Name, FutType)
-
-type FunctionReplaceData = {
-  -- Contains the type of the function after replacing record parameters with a
-  -- record field parameters.
-  newType : FutType,
-
-  -- The sequence of parameter names and type, as expected by the function
-  -- prior to the record parameter lifting.
-  oldParams : [ParamData],
-
-  -- Maps the name of a replaced record parameter to the parameters of the
-  -- fields that replaced it.
-  paramReplace : Map Name (Map SID ParamData)
-}
-
 let _collectAppTargetAndArgs = use FutharkAst in
   lam e : FutExpr.
   recursive let work = lam args : [FutExpr]. lam e : FutExpr.
@@ -54,7 +38,23 @@ let _constructAppSeq = use FutharkAst in
     args
 
 lang FutharkRecordParamLift = FutharkAst
-  sem updateParams : FunctionReplaceData -> FExpr -> [FExpr] -> FExpr
+  type ParamData = (Name, FutType)
+
+  type FunctionReplaceData = {
+    -- Contains the type of the function after replacing record parameters with a
+    -- record field parameters.
+    newType : FutType,
+
+    -- The sequence of parameter names and type, as expected by the function
+    -- prior to the record parameter lifting.
+    oldParams : [ParamData],
+
+    -- Maps the name of a replaced record parameter to the parameters of the
+    -- fields that replaced it.
+    paramReplace : Map Name (Map SID ParamData)
+  }
+
+  sem updateParams : FunctionReplaceData -> FutExpr -> [FutExpr] -> Info -> FutExpr
   sem updateParams data target args =
   | info ->
     let data : FunctionReplaceData = data in
@@ -98,7 +98,7 @@ lang FutharkRecordParamLift = FutharkAst
       (_constructAppSeq target appArgs)
       addedArgs
 
-  sem updateApplicationParameters : Map Name FunctionReplaceData -> FExpr -> FExpr
+  sem updateApplicationParameters : Map Name FunctionReplaceData -> FutExpr -> FutExpr
   sem updateApplicationParameters replaceMap =
   | FEVar t ->
     match mapLookup t.ident replaceMap with Some data then

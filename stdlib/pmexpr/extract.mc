@@ -16,7 +16,7 @@ include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
 -- Generates a random ASCII letter or digit character.
-let _randAlphanum : Unit -> Char = lam.
+let _randAlphanum : () -> Char = lam.
   -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
   -- (lower- and upper-case) is 10 + 26 + 26 = 62.
   let r = randIntU 0 62 in
@@ -51,11 +51,13 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   }
 
   type AddIdentifierAccelerateEnv = {
-    functions : Map Expr AccelerateData,
+    functions : Map Name AccelerateData,
     programIdentifiers : Set SID
   }
 
-  sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
+  sem collectProgramIdentifiers : AddIdentifierAccelerateEnv -> Expr
+                               -> AddIdentifierAccelerateEnv
+  sem collectProgramIdentifiers env =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
     {env with programIdentifiers = setInsert sid env.programIdentifiers}
@@ -252,8 +254,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   -- parameter, so that expressions without free variables can also be
   -- accelerated (also for lambda lifting). Here we remove this dummy parameter
   -- for all accelerate terms with at least one free variable parameter.
-  sem eliminateDummyParameter (solutions : Map Name Type)
-                              (accelerated : Map Name AccelerateData) =
+  sem eliminateDummyParameter : Map Name (Map Name Type)
+                             -> Map Name AccelerateData
+                             -> Expr -> (Map Name AccelerateData, Expr)
+  sem eliminateDummyParameter solutions accelerated =
   | ast ->
     let ast = eliminateDummyParameterH solutions accelerated ast in
     let accelerated =

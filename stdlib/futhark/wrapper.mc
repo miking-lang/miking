@@ -80,7 +80,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
         dimIdents = dimIdents, sizeIdent = nameSym "n",
         elemTy = mexprToCType elemType}
     else
-      let tystr = use MExprPrettyPrint in type2str ty in
+      let tystr = use MExprPrettyPrint in type2str (TySeq ty) in
       infoErrorExit
         ty.info
         (join ["Sequences of ", tystr, " are not supported in Futhark wrapper"])
@@ -605,13 +605,14 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
                                                  dstIdent t.dimIdents in
     join [[countDeclStmt], allocStmts, [freeStmt]]
 
-  sem _generateCToOCamlWrapperStmts (dstIdent : Name) =
+  sem _generateCToOCamlWrapperStmts : Name -> CDataRepr -> [CStmt]
+  sem _generateCToOCamlWrapperStmts dstIdent =
   | t & (FutharkSeqRepr {ident = ident}) ->
     _allocateSequenceOCamlData ident dstIdent t
   | FutharkRecordRepr t ->
     if null t.fields then []
     else
-      let wrapField = lam idx : Int. lam field : CDataRepr.
+      let wrapField : Int -> CDataRepr -> [CStmt] = lam idx. lam field.
         let tempDstIdent = nameSym "c_tmp" in
         let fieldStmts = _generateCToOCamlWrapperStmts tempDstIdent field in
         let storeStmt = CSExpr {expr = CEApp {
@@ -628,7 +629,7 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
         rhs = CEApp {
           fun = _getIdentExn "caml_alloc",
           args = [CEInt {i = length t.fields}, CEInt {i = 0}]}}} in
-      let fieldStmts = mapi wrapField t.fields in
+      let fieldStmts = join (mapi wrapField t.fields) in
       cons recordAllocStmt fieldStmts
   | FutharkBaseTypeRepr t ->
     let toOCamlStmt = CSExpr {expr = CEBinOp {
@@ -751,7 +752,7 @@ mexpr
 use Test in
 
 let functionIdent = nameSym "f" in
-let dataEntry : AcceleratedData = {
+let dataEntry : AccelerateData = {
   identifier = functionIdent,
   bytecodeWrapperId = nameSym "fbyte",
   params = [(nameSym "s", tyseq_ tyint_)],

@@ -12,6 +12,9 @@ type sym_env =
 let empty_sym_env =
   {var= SidMap.empty; con= SidMap.empty; ty= SidMap.empty; label= SidMap.empty}
 
+(* Option for allowing/disallowing free variables in symbolize *)
+let allow_free = ref false
+
 let sym_env_to_assoc env =
   let vars = List.map (fun (k, v) -> (IdVar k, v)) (SidMap.bindings env.var) in
   let cons = List.map (fun (k, v) -> (IdCon k, v)) (SidMap.bindings env.con) in
@@ -44,7 +47,8 @@ let findsym fi id env =
       | IdLabel x ->
           (x, "label")
     in
-    raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
+    if !allow_free then Symb.Helpers.nosym
+    else raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
 
 let findsym_opt id env =
   match id with

@@ -16,6 +16,7 @@ include "cuda/intrinsics/loop-kernel.mc"
 include "cuda/intrinsics/loop.mc"
 include "cuda/intrinsics/tensor-slice.mc"
 include "cuda/intrinsics/tensor-sub.mc"
+include "pmexpr/extract.mc"
 
 -- Translates non-kernel intrinsics, which could run either in CPU or GPU code,
 -- to looping constructs.
@@ -23,11 +24,15 @@ lang CudaCpuTranslate =
   CudaFoldlIntrinsic + CudaTensorSliceIntrinsic + CudaTensorSubIntrinsic +
   CudaLoopIntrinsic + CudaLoopAccIntrinsic
 
-  sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
+  sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
+                           -> ([CuTop], CStmt)
+  sem generateIntrinsicExpr ccEnv acc outExpr =
   | (CESeqFoldl _ | CETensorSliceExn _ | CETensorSubExn _ | CESeqLoopAcc _) & t ->
     generateCudaIntrinsicCall ccEnv acc outExpr t
 
-  sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
+  sem generateIntrinsicExprNoRet : CompileCEnv -> [CuTop] -> CExpr
+                                -> ([CuTop], CStmt)
+  sem generateIntrinsicExprNoRet ccEnv acc =
   | (CESeqLoop _) & t ->
     generateCudaIntrinsicCallNoRet ccEnv acc t
 end
@@ -38,34 +43,39 @@ lang CudaGpuTranslate =
 
   -- NOTE(larshum, 2022-03-22): At the moment, no kernels returning a value are
   -- supported.
-  sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
+  sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
+                           -> ([CuTop], CStmt)
   /-| t ->
     match generateCudaKernelCall ccEnv outExpr t with (kernelTop, kernelCall) in
     let acc = cons kernelTop acc in
     (acc, kernelCall)-/
 
-  sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
+  sem generateIntrinsicExprNoRet : CompileCEnv -> [CuTop] -> CExpr -> ([CuTop], CStmt)
+  sem generateIntrinsicExprNoRet ccEnv acc =
   | (CELoopKernel _) & t ->
     match generateCudaKernelCallNoRet ccEnv t with (kernelTop, kernelCall) in
     let acc = cons kernelTop acc in
     (acc, kernelCall)
 end
 
-lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTranslate
-  sem translateCudaTops (accelerateData : Map Name AccelerateData)
-                        (ccEnv : CompileCEnv) =
+lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate +
+                           CudaGpuTranslate + PMExprExtractAccelerate
+
+  sem translateCudaTops : Map Name AccelerateData -> CompileCEnv -> [CTop]
+                       -> (Map Name Name, [CuTop])
+  sem translateCudaTops accelerateData ccEnv =
   | tops ->
     let tops = map translateTopToCudaFormat tops in
     let wrapperMap =
       mapMapWithKey (lam key. lam. nameSym "cuda_wrap") accelerateData in
     (wrapperMap, generateIntrinsics wrapperMap ccEnv tops)
 
-  sem generateIntrinsics (wrapperMap : Map Name Name)
-                         (ccEnv : CompileCEnv) =
+  sem generateIntrinsics : Map Name Name -> CompileCEnv -> [CuTop] -> [CuTop]
+  sem generateIntrinsics wrapperMap ccEnv =
   | tops -> join (map (generateIntrinsicsTop wrapperMap ccEnv) tops)
 
-  sem generateIntrinsicsTop (wrapperMap : Map Name Name)
-                            (ccEnv : CompileCEnv) =
+  sem generateIntrinsicsTop : Map Name Name -> CompileCEnv -> CuTop -> [CuTop]
+  sem generateIntrinsicsTop wrapperMap ccEnv =
   | CuTTop (cuTop & {top = CTFun t}) ->
     match mapAccumL (generateIntrinsicStmt ccEnv t.ret) [] t.body with (tops, body) in
     match mapLookup t.id wrapperMap with Some cudaWrapperId then
@@ -86,14 +96,18 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
       snoc tops cudaTop
   | t -> [t]
 
+  sem containsKernelCall : [CStmt] -> Bool
   sem containsKernelCall =
   | stmts -> foldl containsKernelCallH false stmts
 
-  sem containsKernelCallH (acc : Bool) =
+  sem containsKernelCallH : Bool -> CStmt -> Bool
+  sem containsKernelCallH acc =
   | CSExpr {expr = CEKernelApp _} -> true
   | stmt -> sfold_CStmt_CStmt containsKernelCallH acc stmt
 
-  sem generateIntrinsicStmt (ccEnv : CompileCEnv) (ty : CType) (acc : [CuTop]) =
+  sem generateIntrinsicStmt : CompileCEnv -> CType -> [CuTop] -> CStmt
+                           -> ([CuTop], CStmt)
+  sem generateIntrinsicStmt ccEnv ty acc =
   | CSExpr {expr = t} ->
     generateIntrinsicExprNoRet ccEnv acc t
   | CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = t}} ->
@@ -109,15 +123,20 @@ lang CudaKernelTranslate = CudaPMExprCompile + CudaCpuTranslate + CudaGpuTransla
 
   -- Generates an statement for the contained intrinsic, which potentially
   -- replaces the original assignment statement.
-  sem generateIntrinsicExpr (ccEnv : CompileCEnv) (acc : [CuTop]) (outExpr : CExpr) =
+  sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
+                           -> ([CuTop], CStmt)
+  sem generateIntrinsicExpr ccEnv acc outExpr =
   | t -> (acc, CSExpr {expr = CEBinOp {op = COAssign (), lhs = outExpr, rhs = t}})
 
   -- As above, but for intrinsics that do not return values.
-  sem generateIntrinsicExprNoRet (ccEnv : CompileCEnv) (acc : [CuTop]) =
+  sem generateIntrinsicExprNoRet : CompileCEnv -> [CuTop] -> CExpr
+                                -> ([CuTop], CStmt)
+  sem generateIntrinsicExprNoRet ccEnv acc =
   | t -> (acc, CSExpr {expr = t})
 
   -- Wraps the C top-level terms in the CUDA version of a top-level term, which
   -- includes a sequence of attributes that can be attached.
+  sem translateTopToCudaFormat : CTop -> CuTop
   sem translateTopToCudaFormat =
   | top -> CuTTop {attrs = [], top = top}
 end

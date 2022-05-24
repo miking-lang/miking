@@ -455,27 +455,27 @@ lang TypeCheck = Unify + Generalize + ResolveLinks
   -- Type check `tm', with FreezeML-style type inference. Returns the
   -- term annotated with its type. The resulting type contains no
   -- TyFlex links.
+  sem typeCheck : Expr -> Expr
   sem typeCheck =
   | tm ->
     resolveLinksExpr (typeCheckExpr _tcEnvEmpty tm)
 
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain TyFlex links.
-  sem typeCheckExpr (env : TCEnv) =
+  sem typeCheckExpr : TCEnv -> Expr -> Expr
+  sem typeCheckExpr env =
   | tm ->
     typeCheckBase env tm
 
-  sem typeCheckBase (env : TCEnv) =
-  -- Intentionally left blank
+  sem typeCheckBase : TCEnv -> Expr -> Expr
 end
 
 lang PatTypeCheck = Unify
-  sem typeCheckPat (env : TCEnv) =
-  -- Intentionally left blank
+  sem typeCheckPat : TCEnv -> Pat -> (TCEnv, Pat)
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmVar t ->
     match mapLookup t.ident env.varEnv with Some ty then
       let ty =
@@ -492,7 +492,7 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang LamTypeCheck = TypeCheck + LamAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmLam t ->
     let tyX = optionGetOrElse
       -- No type annotation: assign a monomorphic type variable to x
@@ -508,7 +508,7 @@ lang LamTypeCheck = TypeCheck + LamAst
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmApp t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
@@ -520,7 +520,7 @@ lang AppTypeCheck = TypeCheck + AppAst
 end
 
 lang LetTypeCheck = TypeCheck + LetAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = optionMapOr t.body (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyBody) in
@@ -551,7 +551,7 @@ lang LetTypeCheck = TypeCheck + LetAst
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmRecLets t ->
     let lvl = env.currentLvl in
 
@@ -599,7 +599,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst
 end
 
 lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env t.pat with (thnEnv, pat) in
@@ -615,7 +615,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
     let ty = inst env.tyConEnv env.currentLvl (f (tyConst t.val)) in
@@ -623,7 +623,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
 end
 
 lang SeqTypeCheck = TypeCheck + SeqAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
@@ -645,7 +645,7 @@ lang FlexDisableGeneralize = FlexTypeAst
 end
 
 lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGeneralize
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
@@ -664,7 +664,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
 end
 
 lang TypeTypeCheck = TypeCheck + TypeAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmType t ->
     let env = _insertTyCon t.ident (t.params, t.tyIdent) env in
     let inexpr = typeCheckExpr env t.inexpr in
@@ -673,7 +673,7 @@ lang TypeTypeCheck = TypeCheck + TypeAst
 end
 
 lang DataTypeCheck = TypeCheck + DataAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmConDef t ->
     let inexpr = typeCheckExpr (_insertCon t.ident t.tyIdent env) t.inexpr in
     TmConDef {{t with inexpr = inexpr}
@@ -694,7 +694,7 @@ lang DataTypeCheck = TypeCheck + DataAst
 end
 
 lang UtestTypeCheck = TypeCheck + UtestAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmUtest t ->
     let test = typeCheckExpr env t.test in
     let expected = typeCheckExpr env t.expected in
@@ -712,12 +712,12 @@ lang UtestTypeCheck = TypeCheck + UtestAst
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmNever t -> TmNever {t with ty = newvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst
-  sem typeCheckBase (env : TCEnv) =
+  sem typeCheckBase env =
   | TmExt t ->
     let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
@@ -730,7 +730,7 @@ end
 ---------------------------
 
 lang NamedPatTypeCheck = PatTypeCheck + NamedPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatNamed t ->
     let patTy = newvar env.currentLvl t.info in
     let env =
@@ -742,7 +742,7 @@ lang NamedPatTypeCheck = PatTypeCheck + NamedPat
 end
 
 lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL typeCheckPat env t.pats with (env, pats) in
@@ -752,7 +752,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
@@ -771,7 +771,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatRecord t ->
     let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
     match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
@@ -783,7 +783,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
 end
 
 lang DataPatTypeCheck = TypeCheck + DataPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
       match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
@@ -800,22 +800,22 @@ lang DataPatTypeCheck = TypeCheck + DataPat
 end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatInt t -> (env, PatInt {t with ty = TyInt {info = t.info}})
 end
 
 lang CharPatTypeCheck = PatTypeCheck + CharPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatChar t -> (env, PatChar {t with ty = TyChar {info = t.info}})
 end
 
 lang BoolPatTypeCheck = PatTypeCheck + BoolPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatBool t -> (env, PatBool {t with ty = TyBool {info = t.info}})
 end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatAnd t ->
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
@@ -826,7 +826,7 @@ end
 -- TODO(aathn, 2021-11-11): This definition is incorrect as it does not check
 -- that variables from different branches have the same type
 lang OrPatTypeCheck = PatTypeCheck + OrPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatOr t ->
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
@@ -835,7 +835,7 @@ lang OrPatTypeCheck = PatTypeCheck + OrPat
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
-  sem typeCheckPat (env : TCEnv) =
+  sem typeCheckPat env =
   | PatNot t ->
     match typeCheckPat env t.subpat with (env, subpat) in
     (env, PatNot {{t with subpat = subpat} with ty = tyPat subpat})
