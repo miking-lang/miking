@@ -96,8 +96,8 @@ lang CudaPMExprAst = PMExprAst
     let s = typeCheckExpr env t.s in
     let inElemType = newvar env.currentLvl t.info in
     let outElemType = newvar env.currentLvl t.info in
-    unify env (tyTm s) (ityseq_ t.info inElemType);
-    unify env (tyTm f) (ityarrow_ t.info inElemType outElemType);
+    unify t.info env (tyTm s) (ityseq_ t.info inElemType);
+    unify t.info env (tyTm f) (ityarrow_ t.info inElemType outElemType);
     TmSeqMap {{{t with f = f}
                   with s = s}
                   with ty = TySeq {ty = outElemType, info = t.info}}
@@ -106,9 +106,9 @@ lang CudaPMExprAst = PMExprAst
     let acc = typeCheckExpr env t.acc in
     let s = typeCheckExpr env t.s in
     let sElemTy = newvar env.currentLvl t.info in
-    unify env (tyTm s) (ityseq_ t.info sElemTy);
-    unify env (tyTm f) (ityarrow_ t.info (tyTm acc)
-                                  (ityarrow_ t.info sElemTy (tyTm acc)));
+    unify t.info env (tyTm s) (ityseq_ t.info sElemTy);
+    unify t.info env (tyTm f) (ityarrow_ t.info (tyTm acc)
+                                         (ityarrow_ t.info sElemTy (tyTm acc)));
     TmSeqFoldl {{{{t with f = f}
                      with acc = acc}
                      with s = s}
@@ -117,8 +117,8 @@ lang CudaPMExprAst = PMExprAst
     let tt = typeCheckExpr env t.t in
     let slice = typeCheckExpr env t.slice in
     let elemTy = newvar env.currentLvl t.info in
-    unify env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
-    unify env (tyTm slice) (ityseq_ t.info (tyWithInfo t.info tyint_));
+    unify t.info env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
+    unify t.info env (tyTm slice) (ityseq_ t.info (tyWithInfo t.info tyint_));
     TmTensorSliceExn {{{t with t = tt}
                           with slice = slice}
                           with ty = tyTm tt}
@@ -127,9 +127,9 @@ lang CudaPMExprAst = PMExprAst
     let ofs = typeCheckExpr env t.ofs in
     let len = typeCheckExpr env t.len in
     let elemTy = newvar env.currentLvl t.info in
-    unify env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
-    unify env (tyTm ofs) (tyWithInfo t.info tyint_);
-    unify env (tyTm len) (tyWithInfo t.info tyint_);
+    unify t.info env (tyTm tt) (tyWithInfo t.info (tytensor_ elemTy));
+    unify t.info env (tyTm ofs) (tyWithInfo t.info tyint_);
+    unify t.info env (tyTm len) (tyWithInfo t.info tyint_);
     TmTensorSubExn {{{{t with t = tt}
                          with ofs = ofs}
                          with len = len}
@@ -139,8 +139,8 @@ lang CudaPMExprAst = PMExprAst
     let s = typeCheckExpr env t.s in
     let inElemType = newvar env.currentLvl t.info in
     let outElemType = newvar env.currentLvl t.info in
-    unify env (tyTm s) (ityseq_ t.info inElemType);
-    unify env (tyTm f) (ityarrow_ t.info inElemType outElemType);
+    unify t.info env (tyTm s) (ityseq_ t.info inElemType);
+    unify t.info env (tyTm f) (ityarrow_ t.info inElemType outElemType);
     TmMapKernel {{{t with f = f}
                      with s = s}
                      with ty = TySeq {ty = outElemType, info = t.info}}
@@ -150,8 +150,8 @@ lang CudaPMExprAst = PMExprAst
     let s = typeCheckExpr env t.s in
     let seqElemTy = newvar env.currentLvl t.info in
     let neTy = tyTm ne in
-    unify env (tyTm s) (ityseq_ t.info neTy);
-    unify env (tyTm f) (ityarrow_ t.info neTy (ityarrow_ t.info neTy neTy));
+    unify t.info env (tyTm s) (ityseq_ t.info neTy);
+    unify t.info env (tyTm f) (ityarrow_ t.info neTy (ityarrow_ t.info neTy neTy));
     TmReduceKernel {{{{t with f = f}
                          with ne = ne}
                          with s = s}
@@ -160,8 +160,8 @@ lang CudaPMExprAst = PMExprAst
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
     let unitType = tyWithInfo t.info tyunit_ in
-    unify env (tyTm n) (tyWithInfo t.info tyint_);
-    unify env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
+    unify t.info env (tyTm n) (tyWithInfo t.info tyint_);
+    unify t.info env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
     TmLoopKernel {{{t with n = n}
                       with f = f}
                       with ty = unitType}
@@ -298,7 +298,7 @@ let mapKernel_ = lam f. lam s.
 
 let reduceKernel_ = lam f. lam ne. lam s.
   use CudaPMExprAst in
-  TmReduceKernel {f = f, ne = ne, s = s, ty = tyunknown_, info = NoInfo ()}
+  TmReduceKernel {f = f, ne = ne, s = s, ty = tyunknown_, info = NoInfo (), commutative = true}
 
 let loopKernel_ = lam n. lam f.
   use CudaPMExprAst in

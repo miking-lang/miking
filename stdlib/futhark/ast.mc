@@ -151,7 +151,7 @@ lang FutharkPatAst = FutharkTypeAst
   | FPBool t -> t.ty
   | FPRecord t -> t.ty
 
-  sem withTypeFutPat (ty : Info) =
+  sem withTypeFutPat (ty : FutType) =
   | FPNamed t -> FPNamed {t with ty = ty}
   | FPInt t -> FPInt {t with ty = ty}
   | FPBool t -> FPBool {t with ty = ty}

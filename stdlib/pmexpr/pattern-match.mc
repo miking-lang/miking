@@ -399,7 +399,7 @@ let matchBindingsWithPattern : Expr -> Pattern -> [PatternMatchResult] =
   else never
 in
 
-let lookupSnd : VarPattern -> PatternMatchResult -> Option Expr =
+let lookupSnd : VarPattern -> Map VarPattern (Name, Expr) -> Option Expr =
   lam pat. lam result.
   optionMap
     (lam p : (Name, Expr). p.1)
