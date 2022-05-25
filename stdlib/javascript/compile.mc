@@ -249,6 +249,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
+    else match val with () then JSENop { }
     else match compileCOp opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else error "Unsupported literal"
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
@@ -282,7 +283,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       exprs = map (
         lam bind : RecLetBinding.
         match bind with { ident = ident, body = body } then
-          let nop = TmConst { val = CFlushStdout { } } in
+          let nop = TmConst { val = () } in
           compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop })
         else never
         ) bindings,
