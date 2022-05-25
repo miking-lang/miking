@@ -278,7 +278,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else never
 
   | TmRecLets { bindings = bindings, inexpr = e } ->
-    -- Todo: Compile each binding as a let expression
     flattenBlock (JSEBlock {
       exprs = map (
         lam bind : RecLetBinding.
