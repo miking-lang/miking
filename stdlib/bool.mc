@@ -63,3 +63,9 @@ utest eqBool false true  with false
 utest eqBool true  false with false
 utest eqBool true  true  with true
 
+-- Boolean to string
+let bool2string: Bool -> String = lam b.
+  if b then "true" else "false"
+
+utest bool2string true with "true"
+utest bool2string false with "false"
