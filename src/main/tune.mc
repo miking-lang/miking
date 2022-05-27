@@ -31,7 +31,7 @@ let dependencyAnalysis
   lam options : Options. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.tuneOptions.dependencyAnalysis then
-      let ast = (if options.typeCheck then typeCheck else typeAnnot) ast in
+      let ast = typeCheck ast in
       let ast = use HoleANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
       let cfaRes = analyzeNested env cfaRes ast in

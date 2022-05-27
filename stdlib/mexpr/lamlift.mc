@@ -382,7 +382,8 @@ mexpr
 
 use TestLang in
 
-let preprocess = lam t. typeAnnot (symbolize t) in
+let preprocess = lam t.
+  typeAnnot (symbolizeExpr {symEnvEmpty with strictTypeVars = false} t) in
 
 let noLambdas = bind_ (ulet_ "x" (int_ 2)) unit_ in
 utest liftLambdas noLambdas with noLambdas using eqExpr in

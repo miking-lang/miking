@@ -231,7 +231,7 @@ lang ContextExpand = HoleAst
     " in
 
     use MExprSym in
-    let impl = symbolize impl in
+    let impl = symbolizeExpr {symEnvEmpty with strictTypeVars = false} impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
       match findName s expr with Some n then n
