@@ -56,7 +56,9 @@ let jsKeywords = [
 lang JSExprPrettyPrint = JSExprAst
 
   sem printJSDef (indent: Int) (env: PprintEnv) (id: String) =
-  | expr -> (env, join [pprintNewline indent, "let ", id, " = ", printJSExpr expr])
+  | expr ->
+    match printJSExpr indent env expr with (env,str) in
+    (env, join [pprintNewline indent, "let ", id, " = ", str])
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
@@ -79,7 +81,7 @@ lang JSExprPrettyPrint = JSExprAst
       else never
     else never
   | JSEDef { id = id, expr = expr } ->
-    match pprintEnvGetOptStr env id with (env,id) then
+    match pprintEnvGetStr env id with (env,id) then
       match printJSDef indent env id expr with (env,str) then
         (env, join [str, ";"])
       else never
@@ -89,11 +91,7 @@ lang JSExprPrettyPrint = JSExprAst
     let i = indent in
     let ii = pprintIncr indent in
     match pprintEnvGetStr env id with (env,id) then
-      let f = lam env. lam t: Name.
-        match pprintEnvGetStr env t.1 with (env,t1) then
-          printJSDef indent env t.0 t1 (None ())
-        else never in
-      match mapAccumL f env params with (env,params) then
+      match mapAccumL pprintEnvGetStr env params with (env,params) then
         let params = join ["(", strJoin ", " params, ")"] in
         match (printJSExpr ii) env body with (env,body) then
           (env, join [id, params, " {", pprintNewline ii, body, pprintNewline i, "}"])
