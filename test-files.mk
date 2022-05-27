@@ -43,6 +43,7 @@ typecheck_files += $(wildcard stdlib/javascript/*.mc)
 typecheck_files += $(wildcard stdlib/ad/*.mc)
 typecheck_files += $(wildcard stdlib/ext/*.mc)
 typecheck_files += $(wildcard stdlib/multicore/*.mc)
+typecheck_files += $(wildcard stdlib/ipopt/*.mc)
 typecheck_files += stdlib/parser/lexer.mc
 typecheck_files += stdlib/parser/ll1.mc
 typecheck_files += stdlib/parser/breakable.mc
