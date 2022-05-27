@@ -5,6 +5,8 @@
 
 include "thread.mc"
 
+type Mutex
+
 -- 'mutexCreate ()' returns a new mutex.
 external externalMutexCreate ! : () -> Mutex
 let mutexCreate = lam.
@@ -28,7 +30,7 @@ let mutexRelease = lam m.
 mexpr
 
 let debug = false in
-let debugPrint = if debug then print else lam x. x in
+let debugPrint = if debug then print else lam x. () in
 
 -- Used for debug printing, included to avoid dependency on seq.mc
 let int2string = lam n.

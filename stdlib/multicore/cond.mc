@@ -6,6 +6,8 @@
 include "thread.mc"
 include "mutex.mc"
 
+type Cond
+
 -- 'condCreate ()' returns a new condition variable
 external externalCondCreate ! : () -> Cond
 let condCreate = lam.
