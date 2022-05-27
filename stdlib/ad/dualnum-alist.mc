@@ -11,12 +11,12 @@
 include "set.mc"
 include "string.mc"
 
-type Eps = Symb
+type Eps = Symbol
 
 -- Dual-numbers can be nested and are implemented as association lists. Each key
 -- is the set if epsilons for a particular term in the dual number and the
 -- value is the value of the term.
-type DualNumTerm = (Set Symb, Float)
+type DualNumTerm = (Set Symbol, Float)
 type DualNum = [DualNumTerm]
 
 let _cmpEpsilon = lam e1 : Eps. lam e2 : Eps. subi (sym2hash e1) (sym2hash e2)
@@ -30,14 +30,14 @@ let _termHasAnyEpsilon = lam t : DualNumTerm. not (setIsEmpty (_termEpsilons t))
 let _termHasEpsilon = lam e. lam t. setMem e (_termEpsilons t)
 
 -- generate a unique epsilon
-let dualGenEpsilon : Unit -> Eps = gensym
+let dualGenEpsilon : () -> Eps = gensym
 
 -- epsilons are un-ordered
 let dualLtE : Eps -> Eps -> Bool = lam. lam. true
 let dualEqE : Eps -> Eps -> Bool = eqsym
 
 -- packs a floating point number in a DualNumber
-let dualnumCreatePrimal : a -> DualNum =
+let dualnumCreatePrimal : Float -> DualNum =
 lam x. [(setEmpty _cmpEpsilon, x)]
 
 -- false if x' = 0 in x+ex'
@@ -59,7 +59,7 @@ let dualnumPrimal : Eps -> DualNum -> DualNum =
 lam e. filter (lam t. not (_termHasEpsilon e t))
 
 -- x in x+e1(x+e2(x+e3(...)))
-let dualnumPrimalDeep : DualNum -> a =
+let dualnumPrimalDeep : DualNum -> Float =
 lam n.
   -- NOTE(oerikss, 2021-10-11): Exactly one element in the association list
   -- fulfills this predicate by construction.
@@ -90,16 +90,15 @@ let dualnumEq : (Float -> Float -> Bool) -> DualNum -> DualNum -> Bool =
   in recur
 
 -- String representation of dual number
-let dualnumToString : (a -> String) -> DualNum -> String =
+let dualnumToString : (Float -> String) -> DualNum -> String =
 lam pri2str. lam n.
   strJoin "+"
     (map
       (lam t : DualNumTerm.
         match t with (es, x) then
-          join
-            (snoc
-              (map (lam e. join ["(", int2string (sym2hash e), ")"]) es)
-              (pri2str x))
+          concat
+            (setFold (lam s. lam e. join ["(", int2string (sym2hash e), ")", s]) "" es)
+            (pri2str x)
         else never)
       n)
 
