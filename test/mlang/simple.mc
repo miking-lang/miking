@@ -25,7 +25,7 @@ lang Recursive
   | True ()
   | False ()
 
-  sem my_not (n : Dyn) =
+  sem my_not (n : Int) =
   | True _ -> if eqi n 0 then False () else my_not (subi n 1) (True ())
   | False _ -> if eqi n 0 then True () else my_not (subi n 1) (False ())
 end
@@ -35,17 +35,17 @@ lang Mutual
   | True ()
   | False ()
 
-  sem my_not (n : Dyn) =
+  sem my_not (n : Int) =
   | True _ -> if eqi n 0 then False () else my_not2 (subi n 1) (True ())
   | False _ -> if eqi n 0 then True () else my_not2 (subi n 1) (False ())
 
-  sem my_not2 (n : Dyn) =
+  sem my_not2 (n : Int) =
   | True _ -> if eqi n 0 then False () else my_not (subi n 1) (True ())
   | False _ -> if eqi n 0 then True () else my_not (subi n 1) (False ())
 end
 
 lang And = MyBool
-  sem my_and (b1 : Dyn) =
+  sem my_and (b1 : MyBool) =
   | True _ -> b1
   | False _ -> False ()
 end

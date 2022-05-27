@@ -30,7 +30,7 @@ python_files += $(wildcard test/py/*.mc)
 # Programs that should pass the type checker. The goal is to make this list
 # contain all programs, at which point it can be removed and the type checker
 # can be enabled by default.
-typecheck_files += test/mlang/type-alias.mc
+typecheck_files += $(wildcard test/mlang/*.mc)
 typecheck_files += $(wildcard test/mexpr/*.mc)
 typecheck_files += $(wildcard stdlib/*.mc)
 typecheck_files += $(wildcard stdlib/mexpr/*.mc)
