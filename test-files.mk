@@ -41,6 +41,7 @@ typecheck_files += $(wildcard stdlib/futhark/*.mc)
 typecheck_files += $(wildcard stdlib/pmexpr/*.mc)
 typecheck_files += $(wildcard stdlib/javascript/*.mc)
 typecheck_files += $(wildcard stdlib/ad/*.mc)
+typecheck_files += $(wildcard stdlib/ext/*.mc)
 typecheck_files += stdlib/parser/lexer.mc
 typecheck_files += stdlib/parser/ll1.mc
 typecheck_files += stdlib/parser/breakable.mc
@@ -48,7 +49,6 @@ typecheck_files += stdlib/parser/tool.mc
 typecheck_files += stdlib/parser/gen-ast.mc
 typecheck_files += stdlib/parser/gen-op-ast.mc
 typecheck_files += stdlib/parser/selfhost-gen.mc
-typecheck_files += stdlib/ext/ext-test.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written
