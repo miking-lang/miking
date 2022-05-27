@@ -6,12 +6,12 @@
 include "thread.mc"
 
 -- 'mutexCreate ()' returns a new mutex.
-external externalMutexCreate ! : Unit -> Mutex
+external externalMutexCreate ! : () -> Mutex
 let mutexCreate = lam.
   externalMutexCreate ()
 
 -- 'mutexLock m' locks the mutex 'm'.
-external externalMutexLock ! : Mutex -> Unit
+external externalMutexLock ! : Mutex -> ()
 let mutexLock = lam m.
   externalMutexLock m
 
@@ -21,7 +21,7 @@ let mutexTryLock = lam m.
   externalMutexTryLock m
 
 -- 'mutexRelease m' releases the mutex 'm'.
-external externalMutexRelease ! : Mutex -> Unit
+external externalMutexRelease ! : Mutex -> ()
 let mutexRelease = lam m.
   externalMutexRelease m
 

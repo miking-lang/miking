@@ -5,7 +5,7 @@ include "string.mc"
 
 -- Get the available number of processing units, as reported by the command
 -- 'nproc'.
-let multicoreNbrOfCores : Unit -> Int = lam.
+let multicoreNbrOfCores : () -> Int = lam.
     let res = sysRunCommand ["nproc"] "" "." in
     if eqi res.returncode 0 then
       let nprocStr = strTrim res.stdout in

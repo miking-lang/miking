@@ -15,14 +15,14 @@ include "option.mc"
 
 type Channel a = {contents : Aref [a], lock : Mutex, nonEmpty : Cond}
 
-let channelEmpty : Unit -> Channel a = lam.
+let channelEmpty : () -> Channel a = lam.
   { contents = atomicMake []
   , lock = mutexCreate ()
   , nonEmpty = condCreate ()
   }
 
 -- 'channelSend c msg' sends the message 'msg' to the channel 'c'
-let channelSend : Channel a -> a -> Unit = lam chan. lam msg.
+let channelSend : Channel a -> a -> () = lam chan. lam msg.
   mutexLock chan.lock;
 
   let old = atomicGet chan.contents in
@@ -34,7 +34,7 @@ let channelSend : Channel a -> a -> Unit = lam chan. lam msg.
   mutexRelease chan.lock
 
 -- 'channelSendMany c msgs' sends the messages 'msgs' to the channel 'c'
-let channelSendMany : Channel a -> [a] -> Unit = lam chan. lam msgs.
+let channelSendMany : Channel a -> [a] -> () = lam chan. lam msgs.
   mutexLock chan.lock;
 
   let old = atomicGet chan.contents in
@@ -50,7 +50,7 @@ let channelSendMany : Channel a -> [a] -> Unit = lam chan. lam msgs.
 let channelRecv : Channel a -> a = lam chan.
   mutexLock chan.lock;
 
-  recursive let waitForMsg : Unit -> a = lam.
+  recursive let waitForMsg : () -> a = lam.
     let contents = atomicGet chan.contents in
     match contents with [] then
       condWait chan.nonEmpty chan.lock;

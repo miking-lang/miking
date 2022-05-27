@@ -11,8 +11,8 @@ include "map.mc"
 type Async a = AtomicRef (Option a)
 
 type ThreadPoolTask
-con Task : {task : Unit -> a, result : Async a} -> ThreadPoolTask
-con Quit : Unit -> ThreadPoolTask
+con Task : {task : () -> a, result : Async a} -> ThreadPoolTask
+con Quit : () -> ThreadPoolTask
 
 type ThreadPool = {threads : [Thread], queue : Channel ThreadPoolTask}
 
@@ -35,12 +35,12 @@ let threadPoolCreate : Int -> ThreadPool = lam n.
 --
 -- NOTE: Should be called as soon as a thread pool has finished all intended
 -- tasks. After 'threadPoolTearDown', no more tasks can be sent to the pool.
-let threadPoolTearDown : ThreadPool -> Unit = lam pool.
+let threadPoolTearDown : ThreadPool -> () = lam pool.
   channelSendMany pool.queue (map (lam. Quit ()) pool.threads);
   iter threadJoin pool.threads
 
 -- 'threadPoolAsync p task' sends a 'task' to the pool 'p'.
-let threadPoolAsync : ThreadPool -> (Unit -> a) -> Async a = lam pool. lam task.
+let threadPoolAsync : ThreadPool -> (() -> a) -> Async a = lam pool. lam task.
   let r = atomicMake (None ()) in
   channelSend pool.queue (Task {task = task, result = r});
   r
