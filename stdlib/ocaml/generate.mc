@@ -126,7 +126,7 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
       with (_, body) in
       body
     else
-      infoErrorExit info (join ["No implementation for external ", nameGetStr ident])
+      errorSingle [info] (join ["No implementation for external ", nameGetStr ident])
 
   sem generate (env : GenerateEnv) =
   -- Intentionally left blank
@@ -253,7 +253,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             _omatch_ (objMagic (generate env t.target))
               [(OPatCon {ident = name, args = [precord]}, objMagic (nvar_ patName))]
           else error "Record type not handled by type-lifting"
-        else infoErrorExit info "Unknown record type"
+        else errorSingle [info] "Unknown record type"
       else generateDefaultMatchCase env t
     else generateDefaultMatchCase env t
   | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
@@ -290,7 +290,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             "Unknown constructor referenced in nested match expression: ",
             nameGetStr arm.0
           ] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       in
       let flattenedMatch =
         _omatch_ (objMagic (generate env t.target))
@@ -329,8 +329,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
               args = [TmRecord {t with bindings = bindings}]
             }
           else never
-        else infoErrorExit (infoTy ty) "env.constrs lookup failed"
-      else infoErrorExit (infoTy ty) "expected TyCon"
+        else errorSingle [infoTy ty] "env.constrs lookup failed"
+      else errorSingle [infoTy ty] "expected TyCon"
   | TmRecordUpdate t ->
     let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyCon {ident = ident} then
@@ -351,14 +351,14 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       else
         let msg = join ["Record update was annotated with an invalid type."] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else
       let msg = join ["Expected type to be a TyCon. ",
                       "This was caused by an error in the type-lifting."] in
-      infoErrorExit t.info msg
+      errorSingle [t.info] msg
   | TmConApp t ->
     -- TODO(vipa, 2021-05-11): can env.constrs contain a non-resolved alias? If so this breaks.
     match mapLookup t.ident env.constrs with Some (TyRecord {fields = fields}) then
@@ -401,7 +401,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
     else
       -- NOTE(vipa, 2021-05-11): Argument is not an explicit record, it should be `repr`ed
       OTmConApp {
@@ -590,8 +590,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
           ty
         else
           let strFields = strJoin ", " (map sidToString (mapKeys fields)) in
-          infoErrorExit t.info
-            (join ["Field ", sidToString id, " not found in record with fields {", strFields, "}"])
+          errorSingle [t.info] (join ["Field ", sidToString id, " not found in record with fields {", strFields, "}"])
       in
       match mapLookup id patNames with Some n then
         match generatePat env n pat with (names, innerWrap) then
@@ -634,11 +633,11 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
         else
           let msg = join ["Pattern refers to record type that was not handled by type-lifting. ",
                           "This is an internal error."] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       else
         let msg = join ["Pattern refers to an unknown record type. ",
                         "The target term must be annotated with a type."] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else never
   | PatCon t ->
     match env with {constrs = constrs} then
@@ -676,7 +675,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
         let msg = join ["Pattern refers to unknown type constructor: ",
                         nameGetStr t.ident,
                         ". The target term must be annotated with a type."] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else never
 end
 

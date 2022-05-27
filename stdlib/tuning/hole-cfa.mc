@@ -199,14 +199,14 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
         CstrHoleApp { lhs = l.ident, res = ident},
         CstrHoleConstApp { lhs = l.ident, rhs = r.ident, res = ident }
       ]
-      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
-    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
   | TmLet { ident = ident, body = TmIndependent t} ->
     match t.lhs with TmVar lhs then
       match t.rhs with TmVar rhs then
         [ CstrHoleIndependent {lhs = lhs.ident, rhs = rhs.ident, res = ident} ]
-      else infoErrorExit (infoTm t.rhs) "Not a TmVar in independent annotation"
-    else infoErrorExit (infoTm t.lhs) "Not a TmVar in independent annotation"
+      else errorSingle [infoTm t.rhs] "Not a TmVar in independent annotation"
+    else errorSingle [infoTm t.lhs] "Not a TmVar in independent annotation"
 
   sem constraintToString (env: PprintEnv) =
   | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->

@@ -10,7 +10,7 @@ lang CudaIntrinsic = CudaAst + CudaCompile
     -- TODO(larshum, 2022-02-08): Assumes 1d sequence
     match _unwrapType env.typeEnv ty with TySeq {ty = ty} then
       compileType env ty
-    else infoErrorExit (infoTy ty) "Could not unwrap sequence type"
+    else errorSingle [infoTy ty] "Could not unwrap sequence type"
 
   sem _getStructDataElemType (env : CompileCEnv) =
   | cty ->

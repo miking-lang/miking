@@ -24,7 +24,7 @@ lang PMExprReplaceAccelerate =
       else OTyBigarrayFloat64Elt {info = info} in
     OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
-    infoErrorExit t.info "Cannot convert tensor of unsupported type"
+    errorSingle [t.info] "Cannot convert tensor of unsupported type"
 
   sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
   | ty & (TyCon {info = info, ident = ident}) ->

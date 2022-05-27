@@ -11,13 +11,13 @@ let holeKeywords = ["hole", "Boolean", "IntRange", "independent"]
 
 let _lookupExit : all a. Info -> String -> Map String a -> a =
   lam info : Info. lam s : String. lam m : Map String a.
-    mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
+    mapLookupOrElse (lam. errorSingle [info] (concat s " not found")) s m
 
 let _expectConstInt : Info -> String -> Expr -> Int =
   lam info : Info. lam s. lam i.
     use IntAst in
     match i with TmConst {val = CInt {val = i}} then i
-    else infoErrorExit info (concat "Expected a constant integer: " s)
+    else errorSingle [info] (concat "Expected a constant integer: " s)
 
 lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
   syn Hole =
@@ -173,8 +173,8 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
       let validate = lam expr.
         match expr with TmHole {default = default} then
           match default with TmConst {val = CBool _} then expr
-          else infoErrorExit info "Default value not a constant Boolean"
-        else infoErrorExit info "Not a hole" in
+          else errorSingle [info] "Default value not a constant Boolean"
+        else errorSingle [info] "Not a hole" in
 
       lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
 
@@ -232,8 +232,8 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
                      inner = HIntRange {min = min, max = max}}
         then
           if and (leqi min i) (geqi max i) then expr
-          else infoErrorExit info "Default value is not within range"
-        else infoErrorExit info "Not a hole" in
+          else errorSingle [info] "Default value is not within range"
+        else errorSingle [info] "Not a hole" in
 
       lam lst. _mkHole info tyint_
         (lam m: Map String Expr.
@@ -241,8 +241,7 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
            let max = _expectConstInt info "max" (_lookupExit info "max" m) in
            if leqi min max then
              HIntRange {min = min, max = max}
-           else infoErrorExit info
-             (join ["Empty domain: ", int2string min, "..", int2string max]))
+           else errorSingle [info] (join ["Empty domain: ", int2string min, "..", int2string max]))
         validate (get lst 0))
 
   sem pprintHole =

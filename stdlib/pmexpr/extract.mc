@@ -324,12 +324,12 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   sem eliminateInnermostParameterType =
   | TyArrow {from = TyInt _, to = to & !(TyArrow _)} -> to
   | TyArrow t -> TyArrow {t with to = eliminateInnermostParameterType t.to}
-  | t -> infoErrorExit (infoTy t) "Unexpected type of accelerate function body"
+  | t -> errorSingle [infoTy t] "Unexpected type of accelerate function body"
 
   sem eliminateInnermostLambda =
   | TmLam {body = body & !(TmLam _)} -> body
   | TmLam t -> TmLam {t with body = eliminateInnermostLambda t.body}
-  | t -> infoErrorExit (infoTm t) "Unexpected structure of accelerate body"
+  | t -> errorSingle [infoTm t] "Unexpected structure of accelerate body"
 end
 
 lang TestLang =

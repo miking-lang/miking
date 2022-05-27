@@ -144,7 +144,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
       match (_charSeq2String tms) with Some str then JSEString { s = str }
-      else infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+      else errorSingle [infoTm t] "Non-literal strings currently unsupported."
     else
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list

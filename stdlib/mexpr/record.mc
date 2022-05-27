@@ -3,6 +3,7 @@
 
 include "stringid.mc"
 include "mexpr/ast.mc"
+include "error.mc"
 
 let recordOrderedLabels = lam labels: [SID].
   let isTupleLabel = lam sid.
@@ -23,7 +24,7 @@ let tyRecordOrderedLabels = use RecordTypeAst in
   match ty with TyRecord {fields = fields} then
     recordOrderedLabels (mapKeys fields)
   else
-    infoErrorExit (infoTy ty) "Not a TyRecord, cannot extract labels."
+    errorSingle [infoTy ty] "Not a TyRecord, cannot extract labels."
 
 let tyRecordOrderedFields = use RecordTypeAst in
   lam ty: Type.
@@ -31,4 +32,4 @@ let tyRecordOrderedFields = use RecordTypeAst in
     let labels = recordOrderedLabels (mapKeys fields) in
     map (lam sid. (sid, mapFindExn sid fields)) labels
   else
-    infoErrorExit (infoTy ty) "Not a TyRecord, cannot extract fields."
+    errorSingle [infoTy ty] "Not a TyRecord, cannot extract fields."

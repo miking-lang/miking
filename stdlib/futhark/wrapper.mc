@@ -58,8 +58,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
   | TyChar _ -> CTyChar ()
   | ty ->
     let tystr = use MExprPrettyPrint in type2str ty in
-    infoErrorExit
-      (infoTy ty)
+    errorSingle [infoTy ty]
       (join ["Type ", tystr, " is not supported by C wrapper"])
 
   sem _generateCDataRepresentation (env : CWrapperEnv) =
@@ -81,11 +80,9 @@ lang FutharkCWrapperBase = PMExprCWrapper
         elemTy = mexprToCType elemType}
     else
       let tystr = use MExprPrettyPrint in type2str (TySeq ty) in
-      infoErrorExit
-        ty.info
-        (join ["Sequences of ", tystr, " are not supported in Futhark wrapper"])
+      errorSingle [ty.info] (join ["Sequences of ", tystr, " are not supported in Futhark wrapper"])
   | TyTensor {info = info} ->
-    infoErrorExit info "Tensors are not supported in Futhark wrapper"
+    errorSingle [info] "Tensors are not supported in Futhark wrapper"
   | (TyRecord t) & ty ->
     let labels = tyRecordOrderedLabels ty in
     let fields : [CDataRepr] =
@@ -94,7 +91,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
           match mapLookup label t.fields with Some ty then
             _generateFutharkDataRepresentation ty
           else
-            infoErrorExit t.info "Inconsistent labels in record type")
+            errorSingle [t.info] "Inconsistent labels in record type")
         labels in
     FutharkRecordRepr {fields = fields}
   | ty -> FutharkBaseTypeRepr {ident = nameSym "c_tmp", ty = mexprToCType ty}

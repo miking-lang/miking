@@ -94,7 +94,7 @@ lang FutharkRecordParamLift = FutharkAst
                  ty = FTyArrow {from = tyFutTm extraArg,
                                 to = tyFutTm acc,
                                 info = info}}
-        else infoErrorExit info "")
+        else errorSingle [info] "")
       (_constructAppSeq target appArgs)
       addedArgs
 
@@ -151,7 +151,7 @@ lang FutharkRecordParamLift = FutharkAst
           -- record projections found here should also be found in the
           -- collection phase. If we were to get here, there is a bug in the
           -- implementation. What would be a good error message here?
-          infoErrorExit t.info "Failed to replace record with its fields"
+          errorSingle [t.info] "Failed to replace record with its fields"
       else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
     else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
   | t -> smap_FExpr_FExpr (replaceProjections paramReplace) t
