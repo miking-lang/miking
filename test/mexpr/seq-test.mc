@@ -6,7 +6,8 @@
 include "common.mc"
 
 -- Helper function for tests
-let eqSeq = lam eq : (a -> a -> Bool).
+let eqSeq : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+  lam eq : (a -> a -> Bool).
   recursive let work = lam as. lam bs.
     let pair = (as, bs) in
     match pair with ([], []) then true else
