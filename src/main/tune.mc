@@ -109,7 +109,7 @@ let tune = lam files. lam options : Options. lam args.
      else ());
 
     -- If option --enable-cleanup is given, then remove the tune file
-    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file); () else ());
 
     -- Clean up temporary files used during tuning
     r.cleanup ();
