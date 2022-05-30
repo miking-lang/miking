@@ -109,7 +109,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
             Some (performSubstitution exprWrappedInLambdas params args)
           else if eqi nargs nparams then
             Some (performSubstitution expr params args)
-          else infoErrorExit info (concat "Too many arguments passed to "
+          else errorSingle [info] (concat "Too many arguments passed to "
                                           (nameGetStr ident))
         else None ()
       else None ()

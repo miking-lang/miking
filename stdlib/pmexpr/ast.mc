@@ -142,7 +142,7 @@ lang PMExprAst =
   | TmFlatten t ->
     let e = typeCheckExpr env t.e in
     let elemTy = newvar env.currentLvl t.info in
-    unify t.info env (tyTm e) (ityseq_ t.info (ityseq_ t.info elemTy));
+    unify [infoTm e, t.info] env (tyTm e) (ityseq_ t.info (ityseq_ t.info elemTy));
     TmFlatten {{t with e = e}
                   with ty = TySeq {ty = elemTy, info = t.info}}
   | TmMap2 t ->
@@ -152,9 +152,9 @@ lang PMExprAst =
     let aElemTy = newvar env.currentLvl t.info in
     let bElemTy = newvar env.currentLvl t.info in
     let outElemTy = newvar env.currentLvl t.info in
-    unify t.info env (tyTm as) (ityseq_ t.info aElemTy);
-    unify t.info env (tyTm bs) (ityseq_ t.info bElemTy);
-    unify t.info env (tyTm f)
+    unify [infoTm as, t.info] env (tyTm as) (ityseq_ t.info aElemTy);
+    unify [infoTm bs, t.info] env (tyTm bs) (ityseq_ t.info bElemTy);
+    unify [infoTm f, t.info] env (tyTm f)
       (ityarrow_ t.info aElemTy (ityarrow_ t.info bElemTy outElemTy));
     TmMap2 {{{{t with f = f}
                  with as = as}
@@ -165,8 +165,8 @@ lang PMExprAst =
     let ne = typeCheckExpr env t.ne in
     let as = typeCheckExpr env t.as in
     let accType = tyTm ne in
-    unify t.info env (tyTm as) (ityseq_ t.info accType);
-    unify t.info env (tyTm f)
+    unify [infoTm as, t.info] env (tyTm as) (ityseq_ t.info accType);
+    unify [infoTm f, t.info] env (tyTm f)
       (ityarrow_ t.info accType (ityarrow_ t.info accType accType));
     TmParallelReduce {{{{t with f = f}
                            with ne = ne}
@@ -176,8 +176,8 @@ lang PMExprAst =
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
     let unitType = tyWithInfo t.info tyunit_ in
-    unify t.info env (tyTm n) (tyWithInfo t.info tyint_);
-    unify t.info env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
+    unify [infoTm n, t.info] env (tyTm n) (tyWithInfo t.info tyint_);
+    unify [infoTm f, t.info] env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
     TmLoop {{{t with n = n}
                 with f = f}
                 with ty = unitType}
@@ -185,8 +185,8 @@ lang PMExprAst =
     let ne = typeCheckExpr env t.ne in
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
-    unify t.info env (tyTm n) (tyWithInfo t.info tyint_);
-    unify t.info env (tyTm f) (ityarrow_ t.info (tyTm ne)
+    unify [infoTm n, t.info] env (tyTm n) (tyWithInfo t.info tyint_);
+    unify [infoTm f, t.info] env (tyTm f) (ityarrow_ t.info (tyTm ne)
                                          (ityarrow_ t.info (tyTm n) (tyTm ne)));
     TmLoopAcc {{{{t with ne = ne}
                     with n = n}
@@ -196,15 +196,15 @@ lang PMExprAst =
     let n = typeCheckExpr env t.n in
     let f = typeCheckExpr env t.f in
     let unitType = tyWithInfo t.info tyunit_ in
-    unify t.info env (tyTm n) (tyWithInfo t.info tyint_);
-    unify t.info env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
+    unify [infoTm n, t.info] env (tyTm n) (tyWithInfo t.info tyint_);
+    unify [infoTm f, t.info] env (tyTm f) (ityarrow_ t.info (tyTm n) unitType);
     TmParallelLoop {{{t with n = n}
                         with f = f}
                         with ty = unitType}
   | TmPrintFloat t ->
     let e = typeCheckExpr env t.e in
     let unitType = tyWithInfo t.info tyunit_ in
-    unify t.info env (tyTm e) (tyWithInfo t.info tyfloat_);
+    unify [infoTm e, t.info] env (tyTm e) (tyWithInfo t.info tyfloat_);
     TmPrintFloat {{t with e = e} with ty = unitType}
   | TmParallelSizeCoercion t ->
     let e = typeCheckExpr env t.e in

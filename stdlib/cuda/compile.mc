@@ -33,10 +33,10 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
   | t & (TmApp _) ->
     match collectAppArguments t with (_, args) in
     map (lam arg. compileType env (tyTm arg)) args
-  | t -> infoErrorExit (infoTm t) "Unsupported function type"
+  | t -> errorSingle [infoTm t] "Unsupported function type"
 
   sem compileExpr (env : CompileCEnv) =
-  | TmSeqMap t -> infoErrorExit t.info "Maps are not supported"
+  | TmSeqMap t -> errorSingle [t.info] "Maps are not supported"
   | TmSeqFoldl t ->
     let argTypes = _getFunctionArgTypes env t.f in
     CESeqFoldl {
@@ -59,8 +59,8 @@ lang CudaCompile = MExprCCompileAlloc + CudaPMExprAst + CudaAst
     CETensorSubExn {
       t = compileExpr env t.t, ofs = compileExpr env t.ofs,
       len = compileExpr env t.len, ty = compileType env t.ty}
-  | TmMapKernel t -> infoErrorExit t.info "Maps are not supported"
-  | TmReduceKernel t -> infoErrorExit t.info "not implemented yet"
+  | TmMapKernel t -> errorSingle [t.info] "Maps are not supported"
+  | TmReduceKernel t -> errorSingle [t.info] "not implemented yet"
   | TmLoop t | TmParallelLoop t ->
     -- NOTE(larshum, 2022-03-08): Parallel loops that were not promoted to a
     -- kernel are compiled to sequential loops.

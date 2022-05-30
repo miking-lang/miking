@@ -13,7 +13,7 @@ include "pmexpr/extract.mc"
 lang PMExprNestedAccelerate = PMExprAst
   sem _reportNestedAccelerateError =
   | info /- : Info -/ ->
-    infoErrorExit info "Nested accelerate terms are not supported"
+    errorSingle [info] "Nested accelerate terms are not supported"
 
   sem containsMarkedTerm (marked : Set Name) (flag : Bool) =
   | TmVar t -> if flag then flag else setMem t.ident marked

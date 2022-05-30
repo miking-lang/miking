@@ -233,7 +233,7 @@ let collectKnownProgramTypes = use MExprAst in
     let msg = join [
       "Expected constructor of arrow type, got ", tyIdentStr
     ] in
-    infoErrorExit info msg
+    errorSingle [info] msg
   in
   recursive let collectTypes : UtestTypeEnv -> Expr -> UtestTypeEnv =
     lam acc : UtestTypeEnv. lam expr.
@@ -257,7 +257,7 @@ let collectKnownProgramTypes = use MExprAst in
                 "Constructor definition refers to undefined type ",
                 nameGetStr ident
               ] in
-              infoErrorExit (infoTm expr) msg
+              errorSingle [infoTm expr] msg
           in
           let variants = mapInsert ident constructors acc.variants in
           let acc = collectType acc argTy in
@@ -278,7 +278,7 @@ let collectKnownProgramTypes = use MExprAst in
             let msg = join [
               "Arguments of equality function must be properly annotated"
             ] in
-            infoErrorExit (infoTm t) msg
+            errorSingle [infoTm t] msg
         else acc
       in
       let acc = collectTypes acc t.test in
@@ -515,7 +515,7 @@ let getTypeFunctions =
   lam env : UtestTypeEnv. lam ty.
   let reportError = lam msg : String -> String.
     match getTypeStringCode 0 pprintEnvEmpty ty with (_, tyStr) then
-      infoErrorExit (infoTy ty) (msg tyStr)
+      errorSingle [infoTy ty] (msg tyStr)
     else never
   in
   match ty with TyInt _ then
@@ -611,7 +611,7 @@ lang UtestViaMatch = Ast + PrettyPrint
       let msg = join [
         "Utest needs a custom equality function to be provided, or for the expected value to be a literal. ",
         "No default equality implemented for type ", pprintTy ty, "."
-      ] in infoErrorExit (infoTm t) msg
+      ] in errorSingle [infoTm t] msg
 end
 
 lang UtestViaMatchInt = UtestViaMatch + IntAst
@@ -725,7 +725,7 @@ let _generateUtest = use MExprTypeAnnot in
             "Utest needs a custom equality function to be provided. ",
             "No default equality implemented for type ", pprintTy eTy, "."
           ] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       in
       utestRunnerCall utestInfo usingStr pprintFunc pprintFunc eqFunc t.test
                       t.expected

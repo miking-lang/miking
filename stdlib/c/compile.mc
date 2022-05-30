@@ -45,7 +45,7 @@ recursive let _unwrapType = use ConTypeAst in
     match ty with TyCon { ident = ident } then
       match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
         _unwrapType tyEnv ty
-      else infoErrorExit (infoTy ty) "TyCon not defined in environment"
+      else errorSingle [infoTy ty] "TyCon not defined in environment"
     else ty
 end
 
@@ -59,7 +59,7 @@ let _lookupTypeName = use MExprAst in
     match ty with TyCon {ident = ident} then ident
     else match assocSeqReverseLookup {eq = eqType} ty tyEnv with Some id then
       id
-    else infoErrorExit (infoTy ty) "Type not found in type environment"
+    else errorSingle [infoTy ty] "Type not found in type environment"
   in
   work (None ()) ty
 
@@ -486,7 +486,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
       let acc = mapInsert t.ident e acc in
       sfold_Expr_Expr collectExternals acc t.inexpr
-    else infoErrorExit (t.info) "Unsupported external"
+    else errorSingle [t.info] "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
 
   -------------
@@ -617,31 +617,31 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- Non-pointer types
     else CTyVar { id = ident }
 
-  | TyUnknown _ & ty -> infoErrorExit (infoTy ty) "Unknown type in compileType"
+  | TyUnknown _ & ty -> errorSingle [infoTy ty] "Unknown type in compileType"
 
   | TyRecord { fields = fields } & ty ->
     if mapIsEmpty fields then CTyVoid {}
     else
-      infoErrorExit (infoTy ty)
+      errorSingle [infoTy ty]
         "TyRecord should not occur in compileType. Did you run type lift?"
 
   | TyVariant _ & ty ->
-    infoErrorExit (infoTy ty)
+    errorSingle [infoTy ty]
       "TyVariant should not occur in compileType. Did you run type lift?"
 
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
 
   | TySeq _ & ty ->
-    infoErrorExit (infoTy ty)
+    errorSingle [infoTy ty]
       "TySeq should not occur in compileType. Did you run type lift?"
 
   | TyTensor _ & ty ->
-    infoErrorExit (infoTy ty)
+    errorSingle [infoTy ty]
       "TyTensor should not occur in compileType. Did you run type lift?"
 
-  | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
+  | TyApp _ & ty -> errorSingle [infoTy ty] "Type not currently supported"
   | TyArrow _ & ty ->
-    infoErrorExit (infoTy ty) "TyArrow currently not supported"
+    errorSingle [infoTy ty] "TyArrow currently not supported"
     -- recursive let params = lam acc. lam ty.
     --   match ty with TyArrow { from = from, to = to } then
     --     params (snoc acc from) to
@@ -655,7 +655,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     --   else never
     -- else never
 
-  | ty -> infoErrorExit (infoTy ty) "Unsupported type in compileType"
+  | ty -> errorSingle [infoTy ty] "Unsupported type in compileType"
 
 
   -----------------------
@@ -674,7 +674,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           match ty with TyArrow { from = fromTy } then
             if _isUnitTy fromTy then detachParams acc rest
             else detachParams (snoc acc ident) rest
-          else infoErrorExit (infoTy ty) "Incorrect type in compileFun"
+          else errorSingle [infoTy ty] "Incorrect type in compileFun"
         else (acc, rest)
     in
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
@@ -687,7 +687,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     match detachParams [] fun with (params, body) then
       match funTypes [] ty with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
-          infoErrorExit (infoTy ty) "Number of parameters in compileFun does not match."
+          errorSingle [infoTy ty] "Number of parameters in compileFun does not match."
         else
           match map (compileType env) paramTypes with paramTypes then
             let params = zipWith (lam t. lam id. (t, id)) paramTypes params in
@@ -705,7 +705,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       else never
     else never
 
-  | t -> infoErrorExit (infoTm t) "Non-lambda supplied to compileFun"
+  | t -> errorSingle [infoTm t] "Non-lambda supplied to compileFun"
 
 
   -----------------
@@ -734,13 +734,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     (env, def, init, n)
 
   | TmRecord _ & t ->
-    infoErrorExit (infoTm t)
+    errorSingle [infoTm t]
       "Unhandled case for TmRecord in compileAlloc (should be impossible)."
   | TmRecord { ty = TyRecord _, bindings = bindings } & t ->
     -- If the type is TyRecord, it follows from type lifting that this must be
     -- an empty record.
     -- TODO(dlunde,2021-10-07): Handle this how?
-    infoErrorExit (infoTm t) "Empty bindings in TmRecord in compileAlloc"
+    errorSingle [infoTm t] "Empty bindings in TmRecord in compileAlloc"
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
     let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
@@ -793,7 +793,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           }] in
         (env, def, [], n)
       else
-        infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+        errorSingle [infoTm t] "Non-literal strings currently unsupported."
         -- let iTy = CTyArray {
         --   ty = compileType env iTy,
         --   size = Some (CEInt { i = addi 1 len })
@@ -838,7 +838,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       (env, def, concat init initSeq, n)
 
 
-    else infoErrorExit (infoTm t) "TmSeq type inconsistency"
+    else errorSingle [infoTm t] "TmSeq type inconsistency"
 
 
   ---------------
@@ -945,11 +945,11 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
                     CEArrow { lhs = target, id = nameNoSym label }
                   else
                     CEMember { lhs = target, id = nameNoSym label }
-                else infoErrorExit (infoPat pat) "Impossible scenario"
+                else errorSingle [infoPat pat] "Impossible scenario"
               in
               compilePat env conds defs expr fTy subpat
-            else infoErrorExit (infoPat pat) "Label does not match between PatRecord and TyRecord"
-          else infoErrorExit (infoPat pat) "Type not TyCon for PatRecord in compilePat"
+            else errorSingle [infoPat pat] "Label does not match between PatRecord and TyRecord"
+          else errorSingle [infoPat pat] "Type not TyCon for PatRecord in compilePat"
         else never
       in
       mapFoldWithKey f (conds, defs) bindings
@@ -967,10 +967,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           let expr = CEArrow { lhs = target, id = ident } in
           compilePat env (snoc conds cond)
             defs expr ty subpat
-        else infoErrorExit (infoPat pat) "Invalid constructor in compilePat"
-      else infoErrorExit (infoPat pat) "Not a TyVariant for PatCon in compilePat"
+        else errorSingle [infoPat pat] "Invalid constructor in compilePat"
+      else errorSingle [infoPat pat] "Not a TyVariant for PatCon in compilePat"
     else never
-  | pat -> infoErrorExit (infoPat pat) "Pattern not supported"
+  | pat -> errorSingle [infoPat pat] "Pattern not supported"
 
 
   ----------------
@@ -1024,9 +1024,9 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         ])
       else never
     else match res with RReturn _ then
-      infoErrorExit (infoTm t) "Returning TmSeq is not allowed"
+      errorSingle [infoTm t] "Returning TmSeq is not allowed"
     else
-      infoErrorExit (infoTm t) "Type error, should have been caught previously"
+      errorSingle [infoTm t] "Type error, should have been caught previously"
 
   -- TODO(dlunde,2021-10-07): Lots of code duplication here ...
   | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
@@ -1041,15 +1041,15 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         ])
       else never
     else match res with RReturn _ then
-      infoErrorExit (infoTm t) "Returning TmConApp is not allowed"
+      errorSingle [infoTm t] "Returning TmConApp is not allowed"
     else
-      infoErrorExit (infoTm t) "Type error, should have been caught previously"
+      errorSingle [infoTm t] "Type error, should have been caught previously"
 
   -- TODO(dlunde,2021-10-07): ... and here
   | TmRecord { ty = ty, bindings = bindings } & t ->
     if mapIsEmpty bindings then
       match res with RNone _ | RReturn _ then (env, [CSNop {}])
-      else infoErrorExit (infoTm t) "Binding of unit type is not allowed"
+      else errorSingle [infoTm t] "Binding of unit type is not allowed"
     else
       match res with RIdent id then
         match compileAlloc env (None ()) t with (env, def, init, n) in
@@ -1062,7 +1062,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         ])
       else match res with RReturn _ then
         if isPtrType env.ptrTypes ty then
-          infoErrorExit (infoTm t) "Returning TmRecord containing pointers is not allowed"
+          errorSingle [infoTm t] "Returning TmRecord containing pointers is not allowed"
         else
           match compileAlloc env (None ()) t with (env, def, init, n) in
           let env : CompileCEnv = env in
@@ -1072,9 +1072,9 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
             init,
             [CSRet {val = Some (CEVar {id = n})}]])
       else
-        infoErrorExit (infoTm t) "Type error, should have been caught previously"
+        errorSingle [infoTm t] "Type error, should have been caught previously"
 
-  | TmRecordUpdate _ & t -> infoErrorExit (infoTm t) "TODO: TmRecordUpdate"
+  | TmRecordUpdate _ & t -> errorSingle [infoTm t] "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
   | expr ->
@@ -1092,7 +1092,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       if _isUnitTy (tyTm expr) then
         match expr with TmVar _ then (env, [])
         else (env, [CSExpr { expr = compileExpr env expr }])
-      else infoErrorExit (infoTm expr)
+      else errorSingle [infoTm expr]
         "Type error, should have been caught previously"
 
     else match res with RIdent id then
@@ -1225,14 +1225,14 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   -- code, we do not use 'exit' as that is only available from CPU code.
   | CError _ -> CEApp {fun = _printf, args = [CEString {s = "%s\n"}, head args]}
 
-  | c -> infoErrorExit info "Unsupported intrinsic in compileOp"
+  | c -> errorSingle [info] "Unsupported intrinsic in compileOp"
 
 
   sem compileExpr (env: CompileCEnv) =
 
   | TmVar { ty = ty, ident = ident } & t->
     if _isUnitTy ty then
-      infoErrorExit (infoTm t) "Unit type var in compileExpr"
+      errorSingle [infoTm t] "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
       let ext : ExtInfo = ext in
       CEVar { id = nameNoSym ext.ident }
@@ -1261,23 +1261,23 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         let args = map (compileExpr env) args in
         compileOp env (infoTm fun) args val
 
-      else infoErrorExit (infoTm app) "Unsupported application in compileExpr"
+      else errorSingle [infoTm app] "Unsupported application in compileExpr"
     else never
 
   -- Anonymous function, not allowed.
-  | (TmLam _) & t -> infoErrorExit (infoTm t) "Anonymous function in compileExpr."
+  | (TmLam _) & t -> errorSingle [infoTm t] "Anonymous function in compileExpr."
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } & t ->
     if mapIsEmpty bindings then CEInt { i = 0 }
-    else infoErrorExit (infoTm t) "ERROR: Records cannot be handled in compileExpr."
+    else errorSingle [infoTm t] "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF and type lifting.
   | (TmRecordUpdate _ | TmLet _
     | TmRecLets _ | TmType _ | TmConDef _
     | TmConApp _ | TmMatch _ | TmUtest _
     | TmSeq _ | TmExt _) & t ->
-    infoErrorExit (infoTm t) "ERROR: Term cannot be handled in compileExpr."
+    errorSingle [infoTm t] "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
   | TmConst { val = val } & t ->
@@ -1287,10 +1287,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     else match val with CBool  { val = val } then
       let val = match val with true then 1 else 0 in
       CEInt { i = val }
-    else infoErrorExit (infoTm t) "Unsupported literal"
+    else errorSingle [infoTm t] "Unsupported literal"
 
   -- Should not occur
-  | (TmNever _) & t -> infoErrorExit (infoTm t) "Never term found in compileExpr"
+  | (TmNever _) & t -> errorSingle [infoTm t] "Never term found in compileExpr"
 
 end
 

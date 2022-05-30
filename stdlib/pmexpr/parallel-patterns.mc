@@ -375,8 +375,8 @@ let reducePattern : () -> Pattern =
       match tyTm f with TyArrow {from = tya, to = TyArrow {from = tyb, to = tyc}} then
         if eqType tya tyc then
           (tya, tyb)
-        else infoErrorExit info errMsg
-      else infoErrorExit info errMsg
+        else errorSingle [info] errMsg
+      else errorSingle [info] errMsg
     in
     let seqReduce = lam f. lam acc. lam s.
       match getReduceFunctionTypes f with (accType, seqElemType) in

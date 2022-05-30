@@ -132,7 +132,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
           map (lam l. (cur,l,gensym ())) (setToSeq avLamsLhs)
         else []
       in concat res acc
-    else infoErrorExit (infoTm t.lhs) "Not a TmVar in application"
+    else errorSingle [infoTm t.lhs] "Not a TmVar in application"
 
   | t ->
     sfold_Expr_Expr (_callGraphEdges data avLams cur) acc t
@@ -265,7 +265,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
             ) [] avLamsLhs
           in reachable
         else []
-      else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
+      else errorSingle [infoTm app.lhs] "Not a TmVar in application"
     in
     let resLet = optionGetOr [] (mapLookup t.ident dataEholes) in
     let resInexpr = sfold_Expr_Expr

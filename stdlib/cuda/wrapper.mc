@@ -97,8 +97,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
         CTyPtr {ty = CTyVar {id = id}}
       else CTyVar {id = id}
     else
-      infoErrorExit
-        (infoTy ty)
+      errorSingle [infoTy ty]
         "Reverse type lookup failed when generating CUDA wrapper code"
   | ty & (TySeq _ | TyTensor _ | TyVariant _) ->
     match env with CudaTargetEnv cenv in
@@ -107,8 +106,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
         CTyPtr {ty = CTyVar {id = id}}
       else CTyVar {id = id}
     else
-      infoErrorExit
-        (infoTy ty)
+      errorSingle [infoTy ty]
         "Reverse type lookup failed when generating CUDA wrapper code"
   | ty ->
     match env with CudaTargetEnv cenv in
@@ -118,8 +116,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   | TyFloat _ -> CTyDouble ()
   | TyInt _ -> CTyInt64 ()
   | ty ->
-      infoErrorExit
-        (infoTy ty)
+      errorSingle [infoTy ty]
         "Type is not supported for CUDA tensors yet"
 
   sem _generateCDataRepresentation (env : CWrapperEnv) =
@@ -149,7 +146,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
           match mapLookup label t.fields with Some ty then
             let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
             _generateCudaDataRepresentation env ty
-          else infoErrorExit t.info "Inconsistent labels in record type")
+          else errorSingle [t.info] "Inconsistent labels in record type")
         labels in
     CudaRecordRepr {
       ident = nameSym "cuda_rec_tmp", labels = labels, fields = fields,
@@ -169,7 +166,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   | ty & (TyCon _) ->
     match env.targetEnv with CudaTargetEnv cenv in
     let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
-    match ty with TyCon _ then infoErrorExit (infoTy ty) "Could not unwrap type"
+    match ty with TyCon _ then errorSingle [infoTy ty] "Could not unwrap type"
     else  _generateCudaDataRepresentation env ty
   | ty ->
     CudaBaseTypeRepr {

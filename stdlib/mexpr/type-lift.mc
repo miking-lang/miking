@@ -75,7 +75,7 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
         match mapLookup ident env.variants with Some constrs then
           TyVariant {constrs = constrs, info = info/-infoTy ty-/}
         else
-          infoErrorExit info (join ["No variant type ", nameGetStr ident,
+          errorSingle [info] (join ["No variant type ", nameGetStr ident,
                                     " found in environment"])
       else ty
     in
@@ -233,7 +233,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in
             let err = lam.
-              infoErrorExit t.info (join ["Constructor ", nameGetStr t.ident,
+              errorSingle [t.info] (join ["Constructor ", nameGetStr t.ident,
                                           " defined before referenced variant type ",
                                           nameGetStr ident])
             in

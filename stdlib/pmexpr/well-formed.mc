@@ -129,7 +129,7 @@ lang PMExprWellFormed = WellFormed + PMExprAst
       let accTy = tyTm t.ne in
       let elemTy =
         match tyTm t.as with TySeq {ty = ty} then ty
-        else infoErrorExit (infoTm t.as) "Invalid type of sequence argument" in
+        else errorSingle [infoTm t.as] "Invalid type of sequence argument" in
       if eqType accTy elemTy then acc
       else cons (PMExprParallelReduceType t.info) acc
   | t ->
