@@ -6,8 +6,6 @@ let _pathSep = "/"
 let _tempBase = "/tmp"
 let _null = "/dev/null"
 
-let _tempIdx = ref 0
-
 let _commandListTime : [String] -> (Float, Int) = lam cmd.
   let cmd = strJoin " " cmd in
   let t1 = wallTimeMs () in
