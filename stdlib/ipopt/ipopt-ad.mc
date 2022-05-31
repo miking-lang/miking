@@ -11,10 +11,10 @@ type Vector a = Tensor[a]
 
 type IpoptAdCreateNLPArg = {
   -- Objective function f(x).
-  f : Vector Dualnum -> Dualnum,
+  f : Vector DualNum -> DualNum,
 
   -- Constraint functions g_i(x).
-  g : Vector Dualnum -> Vector Dualnum -> (),
+  g : Vector DualNum -> Vector DualNum -> (),
 
   -- Lower bounds on the variables xL_k.
   lb : Vector Float,

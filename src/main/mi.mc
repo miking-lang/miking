@@ -62,7 +62,7 @@ in
 -- configuration for parsing options for the sub command.
 type SubConfig = {
   name : String,
-  cmd : [String] -> Options -> [String] -> Unit,
+  cmd : [String] -> Options -> [String] -> (),
   config : ParseConfig Options
 } in
 

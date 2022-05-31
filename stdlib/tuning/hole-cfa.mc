@@ -386,7 +386,7 @@ let debug = false in
 let parse = lam str.
   let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
-  symbolize ast
+  symbolizeExpr {symEnvEmpty with strictTypeVars = false} ast
 in
 let test: Bool -> Expr -> [String] -> [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
   lam debug: Bool. lam t: Expr. lam vars: [String].

@@ -1,3 +1,5 @@
+include "mexpr/info.mc"
+include "name.mc"
 
 --------------------------------------
 -- JavaScript TYPES AND EXPRESSIONS --

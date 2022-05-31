@@ -31,10 +31,9 @@ let z = 8 in
 let m = lam x. lam y. muli x y in
 utest if eqi (m 2 3) 6 then addi z 2 else 0 with 10 in
 
--- Sequence operator "t1 ; t2", which syntactic sugar for let _ = t2 in t2
+-- Sequence operator "t1 ; t2", which syntactic sugar for let #var"" = t1 in t2
 let foo = lam x.
-  dprint ["Value x", x];
-  dprint x;
+  dprint "Value x "; dprint x;
   addi x 2 in
 
 -- factorial function

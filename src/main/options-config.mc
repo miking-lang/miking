@@ -81,10 +81,6 @@ let optionsConfig : ParseConfig Options = [
     "Disable dead code elimination pass",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with keepDeadCode = true}),
-  ([("--typecheck", "", "")],
-    "Type check the program before evaluation or compilation",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with typeCheck = true}),
   ([("--to-js", "", "")],
     "Compile to JavaScript",
     lam p: ArgPart Options.

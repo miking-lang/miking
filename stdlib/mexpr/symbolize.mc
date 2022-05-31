@@ -43,7 +43,7 @@ let symEnvEmpty = {
   ),
 
   currentLvl = 1,
-  strictTypeVars = false,
+  strictTypeVars = true,
   allowFree = false
 }
 

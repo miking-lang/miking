@@ -24,7 +24,6 @@ let optionsDefault : Options = {
   use32BitIntegers = false,
   use32BitFloats = false,
   keepDeadCode = false,
-  typeCheck = false,
   printHelp = false,
   toJavaScript = false, -- Compile MExpr to JavaScript
   output = None (),

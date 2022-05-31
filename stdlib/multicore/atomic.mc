@@ -1,32 +1,34 @@
 
 -- Atomic references.
 
+type ARef a
+
 -- 'atomicMake v' creates a new atomic reference with initial value v
-external externalAtomicMake ! : a -> Aref
+external externalAtomicMake ! : all a. a -> ARef a
 let atomicMake = lam v.
   externalAtomicMake v
 
 -- 'atomicGet r' returns the current value of the atomic reference 'r'.
-external externalAtomicGet ! : Aref -> a
+external externalAtomicGet ! : all a. ARef a -> a
 let atomicGet = lam v.
   externalAtomicGet v
 
 -- 'atomicExchange r v' sets the value of the atomic reference 'r' to 'v' and
 -- returns the current (old) value.
-external externalAtomicExchange ! : Aref -> a -> a
+external externalAtomicExchange ! : all a. ARef a -> a -> a
 let atomicExchange = lam r. lam v.
   externalAtomicExchange r v
 
 -- 'atomicCAS r seen v' sets the value of the atomic reference 'r' to 'v' iff
 -- the current value is physically equal to 'seen'. Returns 'true' if the update
 -- was successful, otherwise 'false'.
-external externalAtomicCAS ! : Aref -> a -> a -> Bool
+external externalAtomicCAS ! : all a. ARef a -> a -> a -> Bool
 let atomicCAS = lam r. lam v1. lam v2.
   externalAtomicCAS r v1 v2
 
 -- 'atomicFetchAndAdd r v' adds 'v' to the current value of the atomic reference
 -- 'r' and returns the current (old) value.
-external externalAtomicFetchAndAdd ! : Aref -> Int -> Int
+external externalAtomicFetchAndAdd ! : ARef Int -> Int -> Int
 let atomicFetchAndAdd = lam a. lam v.
   externalAtomicFetchAndAdd a v
 
@@ -34,15 +36,15 @@ let atomicFetchAndAdd = lam a. lam v.
 -- Auxiliary (non-external) functions follow below
 
 -- 'atomicSet r v' sets the value of the atomic reference 'r' to 'v'.
-let atomicSet : ARef a -> a -> Unit = lam r. lam v.
+let atomicSet : all a. ARef a -> a -> () = lam r. lam v.
   atomicExchange r v; ()
 
 -- 'atomicIncr r' increments the value of the atomic reference 'r' by 1.
-let atomicIncr : ARef -> Unit = lam r.
+let atomicIncr : ARef Int -> () = lam r.
   atomicFetchAndAdd r 1; ()
 
 -- 'atomicDecr r' decrements the value of the atomic reference 'r' by 1.
-let atomicDecr : ARef -> Unit = lam r.
+let atomicDecr : ARef Int -> () = lam r.
   atomicFetchAndAdd r (subi 0 1); ()
 
 mexpr
