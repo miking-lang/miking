@@ -59,8 +59,8 @@ let sysTempMake = lam dir: Bool. lam prefix: String. lam.
 let sysTempDirMakePrefix: String -> () -> String = sysTempMake true
 let sysTempFileMakePrefix: String -> () -> String = sysTempMake false
 
-let sysTempDirMake: () -> String = sysTempDirMakePrefix "tmp."
-let sysTempFileMake: () -> String = sysTempFileMakePrefix "tmp."
+let sysTempDirMake: () -> String = sysTempDirMakePrefix "miking-tmp."
+let sysTempFileMake: () -> String = sysTempFileMakePrefix "miking-tmp."
 
 let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam. sysDeleteDir td
