@@ -164,3 +164,12 @@ utest isLowerAlphaOrUnderscore 'A' with false
 utest isLowerAlphaOrUnderscore '{' with false
 utest isLowerAlphaOrUnderscore '_' with true
 utest isLowerAlphaOrUnderscore '\n' with false
+
+-- Generates a random ASCII letter or digit character.
+let randAlphanum : () -> Char = lam.
+  -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
+  -- (lower- and upper-case) is 10 + 26 + 26 = 62.
+  let r = randIntU 0 62 in
+  if lti r 10 then int2char (addi r 48)
+  else if lti r 36 then int2char (addi r 55)
+  else int2char (addi r 61)

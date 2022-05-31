@@ -15,15 +15,6 @@ include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
--- Generates a random ASCII letter or digit character.
-let _randAlphanum : () -> Char = lam.
-  -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
-  -- (lower- and upper-case) is 10 + 26 + 26 = 62.
-  let r = randIntU 0 62 in
-  if lti r 10 then int2char (addi r 48)
-  else if lti r 36 then int2char (addi r 55)
-  else int2char (addi r 61)
-
 lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   syn CopyStatus =
   | CopyBoth ()
@@ -68,7 +59,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     recursive let genstr = lam acc. lam n.
       if eqi n 0 then acc
       else
-        let nextchr = _randAlphanum () in
+        let nextchr = randAlphanum () in
         genstr (snoc acc nextchr) (subi n 1)
     in
     -- NOTE(larshum, 2021-09-15): Start the string with a hard-coded alphabetic
