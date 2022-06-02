@@ -174,7 +174,7 @@ For instance,
 print "Hello\n"
 ```
 
-uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type.
+uses the built-in function `print` which has the type `String -> ()`, i.e., it prints a string and returns the unit type.
 
 The current documentation of intrinsics is implicit via code
 containing `utest` expressions. Please see the following files:
@@ -1081,7 +1081,7 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | Float           | float       |
 | [Char] (String) | str         |
 | [a]             | List        |
-| Unit            | None        |
+| ()              | None        |
 | Record          | Dict        |
 | Tuple (Record)  | Tuple       |
 | other           | N/A         |
@@ -1096,7 +1096,7 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | float       | Float           |
 | str         | [Char] (String) |
 | List        | [a]             |
-| None        | Unit            |
+| None        | ()              |
 | Dict        | Record          |
 | Tuple       | Tuple (Record)  |
 | other       | N/A             |
@@ -1458,7 +1458,7 @@ let threads = create 10 (lam. threadSpawn (lam.
 map threadJoin threads
 ```
 
-where `threadSpawn` takes a function of type `Unit -> a` as argument
+where `threadSpawn` takes a function of type `() -> a` as argument
 and `threadSelf` returns the ID of the current thread. Note that
 `threadJoin` must be called once for each call to `threadSpawn`. The
 output of the above program might be:

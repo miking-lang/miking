@@ -6,8 +6,6 @@ let _pathSep = "/"
 let _tempBase = "/tmp"
 let _null = "/dev/null"
 
-let _tempIdx = ref 0
-
 let _commandListTime : [String] -> (Float, Int) = lam cmd.
   let cmd = strJoin " " cmd in
   let t1 = wallTimeMs () in
@@ -24,6 +22,9 @@ let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. la
        , ["\'}"]
        ]
 
+let sysFileExists: String -> Bool = lam file.
+  if eqi (_commandList ["test", "-e", file]) 0 then true else false
+
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
@@ -39,7 +40,7 @@ let sysChmodWriteAccessFile = lam file.
 let sysJoinPath = lam p1. lam p2.
   strJoin _pathSep [p1, p2]
 
-let sysTempMake = lam dir: Bool. lam.
+let sysTempMake = lam dir: Bool. lam prefix: String. lam.
   recursive let mk = lam base. lam i.
     let name = concat base (int2string i) in
     match
@@ -48,18 +49,28 @@ let sysTempMake = lam dir: Bool. lam.
         sysJoinPath _tempBase name, "2>", _null
       ]
     with 0
-    then (addi i 1, name)
+    then name
     else mk base (addi i 1) in
-  match mk "tmp" (deref _tempIdx) with (i, name) then
-    modref _tempIdx i;
-    sysJoinPath _tempBase name
-  else never
+  let alphanumStr = create 10 (lam. randAlphanum ()) in
+  let base = concat prefix alphanumStr in
+  let name = mk base 0 in
+  sysJoinPath _tempBase name
 
-let sysTempDirMake = sysTempMake true
-let sysTempFileMake = sysTempMake false
+let sysTempDirMakePrefix: String -> () -> String = sysTempMake true
+let sysTempFileMakePrefix: String -> () -> String = sysTempMake false
+
+let sysTempDirMake: () -> String = sysTempDirMakePrefix "miking-tmp."
+let sysTempFileMake: () -> String = sysTempFileMakePrefix "miking-tmp."
 
 let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam. sysDeleteDir td
+
+utest
+  let d = sysTempDirMake () in
+  let exists = sysFileExists (sysTempDirName d) in
+  sysTempDirDelete d ();
+  [exists, sysFileExists (sysTempDirName d)]
+with [true, false]
 
 let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
   lam timeoutSec. lam cmd. lam stdin. lam cwd.
@@ -104,5 +115,12 @@ let sysRunCommand : [String] -> String -> String -> ExecResult =
 
 let sysCommandExists : String -> Bool = lam cmd.
   eqi 0 (command (join ["which ", cmd, " >/dev/null 2>&1"]))
+
+let sysGetCwd : () -> String = lam. strTrim (sysRunCommand ["pwd"] "" ".").stdout
+
+let sysGetEnv : String -> Option String = lam env.
+  let res = strTrim (sysRunCommand ["echo", concat "$" env] "" ".").stdout in
+  if null res then None ()
+  else Some res
 
 utest sysCommandExists "ls" with true

@@ -27,24 +27,19 @@ python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
 
-# Programs that should pass the type checker. The goal is to make this list
-# contain all programs, at which point it can be removed and the type checker
-# can be enabled by default.
-typecheck_files += test/mlang/type-alias.mc
-typecheck_files += $(wildcard stdlib/*.mc)
-typecheck_files += $(wildcard stdlib/mexpr/*.mc)
-typecheck_files += $(wildcard stdlib/ocaml/*.mc)
-typecheck_files += $(wildcard stdlib/c/*.mc)
-typecheck_files += $(wildcard stdlib/tuning/*.mc)
-typecheck_files += stdlib/parser/lexer.mc
-typecheck_files += stdlib/parser/breakable.mc
-typecheck_files += stdlib/ext/ext-test.mc
+# Programs that we currently cannot typecheck. These are programs written
+# before the typechecker was implemented. It is forbidden to add to this list of
+# programs but removing from it is very welcome.
+typecheck_files_exclude += stdlib/parser/breakable-helper.mc
+typecheck_files_exclude += test/mexpr/nestedpatterns.mc
+typecheck_files_exclude += test/mlang/nestedpatterns.mc
+typecheck_files_exclude += test/mlang/mlang.mc
+typecheck_files_exclude += test/mlang/catchall.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
-compile_files_exclude += stdlib/json.mc
 compile_files_exclude += stdlib/parser-combinators.mc
 compile_files_exclude += stdlib/regex.mc
 compile_files_exclude += test/mexpr/nestedpatterns.mc
@@ -62,24 +57,21 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
-# Programs that should be compiled with type-checking enabled. These are
-# excluded from the default compile rules, so that we don't test them twice.
-compile_files_typecheck =\
-	$(filter-out $(compile_files_exclude), $(typecheck_files))
-
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
 	$(filter-out $(python_files) $(compile_files_exclude), $(src_files_all))
 
 # Programs that we should be able to compile/test, even without utest pruning,
-# if all, except the special, external dependencies are met. Excludes files
-# that are to be compiled with type checking enabled.
+# if all, except the special, external dependencies are met.
 compile_files =\
-	$(filter-out $(special_dependencies_files) $(compile_files_typecheck), $(compile_files_prune))
+	$(filter-out $(special_dependencies_files) $(typecheck_files_exclude),\
+		$(compile_files_prune))
 
 
 # Programs the we should be able to interpret/test with the interpreter.
-run_files = $(filter-out $(python_files) $(run_files_exclude), $(src_files_all))
+run_files =\
+	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude),\
+		$(src_files_all))
 
 
 # Programs that we should be able to interpret/test with boot.

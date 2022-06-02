@@ -23,6 +23,16 @@ utest cmpfApprox 0.1 0. 0.1 with 0
 utest cmpfApprox 0. 0.1 0.2 with subi 0 1
 utest cmpfApprox 0.1 0.4 0.2 with 1
 
+-- Inefficient version of logFactorial
+let logFactorial : Int -> Float = lam n.
+  recursive let work = lam acc. lam n.
+    if gti n 0 then work (addf (log (int2float n)) acc) (subi n 1)
+    else acc
+  in work 0.0 n
+
+utest roundfi (exp (logFactorial 3)) with 6
+utest roundfi (exp (logFactorial 4)) with 24
+
 -- Int stuff
 let maxi = lam r. lam l. if gti r l then r else l
 let mini = lam r. lam l. if lti r l then r else l

@@ -84,7 +84,7 @@ let callStack : [StackEntry] =
 ",
 functionProfileData,
 "
-let addExclusiveTime : Float -> StackEntry -> Unit =
+let addExclusiveTime : Float -> StackEntry -> () =
   lam t. lam entry.
   let dataRef = get functionProfileData entry.functionIndex in
   let data : ProfileData = deref dataRef in
@@ -92,7 +92,7 @@ let addExclusiveTime : Float -> StackEntry -> Unit =
   modref dataRef {data with exclusiveTime = addf data.exclusiveTime addedTime}
 in
 
-let addInclusiveTime : Float -> StackEntry -> Unit =
+let addInclusiveTime : Float -> StackEntry -> () =
   lam t. lam entry.
   let dataRef = get functionProfileData entry.functionIndex in
   let data : ProfileData = deref dataRef in
@@ -100,13 +100,13 @@ let addInclusiveTime : Float -> StackEntry -> Unit =
   modref dataRef {data with inclusiveTime = addf data.inclusiveTime addedTime}
 in
 
-let incrementCallCount : Int -> Unit = lam index.
+let incrementCallCount : Int -> () = lam index.
   let dataRef = get functionProfileData index in
   let data : ProfileData = deref dataRef in
   modref dataRef {data with calls = addi data.calls 1}
 in
 
-let pushCallStack : Int -> Unit = lam index.
+let pushCallStack : Int -> () = lam index.
   let stack = deref callStack in
   let t = wallTimeMs () in
   let pushEntry = lam.
@@ -124,7 +124,7 @@ let pushCallStack : Int -> Unit = lam index.
   modref callStack stack
 in
 
-let popCallStack : Unit -> Unit = lam.
+let popCallStack : () -> () = lam.
   let stack = deref callStack in
   if null stack then error \"Attempted to pop empty call stack\"
   else
@@ -190,7 +190,7 @@ let getProfilerReportCode = lam.
   match deref _profilerReportCodeRef with Some t then t
   else
     use BootParser in
-    let code = parseMExprString ["functionProfileData"] _profilerReportStr in
+    let code = parseMExprStringKeywords ["functionProfileData"] _profilerReportStr in
     modref _profilerReportCodeRef (Some code);
     code
 
@@ -251,7 +251,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
     let emptyEnv = mapEmpty nameCmp in
     let env = collectToplevelFunctions emptyEnv t in
     bindall_ [
-      parseMExprString [] (_profilerInitStr env),
+      parseMExprStringKeywords [] (_profilerInitStr env),
       ulet_ "" (instrumentProfilingH env t),
       getProfilerReportCode ()]
 end

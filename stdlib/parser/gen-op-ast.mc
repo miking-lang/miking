@@ -85,57 +85,59 @@ let _mkBaseFragment
   = lam config. lam names.
     let originalName = names.0 in
     let synName = names.1 .op in
+    let synTy_ = lam l. lam r. tyapp_ (tyapp_ (ntycon_ synName) l) r in
+    let synTy = synTy_ (tyvar_ "lstyle") (tyvar_ "rstyle") in
     let suffix = concat "_" (nameGetStr synName) in
 
     let topAllowed =
       { name = concat "topAllowed" suffix
-      , ty = Some (tyarrow_ (ntycon_ synName) tybool_)
+      , ty = Some (tyalls_ ["lstyle", "rstyle"] (tyarrow_ synTy tybool_))
       , preCaseArgs = []
       , cases = [(pvarw_, true_)]
       }
     in
     let leftAllowed =
       { name = concat "leftAllowed" suffix
-      , ty = Some (tyarrow_
-        (tyrecord_ [("parent", ntycon_ synName), ("child", ntycon_ synName)])
-        tybool_)
+      , ty = Some (tyalls_ ["lstyle", "style", "rstyle"] (tyarrow_
+        (tyrecord_ [("parent", synTy_ (tycon_ "LOpen") (tyvar_ "style")), ("child", synTy)])
+        tybool_))
       , preCaseArgs = []
       , cases = [(pvarw_, true_)]
       }
     in
     let rightAllowed =
       { name = concat "rightAllowed" suffix
-      , ty = Some (tyarrow_
-        (tyrecord_ [("parent", ntycon_ synName), ("child", ntycon_ synName)])
-        tybool_)
+      , ty = Some (tyalls_ ["style", "lstyle", "rstyle"] (tyarrow_
+        (tyrecord_ [("parent", synTy_ (tyvar_ "style") (tycon_ "ROpen")), ("child", synTy)])
+        tybool_))
       , preCaseArgs = []
       , cases = [(pvarw_, true_)]
       }
     in
     let groupingsAllowed =
       { name = concat "groupingsAllowed" suffix
-      , ty = Some (tyarrow_ (ntycon_ synName) _allowedDirectionTy)
+      , ty = Some (tyalls_ ["lstyle", "rstyle"] (tyarrow_ (tytuple_ [synTy_ (tyvar_ "lstyle") (tycon_ "ROpen"), synTy_ (tycon_ "LOpen") (tyvar_ "rstyle")]) _allowedDirectionTy))
       , preCaseArgs = []
       , cases = [(pvarw_, _geither)]
       }
     in
     let parenAllowed =
       { name = concat "parenAllowed" suffix
-      , ty = Some (tyarrow_ (ntycon_ synName) _allowedDirectionTy)
+      , ty = Some (tyalls_ ["lstyle", "rstyle"] (tyarrow_ synTy _allowedDirectionTy))
       , preCaseArgs = []
       , cases = [(pvarw_, _geither)]
       }
     in
     let getInfo =
       { name = join ["get", suffix, "_info"]
-      , ty = Some (tyarrow_ (ntycon_ synName) _infoTy)
+      , ty = Some (tyalls_ ["lstyle", "rstyle"] (tyarrow_ synTy _infoTy))
       , preCaseArgs = []
       , cases = []
       }
     in
     let getTerms =
       { name = join ["get", suffix, "_terms"]
-      , ty = Some (tyarrow_ (ntycon_ synName) (tyseq_ _infoTy))
+      , ty = Some (tyalls_ ["lstyle", "rstyle"] (tyarrow_ synTy (tyseq_ _infoTy)))
       , preCaseArgs = []
       , cases = []
       }
@@ -151,7 +153,7 @@ let _mkBaseFragment
     { name = config.mkBaseName (nameGetStr synName)
     , extends = [config.mkSynAstBaseName originalName]
     , aliases = []
-    , synTypes = mapInsert synName [] (mapEmpty nameCmp)
+    , synTypes = mapInsert synName ([nameNoSym "lstyle", nameNoSym "rstyle"], []) (mapEmpty nameCmp)
     , semanticFunctions =
       [ topAllowed, leftAllowed, rightAllowed, groupingsAllowed
       , parenAllowed, getInfo, getTerms, unsplit
@@ -283,7 +285,7 @@ let _mkConstructorFragment
       (config.mkBaseName (nameGetStr synName))
       (match op.baseConstructorName with Some n then [config.mkConAstName n] else [])
     , aliases = []
-    , synTypes = mapInsert synName [{name = conName, synType = synName, carried = untargetableType op.carried}] (mapEmpty nameCmp)
+    , synTypes = mapInsert synName ([nameNoSym "lstyle", nameNoSym "rstyle"], [{name = conName, synType = synName, carried = untargetableType op.carried}]) (mapEmpty nameCmp)
     , semanticFunctions = concat [getInfo, getTerms, unsplit] grouping
     }
 
@@ -406,22 +408,22 @@ let _mkBrWrappersFor
                       ])))
                 (unit_))
               (var_ "st")))
-          (var_ "st"))))) in
+          (conapp_ "None" unit_))))) in
     let definitions =
       [ nulet_ configName
         (urecord_
-          [ ("topAllowed", var_ (concat "topAllowed" suffix))
-          , ("leftAllowed", var_ (concat "leftAllowed" suffix))
-          , ("rightAllowed", var_ (concat "rightAllowed" suffix))
-          , ("parenAllowed", var_ (concat "parenAllowed" suffix))
-          , ("groupingsAllowed", var_ (concat "groupingsAllowed" suffix))
+          [ ("topAllowed", freeze_ (var_ (concat "topAllowed" suffix)))
+          , ("leftAllowed", freeze_ (var_ (concat "leftAllowed" suffix)))
+          , ("rightAllowed", freeze_ (var_ (concat "rightAllowed" suffix)))
+          , ("parenAllowed", freeze_ (var_ (concat "parenAllowed" suffix)))
+          , ("groupingsAllowed", freeze_ (var_ (concat "groupingsAllowed" suffix)))
           ])
       , nulet_ reportConfigName
         (urecord_
-          [ ("parenAllowed", var_ (concat "parenAllowed" suffix))
-          , ("topAllowed", var_ (concat "topAllowed" suffix))
-          , ("terminalInfos", var_ (join ["get", suffix, "_terms"]))
-          , ("getInfo", var_ (join ["get", suffix, "_info"]))
+          [ ("parenAllowed", freeze_ (var_ (concat "parenAllowed" suffix)))
+          , ("topAllowed", freeze_ (var_ (concat "topAllowed" suffix)))
+          , ("terminalInfos", freeze_ (var_ (join ["get", suffix, "_terms"])))
+          , ("getInfo", freeze_ (var_ (join ["get", suffix, "_info"])))
           , ("lpar", str_ lparStr)
           , ("rpar", str_ rparStr)
           ])
@@ -473,29 +475,6 @@ let _mkBrWrappersFor
     , finalize_ = appf2_ (nvar_ finalizeName)
     }
 
-let _mkBrWrappers
-  : GenOpInput -> Map Name Name -> GenOpResult
-  = lam config. lam synNames.
-    let wrappers = mapMapWithKey
-      (lam original. lam names : {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}.
-        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad, grouping = names.grouping, precedence = names.precedence})
-      synNames in
-    let getWrapper : Name -> WrapperInfo = lam name.
-      mapFindExn name wrappers in
-    { fragments = ""
-    , addAtomFor = lam name. (getWrapper name).addAtom_
-    , addInfixFor = lam name. (getWrapper name).addInfix_
-    , addPrefixFor = lam name. (getWrapper name).addPrefix_
-    , addPostfixFor = lam name. (getWrapper name).addPostfix_
-    , finalizeFor = lam name. (getWrapper name).finalize_
-    , wrapProductions = lam expr.
-      let definitions = mapFoldWithKey
-        (lam acc. lam. lam wrapper: WrapperInfo. concat acc wrapper.definitions)
-        []
-        wrappers in
-      bindall_ (snoc definitions expr)
-    }
-
 type GenOpResult =
   { fragments : String
   -- NOTE(vipa, 2022-04-12): This function wraps an expression such
@@ -516,6 +495,29 @@ type GenOpResult =
   -- Expr (the operator sequence already encountered)
   , finalizeFor : Name -> Expr -> Expr -> Expr
   }
+
+let _mkBrWrappers
+  : GenOpInput -> Map Name {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering} -> GenOpResult
+  = lam config. lam synNames.
+    let wrappers = mapMapWithKey
+      (lam original. lam names : {bad : Name, op : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}.
+        _mkBrWrappersFor config {original = original, op = names.op, bad = names.bad, grouping = names.grouping, precedence = names.precedence})
+      synNames in
+    let getWrapper : Name -> WrapperInfo = lam name.
+      mapFindExn name wrappers in
+    { fragments = ""
+    , addAtomFor = lam name. (getWrapper name).addAtom_
+    , addInfixFor = lam name. (getWrapper name).addInfix_
+    , addPrefixFor = lam name. (getWrapper name).addPrefix_
+    , addPostfixFor = lam name. (getWrapper name).addPostfix_
+    , finalizeFor = lam name. (getWrapper name).finalize_
+    , wrapProductions = lam expr.
+      let definitions = mapFoldWithKey
+        (lam acc. lam. lam wrapper: WrapperInfo. concat acc wrapper.definitions)
+        []
+        wrappers in
+      bindall_ (snoc definitions expr)
+    }
 
 let mkOpLanguages
   : GenOpInput -> GenOpResult

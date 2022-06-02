@@ -224,9 +224,9 @@ and const =
   | Ctensor2string of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
-  | CbootParserParseMExprString of int Mseq.t Mseq.t option
+  | CbootParserParseMExprString of bool option * int Mseq.t Mseq.t option
   | CbootParserParseMCoreFile of
-      (bool * bool * int Mseq.t Mseq.t * bool * bool) option
+      (bool * bool * int Mseq.t Mseq.t * bool * bool * bool) option
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
@@ -250,13 +250,13 @@ and ptree =
   | PTreeInfo of info
 
 (* Terms in MLang *)
-and cdecl = CDecl of info * ustring * ty
+and cdecl = CDecl of info * ustring list * ustring * ty
 
 and param = Param of info * ustring * ty
 
 and decl =
   (* TODO(?,?): Local? *)
-  | Data of info * ustring * cdecl list
+  | Data of info * ustring * int * cdecl list
   | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 

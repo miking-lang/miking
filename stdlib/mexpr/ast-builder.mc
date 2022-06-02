@@ -4,6 +4,7 @@
 include "mexpr/ast.mc"
 include "assoc.mc"
 include "info.mc"
+include "error.mc"
 include "stringid.mc"
 include "map.mc"
 
@@ -423,7 +424,7 @@ let nreclets_add = use MExprAst in
     let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
-    infoErrorExit (infoTm reclets) "reclets is not a TmRecLets construct"
+    errorSingle [infoTm reclets] "reclets is not a TmRecLets construct"
 
 let reclets_add = use MExprAst in
   lam s. lam ty. lam body. lam reclets.
@@ -465,7 +466,7 @@ let var_ = use MExprAst in
 let freeze_ = use MExprAst in
   lam var.
   match var with TmVar t then TmVar {t with frozen = true}
-  else infoErrorExit (infoTm var) "var is not a TmVar construct"
+  else errorSingle [infoTm var] "var is not a TmVar construct"
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
@@ -570,7 +571,7 @@ let record_add = use MExprAst in
   match record with TmRecord t then
       TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
-      infoErrorExit (infoTm record) "record is not a TmRecord construct"
+      errorSingle [infoTm record] "record is not a TmRecord construct"
 
 let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
@@ -589,7 +590,7 @@ let matchall_ = use MExprAst in
     foldr1 (lam m. lam acc.
       match m with TmMatch t then
         TmMatch {t with els = acc}
-      else infoErrorExit (infoTm m) "expected match expression")
+      else errorSingle [infoTm m] "expected match expression")
       matches
 
 let nrecordproj_ = use MExprAst in
@@ -1146,7 +1147,8 @@ let utensor2string_ = tensor2string_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
+  lam options. lam key. lam str.
+    appf3_ (uconst_ (CBootParserParseMExprString ())) options key str
 
 let bootParserParseMCoreFile_ = use MExprAst in
   lam pruneArgs.

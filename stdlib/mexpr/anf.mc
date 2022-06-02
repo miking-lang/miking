@@ -10,6 +10,7 @@ include "pprint.mc"
 include "symbolize.mc"
 include "eq.mc"
 include "info.mc"
+include "error.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
 
@@ -166,7 +167,7 @@ lang RecLetsANFBase = ANF + RecLetsAst + LamAst
     let bindings = map (
       lam b: RecLetBinding. { b with body =
         match b.body with TmLam _ & t then normalizeLams t
-        else infoErrorExit (infoTm b.body)
+        else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in ANF transformation"
       }
     )

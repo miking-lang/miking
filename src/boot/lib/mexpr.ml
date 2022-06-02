@@ -465,9 +465,11 @@ let arity = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
-  | CbootParserParseMExprString None ->
+  | CbootParserParseMExprString (None, None) ->
+      3
+  | CbootParserParseMExprString (Some _, None) ->
       2
-  | CbootParserParseMExprString (Some _) ->
+  | CbootParserParseMExprString (_, Some _) ->
       1
   | CbootParserParseMCoreFile (None, None) ->
       3
@@ -1507,14 +1509,22 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString None, TmSeq (fi, seq) ->
+  | CbootParserParseMExprString (None, None), TmRecord (_, r) -> (
+    try
+      match Record.find (us "0") r with
+      | TmConst (_, CBool allow_free) ->
+          TmConst (fi, CbootParserParseMExprString (Some allow_free, None))
+      | _ ->
+          fail_constapp fi
+    with Not_found -> fail_constapp fi )
+  | CbootParserParseMExprString (Some options, None), TmSeq (fi, seq) ->
       let keywords =
         Mseq.map
           (function
             | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
           seq
       in
-      TmConst (fi, CbootParserParseMExprString (Some keywords))
+      TmConst (fi, CbootParserParseMExprString (Some options, Some keywords))
   | Ctensor2string None, tm ->
       TmConst (fi, Ctensor2string (Some tm))
   | Ctensor2string (Some el2str), TmTensor (_, t) ->
@@ -1539,8 +1549,11 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       |> fun str -> TmSeq (fi, ustring2tmseq fi str)
   | Ctensor2string _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString keywords (tmseq2seq_of_int fi seq) in
+  | CbootParserParseMExprString (Some options, Some keywords), TmSeq (fi, seq)
+    ->
+      let t =
+        Bootparser.parseMExprString options keywords (tmseq2seq_of_int fi seq)
+      in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
@@ -1551,13 +1564,15 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
         , Record.find (us "1") r
         , Record.find (us "2") r
         , Record.find (us "3") r
-        , Record.find (us "4") r )
+        , Record.find (us "4") r
+        , Record.find (us "5") r )
       with
       | ( TmConst (_, CBool keep_utests)
         , TmConst (_, CBool prune_external_utests)
         , TmSeq (_, externals_exclude)
         , TmConst (_, CBool warn)
-        , TmConst (_, CBool eliminate_deadcode) ) ->
+        , TmConst (_, CBool eliminate_deadcode)
+        , TmConst (_, CBool allow_free) ) ->
           let externals_exclude =
             Mseq.map
               (function
@@ -1573,7 +1588,8 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
                     , prune_external_utests
                     , externals_exclude
                     , warn
-                    , eliminate_deadcode )
+                    , eliminate_deadcode
+                    , allow_free )
                 , None ) )
       | _ ->
           fail_constapp fi

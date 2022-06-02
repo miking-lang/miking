@@ -21,7 +21,6 @@ type Options = {
   use32BitIntegers : Bool,
   use32BitFloats : Bool,
   keepDeadCode : Bool,
-  typeCheck : Bool,
   printHelp : Bool,
   toJavaScript : Bool,
   output : Option String,

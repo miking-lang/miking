@@ -15,15 +15,6 @@ include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
--- Generates a random ASCII letter or digit character.
-let _randAlphanum : Unit -> Char = lam.
-  -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
-  -- (lower- and upper-case) is 10 + 26 + 26 = 62.
-  let r = randIntU 0 62 in
-  if lti r 10 then int2char (addi r 48)
-  else if lti r 36 then int2char (addi r 55)
-  else int2char (addi r 61)
-
 lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   syn CopyStatus =
   | CopyBoth ()
@@ -51,11 +42,13 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   }
 
   type AddIdentifierAccelerateEnv = {
-    functions : Map Expr AccelerateData,
+    functions : Map Name AccelerateData,
     programIdentifiers : Set SID
   }
 
-  sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
+  sem collectProgramIdentifiers : AddIdentifierAccelerateEnv -> Expr
+                               -> AddIdentifierAccelerateEnv
+  sem collectProgramIdentifiers env =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
     {env with programIdentifiers = setInsert sid env.programIdentifiers}
@@ -66,7 +59,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     recursive let genstr = lam acc. lam n.
       if eqi n 0 then acc
       else
-        let nextchr = _randAlphanum () in
+        let nextchr = randAlphanum () in
         genstr (snoc acc nextchr) (subi n 1)
     in
     -- NOTE(larshum, 2021-09-15): Start the string with a hard-coded alphabetic
@@ -252,8 +245,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   -- parameter, so that expressions without free variables can also be
   -- accelerated (also for lambda lifting). Here we remove this dummy parameter
   -- for all accelerate terms with at least one free variable parameter.
-  sem eliminateDummyParameter (solutions : Map Name Type)
-                              (accelerated : Map Name AccelerateData) =
+  sem eliminateDummyParameter : Map Name (Map Name Type)
+                             -> Map Name AccelerateData
+                             -> Expr -> (Map Name AccelerateData, Expr)
+  sem eliminateDummyParameter solutions accelerated =
   | ast ->
     let ast = eliminateDummyParameterH solutions accelerated ast in
     let accelerated =
@@ -320,12 +315,12 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   sem eliminateInnermostParameterType =
   | TyArrow {from = TyInt _, to = to & !(TyArrow _)} -> to
   | TyArrow t -> TyArrow {t with to = eliminateInnermostParameterType t.to}
-  | t -> infoErrorExit (infoTy t) "Unexpected type of accelerate function body"
+  | t -> errorSingle [infoTy t] "Unexpected type of accelerate function body"
 
   sem eliminateInnermostLambda =
   | TmLam {body = body & !(TmLam _)} -> body
   | TmLam t -> TmLam {t with body = eliminateInnermostLambda t.body}
-  | t -> infoErrorExit (infoTm t) "Unexpected structure of accelerate body"
+  | t -> errorSingle [infoTm t] "Unexpected structure of accelerate body"
 end
 
 lang TestLang =

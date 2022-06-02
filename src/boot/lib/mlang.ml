@@ -72,7 +72,7 @@ type inter_data =
 
 type lang_data =
   { inters: inter_data Record.t
-  ; syns: (info * cdecl list) Record.t
+  ; syns: (info * int * cdecl list) Record.t
   ; alias_defs: info Record.t
   ; aliases_rev: (Ustring.t * info * ustring list * ty) list }
 
@@ -187,10 +187,10 @@ let merge_inter fi name a b =
  * no duplicate definitions, etc. Does not consider included languages at all.
  *)
 let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
-  let add_new_syn name ((fi, _) as data) = function
+  let add_new_syn name ((fi, _, _) as data) = function
     | None ->
         Some data
-    | Some (old_fi, _) ->
+    | Some (old_fi, _, _) ->
         raise_error fi
           ( "Duplicate definition of '" ^ Ustring.to_utf8 name
           ^ "', previously defined at "
@@ -208,10 +208,12 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
         else merge_inter fi name (Some old_data) (Some data)
   in
   let add_decl lang_data = function
-    | Data (fi, name, cons) ->
+    | Data (fi, name, params, cons) ->
         { lang_data with
-          syns= Record.update name (add_new_syn name (fi, cons)) lang_data.syns
-        }
+          syns=
+            Record.update name
+              (add_new_syn name (fi, params, cons))
+              lang_data.syns }
     | Inter (fi, name, ty, params, cases) ->
         let mk_case (pat, rhs) =
           let pos_pat = pat_to_normpat pat in
@@ -253,21 +255,26 @@ let compute_lang_data (Lang (info, _, _, decls)) : lang_data =
 (* Merges the second language into the first, because the first includes the second *)
 let merge_lang_data fi {inters= i1; syns= s1; alias_defs= a1; aliases_rev= ar1}
     {inters= i2; syns= s2; alias_defs= a2; aliases_rev= ar2} : lang_data =
-  let eq_cons (CDecl (_, c1, _)) (CDecl (_, c2, _)) = c1 =. c2 in
+  let eq_cons (CDecl (_, _, c1, _)) (CDecl (_, _, c2, _)) = c1 =. c2 in
   let merge_syn _ a b =
     match (a, b) with
     | None, None ->
         None
-    | None, Some (fi, _) ->
-        Some (fi, [])
+    | None, Some (fi, count, _) ->
+        Some (fi, count, [])
     | Some a, None ->
         Some a
-    | Some (fi, cons), Some (_, old_cons) ->
-        Some
-          ( fi
-          , List.filter
-              (fun c1 -> List.exists (eq_cons c1) old_cons |> not)
-              cons )
+    | Some (fi, old_count, cons), Some (_, new_count, old_cons) ->
+        if old_count <> new_count then
+          raise_error fi
+            "This definition has the wrong number of type arguments"
+        else
+          Some
+            ( fi
+            , old_count
+            , List.filter
+                (fun c1 -> List.exists (eq_cons c1) old_cons |> not)
+                cons )
   in
   ignore
     (Record.merge
@@ -313,7 +320,8 @@ let data_to_lang info name includes {inters; syns; aliases_rev; _} : mlang =
   let info_assoc fi l = List.find (fun (fi2, _) -> eq_info fi fi2) l |> snd in
   let syns =
     Record.bindings syns
-    |> List.map (fun (syn_name, (fi, cons)) -> Data (fi, syn_name, cons))
+    |> List.map (fun (syn_name, (fi, count, cons)) ->
+           Data (fi, syn_name, count, cons) )
   in
   let sort_inter name {info; ty; params; cases; subsets} =
     let mk_case fi =
@@ -822,14 +830,14 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let previous_ns = List.fold_left add_lang emptyMlangEnv includes in
       (* compute the namespace *)
       let mangle str = langName ^. us "_" ^. str in
-      let cdecl_names (CDecl (_, name, _)) = (name, mangle name) in
+      let cdecl_names (CDecl (_, _, name, _)) = (name, mangle name) in
       let add_decl ({constructors; normals; aliases}, syns) = function
-        | Data (fi, name, cdecls) ->
+        | Data (fi, name, count, cdecls) ->
             let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names in
             ( { constructors= USMap.add_seq new_constructors constructors
               ; aliases
               ; normals }
-            , USMap.add name fi syns )
+            , USMap.add name (fi, count) syns )
         | Inter (_, name, _, _, _) ->
             ( { normals= USMap.add name (mangle name) normals
               ; aliases
@@ -843,19 +851,26 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       in
       let ns, new_syns = List.fold_left add_decl (previous_ns, syns) decls in
       (* wrap in "con"s *)
-      let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
+      let wrap_con ty_name (CDecl (fi, params, cname, ty)) tm =
+        let app_param ty param = TyApp (fi, ty, TyVar (fi, param)) in
+        let all_param param ty = TyAll (fi, param, ty) in
+        let con =
+          List.fold_left app_param
+            (TyCon (fi, ty_name, Symb.Helpers.nosym))
+            params
+        in
         TmConDef
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow
-              (fi, desugar_ty ns ty, TyCon (fi, ty_name, Symb.Helpers.nosym))
+          , List.fold_right all_param params
+              (TyArrow (fi, desugar_ty ns ty, con))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
       let wrap_data decl tm =
         match decl with
-        | Data (_, name, cdecls) ->
+        | Data (_, name, _, cdecls) ->
             List.fold_right (wrap_con name) cdecls tm
         | Alias (fi, name, params, ty) ->
             TmType
@@ -964,8 +979,14 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
      solution would be to mangle them as well *)
   let syntydecl =
     List.map
-      (fun (syn, fi) tm' ->
-        TmType (fi, syn, Symb.Helpers.nosym, [], TyVariant (fi, []), tm') )
+      (fun (syn, (fi, count)) tm' ->
+        TmType
+          ( fi
+          , syn
+          , Symb.Helpers.nosym
+          , List.init count (fun i -> us "a" ^. ustring_of_int i)
+          , TyVariant (fi, [])
+          , tm' ) )
       (USMap.bindings syns)
   in
   let stack = stack @ syntydecl in

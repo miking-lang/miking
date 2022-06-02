@@ -52,6 +52,12 @@ module Mseq : sig
 
   (* Complexity:
    * rope (?): O(1) assuming OCaml's Array.length is O(1)
+   * list (?): O(i), where i is the provided length to compare with
+   *)
+  val is_length_at_least : 'a t -> int -> bool
+
+  (* Complexity:
+   * rope (?): O(1) assuming OCaml's Array.length is O(1)
    * list (?): O(n), where n is the length of the first argument
    *)
   val concat : 'a t -> 'a t -> 'a t

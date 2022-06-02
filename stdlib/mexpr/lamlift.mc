@@ -210,7 +210,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             let appType =
               match tyTm acc with TyArrow {to = to} then
                 to
-              else infoErrorExit info "Application on non-arrow type"
+              else errorSingle [info] "Application on non-arrow type"
             in
             TmApp {lhs = acc, rhs = x, ty = appType, info = info})
           (TmVar {ident = t.ident, ty = tyBody, info = info, frozen = false})
@@ -221,7 +221,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         (subMap, TmLet {{{t with tyBody = tyBody}
                             with body = body}
                             with inexpr = inexpr})
-    else infoErrorExit t.info (join ["Found no free variable solution for ",
+    else errorSingle [t.info] (join ["Found no free variable solution for ",
                                      nameGetStr t.ident])
   | TmRecLets t ->
     let addBindingSubExpression =
@@ -240,13 +240,13 @@ lang LambdaLiftInsertFreeVariables = MExprAst
               let appType =
                 match tyTm acc with TyArrow {to = to} then
                   to
-                else infoErrorExit info "Application on non-arrow type"
+                else errorSingle [info] "Application on non-arrow type"
               in
               TmApp {lhs = acc, rhs = x, ty = appType, info = info})
             (TmVar {ident = bind.ident, ty = bindType, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
-      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+      else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
                                           nameGetStr bind.ident])
     in
     let insertFreeVarsBinding =
@@ -265,7 +265,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         let tyBody = tyTm body in
         match insertFreeVariablesH solutions subMap body with (subMap, body) in
         (subMap, {{bind with tyBody = tyBody} with body = body})
-      else infoErrorExit bind.info (join ["Lambda lifting error: No solution found for binding ",
+      else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
                                           nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
@@ -382,7 +382,8 @@ mexpr
 
 use TestLang in
 
-let preprocess = lam t. typeAnnot (symbolize t) in
+let preprocess = lam t.
+  typeAnnot (symbolizeExpr {symEnvEmpty with strictTypeVars = false} t) in
 
 let noLambdas = bind_ (ulet_ "x" (int_ 2)) unit_ in
 utest liftLambdas noLambdas with noLambdas using eqExpr in

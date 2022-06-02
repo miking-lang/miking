@@ -14,15 +14,15 @@ type Eps = Int
 
 -- Dual's can be nested and are implemented as explicit trees.
 type Dual a
-con Dual : {e : Eps, x : Dual a, xp : Dual a} -> Dual a
-con Primal : a -> Dual a
+con Dual : all a. {e : Eps, x : Dual a, xp : Dual a} -> Dual a
+con Primal : all a. a -> Dual a
 
 -- Epsilons are ordered.
 let dualLtE : Eps -> Eps -> Bool = lti
 let dualEqE : Eps -> Eps -> Bool = eqi
 
 -- false if x' = 0 in x+ex'
-let dualIsDual : Dual a -> Bool =
+let dualIsDual : all a. Dual a -> Bool =
 lam n.
   switch n
   case Primal _ then false
@@ -30,20 +30,20 @@ lam n.
   end
 
 -- x if x' = 0 otherwise x+ex'
-let dualCreateDual : (a -> Bool) -> Eps -> Dual a -> Dual a -> Dual a =
+let dualCreateDual : all a. (a -> Bool) -> Eps -> Dual a -> Dual a -> Dual a =
 lam isZero. lam e. lam x. lam xp.
   match xp with Primal v then
     if isZero v then x else Dual { e = e, x = x, xp = xp }
   else Dual { e = e, x = x, xp = xp }
 
 -- e in x+ex'
-let dualEpsilon : Dual a -> Eps =
+let dualEpsilon : all a. Dual a -> Eps =
 lam n.
   match n with Dual dn then dn.e
   else error "Operand not a dual number"
 
 -- x in x+ex' given e
-let dualPrimal : Eps -> Dual a -> Dual a =
+let dualPrimal : all a. Eps -> Dual a -> Dual a =
 lam e. lam n.
   switch n
   case Primal _ then n
@@ -52,7 +52,7 @@ lam e. lam n.
 
 -- x in x+e1(x+e2(x+e3(...)))
 recursive
-let dualPrimalDeep : Dual a -> a =
+let dualPrimalDeep : all a. Dual a -> a =
 lam n.
   switch n
   case Primal n then n
@@ -61,7 +61,7 @@ lam n.
 end
 
 -- x' in x+ex' given e
-let dualPertubation : a -> Eps -> Dual a -> Dual a =
+let dualPertubation : all a. a -> Eps -> Dual a -> Dual a =
 lam zero. lam e. lam n.
   switch n
   case Primal _ then Primal zero
@@ -71,11 +71,11 @@ lam zero. lam e. lam n.
 -- generate a unique epsilon e1 that fulfills the invariant e1 > e for all
 -- previously generated epsilons e.
 let e = ref 0
-let dualGenEpsilon : Unit -> Eps =
+let dualGenEpsilon : () -> Eps =
 lam. modref e (succ (deref e)); deref e
 
 -- Structural equality function for duals
-let dualEq : (a -> a -> Bool) -> Dual a -> Dual a -> Bool =
+let dualEq : all a. (a -> a -> Bool) -> Dual a -> Dual a -> Bool =
   lam eq.
   recursive let recur = lam n1. lam n2.
     switch (n1, n2)
@@ -89,7 +89,7 @@ let dualEq : (a -> a -> Bool) -> Dual a -> Dual a -> Bool =
   in recur
 
 -- String representation of duals
-let dualToString : (a -> String) -> Dual a -> String =
+let dualToString : all a. (a -> String) -> Dual a -> String =
 lam pri2str. lam n.
   let wrapInParen = lam n. lam str.
     if dualIsDual n then join ["(", str, ")"] else str

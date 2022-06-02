@@ -102,7 +102,7 @@ lang ConCompatibleType = CompatibleType + ConTypeAst
   sem reduceType (tyEnv : Map Name Type) =
   | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      infoErrorExit info (concat "Unbound TyCon in reduceType: " (nameGetStr id))
+      errorSingle [info] (concat "Unbound TyCon in reduceType: " (nameGetStr id))
 
 end
 
@@ -245,7 +245,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
               "Variable annotated with type: ", _pprintType t.ty, "\n",
               "Type in variable environment: ", _pprintType ty
             ] in
-            infoErrorExit t.info msg
+            errorSingle [t.info] msg
         else t.ty
       else never
     in
@@ -308,7 +308,7 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + All
           "Expected type: ", _pprintType (tyTm body), "\n",
           "Annotated type: ", _pprintType t.tyBody
         ] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else never
 end
 
@@ -334,7 +334,7 @@ lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
         "Type from let: ", _pprintType from, "\n",
         "Type from lambda: ", _pprintType t.tyIdent
       ] in
-      infoErrorExit t.info msg
+      errorSingle [t.info] msg
 end
 
 lang ExpTypeAnnot = TypeAnnot + ExtAst
@@ -376,7 +376,7 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
               "Expected type: ", _pprintType (tyTm body), "\n",
               "Annotated type: ", _pprintType binding.tyBody
             ] in
-            infoErrorExit t.info msg
+            errorSingle [t.info] msg
         in
         {{binding with body = body}
                   with tyBody = tyBody}
@@ -472,12 +472,12 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (tyTm body)
               ] in
-              infoErrorExit t.info msg
+              errorSingle [t.info] msg
           else (ityunknown_ t.info)
         else
           let msg = join ["Application of untyped constructor: ",
                           nameGetStr t.ident] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       in
       TmConApp {{t with body = body}
                    with ty = ty}
@@ -532,20 +532,20 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
               _pprintType rty, ", got argument of incompatible type ",
               _pprintType (tyTm expected)
             ] in
-            infoErrorExit t.info msg
+            errorSingle [t.info] msg
         else
           let msg = join [
             "Custom equality function expected left-hand side of type ",
             _pprintType lty, ", got argument of incompatible type ",
             _pprintType (tyTm test)
           ] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       else
         let msg = join [
           "Equality function was found to have incorrect type.\n",
           "Type was inferred to be ", _pprintType (tyTm tu)
         ] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else match compatibleType env.tyEnv (tyTm test) (tyTm expected) with Some eTy then
       TmUtest {{{{t with test = withType eTy test}
                     with expected = withType eTy expected}
@@ -556,7 +556,7 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
         "Arguments to utest have incompatible types\n",
         "LHS: ", _pprintType (tyTm test), "\nRHS: ", _pprintType (tyTm expected)
       ] in
-      infoErrorExit t.info msg
+      errorSingle [t.info] msg
 end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst

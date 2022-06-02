@@ -121,7 +121,7 @@ lang ContextExpand = HoleAst
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
     use BootParser in
-    let impl = parseMExprString [] "
+    let impl = parseMExprStringKeywords [] "
     let or: Bool -> Bool -> Bool =
       lam a. lam b. if a then true else b in
 
@@ -231,7 +231,7 @@ lang ContextExpand = HoleAst
     " in
 
     use MExprSym in
-    let impl = symbolize impl in
+    let impl = symbolizeExpr {symEnvEmpty with strictTypeVars = false} impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
       match findName s expr with Some n then n
@@ -298,7 +298,7 @@ let anf = compose normalizeTerm symbolize in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
+  let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords [] ast in
   symbolize ast
 in

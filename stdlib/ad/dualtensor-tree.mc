@@ -81,7 +81,7 @@ let dualtensorPrimal : Eps -> DualTensor -> DualTensor =
 lam e. lam t.
   switch t
   case UnitTensor _ | PrimalTensor _ then t
-  case DualTensor t then if dualLtE t.e e then t else t.x
+  case DualTensor t then if dualLtE t.e e then DualTensor t else t.x
   end
 
 let dualtensorPrimalDeep : DualTensor -> Tensor[Float] =
@@ -94,14 +94,14 @@ recursive let recur = lam t.
   end
 in recur
 
-let dualtensorPertubation : Eps -> DualTensor -> DualTensor -> DualTensor =
+let dualtensorPertubation : Eps -> DualTensor -> DualTensor =
 lam e. lam t.
   switch t
   case UnitTensor _ then
     error "dualtensorPertubation: Invalid Argument"
   case PrimalTensor t then PrimalTensor (tensorMapCopy (lam. 0.) t)
   case DualTensor t then
-  	if dualLtE t.e e then PrimalTensor (tensorMapCopy (lam. 0.) t) else t.xp
+  	if dualLtE t.e e then DualTensor t else t.xp
   end
 
 let dualtensorGenEpsilon : () -> Eps = dualGenEpsilon
@@ -141,18 +141,19 @@ lam eq. lam t1. lam t2.
 let dualtensorToString : DualTensor -> String =
 lam t.
   let wrapInParen = lam t. lam str.
-    if dualIsDual t then join ["(", str, ")"] else str
+    if dualtensorIsDualNum t then join ["(", str, ")"] else str
   in
   let shape2str = lam shape.
     strJoin ", " (map int2string shape)
   in
   recursive let recur = lam t.
     switch t
-    case UnitTensor {shape = shape, idx = idx} then
+    case UnitTensor {shape = shape, lidx = lidx} then
+      let idx = linearToCartesianIndex shape lidx in
       let t = tensorCreateDense shape (lam. 0.) in
       (if _idxInShape idx shape then tensorSetExn t idx 1. else ());
       tensor2string float2string t
-    case PrimalTensor t then tensor2string float2string
+    case PrimalTensor t then tensor2string float2string t
     case DualTensor {e = e, x = x, xp = xp} then
       join [
         wrapInParen x (recur x),
@@ -310,7 +311,7 @@ let dualtensorJacfj
   -> DualTensor
   -> () =
 lam f. lam x. lam j.
-  dualtensorJacfvecprod f x (UnitTensor { shape = dualtensorShape x, idx = [j] })
+  dualtensorJacfvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 
 -- `dualtensorJacvecprod f x y rp` computes the Jacobian-vector product of `f`
 -- at `x` with `y`, storing 𝛁f(x)y in `rp`.
@@ -350,7 +351,7 @@ lam f. lam x. lam y.
 -- `dualtensorGradfj f x j` computes the j'th element in the gradient of `f` at
 -- `x`, returning the tuple (f(x), 𝛁f(x)_j).
 let dualtensorGradfj
-  : (DualVec -> DualTensor -> ()) -> DualVec -> Int -> (DualNum, DualNum) =
+  : (DualVec -> DualNum) -> DualVec -> Int -> (DualNum, DualNum) =
 lam f. lam x. lam j.
   dualtensorGradfvecprod f x (dualtensorCreateUnit (dualtensorShape x) [j])
 

@@ -3,6 +3,7 @@ include "mexpr/anf.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 
 -- Defines AST nodes for holes.
 
@@ -10,15 +11,15 @@ let holeKeywords = ["hole", "Boolean", "IntRange", "independent"]
 
 let _lookupExit : all a. Info -> String -> Map String a -> a =
   lam info : Info. lam s : String. lam m : Map String a.
-    mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
+    mapLookupOrElse (lam. errorSingle [info] (concat s " not found")) s m
 
 let _expectConstInt : Info -> String -> Expr -> Int =
   lam info : Info. lam s. lam i.
     use IntAst in
     match i with TmConst {val = CInt {val = i}} then i
-    else infoErrorExit info (concat "Expected a constant integer: " s)
+    else errorSingle [info] (concat "Expected a constant integer: " s)
 
-lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot
+lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
   syn Hole =
 
   syn Expr =
@@ -123,12 +124,19 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot
   sem typeAnnotExpr (env : TypeEnv) =
   | TmHole t ->
     let default = typeAnnotExpr env t.default in
-    let ty = hty t.inner in
+    let ty = hty t.info t.inner in
     TmHole {{t with default = default}
                with ty = ty}
 
-  sem hty : Hole -> Type
+  sem hty : Info -> Hole -> Type
 
+  sem typeCheckBase (env: TCEnv) =
+  | TmHole t ->
+    let default = typeCheckExpr env t.default in
+    let ty = hty t.info t.inner in
+    unify [t.info] env ty (tyTm default);
+    TmHole {{t with default = default}
+               with ty = ty}
 end
 
 -- A Boolean hole.
@@ -165,8 +173,8 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
       let validate = lam expr.
         match expr with TmHole {default = default} then
           match default with TmConst {val = CBool _} then expr
-          else infoErrorExit info "Default value not a constant Boolean"
-        else infoErrorExit info "Not a hole" in
+          else errorSingle [info] "Default value not a constant Boolean"
+        else errorSingle [info] "Not a hole" in
 
       lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
 
@@ -174,8 +182,8 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
   | BoolHole {} ->
     ("Boolean", [])
 
-  sem hty =
-  | BoolHole {} -> TyBool {info = NoInfo ()}
+  sem hty info =
+  | BoolHole {} -> TyBool {info = info}
 end
 
 -- An integer hole (range of integers).
@@ -224,8 +232,8 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
                      inner = HIntRange {min = min, max = max}}
         then
           if and (leqi min i) (geqi max i) then expr
-          else infoErrorExit info "Default value is not within range"
-        else infoErrorExit info "Not a hole" in
+          else errorSingle [info] "Default value is not within range"
+        else errorSingle [info] "Not a hole" in
 
       lam lst. _mkHole info tyint_
         (lam m: Map String Expr.
@@ -233,16 +241,15 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
            let max = _expectConstInt info "max" (_lookupExit info "max" m) in
            if leqi min max then
              HIntRange {min = min, max = max}
-           else infoErrorExit info
-             (join ["Empty domain: ", int2string min, "..", int2string max]))
+           else errorSingle [info] (join ["Empty domain: ", int2string min, "..", int2string max]))
         validate (get lst 0))
 
   sem pprintHole =
   | HIntRange {min = min, max = max} ->
     ("IntRange", [("min", int2string min), ("max", int2string max)])
 
-  sem hty =
-  | HIntRange {} -> TyInt {info = NoInfo ()}
+  sem hty info =
+  | HIntRange {} -> TyInt {info = info}
 end
 
 lang HoleAnnotation = Ast

@@ -2,7 +2,7 @@ include "mexpr/ast.mc"
 include "ocaml/ast.mc"
 include "pmexpr/extract.mc"
 
-lang PMExprCExternals = MExprAst + OCamlAst
+lang PMExprCExternals = MExprAst + OCamlAst + PMExprExtractAccelerate
   sem getExternalCDeclarations =
   | accelerated /- : Map Name AcceleratedData -> [Top] -/ ->
     mapValues

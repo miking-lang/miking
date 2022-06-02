@@ -14,7 +14,6 @@ include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eval.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
@@ -23,7 +22,7 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprRemoveTypeAscription +
+  BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestTrans + MExprProfileInstrument +
   MExprEval
 
@@ -33,13 +32,9 @@ lang ExtMCore =
 
 end
 
-let generateTests = lam ast. lam testsEnabled. lam typeChecked.
+let generateTests = lam ast. lam testsEnabled.
   use ExtMCore in
   if testsEnabled then
-    let ast =
-      if not typeChecked then typeAnnot (symbolize ast)
-      else ast
-    in
     let ast = removeTypeAscription ast in
     utestGen ast
   else
@@ -65,22 +60,19 @@ let eval = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
+    let ast = symbolize ast in
+
     let ast =
       if options.debugProfile then
-        instrumentProfiling (symbolize ast)
+        instrumentProfiling ast
       else ast
     in
 
-    -- If option --typecheck, type check the AST
-    let ast =
-      if options.typeCheck then
-        typeCheck (symbolizeExpr {symEnvEmpty with strictTypeVars = true} ast)
-      else ast
-    in
+    let ast = typeCheck ast in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests options.typeCheck with (symEnv, ast) then
+    match generateTests ast options.runTests with (symEnv, ast) then
       let ast = symbolizeExpr symEnv ast in
       if options.exitBefore then exit 0
       else

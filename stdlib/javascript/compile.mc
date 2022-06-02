@@ -144,7 +144,7 @@ lang MExprJSCompile = MExprAst + JSProgAst
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
       match (_charSeq2String tms) with Some str then JSEString { s = str }
-      else infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
+      else errorSingle [infoTm t] "Non-literal strings currently unsupported."
     else
       -- infoErrorExit (infoTm t) "Non-literal strings currently unsupported."
       -- Else compile each expression in sequence and return a list
@@ -188,18 +188,18 @@ let filepathWithoutExtension = lam filename.
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
-let javascriptCompile : Expr -> JSPProg =
+let javascriptCompile : Expr -> JSProg =
   lam ast : Expr.
   use MExprJSCompile in
   compile ast
 
 
 
-let javascriptCompileFile : Expr -> String -> Bool =
+let javascriptCompileFile : Expr -> String -> String =
   lam ast : Expr. lam sourcePath: String.
   use JSProgPrettyPrint in
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
   let jsprog = javascriptCompile ast in   -- Run JS compiler
   let source = printJSProg jsprog in      -- Pretty print
   writeFile targetPath source;
-  true
+  targetPath

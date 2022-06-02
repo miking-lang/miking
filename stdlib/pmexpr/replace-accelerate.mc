@@ -13,7 +13,8 @@ include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
-  PMExprAst + OCamlDataConversionMExpr + OCamlTopAst + OCamlPrettyPrint
+  PMExprAst + PMExprExtractAccelerate + OCamlDataConversionMExpr + OCamlTopAst +
+  OCamlPrettyPrint
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -23,7 +24,7 @@ lang PMExprReplaceAccelerate =
       else OTyBigarrayFloat64Elt {info = info} in
     OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
   | TyTensor t ->
-    infoErrorExit t.info "Cannot convert tensor of unsupported type"
+    errorSingle [t.info] "Cannot convert tensor of unsupported type"
 
   sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
   | ty & (TyCon {info = info, ident = ident}) ->
@@ -119,13 +120,14 @@ lang PMExprReplaceAccelerate =
   --
   -- The result is a list of OCaml record definitions, needed to handle the
   -- data conversion of record types, and an AST.
-  sem replaceAccelerate (accelerated : Map Name AccelerateData)
-                        (env : GenerateEnv) =
+  sem replaceAccelerate : Map Name AccelerateData -> GenerateEnv -> Expr
+                       -> ([Top], Expr)
+  sem replaceAccelerate accelerated env =
   | t -> replaceAccelerateH accelerated env [] t
 
-  sem replaceAccelerateH (accelerated : Map Name AccelerateData)
-                         (env : GenerateEnv)
-                         (acc : [Top]) =
+  sem replaceAccelerateH : Map Name AccelerateData -> GenerateEnv -> [Top]
+                        -> Expr -> ([Top], Expr)
+  sem replaceAccelerateH accelerated env acc =
   | t & (TmApp {lhs = lhs, ty = appTy}) ->
     let appArgs = collectAppArguments t in
     match appArgs with (TmVar {ident = id}, args) then
