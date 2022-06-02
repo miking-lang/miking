@@ -1,60 +1,75 @@
--- This file contains proof-of-concept functions for CPS transformation of the
--- basic lambda calculus subset of MExpr. It is based on
--- http://matt.might.net/articles/cps-conversion/.
--- TODO(dlunde,2020-09-25): Add full support for MExpr when stable.
+-- CPS tranformation for MExpr terms in ANF (produced by MExprANFAll in anf.mc).
 
 include "ast.mc"
 include "ast-builder.mc"
-include "symbolize.mc"
+include "boot-parser.mc"
 include "eq.mc"
+include "anf.mc"
 
-lang FunCPS = LamSym + LamEq + UnknownTypeAst + UnknownTypeEq
+lang CPS = LamAst + VarAst + LetAst
 
-  sem cpsK (cont: Expr -> Expr) =
-  | TmLam t -> cont (cpsM (TmLam t))
-  | TmVar t -> cont (cpsM (TmVar t))
-  | TmApp t ->
-    let rv = nameSym "rv" in
-    let rvvar = nvar_ rv in
-    let cont = nulam_ rv (cont rvvar) in
-    cpsK
-      (lam lhs.
-        cpsK
-          (lam rhs.
-            appf2_ lhs rhs cont)
-          t.rhs)
-      t.lhs
+  sem cps : Expr -> Expr
+  sem cps =
+  | e -> cpsCont (ulam_ "x" (var_ "x")) e
 
-  sem cpsC (cont: Expr) =
-  | TmLam t -> app_ cont (cpsM (TmLam t))
-  | TmVar t -> app_ cont (cpsM (TmVar t))
-  | TmApp t ->
-    cpsK
-      (lam lhs.
-        cpsK
-          (lam rhs.
-            appf2_ lhs rhs cont)
-          t.rhs)
-      t.lhs
-
-  sem cpsM =
-  | TmApp t -> errorSingle [t.info] "CPS: TmApp is not atomic"
-  | TmVar t -> TmVar t
-  | TmLam t ->
-    let k = nameSym "k" in
-    let kvar = nvar_ k in
-    nlam_ t.ident t.ty (nulam_ k (cpsC kvar t.body))
+  sem cpsCont : Expr -> Expr -> Expr
 
 end
 
+lang VarCPS = CPS + VarAst + AppAst
+  sem cpsCont k =
+  | TmVar _ & t-> app_ k t
+end
+
+lang AppCPS = CPS + AppAst
+  sem cpsCont k =
+  | TmLet { ident = ident, body = TmApp app, inexpr = inexpr } ->
+    let tailCall =
+      match inexpr with TmVar { ident = varIdent } then nameEq ident varIdent
+      else false
+    in
+    if tailCall then
+      -- Optimize tail call
+      appf2_ app.lhs k app.rhs
+    else
+      let inexpr = cpsCont k inexpr in
+      let kName = nameSym "k" in
+      let k = nulam_ ident inexpr in
+      bindall_ [
+        nulet_ kName k,
+        appf2_ app.lhs (nvar_ kName) app.rhs
+      ]
+end
+
+lang LamCPS = CPS + LamAst
+  sem cpsCont k =
+  | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
+    let kName = nameSym "k" in
+    let body =
+      nulam_ kName (TmLam {t with body = cpsCont (nvar_ kName) t.body}) in
+    TmLet { r with body = body }
+end
+
+lang MExprCPS = CPS + VarCPS + AppCPS + LamCPS
+end
+
+-----------
+-- TESTS --
+-----------
+
+lang Test = MExprCPS + BootParser + MExprEq + MExprANFAll
+end
 mexpr
-use FunCPS in
+use Test in
 
-let id = symbolize (ulam_ "x" (var_ "x")) in
-let idc = symbolize (ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))) in
-
-utest cpsM id with idc using eqExpr in
-
--- TODO(dlunde,2020-09-25): Add more test cases
+let _parse =
+  parseMExprString { defaultBootParserParseMExprStringArg with allowFree = true }
+in
+let _cps = lam e. cps (normalizeTerm (_parse e)) in
+utest _cps "
+  a b
+" with _parse "
+  a (lam x. x) b
+" using eqExpr in
 
 ()
