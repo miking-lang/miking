@@ -1,6 +1,7 @@
 -- CPS tranformation for MExpr terms in ANF (produced by MExprANFAll in anf.mc).
 
 include "ast.mc"
+include "type.mc"
 include "ast-builder.mc"
 include "boot-parser.mc"
 include "eq.mc"
@@ -25,6 +26,8 @@ end
 lang VarCPS = CPS + VarAst + AppAst
   sem cpsCont k =
   | TmVar _ & t-> app_ k t
+  | TmLet ({ body = TmVar _ } & t) ->
+    TmLet { t with inexpr = cpsCont k t.inexpr }
 end
 
 lang AppCPS = CPS + AppAst
@@ -65,7 +68,7 @@ lang RecLetsCPS = CPS + RecLetsAst + LamAst
     in TmRecLets { t with bindings = bindings, inexpr = cpsCont k t.inexpr }
 end
 
--- Wraps a direct-style (function) expression with given arity as a CPS function
+-- Wraps a direct-style function with given arity as a CPS function
 let wrapDirect = use MExprAst in
   lam arity: Int. lam e: Expr.
     recursive let vars = lam acc. lam arity.
@@ -78,7 +81,7 @@ let wrapDirect = use MExprAst in
     let varNames = vars [] arity in
     let inner = foldl (lam acc. lam v. app_ acc (nvar_ v.0)) e varNames in
     foldr (lam v. lam acc.
-        nulam_ v.0 (nulam_ v.1 (app_ (nvar_ v.0) acc))
+        nulam_ v.1 (nulam_ v.0 (app_ (nvar_ v.1) acc))
       ) inner varNames
 
 lang ConstCPS = CPS + ConstAst + MExprArity
@@ -135,22 +138,35 @@ lang MatchCPS = CPS + MatchAst
       ]
 end
 
+-- Not much needs to be done here thanks to ANF
 lang UtestCPS = CPS + UtestAst
-  -- TODO
+  sem cpsCont k =
+  | TmUtest t -> TmUtest { t with next = cpsCont k t.next }
+
 end
 
 lang NeverCPS = CPS + NeverAst
-  -- TODO
+  sem cpsCont k =
+  | TmLet ({ body = TmNever _ } & t) ->
+    TmLet { t with inexpr = cpsCont k t.inexpr }
 end
 
 lang ExtCPS = CPS + ExtAst
-  -- TODO We must have some way of getting the arity of externals (to wrap them
-  -- in continuations just like with intrinsics/constants)
+  sem cpsCont k =
+  | TmExt t ->
+    let arity = arityFunType t.tyIdent in
+    let newExtIdent = nameSetNewSym t.ident in
+    TmExt { t with
+      ident = newExtIdent,
+      inexpr = bindall_
+        [ nulet_ t.ident (wrapDirect arity (nvar_ newExtIdent)),
+          cpsCont k t.inexpr ]
+    }
 end
 
 lang MExprCPS =
-  CPS + VarCPS + AppCPS + LamCPS + RecLetsCPS + ConstCPS + SeqCPS + RecordCPS + TypeCPS
-  + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS
+  CPS + VarCPS + AppCPS + LamCPS + RecLetsCPS + ConstCPS + SeqCPS + RecordCPS +
+  TypeCPS + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS
 end
 
 -----------
@@ -182,6 +198,19 @@ utest _cps "
 "
 using eqExpr in
 
+utest _cps "
+  let x = 1 in
+  let y = x in
+  let z = y in
+  z
+" with _parse "
+  let x = 1 in
+  let y = x in
+  let z = y in
+  (lam x. x) z
+"
+using eqExpr in
+
 -- Recursive lets
 let recletsTest = _cps "
   recursive
@@ -204,10 +233,10 @@ utest recletsTest with _parse "
     let k4 = lam x.
       let t4 = 3 in
       let k5 = lam y.
-          let k6 = lam t5.
-              (lam x. x) y
-          in
-          and k6 x
+        let k6 = lam t5.
+          (lam x. x) y
+        in
+        and k6 x
       in
       f2 k5 t4
     in
@@ -221,7 +250,7 @@ using eqExpr in
 utest _cps "
   addi 1 2
 " with _parse "
-  let t = lam a1. lam k1. a1 (lam a2. lam k2. a2 (addi a1 a2)) in
+  let t = lam k1. lam a1. k1 (lam k2. lam a2. k2 (addi a1 a2)) in
   let t1 = 1 in
   let k = lam t2.
     let t3 = 2 in
@@ -303,6 +332,52 @@ utest matchtest with _parse "
       k1 t1
   in
   a k b
+"
+using eqExpr in
+
+-- Utest
+let utesttest = _cps "
+  utest a b with c using d e in
+  let x = f g in
+  y
+" in
+-- print (mexprToString utesttest);
+utest utesttest with _parse "
+  let k =
+    lam t.
+      let k1 =
+        lam t1.
+          utest t with c using t1 in
+          let k2 = lam x. (lam x. x) y in
+          f k2 g
+      in
+      d k1 e
+  in
+  a k b
+"
+using eqExpr in
+
+-- Never
+utest _cps "
+  never
+" with _parse "
+  let t = never in
+  (lam x. x) t
+"
+using eqExpr in
+
+-- Externals
+let externaltest = _cps "
+  external f : Float -> Float in
+  let x = f g in
+  y
+" in
+-- print (mexprToString externaltest);
+utest externaltest with _parse "
+  external f : Float -> Float in
+  let f1 = lam k1. lam a1. k1 (f a1) in
+  let k = lam x. (lam x. x) y in
+  f1 k g
 "
 using eqExpr in
 

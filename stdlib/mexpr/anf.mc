@@ -216,10 +216,22 @@ lang UtestANF = ANF + UtestAst
 
   sem normalize (k : Expr -> Expr) =
   | TmUtest t -> let tusing = optionMap normalizeTerm t.tusing in
-    TmUtest {{{{t with test = normalizeTerm t.test}
-                 with expected = normalizeTerm t.expected}
-                 with next = normalize k t.next}
-                 with tusing = tusing}
+    normalizeName
+      (lam test.
+         normalizeName
+           (lam expected.
+              let inner = lam tusing.
+                TmUtest { t with test = test,
+                                 expected = expected,
+                                 next = normalize k t.next,
+                                 tusing = tusing }
+              in
+              match t.tusing with Some tusing then
+                normalizeName (lam tusing. inner (Some tusing)) tusing
+              else
+                inner (None ()))
+           t.expected)
+      t.test
 
 end
 
