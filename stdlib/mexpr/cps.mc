@@ -10,8 +10,8 @@ include "const-arity.mc"
 
 lang CPS = LamAst + VarAst + LetAst
 
-  sem cps : Expr -> Expr
-  sem cps =
+  sem cpsIdentity : Expr -> Expr
+  sem cpsIdentity =
   | e -> cpsCont (ulam_ "x" (var_ "x")) e
 
   sem cpsCont : Expr -> Expr -> Expr
@@ -164,6 +164,12 @@ lang ExtCPS = CPS + ExtAst
     }
 end
 
+-- TODO: We need CPS for the types as well
+
+---------------
+-- MEXPR CPS --
+---------------
+
 lang MExprCPS =
   CPS + VarCPS + AppCPS + LamCPS + RecLetsCPS + ConstCPS + SeqCPS + RecordCPS +
   TypeCPS + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS
@@ -181,7 +187,7 @@ use Test in
 let _parse =
   parseMExprString { defaultBootParserParseMExprStringArg with allowFree = true }
 in
-let _cps = lam e. cps (normalizeTerm (_parse e)) in
+let _cps = lam e. cpsIdentity (normalizeTerm (_parse e)) in
 
 -- Simple base cases
 utest _cps "
