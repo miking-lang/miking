@@ -561,7 +561,7 @@ lang MExprTune = MExpr + TuneBase end
 lang TestLang =
   TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
-  BootParser + MExprSym + MExprPrettyPrint + MExprEval
+  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck
 end
 
 mexpr
@@ -607,7 +607,8 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     -- Context expansion
     match contextExpand env ast with (exp, ast) in
 
-    (if debug then printLn (expr2str ast) else ());
+    -- Transformations should produce an AST that type checks
+    let ast = typeCheck ast in
 
     -- Compile the program
     let compileOCaml = lam libs. lam clibs. lam ocamlProg.
