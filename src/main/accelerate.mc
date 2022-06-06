@@ -25,7 +25,6 @@ include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
-include "mexpr/resolve-alias.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
@@ -36,7 +35,9 @@ include "ocaml/pprint.mc"
 include "options.mc"
 include "sys.mc"
 include "pmexpr/ast.mc"
+include "pmexpr/build.mc"
 include "pmexpr/c-externals.mc"
+include "pmexpr/classify.mc"
 include "pmexpr/copy-analysis.mc"
 include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
@@ -48,17 +49,19 @@ include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utest-size-constraint.mc"
+include "pmexpr/well-formed.mc"
 include "parse.mc"
 
 lang PMExprCompile =
   BootParser +
-  MExprSym + MExprTypeCheck + MExprRemoveTypeAscription + MExprResolveAlias +
+  MExprSym + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprUtestTrans + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
   PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprUtestSizeConstraint +
-  PMExprReplaceAccelerate + PMExprNestedAccelerate + OCamlGenerate +
-  OCamlTypeDeclGenerate + OCamlGenerateExternalNaive + PMExprCopyAnalysis
+  PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
+  PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
+  PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +
+  OCamlGenerateExternalNaive + PMExprCopyAnalysis + PMExprBuild
 
   type AccelerateHooks a b = {
     generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
@@ -262,8 +265,8 @@ let writeFiles : String -> [(String, String)] -> () = lam dir. lam fileStrs.
 
 -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
 -- it because dune cannot set environment variables.
-let buildBinaryUsingMake : String -> String -> () =
-  lam sourcePath. lam td.
+let buildBinaryUsingMake : Option String -> String -> String -> () =
+  lam output. lam sourcePath. lam td.
   let dir = sysTempDirName td in
   let r = sysRunCommand ["make"] "" dir in
   (if neqi r.returncode 0 then
@@ -272,7 +275,9 @@ let buildBinaryUsingMake : String -> String -> () =
     exit 1
   else ());
   let binPath = sysJoinPath dir "_build/default/program.exe" in
-  let destFile = filenameWithoutExtension (filename sourcePath) in
+  let destFile =
+    match output with Some o then o
+    else filenameWithoutExtension (filename sourcePath) in
   sysMoveFile binPath destFile;
   sysChmodWriteAccessFile destFile;
   sysTempDirDelete td ();
@@ -295,7 +300,7 @@ let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
     ("dune-project", "(lang dune 2.0)"),
     ("dune", dunefile),
     ("Makefile", makefile)];
-  buildBinaryUsingMake sourcePath td
+  buildBinaryUsingMake options.output sourcePath td
 
 let mergePrograms : CudaProg -> CudaProg -> CudaProg =
   lam cudaProg. lam wrapperProg.
@@ -343,7 +348,7 @@ let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
     printLn (join ["Output files saved at '", dir, "'"]);
     exit 0
   else ());
-  buildBinaryUsingMake sourcePath td
+  buildBinaryUsingMake options.output sourcePath td
 
 -- NOTE(larshum, 2022-03-30): For now, we use a very simple solution which runs
 -- the compilation up until the well-formedness checks.
@@ -366,6 +371,26 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   let ast = utestStrip ast in
   wellFormed ast
 
+let generateGpuCode =
+  use PMExprCompile in
+  lam options : Options. lam asts : Map Class (Map Name AccelerateData, Expr).
+  mapMapWithKey
+    (lam class. lam entry.
+      match entry with (accelerateData, ast) in
+      match class with Cuda _ then
+        use MExprCudaCompile in
+        match cudaTranslation options accelerateData ast
+        with (cudaProg, wrapperProg) in
+        CudaCompileResult (mergePrograms cudaProg wrapperProg)
+      else match class with Futhark _ then
+        use MExprFutharkCompile in
+        let accelerateIds = mapMap (lam. ()) accelerateData in
+        let futharkProg = futharkTranslation accelerateIds ast in
+        let wrapperProg = generateWrapperCode accelerateData in
+        FutharkCompileResult (futharkProg, wrapperProg)
+      else never)
+    asts
+
 let compileAccelerated =
   use PMExprCompile in
   let _compile : all a. all b. Options -> AccelerateHooks a b -> String -> () =
@@ -383,7 +408,6 @@ let compileAccelerated =
     let ast = symbolizeExpr keywordsSymEnv ast in
     let ast = typeCheck ast in
     let ast = removeTypeAscription ast in
-    let ast = resolveAliases ast in
 
     -- Translate accelerate terms into functions with one dummy parameter, so
     -- that we can accelerate terms without free variables and so that it is
@@ -405,9 +429,15 @@ let compileAccelerated =
     -- Perform analysis to find variables unused after the accelerate call.
     let accelerated = findUnusedAfterAccelerate accelerated ast in
 
-    -- Translate the PMExpr AST into a representation of the GPU code and the
-    -- wrapper code.
-    match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
+    --match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
+
+    -- Produces an AST for each backend based on a classification of the
+    -- accelerated code. The result is a map from a backend-specific
+    -- classification type to an AST for the specific backend.
+    let accelerateAsts = classifyAccelerated accelerated accelerateAst in
+
+    -- Generate GPU code for the AST of each accelerate backend in use.
+    let gpuResult = generateGpuCode options accelerateAsts in
 
     -- Eliminate all utests in the MExpr AST
     let ast = utestStrip ast in
@@ -441,7 +471,18 @@ let compileAccelerated =
     let externalTops = getExternalCDeclarations accelerated in
 
     let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
-    hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
+    --hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
+
+    let buildOptions = {
+      debugGenerate = options.debugGenerate,
+      output = options.output,
+      file = file,
+      libs = libs,
+      clibs = clibs,
+      ocamlTops = ocamlTops,
+      acceleratedCode = gpuResult
+    } in
+    buildAccelerated buildOptions
   in _compile
 
 let compileAccelerate = lam files. lam options : Options. lam args.
