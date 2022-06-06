@@ -1,6 +1,6 @@
 -- defines the code for the gpu-utils.cu file
 
-let gpu_utils_code = "
+let gpuUtilsCode = "
 #include <stdlib.h>
 #include <stdio.h>
 

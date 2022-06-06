@@ -733,7 +733,7 @@ lang FutharkCWrapper =
         "<stddef.h>",
         "<stdlib.h>",
         "<stdio.h>",
-        "\"gpu.h\"",
+        "\"mexpr-futhark.h\"",
         "\"caml/alloc.h\"",
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\""
