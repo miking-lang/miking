@@ -193,24 +193,6 @@ let mergePrograms : CudaProg -> CudaProg -> CudaProg =
   let mergedTops = join [topDecls, cudaTops, topWrapperFunctions] in
   CuPProg {includes = concat lincludes rincludes, tops = mergedTops}
 
-let checkWellFormed =
-  use PMExprCompile in
-  lam accelerated : Map Class (Map Name AccelerateData, Expr).
-  mapMapWithKey
-    (lam class. lam entry.
-      match entry with (_, ast) in
-      dprintLn class;
-      printLn (use PMExprPrettyPrint in expr2str ast);
-      match class with Cuda _ then
-        use MExprCudaCompile in
-        wellFormed ast
-      else match class with Futhark _ then
-        use MExprFutharkCompile in
-        wellFormed ast
-      else never)
-    accelerated;
-  ()
-
 let generateGpuCode =
   use PMExprCompile in
   lam options : Options. lam asts : Map Class (Map Name AccelerateData, Expr).
@@ -277,9 +259,6 @@ let compileAccelerated =
     -- accelerated code. The result is a map from a backend-specific
     -- classification type to an AST for the specific backend.
     let accelerateAsts = classifyAccelerated accelerated accelerateAst in
-
-    -- Run the well-formedness checks on the accelerated parts of the program.
-    checkWellFormed accelerateAsts;
 
     -- Generate GPU code for the AST of each accelerate backend in use.
     let gpuResult = generateGpuCode options accelerateAsts in
