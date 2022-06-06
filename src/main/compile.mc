@@ -110,7 +110,9 @@ let compile = lam files. lam options : Options. lam args.
 
     -- Performs a CUDA well-formedness check of the AST, when the
     -- --check-cuda-well-formed flag is set.
-    (if options.checkCudaWellFormed then checkWellFormedCuda ast else ());
+    -- TODO: Include this in the "default" build process for MExpr, without
+    -- producing duplicated code.
+    -- (if options.checkCudaWellFormed then checkWellFormed ast else ());
 
     -- Demote parallel constructs to sequential equivalents and remove
     -- accelerate terms
