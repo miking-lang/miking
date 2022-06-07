@@ -187,11 +187,9 @@ lang ExtCPS = CPS + ExtAst
   sem exprCps k =
   | TmExt t ->
     let arity = arityFunType t.tyIdent in
-    let newExtIdent = nameSetNewSym t.ident in
     TmExt { t with
-      ident = newExtIdent,
       inexpr = bindall_
-        [ nulet_ t.ident (wrapDirect arity (nvar_ newExtIdent)),
+        [ nulet_ t.ident (wrapDirect arity (nvar_ t.ident)),
           exprCps k t.inexpr ]
     }
 end
