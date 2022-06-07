@@ -22,12 +22,10 @@ lang CPS = LamAst + VarAst + LetAst
 
   sem exprCps : Expr -> Expr -> Expr
 
-  -- TODO This does NOT currently work as expected
   sem exprTyCps : Expr -> Expr
   sem exprTyCps =
-  | e -> e -- Default is identity function
+  | e -> e -- Default is identity function (do nothing)
 
-  -- TODO This does NOT currently work as expected
   sem tyCps : Type -> Type
   sem tyCps =
   | t -> smap_Type_Type tyCps t
@@ -202,7 +200,6 @@ end
 -- TYPES --
 -----------
 
--- TODO This does NOT currently work as expected
 lang FunTypeCPS = CPS + FunTypeAst
   sem tyCps =
   -- Function type a -> b becomes (b -> res) -> a -> res
@@ -440,10 +437,51 @@ using eqExpr in
 
 -- Types (not supported in equality, check the string output from pprint)
 let typestest = _cps "
+  external e : Float -> Float in
+  let f: Float -> Float = lam x: Float. e x in
   let g: (Float -> Float) -> Float = lam h: (Float -> Float). h 1.0 in
-  g
+  recursive let h : all a. a -> a = lam y: a. y in
+  g f
 " in
-print (mexprToString typestest);
--- utest mexprToString typestest with "" in
+-- print (mexprToString typestest);
+utest mexprToString typestest with
+"external e : (Float) -> (Float)
+in
+let e1 =
+  lam k11.
+    lam a1.
+      k11
+        (e
+           a1)
+in
+let f: all r4. ((Float) -> (r4)) -> ((Float) -> (r4)) =
+  lam k2.
+    lam x: Float.
+      e1
+        k2
+        x
+in
+let g: all r1. ((Float) -> (r1)) -> ((all r2. ((Float) -> (r2)) -> ((Float) -> (r2))) -> (r1)) =
+  lam k1.
+    lam h: all r3. ((Float) -> (r3)) -> ((Float) -> (r3)).
+      let t =
+        1.
+      in
+      h
+        k1
+        t
+in
+recursive
+  let h: all a. all r. ((a) -> (r)) -> ((a) -> (r)) =
+    lam k.
+      lam y: a.
+        k
+          y
+in
+g
+  (lam x.
+     x)
+  f"
+in
 
 ()
