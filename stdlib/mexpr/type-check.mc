@@ -584,7 +584,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
           unify [infoTm body] env ty (tyTm body))
         -- Type annotation: unify the inferred type of the body with the annotated one
         (lam ty.
-          match stripTyAll ty with (_, tyAnnot) in
+          match stripTyAll (resolveAlias env.tyConEnv ty) with (_, tyAnnot) in
           unify [infoTy ty, infoTm body] env tyAnnot (tyTm body))
         (sremoveUnknown b.tyBody);
       {b with body = body}
