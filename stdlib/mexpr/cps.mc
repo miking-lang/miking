@@ -158,6 +158,12 @@ lang DataCPS = CPS + DataAst
     TmLet { t with inexpr = exprCps k t.inexpr }
   | TmConDef t ->
     TmConDef { t with inexpr = exprCps k t.inexpr }
+
+  -- We do not transform the top-level arrow type of the condef (due to
+  -- the nested smap_Type_Type), as data values are constructed as usual even
+  -- in CPS.
+  sem exprTyCps =
+  | TmConDef _ & e -> smap_Expr_Type (smap_Type_Type tyCps) e
 end
 
 lang MatchCPS = CPS + MatchAst
@@ -452,6 +458,8 @@ let typestest = _cps "
   let f: Float -> Float = lam x: Float. e x in
   let g: (Float -> Float) -> Float = lam h: (Float -> Float). h 1.0 in
   recursive let h : all a. a -> a = lam y: a. y in
+  type T in
+  con C : (all x. x -> x) -> T in
   g f
 " in
 -- print (mexprToString typestest);
@@ -465,16 +473,16 @@ let e =
         (e
            a1)
 in
-let f: all r4. ((Float) -> (r4)) -> ((Float) -> (r4)) =
+let f: all r5. ((Float) -> (r5)) -> ((Float) -> (r5)) =
   lam k2.
     lam x: Float.
       e
         k2
         x
 in
-let g: all r1. ((Float) -> (r1)) -> ((all r2. ((Float) -> (r2)) -> ((Float) -> (r2))) -> (r1)) =
+let g: all r2. ((Float) -> (r2)) -> ((all r3. ((Float) -> (r3)) -> ((Float) -> (r3))) -> (r2)) =
   lam k1.
-    lam h: all r3. ((Float) -> (r3)) -> ((Float) -> (r3)).
+    lam h: all r4. ((Float) -> (r4)) -> ((Float) -> (r4)).
       let t =
         1.
       in
@@ -489,6 +497,9 @@ recursive
         k
           y
 in
+type T
+in
+con C: (all x. all r1. ((x) -> (r1)) -> ((x) -> (r1))) -> (T) in
 g
   (lam x.
      x)
