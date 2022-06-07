@@ -148,16 +148,20 @@ lang Unify = MExprAst + ResolveAlias
   | (ty1, ty2) ->
     unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
 
-  -- checkBeforeUnify is called before a variable `tv' is unified with another type.
+  -- unifyCheck is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
   -- - Occurs check
   -- - Update level fields of FlexVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
-  -- - If `tv' is unified with a bound type variable, ensure no capture occurs
-  sem checkBeforeUnify : [Info] -> FlexVarRec -> Type -> ()
-  sem checkBeforeUnify info tv =
+  -- - If `tv' is unified with a free type variable, ensure no capture occurs
+  sem unifyCheck : [Info] -> FlexVarRec -> Type -> ()
+  sem unifyCheck info tv =
+  | ty -> unifyCheckBase info (setEmpty nameCmp) tv ty
+
+  sem unifyCheckBase : [Info] -> Set Name -> FlexVarRec -> Type -> ()
+  sem unifyCheckBase info boundVars tv =
   | ty ->
-    sfold_Type_Type (lam. lam ty. checkBeforeUnify info tv ty) () ty
+    sfold_Type_Type (lam. lam ty. unifyCheckBase info boundVars tv ty) () ty
 end
 
 -- Helper language providing functions to unify fields of record-like types
@@ -190,14 +194,16 @@ lang VarTypeUnify = Unify + VarTypeAst
     else if biMem (t1.ident, t2.ident) env.names then ()
     else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
 
-  sem checkBeforeUnify info tv =
+  sem unifyCheckBase info boundVars tv =
   | TyVar t ->
     if leqi tv.level t.level then
-      let msg = join [
-        "Type check failed: unification failure\n",
-        "Attempted to unify with type variable escaping its scope!\n"
-      ] in
-      errorSingle info msg
+      if not (setMem t.ident boundVars) then
+        let msg = join [
+          "Type check failed: unification failure\n",
+          "Attempted to unify with type variable escaping its scope!\n"
+        ] in
+        errorSingle info msg
+      else ()
     else ()
 end
 
@@ -226,7 +232,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     -- resolves any potential links, so TyFlexes are always unbound here.
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
     if not (nameEq r1.ident r2.ident) then
-      checkBeforeUnify env.info r1 ty2;
+      unifyCheck env.info r1 ty2;
       let updated =
         Unbound {{{r1 with level = mini r1.level r2.level}
                       with sort = addSorts env (r1.sort, r2.sort)}
@@ -237,7 +243,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
   | (TyFlex t1 & ty1, !(TyUnknown _ | TyFlex _) & ty2)
   | (!(TyUnknown _ | TyFlex _) & ty2, TyFlex t1 & ty1) ->
     match deref t1.contents with Unbound tv in
-    checkBeforeUnify env.info tv ty2;
+    unifyCheck env.info tv ty2;
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
        unifyFields env r1.fields r2.fields
      else match tv.sort with RecordVar _ then
@@ -245,7 +251,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
      else ());
     modref t1.contents (Link ty2)
 
-  sem checkBeforeUnify info tv =
+  sem unifyCheckBase info boundVars tv =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
       if nameEq r.ident tv.ident then
@@ -255,7 +261,8 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
         let sort =
           match (tv.sort, r.sort) with (WeakVar _, TypeVar _) then WeakVar ()
           else
-            sfold_VarSort_Type (lam. lam ty. checkBeforeUnify info tv ty) () r.sort;
+            sfold_VarSort_Type
+              (lam. lam ty. unifyCheckBase info boundVars tv ty) () r.sort;
             r.sort
         in
         let updated = Unbound {{{r with level = mini r.level tv.level}
@@ -263,7 +270,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
                                    with allowGeneralize = and r.allowGeneralize tv.allowGeneralize} in
         modref t.contents updated
     else
-      checkBeforeUnify info tv (resolveLink ty)
+      unifyCheckBase info boundVars tv (resolveLink ty)
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -290,7 +297,7 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
-  sem checkBeforeUnify info tv =
+  sem unifyCheckBase info boundVars tv =
   | TyAll t ->
     match tv.sort with WeakVar _ then
       let msg = join [
@@ -299,8 +306,8 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
       ] in
       errorSingle info msg
     else
-      sfold_VarSort_Type (lam. lam ty. checkBeforeUnify info tv ty) () t.sort;
-      checkBeforeUnify info tv t.ty
+      sfold_VarSort_Type (lam. lam ty. unifyCheckBase info boundVars tv ty) () t.sort;
+      unifyCheckBase info (setInsert t.ident boundVars) tv t.ty
 end
 
 lang ConTypeUnify = Unify + ConTypeAst
