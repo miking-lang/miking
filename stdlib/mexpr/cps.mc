@@ -12,7 +12,9 @@ lang CPS = LamAst + VarAst + LetAst
 
   sem cpsIdentity : Expr -> Expr
   sem cpsIdentity =
-  | e -> cpsCont (ulam_ "x" (var_ "x")) e
+  | e ->
+    let i = withInfo (infoTm e) in
+    cpsCont (i (ulam_ "x" (var_ "x"))) e
 
   sem cpsCont : Expr -> Expr -> Expr
   sem cpsCont k =
@@ -43,7 +45,7 @@ end
 
 lang VarCPS = CPS + VarAst + AppAst
   sem exprCps k =
-  | TmVar _ & t-> app_ k t
+  | TmVar _ & t-> withInfo (infoTm t) (app_ k t)
   | TmLet ({ body = TmVar _ } & b) ->
     TmLet { b with inexpr = exprCps k b.inexpr }
 end
@@ -51,16 +53,17 @@ end
 lang AppCPS = CPS + AppAst
   sem exprCps k =
   | TmLet { ident = ident, body = TmApp app, inexpr = inexpr } & t ->
+    let i = withInfo (infoTm t) in
     if tailCall t then
       -- Optimize tail call
-      appf2_ app.lhs k app.rhs
+      i (appf2_ app.lhs k app.rhs)
     else
       let inexpr = exprCps k inexpr in
       let kName = nameSym "k" in
-      let k = nulam_ ident inexpr in
+      let k = i (nulam_ ident inexpr) in
       bindall_ [
-        nulet_ kName k,
-        appf2_ app.lhs (nvar_ kName) app.rhs
+        i (nulet_ kName k),
+        i (appf2_ app.lhs (i (nvar_ kName)) app.rhs)
       ]
 end
 
@@ -68,8 +71,10 @@ lang LamCPS = CPS + LamAst
   sem exprCps k =
   | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
     let kName = nameSym "k" in
+    let i = withInfo t.info in
     let body =
-      nulam_ kName (TmLam {t with body = exprCps (nvar_ kName) t.body}) in
+      i (nulam_ kName (TmLam {t with body = exprCps (i (nvar_ kName)) t.body}))
+    in
     TmLet { r with body = body, inexpr = exprCps k inexpr }
 
   sem exprTyCps =
@@ -87,7 +92,9 @@ lang RecLetsCPS = CPS + RecLetsAst + LamAst
     let bindings = map (lam b: RecLetBinding. { b with body =
         match b.body with TmLam t then
           let kName = nameSym "k" in
-          nulam_ kName (TmLam {t with body = exprCps (nvar_ kName) t.body})
+          let i = withInfo t.info in
+          i (nulam_ kName
+               (TmLam {t with body = exprCps (i (nvar_ kName)) t.body}))
         else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in CPS transformation"
       }) t.bindings
@@ -100,6 +107,7 @@ end
 -- Wraps a direct-style function with given arity as a CPS function
 let wrapDirect = use MExprAst in
   lam arity: Int. lam e: Expr.
+    let i = withInfo (infoTm e) in
     recursive let vars = lam acc. lam arity.
       if lti arity 1 then acc
       else
@@ -108,9 +116,10 @@ let wrapDirect = use MExprAst in
         vars (cons (arg, cont) acc) (subi arity 1)
     in
     let varNames = vars [] arity in
-    let inner = foldl (lam acc. lam v. app_ acc (nvar_ v.0)) e varNames in
+    let inner = foldl (lam acc. lam v.
+        i (app_ acc (nvar_ v.0))) e varNames in
     foldr (lam v. lam acc.
-        nulam_ v.1 (nulam_ v.0 (app_ (nvar_ v.1) acc))
+        i (nulam_ v.1 (i (nulam_ v.0 (app_ (i (nvar_ v.1)) acc))))
       ) inner varNames
 
 lang ConstCPS = CPS + ConstAst + MExprArity
@@ -160,12 +169,13 @@ lang MatchCPS = CPS + MatchAst
     else
       let inexpr = exprCps k inexpr in
       let kName = nameSym "k" in
-      let k = nulam_ ident inexpr in
+      let i = withInfo (infoTm t) in
+      let k = i (nulam_ ident inexpr) in
       bindall_ [
-        nulet_ kName k,
+        i (nulet_ kName k),
         TmMatch { m with
-          thn = exprCps (nvar_ kName) m.thn,
-          els = exprCps (nvar_ kName) m.els
+          thn = exprCps (i (nvar_ kName)) m.thn,
+          els = exprCps (i (nvar_ kName)) m.els
         }
       ]
 end
@@ -187,9 +197,10 @@ lang ExtCPS = CPS + ExtAst
   sem exprCps k =
   | TmExt t ->
     let arity = arityFunType t.tyIdent in
+    let i = withInfo t.info in
     TmExt { t with
       inexpr = bindall_
-        [ nulet_ t.ident (wrapDirect arity (nvar_ t.ident)),
+        [ i (nulet_ t.ident (wrapDirect arity (i (nvar_ t.ident)))),
           exprCps k t.inexpr ]
     }
 end
@@ -202,12 +213,14 @@ lang FunTypeCPS = CPS + FunTypeAst
   sem tyCps =
   -- Function type a -> b becomes (b -> res) -> a -> res
   | TyArrow ({ from = from, to = to } & b) ->
+    let i = tyWithInfo b.info in
     let from = tyCps from in
     let to = tyCps to in
     let resTyName = nameSym "r" in
-    let cont = tyarrow_ to (ntyvar_ resTyName) in
-    ntyall_ resTyName
-      (tyarrow_ cont (TyArrow { b with from = from, to = (ntyvar_ resTyName) }))
+    let cont = i (tyarrow_ to (i (ntyvar_ resTyName))) in
+    i (ntyall_ resTyName
+        (i (tyarrow_ cont
+              (TyArrow { b with from = from, to = (i (ntyvar_ resTyName)) }))))
 end
 
 ---------------
@@ -445,7 +458,7 @@ let typestest = _cps "
 utest mexprToString typestest with
 "external e : (Float) -> (Float)
 in
-let e1 =
+let e =
   lam k11.
     lam a1.
       k11
@@ -455,7 +468,7 @@ in
 let f: all r4. ((Float) -> (r4)) -> ((Float) -> (r4)) =
   lam k2.
     lam x: Float.
-      e1
+      e
         k2
         x
 in
