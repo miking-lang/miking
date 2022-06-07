@@ -15,6 +15,22 @@ lang CPS = LamAst + VarAst + LetAst
   | e -> cpsCont (ulam_ "x" (var_ "x")) e
 
   sem cpsCont : Expr -> Expr -> Expr
+  sem cpsCont k =
+  | e ->
+    let e = exprCps k e in
+    mapPre_Expr_Expr exprTyCps e
+
+  sem exprCps : Expr -> Expr -> Expr
+
+  -- TODO This does NOT currently work as expected
+  sem exprTyCps : Expr -> Expr
+  sem exprTyCps =
+  | e -> e -- Default is identity function
+
+  -- TODO This does NOT currently work as expected
+  sem tyCps : Type -> Type
+  sem tyCps =
+  | t -> smap_Type_Type tyCps t
 
   sem tailCall =
   | TmLet { ident = ident, inexpr = inexpr } ->
@@ -23,21 +39,25 @@ lang CPS = LamAst + VarAst + LetAst
 
 end
 
+-----------
+-- TERMS --
+-----------
+
 lang VarCPS = CPS + VarAst + AppAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmVar _ & t-> app_ k t
-  | TmLet ({ body = TmVar _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+  | TmLet ({ body = TmVar _ } & b) ->
+    TmLet { b with inexpr = exprCps k b.inexpr }
 end
 
 lang AppCPS = CPS + AppAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet { ident = ident, body = TmApp app, inexpr = inexpr } & t ->
     if tailCall t then
       -- Optimize tail call
       appf2_ app.lhs k app.rhs
     else
-      let inexpr = cpsCont k inexpr in
+      let inexpr = exprCps k inexpr in
       let kName = nameSym "k" in
       let k = nulam_ ident inexpr in
       bindall_ [
@@ -47,25 +67,36 @@ lang AppCPS = CPS + AppAst
 end
 
 lang LamCPS = CPS + LamAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
     let kName = nameSym "k" in
     let body =
-      nulam_ kName (TmLam {t with body = cpsCont (nvar_ kName) t.body}) in
-    TmLet { r with body = body, inexpr = cpsCont k inexpr }
+      nulam_ kName (TmLam {t with body = exprCps (nvar_ kName) t.body}) in
+    TmLet { r with body = body, inexpr = exprCps k inexpr }
+
+  sem exprTyCps =
+  | TmLam _ & e -> smap_Expr_Type tyCps e
+end
+
+lang LetCPS = CPS + LetAst
+  sem exprTyCps =
+  | TmLet _ & e -> smap_Expr_Type tyCps e
 end
 
 lang RecLetsCPS = CPS + RecLetsAst + LamAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmRecLets t ->
     let bindings = map (lam b: RecLetBinding. { b with body =
         match b.body with TmLam t then
           let kName = nameSym "k" in
-          nulam_ kName (TmLam {t with body = cpsCont (nvar_ kName) t.body})
+          nulam_ kName (TmLam {t with body = exprCps (nvar_ kName) t.body})
         else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in CPS transformation"
       }) t.bindings
-    in TmRecLets { t with bindings = bindings, inexpr = cpsCont k t.inexpr }
+    in TmRecLets { t with bindings = bindings, inexpr = exprCps k t.inexpr }
+
+  sem exprTyCps =
+  | TmRecLets _ & e -> smap_Expr_Type tyCps e
 end
 
 -- Wraps a direct-style function with given arity as a CPS function
@@ -85,74 +116,77 @@ let wrapDirect = use MExprAst in
       ) inner varNames
 
 lang ConstCPS = CPS + ConstAst + MExprArity
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ body = TmConst { val = c } & body} & t) ->
     -- Constants are not in CPS, so we must wrap them all in CPS lambdas
     let body = wrapDirect (constArity c) body in
-    TmLet { t with body = body, inexpr = cpsCont k t.inexpr }
+    TmLet { t with body = body, inexpr = exprCps k t.inexpr }
 end
 
 -- Thanks to ANF, we don't need to do anything at all when constructing data
 -- (TmRecord, TmSeq, TmConApp, etc.)
 lang SeqCPS = CPS + SeqAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ body = TmSeq _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
 end
 
 lang RecordCPS = CPS + RecordAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ body = TmRecord _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
 end
 
 lang TypeCPS = CPS + TypeAst
-  sem cpsCont k =
-  | TmType t -> TmType { t with inexpr = cpsCont k t.inexpr }
+  sem exprCps k =
+  | TmType t -> TmType { t with inexpr = exprCps k t.inexpr }
+
+  sem exprTyCps =
+  | TmType _ & e -> smap_Expr_Type tyCps e
 end
 
 lang DataCPS = CPS + DataAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ body = TmConApp _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
   | TmConDef t ->
-    TmConDef { t with inexpr = cpsCont k t.inexpr }
+    TmConDef { t with inexpr = exprCps k t.inexpr }
 end
 
 lang MatchCPS = CPS + MatchAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet { ident = ident, body = TmMatch m, inexpr = inexpr } & t ->
     if tailCall t then
       -- Optimize tail call
-      TmMatch { m with thn = cpsCont k m.thn, els = cpsCont k m.els }
+      TmMatch { m with thn = exprCps k m.thn, els = exprCps k m.els }
     else
-      let inexpr = cpsCont k inexpr in
+      let inexpr = exprCps k inexpr in
       let kName = nameSym "k" in
       let k = nulam_ ident inexpr in
       bindall_ [
         nulet_ kName k,
         TmMatch { m with
-          thn = cpsCont (nvar_ kName) m.thn,
-          els = cpsCont (nvar_ kName) m.els
+          thn = exprCps (nvar_ kName) m.thn,
+          els = exprCps (nvar_ kName) m.els
         }
       ]
 end
 
 -- Not much needs to be done here thanks to ANF
 lang UtestCPS = CPS + UtestAst
-  sem cpsCont k =
-  | TmUtest t -> TmUtest { t with next = cpsCont k t.next }
+  sem exprCps k =
+  | TmUtest t -> TmUtest { t with next = exprCps k t.next }
 
 end
 
 lang NeverCPS = CPS + NeverAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmLet ({ body = TmNever _ } & t) ->
-    TmLet { t with inexpr = cpsCont k t.inexpr }
+    TmLet { t with inexpr = exprCps k t.inexpr }
 end
 
 lang ExtCPS = CPS + ExtAst
-  sem cpsCont k =
+  sem exprCps k =
   | TmExt t ->
     let arity = arityFunType t.tyIdent in
     let newExtIdent = nameSetNewSym t.ident in
@@ -160,19 +194,36 @@ lang ExtCPS = CPS + ExtAst
       ident = newExtIdent,
       inexpr = bindall_
         [ nulet_ t.ident (wrapDirect arity (nvar_ newExtIdent)),
-          cpsCont k t.inexpr ]
+          exprCps k t.inexpr ]
     }
 end
 
--- TODO: We need CPS for the types as well
+-----------
+-- TYPES --
+-----------
+
+-- TODO This does NOT currently work as expected
+lang FunTypeCPS = CPS + FunTypeAst
+  sem tyCps =
+  -- Function type a -> b becomes (b -> res) -> a -> res
+  | TyArrow ({ from = from, to = to } & b) ->
+    let from = tyCps from in
+    let to = tyCps to in
+    let resTyName = nameSym "r" in
+    let cont = tyarrow_ to (ntyvar_ resTyName) in
+    ntyall_ resTyName
+      (tyarrow_ cont (TyArrow { b with from = from, to = (ntyvar_ resTyName) }))
+end
 
 ---------------
 -- MEXPR CPS --
 ---------------
 
 lang MExprCPS =
-  CPS + VarCPS + AppCPS + LamCPS + RecLetsCPS + ConstCPS + SeqCPS + RecordCPS +
-  TypeCPS + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS
+  CPS + VarCPS + AppCPS + LamCPS + LetCPS + RecLetsCPS + ConstCPS + SeqCPS +
+  RecordCPS + TypeCPS + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS +
+
+  FunTypeCPS
 end
 
 -----------
@@ -386,5 +437,13 @@ utest externaltest with _parse "
   f1 k g
 "
 using eqExpr in
+
+-- Types (not supported in equality, check the string output from pprint)
+let typestest = _cps "
+  let g: (Float -> Float) -> Float = lam h: (Float -> Float). h 1.0 in
+  g
+" in
+print (mexprToString typestest);
+-- utest mexprToString typestest with "" in
 
 ()

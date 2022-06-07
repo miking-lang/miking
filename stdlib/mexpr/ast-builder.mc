@@ -100,6 +100,10 @@ let nstyall_ = use AllTypeAst in
 
 let styall_ = lam s. nstyall_ (nameNoSym s)
 
+let ntyall_ : Name -> Type -> Type  = use VarSortAst in
+  lam n.
+  nstyall_ n (TypeVar ())
+
 let tyall_ = use VarSortAst in
   lam s.
   styall_ s (TypeVar ())
