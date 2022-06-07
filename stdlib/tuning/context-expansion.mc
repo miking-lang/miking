@@ -70,9 +70,8 @@ lang ContextExpand = HoleAst
   --  replace them by lookups in a static table.
   sem contextExpand (env : CallCtxEnv) =
   | t ->
-    let lookup = lam i.
-      let intExpr = tensorGetExn_ tyunknown_ (nvar_ _table) (seq_ [int_ i]) in
-      fromInt (get env.idx2hole i) intExpr
+    let lookup = _lookupFromInt env (lam i.
+      tensorGetExn_ tyint_ (nvar_ _table) (seq_ [int_ i]))
     in
     let ast = _contextExpandWithLookup env lookup t in
     let tempDir = sysTempDirMake () in
@@ -87,7 +86,13 @@ lang ContextExpand = HoleAst
   -- 'insert public table t' replaces the holes in expression 't' by the values
   -- in 'table'
   sem insert (env : CallCtxEnv) (table : LookupTable) =
-  | t -> _contextExpandWithLookup env (lam i. get table i) t
+  | t ->
+    _contextExpandWithLookup env (_lookupFromInt env (lam i. get table i)) t
+
+  -- Converts the ith table entry from an integer to the type of the hole
+  sem _lookupFromInt (env: CallCtxEnv) (lookup: Int -> Expr) =
+  | i ->
+    fromInt (get env.idx2hole i) (lookup i)
 
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.

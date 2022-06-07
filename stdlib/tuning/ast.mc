@@ -198,7 +198,7 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
 
   sem hfromInt =
   | BoolHole {} ->
-    lam e. if_ (eqi_ (int_ 0) e) false_ true_
+    lam e. neqi_ (int_ 0) e
 
   sem htoInt info v =
   | BoolHole {} ->
