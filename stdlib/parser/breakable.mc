@@ -155,7 +155,7 @@ include "map.mc"
 include "set.mc"
 include "either.mc"
 include "common.mc"
-include "parser/error-highlight.mc"
+include "error.mc"
 
 type AllowedDirection
 con GNeither : () -> AllowedDirection

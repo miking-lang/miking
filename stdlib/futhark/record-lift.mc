@@ -14,22 +14,6 @@ include "futhark/ast.mc"
 include "futhark/ast-builder.mc"
 include "futhark/pprint.mc"
 
-type ParamData = (Name, FutType)
-
-type FunctionReplaceData = {
-  -- Contains the type of the function after replacing record parameters with a
-  -- record field parameters.
-  newType : FutType,
-
-  -- The sequence of parameter names and type, as expected by the function
-  -- prior to the record parameter lifting.
-  oldParams : [ParamData],
-
-  -- Maps the name of a replaced record parameter to the parameters of the
-  -- fields that replaced it.
-  paramReplace : Map Name (Map SID ParamData)
-}
-
 let _collectAppTargetAndArgs = use FutharkAst in
   lam e : FutExpr.
   recursive let work = lam args : [FutExpr]. lam e : FutExpr.
@@ -54,7 +38,23 @@ let _constructAppSeq = use FutharkAst in
     args
 
 lang FutharkRecordParamLift = FutharkAst
-  sem updateParams : FunctionReplaceData -> FExpr -> [FExpr] -> FExpr
+  type ParamData = (Name, FutType)
+
+  type FunctionReplaceData = {
+    -- Contains the type of the function after replacing record parameters with a
+    -- record field parameters.
+    newType : FutType,
+
+    -- The sequence of parameter names and type, as expected by the function
+    -- prior to the record parameter lifting.
+    oldParams : [ParamData],
+
+    -- Maps the name of a replaced record parameter to the parameters of the
+    -- fields that replaced it.
+    paramReplace : Map Name (Map SID ParamData)
+  }
+
+  sem updateParams : FunctionReplaceData -> FutExpr -> [FutExpr] -> Info -> FutExpr
   sem updateParams data target args =
   | info ->
     let data : FunctionReplaceData = data in
@@ -94,11 +94,11 @@ lang FutharkRecordParamLift = FutharkAst
                  ty = FTyArrow {from = tyFutTm extraArg,
                                 to = tyFutTm acc,
                                 info = info}}
-        else infoErrorExit info "")
+        else errorSingle [info] "")
       (_constructAppSeq target appArgs)
       addedArgs
 
-  sem updateApplicationParameters : Map Name FunctionReplaceData -> FExpr -> FExpr
+  sem updateApplicationParameters : Map Name FunctionReplaceData -> FutExpr -> FutExpr
   sem updateApplicationParameters replaceMap =
   | FEVar t ->
     match mapLookup t.ident replaceMap with Some data then
@@ -151,7 +151,7 @@ lang FutharkRecordParamLift = FutharkAst
           -- record projections found here should also be found in the
           -- collection phase. If we were to get here, there is a bug in the
           -- implementation. What would be a good error message here?
-          infoErrorExit t.info "Failed to replace record with its fields"
+          errorSingle [t.info] "Failed to replace record with its fields"
       else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
     else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
   | t -> smap_FExpr_FExpr (replaceProjections paramReplace) t

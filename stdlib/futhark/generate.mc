@@ -19,72 +19,6 @@ type FutharkGenerateEnv = {
   boundNames : Map Name Expr
 }
 
-recursive let _isHigherOrderFunction = use FutharkAst in
-  lam params : [(Name, FutType)].
-  match params with [] then
-    false
-  else match params with [(_, ty)] ++ t then
-    match ty with FTyArrow _ then
-      true
-    else _isHigherOrderFunction t
-  else never
-end
-
-recursive let _getTrailingSelfRecursiveCallParams = use MExprAst in
-  lam funcIdent : Name. lam body : Expr.
-  match body with TmLet {inexpr = inexpr} then
-    _getTrailingSelfRecursiveCallParams funcIdent inexpr
-  else match body with TmRecLets {inexpr = inexpr} then
-    _getTrailingSelfRecursiveCallParams funcIdent inexpr
-  else
-    recursive let collectAppArgs = lam args : [Expr]. lam e : Expr.
-      match e with TmApp {lhs = lhs, rhs = rhs} then
-        let args = cons rhs args in
-        match lhs with TmVar {ident = id} then
-          if nameEq funcIdent id then Some args
-          else None ()
-        else
-          collectAppArgs args lhs
-      else None ()
-    in
-    collectAppArgs [] body
-end
-
-let _constructLoopResult = use MExprAst in
-  lam functionParams : [(Name, a)].
-  lam recursiveCallParams : [Expr].
-  lam baseCase : Expr.
-  let updatedParams : Map Name Expr =
-    mapFromSeq
-      nameCmp
-      (mapi
-        (lam i. lam p : (Name, a).
-          (p.0, get recursiveCallParams i)) functionParams) in
-  recursive let work = lam e : Expr.
-    match e with TmVar t then
-      optionGetOrElse (lam. e) (mapLookup t.ident updatedParams)
-    else smap_Expr_Expr work e
-  in
-  work baseCase
-
-let _usePassedParameters = use MExprAst in
-  lam functionParams : [(Name, a)].
-  lam passedParams : [Expr].
-  lam body : Expr.
-  let paramMap : Map Name Expr =
-    mapFromSeq
-      nameCmp
-      (mapi
-        (lam i. lam p : (Name, a).
-          (p.0, get passedParams i))
-        (subsequence functionParams 0 (length passedParams))) in
-  recursive let work = lam e : Expr.
-    match e with TmVar t then
-      optionGetOrElse (lam. e) (mapLookup t.ident paramMap)
-    else smap_Expr_Expr work e
-  in
-  work body
-
 lang FutharkConstGenerate = MExprAst + FutharkAst
   sem generateConst (info : Info) =
   | CInt n -> FCInt {val = n.val}
@@ -114,7 +48,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CNull _ -> FCNull ()
   | CMap _ -> FCMap ()
   | CFoldl _ -> FCFoldl ()
-  | c -> infoErrorExit info "Constant is not supported by the Futhark backend"
+  | c -> errorSingle [info] "Constant is not supported by the Futhark backend"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
@@ -153,12 +87,12 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
               info = t.info}
   | TyVar t -> FTyIdent {ident = t.ident, info = t.info}
   | TyUnknown t ->
-    infoErrorExit t.info "Unknown types are not supported by the Futhark backend"
+    errorSingle [t.info] "Unknown types are not supported by the Futhark backend"
   | TyVariant t ->
-    infoErrorExit t.info "Variant types are not supported by the Futhark backend"
+    errorSingle [t.info] "Variant types are not supported by the Futhark backend"
   | t ->
     let tyStr = use MExprPrettyPrint in type2str t in
-    infoErrorExit (infoTy t)
+    errorSingle [infoTy t]
       (join ["Terms of type '", tyStr, "' are not supported by the Futhark backend"])
 end
 
@@ -186,17 +120,17 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
                 ty = generateType env t.ty, info = t.info}
     else
       let tyStr = use MExprPrettyPrint in type2str targetTy in
-      infoErrorExit t.info (join ["Term of non-record type '", tyStr,
+      errorSingle [t.info] (join ["Term of non-record type '", tyStr,
                                   "' cannot be matched with record pattern"])
   | p ->
-    infoErrorExit (infoPat p) "Pattern is not supported by Futhark backend"
+    errorSingle [infoPat p] "Pattern is not supported by Futhark backend"
 end
 
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
                             FutharkTypeGenerate + FutharkTypePrettyPrint
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
-    infoErrorExit t.info (join ["Match expression not supported by the Futhark backend"])
+    errorSingle [t.info] (join ["Match expression not supported by the Futhark backend"])
 
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmMatch ({pat = PatBool {val = true}} & t) ->
@@ -233,9 +167,9 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
-    FELet {ident = n, tyBody = tyTm t.target, body = generateExpr env t.target,
-           inexpr = generateExpr env t.thn, ty = generateType env (tyTm t.thn),
-           info = infoTm t.target}
+    FELet {ident = n, tyBody = generateType env (tyTm t.target),
+           body = generateExpr env t.target, inexpr = generateExpr env t.thn,
+           ty = generateType env (tyTm t.thn), info = infoTm t.target}
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     let defaultGenerateRecordMatch = lam.
       FEMatch {
@@ -282,8 +216,9 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
         ty = generateType env (tyTm t.thn),
         info = t.info}
     else
-      let tyStr = use MExprPrettyPrint in type2str targetTy in
-      infoErrorExit t.info (join ["Term of non-sequence type '", tyStr,
+      use FutharkTypePrettyPrint in
+      match pprintType 0 pprintEnvEmpty targetTy with (_, tyStr) in
+      errorSingle [t.info] (join ["Term of non-sequence type '", tyStr,
                                   "' cannot be matched on sequence pattern"])
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
@@ -356,7 +291,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
       else
         FEApp {
           lhs = FEApp {
-            lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
+            lhs = FEConst {val = FCAdd (), ty = futUnknownTy_, info = info},
             rhs = startIdx,
             ty = FTyArrow {
               from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
@@ -401,7 +336,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
     let elemTy =
       match funcTy with FTyArrow {to = FTyArrow {to = elemTy}} then
         elemTy
-      else infoErrorExit t.info "Invalid type of function passed to foldl" in
+      else errorSingle [t.info] "Invalid type of function passed to foldl" in
     let param : (FutPat, FutExpr) =
       ( FPNamed {ident = PName acc, ty = accTy, info = t.info},
         generateExpr env ne ) in
@@ -487,15 +422,15 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       FESizeCoercion {
         e = generateExpr env t.e, ty = FTyArray {aty with dim = Some t.size},
         info = t.info}
-    else infoErrorExit t.info (join ["Size coercion could not be generated ",
+    else errorSingle [t.info] (join ["Size coercion could not be generated ",
                                      "due to unexpected type of sequence"])
   | TmParallelSizeEquality t ->
-    FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2, ty = t.ty,
-                    info = t.info}
+    FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2,
+                    ty = generateType env t.ty, info = t.info}
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions are not supported by the Futhark backend"
+    errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | t ->
-    infoErrorExit (infoTm t) "Term is not supported by the Futhark backend"
+    errorSingle [infoTm t] "Term is not supported by the Futhark backend"
 end
 
 recursive let _extractTypeParams = use FutharkAst in
@@ -540,7 +475,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
       else match ty with TyArrow t then
         findReturnType (tail params) t.to
       else
-        infoErrorExit t.info (join ["Function takes more parameters than ",
+        errorSingle [t.info] (join ["Function takes more parameters than ",
                                     "specified in return type"])
     in
     let decl =
@@ -560,15 +495,15 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     in
     cons decl (generateToplevel env t.inexpr)
   | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions are not supported by the Futhark backend"
+    errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | TmExt t ->
-    infoErrorExit t.info "External functions are not supported by the Futhark backend"
+    errorSingle [t.info] "External functions are not supported by the Futhark backend"
   | TmUtest t ->
     -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
     -- are removed/replaced in earlier stages of the compilation.
-    infoErrorExit t.info "Utests are not supported by the Futhark backend"
+    errorSingle [t.info] "Utests are not supported by the Futhark backend"
   | TmConDef t ->
-    infoErrorExit t.info "Constructor definitions are not supported by the Futhark backend"
+    errorSingle [t.info] "Constructor definitions are not supported by the Futhark backend"
   | _ -> []
 end
 

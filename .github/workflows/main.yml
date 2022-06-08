@@ -42,7 +42,7 @@ jobs:
           make install
 
       - name: Run tests
-        timeout-minutes: 40
+        timeout-minutes: 60
         run: |
           eval $(opam env)
           make test-all
@@ -85,7 +85,7 @@ jobs:
           make install
 
       - name: Run tests
-        timeout-minutes: 40
+        timeout-minutes: 60
         run: |
           eval $(opam env)
           make test-all

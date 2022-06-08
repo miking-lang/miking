@@ -3,11 +3,14 @@ include "seq.mc"
 include "string.mc"
 
 -- Run all tests
-let testTensors =
-  lam tcreate.
-  lam eq : a -> a -> Bool.
-  lam fromInt : Int -> a.
-  lam vs : [a].
+let testTensors
+  : all a.
+  ([Int] -> (([Int] -> a) -> Tensor[a]))
+  -> (a -> a -> Bool)
+  -> (Int -> a)
+  -> [a]
+  -> ()
+  = lam tcreate. lam eq. lam fromInt. lam vs.
 
   let v0 = get vs 0 in
   let v1 = get vs 1 in

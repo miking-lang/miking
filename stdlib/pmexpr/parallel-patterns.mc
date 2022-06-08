@@ -36,7 +36,7 @@ let varPatString : VarPattern -> String = lam pat.
         int2string (sym2hash sym)
       else "?"
     in
-    join ["PatternName (", nameGetStr n, ", " symStr, ")"]
+    join ["PatternName (", nameGetStr n, ", ", symStr, ")"]
   else match pat with PatternLiteralInt n then
     concat "PatternLiteralInt " (int2string n)
   else never
@@ -51,7 +51,7 @@ con ReturnPattern : {id : Int, var : VarPattern} -> AtomicPattern
 
 type Pattern = {
   atomicPatternMap : Map Int AtomicPattern,
-  activePatterns : [AtomicPattern],
+  activePatterns : [Int],
   dependencies : Map Int (Set Int),
   replacement : Info -> Map VarPattern (Name, Expr) -> Expr
 }
@@ -90,9 +90,10 @@ let getInnerPatterns : AtomicPattern -> Option [AtomicPattern] = lam p.
 -- This function is implemented with the assumption that every pattern has been
 -- given a unique index. If multiple patterns with the same index are found, an
 -- error will be reported.
-let getPatternDependencies : [AtomicPattern] -> ([AtomicPattern], Map Int (Set Int)) =
+let getPatternDependencies : [AtomicPattern] -> ([Int], Map Int (Set Int)) =
   lam atomicPatterns.
-  recursive let atomicPatternDependencies = lam dependencies. lam p.
+  recursive let atomicPatternDependencies =
+    lam dependencies : Map Int (Set Int). lam p : AtomicPattern.
     let id = getPatternIndex p in
     match mapLookup id dependencies with None () then
       let patternDeps : Set Int =
@@ -374,8 +375,8 @@ let reducePattern : () -> Pattern =
       match tyTm f with TyArrow {from = tya, to = TyArrow {from = tyb, to = tyc}} then
         if eqType tya tyc then
           (tya, tyb)
-        else infoErrorExit info errMsg
-      else infoErrorExit info errMsg
+        else errorSingle [info] errMsg
+      else errorSingle [info] errMsg
     in
     let seqReduce = lam f. lam acc. lam s.
       match getReduceFunctionTypes f with (accType, seqElemType) in

@@ -54,12 +54,17 @@ lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeCheck + MExprRemoveTypeAscription + MExprResolveAlias +
   MExprUtestTrans + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
-  PMExprTailRecursion + PMExprParallelPattern + PMExprCExternals +
+  PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
-  PMExprExtractAccelerate + PMExprUtestSizeConstraint +
+  PMExprExtractAccelerate + PMExprCExternals + PMExprUtestSizeConstraint +
   PMExprReplaceAccelerate + PMExprNestedAccelerate + PMExprWellFormed +
   OCamlGenerate + OCamlTypeDeclGenerate + OCamlGenerateExternalNaive +
   PMExprCopyAnalysis
+
+  type AccelerateHooks a b = {
+    generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
+    buildAccelerated : Options -> String -> [String] -> [String] -> [Top] -> b -> a -> ()
+  }
 end
 
 lang MExprFutharkCompile =
@@ -75,11 +80,6 @@ lang MExprCudaCompile =
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
   CudaTensorMemory + CudaLanguageFragmentFix
 end
-
-type AccelerateHooks a b = {
-  generateGpuCode : Map Name AccelerateData -> Expr -> (a, b),
-  buildAccelerated : Options -> String -> [Top] -> a -> b -> Unit
-}
 
 let parallelKeywords = [
   "accelerate",
@@ -104,29 +104,30 @@ let parallelPatterns = [
   getReducePattern ()
 ]
 
-let pprintOCamlTops : [Top] -> String = lam tops.
-  use OCamlPrettyPrint in
+let pprintOCamlTops = use OCamlPrettyPrint in
+  lam tops : [Top].
   pprintOcamlTops tops
 
-let pprintFutharkAst : FutProg -> String = lam ast.
-  use FutharkPrettyPrint in
+let pprintFutharkAst = use FutharkPrettyPrint in
+  lam ast : FutProg.
   printFutProg ast
 
-let pprintPMExprAst : Expr -> String = lam ast.
-  use PMExprPrettyPrint in
+let pprintPMExprAst = use PMExprPrettyPrint in
+  lam ast : Expr.
   expr2str ast
 
-let pprintCudaPMExprAst : Expr -> String = lam ast.
-  use CudaPMExprPrettyPrint in
+let pprintCudaPMExprAst = use CudaPMExprPrettyPrint in
+  lam ast : Expr.
   expr2str ast
 
-let pprintCAst : CPProg -> String = lam ast.
+let pprintCAst =
   use CPrettyPrint in
   use CProgPrettyPrint in
+  lam ast : CProg.
   printCProg [] ast
 
-let pprintCudaAst : CuPProg -> String = lam ast.
-  use CudaPrettyPrint in
+let pprintCudaAst = use CudaPrettyPrint in
+  lam ast : CudaProg.
   printCudaProg cCompilerNames ast
 
 let patternTransformation : Expr -> Expr = lam ast.
@@ -156,9 +157,9 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
   let ast = deadcodeElimination ast in
   parameterizeSizes ast
 
-let cudaTranslation : Options -> Map Name AccelerateData -> Expr -> (CuProg, CuProg) =
-  lam options. lam accelerateData. lam ast.
+let cudaTranslation =
   use MExprCudaCompile in
+  lam options : Options. lam accelerateData : Map Name AccelerateData. lam ast : Expr.
   let ast = fixLanguageFragmentSemanticFunction ast in
   let ast = constantAppToExpr ast in
   let ast = normalizeTerm ast in
@@ -257,7 +258,7 @@ let buildConfigCuda : String -> [String] -> [String] -> (String, String) =
     "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@"] in
   (dunefile, makefile)
 
-let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
+let writeFiles : String -> [(String, String)] -> () = lam dir. lam fileStrs.
   let tempfile = lam f. sysJoinPath dir f in
   iter
     (lam fstr : (String, String).
@@ -267,7 +268,7 @@ let writeFiles : String -> [(String, String)] -> Unit = lam dir. lam fileStrs.
 
 -- TODO(larshum, 2021-09-17): Remove dependency on Makefile. For now, we use
 -- it because dune cannot set environment variables.
-let buildBinaryUsingMake : String -> String -> Unit =
+let buildBinaryUsingMake : String -> String -> () =
   lam sourcePath. lam td.
   let dir = sysTempDirName td in
   let r = sysRunCommand ["make"] "" dir in
@@ -284,7 +285,7 @@ let buildBinaryUsingMake : String -> String -> Unit =
   ()
 
 let buildFuthark : Options -> String -> [String] -> [String] -> [Top] -> CProg
-                -> FutProg -> Unit =
+                -> FutProg -> () =
   lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
   lam wrapperProg. lam futharkProg.
   match
@@ -325,7 +326,7 @@ let mergePrograms : CudaProg -> CudaProg -> CudaProg =
   CuPProg {includes = concat lincludes rincludes, tops = mergedTops}
 
 let buildCuda : Options -> String -> [String] -> [String] -> [Top] -> CudaProg
-             -> CudaProg -> Unit =
+             -> CudaProg -> () =
   lam options. lam sourcePath. lam libs. lam clibs. lam ocamlTops.
   lam wrapperProg. lam cudaProg.
   let cudaProg = mergePrograms cudaProg wrapperProg in
@@ -371,92 +372,96 @@ let checkWellFormedCuda : Expr -> () = lam ast.
   let ast = utestStrip ast in
   wellFormed ast
 
-let compileAccelerated : Options -> AccelerateHooks -> String -> Unit =
-  lam options. lam hooks. lam file.
+let compileAccelerated =
   use PMExprCompile in
-  let ast = parseParseMCoreFile {
-    keepUtests = true,
-    pruneExternalUtests = false,
-    pruneExternalUtestsWarning = false,
-    findExternalsExclude = false,
-    eliminateDeadCode = true,
-    keywords = parallelKeywords
-  } file in
-  let ast = makeKeywords [] ast in
+  let _compile : all a. all b. Options -> AccelerateHooks a b -> String -> () =
+    lam options. lam hooks. lam file.
+    let ast = parseParseMCoreFile {
+      keepUtests = true,
+      pruneExternalUtests = false,
+      pruneExternalUtestsWarning = false,
+      findExternalsExclude = false,
+      eliminateDeadCode = true,
+      keywords = parallelKeywords
+    } file in
+    let ast = makeKeywords [] ast in
 
-  let ast = symbolizeExpr keywordsSymEnv ast in
-  let ast = typeCheck ast in
-  let ast = removeTypeAscription ast in
-  let ast = resolveAliases ast in
+    let ast = symbolizeExpr keywordsSymEnv ast in
+    let ast = typeCheck ast in
+    let ast = removeTypeAscription ast in
+    let ast = resolveAliases ast in
 
-  -- Translate accelerate terms into functions with one dummy parameter, so
-  -- that we can accelerate terms without free variables and so that it is
-  -- lambda lifted.
-  match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
+    -- Translate accelerate terms into functions with one dummy parameter, so
+    -- that we can accelerate terms without free variables and so that it is
+    -- lambda lifted.
+    match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
 
-  -- Perform lambda lifting and return the free variable solutions
-  match liftLambdasWithSolutions ast with (solutions, ast) in
+    -- Perform lambda lifting and return the free variable solutions
+    match liftLambdasWithSolutions ast with (solutions, ast) in
 
-  -- Extract the accelerate AST
-  let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-  let accelerateAst = extractAccelerateTerms accelerateIds ast in
+    -- Extract the accelerate AST
+    let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+    let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
-  -- Eliminate the dummy parameter in functions of accelerate terms with at
-  -- least one free variable parameter.
-  match eliminateDummyParameter solutions accelerated accelerateAst
-  with (accelerated, accelerateAst) in
+    -- Eliminate the dummy parameter in functions of accelerate terms with at
+    -- least one free variable parameter.
+    match eliminateDummyParameter solutions accelerated accelerateAst
+    with (accelerated, accelerateAst) in
 
-  -- Perform analysis to find variables unused after the accelerate call.
-  let accelerated = findUnusedAfterAccelerate accelerated ast in
+    -- Perform analysis to find variables unused after the accelerate call.
+    let accelerated = findUnusedAfterAccelerate accelerated ast in
 
-  -- Translate the PMExpr AST into a representation of the GPU code and the
-  -- wrapper code.
-  match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
+    -- Translate the PMExpr AST into a representation of the GPU code and the
+    -- wrapper code.
+    match hooks.generateGpuCode accelerated accelerateAst with (gpuProg, wrapperProg) in
 
-  -- Eliminate all utests in the MExpr AST
-  let ast = utestStrip ast in
+    -- Eliminate all utests in the MExpr AST
+    let ast = utestStrip ast in
 
-  -- Construct a sequential version of the AST where parallel constructs have
-  -- been demoted to sequential equivalents
-  let ast = demoteParallel ast in
+    -- Construct a sequential version of the AST where parallel constructs have
+    -- been demoted to sequential equivalents
+    let ast = demoteParallel ast in
 
-  match typeLift ast with (typeLiftEnv, ast) in
-  match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
+    match typeLift ast with (typeLiftEnv, ast) in
+    match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
 
-  -- Replace auxilliary accelerate terms in the AST by eliminating
-  -- the let-expressions (only used in the accelerate AST) and adding
-  -- data conversion of parameters and result.
-  match replaceAccelerate accelerated generateEnv ast
-  with (recordDeclTops, ast) in
+    -- Replace auxilliary accelerate terms in the AST by eliminating
+    -- the let-expressions (only used in the accelerate AST) and adding
+    -- data conversion of parameters and result.
+    match replaceAccelerate accelerated generateEnv ast
+    with (recordDeclTops, ast) in
 
-  -- Generate the OCaml AST (with externals support)
-  let env : GenerateEnv =
-    chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
-  in
-  let exprTops = generateTops env ast in
-  let syslibs =
-    setOfSeq cmpString
-      (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
-  in
-  match collectLibraries env.exts syslibs with (libs, clibs) in
+    -- Generate the OCaml AST (with externals support)
+    let env : GenerateEnv =
+      chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
+    in
+    let exprTops = generateTops env ast in
+    let syslibs =
+      setOfSeq cmpString
+        (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+    in
+    match collectLibraries env.exts syslibs with (libs, clibs) in
 
-  -- Add an external declaration of a C function in the OCaml AST,
-  -- for each accelerate term.
-  let externalTops = getExternalCDeclarations accelerated in
+    -- Add an external declaration of a C function in the OCaml AST,
+    -- for each accelerate term.
+    let externalTops = getExternalCDeclarations accelerated in
 
-  let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
-  hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
+    let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
+    hooks.buildAccelerated options file libs clibs ocamlTops wrapperProg gpuProg
+  in _compile
 
 let compileAccelerate = lam files. lam options : Options. lam args.
-  use PMExprAst in
-  let hooks =
-    if options.runTests then
-      error "Flag --test may not be used for accelerated code generation"
-    else if options.accelerateCuda then
+  use PMExprCompile in
+  let compile = lam hooks. iter (compileAccelerated options hooks) files in
+  if options.runTests then
+    error "Flag --test may not be used for accelerated code generation"
+  else if options.accelerateCuda then
+    compile
       { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.
           cudaTranslation options accelerateData ast
       , buildAccelerated = buildCuda}
-    else if options.accelerateFuthark then
+  else if options.accelerateFuthark then
+    compile
       { generateGpuCode = lam accelerateData : Map Name AccelerateData. lam ast : Expr.
           use MExprFutharkCompile in
           let accelerateIds = mapMap (lam. ()) accelerateData in
@@ -464,6 +469,5 @@ let compileAccelerate = lam files. lam options : Options. lam args.
           let wrapperProg = generateWrapperCode accelerateData in
           (futharkProg, wrapperProg)
       , buildAccelerated = buildFuthark}
-    else
-      error "Neither CUDA nor Futhark was chosen as acceleration target"
-  in iter (compileAccelerated options hooks) files
+  else
+    error "Neither CUDA nor Futhark was chosen as acceleration target"

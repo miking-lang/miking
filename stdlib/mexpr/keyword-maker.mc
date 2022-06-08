@@ -10,6 +10,7 @@
 
 include "ast.mc"
 include "info.mc"
+include "error.mc"
 include "mexpr.mc"
 include "ast-builder.mc"
 include "eq.mc"
@@ -25,7 +26,7 @@ lang KeywordMakerBase = VarAst + AppAst
   | _ -> None ()
 
   sem makeKeywordError (info: Info) (n1: Int) (n2: Int) =
-  | ident -> infoErrorExit info (join ["Unexpected number of arguments for construct '",
+  | ident -> errorSingle [info] (join ["Unexpected number of arguments for construct '",
              ident, "'. ", "Expected ", int2string n1,
              " arguments, but found ", int2string n2, "."])
 
@@ -61,7 +62,7 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
   | TmConDef r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident,
+       errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
      else TmConDef {r with inexpr = makeKeywords [] r.inexpr}
 end
@@ -72,7 +73,7 @@ lang KeywordMakerLam = KeywordMakerBase + LamAst
   | TmLam r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
+       errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
      else TmLam {r with body = makeKeywords [] r.body}
 end
 
@@ -83,7 +84,7 @@ lang KeywordMakerLet = KeywordMakerBase + LetAst
   | TmLet r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
+       errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
        TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr}
 end
@@ -96,7 +97,7 @@ lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
       match r.ident with PName name then
         let ident = nameGetStr name in
         match matchKeywordString r.info ident with Some _ then
-          infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used inside a pattern."])
+          errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used inside a pattern."])
         else PatNamed r
       else PatNamed r
   | pat -> smap_Pat_Pat matchKeywordPat pat

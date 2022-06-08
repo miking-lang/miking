@@ -31,7 +31,7 @@ let dependencyAnalysis
   lam options : Options. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.tuneOptions.dependencyAnalysis then
-      let ast = (if options.typeCheck then typeCheck else typeAnnot) ast in
+      let ast = typeCheck ast in
       let ast = use HoleANFAll in normalizeTerm ast in
       let cfaRes = cfaData (graphDataFromEnv env) ast in
       let cfaRes = analyzeNested env cfaRes ast in
@@ -109,7 +109,7 @@ let tune = lam files. lam options : Options. lam args.
      else ());
 
     -- If option --enable-cleanup is given, then remove the tune file
-    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file) else ());
+    (if tuneOptions.cleanup then sysDeleteFile (tuneFileName file); () else ());
 
     -- Clean up temporary files used during tuning
     r.cleanup ();

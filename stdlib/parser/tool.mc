@@ -5,6 +5,8 @@ include "result.mc"
 include "seq.mc"
 include "mexpr/cmp.mc"
 
+type Res a = Result (Info, String) (Info, String) a
+
 -- NOTE(vipa, 2022-04-05): A token type only ever intended for
 -- analysis, thus only containing a TokenRepr, no Token. This is used
 -- for all tokens declared with the `token` declaration.
@@ -95,8 +97,11 @@ con TyGrouping : {left: Info, right: Info} -> GenLabel in
 con ProdTop : {v: Name, i: Info} -> GenLabel in
 con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
+let asDyn_ : Expr -> Expr = app_ (var_ "asDyn") in
+let fromDyn_ : Expr -> Expr = app_ (var_ "fromDyn") in
+
 match argv with ![_, _, _] then
-  printLn "Please provide exactly two argument; a .syn file and the output .mc file";
+  printLn "Please provide exactly two arguments; a .syn file and the output .mc file";
   exit 0
 else match argv with [_, filename, destinationFile] in
 let content = readFile filename in
@@ -129,8 +134,6 @@ let multiMsg
   = lam surround. lam infos. lam msg.
     (surround, join [msg, multiHighlight surround infos])
 in
-
-type Res a = Result (Info, String) (Info, String) a in
 
 -- NOTE(vipa, 2022-04-21): The `Expr` type defined in the `.syn`
 -- format is similar to, but not precisely like, MExpr, and thus it
@@ -180,7 +183,7 @@ in
 -- syntactically as much as possible with `Type` in MExpr, so a
 -- similar approach to exprToMExpr is needed for conversion.
 recursive let exprToMExprTy
-  : Expr -> Res Expr
+  : Expr -> Res Type
   = lam e. switch e
     case AppExpr x then
       result.map2
@@ -496,7 +499,7 @@ let resolveTypeProperty
       let mkParen : Expr -> Res {v: Either Name String, i: Info} = lam e. switch e
         case ConExpr c then
           result.map
-            (lam name. {v = Left name, i = c.name.i})
+            (lam name. {v = Left name.v, i = c.name.i})
             (lookupName c.name nameEnv.types)
         case StringExpr s then
           result.ok {v = Right s.val.v, i = s.val.i}
@@ -574,7 +577,7 @@ let resolveDecl
         (lam name. StartDecl {x with name = name})
         (lookupName x.name nameEnv.types)
     case PrecedenceTableDecl x then
-      let resolveLevel = lam level: {noeq : Option {v: (), i: Info}, operators : [{v: Name, i: Info}]}.
+      let resolveLevel = lam level: {noeq : Option Info, operators : [{v: Name, i: Info}]}.
         result.map
           (lam operators. {level with operators = operators})
           (result.mapM (lam n. lookupName n nameEnv.productions) level.operators) in
@@ -721,7 +724,7 @@ in
 type FieldInfo = {min : Int, max : Option Int, ty : [(Info, Res CarriedType)]} in
 type RecordInfo = Map String FieldInfo in
 let emptyRecordInfo : RecordInfo = mapEmpty cmpString in
-let singleRecordInfo : String -> Info -> a -> RecordInfo = lam field. lam info. lam a.
+let singleRecordInfo : String -> Info -> Res CarriedType -> RecordInfo = lam field. lam info. lam a.
   mapInsert field {min = 1, max = Some 1, ty = [(info, a)]} emptyRecordInfo in
 let concatRecordInfo
   : RecordInfo -> RecordInfo -> RecordInfo
@@ -769,7 +772,7 @@ in
 let reifyRecord
   : Info -> RecordInfo -> Res CarriedType
   = lam info. lam content.
-    let buryInfo : (Info, Res a) -> Res (Info, a) = lam x. result.map (lam a. (x.0, a)) x.1 in
+    let buryInfo : all a. (Info, Res a) -> Res (Info, a) = lam x. result.map (lam a. (x.0, a)) x.1 in
     let groupByTypeRepr : [(Info, CarriedType)] -> Map Type [(Info, CarriedType)] =
       foldl
         (lam m. lam pair : (Info, CarriedType). mapInsertWith concat (carriedRepr pair.1) [pair] m)
@@ -867,7 +870,7 @@ type PartialSymbol =
   { repr : Expr
   , pat : Pat
   , info : Expr
-  , sym : SpecSymbol
+  , sym : SpecSymbol Token TokenRepr () GenLabel
   } in
 type PartialProduction =
   { record : RecordInfo
@@ -995,7 +998,7 @@ let completeSeqProduction
         (lam pair. match pair with (k, vs) in result.map (lam vs. (k, vs)) (result.mapM identity vs))
         (mapBindings x.fields)) in
     let mkProd
-      : [PartialProduction]
+      : [PartialSymbol]
       -> [Expr]
       -> Map String [Expr]
       -> (Expr, Production GenLabel ())
@@ -1017,14 +1020,14 @@ let completeSeqProduction
           let seqName = nameSym "res" in
           let pats = pseqtot_ pats in
           let toRebind = map
-            (lam pair. match pair with (name, ty) in nlet_ name ty (nvar_ name))
+            (lam pair. match pair with (name, ty) in nlet_ name ty (fromDyn_ (nvar_ name)))
             (collectNamesWithTypes pats) in
           nlam_ stateName stateTy
             (nulam_ seqName
               (match_ (nvar_ seqName) pats
                 (bindall_
                   (snoc toRebind
-                    (wrap (urecord_ fields))))
+                    (asDyn_ (wrap (urecord_ fields)))))
                 never_))
         in
         let exprProduction = urecord_
@@ -1037,7 +1040,7 @@ let completeSeqProduction
           { nt = nt
           , label = label
           , rhs = syms
-          , action = lam. lam. ()
+          , action = lam. lam. asDyn ()
           } in
         (exprProduction, production)
     in result.map3 mkProd symbols terms fields
@@ -1050,15 +1053,15 @@ let processTerminal
   = lam term. switch term
     case NtTerm conf then
       let ty = result.map (lam config: TypeInfo. targetableType config.ty) conf.config in
-      let infoName = nameSym "info" in
-      let valName = nameSym "val" in
+      let pairName = nameSym "ntVal" in
+      let pairPat = withTypePat (tytuple_ [tycon_ "Info", ntycon_ conf.name]) (npvar_ pairName) in
       let sym =
         { repr = app_ (var_ "ntSym") (nvar_ conf.name)
-        , pat = pcon_ "UserSym" (ptuple_ [npvar_ infoName, npvar_ valName])
-        , info = nvar_ infoName
+        , pat = pcon_ "UserSym" pairPat
+        , info = tupleproj_ 0 (nvar_ pairName)
         , sym = ntSym conf.name
         } in
-      (result.ok sym, [], result.ok (seq_ [nvar_ valName]), ty)
+      (result.ok sym, [], result.ok (seq_ [tupleproj_ 1 (nvar_ pairName)]), ty)
 
     case TokenTerm config then
       let valName = nameSym "x" in
@@ -1159,7 +1162,7 @@ let addInfoField
   : Info -> RecordInfo -> RecordInfo
   = lam info. lam content.
     let count = {min = 1, max = Some 1, ty = [(NoInfo (), result.ok (untargetableType (tycon_ "Info")))]} in
-    let mkError : FieldInfo -> a -> FieldInfo = lam prev. lam.
+    let mkError : all a. FieldInfo -> a -> FieldInfo = lam prev. lam.
       let highlight = multiHighlight info (map (lam x. match x with (info, _) in info) prev.ty) in
       let msg = join ["The 'info' field is reserved, it must not be manually defined:\n", highlight, "\n"] in
       let err = result.err (info, msg) in
@@ -1258,7 +1261,7 @@ let mkOperatorConstructor
   : Operator
   -> RecordInfo
   -> PartialProduction
-  -> Res GenOpInput
+  -> Res GenOperator
   = lam op. lam record. lam prod.
     let #var"" =
       let opNtNames : {prefix : Name, infix : Name, postfix : Name, atom : Name} =
@@ -1360,7 +1363,7 @@ let constructors : Res [ConstructorInfo] =
 in
 
 let foldWithLater
-  : (a -> acc -> a -> acc) -> acc -> [a] -> acc
+  : all a. all acc. (a -> acc -> a -> acc) -> acc -> [a] -> acc
   = lam f.
     recursive let work = lam acc. lam seq.
       match seq with [a] ++ seq then
@@ -1375,8 +1378,8 @@ let cmpNamePair = lam a: (Name, Name). lam b: (Name, Name).
   match res with 0 then nameCmp a.1 b.1 else res in
 let precedences : Res (Map Name (Map (Name, Name) Ordering)) =
   type OrderDef = {ordering: Ordering, surround: Info, i1: Info, i2: Info} in
-  type Acc = (Map Name (Map (Name, Name) Ordering), Res ()) in
-  let addPrec : (Name, Name) -> OrderDef -> Map (Name, Name) OrderDef -> Map (Name, Name) [OrderDef]
+  type Acc = (Map Name (Map (Name, Name) [OrderDef]), Res ()) in
+  let addPrec : (Name, Name) -> OrderDef -> Map (Name, Name) [OrderDef] -> Map (Name, Name) [OrderDef]
     = lam pair. lam def. if leqi (nameCmp pair.0 pair.1) 0
       then mapInsertWith concat pair [def]
       else mapInsertWith concat (pair.1, pair.0) [{def with ordering = flipOrdering def.ordering}]
@@ -1388,11 +1391,13 @@ let precedences : Res (Map Name (Map (Name, Name) Ordering)) =
         result.err (simpleMsg info "This is not an operator") in
       let levels : [{noeq: Option Info, operators: [{v: Res Operator, i: Info}]}] = map
         (lam level: {noeq: Option Info, operators: [{v: Name, i: Info}]}.
-          {level with operators = mapOption
+          { operators = mapOption
             (lam n: {v: Name, i: Info}. match mapLookup n.v operators with Some op
-              then Some {n with v = result.bind op (ensureNonAtomic n.i)}
+              then Some {v = result.bind op (ensureNonAtomic n.i), i = n.i}
               else None ())
-            level.operators})
+            level.operators
+          , noeq = level.noeq
+          })
         x.levels in
       let exceptions : [(Set Name, Set Name)] = map
         (lam x: {lefts: [{v: Name, i: Info}], rights: [{v: Name, i: Info}]}.
@@ -1406,7 +1411,7 @@ let precedences : Res (Map Name (Map (Name, Name) Ordering)) =
           if (if setMem pair.0 row.0 then setMem pair.1 row.1 else false) then true
           else (if setMem pair.1 row.0 then setMem pair.0 row.1 else false))
         exceptions in
-      let maybeAddPrec : Name -> (Name, Name) -> OrderDef -> Acc -> Acc =
+      let maybeAddPrec : Name -> (Name, Name) -> OrderDef -> Map Name (Map (Name, Name) [OrderDef]) -> Map Name (Map (Name, Name) [OrderDef]) =
         lam nt. lam n. lam def. lam m. if isException n then m else
           let inner = match mapLookup nt m with Some m then m else mapEmpty cmpNamePair in
           let inner = addPrec n def inner in
@@ -1546,7 +1551,7 @@ let groupingOperators : Res [GenOperator] =
         match processTerminal (parToTerminal lpar) with (lPartSym, _, _, _) in
         match processTerminal ntTerminal with (ntSym, _, ntVal, _) in
         match processTerminal (parToTerminal rpar) with (rPartSym, _, _, _) in
-        let f : PartialSymbol -> PartialSymbol -> PartialSymbol -> Res Expr -> GenOperator
+        let f : PartialSymbol -> PartialSymbol -> PartialSymbol -> Expr -> GenOperator
           = lam lPartSym. lam ntSym. lam rPartSym. lam ntVal.
             let conName = nameSym (concat (nameGetStr nt) "Grouping") in
             let atomNt =
@@ -1558,19 +1563,20 @@ let groupingOperators : Res [GenOperator] =
               let seqName = nameSym "seq" in
               let pats = pseqtot_ [lPartSym.pat, ntSym.pat, rPartSym.pat] in
               let toRebind = map
-                (lam pair. match pair with (name, ty) in nlet_ name ty (nvar_ name))
+                (lam pair. match pair with (name, ty) in nlet_ name ty (fromDyn_ (nvar_ name)))
                 (collectNamesWithTypes pats) in
               ulam_ ""
                 (nulam_ seqName
                   (match_ (nvar_ seqName) pats
                     (bindall_
                       (snoc toRebind
-                        (nconapp_ conName
-                          (urecord_
-                            [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
-                            , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
-                            , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
-                            ]))))
+                        (asDyn_
+                          (nconapp_ conName
+                            (urecord_
+                              [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
+                              , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
+                              , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
+                              ])))))
                     never_))
             in
             let prod =
@@ -1583,7 +1589,7 @@ let groupingOperators : Res [GenOperator] =
               , { nt = atomNt
                 , label = TyGrouping {left = lpar.i, right = rpar.i}
                 , rhs = [lPartSym.sym, ntSym.sym, rPartSym.sym]
-                , action = lam. lam. ()
+                , action = lam. lam. asDyn ()
                 }
               ) in
             modref productions (snoc (deref productions) (result.ok prod));
@@ -1608,8 +1614,8 @@ in
 
 let genOpResult : Res GenOpResult =
   let mkMirroredProduction
-    : { nt : Name, rhs : [Name], label : label, action : Expr }
-    -> (Expr, Production label)
+    : all label. { nt : Name, rhs : [Name], label : label, action : Expr }
+    -> (Expr, Production label ())
     = lam prod.
       let liftSpec : Name -> Expr = lam sym.
         (app_ (var_ "ntSym") (nvar_ sym)) in
@@ -1626,13 +1632,13 @@ let genOpResult : Res GenOpResult =
         }
       )
   in
-  let synInfo : Res (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) =
+  let synInfo : Res [(Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering})] =
     let f : Map Name (Map (Name, Name) Ordering) -> Constructor -> Res (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) = lam precedence. lam constructor.
       let precedence = mapLookupOrElse (lam. mapEmpty cmpNamePair) constructor.synType precedence in
       match mapFindExn constructor.synType typeMap with Left tinfo in
       let f : TypeInfo -> (Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering}) = lam tinfo.
         let parToStr : {v: Either Name String, i: Info} -> String = lam x. switch x.v
-          case Left n then snoc (cons '<' nameGetStr n) '>'
+          case Left n then snoc (cons '<' (nameGetStr n)) '>'
           case Right lit then lit
           end in
         let parsToStr : ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}) -> (String, String) = lam pair.
@@ -1641,7 +1647,7 @@ let genOpResult : Res GenOpResult =
       in result.map f tinfo
     in result.bind2 precedences badConstructors (lam precedences. lam cs. result.mapM (f precedences) cs)
   in
-  let f : [(Name, {bad : Name, grouping : Option (String, String)})] -> [ConstructorInfo] -> [GenOperator] -> [String] -> GenOpResult = lam syns. lam constructors. lam groupingOperators. lam extraFragments.
+  let f : [(Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering})] -> [ConstructorInfo] -> [GenOperator] -> [String] -> GenOpResult = lam syns. lam constructors. lam groupingOperators. lam extraFragments.
     let genOpInput =
       { infoFieldLabel = infoFieldLabel
       , termsFieldLabel = termsFieldLabel
@@ -1668,7 +1674,7 @@ let genOpResult : Res GenOpResult =
         , rhs = [lclosed]
         , action = ulam_ "" (ulam_ "seq"
           (match_ (var_ "seq") (pseqtot_ [pcon_ "UserSym" (pvar_ "cont")])
-            (app_ (var_ "cont") (conapp_ "Some" (app_ (var_ "breakableInitState") unit_)))
+            (app_ (fromDyn_ (var_ "cont")) (conapp_ "Some" (app_ (var_ "breakableInitState") unit_)))
             never_
           ))
         } in
@@ -1679,9 +1685,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addAtomFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addAtomFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let infix = mkMirroredProduction
@@ -1691,9 +1698,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addInfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addInfixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let prefix = mkMirroredProduction
@@ -1703,9 +1711,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addPrefixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addPrefixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let postfix = mkMirroredProduction
@@ -1715,9 +1724,10 @@ let genOpResult : Res GenOpResult =
         , action = ulam_ "p" (ulam_ "seq"
           (match_ (var_ "seq")
             (pseqtot_ [pcon_ "UserSym" (pvar_ "x"), pcon_ "UserSym" (pvar_ "cont")])
-            (ulam_ "st"
-              (app_ (var_ "cont")
-                (genOpResult.addPostfixFor original.v (var_ "p") (var_ "x") (var_ "st"))))
+            (asDyn_
+              (ulam_ "st"
+                (app_ (fromDyn_ (var_ "cont"))
+                  (genOpResult.addPostfixFor original.v (var_ "p") (fromDyn_ (var_ "x")) (var_ "st")))))
             never_))
         } in
       let final = mkMirroredProduction
@@ -1725,7 +1735,7 @@ let genOpResult : Res GenOpResult =
         , label = TyRegex {nt = original, kind = LRegEnd ()}
         , rhs = []
         , action = ulam_ "p" (ulam_ ""
-          (ulam_ "st" (genOpResult.finalizeFor original.v (var_ "p") (var_ "st"))))
+          (asDyn_ (ulam_ "st" (genOpResult.finalizeFor original.v (var_ "p") (var_ "st")))))
         } in
       map result.ok [top, atom, infix, prefix, postfix, final]
     in
@@ -1742,7 +1752,7 @@ let ll1Error : Res () =
   result.bind2 start productions
     (lam start: Name. lam productions: [Production GenLabel ()].
       match genParsingTable {start = start, productions = productions} with Left err then
-        let errs : [(SpecSymbol, [GenLabel])] = join (map mapBindings (mapValues err)) in
+        let errs : [(SpecSymbol Token TokenRepr () GenLabel, [GenLabel])] = join (map mapBindings (mapValues err)) in
         let regexKindToStr = lam x. switch x
           case LRegAtom _ then "production"
           case LRegInfix _ then "infix operator"
@@ -1758,7 +1768,7 @@ let ll1Error : Res () =
           case ProdTop x then snoc (simpleHighlight x.i) '\n'
           case ProdInternal x then snoc (simpleHighlight x.info) '\n'
           end in
-        let mkErr : (SpecSymbol, [GenLabel]) -> Res () = lam pair.
+        let mkErr : (SpecSymbol Token TokenRepr () GenLabel, [GenLabel]) -> Res () = lam pair.
           let msg = join
             [ "LL1 conflict when seeing a ", symSpecToStr pair.0
             , ", it might be the start of one of these:\n"
@@ -1771,7 +1781,7 @@ let ll1Error : Res () =
 in
 
 let table : Res String =
-  let f : Name -> GenOpResult -> [(Expr, Production GenLabel ())] -> Expr =
+  let f : Name -> GenOpResult -> [(Expr, Production GenLabel ())] -> String =
     lam start. lam genOpResult. lam prods.
       let getNt = lam x. match x with NtSpec nt then Some nt else None () in
       let nts = join (map
@@ -1802,13 +1812,15 @@ let parseFunctions : Res String =
     , join ["  use Parse", langName, " in"]
     , "  let config = {errors = ref [], content = content} in"
     , "  let res = parseWithTable _table filename config content in"
-    , "  let errors = deref config.errors in"
-    , "  let errors ="
-    , "    match res with Left err then"
-    , "      let err = ll1DefaultHighlight content (ll1ToErrorHighlightSpec err) in"
-    , "      snoc errors err"
-    , "    else errors in"
-    , "  if null errors then eitherMapRight (lam x. match x with (_, x) in x) res else Left errors"
+    , "  switch (res, deref config.errors)"
+    , "  case (Right dyn, []) then"
+    , "    match fromDyn dyn with (_, res) in Right res"
+    , "  case (Left err, errors) then"
+    , "    let err = ll1DefaultHighlight content (ll1ToErrorHighlightSpec err) in"
+    , "    Left (snoc errors err)"
+    , "  case (_, errors) then"
+    , "    Left errors"
+    , "  end"
     , ""
     , join ["let parse", langName, "Exn"]
     , concat ": String -> String -> " (nameGetStr start)

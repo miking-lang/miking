@@ -14,7 +14,7 @@ type Vector = Tensor[Float]
 
 type IpoptAdCreateNLPArg = {
   -- Objective function f(x).
-  f : DualVec -> Dualnum,
+  f : DualVec -> DualNum,
 
   -- Constraint functions g_i(x).
   g : DualVec -> DualVec -> (),

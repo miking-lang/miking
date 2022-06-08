@@ -24,7 +24,8 @@
 
   let unique_ident = us"X"
 
-
+  let set_con_params params = function
+    | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
 
 %}
@@ -239,9 +240,9 @@ decls:
   |
     { [] }
 decl:
-  | SYN type_ident EQ constrs
-    { let fi = mkinfo $1.i $3.i in
-      Data (fi, $2.v, $4) }
+  | SYN type_ident type_params EQ constrs
+    { let fi = mkinfo $1.i $4.i in
+      Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5) }
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
       Inter (fi, $2.v, TyUnknown fi, Some $3, $5) }
@@ -260,7 +261,7 @@ constrs:
 constr:
   | BAR con_ident constr_params
     { let fi = mkinfo $1.i $2.i in
-      CDecl(fi, $2.v, $3 $1.i) }
+      CDecl(fi, [], $2.v, $3 $1.i) }
 
 constr_params:
   | ty
@@ -407,8 +408,10 @@ atom:
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, Record.empty)}
-  | LBRACKET mexpr WITH label_ident EQ mexpr RBRACKET
-      { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
+  | LBRACKET mexpr WITH labels RBRACKET
+      { List.fold_left (fun acc (k,v) ->
+          TmRecordUpdate (mkinfo $1.i $5.i, acc, k, v)
+        ) $2 $4}
 
 proj_label:
   | UINT

@@ -10,12 +10,12 @@ lang CudaIntrinsic = CudaAst + CudaCompile
     -- TODO(larshum, 2022-02-08): Assumes 1d sequence
     match _unwrapType env.typeEnv ty with TySeq {ty = ty} then
       compileType env ty
-    else infoErrorExit (infoTy ty) "Could not unwrap sequence type"
+    else errorSingle [infoTy ty] "Could not unwrap sequence type"
 
   sem _getStructDataElemType (env : CompileCEnv) =
   | cty ->
     recursive let findTypeId : CType -> Name = lam ty.
-      match ty with CTyPtr t then findTypeId t
+      match ty with CTyPtr t then findTypeId t.ty
       else match ty with CTyVar {id = id} then id
       else error "Expected struct type"
     in

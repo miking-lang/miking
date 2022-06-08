@@ -230,7 +230,7 @@ lang OCamlDataConversionHelpers =
               if ty1ToTy2 then convertData info env var (ty1, ty2)
               else convertData info env var (ty2, ty1)
             else
-              infoErrorExit info "Cannot convert tuple"
+              errorSingle [info] "Cannot convert tuple"
           else never)
         (zip ns tys)
     in
@@ -286,17 +286,17 @@ lang OCamlDataConversionTuple = OCamlDataConversionHelpers + OCamlAst
     (TyRecord {fields = fields}, OTyTuple {tys = []}) ->
     if eqi (mapSize fields) 0 then
       (0, semi_ t (OTmTuple { values = [] }))
-    else infoErrorExit info "Cannot convert unit"
+    else errorSingle [info] "Cannot convert unit"
   | (OTyTuple {tys = tys}, TyCon {ident = ident}) ->
     match mapLookup ident env.constrs
     with Some (TyRecord {fields = fields}) then
       convertTuple info env true t fields tys
-    else infoErrorExit info "Cannot convert from OCaml tuple"
+    else errorSingle [info] "Cannot convert from OCaml tuple"
   | (TyCon {ident = ident}, OTyTuple {tys = tys}) ->
     match mapLookup ident env.constrs
     with Some (TyRecord {fields = fields}) then
       convertTuple info env false t fields tys
-    else infoErrorExit info "Cannot convert to OCaml tuple"
+    else errorSingle [info] "Cannot convert to OCaml tuple"
 end
 
 lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
@@ -323,9 +323,7 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
               convertData
                 info env (OTmProject { field = l1, tm = t }) (ty1, ty2)
             else
-              infoErrorExit
-                info
-                (join
+              errorSingle [info] (join
                   ["Field \"", sidToString l2, "\" not found in record type"]))
           labels2 fields1
       in
@@ -346,8 +344,8 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
         let t = OTmConApp { ident = id, args = [record] } in
         let cost = addi _recordConversionCost (foldl1 addi costs) in
         (cost, t)
-      else infoErrorExit info "impossible"
-    else infoErrorExit info "Cannot convert record"
+      else errorSingle [info] "impossible"
+    else errorSingle [info] "Cannot convert record"
   | (TyCon {ident = ident} & ty1,
     OTyRecordExt {tyident = tyident, fields = fields2} & ty2) ->
     match mapLookup ident env.constrs
@@ -392,9 +390,7 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
                 in
                 convertData info env (objMagic var) (ty1, ty2)
               else
-                infoErrorExit
-                  info
-                  (join
+                errorSingle [info] (join
                     ["Field \"", sidToString l1, "\" not found in record type"]))
             ns (zip labels1 tys2)
         in
@@ -405,8 +401,8 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
         let cpat = OPatCon { ident = id, args = [rpat] } in
         let t = OTmMatch { target = t, arms = [(cpat, rec)] } in
         (foldl1 addi costs, t)
-      else infoErrorExit info "impossible"
-    else infoErrorExit info "Cannot convert record"
+      else errorSingle [info] "impossible"
+    else errorSingle [info] "Cannot convert record"
 end
 
 lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
@@ -451,7 +447,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
       })
   ->
     if eqi rank1 rank2 then (0, t)
-    else infoErrorExit info "Bigarray rank mismatch"
+    else errorSingle [info] "Bigarray rank mismatch"
   | (TyTensor {ty = elty1} & ty1
     ,OTyBigarrayGenarray
       {ty = elty2, elty = elty3, layout = OTyBigarrayClayout _})
@@ -474,7 +470,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
       in
       (_tensorToGenarrayCost, t)
     else
-      infoErrorExit info "Cannot convert to bigarray"
+      errorSingle [info] "Cannot convert to bigarray"
   | (TyTensor {ty = elty1} & ty1
     ,OTyBigarrayArray {
         rank = rank,
@@ -492,7 +488,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
           else if eqi rank 2 then
             "Helpers.to_array2_clayout"
           else
-            infoErrorExit info "Cannot convert bigarray"
+            errorSingle [info] "Cannot convert bigarray"
         in
         OTmVarExt { ident = intrinsicOpTensor op }
       in
@@ -506,7 +502,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
       in
       (_tensorToGenarrayCost, t)
     else
-      infoErrorExit info "Cannot convert to bigarray"
+      errorSingle [info] "Cannot convert to bigarray"
   | (OTyBigarrayGenarray
       {ty = elty1, elty = elty3, layout = OTyBigarrayClayout _}
     ,TyTensor {ty = elty2} & ty2)
@@ -517,7 +513,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
         "Helpers.of_genarray_clayout"
       case (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _) then
         "Helpers.of_genarray_clayout"
-      case (_, _, _) then infoErrorExit info "Cannot convert bigarray"
+      case (_, _, _) then errorSingle [info] "Cannot convert bigarray"
       end
     in
     let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
@@ -546,7 +542,7 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
         "Helpers.of_array2_clayout"
       case (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 2) then
         "Helpers.of_array2_clayout"
-      case (_, _, _, _) then infoErrorExit info "Cannot convert bigarray"
+      case (_, _, _, _) then errorSingle [info] "Cannot convert bigarray"
       end
     in
     let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
@@ -614,6 +610,6 @@ lang OCamlGenerateExternalNaive =
           ]
         else errMsg
       in
-      infoErrorExit info errMsg
+      errorSingle [info] errMsg
   | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
 end

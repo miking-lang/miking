@@ -30,7 +30,7 @@ con Both : () -> Side
 
 -- Combines two options by choosing Some over None. Should both options be
 -- Some, they are combined according to the given function.
-let combineOptions : (a -> a -> Option a) -> Option a -> Option a -> Option a =
+let combineOptions : all a. (a -> a -> Option a) -> Option a -> Option a -> Option a =
   lam f. lam o1. lam o2.
   let t = (o1, o2) in
   match t with (None (), rhs) then rhs
@@ -110,7 +110,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
         (lam l. lam r.
           if eqExpr l r then Some l else None ())
         acc binop in
-    let compatibleArgumentSide : Option Side -> TailPosInfo -> Option Side =
+    let compatibleArgumentSide : Option Side -> Option TailPosInfo -> Option Side =
       lam acc. lam info.
       let side = optionJoin (optionMap (lam info : TailPosInfo. info.side) info) in
       compatibleSide acc side in

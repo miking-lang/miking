@@ -124,7 +124,7 @@ lang CFA = Ast + LetAst + MExprPrettyPrint
   -- The existence of such a label is guaranteed by ANF.
   sem exprName: Expr -> Name
   sem exprName =
-  | t -> infoErrorExit (infoTm t) "Error in exprName for CFA"
+  | t -> errorSingle [infoTm t] "Error in exprName for CFA"
 
   -- Required for the data type Set AbsVal
   sem cmpAbsVal: AbsVal -> AbsVal -> Int
@@ -388,7 +388,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
       match b.body with TmLam t then
         let av: AbsVal = AVLam { ident = t.ident, body = exprName t.body } in
         CstrInit { lhs = av, rhs = b.ident }
-      else infoErrorExit (infoTm b.body) "Not a lambda in recursive let body"
+      else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) bindings
 
 end
@@ -421,7 +421,7 @@ lang ConstCFA = CFA + ConstAst + InitConstraint
 
   sem generateConstraintsConst: Info -> Name -> Const -> [Constraint]
   sem generateConstraintsConst info ident =
-  | _ -> infoErrorExit info "Constant not supported in CFA"
+  | _ -> errorSingle [info] "Constant not supported in CFA"
 end
 
 lang AppCFA = CFA + ConstCFA + DirectConstraint + LamCFA + AppAst + MExprArity
@@ -477,8 +477,8 @@ lang AppCFA = CFA + ConstCFA + DirectConstraint + LamCFA + AppAst + MExprArity
         [ CstrLamApp { lhs = l.ident, rhs = r.ident, res = ident },
           CstrConstApp { lhs = l.ident, rhs = r.ident, res = ident }
         ]
-      else infoErrorExit (infoTm app.rhs) "Not a TmVar in application"
-    else infoErrorExit (infoTm app.lhs) "Not a TmVar in application"
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
   sem propagateConstraintConst : Name -> [Name] -> CFAGraph -> Const -> CFAGraph
 end
@@ -499,7 +499,7 @@ lang RecordCFA = CFA + InitConstraint + RecordAst
   | TmLet { ident = ident, body = TmRecord t } ->
     let bindings = mapMap (lam v: Expr.
         match v with TmVar t then t.ident
-        else infoErrorExit (infoTm v) "Not a TmVar in record"
+        else errorSingle [infoTm v] "Not a TmVar in record"
       ) t.bindings
     in
     let av: AbsVal = AVRec { bindings = bindings } in
@@ -562,7 +562,7 @@ lang DataCFA = CFA + InitConstraint + DataAst
   sem generateConstraints =
   | TmLet { ident = ident, body = TmConApp t } ->
     let body = match t.body with TmVar t then t.ident
-      else infoErrorExit (infoTm t.body) "Not a TmVar in con app" in
+      else errorSingle [infoTm t.body] "Not a TmVar in con app" in
     let av: AbsVal = AVCon { ident = t.ident, body = body } in
     [ CstrInit { lhs = av, rhs = ident } ]
 
@@ -612,7 +612,7 @@ lang MatchCFA = CFA + DirectConstraint + MatchAst
     ] in
     match t.target with TmVar tv then
       foldl (lam acc. lam f. concat (f ident tv.ident t.pat) acc) cstrs mcgfs
-    else infoErrorExit (infoTm t.target) "Not a TmVar in match target"
+    else errorSingle [infoTm t.target] "Not a TmVar in match target"
 
   sem generateMatchConstraints: Name -> Name -> Pat -> [Constraint]
   sem generateMatchConstraints (id: Name) (target: Name) =

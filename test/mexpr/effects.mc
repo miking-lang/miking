@@ -8,12 +8,12 @@ mexpr
 
 -- 'print s' prints out a string to the stdout.
 -- String -> ()
-utest if false then print "message\n" else 0 with 0 in
+utest if false then print "message\n" else () with () in
 
 
 -- Test debug print (cannot execute actual printing)
 -- Debug print can be applied to any term
-utest if false then dprint ["message\n","hi"] else 0 with 0 in
+utest if false then dprint ["message\n","hi"] else () with () in
 
 
 -- 'writeFile fname s' writes a string 's' to a file named 'fname'.

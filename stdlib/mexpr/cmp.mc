@@ -17,7 +17,7 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Expr, Expr) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      infoErrorExit (mergeInfo (infoTm lhs) (infoTm rhs))
+      errorSingle [infoTm lhs, infoTm rhs]
                     "Missing case in cmpExprH for expressions with equal indices."
     else res
 
@@ -37,7 +37,7 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Pat, Pat) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      infoErrorExit (mergeInfo (infoPat lhs) (infoPat rhs))
+      errorSingle [infoPat lhs, infoPat rhs]
                     "Missing case in cmpPatH for patterns with equal indices."
     else res
 
@@ -49,7 +49,7 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      infoErrorExit (mergeInfo (infoTy lhs) (infoTy rhs))
+      errorSingle [infoTy lhs, infoTy rhs]
                     "Missing case in cmpTypeH for types with equal indices."
     else res
 end

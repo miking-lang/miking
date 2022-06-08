@@ -25,7 +25,7 @@ utest
 with [1,2,3,4,5,6,7,8]
 
 -- Split a sequence into chunks of size 'chunkSize'
-let _split = lam seq. lam chunkSize.
+let _split : all a. [a] -> Int -> [[a]] = lam seq. lam chunkSize.
   recursive let work = lam acc. lam n. lam xs.
     if leqi n chunkSize then
       cons xs acc
@@ -43,7 +43,7 @@ utest _split [] 4 with [[]]
 -- min(nbrChunks, length s) chunks, where each chunk is operated on in parallel.
 -- The representation of the sequence is unchanged: a list as input gives a list
 -- as output, and vice versa for Ropes.
-let pmap : ThreadPool -> Int -> (a -> b) -> [a] -> [b] =
+let pmap : all a. all b. ThreadPool [b] -> Int -> (a -> b) -> [a] -> [b] =
   lam pool. lam nbrChunks. lam f. lam seq.
     if eqi nbrChunks 1 then
       if isList seq then reverse (mapReverse f seq)

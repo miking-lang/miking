@@ -67,7 +67,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
       let incVarName = mapFindExn (mapFindExn ident graph.meas2fun) env.fun2inc in
       let lookup = lam i. int_ i in
       contextExpansionLookupCallCtx lookup tree incVarName env
-    else infoErrorExit info "Measuring point without id"
+    else errorSingle [info] "Measuring point without id"
 
   -- Recursive helper for instrument
   sem instrumentH (env : CallCtxEnv) (graph : DependencyGraph) (str2name : String -> Name) =

@@ -1,0 +1,22 @@
+{
+    "user_defined_delimiters": [
+        [ "lang", "end" ],
+        [ "(", ")" ],
+        [ "[", "]" ],
+        [ "{", "}" ],
+        [ "let", "in" ],
+        [ "recursive", "in" ],
+        [ "recursive", "end" ],
+        [ "type", "in" ],
+        [ "use", "in" ]
+    ],
+    "escapable_string_literals": {
+        "delimiters": [ "\"" ],
+        "escape_character": "\\"
+    },
+    "raw_string_literals": [],
+    "comments": [
+        [ "Multiline", "/-", "-/" ],
+        [ "Until_newline", "--" ]
+    ]
+}

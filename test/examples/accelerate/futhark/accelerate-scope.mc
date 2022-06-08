@@ -3,7 +3,7 @@
 
 include "common.mc" -- printLn
 
-let timeFunction = lam f : Unit -> Unit.
+let timeFunction = lam f : () -> ().
   let t1 = wallTimeMs () in
   f ();
   let t2 = wallTimeMs () in
