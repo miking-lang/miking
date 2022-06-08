@@ -234,9 +234,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
     if not (nameEq r1.ident r2.ident) then
       unifyCheck env.info r1 ty2;
       let updated =
-        Unbound {{{r1 with level = mini r1.level r2.level}
-                      with sort = addSorts env (r1.sort, r2.sort)}
-                      with isWeak = or r1.isWeak r2.isWeak} in
+        Unbound {r1 with level = mini r1.level r2.level
+                       , sort = addSorts env (r1.sort, r2.sort)
+                       , isWeak = or r1.isWeak r2.isWeak} in
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
@@ -265,9 +265,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
               (lam. lam ty. unifyCheckBase info boundVars tv ty) () r.sort;
             r.sort
         in
-        let updated = Unbound {{{r with level = mini r.level tv.level}
-                                   with sort  = sort}
-                                   with isWeak = or r.isWeak tv.isWeak} in
+        let updated = Unbound {r with level = mini r.level tv.level
+                                    , sort  = sort
+                                    , isWeak = or r.isWeak tv.isWeak} in
         modref t.contents updated
     else
       unifyCheckBase info boundVars tv (resolveLink ty)
@@ -516,9 +516,7 @@ lang LamTypeCheck = TypeCheck + LamAst
     in
     let body = typeCheckExpr (_insertVar t.ident tyX env) t.body in
     let tyLam = ityarrow_ t.info tyX (tyTm body) in
-    TmLam {{{t with body = body}
-               with tyIdent = tyX}
-               with ty = tyLam}
+    TmLam {t with body = body, tyIdent = tyX, ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -528,9 +526,7 @@ lang AppTypeCheck = TypeCheck + AppAst
     let rhs = typeCheckExpr env t.rhs in
     let tyRes = newvar env.currentLvl t.info in
     unify [infoTm t.lhs] env (tyTm lhs) (ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
-    TmApp {{{t with lhs = lhs}
-               with rhs = rhs}
-               with ty = tyRes}
+    TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
 end
 
 lang LetTypeCheck = TypeCheck + LetAst
@@ -550,17 +546,17 @@ lang LetTypeCheck = TypeCheck + LetAst
       (sremoveUnknown t.tyBody)
     in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-    TmLet {{{{t with body = body}
-                with tyBody = tyBody}
-                with inexpr = inexpr}
-                with ty = tyTm inexpr}
+    TmLet {t with body = body
+                , tyBody = tyBody
+                , inexpr = inexpr
+                , ty = tyTm inexpr}
 
   sem propagateTyAnnot =
   | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
   | (TmLam l, TyArrow a) ->
     let body = propagateTyAnnot (l.body, a.to) in
     let ty = optionGetOr a.from (sremoveUnknown l.tyIdent) in
-    TmLam {{l with body = body} with tyIdent = ty}
+    TmLam {l with body = body, tyIdent = ty}
   | (tm, ty) -> tm
 end
 
@@ -608,9 +604,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
     in
     match mapAccumL envIteratee env bindings with (env, bindings) in
     let inexpr = typeCheckExpr env t.inexpr in
-    TmRecLets {{{t with bindings = bindings}
-                   with inexpr = inexpr}
-                   with ty = tyTm inexpr}
+    TmRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}
 end
 
 lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
@@ -622,11 +616,11 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr env t.els in
     unify [infoTm thn, infoTm els] env (tyTm thn) (tyTm els);
-    TmMatch {{{{{t with target = target}
-                   with thn = thn}
-                   with els = els}
-                   with ty = tyTm thn}
-                   with pat = pat}
+    TmMatch {t with target = target
+                  , thn = thn
+                  , els = els
+                  , ty = tyTm thn
+                  , pat = pat}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
@@ -643,8 +637,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
     iter (lam tm. unify [infoTm tm] env elemTy (tyTm tm)) tms;
-    TmSeq {{t with tms = tms}
-              with ty = ityseq_ t.info elemTy}
+    TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
 end
 
 lang FlexDisableGeneralize = FlexTypeAst
@@ -665,17 +658,14 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
     let bindings = mapMap (typeCheckExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
     let ty = TyRecord {fields = bindingTypes, info = t.info} in
-    TmRecord {{t with bindings = bindings}
-                 with ty = ty}
+    TmRecord {t with bindings = bindings, ty = ty}
   | TmRecordUpdate t ->
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     unify [infoTm rec] env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
     (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
-    TmRecordUpdate {{{t with rec = rec}
-                        with value = value}
-                        with ty = tyTm rec}
+    TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
 lang TypeTypeCheck = TypeCheck + TypeAst
@@ -683,23 +673,20 @@ lang TypeTypeCheck = TypeCheck + TypeAst
   | TmType t ->
     let env = _insertTyCon t.ident (t.params, t.tyIdent) env in
     let inexpr = typeCheckExpr env t.inexpr in
-    TmType {{t with inexpr = inexpr}
-               with ty = tyTm inexpr}
+    TmType {t with inexpr = inexpr, ty = tyTm inexpr}
 end
 
 lang DataTypeCheck = TypeCheck + DataAst
   sem typeCheckBase env =
   | TmConDef t ->
     let inexpr = typeCheckExpr (_insertCon t.ident t.tyIdent env) t.inexpr in
-    TmConDef {{t with inexpr = inexpr}
-                 with ty = tyTm inexpr}
+    TmConDef {t with inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
       match inst env.tyConEnv env.currentLvl lty with TyArrow {from = from, to = to} in
       unify [infoTm body] env (tyTm body) from;
-      TmConApp {{t with body = body}
-                   with ty   = to}
+      TmConApp {t with body = body, ty = to}
     else
       let msg = join [
         "Type check failed: reference to unbound constructor: ",
@@ -719,11 +706,11 @@ lang UtestTypeCheck = TypeCheck + UtestAst
        unify [infoTm tu] env (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
      else
        unify [infoTm test, infoTm expected] env (tyTm test) (tyTm expected));
-    TmUtest {{{{{t with test = test}
-                   with expected = expected}
-                   with next = next}
-                   with tusing = tusing}
-                   with ty = tyTm next}
+    TmUtest {t with test = test
+                  , expected = expected
+                  , next = next
+                  , tusing = tusing
+                  , ty = tyTm next}
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
@@ -736,8 +723,7 @@ lang ExtTypeCheck = TypeCheck + ExtAst
   | TmExt t ->
     let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
-    TmExt {{t with inexpr = inexpr}
-              with ty = tyTm inexpr}
+    TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
 end
 
 ---------------------------
@@ -762,8 +748,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL typeCheckPat env t.pats with (env, pats) in
     iter (lam pat. unify [infoPat pat] env elemTy (tyPat pat)) pats;
-    (env, PatSeqTot {{t with pats = pats}
-                        with ty = ityseq_ t.info elemTy})
+    (env, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
@@ -780,9 +765,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
       match t.middle with PName n then _insertVar n seqTy env
       else env
     in
-    (env, PatSeqEdge {{{t with prefix = prefix}
-                          with postfix = postfix}
-                          with ty = seqTy})
+    (env, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
@@ -793,8 +776,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
     let env : TCEnv = env in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
     (if env.disableRecordPolymorphism then disableGeneralize ty else ());
-    (env, PatRecord {{t with bindings = bindings}
-                        with ty = ty})
+    (env, PatRecord {t with bindings = bindings, ty = ty})
 end
 
 lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
@@ -804,8 +786,7 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
       match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env t.subpat with (env, subpat) in
       unify [infoPat subpat] env (tyPat subpat) from;
-      (env, PatCon {{t with subpat = subpat}
-                       with ty = to})
+      (env, PatCon {t with subpat = subpat, ty = to})
     else
       let msg = join [
         "Type check failed: reference to unbound constructor: ",
@@ -835,7 +816,7 @@ lang AndPatTypeCheck = PatTypeCheck + AndPat
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
     unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (env, PatAnd {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
+    (env, PatAnd {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
 end
 
 -- TODO(aathn, 2021-11-11): This definition is incorrect as it does not check
@@ -846,14 +827,14 @@ lang OrPatTypeCheck = PatTypeCheck + OrPat
     match typeCheckPat env t.lpat with (env, lpat) in
     match typeCheckPat env t.rpat with (env, rpat) in
     unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (env, PatOr {{{t with lpat = lpat} with rpat = rpat} with ty = tyPat lpat})
+    (env, PatOr {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
   sem typeCheckPat env =
   | PatNot t ->
     match typeCheckPat env t.subpat with (env, subpat) in
-    (env, PatNot {{t with subpat = subpat} with ty = tyPat subpat})
+    (env, PatNot {t with subpat = subpat, ty = tyPat subpat})
 end
 
 
