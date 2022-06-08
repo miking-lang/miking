@@ -223,8 +223,8 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
   | (RecordVar _ & rv, ! RecordVar _ & tv)
   | (! RecordVar _ & tv, RecordVar _ & rv) ->
     rv
-  | (TypeVar _, TypeVar _) -> TypeVar ()
-  | (s1, s2) -> WeakVar ()
+  | (PolyVar _, PolyVar _) -> PolyVar ()
+  | (s1, s2) -> MonoVar ()
 
   sem unifyBase (env : UnifyEnv) =
   | (TyFlex t1 & ty1, TyFlex t2 & ty2) ->
@@ -236,7 +236,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
       let updated =
         Unbound {{{r1 with level = mini r1.level r2.level}
                       with sort = addSorts env (r1.sort, r2.sort)}
-                      with allowGeneralize = and r1.allowGeneralize r2.allowGeneralize} in
+                      with isWeak = or r1.isWeak r2.isWeak} in
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
@@ -259,7 +259,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
         errorSingle info msg
       else
         let sort =
-          match (tv.sort, r.sort) with (WeakVar _, TypeVar _) then WeakVar ()
+          match (tv.sort, r.sort) with (MonoVar _, PolyVar _) then MonoVar ()
           else
             sfold_VarSort_Type
               (lam. lam ty. unifyCheckBase info boundVars tv ty) () r.sort;
@@ -267,7 +267,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + UnknownTypeAst
         in
         let updated = Unbound {{{r with level = mini r.level tv.level}
                                    with sort  = sort}
-                                   with allowGeneralize = and r.allowGeneralize tv.allowGeneralize} in
+                                   with isWeak = or r.isWeak tv.isWeak} in
         modref t.contents updated
     else
       unifyCheckBase info boundVars tv (resolveLink ty)
@@ -299,7 +299,7 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
 
   sem unifyCheckBase info boundVars tv =
   | TyAll t ->
-    match tv.sort with WeakVar _ then
+    match tv.sort with MonoVar _ then
       let msg = join [
         "Type check failed: unification failure\n",
         "Attempted to unify monomorphic type variable with polymorphic type!\n"
@@ -368,12 +368,12 @@ end
 
 let newflexvar =
   lam sort. lam level. lam info.
-  tyFlexUnbound info (nameSym "a") level sort true
+  tyFlexUnbound info (nameSym "a") level sort false
 
-let newvarWeak = use VarSortAst in
-  newflexvar (WeakVar ())
+let newvarMono = use VarSortAst in
+  newflexvar (MonoVar ())
 let newvar = use VarSortAst in
-  newflexvar (TypeVar ())
+  newflexvar (PolyVar ())
 let newrecvar = use VarSortAst in
   lam fields. newflexvar (RecordVar {fields = fields})
 
@@ -407,7 +407,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
   | ty ->
     match genBase lvl ty with (vars, genTy) in
     let iteratee = lam v : (Name, VarSort). lam ty.
-      let sort = match v.1 with WeakVar _ then TypeVar () else v.1 in
+      let sort = match v.1 with MonoVar _ then PolyVar () else v.1 in
       TyAll {info = infoTy genTy, ident = v.0, ty = ty, sort = sort}
     in
     foldr iteratee genTy vars
@@ -423,8 +423,8 @@ end
 lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
   sem genBase (lvl : Level) =
   | TyFlex t & ty ->
-    match deref t.contents with Unbound {ident = n, level = k, sort = s, allowGeneralize = a} then
-      if and a (gti k lvl) then
+    match deref t.contents with Unbound {ident = n, level = k, sort = s, isWeak = w} then
+      if and (not w) (gti k lvl) then
         -- Var is free, generalize
         let f = lam vars1. lam ty.
           match genBase lvl ty with (vars2, ty) in
@@ -510,7 +510,7 @@ lang LamTypeCheck = TypeCheck + LamAst
   | TmLam t ->
     let tyX = optionGetOrElse
       -- No type annotation: assign a monomorphic type variable to x
-      (lam. newvarWeak env.currentLvl t.info)
+      (lam. newvarMono env.currentLvl t.info)
       -- Type annotation: assign x its annotated type
       (sremoveUnknown t.tyIdent)
     in
@@ -651,7 +651,7 @@ lang FlexDisableGeneralize = FlexTypeAst
   sem disableGeneralize =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
-      modref t.contents (Unbound {r with allowGeneralize = false});
+      modref t.contents (Unbound {r with isWeak = true});
       sfold_VarSort_Type (lam. lam ty. disableGeneralize ty) () r.sort
     else
       disableGeneralize (resolveLink ty)
@@ -892,8 +892,8 @@ let a = tyvar_ "a" in
 let b = tyvar_ "b" in
 let fa = newvar 0 (NoInfo ()) in
 let fb = newvar 0 (NoInfo ()) in
-let wa = newvarWeak 0 (NoInfo ()) in
-let wb = newvarWeak 0 (NoInfo ()) in
+let wa = newvarMono 0 (NoInfo ()) in
+let wb = newvarMono 0 (NoInfo ()) in
 
 let tychoose_ = tyall_ "a" (tyarrows_ [a, a, a]) in
 let choose_ = ("choose", tychoose_) in

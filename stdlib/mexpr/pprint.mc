@@ -1144,8 +1144,8 @@ end
 
 lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
-  | TypeVar () -> (env, idstr)
-  | WeakVar () -> (env, concat "_" idstr)
+  | PolyVar () -> (env, idstr)
+  | MonoVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
       TyRecord {info = NoInfo (), fields = r.fields} in

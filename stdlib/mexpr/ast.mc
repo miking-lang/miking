@@ -1348,8 +1348,8 @@ lang VarSortAst
   -- VarSort indicates the sort of a type variable, like type variable or
   -- record variable, and contains related data
   syn VarSort =
-  | TypeVar ()
-  | WeakVar ()
+  | PolyVar ()
+  | MonoVar ()
   | RecordVar {fields : Map SID Type}
 
   sem smapAccumL_VarSort_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> VarSort -> (acc, VarSort)
@@ -1371,10 +1371,10 @@ lang VarSortAst
     match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-type FlexVarRec = {ident : Name,
-                   level : Level,
-                   sort  : VarSort,
-                   allowGeneralize : Bool}
+type FlexVarRec = {ident  : Name,
+                   level  : Level,
+                   sort   : VarSort,
+                   isWeak : Bool}
 
 lang FlexTypeAst = VarSortAst + Ast
   syn FlexVar =

@@ -102,23 +102,23 @@ let styall_ = lam s. nstyall_ (nameNoSym s)
 
 let tyall_ = use VarSortAst in
   lam s.
-  styall_ s (TypeVar ())
+  styall_ s (PolyVar ())
 
 let tyalls_ =
   lam strs. lam ty.
   foldr tyall_ ty strs
 
 let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam sort. lam allowGeneralize.
+  lam info. lam ident. lam level. lam sort. lam isWeak.
   TyFlex {info = info,
           contents = ref (Unbound {ident = ident,
                                    level = level,
                                    sort = sort,
-                                   allowGeneralize = allowGeneralize})}
+                                   isWeak = isWeak})}
 
 let tyflexunbound_ = use FlexTypeAst in
   lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (TypeVar ()) true
+  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (PolyVar ()) true
 
 let tyflexlink_ = use FlexTypeAst in
   lam ty.

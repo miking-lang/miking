@@ -262,7 +262,7 @@ lang BootParser = MExprAst + ConstTransformer
     TyAll {info = ginfo t 0,
            ident = gname t 0,
            ty = gtype t 0,
-           sort = TypeVar ()}
+           sort = PolyVar ()}
 
 
   -- Get constant help function
