@@ -222,11 +222,9 @@ lang FunTypeCPS = CPS + FunTypeAst
     let i = tyWithInfo b.info in
     let from = tyCps from in
     let to = tyCps to in
-    let resTyName = nameSym "r" in
-    let cont = i (tyarrow_ to (i (ntyvar_ resTyName))) in
-    i (ntyall_ resTyName
-        (i (tyarrow_ cont
-              (TyArrow { b with from = from, to = (i (ntyvar_ resTyName)) }))))
+    let cont = i (tyarrow_ to (i tyunknown_)) in
+    (i (tyarrow_ cont
+        (TyArrow { b with from = from, to = (i tyunknown_) })))
 end
 
 ---------------
