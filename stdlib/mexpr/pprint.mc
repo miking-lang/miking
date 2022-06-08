@@ -180,12 +180,13 @@ lang PrettyPrint = IdentifierPrettyPrint
   -- Intentionally left blank
   sem patIsAtomic =
   -- Intentionally left blank
+  sem typePrecedence =
+  | ty -> 100000
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   -- Intentionally left blank
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   -- Intentionally left blank
-
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
@@ -235,6 +236,12 @@ lang PrettyPrint = IdentifierPrettyPrint
     if patIsAtomic pat then (env, str)
     else (env, join ["(", str, ")"])
 
+  -- Helper function for printing parentheses (around types)
+  sem printTypeParen (indent : Int) (prec : Int) (env : PprintEnv) =
+  | ty ->
+    match getTypeStringCode indent env ty with (env, str) in
+    if leqi prec (typePrecedence ty) then (env, str)
+    else (env, join ["(", str, ")"])
 end
 
 lang VarPrettyPrint = PrettyPrint + VarAst
@@ -967,8 +974,6 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO(dlunde,2020-11-24): Type printing is using a lot of unnecessary
--- parentheses.
 
 lang UnknownTypePrettyPrint = UnknownTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
@@ -995,30 +1000,29 @@ lang CharTypePrettyPrint = CharTypeAst
   | TyChar _ -> (env,"Char")
 end
 
-lang FunTypePrettyPrint = FunTypeAst
+lang FunTypePrettyPrint = PrettyPrint + FunTypeAst
+  sem typePrecedence =
+  | TyArrow _ -> 0
+
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyArrow t ->
-    match getTypeStringCode indent env t.from with (env, from) then
-      match getTypeStringCode indent env t.to with (env, to) then
-        (env, join ["(", from, ") -> (", to, ")"])
-      else never
-    else never
+    match printTypeParen indent 1 env t.from with (env, from) in
+    match getTypeStringCode indent env t.to with (env, to) in
+    (env, join [from, " -> ", to])
 end
 
 lang SeqTypePrettyPrint = SeqTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TySeq t ->
-    match getTypeStringCode indent env t.ty with (env, ty) then
-      (env, join ["[", ty, "]"])
-    else never
+    match getTypeStringCode indent env t.ty with (env, ty) in
+    (env, join ["[", ty, "]"])
 end
 
 lang TensorTypePrettyPrint = TensorTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyTensor t ->
-    match getTypeStringCode indent env t.ty with (env, ty) then
-      (env, join ["Tensor[", ty, "]"])
-    else never
+    match getTypeStringCode indent env t.ty with (env, ty) in
+    (env, join ["Tensor[", ty, "]"])
 end
 
 lang RecordTypePrettyPrint = RecordTypeAst
@@ -1070,8 +1074,8 @@ end
 lang ConTypePrettyPrint = ConTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyCon t ->
-    match pprintEnvGetStr env t.ident with (env,str)
-    then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
+    pprintEnvGetStr env t.ident
+    -- TODO(vipa, 2020-09-23): format properly with #type
 end
 
 lang VarTypePrettyPrint = VarTypeAst
@@ -1083,8 +1087,7 @@ end
 lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
   | RecordVar r ->
-    let recty =
-      TyRecord {info = NoInfo (), fields = r.fields} in
+    let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
   | _ -> (env, idstr)
@@ -1103,6 +1106,9 @@ lang FlexTypePrettyPrint = FlexTypeAst + VarSortPrettyPrint
 end
 
 lang AllTypePrettyPrint = AllTypeAst + VarSortPrettyPrint
+  sem typePrecedence =
+  | TyAll _ -> 0
+
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyAll t ->
     match pprintEnvGetStr env t.ident with (env, idstr) in
@@ -1111,14 +1117,15 @@ lang AllTypePrettyPrint = AllTypeAst + VarSortPrettyPrint
     (env, join ["all ", varstr, ". ", tystr])
 end
 
-lang AppTypePrettyPrint = AppTypeAst
+lang AppTypePrettyPrint = PrettyPrint + AppTypeAst
+  sem typePrecedence =
+  | TyApp _ -> 1
+
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyApp t ->
-    match getTypeStringCode indent env t.lhs with (env,lhs) then
-      match getTypeStringCode indent env t.rhs with (env,rhs) then
-        (env,join ["(", lhs, ") (", rhs, ")"])
-      else never
-    else never
+    match printTypeParen indent 1 env t.lhs with (env,lhs) in
+    match printTypeParen indent 2 env t.rhs with (env,rhs) in
+    (env, join [lhs, " ", rhs])
 end
 
 

@@ -490,7 +490,7 @@ utest l_infoClosed "  type Bar in () " with r_info 1 2 1 13 in
 -- TmConDef
 let s = "con Foo in x" in
 utest lside ["x"] s with rside s in
-let s = "con Foo : (Int) -> (Tree) in x" in
+let s = "con Foo : Int -> Tree in x" in
 utest lside ["x"] s with rside s in
 utest l_infoClosed "  con Bar in 10 " with r_info 1 2 1 12 in
 
@@ -628,16 +628,16 @@ utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else
 with r_info 1 6 1 10 in
 
 -- TyArrow
-let s = "let y:(Int)->(Int) = lam x.x in y" in
+let s = "let y:Int->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else NoInfo ()
-with r_info 1 7 1 17 in
+with r_info 1 6 1 14 in
 
 -- Nested TyArrow
-let s = "let y:([Float])->(Int) = lam x.x in y" in
+let s = "let y:[Float]->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else NoInfo ()
-with r_info 1 7 1 21 in
+with r_info 1 6 1 18 in
 
 -- TySeq
 let s = "let y:[Int] = lam x.x in y" in
@@ -721,10 +721,10 @@ utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else
 with r_info 1 6 1 13 in
 
 -- Nested TyAll
-let s = "let y:all x.(all y.all z.z)->(all w.w) = lam x.x in y" in
+let s = "let y:all x.(all y.all z.z)->all w.w = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else NoInfo ()
-with r_info 1 6 1 37 in
+with r_info 1 6 1 36 in
 
 -- TyCon
 let s = "let y:Foo = lam x.x in y" in
@@ -733,16 +733,16 @@ utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else
 with r_info 1 6 1 9 in
 
 -- TyApp
-let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in
+let s = "let y:(Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else NoInfo ()
-with r_info 1 8 1 24 in
+with r_info 1 7 1 19 in
 
 -- Nested TyApp
-let s = "let y:((((Int)->(Int))(Int))->(Int))(Int) = lam x.x in y" in
+let s = "let y:((Int->Int)Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyBody else NoInfo ()
-with r_info 1 10 1 40 in
+with r_info 1 8 1 29 in
 
 -- Allow free variables
 utest
