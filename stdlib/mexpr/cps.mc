@@ -222,6 +222,10 @@ lang FunTypeCPS = CPS + FunTypeAst
     let i = tyWithInfo b.info in
     let from = tyCps from in
     let to = tyCps to in
+    -- NOTE(dlunde,2022-06-08): We replace all continuation return types with
+    -- the unknown type. No polymorphism should be needed, as all of these
+    -- unknown types should ultimately be the same type: the return type of the
+    -- program (I think). This can easily be inferred by the type checker.
     let cont = i (tyarrow_ to (i tyunknown_)) in
     (i (tyarrow_ cont
         (TyArrow { b with from = from, to = (i tyunknown_) })))
