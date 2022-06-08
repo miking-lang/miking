@@ -1144,13 +1144,12 @@ end
 
 lang VarSortPrettyPrint = VarSortAst + RecordTypePrettyPrint
   sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
-  | PolyVar () -> (env, idstr)
-  | MonoVar () -> (env, concat "_" idstr)
   | RecordVar r ->
     let recty =
       TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [idstr, "<:", recstr])
+  | _ -> (env, idstr)
 end
 
 lang FlexTypePrettyPrint = FlexTypeAst + VarSortPrettyPrint
@@ -1158,7 +1157,9 @@ lang FlexTypePrettyPrint = FlexTypeAst + VarSortPrettyPrint
   | TyFlex t & ty ->
     match deref t.contents with Unbound t then
       match pprintEnvGetStr env t.ident with (env, idstr) in
-      getVarSortStringCode indent env idstr t.sort
+      match getVarSortStringCode indent env idstr t.sort with (env, str) in
+      let weakPrefix = if t.isWeak then "_" else "" in
+      (env, concat weakPrefix str)
     else
       getTypeStringCode indent env (resolveLink ty)
 end
