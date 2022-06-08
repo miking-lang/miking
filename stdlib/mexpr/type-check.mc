@@ -388,7 +388,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
     then stripTyAllBaseAlias env vars ty
     else (vars, ty)
 
-  -- Instantiate the top-level type variables of `ty' with fresh schematic variables.
+  -- Instantiate the top-level type variables of `ty' with fresh unification variables.
   sem inst (env : Map Name ([Name], Type)) (lvl : Level) =
   | ty ->
     match stripTyAllAlias env ty with (vars, ty) in
@@ -402,12 +402,10 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
     else
       ty
 
-  -- Generalize all flexible (schematic) type variables in `ty'.
+  -- Generalize the unification variables in `ty' introduced at least at level `lvl`.
   sem gen (lvl : Level) =
   | ty ->
     match genBase lvl ty with (vars, genTy) in
-    let fstEq = lam v1 : (Name, VarSort). lam v2 : (Name, VarSort). nameEq v1.0 v2.0 in
-    let vars = distinct fstEq vars in
     let iteratee = lam v : (Name, VarSort). lam ty.
       let sort = match v.1 with WeakVar _ then TypeVar () else v.1 in
       TyAll {info = infoTy genTy, ident = v.0, ty = ty, sort = sort}
@@ -433,7 +431,9 @@ lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
           (concat vars1 vars2, ty)
         in
         match smapAccumL_VarSort_Type f [] s with (vars, sort) in
-        (snoc vars (n, sort), TyVar {info = t.info, ident = n, level = lvl})
+        let v = TyVar {info = t.info, ident = n, level = lvl} in
+        modref t.contents (Link v);
+        (snoc vars (n, sort), v)
       else
         -- Var is bound in previous let, don't generalize
         ([], ty)
