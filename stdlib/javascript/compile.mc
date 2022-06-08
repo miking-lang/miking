@@ -328,7 +328,7 @@ let defaultCompileJSOptions : CompileJSOptions = {
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
-let javascriptCompile : CompileJSOptions -> Expr -> JSPProg =
+let javascriptCompile : CompileJSOptions -> Expr -> JSProg =
   lam opts : CompileJSOptions.
   lam ast : Expr.
   use MExprJSCompile in
@@ -336,7 +336,7 @@ let javascriptCompile : CompileJSOptions -> Expr -> JSPProg =
 
 
 
-let javascriptCompileFile : CompileJSOptions -> Expr -> String -> Bool =
+let javascriptCompileFile : CompileJSOptions -> Expr -> String -> String =
   lam opts : CompileJSOptions.
   lam ast : Expr.
   lam sourcePath: String.
@@ -351,4 +351,4 @@ let javascriptCompileFile : CompileJSOptions -> Expr -> String -> Bool =
     case _ then "" end
   ), "\n"] in
   writeFile targetPath (concat intrinsics source);
-  true
+  targetPath
