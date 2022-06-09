@@ -8,6 +8,7 @@ let optionsDefault : Options = {
   debugParse = false,
   debugGenerate = false,
   debugTypeAnnot = false,
+  debugTypeCheck = false,
   debugProfile = false,
   exitBefore = false,
   disablePruneExternalUtests = false,
