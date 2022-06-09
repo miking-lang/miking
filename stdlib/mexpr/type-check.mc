@@ -196,6 +196,9 @@ lang VarTypeUnify = Unify + VarTypeAst
 
   sem unifyCheckBase info boundVars tv =
   | TyVar t ->
+    -- NOTE(aathn, 2022-06-09): We should also disallow unifying weak variables
+    -- with type variables in the future. For now, we allow it to facilitate
+    -- polymorphic type signatures containing records
     if leqi tv.level t.level then
       if not (setMem t.ident boundVars) then
         let msg = join [
