@@ -253,6 +253,10 @@ let compileAccelerated =
     match eliminateDummyParameter solutions accelerated accelerateAst
     with (accelerated, accelerateAst) in
 
+    -- Check that the AST does not contain nested uses of acceleration, as this
+    -- is not supported at the moment.
+    checkNestedAccelerate accelerateIds accelerateAst;
+
     -- Perform analysis to find variables unused after the accelerate call.
     let accelerated = findUnusedAfterAccelerate accelerated ast in
 
