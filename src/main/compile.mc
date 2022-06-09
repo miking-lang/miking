@@ -108,11 +108,11 @@ let compile = lam files. lam options : Options. lam args.
     } file in
     let ast = makeKeywords [] ast in
 
-    -- Performs a CUDA well-formedness check of the AST, when the
-    -- --check-cuda-well-formed flag is set.
-    -- TODO: Include this in the "default" build process for MExpr, without
-    -- producing duplicated code.
-    -- (if options.checkCudaWellFormed then checkWellFormed ast else ());
+    -- Performs a well-formedness check of the accelerated expressions in the
+    -- AST, when the --check-well-formed flag is set.
+    -- TODO: integrate this in the default compiler process, together with the
+    -- acceleration.
+    -- (if options.checkWellFormed then checkWellFormed ast else ());
 
     -- Demote parallel constructs to sequential equivalents and remove
     -- accelerate terms
@@ -126,6 +126,5 @@ let compile = lam files. lam options : Options. lam args.
 
     compileWithUtests options file ast; ()
   in
-  if or options.accelerateCuda options.accelerateFuthark then
-    compileAccelerate files options args
+  if options.accelerate then compileAccelerate files options args
   else iter compileFile files

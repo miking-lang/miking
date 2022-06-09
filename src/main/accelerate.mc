@@ -213,6 +213,11 @@ let generateGpuCode =
       else never)
     asts
 
+let generateTests = lam ast. lam testsEnabled.
+  use PMExprCompile in
+  if testsEnabled then utestGen (removeTypeAscription ast)
+  else (symEnvEmpty, utestStrip ast)
+
 let compileAccelerated =
   use PMExprCompile in
   let _compile : Options -> String -> () =
@@ -230,10 +235,6 @@ let compileAccelerated =
     let ast = symbolizeExpr keywordsSymEnv ast in
     let ast = typeCheck ast in
     let ast = removeTypeAscription ast in
-
-    -- TODO(larshum, 2022-06-06): Add support for utests when compiling with
-    -- acceleration enabled.
-    let ast = utestStrip ast in
 
     -- Translate accelerate terms into functions with one dummy parameter, so
     -- that we can accelerate terms without free variables and so that it is
@@ -266,6 +267,10 @@ let compileAccelerated =
     -- Construct a sequential version of the AST where parallel constructs have
     -- been demoted to sequential equivalents
     let ast = demoteParallel ast in
+
+    -- Generate utests or strip them from the program.
+    match generateTests ast options.runTests with (symEnv, ast) in
+    let ast = symbolizeExpr symEnv ast in
 
     match typeLift ast with (typeLiftEnv, ast) in
     match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in

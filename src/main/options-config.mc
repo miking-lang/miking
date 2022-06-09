@@ -52,19 +52,15 @@ let optionsConfig : ParseConfig Options = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
-  ([("--accelerate-cuda", "", "")],
-    "Compile into an accelerated executable using the CUDA backend",
+  ([("--accelerate", "", "")],
+    "Compile accelerated expressions to GPU code using a suitable backend",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerateCuda = true}),
-  ([("--accelerate-futhark", "", "")],
-    "Compile into an accelerated executable using the Futhark backend",
+      let o: Options = p.options in {o with accelerate = true}),
+  ([("--check-well-formed", "", "")],
+    join ["Enables well-formedness checks for accelerated expressions, ",
+          "even when compiling without acceleration"],
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerateFuthark = true}),
-  ([("--check-cuda-well-formed", "", "")],
-    join ["Runs the well-formedness checks for the CUDA backend, even when ",
-          "compiling without acceleration"],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with checkCudaWellFormed = true}),
+      let o: Options = p.options in {o with checkWellFormed = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.
