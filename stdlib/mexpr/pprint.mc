@@ -1079,7 +1079,8 @@ lang RecordTypePrettyPrint = IdentifierPrettyPrint + RecordTypeAst
       in
       match tuple with Some tuple then
         match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple) in
-        (env, join ["(", strJoin ", " tuple, ")"])
+        let singletonComma = match tuple with [_] then "," else "" in
+        (env, join ["(", strJoin ", " tuple, singletonComma, ")"])
       else
         let f = lam env. lam field.
           match field with (sid, ty) in

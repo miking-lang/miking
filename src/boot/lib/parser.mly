@@ -555,6 +555,8 @@ ty_atom:
     { TySeq(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
+  | LPAREN ty COMMA RPAREN
+    { TyRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LBRACKET RBRACKET
     { ty_unit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
