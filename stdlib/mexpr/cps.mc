@@ -475,16 +475,16 @@ let e =
         (e
            a1)
 in
-let f: all r5. ((Float) -> (r5)) -> ((Float) -> (r5)) =
+let f: ((Float) -> (Unknown)) -> ((Float) -> (Unknown)) =
   lam k2.
     lam x: Float.
       e
         k2
         x
 in
-let g: all r2. ((Float) -> (r2)) -> ((all r3. ((Float) -> (r3)) -> ((Float) -> (r3))) -> (r2)) =
+let g: ((Float) -> (Unknown)) -> ((((Float) -> (Unknown)) -> ((Float) -> (Unknown))) -> (Unknown)) =
   lam k1.
-    lam h: all r4. ((Float) -> (r4)) -> ((Float) -> (r4)).
+    lam h: ((Float) -> (Unknown)) -> ((Float) -> (Unknown)).
       let t =
         1.
       in
@@ -493,7 +493,7 @@ let g: all r2. ((Float) -> (r2)) -> ((all r3. ((Float) -> (r3)) -> ((Float) -> (
         t
 in
 recursive
-  let h: all a. all r. ((a) -> (r)) -> ((a) -> (r)) =
+  let h: all a. ((a) -> (Unknown)) -> ((a) -> (Unknown)) =
     lam k.
       lam y: a.
         k
@@ -501,7 +501,7 @@ recursive
 in
 type T
 in
-con C: (all x. all r1. ((x) -> (r1)) -> ((x) -> (r1))) -> (T) in
+con C: (all x. ((x) -> (Unknown)) -> ((x) -> (Unknown))) -> (T) in
 g
   (lam x.
      x)
