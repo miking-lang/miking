@@ -91,7 +91,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
     let retType = t.ty in
-    let info = infoTm t.e in
+    let info = mergeInfo t.info (infoTm t.e) in
     let paramId = nameSym "x" in
     let paramTy = TyInt {info = info} in
     let functionData : AccelerateData = {
