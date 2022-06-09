@@ -8,7 +8,6 @@
 -- code contains a call to one of these functions, the original program makes
 -- use of nested acceleration.
 
-include "result.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "pmexpr/ast.mc"
@@ -19,8 +18,6 @@ let _nestedAccMsg = join [
   "which is not supported."]
 
 lang PMExprNestedAccelerate = PMExprAst
-  type NAResult = Result () (Info, String) ()
-
   sem checkIdentifiers : Set Name -> Expr -> ()
   sem checkIdentifiers env =
   | TmVar t ->
