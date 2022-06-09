@@ -119,13 +119,6 @@ let _tensorRankKey = nameNoSym "rank"
 let _tensorOffsetKey = nameNoSym "offset"
 let _tensorSizeKey = nameNoSym "size"
 
--- Used in compileStmt and compileStmts for deciding what action to take in
--- tail position
-type Result
-con RIdent : Name -> Result
-con RReturn : () -> Result
-con RNone : () -> Result
-
 
 -- TODO(dlunde,2022-04-29): A bug in the MLang transformation currently
 -- prevents this fragment from being put in MExprCCompileBase
@@ -413,6 +406,13 @@ end
 ----------------------------------
 
 lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
+
+  -- Used in compileStmt and compileStmts for deciding what action to take in
+  -- tail position
+  syn Result =
+  | RIdent Name
+  | RReturn ()
+  | RNone ()
 
   -- Function that is called when allocation of data is needed. Must be implemented by a concrete C compiler.
   sem alloc (name: Name) =
