@@ -204,8 +204,8 @@ let rec ustring_of_ty = function
       us "<>"
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
-  | TyCon (_, x, s) ->
-      ustring_of_type x s
+  | TyCon (_, x) ->
+      pprint_type_str x
   | TyVar (_, x) ->
       pprint_var_str x
   | TyApp (_, ty1, ty2) ->
@@ -661,8 +661,8 @@ and print_tm' fmt t =
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
-  | TmType (_, x, s, params, ty, t1) ->
-      let x = string_of_ustring (ustring_of_type x s) in
+  | TmType (_, x, params, ty, t1) ->
+      let x = string_of_ustring (pprint_type_str x) in
       let params =
         params |> List.map string_of_ustring |> List.cons ""
         |> String.concat " "
