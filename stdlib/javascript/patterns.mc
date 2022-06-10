@@ -82,7 +82,7 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
     _assign (compileSinglePattern pat) target
 
 
-  sem reverseExpr : JSExpr -> JSEApp
+  sem reverseExpr : JSExpr -> JSExpr
   sem reverseExpr =
   | e -> JSEApp {
       fun = JSEMember {

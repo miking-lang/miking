@@ -28,7 +28,7 @@ let intrinsic : Name -> String -> [JSExpr] -> JSExpr =
         id = name
       }
 
-let optimizedOpIntrinsic : Name -> Const -> String -> [JSExpr] -> ([JSExpr] -> JSEBinOp) -> JSExpr =
+let optimizedOpIntrinsic : Name -> Const -> String -> [JSExpr] -> ([JSExpr] -> JSExpr) -> JSExpr =
   use CompileJSOptimizedIntrinsics in
   lam runtime. lam const. lam name. lam args. lam opFun.
     -- Check if the arguments is fully applied (have the same length as constArity(const))
@@ -55,5 +55,5 @@ let intrinsicWeb = intrinsic intrWebNS
 let intrinsicNode = intrinsic intrNodeNS
 
 let optimizedOpIntrinsicGen = optimizedOpIntrinsic intrGenNS
-let optimizedOpIntrinsicWeb = optimizedOpIntrinsic intrinsicWeb
-let optimizedOpIntrincNode = optimizedOpIntrinsic intrinsicNode
+let optimizedOpIntrinsicWeb = optimizedOpIntrinsic intrWebNS
+let optimizedOpIntrincNode = optimizedOpIntrinsic intrNodeNS
