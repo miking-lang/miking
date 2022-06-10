@@ -1199,6 +1199,22 @@ let tests = [
   {name = "Never1",
    tm = never_,
    ty = fa,
+   env = []},
+
+  {name = "Unknown1",
+   tm = bind_
+     (let_ "f" (tyarrow_ tyunknown_ tyunknown_)
+       (ulam_ "x" (var_ "x")))
+     (freeze_ (var_ "f")),
+   ty = tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")),
+   env = []},
+
+  {name = "Unknown2",
+   tm = bind_
+     (let_ "f" (tyarrow_ tyint_ tyunknown_)
+       (ulam_ "x" (var_ "x")))
+     (freeze_ (var_ "f")),
+   ty = tyarrow_ tyint_ tyint_,
    env = []}
 
 ]
