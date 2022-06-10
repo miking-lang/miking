@@ -102,7 +102,7 @@ let styall_ = lam s. nstyall_ (nameNoSym s)
 
 let ntyall_ : Name -> Type -> Type  = use VarSortAst in
   lam n.
-  nstyall_ n (TypeVar ())
+  nstyall_ n (PolyVar ())
 
 let tyall_ = use VarSortAst in
   lam s.
