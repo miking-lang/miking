@@ -729,6 +729,7 @@ end
 
 lang FloatStringConversionCFA = CFA + ConstCFA + FloatStringConversionAst
   sem generateConstraintsConst info ident =
+  | CStringIsFloat _ -> []
   | CString2float _ -> []
   | CFloat2string _ -> []
 end
@@ -931,6 +932,8 @@ end
 -- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
   sem generateConstraintsConst info ident =
+  -- | CTensorCreateUninitInt _ -> []
+  -- | CTensorCreateUninitFloat _ -> []
   -- | CTensorCreateInt _ -> []
   -- | CTensorCreateFloat _ -> []
   -- | CTensorCreate _ -> []

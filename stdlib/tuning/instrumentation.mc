@@ -337,7 +337,7 @@ end
 lang TestLang = Instrumentation + GraphColoring + MExprHoleCFA + ContextExpand +
                 NestedMeasuringPoints + DependencyAnalysis +
                 BootParser + MExprSym + MExprPrettyPrint + MExprANFAll +
-                MExprEval
+                MExprEval + MExprTypeCheck
 end
 
 mexpr
@@ -427,13 +427,17 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   let tableMap : Map Int Expr = foldl (
     lam acc. lam t : ((String,[String]),Expr).
       let id = resolveId t.0 env.contexts nameInfoGetStr in
-      mapInsert id t.1 acc
+      let intExpr = int_ (toInt t.1 (get env.idx2hole id)) in
+      mapInsert id intExpr acc
     ) (mapEmpty subi) table in
   let lookupTable = mapValues tableMap in
   let ast = insert env lookupTable ast in
   debugPrintLn debug "\n-------- CONTEXT EXPANSION --------";
   debugPrintLn debug (expr2str ast);
   debugPrintLn debug "";
+
+  -- Transformations should produce an AST that type checks
+  let ast = typeCheck ast in
 
   -- Evaluate the program
   eval { env = evalEnvEmpty } ast;
@@ -616,7 +620,6 @@ utest test debug false [(("h", []), true_)] t with {
 }
 using eqTest in
 
-
 -- Context-sensitive, but only one context
 let t = parse
 "
@@ -703,7 +706,7 @@ utest test debug false table t with {
 let t = parse
 "
 let f1 = lam x.
-  let h = hole (Boolean {default = true, depth = 3}) in
+  let h = hole (IntRange {default = 0, depth = 3, min = 0, max = 40}) in
   let m = sleepMs h in
   m
 in
@@ -744,7 +747,7 @@ utest test debug false table t with {
 let t = parse
 "
 let f1 = lam x.
-  let h = hole (Boolean {default = true, depth = 2}) in
+  let h = hole (IntRange {default = 0, depth = 2, min = 0, max = 100}) in
   h
 in
 let f2 = lam x.
