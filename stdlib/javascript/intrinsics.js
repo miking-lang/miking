@@ -31,4 +31,11 @@ const MExpr_JS_Intrinsics = Object.freeze({
   // Helper Functions
   trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,
   ensureString: x => (Array.isArray(x)) ? x.join('') : x.toString(),
+
+  // Tail-Call Optimization Functions
+  trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
+  trampoline: val => {
+    while (val.isTrampolineCapture) val = val.fun(...val.args);
+    return val;
+  }
 });
