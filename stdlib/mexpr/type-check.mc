@@ -480,11 +480,6 @@ lang TypeCheck = Unify + Generalize + ResolveLinks
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain TyFlex links.
   sem typeCheckExpr : TCEnv -> Expr -> Expr
-  sem typeCheckExpr env =
-  | tm ->
-    typeCheckBase env tm
-
-  sem typeCheckBase : TCEnv -> Expr -> Expr
 end
 
 lang PatTypeCheck = Unify
@@ -492,7 +487,7 @@ lang PatTypeCheck = Unify
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmVar t ->
     match mapLookup t.ident env.varEnv with Some ty then
       let ty =
@@ -509,7 +504,7 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang LamTypeCheck = TypeCheck + LamAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmLam t ->
     let tyX = optionGetOrElse
       -- No type annotation: assign a monomorphic type variable to x
@@ -523,7 +518,7 @@ lang LamTypeCheck = TypeCheck + LamAst
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmApp t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
@@ -533,7 +528,7 @@ lang AppTypeCheck = TypeCheck + AppAst
 end
 
 lang LetTypeCheck = TypeCheck + LetAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = optionMapOr t.body (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyBody) in
@@ -564,7 +559,7 @@ lang LetTypeCheck = TypeCheck + LetAst
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmRecLets t ->
     let lvl = env.currentLvl in
 
@@ -611,7 +606,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
 end
 
 lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env t.pat with (thnEnv, pat) in
@@ -627,7 +622,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
     let ty = inst env.tyConEnv env.currentLvl (f (tyConst t.val)) in
@@ -635,7 +630,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
 end
 
 lang SeqTypeCheck = TypeCheck + SeqAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
@@ -656,7 +651,7 @@ lang FlexDisableGeneralize = FlexTypeAst
 end
 
 lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGeneralize
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
@@ -672,7 +667,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
 end
 
 lang TypeTypeCheck = TypeCheck + TypeAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmType t ->
     let env = _insertTyCon t.ident (t.params, t.tyIdent) env in
     let inexpr = typeCheckExpr env t.inexpr in
@@ -680,7 +675,7 @@ lang TypeTypeCheck = TypeCheck + TypeAst
 end
 
 lang DataTypeCheck = TypeCheck + DataAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmConDef t ->
     let inexpr = typeCheckExpr (_insertCon t.ident t.tyIdent env) t.inexpr in
     TmConDef {t with inexpr = inexpr, ty = tyTm inexpr}
@@ -699,7 +694,7 @@ lang DataTypeCheck = TypeCheck + DataAst
 end
 
 lang UtestTypeCheck = TypeCheck + UtestAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmUtest t ->
     let test = typeCheckExpr env t.test in
     let expected = typeCheckExpr env t.expected in
@@ -717,12 +712,12 @@ lang UtestTypeCheck = TypeCheck + UtestAst
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmNever t -> TmNever {t with ty = newvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmExt t ->
     let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
