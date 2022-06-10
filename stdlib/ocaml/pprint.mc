@@ -315,7 +315,7 @@ lang OCamlPrettyPrint =
         env
       else
         {{env with nameMap = mapInsert name str env.nameMap}
-              with strings = mapInsert str 1 env.strings}
+              with strings = setInsert str env.strings}
     in
     let f = lam top. lam env.
       switch top

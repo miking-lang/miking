@@ -37,7 +37,11 @@ let parser_str s prefix cond =
 (** Variable string parser translation *)
 let pprint_var_str s =
   parser_str s (us "#var") (fun s ->
-      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0)
+      || (Ustring.starts_with (us "_") s && Ustring.length s > 1) )
+
+(** Frozen variable string parser translation *)
+let pprint_frozen_str s = parser_str s (us "#frozen") (fun _ -> false)
 
 (** Constructor string parser translation *)
 let pprint_con_str s =
@@ -45,10 +49,17 @@ let pprint_con_str s =
       let c = Ustring.get s 0 in
       is_ascii_upper_alpha c )
 
+(** Type constructor string parser translation *)
+let pprint_type_str s =
+  parser_str s (us "#type") (fun s ->
+      let c = Ustring.get s 0 in
+      is_ascii_upper_alpha c )
+
 (** Label string parser translation *)
 let pprint_label_str s =
   parser_str s (us "#label") (fun s ->
-      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0)
+      || (Ustring.starts_with (us "_") s && Ustring.length s > 1) )
 
 (** Create string representation of an identifier *)
 let ustring_of_ident symbol pprint_ident x s =
@@ -63,13 +74,17 @@ let ustring_of_ident symbol pprint_ident x s =
 let ustring_of_var ?(symbol = !ref_symbol) x s =
   ustring_of_ident symbol pprint_var_str x s
 
+(** Create string representation of a frozen variable *)
+let ustring_of_frozen ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_frozen_str x s
+
 (** Create string representation of a constructor *)
 let ustring_of_con ?(symbol = !ref_symbol) x s =
   ustring_of_ident symbol pprint_con_str x s
 
-(** Create string representation of a type or type variable *)
+(** Create string representation of a type constructor *)
 let ustring_of_type ?(symbol = !ref_symbol) x s =
-  ustring_of_ident symbol (fun x -> x) x s
+  ustring_of_ident symbol pprint_type_str x s
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -167,7 +182,7 @@ let rec ustring_of_ty = function
   | TyArrow (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
   | TyAll (_, var, ty) ->
-      us "all " ^. var ^. us ". " ^. ustring_of_ty ty
+      us "all " ^. pprint_var_str var ^. us ". " ^. ustring_of_ty ty
   | TySeq (_, ty1) -> (
     match ty1 with
     | TyChar _ ->
@@ -192,7 +207,7 @@ let rec ustring_of_ty = function
   | TyCon (_, x, s) ->
       ustring_of_type x s
   | TyVar (_, x) ->
-      x
+      pprint_var_str x
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -627,7 +642,7 @@ and print_tm' fmt t =
   match t with
   | TmVar (_, x, s, frozen) ->
       let var_str =
-        if frozen then string_of_ustring (us "#frozen\"" ^. x ^. us "\"")
+        if frozen then string_of_ustring (ustring_of_frozen x s)
         else string_of_ustring (ustring_of_var x s)
       in
       (*  fprintf fmt "%s#%d" print s *)
