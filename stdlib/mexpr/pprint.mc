@@ -73,28 +73,6 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
     let strings = setInsert str strings in
     {nameMap = nameMap, count = count, strings = strings}
 
--- Get a string for the current name. Returns both the string and a new
--- environment.
-let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
-  lam env : PprintEnv. lam name.
-    match pprintEnvLookup name env with Some str then (env,str)
-    else
-      let baseStr = nameGetStr name in
-      if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
-      else
-        match env with {count = count} in
-        let start =
-          match mapLookup baseStr count
-          with Some i then i else 1 in
-        recursive let findFree : String -> Int -> (String, Int) =
-          lam baseStr. lam i.
-            let proposal = concat baseStr (int2string i) in
-            if pprintEnvFree proposal env then (proposal, i)
-            else findFree baseStr (addi i 1)
-        in
-        match findFree baseStr start with (str, i) in
-        (pprintEnvAdd name str (addi i 1) env, str)
-
 -- Adds the given name to the environment, if its exact string is not already
 -- mapped to. If the exact string is already mapped to, return None (). This
 -- function is useful if you have names which must be printed with their exact
@@ -169,6 +147,28 @@ lang IdentifierPrettyPrint
   sem pprintConName  (env : PprintEnv) =
   sem pprintTypeName (env : PprintEnv) =
   sem pprintLabelString =                -- Label string parser translation for records
+
+  -- Get a string for the given name. Returns both the string and a new
+  -- environment.
+  sem pprintEnvGetStr (env : PprintEnv) =
+  | name ->
+    match pprintEnvLookup name env with Some str then (env,str)
+    else
+      let baseStr = nameGetStr name in
+      if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
+      else
+        match env with {count = count} in
+        let start =
+          match mapLookup baseStr count
+          with Some i then i else 1 in
+        recursive let findFree : String -> Int -> (String, Int) =
+          lam baseStr. lam i.
+            let proposal = concat baseStr (int2string i) in
+            if pprintEnvFree proposal env then (proposal, i)
+            else findFree baseStr (addi i 1)
+        in
+        match findFree baseStr start with (str, i) in
+        (pprintEnvAdd name str (addi i 1) env, str)
 end
 
 lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint

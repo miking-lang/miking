@@ -16,6 +16,7 @@ include "mexpr/pprint.mc"
 let _par = lam str. join ["(",str,")"]
 
 let pprintEnvGetStr = lam env. lam id: Name.
+  use IdentifierPrettyPrint in
   -- Set this to true to print names with their symbols (for debugging)
   if false then
     (env,join [
