@@ -93,12 +93,14 @@ let _parserStr = lam str. lam prefix. lam cond.
   else if cond str then str
   else join [prefix, "\"", str, "\""]
 
+let _isValidLowerIdent = lam str.
+  match str with [x]
+  then isLowerAlpha x
+  else isLowerAlphaOrUnderscore (head str)
+
 -- Variable string parser translation
 let pprintVarString = lam str.
-  _parserStr str "#var"
-  (lam str. match str with [x]
-     then isLowerAlpha x
-     else isLowerAlphaOrUnderscore (head str))
+  _parserStr str "#var" _isValidLowerIdent
 
 -- Frozen variable string parser translation
 let pprintFrozenString = lam str.
@@ -146,7 +148,7 @@ lang IdentifierPrettyPrint
   sem pprintVarName  (env : PprintEnv) =
   sem pprintConName  (env : PprintEnv) =
   sem pprintTypeName (env : PprintEnv) =
-  sem pprintLabelString =                -- Label string parser translation for records
+  sem pprintLabelString =                -- Record label string parser translation
 
   -- Get a string for the given name. Returns both the string and a new
   -- environment.
@@ -198,10 +200,12 @@ lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
 
   sem pprintLabelString =
   | sid ->
+    _parserStr (sidToString sid) "#label" _isValidLowerIdent
+
+  sem pprintProjString =
+  | sid ->
     _parserStr (sidToString sid) "#label"
-    (lam str. match str with [x]
-       then isLowerAlpha x
-       else isLowerAlphaOrUnderscore (head str))
+    (lam str. if forAll isDigit str then true else _isValidLowerIdent str)
 end
 
 lang PrettyPrint = IdentifierPrettyPrint
@@ -515,7 +519,7 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
                "else", pprintNewline ii, els])
 end
 
-lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
+lang RecordProjectionSyntaxSugarPrettyPrint = MExprIdentifierPrettyPrint + MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmMatch (t &
     { pat = PatRecord
@@ -532,7 +536,7 @@ lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + Nev
       if nameEq patName exprName
       then
         match printParen indent env expr with (env, expr) in
-        (env, join [expr, ".", pprintLabelString fieldLabel])
+        (env, join [expr, ".", pprintProjString fieldLabel])
       else pprintTmMatchNormally indent env t
     else pprintTmMatchNormally indent env t
 end
