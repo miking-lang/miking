@@ -47,13 +47,6 @@ let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
 
 
 
-
--- Names used in the compiler for intrinsics
-let _consoleLog = use JSExprAst in
-  JSEMember { expr = JSEVar { id = nameSym "console" }, id = "log" }
-
-
-
 -- Supported JS runtime targets
 type CompileJSTargetPlatform
 con CompileJSTP_Normal : () -> CompileJSTargetPlatform
