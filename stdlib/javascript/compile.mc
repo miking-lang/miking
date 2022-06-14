@@ -89,30 +89,35 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
 
   -- Helper functions
+  sem flattenBlockHelper : JSExpr -> ([JSExpr], JSExpr)
   sem flattenBlockHelper =
   | JSEBlock { exprs = exprs, ret = ret } ->
     -- If the return value is a block, concat the expressions in that block with the
     -- expressions in the current block and set the return value to the return value
     -- of the current block
     -- For each expression in the current block, if it is a block, flatten it
-    let flatExprs = filterNops (foldl (
-      lam acc. lam e.
+    let flatExprs : [JSExpr] = filterNops (foldr (
+      lam e. lam acc.
         let flatE = flattenBlockHelper e in
-        match flatE with (flatEExprs, flatERet) then
-          concat (concat acc flatEExprs) [flatERet]
-        else concat acc [flatE]
+        match flatE with ([], e) then
+          cons e acc
+        else match flatE with (flatEExprs, flatERet) then
+          join [acc, flatEExprs, [flatERet]]
+        else never
     ) [] exprs) in
 
     -- Call flattenBlockHelper recursively on the return value
     let flatRet = flattenBlockHelper ret in
-    match flatRet with (retExprs, retRet) then
-      (concat flatExprs retExprs, retRet)
-    else
+    match flatRet with ([], e) then
       -- Normal expressions are returned as is, thus concat them with the expressions
       -- in the current block
-      (concat flatExprs [flatRet], ret)
+      (concat flatExprs [e], ret)
+    else match flatRet with (retExprs, retRet) then
+      (concat flatExprs retExprs, retRet)
+    else never
   | expr -> ([], expr)
 
+  sem flattenBlock : JSExpr -> JSExpr
   sem flattenBlock =
   | JSEBlock _ & block ->
     match flattenBlockHelper block with (exprs, ret) then
@@ -120,14 +125,15 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else never
   | expr -> expr
 
+  sem immediatelyInvokeBlock : JSExpr -> JSExpr
   sem immediatelyInvokeBlock =
   | JSEBlock _ & block -> JSEIIFE { body = block }
   | expr -> expr
 
   sem filterNops : [JSExpr] -> [JSExpr]
   sem filterNops =
-  | lst -> foldl (
-    lam acc. lam e.
+  | lst -> foldr (
+    lam e. lam acc.
       match e with JSENop { } then acc else cons e acc
   ) [] lst
 
@@ -276,13 +282,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       })
     else never
 
-  | TmRecLets { bindings = bindings, inexpr = e } ->
+  | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     flattenBlock (JSEBlock {
       exprs = map (
         lam bind : RecLetBinding.
-        match bind with { ident = ident, body = body } then
-          let nop = TmConst { val = () } in
-          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop })
+        match bind with { ident = ident, body = body, tyBody = tyBody, info = info } then
+          let nop = TmNever { ty = tyBody, info = info } in
+          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop, ty = ty, tyBody = tyBody, info = info })
         else never
         ) bindings,
       ret = (compileMExpr opts) e
@@ -303,8 +309,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
   | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
 
+  -- No-op
+  | TmNever _ -> JSENop { }
   -- Should not occur
-  | TmNever _ -> error "Never term found in compileMExpr"
+  -- | TmNever _ -> error "Never term found in compileMExpr"
 
 
 
