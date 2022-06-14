@@ -84,9 +84,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     if options.toJavaScript then
       let runtimePrint = lam s. printLn (join ["Compiling to JavaScript targeting ", s, " environment..."]) in
       let target = switch options.jsTarget
-        case Some ("node") then runtimePrint "the node"; CompileJSTP_Node ()
-        case Some ("web")  then runtimePrint "a web browser"; CompileJSTP_Web  ()
-        case Some ("generic") then runtimePrint "a generic"; CompileJSTP_Normal ()
+        case Some ("node")    then runtimePrint "the node";       CompileJSTP_Node ()
+        case Some ("web")     then runtimePrint "a web browser";  CompileJSTP_Web  ()
+        case Some ("generic") then runtimePrint "a generic";      CompileJSTP_Normal ()
         case Some (e) then error (join ["Invalid value for --js-target: '", e, "'"])
         case _ then runtimePrint "a generic"; CompileJSTP_Normal ()
       end in

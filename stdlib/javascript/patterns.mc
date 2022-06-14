@@ -38,12 +38,12 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
     let patExpr = compileSinglePattern pat in
     match patExpr with JSEVar _ then _assign patExpr target
     else patExpr -- Whildcard pattern, just return "true"
-  | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix } ->
+  | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
     let hasPostfix = not (null postfix) in
     let prefixExprs: [JSExpr] = map compileSinglePattern prefix in
-    let middleExpr: JSExpr = compileSinglePattern (PatNamed { ident = middle }) in
+    let middleExpr: JSExpr = compileSinglePattern (PatNamed { ident = middle, ty = ty, info = info }) in
     let postfixExprs: [JSExpr] = map compileSinglePattern postfix in
     switch (hasPrefix, hasMiddle, hasPostfix)
       case (false, false, false) then middleExpr
