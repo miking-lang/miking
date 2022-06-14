@@ -222,7 +222,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
         let args = map (compileMExpr opts) args in
         compileJSOp info opts args val
 
-      else error "Unsupported application in compileMExpr"
+      else errorSingle [app.info] "Unsupported application in compileMExpr"
     else never
 
   -- Anonymous function, not allowed.
@@ -254,7 +254,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CBool  { val = val } then JSEBool  { b = val }
     else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else never
-  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
+  | TmRecordUpdate _ & t -> errorSingle [t.info] "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
@@ -291,7 +291,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       ret = (compileMExpr opts) e
     })
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
-  | TmConApp _ -> error "Constructor application in compileMExpr."
+  | TmConApp _ & t -> errorSingle [t.info] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
@@ -303,13 +303,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     }
-  | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
-  | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
-
-  -- No-op
+  | TmUtest _ & t -> errorSingle [t.info] "Unit test expressions cannot be handled in compileMExpr."
+  | TmExt _ & t -> errorSingle [t.info] "External expressions cannot be handled in compileMExpr."
   | TmNever _ -> JSENop { }
-  -- Should not occur
-  -- | TmNever _ -> error "Never term found in compileMExpr"
 
 
 
