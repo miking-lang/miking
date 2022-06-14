@@ -226,8 +226,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
     let body = (compileMExpr opts) body in
-    -- dprintLn "Compiling lambda";
-    -- dprintLn body;
     JSEFun { param = arg, body = body }
 
   -- Unit type is represented by int literal 0.
