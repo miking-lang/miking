@@ -111,7 +111,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match flatRet with ([], e) then
       -- Normal expressions are returned as is, thus concat them with the expressions
       -- in the current block
-      (concat flatExprs [e], ret)
+      (flatExprs, ret)
     else match flatRet with (retExprs, retRet) then
       (concat flatExprs retExprs, retRet)
     else never
