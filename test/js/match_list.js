@@ -40,7 +40,14 @@ let printLn = s => {
   MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
 };
 let s1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-(([h, ...t] = s1) ? printLn(int2string(h)) : ((([...rest] = s1) && ([b, a] = rest.slice().reverse())) ? (() => {
+(([h, ...t] = s1) ? (() => {
+    printLn(int2string(h));
+    return 0;
+  })() : ((([...rest] = s1) && ([b, a] = rest.slice().reverse())) ? (() => {
     printLn(int2string(a));
-    return printLn(int2string(b));
-  })() : printLn("nothing")));
+    printLn(int2string(b));
+    return MExpr_JS_Intrinsics.foldl(x => acc => (acc + x))(0)(rest);
+  })() : (() => {
+    printLn("nothing");
+    return 1;
+  })()));

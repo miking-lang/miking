@@ -14,6 +14,7 @@ include "javascript/operators.mc"
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
+include "error.mc"
 
 
 ----------------------
@@ -193,6 +194,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       );
       intrinsicGen t args
   | CFlushStdout _ -> JSENop { }
+  | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
 
 
   -----------------
@@ -251,7 +253,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
     else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
-    else error "Unsupported literal"
+    else never
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
 
 
