@@ -393,22 +393,28 @@ lang ConstCFA = CFA + ConstAst + InitConstraint
 
   syn AbsVal =
   -- Abstract representation of constants. Contains the constant and the
-  -- arguments applied to it. Currently, not all constants are supported by
+  -- arguments applied to it. It also includes the name bound at the let that
+  -- introduced the constant. Currently, not all constants are supported by
   -- basic 0-CFA, so we include the info field in order to use `infoErrorExit`
   -- on those.
-  | AVConst { const: Const, args: [Name] }
+  | AVConst { id: Name, const: Const, args: [Name] }
 
   sem absValToString (env: PprintEnv) =
-  | AVConst { const = const, args = args } ->
+  | AVConst { id = id, const = const, args = args } ->
     let const = getConstStringCode 0 const in
-    let args = strJoin ", " (map nameGetStr args) in
-    (env, join [const, "(", args, ")"])
+    match mapAccumL pprintVarName env args with (env,args) in
+    let args = strJoin ", " args in
+    match pprintVarName env id with (env,id) in
+    (env, join [const,"<", id, ">", "(", args, ")"])
 
   sem cmpAbsValH =
   | (AVConst lhs, AVConst rhs) ->
     use MExprCmp in
     let cmp = cmpConst lhs.const rhs.const in
-    if eqi 0 cmp then subi (length lhs.args) (length rhs.args)
+    if eqi 0 cmp then
+      let ncmp = nameCmp lhs.id rhs.id in
+      if eqi 0 ncmp then subi (length lhs.args) (length rhs.args)
+      else ncmp
     else cmp
 
   sem generateConstraints =
@@ -625,6 +631,7 @@ lang NeverCFA = CFA + NeverAst
   -- Nothing to be done here
 end
 
+-- TODO Treat this in the same way as constants
 lang ExtCFA = CFA + ExtAst
   sem exprName =
   | TmExt t -> exprName t.inexpr
@@ -794,7 +801,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + DirectConstraint
     | CTail _
     | CSubsequence _
     ) & const ->
-    [ CstrInit {lhs = AVConst {const = const, args = []}, rhs = ident} ]
+    [ CstrInit {lhs = AVConst { id = ident, const = const, args = []}, rhs = ident} ]
 
   | ( CLength _
     | CNull _
