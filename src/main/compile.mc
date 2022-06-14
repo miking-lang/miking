@@ -90,7 +90,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
         case Some (e) then error (join ["Invalid value for --js-target: '", e, "'"])
         case _ then runtimePrint "a generic"; CompileJSTP_Normal ()
       end in
-      javascriptCompileFile {defaultCompileJSOptions with targetPlatform = target} ast sourcePath
+      let res = javascriptCompileFile {defaultCompileJSOptions with targetPlatform = target} ast sourcePath in
+      printLn (join ["Successfully compiled to JavaScript in ", res]);
+      res
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
