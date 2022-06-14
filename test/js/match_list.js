@@ -40,14 +40,15 @@ let int2string = n => {
     })());
   return ((true === (n < 0)) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
 };
-let s = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-let printLn = s1 => {
-  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s1)("\n"));
+let printLn = s => {
+  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
 };
-(([h, ...t] = s) ? printLn(int2string(h)) : ((([1, x, true, ...mid] = s) && ([5, y] = mid.slice().reverse())) ? (() => {
-    printLn(int2string(x));
-    return printLn(int2string(y));
-  })() : ((([...rest] = s) && ([b, a] = rest.slice().reverse())) ? (() => {
+
+
+let s1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+(([h, ...t] = s1) ? printLn(int2string(h)) :
+((([...rest] = s1) && ([b, a] = rest.slice().reverse())) ? (() => {
     printLn(int2string(a));
     return printLn(int2string(b));
-  })() : printLn("nothing"))));
+  })() :
+  printLn("nothing")));
