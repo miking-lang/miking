@@ -2,6 +2,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/pprint.mc"
+include "mexpr/info.mc"
 include "mexpr/ast.mc"
 
 include "javascript/ast.mc"
@@ -139,7 +140,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
-  sem compileCOp (opts: CompileJSOptions) (args: [JSExpr]) =
+  sem compileJSOp (info: Info) (opts: CompileJSOptions) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
   | CAddf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOAdd {}))
@@ -186,7 +187,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else
       -- Warning about inconsistent behaviour
-      printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
+      printLn (concat
+        (info2str info)
+        "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime"
+      );
       intrinsicGen t args
   | CFlushStdout _ -> JSENop { }
 
@@ -212,9 +216,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
         JSEApp { fun = JSEVar { id = ident }, args = map (compileMExpr opts) args, curried = true }
 
       -- Intrinsics
-      else match fun with TmConst { val = val } then
+      else match fun with TmConst { val = val, info = info } then
         let args = map (compileMExpr opts) args in
-        compileCOp opts args val
+        compileJSOp info opts args val
 
       else error "Unsupported application in compileMExpr"
     else never
@@ -243,12 +247,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       JSEArray { exprs = map (compileMExpr opts) tms }
 
   -- Literals
-  | TmConst { val = val } ->
+  | TmConst { val = val, info = info } ->
     match val      with CInt   { val = val } then JSEInt   { i = val }
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileCOp opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else error "Unsupported literal"
   | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
 
