@@ -149,52 +149,52 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   sem compileCOp (opts: CompileJSOptions) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedOpIntrinsicGen t "add" args (_binOp (JSOAdd {}))
+  | CAddf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedOpIntrinsicGen t "sub" args (_binOp (JSOSub {}))
+  | CSubf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedOpIntrinsicGen t "mul" args (_binOp (JSOMul {}))
+  | CMulf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedOpIntrinsicGen t "div" args (_binOp (JSODiv {}))
-  | CModi _ & t -> optimizedOpIntrinsicGen t "mod" args (_binOp (JSOMod {}))
+  | CDivf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedOpIntrinsicGen t "eq" args (_binOp (JSOEq {}))
+  | CEqf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedOpIntrinsicGen t "lt" args (_binOp (JSOLt {}))
+  | CLtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedOpIntrinsicGen t "gt" args (_binOp (JSOGt {}))
+  | CGtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedOpIntrinsicGen t "le" args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedOpIntrinsicGen t "ge" args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedOpIntrinsicGen t "ne" args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedOpIntrinsicGen t "neg" args (_unOp (JSONeg {}))
+  | CNegi _ & t -> optimizedOpIntrinsicGen t args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
-  | CConcat _ -> intrinsicGen "concat" args
-  | CCons _ -> intrinsicGen "cons" args
-  | CFoldl _ -> intrinsicGen "foldl" args
+  | CConcat _ & t -> intrinsicGen t args
+  | CCons _   & t -> intrinsicGen t args
+  | CFoldl _  & t -> intrinsicGen t args
 
   -- Convert operations
-  | CChar2Int _ -> intrinsicGen "char2int" args
-  | CInt2Char _ -> intrinsicGen "int2char" args
+  | CChar2Int _ & t -> intrinsicGen t args
+  | CInt2Char _ & t -> intrinsicGen t args
 
   -- References
-  | CRef _ -> intrinsicGen "ref" args
-  | CModRef _ -> intrinsicGen "modref" args
-  | CDeRef _ -> intrinsicGen "deref" args
+  | CRef _    & t -> intrinsicGen t args
+  | CModRef _ & t -> intrinsicGen t args
+  | CDeRef _  & t -> intrinsicGen t args
 
   -- Not directly mapped to JavaScript operators
-  | CPrint _ ->
-    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
+  | CPrint _ & t ->
+    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else
       -- Warning about inconsistent behaviour
       printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
-      intrinsicGen "print" args
+      intrinsicGen t args
   | CFlushStdout _ -> JSENop { }
 
 
