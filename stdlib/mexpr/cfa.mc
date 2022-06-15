@@ -250,24 +250,46 @@ end
 -- BASE CONSTRAINTS --
 ----------------------
 
-lang InitConstraint = CFA
+lang BaseConstraint = CFA
 
   syn Constraint =
   -- {lhs} ⊆ rhs
   | CstrInit { lhs: AbsVal, rhs: Name }
+  -- lhs ⊆ rhs
+  | CstrDirect { lhs: Name, rhs: Name }
+  -- {lhsav} ⊆ lhs ⇒ {rhsav} ⊆ rhs
+  | CstrDirectAv { lhs: Name, lhsav: AbsVal, rhs: Name, rhsav: AbsVal }
+  -- {lhsav} ⊆ lhs ⇒ [rhs]
+  | CstrDirectAvCstrs { lhs: Name, lhsav: AbsVal, rhs: [Constraint] }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
+  | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrDirectAv r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrDirectAvCstrs r & cstr -> initConstraintName r.lhs graph cstr
 
   sem constraintToString (env: PprintEnv) =
   | CstrInit { lhs = lhs, rhs = rhs } ->
     match absValToString env lhs with (env,lhs) in
     match pprintVarName env rhs with (env,rhs) in
     (env, join ["{", lhs, "}", " ⊆ ", rhs])
+  | CstrDirect { lhs = lhs, rhs = rhs } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match pprintVarName env rhs with (env,rhs) in
+    (env, join [lhs, " ⊆ ", rhs])
+  | CstrDirectAv { lhs = lhs, lhsav = lhsav, rhs = rhs, rhsav = rhsav } ->
+    match pprintVarName env lhs with (env,lhs) in
+    match absValToString env lhsav with (env,lhsav) in
+    match pprintVarName env rhs with (env,rhs) in
+    match absValToString env rhsav with (env,rhsav) in
+    (env, join ["{", lhsav ,"} ⊆ ", lhs, " ⇒ {", rhsav ,"} ⊆ ", rhs])
+  | CstrDirectAvCstrs { lhs = lhs, lhsav = lhsav, rhs = rhs } ->
+    match mapAccumL constraintToString env rhs with (env,rhs) in
+    let rhs = strJoin " AND " rhs in
+    match pprintVarName env lhs with (env,lhs) in
+    match absValToString env lhsav with (env,lhsav) in
+    (env, join [ "{", lhsav, "} ⊆ ", lhs, " ⇒ (", rhs, ")" ])
 
-end
-
-lang DirectConstraintOptions = CFA
   sem isDirect: AbsVal -> Bool
   sem isDirect =
   | _ -> true
@@ -275,6 +297,17 @@ lang DirectConstraintOptions = CFA
   sem directTransition: CFAGraph -> Name -> AbsVal -> AbsVal
   sem directTransition (graph: CFAGraph) (rhs: Name) =
   | av -> av
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrDirect r -> propagateDirectConstraint r.rhs graph update.1
+  | CstrDirectAv r ->
+    if eqAbsVal update.1 r.lhsav then
+      addData graph r.rhsav r.rhs
+    else graph
+  | CstrDirectAvCstrs r & cstr ->
+    if eqAbsVal update.1 r.lhsav then
+      foldl initConstraint graph r.rhs
+    else graph
 
   sem propagateDirectConstraint: Name -> CFAGraph -> AbsVal -> CFAGraph
   sem propagateDirectConstraint (rhs: Name) (graph: CFAGraph) =
@@ -284,56 +317,11 @@ lang DirectConstraintOptions = CFA
     else graph
 end
 
-lang DirectConstraint = CFA + DirectConstraintOptions
-
-  syn Constraint =
-  -- lhs ⊆ rhs
-  | CstrDirect { lhs: Name, rhs: Name }
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrDirect r & cstr -> initConstraintName r.lhs graph cstr
-
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrDirect r -> propagateDirectConstraint r.rhs graph update.1
-
-  sem constraintToString (env: PprintEnv) =
-  | CstrDirect { lhs = lhs, rhs = rhs } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match pprintVarName env rhs with (env,rhs) in
-    (env, join [lhs, " ⊆ ", rhs])
-
-end
-
-lang DirectAbsValConstraint = CFA
-
-  syn Constraint =
-  -- {lhsav} ⊆ lhs ⇒ {rhsav} ⊆ rhs
-  | CstrDirectAv { lhs: Name, lhsav: AbsVal, rhs: Name, rhsav: AbsVal }
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrDirectAv r & cstr -> initConstraintName r.lhs graph cstr
-
-  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
-  | CstrDirectAv r ->
-    if eqAbsVal update.1 r.lhsav then
-      addData graph r.rhsav r.rhs
-    else graph
-
-  sem constraintToString (env: PprintEnv) =
-  | CstrDirectAv { lhs = lhs, lhsav = lhsav, rhs = rhs, rhsav = rhsav } ->
-    match pprintVarName env lhs with (env,lhs) in
-    match absValToString env lhsav with (env,lhsav) in
-    match pprintVarName env rhs with (env,rhs) in
-    match absValToString env rhsav with (env,rhsav) in
-    (env, join ["{", lhsav ,"} ⊆ ", lhs, " ⇒ {", rhsav ,"} ⊆ ", rhs])
-
-end
-
 -----------
 -- TERMS --
 -----------
 
-lang VarCFA = CFA + DirectConstraint + VarAst
+lang VarCFA = CFA + BaseConstraint + VarAst
 
   sem generateConstraints =
   | TmLet { ident = ident, body = TmVar t } ->
@@ -344,7 +332,7 @@ lang VarCFA = CFA + DirectConstraint + VarAst
 
 end
 
-lang LamCFA = CFA + InitConstraint + LamAst
+lang LamCFA = CFA + BaseConstraint + LamAst
 
   -- Abstract representation of lambdas.
   syn AbsVal =
@@ -366,6 +354,8 @@ lang LamCFA = CFA + InitConstraint + LamAst
     match pprintVarName env ident with (env,ident) in
     match pprintVarName env body with (env,body) in
     (env, join ["lam ", ident, ". ", body])
+
+
 
 end
 
@@ -389,7 +379,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 
 end
 
-lang ConstCFA = CFA + ConstAst + InitConstraint
+lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
 
   syn AbsVal =
   -- Abstract representation of constants. Contains the constant and the
@@ -409,10 +399,12 @@ lang ConstCFA = CFA + ConstAst + InitConstraint
 
   sem cmpAbsValH =
   | (AVConst lhs, AVConst rhs) ->
-    use MExprCmp in
     let cmp = cmpConst lhs.const rhs.const in
     if eqi 0 cmp then
       let ncmp = nameCmp lhs.id rhs.id in
+      -- NOTE(dlunde,2022-06-15): Is simply checking the diff of the number of
+      -- arguments correct here? Shouldn't the argument list be compared with
+      -- (cmpSeq nameCmp) or similar?
       if eqi 0 ncmp then subi (length lhs.args) (length rhs.args)
       else ncmp
     else cmp
@@ -426,7 +418,7 @@ lang ConstCFA = CFA + ConstAst + InitConstraint
   | _ -> errorSingle [info] "Constant not supported in CFA"
 end
 
-lang AppCFA = CFA + ConstCFA + DirectConstraint + LamCFA + AppAst + MExprArity
+lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
@@ -485,7 +477,7 @@ lang AppCFA = CFA + ConstCFA + DirectConstraint + LamCFA + AppAst + MExprArity
   sem propagateConstraintConst : Name -> [Name] -> CFAGraph -> Const -> CFAGraph
 end
 
-lang RecordCFA = CFA + InitConstraint + RecordAst
+lang RecordCFA = CFA + BaseConstraint + RecordAst
   -- NOTE(dlunde,2021-11-10) TmRecordUpdate is currently not supported.
 
   syn AbsVal =
@@ -520,7 +512,7 @@ lang RecordCFA = CFA + InitConstraint + RecordAst
 
 end
 
-lang SeqCFA = CFA + InitConstraint + SeqAst
+lang SeqCFA = CFA + BaseConstraint + SeqAst
 
   syn AbsVal =
   -- Abstract representation of sequences. Contains a set of names that may
@@ -550,7 +542,7 @@ lang TypeCFA = CFA + TypeAst
   | TmType t -> exprName t.inexpr
 end
 
-lang DataCFA = CFA + InitConstraint + DataAst
+lang DataCFA = CFA + BaseConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
   | AVCon { ident: Name, body: Name }
@@ -579,7 +571,7 @@ lang DataCFA = CFA + InitConstraint + DataAst
 
 end
 
-lang MatchCFA = CFA + DirectConstraint + MatchAst
+lang MatchCFA = CFA + BaseConstraint + MatchAst
 
   syn Constraint =
   | CstrMatch { id: Name, pat: Pat, target: Name }
@@ -631,10 +623,88 @@ lang NeverCFA = CFA + NeverAst
   -- Nothing to be done here
 end
 
--- TODO Treat this in the same way as constants
 lang ExtCFA = CFA + ExtAst
+
+  syn AbsVal =
+  -- Abstract representation of externals. Handled in the same way as
+  -- constants, but with a string identifying the external rather than a value
+  -- of Const type. Also, we directly store the external arity in the abstract
+  -- value. Note that ANF eta expands all external definitions, so from the
+  -- perspective of CFA, externals are curried (need not be fully applied as in
+  -- standard MExpr).
+  -- NOTE(dlunde,2022-06-15): I'm not convinced the current approach for
+  -- handling externals is optimal. The additional `let` added by ANF to shadow
+  -- the original external definition is quite clunky. Maybe we can
+  -- incorporate the fact that externals are always fully applied into the
+  -- analysis somehow?
+  | AVExt { id: Name, ext: String, arity: Int, args: [Name] }
+
+  sem absValToString (env: PprintEnv) =
+  | AVExt { id = id, ext = ext, args = args } ->
+    -- We ignore the arity (one can simply look up the ext to get the arity)
+    match mapAccumL pprintVarName env args with (env,args) in
+    let args = strJoin ", " args in
+    match pprintVarName env id with (env,id) in
+    (env, join [ext,"<", id, ">", "(", args, ")"])
+
+  sem cmpAbsValH =
+  | (AVExt lhs, AVExt rhs) ->
+    -- We ignore the arity (if ext is the same, arity is the same)
+    let cmp = cmpString lhs.ext rhs.ext in
+    if eqi 0 cmp then
+      let ncmp = nameCmp lhs.id rhs.id in
+      -- NOTE(dlunde,2022-06-15): Is simply checking the diff of the number of
+      -- arguments correct here? Shouldn't the argument list be compared with
+      -- (cmpSeq nameCmp) or similar?
+      if eqi 0 ncmp then subi (length lhs.args) (length rhs.args)
+      else ncmp
+    else cmp
+
+  syn Constraint =
+  -- {ext args} ⊆ lhs ⇒ {ext args lhs} ⊆ res
+  | CstrExtApp { lhs: Name, rhs : Name, res: Name }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrExtApp r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem propagateConstraint (update: (Name,AbsVal)) (graph: CFAGraph) =
+  | CstrExtApp { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1
+    with AVExt ({ ext = ext, args = args, arity = arity } & ave) then
+      let args = snoc args rhs in
+      if eqi arity (length args) then
+        -- Last application
+        -- TODO(dlunde,2022-06-15): We currently do nothing here. Optimally, we
+        -- would like to delegate to a `propagateConstraintExt` here, similar
+        -- to constants. I'm not sure where/how `propagateConstraintExt` should
+        -- be defined.
+        graph
+      else
+        -- Curried application, add the new argument
+        addData graph (AVExt { ave with args = args }) res
+    else graph
+
+  -- This ensures that `collectConstraints` does _not_ try to collect constraints
+  -- from `let`s immediately following externals. These `let`s are generated by
+  -- the ANF transform and define eta expanded versions of the externals (so
+  -- that they can be curried).
+  sem collectConstraints cgfs acc =
+  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } & t ->
+    let acc = foldl (lam acc. lam f. concat (f t) acc) acc cgfs in
+    sfold_Expr_Expr (collectConstraints cgfs) acc inexpr
+
+  sem generateConstraints =
+  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
+    -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
+    -- for externals. Similarly to constants, we probably want to delegate to
+    -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
+    -- not clear where the `generateConstraintsExts` function should be defined.
+    --
+    []
+
   sem exprName =
   | TmExt t -> exprName t.inexpr
+
 end
 
 ---------------
@@ -753,7 +823,7 @@ lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
   | CEqsym _ -> []
 end
 
-lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + DirectConstraint
+lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
 
   syn Constraint =
   -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
@@ -980,7 +1050,7 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatCFA = MatchCFA + NamedPat + DirectConstraintOptions
+lang NamedPatCFA = MatchCFA + NamedPat + BaseConstraint
   sem propagateMatchConstraint (graph: CFAGraph) (id: Name) =
   | (PatNamed { ident = PName n }, av) -> propagateDirectConstraint n graph av
   | (PatNamed { ident = PWildcard _ }, _) -> graph
@@ -1081,7 +1151,7 @@ end
 lang MExprCFA = CFA +
 
   -- Base constraints
-  InitConstraint + DirectConstraint + DirectAbsValConstraint +
+  BaseConstraint +
 
   -- Terms
   VarCFA + LamCFA + AppCFA +

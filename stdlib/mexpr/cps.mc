@@ -509,18 +509,17 @@ utest _cps "
 using eqExpr in
 
 -- Externals
--- TODO Use arity > 1
 let externaltest = _cps "
-  external f : Float -> Float in
-  let x = f g in
-  y
+  external f : Float -> Float -> Float in
+  let x = f a b in
+  x
 " in
--- print (mexprToString externaltest);
+print (mexprToString externaltest);
 utest externaltest with _parse "
-  external f : Float -> Float in
-  let f1 = lam k1. lam a1. k1 (f a1) in
-  let k = lam x. (lam x. x) y in
-  f1 k g
+  external f : Float -> Float -> Float in
+  let f = lam k1. lam a1. k1 (lam k2. lam a2. k2 (f a1 a2)) in
+  let k = lam t. t (lam x. x) b in
+  f k a
 "
 using eqExpr in
 
