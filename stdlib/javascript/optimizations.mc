@@ -1,7 +1,6 @@
 include "javascript/ast.mc"
 
 
-
 -- Block Optimizations
 lang JSOptimizeBlocks = JSExprAst
 
@@ -60,9 +59,14 @@ end
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst
 
-  sem optimizeTailCall : JSExpr -> JSExpr
-  sem optimizeTailCall =
-  | a -> a
+  sem optimizeTailCall : Name -> JSExpr -> JSExpr
+  sem optimizeTailCall (name: Name) (info: Info) =
+  | JSEFun { param = param, body = body } & fun ->
+    -- Outer most lambda in the function to be optimized
+    printLn (concat "Tail call optimization for: " (nameGetStr name));
+    fun
+
+  | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 end
 

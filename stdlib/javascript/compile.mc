@@ -213,12 +213,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   ----------------
 
   | TmLet { ident = ident, body = body, inexpr = e } ->
-    match body with TmLam _ then
-      flattenBlock (JSEBlock {
-        exprs = [compileFun ident opts false body],
-        ret = compileMExpr opts e
-      })
-    else match nameGetStr ident with [] then
+    match nameGetStr ident with [] then
       match body with TmApp _ then
         -- If identifier is the ignore identifier (_, or [])
         -- Then inline the function call
@@ -235,7 +230,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     let compileBind = lam bind : RecLetBinding.
       match bind with { ident = ident, body = body, info = info } then
-        compileFun ident opts true body
+        match body with TmLam _ then
+          JSEDef { id = ident, expr = optimizeTailCall ident info (compileMExpr opts body)}
+        else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
       else never in
     flattenBlock (JSEBlock {
       exprs = map compileBind bindings,
@@ -258,13 +255,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }
-
-  sem compileFun (name: Name) (opts: CompileJSOptions) (optimize: Bool) =
-  | TmLam _ & fun ->
-    let optz = lam e. if optimize then optimizeTailCall e else e in
-    JSEDef { id = name, expr = optz (compileMExpr opts fun) }
-  | t -> errorSingle [infoTm t] "Non-lambda supplied to JavaScript compileFun"
-
 
 end
 
