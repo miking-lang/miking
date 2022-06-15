@@ -205,7 +205,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   | TmVar { ident = id } -> JSEVar { id = id }
 
-  | TmApp _ & app ->
+  | TmApp { info = info } & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
         if _isUnitTy (tyTm rhs) then rec acc lhs
@@ -222,7 +222,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
         let args = map (compileMExpr opts) args in
         compileJSOp info opts args val
 
-      else errorSingle [app.info] "Unsupported application in compileMExpr"
+      else errorSingle [info] "Unsupported application in compileMExpr"
     else never
 
   -- Anonymous function, not allowed.
@@ -254,7 +254,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CBool  { val = val } then JSEBool  { b = val }
     else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else never
-  | TmRecordUpdate _ & t -> errorSingle [t.info] "Record updates cannot be handled in compileMExpr."
+  | TmRecordUpdate { info = info } -> errorSingle [info] "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
@@ -291,7 +291,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       ret = (compileMExpr opts) e
     })
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
-  | TmConApp _ & t -> errorSingle [t.info] "Constructor application in compileMExpr."
+  | TmConApp { info = info } -> errorSingle [info] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
@@ -303,8 +303,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     }
-  | TmUtest _ & t -> errorSingle [t.info] "Unit test expressions cannot be handled in compileMExpr."
-  | TmExt _ & t -> errorSingle [t.info] "External expressions cannot be handled in compileMExpr."
+  | TmUtest { info = info } -> errorSingle [info] "Unit test expressions cannot be handled in compileMExpr."
+  | TmExt { info = info } -> errorSingle [info] "External expressions cannot be handled in compileMExpr."
   | TmNever _ -> JSENop { }
 
 
