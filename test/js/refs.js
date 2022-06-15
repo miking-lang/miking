@@ -27,21 +27,16 @@ const MExpr_JS_Intrinsics = Object.freeze({
   // Helper Functions
   trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,
   ensureString: x => (Array.isArray(x)) ? x.join('') : x.toString(),
+
+  // Tail-Call Optimization Functions
+  trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
+  trampoline: val => {
+    while (val.isTrampolineCapture) val = val.fun(...val.args);
+    return val;
+  }
 });
 
-let join = seqs => MExpr_JS_Intrinsics.foldl(MExpr_JS_Intrinsics.concat)("")(seqs);
-let int2string = n => {
-  let int2string_rechelper = n1 => ((n1 < 10) ? [MExpr_JS_Intrinsics.int2char((n1 + MExpr_JS_Intrinsics.char2int('0')))] : (() => {
-      let d = [MExpr_JS_Intrinsics.int2char(((n1 % 10) + MExpr_JS_Intrinsics.char2int('0')))];
-      return MExpr_JS_Intrinsics.concat(int2string_rechelper((n1 / 10)))(d);
-    })());
-  return ((n < 0) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
-};
-let printLn = s => {
-  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
-};
-let a = 1;
-(({c: {b: b}} = {b: 2, c: {b: a}}) ? (() => {
-    printLn(join([int2string(b), " == ", int2string(a)]));
-    return printLn(((a === b) ? "true" : "false"));
-  })() : printLn("false"));
+let r = MExpr_JS_Intrinsics.ref("5");
+let to10 = setter => setter("10");
+to10(MExpr_JS_Intrinsics.modref(r));
+MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.deref(r));

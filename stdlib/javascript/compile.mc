@@ -295,7 +295,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
-    let pat: JSExpr = compileBindingPattern target pat in
+    let pat: JSExpr = optimizePattern (compileBindingPattern target pat) in
     let thn = (compileMExpr opts) thn in
     let els = (compileMExpr opts) els in
     JSETernary {
