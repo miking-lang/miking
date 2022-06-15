@@ -284,7 +284,7 @@ lang ExtANF = ANF + ExtAst
       foldr (lam v. lam acc. i (nulam_ v acc )) inner varNames in
     TmExt { t with
       inexpr = bindall_
-        [ i (nulet_ t.ident etaExpansion),
+        [ i (nlet_ t.ident t.tyIdent etaExpansion),
           normalize k t.inexpr ] }
 
 end
@@ -530,15 +530,15 @@ let ext = _parse "
 " in
 -- printLn (mexprToString (_test ext));
 utest _test ext with _parse "
-external e : Int -> Int -> Int in
-let e = lam a1. lam a2. e a1 a2 in
-let t = 1 in
-let t1 = e t in
-let t2 = 2 in
-let t3 = t1 t2 in
-let t4 = 3 in
-let t5 = t3 t4 in
-t5
+  external e : Int -> Int -> Int in
+  let e = lam a1. lam a2. e a1 a2 in
+  let t = 1 in
+  let t1 = e t in
+  let t2 = 2 in
+  let t3 = t1 t2 in
+  let t4 = 3 in
+  let t5 = t3 t4 in
+  t5
 " using eqExpr in
 
 ()

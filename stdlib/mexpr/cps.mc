@@ -20,16 +20,16 @@
 --    ```
 --      let a = b c in
 --    ```
---    you must ensure that if there is a function (lambda, constant, or
---    external) defined somewhere as, e.g.,
+--    you must ensure that if there is a function (lambda, constant,
+--    external, ...) defined somewhere as, e.g.,
 --    ```
 --      let f = (lam x. ...) in
 --    ```
 --    with `f` marked and such that `lam x. ...` can occur at position `b`,
 --    _all other functions_ that can occur at `b` must also be marked.
 --    Furthermore, `a` must be marked. It is tricky to determine all functions
---    that can occur at `b`, and this is best handled with a control-flow
---    analysis (see `cfa.mc`).
+--    that can occur at `b`, and this is best handled with a separate
+--    control-flow analysis (see `cfa.mc`).
 
 include "ast.mc"
 include "type.mc"
@@ -292,17 +292,20 @@ lang ExtCPS = CPS + ExtAst
   | TmExt t ->
     errorSingle [t.info]
       "Error in CPS: Should not happen due to ANF transformation"
-  | TmExt ({ inexpr = TmLet { ident = ident, body = TmLam _, inexpr = inexpr } } & t) ->
-    -- We know that ANF adds a let that eta expands the external just after its
-    -- definition. Here, we simply replace this eta expansion with its CPS
-    -- equivalent
-    let arity = arityFunType t.tyIdent in
-    let i = withInfo t.info in
-    TmExt { t with
-      inexpr = bindall_
-        [ i (nulet_ t.ident (wrapDirect arity (i (nvar_ t.ident)))),
-          exprCps env k inexpr ]
-    }
+  | TmExt ({ inexpr = TmLet ({ ident = ident, body = TmLam _, inexpr = inexpr } & tl) } & t) ->
+    if not (transform env ident) then
+      TmExt { t with inexpr = TmLet { tl with inexpr = exprCps env k inexpr } }
+    else
+      -- We know that ANF adds a let that eta expands the external just after its
+      -- definition. Here, we simply replace this eta expansion with its CPS
+      -- equivalent
+      let arity = arityFunType t.tyIdent in
+      let i = withInfo t.info in
+      TmExt { t with
+        inexpr = bindall_
+          [ i (nulet_ t.ident (wrapDirect arity (i (nvar_ t.ident)))),
+            exprCps env k inexpr ]
+      }
 end
 
 -----------
@@ -684,6 +687,29 @@ utest _cps ["b", "t", "x"] recletsTest with _parse "
       (lam x. x) t7
   in
   t2 k1 t3
+" using eqExpr in
+
+let constexttest = "
+  external e: Float -> Float -> Float in
+  let c = addi in
+  let f1 = (lam x1. let f2 = lam x2. x2 in f2) in
+  res
+" in
+-- printLn (mexprToString (_cps [] constexttest));
+utest _cps [] constexttest with _parse "
+external e : Float -> Float -> Float in
+let e = lam a1. lam a2. e a1 a2 in
+let c = addi in
+let f1 = lam x1. let f2 = lam x2. x2 in f2 in
+(lam x. x) res
+" using eqExpr in
+-- printLn (mexprToString (_cps ["e","c","f1","f2"] constexttest));
+utest _cps ["e","c","f1","f2"] constexttest with _parse "
+  external e : Float -> Float -> Float in
+  let e = lam k11. lam a1. k11 (lam k2. lam a2. k2 (e a1 a2)) in
+  let c = lam k11. lam a1. k11 (lam k2. lam a2. k2 (addi a1 a2)) in
+  let f1 = lam k. lam x1. let f2 = lam k1. lam x2. k1 x2 in k f2 in
+  (lam x. x) res
 " using eqExpr in
 
 ()
