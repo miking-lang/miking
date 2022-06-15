@@ -156,7 +156,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
 
   | TmVar { ident = id } -> JSEVar { id = id }
 
-  | TmApp { info = info } & app ->
+  | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
         if _isUnitTy (tyTm rhs) then rec acc lhs
@@ -173,10 +173,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
         let args = map (compileMExpr opts) args in
         compileJSOp info opts args val
 
-      else errorSingle [info] "Unsupported application in compileMExpr"
+      else errorSingle [infoTm app] "Unsupported application in compileMExpr"
     else never
 
-  -- Anonymous function, not allowed.
+  -- Anonymous function
   | TmLam { ident = arg, body = body } ->
     let body = (compileMExpr opts) body in
     JSEFun { param = arg, body = body }
@@ -205,7 +205,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
     else match val with CBool  { val = val } then JSEBool  { b = val }
     else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else never
-  | TmRecordUpdate { info = info } -> errorSingle [info] "Record updates cannot be handled in compileMExpr."
+  | TmRecordUpdate _ & t -> errorSingle [infoTm t] "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
@@ -243,7 +243,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
     })
 
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
-  | TmConApp { info = info } -> errorSingle [info] "Constructor application in compileMExpr."
+  | TmConApp _ & t -> errorSingle [infoTm t] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
@@ -255,8 +255,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     }
-  | TmUtest { info = info } -> errorSingle [info] "Unit test expressions cannot be handled in compileMExpr."
-  | TmExt { info = info } -> errorSingle [info] "External expressions cannot be handled in compileMExpr."
+  | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
+  | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }
 
   sem compileFun (name: Name) (opts: CompileJSOptions) (optimize: Bool) =
