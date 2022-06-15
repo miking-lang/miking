@@ -1,5 +1,5 @@
 const MExpr_JS_Intrinsics = Object.freeze({
-  // JS Curried Operations
+  // JS Curried Operators
   add: lhs => rhs => lhs + rhs,
   sub: lhs => rhs => lhs - rhs,
   mul: lhs => rhs => lhs * rhs,
@@ -11,13 +11,9 @@ const MExpr_JS_Intrinsics = Object.freeze({
   le: lhs => rhs => lhs <= rhs,
   gt: lhs => rhs => lhs > rhs,
   ge: lhs => rhs => lhs >= rhs,
-  // and: lhs => rhs => lhs && rhs, // Unused
-  // or: lhs => rhs => lhs || rhs,  // Unused
-  // not: lhs => !lhs,              // Unused
   neg: lhs => -lhs,
-  // abs: lhs => Math.abs(lhs),     // Unused
 
-  // Built-in MExpr -> JS Functions
+  // Built-in MExpr
   print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => [elm].concat(list),
@@ -40,14 +36,18 @@ let int2string = n => {
     })());
   return ((true === (n < 0)) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
 };
-let s = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-let printLn = s1 => {
-  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s1)("\n"));
+let printLn = s => {
+  MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
 };
-(([h, ...t] = s) ? printLn(int2string(h)) : ((([1, x, true, ...mid] = s) && ([5, y] = mid.slice().reverse())) ? (() => {
-    printLn(int2string(x));
-    return printLn(int2string(y));
-  })() : ((([...rest] = s) && ([b, a] = rest.slice().reverse())) ? (() => {
+let s1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+(([h, ...t] = s1) ? (() => {
+    printLn(int2string(h));
+    return 0;
+  })() : ((([...rest] = s1) && ([b, a] = rest.slice().reverse())) ? (() => {
     printLn(int2string(a));
-    return printLn(int2string(b));
-  })() : printLn("nothing"))));
+    printLn(int2string(b));
+    return MExpr_JS_Intrinsics.foldl(x => acc => (acc + x))(0)(rest);
+  })() : (() => {
+    printLn("nothing");
+    return 1;
+  })()));

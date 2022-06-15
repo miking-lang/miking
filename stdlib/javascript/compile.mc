@@ -2,6 +2,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/pprint.mc"
+include "mexpr/info.mc"
 include "mexpr/ast.mc"
 
 include "javascript/ast.mc"
@@ -13,6 +14,7 @@ include "javascript/operators.mc"
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
+include "error.mc"
 
 
 ----------------------
@@ -44,13 +46,6 @@ let _charSeq2String = use MExprAst in lam tms.
 
 -- Empty compile JS environment
 let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
-
-
-
-
--- Names used in the compiler for intrinsics
-let _consoleLog = use JSExprAst in
-  JSEMember { expr = JSEVar { id = nameSym "console" }, id = "log" }
 
 
 
@@ -111,7 +106,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     match flatRet with ([], e) then
       -- Normal expressions are returned as is, thus concat them with the expressions
       -- in the current block
-      (concat flatExprs [e], ret)
+      (flatExprs, ret)
     else match flatRet with (retExprs, retRet) then
       (concat flatExprs retExprs, retRet)
     else never
@@ -146,56 +141,60 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
-  sem compileCOp (opts: CompileJSOptions) (args: [JSExpr]) =
+  sem compileJSOp (info: Info) (opts: CompileJSOptions) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedOpIntrinsicGen t "add" args (_binOp (JSOAdd {}))
+  | CAddf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedOpIntrinsicGen t "sub" args (_binOp (JSOSub {}))
+  | CSubf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedOpIntrinsicGen t "mul" args (_binOp (JSOMul {}))
+  | CMulf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedOpIntrinsicGen t "div" args (_binOp (JSODiv {}))
-  | CModi _ & t -> optimizedOpIntrinsicGen t "mod" args (_binOp (JSOMod {}))
+  | CDivf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedOpIntrinsicGen t "eq" args (_binOp (JSOEq {}))
+  | CEqf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedOpIntrinsicGen t "lt" args (_binOp (JSOLt {}))
+  | CLtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedOpIntrinsicGen t "gt" args (_binOp (JSOGt {}))
+  | CGtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedOpIntrinsicGen t "le" args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedOpIntrinsicGen t "ge" args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedOpIntrinsicGen t "ne" args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedOpIntrinsicGen t "neg" args (_unOp (JSONeg {}))
+  | CNegi _ & t -> optimizedOpIntrinsicGen t args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
-  | CConcat _ -> intrinsicGen "concat" args
-  | CCons _ -> intrinsicGen "cons" args
-  | CFoldl _ -> intrinsicGen "foldl" args
+  | CConcat _ & t -> intrinsicGen t args
+  | CCons _   & t -> intrinsicGen t args
+  | CFoldl _  & t -> intrinsicGen t args
 
   -- Convert operations
-  | CChar2Int _ -> intrinsicGen "char2int" args
-  | CInt2Char _ -> intrinsicGen "int2char" args
+  | CChar2Int _ & t -> intrinsicGen t args
+  | CInt2Char _ & t -> intrinsicGen t args
 
   -- References
-  | CRef _ -> intrinsicGen "ref" args
-  | CModRef _ -> intrinsicGen "modref" args
-  | CDeRef _ -> intrinsicGen "deref" args
+  | CRef _    & t -> intrinsicGen t args
+  | CModRef _ & t -> intrinsicGen t args
+  | CDeRef _  & t -> intrinsicGen t args
 
   -- Not directly mapped to JavaScript operators
-  | CPrint _ ->
-    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode "print" args
+  | CPrint _ & t ->
+    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else
       -- Warning about inconsistent behaviour
-      printLn "Warning: CPrint might have unexpected behaviour when targeting the web or a generic JS runtime";
-      intrinsicGen "print" args
+      printLn (concat
+        (info2str info)
+        "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime"
+      );
+      intrinsicGen t args
   | CFlushStdout _ -> JSENop { }
+  | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
 
 
   -----------------
@@ -206,7 +205,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   | TmVar { ident = id } -> JSEVar { id = id }
 
-  | TmApp _ & app ->
+  | TmApp { info = info } & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
         if _isUnitTy (tyTm rhs) then rec acc lhs
@@ -219,18 +218,16 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
         JSEApp { fun = JSEVar { id = ident }, args = map (compileMExpr opts) args, curried = true }
 
       -- Intrinsics
-      else match fun with TmConst { val = val } then
+      else match fun with TmConst { val = val, info = info } then
         let args = map (compileMExpr opts) args in
-        compileCOp opts args val
+        compileJSOp info opts args val
 
-      else error "Unsupported application in compileMExpr"
+      else errorSingle [info] "Unsupported application in compileMExpr"
     else never
 
   -- Anonymous function, not allowed.
   | TmLam { ident = arg, body = body } ->
     let body = (compileMExpr opts) body in
-    -- dprintLn "Compiling lambda";
-    -- dprintLn body;
     JSEFun { param = arg, body = body }
 
   -- Unit type is represented by int literal 0.
@@ -250,14 +247,14 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       JSEArray { exprs = map (compileMExpr opts) tms }
 
   -- Literals
-  | TmConst { val = val } ->
+  | TmConst { val = val, info = info } ->
     match val      with CInt   { val = val } then JSEInt   { i = val }
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileCOp opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
-    else error "Unsupported literal"
-  | TmRecordUpdate _ -> error "Record updates cannot be handled in compileMExpr."
+    else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else never
+  | TmRecordUpdate { info = info } -> errorSingle [info] "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
@@ -294,7 +291,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       ret = (compileMExpr opts) e
     })
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
-  | TmConApp _ -> error "Constructor application in compileMExpr."
+  | TmConApp { info = info } -> errorSingle [info] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr opts) target in
@@ -306,13 +303,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     }
-  | TmUtest _ -> error "Unit test expressions cannot be handled in compileMExpr."
-  | TmExt _ -> error "External expressions cannot be handled in compileMExpr."
-
-  -- No-op
+  | TmUtest { info = info } -> errorSingle [info] "Unit test expressions cannot be handled in compileMExpr."
+  | TmExt { info = info } -> errorSingle [info] "External expressions cannot be handled in compileMExpr."
   | TmNever _ -> JSENop { }
-  -- Should not occur
-  -- | TmNever _ -> error "Never term found in compileMExpr"
 
 
 

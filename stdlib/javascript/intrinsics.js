@@ -1,5 +1,5 @@
 const MExpr_JS_Intrinsics = Object.freeze({
-  // JS Curried Operations
+  // JS Curried Operators
   add: lhs => rhs => lhs + rhs,
   sub: lhs => rhs => lhs - rhs,
   mul: lhs => rhs => lhs * rhs,
@@ -11,13 +11,9 @@ const MExpr_JS_Intrinsics = Object.freeze({
   le: lhs => rhs => lhs <= rhs,
   gt: lhs => rhs => lhs > rhs,
   ge: lhs => rhs => lhs >= rhs,
-  // and: lhs => rhs => lhs && rhs, // Unused
-  // or: lhs => rhs => lhs || rhs,  // Unused
-  // not: lhs => !lhs,              // Unused
   neg: lhs => -lhs,
-  // abs: lhs => Math.abs(lhs),     // Unused
 
-  // Built-in MExpr -> JS Functions
+  // Built-in MExpr
   print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => [elm].concat(list),
