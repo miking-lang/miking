@@ -8,8 +8,9 @@ include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
-include "javascript/intrinsics.mc"
 include "javascript/operators.mc"
+include "javascript/intrinsics.mc"
+include "javascript/optimizations.mc"
 
 include "sys.mc"
 include "common.mc"
@@ -67,7 +68,7 @@ type CompileJSOptions = {
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
+lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns
 
   -- Entry point
   sem compileProg (opts: CompileJSOptions) =
@@ -81,56 +82,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       JSPProg { imports = [], exprs = exprs }
     else never
 
-
-
-  -- Helper functions
-  sem flattenBlockHelper : JSExpr -> ([JSExpr], JSExpr)
-  sem flattenBlockHelper =
-  | JSEBlock { exprs = exprs, ret = ret } ->
-    -- If the return value is a block, concat the expressions in that block with the
-    -- expressions in the current block and set the return value to the return value
-    -- of the current block
-    -- For each expression in the current block, if it is a block, flatten it
-    let flatExprs : [JSExpr] = filterNops (foldr (
-      lam e. lam acc.
-        let flatE = flattenBlockHelper e in
-        match flatE with ([], e) then
-          cons e acc
-        else match flatE with (flatEExprs, flatERet) then
-          join [acc, flatEExprs, [flatERet]]
-        else never
-    ) [] exprs) in
-
-    -- Call flattenBlockHelper recursively on the return value
-    let flatRet = flattenBlockHelper ret in
-    match flatRet with ([], e) then
-      -- Normal expressions are returned as is, thus concat them with the expressions
-      -- in the current block
-      (flatExprs, ret)
-    else match flatRet with (retExprs, retRet) then
-      (concat flatExprs retExprs, retRet)
-    else never
-  | expr -> ([], expr)
-
-  sem flattenBlock : JSExpr -> JSExpr
-  sem flattenBlock =
-  | JSEBlock _ & block ->
-    match flattenBlockHelper block with (exprs, ret) then
-      JSEBlock { exprs = exprs, ret = ret }
-    else never
-  | expr -> expr
-
-  sem immediatelyInvokeBlock : JSExpr -> JSExpr
-  sem immediatelyInvokeBlock =
-  | JSEBlock _ & block -> JSEIIFE { body = block }
-  | expr -> expr
-
-  sem filterNops : [JSExpr] -> [JSExpr]
-  sem filterNops =
-  | lst -> foldr (
-    lam e. lam acc.
-      match e with JSENop { } then acc else cons e acc
-  ) [] lst
 
 
 
@@ -261,35 +212,36 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- STATEMENTS --
   ----------------
 
-  | TmLet { ident = id, body = expr, inexpr = e } ->
-    -- Check if identifier is the ignore identifier (_, or [])
-    -- If so, ignore the expression unless it is a function application
-    let data = (match nameGetStr id with [] then
-      match expr with TmApp { } then -- Inline the function call
-        ([(compileMExpr opts) expr], (compileMExpr opts) e)
-      else -- Ignore the expression
-        ([], (compileMExpr opts) e)
-    else -- Normal let binding
-      ([JSEDef { id = id, expr = (compileMExpr opts) expr }], (compileMExpr opts) e)
-    ) in
-    match data with (exprs, ret) then
+  | TmLet { ident = ident, body = body, inexpr = e } ->
+    match body with TmLam _ then
       flattenBlock (JSEBlock {
-        exprs = exprs,
-        ret = ret
+        exprs = [compileFun ident opts false body],
+        ret = compileMExpr opts e
       })
-    else never
+    else match nameGetStr ident with [] then
+      match body with TmApp _ then
+        -- If identifier is the ignore identifier (_, or [])
+        -- Then inline the function call
+        flattenBlock (JSEBlock {
+          exprs = [compileMExpr opts body],
+          ret = compileMExpr opts e
+        })
+      else JSENop { } -- Ignore the expression
+    else flattenBlock (JSEBlock {
+      exprs = [JSEDef { id = ident, expr = compileMExpr opts body }],
+      ret = compileMExpr opts e
+    })
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
+    let compileBind = lam bind : RecLetBinding.
+      match bind with { ident = ident, body = body, info = info } then
+        compileFun ident opts true body
+      else never in
     flattenBlock (JSEBlock {
-      exprs = map (
-        lam bind : RecLetBinding.
-        match bind with { ident = ident, body = body, tyBody = tyBody, info = info } then
-          let nop = TmNever { ty = tyBody, info = info } in
-          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop, ty = ty, tyBody = tyBody, info = info })
-        else never
-        ) bindings,
-      ret = (compileMExpr opts) e
+      exprs = map compileBind bindings,
+      ret = compileMExpr opts e
     })
+
   | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
   | TmConApp { info = info } -> errorSingle [info] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
@@ -307,6 +259,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | TmExt { info = info } -> errorSingle [info] "External expressions cannot be handled in compileMExpr."
   | TmNever _ -> JSENop { }
 
+  sem compileFun (name: Name) (opts: CompileJSOptions) (optimize: Bool) =
+  | TmLam _ & fun ->
+    let optz = lam e. if optimize then optimizeTailCall e else e in
+    JSEDef { id = name, expr = optz (compileMExpr opts fun) }
+  | t -> errorSingle [infoTm t] "Non-lambda supplied to JavaScript compileFun"
 
 
 end
