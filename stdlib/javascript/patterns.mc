@@ -93,6 +93,14 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       curried = false
     }
 
+  sem optimizePattern : JSExpr -> JSExpr
+  sem optimizePattern =
+  | JSEBinOp {
+      op = JSOEq {},
+      lhs = JSEBool { b = true },
+      rhs = e
+    } -> e
+  | e -> e
 
 end
 

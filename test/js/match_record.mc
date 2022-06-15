@@ -7,4 +7,4 @@ mexpr
 		printLn (join [int2string b, " == ", int2string a]);
 		printLn (if eqi a b then "true" else "false")
 	else
-		printLn false
+		printLn "false"
