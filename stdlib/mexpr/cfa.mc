@@ -383,10 +383,9 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
 
   syn AbsVal =
   -- Abstract representation of constants. Contains the constant and the
-  -- arguments applied to it. It also includes the name bound at the let that
-  -- introduced the constant. Currently, not all constants are supported by
-  -- basic 0-CFA, so we include the info field in order to use `infoErrorExit`
-  -- on those.
+  -- arguments applied to it. It also includes the `let` name that binds the
+  -- constant and syntactically distinguishes it from other of its kind in the
+  -- program.
   | AVConst { id: Name, const: Const, args: [Name] }
 
   sem absValToString (env: PprintEnv) =
@@ -626,9 +625,8 @@ end
 lang ExtCFA = CFA + ExtAst
 
   syn AbsVal =
-  -- Abstract representation of externals. Handled in the same way as
-  -- constants, but with a string identifying the external rather than a value
-  -- of Const type. Also, we directly store the external arity in the abstract
+  -- Abstract representation of externals. Handled in a similar way as
+  -- constants. We directly store the external arity in the abstract
   -- value. Note that ANF eta expands all external definitions, so from the
   -- perspective of CFA, externals are curried (need not be fully applied as in
   -- standard MExpr).
@@ -637,27 +635,25 @@ lang ExtCFA = CFA + ExtAst
   -- the original external definition is quite clunky. Maybe we can
   -- incorporate the fact that externals are always fully applied into the
   -- analysis somehow?
-  | AVExt { id: Name, ext: String, arity: Int, args: [Name] }
+  | AVExt { ext: Name, arity: Int, args: [Name] }
 
   sem absValToString (env: PprintEnv) =
-  | AVExt { id = id, ext = ext, args = args } ->
+  | AVExt { ext = ext, args = args } ->
     -- We ignore the arity (one can simply look up the ext to get the arity)
     match mapAccumL pprintVarName env args with (env,args) in
     let args = strJoin ", " args in
-    match pprintVarName env id with (env,id) in
-    (env, join [ext,"<", id, ">", "(", args, ")"])
+    match pprintVarName env ext with (env,ext) in
+    (env, join [ext, "(", args, ")"])
 
   sem cmpAbsValH =
   | (AVExt lhs, AVExt rhs) ->
     -- We ignore the arity (if ext is the same, arity is the same)
-    let cmp = cmpString lhs.ext rhs.ext in
+    let cmp = nameCmp lhs.ext rhs.ext in
     if eqi 0 cmp then
-      let ncmp = nameCmp lhs.id rhs.id in
       -- NOTE(dlunde,2022-06-15): Is simply checking the diff of the number of
       -- arguments correct here? Shouldn't the argument list be compared with
       -- (cmpSeq nameCmp) or similar?
-      if eqi 0 ncmp then subi (length lhs.args) (length rhs.args)
-      else ncmp
+      subi (length lhs.args) (length rhs.args)
     else cmp
 
   syn Constraint =
@@ -871,7 +867,11 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
     | CTail _
     | CSubsequence _
     ) & const ->
-    [ CstrInit {lhs = AVConst { id = ident, const = const, args = []}, rhs = ident} ]
+    [
+      CstrInit {
+        lhs = AVConst { id = ident, const = const, args = []}, rhs = ident
+      }
+    ]
 
   | ( CLength _
     | CNull _

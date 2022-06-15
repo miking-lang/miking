@@ -1,4 +1,35 @@
 -- CPS tranformation for MExpr terms in ANF (produced by MExprANFAll in anf.mc).
+-- Includes both full and partial versions.
+--
+-- The partial version takes a list of names as arguments. These names signal
+-- which ANF expressions (i.e., `let`s) should be CPS transformed. *** Note
+-- that the transformation leaves no guarantees that the partial transformation
+-- is correct ***.  Instead, users must make sure that the list of names (below
+-- called "marked" names) given to the transfomation is sound. The rules are as
+-- follows:
+--
+-- 1. If `a` is marked for a let expression
+--    ```
+--      let a = <expr> in
+--    ```
+--    you must ensure that the names of _all_ enclosing `match` expressions up
+--    until the innermost `lambda` are marked. The `lambda` itself must also be
+--    marked.
+--
+-- 2. For all applications
+--    ```
+--      let a = b c in
+--    ```
+--    you must ensure that if there is a function (lambda, constant, or
+--    external) defined somewhere as, e.g.,
+--    ```
+--      let f = (lam x. ...) in
+--    ```
+--    with `f` marked and such that `lam x. ...` can occur at position `b`,
+--    _all other functions_ that can occur at `b` must also be marked.
+--    Furthermore, `a` must be marked. It is tricky to determine all functions
+--    that can occur at `b`, and this is best handled with a control-flow
+--    analysis (see `cfa.mc`).
 
 include "ast.mc"
 include "type.mc"
@@ -24,8 +55,8 @@ lang CPS = LamAst + VarAst + LetAst
   sem cpsFullIdentity : Expr -> Expr
   sem cpsFullIdentity =
   | e ->
-    let i = withInfo (infoTm e) in
-    cpsFullCont (i (ulam_ "x" (var_ "x"))) e
+    let id = withInfo (infoTm e) (ulam_ "x" (var_ "x")) in
+    cpsFullCont id e
 
   sem cpsFullCont : Expr -> Expr -> Expr
   sem cpsFullCont k =
@@ -33,6 +64,12 @@ lang CPS = LamAst + VarAst + LetAst
     let env = _cpsEnvDefault in
     let e = exprCps env (Some k) e in
     mapPre_Expr_Expr (exprTyCps env) e
+
+  sem cpsPartialIdentity : Set Name -> Expr -> Expr
+  sem cpsPartialIdentity names =
+  | e ->
+    let id = withInfo (infoTm e) (ulam_ "x" (var_ "x")) in
+    cpsPartialCont names id e
 
   sem cpsPartialCont : Set Name -> Expr -> Expr -> Expr
   sem cpsPartialCont names k =
@@ -56,6 +93,12 @@ lang CPS = LamAst + VarAst + LetAst
     match inexpr with TmVar { ident = varIdent } then nameEq ident varIdent
     else false
 
+  sem transform : CPSEnv -> Name -> Bool
+  sem transform env =
+  | n ->
+    match env.names with Some names then setMem n names
+    else true
+
 end
 
 -----------
@@ -73,17 +116,17 @@ end
 lang AppCPS = CPS + AppAst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmApp app, inexpr = inexpr } & b) & t ->
-    let transform =
-      match env.names with Some names then setMem ident names
-      else true
-    in
-    if not transform then TmLet { b with inexpr = exprCps env k inexpr }
+    if not (transform env ident) then
+      TmLet { b with inexpr = exprCps env k inexpr }
     else
       let i = withInfo (infoTm t) in
-      let opt = match k with Some k then tailCall t else false in
-      if opt then
+      let opt =
+        match k with Some k then
+          if tailCall t then Some k
+          else None ()
+        else None () in
+      match opt with Some k then
         -- Optimize tail call with available continuation
-        let k = match k with Some k then k else error "Impossible" in
         i (appf2_ app.lhs k app.rhs)
       else
         let inexpr = exprCps env k inexpr in
@@ -98,11 +141,11 @@ end
 lang LamCPS = CPS + LamAst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
-    let transform =
-      match env.names with Some names then setMem ident names
-      else true
-    in
-    if not transform then TmLet { r with inexpr = exprCps env k inexpr }
+    if not (transform env ident) then
+      TmLet { r with
+        body = TmLam { t with body = exprCps env (None ()) t.body },
+        inexpr = exprCps env k inexpr
+      }
     else
       let kName = nameSym "k" in
       let i = withInfo t.info in
@@ -126,11 +169,8 @@ lang RecLetsCPS = CPS + RecLetsAst + LamAst
   | TmRecLets t ->
     let bindings = map (lam b: RecLetBinding. { b with body =
         match b.body with TmLam t then
-          let transform =
-            match env.names with Some names then setMem b.ident names
-            else true
-          in
-          if not transform then TmLam t
+          if not (transform env b.ident) then
+            TmLam { t with body = exprCps env (None ()) t.body }
           else
             let kName = nameSym "k" in
             let i = withInfo t.info in
@@ -166,11 +206,8 @@ let wrapDirect = use MExprAst in
 lang ConstCPS = CPS + ConstAst + MExprArity
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmConst { val = c } & body} & t) ->
-    let transform =
-      match env.names with Some names then setMem ident names
-      else true
-    in
-    if not transform then TmLet { t with inexpr = exprCps env k t.inexpr }
+    if not (transform env ident) then
+      TmLet { t with inexpr = exprCps env k t.inexpr }
     else
       -- Constants are not in CPS, so we must wrap them in CPS lambdas
       let body = wrapDirect (constArity c) body in
@@ -216,11 +253,8 @@ end
 lang MatchCPS = CPS + MatchAst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmMatch m, inexpr = inexpr } & b) & t ->
-    let transform =
-      match env.names with Some names then setMem ident names
-      else true
-    in
-    if not transform then TmLet { b with inexpr = exprCps env k inexpr }
+    if not (transform env ident) then
+      TmLet { b with inexpr = exprCps env k inexpr }
     else
       let opt = match k with Some k then tailCall t else false in
       if opt then
@@ -321,6 +355,11 @@ use Test in
 let _parse =
   parseMExprString { defaultBootParserParseMExprStringArg with allowFree = true }
 in
+
+-------------------------
+-- TESTS FOR FULL CPS  --
+-------------------------
+
 let _cps = lam e. cpsFullIdentity (normalizeTerm (_parse e)) in
 
 -- Simple base cases
@@ -514,7 +553,7 @@ let externaltest = _cps "
   let x = f a b in
   x
 " in
-print (mexprToString externaltest);
+-- print (mexprToString externaltest);
 utest externaltest with _parse "
   external f : Float -> Float -> Float in
   let f = lam k1. lam a1. k1 (lam k2. lam a2. k2 (f a1 a2)) in
@@ -577,4 +616,75 @@ g
   f"
 in
 
+----------------------------
+-- TESTS FOR PARTIAL CPS  --
+----------------------------
+
+let _cps = lam names. lam e.
+  let names = setOfSeq nameCmp (map nameNoSym names) in
+  cpsPartialIdentity names (normalizeTerm (_parse e))
+in
+
+-- Variables
+utest _cps [] "a" with _parse "(lam x. x) a" using eqExpr in
+utest _cps ["a"] "a" with _parse "(lam x. x) a" using eqExpr in
+
+-- Applications
+utest _cps [] "let t = a b in t"
+with _parse "let t = a b in (lam x. x) t"
+using eqExpr in
+
+utest _cps ["t"] "let t = a b in t"
+with _parse "a (lam x. x) b"
+using eqExpr in
+
+-- Recursive lets
+let recletsTest = "
+  recursive
+    let f1 = lam a. let t = lam b. b in t
+    let f2 = lam c. c
+  in
+  let x = f1 1 2 in
+  let y = f2 3 in
+  addi x y
+" in
+-- printLn (mexprToString (_cps [] recletsTest));
+utest _cps [] recletsTest with _parse "
+  recursive
+    let f1 = lam a. let t = lam b. b in t
+    let f2 = lam c. c
+  in
+  let t1 = 1 in
+  let t2 = f1 t1 in
+  let t3 = 2 in
+  let x = t2 t3 in
+  let t4 = 3 in
+  let y = f2 t4 in
+  let t5 = addi in
+  let t6 = t5 x in
+  let t7 = t6 y in
+  (lam x. x) t7
+" using eqExpr in
+-- printLn (mexprToString (_cps ["b", "t", "x"] recletsTest));
+utest _cps ["b", "t", "x"] recletsTest with _parse "
+  recursive
+    let f1 = lam a. let t = lam k. lam b. k b in t
+    let f2 = lam c. c
+  in
+  let t1 = 1 in
+  let t2 = f1 t1 in
+  let t3 = 2 in
+  let k1 =
+    lam x.
+      let t4 = 3 in
+      let y = f2 t4 in
+      let t5 = addi in
+      let t6 = t5 x in
+      let t7 = t6 y in
+      (lam x. x) t7
+  in
+  t2 k1 t3
+" using eqExpr in
+
 ()
+
