@@ -526,19 +526,17 @@ utest _test lamseq with _parse "
 -- Externals
 let ext = _parse "
   external e: Int -> Int -> Int in
-  e 1 2 3
+  e 1 2
 " in
 -- printLn (mexprToString (_test ext));
 utest _test ext with _parse "
-  external e : Int -> Int -> Int in
-  let e = lam a1. lam a2. e a1 a2 in
-  let t = 1 in
-  let t1 = e t in
-  let t2 = 2 in
-  let t3 = t1 t2 in
-  let t4 = 3 in
-  let t5 = t3 t4 in
-  t5
+external e : Int -> Int -> Int in
+let e: Int -> Int -> Int = lam a1.  lam a2.  e a1 a2 in
+let t = 1 in
+let t1 = e t in
+let t2 = 2 in
+let t3 = t1 t2 in
+t3
 " using eqExpr in
 
 ()
