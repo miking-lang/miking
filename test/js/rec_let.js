@@ -39,14 +39,12 @@ const MExpr_JS_Intrinsics = Object.freeze({
 let printLn = s => {
   MExpr_JS_Intrinsics.print(MExpr_JS_Intrinsics.concat(s)("\n"));
 };
+let digit2char = d => MExpr_JS_Intrinsics.int2char((d + MExpr_JS_Intrinsics.char2int('0')));
 let int2string = n => {
-  let int2string_rechelper = n1 => ((n1 < 10) ? [MExpr_JS_Intrinsics.int2char((n1 + MExpr_JS_Intrinsics.char2int('0')))] : (() => {
-      let d = [MExpr_JS_Intrinsics.int2char(((n1 % 10) + MExpr_JS_Intrinsics.char2int('0')))];
-      return MExpr_JS_Intrinsics.concat(int2string_rechelper((n1 / 10)))(d);
-    })());
-  return ((n < 0) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
+  let int2string_rechelper = n => acc => ((n < 10) ? MExpr_JS_Intrinsics.cons(digit2char(n))(acc) : MExpr_JS_Intrinsics.trampolineCapture(int2string_rechelper)([(n / 10), MExpr_JS_Intrinsics.cons(digit2char((n % 10)))(acc)]));
+  return ((n1 < 0) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n1)("")) : int2string_rechelper(n1)(""));
 };
-let fact_rect = acc => n2 => ((n2 === 0) ? acc : MExpr_JS_Intrinsics.trampolineCapture(fact_rect)([(n2 * acc), (n2 - 1)]));
+let fact_rect = acc1 => n1 => ((n1 === 0) ? acc1 : MExpr_JS_Intrinsics.trampolineCapture(fact_rect)([(n1 * acc1), (n1 - 1)]));
 let fact = fact_rect(1);
 printLn(int2string(fact(5)));
 printLn(int2string(fact(10)));
