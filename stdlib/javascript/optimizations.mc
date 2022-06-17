@@ -65,24 +65,33 @@ type JSTCOContext = {
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst
 
-  sem optimizeTailCall : Name -> Info -> JSExpr -> JSExpr
-  sem optimizeTailCall (name: Name) (info: Info) =
+  sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> JSExpr
+  sem optimizeTailCall (name: Name) (info: Info) (ctx: CompileJSContext) =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
-    let fun = foldArgs fun in
+    let fun = foldFunc fun in
     match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true } then
-      -- Call wrapping function on the optimized function
-      trampolineWrap fun
+      let ctx = { ctx with trampolinedFunctions = mapInsert name fun ctx.trampolinedFunctions } in
+      (ctx, fun)
     else
       -- Otherwise, return the function as is
-      fun
+      (ctx, fun)
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
-  sem foldArgs : JSExpr -> JSExpr
-  sem foldArgs =
+  sem wrapCallToOptimizedFunction : Info -> JSExpr -> JSExpr
+  sem wrapCallToOptimizedFunction (info: Info) =
+  | JSEApp _ & app ->
+    -- Trampoline fulllly applied trampoline functions
+    trampolineWrapCall app
+  | _ -> errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
+
+
+  -- Fold nested functions to the top level
+  sem foldFunc : JSExpr -> JSExpr
+  sem foldFunc =
   | JSEFun { params = params, body = body } ->
-    let body = foldArgs body in
+    let body = foldFunc body in
     match body with JSEFun { params = paramsNested, body = bodyNested } then
       JSEFun { params = concat params paramsNested, body = bodyNested }
     else JSEFun { params = params, body = body }
@@ -134,12 +143,12 @@ lang JSOptimizeTailCalls = JSExprAst
     intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
   | _ -> error "trampolineCapture called on non-function application expression"
 
-  sem trampolineWrap : JSExpr -> JSExpr
-  sem trampolineWrap =
-  | JSEFun _ & fun ->
-    -- Wrap the function body in a trampoline capture
-    fun
-  | _ -> error "trampolineWrap called on non-function expression"
+  sem trampolineWrapCall : JSExpr -> JSExpr
+  sem trampolineWrapCall =
+  | JSEApp _ & app ->
+    -- Wrap the function application in a trampoline intrinsic
+    intrinsicFromString intrGenNS "trampoline" [app]
+  | _ -> error "trampolineWrapCall invoked with non-function expression"
 
 end
 

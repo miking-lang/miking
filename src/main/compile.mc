@@ -90,7 +90,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
         case Some (e) then error (join ["Invalid value for --js-target: '", e, "'"])
         case _ then runtimePrint "a generic"; CompileJSTP_Normal ()
       end in
-      let res = javascriptCompileFile {defaultCompileJSOptions with targetPlatform = target} ast sourcePath in
+      let res = javascriptCompileFile {compileJSOptionsEmpty with targetPlatform = target} ast sourcePath in
       printLn (join ["Successfully compiled to JavaScript in ", res]);
       res
     else compileMCore ast

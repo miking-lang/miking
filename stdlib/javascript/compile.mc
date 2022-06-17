@@ -46,9 +46,6 @@ let _charSeq2String = use MExprAst in lam tms.
 -- TODO: Extract shared helper functions into a separate files
 
 
--- Empty compile JS environment
-let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
-
 
 
 -- Supported JS runtime targets
@@ -63,11 +60,27 @@ type CompileJSOptions = {
   debugMode : Bool
 }
 
-type CompileJSContext = {
-  options : CompileJSOptions,
-  nonCurriedFunctions: Map Name JSExpr
+let compileJSOptionsEmpty : CompileJSOptions = {
+  targetPlatform = CompileJSTP_Normal (),
+  debugMode = false
 }
 
+type CompileJSContext = {
+  options : CompileJSOptions,
+  trampolinedFunctions: Map Name JSExpr
+}
+
+-- Empty compile JS environment
+let compileJSCtxEmpty = {
+  options = compileJSOptionsEmpty,
+  trampolinedFunctions = mapEmpty nameCmp
+}
+
+
+let isTrampolinedJs : CompileJSContext -> Name -> Bool =
+  lam ctx. lam name.
+  match mapLookup name ctx.trampolinedFunctions with Some _ then false
+  else true
 
 
 -------------------------------------------
@@ -154,25 +167,34 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
 
 
+  -- Extract the name of the function and the arguments from
+  -- a function application
+  sem foldApp : [Expr] -> Expr -> (Expr, [Expr])
+  sem foldApp acc =
+  | TmApp { lhs = lhs, rhs = rhs } ->
+    if _isUnitTy (tyTm rhs) then foldApp acc lhs
+    else foldApp (cons rhs acc) lhs
+  | t -> (t, acc)
+
+
   -----------------
   -- EXPRESSIONS --
   -----------------
-
   sem compileMExpr (ctx: CompileJSContext) =
-
   | TmVar { ident = id } -> JSEVar { id = id }
-
-  | TmApp _ & app ->
-    recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
-      match t with TmApp { lhs = lhs, rhs = rhs } then
-        if _isUnitTy (tyTm rhs) then rec acc lhs
-        else rec (cons rhs acc) lhs
-      else (t, acc)
-    in
-    match rec [] app with (fun, args) then
+  | TmApp { info = info } & app ->
+    match foldApp [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = JSEVar { id = ident }, args = map (compileMExpr ctx) args, curried = true }
+        let isTrampolined = isTrampolinedJs ctx ident in
+        let jsApp = JSEApp {
+          fun = JSEVar { id = ident },
+          args = map (compileMExpr ctx) args,
+          curried = isTrampolined
+        } in
+        -- if isTrampolined then wrapCallToOptimizedFunction info jsApp
+        --else jsApp
+        jsApp
 
       -- Intrinsics
       else match fun with TmConst { val = val, info = info } then
@@ -234,15 +256,21 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
     })
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
+    let rctx = ref ctx in
     let compileBind = lam bind : RecLetBinding.
       match bind with { ident = ident, body = body, info = info } then
         match body with TmLam _ then
-          JSEDef { id = ident, expr = optimizeTailCall ident info (compileMExpr ctx body)}
+          let fun = compileMExpr (deref rctx) body in
+          match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) then
+            modref rctx ctx;
+            JSEDef { id = ident, expr = fun }
+          else never
         else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
       else never in
+    let exprs = map compileBind bindings in
     flattenBlock (JSEBlock {
-      exprs = map compileBind bindings,
-      ret = compileMExpr ctx e
+      exprs = exprs,
+      ret = compileMExpr (deref rctx) e
     })
 
   | TmType { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type declaration)
@@ -274,22 +302,13 @@ let filepathWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let defaultCompileJSOptions : CompileJSOptions = {
-  targetPlatform = CompileJSTP_Normal (),
-  debugMode = false
-}
-
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
 let javascriptCompile : CompileJSOptions -> Expr -> JSProg =
   lam opts : CompileJSOptions. lam ast : Expr.
   use MExprJSCompile in
-  let ctx : CompileJSContext = {
-    options = opts,
-    nonCurriedFunctions = mapEmpty nameCmp
-  } in
+  let ctx = { compileJSCtxEmpty with options = opts } in
   compileProg ctx ast
-
 
 
 let javascriptCompileFile : CompileJSOptions -> Expr -> String -> String =
