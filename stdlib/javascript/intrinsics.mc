@@ -8,27 +8,32 @@ include "javascript/ast.mc"
 lang CompileJSOptimizedIntrinsics = JSExprAst + MExprAst + MExprArity + MExprPrettyPrint
 end
 
--- Compile intrinsic function template (MExpr_JS_Intrinsics.[name])
+-- Compile intrinsic function
+let intrinsicFromString : Name -> String -> [JSExpr] -> JSExpr =
+  use CompileJSOptimizedIntrinsics in
+  lam runtime. lam name. lam args.
+  -- If there is at least one argument, apply it to the intrinsic function
+  if gti (length args) 0 then
+    JSEApp {
+      fun = JSEMember {
+        expr = JSEVar { id = runtime },
+        id = name
+      },
+      args = args,
+      curried = true
+    }
+  else -- Otherwise return a reference to the function itself
+    JSEMember {
+      expr = JSEVar { id = runtime },
+      id = name
+    }
+
 let intrinsic : Name -> Const -> [JSExpr] -> JSExpr =
   use CompileJSOptimizedIntrinsics in
   lam runtime. lam const. lam args.
-    -- If there is at least one argument, apply the intrinsic function
-    -- to the arguments.
     let name = getConstStringCode 0 const in -- The name of the intrinsic function
-    if gti (length args) 0 then
-      JSEApp {
-        fun = JSEMember {
-          expr = JSEVar { id = runtime },
-          id = name
-        },
-        args = args,
-        curried = true
-      }
-    else -- No arguments, return the function itself
-      JSEMember {
-        expr = JSEVar { id = runtime },
-        id = name
-      }
+    intrinsicFromString runtime name args
+
 
 let optimizedOpIntrinsic : Name -> Const -> [JSExpr] -> ([JSExpr] -> JSExpr) -> JSExpr =
   use CompileJSOptimizedIntrinsics in
