@@ -141,7 +141,7 @@ end
 lang LamCPS = CPS + LamAst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
-    if not (transform env ident) then
+    if not (or (transform env ident) (transform env t.ident)) then
       TmLet { r with
         body = TmLam { t with body = exprCps env (None ()) t.body },
         inexpr = exprCps env k inexpr
