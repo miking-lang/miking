@@ -61,45 +61,32 @@ lang JSOptimizeTailCalls = JSExprAst
 
   sem optimizeTailCall : Name -> Info -> JSExpr -> JSExpr
   sem optimizeTailCall (name: Name) (info: Info) =
-  | JSEFun { param = param, body = body } & fun ->
+  | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
-    if hasTailRecCall name body then
-      printLn (concat "Tail call optimization for: " (nameGetStr name));
-      runOnTailPositional name trampoline fun
-    else
-      fun
+    printLn (concat "Tail call optimization for: " (nameGetStr name));
+    runOnTailPositional name trampolineCapture fun
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
   sem runOnTailPositional (name: Name) (action: (JSExpr -> JSExpr)) =
-  | JSEApp _ & t ->
+  | JSEApp { fun = fun } & t ->
     -- If the function is a tail call, run the action on the function
     -- and replace the function with the result
-    if isTailRecCall name t then action t else t
-  | JSEFun { param = param, body = body } -> JSEFun { param = param, body = runOnTailPositional name action body }
-  | JSETernary { cond = cond, thn = thn, els = els } ->
-    JSETernary { cond = cond, thn = runOnTailPositional name action thn, els = runOnTailPositional name action els }
-  | JSEIIFE { body = body } -> JSEIIFE { body = runOnTailPositional name action body }
-  | JSEBlock { exprs = exprs, ret = ret } -> JSEBlock { exprs = exprs, ret = runOnTailPositional name action ret }
+    match fun with JSEVar { id = name } then action t else t
+  | JSEFun t -> JSEFun { t with body = runOnTailPositional name action t.body }
+  | JSETernary t -> JSETernary { t with thn = runOnTailPositional name action t.thn, els = runOnTailPositional name action t.els }
+  | JSEIIFE t -> JSEIIFE { t with body = runOnTailPositional name action t.body }
+  | JSEBlock t -> JSEBlock { t with ret = runOnTailPositional name action t.ret }
   | JSEVar _ & t -> t
+  | JSEArray _ & t -> t
   | e -> dprintLn e; error "Not yet implemented!"
 
-  sem isTailRecCall (funName: Name) =
-  | JSEApp { fun = fun } ->
-    dprintLn fun;
-    printLn (join ["Checking if previous tail call in ", nameGetStr funName, "..."]);
-    -- Check if the function is a tail recursive call
-    match fun with JSEVar { id = funName } then true
-    else false
-  | _ -> false
-
-  sem hasTailRecCall : Name -> JSExpr -> Bool
-  sem hasTailRecCall (funName: Name) =
-  | _ -> true
 
   -- Strategies for optimizing tail calls
-  sem trampoline : JSExpr -> JSExpr
-  sem trampoline =
+
+  -- Wrap all calls in a trampoline capture that is immediately returned
+  sem trampolineCapture : JSExpr -> JSExpr
+  sem trampolineCapture =
   | e -> e
 
 end
