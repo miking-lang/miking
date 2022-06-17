@@ -22,8 +22,9 @@ include "cmp.mc"
 include "const-arity.mc"
 include "index.mc"
 
+type IName = Int
 type GenFun = Expr -> [Constraint]
-type MatchGenFun = Int -> Int -> Pat -> [Constraint]
+type MatchGenFun = IName -> IName -> Pat -> [Constraint]
 
 -------------------
 -- BASE FRAGMENT --
@@ -34,7 +35,7 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   type CFAGraph = {
 
     -- Contains updates that needs to be processed in the main CFA loop
-    worklist: [(Int,AbsVal)],
+    worklist: [(IName,AbsVal)],
 
     -- Contains abstract values currently associated with each name in the program.
     data: [Set AbsVal],
@@ -70,16 +71,20 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
       im = im,
       graphData = None () }
 
-  sem name2int: IndexMap -> Info -> Name -> Int
+  sem name2int: IndexMap -> Info -> Name -> IName
   sem name2int im info =
   | name ->
     mapLookupOrElse (lam.
         errorSingle [info] (concat "name2int failed: " (nameGetStr name)))
       name im.name2int
 
-  sem int2name: IndexMap -> Int -> Name
+  sem int2name: IndexMap -> IName -> Name
   sem int2name im =
   | i -> get im.int2name i
+
+  sem pprintVarIName: IndexMap -> PprintEnv -> IName -> (PprintEnv, String)
+  sem pprintVarIName im env =
+  | n -> pprintVarName env (int2name im n)
 
   syn Constraint =
   -- Intentionally left blank
@@ -172,32 +177,32 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   sem initConstraint: CFAGraph -> Constraint -> CFAGraph
 
-  sem propagateConstraint: (Int,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
+  sem propagateConstraint: (IName,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
-  sem addEdge: CFAGraph -> Int -> Constraint -> CFAGraph
-  sem addEdge (graph: CFAGraph) (q: Int) =
+  sem addEdge: CFAGraph -> IName -> Constraint -> CFAGraph
+  sem addEdge (graph: CFAGraph) (q: IName) =
   | cstr ->
     let cstrsq = edgesLookup q graph in
     { graph with edges = set graph.edges q (cons cstr cstrsq) }
 
   -- Helper function for initializing a constraint for a given name (mainly
   -- used for convenience in initConstraint)
-  sem initConstraintName: Int -> CFAGraph -> Constraint -> CFAGraph
-  sem initConstraintName (name: Int) (graph: CFAGraph) =
+  sem initConstraintName: IName -> CFAGraph -> Constraint -> CFAGraph
+  sem initConstraintName (name: IName) (graph: CFAGraph) =
   | cstr ->
     let graph = addEdge graph name cstr in
     let avs = dataLookup name graph in
     setFold (lam graph. lam av. propagateConstraint (name,av) graph cstr)
       graph avs
 
-  sem dataLookup: Int -> CFAGraph -> Set AbsVal
-  sem dataLookup (key: Int) =
+  sem dataLookup: IName -> CFAGraph -> Set AbsVal
+  sem dataLookup (key: IName) =
   | graph -> get graph.data key
 
-  sem edgesLookup (key: Int) =
+  sem edgesLookup (key: IName) =
   | graph -> get graph.edges key
 
-  sem addData: CFAGraph -> AbsVal -> Int -> CFAGraph
+  sem addData: CFAGraph -> AbsVal -> IName -> CFAGraph
   sem addData (graph: CFAGraph) (d: AbsVal) =
   | q ->
     let dq = dataLookup q graph in
@@ -219,19 +224,19 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem cfaGraphToString (env: PprintEnv) =
   | graph ->
     let graph: CFAGraph = graph in
-    let f = lam env. lam e: (Int,AbsVal).
-      match pprintVarName env (int2name graph.im e.0) with (env,n) in
+    let f = lam env. lam e: (IName,AbsVal).
+      match pprintVarIName graph.im env e.0 with (env,n) in
       match absValToString graph env e.1 with (env,av) in
       (env,join ["(", n, ", ", av, ")"]) in
     match mapAccumL f env graph.worklist with (env,worklist) in
-    match mapAccumL (lam env: PprintEnv. lam b:(Int,Set AbsVal).
-        match pprintVarName env (int2name graph.im b.0) with (env,b0) in
+    match mapAccumL (lam env: PprintEnv. lam b:(IName,Set AbsVal).
+        match pprintVarIName graph.im env b.0 with (env,b0) in
         match mapAccumL (absValToString graph) env (setToSeq b.1) with (env,b1)
         in (env,(b0,b1))
       ) env (mapi (lam i. lam x. (i,x)) graph.data)
     with (env, data) in
-    match mapAccumL (lam env: PprintEnv. lam b:(Int,[Constraint]).
-        match pprintVarName env (int2name graph.im b.0) with (env,b0) in
+    match mapAccumL (lam env: PprintEnv. lam b:(IName,[Constraint]).
+        match pprintVarIName graph.im env b.0 with (env,b0) in
         match mapAccumL (constraintToString graph) env b.1 with (env,b1) in
         (env,(b0,b1))
       ) env (mapi (lam i. lam x. (i,x)) graph.edges)
@@ -264,13 +269,13 @@ lang BaseConstraint = CFA
 
   syn Constraint =
   -- {lhs} ⊆ rhs
-  | CstrInit { lhs: AbsVal, rhs: Int }
+  | CstrInit { lhs: AbsVal, rhs: IName }
   -- lhs ⊆ rhs
-  | CstrDirect { lhs: Int, rhs: Int }
+  | CstrDirect { lhs: IName, rhs: IName }
   -- {lhsav} ⊆ lhs ⇒ {rhsav} ⊆ rhs
-  | CstrDirectAv { lhs: Int, lhsav: AbsVal, rhs: Int, rhsav: AbsVal }
+  | CstrDirectAv { lhs: IName, lhsav: AbsVal, rhs: IName, rhsav: AbsVal }
   -- {lhsav} ⊆ lhs ⇒ [rhs]
-  | CstrDirectAvCstrs { lhs: Int, lhsav: AbsVal, rhs: [Constraint] }
+  | CstrDirectAvCstrs { lhs: IName, lhsav: AbsVal, rhs: [Constraint] }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
@@ -281,22 +286,22 @@ lang BaseConstraint = CFA
   sem constraintToString graph (env: PprintEnv) =
   | CstrInit { lhs = lhs, rhs = rhs } ->
     match absValToString graph env lhs with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
     (env, join ["{", lhs, "}", " ⊆ ", rhs])
   | CstrDirect { lhs = lhs, rhs = rhs } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
     (env, join [lhs, " ⊆ ", rhs])
   | CstrDirectAv { lhs = lhs, lhsav = lhsav, rhs = rhs, rhsav = rhsav } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
     match absValToString graph env lhsav with (env,lhsav) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
     match absValToString graph env rhsav with (env,rhsav) in
     (env, join ["{", lhsav ,"} ⊆ ", lhs, " ⇒ {", rhsav ,"} ⊆ ", rhs])
   | CstrDirectAvCstrs { lhs = lhs, lhsav = lhsav, rhs = rhs } ->
     match mapAccumL (constraintToString graph) env rhs with (env,rhs) in
     let rhs = strJoin " AND " rhs in
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
     match absValToString graph env lhsav with (env,lhsav) in
     (env, join [ "{", lhsav, "} ⊆ ", lhs, " ⇒ (", rhs, ")" ])
 
@@ -304,11 +309,11 @@ lang BaseConstraint = CFA
   sem isDirect =
   | _ -> true
 
-  sem directTransition: CFAGraph -> Int -> AbsVal -> AbsVal
-  sem directTransition (graph: CFAGraph) (rhs: Int) =
+  sem directTransition: CFAGraph -> IName -> AbsVal -> AbsVal
+  sem directTransition (graph: CFAGraph) (rhs: IName) =
   | av -> av
 
-  sem propagateConstraint (update: (Int,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrDirect r -> propagateDirectConstraint r.rhs graph update.1
   | CstrDirectAv r ->
     if eqAbsVal update.1 r.lhsav then
@@ -319,8 +324,8 @@ lang BaseConstraint = CFA
       foldl initConstraint graph r.rhs
     else graph
 
-  sem propagateDirectConstraint: Int -> CFAGraph -> AbsVal -> CFAGraph
-  sem propagateDirectConstraint (rhs: Int) (graph: CFAGraph) =
+  sem propagateDirectConstraint: IName -> CFAGraph -> AbsVal -> CFAGraph
+  sem propagateDirectConstraint (rhs: IName) (graph: CFAGraph) =
   | av ->
     if isDirect av then
       addData graph (directTransition graph rhs av) rhs
@@ -349,7 +354,7 @@ lang LamCFA = CFA + BaseConstraint + LamAst
 
   -- Abstract representation of lambdas.
   syn AbsVal =
-  | AVLam { ident: Int, body: Int }
+  | AVLam { ident: IName, body: IName }
 
   sem cmpAbsValH =
   | (AVLam { ident = lhs, body = lbody },
@@ -367,8 +372,8 @@ lang LamCFA = CFA + BaseConstraint + LamAst
 
   sem absValToString graph (env: PprintEnv) =
   | AVLam { ident = ident, body = body } ->
-    match pprintVarName env (int2name graph.im ident) with (env,ident) in
-    match pprintVarName env (int2name graph.im body) with (env,body) in
+    match pprintVarIName graph.im env ident with (env,ident) in
+    match pprintVarIName graph.im env body with (env,body) in
     (env, join ["lam ", ident, ". ", body])
 
 end
@@ -403,15 +408,14 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
   -- arguments applied to it. It also includes the `let` name that binds the
   -- constant and syntactically distinguishes it from other of its kind in the
   -- program.
-  | AVConst { id: Int, const: Const, args: [Int] }
+  | AVConst { id: IName, const: Const, args: [IName] }
 
   sem absValToString graph (env: PprintEnv) =
   | AVConst { id = id, const = const, args = args } ->
     let const = getConstStringCode 0 const in
-    let args = map (int2name graph.im) args in
-    match mapAccumL pprintVarName env args with (env,args) in
+    match mapAccumL (pprintVarIName graph.im) env args with (env,args) in
     let args = strJoin ", " args in
-    match pprintVarName env (int2name graph.im id) with (env,id) in
+    match pprintVarIName graph.im env id with (env,id) in
     (env, join [const,"<", id, ">", "(", args, ")"])
 
   sem cmpAbsValH =
@@ -427,7 +431,7 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
   | TmLet { ident = ident, body = TmConst t, info = info } ->
     generateConstraintsConst t.info (name2int im info ident) t.val
 
-  sem generateConstraintsConst: Info -> Int -> Const -> [Constraint]
+  sem generateConstraintsConst: Info -> IName -> Const -> [Constraint]
   sem generateConstraintsConst info ident =
   | _ -> errorSingle [info] "Constant not supported in CFA"
 end
@@ -436,15 +440,15 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
 
   syn Constraint =
   -- {lam x. b} ⊆ lhs ⇒ (rhs ⊆ x and b ⊆ res)
-  | CstrLamApp { lhs: Int, rhs: Int, res: Int }
+  | CstrLamApp { lhs: IName, rhs: IName, res: IName }
   -- {const args} ⊆ lhs ⇒ {const args lhs} ⊆ res
-  | CstrConstApp { lhs: Int, rhs: Int, res: Int }
+  | CstrConstApp { lhs: IName, rhs: IName, res: IName }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrLamApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem propagateConstraint (update: (Int,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1 with AVLam { ident = x, body = b } then
       -- Add rhs ⊆ x constraint
@@ -466,14 +470,14 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
 
   sem constraintToString graph (env: PprintEnv) =
   | CstrLamApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
-    match pprintVarName env (int2name graph.im res) with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [ "{lam >x<. >b<} ⊆ ", lhs, " ⇒ ", rhs, " ⊆ >x< AND >b< ⊆ ", res ])
   | CstrConstApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
-    match pprintVarName env (int2name graph.im res) with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [
         ">const< >args< ⊆ ", lhs, " ⇒ ", ">const< >args< ", rhs, " ⊆ ", res
       ])
@@ -491,7 +495,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
-  sem propagateConstraintConst : Int -> [Int] -> CFAGraph -> Const -> CFAGraph
+  sem propagateConstraintConst : IName -> [IName] -> CFAGraph -> Const -> CFAGraph
 end
 
 lang RecordCFA = CFA + BaseConstraint + RecordAst
@@ -500,7 +504,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
   syn AbsVal =
   -- Abstract representation of records. The bindings are from SIDs to names,
   -- rather than expressions.
-  | AVRec { bindings: Map SID Int }
+  | AVRec { bindings: Map SID IName }
 
   sem cmpAbsValH =
   | (AVRec { bindings = lhs }, AVRec { bindings = rhs }) ->
@@ -519,7 +523,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
   sem absValToString graph (env: PprintEnv) =
   | AVRec { bindings = bindings } ->
     match mapMapAccum (lam env. lam k. lam v.
-        match pprintVarName env (int2name graph.im v) with (env, v) in
+        match pprintVarIName graph.im env v with (env, v) in
         (env, join [pprintLabelString k, " = ", v])
       ) env bindings
     with (env, bindings) in
@@ -534,14 +538,14 @@ lang SeqCFA = CFA + BaseConstraint + SeqAst
   syn AbsVal =
   -- Abstract representation of sequences. Contains a set of names that may
   -- flow to the sequence.
-  | AVSeq { names: Set Int }
+  | AVSeq { names: Set IName }
 
   sem cmpAbsValH =
   | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
 
   sem generateConstraints im =
   | TmLet { ident = ident, body = TmSeq t, info = info } ->
-    let names = foldl (lam acc: [Int]. lam t: Expr.
+    let names = foldl (lam acc: [IName]. lam t: Expr.
       match t with TmVar t then
         cons (name2int im t.info t.ident) acc
       else acc) [] t.tms
@@ -551,8 +555,8 @@ lang SeqCFA = CFA + BaseConstraint + SeqAst
 
   sem absValToString graph (env: PprintEnv) =
   | AVSeq { names = names } ->
-    let names: [Name] = map (int2name graph.im) (setToSeq names) in
-    match mapAccumL pprintVarName env names with (env,names) in
+    match mapAccumL (pprintVarIName graph.im) env (setToSeq names)
+    with (env,names) in
     let names = strJoin ", " names in
     (env, join ["[{", names, "}]"])
 end
@@ -565,7 +569,7 @@ end
 lang DataCFA = CFA + BaseConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
-  | AVCon { ident: Int, body: Int }
+  | AVCon { ident: IName, body: IName }
 
   sem cmpAbsValH =
   | (AVCon { ident = ilhs, body = blhs },
@@ -584,7 +588,7 @@ lang DataCFA = CFA + BaseConstraint + DataAst
   sem absValToString graph (env: PprintEnv) =
   | AVCon { ident = ident, body = body } ->
     match pprintConName env (int2name graph.im ident) with (env,ident) in
-    match pprintVarName env (int2name graph.im body) with (env,body) in
+    match pprintVarIName graph.im env body with (env,body) in
     (env, join [ident, " ", body])
 
   sem exprName =
@@ -595,24 +599,24 @@ end
 lang MatchCFA = CFA + BaseConstraint + MatchAst
 
   syn Constraint =
-  | CstrMatch { id: Int, pat: Pat, target: Int }
+  | CstrMatch { id: IName, pat: Pat, target: IName }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrMatch r & cstr -> initConstraintName r.target graph cstr
 
-  sem propagateConstraint (update: (Int,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrMatch r ->
     propagateMatchConstraint graph r.id (r.pat,update.1)
 
-  sem propagateMatchConstraint: CFAGraph -> Int -> (Pat, AbsVal) -> CFAGraph
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint: CFAGraph -> IName -> (Pat, AbsVal) -> CFAGraph
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | _ -> graph -- Default: do nothing
 
   sem constraintToString graph (env: PprintEnv) =
   | CstrMatch { id = id, pat = pat, target = target } ->
-    match pprintVarName env (int2name graph.im id) with (env, id) in
+    match pprintVarIName graph.im env id with (env, id) in
     match getPatStringCode 0 env pat with (env, pat) in
-    match pprintVarName env (int2name graph.im target) with (env, target) in
+    match pprintVarIName graph.im env target with (env, target) in
     (env, join [id, ": match ", target, " with ", pat])
 
   sem generateConstraintsMatch: IndexMap -> [MatchGenFun] -> Expr -> [Constraint]
@@ -632,8 +636,8 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst
         ) cstrs mcgfs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
 
-  sem generateMatchConstraints: Int -> Int -> Pat -> [Constraint]
-  sem generateMatchConstraints (id: Int) (target: Int) =
+  sem generateMatchConstraints: IName -> IName -> Pat -> [Constraint]
+  sem generateMatchConstraints (id: IName) (target: IName) =
   | pat -> [ CstrMatch { id = id, pat = pat, target = target } ]
 
 end
@@ -660,15 +664,14 @@ lang ExtCFA = CFA + ExtAst
   -- the original external definition is quite clunky. Maybe we can
   -- incorporate the fact that externals are always fully applied into the
   -- analysis somehow?
-  | AVExt { ext: Int, arity: Int, args: [Int] }
+  | AVExt { ext: IName, arity: Int, args: [IName] }
 
   sem absValToString graph (env: PprintEnv) =
   | AVExt { ext = ext, args = args } ->
     -- We ignore the arity (one can simply look up the ext to get the arity)
-    let args = map (int2name graph.im) args in
-    match mapAccumL pprintVarName env args with (env,args) in
+    match mapAccumL (pprintVarIName graph.im) env args with (env,args) in
     let args = strJoin ", " args in
-    match pprintVarName env (int2name graph.im ext) with (env,ext) in
+    match pprintVarIName graph.im env ext with (env,ext) in
     (env, join [ext, "(", args, ")"])
 
   sem cmpAbsValH =
@@ -680,12 +683,12 @@ lang ExtCFA = CFA + ExtAst
 
   syn Constraint =
   -- {ext args} ⊆ lhs ⇒ {ext args lhs} ⊆ res
-  | CstrExtApp { lhs: Int, rhs : Int, res: Int }
+  | CstrExtApp { lhs: IName, rhs : IName, res: IName }
 
   sem initConstraint (graph: CFAGraph) =
   | CstrExtApp r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem propagateConstraint (update: (Int,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrExtApp { lhs = lhs, rhs = rhs, res = res } ->
     match update.1
     with AVExt ({ ext = ext, args = args, arity = arity } & ave) then
@@ -845,9 +848,9 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
 
   syn Constraint =
   -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
-  | CstrSeq {lhs : Int, rhs : Int}
+  | CstrSeq {lhs : IName, rhs : IName}
   -- [{names}] ⊆ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
-  | CstrSeqUnion {lhs : Int, rhs : Int, res : Int}
+  | CstrSeqUnion {lhs : IName, rhs : IName, res : IName}
 
   sem initConstraint (graph: CFAGraph) =
   | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
@@ -855,18 +858,18 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
 
   sem constraintToString graph (env: PprintEnv) =
   | CstrSeq { lhs = lhs, rhs = rhs } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
     (env, join [ "[{names}] ⊆ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
   | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarName env (int2name graph.im lhs) with (env,lhs) in
-    match pprintVarName env (int2name graph.im rhs) with (env,rhs) in
-    match pprintVarName env (int2name graph.im res) with (env,res) in
+    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName graph.im env rhs with (env,rhs) in
+    match pprintVarIName graph.im env res with (env,res) in
     (env, join [
         "[{names}] ⊆ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
       ])
 
-  sem propagateConstraint (update: (Int,AbsVal)) (graph: CFAGraph) =
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
   | CstrSeq { lhs = lhs, rhs = rhs } ->
     match update.1 with AVSeq { names = names } then
       setFold (lam graph. lam name.
@@ -1073,14 +1076,14 @@ end
 --------------
 
 lang NamedPatCFA = MatchCFA + NamedPat + BaseConstraint
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatNamed { ident = PName n, info = info }, av) ->
     propagateDirectConstraint (name2int graph.im info n) graph av
   | (PatNamed { ident = PWildcard _ }, _) -> graph
 end
 
 lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatSeqTot p, AVSeq { names = names }) ->
     let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs =
@@ -1092,7 +1095,7 @@ lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
 end
 
 lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatSeqEdge p, AVSeq { names = names } & av) ->
     let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs = foldl (lam acc. lam f. concat (f id name pat) acc)
@@ -1111,13 +1114,13 @@ lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
 end
 
 lang RecordPatCFA = MatchCFA + RecordCFA + RecordPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatRecord { bindings = pbindings }, AVRec { bindings = abindings }) ->
     -- Check if record pattern is compatible with abstract value record
     let compatible = mapAllWithKey (lam k. lam. mapMem k abindings) pbindings in
     if compatible then
       mapFoldWithKey (lam graph: CFAGraph. lam k. lam pb: Pat.
-        let ab: Int = mapFindExn k abindings in
+        let ab: IName = mapFindExn k abindings in
         let cstrs = foldl (lam acc. lam f. concat (f id ab pb) acc)
           [] graph.mcgfs in
         foldl initConstraint graph cstrs
@@ -1126,7 +1129,7 @@ lang RecordPatCFA = MatchCFA + RecordCFA + RecordPat
 end
 
 lang DataPatCFA = MatchCFA + DataCFA + DataPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatCon p, AVCon { ident = ident, body = body }) ->
     if nameEq p.ident (int2name graph.im ident) then
       let cstrs = foldl (lam acc. lam f. concat (f id body p.subpat) acc)
@@ -1136,36 +1139,36 @@ lang DataPatCFA = MatchCFA + DataCFA + DataPat
 end
 
 lang IntPatCFA = MatchCFA + IntPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatInt p, _) -> graph
 end
 
 lang CharPatCFA = MatchCFA + CharPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatChar p, _) -> graph
 end
 
 lang BoolPatCFA = MatchCFA + BoolPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatBool p, _) -> graph
 end
 
 lang AndPatCFA = MatchCFA + AndPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatAnd p, av) ->
     let graph = propagateMatchConstraint graph id (p.lpat, av) in
     propagateMatchConstraint graph id (p.rpat, av)
 end
 
 lang OrPatCFA = MatchCFA + OrPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatOr p, av) ->
     let graph = propagateMatchConstraint graph id (p.lpat, av) in
     propagateMatchConstraint graph id (p.rpat, av)
 end
 
 lang NotPatCFA = MatchCFA + NotPat
-  sem propagateMatchConstraint (graph: CFAGraph) (id: Int) =
+  sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
   | (PatNot p, _) -> graph
 end
 
@@ -1404,111 +1407,112 @@ utest _test false t [
   ("resSubsequence", ["x", "z"])
 ] using eqTestLam in
 
--- -- Record
--- let t = _parse "
---   let f = lam x. x in
---   let g = lam y. y in
---   let r = { a = f, b = 3 } in
---   let res = match r with { a = a } then
---       a g
---     else
---       (lam z. z)
---   in res
--- ------------------------" in
--- utest _test false t ["res","a"] with [
---   ("res", ["y","z"]),
---   ("a", ["x"])
--- ] using eqTestLam in
+-- Record
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let r = { a = f, b = 3 } in
+  let res = match r with { a = a } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
 
--- -- ConApp
--- let t = _parse "
---   type T in
---   con C: (a -> a) -> T in
---   let f = lam x. x in
---   let g = lam y. y in
---   let d = C f in
---   let res = match d with C a then
---       a g
---     else
---       (lam z. z)
---   in res
--- ------------------------" in
--- utest _test false t ["res","a"] with [
---   ("res", ["y","z"]),
---   ("a", ["x"])
--- ] using eqTestLam in
+-- ConApp
+let t = _parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
 
--- -- Nested
--- let t = _parse "
---   type T in
---   con C: (a -> a) -> T in
---   let f = lam x. x in
---   let g = lam y. y in
---   let d = { a = [C f], b = 3 } in
---   let res = match d with { a = [C a] } then
---       a g
---     else
---       (lam z. z)
---   in res
--- ------------------------" in
--- utest _test false t ["res","a"] with [
---   ("res", ["y","z"]),
---   ("a", ["x"])
--- ] using eqTestLam in
+  let g = lam y. y in
+  let d = C f in
+  let res = match d with C a then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
 
--- -- And pattern
--- let t = _parse "
---   let f = lam x. x in
---   let g = lam y. y in
---   let res =
---     match f with a & b then a g
---     else (lam z. z)
---   in res
--- ------------------------" in
--- utest _test false t ["res", "a", "b"] with [
---   ("res", ["y","z"]),
---   ("a", ["x"]),
---   ("b", ["x"])
--- ] using eqTestLam in
+-- Nested
+let t = _parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let d = { a = [C f], b = 3 } in
+  let res = match d with { a = [C a] } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"])
+] using eqTestLam in
 
--- -- Or pattern
--- let t = _parse "
---   type T in
---   con C1: (a -> a) -> T in
---   con C2: (a -> a) -> T in
---   let f = lam x. x in
---   let g = lam y. y in
---   let h = (C1 f, f) in
---   let res =
---     match h with (C1 _, rhs) | (C2 _, rhs) then rhs g
---     else (lam z. z)
---   in res
--- ------------------------" in
--- utest _test false t ["res", "rhs"] with [
---   ("res", ["y","z"]),
---   ("rhs", ["x"])
--- ] using eqTestLam in
+-- And pattern
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let res =
+    match f with a & b then a g
+    else (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res", "a", "b"] with [
+  ("res", ["y","z"]),
+  ("a", ["x"]),
+  ("b", ["x"])
+] using eqTestLam in
 
--- -- Not pattern
--- let t = _parse "
---   type T in
---   con C: (a -> a) -> T in
---   let f = lam x. x in
---   let g = lam y. y in
---   let h = (C f, f) in
---   let res =
---     match h with ! (C _, rhs) then (lam yy. yy)
---     else (lam z. z)
---   in
---   let res2 =
---     match h with ! (C _, rhs) & (_, p) then (lam k. k)
---     else (lam w. w)
---   in res
--- ------------------------" in
--- utest _test false t ["res", "res2", "p"] with [
---   ("res", ["yy","z"]),
---   ("res2", ["k","w"]),
---   ("p", ["x"])
--- ] using eqTestLam in
+-- Or pattern
+let t = _parse "
+  type T in
+  con C1: (a -> a) -> T in
+  con C2: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = (C1 f, f) in
+  let res =
+    match h with (C1 _, rhs) | (C2 _, rhs) then rhs g
+    else (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res", "rhs"] with [
+  ("res", ["y","z"]),
+  ("rhs", ["x"])
+] using eqTestLam in
+
+-- Not pattern
+let t = _parse "
+  type T in
+  con C: (a -> a) -> T in
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = (C f, f) in
+  let res =
+    match h with ! (C _, rhs) then (lam yy. yy)
+    else (lam z. z)
+  in
+  let res2 =
+    match h with ! (C _, rhs) & (_, p) then (lam k. k)
+    else (lam w. w)
+  in res
+------------------------" in
+utest _test false t ["res", "res2", "p"] with [
+  ("res", ["yy","z"]),
+  ("res2", ["k","w"]),
+  ("p", ["x"])
+] using eqTestLam in
 
 ()
