@@ -1,4 +1,7 @@
 include "javascript/ast.mc"
+include "javascript/intrinsics.mc"
+
+include "bool.mc"
 
 
 -- Block Optimizations
@@ -54,7 +57,10 @@ lang JSOptimizeBlocks = JSExprAst
 
 end
 
-
+type JSTCOContext = {
+  expr: JSExpr,
+  foundTailCall: Bool
+}
 
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst
@@ -63,31 +69,67 @@ lang JSOptimizeTailCalls = JSExprAst
   sem optimizeTailCall (name: Name) (info: Info) =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
-    printLn (concat "Tail call optimization for: " (nameGetStr name));
-    runOnTailPositional name trampolineCapture fun
+    match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true} then
+      -- Call wrapping function on the optimized function
+      trampolineWrap fun
+    else
+      -- Otherwise, return the function as is
+      fun
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
+  sem runOnTailPositional : Name -> (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
   sem runOnTailPositional (name: Name) (action: (JSExpr -> JSExpr)) =
   | JSEApp { fun = fun } & t ->
     -- If the function is a tail call, run the action on the function
     -- and replace the function with the result
-    match fun with JSEVar { id = name } then action t else t
-  | JSEFun t -> JSEFun { t with body = runOnTailPositional name action t.body }
-  | JSETernary t -> JSETernary { t with thn = runOnTailPositional name action t.thn, els = runOnTailPositional name action t.els }
-  | JSEIIFE t -> JSEIIFE { t with body = runOnTailPositional name action t.body }
-  | JSEBlock t -> JSEBlock { t with ret = runOnTailPositional name action t.ret }
-  | JSEVar _ & t -> t
-  | JSEArray _ & t -> t
-  | e -> dprintLn e; error "Not yet implemented!"
+    match fun with JSEVar { id = name } then {
+      expr = action t,
+      foundTailCall = true
+    } else {
+      expr = t,
+      foundTailCall = false
+    }
+  | JSEFun      t -> runWithJSTCOCtx name action t.body (lam e. JSEFun { t with body = e })
+  | JSEIIFE     t -> runWithJSTCOCtx name action t.body (lam e. JSEIIFE { t with body = e })
+  | JSEBlock    t -> runWithJSTCOCtx name action t.ret (lam e. JSEBlock { t with ret = e })
+  | JSETernary  t -> runWithJSTCOCtx2 name action t.thn t.els (lam e1. lam e2. JSETernary { t with thn = e1, els = e2 })
+  | t -> { expr = t, foundTailCall = false } -- No terms where tail calls can be located
 
+
+  sem runWithJSTCOCtx : Name -> (JSExpr -> JSExpr) -> JSExpr -> (JSExpr -> JSExpr) -> JSTCOContext
+  sem runWithJSTCOCtx name action expr =
+    | constr ->
+      let res = runOnTailPositional name action expr in {
+        expr = constr res.expr,
+        foundTailCall = res.foundTailCall
+      }
+
+  sem runWithJSTCOCtx2 : Name -> (JSExpr -> JSExpr) -> JSExpr -> JSExpr -> (JSExpr -> JSExpr -> JSExpr) -> JSTCOContext
+  sem runWithJSTCOCtx2 name action expr1 expr2 =
+    | constr ->
+      let res1 = runOnTailPositional name action expr1 in
+      let res2 = runOnTailPositional name action expr2 in {
+        expr = constr res1.expr res2.expr,
+        foundTailCall = or res1.foundTailCall res2.foundTailCall
+      }
 
   -- Strategies for optimizing tail calls
 
   -- Wrap all calls in a trampoline capture that is immediately returned
   sem trampolineCapture : JSExpr -> JSExpr
   sem trampolineCapture =
-  | e -> e
+  | JSEApp { fun = fun, args = args } ->
+    -- Transform function calls to a trampoline capture intrinsic
+    intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
+  | _ -> error "trampolineCapture called on non-function application expression"
+
+  sem trampolineWrap : JSExpr -> JSExpr
+  sem trampolineWrap =
+  | JSEFun _ & fun ->
+    -- Wrap the function body in a trampoline capture
+    fun
+  | _ -> error "trampolineWrap called on non-function expression"
 
 end
 
