@@ -107,18 +107,19 @@ utest string2int "25" with 25
 utest string2int "314159" with 314159
 utest string2int "-314159" with (negi 314159)
 
+let digit2char = lam d.
+  int2char (addi d (char2int '0'))
+
 let int2string = lam n.
   recursive
-  let int2string_rechelper = lam n.
+  let int2string_rechelper = lam n. lam acc.
     if lti n 10
-    then [int2char (addi n (char2int '0'))]
-    else
-      let d = [int2char (addi (modi n 10) (char2int '0'))] in
-      concat (int2string_rechelper (divi n 10)) d
+    then cons (digit2char n) acc
+    else int2string_rechelper (divi n 10) (cons (digit2char (modi n 10)) acc)
   in
   if lti n 0
-  then cons '-' (int2string_rechelper (negi n))
-  else int2string_rechelper n
+  then cons '-' (int2string_rechelper (negi n) "")
+  else int2string_rechelper n ""
 
 utest int2string 5 with "5"
 utest int2string 25 with "25"
