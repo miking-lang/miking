@@ -81,16 +81,20 @@ lang JSPrettyPrint = JSExprAst
         (env, join ["let ", id, " = ", str])
       else never
     else never
-  | JSEFun { param = param, body = body } ->
+
+  -- ES6 arrow functions (released 2015)
+  -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
+  -- Comparison to anonymous functions:
+  -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
+  | JSEFun { params = params, body = body } ->
     let i = indent in
-    match pprintEnvGetStr env param with (env,param) then
-      match (printJSExpr i) env body with (env,body) then
-        -- ES6 arrow functions (released 2015)
-        -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
-        -- Comparison to anonymous functions:
-        -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
-        (env, join [param, " => ", body])
-      else never
+    let surrParen = if eqi (length params) 1 then false else true in
+    let paramLst = strJoin ", " (map (lam p.
+      match pprintEnvGetStr env p with (env,p) then p else never
+    ) params) in
+    match (printJSExpr i) env body with (env,body) then
+      if surrParen then (env, join ["(", paramLst, ") => ", body])
+      else (env, join [paramLst, " => ", body])
     else never
   | JSEIIFE { body = body } ->
     let i = indent in

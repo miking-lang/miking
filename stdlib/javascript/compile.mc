@@ -179,7 +179,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   -- Anonymous function
   | TmLam { ident = arg, body = body } ->
     let body = (compileMExpr opts) body in
-    JSEFun { param = arg, body = body }
+    JSEFun { params = [arg], body = body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
