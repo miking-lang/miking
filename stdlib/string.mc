@@ -87,21 +87,18 @@ let str2lower = lam s. map char2lower s
 
 let string2int = lam s.
   recursive
-  let string2int_rechelper = lam s.
-    let len = length s in
-    let last = subi len 1 in
-    if eqi len 0
-    then 0
+  let string2int_rechelper = lam s. lam acc.
+    if null s then acc
     else
-      let lsd = subi (char2int (get s last)) (char2int '0') in
-      let rest = muli 10 (string2int_rechelper (subsequence s 0 last)) in
-      addi rest lsd
+      let fsd = subi (char2int (head s)) (char2int '0') in
+      string2int_rechelper (tail s) (addi (muli 10 acc) fsd)
   in
   match s with [] then 0 else
   if eqChar '-' (head s)
-  then negi (string2int_rechelper (tail s))
-  else string2int_rechelper s
+  then negi (string2int_rechelper (tail s) 0)
+  else string2int_rechelper s 0
 
+utest string2int "" with 0
 utest string2int "5" with 5
 utest string2int "25" with 25
 utest string2int "314159" with 314159
