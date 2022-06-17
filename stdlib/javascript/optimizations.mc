@@ -69,7 +69,7 @@ lang JSOptimizeTailCalls = JSExprAst
   sem optimizeTailCall (name: Name) (info: Info) =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
-    match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true} then
+    match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true } then
       -- Call wrapping function on the optimized function
       trampolineWrap fun
     else

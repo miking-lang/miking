@@ -25,8 +25,8 @@ const MExpr_JS_Intrinsics = Object.freeze({
   deref: ref => ref.value,
 
   // Helper Functions
-  trimLastNewline: lst => lst[lst.length-1] === '\n' ? lst.slice(0, -1) : lst,
-  ensureString: x => (Array.isArray(x)) ? x.join('') : x.toString(),
+  trimLastNewline: lst => lst[lst.length - 1] === '\n' ? lst.slice(0, -1) : lst,
+  ensureString: s => Array.isArray(s) ? s.join('') : s.toString(),
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
@@ -46,9 +46,10 @@ let int2string = n => {
     })());
   return ((n < 0) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n)) : int2string_rechelper(n));
 };
-let fact = n2 => acc => ((n2 === 0) ? acc : fact((n2 - 1))((n2 * acc)));
-printLn(int2string(fact(5)(1)));
-printLn(int2string(fact(10)(1)));
-printLn(int2string(fact(20)(1)));
-printLn(int2string(fact(40)(1)));
+let fact_rect = acc => n2 => ((n2 === 0) ? acc : MExpr_JS_Intrinsics.trampolineCapture(fact_rect)([(n2 * acc), (n2 - 1)]));
+let fact = fact_rect(1);
+printLn(int2string(fact(5)));
+printLn(int2string(fact(10)));
+printLn(int2string(fact(20)));
+printLn(int2string(fact(40)));
 {};
