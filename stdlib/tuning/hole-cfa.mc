@@ -298,7 +298,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | t ->
 
     -- Initial graph
-    let graph = emptyCFAGraph in
+    let graph = emptyCFAGraph () in
 
     -- Initialize graph data
     let graph = {graph with graphData = graphData} in

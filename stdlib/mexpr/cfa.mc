@@ -27,47 +27,46 @@ include "const-arity.mc"
 type GenFun = Expr -> [Constraint]
 type MatchGenFun = Name -> Name -> Pat -> [Constraint]
 
--- NOTE(dlunde,2021-11-03): CFAGraph should of course when possible be defined
--- as part of the CFA fragment (AbsVal and Constraint are not defined out
--- here).
-type CFAGraph = {
-
-  -- Contains updates that needs to be processed in the main CFA loop
-  worklist: [(Name,AbsVal)],
-
-  -- Contains abstract values currently associated with each name in the program.
-  data: Map Name (Set AbsVal),
-
-  -- For each name in the program, gives constraints which needs to be
-  -- repropagated upon updates to the abstract values for the name.
-  edges: Map Name [Constraint],
-
-  -- Contains a list of functions used for generating match constraints
-  -- TODO(dlunde,2021-11-17): Should be added as a product extension
-  -- in the MatchCFA fragment instead, when possible.
-  mcgfs: [MatchGenFun],
-
-  -- NOTE(dlunde,2021-11-18): Data needed for analyses based on this framework
-  -- must be put below directly, since we do not yet have product extensions.
-
-  -- Used to store any custom data in the graph
-  graphData: Option GraphData
-
-}
-
-let emptyCFAGraph: CFAGraph = {
-  worklist = [],
-  data = mapEmpty nameCmp,
-  edges = mapEmpty nameCmp,
-  mcgfs = [],
-  graphData = None ()
-}
-
 -------------------
 -- BASE FRAGMENT --
 -------------------
 
 lang CFA = Ast + LetAst + MExprPrettyPrint
+
+  type CFAGraph = {
+
+    -- Contains updates that needs to be processed in the main CFA loop
+    worklist: [(Name,AbsVal)],
+
+    -- Contains abstract values currently associated with each name in the program.
+    data: Map Name (Set AbsVal),
+
+    -- For each name in the program, gives constraints which needs to be
+    -- repropagated upon updates to the abstract values for the name.
+    edges: Map Name [Constraint],
+
+    -- Contains a list of functions used for generating match constraints
+    -- TODO(dlunde,2021-11-17): Should be added as a product extension
+    -- in the MatchCFA fragment instead, when possible.
+    mcgfs: [MatchGenFun],
+
+    -- NOTE(dlunde,2021-11-18): Data needed for analyses based on this framework
+    -- must be put below directly, since we do not yet have product extensions.
+
+    -- Used to store any custom data in the graph
+    graphData: Option GraphData
+
+  }
+
+  sem emptyCFAGraph: () -> CFAGraph
+  sem emptyCFAGraph =
+  | _ -> {
+    worklist = [],
+    data = mapEmpty nameCmp,
+    edges = mapEmpty nameCmp,
+    mcgfs = [],
+    graphData = None ()
+  }
 
   syn Constraint =
   -- Intentionally left blank
@@ -1182,7 +1181,7 @@ lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
   | t ->
 
     -- Initial graph
-    let graph = emptyCFAGraph in
+    let graph = emptyCFAGraph () in
 
     -- Initialize match constraint generating functions
     let graph = { graph with mcgfs = [generateMatchConstraints] } in
