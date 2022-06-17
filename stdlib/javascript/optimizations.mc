@@ -69,6 +69,7 @@ lang JSOptimizeTailCalls = JSExprAst
   sem optimizeTailCall (name: Name) (info: Info) =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
+    let fun = foldArgs fun in
     match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true } then
       -- Call wrapping function on the optimized function
       trampolineWrap fun
@@ -77,6 +78,15 @@ lang JSOptimizeTailCalls = JSExprAst
       fun
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
+
+  sem foldArgs : JSExpr -> JSExpr
+  sem foldArgs =
+  | JSEFun { params = params, body = body } ->
+    let body = foldArgs body in
+    match body with JSEFun { params = paramsNested, body = bodyNested } then
+      JSEFun { params = concat params paramsNested, body = bodyNested }
+    else JSEFun { params = params, body = body }
+  | e -> e
 
   sem runOnTailPositional : Name -> (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
   sem runOnTailPositional (name: Name) (action: (JSExpr -> JSExpr)) =
