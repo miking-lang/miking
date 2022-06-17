@@ -59,7 +59,7 @@ end
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst
 
-  sem optimizeTailCall : Name -> JSExpr -> JSExpr
+  sem optimizeTailCall : Name -> Info -> JSExpr -> JSExpr
   sem optimizeTailCall (name: Name) (info: Info) =
   | JSEFun { param = param, body = body } & fun ->
     -- Outer most lambda in the function to be optimized
@@ -89,7 +89,7 @@ lang JSOptimizeTailCalls = JSExprAst
     dprintLn fun;
     printLn (join ["Checking if previous tail call in ", nameGetStr funName, "..."]);
     -- Check if the function is a tail recursive call
-    match fun with JSEVar { name = funName } then true
+    match fun with JSEVar { id = funName } then true
     else false
   | _ -> false
 
