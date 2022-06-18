@@ -4,10 +4,10 @@ include "common.mc"
 mexpr
 	let s = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] in
 
-  match s with [x, y, _] ++ mid ++ [z, _] then
+  match s with [x, y, _] ++ mid ++ [_, z, _] then
     dprintLn x;
     dprintLn y;
-    dprintLn mid; -- Should be [3, 4, 5, 6, 7]
+    dprintLn mid; -- Should be [3, 4, 5, 6]
     dprintLn z;
     0
   else match s with [h] ++ t then

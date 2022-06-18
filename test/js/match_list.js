@@ -45,7 +45,7 @@ let dprintLn = x => {
   return printLn("");
 };
 let s1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-(((([x1, y, _, ...mid] = s1) && ([_, z] = mid.slice().reverse())) && (mid = mid.slice(0, -2))) ? (() => {
+(((([x1, y, _, ...mid] = s1) && ([_, z, _] = mid.slice().reverse())) && (mid = mid.slice(0, -3))) ? (() => {
     dprintLn(x1);
     dprintLn(y);
     dprintLn(mid);
