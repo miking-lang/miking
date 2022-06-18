@@ -65,7 +65,7 @@ type JSTCOContext = {
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst
 
-  sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> JSExpr
+  sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> (CompileJSContext, JSExpr)
   sem optimizeTailCall (name: Name) (info: Info) (ctx: CompileJSContext) =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
@@ -79,18 +79,17 @@ lang JSOptimizeTailCalls = JSExprAst
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
-  sem wrapCallToOptimizedFunction : Info -> JSExpr -> [JSExpr] -> JSExpr -> JSExpr
-  sem wrapCallToOptimizedFunction (info: Info) (fun: JSExpr) (args: [JSExpr]) =
+  sem wrapCallToOptimizedFunction : Info -> JSExpr -> Int -> JSExpr -> JSExpr
+  sem wrapCallToOptimizedFunction (info: Info) (fun: JSExpr) (nrArgs: Int) =
   | JSEApp _ & app ->
     -- Trampoline fully applied trampoline functions
     match fun with JSEFun { params = params } then
-      if eqi (length params) (length args) then
+      if eqi (length params) nrArgs then
         -- Wrap the function application in a trampoline intrinsic
         intrinsicFromString intrGenNS "trampoline" [app]
       else
         errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
     else never
-
   | _ -> errorSingle [info] "trampolineWrapCall invoked with non-function expression"
 
 
