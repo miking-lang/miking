@@ -89,7 +89,7 @@ let isTrampolinedJs : CompileJSContext -> Name -> Bool =
 let _lastSubStr : String -> Int -> Option String =
   lam str. lam n.
   if lti (length str) n then None ()
-  else subsequence str (subi (length str) n) (length str)
+  else Some (subsequence str (subi (length str) n) (length str))
 
 let isFuncInModule : CompileJSContext -> String -> String -> Bool =
   lam ctx. lam funcName. lam modulePath.
@@ -98,8 +98,8 @@ let isFuncInModule : CompileJSContext -> String -> String -> Bool =
     if eqString funcName (nameGetStr name) then
       -- Check if the module path matches
       match info with Info { filename = filename } then
-        let endpath = _lastSubStr filename (length modulePath) in
-        if eqString modulePath endpath then true
+        match _lastSubStr filename (length modulePath) with Some endpath then
+          if eqString modulePath endpath then true else false
         else false
       else false
     else false
