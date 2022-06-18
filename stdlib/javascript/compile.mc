@@ -79,8 +79,8 @@ let compileJSCtxEmpty = {
 
 let isTrampolinedJs : CompileJSContext -> Name -> Bool =
   lam ctx. lam name.
-  match mapLookup name ctx.trampolinedFunctions with Some _ then false
-  else true
+  match mapLookup name ctx.trampolinedFunctions with Some _
+  then true else false
 
 
 -------------------------------------------
@@ -190,11 +190,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
         let jsApp = JSEApp {
           fun = JSEVar { id = ident },
           args = map (compileMExpr ctx) args,
-          curried = isTrampolined
+          curried = not isTrampolined
         } in
-        -- if isTrampolined then wrapCallToOptimizedFunction info jsApp
-        --else jsApp
-        jsApp
+        if isTrampolined then
+          match mapLookup ident ctx.trampolinedFunctions with Some fun then
+            wrapCallToOptimizedFunction info fun args jsApp
+          else never
+        else jsApp
 
       -- Intrinsics
       else match fun with TmConst { val = val, info = info } then
@@ -260,7 +262,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
     let compileBind = lam bind : RecLetBinding.
       match bind with { ident = ident, body = body, info = info } then
         match body with TmLam _ then
-          let fun = compileMExpr (deref rctx) body in
+          let fun = compileMExpr ctx body in
           match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) then
             modref rctx ctx;
             JSEDef { id = ident, expr = fun }

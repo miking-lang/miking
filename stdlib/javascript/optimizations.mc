@@ -79,12 +79,19 @@ lang JSOptimizeTailCalls = JSExprAst
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
-  sem wrapCallToOptimizedFunction : Info -> JSExpr -> JSExpr
-  sem wrapCallToOptimizedFunction (info: Info) =
+  sem wrapCallToOptimizedFunction : Info -> JSExpr -> [JSExpr] -> JSExpr -> JSExpr
+  sem wrapCallToOptimizedFunction (info: Info) (fun: JSExpr) (args: [JSExpr]) =
   | JSEApp _ & app ->
-    -- Trampoline fulllly applied trampoline functions
-    trampolineWrapCall app
-  | _ -> errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
+    -- Trampoline fully applied trampoline functions
+    match fun with JSEFun { params = params } then
+      if eqi (length params) (length args) then
+        -- Wrap the function application in a trampoline intrinsic
+        intrinsicFromString intrGenNS "trampoline" [app]
+      else
+        errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
+    else never
+
+  | _ -> errorSingle [info] "trampolineWrapCall invoked with non-function expression"
 
 
   -- Fold nested functions to the top level
