@@ -30,10 +30,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
-  trampoline: val => {
-    while (val.isTrampolineCapture) val = val.fun(...val.args);
-    return val;
-  }
+  trampoline: val => { while(val.isTrampolineCapture) val = val.fun(...val.args); return val; }
 });
 
 let printLn = s => {
