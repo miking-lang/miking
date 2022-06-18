@@ -29,6 +29,8 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
   | PatSeqTot { pats = patterns } -> JSEArray {
       exprs = map compileSinglePattern patterns
     }
+  -- | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
+
 
   sem compileBindingPattern (target: JSExpr) =
   | ( PatInt _
@@ -52,28 +54,30 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       case (true, true, false) then
         _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target
       case (true, true, true) then
-        _binOp (JSOAnd {}) [
+        _binOpM (JSOAnd {}) [
           _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target,
-          _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr)
+          _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
+          shortenMiddle (length postfixExprs) middleExpr
         ]
         -- Todo: Also slice the middle array using `.slice(0, -length(postfix))` after the postfix match.
       case (false, true, true) then
-        _binOp (JSOAnd {}) [
+        _binOpM (JSOAnd {}) [
           _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target,
-          _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr)
+          _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
+          shortenMiddle (length postfixExprs) middleExpr
         ]
         -- Todo: Also slice the middle array using `.slice(0, -length(postfix))` after the postfix match.
       case (false, true, false) then
         _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target
       case (false, false, true) then
         let tmpIgnore = JSEVar { id = nameSym "__ignore__" } in
-        _binOp (JSOAnd {}) [
+        _binOpM (JSOAnd {}) [
           _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [tmpIgnore]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnore)
         ]
       case (true, false, true) then
         let tmpIgnore = JSEVar { id = nameSym "__ignore__" } in
-        _binOp (JSOAnd {}) [
+        _binOpM (JSOAnd {}) [
           _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [tmpIgnore]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnore)
         ]
@@ -92,6 +96,14 @@ lang PatJSCompile = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
       args = [],
       curried = false
     }
+
+  sem shortenMiddle : Int -> JSExpr -> JSExpr
+  sem shortenMiddle n =
+  | JSEVar _ & t -> _assign t (JSEApp {
+      fun = JSEMember { expr = t, id = "slice" },
+      args = [JSEInt { i = 0 }, JSEInt { i = n }],
+      curried = false
+    })
 
 end
 
