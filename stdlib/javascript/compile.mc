@@ -183,13 +183,20 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Not directly mapped to JavaScript operators
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
-    else
-      -- Warning about inconsistent behaviour
+    else -- Warning about inconsistent behaviour
       (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc") (isFuncInModule ctx "printLn" "internal")) then
         printLn (concat (info2str info)
           "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime")
       else ());
         intrinsicGen t args
+  | CDPrint _ & t ->
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    else -- Warning about inconsistent behaviour
+      if not (or (isFuncInModule ctx "dprintLn" "stdlib/common.mc") (isFuncInModule ctx "dprintLn" "internal")) then
+        printLn (concat (info2str info)
+          "WARNING: 'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime");
+          intrinsicGen t args
+      else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
   | CFlushStdout _ -> JSENop { }
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
