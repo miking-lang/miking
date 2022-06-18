@@ -208,22 +208,22 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | TmApp { info = info } & app ->
     match foldApp [] app with (fun, args) then
       -- Function calls
+      let args = map (compileMExpr ctx) args in
       match fun with TmVar { ident = ident } then
         let isTrampolined = isTrampolinedJs ctx ident in
         let jsApp = JSEApp {
           fun = JSEVar { id = ident },
-          args = map (compileMExpr ctx) args,
+          args = args,
           curried = not isTrampolined
         } in
         if isTrampolined then
           match mapLookup ident ctx.trampolinedFunctions with Some fun then
-            wrapCallToOptimizedFunction info fun args jsApp
+            wrapCallToOptimizedFunction info fun (length args) jsApp
           else never
         else jsApp
 
       -- Intrinsics
       else match fun with TmConst { val = val, info = info } then
-        let args = map (compileMExpr ctx) args in
         compileJSOp info ctx args val
 
       else errorSingle [infoTm app] "Unsupported application in compileMExpr"
