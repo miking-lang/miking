@@ -167,6 +167,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CConcat _ & t -> intrinsicGen t args
   | CCons _   & t -> intrinsicGen t args
   | CFoldl _  & t -> intrinsicGen t args
+  | CLength _ & t -> intrinsicGen t args
+  | CHead _   & t -> intrinsicGen t args
+  | CTail _   & t -> intrinsicGen t args
 
   -- Convert operations
   | CChar2Int _ & t -> intrinsicGen t args
