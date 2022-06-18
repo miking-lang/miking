@@ -41,13 +41,19 @@ let printLn = s => {
 };
 let digit2char = d => MExpr_JS_Intrinsics.int2char((d + MExpr_JS_Intrinsics.char2int('0')));
 let int2string = n => {
-  let int2string_rechelper = (n, acc) => ((n < 10) ? MExpr_JS_Intrinsics.cons(digit2char(n))(acc) : MExpr_JS_Intrinsics.trampolineCapture(int2string_rechelper)([(n / 10), MExpr_JS_Intrinsics.cons(digit2char((n % 10)))(acc)]));
-  return ((n1 < 0) ? MExpr_JS_Intrinsics.cons('-')(int2string_rechelper(-n1, "")) : int2string_rechelper(n1, ""));
+  let int2string_rechelper = (n1, acc) => ((n1 < 10) ? MExpr_JS_Intrinsics.cons(digit2char(n1))(acc) : MExpr_JS_Intrinsics.trampolineCapture(int2string_rechelper)([(n1 / 10), MExpr_JS_Intrinsics.cons(digit2char((n1 % 10)))(acc)]));
+  return ((n < 0) ? MExpr_JS_Intrinsics.cons('-')(MExpr_JS_Intrinsics.trampoline(int2string_rechelper(-n, ""))) : MExpr_JS_Intrinsics.trampoline(int2string_rechelper(n, "")));
 };
-let fact_rect = (acc1, n1) => ((n1 === 0) ? acc1 : MExpr_JS_Intrinsics.trampolineCapture(fact_rect)([(n1 * acc1), (n1 - 1)]));
-let fact = n2 => acc2 => fact_rect(acc2, n2);
-printLn(int2string(fact(5)(1)));
-printLn(int2string(fact(10)(1)));
-printLn(int2string(fact(20)(1)));
-printLn(int2string(fact(40)(1)));
+let fact_rect = (acc1, n2) => ((n2 === 0) ? acc1 : MExpr_JS_Intrinsics.trampolineCapture(fact_rect)([(n2 * acc1), (n2 - 1)]));
+let fact = n3 => MExpr_JS_Intrinsics.trampoline(fact_rect(1, n3));
+printLn(int2string(fact(5)));
+printLn(int2string(fact(10)));
+printLn(int2string(fact(20)));
+printLn(int2string(fact(40)));
+let isEven_rect = n4 => ((n4 === 0) ? "true" : MExpr_JS_Intrinsics.trampolineCapture(isOdd_rect)([(n4 - 1)]));
+let isOdd_rect = n5 => ((n5 === 0) ? "false" : MExpr_JS_Intrinsics.trampolineCapture(isEven_rect)([(n5 - 1)]));
+printLn(MExpr_JS_Intrinsics.trampoline(isEven_rect(10)));
+printLn(MExpr_JS_Intrinsics.trampoline(isOdd_rect(10)));
+printLn(MExpr_JS_Intrinsics.trampoline(isEven_rect(15)));
+printLn(MExpr_JS_Intrinsics.trampoline(isOdd_rect(15)));
 {};
