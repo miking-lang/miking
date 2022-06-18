@@ -110,7 +110,8 @@ let isFuncInModule : CompileJSContext -> String -> String -> Bool =
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns
+lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
+                      JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns
 
   -- Entry point
   sem compileProg (ctx: CompileJSContext) =
@@ -181,13 +182,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else
       -- Warning about inconsistent behaviour
-      (if not (isFuncInModule ctx "printLn" "stdlib/common.mc") then
+      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc") (isFuncInModule ctx "printLn" "internal")) then
         printLn (concat (info2str info)
           "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime")
       else ());
         intrinsicGen t args
   | CFlushStdout _ -> JSENop { }
-  | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
+  | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
 
   -- Extract the name of the function and the arguments from
