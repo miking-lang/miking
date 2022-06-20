@@ -130,7 +130,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
 
   sem hty : Info -> Hole -> Type
 
-  sem typeCheckBase (env: TCEnv) =
+  sem typeCheckExpr (env: TCEnv) =
   | TmHole t ->
     let default = typeCheckExpr env t.default in
     let ty = hty t.info t.inner in
