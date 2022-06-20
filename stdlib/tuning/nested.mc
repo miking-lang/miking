@@ -16,18 +16,22 @@ include "common.mc"
 lang NestedMeasuringPoints = MExprHoleCFA
   sem analyzeNested (env: CallCtxEnv) (cfaGraph : CFAGraph) =
   | t ->
+    -- Convert from direct style map
+    let cfaData = cfaGraphData cfaGraph in
+
     -- Collect all lambda abstract values
     let avLams : Set Name = mapFoldWithKey (
-      lam acc. lam. lam v : Set AbsVal.
-        setFold (lam acc. lam abs.
+      lam acc: Set Name. lam. lam v: Set AbsVal.
+        setFold (lam acc: Set Name. lam abs: AbsVal.
           match abs with AVLam {ident = ident} then
-            setInsert ident acc
+            setInsert (int2name cfaGraph.im ident) acc
           else acc) acc v
-      ) (setEmpty nameCmp) cfaGraph.data
+      ) (setEmpty nameCmp) cfaData
     in
+
     -- Build call graph from flow information
     let top = nameSym "top" in
-    let callGraph = buildCallGraph avLams top cfaGraph.data t in
+    let callGraph = buildCallGraph cfaGraph.im avLams top cfaData t in
 
     -- Compute the set of eholes for each measuring point
     let eholes : Map Name [AbsVal] = mapFoldWithKey (
@@ -39,7 +43,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
         in
         if null eholes then acc
         else mapInsert ident eholes acc
-    ) (mapEmpty nameCmp) cfaGraph.data
+    ) (mapEmpty nameCmp) cfaData
     in
 
     let identDepsEnclosing : [(Name, [AbsVal], Name)] =
@@ -72,7 +76,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
     -- Collect augmented dependencies
     let deps : [(Name, [AbsVal])] =
       augmentDependencies
-       env measEnclosingMap measInLam measSet cfaGraph.data eholes callGraph [] t
+       cfaGraph.im env measEnclosingMap measInLam measSet cfaData eholes callGraph [] t
     in
 
     -- Collect syntactically scoped measuring points
@@ -81,7 +85,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
     -- Remove the syntactically scoped measuring points to the CFA result
     let data : Map Name (Set AbsVal) = foldl (lam acc. lam ident.
         mapRemove ident acc
-      ) cfaGraph.data synScoped
+      ) cfaData synScoped
     in
 
     -- Add the augmented dependencies to the CFA result
@@ -97,24 +101,32 @@ lang NestedMeasuringPoints = MExprHoleCFA
       ) data deps
     in
 
+    -- Convert back to direct style map
+    let data: [Set AbsVal] = create (mapSize data) (lam i.
+        match mapLookup (int2name cfaGraph.im i) data with Some s then s
+        else setEmpty cmpAbsVal
+      )
+    in
+
     {cfaGraph with data = data}
 
-  sem buildCallGraph (avLams : Set Name) (top : Name)
+  sem buildCallGraph (im: IndexMap) (avLams : Set Name) (top : Name)
                      (data : Map Name (Set AbsVal)) =
   | t ->
     -- The nodes are the AVLams recorded in the data flow
     let g = digraphEmpty nameCmp eqsym in
     let g = digraphAddVertices (cons top (setToSeq avLams)) g in
     -- The edges are applications
-    let edges = _callGraphEdges data avLams top [] t in
+    let edges = _callGraphEdges im data avLams top [] t in
     let g = digraphAddEdges edges g in
     g
 
-  sem _callGraphEdges (data : Map Name (Set AbsVal)) (avLams : Set Name)
-                      (cur : Name) (acc : [(Name,Name,Symbol)]) =
+  sem _callGraphEdges (im: IndexMap) (data: Map Name (Set AbsVal))
+                      (avLams: Set Name) (cur : Name)
+                      (acc : [(Name,Name,Symbol)]) =
   | TmLam t ->
     if setMem t.ident avLams then
-      _callGraphEdges data avLams t.ident acc t.body
+      _callGraphEdges im data avLams t.ident acc t.body
     else
       -- Lambda expression not reachable, we are done.
       acc
@@ -125,7 +137,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
         match mapLookup v.ident data with Some avs then
           let avLamsLhs = setFold (lam acc. lam av.
             match av with AVLam {ident = ident} then
-              setInsert ident acc
+              setInsert (int2name im ident) acc
             else acc) (setEmpty nameCmp) avs
           in
           -- Add an edge for each lam that flows to lhs
@@ -135,7 +147,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
     else errorSingle [infoTm t.lhs] "Not a TmVar in application"
 
   | t ->
-    sfold_Expr_Expr (_callGraphEdges data avLams cur) acc t
+    sfold_Expr_Expr (_callGraphEdges im data avLams cur) acc t
 
   -- Find the closest enclosing lambda for each measuring point
   sem _measEnclosingLam (data : Map Name [AbsVal]) (avLams : Set Name)
@@ -164,7 +176,8 @@ lang NestedMeasuringPoints = MExprHoleCFA
     sfold_Expr_Expr (_measEnclosingLam data avLams cur) acc t
 
   -- Augment dependencies for nested measuring points.
-  sem augmentDependencies (env: CallCtxEnv)
+  sem augmentDependencies (im: IndexMap)
+                          (env: CallCtxEnv)
                           (enclosingLam : Map Name (Name, [AbsVal]))
                           (measInLam : Map Name (Set Name))
                           (measSet : Set Name)
@@ -178,27 +191,27 @@ lang NestedMeasuringPoints = MExprHoleCFA
   | TmLet ({ ident = ident, body = TmMatch m } & t) ->
     let resInexpr =
       augmentDependencies
-        env enclosingLam measInLam measSet data dataEholes callGraph acc t.inexpr
+        im env enclosingLam measInLam measSet data dataEholes callGraph acc t.inexpr
     in
     let resMatch = sfold_Expr_Expr (
-        augmentDependencies env enclosingLam measInLam measSet data dataEholes callGraph)
+        augmentDependencies im env enclosingLam measInLam measSet data dataEholes callGraph)
         [] (TmMatch m)
     in
     match mapLookup ident enclosingLam with Some (encLam, _) then
       -- Check what measuring points that are reachable from the branches
       let depThn =
         augmentDependenciesH
-          ident env enclosingLam measInLam measSet data dataEholes callGraph [] m.thn in
+          ident im env enclosingLam measInLam measSet data dataEholes callGraph [] m.thn in
       let depEls =
         augmentDependenciesH
-          ident env enclosingLam measInLam measSet data dataEholes callGraph [] m.els in
+          ident im env enclosingLam measInLam measSet data dataEholes callGraph [] m.els in
       let deps = (ident, concat depThn depEls) in
       join [resInexpr, resMatch, [deps]]
     else concat resInexpr resMatch
 
   | t ->
     sfold_Expr_Expr
-      (augmentDependencies env enclosingLam measInLam measSet data dataEholes callGraph)
+      (augmentDependencies im env enclosingLam measInLam measSet data dataEholes callGraph)
       acc t
 
   sem eholesOf (info : Info) (env: CallCtxEnv) (ident: Name) =
@@ -226,6 +239,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
   -- Collect all dependencies reachable from an expression, either from function
   -- applications or from one of the subexpressions themselves.
   sem augmentDependenciesH (ident: Name) -- The enclosing measuring point
+                           (im: IndexMap)
                            (env: CallCtxEnv)
                            (enclosingLam : Map Name (Name, [AbsVal]))
                            (measInLam : Map Name (Set Name))
@@ -241,7 +255,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
           -- What lambdas can flow to lhs?
           let avLamsLhs = setFold (lam acc. lam av.
             match av with AVLam {ident = ident} then
-              setInsert ident acc
+              setInsert (int2name im ident) acc
             else acc) (setEmpty nameCmp) avs
           in
           -- What measuring points are reachable from these lambdas?
@@ -269,20 +283,20 @@ lang NestedMeasuringPoints = MExprHoleCFA
     in
     let resLet = optionGetOr [] (mapLookup t.ident dataEholes) in
     let resInexpr = sfold_Expr_Expr
-      (augmentDependenciesH ident env enclosingLam measInLam measSet data dataEholes callGraph)
+      (augmentDependenciesH ident im env enclosingLam measInLam measSet data dataEholes callGraph)
       acc t.inexpr
     in join [resBody, resLet, resInexpr]
 
   | TmLet t ->
     let resLet = optionGetOr [] (mapLookup t.ident dataEholes) in
     let resRest = sfold_Expr_Expr
-        (augmentDependenciesH ident env enclosingLam measInLam measSet data dataEholes callGraph)
+        (augmentDependenciesH ident im env enclosingLam measInLam measSet data dataEholes callGraph)
         acc (TmLet t)
     in concat resLet resRest
 
   | t ->
     sfold_Expr_Expr
-      (augmentDependenciesH ident env enclosingLam measInLam measSet data dataEholes callGraph)
+      (augmentDependenciesH ident im env enclosingLam measInLam measSet data dataEholes callGraph)
       acc t
 
   -- Collect measuring points that are syntactically scoped within another
@@ -339,7 +353,7 @@ let parse = lam str.
   let ast = makeKeywords [] ast in
   symbolize ast
 in
-let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameInfo] Int))] =
+let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameInfo] Int),IndexMap)] =
   lam debug: Bool. lam t: Expr. lam vars: [String].
     -- Use small ANF first, needed for context expansion
     let tANFSmall = use MExprHoles in normalizeTerm t in
@@ -348,7 +362,7 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
     match colorCallGraph [] tANFSmall with (env, _) in
 
     -- Initialize the graph data
-    let graphData = graphDataFromEnv env in
+    let graphData = graphDataInit env in
 
     -- Apply full ANF
     let tANF = normalizeTerm tANFSmall in
@@ -370,13 +384,13 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
       match cfaGraphToString pprintEnv cfaRes with (_, resStr) in
       printLn "\n--- AUGMENTED CFA GRAPH ---";
       printLn resStr;
-      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
+      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
-          let binds = mapBindings cfaRes.data in
+          let binds = mapBindings (cfaGraphData cfaRes) in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in
-          (var, res, env.hole2idx)
+          (var, res, env.hole2idx, cfaRes.im)
         ) vars
       in avs
 
@@ -384,13 +398,13 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
       -- Version without debug printouts
       let cfaRes : CFAGraph = cfaData graphData tANF in
       let cfaRes : CFAGraph  = analyzeNested env cfaRes tANF in
-      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int))] =
+      let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
-          let binds = mapBindings cfaRes.data in
+          let binds = mapBindings (cfaGraphData cfaRes) in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in
-          (var, res, env.hole2idx)
+          (var, res, env.hole2idx, cfaRes.im)
         ) vars
       in avs
 in
@@ -399,7 +413,7 @@ in
 type Dep = {d: [(String,[[String]])], e: [(String,[[String]])]} in
 let gbl = lam s. (s,[[]]) in
 let eqTestHole = eqSeq
-  (lam t1:(String,[AbsVal],Map NameInfo (Map [NameInfo] Int)).
+  (lam t1:(String,[AbsVal],Map NameInfo (Map [NameInfo] Int),IndexMap).
    lam t2:(String,Dep).
      let index2Path : String -> Int -> [String] = lam str. lam i.
        let pathMap =
@@ -423,12 +437,12 @@ let eqTestHole = eqSeq
        let data : [(String,Set Int)] = foldl (lam acc. lam av.
            match av with AVDHole {id = id, contexts = contexts}
            then
-             cons (nameGetStr id, contexts) acc else acc
+             cons (nameGetStr (int2name t1.3 id), contexts) acc else acc
          ) [] t1.1
        in
        let exe : [(String,Set Int)] = foldl (lam acc. lam av.
            match av with AVEHole {id = id, contexts = contexts}
-           then cons (nameGetStr id, contexts) acc else acc
+           then cons (nameGetStr (int2name t1.3 id), contexts) acc else acc
          ) [] t1.1
        in
        let deps : Dep = t2.1 in

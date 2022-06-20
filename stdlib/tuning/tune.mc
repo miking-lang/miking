@@ -595,7 +595,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       if full then assumeFullDependency env tANF
       else
         -- Perform CFA
-        let graphData = graphDataFromEnv env in
+        let graphData = graphDataInit env in
         let cfaRes : CFAGraph = cfaData graphData tANF in
         let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
         (analyzeDependency env cfaRes tANF, tANF)

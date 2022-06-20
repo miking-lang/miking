@@ -86,6 +86,16 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem pprintVarIName im env =
   | n -> pprintVarName env (int2name im n)
 
+  -- This function converts the data-flow result into a map, which might be more
+  -- convenient to operate on for later analysis steps.
+  sem cfaGraphData: CFAGraph -> Map Name (Set AbsVal)
+  sem cfaGraphData =
+  | graph ->
+    foldl (lam acc. lam b: (IName, Set AbsVal).
+        match b with (id,vals) in
+        mapInsert (int2name graph.im id) vals acc
+      ) (mapEmpty nameCmp) (mapi (lam i. lam x. (i, x)) graph.data)
+
   syn Constraint =
   -- Intentionally left blank
 
@@ -158,7 +168,6 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   -- Base constraint generation function (must still be included manually in
   -- constraintGenFuns)
-  -- TODO: perhaps only send index map, not the entire graph here
   sem generateConstraints: IndexMap -> Expr -> [Constraint]
   sem generateConstraints im =
   | t -> []
