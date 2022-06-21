@@ -19,6 +19,11 @@ mexpr
     dprintLn b;
     dprintLn rest;
     2
+  else match s with [a, b, c] then
+    dprintLn a;
+    dprintLn b;
+    dprintLn c;
+    3
   else
     printLn "nothing";
-    3
+    4
