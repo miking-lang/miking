@@ -78,7 +78,7 @@ type ProfileData = {
 let emptyProfileData = {id = \"\", exclusiveTime = 0.0, inclusiveTime = 0.0,
                         calls = 0} in
 
-let callStack : [StackEntry] =
+let callStack : Ref [StackEntry] =
   ref (createList 0 (lam. {onTopSince = 0.0, pushedAt = 0.0,
                            functionIndex = 0})) in
 ",
