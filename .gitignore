@@ -14,4 +14,3 @@ tags
 *.install
 
 .vscode/*
-test\js\*.js
