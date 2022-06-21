@@ -12,6 +12,7 @@
 include "set.mc"
 include "either.mc"
 include "name.mc"
+include "tensor.mc"
 
 include "pprint.mc"
 include "boot-parser.mc"
@@ -38,11 +39,11 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     worklist: [(IName,AbsVal)],
 
     -- Contains abstract values currently associated with each name in the program.
-    data: [Set AbsVal],
+    data: Tensor[Set AbsVal],
 
     -- For each name in the program, gives constraints which needs to be
     -- repropagated upon updates to the abstract values for the name.
-    edges: [[Constraint]],
+    edges: Tensor[[Constraint]],
 
     -- Contains a list of functions used for generating match constraints
     -- TODO(dlunde,2021-11-17): Should be added as a product extension
@@ -64,9 +65,10 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem emptyCFAGraph =
   | t ->
     let im = indexGen t in
+    let shape = tensorShape im.int2name in
     { worklist = [],
-      data = map (lam. setEmpty cmpAbsVal) im.int2name,
-      edges = map (lam. []) im.int2name,
+      data = tensorCreateDense shape (lam. setEmpty cmpAbsVal),
+      edges = tensorCreateDense shape (lam. []),
       mcgfs = [],
       im = im,
       graphData = None () }
@@ -80,7 +82,7 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   sem int2name: IndexMap -> IName -> Name
   sem int2name im =
-  | i -> get im.int2name i
+  | i -> tensorLinearGetExn im.int2name i
 
   sem pprintVarIName: IndexMap -> PprintEnv -> IName -> (PprintEnv, String)
   sem pprintVarIName im env =
@@ -91,10 +93,9 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem cfaGraphData: CFAGraph -> Map Name (Set AbsVal)
   sem cfaGraphData =
   | graph ->
-    foldl (lam acc. lam b: (IName, Set AbsVal).
-        match b with (id,vals) in
-        mapInsert (int2name graph.im id) vals acc
-      ) (mapEmpty nameCmp) (mapi (lam i. lam x. (i, x)) graph.data)
+    tensorFoldi (lam acc. lam i: [Int]. lam vals: Set AbsVal.
+        mapInsert (int2name graph.im (head i)) vals acc
+      ) (mapEmpty nameCmp) graph.data
 
   syn Constraint =
   -- Intentionally left blank
@@ -188,11 +189,13 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   sem propagateConstraint: (IName,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
+  -- NOTE(Linnea, 2022-06-21): Updates the graph by a side effect
   sem addEdge: CFAGraph -> IName -> Constraint -> CFAGraph
   sem addEdge (graph: CFAGraph) (q: IName) =
   | cstr ->
     let cstrsq = edgesLookup q graph in
-    { graph with edges = set graph.edges q (cons cstr cstrsq) }
+    tensorLinearSetExn graph.edges q (cons cstr cstrsq);
+    graph
 
   -- Helper function for initializing a constraint for a given name (mainly
   -- used for convenience in initConstraint)
@@ -206,19 +209,19 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   sem dataLookup: IName -> CFAGraph -> Set AbsVal
   sem dataLookup (key: IName) =
-  | graph -> get graph.data key
+  | graph -> tensorLinearGetExn graph.data key
 
   sem edgesLookup (key: IName) =
-  | graph -> get graph.edges key
+  | graph -> tensorLinearGetExn graph.edges key
 
+  -- NOTE(Linnea, 2022-06-21): Updates the graph by a side effect
   sem addData: CFAGraph -> AbsVal -> IName -> CFAGraph
   sem addData (graph: CFAGraph) (d: AbsVal) =
   | q ->
     let dq = dataLookup q graph in
     if setMem d dq then graph else
-      {{ graph with
-           data = set graph.data q (setInsert d dq) } with
-           worklist = cons (q,d) graph.worklist }
+      tensorLinearSetExn graph.data q (setInsert d dq);
+      { graph with worklist = cons (q,d) graph.worklist }
 
   ---------------------
   -- PRETTY PRINTING --
@@ -242,13 +245,13 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
         match pprintVarIName graph.im env b.0 with (env,b0) in
         match mapAccumL (absValToString graph) env (setToSeq b.1) with (env,b1)
         in (env,(b0,b1))
-      ) env (mapi (lam i. lam x. (i,x)) graph.data)
+      ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.data))
     with (env, data) in
     match mapAccumL (lam env: PprintEnv. lam b:(IName,[Constraint]).
         match pprintVarIName graph.im env b.0 with (env,b0) in
         match mapAccumL (constraintToString graph) env b.1 with (env,b1) in
         (env,(b0,b1))
-      ) env (mapi (lam i. lam x. (i,x)) graph.edges)
+      ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.edges))
     with (env, edges) in
 
     let str = join [

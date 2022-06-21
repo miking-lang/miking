@@ -33,6 +33,7 @@ include "mexpr/cmp.mc"
 
 include "name.mc"
 include "common.mc"
+include "tensor.mc"
 
 include "ast.mc"
 include "const-dep.mc"
@@ -446,7 +447,7 @@ let test
       let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
           let binds = mapi (lam i. lam s: Set AbsVal.
-            (int2name cfaRes.im i, s)) cfaRes.data in
+            (int2name cfaRes.im i, s)) (tensorToSeqExn cfaRes.data) in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in
@@ -460,7 +461,7 @@ let test
       let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
           let binds = mapi (lam i. lam s: Set AbsVal.
-            (int2name cfaRes.im i, s)) cfaRes.data in
+            (int2name cfaRes.im i, s)) (tensorToSeqExn cfaRes.data) in
           let res = foldl (lam acc. lam b : (Name, Set AbsVal).
             if eqString var (nameGetStr b.0) then setToSeq b.1 else acc
           ) [] binds in

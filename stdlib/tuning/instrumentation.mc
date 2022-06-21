@@ -394,7 +394,7 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   match colorCallGraph [] tANFSmall with (env, ast) in
 
   -- Initialize the graph data
-  let graphData = graphDataFromEnv env in
+  let graphData = graphDataInit env in
   debugPrintLn debug "\n-------- COLORED PROGRAM --------";
   debugPrintLn debug (expr2str ast);
   debugPrintLn debug "";

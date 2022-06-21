@@ -102,13 +102,14 @@ lang NestedMeasuringPoints = MExprHoleCFA
     in
 
     -- Convert back to direct style map
-    let data: [Set AbsVal] = create (mapSize data) (lam i.
-        match mapLookup (int2name cfaGraph.im i) data with Some s then s
+    tensorIteri (lam i. lam.
+      let d =
+        match mapLookup (int2name cfaGraph.im (get i 0)) data with Some s then s
         else setEmpty cmpAbsVal
-      )
-    in
+      in
+      tensorSetExn cfaGraph.data i d) cfaGraph.data;
 
-    {cfaGraph with data = data}
+    cfaGraph
 
   sem buildCallGraph (im: IndexMap) (avLams : Set Name) (top : Name)
                      (data : Map Name (Set AbsVal)) =
