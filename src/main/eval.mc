@@ -69,6 +69,8 @@ let eval = lam files. lam options : Options. lam args.
     in
 
     let ast = typeCheck ast in
+    (if options.debugTypeCheck then
+       printLn (join [expr2str ast, "\n : ", type2str (tyTm ast)]) else ());
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.

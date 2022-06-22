@@ -653,8 +653,8 @@ let rec desugar_ty env = function
       TyRecord (fi, Record.map (desugar_ty env) bindings)
   | TyVariant (fi, constrs) ->
       TyVariant (fi, constrs)
-  | TyCon (fi, id, symb) ->
-      TyCon (fi, resolve_alias env id, symb)
+  | TyCon (fi, id) ->
+      TyCon (fi, resolve_alias env id)
   | TyVar (fi, id) ->
       TyVar (fi, id)
   | TyApp (fi, lty, rty) ->
@@ -684,11 +684,10 @@ let rec desugar_tm nss env subs =
         , desugar_ty env ty
         , desugar_tm nss env subs e
         , desugar_tm nss (delete_id env name) subs body )
-  | TmType (fi, name, s, params, ty, body) ->
+  | TmType (fi, name, params, ty, body) ->
       TmType
         ( fi
         , name
-        , s
         , params
         , desugar_ty env ty
         , desugar_tm nss (delete_alias env name) subs body )
@@ -854,11 +853,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let wrap_con ty_name (CDecl (fi, params, cname, ty)) tm =
         let app_param ty param = TyApp (fi, ty, TyVar (fi, param)) in
         let all_param param ty = TyAll (fi, param, ty) in
-        let con =
-          List.fold_left app_param
-            (TyCon (fi, ty_name, Symb.Helpers.nosym))
-            params
-        in
+        let con = List.fold_left app_param (TyCon (fi, ty_name)) params in
         TmConDef
           ( fi
           , mangle cname
@@ -873,13 +868,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
         | Data (_, name, _, cdecls) ->
             List.fold_right (wrap_con name) cdecls tm
         | Alias (fi, name, params, ty) ->
-            TmType
-              ( fi
-              , mangle name
-              , Symb.Helpers.nosym
-              , params
-              , desugar_ty ns ty
-              , tm )
+            TmType (fi, mangle name, params, desugar_ty ns ty, tm)
         | _ ->
             tm
       in
@@ -937,7 +926,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       in
       (nss, langs, subs, syns, wrap :: stack)
   | TopType (Type (fi, id, params, ty)) ->
-      let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, params, ty, tm') in
+      let wrap tm' = TmType (fi, id, params, ty, tm') in
       (nss, langs, subs, syns, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
@@ -983,7 +972,6 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
         TmType
           ( fi
           , syn
-          , Symb.Helpers.nosym
           , List.init count (fun i -> us "a" ^. ustring_of_int i)
           , TyVariant (fi, [])
           , tm' ) )

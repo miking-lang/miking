@@ -1,6 +1,11 @@
 include "map.mc"
 include "mexpr/ast.mc"
 
+-- Returns the arity of a function type
+recursive let arityFunType = use MExprAst in lam ty.
+  match ty with TyArrow t then addi 1 (arityFunType t.to) else 0
+end
+
 -- Unwraps type alias `ty` from `aliases`.
 recursive let typeUnwrapAlias = use MExprAst in
   lam aliases : Map Name Type. lam ty : Type.

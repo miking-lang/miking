@@ -297,10 +297,10 @@ mexpr:
       { $1 }
   | TYPE type_ident type_params IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmType(fi, $2.v, Symb.Helpers.nosym, $3, TyVariant (fi, []), $5) }
+        TmType(fi, $2.v, $3, TyVariant (fi, []), $5) }
   | TYPE type_ident type_params EQ ty IN mexpr
       { let fi = mkinfo $1.i (tm_info $7) in
-        TmType(fi, $2.v, Symb.Helpers.nosym, $3, $5, $7) }
+        TmType(fi, $2.v, $3, $5, $7) }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
@@ -555,6 +555,8 @@ ty_atom:
     { TySeq(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
+  | LPAREN ty COMMA RPAREN
+    { TyRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LBRACKET RBRACKET
     { ty_unit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
@@ -578,7 +580,7 @@ ty_atom:
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
-    { TyCon($1.i,$1.v,Symb.Helpers.nosym) }
+    { TyCon($1.i,$1.v) }
   | var_ident
     { TyVar($1.i,$1.v)}
 

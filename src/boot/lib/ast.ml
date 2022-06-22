@@ -308,8 +308,8 @@ and tm =
   (* Record update *)
   | TmRecordUpdate of info * tm * ustring * tm
   (* Type let *)
-  (* NOTE(aathn, 2022-03-02): Type parameters are not symbolized currently *)
-  | TmType of info * ustring * Symb.t * ustring list * ty * tm
+  (* NOTE(aathn, 2022-06-10): Types are not symbolized in boot *)
+  | TmType of info * ustring * ustring list * ty * tm
   (* Constructor definition *)
   | TmConDef of info * ustring * Symb.t * ty * tm
   (* Constructor application *)
@@ -368,6 +368,7 @@ and pat =
   | PatNot of info * pat
 
 (* Types *)
+(* NOTE(aathn, 2022-06-10): Types are not symbolized in boot *)
 and ty =
   (* Unknown type *)
   | TyUnknown of info
@@ -382,7 +383,6 @@ and ty =
   (* Function type *)
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
-  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyAll of info * ustring * ty
   (* Sequence type *)
   | TySeq of info * ty
@@ -391,11 +391,10 @@ and ty =
   (* Record type *)
   | TyRecord of info * ty Record.t
   (* Variant type *)
-  | TyVariant of info * (ustring * Symb.t) list
+  | TyVariant of info * ustring list
   (* Type constructors *)
-  | TyCon of info * ustring * Symb.t
+  | TyCon of info * ustring
   (* Type variables *)
-  (* NOTE(aathn, 2022-03-02): Type variables are not symbolized currently *)
   | TyVar of info * ustring
   (* Type application *)
   | TyApp of info * ty * ty
@@ -445,8 +444,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc r
       |> fun (acc, r') ->
       f acc t |> fun (acc, t') -> (acc, TmRecordUpdate (fi, r', l, t'))
-  | TmType (fi, x, s, params, ty, t) ->
-      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, s, params, ty, t'))
+  | TmType (fi, x, params, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmType (fi, x, params, ty, t'))
   | TmConDef (fi, x, s, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmConDef (fi, x, s, ty, t'))
   | TmConApp (fi, k, s, t) ->
@@ -503,7 +502,7 @@ let tm_info = function
   | TmSeq (fi, _)
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
-  | TmType (fi, _, _, _, _, _)
+  | TmType (fi, _, _, _, _)
   | TmConDef (fi, _, _, _, _)
   | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)
@@ -543,7 +542,7 @@ let ty_info = function
   | TyTensor (fi, _)
   | TyRecord (fi, _)
   | TyVariant (fi, _)
-  | TyCon (fi, _, _)
+  | TyCon (fi, _)
   | TyVar (fi, _)
   | TyApp (fi, _, _) ->
       fi

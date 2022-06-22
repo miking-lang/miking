@@ -5,6 +5,7 @@ type Options = {
   debugParse : Bool,
   debugGenerate : Bool,
   debugTypeAnnot : Bool,
+  debugTypeCheck : Bool,
   debugProfile : Bool,
   exitBefore : Bool,
   disablePruneExternalUtests : Bool,

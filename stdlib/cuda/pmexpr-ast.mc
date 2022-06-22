@@ -90,7 +90,7 @@ lang CudaPMExprAst = PMExprAst
     match f acc t.f with (acc, tf) in
     (acc, TmLoopKernel {{t with n = n} with f = tf})
 
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmSeqMap t ->
     let f = typeCheckExpr env t.f in
     let s = typeCheckExpr env t.s in

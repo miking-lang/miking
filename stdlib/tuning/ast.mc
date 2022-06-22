@@ -130,13 +130,24 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
 
   sem hty : Info -> Hole -> Type
 
-  sem typeCheckBase (env: TCEnv) =
+  sem typeCheckExpr (env: TCEnv) =
   | TmHole t ->
     let default = typeCheckExpr env t.default in
     let ty = hty t.info t.inner in
     unify [t.info] env ty (tyTm default);
     TmHole {{t with default = default}
                with ty = ty}
+
+  sem fromInt =
+  | TmHole t -> hfromInt t.inner
+
+  sem toInt (e: Expr) =
+  | TmHole t -> htoInt t.info e t.inner
+
+  sem hfromInt : Hole -> (Expr -> Expr)
+
+  sem htoInt : Info -> Expr -> Hole -> Int
+
 end
 
 -- A Boolean hole.
@@ -184,6 +195,17 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
 
   sem hty info =
   | BoolHole {} -> TyBool {info = info}
+
+  sem hfromInt =
+  | BoolHole {} ->
+    lam e. neqi_ (int_ 0) e
+
+  sem htoInt info v =
+  | BoolHole {} ->
+    match v with TmConst {val = CBool {val = b}} then
+      if b then 1 else 0
+    else errorSingle [info] "Expected a Boolean expression"
+
 end
 
 -- An integer hole (range of integers).
@@ -250,6 +272,17 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
 
   sem hty info =
   | HIntRange {} -> TyInt {info = info}
+
+  sem hfromInt =
+  | HIntRange {} ->
+    lam e. e
+
+  sem htoInt info v =
+  | HIntRange {} ->
+    match v with TmConst {val = CInt {val = i}} then i
+    else errorSingle [info] "Expected an Int expression"
+
+
 end
 
 lang HoleAnnotation = Ast

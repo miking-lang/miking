@@ -50,9 +50,6 @@ type CFAGraph = {
   -- NOTE(dlunde,2021-11-18): Data needed for analyses based on this framework
   -- must be put below directly, since we do not yet have product extensions.
 
-  -- Used for alignment analysis in miking-dppl
-  stochMatches: Set Name,
-
   -- Used to store any custom data in the graph
   graphData: Option GraphData
 
@@ -63,7 +60,6 @@ let emptyCFAGraph: CFAGraph = {
   data = mapEmpty nameCmp,
   edges = mapEmpty nameCmp,
   mcgfs = [],
-  stochMatches = setEmpty nameCmp,
   graphData = None ()
 }
 
@@ -733,6 +729,7 @@ end
 
 lang FloatStringConversionCFA = CFA + ConstCFA + FloatStringConversionAst
   sem generateConstraintsConst info ident =
+  | CStringIsFloat _ -> []
   | CString2float _ -> []
   | CFloat2string _ -> []
 end
@@ -935,6 +932,8 @@ end
 -- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
   sem generateConstraintsConst info ident =
+  -- | CTensorCreateUninitInt _ -> []
+  -- | CTensorCreateUninitFloat _ -> []
   -- | CTensorCreateInt _ -> []
   -- | CTensorCreateFloat _ -> []
   -- | CTensorCreate _ -> []

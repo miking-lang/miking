@@ -29,7 +29,8 @@ type SymEnv = {
   tyConEnv: Map String Name,
   currentLvl : Level,
   strictTypeVars: Bool,
-  allowFree: Bool
+  allowFree: Bool,
+  ignoreExternals: Bool
 }
 
 let symEnvEmpty = {
@@ -44,7 +45,8 @@ let symEnvEmpty = {
 
   currentLvl = 1,
   strictTypeVars = true,
-  allowFree = false
+  allowFree = false,
+  ignoreExternals = false
 }
 
 -----------
@@ -182,7 +184,7 @@ lang ExtSym = Sym + ExtAst
   | TmExt t ->
     match env with {varEnv = varEnv} then
       let tyIdent = symbolizeType env t.tyIdent in
-      if nameHasSym t.ident then
+      if or env.ignoreExternals (nameHasSym t.ident) then
         TmExt {{t with inexpr = symbolizeExpr env t.inexpr}
                   with tyIdent = tyIdent}
       else

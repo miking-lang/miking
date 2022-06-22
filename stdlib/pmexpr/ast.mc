@@ -134,7 +134,7 @@ lang PMExprAst =
     match f acc t.e with (acc, e) in
     (acc, TmParallelSizeCoercion {t with e = e})
 
-  sem typeCheckBase env =
+  sem typeCheckExpr env =
   | TmAccelerate t ->
     let e = typeCheckExpr env t.e in
     TmAccelerate {{t with e = e}
