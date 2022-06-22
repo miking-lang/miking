@@ -37,6 +37,7 @@ let escapeIdentifier = lam str: String.
   else "_"
 
 let pprintEnvGetStr = lam env. lam id: Name.
+  use IdentifierPrettyPrint in
   -- Set this to true to print names with their symbols (for debugging)
   if false then
     (env,join [

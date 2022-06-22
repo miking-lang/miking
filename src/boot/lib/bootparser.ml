@@ -250,7 +250,7 @@ let getData = function
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmType (fi, x, _, params, ty, t)) ->
+  | PTreeTm (TmType (fi, x, params, ty, t)) ->
       let len = List.length params + 1 in
       (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [])
   | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
@@ -292,11 +292,10 @@ let getData = function
       let slst, tylst = List.split (Record.bindings tymap) in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
-  | PTreeTy (TyVariant (fi, lst)) ->
-      let strs = List.map (fun (x, _) -> x) lst in
-      let len = List.length lst in
+  | PTreeTy (TyVariant (fi, strs)) ->
+      let len = List.length strs in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyCon (fi, x, _)) ->
+  | PTreeTy (TyCon (fi, x)) ->
       (idTyCon, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
