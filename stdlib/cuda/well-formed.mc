@@ -7,71 +7,44 @@ include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
 include "pmexpr/well-formed.mc"
 
-lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
-  syn WellFormedError =
+lang CudaWellFormed = WellFormed + CudaPMExprAst
+  syn WFError =
   | CudaExprError Expr
   | CudaTypeError Type
-  | CudaConstantError (Const, Info)
+  | CudaConstantError Info
   | CudaPatternError Pat
-  | CudaConDefError Expr
-  | CudaLoopError Expr
-  | CudaReduceError Expr
+
+  sem wellFormednessBackendName =
+  | () -> "CUDA"
 
   sem pprintWellFormedError =
   | CudaExprError expr ->
-    let info = infoTm expr in
-    let exprStr = expr2str expr in
-    infoErrorString info (join ["Expression\n", exprStr, "\nnot supported by CUDA backend"])
+    (infoTm expr, "Expression is not supported")
   | CudaTypeError ty ->
-    let info = infoTy ty in
-    let tyStr = type2str ty in
-    infoErrorString info (join ["Type '", tyStr, "' not supported by CUDA backend"])
-  | CudaConstantError (c, info) ->
-    let constStr = getConstStringCode 0 c in
-    infoErrorString info (join ["Constant '", constStr, "' not supported by CUDA backend"])
+    (infoTy ty, "Type is not supported")
+  | CudaConstantError info ->
+    (info, "Constant is not supported")
   | CudaPatternError pat ->
-    let info = infoPat pat in
-    match getPatStringCode 0 pprintEnvEmpty pat with (_, patStr) in
-    infoErrorString info (join ["Pattern '", patStr, "' not supported by CUDA backend"])
-  | CudaConDefError (expr & (TmConDef t)) ->
-    let info = infoTm expr in
-    infoErrorString info (join [
-      "Constructor definition\n",
-      "\nwith ident   : ", nameGetStr t.ident,
-      "\nwith tyIdent : ", type2str t.tyIdent,
-      "\nnot supported by CUDA backend"])
-  | CudaLoopError (expr & (TmLoopAcc t)) ->
-    let info = infoTm expr in
-    infoErrorString info (join [
-      "Loop expression\n", expr2str expr,
-      "\nwith ne : ", type2str (tyTm t.ne),
-      "\nwith n  : ", type2str (tyTm t.n),
-      "\nwith f  : ", type2str (tyTm t.f)])
-  | CudaReduceError (expr & (TmParallelReduce t)) ->
-    let info = infoTm expr in
-    infoErrorString info (join [
-      "Reduce expression\n", expr2str expr,
-      "\nwith f  : ", type2str (tyTm t.f),
-      "\nwith ne : ", type2str (tyTm t.ne),
-      "\nwith as : ", type2str (tyTm t.as),
-      "\nnot supported by CUDA backend"])
+    (infoPat pat, "Pattern is not supported")
 
   -- NOTE(larshum, 2022-03-01): Lambda expressions may only be used at the top
   -- of the body of a let-expression or a recursive binding.
-  sem checkLambdasInBody (acc : [WellFormedError]) =
+  sem checkLambdasInBody : [WFError] -> Expr -> ([WFError], Expr)
+  sem checkLambdasInBody acc =
   | TmLam t ->
     let acc = cudaWellFormedType acc t.tyIdent in
     checkLambdasInBody acc t.body
   | t -> (acc, t)
 
-  sem cudaWellFormedExpr (acc : [WellFormedError]) =
+  sem cudaWellFormedExpr : [WFError] -> Expr -> [WFError]
+  sem cudaWellFormedExpr acc =
   | TmVar t -> acc
   | TmApp {lhs = TmConst {val = CError _}} ->
     -- NOTE(larshum, 2022-03-29): Special case to avoid giving well-formedness
     -- error due to unknown type. Needed to support semantic functions.
     acc
   | TmApp t ->
-    recursive let checkApp = lam acc : [WellFormedError]. lam e : Expr.
+    recursive let checkApp = lam acc : [WFError]. lam e : Expr.
       match e with TmApp t then
         let acc = cudaWellFormedExpr acc t.rhs in
         checkApp acc t.lhs
@@ -84,8 +57,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
     let acc = cudaWellFormedExpr acc body in
     cudaWellFormedExpr acc t.inexpr
   | TmRecLets t ->
-    let checkLambdasInBinding : [WellFormedError] -> RecLetBinding
-                             -> [WellFormedError] =
+    let checkLambdasInBinding : [WFError] -> RecLetBinding -> [WFError] =
       lam acc. lam binding.
       match checkLambdasInBody acc binding.body with (acc, body) in
       cudaWellFormedExpr acc body
@@ -107,41 +79,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
     let acc = cudaWellFormedExpr acc t.t in
     let acc = cudaWellFormedExpr acc t.ofs in
     cudaWellFormedExpr acc t.len
-  -- NOTE(larshum, 2022-03-08): The following expressions are CUDA PMExpr
+  -- NOTE(larshum, 2022-03-08): The following expressions are PMExpr
   -- extensions, which are allowed to contain an expression of function type.
   -- This is allowed because they are handled differently from other terms.
-  | loop & (TmLoop t | TmParallelLoop t) ->
-    let addLoopError = lam. cons (CudaLoopError loop) acc in
-    let acc = cudaWellFormedExpr acc t.n in
-    match tyTm t.f with TyArrow {from = TyInt _, to = TyRecord {fields = fFields}} then
-      match t.ty with TyRecord {fields = tyFields} then
-        if and (mapIsEmpty fFields) (mapIsEmpty tyFields) then acc
-        else addLoopError ()
-      else addLoopError ()
-    else addLoopError ()
-  | loop & (TmLoopAcc t) ->
-    let addLoopError = lam. cons (CudaLoopError loop) acc in
-    let acc = cudaWellFormedExpr acc t.ne in
-    let acc = cudaWellFormedExpr acc t.n in
-    match tyTm t.f with TyArrow {
-      from = accTy1,
-      to = TyArrow {from = TyInt _, to = accTy2}}
-    then
-      if and (eqType accTy1 accTy2) (eqType accTy1 (tyTm t.ne)) then acc
-      else addLoopError ()
-    else addLoopError ()
-  | red & (TmParallelReduce t) ->
-    let addReduceError = lam. cons (CudaReduceError red) acc in
-    let acc = cudaWellFormedExpr acc t.ne in
-    let acc = cudaWellFormedExpr acc t.as in
-    match tyTm t.f with TyArrow {
-      from = accTy1,
-      to = TyArrow {from = elemTy, to = accTy2}}
-    then
-      if and (eqType accTy1 accTy2) (eqType (tyTm t.as) (tyseq_ elemTy)) then
-        acc
-      else addReduceError ()
-    else addReduceError ()
+  | (TmLoop _ | TmParallelLoop _ | TmLoopAcc _ | TmParallelReduce _) & t -> acc
   | t ->
     let info = infoTm t in
     let acc =
@@ -150,31 +91,36 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
     let acc = sfold_Type_Type cudaWellFormedType acc (tyTm t) in
     sfold_Expr_Expr cudaWellFormedExpr acc t
 
-  sem cudaWellFormedType (acc : [WellFormedError]) =
+  sem cudaWellFormedType : [WFError] -> Type -> [WFError]
+  sem cudaWellFormedType acc =
   | ty ->
     if isCudaSupportedType ty then
       sfold_Type_Type cudaWellFormedType acc ty
     else
       cons (CudaTypeError ty) acc
 
-  sem cudaWellFormedConstant (info : Info) (acc : [WellFormedError]) =
+  sem cudaWellFormedConstant : Info -> [WFError] -> Const -> [WFError]
+  sem cudaWellFormedConstant info acc =
   | c ->
     if isCudaSupportedConstant c then acc
-    else cons (CudaConstantError (c, info)) acc
+    else cons (CudaConstantError info) acc
 
-  sem cudaWellFormedPattern (acc : [WellFormedError]) =
+  sem cudaWellFormedPattern : [WFError] -> Pat -> [WFError]
+  sem cudaWellFormedPattern acc =
   | pat ->
     if isCudaSupportedPattern pat then
       sfold_Pat_Pat cudaWellFormedPattern acc pat
     else
       cons (CudaPatternError pat) acc
 
+  sem isCudaSupportedExpr : Expr -> Bool
   sem isCudaSupportedExpr =
   | TmVar _ | TmApp _ | TmLet _ | TmRecLets _ | TmConst _ | TmMatch _
   | TmNever _ | TmSeq _ | TmRecord _ | TmType _ | TmExt _ -> true
   | TmLoop _ | TmLoopAcc _ | TmParallelLoop _ | TmPrintFloat _ -> true
   | _ -> false
 
+  sem isCudaSupportedType : Type -> Bool
   sem isCudaSupportedType =
   | TyInt _ | TyFloat _ | TyBool _ | TyChar _ | TyCon _
   | TyTensor {ty = TyInt _ | TyFloat _} -> true
@@ -182,6 +128,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   | TyRecord {fields = fields} -> forAll isCudaSupportedType (mapValues fields)
   | _ -> false
 
+  sem isCudaSupportedConstant : Const -> Bool
   sem isCudaSupportedConstant =
   | CInt _ | CFloat _ | CChar _ | CBool _ -> true
   | CAddi _ | CAddf _ | CSubi _ | CSubf _ | CMuli _ | CMulf _ | CDivi _
@@ -195,35 +142,34 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst + CudaPMExprPrettyPrint
   | CTensorSliceExn _ | CTensorSubExn _ -> true
   | _ -> false
 
+  sem isCudaSupportedPattern : Pat -> Bool
   sem isCudaSupportedPattern =
   | PatNamed _ | PatBool _ | PatRecord _ | PatCon _ -> true
   | _ -> false
 
-  sem wellFormedExprH (acc : [WellFormedError]) =
-  | t -> cudaWellFormedExpr acc t
+  sem wellFormedExprH acc =
+  | e -> cudaWellFormedExpr acc e
 
-  sem wellFormedTypeH (acc : [WellFormedError]) =
-  | t -> cudaWellFormedType acc t
+  sem wellFormedTypeH acc =
+  | ty -> cudaWellFormedType acc ty
 end
 
 mexpr
 
 use CudaWellFormed in
 
-let eqCudaError = lam lerr : WellFormedError. lam rerr : WellFormedError.
+let eqCudaError = lam lerr : WFError. lam rerr : WFError.
   use MExprEq in
   let t = (lerr, rerr) in
   match t with (CudaExprError le, CudaExprError re) then
     eqExpr le re
   else match t with (CudaTypeError lty, CudaTypeError rty) then
     eqType lty rty
-  else match t with (CudaConstantError (lc, li), CudaConstantError (rc, ri)) then
-    and (eqConst lc rc) (eqi (infoCmp li ri) 0)
+  else match t with (CudaConstantError li, CudaConstantError ri) then
+    eqi (infoCmp li ri) 0
   else match t with (CudaPatternError lpat, CudaPatternError rpat) then
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
     optionIsSome (eqPat empty empty biEmpty lpat rpat)
-  else match t with (CudaConDefError lc, CudaConDefError rc) then
-    eqExpr lc rc
   else false
 in
 
@@ -306,7 +252,7 @@ let fileRead = preprocess
   (app_
     (withInfo i (const_ (tyarrow_ tystr_ tystr_) c))
     (str_ "test.txt")) in
-utest wellFormedExpr fileRead with [CudaConstantError (c, i)]
+utest wellFormedExpr fileRead with [CudaConstantError i]
 using eqSeq eqCudaError in
 
 let matchBoolPat = preprocess

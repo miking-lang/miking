@@ -1,7 +1,7 @@
 include "pmexpr/well-formed.mc"
 
 lang FutharkWellFormed = WellFormed + PMExprAst
-  syn WellFormedError =
+  syn WFError =
   | FutharkFunctionInArray Info
   | FutharkFunctionFromIf Info
   | FutharkFunctionFromCreate Info
@@ -9,47 +9,51 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   | FutharkFunctionFromMap Info
   | FutharkRecLet Info
 
+  sem wellFormednessBackendName =
+  | () -> "Futhark"
+
   sem pprintWellFormedError =
   | FutharkFunctionInArray info ->
-    infoErrorString info "Cannot accelerate arrays containing functions"
-  | FutharkFunctionFromIf info ->
-    infoErrorString info (join ["Cannot accelerate conditional expressions ",
-                                "where the result is a higher-order function"])
+    (info, "Sequences of function-type elements are not supported")
   | FutharkFunctionFromCreate info ->
-    infoErrorString info (join ["Cannot accelerate create where the result ",
-                                "is a sequence of higher-order functions"])
-  | FutharkFunctionFromFold info ->
-    infoErrorString info
-      "Cannot accelerate folds with higher-order function accumulator"
+    (info, "Creating sequences of functions is not supported")
   | FutharkFunctionFromMap info ->
-    infoErrorString info (join ["Cannot accelerate map where the result is a ",
-                                "sequence of higher-order functions"])
+    (info, "Map functions producing functions is not supported")
+  | FutharkFunctionFromIf info ->
+    (info, "Conditionals returning functions are not supported")
+  | FutharkFunctionFromFold info ->
+    (info, "Folds with accumulator of function type are not supported")
   | FutharkRecLet info ->
-    infoErrorString info (join ["Cannot accelerate recursive let-expressions"])
+    (info, "Recursive let-expressions are not supported")
 
+  sem containsFunctionType : Type -> Bool
   sem containsFunctionType =
   | t -> containsFunctionTypeH false t
 
-  sem containsFunctionTypeH (acc : Bool) =
+  sem containsFunctionTypeH : Bool -> Type -> Bool
+  sem containsFunctionTypeH acc =
   | TyArrow _ -> true
   | t -> if acc then acc else sfold_Type_Type containsFunctionTypeH acc t
 
-  sem futharkWellFormedType (acc : [WellFormedError]) =
+  sem futharkWellFormedType : Info -> [WFError] -> Type -> [WFError]
+  sem futharkWellFormedType info acc =
   | TySeq t ->
     -- NOTE(larshum, 2021-12-13): An array may not contain elements of a
     -- functional type.
     if containsFunctionType t.ty then
-      cons (FutharkFunctionInArray (infoTy t.ty)) acc
+      cons (FutharkFunctionInArray info) acc
     else acc
-  | t -> sfold_Type_Type futharkWellFormedType acc t
+  | t -> sfold_Type_Type (futharkWellFormedType info) acc t
 
-  sem futharkWellFormedExpr (acc : [WellFormedError]) =
+  sem futharkWellFormedExpr : [WFError] -> Expr -> [WFError]
+  sem futharkWellFormedExpr acc =
   | TmLet t ->
-    let acc = futharkWellFormedType acc t.tyBody in
     let acc = futharkWellFormedExpr acc t.body in
     let acc = futharkWellFormedExpr acc t.inexpr in
-    futharkWellFormedType acc t.ty
-  | TmRecLets t -> cons (FutharkRecLet t.info) acc
+    futharkWellFormedType t.info acc t.ty
+  | TmRecLets t ->
+    let acc = cons (FutharkRecLet t.info) acc in
+    futharkWellFormedExpr acc t.inexpr
   | TmMatch t ->
     -- NOTE(larshum, 2021-12-13): An if-expression may not result in a
     -- functional type.
@@ -83,15 +87,17 @@ lang FutharkWellFormed = WellFormed + PMExprAst
     else sfold_Expr_Expr futharkWellFormedExpr acc (TmParallelReduce t)
   | t ->
     let info = infoTm t in
-    let acc = futharkWellFormedType acc (tyTm t) in
-    let acc = sfold_Expr_Type futharkWellFormedType acc t in
+    let acc = futharkWellFormedType info acc (tyTm t) in
+    let acc = sfold_Expr_Type (futharkWellFormedType info) acc t in
     sfold_Expr_Expr futharkWellFormedExpr acc t
 
-  sem wellFormedExprH (acc : [WellFormedError]) =
+  sem wellFormedExprH : [WFError] -> Expr -> [WFError]
+  sem wellFormedExprH acc =
   | t -> futharkWellFormedExpr acc t
 
-  sem wellFormedTypeH (acc : [WellFormedError]) =
-  | t -> futharkWellFormedType acc t
+  sem wellFormedTypeH : [WFError] -> Type -> [WFError]
+  sem wellFormedTypeH acc =
+  | t -> futharkWellFormedType (NoInfo ()) acc t
 end
 
 mexpr
