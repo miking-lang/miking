@@ -108,18 +108,35 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   sem cfa: Expr -> CFAGraph
   sem cfa =
-  | t -> match cfaDebug (None ()) (None ()) t with (_,graph) in graph
-
-  sem cfaData: GraphData -> Expr -> CFAGraph
-  sem cfaData (graphData: GraphData) =
-  | t -> match cfaDebug (Some graphData) (None ()) t with (_,graph) in graph
+  | t ->
+    cfaData (None ()) t
 
   -- Main algorithm
+  sem cfaData: Option GraphData -> Expr -> CFAGraph
+  sem cfaData (graphData: Option GraphData) =
+  | t ->
+    let graph = initGraph graphData t in
+
+    -- Iteration
+    recursive let iter = lam graph: CFAGraph.
+      if null graph.worklist then graph
+      else
+        match head graph.worklist with (q,d) & h in
+        let graph = { graph with worklist = tail graph.worklist } in
+        match edgesLookup q graph with cc in
+        let graph = foldl (propagateConstraint h) graph cc in
+        iter graph
+    in
+    iter graph
+
   sem cfaDebug : Option GraphData -> Option PprintEnv -> Expr
                -> (Option PprintEnv, CFAGraph)
   sem cfaDebug graphData env =
   | t ->
-
+    -- NOTE(Linnea,2022-06-22): Experiments have shown that using `cfaDebug` as
+    -- the main entry point causes overhead when no printing takes place, as we
+    -- have to match on the pprint env in every iteration. Therefore, some code
+    -- duplication takes place here.
     let printGraph = lam env. lam graph. lam str.
       match env with Some env then
         match cfaGraphToString env graph with (env, graph) in

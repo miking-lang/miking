@@ -457,7 +457,7 @@ let test
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData graphData tANF in
+      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
       let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
           let binds = mapi (lam i. lam s: Set AbsVal.

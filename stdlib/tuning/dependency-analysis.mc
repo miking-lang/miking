@@ -277,7 +277,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData graphData tANF in
+      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
       let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
       match
         if full then assumeFullDependency env tANF
