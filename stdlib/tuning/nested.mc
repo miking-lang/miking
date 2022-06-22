@@ -397,7 +397,7 @@ let test: Bool -> Expr -> [String] -> [(String,[AbsVal],Map NameInfo (Map [NameI
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData graphData tANF in
+      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
       let cfaRes : CFAGraph  = analyzeNested env cfaRes tANF in
       let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.

@@ -64,11 +64,14 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem emptyCFAGraph: Expr -> CFAGraph
   sem emptyCFAGraph =
   | t ->
+    -- NOTE(Linnea,2022-06-22): Experiments have shown that lists are better
+    -- than ropes for 'worklist' and 'edges', especially for 'worklist'
     let im = indexGen t in
     let shape = tensorShape im.int2name in
-    { worklist = [],
+    let elist = toList [] in
+    { worklist = elist,
       data = tensorCreateDense shape (lam. setEmpty cmpAbsVal),
-      edges = tensorCreateDense shape (lam. []),
+      edges = tensorCreateDense shape (lam. elist),
       mcgfs = [],
       im = im,
       graphData = None () }
