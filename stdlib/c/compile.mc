@@ -192,12 +192,18 @@ end
 -- sequence of integers representing a cartesian index, and the dimensions of
 -- the tensor.
 lang MExprTensorCCompile = MExprCCompileBase
-  sem hasTensorTypes =
+  sem usesTensorTypes : [(Name, Type)] -> Bool
+  sem usesTensorTypes =
   | typeEnv ->
-    let isTensorType = lam ty : Type.
+    let isTensorType = lam ty.
       match ty with TyTensor _ then true else false
     in
-    any (lam entry : (Name, Type). isTensorType entry.1) typeEnv
+    let isSeqIntType = lam ty.
+      match ty with TySeq {ty = TyInt _} then true else false
+    in
+    if any (lam entry. isTensorType entry.1) typeEnv then
+      any (lam entry. isSeqIntType entry.1) typeEnv
+    else false
 
   sem _genIndexErrorStmts (rank : Name) =
   | nindices ->
@@ -459,10 +465,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- Run compiler
     match compileTops env [] [] prog with (tops, inits) in
 
-    -- Generate functions for computing linear index for tensors, if any
-    -- tensor types are used.
+    -- Generate functions for computing linear index for tensors, if the
+    -- provided AST uses tensors and sequences of integers.
     let tops =
-      if hasTensorTypes typeEnv then
+      if usesTensorTypes typeEnv then
         concat (snoc (cartesianToLinearIndexDef env) (tensorShapeDef env)) tops
       else tops
     in
