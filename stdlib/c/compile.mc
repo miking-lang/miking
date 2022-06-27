@@ -674,7 +674,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           match ty with TyArrow { from = fromTy } then
             if _isUnitTy fromTy then detachParams acc rest
             else detachParams (snoc acc ident) rest
-          else errorSingle [infoTy ty] "Incorrect type in compileFun"
+          else
+            errorSingle [infoTy ty] "Incorrect type in compileFun"
         else (acc, rest)
     in
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
@@ -1383,7 +1384,6 @@ end
 
 mexpr
 use Test in
-
 let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Symbolize with empty environment
@@ -1397,6 +1397,9 @@ let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- ANF transformation
   let prog = normalizeTerm prog in
+
+  -- Second type check (needed after ANF)
+  let prog = typeCheck prog in
 
   -- Type lift
   match typeLift prog with (env, prog) then
@@ -1707,6 +1710,9 @@ utest testCompile ext with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
+  "double externalLog(double a1) {",
+  "  return log(a1);",
+  "}",
   "double x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = log(2.));",
@@ -2010,6 +2016,5 @@ let seqs = bindall_ [
   int_ 0
 
 ] in
-
 
 ()
