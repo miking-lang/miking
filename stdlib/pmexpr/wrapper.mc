@@ -78,6 +78,7 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
     gpuIdent : Name
   }
 
+  sem defaultArgData : () -> ArgData
   sem defaultArgData =
   | () ->
     { mexprIdent = nameNoSym "", mexprType = tyunknown_
@@ -103,14 +104,17 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
     -- Environment containing target-specific variables.
     targetEnv : TargetWrapperEnv}
 
+  sem _emptyWrapperEnv : () -> CWrapperEnv
   sem _emptyWrapperEnv =
   | () ->
     { arguments = [], return = defaultArgData (), functionIdent = nameNoSym ""
     , targetEnv = EmptyTargetEnv () }
 
+  sem _wosize : CExpr -> CExpr
   sem _wosize = 
   | e -> CEApp {fun = _getIdentExn "Wosize_val", args = [e]}
 
+  sem isBaseType : Type -> Bool
   sem isBaseType =
   | TyInt _ | TyFloat _ | TyBool _ | TyChar _ -> true
   | _ -> false
@@ -118,16 +122,19 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
   -- This implementation is backend-specific
   sem _generateCDataRepresentation : CWrapperEnv -> Type -> CDataRepr
 
+  sem ocamlToCConversionFunctionIdent : CType -> Name
   sem ocamlToCConversionFunctionIdent =
   | CTyChar _ | CTyInt _ -> _getIdentExn "Int_val"
   | CTyInt64 _ -> _getIdentExn "Long_val"
   | CTyFloat _ | CTyDouble _ -> _getIdentExn "Double_val"
 
+  sem cToOCamlConversionFunctionIdent : CType -> Name
   sem cToOCamlConversionFunctionIdent =
   | CTyChar _ | CTyInt _ -> _getIdentExn "Val_int"
   | CTyInt64 _ -> _getIdentExn "Val_long"
   | CTyFloat _ | CTyDouble _ -> _getIdentExn "caml_copy_double"
 
+  sem _getCReturnType : Type -> CType
   sem _getCReturnType =
   | TyRecord t ->
     if mapIsEmpty t.fields then
@@ -139,9 +146,9 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
   -- Generates an additional wrapper function to be referenced from OCaml. This
   -- function is used when calling from bytecode (hence the name) and also when
   -- the function takes more than five parameters.
+  sem generateBytecodeWrapper : AccelerateData -> CTop
   sem generateBytecodeWrapper =
   | data ->
-    let data : AccelerateData = data in
     let returnType = _getCReturnType data.returnType in
     let bytecodeStr = nameGetStr data.bytecodeWrapperId in
     let bytecodeFunctionName = nameSym bytecodeStr in
@@ -164,8 +171,9 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
         fun = data.identifier,
         args = functionArgs})}]}
 
-  sem generateCAMLparamDeclarations =
-  | args /- : [ArgData] -/ ->
+  sem generateCAMLParamDeclarations : [ArgData] -> [CStmt]
+  sem generateCAMLParamDeclarations =
+  | args ->
     let genParamStmt : [ArgData] -> String -> CStmt = lam args. lam funStr.
       let nargsStr = int2string (length args) in
       let camlParamIdent = _getIdentOrInitNew (concat funStr nargsStr) in
@@ -196,9 +204,9 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
 
   -- Generates the main function of the wrapper code. This is the function that
   -- manages the marshalling between OCaml and the target GPU language.
-  sem generateWrapperFunctionCode (env : CWrapperEnv) =
+  sem generateWrapperFunctionCode : CWrapperEnv -> AccelerateData -> [CTop]
+  sem generateWrapperFunctionCode env =
   | data ->
-    let data : AccelerateData = data in
     let toArgData = lam x : (CopyStatus, (Name, Type)).
       match x with (status, (id, ty)) in
       let default : ArgData = defaultArgData () in
@@ -214,7 +222,7 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
     let env = {{{env with arguments = arguments}
                      with return = toArgData (CopyBoth (), returnArg)}
                      with functionIdent = data.identifier} in
-    let camlParamStmts = generateCAMLparamDeclarations env.arguments in
+    let camlParamStmts = generateCAMLParamDeclarations env.arguments in
     let stmts = generateMarshallingCode env in
     let value = _getIdentExn "value" in
     let stmts =
@@ -244,8 +252,10 @@ lang PMExprCWrapper = MExprAst + CAst + PMExprExtractAccelerate
         body = stmts}
     , bytecodeWrapper ]
 
-  sem generateWrapperCodeH (env : CWrapperEnv) =
-  | accelerated /- Map Name AccelerateData -/ ->
+  sem generateWrapperCodeH : CWrapperEnv -> Map Name AccelerateData
+                          -> (CWrapperEnv, [CTop])
+  sem generateWrapperCodeH env =
+  | accelerated ->
     let entryPointWrappers =
       map (generateWrapperFunctionCode env) (mapValues accelerated) in
     (env, join entryPointWrappers)

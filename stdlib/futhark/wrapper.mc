@@ -30,17 +30,20 @@ lang FutharkCWrapperBase = PMExprCWrapper
       initContextIdent : Name, futharkContextConfigIdent : Name,
       futharkContextIdent : Name}
 
+  sem getFutharkElementTypeString : CType -> String
   sem getFutharkElementTypeString =
   | CTyChar _ | CTyInt64 _ -> "i64"
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
 
+  sem getSeqFutharkTypeString : CDataRepr -> String
   sem getSeqFutharkTypeString =
   | FutharkSeqRepr t ->
     let elemTyStr = getFutharkElementTypeString t.elemTy in
     let dims = length t.dimIdents in
     join [elemTyStr, "_", int2string dims, "d"]
 
+  sem getFutharkCType : CDataRepr -> CType
   sem getFutharkCType =
   | t & (FutharkSeqRepr _) ->
     let seqTypeStr = getSeqFutharkTypeString t in
@@ -51,6 +54,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
     error "Records have not been implemented for Futhark"
   | FutharkBaseTypeRepr t -> t.ty
 
+  sem mexprToCType : Type -> CType
   sem mexprToCType =
   | TyInt _ -> CTyInt64 ()
   | TyFloat _ -> CTyDouble ()
@@ -61,10 +65,8 @@ lang FutharkCWrapperBase = PMExprCWrapper
     errorSingle [infoTy ty]
       (join ["Type ", tystr, " is not supported by C wrapper"])
 
-  sem _generateCDataRepresentation (env : CWrapperEnv) =
-  | ty -> _generateFutharkDataRepresentation ty
-
-  sem _generateFutharkDataRepresentation =
+  sem _generateCDataRepresentation : CWrapperEnv -> Type -> CDataRepr
+  sem _generateCDataRepresentation env =
   | TySeq ty ->
     recursive let findSequenceDimensions = lam n. lam ty.
       match ty with TySeq t then
@@ -75,7 +77,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
     if isBaseType elemType then
       let dimIdents = create dims (lam. nameSym "d") in
       FutharkSeqRepr {
-        ident = nameSym "seq_tmp", data = _generateFutharkDataRepresentation ty.ty,
+        ident = nameSym "seq_tmp", data = _generateCDataRepresentation env ty.ty,
         dimIdents = dimIdents, sizeIdent = nameSym "n",
         elemTy = mexprToCType elemType}
     else
@@ -89,7 +91,7 @@ lang FutharkCWrapperBase = PMExprCWrapper
       map
         (lam label : SID.
           match mapLookup label t.fields with Some ty then
-            _generateFutharkDataRepresentation ty
+            _generateCDataRepresentation env ty
           else
             errorSingle [t.info] "Inconsistent labels in record type")
         labels in
@@ -98,7 +100,8 @@ lang FutharkCWrapperBase = PMExprCWrapper
 end
 
 lang FutharkOCamlToCWrapper = FutharkCWrapperBase
-  sem _computeSequenceDimensions (srcIdent : Name) (idx : Int) =
+  sem _computeSequenceDimensions : Name -> Int -> CDataRepr -> [CStmt]
+  sem _computeSequenceDimensions srcIdent idx =
   | t & (FutharkSeqRepr {dimIdents = dimIdents, sizeIdent = sizeIdent}) ->
     let dimIdent = get dimIdents idx in
     let initDimStmt = CSDef {
@@ -125,7 +128,8 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
       let stmts = _computeSequenceDimensions innerSrcIdent idx t in
       concat [initDimStmt, updateSizeStmt, innerSrcStmt] stmts
 
-  sem _generateForLoop (iterIdent : Name) (dimIdent : Name) =
+  sem _generateForLoop : Name -> Name -> [CStmt] -> [CStmt]
+  sem _generateForLoop iterIdent dimIdent =
   | bodyWithoutIterIncrement ->
     let iterDefStmt = CSDef {
       ty = CTyInt64 (), id = Some iterIdent,
@@ -145,7 +149,8 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
           rhs = CEVar {id = dimIdent}},
         body = snoc bodyWithoutIterIncrement iterIncrementStmt} ]
 
-  sem _allocateSequenceCDataH (elemTy : CType) (srcIdent : Name) (dstIdent : Name) =
+  sem _allocateSequenceCDataH : CType -> Name -> Name -> [Name] -> [CStmt]
+  sem _allocateSequenceCDataH elemTy srcIdent dstIdent =
   | [dimIdent] ++ dimIdents ->
     let iterIdent = nameSym "i" in
     let innerSrcIdent = nameSym "x" in
@@ -199,7 +204,8 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
     _generateForLoop iterIdent dimIdent [fieldWriteStmt]
   | [] -> []
 
-  sem _allocateSequenceCData (srcIdent : Name) =
+  sem _allocateSequenceCData : Name -> CDataRepr -> [CStmt]
+  sem _allocateSequenceCData srcIdent =
   | FutharkSeqRepr t ->
     let cType = CTyPtr {ty = t.elemTy} in
     let sizeExpr = CEBinOp {
@@ -217,7 +223,8 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
       allocStmt
       (_allocateSequenceCDataH t.elemTy srcIdent t.ident t.dimIdents)
 
-  sem _generateOCamlToCWrapperStmts (srcIdent : Name) =
+  sem _generateOCamlToCWrapperStmts : Name -> CDataRepr -> [CStmt]
+  sem _generateOCamlToCWrapperStmts srcIdent =
   | t & (FutharkSeqRepr {sizeIdent = sizeIdent}) ->
     let initSizeStmt = CSDef {
       ty = CTyInt64 (), id = Some sizeIdent,
@@ -257,19 +264,20 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
           fun = conversionFunctionId,
           args = [CEVar {id = srcIdent}]}}} ]
 
-  sem _generateOCamlToCWrapperArg (accStmts : [CStmt]) =
+  sem _generateOCamlToCWrapperArg : [CStmt] -> ArgData -> [CStmt]
+  sem _generateOCamlToCWrapperArg accStmts =
   | arg ->
-    let arg : ArgData = arg in
     concat accStmts (_generateOCamlToCWrapperStmts arg.mexprIdent arg.cData)
 
+  sem generateOCamlToCWrapper : CWrapperEnv -> [CStmt]
   sem generateOCamlToCWrapper =
   | env ->
-    let env : CWrapperEnv = env in
     foldl _generateOCamlToCWrapperArg [] env.arguments
 end
 
 lang CToFutharkWrapper = FutharkCWrapperBase
-  sem _generateCToFutharkWrapperArgH (ctxIdent : Name) (arg : ArgData) =
+  sem _generateCToFutharkWrapperArgH : Name -> ArgData -> CDataRepr -> [CStmt]
+  sem _generateCToFutharkWrapperArgH ctxIdent arg =
   | FutharkSeqRepr t ->
     let futharkSeqTypeStr = getSeqFutharkTypeString (FutharkSeqRepr t) in
     let seqTypeIdent = _getIdentOrInitNew (concat "futhark_" futharkSeqTypeStr) in
@@ -296,15 +304,15 @@ lang CToFutharkWrapper = FutharkCWrapperBase
       ty = CTyPtr {ty = t.ty}, id = Some arg.gpuIdent,
       init = Some (CIExpr {expr = CEVar {id = t.ident}})}]
 
-  sem _generateCToFutharkWrapperArg (ctxIdent : Name) (accStmts : [CStmt]) =
+  sem _generateCToFutharkWrapperArg : Name -> [CStmt] -> ArgData -> [CStmt]
+  sem _generateCToFutharkWrapperArg ctxIdent accStmts =
   | arg ->
-    let arg : ArgData = arg in
     let stmts = _generateCToFutharkWrapperArgH ctxIdent arg arg.cData in
     concat accStmts stmts
 
+  sem generateCToFutharkWrapper : CWrapperEnv -> [CStmt]
   sem generateCToFutharkWrapper =
   | env ->
-    let env : CWrapperEnv = env in
     match env.targetEnv with FutharkTargetEnv fenv in
     let ctxIdent = fenv.futharkContextIdent in
     let initContextCall = CSExpr {expr = CEApp {
@@ -315,9 +323,9 @@ lang CToFutharkWrapper = FutharkCWrapperBase
 end
 
 lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
+  sem generateFutharkCall : CWrapperEnv -> [CStmt]
   sem generateFutharkCall =
   | env ->
-    let env : CWrapperEnv = env in
     match env.targetEnv with FutharkTargetEnv fenv in
     let return : ArgData = env.return in
     let returnType = return.mexprType in
@@ -408,7 +416,8 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
 end
 
 lang FutharkToCWrapper = FutharkCWrapperBase
-  sem _generateFutharkToCWrapperH (ctxIdent : Name) (srcIdent : Name) =
+  sem _generateFutharkToCWrapperH : Name -> Name -> CDataRepr -> [CStmt]
+  sem _generateFutharkToCWrapperH ctxIdent srcIdent =
   | FutharkSeqRepr t ->
     -- Find dimensions of result value through the use of 'futhark_shape_*'
     let futReturnTypeString = getSeqFutharkTypeString (FutharkSeqRepr t) in
@@ -491,18 +500,19 @@ lang FutharkToCWrapper = FutharkCWrapperBase
         op = COAddrOf (),
         arg = CEVar {id = srcIdent}}})}]
 
+  sem generateFutharkToCWrapper : CWrapperEnv -> [CStmt]
   sem generateFutharkToCWrapper =
   | env ->
-    let env : CWrapperEnv = env in
+    match env.return with {gpuIdent = gpuIdent, cData = cData} in
     match env.targetEnv with FutharkTargetEnv fenv in
     let futCtx = fenv.futharkContextIdent in
-    let return = env.return in
-    _generateFutharkToCWrapperH futCtx return.gpuIdent return.cData
+    _generateFutharkToCWrapperH futCtx gpuIdent cData
 end
 
 lang FutharkCToOCamlWrapper = FutharkCWrapperBase
-  sem _generateAllocOCamlLoop (iterIdent : Name) (dstIdent : Name)
-                              (dimIdent : Name) (tag : CExpr) =
+  sem _generateAllocOCamlLoop : Name -> Name -> Name -> CExpr -> [CStmt]
+                             -> [CStmt]
+  sem _generateAllocOCamlLoop iterIdent dstIdent dimIdent tag =
   | bodyStmts ->
     let iterInitStmt = CSDef {
       ty = CTyInt64 (), id = Some iterIdent,
@@ -529,8 +539,9 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
       body = whileBody} in
     [iterInitStmt, dstAllocStmt, whileStmt]
 
-  sem _allocateSequenceOCamlDataH (elemTy : CType) (countIdent : Name)
-                                  (srcIdent : Name) (dstIdent : Name) =
+  sem _allocateSequenceOCamlDataH : CType -> Name -> Name -> Name -> [Name]
+                                 -> [CStmt]
+  sem _allocateSequenceOCamlDataH elemTy countIdent srcIdent dstIdent =
   | [dimIdent] ++ dimIdents ->
     let iterIdent = nameSym "i" in
     let innerDstIdent = nameSym "x" in
@@ -589,7 +600,8 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
     _generateAllocOCamlLoop iterIdent dstIdent dimIdent tagExpr loopStmts
   | [] -> []
 
-  sem _allocateSequenceOCamlData (srcIdent : Name) (dstIdent : Name) =
+  sem _allocateSequenceOCamlData : Name -> Name -> CDataRepr -> [CStmt]
+  sem _allocateSequenceOCamlData srcIdent dstIdent =
   | FutharkSeqRepr t ->
     let countIdent = nameSym "count" in
     let countDeclStmt = CSDef {
@@ -637,11 +649,11 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
         args = [CEUnOp {op = CODeref (), arg = CEVar {id = t.ident}}]}}} in
     [toOCamlStmt]
 
+  sem generateCToOCamlWrapper : CWrapperEnv -> [CStmt]
   sem generateCToOCamlWrapper =
   | env ->
-    let env : CWrapperEnv = env in
-    let return = env.return in
-    _generateCToOCamlWrapperStmts return.mexprIdent return.cData
+    match env.return with {mexprIdent = mexprIdent, cData = cData} in
+    _generateCToOCamlWrapperStmts mexprIdent cData
 end
 
 lang FutharkCWrapper =
@@ -658,9 +670,9 @@ lang FutharkCWrapper =
   -- happens, the context config and context are not freed. This should not be
   -- a problem because all values should be deallocated after each Futhark
   -- call.
+  sem futharkContextInit : CWrapperEnv -> [CTop]
   sem futharkContextInit =
-  | env /- : CWrapperEnv -> [CTop] -/ ->
-    let env : CWrapperEnv = env in
+  | env ->
     match env.targetEnv with FutharkTargetEnv fenv in
     let ctxConfigStructId = _getIdentExn "futhark_context_config" in
     let ctxStructId = _getIdentExn "futhark_context" in
@@ -719,6 +731,7 @@ lang FutharkCWrapper =
     let stmt5 = generateCToOCamlWrapper env in
     join [stmt1, stmt2, stmt3, stmt4, stmt5]
 
+  sem generateWrapperCode : Map Name AccelerateData -> CProg
   sem generateWrapperCode =
   | accelerated ->
     let env = generateInitWrapperEnv () in

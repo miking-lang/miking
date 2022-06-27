@@ -49,7 +49,8 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       -- equivalents.
       compileCEnv : CompileCEnv}
 
-  sem lookupTypeIdent (env : TargetWrapperEnv) =
+  sem lookupTypeIdent : TargetWrapperEnv -> Type -> Option Type
+  sem lookupTypeIdent env =
   | (TyRecord t) & tyrec ->
     if mapIsEmpty t.fields then None ()
     else
@@ -88,7 +89,8 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     else None ()
   | ty -> Some ty
 
-  sem getCudaType (env : TargetWrapperEnv) =
+  sem getCudaType : TargetWrapperEnv -> Type -> CType
+  sem getCudaType env =
   | ty & (TyRecord {fields = fields}) ->
     match env with CudaTargetEnv cenv in
     if mapIsEmpty fields then CTyVoid ()
@@ -112,28 +114,25 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     match env with CudaTargetEnv cenv in
     compileType cenv.compileCEnv ty
 
-  sem getOcamlTensorType (env : TargetWrapperEnv) =
+  sem getOcamlTensorType : TargetWrapperEnv -> Type -> CType
+  sem getOcamlTensorType env =
   | TyFloat _ -> CTyDouble ()
   | TyInt _ -> CTyInt64 ()
-  | ty ->
-      errorSingle [infoTy ty]
-        "Type is not supported for CUDA tensors yet"
+  | ty -> errorSingle [infoTy ty] "Type is not supported for CUDA tensors"
 
-  sem _generateCDataRepresentation (env : CWrapperEnv) =
-  | ty -> _generateCudaDataRepresentation env ty
-
-  sem _generateCudaDataRepresentation (env : CWrapperEnv) =
+  sem _generateCDataRepresentation : CWrapperEnv -> Type -> CDataRepr
+  sem _generateCDataRepresentation env =
   | ty & (TySeq t) ->
     match env.targetEnv with CudaTargetEnv cenv in
     let elemTy = _unwrapType cenv.compileCEnv.typeEnv t.ty in
     CudaSeqRepr {
       ident = nameSym "cuda_seq_tmp",
-      data = _generateCudaDataRepresentation env elemTy,
+      data = _generateCDataRepresentation env elemTy,
       elemTy = getCudaType env.targetEnv t.ty, ty = getCudaType env.targetEnv ty}
   | ty & (TyTensor t) ->
     CudaTensorRepr {
       ident = nameSym "cuda_tensor_tmp",
-      data = _generateCudaDataRepresentation env t.ty,
+      data = _generateCDataRepresentation env t.ty,
       elemTy = getCudaType env.targetEnv t.ty,
       elemOcamlTy = getOcamlTensorType env.targetEnv t.ty,
       ty = getCudaType env.targetEnv ty}
@@ -145,7 +144,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
         (lam label : SID.
           match mapLookup label t.fields with Some ty then
             let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
-            _generateCudaDataRepresentation env ty
+            _generateCDataRepresentation env ty
           else errorSingle [t.info] "Inconsistent labels in record type")
         labels in
     CudaRecordRepr {
@@ -158,7 +157,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
         (lam constrId : Name. lam constrTy : Type.
           let constrTy = _unwrapType cenv.compileCEnv.typeEnv constrTy in
           ( getCudaType env.targetEnv constrTy
-          , _generateCudaDataRepresentation env constrTy ))
+          , _generateCDataRepresentation env constrTy ))
         t.constrs in
     CudaDataTypeRepr {
       ident = nameSym "cuda_adt_tmp", constrs = constrs,
@@ -167,7 +166,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     match env.targetEnv with CudaTargetEnv cenv in
     let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
     match ty with TyCon _ then errorSingle [infoTy ty] "Could not unwrap type"
-    else  _generateCudaDataRepresentation env ty
+    else  _generateCDataRepresentation env ty
   | ty ->
     CudaBaseTypeRepr {
       ident = nameSym "cuda_tmp",
@@ -175,6 +174,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
 end
 
 lang CudaTensorWrapper = CudaCWrapperBase
+  sem generateGlobalTensorTops : () -> [CuTop]
   sem generateGlobalTensorTops =
   | () ->
     let stateEnumTop = CuTTop {
@@ -260,9 +260,9 @@ lang CudaTensorWrapper = CudaCWrapperBase
                                        -> [CStmt]
   sem _generateCudaTensorDataWrapperArg env acc =
   | arg ->
-    let arg : ArgData = arg in
-    let src = CEVar {id = arg.gpuIdent} in
-    concat acc (_generateTensorDataInitWrapperStmts env src arg.cData)
+    match arg with {gpuIdent = gpuIdent, cData = cData} in
+    let src = CEVar {id = gpuIdent} in
+    concat acc (_generateTensorDataInitWrapperStmts env src cData)
 
   sem _generateTensorDataAllocStmts : CWrapperEnv -> [CStmt]
   sem _generateTensorDataAllocStmts =
@@ -282,13 +282,13 @@ lang CudaTensorWrapper = CudaCWrapperBase
   sem generateCudaTensorDataWrapper : CWrapperEnv -> [CStmt]
   sem generateCudaTensorDataWrapper =
   | env ->
-    let env : CWrapperEnv = env in
     concat
       (_generateTensorDataAllocStmts env)
       (foldl (_generateCudaTensorDataWrapperArg env) [] env.arguments)
 end
 
 lang OCamlToCudaWrapper = CudaCWrapperBase
+  sem _tensorRankErrorStmt : CExpr -> CStmt
   sem _tensorRankErrorStmt =
   | rankExpr ->
     let printErrorStmt = CSExpr {expr = CEApp {
@@ -308,7 +308,6 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
                                       -> Name -> CDataRepr -> [CStmt]
   sem _generateOCamlToCudaWrapperStmts env status src dstIdent =
   | CudaSeqRepr t ->
-    let env : CWrapperEnv = env in
     let seqInitExpr =
       match t.ty with CTyPtr {ty = ty} then
         let sizeExpr = CESizeOfType {ty = ty} in
@@ -372,7 +371,6 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       body = snoc fieldUpdateStmts iterIncrementStmt} in
     [ seqDefStmt, setLenStmt, allocSeqStmt, _cudaErrorCheckStmt, iterDefStmt, dataCopyLoopStmt ]
   | CudaTensorRepr t ->
-    let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
     let bigarrayValId = _getIdentExn "Caml_ba_array_val" in
     let dst = CEVar {id = dstIdent} in
@@ -473,13 +471,6 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         args = [
           CEUnOp {op = COAddrOf (), arg = CEVar {id = tempId}},
           CEVar {id = n}]}} in
-      --let copyDataStmt = CSExpr {expr = CEApp {
-      --  fun = _cudaMemcpy,
-      --  args = [
-      --    CEVar {id = tempId},
-      --    CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]},
-      --    CEVar {id = n},
-      --    CEVar {id = _cudaMemcpyHostToDevice}]}} in
       let tensorArrId = nameSym "t_ocaml" in
       let tensorArrPtrStmt = CSDef {
         ty = CTyPtr { ty = t.elemOcamlTy }, id = Some tensorArrId,
@@ -623,13 +614,14 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
   sem _generateOCamlToCudaWrapperArg : CWrapperEnv -> [CStmt] -> ArgData -> [CStmt]
   sem _generateOCamlToCudaWrapperArg env acc =
   | arg ->
-    let arg : ArgData = arg in
-    let src = CEVar {id = arg.mexprIdent} in
-    concat acc (_generateOCamlToCudaWrapperStmts env arg.copyStatus src arg.gpuIdent arg.cData)
+    match arg with {mexprIdent = mid, copyStatus = cs,
+                    gpuIdent = gid, cData = cdata} in
+    let src = CEVar {id = mid} in
+    concat acc (_generateOCamlToCudaWrapperStmts env cs src gid cdata)
 
+  sem generateOCamlToCudaWrapper : CWrapperEnv -> [CStmt]
   sem generateOCamlToCudaWrapper =
   | env ->
-    let env : CWrapperEnv = env in
     let initTensorCountStmt = CSDef {
       ty = CTyInt64 (), id = Some _tensorCountId,
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
@@ -639,9 +631,9 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
 end
 
 lang CudaCallWrapper = CudaCWrapperBase
+  sem generateCudaWrapperCall : CWrapperEnv -> [CStmt]
   sem generateCudaWrapperCall =
   | env ->
-    let env : CWrapperEnv = env in
     match env.targetEnv with CudaTargetEnv cenv in
     let return : ArgData = env.return in
     let returnType = return.mexprType in
@@ -668,7 +660,9 @@ lang CudaCallWrapper = CudaCWrapperBase
 end
 
 lang CudaToOCamlWrapper = CudaCWrapperBase
-  sem _generateCudaToOCamlWrapperH (env : CWrapperEnv) (src : CExpr) (dst : CExpr) =
+  sem _generateCudaToOCamlWrapperH : CWrapperEnv -> CExpr -> CExpr -> CDataRepr
+                                  -> [CStmt]
+  sem _generateCudaToOCamlWrapperH env src dst =
   | CudaSeqRepr t ->
     let lengthExpr = _accessMember t.ty src _seqLenKey in
     let tagExpr =
@@ -936,8 +930,8 @@ lang CudaDeallocWrapper = CudaCWrapperBase
     let freeVariantStmt = CSExpr {expr = CEApp {
       fun = _free, args = [arg]}} in
     snoc constructorFreeStmts freeVariantStmt
-
   | CudaBaseTypeRepr _ -> []
+
   sem generateCudaDeallocWrapper : CWrapperEnv -> [CStmt]
   sem generateCudaDeallocWrapper =
   | env ->
@@ -965,15 +959,15 @@ lang CudaCWrapper =
   CudaToOCamlWrapper + CudaDeallocWrapper + Cmp
 
   -- Generates the initial wrapper environment
-  sem generateInitWrapperEnv : Map Name Name -> CompileCEnv -> CWrapperEnv
-  sem generateInitWrapperEnv wrapperMap =
-  | compileCEnv ->
+  sem generateInitWrapperEnv : Map Name Name -> CompileCEnv -> Int -> CWrapperEnv
+  sem generateInitWrapperEnv wrapperMap compileCEnv =
+  | tensorMaxRank ->
     let compileCEnv : CompileCEnv = compileCEnv in
     let tupleSwap = lam t : (Name, Type). match t with (x, y) in (y, x) in
     let revTypeEnv = mapFromSeq cmpType (map tupleSwap compileCEnv.typeEnv) in
     let targetEnv = CudaTargetEnv {
       wrapperMap = wrapperMap, compileCEnv = compileCEnv,
-      revTypeEnv = revTypeEnv} in
+      revTypeEnv = revTypeEnv, tensorMaxRank = tensorMaxRank} in
     let env : CWrapperEnv = _emptyWrapperEnv () in
     {env with targetEnv = targetEnv}
 
@@ -988,10 +982,10 @@ lang CudaCWrapper =
 
   -- Defines the target-specific generation of wrapper code.
   sem generateWrapperCode : Map Name AccelerateData -> Map Name Name
-                         -> CompileCEnv -> CudaProg
-  sem generateWrapperCode accelerated wrapperMap =
+                         -> Int -> CompileCEnv -> CudaProg
+  sem generateWrapperCode accelerated wrapperMap tensorMaxRank =
   | compileCEnv ->
-    let env = generateInitWrapperEnv wrapperMap compileCEnv in
+    let env = generateInitWrapperEnv wrapperMap compileCEnv tensorMaxRank in
     let tensorTops = generateGlobalTensorTops () in
     match generateWrapperCodeH env accelerated with (env, entryPointWrappers) in
     let entryPointTops =
