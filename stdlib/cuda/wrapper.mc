@@ -299,7 +299,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     let printErrorStmt = CSExpr {expr = CEApp {
       fun = _printf,
       args = [
-        CEString {s = "Tensors with rank at most %ld are supported, found rank %ld\n"},
+        CEString {s = "Tensors with rank at most %d are supported, found rank %ld\n"},
         maxRank, rankExpr]}} in
     let exitErrorStmt = CSExpr {expr = CEApp {
       fun = _getIdentExn "exit",
