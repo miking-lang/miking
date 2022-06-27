@@ -308,14 +308,14 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     ) [] pnames
 
   -- Type: Expr -> CFAGraph
-  sem initGraph (graphData: Option GraphData) =
+  sem initGraph (graphData: GraphData) =
   | t ->
 
     -- Initial graph
     let graph = emptyCFAGraph t in
 
     -- Initialize graph data
-    match graphData with Some (HoleCtxEnv {env = env}) in
+    match graphData with (HoleCtxEnv {env = env}) in
     let graph = {graph with graphData = Some (graphDataFromEnv graph.im env)} in
 
     -- Initialize match constraint generating functions
@@ -338,6 +338,14 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
     -- Return graph
     graph
+
+  sem holeCfa : GraphData -> Expr -> CFAGraph
+  sem holeCfa gd =
+  | t -> solveCfa (initGraph gd t)
+
+  sem holeCfaDebug : GraphData -> PprintEnv -> Expr -> (PprintEnv, CFAGraph)
+  sem holeCfaDebug gd pprintenv =
+  | t -> solveCfaDebug pprintenv (initGraph gd t)
 
   sem graphDataInit: CallCtxEnv -> GraphData
   sem graphDataInit =
@@ -439,7 +447,7 @@ let test
       match pprintCode 0 pprintEnvEmpty tANF with (pprintEnv,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some graphData) (Some pprintEnv) tANF with (Some pprintEnv,cfaRes) in
+      match holeCfaDebug graphData pprintEnv tANF with (pprintEnv,cfaRes) in
       match cfaGraphToString pprintEnv cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -457,7 +465,7 @@ let test
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
+      let cfaRes : CFAGraph = holeCfa graphData tANF in
       let avs : [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
         map (lam var: String.
           let binds = mapi (lam i. lam s: Set AbsVal.

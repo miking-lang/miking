@@ -259,7 +259,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
       match pprintCode 0 pprintEnvEmpty tANF with (pprintEnv,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (Some graphData) (Some pprintEnv) tANF with (Some pprintEnv,cfaRes) in
+      match holeCfaDebug graphData pprintEnv tANF with (pprintEnv,cfaRes) in
       match cfaGraphToString pprintEnv cfaRes with (_, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -277,7 +277,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
+      let cfaRes : CFAGraph = holeCfa graphData tANF in
       let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
       match
         if full then assumeFullDependency env tANF
