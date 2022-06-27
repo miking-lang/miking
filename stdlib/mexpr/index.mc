@@ -112,13 +112,19 @@ lang NamedPatIndex = Index + NamedPat
   | PatNamed { ident = PName name } -> addKey name acc
 end
 
+lang SeqEdgePatIndex = Index + SeqEdgePat
+  sem patIndexAdd (acc: IndexAcc) =
+  | PatSeqEdge { middle = PName name } & p ->
+    sfold_Pat_Pat patIndexAdd (addKey name acc) p
+end
+
 --------------------------
 -- MEXPR INDEX FRAGMENT --
 --------------------------
 
 lang MExprIndex =
   Index + VarIndex + LamIndex + LetIndex + RecLetsIndex + ExtIndex + DataIndex +
-  TypeIndex + MatchIndex + NamedPatIndex
+  TypeIndex + MatchIndex + NamedPatIndex + SeqEdgePatIndex
 end
 
 -----------
@@ -212,6 +218,17 @@ utest test "
 ------------------------" with [
   ("T", 0),
   ("C", 1)
+] using eqTest in
+
+utest test "
+  let a = 1 in
+  match a with b in
+  match [a,b] with [_] ++ c in
+  ()
+------------------------" with [
+  ("a", 0),
+  ("b", 1),
+  ("c", 2)
 ] using eqTest in
 
 ()
