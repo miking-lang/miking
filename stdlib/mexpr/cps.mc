@@ -169,7 +169,7 @@ lang RecLetsCPS = CPS + RecLetsAst + LamAst
   | TmRecLets t ->
     let bindings = map (lam b: RecLetBinding. { b with body =
         match b.body with TmLam t then
-          if not (transform env b.ident) then
+          if not (or (transform env b.ident) (transform env t.ident)) then
             TmLam { t with body = exprCps env (None ()) t.body }
           else
             let kName = nameSym "k" in
