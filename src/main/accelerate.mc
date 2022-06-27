@@ -168,7 +168,8 @@ let cudaTranslation =
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
   let cudaTops = addCudaTensorMemoryManagement cudaTops in
-  let wrapperProg = generateWrapperCode accelerateData wrapperMap ccEnv in
+  let wrapperProg = generateWrapperCode accelerateData wrapperMap
+                                        options.accelerateTensorMaxRank ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
 let mergePrograms : CudaProg -> CudaProg -> CudaProg =
@@ -219,100 +220,98 @@ let generateTests = lam ast. lam testsEnabled.
   else (symEnvEmpty, utestStrip ast)
 
 let compileAccelerated =
+  lam options. lam file.
   use PMExprCompile in
-  let _compile : Options -> String -> () =
-    lam options. lam file.
-    let ast = parseParseMCoreFile {
-      keepUtests = true,
-      pruneExternalUtests = false,
-      pruneExternalUtestsWarning = false,
-      findExternalsExclude = false,
-      eliminateDeadCode = true,
-      keywords = parallelKeywords
-    } file in
-    let ast = makeKeywords [] ast in
+  let ast = parseParseMCoreFile {
+    keepUtests = true,
+    pruneExternalUtests = false,
+    pruneExternalUtestsWarning = false,
+    findExternalsExclude = false,
+    eliminateDeadCode = true,
+    keywords = parallelKeywords
+  } file in
+  let ast = makeKeywords [] ast in
 
-    let ast = symbolizeExpr keywordsSymEnv ast in
-    let ast = typeCheck ast in
-    let ast = removeTypeAscription ast in
+  let ast = symbolizeExpr keywordsSymEnv ast in
+  let ast = typeCheck ast in
+  let ast = removeTypeAscription ast in
 
-    -- Translate accelerate terms into functions with one dummy parameter, so
-    -- that we can accelerate terms without free variables and so that it is
-    -- lambda lifted.
-    match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
+  -- Translate accelerate terms into functions with one dummy parameter, so
+  -- that we can accelerate terms without free variables and so that it is
+  -- lambda lifted.
+  match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
 
-    -- Perform lambda lifting and return the free variable solutions
-    match liftLambdasWithSolutions ast with (solutions, ast) in
+  -- Perform lambda lifting and return the free variable solutions
+  match liftLambdasWithSolutions ast with (solutions, ast) in
 
-    -- Extract the accelerate AST
-    let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-    let accelerateAst = extractAccelerateTerms accelerateIds ast in
+  -- Extract the accelerate AST
+  let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
+  let accelerateAst = extractAccelerateTerms accelerateIds ast in
 
-    -- Eliminate the dummy parameter in functions of accelerate terms with at
-    -- least one free variable parameter.
-    match eliminateDummyParameter solutions accelerated accelerateAst
-    with (accelerated, accelerateAst) in
+  -- Eliminate the dummy parameter in functions of accelerate terms with at
+  -- least one free variable parameter.
+  match eliminateDummyParameter solutions accelerated accelerateAst
+  with (accelerated, accelerateAst) in
 
-    -- Check that the AST does not contain nested uses of acceleration, as this
-    -- is not supported at the moment.
-    checkNestedAccelerate accelerateIds accelerateAst;
+  -- Check that the AST does not contain nested uses of acceleration, as this
+  -- is not supported at the moment.
+  checkNestedAccelerate accelerateIds accelerateAst;
 
-    -- Perform analysis to find variables unused after the accelerate call.
-    let accelerated = findUnusedAfterAccelerate accelerated ast in
+  -- Perform analysis to find variables unused after the accelerate call.
+  let accelerated = findUnusedAfterAccelerate accelerated ast in
 
-    -- Produces an AST for each backend based on a classification of the
-    -- accelerated code. The result is a map from a backend-specific
-    -- classification type to an AST for the specific backend.
-    let accelerateAsts = classifyAccelerated accelerated accelerateAst in
+  -- Produces an AST for each backend based on a classification of the
+  -- accelerated code. The result is a map from a backend-specific
+  -- classification type to an AST for the specific backend.
+  let accelerateAsts = classifyAccelerated accelerated accelerateAst in
 
-    -- Generate GPU code for the AST of each accelerate backend in use.
-    let gpuResult = generateGpuCode options accelerateAsts in
+  -- Generate GPU code for the AST of each accelerate backend in use.
+  let gpuResult = generateGpuCode options accelerateAsts in
 
-    -- Construct a sequential version of the AST where parallel constructs have
-    -- been demoted to sequential equivalents
-    let ast = demoteParallel ast in
+  -- Construct a sequential version of the AST where parallel constructs have
+  -- been demoted to sequential equivalents
+  let ast = demoteParallel ast in
 
-    -- Generate utests or strip them from the program.
-    match generateTests ast options.runTests with (symEnv, ast) in
-    let ast = symbolizeExpr symEnv ast in
+  -- Generate utests or strip them from the program.
+  match generateTests ast options.runTests with (symEnv, ast) in
+  let ast = symbolizeExpr symEnv ast in
 
-    match typeLift ast with (typeLiftEnv, ast) in
-    match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
+  match typeLift ast with (typeLiftEnv, ast) in
+  match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
 
-    -- Replace auxilliary accelerate terms in the AST by eliminating
-    -- the let-expressions (only used in the accelerate AST) and adding
-    -- data conversion of parameters and result.
-    match replaceAccelerate accelerated generateEnv ast
-    with (recordDeclTops, ast) in
+  -- Replace auxilliary accelerate terms in the AST by eliminating
+  -- the let-expressions (only used in the accelerate AST) and adding
+  -- data conversion of parameters and result.
+  match replaceAccelerate accelerated generateEnv ast
+  with (recordDeclTops, ast) in
 
-    -- Generate the OCaml AST (with externals support)
-    let env : GenerateEnv =
-      chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
-    in
-    let exprTops = generateTops env ast in
-    let syslibs =
-      setOfSeq cmpString
-        (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
-    in
-    match collectLibraries env.exts syslibs with (libs, clibs) in
+  -- Generate the OCaml AST (with externals support)
+  let env : GenerateEnv =
+    chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
+  in
+  let exprTops = generateTops env ast in
+  let syslibs =
+    setOfSeq cmpString
+      (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+  in
+  match collectLibraries env.exts syslibs with (libs, clibs) in
 
-    -- Add an external declaration of a C function in the OCaml AST,
-    -- for each accelerate term.
-    let externalTops = getExternalCDeclarations accelerated in
+  -- Add an external declaration of a C function in the OCaml AST,
+  -- for each accelerate term.
+  let externalTops = getExternalCDeclarations accelerated in
 
-    let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
+  let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
 
-    let buildOptions = {
-      debugGenerate = options.debugGenerate,
-      output = options.output,
-      file = file,
-      libs = libs,
-      clibs = clibs,
-      ocamlTops = ocamlTops,
-      acceleratedCode = gpuResult
-    } in
-    buildAccelerated buildOptions
-  in _compile
+  let buildOptions = {
+    debugGenerate = options.debugGenerate,
+    output = options.output,
+    file = file,
+    libs = libs,
+    clibs = clibs,
+    ocamlTops = ocamlTops,
+    acceleratedCode = gpuResult
+  } in
+  buildAccelerated buildOptions
 
 let compileAccelerate = lam files. lam options : Options. lam args.
   use PMExprCompile in

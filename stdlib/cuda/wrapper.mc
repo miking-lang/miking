@@ -47,7 +47,11 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
 
       -- C compiler environment, used to compile MExpr types to the C
       -- equivalents.
-      compileCEnv : CompileCEnv}
+      compileCEnv : CompileCEnv,
+
+      -- Determines the maximum rank of a tensor. Larger values result in more
+      -- memory usage per tensor.
+      tensorMaxRank : Int}
 
   sem lookupTypeIdent : TargetWrapperEnv -> Type -> Option Type
   sem lookupTypeIdent env =
@@ -288,19 +292,20 @@ lang CudaTensorWrapper = CudaCWrapperBase
 end
 
 lang OCamlToCudaWrapper = CudaCWrapperBase
-  sem _tensorRankErrorStmt : CExpr -> CStmt
-  sem _tensorRankErrorStmt =
+  sem _tensorRankErrorStmt : Int -> CExpr -> CStmt
+  sem _tensorRankErrorStmt tensorMaxRank =
   | rankExpr ->
+    let maxRank = CEInt {i = tensorMaxRank} in
     let printErrorStmt = CSExpr {expr = CEApp {
       fun = _printf,
       args = [
-        CEString {s = "Tensors with rank at most 3 are supported, found rank %ld\n"},
-        rankExpr]}} in
+        CEString {s = "Tensors with rank at most %ld are supported, found rank %ld\n"},
+        maxRank, rankExpr]}} in
     let exitErrorStmt = CSExpr {expr = CEApp {
       fun = _getIdentExn "exit",
       args = [CEInt {i = 1}]}} in
     CSIf {
-      cond = CEBinOp {op = COGt (), lhs = rankExpr, rhs = CEInt {i = 3}},
+      cond = CEBinOp {op = COGt (), lhs = rankExpr, rhs = maxRank},
       thn = [printErrorStmt, exitErrorStmt],
       els = []}
 
@@ -386,7 +391,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     -- NOTE(larshum, 2022-03-09): The current C representation of tensors
     -- supports at most 3 dimensions, so we verify that the provided tensor
     -- does not exceed this at runtime (as it is not known at compile-time).
-    let rankErrorStmt = _tensorRankErrorStmt rankExpr in
+    let rankErrorStmt = _tensorRankErrorStmt cenv.tensorMaxRank rankExpr in
 
     let setTensorOffsetStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),

@@ -57,9 +57,14 @@ let optionsConfig : ParseConfig Options = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
   ([("--accelerate", "", "")],
-    "Compile accelerated expressions to GPU code using a suitable backend",
+    "Enables expression acceleration which outputs GPU code by default",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with accelerate = true}),
+  ([("--tensor-max-rank", " ", "<rank>")],
+    "Sets the maximum rank of tensors to <rank> in accelerated code",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      {o with accelerateTensorMaxRank = string2int (argToString p)}),
   ([("--check-well-formed", "", "")],
     join ["Enables well-formedness checks for accelerated expressions, ",
           "even when compiling without acceleration"],

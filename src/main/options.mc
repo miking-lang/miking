@@ -19,6 +19,7 @@ let optionsDefault : Options = {
   useTuned = false,
   compileAfterTune = false,
   accelerate = false,
+  accelerateTensorMaxRank = 3,
   checkWellFormed = false,
   cpuOnly = false,
   use32BitIntegers = false,
