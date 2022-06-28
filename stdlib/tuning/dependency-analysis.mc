@@ -52,7 +52,7 @@ lang DependencyAnalysis = MExprHoleCFA
     -- to store both sets as vertices in a graph).
     let nHoles = length env.idx2hole in
     match
-      buildDependencies callGraphTop env cfaGraph.data
+      buildDependencies callGraphTop env (cfaGraphData cfaGraph)
         (_dependencyGraphEmpty, nHoles) t
     with ((graph, _), _) in
     let graph : DependencyGraph = graph in
@@ -246,7 +246,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
     match colorCallGraph [] tANFSmall with (env, _) in
 
     -- Initialize the graph data
-    let graphData = graphDataFromEnv env in
+    let graphData = graphDataInit env in
 
     -- Apply full ANF
     let tANF = normalizeTerm tANFSmall in
@@ -277,7 +277,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
 
     else
       -- Version without debug printouts
-      let cfaRes : CFAGraph = cfaData graphData tANF in
+      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
       let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
       match
         if full then assumeFullDependency env tANF
