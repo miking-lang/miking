@@ -307,45 +307,48 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       cons (CstrHoleDirectData { lhs = target, rhs = name }) acc
     ) [] pnames
 
-  -- Type: Expr -> CFAGraph
-  sem initGraph (graphData: GraphData) =
+  sem addHoleMatchConstraints =
+  | graph ->
+    -- Initialize match constraint generating functions
+    { graph with mcgfs = concat [ generateHoleMatchConstraints graph.im
+                                , generateHoleMatchResConstraints
+                                ]
+                                graph.mcgfs }
+
+  sem addHoleConstraints (graphData: GraphData) (graph: CFAGraph) =
   | t ->
-
-    -- Initial graph
-    let graph = emptyCFAGraph t in
-
     -- Initialize graph data
     match graphData with (HoleCtxEnv {env = env}) in
     let graph = {graph with graphData = Some (graphDataFromEnv graph.im env)} in
 
-    -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = [ generateMatchConstraints
-                                     , generateHoleMatchConstraints graph.im
-                                     , generateHoleMatchResConstraints
-                                     ] } in
-
     -- Initialize constraint generating functions
-    let cgfs = [ generateConstraints graph.im
-               , generateConstraintsMatch graph.im graph.mcgfs
-               , generateHoleConstraints graph
-               ] in
+    let cgfs = [ generateHoleConstraints graph ] in
 
     -- Recurse over program and generate constraints
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
 
-    -- Initialize all collected constraints
-    let graph = foldl initConstraint graph cstrs in
-
-    -- Return graph
-    graph
+    -- Initialize all collected constraints and return the result
+    foldl initConstraint graph cstrs
 
   sem holeCfa : GraphData -> Expr -> CFAGraph
   sem holeCfa gd =
-  | t -> solveCfa (initGraph gd t)
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addHoleMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    let graph = addHoleConstraints gd graph t in
+    solveCfa graph
 
   sem holeCfaDebug : GraphData -> PprintEnv -> Expr -> (PprintEnv, CFAGraph)
   sem holeCfaDebug gd pprintenv =
-  | t -> solveCfaDebug pprintenv (initGraph gd t)
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addHoleMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    let graph = addHoleConstraints gd graph t in
+    solveCfaDebug pprintenv graph
 
   sem graphDataInit: CallCtxEnv -> GraphData
   sem graphDataInit =

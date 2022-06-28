@@ -1214,22 +1214,15 @@ lang MExprCFA = CFA +
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
   IntPatCFA + CharPatCFA + BoolPatCFA + AndPatCFA + OrPatCFA + NotPatCFA
-end
 
------------
--- TESTS --
------------
+  -- Function that adds a set of universal base match constraints to a CFAGraph
+  sem addBaseMatchConstraints =
+  | graph ->
+    { graph with mcgfs = concat [generateMatchConstraints] graph.mcgfs }
 
-lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
-
-  sem initGraph =
+  -- Function that adds a set of universal base constraints to a CFAGraph
+  sem addBaseConstraints (graph: CFAGraph) =
   | t ->
-
-    -- Initial graph
-    let graph = emptyCFAGraph t in
-
-    -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = [generateMatchConstraints] } in
 
     -- Initialize constraint generating functions
     let cgfs = [ generateConstraints graph.im,
@@ -1238,19 +1231,32 @@ lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
     -- Recurse over program and generate constraints
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
 
-    -- Initialize all collected constraints
-    let graph = foldl initConstraint graph cstrs in
+    -- Initialize all collected constraints and return
+    foldl initConstraint graph cstrs
 
-    -- Return graph
-    graph
+end
+
+-----------
+-- TESTS --
+-----------
+
+lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
 
   sem testCfa : Expr -> CFAGraph
   sem testCfa =
-  | t -> solveCfa (initGraph t)
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    solveCfa graph
 
   sem testCfaDebug : PprintEnv -> Expr -> (PprintEnv, CFAGraph)
   sem testCfaDebug pprintenv =
-  | t -> solveCfaDebug pprintenv (initGraph t)
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    solveCfaDebug pprintenv graph
 
 end
 
