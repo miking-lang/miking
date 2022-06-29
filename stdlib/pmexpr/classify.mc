@@ -10,6 +10,7 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
   | Invalid ()
 
   type ClassificationEnv = Map Name (Info, Class)
+  type ClassificationResult = Map Class (Map Name AccelerateData, Expr)
 
   sem cmpClass : Class -> Class -> Int
   sem cmpClass lhs =
@@ -99,7 +100,7 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
   | _ -> Any ()
 
   sem classifyAccelerated : Map Name AccelerateData -> Expr
-                         -> Map Class (Map Name AccelerateData, Expr)
+                         -> ClassificationResult
   sem classifyAccelerated accelerated =
   | ast ->
     match classify ast with (_, classification) in

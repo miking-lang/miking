@@ -208,7 +208,7 @@ utest wellFormedExpr seqLitArrowType with [CudaTypeError arrowType]
 using eqSeq eqCudaError in
 
 let tensorSeqTy = tyseq_ (tytensor_ tyint_) in
-utest wellFormedType tensorSeqTy with []
+utest wellFormedTypeH [] tensorSeqTy with []
 using eqSeq eqCudaError in
 
 let recLit =
@@ -218,7 +218,7 @@ let recLit =
 utest wellFormedExpr recLit with [] using eqSeq eqCudaError in
 
 let recTy = tyrecord_ [("a", arrowType)] in
-utest wellFormedType recTy with [CudaTypeError recTy]
+utest wellFormedTypeH [] recTy with [CudaTypeError recTy]
 using eqSeq eqCudaError in
 
 let recordUpdateExpr = recordupdate_ (var_ "r") "a" (int_ 4) in

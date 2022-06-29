@@ -1,11 +1,7 @@
--- Performs a well-formed check of a PMExpr AST. This ensures that:
--- * Sequences do not contain elements of functional type.
--- * The accumulator of a foldl and parallelReduce is not of functional type.
--- * The accumulator and the sequence elements of parallelReduce have the same
---   type.
---
--- These type checks assume that the provided AST is valid according to the
--- MExpr type checking.
+-- Applies static as well as dynamic well-formedness checks on a provided
+-- accelerate AST. The definition of these checks and which guarantees they
+-- provide depend on which backend it targets. The checks assume that the
+-- provided AST has been type-checked.
 
 include "pmexpr/ast.mc"
 
@@ -36,9 +32,11 @@ lang WellFormed
 
   sem wellFormedTypeH : [WFError] -> Type -> [WFError]
 
+  sem wellFormedType : Type -> [WFError]
   sem wellFormedType =
   | t -> reverse (wellFormedTypeH [] t)
 
+  sem wellFormed : Expr -> ()
   sem wellFormed =
   | t ->
     let errors = wellFormedExpr t in

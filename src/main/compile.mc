@@ -114,15 +114,20 @@ let compile = lam files. lam options : Options. lam args.
     } file in
     let ast = makeKeywords [] ast in
 
-    -- Performs a well-formedness check of the accelerated expressions in the
-    -- AST, when the --check-well-formed flag is set.
-    -- TODO: integrate this in the default compiler process, together with the
-    -- acceleration.
-    -- (if options.checkWellFormed then checkWellFormed ast else ());
-
-    -- Demote parallel constructs to sequential equivalents and remove
-    -- accelerate terms
-    let ast = demoteParallel ast in
+    -- Apply well-formedness checks to the accelerated expressions of the AST,
+    -- when the --check-well-formed flag is set. In the end, we eliminate all
+    -- parallel constructs from the AST and leave it to the default compiler.
+    -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
+    -- duplicate symbolization and type-checking when compiling with
+    -- well-formedness checks.
+    let ast =
+      if options.checkWellFormed then
+        let ast = symbolizeExpr keywordsSymEnv ast in
+        let ast = typeCheck ast in
+        let ast = removeTypeAscription ast in
+        match checkWellFormedness options ast with (ast, _, _) in
+        demoteParallel ast
+      else demoteParallel ast in
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in

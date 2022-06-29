@@ -292,23 +292,6 @@ lang CudaTensorWrapper = CudaCWrapperBase
 end
 
 lang OCamlToCudaWrapper = CudaCWrapperBase
-  sem _tensorRankErrorStmt : Int -> CExpr -> CStmt
-  sem _tensorRankErrorStmt tensorMaxRank =
-  | rankExpr ->
-    let maxRank = CEInt {i = tensorMaxRank} in
-    let printErrorStmt = CSExpr {expr = CEApp {
-      fun = _printf,
-      args = [
-        CEString {s = "Tensors with rank at most %d are supported, found rank %ld\n"},
-        maxRank, rankExpr]}} in
-    let exitErrorStmt = CSExpr {expr = CEApp {
-      fun = _getIdentExn "exit",
-      args = [CEInt {i = 1}]}} in
-    CSIf {
-      cond = CEBinOp {op = COGt (), lhs = rankExpr, rhs = maxRank},
-      thn = [printErrorStmt, exitErrorStmt],
-      els = []}
-
   sem _generateOCamlToCudaWrapperStmts : CWrapperEnv -> CopyStatus -> CExpr
                                       -> Name -> CDataRepr -> [CStmt]
   sem _generateOCamlToCudaWrapperStmts env status src dstIdent =
@@ -388,11 +371,6 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         lhs = CEApp {fun = bigarrayValId, args = [src]},
         id = _bigarrayNumDimsKey}}} in
 
-    -- NOTE(larshum, 2022-03-09): The current C representation of tensors
-    -- supports at most 3 dimensions, so we verify that the provided tensor
-    -- does not exceed this at runtime (as it is not known at compile-time).
-    let rankErrorStmt = _tensorRankErrorStmt cenv.tensorMaxRank rankExpr in
-
     let setTensorOffsetStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = _accessMember t.ty dst _tensorOffsetKey,
@@ -457,7 +435,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
     -- NOTE(larshum, 2022-04-12): If the tensor data does not need to be
     -- copied, we just allocate memory.
     let tensorAllocStmts =
-      [ tensorDefStmt, setTensorRankStmt, rankErrorStmt, setTensorOffsetStmt
+      [ tensorDefStmt, setTensorRankStmt, setTensorOffsetStmt
       , setTensorIdStmt, incrementTensorCountStmt, iterInitStmt, sizeInitStmt
       , dimLoopStmt, setTensorSizeStmt ] in
     match status with CopyFromAccelerate _ | NoCopy _ then
@@ -818,13 +796,6 @@ lang CudaDeallocWrapper = CudaCWrapperBase
         op = COSubScript (),
         lhs = CEVar {id = ptrId},
         rhs = tensorIdExpr} in
-    --let copyBackTensorDataStmt = CSExpr {expr = CEApp {
-    --  fun = _cudaMemcpy,
-    --  args = [
-    --    CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [ocamlArg]},
-    --    _accessMember t.ty arg _tensorDataKey,
-    --    _accessMember t.ty arg _tensorSizeKey,
-    --    CEVar {id = _cudaMemcpyDeviceToHost}]}} in
     let tensorArrId = nameSym "t_ocaml" in
     let tensorArrPtrStmt = CSDef {
       ty = CTyPtr { ty = t.elemOcamlTy }, id = Some tensorArrId,

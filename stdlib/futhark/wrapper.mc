@@ -63,7 +63,8 @@ lang FutharkCWrapperBase = PMExprCWrapper
   | ty ->
     let tystr = use MExprPrettyPrint in type2str ty in
     errorSingle [infoTy ty]
-      (join ["Type ", tystr, " is not supported by C wrapper"])
+      (join ["Type ", tystr, " cannot be passed to accelerated expressions ",
+             "using the functional backend."])
 
   sem _generateCDataRepresentation : CWrapperEnv -> Type -> CDataRepr
   sem _generateCDataRepresentation env =

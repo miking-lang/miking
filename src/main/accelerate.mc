@@ -3,12 +3,12 @@ include "c/pprint.mc"
 include "cuda/compile.mc"
 include "cuda/constant-app.mc"
 include "cuda/gpu-utils.mc"
+include "cuda/kernel-translate.mc"
 include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-compile.mc"
 include "cuda/pmexpr-pprint.mc"
 include "cuda/pprint.mc"
-include "cuda/kernel-translate.mc"
 include "cuda/tensor-memory.mc"
 include "cuda/well-formed.mc"
 include "cuda/wrapper.mc"
@@ -33,11 +33,12 @@ include "ocaml/generate.mc"
 include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
 include "options.mc"
-include "sys.mc"
+include "parse.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/build.mc"
 include "pmexpr/c-externals.mc"
 include "pmexpr/classify.mc"
+include "pmexpr/compile.mc"
 include "pmexpr/copy-analysis.mc"
 include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
@@ -50,7 +51,7 @@ include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utest-size-constraint.mc"
 include "pmexpr/well-formed.mc"
-include "parse.mc"
+include "sys.mc"
 
 lang PMExprCompile =
   BootParser +
@@ -61,7 +62,8 @@ lang PMExprCompile =
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +
-  OCamlGenerateExternalNaive + PMExprCopyAnalysis + PMExprBuild
+  OCamlGenerateExternalNaive + PMExprCopyAnalysis + PMExprBuild +
+  PMExprCompileWellFormed
 end
 
 lang MExprFutharkCompile =
@@ -127,21 +129,9 @@ let pprintCudaAst = use CudaPrettyPrint in
   lam ast : CudaProg.
   printCudaProg cCompilerNames ast
 
-let patternTransformation : Expr -> Expr = lam ast.
-  use PMExprCompile in
-  let ast = replaceUtestsWithSizeConstraint ast in
-  let ast = rewriteTerm ast in
-  let ast = tailRecursive ast in
-  let ast = cseGlobal ast in
-  let ast = normalizeTerm ast in
-  let ast = parallelPatternRewrite parallelPatterns ast in
-  eliminateRecursion ast
-
 let futharkTranslation : Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
   use MExprFutharkCompile in
-  let ast = patternTransformation ast in
-  wellFormed ast;
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
@@ -152,10 +142,6 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation =
   use MExprCudaCompile in
   lam options : Options. lam accelerateData : Map Name AccelerateData. lam ast : Expr.
-  let ast = fixLanguageFragmentSemanticFunction ast in
-  let ast = constantAppToExpr ast in
-  let ast = normalizeTerm ast in
-  wellFormed ast;
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
@@ -214,6 +200,17 @@ let generateGpuCode =
       else never)
     asts
 
+let checkWellFormedness = lam options. lam ast.
+  use PMExprCompile in
+  let config = {
+    dynamicChecks = options.checkWellFormed,
+    tensorMaxRank = options.accelerateTensorMaxRank
+  } in
+  match checkWellFormed config ast
+  with {seqAst = seqAst, accelerateData = accelerateData,
+        accelerateAsts = accelerateAsts} in
+  (seqAst, accelerateData, accelerateAsts)
+
 let generateTests = lam ast. lam testsEnabled.
   use PMExprCompile in
   if testsEnabled then utestGen (removeTypeAscription ast)
@@ -236,34 +233,8 @@ let compileAccelerated =
   let ast = typeCheck ast in
   let ast = removeTypeAscription ast in
 
-  -- Translate accelerate terms into functions with one dummy parameter, so
-  -- that we can accelerate terms without free variables and so that it is
-  -- lambda lifted.
-  match addIdentifierToAccelerateTerms ast with (accelerated, ast) in
-
-  -- Perform lambda lifting and return the free variable solutions
-  match liftLambdasWithSolutions ast with (solutions, ast) in
-
-  -- Extract the accelerate AST
-  let accelerateIds : Set Name = mapMap (lam. ()) accelerated in
-  let accelerateAst = extractAccelerateTerms accelerateIds ast in
-
-  -- Eliminate the dummy parameter in functions of accelerate terms with at
-  -- least one free variable parameter.
-  match eliminateDummyParameter solutions accelerated accelerateAst
-  with (accelerated, accelerateAst) in
-
-  -- Check that the AST does not contain nested uses of acceleration, as this
-  -- is not supported at the moment.
-  checkNestedAccelerate accelerateIds accelerateAst;
-
-  -- Perform analysis to find variables unused after the accelerate call.
-  let accelerated = findUnusedAfterAccelerate accelerated ast in
-
-  -- Produces an AST for each backend based on a classification of the
-  -- accelerated code. The result is a map from a backend-specific
-  -- classification type to an AST for the specific backend.
-  let accelerateAsts = classifyAccelerated accelerated accelerateAst in
+  match checkWellFormedness options ast
+  with (ast, accelerateData, accelerateAsts) in
 
   -- Generate GPU code for the AST of each accelerate backend in use.
   let gpuResult = generateGpuCode options accelerateAsts in
@@ -282,7 +253,7 @@ let compileAccelerated =
   -- Replace auxilliary accelerate terms in the AST by eliminating
   -- the let-expressions (only used in the accelerate AST) and adding
   -- data conversion of parameters and result.
-  match replaceAccelerate accelerated generateEnv ast
+  match replaceAccelerate accelerateData generateEnv ast
   with (recordDeclTops, ast) in
 
   -- Generate the OCaml AST (with externals support)
@@ -298,7 +269,7 @@ let compileAccelerated =
 
   -- Add an external declaration of a C function in the OCaml AST,
   -- for each accelerate term.
-  let externalTops = getExternalCDeclarations accelerated in
+  let externalTops = getExternalCDeclarations accelerateData in
 
   let ocamlTops = join [externalTops, recordDeclTops, typeTops, exprTops] in
 
