@@ -1045,6 +1045,17 @@ let tests = [
    ty = tyarrow_ tyint_ tybool_,
    env = []},
 
+  {name = "RecLets3",
+   tm = bindall_ [
+     ureclets_ [
+       ("f", ulam_ "x" (var_ "x")),
+       ("g", ulam_ "x" (app_ (var_ "f") (var_ "x")))
+     ],
+     app_ (var_ "g") (int_ 1)
+   ],
+   ty = tyint_,
+   env = []},
+
   {name = "Match1",
    tm = if_ true_ (int_ 1) (int_ 0),
    ty = tyint_,
