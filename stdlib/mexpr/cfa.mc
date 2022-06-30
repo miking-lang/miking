@@ -76,20 +76,14 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
       im = im,
       graphData = None () }
 
-  sem name2int: IndexMap -> Info -> Name -> IName
-  sem name2int im info =
-  | name ->
-    mapLookupOrElse (lam.
-        errorSingle [info] (concat "name2int failed: " (nameGetStr name)))
-      name im.name2int
+  syn Constraint =
+  -- Intentionally left blank
 
-  sem int2name: IndexMap -> IName -> Name
-  sem int2name im =
-  | i -> tensorLinearGetExn im.int2name i
+  syn AbsVal =
+  -- Intentionally left blank
 
-  sem pprintVarIName: IndexMap -> PprintEnv -> IName -> (PprintEnv, String)
-  sem pprintVarIName im env =
-  | n -> pprintVarName env (int2name im n)
+  syn GraphData =
+  -- Intentionally left blank
 
   -- This function converts the data-flow result into a map, which might be more
   -- convenient to operate on for later analysis steps.
@@ -99,15 +93,6 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     tensorFoldi (lam acc. lam i: [Int]. lam vals: Set AbsVal.
         mapInsert (int2name graph.im (head i)) vals acc
       ) (mapEmpty nameCmp) graph.data
-
-  syn Constraint =
-  -- Intentionally left blank
-
-  syn AbsVal =
-  -- Intentionally left blank
-
-  syn GraphData =
-  -- Intentionally left blank
 
   -- Main algorithm
   sem solveCfa: CFAGraph -> CFAGraph
@@ -141,17 +126,18 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     in
 
     -- Iteration
-    recursive let iter = lam pprintenv: PprintEnv. lam graph: CFAGraph.
+    recursive let iter = lam i. lam pprintenv: PprintEnv. lam graph: CFAGraph.
       if null graph.worklist then (pprintenv,graph)
       else
-        let pprintenv = printGraph pprintenv graph "INTERMEDIATE CFA GRAPH" in
+        let header = concat "INTERMEDIATE CFA GRAPH " (int2string i) in
+        let pprintenv = printGraph pprintenv graph header in
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup q graph with cc in
         let graph = foldl (propagateConstraint h) graph cc in
-        iter pprintenv graph
+        iter (addi i 1) pprintenv graph
     in
-    iter pprintenv graph
+    iter 1 pprintenv graph
 
   -- For a given expression, returns the variable "labeling" that expression.
   -- The existence of such a label is guaranteed by ANF.
@@ -228,9 +214,28 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
       tensorLinearSetExn graph.data q (setInsert d dq);
       { graph with worklist = cons (q,d) graph.worklist }
 
+  --------------------------
+  -- NAME-INTEGER MAPPING --
+  --------------------------
+
+  sem name2int: IndexMap -> Info -> Name -> IName
+  sem name2int im info =
+  | name ->
+    mapLookupOrElse (lam.
+        errorSingle [info] (concat "name2int failed: " (nameGetStr name))
+      ) name im.name2int
+
+  sem int2name: IndexMap -> IName -> Name
+  sem int2name im =
+  | i -> tensorLinearGetExn im.int2name i
+
   ---------------------
   -- PRETTY PRINTING --
   ---------------------
+
+  sem pprintVarIName: IndexMap -> PprintEnv -> IName -> (PprintEnv, String)
+  sem pprintVarIName im env =
+  | n -> pprintVarName env (int2name im n)
 
   sem constraintToString
   : CFAGraph -> PprintEnv -> Constraint -> (PprintEnv, String)
