@@ -36,7 +36,8 @@ let escapeIdentifier = lam str: String.
     concat h (map replaceInvalidChar t)
   else "_"
 
-let pprintEnvGetStr = lam env. lam id: Name.
+let cPprintEnvGetStr = lam env. lam id: Name.
+  use IdentifierPrettyPrint in
   -- Set this to true to print names with their symbols (for debugging)
   if false then
     (env,join [
@@ -45,12 +46,12 @@ let pprintEnvGetStr = lam env. lam id: Name.
     ])
   else
     let id = nameSetStr id (escapeIdentifier (nameGetStr id)) in
-    pprintEnvGetStr env id -- Note that this is not a recursive call!
+    pprintEnvGetStr env id
 
--- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
+-- Similar to cPprintEnvGetStr above, but takes an Option Name as
 -- argument. If it is None (), the returned string is "".
-let pprintEnvGetOptStr = lam env. lam id.
-  match id with Some id then pprintEnvGetStr env id else (env,"")
+let cPprintEnvGetOptStr = lam env. lam id.
+  match id with Some id then cPprintEnvGetStr env id else (env,"")
 
 --------------
 -- KEYWORDs --
@@ -86,7 +87,7 @@ lang CExprTypePrettyPrint = CExprTypeAst
   sem printCType (decl: String) (env: PprintEnv) =
 
   | CTyVar { id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       (env, _joinSpace id decl)
     else never
 
@@ -114,12 +115,12 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   | CTyStruct { id = id, mem = mem } ->
     let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
+      match id with Some id then cPprintEnvGetStr env id else (env, "") in
     match idtup with (env,id) then
       match mem with Some mem then
         let f = lam env. lam t: (CType, Option Name).
           match t.1 with Some n then
-            match pprintEnvGetStr env n with (env,n) then
+            match cPprintEnvGetStr env n with (env,n) then
               printCType n env t.0
             else never
           else match t.1 with None _ then
@@ -138,12 +139,12 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   | CTyUnion { id = id, mem = mem } ->
     let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
+      match id with Some id then cPprintEnvGetStr env id else (env, "") in
     match idtup with (env,id) then
       match mem with Some mem then
         let f = lam env. lam t: (CType, Option Name).
           match t.1 with Some n then
-            match pprintEnvGetStr env n with (env,n) then
+            match cPprintEnvGetStr env n with (env,n) then
               printCType n env t.0
             else never
           else printCType "" env t.0
@@ -158,10 +159,10 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   | CTyEnum { id = id, mem = mem } ->
     let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
+      match id with Some id then cPprintEnvGetStr env id else (env, "") in
     match idtup with (env,id) then
       match mem with Some mem then
-        match mapAccumL pprintEnvGetStr env mem with (env,mem) then
+        match mapAccumL cPprintEnvGetStr env mem with (env,mem) then
           let mem = strJoin ", " mem in
           (env, _joinSpace (join [_joinSpace "enum" id, " {", mem, "}"]) decl)
         else never
@@ -171,13 +172,13 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   sem printCExpr (env: PprintEnv) =
 
-  | CEVar { id = id } -> pprintEnvGetStr env id
+  | CEVar { id = id } -> cPprintEnvGetStr env id
 
   -- NOTE(larshum, 2021-09-03): We might need to add parentheses around
   -- applications in the future, if we add support for scope resolution
   -- (see https://en.cppreference.com/w/cpp/language/operator_precedence).
   | CEApp { fun = fun, args = args } ->
-    match pprintEnvGetStr env fun with (env,fun) then
+    match cPprintEnvGetStr env fun with (env,fun) then
       match mapAccumL printCExpr env args with (env,args) then
         (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
@@ -202,14 +203,14 @@ lang CExprTypePrettyPrint = CExprTypeAst
     else never
 
   | CEMember { lhs = lhs, id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCExpr env lhs with (env,lhs) then
         (env, _par (join [lhs, ".", escapeIdentifier id]))
       else never
     else never
 
   | CEArrow { lhs = lhs, id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCExpr env lhs with (env,lhs) then
         (env, _par (join [lhs, "->", escapeIdentifier id]))
       else never
@@ -310,7 +311,7 @@ lang CStmtPrettyPrint =
   sem printCStmt (indent: Int) (env: PprintEnv) =
 
   | CSDef { ty = ty, id = id, init = init } ->
-    match pprintEnvGetOptStr env id with (env,id) then
+    match cPprintEnvGetOptStr env id with (env,id) then
       match printCDef env ty id init with (env,str) then
         (env, join [str, ";"])
       else never
@@ -403,14 +404,14 @@ lang CTopPrettyPrint =
 
   sem printCTop (indent : Int) (env: PprintEnv) =
   | CTTyDef { ty = ty, id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       match printCDef env ty id (None ()) with (env,str) then
         (env, join ["typedef ", str, ";"])
       else never
     else never
 
   | CTDef { ty = ty, id = id, init = init } ->
-    match pprintEnvGetOptStr env id with (env,id) then
+    match cPprintEnvGetOptStr env id with (env,id) then
       match printCDef env ty id init with (env,str) then
         (env, join [str, ";"])
       else never
@@ -419,9 +420,9 @@ lang CTopPrettyPrint =
   | CTFun { ret = ret, id = id, params = params, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match pprintEnvGetStr env id with (env,id) then
+    match cPprintEnvGetStr env id with (env,id) then
       let f = lam env. lam t: (CType,Name).
-        match pprintEnvGetStr env t.1 with (env,t1) then
+        match cPprintEnvGetStr env t.1 with (env,t1) then
           printCDef env t.0 t1 (None ())
         else never in
       match mapAccumL f env params with (env,params) then
