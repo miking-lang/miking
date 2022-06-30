@@ -254,7 +254,13 @@ lang MatchCPS = CPS + MatchAst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmMatch m, inexpr = inexpr } & b) & t ->
     if not (transform env ident) then
-      TmLet { b with inexpr = exprCps env k inexpr }
+      TmLet { b with
+        body = TmMatch { m with
+          thn = exprCps env (None ()) m.thn,
+          els = exprCps env (None ()) m.els
+        },
+        inexpr = exprCps env k inexpr
+      }
     else
       let opt = match k with Some k then tailCall t else false in
       if opt then
