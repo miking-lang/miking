@@ -25,7 +25,7 @@ include "index.mc"
 type IName = Int
 type Ctx = [IName]
 type CtxEnv = Map IName Ctx
-type AnalyzedApps = Tensor[Set Ctx]
+type AnalyzedApps = Tensor[Map Ctx (Set CtxEnv)]
 type GenFunAcc = (AnalyzedApps, CtxEnv, [Constraint])
 type GenFun = Ctx -> AnalyzedApps -> CtxEnv -> Expr -> GenFunAcc
 type MatchGenFun = (IName,Ctx) -> (IName,Ctx) -> Pat -> [Constraint]
@@ -331,21 +331,23 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem analyzedAppsEmpty: IndexMap -> AnalyzedApps
   sem analyzedAppsEmpty =
   | im ->
-    tensorCreateDense (tensorShape im.int2name) (lam. setEmpty cmpCtx)
+    tensorCreateDense (tensorShape im.int2name) (lam. mapEmpty cmpCtx)
 
   -- Checks if a given application has been analyzed, and adds it to the set if
   -- not already analyzed. Updates the set by a side effect.
-  -- NOTE(Linnea, 2022-06-30): Does not consider the context environment, only
-  -- the label and the context of an application. I have not been able to
-  -- construct a test cast where the context environment is needed, but I have
-  -- not verified (by proof or reference) that the label and context are enough.
-  sem analyzedAppsAdd: IName -> Ctx -> AnalyzedApps -> (Bool, AnalyzedApps)
-  sem analyzedAppsAdd n c =
+  sem analyzedAppsAdd
+  : IName -> Ctx -> CtxEnv -> AnalyzedApps -> (Bool, AnalyzedApps)
+  sem analyzedAppsAdd n c e =
   | a ->
     let cs = tensorLinearGetExn a n in
-    match mapLookup c cs with Some es then (true, a)
+    match mapLookup c cs with Some es then
+      if setMem e es then (true, a)
+      else
+        tensorLinearSetExn a n (mapInsert c (setInsert e es) cs);
+        (false, a)
     else
-      tensorLinearSetExn a n (setInsert c cs);
+      let s = setInsert e (setEmpty cmpCtxEnv) in
+      tensorLinearSetExn a n (mapInsert c s cs);
       (false, a)
 
   ---------------------
@@ -738,7 +740,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
     -- Check if the application already has been analyzed in this context and
     -- context environment. Without this check, applications in recursive
     -- functions would be analyzed infinitely many times.
-    switch analyzedAppsAdd ident ctx apps
+    switch analyzedAppsAdd ident ctx env apps
     case (true, _) then (apps, ctxEnvAdd ident ctx env, [])
     case (false, apps) then
       match app.lhs with TmVar l then
@@ -1895,6 +1897,29 @@ utest _test0 false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
 ] using eqTestLam0 in
+
+let t = _parse "
+  let f = lam x.
+    recursive let g = lam y.
+      let a = g x in
+      a
+    in
+    let d = g x in
+    d
+  in
+  let b = f (lam z. z) in
+  let c = f (lam w. w) in
+  c
+------------------------" in
+utest _test false 3 t [
+  ("y", ["b","d","a"]),
+  ("y", ["c","d","a"]),
+  ("y", ["a","a","a"])
+] with [
+  ("y", ["b","d","a"], ["z"]),
+  ("y", ["c","d","a"], ["w"]),
+  ("y", ["a","a","a"], ["z", "w"])
+] using eqTestLam in
 
 -- And pattern
 let t = _parse "
