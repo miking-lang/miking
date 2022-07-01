@@ -34,6 +34,8 @@ lang PMExprAst =
   | "accelerate" ->
     Some (1, lam lst. TmAccelerate {e = get lst 0, ty = TyUnknown {info = info},
                                     info = info})
+  | "parallelMap" ->
+    Some (2, lam lst. TmConst {val = CMap (), ty = TyUnknown {info = info}, info = info})
   | "parallelFlatten" ->
     Some (1, lam lst. TmFlatten {e = get lst 0, ty = TyUnknown {info = info},
                                  info = info})
