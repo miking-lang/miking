@@ -161,6 +161,11 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   | t ->
     errorSingle [infoTm t] "Error in exprName for CFA"
 
+  -- Returns the set of free variables for a given expression.
+  sem freeVars: Set Name -> Expr -> Set Name
+  sem freeVars acc =
+  | t -> sfold_Expr_Expr freeVars acc t
+
   -- Required for the data type Set AbsVal
   sem cmpAbsVal: AbsVal -> AbsVal -> Int
   sem cmpAbsVal lhs =
@@ -273,10 +278,6 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     let ctx = snoc ctx n in
     if leqi (length ctx) k then ctx else tail ctx
 
-  sem ctxEnvEmpty: () -> CtxEnv
-  sem ctxEnvEmpty =
-  | _ -> mapEmpty subi
-
   -- Needed for `Map Ctx (Set AbsVal)`
   sem cmpCtx: Ctx -> Ctx -> Int
   sem cmpCtx ctx1 =
@@ -296,6 +297,10 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     match mapAccumL (pprintVarIName im) env ctx with (env,ctx) in
     (env, join ["<", strJoin "," ctx, ">"])
 
+  sem ctxEnvEmpty: () -> CtxEnv
+  sem ctxEnvEmpty =
+  | _ -> mapEmpty subi
+
   sem ctxEnvAdd: IName -> Ctx -> CtxEnv -> CtxEnv
   sem ctxEnvAdd n c =
   | env ->
@@ -309,6 +314,16 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
         errorSingle [info] (concat "ctxEnvLookup failed: " (nameGetStr name))
       ) n env
 
+  -- Keep names that appear free in a given expression.
+  sem ctxEnvFilterFree: IndexMap -> Expr -> CtxEnv -> CtxEnv
+  sem ctxEnvFilterFree im e =
+  | env ->
+    let free: Set Name = freeVars (setEmpty nameCmp) e in
+    mapFoldWithKey (lam acc. lam n. lam ctx.
+        if setMem (int2name im n) free then mapInsert n ctx acc
+        else acc
+      ) (mapEmpty subi) env
+
   sem cmpCtxEnv: CtxEnv -> CtxEnv -> Int
   sem cmpCtxEnv env1 =
   | env2 -> mapCmp cmpCtx env1 env2
@@ -320,9 +335,11 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
 
   -- Checks if a given application has been analyzed, and adds it to the set if
   -- not already analyzed. Updates the set by a side effect.
-  -- TODO(Linnea, 2022-06-30): Should consider the context environment as well?
-  sem analyzedAppsAdd
-  : IName -> Ctx -> AnalyzedApps -> (Bool, AnalyzedApps)
+  -- NOTE(Linnea, 2022-06-30): Does not consider the context environment, only
+  -- the label and the context of an application. I have not been able to
+  -- construct a test cast where the context environment is needed, but I have
+  -- not verified (by proof or reference) that the label and context are enough.
+  sem analyzedAppsAdd: IName -> Ctx -> AnalyzedApps -> (Bool, AnalyzedApps)
   sem analyzedAppsAdd n c =
   | a ->
     let cs = tensorLinearGetExn a n in
@@ -529,6 +546,8 @@ lang VarCFA = CFA + BaseConstraint + VarAst
   sem exprName =
   | TmVar t -> t.ident
 
+  sem freeVars acc =
+  | TmVar t -> setInsert t.ident acc
 end
 
 lang LamCFA = CFA + BaseConstraint + LamAst
@@ -553,7 +572,7 @@ lang LamCFA = CFA + BaseConstraint + LamAst
       ident = name2int im t.info t.ident,
       bident = name2int im (infoTm t.body) (exprName t.body),
       body = t.body,
-      env = env
+      env = ctxEnvFilterFree im (TmLam t) env
     } in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
     (apps, ctxEnvAdd ident ctx env, cstrs)
@@ -569,11 +588,18 @@ lang LamCFA = CFA + BaseConstraint + LamAst
   sem collectConstraints ctx cgfs acc =
   | TmLam t -> acc
 
+  sem freeVars acc =
+  | TmLam t ->
+    setRemove t.ident (freeVars acc t.body)
 end
 
 lang LetCFA = CFA + LetAst
   sem exprName =
   | TmLet t -> exprName t.inexpr
+
+  sem freeVars acc =
+  | TmLet t ->
+    setRemove t.ident (freeVars (freeVars acc t.body) t.inexpr)
 end
 
 lang RecLetsCFA = CFA + LamCFA + RecLetsAst
@@ -581,10 +607,11 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
   | TmRecLets t -> exprName t.inexpr
 
   sem generateConstraints im ctx apps env =
-  | TmRecLets { bindings = bindings } ->
-    -- Make each reclet available in the environment
+  | TmRecLets ({ bindings = bindings } & t) ->
+    -- Make each binding available in the environment
     let idents = map (lam b. name2int im b.info b.ident) bindings in
-    let env = foldl (lam env. lam i. ctxEnvAdd i ctx env) env idents in
+    let envBody = foldl (lam env. lam i.
+        ctxEnvAdd i ctx env) (ctxEnvFilterFree im (TmRecLets t) env) idents in
     let cstrs = map (lam identBind: (IName, RecLetBinding).
       match identBind with (ident, b) in
       match b.body with TmLam t then
@@ -592,12 +619,19 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
           ident = name2int im t.info t.ident,
           bident = name2int im (infoTm t.body) (exprName t.body),
           body = t.body,
-          env = env
+          env = envBody
         } in
         CstrInit { lhs = av, rhs = (ident, ctx) }
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) (zip idents bindings) in
+    let env = foldl (lam env. lam i. ctxEnvAdd i ctx env) env idents in
     (apps, env, cstrs)
+
+  sem freeVars acc =
+  | TmRecLets t ->
+    let acc = foldl (lam acc. lam b.
+      freeVars acc b.body) (freeVars acc t.inexpr) t.bindings in
+    foldl (lam acc. lam b. setRemove b.ident acc) acc t.bindings
 
 end
 
@@ -733,6 +767,9 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
 
   sem propagateConstraintConst
   : (IName,Ctx) -> [(IName,Ctx)] -> CFAGraph -> Const -> CFAGraph
+
+  sem freeVars acc =
+  | TmApp t -> freeVars (freeVars acc t.lhs) t.rhs
 end
 
 lang RecordCFA = CFA + BaseConstraint + RecordAst
@@ -1692,8 +1729,9 @@ utest _test false 1 t [("a",[]), ("b",[]), ("x",["a"]), ("x",["b"])] with [
 
 -- Third test using 2-CFA
 let t = _parse "
+let f = lam y. y in
 recursive let g = lam x.
-  let a = g (lam y. y) in
+  let a = g f in
   a
 in
 let res = g (lam z. z) in
