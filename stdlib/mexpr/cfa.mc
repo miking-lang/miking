@@ -540,7 +540,6 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
 end
 
 lang RecordCFA = CFA + BaseConstraint + RecordAst
-  -- NOTE(dlunde,2021-11-10) TmRecordUpdate is currently not supported.
 
   syn AbsVal =
   -- Abstract representation of records. The bindings are from SIDs to names,
@@ -551,6 +550,13 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
   | (AVRec { bindings = lhs }, AVRec { bindings = rhs }) ->
     mapCmp subi lhs rhs
 
+  syn Constraint =
+  -- r ⊆ lhs ⇒ { r with key = val } ⊆ rhs
+  | CstrRecordUpdate { lhs: IName, key: SID, val: IName, rhs: IName }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
+
   sem generateConstraints im =
   | TmLet { ident = ident, body = TmRecord t, info = info } ->
     let bindings = mapMap (lam v: Expr.
@@ -560,6 +566,22 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
     in
     let av: AbsVal = AVRec { bindings = bindings } in
     [ CstrInit { lhs = av, rhs = name2int im info ident } ]
+  | TmLet { ident = ident, body = TmRecordUpdate t, info = info } ->
+    match t.rec with TmVar vrec then
+      match t.value with TmVar vval then
+        let lhs = name2int im vrec.info vrec.ident in
+        let val = name2int im vval.info vval.ident in
+        let ident = name2int im info ident in
+        [ CstrRecordUpdate { lhs = lhs, key = t.key, val = val, rhs = ident } ]
+      else errorSingle [t.info] "Not a TmVar in record update"
+    else errorSingle [t.info] "Not a TmVar in record update"
+
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
+  | CstrRecordUpdate { lhs = lhs, key = key, val = val, rhs = rhs } ->
+    match update.1 with AVRec { bindings = bindings } then
+      let av = AVRec { bindings = mapInsert key val bindings } in
+      initConstraint graph (CstrInit { lhs = av, rhs = rhs })
+    else graph
 
   sem absValToString im (env: PprintEnv) =
   | AVRec { bindings = bindings } ->
@@ -571,6 +593,14 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
     let binds = mapValues bindings in
     let merged = strJoin ", " binds in
     (env, join ["{ ", merged, " }"])
+
+  sem constraintToString im (env: PprintEnv) =
+  | CstrRecordUpdate { lhs = lhs, key = key, val = val, rhs = rhs } ->
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintLabelString key with key in
+    match pprintVarIName im env val with (env,val) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    (env, join [ "r ⊆ ", lhs, " ⇒ { r with ", key, " = ", val, " } ⊆ ", rhs ])
 
 end
 
@@ -1956,7 +1986,6 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
 end
 
 lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
-  -- NOTE(dlunde,2021-11-10) TmRecordUpdate is currently not supported.
 
   syn AbsVal =
   -- Abstract representation of records. The bindings are from SIDs to names,
@@ -1966,6 +1995,14 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
   sem cmpAbsValH =
   | (AVRec { bindings = lhs }, AVRec { bindings = rhs }) ->
     mapCmp cmpINameCtx lhs rhs
+
+  syn Constraint =
+  -- r ⊆ lhs ⇒ { r with key = val } ⊆ rhs
+  | CstrRecordUpdate { lhs: (IName,Ctx), key: SID, val: (IName,Ctx),
+                       rhs: (IName,Ctx) }
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
 
   sem generateConstraints im ctx apps env =
   | TmLet { ident = ident, body = TmRecord t, info = info } ->
@@ -1982,8 +2019,27 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
     (apps, ctxEnvAdd ident ctx env, cstrs)
   | TmLet { ident = ident, body = TmRecordUpdate t, info = info } ->
-    let ident = name2int im info ident in
-    (apps, ctxEnvAdd ident ctx env, [])
+    match t.rec with TmVar vrec then
+      match t.value with TmVar vval then
+        let lhs = name2int im vrec.info vrec.ident in
+        let val = name2int im vval.info vval.ident in
+        let ident = name2int im info ident in
+        let cstrs =
+          [ CstrRecordUpdate { lhs = (lhs, ctxEnvLookup im vrec.info lhs env),
+                               key = t.key,
+                               val = (val, ctxEnvLookup im vval.info val env),
+                               rhs = (ident, ctx)}
+          ] in
+        (apps, ctxEnvAdd ident ctx env, cstrs)
+      else errorSingle [t.info] "Not a TmVar in record update"
+    else errorSingle [t.info] "Not a TmVar in record update"
+
+  sem propagateConstraint (update: (IName,Ctx,AbsVal)) (graph: CFAGraph) =
+  | CstrRecordUpdate { lhs = lhs, key = key, val = val, rhs = rhs } ->
+    match update.2 with AVRec { bindings = bindings } then
+      let av = AVRec { bindings = mapInsert key val bindings } in
+      initConstraint graph (CstrInit { lhs = av, rhs = rhs })
+    else graph
 
   sem absValToString im (env: PprintEnv) =
   | AVRec { bindings = bindings } ->
@@ -1995,6 +2051,14 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     let binds = mapValues bindings in
     let merged = strJoin ", " binds in
     (env, join ["{ ", merged, " }"])
+
+  sem constraintToString im (env: PprintEnv) =
+  | CstrRecordUpdate { lhs = lhs, key = key, val = val, rhs = rhs } ->
+    match pprintVarINameCtx im env lhs with (env,lhs) in
+    match pprintLabelString key with key in
+    match pprintVarINameCtx im env val with (env,val) in
+    match pprintVarINameCtx im env rhs with (env,rhs) in
+    (env, join [ "r ⊆ ", lhs, " ⇒ { r with ", key, " = ", val, " } ⊆ ", rhs ])
 
 end
 
@@ -2982,6 +3046,24 @@ utest _test false t ["res","a"] with [
   ("a", ["x"])
 ] using eqTestLam in
 
+-- Record update
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam w. w in
+  let r1 = { a = f, b = 3 } in
+  let r2 = { r1 with a = h } in
+  let res = match r2 with { a = a } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest _test false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["w"])
+] using eqTestLam in
+
 -- ConApp
 let t = _parse "
   type T in
@@ -3360,6 +3442,24 @@ let t = _parse "
 utest _test0 false t ["res","a"] with [
   ("res", ["y","z"]),
   ("a", ["x"])
+] using eqTestLam0 in
+
+-- Record update
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam w. w in
+  let r1 = { a = f, b = 3 } in
+  let r2 = { r1 with a = h } in
+  let res = match r2 with { a = a } then
+      a g
+    else
+      (lam z. z)
+  in res
+------------------------" in
+utest _test0 false t ["res","a"] with [
+  ("res", ["y","z"]),
+  ("a", ["w"])
 ] using eqTestLam0 in
 
 -- ConApp
