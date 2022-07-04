@@ -1598,11 +1598,15 @@ lang KCFA = CFABase
       ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.edges))
     with (env, edges) in
 
+    let strJoinNonEmpty = lam delim: String. lam strs: [String].
+      strJoin delim (filter (lam s. not (null s)) strs)
+    in
+
     let str = join [
       "*** WORKLIST ***\n",
       "  [", strJoin ", " worklist, "]\n",
       "*** DATA ***\n",
-      strJoin "\n" (map (lam b:(String,[(String, [String])]).
+      strJoinNonEmpty "\n" (map (lam b:(String,[(String, [String])]).
         match b with (n, ctxsAvs) in
         let f = lam avs.
           strJoin "\n" (map (concat "    ") avs)
@@ -1614,7 +1618,7 @@ lang KCFA = CFABase
         in strJoin "\n" entries
       ) data), "\n",
       "*** EDGES ***\n",
-      strJoin "\n" (map (lam b:(String,[(String, [String])]).
+      strJoinNonEmpty "\n" (map (lam b:(String,[(String, [String])]).
         match b with (n, ctxCstrs) in
         let f = lam cstrs.
           strJoin "\n" (map (concat "    ") cstrs)
@@ -2708,17 +2712,19 @@ lang MExprKCFA = KCFA +
     { graph with mcgfs = concat [generateMatchConstraints] graph.mcgfs }
 
   -- Function that adds a set of universal base constraints to a CFAGraph
-  sem addBaseConstraints (graph: CFAGraph) =
-  | t ->
-
-    -- Initialize constraint generating functions
+  sem addBaseConstraints =
+  | graph ->
     let cgfs = [ generateConstraints graph.im,
                  generateConstraintsMatch graph.im graph.mcgfs ] in
-    let graph = { graph with cgfs = cgfs } in
+    { graph with cgfs = concat cgfs graph.cgfs }
 
+  -- Function that initializes the constraints in a CFAGraph
+  sem initConstraints: CFAGraph -> Expr -> CFAGraph
+  sem initConstraints graph =
+  | t ->
     -- Recurse over program and generate constraints
     match
-      collectConstraints (ctxEmpty ()) cgfs (graph.apps,ctxEnvEmpty (),[]) t
+      collectConstraints (ctxEmpty()) graph.cgfs (graph.apps,ctxEnvEmpty(),[]) t
     with (apps, env, cstrs) in
 
     -- Update the set of analyzed applications in the graph
@@ -2764,7 +2770,8 @@ lang KTest = MExprKCFA + MExprANFAll + BootParser + MExprPrettyPrint
   | t ->
     let graph = emptyCFAGraph k t in
     let graph = addBaseMatchConstraints graph in
-    let graph = addBaseConstraints graph t in
+    let graph = addBaseConstraints graph in
+    let graph = initConstraints graph t in
     solveCfa graph
 
   sem testCfaDebug : PprintEnv -> Int -> Expr -> (PprintEnv, CFAGraph)
@@ -2772,7 +2779,8 @@ lang KTest = MExprKCFA + MExprANFAll + BootParser + MExprPrettyPrint
   | t ->
     let graph = emptyCFAGraph k t in
     let graph = addBaseMatchConstraints graph in
-    let graph = addBaseConstraints graph t in
+    let graph = addBaseConstraints graph in
+    let graph = initConstraints graph t in
     solveCfaDebug pprintenv graph
 
 end
