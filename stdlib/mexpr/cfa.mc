@@ -551,7 +551,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
     mapCmp subi lhs rhs
 
   syn Constraint =
-  -- r ⊆ lhs ⇒ { r with key = val } ⊆ rhs
+  -- r ∈ lhs ⇒ { r with key = val } ∈ rhs
   | CstrRecordUpdate { lhs: IName, key: SID, val: IName, rhs: IName }
 
   sem initConstraint (graph: CFAGraph) =
@@ -600,7 +600,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
     match pprintLabelString key with key in
     match pprintVarIName im env val with (env,val) in
     match pprintVarIName im env rhs with (env,rhs) in
-    (env, join [ "r ⊆ ", lhs, " ⇒ { r with ", key, " = ", val, " } ⊆ ", rhs ])
+    (env, join [">r< ⊆ ", lhs, " ⇒ { >r< with ", key, " = ", val, " } ⊆ ", rhs])
 
 end
 
@@ -1997,7 +1997,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     mapCmp cmpINameCtx lhs rhs
 
   syn Constraint =
-  -- r ⊆ lhs ⇒ { r with key = val } ⊆ rhs
+  -- r ∈ lhs ⇒ { r with key = val } ∈ rhs
   | CstrRecordUpdate { lhs: (IName,Ctx), key: SID, val: (IName,Ctx),
                        rhs: (IName,Ctx) }
 
@@ -2058,7 +2058,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     match pprintLabelString key with key in
     match pprintVarINameCtx im env val with (env,val) in
     match pprintVarINameCtx im env rhs with (env,rhs) in
-    (env, join [ "r ⊆ ", lhs, " ⇒ { r with ", key, " = ", val, " } ⊆ ", rhs ])
+    (env, join [">r< ∈ ", lhs, " ⇒ { >r< with ", key, " = ", val, " } ∈ ", rhs])
 
 end
 
