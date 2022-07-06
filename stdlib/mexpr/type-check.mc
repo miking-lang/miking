@@ -402,6 +402,9 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
   sem gen (lvl : Level) =
   | ty ->
     match genBase lvl ty with (vars, genTy) in
+    -- OPT(aathn, 2022-06-29): It might be better to use a set for `vars`
+    -- to avoid having to check for duplicates here.
+    let vars = distinct (lam x. lam y. nameEq x.0 y.0) vars in
     let iteratee = lam v : (Name, VarSort). lam ty.
       let sort = match v.1 with MonoVar _ then PolyVar () else v.1 in
       TyAll {info = infoTy genTy, ident = v.0, ty = ty, sort = sort}
@@ -427,9 +430,7 @@ lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
           (concat vars1 vars2, ty)
         in
         match smapAccumL_VarSort_Type f [] s with (vars, sort) in
-        let v = TyVar {info = t.info, ident = n, level = lvl} in
-        modref t.contents (Link v);
-        (snoc vars (n, sort), v)
+        (snoc vars (n, sort), TyVar {info = t.info, ident = n, level = lvl})
       else
         -- Var is bound in previous let, don't generalize
         ([], ty)
@@ -1042,6 +1043,17 @@ let tests = [
      var_ "even"
    ],
    ty = tyarrow_ tyint_ tybool_,
+   env = []},
+
+  {name = "RecLets3",
+   tm = bindall_ [
+     ureclets_ [
+       ("f", ulam_ "x" (var_ "x")),
+       ("g", ulam_ "x" (app_ (var_ "f") (var_ "x")))
+     ],
+     app_ (var_ "g") (int_ 1)
+   ],
+   ty = tyint_,
    env = []},
 
   {name = "Match1",
