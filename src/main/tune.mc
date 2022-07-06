@@ -29,7 +29,7 @@ let dependencyAnalysis
     if options.tuneOptions.dependencyAnalysis then
       let ast = typeCheck ast in
       let ast = use HoleANFAll in normalizeTerm ast in
-      let cfaRes = cfaData (Some (graphDataInit env)) ast in
+      let cfaRes = holeCfa (graphDataInit env) ast in
       let cfaRes = analyzeNested env cfaRes ast in
       let dep = analyzeDependency env cfaRes ast in
       (if options.tuneOptions.debugDependencyAnalysis then

@@ -109,17 +109,10 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   syn GraphData =
   -- Intentionally left blank
 
-  sem cfa: Expr -> CFAGraph
-  sem cfa =
-  | t ->
-    cfaData (None ()) t
-
   -- Main algorithm
-  sem cfaData: Option GraphData -> Expr -> CFAGraph
-  sem cfaData (graphData: Option GraphData) =
-  | t ->
-    let graph = initGraph graphData t in
-
+  sem solveCfa: CFAGraph -> CFAGraph
+  sem solveCfa =
+  | graph ->
     -- Iteration
     recursive let iter = lam graph: CFAGraph.
       if null graph.worklist then graph
@@ -132,37 +125,33 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
     in
     iter graph
 
-  sem cfaDebug : Option GraphData -> Option PprintEnv -> Expr
-               -> (Option PprintEnv, CFAGraph)
-  sem cfaDebug graphData env =
-  | t ->
+  -- Main algorithm (debug version)
+  sem solveCfaDebug : PprintEnv -> CFAGraph -> (PprintEnv, CFAGraph)
+  sem solveCfaDebug pprintenv =
+  | graph ->
     -- NOTE(Linnea,2022-06-22): Experiments have shown that using `cfaDebug` as
     -- the main entry point causes overhead when no printing takes place, as we
-    -- have to match on the pprint env in every iteration. Therefore, some code
+    -- have to match on the pprintenv in every iteration. Therefore, some code
     -- duplication takes place here.
-    let printGraph = lam env. lam graph. lam str.
-      match env with Some env then
-        match cfaGraphToString env graph with (env, graph) in
-        printLn (join ["\n--- ", str, " ---"]);
-        printLn graph;
-        Some env
-      else None ()
+    let printGraph = lam pprintenv. lam graph. lam str.
+      match cfaGraphToString pprintenv graph with (pprintenv, graph) in
+      printLn (join ["\n--- ", str, " ---"]);
+      printLn graph;
+      pprintenv
     in
 
-    let graph = initGraph graphData t in
-
     -- Iteration
-    recursive let iter = lam env: Option PprintEnv. lam graph: CFAGraph.
-      if null graph.worklist then (env,graph)
+    recursive let iter = lam pprintenv: PprintEnv. lam graph: CFAGraph.
+      if null graph.worklist then (pprintenv,graph)
       else
-        match printGraph env graph "INTERMEDIATE CFA GRAPH" with env in
+        let pprintenv = printGraph pprintenv graph "INTERMEDIATE CFA GRAPH" in
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup q graph with cc in
         let graph = foldl (propagateConstraint h) graph cc in
-        iter env graph
+        iter pprintenv graph
     in
-    iter env graph
+    iter pprintenv graph
 
   -- For a given expression, returns the variable "labeling" that expression.
   -- The existence of such a label is guaranteed by ANF.
@@ -193,12 +182,8 @@ lang CFA = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem generateConstraints im =
   | t -> []
 
-  -- This function is responsible for setting up the initial CFAGraph given the
-  -- program to analyze.
-  sem initGraph: Option GraphData -> Expr -> CFAGraph
-
   -- Call a set of constraint generation functions on each term in program.
-  -- Useful when defining initGraph.
+  -- Useful when defining values of type CFAGraph.
   sem collectConstraints: [GenFun] -> [Constraint] -> Expr -> [Constraint]
   sem collectConstraints (cgfs: [GenFun]) (acc: [Constraint]) =
   | t ->
@@ -1229,23 +1214,15 @@ lang MExprCFA = CFA +
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
   IntPatCFA + CharPatCFA + BoolPatCFA + AndPatCFA + OrPatCFA + NotPatCFA
-end
 
------------
--- TESTS --
------------
+  -- Function that adds a set of universal base match constraints to a CFAGraph
+  sem addBaseMatchConstraints =
+  | graph ->
+    { graph with mcgfs = concat [generateMatchConstraints] graph.mcgfs }
 
-lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
-
-  -- Type: Expr -> CFAGraph
-  sem initGraph (graphData : Option GraphData) =
+  -- Function that adds a set of universal base constraints to a CFAGraph
+  sem addBaseConstraints (graph: CFAGraph) =
   | t ->
-
-    -- Initial graph
-    let graph = emptyCFAGraph t in
-
-    -- Initialize match constraint generating functions
-    let graph = { graph with mcgfs = [generateMatchConstraints] } in
 
     -- Initialize constraint generating functions
     let cgfs = [ generateConstraints graph.im,
@@ -1254,11 +1231,32 @@ lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
     -- Recurse over program and generate constraints
     let cstrs: [Constraint] = collectConstraints cgfs [] t in
 
-    -- Initialize all collected constraints
-    let graph = foldl initConstraint graph cstrs in
+    -- Initialize all collected constraints and return
+    foldl initConstraint graph cstrs
 
-    -- Return graph
-    graph
+end
+
+-----------
+-- TESTS --
+-----------
+
+lang Test = MExprCFA + MExprANFAll + BootParser + MExprPrettyPrint
+
+  sem testCfa : Expr -> CFAGraph
+  sem testCfa =
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    solveCfa graph
+
+  sem testCfaDebug : PprintEnv -> Expr -> (PprintEnv, CFAGraph)
+  sem testCfaDebug pprintenv =
+  | t ->
+    let graph = emptyCFAGraph t in
+    let graph = addBaseMatchConstraints graph in
+    let graph = addBaseConstraints graph t in
+    solveCfaDebug pprintenv graph
 
 end
 
@@ -1278,7 +1276,7 @@ let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
       match pprintCode 0 env tANF with (env,tANFStr) in
       printLn "\n--- ANF ---";
       printLn tANFStr;
-      match cfaDebug (None ()) (Some env) tANF with (Some env,cfaRes) in
+      match testCfaDebug env tANF with (env,cfaRes) in
       match cfaGraphToString env cfaRes with (env, resStr) in
       printLn "\n--- FINAL CFA GRAPH ---";
       printLn resStr;
@@ -1287,7 +1285,7 @@ let _testBase: Option PprintEnv -> Expr -> (Option PprintEnv, CFAGraph) =
     else
       -- Version without debug printouts
       let tANF = normalizeTerm t in
-      let cfaRes = cfa tANF in
+      let cfaRes = testCfa tANF in
       (None (), cfaRes)
 in
 

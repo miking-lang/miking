@@ -334,7 +334,7 @@ let test
     -- Perform dependency analysis
     match
       let graphData = graphDataInit env in
-      let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
+      let cfaRes : CFAGraph = holeCfa graphData tANF in
       let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
       (analyzeDependency env cfaRes tANF, tANF)
     with (dep, ast) in

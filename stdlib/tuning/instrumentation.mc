@@ -406,7 +406,7 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   debugPrintLn debug "";
 
   -- Perform CFA
-  let cfaRes : CFAGraph = cfaData (Some graphData) tANF in
+  let cfaRes : CFAGraph = holeCfa graphData tANF in
 
   -- Analyze nested
   let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
