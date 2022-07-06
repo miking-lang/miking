@@ -43,7 +43,7 @@ lang PMExprAst =
     Some (3, lam lst. TmMap2 {f = get lst 0, as = get lst 1,
                               bs = get lst 2,
                               ty = TyUnknown {info = info}, info = info})
-  | "parallelReduce" ->
+  | "reduce" ->
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
                                         as = get lst 2,
                                         ty = TyUnknown {info = info},
@@ -55,7 +55,7 @@ lang PMExprAst =
     Some (3, lam lst. TmLoopAcc {ne = get lst 0, n = get lst 1,
                                  f = get lst 2, ty = TyUnknown {info = info},
                                  info = info})
-  | "parallelLoop" ->
+  | "loop" ->
     Some (2, lam lst. TmParallelLoop {n = get lst 0, f = get lst 1,
                                       ty = TyUnknown {info = info},
                                       info = info})
@@ -402,7 +402,7 @@ utest makeKeywords [] expr with flatten_ emptySeq_ using eqExpr in
 let expr = appf3_ (var_ "map2") zip_ emptySeq_ emptySeq_ in
 utest makeKeywords [] expr with map2_ zip_ emptySeq_ emptySeq_ using eqExpr in
 
-let expr = appf3_ (var_ "parallelReduce") id_ (int_ 0) emptySeq_ in
+let expr = appf3_ (var_ "reduce") id_ (int_ 0) emptySeq_ in
 utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
 
 let expr = appf2_ (var_ "seqLoop") (int_ 10) unitfn_ in
@@ -411,7 +411,7 @@ utest makeKeywords [] expr with loop_ (int_ 10) unitfn_ using eqExpr in
 let expr = appf3_ (var_ "seqLoopAcc") (int_ 0) (int_ 10) addfn_ in
 utest makeKeywords [] expr with loopAcc_ (int_ 0) (int_ 10) addfn_ using eqExpr in
 
-let expr = appf2_ (var_ "parallelLoop") (int_ 10) unitfn_ in
+let expr = appf2_ (var_ "loop") (int_ 10) unitfn_ in
 utest makeKeywords [] expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = app_ (var_ "printFloat") (float_ 3.14) in

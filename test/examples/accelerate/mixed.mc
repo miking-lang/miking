@@ -11,12 +11,12 @@ let tensorAdd : Tensor[Int] -> Tensor[Int] -> Tensor[Int] -> () =
   lam a. lam b. lam out.
   let n = get (tensorShape a) 0 in
   accelerate (
-    parallelLoop n (lam i. tensorSet out i (addi (tensorGet a i) (tensorGet b i))))
+    loop n (lam i. tensorSet out i (addi (tensorGet a i) (tensorGet b i))))
 
 let tensorSum : Tensor[Int] -> Int = lam t.
   let sum = ref 0 in
   let n = get (tensorShape t) 0 in
-  seqLoop n (lam i. modref sum (addi (deref sum) (tensorGet t i)));
+  loop n (lam i. modref sum (addi (deref sum) (tensorGet t i)));
   deref sum
 
 let seqAdd : [Int] -> [Int] -> [Int] = lam s1. lam s2.
