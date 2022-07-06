@@ -55,17 +55,17 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | AVDHole _ -> "d"
   | AVEHole _ -> "e"
 
-  sem absValToString graph (env : PprintEnv) =
+  sem absValToString im (env : PprintEnv) =
   | ( AVDHole {id = id, contexts = contexts}
     | AVEHole {id = id, contexts = contexts} ) & av ->
-    match pprintVarIName graph.im env id with (env,id) in
+    match pprintVarIName im env id with (env,id) in
     (env, join [
         absValToStringH av, "hole", "(", id, ",{",
         strJoin "," (map int2string (setToSeq contexts)), "}", ")"
       ])
   | AVConstHole { const = const, args = args } ->
     let const = getConstStringCode 0 const in
-    match mapAccumL (pprintVarIName graph.im) env args with (env, args) in
+    match mapAccumL (pprintVarIName im) env args with (env, args) in
     (env, join [const, "(", strJoin ", " args, ")"])
 
   sem isDirect =
@@ -221,29 +221,29 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       else errorSingle [infoTm t.rhs] "Not a TmVar in independent annotation"
     else errorSingle [infoTm t.lhs] "Not a TmVar in independent annotation"
 
-  sem constraintToString graph (env: PprintEnv) =
+  sem constraintToString im (env: PprintEnv) =
   | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env lhs with (env,lhs) in
     (env, join [ "{dhole} ⊆ ", lhs, " ⇒ {dhole} ⊆ ", rhs ])
   | CstrHoleDirectExe { lhs = lhs, rhs = rhs } ->
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env lhs with (env,lhs) in
     (env, join [ "{dhole} ⊆ ", lhs, " ⇒ {ehole} ⊆ ", rhs ])
   | CstrHoleApp { lhs = lhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [
       "{dhole} ⊆ ", lhs, " ⇒ {dhole} ⊆ ", res ])
   | CstrHoleMatch { lhs = lhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [
       "{dhole} ⊆ ", lhs, " ⇒ {ehole} ⊆ ", res ])
   | CstrHoleConstApp { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [
       "({const with args = args} ⊆ ", lhs, " AND |args| = arity(const)-1\n",
       "  ⇒ ∀(a,i): (a,i) in ({args} ∪ {", rhs, "} ⨯ [1,...,arity(const)]):\n",
@@ -255,9 +255,9 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       "  ⇒ {const with args = snoc args ", rhs, "} ⊆ ", res, ")"
     ])
   | CstrHoleIndependent { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarIName graph.im env lhs with (env,lhs) in
-    match pprintVarIName graph.im env rhs with (env,rhs) in
-    match pprintVarIName graph.im env res with (env,res) in
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env res with (env,res) in
     (env, join [lhs, " \\ {dhole : dhole ∈ ", rhs, "} ⊆ ", res])
 
 
