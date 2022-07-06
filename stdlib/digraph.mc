@@ -186,6 +186,15 @@ let digraphAddUpdateVertex : all v. all l. v -> Digraph v l -> Digraph v l =
   else
     {g with adj = mapInsert v [] g.adj}
 
+let digraphRemoveVertex : all v. all l. v -> Digraph v l -> Digraph v l = lam v. lam g.
+  utest digraphHasVertex v g with true in
+    let m = mapRemove v g.adj in
+    let m = foldl (lam acc. lam v2.
+            let edgeLst = mapLookupOrElse (lam. error "Lookup failed") v2 acc in
+            let newEdgeLst = filter (lam e:(v,l). not ((digraphEqv g) v e.0) ) edgeLst in
+            mapInsert v2 newEdgeLst (mapRemove v2 acc)) m (mapKeys m) in
+    {g with adj = m}
+
 -- Add edge e=(v1,v2,l) to g. Checks invariants iff utests are enabled.
 let digraphAddEdge : all v. all l. v -> v -> l -> Digraph v l -> Digraph v l =
   lam v1. lam v2. lam l. lam g.
@@ -235,7 +244,7 @@ let digraphRemoveEdge : all v. all l. v -> v -> l -> Digraph v l -> Digraph v l 
   lam from. lam to. lam l. lam g.
   utest (digraphHasEdge (from, to, l) g) with true in
   let outgoing = mapFindExn from g.adj in
-  let newOutgoing = filter (lam o : (v, l). not (g.eql l o.1)) outgoing in
+  let newOutgoing = filter (lam o : (v, l). or (not (g.eql l o.1)) (not ((digraphEqv g) o.0 to))) outgoing in
   {g with adj = mapInsert from newOutgoing g.adj}
 
 -- Breadth-first search. Marks all reachable vertices from the source with the
@@ -445,7 +454,9 @@ let g = digraphRemoveEdge 1 3 l2 g in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 2 in
 utest digraphHasEdges [(1,2,l1),(3,1,l3)] g with true in
-
+let g2 = digraphRemoveVertex 3 gRev in
+utest digraphCountVertices g2 with 2 in
+utest digraphCountEdges g2 with 1 in
 let g = digraphAddEdges [(0,1,l1), (0,2,l2), (2,3,l3), (3,4,l4), (0,4,l5)]
   (digraphAddVertices [0,1,2,3,4] empty) in
 utest mapBindings (digraphBFS 0 g) with [(0,0), (1,1), (2,1), (3,2), (4,1)] in
