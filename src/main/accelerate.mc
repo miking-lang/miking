@@ -85,7 +85,7 @@ let parallelKeywords = [
   "map2",
   "parallelFlatten",
   "reduce",
-  "loop",
+  "parallelLoop",
   "seqLoop",
   "seqLoopAcc",
   "printFloat"

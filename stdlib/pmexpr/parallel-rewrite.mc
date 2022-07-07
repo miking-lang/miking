@@ -189,23 +189,23 @@ let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
 utest containsParallelKeyword expr with true in
 
-let reduce = nameSym "reduce" in
+let red = nameSym "reduce" in
 let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let expr = preprocess (bindall_ [
   nureclets_ [
-    (reduce, nulam_ acc (nulam_ s (
+    (red, nulam_ acc (nulam_ s (
       match_ (nvar_ s)
         (pseqedgen_ [npvar_ h] t [])
-        (appf2_ (nvar_ reduce)
+        (appf2_ (nvar_ red)
           (addi_ (nvar_ acc) (nvar_ h))
           (nvar_ t))
         (match_ (nvar_ s)
           (pseqtot_ [])
           (nvar_ acc)
           never_))))],
-  ulet_ "sum" (appf2_ (nvar_ reduce) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
+  ulet_ "sum" (appf2_ (nvar_ red) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in

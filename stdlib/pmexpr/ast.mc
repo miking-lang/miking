@@ -55,7 +55,7 @@ lang PMExprAst =
     Some (3, lam lst. TmLoopAcc {ne = get lst 0, n = get lst 1,
                                  f = get lst 2, ty = TyUnknown {info = info},
                                  info = info})
-  | "loop" ->
+  | "parallelLoop" ->
     Some (2, lam lst. TmParallelLoop {n = get lst 0, f = get lst 1,
                                       ty = TyUnknown {info = info},
                                       info = info})
@@ -411,7 +411,7 @@ utest makeKeywords [] expr with loop_ (int_ 10) unitfn_ using eqExpr in
 let expr = appf3_ (var_ "seqLoopAcc") (int_ 0) (int_ 10) addfn_ in
 utest makeKeywords [] expr with loopAcc_ (int_ 0) (int_ 10) addfn_ using eqExpr in
 
-let expr = appf2_ (var_ "loop") (int_ 10) unitfn_ in
+let expr = appf2_ (var_ "parallelLoop") (int_ 10) unitfn_ in
 utest makeKeywords [] expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = app_ (var_ "printFloat") (float_ 3.14) in

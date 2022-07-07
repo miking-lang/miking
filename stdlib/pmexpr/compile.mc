@@ -301,9 +301,11 @@ end
 lang PMExprCompileWellFormed = PMExprCudaWellFormed + PMExprFutharkWellFormed
 end
 
+lang TestLang = PMExprCompileWellFormed + PMExprPrettyPrint end
+
 mexpr
 
-use PMExprCompileWellFormed in
+use TestLang in
 
 let fnid = nameSym "f" in
 let x = nameSym "x" in
@@ -316,5 +318,5 @@ let config = {dynamicChecks = true, tensorMaxRank = 3} in
 let t =
   addGlobalDefinitions
     (instrumentWellFormedChecks ids config (Futhark ()) t) in
-printLn (expr2str t);
+-- printLn (expr2str t);
 ()
