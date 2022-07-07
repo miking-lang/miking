@@ -9,7 +9,6 @@ include "cuda/pmexpr-ast.mc"
 include "cuda/pmexpr-compile.mc"
 include "cuda/pmexpr-pprint.mc"
 include "cuda/pprint.mc"
-include "cuda/tensor-memory.mc"
 include "cuda/well-formed.mc"
 include "cuda/wrapper.mc"
 include "futhark/alias-analysis.mc"
@@ -77,7 +76,7 @@ lang MExprCudaCompile =
   CudaPMExprCompile + MExprTypeLift +
   SeqTypeNoStringTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
-  CudaTensorMemory + CudaLanguageFragmentFix
+  CudaLanguageFragmentFix
 end
 
 let parallelKeywords = [
@@ -153,7 +152,6 @@ let cudaTranslation =
   let ctops = join [types, tops] in
   match translateCudaTops accelerateData ccEnv ctops
   with (wrapperMap, cudaTops) in
-  let cudaTops = addCudaTensorMemoryManagement cudaTops in
   let wrapperProg = generateWrapperCode accelerateData wrapperMap
                                         options.accelerateTensorMaxRank ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
