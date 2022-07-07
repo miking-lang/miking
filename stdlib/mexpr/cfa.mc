@@ -915,29 +915,84 @@ lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
   | CEqsym _ -> []
 end
 
-lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
+lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
 
   syn Constraint =
-  -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
+  -- [{names}] ∈ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
   | CstrSeq {lhs : IName, rhs : IName}
-  -- [{names}] ⊆ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
+  -- [{names}] ∈ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
   | CstrSeqUnion {lhs : IName, rhs : IName, res : IName}
+  -- [{names}] ∈ seq ⇒ [{f n : n ∈ names}] ∈ res
+  | CstrSeqMap1 {seq: IName, f: IName, res: IName}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
+  | CstrSeqMap2 {f: IName, names: Set IName, res: IName}
+  -- [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
+  | CstrSeqFold1 {seq: IName, f: IName, acc: IName, res: IName}
+  -- {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and {c} ⊆ res))
+  | CstrSeqFold2 {f: IName, acc: IName, names: Set IName, res: IName}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and {b} ⊆ res)
+  | CstrSeqFold3 {f: IName, names: Set IName, res: IName}
 
   sem initConstraint (graph: CFAGraph) =
   | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
   | CstrSeqUnion r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrSeqMap1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSeqMap2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSeqFold1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSeqFold2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSeqFold3 r & cstr -> initConstraintName r.f graph cstr
 
   sem constraintToString im (env: PprintEnv) =
   | CstrSeq { lhs = lhs, rhs = rhs } ->
     match pprintVarIName im env lhs with (env,lhs) in
     match pprintVarIName im env rhs with (env,rhs) in
-    (env, join [ "[{names}] ⊆ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
+    (env, join [ "[{names}] ∈ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
   | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
     match pprintVarIName im env lhs with (env,lhs) in
     match pprintVarIName im env rhs with (env,rhs) in
     match pprintVarIName im env res with (env,res) in
     (env, join [
-        "[{names}] ⊆ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
+        "[{names}] ∈ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
+      ])
+  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, " n : n ∈ names}] ∈ ", res
+      ])
+  | CstrSeqMap2 { f = f, names = names, res = res } ->
+    match pprintVarIName im env f with (env,f) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
+        "[{b}] ∈ ", res
+      ])
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env acc with (env,acc) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, " ", acc, " n : n ∈ names}] ∈ ", res
+      ])
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env acc with (env,acc) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ ", acc, " ⊆ x AND ",
+        "{lam y. c} ⊆ b ⇒ {", strJoin ", " names, "} ⊆ y AND {c} ⊆ ", res
+      ])
+  | CstrSeqFold3 { f = f, names = names, res = res } ->
+    match pprintVarIName im env f with (env,f) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", (strJoin ", " names), "} ⊆ x AND ",
+        "b ⊆ ", res
       ])
 
   sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
@@ -951,6 +1006,40 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
     match update.1 with AVSeq { names = names } then
       addData graph (AVSeq {names = setInsert rhs names}) res
     else graph
+  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
+    match update.1 with AVSeq { names = names } then
+      initConstraint graph (CstrSeqMap2 { f = f, names = names, res = res })
+    else graph
+  | CstrSeqMap2 { f = f, names = names, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = x })
+        ) graph names in
+      -- Add [{b}] ⊆ res constraint
+      initConstraint graph (
+        CstrInit { lhs = AVSeq {names = setOfSeq subi [b]}, rhs = res })
+    else graph
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+    match update.1 with AVSeq { names = names } then
+      initConstraint graph (
+        CstrSeqFold2 { f = f, acc = acc, names = names, res = res })
+    else graph
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add acc ⊆ x constraint
+      let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = x }) in
+      initConstraint graph (CstrSeqFold3 {f = b, names = names, res = res})
+    else graph
+  | CstrSeqFold3 { f = f, names = names, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = x })
+        ) graph names in
+      -- Add b ⊆ res constraint
+      initConstraint graph (CstrDirect { lhs = b, rhs = res })
+    else graph
 
   sem generateConstraintsConst info ident =
   | ( CSet _
@@ -962,6 +1051,9 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
     | CHead _
     | CTail _
     | CSubsequence _
+    | CFoldl _
+    | CFoldr _
+    | CMap _
     ) & const ->
     [
       CstrInit {
@@ -1023,6 +1115,20 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
   | CSubsequence _ ->
     utest length args with 3 in
     initConstraint graph (CstrDirect {lhs = head args, rhs = res})
+  | CMap _ ->
+    utest length args with 2 in
+    initConstraint graph (
+      CstrSeqMap1 {seq = get args 1, f = head args, res = res})
+  | CFoldl _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    -- Add acc ⊆ res constraint
+    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
+    initConstraint graph (CstrSeqFold1 {
+      seq = seq, f = f, acc = acc, res = res})
+
 end
 
 lang FileOpCFA = CFA + ConstCFA + FileOpAst
@@ -2971,7 +3077,7 @@ utest _test false t ["res","a"] with [
   ("a", ["x","z"])
 ] using eqTestLam in
 
--- Sequence operations
+-- Sequence operations (basic)
 let t = _parse "
   let f = lam x. x in
   let g = lam y. y in
@@ -3028,6 +3134,35 @@ utest _test false t [
   ("resIsList", []),
   ("resIsRope", []),
   ("resSubsequence", ["x", "z"])
+] using eqTestLam in
+
+-- Map over sequences
+let t = _parse "
+  let s1 = map (lam x. x) [lam y. y, lam z. z] in
+  let r1 = head s1 in
+  let s2 = map (lam a. lam d. d) [lam b. b, lam c. c] in
+  let r2 = head s2 in
+  ()
+------------------------" in
+utest _test false t ["r1", "r2"] with [
+  ("r1", ["y", "z"]),
+  ("r2", ["d"])
+] using eqTestLam in
+
+-- Fold over sequences
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam z. z in
+  let r1 = foldl (lam a1. lam e1. a1) f [g, h] in
+  let r2 = foldl (lam a2. lam e2. a2 e2) f [g, h] in
+  let r3 = foldl (lam a3. lam e3. a3 e3) (lam w. w) [] in
+  ()
+------------------------" in
+utest _test true t ["r1", "r2", "r3"] with [
+  ("r1", ["x"]),
+  ("r2", ["x", "y", "z"]),
+  ("r3", ["w"])
 ] using eqTestLam in
 
 -- Record
