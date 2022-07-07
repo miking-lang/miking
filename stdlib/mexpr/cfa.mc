@@ -1052,7 +1052,6 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     | CTail _
     | CSubsequence _
     | CFoldl _
-    | CFoldr _
     | CMap _
     ) & const ->
     [
