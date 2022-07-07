@@ -65,6 +65,19 @@ lang CFABase = Ast + LetAst + MExprIndex + MExprPrettyPrint
   sem eqAbsVal (lhs: AbsVal) =
   | rhs -> eqi (cmpAbsVal lhs rhs) 0
 
+  -- Required for the data type Set Constraint
+  sem cmpConstraint: Constraint -> Constraint -> Int
+  sem cmpConstraint lhs =
+  | rhs -> cmpConstraintH (lhs, rhs)
+  sem cmpConstraintH: (Constraint, Constraint) -> Int
+  sem cmpConstraintH =
+  | (lhs, rhs) ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      error
+        "Missing case in cmpConstraintH for constraints with same constructor."
+    else res
+
   --------------------------
   -- NAME-INTEGER MAPPING --
   --------------------------
@@ -118,7 +131,7 @@ lang CFA = CFABase
 
     -- For each name in the program, gives constraints which needs to be
     -- repropagated upon updates to the abstract values for the name.
-    edges: Tensor[[Constraint]],
+    edges: Tensor[Set Constraint],
 
     -- Contains a list of functions used for generating match constraints
     -- TODO(dlunde,2021-11-17): Should be added as a product extension
@@ -146,7 +159,7 @@ lang CFA = CFABase
     let elist = toList [] in
     { worklist = elist,
       data = tensorCreateDense shape (lam. setEmpty cmpAbsVal),
-      edges = tensorCreateDense shape (lam. elist),
+      edges = tensorCreateDense shape (lam. setEmpty cmpConstraint),
       mcgfs = [],
       im = im,
       graphData = None () }
@@ -171,7 +184,7 @@ lang CFA = CFABase
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup q graph with cc in
-        let graph = foldl (propagateConstraint h) graph cc in
+        let graph = setFold (propagateConstraint h) graph cc in
         iter graph
     in
     iter graph
@@ -200,7 +213,7 @@ lang CFA = CFABase
         match head graph.worklist with (q,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup q graph with cc in
-        let graph = foldl (propagateConstraint h) graph cc in
+        let graph = setFold (propagateConstraint h) graph cc in
         iter (addi i 1) pprintenv graph
     in
     iter 1 pprintenv graph
@@ -228,7 +241,7 @@ lang CFA = CFABase
   sem addEdge (graph: CFAGraph) (q: IName) =
   | cstr ->
     let cstrsq = edgesLookup q graph in
-    tensorLinearSetExn graph.edges q (cons cstr cstrsq);
+    tensorLinearSetExn graph.edges q (setInsert cstr cstrsq);
     graph
 
   -- Helper function for initializing a constraint for a given name (mainly
@@ -280,7 +293,7 @@ lang CFA = CFABase
         match pprintVarIName graph.im env b.0 with (env,b0) in
         match mapAccumL (constraintToString graph.im) env b.1 with (env,b1) in
         (env,(b0,b1))
-      ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.edges))
+      ) env (mapi (lam i. lam x. (i, setToSeq x)) (tensorToSeqExn graph.edges))
     with (env, edges) in
 
     let str = join [
@@ -317,6 +330,18 @@ lang BaseConstraint = CFA
   | CstrDirectAv { lhs: IName, lhsav: AbsVal, rhs: IName, rhsav: AbsVal }
   -- {lhsav} ⊆ lhs ⇒ [rhs]
   | CstrDirectAvCstrs { lhs: IName, lhsav: AbsVal, rhs: [Constraint] }
+
+  sem cmpConstraintH =
+  | (CstrInit { lhs = lhs1, rhs = rhs1 },
+     CstrInit { lhs = lhs2, rhs = rhs2 }) ->
+     let d = cmpAbsVal lhs1 lhs2 in
+     if eqi d 0 then subi rhs1 rhs2
+     else d
+  | (CstrDirect { lhs = lhs1, rhs = rhs1 },
+     CstrDirect { lhs = lhs2, rhs = rhs2 }) ->
+     let d = subi lhs1 lhs2 in
+     if eqi d 0 then subi rhs1 rhs2
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
@@ -485,6 +510,24 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
   -- {const args} ⊆ lhs ⇒ {const args lhs} ⊆ res
   | CstrConstApp { lhs: IName, rhs: IName, res: IName }
 
+  sem cmpConstraintH =
+  | (CstrLamApp { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrLamApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi lhs1 lhs2 in
+       if eqi d 0 then subi rhs2 rhs2
+       else d
+     else d
+  | (CstrConstApp { lhs = lhs1, rhs = rhs1, res = res1},
+     CstrConstApp { lhs = lhs2, rhs = rhs2, res = res2}) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi lhs1 lhs2 in
+       if eqi d 0 then subi rhs2 rhs2
+       else d
+     else d
+
   sem initConstraint (graph: CFAGraph) =
   | CstrLamApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -553,6 +596,19 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
   syn Constraint =
   -- r ∈ lhs ⇒ { r with key = val } ∈ rhs
   | CstrRecordUpdate { lhs: IName, key: SID, val: IName, rhs: IName }
+
+  sem cmpConstraintH =
+  | (CstrRecordUpdate { lhs = lhs1, key = key1, val = val1, rhs = rhs1 },
+     CstrRecordUpdate { lhs = lhs2, key = key2, val = val2, rhs = rhs2 }) ->
+     let d = subi lhs1 lhs2 in
+     if eqi d 0 then
+       let d = cmpSID key1 key2 in
+       if eqi d 0 then
+         let d = subi val1 val2 in
+         if eqi d 0 then subi rhs1 rhs2
+         else d
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
@@ -667,10 +723,20 @@ lang DataCFA = CFA + BaseConstraint + DataAst
 
 end
 
-lang MatchCFA = CFA + BaseConstraint + MatchAst
+lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
 
   syn Constraint =
   | CstrMatch { id: IName, pat: Pat, target: IName }
+
+  sem cmpConstraintH =
+  | (CstrMatch { id = id1, pat = pat1, target = target1 },
+     CstrMatch { id = id2, pat = pat2, target = target2 }) ->
+     let d = subi id1 id2 in
+     if eqi d 0 then
+       let d = subi target1 target2 in
+       if eqi d 0 then cmpPat pat1 pat2
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrMatch r & cstr -> initConstraintName r.target graph cstr
@@ -932,6 +998,67 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
   | CstrSeqFold2 {f: IName, acc: IName, names: Set IName, res: IName}
   -- {lam x. b} ⊆ f ⇒ (names ⊆ x and {b} ⊆ res)
   | CstrSeqFold3 {f: IName, names: Set IName, res: IName}
+
+  sem cmpConstraintH =
+  | (CstrSeq { lhs = lhs1, rhs = rhs1 },
+     CstrSeq { lhs = lhs2, rhs = rhs2 }) ->
+     let d = subi lhs1 lhs2 in
+     if eqi d 0 then subi rhs1 rhs2
+     else d
+  | (CstrSeqUnion { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrSeqUnion { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi lhs1 lhs2 in
+       if eqi d 0 then subi rhs1 rhs2
+       else d
+     else d
+  | (CstrSeqMap1 { seq = seq1, f = f1, res = res1 },
+     CstrSeqMap1 { seq = seq2, f = f2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi seq1 seq2 in
+       if eqi d 0 then subi f1 f2
+       else d
+     else d
+  | (CstrSeqMap2 { f = f1, names = names1, res = res1 },
+     CstrSeqMap2 { f = f2, names = names2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
+  | (CstrSeqFold1 { seq = seq1, f = f1, acc = acc1, res = res1 },
+     CstrSeqFold1 { seq = seq2, f = f2, acc = acc2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi seq1 seq2 in
+       if eqi d 0 then
+         let d = subi acc1 acc2 in
+         if eqi d 0 then subi f1 f2
+         else d
+       else d
+     else d
+  | (CstrSeqFold2 { f = f1, acc = acc1, names = names1, res = res1 },
+     CstrSeqFold2 { f = f2, acc = acc2, names = names2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi acc1 acc2 in
+       if eqi d 0 then
+         let d = subi f1 f2 in
+         if eqi d 0 then setCmp names1 names2
+         else d
+       else d
+     else d
+  | (CstrSeqFold3 { f = f1, names = names1, res = res1 },
+     CstrSeqFold3 { f = f2, names = names2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
