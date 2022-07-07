@@ -30,7 +30,7 @@ let s : [Tensor[Float]] =
   create 5 (lam. tensorCreateCArrayFloat sh (lam. randFloat ())) in
 
 accelerate (
-  loop n (lam i.
+  parallelLoop n (lam i.
     let r = divi i cols in
     let c = modi i cols in
     let n = length s in

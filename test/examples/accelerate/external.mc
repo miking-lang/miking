@@ -22,7 +22,7 @@ let t = tensorCreateCArrayFloat shape (lam. 0.0) in
 let n : Int = foldl multiply 1 shape in
 
 let x : Float = accelerate (
-  loop n
+  parallelLoop n
     (lam i : Int.
       let x = divi i 100 in
       let y = modi i 100 in
