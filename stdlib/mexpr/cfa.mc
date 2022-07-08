@@ -1703,6 +1703,23 @@ lang KCFA = CFABase
 
   sem initConstraint: CFAGraph -> Constraint -> CFAGraph
 
+  -- Function that initializes all constraints in a CFAGraph for a given context
+  -- and context environment
+  sem initConstraints
+  : Ctx -> CtxEnv -> CFAGraph -> Expr -> (CtxEnv, CFAGraph)
+  sem initConstraints ctx env graph =
+  | t ->
+    -- Recurse over program and generate constraints
+    match
+      collectConstraints ctx graph.cgfs (graph.apps, env, []) t
+    with (apps, env, cstrs) in
+
+    -- Update the set of analyzed applications in the graph
+    let graph = { graph with apps = apps } in
+
+    -- Initialize all collected constraints and return
+    (env, foldl initConstraint graph cstrs)
+
   sem propagateConstraint
   : (IName,Ctx,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
@@ -2199,10 +2216,7 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
       let ctxBody = ctxAdd graph.k res.0 res.1 in
       let envBody = ctxEnvAdd x ctxBody env in
       -- Analyze the lambda body
-      match collectConstraints ctxBody graph.cgfs (graph.apps,envBody,[]) body
-      with (apps, envBody, cstrs) in
-      let graph = {graph with apps = apps} in
-      let graph = foldl initConstraint graph cstrs in
+      match initConstraints ctxBody envBody graph body with (envBody, graph) in
       -- Add rhs ⊆ x constraint
       let graph = initConstraint graph (CstrDirect {
           lhs = rhs, rhs = (x, ctxBody)
@@ -2724,6 +2738,7 @@ lang CmpSymbKCFA = KCFA + ConstKCFA + CmpSymbAst
 end
 
 lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
+               + LamKCFA
 
   syn Constraint =
   -- [{names}] ⊆ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
@@ -2732,6 +2747,21 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
   | CstrSeqUnion {lhs : (IName,Ctx),
                   rhs : (IName,Ctx),
                   res : (IName,Ctx)}
+  -- [{names}] ∈ seq ⇒ [{f n : n ∈ names}] ∈ res
+  | CstrSeqMap1 {seq: (IName,Ctx), f: (IName,Ctx), res: (IName,Ctx)}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
+  | CstrSeqMap2 {f: (IName,Ctx), names: Set (IName,Ctx), res: (IName,Ctx)}
+  -- CstrSeqFold<n> implements foldl when left = true, and foldr otherwise
+  -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
+  -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
+  | CstrSeqFold1 { seq: (IName,Ctx), f: (IName,Ctx), acc: (IName,Ctx),
+                   res: (IName,Ctx), left: Bool }
+  -- l: {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and c ⊆ res))
+  -- r: {lam x. b} ⊆ f ⇒ (names ⊆ x and {lam y. c} ⊆ b ⇒ (acc ⊆ y and c ⊆ res))
+  | CstrSeqFold2 { f: (IName,Ctx), acc: (IName,Ctx), names: Set (IName,Ctx),
+                   res: (IName,Ctx), left: Bool }
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and b ⊆ res)
+  | CstrSeqFold3 { f: (IName,Ctx), names: Set (IName,Ctx), res: (IName,Ctx) }
 
   sem cmpConstraintH =
   | (CstrSeq { lhs = lhs1, rhs = rhs1 },
@@ -2747,10 +2777,67 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
        if eqi d 0 then cmpINameCtx rhs1 rhs2
        else d
      else d
+  | (CstrSeqMap1 { seq = seq1, f = f1, res = res1 },
+     CstrSeqMap1 { seq = seq2, f = f2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx seq1 seq2 in
+       if eqi d 0 then cmpINameCtx f1 f2
+       else d
+     else d
+  | (CstrSeqMap2 { f = f1, names = names1, res = res1 },
+     CstrSeqMap2 { f = f2, names = names2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
+  | (CstrSeqFold1 { seq = seq1, f = f1, acc = acc1, res = res1, left = l1 },
+     CstrSeqFold1 { seq = seq2, f = f2, acc = acc2, res = res2, left = l2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx seq1 seq2 in
+       if eqi d 0 then
+         let d = cmpINameCtx acc1 acc2 in
+         if eqi d 0 then
+           let d = cmpINameCtx f1 f2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
+         else d
+       else d
+     else d
+  | (CstrSeqFold2 { f = f1, acc = acc1, names = names1, res = res1, left = l1 },
+     CstrSeqFold2 { f = f2, acc = acc2, names = names2, res = res2, left = l2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx acc1 acc2 in
+       if eqi d 0 then
+         let d = cmpINameCtx f1 f2 in
+         if eqi d 0 then
+           let d = setCmp names1 names2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
+         else d
+       else d
+     else d
+  | (CstrSeqFold3 { f = f1, names = names1, res = res1 },
+     CstrSeqFold3 { f = f2, names = names2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
   | CstrSeqUnion r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrSeqMap1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSeqMap2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSeqFold1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSeqFold2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSeqFold3 r & cstr -> initConstraintName r.f graph cstr
 
   sem constraintToString im (env: PprintEnv) =
   | CstrSeq { lhs = lhs, rhs = rhs } ->
@@ -2764,6 +2851,49 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
     (env, join [
         "[{names}] ⊆ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
       ])
+  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
+    match pprintVarINameCtx im env seq with (env,seq) in
+    match pprintVarINameCtx im env f with (env,f) in
+    match pprintVarINameCtx im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, " n : n ∈ names}] ∈ ", res
+      ])
+  | CstrSeqMap2 { f = f, names = names, res = res } ->
+    match pprintVarINameCtx im env f with (env,f) in
+    match mapAccumL (pprintVarINameCtx im) env (setToSeq names)
+    with (env,names) in
+    match pprintVarINameCtx im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
+        "[{b}] ∈ ", res
+      ])
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+    match pprintVarINameCtx im env seq with (env,seq) in
+    match pprintVarINameCtx im env f with (env,f) in
+    match pprintVarINameCtx im env acc with (env,acc) in
+    match pprintVarINameCtx im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, " ", acc, " n : n ∈ names}] ∈ ", res
+      ])
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+    match pprintVarINameCtx im env f with (env,f) in
+    match pprintVarINameCtx im env acc with (env,acc) in
+    match mapAccumL (pprintVarINameCtx im) env (setToSeq names)
+    with (env,names) in
+    match pprintVarINameCtx im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ ", acc, " ⊆ x AND ",
+        "{lam y. c} ⊆ b ⇒ {", strJoin ", " names, "} ⊆ y AND {c} ⊆ ", res
+      ])
+  | CstrSeqFold3 { f = f, names = names, res = res } ->
+    match pprintVarINameCtx im env f with (env,f) in
+    match mapAccumL (pprintVarINameCtx im) env (setToSeq names)
+    with (env,names) in
+    match pprintVarINameCtx im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", (strJoin ", " names), "} ⊆ x AND ",
+        "b ⊆ ", res
+      ])
 
   sem propagateConstraint update graph =
   | CstrSeq { lhs = lhs, rhs = rhs } ->
@@ -2776,6 +2906,71 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
     match update.2 with AVSeq { names = names } then
       addData graph (AVSeq {names = setInsert rhs names}) res
     else graph
+  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
+    match update.2 with AVSeq { names = names } then
+      initConstraint graph (CstrSeqMap2 { f = f, names = names, res = res })
+    else graph
+  | CstrSeqMap2 { f = f, names = names, res = res } ->
+    match update.2 with AVLam { ident = x, bident = b, body = body, env = env }
+    then
+      -- All calls to 'f' within the map get the same context
+      let ctxBody = res.1 in
+      let envBody = ctxEnvAdd x ctxBody env in
+      -- Analyze the lambda body
+      match initConstraints ctxBody envBody graph body with (envBody, graph) in
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = (x, ctxBody) })
+        ) graph names in
+      -- Add [{b}] ⊆ res constraint
+      let ctx = ctxEnvLookup graph.im (infoTm body) b envBody in
+      initConstraint graph (CstrInit {
+        lhs = AVSeq { names = setOfSeq cmpINameCtx [(b, ctx)]},
+        rhs = res })
+    else graph
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
+    match update.2 with AVSeq { names = names } then
+      initConstraint graph (
+        CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left }
+      )
+    else graph
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
+    match update.2 with AVLam { ident = x, bident = b, body = body, env = env }
+    then
+      let ctxBody = res.1 in
+      let envBody = ctxEnvAdd x ctxBody env in
+      -- Analyze the lambda body
+      match initConstraints ctxBody envBody graph body with (envBody, graph) in
+      let ctxBident = ctxEnvLookup graph.im (infoTm body) b envBody in
+      if left then
+        -- Add acc ⊆ x constraint
+        let graph = initConstraint graph (CstrDirect {
+          lhs = acc, rhs = (x, ctxBody) }) in
+        initConstraint graph (CstrSeqFold3 {
+          f = (b, ctxBident), names = names, res = res})
+      else
+        -- Add names ⊆ x constraint
+        let graph = setFold (lam graph. lam n.
+            initConstraint graph (CstrDirect { lhs = n, rhs = (x, ctxBody) })
+          ) graph names in
+        initConstraint graph (CstrSeqFold3 {
+          f = (b, ctxBident), names = setOfSeq cmpINameCtx [acc], res = res})
+    else graph
+  | CstrSeqFold3 { f = f, names = names, res = res } ->
+    match update.2 with AVLam { ident = x, bident = b, body = body, env = env }
+    then
+      let ctxBody = res.1 in
+      let envBody = ctxEnvAdd x ctxBody env in
+      -- Analyze the lambda body
+      match initConstraints ctxBody envBody graph body with (envBody, graph) in
+      let ctxBident = ctxEnvLookup graph.im (infoTm body) b envBody in
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = (x, ctxBody) })
+        ) graph names in
+      -- Add b ⊆ res constraint
+      initConstraint graph (CstrDirect { lhs = (b, ctxBident), rhs = res })
+    else graph
 
   sem generateConstraintsConst info ident =
   | ( CSet _
@@ -2787,6 +2982,9 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
     | CHead _
     | CTail _
     | CSubsequence _
+    | CFoldl _
+    | CFoldr _
+    | CMap _
     ) & const ->
     [
       CstrInit {
@@ -2801,12 +2999,9 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
     ) -> []
 
   -- TODO(Linnea, 2022-05-13): Add flow constraints to all sequence operations
-  -- | ( CMap _
-  --   | CMapi _
+  -- | ( CMapi _
   --   | CIter _
   --   | CIteri _
-  --   | CFoldl _
-  --   | CFoldr _
   --   | CCreate _
   --   | CCreateList _
   --   | CCreateRope _
@@ -2848,6 +3043,29 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
   | CSubsequence _ ->
     utest length args with 3 in
     initConstraint graph (CstrDirect {lhs = head args, rhs = res})
+  | CMap _ ->
+    utest length args with 2 in
+    initConstraint graph (
+      CstrSeqMap1 {seq = get args 1, f = head args, res = res})
+  | CFoldl _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    -- Add acc ⊆ res constraint
+    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
+    initConstraint graph (CstrSeqFold1 {
+      seq = seq, f = f, acc = acc, res = res, left = true})
+  | CFoldr _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    -- Add acc ⊆ res constraint
+    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
+    initConstraint graph (CstrSeqFold1 {
+      seq = seq, f = f, acc = acc, res = res, left = false})
+
 end
 
 lang FileOpKCFA = KCFA + ConstKCFA + FileOpAst
@@ -3114,20 +3332,13 @@ lang MExprKCFA = KCFA +
                  generateConstraintsMatch graph.im graph.mcgfs ] in
     { graph with cgfs = concat cgfs graph.cgfs }
 
-  -- Function that initializes the constraints in a CFAGraph
-  sem initConstraints: CFAGraph -> Expr -> CFAGraph
-  sem initConstraints graph =
+  -- Function that initializes the constraints in a CFAGraph for an empty
+  -- context and context environment
+  sem initConstraintsEmpty: CFAGraph -> Expr -> CFAGraph
+  sem initConstraintsEmpty graph =
   | t ->
-    -- Recurse over program and generate constraints
-    match
-      collectConstraints (ctxEmpty()) graph.cgfs (graph.apps,ctxEnvEmpty(),[]) t
-    with (apps, env, cstrs) in
-
-    -- Update the set of analyzed applications in the graph
-    let graph = { graph with apps = apps } in
-
-    -- Initialize all collected constraints and return
-    foldl initConstraint graph cstrs
+    match initConstraints (ctxEmpty ()) (ctxEnvEmpty ()) graph t with (_, graph)
+    in graph
 
 end
 
@@ -3167,7 +3378,7 @@ lang KTest = MExprKCFA + MExprANFAll + BootParser + MExprPrettyPrint
     let graph = emptyCFAGraph k t in
     let graph = addBaseMatchConstraints graph in
     let graph = addBaseConstraints graph in
-    let graph = initConstraints graph t in
+    let graph = initConstraintsEmpty graph t in
     solveCfa graph
 
   sem testCfaDebug : PprintEnv -> Int -> Expr -> (PprintEnv, CFAGraph)
@@ -3176,7 +3387,7 @@ lang KTest = MExprKCFA + MExprANFAll + BootParser + MExprPrettyPrint
     let graph = emptyCFAGraph k t in
     let graph = addBaseMatchConstraints graph in
     let graph = addBaseConstraints graph in
-    let graph = initConstraints graph t in
+    let graph = initConstraintsEmpty graph t in
     solveCfaDebug pprintenv graph
 
 end
@@ -3385,7 +3596,7 @@ let t = _parse "
   let r3 = foldl (lam a3. lam e3. a3 e3) (lam w. w) [] in
   ()
 ------------------------" in
-utest _test true t ["r1", "r2", "r3"] with [
+utest _test false t ["r1", "r2", "r3"] with [
   ("r1", ["x"]),
   ("r2", ["x", "y", "z"]),
   ("r3", ["w"])
@@ -3401,7 +3612,7 @@ let t = _parse "
   let r3 = foldr (lam e3. lam a3. a3 e3) (lam w. w) [] in
   ()
 ------------------------" in
-utest _test true t ["r1", "r2", "r3"] with [
+utest _test false t ["r1", "r2", "r3"] with [
   ("r1", ["x"]),
   ("r2", ["x", "y", "z"]),
   ("r3", ["w"])
@@ -3746,7 +3957,7 @@ utest _test0 false t ["res","a"] with [
   ("a", ["x","z"])
 ] using eqTestLam0 in
 
--- Sequence operations
+-- Sequence operations (basic)
 let t = _parse "
   let f = lam x. x in
   let g = lam y. y in
@@ -3803,6 +4014,51 @@ utest _test0 false t [
   ("resIsList", []),
   ("resIsRope", []),
   ("resSubsequence", ["x", "z"])
+] using eqTestLam0 in
+
+-- Map over sequences
+let t = _parse "
+  let s1 = map (lam x. x) [lam y. y, lam z. z] in
+  let r1 = head s1 in
+  let s2 = map (lam a. lam d. d) [lam b. b, lam c. c] in
+  let r2 = head s2 in
+  ()
+------------------------" in
+utest _test0 false t ["r1", "r2"] with [
+  ("r1", ["y", "z"]),
+  ("r2", ["d"])
+] using eqTestLam0 in
+
+-- Foldl
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam z. z in
+  let r1 = foldl (lam a1. lam e1. a1) f [g, h] in
+  let r2 = foldl (lam a2. lam e2. a2 e2) f [g, h] in
+  let r3 = foldl (lam a3. lam e3. a3 e3) (lam w. w) [] in
+  ()
+------------------------" in
+utest _test0 false t ["r1", "r2", "r3"] with [
+  ("r1", ["x"]),
+  ("r2", ["x", "y", "z"]),
+  ("r3", ["w"])
+] using eqTestLam0 in
+
+-- Foldr
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam z. z in
+  let r1 = foldr (lam e1. lam a1. a1) f [g, h] in
+  let r2 = foldr (lam e2. lam a2. a2 e2) f [g, h] in
+  let r3 = foldr (lam e3. lam a3. a3 e3) (lam w. w) [] in
+  ()
+------------------------" in
+utest _test0 false t ["r1", "r2", "r3"] with [
+  ("r1", ["x"]),
+  ("r2", ["x", "y", "z"]),
+  ("r3", ["w"])
 ] using eqTestLam0 in
 
 -- Record
