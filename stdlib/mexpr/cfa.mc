@@ -1594,9 +1594,8 @@ lang KCFA = CFABase
 
   type Ctx = [IName]
   type CtxEnv = Map IName Ctx
-  type AnalyzedApps = Tensor[Map Ctx (Set CtxEnv)]
-  type GenFunAcc = (AnalyzedApps, CtxEnv, [Constraint])
-  type GenFun = Ctx -> AnalyzedApps -> CtxEnv -> Expr -> GenFunAcc
+  type GenFunAcc = (CtxEnv, [Constraint])
+  type GenFun = Ctx -> CtxEnv -> Expr -> GenFunAcc
   type MatchGenFun = (IName,Ctx) -> (IName,Ctx) -> Pat -> [Constraint]
 
   type CFAGraph = {
@@ -1616,10 +1615,6 @@ lang KCFA = CFABase
 
     -- The "k" in k-CFA.
     k: Int,
-
-    -- Stores the set of applications that have been analyzed in a given
-    -- context.
-    apps: AnalyzedApps,
 
     -- Contains a list of functions used for generating constraints
     cgfs: [GenFun],
@@ -1649,7 +1644,6 @@ lang KCFA = CFABase
       edges = tensorCreateDense shape (lam. mapEmpty cmpCtx),
       im = im,
       k = k,
-      apps = analyzedAppsEmpty im,
       cgfs = [],
       mcgfs = [],
       graphData = None () }
@@ -1716,9 +1710,9 @@ lang KCFA = CFABase
   -- Base constraint generation function (must still be included manually in
   -- constraintGenFuns)
   sem generateConstraints
-  : IndexMap -> Ctx -> AnalyzedApps -> CtxEnv -> Expr -> GenFunAcc
-  sem generateConstraints im ctx apps env =
-  | t -> (apps,env,[])
+  : IndexMap -> Ctx -> CtxEnv -> Expr -> GenFunAcc
+  sem generateConstraints im ctx env =
+  | t -> (env,[])
 
   -- Call a set of constraint generation functions on each term in program.
   -- Useful when defining values of type CFAGraph.
@@ -1726,9 +1720,9 @@ lang KCFA = CFABase
   sem collectConstraints ctx cgfs acc =
   | t ->
     let acc = foldl (lam acc. lam f: GenFun.
-        match acc with (apps, env, cstrs) in
-        match f ctx apps env t with (apps, env, fcstrs) in
-        (apps, env, concat fcstrs cstrs)
+        match acc with (env, cstrs) in
+        match f ctx env t with (env, fcstrs) in
+        (env, concat fcstrs cstrs)
       ) acc cgfs
     in
     sfold_Expr_Expr (collectConstraints ctx cgfs) acc t
@@ -1743,11 +1737,8 @@ lang KCFA = CFABase
   | t ->
     -- Recurse over program and generate constraints
     match
-      collectConstraints ctx graph.cgfs (graph.apps, env, []) t
-    with (apps, env, cstrs) in
-
-    -- Update the set of analyzed applications in the graph
-    let graph = { graph with apps = apps } in
+      collectConstraints ctx graph.cgfs (env, []) t
+    with (env, cstrs) in
 
     -- Initialize all collected constraints and return
     (env, foldl initConstraint graph cstrs)
@@ -1868,28 +1859,6 @@ lang KCFA = CFABase
   sem cmpCtxEnv: CtxEnv -> CtxEnv -> Int
   sem cmpCtxEnv env1 =
   | env2 -> mapCmp cmpCtx env1 env2
-
-  sem analyzedAppsEmpty: IndexMap -> AnalyzedApps
-  sem analyzedAppsEmpty =
-  | im ->
-    tensorCreateDense (tensorShape im.int2name) (lam. mapEmpty cmpCtx)
-
-  -- Checks if a given application has been analyzed, and adds it to the set if
-  -- not already analyzed. Updates the set by a side effect.
-  sem analyzedAppsAdd
-  : IName -> Ctx -> CtxEnv -> AnalyzedApps -> (Bool, AnalyzedApps)
-  sem analyzedAppsAdd n c e =
-  | a ->
-    let cs = tensorLinearGetExn a n in
-    match mapLookup c cs with Some es then
-      if setMem e es then (true, a)
-      else
-        tensorLinearSetExn a n (mapInsert c (setInsert e es) cs);
-        (false, a)
-    else
-      let s = setInsert e (setEmpty cmpCtxEnv) in
-      tensorLinearSetExn a n (mapInsert c s cs);
-      (false, a)
 
   ---------------------
   -- PRETTY PRINTING --
@@ -2094,7 +2063,7 @@ end
 
 lang VarKCFA = KCFA + KBaseConstraint + VarAst
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmVar t, info = info } ->
     let ident = name2int im info ident in
     let lhs = name2int im t.info t.ident in
@@ -2104,7 +2073,7 @@ lang VarKCFA = KCFA + KBaseConstraint + VarAst
         rhs = (ident, ctx)
       } ]
     in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem exprName =
   | TmVar t -> t.ident
@@ -2128,7 +2097,7 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
        if eqi diff 0 then cmpCtxEnv lenv renv else diff
      else diff
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmLam t, info = info } ->
     let ident = name2int im info ident in
     let av: AbsVal = AVLam {
@@ -2138,7 +2107,7 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
       env = ctxEnvFilterFree im (TmLam t) env
     } in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem absValToString im (env: PprintEnv) =
   | AVLam { ident = ident, bident = bident } ->
@@ -2169,7 +2138,7 @@ lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
   sem exprName =
   | TmRecLets t -> exprName t.inexpr
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmRecLets ({ bindings = bindings } & t) ->
     -- Make each binding available in the environment
     let idents = map (lam b. name2int im b.info b.ident) bindings in
@@ -2188,7 +2157,7 @@ lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
       else errorSingle [infoTm b.body] "Not a lambda in recursive let body"
     ) (zip idents bindings) in
     let env = foldl (lam env. lam i. ctxEnvAdd i ctx env) env idents in
-    (apps, env, cstrs)
+    (env, cstrs)
 
   sem freeVars acc =
   | TmRecLets t ->
@@ -2224,11 +2193,11 @@ lang ConstKCFA = KCFA + ConstAst + KBaseConstraint + Cmp
       else ncmp
     else cmp
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmConst t, info = info } ->
     let ident = name2int im info ident in
     let cstrs = generateConstraintsConst t.info (ident,ctx) t.val in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem generateConstraintsConst: Info -> (IName,Ctx) -> Const -> [Constraint]
   sem generateConstraintsConst info ident =
@@ -2310,38 +2279,31 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
         ">const< >args< ⊆ ", lhs, " ⇒ ", ">const< >args< ", rhs, " ⊆ ", res
       ])
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmApp app, info = info} ->
     let ident = name2int im info ident in
-    -- Check if the application already has been analyzed in this context and
-    -- context environment. Without this check, applications in recursive
-    -- functions would be analyzed infinitely many times.
-    switch analyzedAppsAdd ident ctx env apps
-    case (true, _) then (apps, ctxEnvAdd ident ctx env, [])
-    case (false, apps) then
-      match app.lhs with TmVar l then
-        match app.rhs with TmVar r then
-          let lhs = name2int im l.info l.ident in
-          let rhs = name2int im r.info r.ident in
-          let lenv = ctxEnvLookup im l.info lhs env in
-          let renv = ctxEnvLookup im r.info rhs env in
-          let cstrs =
-            [ CstrLamApp {
-                lhs = (lhs, lenv),
-                rhs = (rhs, renv),
+    match app.lhs with TmVar l then
+      match app.rhs with TmVar r then
+        let lhs = name2int im l.info l.ident in
+        let rhs = name2int im r.info r.ident in
+        let lenv = ctxEnvLookup im l.info lhs env in
+        let renv = ctxEnvLookup im r.info rhs env in
+        let cstrs =
+          [ CstrLamApp {
+              lhs = (lhs, lenv),
+              rhs = (rhs, renv),
                 res = (ident, ctx)
               },
-              CstrConstApp {
-                lhs = (lhs, lenv),
-                rhs = (rhs, renv),
-                res = (ident, ctx)
-              }
-            ]
-          in
-          (apps, ctxEnvAdd ident ctx env, cstrs)
-        else errorSingle [infoTm app.rhs] "Not a TmVar in application"
-      else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-    end
+            CstrConstApp {
+              lhs = (lhs, lenv),
+              rhs = (rhs, renv),
+              res = (ident, ctx)
+            }
+          ]
+        in
+        (ctxEnvAdd ident ctx env, cstrs)
+      else errorSingle [infoTm app.rhs] "Not a TmVar in application"
+    else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
   sem propagateConstraintConst
   : (IName,Ctx) -> [(IName,Ctx)] -> CFAGraph -> Const -> CFAGraph
@@ -2382,7 +2344,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
   sem initConstraint (graph: CFAGraph) =
   | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmRecord t, info = info } ->
     let bindings = mapMap (lam v: Expr.
         match v with TmVar t then
@@ -2395,7 +2357,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     let av: AbsVal = AVRec { bindings = bindings } in
     let ident = name2int im info ident in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
   | TmLet { ident = ident, body = TmRecordUpdate t, info = info } ->
     match t.rec with TmVar vrec then
       match t.value with TmVar vval then
@@ -2408,7 +2370,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
                                val = (val, ctxEnvLookup im vval.info val env),
                                rhs = (ident, ctx)}
           ] in
-        (apps, ctxEnvAdd ident ctx env, cstrs)
+        (ctxEnvAdd ident ctx env, cstrs)
       else errorSingle [t.info] "Not a TmVar in record update"
     else errorSingle [t.info] "Not a TmVar in record update"
 
@@ -2450,7 +2412,7 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
   sem cmpAbsValH =
   | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmSeq t, info = info } ->
     let names = foldl (lam acc: [(IName,Ctx)]. lam t: Expr.
       match t with TmVar t then
@@ -2461,7 +2423,7 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
     let av: AbsVal = AVSeq { names = setOfSeq cmpINameCtx names } in
     let ident = name2int im info ident in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem absValToString im (env: PprintEnv) =
   | AVSeq { names = names } ->
@@ -2487,7 +2449,7 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
     let idiff = cmpINameCtx ilhs irhs in
     if eqi idiff 0 then cmpINameCtx blhs brhs else idiff
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmLet { ident = ident, body = TmConApp t, info = info } ->
     let body =
       match t.body with TmVar v then name2int im v.info v.ident
@@ -2499,7 +2461,7 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
       } in
     let ident = name2int im info ident in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident,ctx) } ] in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem absValToString im (env: PprintEnv) =
   | AVCon { ident = ident, body = body } ->
@@ -2547,10 +2509,9 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
     (env, join [id, ": match ", target, " with ", pat])
 
   sem generateConstraintsMatch
-  : IndexMap -> [MatchGenFun] -> Ctx -> AnalyzedApps -> CtxEnv -> Expr
-  -> GenFunAcc
-  sem generateConstraintsMatch im mcgfs ctx apps env =
-  | _ -> (apps,env,[])
+  : IndexMap -> [MatchGenFun] -> Ctx -> CtxEnv -> Expr -> GenFunAcc
+  sem generateConstraintsMatch im mcgfs ctx env =
+  | _ -> (env,[])
   | TmLet { ident = ident, body = TmMatch t, info = info } ->
     let thn = name2int im (infoTm t.thn) (exprName t.thn) in
     let els = name2int im (infoTm t.els) (exprName t.els) in
@@ -2571,7 +2532,7 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
     -- Add the names bound in the pattern to the environment
     let names = map (name2int im t.info) (patNames [] t.pat) in
     let env = foldl (lam acc. lam n. ctxEnvAdd n ctx acc) env names in
-    (apps, ctxEnvAdd ident ctx env, cstrs)
+    (ctxEnvAdd ident ctx env, cstrs)
 
   sem generateMatchConstraints
   : (IName,Ctx) -> (IName,Ctx) -> Pat -> [Constraint]
@@ -2668,20 +2629,20 @@ lang ExtKCFA = KCFA + ExtAst
   sem collectConstraints ctx cgfs acc =
   | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } & t ->
     let acc = foldl (lam acc. lam f.
-        match acc with (apps, env, cstrs) in
-        match f ctx apps env t with (apps, env, fcstrs) in
-        (apps, env, concat fcstrs cstrs)
+        match acc with (env, cstrs) in
+        match f ctx env t with (env, fcstrs) in
+        (env, concat fcstrs cstrs)
       ) acc cgfs in
     sfold_Expr_Expr (collectConstraints ctx cgfs) acc inexpr
 
-  sem generateConstraints im ctx apps env =
+  sem generateConstraints im ctx env =
   | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
     -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
     -- for externals. Similarly to constants, we probably want to delegate to
     -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
     -- not clear where the `generateConstraintsExts` function should be defined.
     --
-    (apps,env,[])
+    (env,[])
 
   sem exprName =
   | TmExt t -> exprName t.inexpr
