@@ -348,6 +348,23 @@ lang BaseConstraint = CFA
      let d = subi lhs1 lhs2 in
      if eqi d 0 then subi rhs1 rhs2
      else d
+  | (CstrDirectAv t1, CstrDirectAv t2) ->
+     let d = subi t1.lhs t2.lhs in
+     if eqi d 0 then
+       let d = subi t1.rhs t2.rhs in
+       if eqi d 0 then
+         let d = cmpAbsVal t1.lhsav t2.lhsav in
+         if eqi d 0 then cmpAbsVal t1.rhsav t2.rhsav
+         else d
+       else d
+     else d
+  | (CstrDirectAvCstrs t1, CstrDirectAvCstrs t2) ->
+     let d = subi t1.lhs t2.lhs in
+     if eqi d 0 then
+       let d = cmpAbsVal t1.lhsav t2.lhsav in
+       if eqi d 0 then seqCmp cmpConstraint t1.rhs t2.rhs
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
@@ -828,6 +845,16 @@ lang ExtCFA = CFA + ExtAst
   -- {ext args} ⊆ lhs ⇒ {ext args lhs} ⊆ res
   | CstrExtApp { lhs: IName, rhs : IName, res: IName }
 
+  sem cmpConstraintH =
+  | (CstrExtApp { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrExtApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi lhs1 lhs2 in
+       if eqi d 0 then subi rhs2 rhs2
+       else d
+     else d
+
   sem initConstraint (graph: CFAGraph) =
   | CstrExtApp r & cstr -> initConstraintName r.lhs graph cstr
 
@@ -998,7 +1025,8 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
   | CstrSeqMap1 {seq: IName, f: IName, res: IName}
   -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
   | CstrSeqMap2 {f: IName, names: Set IName, res: IName}
-  -- CstrSeqFold<n> implements foldl when left = true, and foldr otherwise
+  -- CstrSeqFold<n> constraints implement foldl when left = true, and foldr
+  -- otherwise
   -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
   -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
   | CstrSeqFold1 {seq: IName, f: IName, acc: IName, res: IName, left: Bool}
@@ -1111,22 +1139,26 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
         "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
         "[{b}] ∈ ", res
       ])
-  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
     match pprintVarIName im env seq with (env,seq) in
     match pprintVarIName im env f with (env,f) in
     match pprintVarIName im env acc with (env,acc) in
     match pprintVarIName im env res with (env,res) in
+    let app = if left then [" ", acc, " n"] else [" n ", acc] in
     (env, join [
-        "[{names}] ∈ ", seq, " ⇒ [{", f, " ", acc, " n : n ∈ names}] ∈ ", res
+        "[{names}] ∈ ", seq, " ⇒ [{", f, join app, " : n ∈ names}] ∈ ", res
       ])
-  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
     match pprintVarIName im env f with (env,f) in
     match pprintVarIName im env acc with (env,acc) in
     match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
     match pprintVarIName im env res with (env,res) in
+    let args =
+      if left then (acc, join ["{", strJoin ", " names, "}"])
+      else (join ["{", strJoin ", " names, "}"], acc) in
     (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ ", acc, " ⊆ x AND ",
-        "{lam y. c} ⊆ b ⇒ {", strJoin ", " names, "} ⊆ y AND {c} ⊆ ", res
+        "{lam x. b} ⊆ ", f, " ⇒ ", args.0, " ⊆ x AND ",
+        "{lam y. c} ⊆ b ⇒ ", args.1, " ⊆ y AND {c} ⊆ ", res
       ])
   | CstrSeqFold3 { f = f, names = names, res = res } ->
     match pprintVarIName im env f with (env,f) in
@@ -1975,6 +2007,23 @@ lang KBaseConstraint = KCFA
      let d = cmpINameCtx lhs1 lhs2 in
      if eqi d 0 then cmpINameCtx rhs1 rhs2
      else d
+  | (CstrDirectAv t1, CstrDirectAv t2) ->
+     let d = cmpINameCtx t1.lhs t2.lhs in
+     if eqi d 0 then
+       let d = cmpINameCtx t1.rhs t2.rhs in
+       if eqi d 0 then
+         let d = cmpAbsVal t1.lhsav t2.lhsav in
+         if eqi d 0 then cmpAbsVal t1.rhsav t2.rhsav
+         else d
+       else d
+     else d
+  | (CstrDirectAvCstrs t1, CstrDirectAvCstrs t2) ->
+     let d = cmpINameCtx t1.lhs t2.lhs in
+     if eqi d 0 then
+       let d = cmpAbsVal t1.lhsav t2.lhsav in
+       if eqi d 0 then seqCmp cmpConstraint t1.rhs t2.rhs
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
@@ -2574,6 +2623,16 @@ lang ExtKCFA = KCFA + ExtAst
                  rhs : (IName,Ctx),
                  res: (IName,Ctx) }
 
+  sem cmpConstraintH =
+  | (CstrExtApp { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrExtApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx lhs1 lhs2 in
+       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       else d
+     else d
+
   sem initConstraint (graph: CFAGraph) =
   | CstrExtApp r & cstr -> initConstraintName r.lhs graph cstr
 
@@ -2867,23 +2926,27 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
         "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
         "[{b}] ∈ ", res
       ])
-  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
     match pprintVarINameCtx im env seq with (env,seq) in
     match pprintVarINameCtx im env f with (env,f) in
     match pprintVarINameCtx im env acc with (env,acc) in
     match pprintVarINameCtx im env res with (env,res) in
+    let app = if left then [" ", acc, " n"] else [" n ", acc] in
     (env, join [
-        "[{names}] ∈ ", seq, " ⇒ [{", f, " ", acc, " n : n ∈ names}] ∈ ", res
+        "[{names}] ∈ ", seq, " ⇒ [{", f, join app, " : n ∈ names}] ∈ ", res
       ])
-  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
     match pprintVarINameCtx im env f with (env,f) in
     match pprintVarINameCtx im env acc with (env,acc) in
     match mapAccumL (pprintVarINameCtx im) env (setToSeq names)
     with (env,names) in
     match pprintVarINameCtx im env res with (env,res) in
+    let args =
+      if left then (acc, join ["{", strJoin ", " names, "}"])
+      else (join ["{", strJoin ", " names, "}"], acc) in
     (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ ", acc, " ⊆ x AND ",
-        "{lam y. c} ⊆ b ⇒ {", strJoin ", " names, "} ⊆ y AND {c} ⊆ ", res
+        "{lam x. b} ⊆ ", f, " ⇒ ", args.0, " ⊆ x AND ",
+        "{lam y. c} ⊆ b ⇒ ", args.1, " ⊆ y AND {c} ⊆ ", res
       ])
   | CstrSeqFold3 { f = f, names = names, res = res } ->
     match pprintVarINameCtx im env f with (env,f) in
