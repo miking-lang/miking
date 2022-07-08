@@ -236,23 +236,29 @@ lang CFA = CFABase
 
   sem propagateConstraint: (IName,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
+  -- Returns both the new graph, and a Boolean that is true iff the new edge was
+  -- added to the graph.
   -- NOTE(Linnea, 2022-06-21): Updates the graph by a side effect
-  sem addEdge: CFAGraph -> IName -> Constraint -> CFAGraph
+  sem addEdge: CFAGraph -> IName -> Constraint -> (CFAGraph, Bool)
   sem addEdge (graph: CFAGraph) (q: IName) =
   | cstr ->
     let cstrsq = edgesLookup q graph in
-    tensorLinearSetExn graph.edges q (setInsert cstr cstrsq);
-    graph
+    if setMem cstr cstrsq then (graph, false)
+    else
+      tensorLinearSetExn graph.edges q (setInsert cstr cstrsq);
+      (graph, true)
 
   -- Helper function for initializing a constraint for a given name (mainly
   -- used for convenience in initConstraint)
   sem initConstraintName: IName -> CFAGraph -> Constraint -> CFAGraph
   sem initConstraintName (name: IName) (graph: CFAGraph) =
   | cstr ->
-    let graph = addEdge graph name cstr in
-    let avs = dataLookup name graph in
-    setFold (lam graph. lam av. propagateConstraint (name,av) graph cstr)
-      graph avs
+    match addEdge graph name cstr with (graph, new) in
+    if new then
+      let avs = dataLookup name graph in
+      setFold (lam graph. lam av. propagateConstraint (name,av) graph cstr)
+        graph avs
+    else graph
 
   sem dataLookup: IName -> CFAGraph -> Set AbsVal
   sem dataLookup (key: IName) =
@@ -992,11 +998,14 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
   | CstrSeqMap1 {seq: IName, f: IName, res: IName}
   -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
   | CstrSeqMap2 {f: IName, names: Set IName, res: IName}
-  -- [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
-  | CstrSeqFold1 {seq: IName, f: IName, acc: IName, res: IName}
-  -- {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and {c} ⊆ res))
-  | CstrSeqFold2 {f: IName, acc: IName, names: Set IName, res: IName}
-  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and {b} ⊆ res)
+  -- CstrSeqFold<n> implements foldl when left = true, and foldr otherwise
+  -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
+  -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
+  | CstrSeqFold1 {seq: IName, f: IName, acc: IName, res: IName, left: Bool}
+  -- l: {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and c ⊆ res))
+  -- r: {lam x. b} ⊆ f ⇒ (names ⊆ x and {lam y. c} ⊆ b ⇒ (acc ⊆ y and c ⊆ res))
+  | CstrSeqFold2 {f: IName, acc: IName, names: Set IName, res: IName, left: Bool}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and b ⊆ res)
   | CstrSeqFold3 {f: IName, names: Set IName, res: IName}
 
   sem cmpConstraintH =
@@ -1029,25 +1038,31 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
        if eqi d 0 then setCmp names1 names2
        else d
      else d
-  | (CstrSeqFold1 { seq = seq1, f = f1, acc = acc1, res = res1 },
-     CstrSeqFold1 { seq = seq2, f = f2, acc = acc2, res = res2 }) ->
+  | (CstrSeqFold1 { seq = seq1, f = f1, acc = acc1, res = res1, left = l1 },
+     CstrSeqFold1 { seq = seq2, f = f2, acc = acc2, res = res2, left = l2 }) ->
      let d = subi res1 res2 in
      if eqi d 0 then
        let d = subi seq1 seq2 in
        if eqi d 0 then
          let d = subi acc1 acc2 in
-         if eqi d 0 then subi f1 f2
+         if eqi d 0 then
+           let d = subi f1 f2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
          else d
        else d
      else d
-  | (CstrSeqFold2 { f = f1, acc = acc1, names = names1, res = res1 },
-     CstrSeqFold2 { f = f2, acc = acc2, names = names2, res = res2 }) ->
+  | (CstrSeqFold2 { f = f1, acc = acc1, names = names1, res = res1, left = l1 },
+     CstrSeqFold2 { f = f2, acc = acc2, names = names2, res = res2, left = l2 }) ->
      let d = subi res1 res2 in
      if eqi d 0 then
        let d = subi acc1 acc2 in
        if eqi d 0 then
          let d = subi f1 f2 in
-         if eqi d 0 then setCmp names1 names2
+         if eqi d 0 then
+           let d = setCmp names1 names2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
          else d
        else d
      else d
@@ -1147,16 +1162,25 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
       initConstraint graph (
         CstrInit { lhs = AVSeq {names = setOfSeq subi [b]}, rhs = res })
     else graph
-  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res } ->
+  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
     match update.1 with AVSeq { names = names } then
       initConstraint graph (
-        CstrSeqFold2 { f = f, acc = acc, names = names, res = res })
+        CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left }
+      )
     else graph
-  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res } ->
+  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
     match update.1 with AVLam { ident = x, body = b } then
-      -- Add acc ⊆ x constraint
-      let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = x }) in
-      initConstraint graph (CstrSeqFold3 {f = b, names = names, res = res})
+      if left then
+        -- Add acc ⊆ x constraint
+        let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = x }) in
+        initConstraint graph (CstrSeqFold3 {f = b, names = names, res = res})
+      else
+        -- Add names ⊆ x constraint
+        let graph = setFold (lam graph. lam n.
+            initConstraint graph (CstrDirect { lhs = n, rhs = x })
+          ) graph names in
+        initConstraint graph (
+          CstrSeqFold3 {f = b, names = setOfSeq subi [acc], res = res})
     else graph
   | CstrSeqFold3 { f = f, names = names, res = res } ->
     match update.1 with AVLam { ident = x, body = b } then
@@ -1179,6 +1203,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     | CTail _
     | CSubsequence _
     | CFoldl _
+    | CFoldr _
     | CMap _
     ) & const ->
     [
@@ -1194,12 +1219,9 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     ) -> []
 
   -- TODO(Linnea, 2022-05-13): Add flow constraints to all sequence operations
-  -- | ( CMap _
-  --   | CMapi _
+  -- | ( CMapi _
   --   | CIter _
   --   | CIteri _
-  --   | CFoldl _
-  --   | CFoldr _
   --   | CCreate _
   --   | CCreateList _
   --   | CCreateRope _
@@ -1253,7 +1275,16 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     -- Add acc ⊆ res constraint
     let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
     initConstraint graph (CstrSeqFold1 {
-      seq = seq, f = f, acc = acc, res = res})
+      seq = seq, f = f, acc = acc, res = res, left = true})
+  | CFoldr _ ->
+    utest length args with 3 in
+    let seq = get args 2 in
+    let f = head args in
+    let acc = get args 1 in
+    -- Add acc ⊆ res constraint
+    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
+    initConstraint graph (CstrSeqFold1 {
+      seq = seq, f = f, acc = acc, res = res, left = false})
 
 end
 
@@ -3275,7 +3306,7 @@ utest _test false t ["r1", "r2"] with [
   ("r2", ["d"])
 ] using eqTestLam in
 
--- Fold over sequences
+-- Foldl
 let t = _parse "
   let f = lam x. x in
   let g = lam y. y in
@@ -3283,6 +3314,22 @@ let t = _parse "
   let r1 = foldl (lam a1. lam e1. a1) f [g, h] in
   let r2 = foldl (lam a2. lam e2. a2 e2) f [g, h] in
   let r3 = foldl (lam a3. lam e3. a3 e3) (lam w. w) [] in
+  ()
+------------------------" in
+utest _test true t ["r1", "r2", "r3"] with [
+  ("r1", ["x"]),
+  ("r2", ["x", "y", "z"]),
+  ("r3", ["w"])
+] using eqTestLam in
+
+-- Foldr
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let h = lam z. z in
+  let r1 = foldr (lam e1. lam a1. a1) f [g, h] in
+  let r2 = foldr (lam e2. lam a2. a2 e2) f [g, h] in
+  let r3 = foldr (lam e3. lam a3. a3 e3) (lam w. w) [] in
   ()
 ------------------------" in
 utest _test true t ["r1", "r2", "r3"] with [
