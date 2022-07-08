@@ -1577,7 +1577,7 @@ lang KCFA = CFABase
 
     -- For each name in the program, gives constraints which needs to be
     -- repropagated upon updates to the abstract values for the name.
-    edges: Tensor[Map Ctx [Constraint]],
+    edges: Tensor[Map Ctx (Set Constraint)],
 
     -- Bidirectional mapping between names and integers.
     im: IndexMap,
@@ -1642,7 +1642,7 @@ lang KCFA = CFABase
         match head graph.worklist with (q,c,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup (q,c) graph with cc in
-        let graph = foldl (propagateConstraint h) graph cc in
+        let graph = setFold (propagateConstraint h) graph cc in
         iter graph
     in
     iter graph
@@ -1671,7 +1671,7 @@ lang KCFA = CFABase
         match head graph.worklist with (q,c,d) & h in
         let graph = { graph with worklist = tail graph.worklist } in
         match edgesLookup (q,c) graph with cc in
-        let graph = foldl (propagateConstraint h) graph cc in
+        let graph = setFold (propagateConstraint h) graph cc in
         iter (addi i 1) pprintenv graph
     in
     iter 1 pprintenv graph
@@ -1712,7 +1712,7 @@ lang KCFA = CFABase
   | cstr ->
     match qc with (q,c) in
     let cstrsq = edgesLookup qc graph in
-    let m = mapInsert c (cons cstr cstrsq) (tensorLinearGetExn graph.edges q) in
+    let m = mapInsert c (setInsert cstr cstrsq) (tensorLinearGetExn graph.edges q) in
     tensorLinearSetExn graph.edges q m;
     graph
 
@@ -1732,10 +1732,11 @@ lang KCFA = CFABase
     let m = tensorLinearGetExn graph.data key.0 in
     mapLookupOrElse (lam. setEmpty cmpAbsVal) key.1 m
 
+  sem edgesLookup: (IName,Ctx) -> CFAGraph -> Set Constraint
   sem edgesLookup (key: (IName,Ctx)) =
   | graph ->
     let m = tensorLinearGetExn graph.edges key.0 in
-    mapLookupOrElse (lam. toList []) key.1 m
+    mapLookupOrElse (lam. setEmpty cmpConstraint) key.1 m
 
   -- Updates the graph by a side effect
   sem addData: CFAGraph -> AbsVal -> (IName,Ctx) -> CFAGraph
@@ -1876,19 +1877,19 @@ lang KCFA = CFABase
         in (env,(b0,b1))
       ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.data))
     with (env, data) in
-    match mapAccumL (lam env: PprintEnv. lam b:(IName,Map Ctx [Constraint]).
+    match mapAccumL (lam env: PprintEnv. lam b:(IName,Map Ctx (Set Constraint)).
         match pprintVarIName graph.im env b.0 with (env,b0) in
-        let printCstrs = lam env. lam cstrs: [Constraint].
-          mapAccumL (constraintToString graph.im) env cstrs
+        let printCstrs = lam env. lam cstrs: Set Constraint.
+          mapAccumL (constraintToString graph.im) env (setToSeq cstrs)
         in
-        match mapAccumL (lam env: PprintEnv. lam b:(Ctx,[Constraint]).
+        match mapAccumL (lam env: PprintEnv. lam b:(Ctx,Set Constraint).
             match ctxToString graph.im env b.0 with (env, ctx) in
             match printCstrs env b.1 with (env, cstrs) in
             (env, (ctx, cstrs))
           ) env (mapBindings b.1)
         with (env,(b1))
         in (env,(b0,b1))
-      ) env (mapi (lam i. lam x. (i,x)) (tensorToSeqExn graph.edges))
+      ) env (mapi (lam i. lam x. (i, x)) (tensorToSeqExn graph.edges))
     with (env, edges) in
 
     let strJoinNonEmpty = lam delim: String. lam strs: [String].
@@ -1945,6 +1946,18 @@ lang KBaseConstraint = KCFA
                    rhs: (IName,Ctx), rhsav: AbsVal }
   -- {lhsav} ⊆ lhs ⇒ [rhs]
   | CstrDirectAvCstrs { lhs: (IName,Ctx), lhsav: AbsVal, rhs: [Constraint] }
+
+  sem cmpConstraintH =
+  | (CstrInit { lhs = lhs1, rhs = rhs1 },
+     CstrInit { lhs = lhs2, rhs = rhs2 }) ->
+     let d = cmpAbsVal lhs1 lhs2 in
+     if eqi d 0 then cmpINameCtx rhs1 rhs2
+     else d
+  | (CstrDirect { lhs = lhs1, rhs = rhs1 },
+     CstrDirect { lhs = lhs2, rhs = rhs2 }) ->
+     let d = cmpINameCtx lhs1 lhs2 in
+     if eqi d 0 then cmpINameCtx rhs1 rhs2
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrInit r -> addData graph r.lhs r.rhs
@@ -2157,6 +2170,24 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
   | CstrConstApp { lhs: (IName,Ctx), rhs: (IName,Ctx),
                    res: (IName,Ctx) }
 
+  sem cmpConstraintH =
+  | (CstrLamApp { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrLamApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx lhs1 lhs2 in
+       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       else d
+     else d
+  | (CstrConstApp { lhs = lhs1, rhs = rhs1, res = res1},
+     CstrConstApp { lhs = lhs2, rhs = rhs2, res = res2}) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx lhs1 lhs2 in
+       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       else d
+     else d
+
   sem initConstraint (graph: CFAGraph) =
   | CstrLamApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrConstApp r & cstr -> initConstraintName r.lhs graph cstr
@@ -2263,6 +2294,19 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
   -- r ∈ lhs ⇒ { r with key = val } ∈ rhs
   | CstrRecordUpdate { lhs: (IName,Ctx), key: SID, val: (IName,Ctx),
                        rhs: (IName,Ctx) }
+
+  sem cmpConstraintH =
+  | (CstrRecordUpdate { lhs = lhs1, key = key1, val = val1, rhs = rhs1 },
+     CstrRecordUpdate { lhs = lhs2, key = key2, val = val2, rhs = rhs2 }) ->
+     let d = cmpINameCtx lhs1 lhs2 in
+     if eqi d 0 then
+       let d = cmpSID key1 key2 in
+       if eqi d 0 then
+         let d = cmpINameCtx val1 val2 in
+         if eqi d 0 then cmpINameCtx rhs1 rhs2
+         else d
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
@@ -2397,10 +2441,20 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
 
 end
 
-lang MatchKCFA = KCFA + KBaseConstraint + MatchAst
+lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
 
   syn Constraint =
   | CstrMatch { id: (IName,Ctx), pat: Pat, target: (IName,Ctx) }
+
+  sem cmpConstraintH =
+  | (CstrMatch { id = id1, pat = pat1, target = target1 },
+     CstrMatch { id = id2, pat = pat2, target = target2 }) ->
+     let d = cmpINameCtx id1 id2 in
+     if eqi d 0 then
+       let d = cmpINameCtx target1 target2 in
+       if eqi d 0 then cmpPat pat1 pat2
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrMatch r & cstr -> initConstraintName r.target graph cstr
@@ -2678,6 +2732,21 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
   | CstrSeqUnion {lhs : (IName,Ctx),
                   rhs : (IName,Ctx),
                   res : (IName,Ctx)}
+
+  sem cmpConstraintH =
+  | (CstrSeq { lhs = lhs1, rhs = rhs1 },
+     CstrSeq { lhs = lhs2, rhs = rhs2 }) ->
+     let d = cmpINameCtx lhs1 lhs2 in
+     if eqi d 0 then cmpINameCtx rhs1 rhs2
+     else d
+  | (CstrSeqUnion { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrSeqUnion { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = cmpINameCtx res1 res2 in
+     if eqi d 0 then
+       let d = cmpINameCtx lhs1 lhs2 in
+       if eqi d 0 then cmpINameCtx rhs1 rhs2
+       else d
+     else d
 
   sem initConstraint (graph: CFAGraph) =
   | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
