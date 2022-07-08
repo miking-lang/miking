@@ -539,7 +539,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
      let d = subi res1 res2 in
      if eqi d 0 then
        let d = subi lhs1 lhs2 in
-       if eqi d 0 then subi rhs2 rhs2
+       if eqi d 0 then subi rhs1 rhs2
        else d
      else d
   | (CstrConstApp { lhs = lhs1, rhs = rhs1, res = res1},
@@ -547,7 +547,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
      let d = subi res1 res2 in
      if eqi d 0 then
        let d = subi lhs1 lhs2 in
-       if eqi d 0 then subi rhs2 rhs2
+       if eqi d 0 then subi rhs1 rhs2
        else d
      else d
 
@@ -851,7 +851,7 @@ lang ExtCFA = CFA + ExtAst
      let d = subi res1 res2 in
      if eqi d 0 then
        let d = subi lhs1 lhs2 in
-       if eqi d 0 then subi rhs2 rhs2
+       if eqi d 0 then subi rhs1 rhs2
        else d
      else d
 
@@ -1755,25 +1755,33 @@ lang KCFA = CFABase
   sem propagateConstraint
   : (IName,Ctx,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
+  -- Returns both the new graph, and a Boolean that is true iff the new edge was
+  -- added to the graph.
   -- NOTE(Linnea, 2022-06-21): Updates the graph by a side effect
-  sem addEdge: CFAGraph -> (IName,Ctx) -> Constraint -> CFAGraph
+  sem addEdge: CFAGraph -> (IName,Ctx) -> Constraint -> (CFAGraph, Bool)
   sem addEdge (graph: CFAGraph) (qc: (IName,Ctx)) =
   | cstr ->
     match qc with (q,c) in
     let cstrsq = edgesLookup qc graph in
-    let m = mapInsert c (setInsert cstr cstrsq) (tensorLinearGetExn graph.edges q) in
-    tensorLinearSetExn graph.edges q m;
-    graph
+    if setMem cstr cstrsq then (graph, false)
+    else
+      let m = mapInsert c (setInsert cstr cstrsq) (
+        tensorLinearGetExn graph.edges q) in
+      tensorLinearSetExn graph.edges q m;
+      (graph, true)
 
   -- Helper function for initializing a constraint for a given name (mainly
   -- used for convenience in initConstraint)
   sem initConstraintName: (IName,Ctx) -> CFAGraph -> Constraint -> CFAGraph
   sem initConstraintName name graph =
   | cstr ->
-    let graph = addEdge graph name cstr in
-    let avs = dataLookup name graph in
-    setFold (lam graph. lam av. propagateConstraint (name.0,name.1,av) graph cstr)
+    match addEdge graph name cstr with (graph, new) in
+    if new then
+      let avs = dataLookup name graph in
+      setFold (lam graph. lam av.
+        propagateConstraint (name.0,name.1,av) graph cstr)
       graph avs
+    else graph
 
   sem dataLookup: (IName,Ctx) -> CFAGraph -> Set AbsVal
   sem dataLookup key =
@@ -2242,15 +2250,15 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
      let d = cmpINameCtx res1 res2 in
      if eqi d 0 then
        let d = cmpINameCtx lhs1 lhs2 in
-       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       if eqi d 0 then cmpINameCtx rhs1 rhs2
        else d
      else d
-  | (CstrConstApp { lhs = lhs1, rhs = rhs1, res = res1},
-     CstrConstApp { lhs = lhs2, rhs = rhs2, res = res2}) ->
+  | (CstrConstApp { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrConstApp { lhs = lhs2, rhs = rhs2, res = res2 }) ->
      let d = cmpINameCtx res1 res2 in
      if eqi d 0 then
        let d = cmpINameCtx lhs1 lhs2 in
-       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       if eqi d 0 then cmpINameCtx rhs1 rhs2
        else d
      else d
 
@@ -2629,7 +2637,7 @@ lang ExtKCFA = KCFA + ExtAst
      let d = cmpINameCtx res1 res2 in
      if eqi d 0 then
        let d = cmpINameCtx lhs1 lhs2 in
-       if eqi d 0 then cmpINameCtx rhs2 rhs2
+       if eqi d 0 then cmpINameCtx rhs1 rhs2
        else d
      else d
 
