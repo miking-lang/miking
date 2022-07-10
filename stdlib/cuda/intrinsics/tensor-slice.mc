@@ -14,8 +14,11 @@ lang CudaTensorSliceIntrinsic = CudaIntrinsic
     let elsStmts = [
       CSExpr {expr = CEBinOp {
         op = COAssign (),
-        lhs = CEMember {lhs = tensor, id = _tensorOffsetKey},
-        rhs = tensorComputeLinearIndex tensor slice}},
+        lhs = CEMember {lhs = tensor, id = _tensorDataKey},
+        rhs = CEBinOp {
+          op = COAdd (),
+          lhs = CEMember {lhs = tensor, id = _tensorDataKey},
+          rhs = tensorComputeLinearIndex tensor slice}}},
       CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEMember {lhs = tensor, id = _tensorRankKey},

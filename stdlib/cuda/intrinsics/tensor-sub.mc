@@ -13,7 +13,6 @@ lang CudaTensorSubIntrinsic = CudaIntrinsic
     let intType = getCIntType ccEnv in
     let cartIdxSeq = nameSym "cartesian_idx_seq" in
     let cartIdx = nameSym "cartesian_idx" in
-    let offsetId = nameSym "offset" in
     let seqIntTypeName = _lookupTypeName ccEnv.typeEnv (tyseq_ tyint_) in
     let seqIntType = CTyVar {id = seqIntTypeName} in
     let initCartesianSeqStmts = [
@@ -39,8 +38,11 @@ lang CudaTensorSubIntrinsic = CudaIntrinsic
     let stmts = concat initCartesianSeqStmts [
       CSExpr {expr = CEBinOp {
         op = COAssign (),
-        lhs = CEMember {lhs = tensor, id = _tensorOffsetKey},
-        rhs = tensorComputeLinearIndex tensor (CEVar {id = cartIdx})}},
+        lhs = CEMember {lhs = tensor, id = _tensorDataKey},
+        rhs = CEBinOp {
+          op = COAdd (),
+          lhs = CEMember {lhs = tensor, id = _tensorDataKey},
+          rhs = tensorComputeLinearIndex tensor (CEVar {id = cartIdx})}}},
       CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEBinOp {

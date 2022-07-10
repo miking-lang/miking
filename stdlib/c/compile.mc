@@ -116,7 +116,6 @@ let _tensorIdKey = nameNoSym "id"
 let _tensorDataKey = nameNoSym "data"
 let _tensorDimsKey = nameNoSym "dims"
 let _tensorRankKey = nameNoSym "rank"
-let _tensorOffsetKey = nameNoSym "offset"
 let _tensorSizeKey = nameNoSym "size"
 
 
@@ -391,14 +390,9 @@ lang MExprTensorCCompile = MExprCCompileBase
   | cartesianIndex ->
     let tensorDims = CEMember {lhs = tensor, id = _tensorDimsKey} in
     let tensorRank = CEMember {lhs = tensor, id = _tensorRankKey} in
-    let tensorOffset = CEMember {lhs = tensor, id = _tensorOffsetKey} in
-    let cartToLinear = CEApp {
+    CEApp {
       fun = _cartesianToLinearIndex,
-      args = [tensorDims, tensorRank, cartesianIndex]} in
-    CEBinOp {
-      op = COAdd (),
-      lhs = cartToLinear,
-      rhs = tensorOffset}
+      args = [tensorDims, tensorRank, cartesianIndex]}
 
   sem tensorShapeCall =
   | tensor /- CExpr -/ ->
@@ -565,7 +559,6 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       (CTyPtr { ty = ty }, Some _tensorDataKey),
       (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
       (CTyInt64 (), Some _tensorRankKey),
-      (CTyInt64 (), Some _tensorOffsetKey),
       (CTyInt64 (), Some _tensorSizeKey)
     ] in
     let def = CTTyDef {
@@ -1211,17 +1204,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
       rhs = get args 2
     }
   | CTensorLinearGetExn _ ->
-    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
-    let idx = CEBinOp {op = COAdd (), lhs = last args, rhs = offset} in
     let data = CEMember {lhs = head args, id = _tensorDataKey} in
-    CEBinOp {op = COSubScript {}, lhs = data, rhs = idx}
+    CEBinOp {op = COSubScript {}, lhs = data, rhs = last args}
   | CTensorLinearSetExn _ ->
-    let offset = CEMember {lhs = head args, id = _tensorOffsetKey} in
-    let idx = CEBinOp {op = COAdd (), lhs = get args 1, rhs = offset} in
     let data = CEMember {lhs = head args, id = _tensorDataKey} in
     CEBinOp {
       op = COAssign (),
-      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = idx},
+      lhs = CEBinOp {op = COSubScript {}, lhs = data, rhs = get args 1},
       rhs = get args 2
     }
   | CTensorRank _ -> CEMember {lhs = head args, id = _tensorRankKey}
@@ -1930,9 +1919,9 @@ utest testCompile tensor with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
   "#include <math.h>",
-  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor;",
+  "typedef struct Tensor {int64_t id; int64_t (*data); int64_t dims[3]; int64_t rank; int64_t size;} Tensor;",
   "typedef struct Seq {int64_t (*seq); int64_t len;} Seq;",
-  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t offset; int64_t size;} Tensor1;",
+  "typedef struct Tensor1 {int64_t id; double (*data); int64_t dims[3]; int64_t rank; int64_t size;} Tensor1;",
   "int64_t cartesian_to_linear_index0(int64_t dims1[3], int64_t rank1) {",
   "  return 0;",
   "}",
@@ -1989,10 +1978,10 @@ utest testCompile tensor with strJoin "\n" [
   "  return s;",
   "}",
   "void update(Tensor t, Seq dims3, int64_t v) {",
-  "  (((t.data)[(cartesian_to_linear_index((t.dims), (t.rank), dims3) + (t.offset))]) = v);",
+  "  (((t.data)[cartesian_to_linear_index((t.dims), (t.rank), dims3)]) = v);",
   "}",
   "double access(Tensor1 t1, Seq dims4) {",
-  "  return ((t1.data)[(cartesian_to_linear_index((t1.dims), (t1.rank), dims4) + (t1.offset))]);",
+  "  return ((t1.data)[cartesian_to_linear_index((t1.dims), (t1.rank), dims4)]);",
   "}",
   "int64_t rank3(Tensor t2) {",
   "  return (t2.rank);",
