@@ -122,6 +122,9 @@ let _tensorSizeKey = nameNoSym "size"
 -- TODO(dlunde,2022-04-29): A bug in the MLang transformation currently
 -- prevents this fragment from being put in MExprCCompileBase
 type CompileCOptions = {
+  -- Controls the maximum rank of tensors in the C code.
+  tensorMaxRank : Int,
+
   -- Controls whether 32-bit integers should be used. If this is false (which
   -- is the default setting), the compiler will use 64-bit integers.
   use32BitInts : Bool,
@@ -139,7 +142,7 @@ lang MExprCCompileBase = MExprAst + CAst
   --------------------------
 
   sem defaultCompileCOptions =
-  | _ -> {use32BitInts = false, use32BitFloats = false}
+  | _ -> {tensorMaxRank = 3, use32BitInts = false, use32BitFloats = false}
 
   type CompileCEnv = {
 
@@ -552,12 +555,11 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   | TyTensor { ty = ty } ->
     let ty = compileType env ty in
     let dimsType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
-    -- NOTE(larshum, 2022-03-03): For now, we hard-code the maximum number of
-    -- dimensions to 3.
+    let maxRank = env.options.tensorMaxRank in
     let fields = [
       (CTyInt64 (), Some _tensorIdKey),
       (CTyPtr { ty = ty }, Some _tensorDataKey),
-      (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = 3}) }, Some _tensorDimsKey),
+      (CTyArray { ty = CTyInt64 (), size = Some (CEInt {i = maxRank}) }, Some _tensorDimsKey),
       (CTyInt64 (), Some _tensorRankKey),
       (CTyInt64 (), Some _tensorSizeKey)
     ] in

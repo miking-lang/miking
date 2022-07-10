@@ -145,6 +145,7 @@ let cudaTranslation =
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
   let opts : CompileCOptions = {
+    tensorMaxRank = options.accelerateTensorMaxRank,
     use32BitInts = options.use32BitIntegers,
     use32BitFloats = options.use32BitFloats
   } in
