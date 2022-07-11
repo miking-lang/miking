@@ -25,6 +25,7 @@ lang JSExprAst
   | JSEObject    { fields: [(String, JSExpr)] } -- Objects
   | JSEIIFE      { body: JSExpr } -- Immediately-invoked function expression
   | JSEBlock     { exprs: [JSExpr], ret: JSExpr } -- Block
+  | JSEReturn    { expr: JSExpr } -- Early return
   | JSENop       { } -- No-op
 
   syn JSBinOp =
