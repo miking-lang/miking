@@ -120,20 +120,20 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
 
   sem runWithJSTCOCtx : (JSExpr -> JSExpr) -> JSExpr -> (JSExpr -> JSExpr) -> JSTCOContext
   sem runWithJSTCOCtx action expr =
-    | constr ->
-      let res = runOnTailPositional action expr in {
-        expr = constr res.expr,
-        foundTailCall = res.foundTailCall
-      }
+  | constr ->
+    let res = runOnTailPositional action expr in {
+      expr = constr res.expr,
+      foundTailCall = res.foundTailCall
+    }
 
   sem runWithJSTCOCtx2 : (JSExpr -> JSExpr) -> JSExpr -> JSExpr -> (JSExpr -> JSExpr -> JSExpr) -> JSTCOContext
   sem runWithJSTCOCtx2 action expr1 expr2 =
-    | constr ->
-      let res1 = runOnTailPositional action expr1 in
-      let res2 = runOnTailPositional action expr2 in {
-        expr = constr res1.expr res2.expr,
-        foundTailCall = or res1.foundTailCall res2.foundTailCall
-      }
+  | constr ->
+    let res1 = runOnTailPositional action expr1 in
+    let res2 = runOnTailPositional action expr2 in {
+      expr = constr res1.expr res2.expr,
+      foundTailCall = or res1.foundTailCall res2.foundTailCall
+    }
 
   -- Strategies for optimizing tail calls
 
