@@ -70,7 +70,9 @@ lang ContextExpand = HoleAst
   --  replace them by lookups in a static table.
   sem contextExpand (env : CallCtxEnv) =
   | t ->
-    let lookup = lam i. tensorGetExn_ tyunknown_ (nvar_ _table) (seq_ [int_ i]) in
+    let lookup = _lookupFromInt env (lam i.
+      tensorGetExn_ tyint_ (nvar_ _table) (seq_ [int_ i]))
+    in
     let ast = _contextExpandWithLookup env lookup t in
     let tempDir = sysTempDirMake () in
     let tuneFile = sysJoinPath tempDir ".tune" in
@@ -84,7 +86,13 @@ lang ContextExpand = HoleAst
   -- 'insert public table t' replaces the holes in expression 't' by the values
   -- in 'table'
   sem insert (env : CallCtxEnv) (table : LookupTable) =
-  | t -> _contextExpandWithLookup env (lam i. get table i) t
+  | t ->
+    _contextExpandWithLookup env (_lookupFromInt env (lam i. get table i)) t
+
+  -- Converts the ith table entry from an integer to the type of the hole
+  sem _lookupFromInt (env: CallCtxEnv) (lookup: Int -> Expr) =
+  | i ->
+    fromInt (get env.idx2hole i) (lookup i)
 
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.
@@ -122,18 +130,6 @@ lang ContextExpand = HoleAst
   | tm ->
     use BootParser in
     let impl = parseMExprStringKeywords [] "
-    let or: Bool -> Bool -> Bool =
-      lam a. lam b. if a then true else b in
-
-    let zipWith = lam f. lam seq1. lam seq2.
-      recursive let work = lam a. lam s1. lam s2.
-        if or (null s1) (null s2) then a
-        else
-          work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
-        in
-        work [] seq1 seq2
-    in
-
     let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
       recursive let work = lam s1. lam s2.
         match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
@@ -178,12 +174,6 @@ lang ContextExpand = HoleAst
       in
       if null delim then [s]
       else work [] 0 0
-    in
-
-    let string2bool = lam s : String.
-      match s with \"true\" then true
-      else match s with \"false\" then false
-      else error (join [\"Cannot be converted to Bool: \'\", s, \"\'\"])
     in
 
     recursive let any = lam p. lam seq.
@@ -237,22 +227,10 @@ lang ContextExpand = HoleAst
       match findName s expr with Some n then n
       else error (concat "not found: " s) in
 
-    let zipWithName = getName "zipWith" impl in
-    let string2boolName = getName "string2bool" impl in
     let string2intName = getName "string2int" impl in
     let strSplitName = getName "strSplit" impl in
     let strTrimName = getName "strTrim" impl in
     let seq2TensorName = getName "seq2Tensor" impl in
-
-    let convertFuns = map (lam h.
-      match h with TmHole {ty = TyBool _} then string2boolName
-      else match h with TmHole {ty = TyInt _} then string2intName
-      else error "Unsupported type"
-    ) env.idx2hole in
-
-    let x = nameSym "x" in
-    let y = nameSym "y" in
-    let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
 
     let fileContent = nameSym "fileContent" in
     let strVals = nameSym "strVals" in
@@ -272,9 +250,7 @@ lang ContextExpand = HoleAst
         (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
         (nvar_ strVals))
     -- Convert strings into values
-    , nulet_ _table
-      (appf3_ (nvar_ zipWithName) doConvert
-        (seq_ (map nvar_ convertFuns)) (nvar_ strVals))
+    , nulet_ _table (map_ (nvar_ string2intName) (nvar_ strVals))
     -- Convert table into a tensor (for constant-time lookups)
     , nulet_ _table (app_ (nvar_ seq2TensorName) (nvar_ _table))
     , tm
@@ -349,7 +325,8 @@ let test : Bool -> Expr -> [(String, [([String],Expr)])] -> String =
     let dumpTable = lam table : LookupTable.
       use MExprPrettyPrint in
       let rows = mapi (lam i. lam expr.
-        join [int2string i, ": ", expr2str expr]) table in
+        let v = toInt expr (get env.idx2hole i) in
+        join [int2string i, ": ", int2string v]) table in
       let rows = cons (int2string (length table)) rows in
       let str = strJoin "\n" (concat rows ["="]) in
       writeFile res.tempFile str

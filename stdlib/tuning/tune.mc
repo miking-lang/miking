@@ -52,12 +52,12 @@ lang TuneBase = HoleAst
            -> InstrumentedResult -> String -> (() -> ()) -> LookupTable -> Expr
            -> LookupTable
 
-  sem measure (table : LookupTable) (runner : Runner) (file : String)
-              (options : TuneOptions) (timeout : Option Float)
-              (onFailure : () -> ()) =
+  sem measure (env: CallCtxEnv) (table: LookupTable) (runner: Runner)
+              (file: String) (options: TuneOptions) (timeout: Option Float)
+              (onFailure: () -> ()) =
   | args ->
     let timeout = if options.exitEarly then timeout else None () in
-    tuneFileDumpTable file (None ()) table;
+    tuneFileDumpTable file env table false;
     match runner args timeout with (ms, res) then
       let res : ExecResult = res in
       let rcode = res.returncode in
@@ -68,7 +68,7 @@ lang TuneBase = HoleAst
       else
         let msg = strJoin " "
         [ "Program returned non-zero exit code during tuning\n"
-        , "hole values:\n", _tuneTable2str table, "\n"
+        , "hole values:\n", _tuneTable2str env table, "\n"
         , "command line arguments:", args, "\n"
         , "stdout:", res.stdout, "\n"
         , "stderr:", res.stderr
@@ -434,8 +434,8 @@ lang TuneDep = TuneLocalSearch + Database
               (input : [String]) (data : LSData) (onFailure : () -> ())
               (inc : Option Solution) =
   | Table { table = table } ->
-    let f = lam i. measure table run tuneFile options (None ()) onFailure i in
-    match data with TuneData {inst = inst} in
+    match data with TuneData {inst = inst, env = env} in
+    let f = lam i. measure env table run tuneFile options (None ()) onFailure i in
     match foldl (lam acc: (Float, [String]). lam inp.
         match acc with (ms, strs) in
         match f inp with Success {ms = ms2} then
@@ -561,7 +561,7 @@ lang MExprTune = MExpr + TuneBase end
 lang TestLang =
   TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
-  BootParser + MExprSym + MExprPrettyPrint + MExprEval
+  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck
 end
 
 mexpr
@@ -595,8 +595,8 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       if full then assumeFullDependency env tANF
       else
         -- Perform CFA
-        let graphData = graphDataFromEnv env in
-        let cfaRes : CFAGraph = cfaData graphData tANF in
+        let graphData = graphDataInit env in
+        let cfaRes : CFAGraph = holeCfa graphData tANF in
         let cfaRes : CFAGraph = analyzeNested env cfaRes tANF in
         (analyzeDependency env cfaRes tANF, tANF)
     with (dep, ast) in
@@ -606,6 +606,9 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
 
     -- Context expansion
     match contextExpand env ast with (exp, ast) in
+
+    -- Transformations should produce an AST that type checks
+    let ast = typeCheck ast in
 
     -- Compile the program
     let compileOCaml = lam libs. lam clibs. lam ocamlProg.

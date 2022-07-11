@@ -15,6 +15,10 @@ let optionsConfig : ParseConfig Options = [
     "Print the AST after adding type annotations",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugTypeAnnot = true}),
+  ([("--debug-type-check", "", "")],
+    "Print the AST after type checking",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugTypeCheck = true}),
   ([("--debug-profile", "", "")],
     "Instrument profiling expressions to AST",
     lam p: ArgPart Options.

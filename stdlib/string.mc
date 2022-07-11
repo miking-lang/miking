@@ -122,8 +122,8 @@ let int2string = lam n.
     else int2string_rechelper (divi n 10) (cons (digit2char (modi n 10)) acc)
   in
   if lti n 0
-  then cons '-' (int2string_rechelper (negi n) [])
-  else int2string_rechelper n []
+  then cons '-' (int2string_rechelper (negi n) "")
+  else int2string_rechelper n ""
 
 utest int2string 5 with "5"
 utest int2string 25 with "25"

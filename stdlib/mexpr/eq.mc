@@ -209,12 +209,12 @@ end
 
 lang RecLetsEq = Eq + RecLetsAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmRecLets {bindings = bs2} ->
+  | TmRecLets {bindings = bs2, inexpr = ie2} ->
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
     match env with {varEnv = varEnv} then
-      match lhs with TmRecLets {bindings = bs1} then
+      match lhs with TmRecLets {bindings = bs1, inexpr = ie1} then
         if eqi (length bs1) (length bs2) then
           let bszip = zipWith (lam b1. lam b2. (b1, b2)) bs1 bs2 in
           let varEnv =
@@ -224,10 +224,13 @@ lang RecLetsEq = Eq + RecLetsAst
               varEnv bszip
           in
           let env = {env with varEnv = varEnv} in
-          optionFoldlM
+          match optionFoldlM
             (lam free. lam t : (RecLetBinding, RecLetBinding).
               eqExprH env free (t.0).body (t.1).body)
             free bszip
+          with Some free then
+            eqExprH env free ie1 ie2
+          else None ()
         else None ()
       else None ()
     else never

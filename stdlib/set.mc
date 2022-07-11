@@ -40,6 +40,13 @@ let setIntersect : all a. Set a -> Set a -> Set a = lam s1. lam s2.
     if setMem key s2 then setInsert key acc else acc
   ) (setEmpty cmp) s1
 
+-- `setSubtract s1 s2` is the relative complement of set `s2` in `s1` (set
+-- difference, i.e., s1 - s2).
+let setSubtract : all a. Set a -> Set a -> Set a = lam s1. lam s2.
+  let cmp = mapGetCmpFun s1 in
+  mapFoldWithKey (lam acc. lam key. lam. mapRemove key acc) s1 s2
+
+
 -- `setOfSeq cmp seq` construct a set ordered by `cmp` from a sequence `seq`.
 let setOfSeq : all a. (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
@@ -128,6 +135,9 @@ utest setSize sInt1 with 0 in
 let sInt2 = setIntersect (setOfSeq subi [1,2]) (setOfSeq subi [2]) in
 utest setSize sInt2 with 1 in
 utest setMem 2 sInt2 with true in
+
+utest setSubtract s5 (setEmpty subi) with s5 using setEq in
+utest setSubtract s5 s6 with setOfSeq subi [4,5] using setEq in
 
 utest setCmp s5 s5 with 0 in
 utest setCmp s5 s6 with 1 in

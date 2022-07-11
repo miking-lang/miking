@@ -22,10 +22,6 @@ let tableFromFile = lam file.
   if fileExists file then tuneFileReadTable file
   else error (join ["Tune file ", file, " does not exist"])
 
-let dumpTable = lam file. lam env. lam table.
-  let destination = tuneFileName file in
-  tuneFileDumpTable destination env table
-
 let dependencyAnalysis
   : Options -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
   lam options : Options. lam env : CallCtxEnv. lam ast.
@@ -33,7 +29,7 @@ let dependencyAnalysis
     if options.tuneOptions.dependencyAnalysis then
       let ast = typeCheck ast in
       let ast = use HoleANFAll in normalizeTerm ast in
-      let cfaRes = cfaData (graphDataFromEnv env) ast in
+      let cfaRes = holeCfa (graphDataInit env) ast in
       let cfaRes = analyzeNested env cfaRes ast in
       let dep = analyzeDependency env cfaRes ast in
       (if options.tuneOptions.debugDependencyAnalysis then
@@ -100,7 +96,7 @@ let tune = lam files. lam options : Options. lam args.
     let result = tuneEntry binary tuneOptions env dep instRes r ast in
 
     -- Write the best found values to filename.tune
-    tuneFileDumpTable (tuneFileName file) (Some env) result;
+    tuneFileDumpTable (tuneFileName file) env result true;
 
     -- If option --compile is given, then compile the program using the
     -- tuned values
