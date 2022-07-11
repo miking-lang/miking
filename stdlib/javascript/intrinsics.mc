@@ -41,6 +41,15 @@ lang CompileJSOptimizedIntrinsics = JSExprAst + MExprAst + MExprArity + MExprPre
     else intrinsic runtime const args
 
 
+  sem optimizedIntrinsic : Name -> Const -> [JSExpr] -> ([JSExpr] -> JSExpr) -> JSExpr
+  sem optimizedIntrinsic runtime const args =
+  | opFun ->
+    -- Check if the arguments is fully applied (have the same length as constArity(const))
+    -- If so, then optimize the intrinsic and return an in-place operation
+    -- Otherwise, return a partially applied intrinsic
+    if eqi (length args) (constArity const) then opFun args
+    else intrinsic runtime const args
+
 end
 
 ---------------------------------------------------
@@ -59,6 +68,6 @@ let intrinsicGen  = use CompileJSOptimizedIntrinsics in intrinsic intrGenNS
 let intrinsicWeb  = use CompileJSOptimizedIntrinsics in intrinsic intrWebNS
 let intrinsicNode = use CompileJSOptimizedIntrinsics in intrinsic intrNodeNS
 
-let optimizedOpIntrinsicGen = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrGenNS
-let optimizedOpIntrinsicWeb = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrWebNS
-let optimizedOpIntrincNode  = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrNodeNS
+let optimizedIntrinsicGen = use CompileJSOptimizedIntrinsics in optimizedIntrinsic intrGenNS
+let optimizedIntrinsicWeb = use CompileJSOptimizedIntrinsics in optimizedIntrinsic intrWebNS
+let optimizedIntrinsicNode  = use CompileJSOptimizedIntrinsics in optimizedIntrinsic intrNodeNS

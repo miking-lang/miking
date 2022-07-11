@@ -138,30 +138,30 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileJSOp (info: Info) (ctx: CompileJSContext) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOAdd {}))
+  | CAddf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOSub {}))
+  | CSubf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMul {}))
+  | CMulf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSODiv {}))
-  | CModi _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOMod {}))
+  | CDivf _ & t -> optimizedIntrinsicGen t args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedIntrinsicGen t args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOEq {}))
+  | CEqf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLt {}))
+  | CLtf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGt {}))
+  | CGtf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedOpIntrinsicGen t args (_unOp (JSONeg {}))
+  | CNegi _ & t -> optimizedIntrinsicGen t args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
   | CConcat _ & t -> intrinsicGen t args
