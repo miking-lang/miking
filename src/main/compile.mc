@@ -18,6 +18,7 @@ include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/wrap-in-try-with.mc"
 include "javascript/compile.mc"
+include "javascript/mcore.mc"
 include "pmexpr/demote.mc"
 
 lang MCoreCompile =
@@ -81,18 +82,8 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
-    if options.toJavaScript then
-      let runtimePrint = lam s. printLn (join ["Compiling to JavaScript targeting ", s, " environment..."]) in
-      let target = switch options.jsTarget
-        case Some ("node")    then runtimePrint "the node";       CompileJSTP_Node ()
-        case Some ("web")     then runtimePrint "a web browser";  CompileJSTP_Web  ()
-        case Some ("generic") then runtimePrint "a generic";      CompileJSTP_Normal ()
-        case Some (e) then error (join ["Invalid value for --js-target: '", e, "'"])
-        case _ then runtimePrint "a generic"; CompileJSTP_Normal ()
-      end in
-      let res = javascriptCompileFile {compileJSOptionsEmpty with targetPlatform = target} ast sourcePath in
-      printLn (join ["Successfully compiled to JavaScript in ", res]);
-      res
+    if options.toJavaScript
+    then compileMCoreToJS options.jsTarget ast sourcePath
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
