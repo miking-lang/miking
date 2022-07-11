@@ -6,44 +6,42 @@ include "javascript/ast.mc"
 
 -- Fragments used by the intrinsic functions
 lang CompileJSOptimizedIntrinsics = JSExprAst + MExprAst + MExprArity + MExprPrettyPrint
-end
 
--- Compile intrinsic function
-let intrinsicFromString : Name -> String -> [JSExpr] -> JSExpr =
-  use CompileJSOptimizedIntrinsics in
-  lam runtime. lam name. lam args.
-  -- If there is at least one argument, apply it to the intrinsic function
-  if gti (length args) 0 then
-    JSEApp {
-      fun = JSEMember {
-        expr = JSEVar { id = runtime },
-        id = name
-      },
-      args = args,
-      curried = true
-    }
-  else -- Otherwise return a reference to the function itself
-    JSEMember {
+  -- Compile intrinsic function
+  sem intrinsicFromString : Name -> String -> [JSExpr] -> JSExpr
+  sem intrinsicFromString runtime name =
+  | [] -> JSEMember {
+    expr = JSEVar { id = runtime },
+    id = name
+  }
+  | args -> JSEApp {
+    fun = JSEMember {
       expr = JSEVar { id = runtime },
       id = name
-    }
+    },
+    args = args,
+    curried = true
+  }
 
-let intrinsic : Name -> Const -> [JSExpr] -> JSExpr =
-  use CompileJSOptimizedIntrinsics in
-  lam runtime. lam const. lam args.
-    let name = getConstStringCode 0 const in -- The name of the intrinsic function
+  sem intrinsic : Name -> Const -> [JSExpr] -> JSExpr
+  sem intrinsic runtime const =
+  | args ->
+    -- Get the name of the intrinsic function
+    let name = getConstStringCode 0 const in
     intrinsicFromString runtime name args
 
 
-let optimizedOpIntrinsic : Name -> Const -> [JSExpr] -> ([JSExpr] -> JSExpr) -> JSExpr =
-  use CompileJSOptimizedIntrinsics in
-  lam runtime. lam const. lam args. lam opFun.
+  sem optimizedOpIntrinsic : Name -> Const -> [JSExpr] -> ([JSExpr] -> JSExpr) -> JSExpr
+  sem optimizedOpIntrinsic runtime const args =
+  | opFun ->
     -- Check if the arguments is fully applied (have the same length as constArity(const))
     -- If so, then optimize the intrinsic and return an in-place operation
     -- Otherwise, return a partially applied intrinsic
     if eqi (length args) (constArity const) then opFun args
     else intrinsic runtime const args
 
+
+end
 
 ---------------------------------------------------
 --- Namespaces for the exisitng runtime targets ---
@@ -57,10 +55,10 @@ let jsIntrinsicsFile_generic  = "stdlib/javascript/intrinsics.js"
 let jsIntrinsicsFile_web      = "stdlib/javascript/web/intrinsics.js"
 let jsIntrinsicsFile_node     = "stdlib/javascript/node/intrinsics.js"
 
-let intrinsicGen  = intrinsic intrGenNS
-let intrinsicWeb  = intrinsic intrWebNS
-let intrinsicNode = intrinsic intrNodeNS
+let intrinsicGen  = use CompileJSOptimizedIntrinsics in intrinsic intrGenNS
+let intrinsicWeb  = use CompileJSOptimizedIntrinsics in intrinsic intrWebNS
+let intrinsicNode = use CompileJSOptimizedIntrinsics in intrinsic intrNodeNS
 
-let optimizedOpIntrinsicGen = optimizedOpIntrinsic intrGenNS
-let optimizedOpIntrinsicWeb = optimizedOpIntrinsic intrWebNS
-let optimizedOpIntrincNode  = optimizedOpIntrinsic intrNodeNS
+let optimizedOpIntrinsicGen = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrGenNS
+let optimizedOpIntrinsicWeb = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrWebNS
+let optimizedOpIntrincNode  = use CompileJSOptimizedIntrinsics in optimizedOpIntrinsic intrNodeNS
