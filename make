@@ -154,7 +154,7 @@ run_test_boot() {
 }
 
 run_js_test() {
-  ./test/js/make.sh run-test $1
+  ./test/js/make.sh run-test-quiet $1
 }
 
 case $1 in
