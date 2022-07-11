@@ -53,40 +53,34 @@ lang JSPrettyPrint = JSExprAst
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
-    match mapAccumL (printJSExpr indent) env exprs with (env, exprs) then
-      (env, strJoin (pprintNewline indent) exprs)
-    else never
+    match mapAccumL (printJSExpr indent) env exprs with (env, exprs) in
+    (env, strJoin (pprintNewline indent) exprs)
 
 
   sem printJSFunParams : PprintEnv -> Bool -> [Name] -> (PprintEnv, String)
   sem printJSFunParams env simplify =
   | params ->
-    match mapAccumL (pprintEnvGetStr) env params with (env, params) then
-      let args = strJoin ", " params in
-      if and simplify (eqi (length params) 1) then (env, args)
-      else (env, join ["(", args, ")"])
-    else never
+    match mapAccumL (pprintEnvGetStr) env params with (env, params) in
+    let args = strJoin ", " params in
+    if and simplify (eqi (length params) 1) then (env, args)
+    else (env, join ["(", args, ")"])
 
 
   sem printJSExpr (indent : Int) (env: PprintEnv) =
   | JSEVar { id = id } -> pprintEnvGetStr env id
   | JSEApp { fun = fun, args = args, curried = curried } ->
-    match (printJSExpr indent) env fun with (env,fun) then
-      match mapAccumL (printJSExpr 0) env args with (env,args) then
-        let joinArgs = if curried then (strJoin ")(") else (strJoin ", ") in
-        (env, join [fun, "(", joinArgs args, ")"])
-      else never
-    else never
+    match (printJSExpr indent) env fun with (env,fun) in
+    match mapAccumL (printJSExpr 0) env args with (env,args) in
+    let joinArgs = if curried then (strJoin ")(") else (strJoin ", ") in
+    (env, join [fun, "(", joinArgs args, ")"])
+
   | JSEMember { expr = expr, id = id } ->
-    match (printJSExpr indent) env expr with (env,expr) then
-      (env, join [expr, ".", id])
-    else never
+    match (printJSExpr indent) env expr with (env,expr) in
+    (env, join [expr, ".", id])
   | JSEDef { id = id, expr = expr } ->
-    match pprintEnvGetStr env id with (env,id) then
-      match (printJSExpr indent env) expr with (env, str) then
-        (env, join ["let ", id, " = ", str])
-      else never
-    else never
+    match pprintEnvGetStr env id with (env,id) in
+    match (printJSExpr indent env) expr with (env, str) in
+    (env, join ["let ", id, " = ", str])
 
   -- ES6 arrow functions (released 2015)
   -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
@@ -94,17 +88,14 @@ lang JSPrettyPrint = JSExprAst
   -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
   | JSEFun { params = params, body = body } ->
     let i = indent in
-    match (printJSFunParams env true params) with (env, args) then
-      match (printJSExpr i) env body with (env,body) then
-        (env, join [args, " => ", body])
-      else never
-    else never
+    match (printJSFunParams env true params) with (env, args) in
+    match (printJSExpr i) env body with (env,body) in
+    (env, join [args, " => ", body])
   | JSEIIFE { body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match (printJSExpr ii) env body with (env,body) then
-      (env, join ["(() => ", body, ")()"])
-    else never
+    match (printJSExpr ii) env body with (env,body) in
+    (env, join ["(() => ", body, ")()"])
 
   | JSEInt   { i = i } -> (env, int2string i)
   | JSEFloat { f = f } -> (env, float2string f)
@@ -114,56 +105,46 @@ lang JSPrettyPrint = JSExprAst
 
   | JSETernary { cond = cond, thn = thn, els = els } ->
     let i = indent in
-    match (printJSExpr 0 env) cond with (env, cond) then
-      match (printJSExpr i env) thn with (env, thn) then
-        match (printJSExpr i env) els with (env, els) then
-          (env, join ["(", cond, " ? ", thn, " : ", els, ")"])
-        else never
-      else never
-    else never
+    match (printJSExpr 0 env) cond with (env, cond) in
+    match (printJSExpr i env) thn with (env, thn) in
+    match (printJSExpr i env) els with (env, els) in
+    (env, join ["(", cond, " ? ", thn, " : ", els, ")"])
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
-    match (printJSExpr indent) env lhs with (env,lhs) then
-      match (printJSExpr indent) env rhs with (env,rhs) then
-        (env, join ["(", printJSBinOp lhs rhs op, ")"])
-      else never
-    else never
+    match (printJSExpr indent) env lhs with (env,lhs) in
+    match (printJSExpr indent) env rhs with (env,rhs) in
+    (env, join ["(", printJSBinOp lhs rhs op, ")"])
 
   | JSEUnOp { op = op, rhs = rhs } ->
-    match (printJSExpr indent) env rhs with (env,rhs) then
-      (env, printJSUnOp rhs op)
-    else never
+    match (printJSExpr indent) env rhs with (env,rhs) in
+    (env, printJSUnOp rhs op)
 
   | JSEArray { exprs = exprs } ->
-    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
-      (env, join ["[", strJoin ", " exprs, "]"])
-    else never
+    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) in
+    (env, join ["[", strJoin ", " exprs, "]"])
   | JSEObject { fields = fields } ->
+
     let printPair = lam field.
-      match field with (n, e)
-      then match (printJSExpr 0) env e with (env,e) then
-          join [n, ": ", e]
-        else never
-      else never in
-    match map (printPair) fields with prs then
-      (env, join ["{", strJoin ", " prs, "}"])
-    else never
+      match field with (n, e) in
+      match (printJSExpr 0) env e with (env,e) in
+      join [n, ": ", e]
+    in
+    match map (printPair) fields with prs in
+    (env, join ["{", strJoin ", " prs, "}"])
   | JSEBlock { exprs = exprs, ret = ret } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match mapAccumL (printJSExpr ii) env exprs with (env, exprs) then
-      let ret = match (printJSExpr 0 env) ret with (env, val) then
-          match val with "" then ""
-          else join [pprintNewline ii, "return ", val, ";"]
-        else "" in
-      (env, join ["{",
-        pprintNewline ii, joinAsStatements ii exprs,
-        ret,
-        pprintNewline i, "}"])
-    else never
+    match mapAccumL (printJSExpr ii) env exprs with (env, exprs) in
+    let ret = match (printJSExpr 0 env) ret with (env, val) then
+        match val with "" then ""
+        else join [pprintNewline ii, "return ", val, ";"]
+      else "" in
+    (env, join ["{",
+      pprintNewline ii, joinAsStatements ii exprs,
+      ret,
+      pprintNewline i, "}"])
   | JSEReturn { expr = expr } ->
-    match (printJSExpr indent) env expr with (env,expr) then
-      (env, join ["return ", expr])
-    else never
+    match (printJSExpr indent) env expr with (env,expr) in
+    (env, join ["return ", expr])
   | JSENop _ -> (env, "")
 
   sem printJSBinOp (lhs: String) (rhs: String) =
@@ -202,10 +183,9 @@ lang JSProgPrettyPrint = JSProgAst + JSPrettyPrint
     let indent = 0 in
     let imports = map (lam imp. join ["import '", imp, "';"]) imports in
     let env = pprintEnvEmpty in
-    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
-      let importsStr = strJoin "\n" imports in
-      let exprsStr = joinAsStatements indent exprs in
-      join [importsStr, exprsStr]
-    else never
+    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) in
+    let importsStr = strJoin "\n" imports in
+    let exprsStr = joinAsStatements indent exprs in
+    join [importsStr, exprsStr]
 
 end

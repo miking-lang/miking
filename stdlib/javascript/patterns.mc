@@ -27,9 +27,9 @@ lang PatJSCompile = PatJSCompileLang
   | PatNamed { ident = PWildcard () } -> tmpIgnoreJS
   | PatSeqTot { pats = patterns } -> JSEArray { exprs = map (compileSinglePattern) patterns }
   | PatRecord   { bindings = bindings } ->
-    let compileField = lam f. match f with (sid, expr) then
+    let compileField = lam f. match f with (sid, expr) in
       (sidToString sid, compileSinglePattern expr)
-    else never in
+    in
     JSEObject { fields = map (compileField) (mapToSeq bindings) }
   -- | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
   --   let hasPrefix = not (null prefix) in

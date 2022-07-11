@@ -19,9 +19,8 @@ lang JSOptimizeBlocks = JSExprAst
         let flatE = flattenBlockHelper e in
         match flatE with ([], e) then
           cons e acc
-        else match flatE with (flatEExprs, flatERet) then
+        else match flatE with (flatEExprs, flatERet) in
           join [acc, flatEExprs, [flatERet]]
-        else never
     ) [] exprs) in
 
     -- Call flattenBlockHelper recursively on the return value
@@ -30,17 +29,15 @@ lang JSOptimizeBlocks = JSExprAst
       -- Normal expressions are returned as is, thus concat them with the expressions
       -- in the current block
       (flatExprs, ret)
-    else match flatRet with (retExprs, retRet) then
+    else match flatRet with (retExprs, retRet) in
       (concat flatExprs retExprs, retRet)
-    else never
   | expr -> ([], expr)
 
   sem flattenBlock : JSExpr -> JSExpr
   sem flattenBlock =
   | JSEBlock _ & block ->
-    match flattenBlockHelper block with (exprs, ret) then
-      JSEBlock { exprs = exprs, ret = ret }
-    else never
+    match flattenBlockHelper block with (exprs, ret) in
+    JSEBlock { exprs = exprs, ret = ret }
   | expr -> expr
 
   sem immediatelyInvokeBlock : JSExpr -> JSExpr
@@ -83,13 +80,12 @@ lang JSOptimizeTailCalls = JSExprAst + CompileJSOptimizedIntrinsics
   sem wrapCallToOptimizedFunction (info: Info) (fun: JSExpr) (nrArgs: Int) =
   | JSEApp _ & app ->
     -- Trampoline fully applied trampoline functions
-    match fun with JSEFun { params = params } then
-      if eqi (length params) nrArgs then
-        -- Wrap the function application in a trampoline intrinsic
-        intrinsicFromString intrGenNS "trampoline" [app]
-      else
-        errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
-    else never
+    match fun with JSEFun { params = params } in
+    if eqi (length params) nrArgs then
+      -- Wrap the function application in a trampoline intrinsic
+      intrinsicFromString intrGenNS "trampoline" [app]
+    else
+      errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
   | _ -> errorSingle [info] "trampolineWrapCall invoked with non-function expression"
 
 

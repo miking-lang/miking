@@ -118,13 +118,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileProg (ctx: CompileJSContext) =
   | prog ->
     -- Run compiler
-    match compileMExpr ctx prog with expr then
-      let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
-        then concat exprs [ret]
-        else [expr] in
-      -- Return final top level expressions
-      JSPProg { imports = [], exprs = exprs }
-    else never
+    match compileMExpr ctx prog with expr in
+    let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
+      then concat exprs [ret]
+      else [expr] in
+    -- Return final top level expressions
+    JSPProg { imports = [], exprs = exprs }
 
 
 
@@ -218,28 +217,24 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileMExpr (ctx: CompileJSContext) =
   | TmVar { ident = id } -> JSEVar { id = id }
   | TmApp { info = info } & app ->
-    match foldApp [] app with (fun, args) then
-      -- Function calls
-      let args = map (compileMExpr ctx) args in
-      match fun with TmVar { ident = ident } then
-        let isTrampolined = isTrampolinedJs ctx ident in
-        let jsApp = JSEApp {
-          fun = JSEVar { id = ident },
-          args = args,
-          curried = not isTrampolined
-        } in
-        if isTrampolined then
-          match mapLookup ident ctx.trampolinedFunctions with Some fun then
-            wrapCallToOptimizedFunction info fun (length args) jsApp
-          else never
-        else jsApp
-
-      -- Intrinsics
-      else match fun with TmConst { val = val, info = info } then
-        compileJSOp info ctx args val
-
-      else errorSingle [infoTm app] "Unsupported application in compileMExpr"
-    else never
+    match foldApp [] app with (fun, args) in
+    -- Function calls
+    let args = map (compileMExpr ctx) args in
+    match fun with TmVar { ident = ident } then
+      let isTrampolined = isTrampolinedJs ctx ident in
+      let jsApp = JSEApp {
+        fun = JSEVar { id = ident },
+        args = args,
+        curried = not isTrampolined
+      } in
+      if isTrampolined then
+        match mapLookup ident ctx.trampolinedFunctions with Some fun in
+        wrapCallToOptimizedFunction info fun (length args) jsApp
+      else jsApp
+    -- Intrinsics
+    else match fun with TmConst { val = val, info = info } then
+      compileJSOp info ctx args val
+    else errorSingle [infoTm app] "Unsupported application in compileMExpr"
 
   -- Anonymous function
   | TmLam { ident = arg, body = body } ->
@@ -249,16 +244,16 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
-    let compileField = lam f. match f with (sid, expr)
-      then (sidToString sid, (compileMExpr ctx) expr)
-      else never in
+    let compileField = lam f. match f with (sid, expr) in
+      (sidToString sid, (compileMExpr ctx) expr)
+    in
     JSEObject { fields = map compileField fieldSeq }
 
   | TmSeq {tms = tms} ->
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
-      match (_charSeq2String tms) with Some str then JSEString { s = str }
-      else never
+      match (_charSeq2String tms) with Some str in
+      JSEString { s = str }
     else
       JSEArray { exprs = map (compileMExpr ctx) tms }
 
@@ -268,8 +263,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileJSOp info ctx [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
-    else never
+    else match compileJSOp info ctx [] val with jsexpr in jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
   | TmRecordUpdate _ & t -> errorSingle [infoTm t] "Record updates cannot be handled in compileMExpr."
 
 
@@ -300,16 +294,15 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     let rctx = ref ctx in
     let compileBind = lam bind : RecLetBinding.
-      match bind with { ident = ident, body = body, info = info } then
-        match body with TmLam _ then
-          let ctx = { ctx with currentFunction = Some (ident, info) } in
-          let fun = compileMExpr ctx body in
-          match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) then
-            modref rctx ctx;
-            JSEDef { id = ident, expr = fun }
-          else never
-        else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
-      else never in
+      match bind with { ident = ident, body = body, info = info } in
+      match body with TmLam _ then
+        let ctx = { ctx with currentFunction = Some (ident, info) } in
+        let fun = compileMExpr ctx body in
+        match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) in
+        modref rctx ctx;
+        JSEDef { id = ident, expr = fun }
+      else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
+    in
     let exprs = map compileBind bindings in
     flattenBlock (JSEBlock {
       exprs = exprs,
