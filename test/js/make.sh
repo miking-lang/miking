@@ -52,7 +52,7 @@ run_all_tests() {
 
 clean_tests() {
 	echo "Cleaning"
-	rm -rf *.js
+	rm -rf test/js/*.js
 }
 
 case $1 in
