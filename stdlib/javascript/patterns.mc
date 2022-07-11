@@ -1,4 +1,5 @@
 include "bool.mc"
+include "error.mc"
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/operators.mc"
