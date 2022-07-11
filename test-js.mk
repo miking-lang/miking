@@ -2,7 +2,7 @@ include test-files.mk
 
 .PHONY: test-js $(js_files)
 
-js: $(js_files)
+test-js: $(js_files)
 
 # File rule
 $(js_files):
