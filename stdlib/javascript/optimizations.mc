@@ -161,7 +161,7 @@ lang JSOptimizePatterns = JSExprAst
 
   sem optimizePattern : JSExpr -> JSExpr
   sem optimizePattern =
-  | JSEBinOp { op = JSOEq  {}, lhs = JSEBool { b = true }, rhs = rhs } -> optimizePattern rhs
+  | JSEBinOp { op = JSOEq  {}, lhs = lhs, rhs = rhs } & p -- Same as and
   | JSEBinOp { op = JSOAnd {}, lhs = lhs, rhs = rhs } & p ->
     match lhs with JSEBool { b = true } then optimizePattern rhs else
     match rhs with JSEBool { b = true } then optimizePattern lhs else p
@@ -178,12 +178,14 @@ end
 
 
 
-lang JSOptimizeExprs = JSExprAst
+lang JSOptimizeExprs = JSExprAst + JSOptimizePatterns
 
   sem optimizeConditionalBranch : JSExpr -> JSExpr
   sem optimizeConditionalBranch =
-  | JSETernary { cond = JSEBool { b = true }, thn = thn } -> optimizeConditionalBranch thn
-  | JSETernary { cond = JSEBool { b = false }, els = els } -> optimizeConditionalBranch els
+  | JSETernary { cond = cond, thn = thn, els = els } ->
+    match cond with JSEBool { b = true } then optimizeConditionalBranch thn else
+    match cond with JSEBool { b = false } then optimizeConditionalBranch els else
+    JSETernary { cond = optimizePattern cond, thn = optimizeConditionalBranch thn, els = optimizeConditionalBranch els }
   | p -> p
 
 end
