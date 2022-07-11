@@ -63,7 +63,10 @@ lang JSPrettyPrint = JSExprAst
   | params ->
     match mapAccumL (pprintEnvGetStr) env params with (env, params) in
     let args = strJoin ", " params in
-    if and simplify (eqi (length params) 1) then (env, args)
+    if and simplify (and
+      (eqi (length params) 1)
+      (not (null args)))
+      then (env, args)
     else (env, join ["(", args, ")"])
 
 
