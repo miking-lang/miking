@@ -183,9 +183,21 @@ lang JSOptimizeExprs = JSExprAst + JSOptimizePatterns
   sem optimizeConditionalBranch : JSExpr -> JSExpr
   sem optimizeConditionalBranch =
   | JSETernary { cond = cond, thn = thn, els = els } ->
-    match cond with JSEBool { b = true } then optimizeConditionalBranch thn else
-    match cond with JSEBool { b = false } then optimizeConditionalBranch els else
-    JSETernary { cond = optimizePattern cond, thn = optimizeConditionalBranch thn, els = optimizeConditionalBranch els }
+    let cond = optimizePattern cond in
+    let thn = optimizeConditionalBranch thn in
+    let els = optimizeConditionalBranch els in
+    match cond with JSEBool { b = true } then thn else
+    match cond with JSEBool { b = false } then els else
+    -- If the then branch is a boolean, optimize it
+    match (cond, thn, els) with (JSEVar _ & c, JSEVar _ & t, JSEBool { b = false }) then
+      JSEBinOp { op = JSOAnd {}, lhs = c, rhs = t }
+    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = true }, JSEVar _ & e) then
+      JSEBinOp { op = JSOOr {}, lhs = c, rhs = e }
+    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = false }, JSEBool { b = true }) then
+      JSEUnOp { op = JSONot {}, rhs = c }
+    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = true }, JSEBool { b = false }) then
+      c
+    else JSETernary { cond = cond, thn = thn, els = els }
   | p -> p
 
 end
