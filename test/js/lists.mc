@@ -1,4 +1,6 @@
 include "string.mc"
+include "common.mc"
+
 mexpr
     let first = "This" in
-    print (join [first, "Is", "A", "Test"])
+    printLn (join [first, "Is", "A", "Test"])
