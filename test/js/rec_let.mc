@@ -10,7 +10,7 @@ mexpr
   printLn (int2string (fact 5));
   printLn (int2string (fact 10));
   printLn (int2string (fact 20));
-  printLn (int2string (fact 40));
+  -- printLn (int2string (fact 40));
   recursive
       let isEven_rect = lam n.
         if eqi n 0 then "true"
