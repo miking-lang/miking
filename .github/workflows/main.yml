@@ -47,6 +47,11 @@ jobs:
           eval $(opam env)
           make test-all
 
+      - name: Run JS tests
+        timeout-minutes: 10
+        run: |
+          make test-js
+
   build-and-test-mac-os:
     runs-on: macos-latest
 
@@ -89,3 +94,8 @@ jobs:
         run: |
           eval $(opam env)
           make test-all
+
+      - name: Run JS tests
+        timeout-minutes: 10
+        run: |
+          make test-js
