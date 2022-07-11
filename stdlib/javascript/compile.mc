@@ -112,7 +112,7 @@ let isFuncInModule : CompileJSContext -> String -> String -> Bool =
 
 lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
                       JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns +
-                      JSOptimizeExprs
+                      JSOptimizeExprs + JSIntrinsic
 
   -- Entry point
   sem compileProg (ctx: CompileJSContext) =
@@ -138,30 +138,30 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileJSOp (info: Info) (ctx: CompileJSContext) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
-  | CAddf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOAdd {}))
+  | CAddf _ & t -> optimizedIntrinsicGenStr t "add" args (_binOp (JSOAdd {}))
   | CSubi _ & t
-  | CSubf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOSub {}))
+  | CSubf _ & t -> optimizedIntrinsicGenStr t "sub" args (_binOp (JSOSub {}))
   | CMuli _ & t
-  | CMulf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOMul {}))
+  | CMulf _ & t -> optimizedIntrinsicGenStr t "mul" args (_binOp (JSOMul {}))
   | CDivi _ & t
-  | CDivf _ & t -> optimizedIntrinsicGen t args (_binOp (JSODiv {}))
-  | CModi _ & t -> optimizedIntrinsicGen t args (_binOp (JSOMod {}))
+  | CDivf _ & t -> optimizedIntrinsicGenStr t "div" args (_binOp (JSODiv {}))
+  | CModi _ & t -> optimizedIntrinsicGenStr t "mod" args (_binOp (JSOMod {}))
   | CEqi  _ & t
-  | CEqf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOEq {}))
+  | CEqf  _ & t -> optimizedIntrinsicGenStr t "eq" args (_binOp (JSOEq {}))
   | CLti  _ & t
-  | CLtf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOLt {}))
+  | CLtf  _ & t -> optimizedIntrinsicGenStr t "lt" args (_binOp (JSOLt {}))
   | CGti  _ & t
-  | CGtf  _ & t -> optimizedIntrinsicGen t args (_binOp (JSOGt {}))
+  | CGtf  _ & t -> optimizedIntrinsicGenStr t "gt" args (_binOp (JSOGt {}))
   | CLeqi _ & t
-  | CLeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOLe {}))
+  | CLeqf _ & t -> optimizedIntrinsicGenStr t "le" args (_binOp (JSOLe {}))
   | CGeqi _ & t
-  | CGeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSOGe {}))
+  | CGeqf _ & t -> optimizedIntrinsicGenStr t "ge" args (_binOp (JSOGe {}))
   | CNeqi _ & t
-  | CNeqf _ & t -> optimizedIntrinsicGen t args (_binOp (JSONeq {}))
+  | CNeqf _ & t -> optimizedIntrinsicGenStr t "ne" args (_binOp (JSONeq {}))
 
   -- Unary operators
   | CNegf _ & t
-  | CNegi _ & t -> optimizedIntrinsicGen t args (_unOp (JSONeg {}))
+  | CNegi _ & t -> optimizedIntrinsicGenStr t "neg" args (_unOp (JSONeg {}))
 
   -- Sequential operators (SeqOpAst)
   | CConcat _ & t -> intrinsicGen t args

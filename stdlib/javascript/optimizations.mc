@@ -60,7 +60,7 @@ type JSTCOContext = {
 }
 
 -- Tail Call Optimizations
-lang JSOptimizeTailCalls = JSExprAst + CompileJSOptimizedIntrinsics
+lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
 
   sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> (CompileJSContext, JSExpr)
   sem optimizeTailCall name info ctx =
