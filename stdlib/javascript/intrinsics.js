@@ -20,7 +20,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
   dprint: val => console.log(val),
   concat: lhs => rhs => lhs.concat(rhs),
-  cons: elm => list => [elm].concat(list),
+  cons: elm => list => (typeof list === "string") ? elm + list : [elm].concat(list),
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
