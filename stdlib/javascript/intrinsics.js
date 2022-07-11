@@ -19,6 +19,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   length: lst => lst.length,
   head: lst => lst[0],
   tail: lst => lst.slice(1),
+  null: lst => lst.length === 0,
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => (typeof list === "string") ? elm + list : [elm].concat(list),
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
