@@ -1,3 +1,5 @@
+include "common.mc"
+
 mexpr
 	let l = [1, 2, 3, 4, 5] in
-	dprint (foldl (addi) 0 l)
+	dprintLn (foldl (addi) 0 l)
