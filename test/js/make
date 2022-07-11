@@ -1,0 +1,5 @@
+compileJS="build/boot eval src/main/mi.mc -- compile --to-js"
+
+run_all_tests() {
+    ./compileJS test/js/match_list.mc
+}
