@@ -70,7 +70,7 @@ lang JSOptimizeTailCalls = JSExprAst
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
     let fun = foldFunc fun in
-    match runOnTailPositional name trampolineCapture fun with { expr = fun, foundTailCall = true } then
+    match runOnTailPositional trampolineCapture fun with { expr = fun, foundTailCall = true } then
       let ctx = { ctx with trampolinedFunctions = mapInsert name fun ctx.trampolinedFunctions } in
       (ctx, fun)
     else
@@ -103,38 +103,38 @@ lang JSOptimizeTailCalls = JSExprAst
     else JSEFun { params = params, body = body }
   | e -> e
 
-  sem runOnTailPositional : Name -> (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
-  sem runOnTailPositional (name: Name) (action: (JSExpr -> JSExpr)) =
+  sem runOnTailPositional : (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
+  sem runOnTailPositional (action: (JSExpr -> JSExpr)) =
   | JSEApp { fun = fun } & t ->
     -- If the function is a tail call, run the action on the function
     -- and replace the function with the result
-    match fun with JSEVar { id = name } then {
+    match fun with JSEVar _ then {
       expr = action t,
       foundTailCall = true
     } else {
       expr = t,
       foundTailCall = false
     }
-  | JSEFun      t -> runWithJSTCOCtx name action t.body (lam e. JSEFun { t with body = e })
-  | JSEIIFE     t -> runWithJSTCOCtx name action t.body (lam e. JSEIIFE { t with body = e })
-  | JSEBlock    t -> runWithJSTCOCtx name action t.ret (lam e. JSEBlock { t with ret = e })
-  | JSETernary  t -> runWithJSTCOCtx2 name action t.thn t.els (lam e1. lam e2. JSETernary { t with thn = e1, els = e2 })
+  | JSEFun      t -> runWithJSTCOCtx action t.body (lam e. JSEFun { t with body = e })
+  | JSEIIFE     t -> runWithJSTCOCtx action t.body (lam e. JSEIIFE { t with body = e })
+  | JSEBlock    t -> runWithJSTCOCtx action t.ret (lam e. JSEBlock { t with ret = e })
+  | JSETernary  t -> runWithJSTCOCtx2 action t.thn t.els (lam e1. lam e2. JSETernary { t with thn = e1, els = e2 })
   | t -> { expr = t, foundTailCall = false } -- No terms where tail calls can be located
 
 
-  sem runWithJSTCOCtx : Name -> (JSExpr -> JSExpr) -> JSExpr -> (JSExpr -> JSExpr) -> JSTCOContext
-  sem runWithJSTCOCtx name action expr =
+  sem runWithJSTCOCtx : (JSExpr -> JSExpr) -> JSExpr -> (JSExpr -> JSExpr) -> JSTCOContext
+  sem runWithJSTCOCtx action expr =
     | constr ->
-      let res = runOnTailPositional name action expr in {
+      let res = runOnTailPositional action expr in {
         expr = constr res.expr,
         foundTailCall = res.foundTailCall
       }
 
-  sem runWithJSTCOCtx2 : Name -> (JSExpr -> JSExpr) -> JSExpr -> JSExpr -> (JSExpr -> JSExpr -> JSExpr) -> JSTCOContext
-  sem runWithJSTCOCtx2 name action expr1 expr2 =
+  sem runWithJSTCOCtx2 : (JSExpr -> JSExpr) -> JSExpr -> JSExpr -> (JSExpr -> JSExpr -> JSExpr) -> JSTCOContext
+  sem runWithJSTCOCtx2 action expr1 expr2 =
     | constr ->
-      let res1 = runOnTailPositional name action expr1 in
-      let res2 = runOnTailPositional name action expr2 in {
+      let res1 = runOnTailPositional action expr1 in
+      let res2 = runOnTailPositional action expr2 in {
         expr = constr res1.expr res2.expr,
         foundTailCall = or res1.foundTailCall res2.foundTailCall
       }
