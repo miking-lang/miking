@@ -56,16 +56,16 @@ clean_tests() {
 }
 
 case $1 in
+	compile-test)
+		compile_test "$2"
+		;;
 	run-test)
 		run_test "$2"
 		clean_tests
 		;;
-	run-tests)
+	run-all)
 		run_all_tests
 		clean_tests
-		;;
-	compile-test)
-		compile_test "$2"
 		;;
 	clean)
 		clean_tests

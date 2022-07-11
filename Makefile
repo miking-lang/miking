@@ -157,3 +157,6 @@ test-ipopt: build
 
 test-accelerate: build
 	@$(MAKE) -s -f test-accelerate.mk
+
+test-js: install-boot
+	@$(MAKE) -s -f test-js.mk
