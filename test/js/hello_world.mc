@@ -1,1 +1,3 @@
-mexpr print "Hello, world!\n"
+include "common.mc"
+
+mexpr printLn "Hello, world!\n"

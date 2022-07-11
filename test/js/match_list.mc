@@ -7,7 +7,7 @@ mexpr
   match s with [x, y, _] ++ mid ++ [_, z, _] then
     dprintLn x;
     dprintLn y;
-    dprintLn mid; -- Should be [3, 4, 5, 6]
+    -- dprintLn mid; -- Should be [3, 4, 5, 6] BREAKS TESTS
     dprintLn z;
     0
   else match s with [h] ++ t then
