@@ -88,7 +88,7 @@ let optionsConfig : ParseConfig Options = [
   ([("--js-target", " ", "[web|node|=generic]")],
     "Specific JavaScript runtime to target, defaults to generic",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with jsTarget = Some (argToString p)}),
+      let o: Options = p.options in {o with jsTarget = argToString p}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

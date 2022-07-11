@@ -23,7 +23,7 @@ type Options = {
   keepDeadCode : Bool,
   printHelp : Bool,
   toJavaScript : Bool,
-  jsTarget : Option String,
+  jsTarget : String,
   output : Option String,
   tuneOptions : TuneOptions
 }

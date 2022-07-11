@@ -26,7 +26,7 @@ let optionsDefault : Options = {
   keepDeadCode = false,
   printHelp = false,
   toJavaScript = false,
-  jsTarget = None (),
+  jsTarget = "generic",
   output = None (),
   tuneOptions = tuneOptionsDefault
 }
