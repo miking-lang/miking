@@ -1,1 +1,7 @@
-mexpr addi 5 6 7 8
+include "common.mc"
+include "string.mc"
+
+mexpr
+  printLn (int2string (addi 5 6));
+  printLn (int2string (addi 5 (negi 6)));
+  ()

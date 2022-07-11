@@ -11,10 +11,14 @@ const MExpr_JS_Intrinsics = Object.freeze({
   le: lhs => rhs => lhs <= rhs,
   gt: lhs => rhs => lhs > rhs,
   ge: lhs => rhs => lhs >= rhs,
-  neg: lhs => -lhs,
+  neg: val => -val,
+  length: lst => lst.length,
+  head: lst => lst[0],
+  tail: lst => lst.slice(1),
 
   // Built-in MExpr
   print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
+  dprint: val => console.log(val),
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => [elm].concat(list),
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),

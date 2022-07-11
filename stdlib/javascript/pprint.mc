@@ -160,6 +160,10 @@ lang JSPrettyPrint = JSExprAst
         ret,
         pprintNewline i, "}"])
     else never
+  | JSEReturn { expr = expr } ->
+    match (printJSExpr indent) env expr with (env,expr) then
+      (env, join ["return ", expr])
+    else never
   | JSENop _ -> (env, "")
 
   sem printJSBinOp (lhs: String) (rhs: String) =

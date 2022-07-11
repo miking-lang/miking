@@ -17,6 +17,8 @@ include "common.mc"
 include "seq.mc"
 include "error.mc"
 include "name.mc"
+include "option.mc"
+include "string.mc"
 
 
 ----------------------
@@ -67,13 +69,15 @@ let compileJSOptionsEmpty : CompileJSOptions = {
 
 type CompileJSContext = {
   options : CompileJSOptions,
-  trampolinedFunctions: Map Name JSExpr
+  trampolinedFunctions: Map Name JSExpr,
+  currentFunction: Option (Name, Info)
 }
 
 -- Empty compile JS environment
 let compileJSCtxEmpty = {
   options = compileJSOptionsEmpty,
-  trampolinedFunctions = mapEmpty nameCmp
+  trampolinedFunctions = mapEmpty nameCmp,
+  currentFunction = None ()
 }
 
 
@@ -82,12 +86,33 @@ let isTrampolinedJs : CompileJSContext -> Name -> Bool =
   match mapLookup name ctx.trampolinedFunctions with Some _
   then true else false
 
+let _lastSubStr : String -> Int -> Option String =
+  lam str. lam n.
+  if lti (length str) n then None ()
+  else Some (subsequence str (subi (length str) n) (length str))
+
+let isFuncInModule : CompileJSContext -> String -> String -> Bool =
+  lam ctx. lam funcName. lam modulePath.
+  match ctx.currentFunction with Some (name, info) then
+    -- Check if the name and function name match
+    if eqString funcName (nameGetStr name) then
+      -- Check if the module path matches
+      match info with Info { filename = filename } then
+        match _lastSubStr filename (length modulePath) with Some endpath then
+          if eqString modulePath endpath then true else false
+        else false
+      else false
+    else false
+  else false
+
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns
+lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
+                      JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns +
+                      JSOptimizeExprs
 
   -- Entry point
   sem compileProg (ctx: CompileJSContext) =
@@ -143,6 +168,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | CConcat _ & t -> intrinsicGen t args
   | CCons _   & t -> intrinsicGen t args
   | CFoldl _  & t -> intrinsicGen t args
+  | CLength _ & t -> intrinsicGen t args
+  | CHead _   & t -> intrinsicGen t args
+  | CTail _   & t -> intrinsicGen t args
 
   -- Convert operations
   | CChar2Int _ & t -> intrinsicGen t args
@@ -156,15 +184,22 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   -- Not directly mapped to JavaScript operators
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
-    else
-      -- Warning about inconsistent behaviour
-      printLn (concat
-        (info2str info)
-        "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime"
-      );
-      intrinsicGen t args
+    else -- Warning about inconsistent behaviour
+      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc") (isFuncInModule ctx "printLn" "internal")) then
+        printLn (concat (info2str info)
+          "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime")
+      else ());
+        intrinsicGen t args
+  | CDPrint _ & t ->
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    else -- Warning about inconsistent behaviour
+      if not (or (isFuncInModule ctx "dprintLn" "stdlib/common.mc") (isFuncInModule ctx "dprintLn" "internal")) then
+        printLn (concat (info2str info)
+          "WARNING: 'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime");
+          intrinsicGen t args
+      else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
   | CFlushStdout _ -> JSENop { }
-  | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
+  | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
 
   -- Extract the name of the function and the arguments from
@@ -242,7 +277,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   -- STATEMENTS --
   ----------------
 
-  | TmLet { ident = ident, body = body, inexpr = e } ->
+  | TmLet { ident = ident, body = body, inexpr = e, info = info } ->
     match nameGetStr ident with [] then
       match body with TmApp _ then
         -- If identifier is the ignore identifier (_, or [])
@@ -252,16 +287,22 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
           ret = compileMExpr ctx e
         })
       else JSENop { } -- Ignore the expression
-    else flattenBlock (JSEBlock {
-      exprs = [JSEDef { id = ident, expr = compileMExpr ctx body }],
-      ret = compileMExpr ctx e
-    })
+    else
+      let expr = (match body with TmLam _ then
+        let ctx = { ctx with currentFunction = Some (ident, info) } in
+        compileMExpr ctx body
+      else compileMExpr ctx body) in
+      flattenBlock (JSEBlock {
+        exprs = [JSEDef { id = ident, expr = expr }],
+        ret = compileMExpr ctx e
+      })
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     let rctx = ref ctx in
     let compileBind = lam bind : RecLetBinding.
       match bind with { ident = ident, body = body, info = info } then
         match body with TmLam _ then
+          let ctx = { ctx with currentFunction = Some (ident, info) } in
           let fun = compileMExpr ctx body in
           match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) then
             modref rctx ctx;
@@ -280,14 +321,14 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + J
   | TmConDef { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr ctx) target in
-    let pat: JSExpr = optimizePattern (compileBindingPattern target pat) in
+    let pat: JSExpr = optimizePattern3 (compileBindingPattern target pat) in
     let thn = (compileMExpr ctx) thn in
     let els = (compileMExpr ctx) els in
-    JSETernary {
+    optimizeConditionalBranch (JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
-    }
+    })
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }
