@@ -86,6 +86,7 @@ test-all:\
   test-boot-all\
   test-compile\
   test-run\
+  test-js\
 	test-tune
 	@./make lint
 
