@@ -23,11 +23,6 @@ let pprintEnvGetStr = lam env. lam id: Name.
     let id = nameSetStr id (nameGetStr id) in
     pprintEnvGetStr env id -- Note that this is not a recursive call!
 
--- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
--- argument. If it is None (), the returned string is "".
-let pprintEnvGetOptStr = lam env. lam id.
-  match id with Some id then pprintEnvGetStr env id else (env,"")
-
 let joinAsStatements = lam indent. lam seq.
   concat (strJoin (concat ";" (pprintNewline indent)) seq) ";"
 
@@ -58,9 +53,20 @@ lang JSPrettyPrint = JSExprAst
 
   sem printJSExprs (indent: Int) (env: PprintEnv) =
   | exprs ->
-    match mapAccumL (printJSExpr indent) env exprs with (env,exprs) then
+    match mapAccumL (printJSExpr indent) env exprs with (env, exprs) then
       (env, strJoin (pprintNewline indent) exprs)
     else never
+
+
+  sem printJSFunParams : PprintEnv -> Bool -> [Name] -> (PprintEnv, String)
+  sem printJSFunParams env simplify =
+  | params ->
+    match mapAccumL (pprintEnvGetStr) env params with (env, params) then
+      let args = strJoin ", " params in
+      if and simplify (eqi (length params) 1) then (env, args)
+      else (env, join ["(", args, ")"])
+    else never
+
 
   sem printJSExpr (indent : Int) (env: PprintEnv) =
   | JSEVar { id = id } -> pprintEnvGetStr env id
@@ -81,15 +87,16 @@ lang JSPrettyPrint = JSExprAst
         (env, join ["let ", id, " = ", str])
       else never
     else never
-  | JSEFun { param = param, body = body } ->
+
+  -- ES6 arrow functions (released 2015)
+  -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
+  -- Comparison to anonymous functions:
+  -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
+  | JSEFun { params = params, body = body } ->
     let i = indent in
-    match pprintEnvGetStr env param with (env,param) then
+    match (printJSFunParams env true params) with (env, args) then
       match (printJSExpr i) env body with (env,body) then
-        -- ES6 arrow functions (released 2015)
-        -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015
-        -- Comparison to anonymous functions:
-        -- https://dmitripavlutin.com/differences-between-arrow-and-regular-functions
-        (env, join [param, " => ", body])
+        (env, join [args, " => ", body])
       else never
     else never
   | JSEIIFE { body = body } ->

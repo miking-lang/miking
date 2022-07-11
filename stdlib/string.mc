@@ -94,38 +94,36 @@ let str2lower = lam s. map char2lower s
 
 let string2int = lam s.
   recursive
-  let string2int_rechelper = lam s.
-    let len = length s in
-    let last = subi len 1 in
-    if eqi len 0
-    then 0
+  let string2int_rechelper = lam s. lam acc.
+    if null s then acc
     else
-      let lsd = subi (char2int (get s last)) (char2int '0') in
-      let rest = muli 10 (string2int_rechelper (subsequence s 0 last)) in
-      addi rest lsd
+      let fsd = subi (char2int (head s)) (char2int '0') in
+      string2int_rechelper (tail s) (addi (muli 10 acc) fsd)
   in
   match s with [] then 0 else
   if eqChar '-' (head s)
-  then negi (string2int_rechelper (tail s))
-  else string2int_rechelper s
+  then negi (string2int_rechelper (tail s) 0)
+  else string2int_rechelper s 0
 
+utest string2int "" with 0
 utest string2int "5" with 5
 utest string2int "25" with 25
 utest string2int "314159" with 314159
 utest string2int "-314159" with (negi 314159)
 
+let digit2char = lam d.
+  int2char (addi d (char2int '0'))
+
 let int2string = lam n.
   recursive
-  let int2string_rechelper = lam n.
+  let int2string_rechelper = lam n. lam acc.
     if lti n 10
-    then [int2char (addi n (char2int '0'))]
-    else
-      let d = [int2char (addi (modi n 10) (char2int '0'))] in
-      concat (int2string_rechelper (divi n 10)) d
+    then cons (digit2char n) acc
+    else int2string_rechelper (divi n 10) (cons (digit2char (modi n 10)) acc)
   in
   if lti n 0
-  then cons '-' (int2string_rechelper (negi n))
-  else int2string_rechelper n
+  then cons '-' (int2string_rechelper (negi n) "")
+  else int2string_rechelper n ""
 
 utest int2string 5 with "5"
 utest int2string 25 with "25"

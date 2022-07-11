@@ -8,13 +8,15 @@ include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
-include "javascript/intrinsics.mc"
 include "javascript/operators.mc"
+include "javascript/intrinsics.mc"
+include "javascript/optimizations.mc"
 
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
 include "error.mc"
+include "name.mc"
 
 
 ----------------------
@@ -44,9 +46,6 @@ let _charSeq2String = use MExprAst in lam tms.
 -- TODO: Extract shared helper functions into a separate files
 
 
--- Empty compile JS environment
-let compileJSEnvEmpty = { externals = mapEmpty nameCmp, allocs = [] }
-
 
 
 -- Supported JS runtime targets
@@ -61,19 +60,40 @@ type CompileJSOptions = {
   debugMode : Bool
 }
 
+let compileJSOptionsEmpty : CompileJSOptions = {
+  targetPlatform = CompileJSTP_Normal (),
+  debugMode = false
+}
+
+type CompileJSContext = {
+  options : CompileJSOptions,
+  trampolinedFunctions: Map Name JSExpr
+}
+
+-- Empty compile JS environment
+let compileJSCtxEmpty = {
+  options = compileJSOptionsEmpty,
+  trampolinedFunctions = mapEmpty nameCmp
+}
+
+
+let isTrampolinedJs : CompileJSContext -> Name -> Bool =
+  lam ctx. lam name.
+  match mapLookup name ctx.trampolinedFunctions with Some _
+  then true else false
 
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
 -------------------------------------------
 
-lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
+lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns
 
   -- Entry point
-  sem compileProg (opts: CompileJSOptions) =
+  sem compileProg (ctx: CompileJSContext) =
   | prog ->
     -- Run compiler
-    match compileMExpr opts prog with expr then
+    match compileMExpr ctx prog with expr then
       let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
         then concat exprs [ret]
         else [expr] in
@@ -81,56 +101,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       JSPProg { imports = [], exprs = exprs }
     else never
 
-
-
-  -- Helper functions
-  sem flattenBlockHelper : JSExpr -> ([JSExpr], JSExpr)
-  sem flattenBlockHelper =
-  | JSEBlock { exprs = exprs, ret = ret } ->
-    -- If the return value is a block, concat the expressions in that block with the
-    -- expressions in the current block and set the return value to the return value
-    -- of the current block
-    -- For each expression in the current block, if it is a block, flatten it
-    let flatExprs : [JSExpr] = filterNops (foldr (
-      lam e. lam acc.
-        let flatE = flattenBlockHelper e in
-        match flatE with ([], e) then
-          cons e acc
-        else match flatE with (flatEExprs, flatERet) then
-          join [acc, flatEExprs, [flatERet]]
-        else never
-    ) [] exprs) in
-
-    -- Call flattenBlockHelper recursively on the return value
-    let flatRet = flattenBlockHelper ret in
-    match flatRet with ([], e) then
-      -- Normal expressions are returned as is, thus concat them with the expressions
-      -- in the current block
-      (flatExprs, ret)
-    else match flatRet with (retExprs, retRet) then
-      (concat flatExprs retExprs, retRet)
-    else never
-  | expr -> ([], expr)
-
-  sem flattenBlock : JSExpr -> JSExpr
-  sem flattenBlock =
-  | JSEBlock _ & block ->
-    match flattenBlockHelper block with (exprs, ret) then
-      JSEBlock { exprs = exprs, ret = ret }
-    else never
-  | expr -> expr
-
-  sem immediatelyInvokeBlock : JSExpr -> JSExpr
-  sem immediatelyInvokeBlock =
-  | JSEBlock _ & block -> JSEIIFE { body = block }
-  | expr -> expr
-
-  sem filterNops : [JSExpr] -> [JSExpr]
-  sem filterNops =
-  | lst -> foldr (
-    lam e. lam acc.
-      match e with JSENop { } then acc else cons e acc
-  ) [] lst
 
 
 
@@ -141,7 +111,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
-  sem compileJSOp (info: Info) (opts: CompileJSOptions) (args: [JSExpr]) =
+  sem compileJSOp (info: Info) (ctx: CompileJSContext) (args: [JSExpr]) =
   -- Binary operators
   | CAddi _ & t
   | CAddf _ & t -> optimizedOpIntrinsicGen t args (_binOp (JSOAdd {}))
@@ -185,7 +155,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
 
   -- Not directly mapped to JavaScript operators
   | CPrint _ & t ->
-    match opts.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else
       -- Warning about inconsistent behaviour
       printLn (concat
@@ -197,44 +167,55 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
   | _ -> errorSingle [info] "Unsupported literal when compiling to JavaScript"
 
 
+  -- Extract the name of the function and the arguments from
+  -- a function application
+  sem foldApp : [Expr] -> Expr -> (Expr, [Expr])
+  sem foldApp acc =
+  | TmApp { lhs = lhs, rhs = rhs } ->
+    if _isUnitTy (tyTm rhs) then foldApp acc lhs
+    else foldApp (cons rhs acc) lhs
+  | t -> (t, acc)
+
+
   -----------------
   -- EXPRESSIONS --
   -----------------
-
-  sem compileMExpr (opts: CompileJSOptions) =
-
+  sem compileMExpr (ctx: CompileJSContext) =
   | TmVar { ident = id } -> JSEVar { id = id }
-
   | TmApp { info = info } & app ->
-    recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
-      match t with TmApp { lhs = lhs, rhs = rhs } then
-        if _isUnitTy (tyTm rhs) then rec acc lhs
-        else rec (cons rhs acc) lhs
-      else (t, acc)
-    in
-    match rec [] app with (fun, args) then
+    match foldApp [] app with (fun, args) then
       -- Function calls
+      let args = map (compileMExpr ctx) args in
       match fun with TmVar { ident = ident } then
-        JSEApp { fun = JSEVar { id = ident }, args = map (compileMExpr opts) args, curried = true }
+        let isTrampolined = isTrampolinedJs ctx ident in
+        let jsApp = JSEApp {
+          fun = JSEVar { id = ident },
+          args = args,
+          curried = not isTrampolined
+        } in
+        if isTrampolined then
+          match mapLookup ident ctx.trampolinedFunctions with Some fun then
+            wrapCallToOptimizedFunction info fun (length args) jsApp
+          else never
+        else jsApp
 
       -- Intrinsics
       else match fun with TmConst { val = val, info = info } then
-        let args = map (compileMExpr opts) args in
-        compileJSOp info opts args val
+        compileJSOp info ctx args val
 
-      else errorSingle [info] "Unsupported application in compileMExpr"
+      else errorSingle [infoTm app] "Unsupported application in compileMExpr"
     else never
 
-  -- Anonymous function, not allowed.
+  -- Anonymous function
   | TmLam { ident = arg, body = body } ->
-    let body = (compileMExpr opts) body in
-    JSEFun { param = arg, body = body }
+    let body = (compileMExpr ctx) body in
+    JSEFun { params = [arg], body = body }
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
     let compileField = lam f. match f with (sid, expr)
-      then (sidToString sid, (compileMExpr opts) expr)
+      then (sidToString sid, (compileMExpr ctx) expr)
       else never in
     JSEObject { fields = map compileField fieldSeq }
 
@@ -244,7 +225,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
       match (_charSeq2String tms) with Some str then JSEString { s = str }
       else never
     else
-      JSEArray { exprs = map (compileMExpr opts) tms }
+      JSEArray { exprs = map (compileMExpr ctx) tms }
 
   -- Literals
   | TmConst { val = val, info = info } ->
@@ -252,62 +233,64 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileJSOp info opts [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else match compileJSOp info ctx [] val with jsexpr then jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
     else never
-  | TmRecordUpdate { info = info } -> errorSingle [info] "Record updates cannot be handled in compileMExpr."
+  | TmRecordUpdate _ & t -> errorSingle [infoTm t] "Record updates cannot be handled in compileMExpr."
 
 
   ----------------
   -- STATEMENTS --
   ----------------
 
-  | TmLet { ident = id, body = expr, inexpr = e } ->
-    -- Check if identifier is the ignore identifier (_, or [])
-    -- If so, ignore the expression unless it is a function application
-    let data = (match nameGetStr id with [] then
-      match expr with TmApp { } then -- Inline the function call
-        ([(compileMExpr opts) expr], (compileMExpr opts) e)
-      else -- Ignore the expression
-        ([], (compileMExpr opts) e)
-    else -- Normal let binding
-      ([JSEDef { id = id, expr = (compileMExpr opts) expr }], (compileMExpr opts) e)
-    ) in
-    match data with (exprs, ret) then
-      flattenBlock (JSEBlock {
-        exprs = exprs,
-        ret = ret
-      })
-    else never
+  | TmLet { ident = ident, body = body, inexpr = e } ->
+    match nameGetStr ident with [] then
+      match body with TmApp _ then
+        -- If identifier is the ignore identifier (_, or [])
+        -- Then inline the function call
+        flattenBlock (JSEBlock {
+          exprs = [compileMExpr ctx body],
+          ret = compileMExpr ctx e
+        })
+      else JSENop { } -- Ignore the expression
+    else flattenBlock (JSEBlock {
+      exprs = [JSEDef { id = ident, expr = compileMExpr ctx body }],
+      ret = compileMExpr ctx e
+    })
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
+    let rctx = ref ctx in
+    let compileBind = lam bind : RecLetBinding.
+      match bind with { ident = ident, body = body, info = info } then
+        match body with TmLam _ then
+          let fun = compileMExpr ctx body in
+          match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) then
+            modref rctx ctx;
+            JSEDef { id = ident, expr = fun }
+          else never
+        else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
+      else never in
+    let exprs = map compileBind bindings in
     flattenBlock (JSEBlock {
-      exprs = map (
-        lam bind : RecLetBinding.
-        match bind with { ident = ident, body = body, tyBody = tyBody, info = info } then
-          let nop = TmNever { ty = tyBody, info = info } in
-          compileMExpr opts (TmLet { ident = ident, body = body, inexpr = nop, ty = ty, tyBody = tyBody, info = info })
-        else never
-        ) bindings,
-      ret = (compileMExpr opts) e
+      exprs = exprs,
+      ret = compileMExpr (deref rctx) e
     })
-  | TmType { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type declaration)
-  | TmConApp { info = info } -> errorSingle [info] "Constructor application in compileMExpr."
-  | TmConDef { inexpr = e } -> (compileMExpr opts) e -- no op (Skip type constructor definitions)
+
+  | TmType { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type declaration)
+  | TmConApp _ & t -> errorSingle [infoTm t] "Constructor application in compileMExpr."
+  | TmConDef { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
-    let target: JSExpr = (compileMExpr opts) target in
+    let target: JSExpr = (compileMExpr ctx) target in
     let pat: JSExpr = optimizePattern (compileBindingPattern target pat) in
-    let thn = (compileMExpr opts) thn in
-    let els = (compileMExpr opts) els in
+    let thn = (compileMExpr ctx) thn in
+    let els = (compileMExpr ctx) els in
     JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     }
-  | TmUtest { info = info } -> errorSingle [info] "Unit test expressions cannot be handled in compileMExpr."
-  | TmExt { info = info } -> errorSingle [info] "External expressions cannot be handled in compileMExpr."
+  | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
+  | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }
-
-
 
 end
 
@@ -321,19 +304,13 @@ let filepathWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let defaultCompileJSOptions : CompileJSOptions = {
-  targetPlatform = CompileJSTP_Normal (),
-  debugMode = false
-}
-
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
 let javascriptCompile : CompileJSOptions -> Expr -> JSProg =
-  lam opts : CompileJSOptions.
-  lam ast : Expr.
+  lam opts : CompileJSOptions. lam ast : Expr.
   use MExprJSCompile in
-  compileProg opts ast
-
+  let ctx = { compileJSCtxEmpty with options = opts } in
+  compileProg ctx ast
 
 
 let javascriptCompileFile : CompileJSOptions -> Expr -> String -> String =
