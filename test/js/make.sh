@@ -13,9 +13,10 @@ compile_test() {
 	set +e
 	echo "Compiling $1 ..."
 	output=$($COMPILE_JS $1 2>&1)
+	exit_code=$?
 	echo "$output\n"
 	set -e
-	if [ $? -ne 0 ]
+	if [ $exit_code -ne 0 ]
 	then
 		echo "ERROR: Compiling test $1 failed!"
 		exit 1
