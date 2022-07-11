@@ -63,7 +63,7 @@ type JSTCOContext = {
 lang JSOptimizeTailCalls = JSExprAst + CompileJSOptimizedIntrinsics
 
   sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> (CompileJSContext, JSExpr)
-  sem optimizeTailCall (name: Name) (info: Info) (ctx: CompileJSContext) =
+  sem optimizeTailCall name info ctx =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
     let fun = foldFunc fun in
@@ -77,7 +77,7 @@ lang JSOptimizeTailCalls = JSExprAst + CompileJSOptimizedIntrinsics
 
 
   sem wrapCallToOptimizedFunction : Info -> JSExpr -> Int -> JSExpr -> JSExpr
-  sem wrapCallToOptimizedFunction (info: Info) (fun: JSExpr) (nrArgs: Int) =
+  sem wrapCallToOptimizedFunction info fun nrArgs =
   | JSEApp _ & app ->
     -- Trampoline fully applied trampoline functions
     match fun with JSEFun { params = params } in
@@ -100,7 +100,7 @@ lang JSOptimizeTailCalls = JSExprAst + CompileJSOptimizedIntrinsics
   | e -> e
 
   sem runOnTailPositional : (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
-  sem runOnTailPositional (action: (JSExpr -> JSExpr)) =
+  sem runOnTailPositional action =
   | JSEApp { fun = fun } & t ->
     -- If the function is a tail call, run the action on the function
     -- and replace the function with the result
