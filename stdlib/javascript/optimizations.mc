@@ -117,6 +117,8 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
   | JSETernary  t -> runWithJSTCOCtx2 action t.thn t.els (lam e1. lam e2. JSETernary { t with thn = e1, els = e2 })
   | JSEBinOp { op = JSOAnd{}, lhs = lhs, rhs = rhs } ->
     runWithJSTCOCtx action rhs (lam e. JSEBinOp { op = JSOAnd { }, lhs = lhs, rhs = e })
+  | JSEBinOp { op = JSOOr{}, lhs = lhs, rhs = rhs } ->
+    runWithJSTCOCtx action rhs (lam e. JSEBinOp { op = JSOOr { }, lhs = lhs, rhs = e })
   | t -> { expr = t, foundTailCall = false } -- No terms where tail calls can be located
 
 
@@ -193,12 +195,12 @@ lang JSOptimizeExprs = JSExprAst + JSOptimizePatterns
     -- If the then branch is a boolean, optimize it
     match els with JSEBool { b = false } then
       JSEBinOp { op = JSOAnd {}, lhs = cond, rhs = thn }
-    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = true }, JSEVar _ & e) then
-      JSEBinOp { op = JSOOr {}, lhs = c, rhs = e }
-    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = false }, JSEBool { b = true }) then
-      JSEUnOp { op = JSONot {}, rhs = c }
-    else match (cond, thn, els) with (JSEVar _ & c, JSEBool { b = true }, JSEBool { b = false }) then
-      c
+    else match thn with JSEBool { b = true } then
+      JSEBinOp { op = JSOOr {}, lhs = cond, rhs = els }
+    else match (thn, els) with (JSEBool { b = true }, JSEBool { b = false }) then
+      cond
+    else match (thn, els) with (JSEBool { b = false }, JSEBool { b = true }) then
+      JSEUnOp { op = JSONot {}, rhs = cond }
     else JSETernary { cond = cond, thn = thn, els = els }
   | p -> p
 
