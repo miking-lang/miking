@@ -59,25 +59,28 @@ lang JSPrettyPrint = JSExprAst
 
 
   sem printJSFunParams : PprintEnv -> Bool -> [Name] -> (PprintEnv, String)
-  sem printJSFunParams env simplify =
+  sem printJSFunParams env curried =
   | params ->
     match mapAccumL (pprintEnvGetStr) env params with (env, params) in
-    let args = strJoin ", " params in
-    if and simplify (and
-      (eqi (length params) 1)
-      (not (null args)))
-      then (env, args)
-    else (env, join ["(", args, ")"])
+    if curried then
+      -- Map over and replace empty params with "()"
+      let params = map (lam p. if null p then "()" else p) params in
+      (env, strJoin " => " params)
+    else (env, join ["(", strJoin ", " params, ")"])
+
+  sem printJSFunApp : PprintEnv -> Bool -> JSExpr -> [JSExpr] -> (PprintEnv, String)
+  sem printJSFunApp env curried fun =
+  | args ->
+    match (printJSExpr 0) env fun with (env, fun) in
+    match mapAccumL (printJSExpr 0) env args with (env, args) in
+    let sep = if curried then strJoin ")(" else strJoin ", " in
+    (env, join [fun, "(", sep args, ")"])
 
 
   sem printJSExpr (indent : Int) (env: PprintEnv) =
   | JSEVar { id = id } -> pprintEnvGetStr env id
   | JSEApp { fun = fun, args = args, curried = curried } ->
-    match (printJSExpr indent) env fun with (env,fun) in
-    match mapAccumL (printJSExpr 0) env args with (env,args) in
-    let joinArgs = if curried then (strJoin ")(") else (strJoin ", ") in
-    (env, join [fun, "(", joinArgs args, ")"])
-
+    printJSFunApp env curried fun args
   | JSEMember { expr = expr, id = id } ->
     match (printJSExpr indent) env expr with (env,expr) in
     (env, join [expr, ".", id])

@@ -223,13 +223,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     -- Function calls
     let args = map (compileMExpr ctx) args in
     match fun with TmVar { ident = ident } then
-      let isTrampolined = isTrampolinedJs ctx ident in
       let jsApp = JSEApp {
         fun = JSEVar { id = ident },
         args = args,
-        curried = not isTrampolined
+        curried = true
       } in
-      if isTrampolined then
+      if isTrampolinedJs ctx ident then
         match mapLookup ident ctx.trampolinedFunctions with Some fun in
         wrapCallToOptimizedFunction info fun (length args) jsApp
       else jsApp
