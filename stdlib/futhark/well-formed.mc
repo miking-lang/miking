@@ -26,21 +26,17 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   | FutharkRecLet info ->
     (info, "Recursive let-expressions are not supported")
 
-  sem containsFunctionType : Type -> Bool
-  sem containsFunctionType =
-  | t -> containsFunctionTypeH false t
-
-  sem containsFunctionTypeH : Bool -> Type -> Bool
-  sem containsFunctionTypeH acc =
+  sem containsFunctionType : Bool -> Type -> Bool
+  sem containsFunctionType acc =
   | TyArrow _ -> true
-  | t -> if acc then acc else sfold_Type_Type containsFunctionTypeH acc t
+  | t -> if acc then acc else sfold_Type_Type containsFunctionType acc t
 
   sem futharkWellFormedType : Info -> [WFError] -> Type -> [WFError]
   sem futharkWellFormedType info acc =
   | TySeq t ->
     -- NOTE(larshum, 2021-12-13): An array may not contain elements of a
     -- functional type.
-    if containsFunctionType t.ty then
+    if containsFunctionType false t.ty then
       cons (FutharkFunctionInArray info) acc
     else acc
   | t -> sfold_Type_Type (futharkWellFormedType info) acc t
@@ -57,7 +53,7 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   | TmMatch t ->
     -- NOTE(larshum, 2021-12-13): An if-expression may not result in a
     -- functional type.
-    if containsFunctionType t.ty then
+    if containsFunctionType false t.ty then
       cons (FutharkFunctionFromIf t.info) acc
     else sfold_Expr_Expr futharkWellFormedExpr acc (TmMatch t)
   | TmConst ({val = CCreate _} & t) ->

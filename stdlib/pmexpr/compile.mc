@@ -135,6 +135,9 @@ lang PMExprCompileWellFormedBase =
     let accelerateAst = extractAccelerateTerms accelerateIds ast in
     match eliminateDummyParameter solutions accelerateData accelerateAst
     with (accelerateData, accelerateAst) in
+    -- NOTE(larshum, 2022-07-12): Added as a temporary fix for a bug in the
+    -- typing after the elimination of dummy parameters.
+    let accelerateAst = typeCheck accelerateAst in
     checkNestedAccelerate accelerateIds accelerateAst;
     let accelerateData = findUnusedAfterAccelerate accelerateData ast in
     let accelerateAsts = classifyAccelerated accelerateData accelerateAst in

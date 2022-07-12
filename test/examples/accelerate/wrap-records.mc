@@ -16,8 +16,7 @@ let t : Int = accelerate (
   let t1 : {c : Int, d : Float} =
     { c = addi r.a.c (if r.b then 1 else 0)
     , d = r.a.d } in
-  let t2 : Int = addi t1.c (floorfi t1.d) in
-  t2
+  addi t1.c (floorfi t1.d)
 ) in
 
 printLn (int2string t)
