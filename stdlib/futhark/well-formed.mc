@@ -3,6 +3,7 @@ include "pmexpr/well-formed.mc"
 lang FutharkWellFormed = WellFormed + PMExprAst
   syn WFError =
   | FutharkFunctionInArray Info
+  | FutharkFunctionInRecord Info
   | FutharkFunctionFromIf Info
   | FutharkFunctionFromCreate Info
   | FutharkFunctionFromFold Info
@@ -15,6 +16,8 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   sem pprintWellFormedError =
   | FutharkFunctionInArray info ->
     (info, "Sequences of function-type elements are not supported")
+  | FutharkFunctionInRecord info ->
+    (info, "Records containing function-type fields are not supported")
   | FutharkFunctionFromCreate info ->
     (info, "Creating sequences of functions is not supported")
   | FutharkFunctionFromMap info ->
@@ -33,12 +36,17 @@ lang FutharkWellFormed = WellFormed + PMExprAst
 
   sem futharkWellFormedType : Info -> [WFError] -> Type -> [WFError]
   sem futharkWellFormedType info acc =
-  | TySeq t ->
-    -- NOTE(larshum, 2021-12-13): An array may not contain elements of a
-    -- functional type.
-    if containsFunctionType false t.ty then
-      cons (FutharkFunctionInArray info) acc
-    else acc
+  | TySeq {ty = ty} ->
+    match ty with TyArrow _ then cons (FutharkFunctionInArray info) acc
+    else futharkWellFormedType info acc ty
+  | TyRecord t ->
+    let isArrowType = lam ty.
+      match ty with TyArrow _ then true else false in
+    if any isArrowType (mapValues t.fields) then
+      cons (FutharkFunctionInRecord info) acc
+    else
+      mapFoldWithKey
+        (lam acc. lam. lam ty. futharkWellFormedType info acc ty) acc t.fields
   | t -> sfold_Type_Type (futharkWellFormedType info) acc t
 
   sem futharkWellFormedExpr : [WFError] -> Expr -> [WFError]
