@@ -139,7 +139,7 @@ lang PMExprCompileWellFormedBase =
     -- typing after the elimination of dummy parameters.
     let accelerateAst = typeCheck accelerateAst in
     checkNestedAccelerate accelerateIds accelerateAst;
-    let accelerateData = findUnusedAfterAccelerate accelerateData ast in
+    let accelerateData = eliminateTensorCopying accelerateData ast in
     let accelerateAsts = classifyAccelerated accelerateData accelerateAst in
     let ast =
       if config.dynamicChecks then
