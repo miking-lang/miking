@@ -82,14 +82,14 @@ lang PMExprBuildConfig = PMExprBuildBase
     if and buildCuda buildFuthark then
       let linkFlags = join [
         "  (link_flags -I ", dir, " -cclib -l", cudaCodeName,
-        "\n    -cclib -lcuda -cclib -lcudart -cclib -lnvrtc)"] in
+        "\n    -cclib -lcuda -cclib -lcudart -cclib -lnvrtc -cclib -lstdc++)"] in
       let foreignStubs = join [
         "  (foreign_stubs (language c) (names ", futharkCodeName, " ",
         futharkWrapperCodeName, ")))"] in
       strJoin "\n" [baseConfig, linkFlags, foreignStubs]
     else if buildCuda then
       let linkFlags = join [
-        "  (link_flags -I ", dir, " -cclib -l", cudaCodeName, " -cclib -lcudart))"
+        "  (link_flags -I ", dir, " -cclib -l", cudaCodeName, " -cclib -lcudart -cclib -lstdc++))"
       ] in
       strJoin "\n" [baseConfig, linkFlags]
     else if buildFuthark then
