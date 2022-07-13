@@ -14,6 +14,14 @@ lang CudaAst = CAst + MExprAst
   | CuAExternC ()
   | CuAManaged ()
 
+  syn CType =
+  | CTyConst {ty : CType}
+
+  sem smapAccumLCTypeCType f acc =
+  | CTyConst t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, CTyConst {t with ty = ty})
+
   syn CExpr =
   | CESeqMap {f : CExpr, s : CExpr, sTy : CType, ty : CType}
   | CESeqFoldl {f : CExpr, acc : CExpr, s : CExpr, sTy : CType,
