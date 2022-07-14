@@ -16,6 +16,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | CudaAppArgTypeError Expr
   | CudaAppResultTypeError Expr
   | CudaFunctionDefError Expr
+  | CudaFunctionInMatch Expr
 
   sem wellFormednessBackendName =
   | () -> "CUDA"
@@ -36,6 +37,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | CudaFunctionDefError fun ->
     (infoTm fun, join ["Functions must be defined using explicit lambdas, ",
                        "using one lambda per parameter"])
+  | CudaFunctionInMatch e ->
+    (infoTm e, join ["Result of conditional expression cannot be a function"])
 
   sem cudaWellFormedExpr : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExpr acc =
@@ -91,7 +94,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedExpr acc t.target in
     let acc = cudaWellFormedPattern acc t.pat in
     let acc = cudaWellFormedExpr acc t.thn in
-    cudaWellFormedExpr acc t.els
+    let acc = cudaWellFormedExpr acc t.els in
+    match t.ty with TyArrow _ then cons (CudaFunctionInMatch (TmMatch t)) acc
+    else acc
   | TmNever _ -> acc
   | TmRecord {bindings = bindings} ->
     mapFoldWithKey
