@@ -63,15 +63,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       match t.ty with TyArrow _ then cons (CudaAppResultTypeError app) acc
       else acc in
     checkApp acc app
-  | (TmLam t) & lambda ->
-    -- NOTE(larshum, 2022-07-12): A lambda must always have arrow type in a
-    -- well-typed program. Well-formedness assumes the program is well-typed.
-    match t.ty with TyArrow {to = to} then
-      if cudaWellFormedLambdas (t.body, to) then acc
-      else cons (CudaFunctionDefError lambda) acc
-    else
-      errorSingle [t.info] (join ["Program was expected to be well-typed in ",
-                                  "well-formedness check for CUDA backend."])
+  | TmLam t -> cudaWellFormedExpr acc t.body
   | TmLet t ->
     let acc =
       if cudaWellFormedLambdas (t.body, t.tyBody) then acc
@@ -121,12 +113,14 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedExpr acc t.ofs in
     cudaWellFormedExpr acc t.len
   | TmLoop t | TmParallelLoop t ->
-    let acc = cudaWellFormedExpr acc t.n in
-    cudaWellFormedExpr acc t.f
+    -- TODO(larshum, 2022-07-15): Need to update the handling of higher-order
+    -- function arguments. Currently we cannot apply well-formedness checks on
+    -- the iteration function, as they are special-cased to make them work.
+    cudaWellFormedExpr acc t.n
   | TmLoopAcc t ->
     let acc = cudaWellFormedExpr acc t.ne in
-    let acc = cudaWellFormedExpr acc t.n in
-    cudaWellFormedExpr acc t.f
+    cudaWellFormedExpr acc t.n
+  | TmPrintFloat t -> acc
   | expr -> cons (CudaExprError expr) acc
 
   sem cudaWellFormedType : [WFError] -> Type -> [WFError]

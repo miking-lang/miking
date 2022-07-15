@@ -1273,8 +1273,7 @@ lang CudaCWrapper =
     let revTypeEnv = mapFromSeq cmpType (map tupleSwap compileCEnv.typeEnv) in
     let targetEnv = CudaTargetEnv {
       wrapperMap = wrapperMap, compileCEnv = compileCEnv,
-      revTypeEnv = revTypeEnv, tensorMaxRank = tensorMaxRank,
-      prevTensorId = nameNoSym ""} in
+      revTypeEnv = revTypeEnv, tensorMaxRank = tensorMaxRank} in
     let env : CWrapperEnv = _emptyWrapperEnv () in
     {env with targetEnv = targetEnv}
 
