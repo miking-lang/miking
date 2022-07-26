@@ -32,52 +32,15 @@ lang PatJSCompile = PatJSCompileLang
       (sidToString sid, compileSinglePattern expr)
     in
     JSEObject { fields = map (compileField) (mapToSeq bindings) }
-  -- | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
-  --   let hasPrefix = not (null prefix) in
-  --   let hasMiddle = match middle with PName _ then true else false in
-  --   let hasPostfix = not (null postfix) in
-  --   let prefixExprs: [JSExpr] = map (compileSinglePattern) prefix in
-  --   let middleExpr: JSExpr = compileSinglePattern (PatNamed { ident = middle, ty = ty, info = info }) in
-  --   let postfixExprs: [JSExpr] = map (compileSinglePattern) postfix in
-  --   switch (hasPrefix, hasMiddle, hasPostfix)
-  --     case (false, false, false) then middleExpr
-  --     case (true, false, false) then
-  --       _assign (JSEArray { exprs = prefixExprs }) target
-  --     case (true, true, false) then
-  --       _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target
-  --     case (true, true, true) then
-  --       _binOpM (JSOAnd {}) [
-  --         _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target,
-  --         _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
-  --         shortenMiddle (length postfixExprs) middleExpr
-  --       ]
-  --     case (false, true, true) then
-  --       _binOpM (JSOAnd {}) [
-  --         _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target,
-  --         _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
-  --         shortenMiddle (length postfixExprs) middleExpr
-  --       ]
-  --     case (false, true, false) then
-  --       _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target
-  --     case (false, false, true) then
-  --       _binOpM (JSOAnd {}) [
-  --         _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [tmpIgnoreJS]] }) target,
-  --         _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnoreJS)
-  --       ]
-  --     case (true, false, true) then
-  --       _binOpM (JSOAnd {}) [
-  --         _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [tmpIgnoreJS]] }) target,
-  --         _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnoreJS)
-  --       ]
-  --   end
 
   sem compileBindingPattern (target: JSExpr) =
   | PatNamed    { ident = PWildcard () } -> JSEBool { b = true }
   | (PatInt _ | PatBool _) & p -> _binOp (JSOEq {}) [target, compileSinglePattern p]
-  | (PatNamed { ident = PName _ }
-    | PatSeqTot _
-    | PatSeqEdge _
-    | PatRecord _) & p -> _assign (compileSinglePattern p) target
+  | ( PatNamed { ident = PName _ }
+    | PatSeqTot   _
+    | PatSeqEdge  _
+    | PatRecord   _
+    ) & p -> _assign (compileSinglePattern p) target
   | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in

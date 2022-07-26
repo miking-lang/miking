@@ -25,5 +25,15 @@ mexpr
     dprintLn c;
     3
   else
-    printLn "nothing";
+
+  let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
+  match u with [ [head] ++ tail ] then
+    dprintLn head;
     4
+  else match u with [ [head, middle] ++ tail ] ++ rest then
+    dprintLn head;
+    dprintLn middle;
+    5
+  else
+    printLn "nothing";
+    6
