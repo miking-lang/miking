@@ -1,3 +1,3 @@
 include "common.mc"
 
-mexpr printLn "Hello, World!\n"
+mexpr printLn "Hello, World!"
