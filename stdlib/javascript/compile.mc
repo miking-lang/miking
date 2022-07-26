@@ -186,8 +186,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else -- Warning about inconsistent behaviour
-      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc") (isFuncInModule ctx "printLn" "internal")) then
-        printLn (concat (info2str info)
+      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc")
+              (or (isFuncInModule ctx "printLn" "internal")
+                  (isFuncInModule ctx "utestTestPassed" "internal")))
+      then printLn (concat (info2str info)
           "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime")
       else ());
         intrinsicGen t args
