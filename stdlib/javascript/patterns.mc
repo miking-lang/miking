@@ -36,7 +36,7 @@ lang PatJSCompile = PatJSCompileLang
       match acc with (patts, extra) in
       match field with (sid, pat) in
       match safeCompileSinglePattern pat with (patExpr, patExtras) in
-      (cons (sidToString sid, patExpr) patts, concat extra patExtras)
+      (cons (sidToString sid, patExpr) patts, concat patExtras extra)
     ) ([], []) (mapToSeq bindings) with (fieldsExprs, extra) in
     (JSEObject { fields = fieldsExprs }, extra)
 
@@ -46,7 +46,7 @@ lang PatJSCompile = PatJSCompileLang
   sem safeCompileSinglePattern =
   | (PatSeqTot _ | PatSeqEdge _ | PatRecord  _) & p ->
     -- Replace the sequence pattern with a new variable
-    let matchVar = JSEVar { id = nameSym "_nestedMatch" } in
+    let matchVar = JSEVar { id = nameSym "_nstd" } in
     -- Compile "<p> = <matchVar>" as a new binding operation
     let matchBinding = compileBindingPattern matchVar p in
     -- Append the new binding to the list of extra bindings
@@ -69,7 +69,7 @@ lang PatJSCompile = PatJSCompileLang
       lam pat: Pat. lam acc: ([JSExpr], [JSExpr]).
       match acc with (patts, extra) in
       match safeCompileSinglePattern pat with (patJS, extrasJS) in
-      (cons patJS patts, concat extra extrasJS)
+      (cons patJS patts, concat extrasJS extra)
     ) ([], []) pats
 
 
