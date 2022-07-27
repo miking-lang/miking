@@ -27,12 +27,16 @@ mexpr
   else
 
   let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
-  match u with [ [head] ++ tail ] then
-    dprintLn head;
+  match u with [ [hd] ++ tl ] then
+    dprintLn hd;
+    dprintLn tl;
     4
-  else match u with [ [head, middle] ++ tail ] ++ rest then
-    dprintLn head;
-    dprintLn middle;
+  else match u with [ [hd, mdl] ++ tl, [last] ] ++ rest then
+    dprintLn hd;
+    dprintLn mdl;
+    dprintLn tl;
+    dprintLn last;
+    dprintLn rest;
     5
   else
     printLn "nothing";
