@@ -202,6 +202,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           intrinsicGen t args
       else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
   | CFlushStdout _ -> JSENop { }
+  | CExit _ -> JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
 
@@ -276,14 +277,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
 
   | TmLet { ident = ident, body = body, inexpr = e, info = info } ->
     match nameGetStr ident with [] then
-      match body with TmApp _ then
-        -- If identifier is the ignore identifier (_, or [])
-        -- Then inline the function call
-        flattenBlock (JSEBlock {
-          exprs = [compileMExpr ctx body],
-          ret = compileMExpr ctx e
-        })
-      else JSENop { } -- Ignore the expression
+      flattenBlock (JSEBlock {
+        exprs = [compileMExpr ctx body],
+        ret = compileMExpr ctx e
+      })
     else
       let expr = (match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
