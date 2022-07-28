@@ -26,6 +26,7 @@ lang PatJSCompile = PatJSCompileLang
   sem compileSinglePattern =
   | PatInt { val = val } -> (JSEInt { i = val }, [])
   | PatBool { val = val } -> (JSEBool { b = val }, [])
+  | PatChar { val = val } -> (JSEChar { c = val}, [])
   | PatNamed { ident = PName name } -> (JSEVar { id = name }, [])
   | PatNamed { ident = PWildcard () } -> (tmpIgnoreJS, [])
   | PatSeqTot { pats = patterns } ->
@@ -76,7 +77,7 @@ lang PatJSCompile = PatJSCompileLang
   sem compileBindingPattern : JSExpr -> Pat -> JSExpr
   sem compileBindingPattern (target: JSExpr) =
   | PatNamed    { ident = PWildcard () } -> JSEBool { b = true }
-  | (PatInt _ | PatBool _) & p ->
+  | (PatInt _ | PatBool _ | PatChar _) & p ->
     match compileSinglePattern p with (pat, []) in
     _binOp (JSOEq {}) [target, pat]
   | ( PatNamed { ident = PName _ }
