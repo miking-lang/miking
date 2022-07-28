@@ -4,7 +4,7 @@ include "common.mc"
 mexpr
 	let s = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] in
 
-  match s with [x, y, _] ++ mid ++ [_, z, _] then
+  (match s with [x, y, _] ++ mid ++ [_, z, _] then
     dprintLn x;
     dprintLn y;
     -- dprintLn mid; -- Should be [3, 4, 5, 6] BREAKS TESTS
@@ -24,20 +24,20 @@ mexpr
     dprintLn b;
     dprintLn c;
     3
-  else
+  else 4);
 
   let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
   match u with [ [hd] ++ tl ] then
     dprintLn hd;
     dprintLn tl;
-    4
+    5
   else match u with [ [hd, mdl] ++ tl, [last] ] ++ rest then
     dprintLn hd;
     dprintLn mdl;
     dprintLn tl;
     dprintLn last;
     dprintLn rest;
-    5
+    6
   else
     printLn "nothing";
-    6
+    7
