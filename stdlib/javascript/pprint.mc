@@ -27,8 +27,14 @@ let pprintEnvGetStr = lam env. lam id: Name.
 let joinAsStatements = lam indent. lam seq.
   concat (strJoin (concat ";" (pprintNewline indent)) seq) ";"
 
+
+let getNameStrDefault =  lam default: String.lam env. lam id: Name.
+  if null (nameGetStr id) then (env, default)
+  else pprintEnvGetStr env id
+
+
 --------------
--- KEYWORDs --
+-- KEYWORDS --
 --------------
 
 -- From Draft ECMA-262 / March 3, 2022 (https://tc39.es/ecma262/#sec-keywords-and-reserved-words)
@@ -61,12 +67,12 @@ lang JSPrettyPrint = JSExprAst
   sem printJSFunParams : PprintEnv -> Bool -> [Name] -> (PprintEnv, String)
   sem printJSFunParams env curried =
   | params ->
-    match mapAccumL (pprintEnvGetStr) env params with (env, params) in
     if curried then
-      -- Map over and replace empty params with "()"
-      let params = map (lam p. if null p then "()" else p) params in
+      match mapAccumL (getNameStrDefault "()") env params with (env, params) in
       (env, strJoin " => " params)
-    else (env, join ["(", strJoin ", " params, ")"])
+    else
+      match mapAccumL (getNameStrDefault "_") env params with (env, params) in
+      (env, join ["(", strJoin ", " params, ")"])
 
   sem printJSFunApp : PprintEnv -> Bool -> JSExpr -> [JSExpr] -> (PprintEnv, String)
   sem printJSFunApp env curried fun =
@@ -78,14 +84,14 @@ lang JSPrettyPrint = JSExprAst
 
 
   sem printJSExpr (indent : Int) (env: PprintEnv) =
-  | JSEVar { id = id } -> pprintEnvGetStr env id
+  | JSEVar { id = id } -> getNameStrDefault "_" env id
   | JSEApp { fun = fun, args = args, curried = curried } ->
     printJSFunApp env curried fun args
   | JSEMember { expr = expr, id = id } ->
     match (printJSExpr indent) env expr with (env,expr) in
     (env, join [expr, ".", id])
   | JSEDef { id = id, expr = expr } ->
-    match pprintEnvGetStr env id with (env,id) in
+    match getNameStrDefault "_" env id with (env,id) in
     match (printJSExpr indent env) expr with (env, str) in
     (env, join ["let ", id, " = ", str])
 
