@@ -8,7 +8,7 @@ include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
-include "javascript/operators.mc"
+include "javascript/util.mc"
 include "javascript/intrinsics.mc"
 include "javascript/optimizations.mc"
 
@@ -19,33 +19,6 @@ include "error.mc"
 include "name.mc"
 include "option.mc"
 include "string.mc"
-
-
-----------------------
--- HELPER FUNCTIONS --
-----------------------
-
--- Check for unit type
-let _isUnitTy = use RecordTypeAst in lam ty.
-  match ty with TyRecord { fields = fields } then mapIsEmpty fields
-  else false
-
-let _isCharSeq = use MExprAst in lam tms.
-    forAll (
-      lam c : Expr.
-        match c with TmConst { val = CChar _ } then true
-        else false
-    ) tms
-
--- First, always check if the terms are characters using _isCharSeq
-let _charSeq2String = use MExprAst in lam tms.
-    let toChar = lam expr.
-      match expr with TmConst { val = CChar { val = val } } then Some val
-      else None ()
-    in
-    optionMapM toChar tms -- String is a list of characters
-
--- TODO: Extract shared helper functions into a separate files
 
 
 

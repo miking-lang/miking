@@ -3,7 +3,7 @@ include "error.mc"
 include "stringid.mc"
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
-include "javascript/operators.mc"
+include "javascript/util.mc"
 
 
 lang PatJSCompileLang = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
