@@ -10,17 +10,32 @@ let _isUnitTy: Expr -> Bool = use RecordTypeAst in lam ty: Expr.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields else false
 
 let _isCharSeq: [Expr] -> Bool = use MExprAst in lam tms: [Expr].
-    forAll (
-      lam c : Expr.
-        match c with TmConst { val = CChar _ } then true else false
-    ) tms
+  forAll (
+    lam c : Expr.
+      match c with TmConst { val = CChar _ } then true else false
+  ) tms
 
 -- First, always check if the terms are characters using _isCharSeq
 let _charSeq2String: [Expr] -> String = use MExprAst in lam tms: [Expr].
-    let toChar = lam expr.
-      match expr with TmConst { val = CChar { val = val } } then Some val else None ()
-    in
-    optionMapM toChar tms -- String is a list of characters
+  let toChar = lam expr.
+    match expr with TmConst { val = CChar { val = val } } then Some val else None ()
+  in
+  optionMapM toChar tms -- String is a list of characters
+
+
+let _isCharPatSeq: [Pat] -> Bool = use MExprAst in lam pats: [Pat].
+  if null pats then false -- Empty list is not a char sequence
+  else forAll (
+    lam c : Pat.
+      match c with PatChar _ then true else false
+  ) pats
+
+-- First, always check if the terms are characters using _isCharPatSeq
+let _charPatSeq2String: [Pat] -> String = use MExprAst in lam pats: [Pat].
+  let toChar = lam pat.
+    match pat with PatChar { val = val } in val
+  in
+  map toChar pats -- String is a list of characters
 
 
 -------------------------------

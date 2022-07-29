@@ -81,13 +81,18 @@ lang PatJSCompile = PatJSCompileLang
     match compileSinglePattern p with (pat, []) in
     _binOp (JSOEq {}) [target, pat]
   | ( PatNamed { ident = PName _ }
-    | PatSeqTot  _
     | PatSeqEdge _
     | PatRecord  _
     ) & p ->
     match compileSinglePattern p with (pat, extra) in
-    let expr = _assign (pat) target in
-    _binOpM (JSOAnd {}) (cons expr extra)
+    _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra)
+  | PatSeqTot { pats = pats } & p ->
+    if _isCharPatSeq pats then
+      let str: String = _charPatSeq2String pats in
+     _binOp (JSOEq {}) [target, JSEString { s = str }]
+    else
+      match compileSinglePattern p with (pat, extra) in
+      _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra)
   | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
