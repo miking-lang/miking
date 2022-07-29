@@ -10,7 +10,8 @@ let _isUnitTy: Expr -> Bool = use RecordTypeAst in lam ty: Expr.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields else false
 
 let _isCharSeq: [Expr] -> Bool = use MExprAst in lam tms: [Expr].
-  forAll (
+  if null tms then false -- Empty list is not a char sequence
+  else forAll (
     lam c : Expr.
       match c with TmConst { val = CChar _ } then true else false
   ) tms
