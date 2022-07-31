@@ -6,7 +6,7 @@ include "javascript/ast.mc"
 ----------------------
 
 -- Check for unit type
-let _isUnitTy: Expr -> Bool = use RecordTypeAst in lam ty: Expr.
+let _isUnitTy: Type -> Bool = use RecordTypeAst in lam ty: Type.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields else false
 
 let _isCharSeq: [Expr] -> Bool = use MExprAst in lam tms: [Expr].
