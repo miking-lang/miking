@@ -22,15 +22,27 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   | CopyFromAccelerate ()
   | NoCopy ()
 
+  sem omitCopyTo : CopyStatus -> CopyStatus
   sem omitCopyTo =
   | CopyBoth _ -> CopyFromAccelerate ()
   | CopyToAccelerate _ -> NoCopy ()
   | status -> status
 
+  sem omitCopyFrom : CopyStatus -> CopyStatus
   sem omitCopyFrom =
   | CopyBoth _ -> CopyToAccelerate ()
   | CopyFromAccelerate _ -> NoCopy ()
   | status -> status
+
+  sem copyStatusTo : CopyStatus -> Bool
+  sem copyStatusTo =
+  | CopyBoth _ | CopyToAccelerate _ -> true
+  | _ -> false
+
+  sem copyStatusFrom : CopyStatus -> Bool
+  sem copyStatusFrom =
+  | CopyBoth _ | CopyFromAccelerate _ -> true
+  | _ -> false
 
   type AccelerateData = {
     identifier : Name,

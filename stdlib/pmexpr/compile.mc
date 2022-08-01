@@ -89,7 +89,7 @@ end
 -- future, it should define the entire compilation process.
 lang PMExprCompileWellFormedBase =
   PMExprCompileWellFormedInstrumentation + PMExprBuild + MExprLambdaLift +
-  PMExprExtractAccelerate + PMExprNestedAccelerate + PMExprCopyAnalysis +
+  PMExprExtractAccelerate + PMExprNestedAccelerate + PMExprTensorCopyAnalysis +
   PMExprClassify
 
   type WellFormedConfig = {

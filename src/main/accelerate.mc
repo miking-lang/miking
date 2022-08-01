@@ -38,7 +38,6 @@ include "pmexpr/build.mc"
 include "pmexpr/c-externals.mc"
 include "pmexpr/classify.mc"
 include "pmexpr/compile.mc"
-include "pmexpr/copy-analysis.mc"
 include "pmexpr/demote.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
@@ -61,8 +60,7 @@ lang PMExprCompile =
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +
-  OCamlGenerateExternalNaive + PMExprCopyAnalysis + PMExprBuild +
-  PMExprCompileWellFormed
+  OCamlGenerateExternalNaive + PMExprBuild + PMExprCompileWellFormed
 end
 
 lang MExprFutharkCompile =
