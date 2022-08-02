@@ -14,6 +14,7 @@ let _tensorIntervalDims = nameNoSym "dims"
 let _tensorIntervalNext = nameNoSym "next"
 let _tensorIntervalOmitCopyTo = nameNoSym "omitCopyTo"
 let _tensorIntervalOmitCopyFrom = nameNoSym "omitCopyFrom"
+let _tensorIntervalCudaElemType = nameNoSym "elementType"
 
 let _topTensorTypeId = nameNoSym "TTensor"
 let _topTensorId = nameNoSym "id"
@@ -23,6 +24,7 @@ let _topTensorSize = nameNoSym "size"
 let _topTensorPred = nameNoSym "pred"
 let _topTensorOmitCopyTo = nameNoSym "omitCopyTo"
 let _topTensorOmitCopyFrom = nameNoSym "omitCopyFrom"
+let _topTensorCudaElemType = nameNoSym "elementType"
 
 let _tensorHeadId = nameNoSym "head"
 let _tensorStartId = nameNoSym "start"
@@ -38,14 +40,14 @@ let _intervalCmpId = nameNoSym "cmp_interval_id"
 let _cudaErrorCheckStmt =
   use CudaAst in
   CSExpr {expr = CEApp {
-    fun = _GPU_UTILS_CHECK_CUDA_ERROR,
+    fun = _CUDA_UTILS_CHECK_CUDA_ERROR,
     args = []
   }}
 
 lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   syn CDataRepr =
   | CudaSeqRepr {ident : Name, data : CDataRepr, elemTy : CType, ty : CType}
-  | CudaTensorRepr {ident : Name, data : CDataRepr, elemTy : CType, elemOcamlTy : CType, ty : CType}
+  | CudaTensorRepr {ident : Name, data : CDataRepr, elemTy : CType, ty : CType}
   | CudaRecordRepr {ident : Name, labels : [SID], fields : [CDataRepr], ty : CType}
   | CudaDataTypeRepr {ident : Name, constrs : Map Name (CType, CDataRepr), ty : CType}
   | CudaBaseTypeRepr {ident : Name, ty : CType}
@@ -156,7 +158,6 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       ident = nameSym "cuda_tensor_tmp",
       data = _generateCDataRepresentation env t.ty,
       elemTy = getCudaType env.targetEnv t.ty,
-      elemOcamlTy = getOcamlTensorType env.targetEnv t.ty,
       ty = getCudaType env.targetEnv ty}
   | ty & (TyRecord t) ->
     match env.targetEnv with CudaTargetEnv cenv in
@@ -197,7 +198,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
   -- Applies an operation on all tensors contained in an expression of a given
   -- data representation.
   sem mapTensorsToStmts : CWrapperEnv
-                       -> (CWrapperEnv -> CExpr -> [CStmt])
+                       -> (CWrapperEnv -> CExpr -> CExpr -> [CStmt])
                        -> CExpr -> CDataRepr -> [CStmt]
   sem mapTensorsToStmts env tensorFn src =
   | CudaSeqRepr t ->
@@ -252,7 +253,14 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
               els = acc} ])
       [] t.constrs
   | CudaBaseTypeRepr _ -> []
-  | (CudaTensorRepr _) & repr -> tensorFn env src
+  | CudaTensorRepr t ->
+    let elemTypeId =
+      match t.elemTy with CTyInt64 _ | CTyDouble _ then 0
+      else match t.elemTy with CTyInt32 _ then 1
+      else match t.elemTy with CTyFloat _ then 2
+      else never in
+    let elemType = CEInt {i = elemTypeId} in
+    tensorFn env elemType src
 end
 
 lang CudaTensorWrapper = CudaCWrapperBase
@@ -272,7 +280,8 @@ lang CudaTensorWrapper = CudaCWrapperBase
         (CTyArray {ty = CTyInt64 (), size = Some dimsSize}, Some _tensorIntervalDims),
         (intervalSelfRef, Some _tensorIntervalNext),
         (CTyInt (), Some _tensorIntervalOmitCopyTo),
-        (CTyInt (), Some _tensorIntervalOmitCopyFrom)])} in
+        (CTyInt (), Some _tensorIntervalOmitCopyFrom),
+        (CTyInt (), Some _tensorIntervalCudaElemType)])} in
     let intervalDefTop = CuTTop {
       attrs = [],
       top = CTTyDef {ty = intervalType, id = _tensorIntervalTypeId}} in
@@ -333,7 +342,8 @@ lang CudaTensorWrapper = CudaCWrapperBase
         (CTyInt64 (), Some _topTensorSize),
         (topTensorSelfRef, Some _topTensorPred),
         (CTyInt (), Some _topTensorOmitCopyTo),
-        (CTyInt (), Some _topTensorOmitCopyFrom)])} in
+        (CTyInt (), Some _topTensorOmitCopyFrom),
+        (CTyInt (), Some _topTensorCudaElemType)])} in
     let topTensorDefTop = CuTTop {
       attrs = [],
       top = CTTyDef {ty = topTensorType, id = _topTensorTypeId}} in
@@ -348,7 +358,7 @@ lang CudaTensorWrapper = CudaCWrapperBase
         op = COAssign (), lhs = CEVar {id = id},
         rhs = CEBinOp {
           op = COAdd (), lhs = CEVar {id = id}, rhs = CEInt {i = 1}}}} in
-    let tensorFn = lam env. lam tensor.
+    let tensorFn = lam env. lam elemType. lam tensor.
       let tid = nameSym "t" in
       let t = CEVar {id = tid} in
       let intervalType = CTyVar {id = _tensorIntervalTypeId} in
@@ -452,13 +462,17 @@ lang CudaTensorWrapper = CudaCWrapperBase
         op = COAssign (),
         lhs = CEArrow {lhs = t, id = _tensorIntervalOmitCopyFrom},
         rhs = CEInt {i = if copyStatusFrom cs then 0 else 1}}} in
+      let intervalElementTypeStmt = CSExpr {expr = CEBinOp {
+        op = COAssign (),
+        lhs = CEArrow {lhs = t, id = _tensorIntervalCudaElemType},
+        rhs = elemType}} in
       let headUpdateStmt = CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEVar {id = _tensorHeadId}, rhs = t}} in
       [ intervalInitStmt, intervalIdStmt, tensorCountIncrement
       , intervalRankStmt, intervalBeginStmt, iterInitStmt, sizeInitStmt
       , dimLoopStmt, intervalEndStmt, headNextStmt, intervalOmitCopyToStmt
-      , intervalOmitCopyFromStmt, headUpdateStmt ]
+      , intervalOmitCopyFromStmt, intervalElementTypeStmt, headUpdateStmt ]
     in
     let src = CEVar {id = mid} in
     concat acc (mapTensorsToStmts env tensorFn src cdata)
@@ -643,6 +657,10 @@ lang CudaTensorWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = CEArrow {lhs = fst, id = _topTensorOmitCopyFrom},
       rhs = CEMember {lhs = firstIntervalExpr, id = _tensorIntervalOmitCopyFrom}}} in
+    let fstElemSizeStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEArrow {lhs = fst, id = _topTensorCudaElemType},
+      rhs = CEMember {lhs = firstIntervalExpr, id = _tensorIntervalCudaElemType}}} in
     let fstCondInitStmt = CSIf {
       cond = CEBinOp {
         op = COGt (),
@@ -650,7 +668,7 @@ lang CudaTensorWrapper = CudaCWrapperBase
         rhs = CEInt {i = 0}},
       thn = [ fstInitStmt, stackInitStmt, fstIdSetStmt, topMapSetStmt
             , incrementMainStmt, fstOCamlStmt, fstSizeStmt, fstPredStmt
-            , fstOmitCopyToStmt, fstOmitCopyFromStmt ],
+            , fstOmitCopyToStmt, fstOmitCopyFromStmt, fstElemSizeStmt ],
       els = []} in
     let iterId = nameSym "i" in
     let iter = CEVar {id = iterId} in
@@ -758,6 +776,10 @@ lang CudaTensorWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = CEArrow {lhs = next, id = _topTensorOmitCopyFrom},
       rhs = CEInt {i = 1}}} in
+    let nextElementTypeStmt = CSExpr {expr = CEBinOp {
+      op = COAssign (),
+      lhs = CEArrow {lhs = next, id = _topTensorCudaElemType},
+      rhs = CEMember {lhs = intervalExpr, id = _tensorIntervalCudaElemType}}} in
     let stackUpdateStmt = CSExpr {expr = CEBinOp {
       op = COAssign (), lhs = stack, rhs = next}} in
     let condStmt = CSIf {
@@ -765,7 +787,7 @@ lang CudaTensorWrapper = CudaCWrapperBase
       thn = [thnTopMapUpdateStmt, maxIfStmt],
       els = [ nextInitStmt, nextIdStmt, elsTopMapUpdateStmt, mainIncrementStmt
             , nextOCamlStmt, nextSizeStmt, nextPredStmt, nextOmitCopyToStmt
-            , nextOmitCopyFromStmt, stackUpdateStmt ]} in
+            , nextOmitCopyFromStmt, nextElementTypeStmt, stackUpdateStmt ]} in
     let updateTopOmitCopyToStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = CEArrow {lhs = stack, id = _topTensorOmitCopyTo},
@@ -848,24 +870,25 @@ lang CudaTensorWrapper = CudaCWrapperBase
     let iterInitStmt = CSDef {
       ty = CTyInt64 (), id = Some iterId,
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
-    let currTensorExpr = CEBinOp {
+    let next = CEBinOp {
       op = COSubScript (), lhs = CEVar {id = _tensorTopsId}, rhs = iter} in
-    let accessField = lam id. CEMember {lhs = currTensorExpr, id = id} in
+    let accessField = lam id. CEMember {lhs = next, id = id} in
     let addrOfCudaData = CEUnOp {
       op = COAddrOf (), arg = accessField _topTensorCuda} in
     let mallocManagedStmt = CSExpr {expr = CEApp {
       fun = _cudaMallocManaged,
       args = [addrOfCudaData, accessField _topTensorSize]}} in
+    let memcpyStmt = CSExpr {expr = CEApp {
+      fun = _CUDA_UTILS_COPY_OCAML_CUDA,
+      args = [
+        accessField _topTensorOCaml,
+        accessField _topTensorCuda,
+        accessField _topTensorSize,
+        accessField _topTensorCudaElemType]}} in
     let copyCondition = CEBinOp {
       op = COEq (),
-      lhs = CEMember {lhs = currTensorExpr, id = _topTensorOmitCopyTo},
+      lhs = accessField _topTensorOmitCopyTo,
       rhs = CEInt {i = 0}} in
-    let memcpyStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        accessField _topTensorCuda, accessField _topTensorOCaml,
-        accessField _topTensorSize,
-        CEVar {id = _cudaMemcpyHostToDevice}]}} in
     let condMemcpyStmt = CSIf {
       cond = copyCondition,
       thn = [memcpyStmt, _cudaErrorCheckStmt],
@@ -899,24 +922,25 @@ lang CudaTensorWrapper = CudaCWrapperBase
       init = Some (CIExpr {expr = CEInt {i = 0}})} in
     let next = CEBinOp {
       op = COSubScript (), lhs = CEVar {id = _tensorTopsId}, rhs = iter} in
+    let accessField = lam id. CEMember {lhs = next, id = id} in
     let copyCondition = CEBinOp {
       op = COEq (),
-      lhs = CEMember {lhs = next, id = _topTensorOmitCopyFrom},
+      lhs = accessField _topTensorOmitCopyFrom,
       rhs = CEInt {i = 0}} in
     let memcpyStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
+      fun = _CUDA_UTILS_COPY_CUDA_OCAML,
       args = [
-        CEMember {lhs = next, id = _topTensorOCaml},
-        CEMember {lhs = next, id = _topTensorCuda},
-        CEMember {lhs = next, id = _topTensorSize},
-        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+        accessField _topTensorCuda,
+        accessField _topTensorOCaml,
+        accessField _topTensorSize,
+        accessField _topTensorCudaElemType]}} in
     let condMemcpyStmt = CSIf {
       cond = copyCondition,
       thn = [memcpyStmt, _cudaErrorCheckStmt],
       els = []} in
     let freeStmt = CSExpr {expr = CEApp {
       fun = _cudaFree,
-      args = [CEMember {lhs = next, id = _topTensorCuda}]}} in
+      args = [accessField _topTensorCuda]}} in
     let iterIncrementStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
       lhs = iter,
@@ -1074,7 +1098,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       op = COAssign (),
       lhs = _accessMember t.ty dst _tensorDataKey,
       rhs = CECast {
-        ty = CTyPtr {ty = t.elemOcamlTy},
+        ty = CTyPtr {ty = t.elemTy},
         rhs = CEBinOp {
           op = COAdd (),
           lhs = CECast {

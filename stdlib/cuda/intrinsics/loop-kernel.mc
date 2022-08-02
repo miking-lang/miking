@@ -98,7 +98,7 @@ lang CudaLoopKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
       blockSize = CEVar {id = tpbId},
       args = cons t.n args}} in
     let errorCheckStmt = CSExpr {expr = CEApp {
-        fun = _GPU_UTILS_CHECK_CUDA_ERROR,
+        fun = _CUDA_UTILS_CHECK_CUDA_ERROR,
         args = []
       }} in
     let deviceSynchronizeStmt = CSExpr {expr = CEApp {

@@ -1,6 +1,6 @@
 include "c/compile.mc"
 include "c/pprint.mc"
-include "cuda/gpu-utils.mc"
+include "cuda/cuda-utils.mc"
 include "cuda/pprint.mc"
 include "futhark/pprint.mc"
 include "pmexpr/classify.mc"
@@ -177,7 +177,7 @@ lang PMExprBuild = PMExprBuildConfig + PMExprBuildPrint
     concat
       files
       [ (concat cudaCodeName ".cu", _pprintCudaAst cudaAst)
-      , ("cuda-utils.cuh", gpuUtilsCode) ]
+      , ("cuda-utils.cuh", cudaUtilsCode) ]
 
   sem addFileData : PMExprBuildOptions -> BuildConfig -> [(String, String)]
   sem addFileData options =
