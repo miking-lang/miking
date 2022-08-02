@@ -33,7 +33,7 @@ lang PatJSCompile = PatJSCompileLang
     match safeMapSinglePattern patterns with (elems, extra) in
     (JSEArray { exprs = elems }, extra)
   | PatRecord { bindings = bindings } -> match foldr (
-      lam field: (SID, Pat). lam acc: ([(SID, JSExpr)], [JSExpr]).
+      lam field: (SID, Pat). lam acc: ([(String, JSExpr)], [JSExpr]).
       match acc with (patts, extra) in
       match field with (sid, pat) in
       match safeCompileSinglePattern pat with (patExpr, patExtras) in
@@ -101,7 +101,7 @@ lang PatJSCompile = PatJSCompileLang
     match compileSinglePattern (PatNamed { ident = middle, ty = ty, info = info }) with (middleExpr, []) in
     match safeMapSinglePattern postfix with (postfixExprs, postfixExtra) in
     let exprs: [JSExpr] = switch (hasPrefix, hasMiddle, hasPostfix)
-      case (false, false, false) then middleExpr
+      case (false, false, false) then [] -- Should never happen
       case (true, false, false) then
         [_assign (JSEArray { exprs = prefixExprs }) target]
       case (true, true, false) then
