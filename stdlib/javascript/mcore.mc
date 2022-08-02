@@ -8,12 +8,15 @@ let platformMapJS = mapFromSeq cmpString
   ,("node", CompileJSTP_Node ())
   ,("web", CompileJSTP_Web ())]
 
-let compileMCoreToJS : String -> Expr -> String -> String =
-  lam target. lam ast. lam sourcePath.
+let compileMCoreToJS : CompileJSOptions -> Expr -> String -> String =
+  lam opts. lam ast. lam sourcePath.
+  let outfile = javascriptCompileFile opts ast sourcePath in
+  printLn (concat "Successfully compiled file to: " outfile);
+  outfile
+
+
+let parseJSTarget : String -> CompileJSTargetPlatform =
+  lam target.
   match mapLookup target platformMapJS with Some p then
-    printLn (concat "Target JavaScript platform: " target);
-    let outfile = javascriptCompileFile { compileJSOptionsEmpty with targetPlatform = p } ast sourcePath in
-    printLn (concat "Successfully compiled file to: " outfile);
-    outfile
-  else
-    error (join ["Invalid value for --js-target: '", target, "'\nAccepted values: ", strJoin ", " (mapKeys platformMapJS)])
+    printLn (concat "Target JavaScript platform: " target); p
+  else error (join ["Invalid value for --js-target: '", target, "'\nAccepted values: ", strJoin ", " (mapKeys platformMapJS)])

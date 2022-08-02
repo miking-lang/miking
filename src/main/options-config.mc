@@ -93,6 +93,10 @@ let optionsConfig : ParseConfig Options = [
     "Specific JavaScript runtime to target, defaults to generic",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with jsTarget = argToString p}),
+  ([("--disable-js-optimizations", "", "")],
+    "Disable JavaScript optimizations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableJsOptimizations = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

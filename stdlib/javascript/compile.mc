@@ -32,12 +32,14 @@ con CompileJSTP_Node   : () -> CompileJSTargetPlatform
 -- JS Compiler options
 type CompileJSOptions = {
   targetPlatform : CompileJSTargetPlatform,
-  debugMode : Bool
+  debugMode : Bool,
+  optimizations : Bool
 }
 
 let compileJSOptionsEmpty : CompileJSOptions = {
   targetPlatform = CompileJSTP_Normal (),
-  debugMode = false
+  debugMode = false,
+  optimizations = true
 }
 
 type CompileJSContext = {
@@ -287,14 +289,17 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmConDef { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target: JSExpr = (compileMExpr ctx) target in
-    let pat: JSExpr = optimizePattern3 (compileBindingPattern target pat) in
+    let pat: JSExpr = compileBindingPattern target pat in
+    let pat = if ctx.options.optimizations then optimizePattern3 pat else pat in
     let thn = (compileMExpr ctx) thn in
     let els = (compileMExpr ctx) els in
-    optimizeConditionalBranch (JSETernary {
+    let expr: JSExpr = JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
-    })
+    } in
+    let expr = if ctx.options.optimizations then optimizeConditionalBranch expr else expr in
+    expr
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }
