@@ -17,7 +17,7 @@ let _isCharSeq: [Expr] -> Bool = use MExprAst in lam tms: [Expr].
   ) tms
 
 -- First, always check if the terms are characters using _isCharSeq
-let _charSeq2String: [Expr] -> String = use MExprAst in lam tms: [Expr].
+let _charSeq2String: [Expr] -> Option String = use MExprAst in lam tms: [Expr].
   let toChar = lam expr.
     match expr with TmConst { val = CChar { val = val } } then Some val else None ()
   in
