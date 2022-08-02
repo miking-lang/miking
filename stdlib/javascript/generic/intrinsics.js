@@ -14,7 +14,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   neg: val => -val,
 
   // Built-in MExpr
-  print: msg => console.log(MExpr_JS_Intrinsics.ensureString(MExpr_JS_Intrinsics.trimLastNewline(msg))),
+  print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(MExpr_JS_Intrinsics.ensureString(msg))),
   dprint: val => console.log(val),
   length: lst => lst.length,
   head: lst => lst[0],
@@ -31,7 +31,8 @@ const MExpr_JS_Intrinsics = Object.freeze({
 
   // Helper Functions
   trimLastNewline: lst => lst[lst.length - 1] === '\n' ? lst.slice(0, -1) : lst,
-  ensureString: s => Array.isArray(s) ? s.join('') : s.toString(),
+  ensureString: s => Array.isArray(s) ? s.map(MExpr_JS_Intrinsics.stringify).join('') : s.toString(),
+  stringify: val => typeof val === "object" ? JSON.stringify(val) : val.toString(),
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),

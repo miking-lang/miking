@@ -8,7 +8,7 @@ include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
-include "javascript/operators.mc"
+include "javascript/util.mc"
 include "javascript/intrinsics.mc"
 include "javascript/optimizations.mc"
 
@@ -19,33 +19,6 @@ include "error.mc"
 include "name.mc"
 include "option.mc"
 include "string.mc"
-
-
-----------------------
--- HELPER FUNCTIONS --
-----------------------
-
--- Check for unit type
-let _isUnitTy = use RecordTypeAst in lam ty.
-  match ty with TyRecord { fields = fields } then mapIsEmpty fields
-  else false
-
-let _isCharSeq = use MExprAst in lam tms.
-    forAll (
-      lam c : Expr.
-        match c with TmConst { val = CChar _ } then true
-        else false
-    ) tms
-
--- First, always check if the terms are characters using _isCharSeq
-let _charSeq2String = use MExprAst in lam tms.
-    let toChar = lam expr.
-      match expr with TmConst { val = CChar { val = val } } then Some val
-      else None ()
-    in
-    optionMapM toChar tms -- String is a list of characters
-
--- TODO: Extract shared helper functions into a separate files
 
 
 
@@ -186,8 +159,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else -- Warning about inconsistent behaviour
-      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc") (isFuncInModule ctx "printLn" "internal")) then
-        printLn (concat (info2str info)
+      (if not (or (isFuncInModule ctx "printLn" "stdlib/common.mc")
+              (or (isFuncInModule ctx "printLn" "internal")
+                  (isFuncInModule ctx "utestTestPassed" "internal")))
+      then printLn (concat (info2str info)
           "WARNING: 'print' might have unexpected behaviour when targeting the web or a generic JS runtime")
       else ());
         intrinsicGen t args
@@ -200,6 +175,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           intrinsicGen t args
       else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
   | CFlushStdout _ -> JSENop { }
+  | CExit _ -> JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
 
@@ -274,14 +250,10 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
 
   | TmLet { ident = ident, body = body, inexpr = e, info = info } ->
     match nameGetStr ident with [] then
-      match body with TmApp _ then
-        -- If identifier is the ignore identifier (_, or [])
-        -- Then inline the function call
-        flattenBlock (JSEBlock {
-          exprs = [compileMExpr ctx body],
-          ret = compileMExpr ctx e
-        })
-      else JSENop { } -- Ignore the expression
+      flattenBlock (JSEBlock {
+        exprs = [compileMExpr ctx body],
+        ret = compileMExpr ctx e
+      })
     else
       let expr = (match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
