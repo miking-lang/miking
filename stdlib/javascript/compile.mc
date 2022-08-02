@@ -86,7 +86,7 @@ let isFuncInModule : CompileJSContext -> String -> String -> Bool =
 -------------------------------------------
 
 lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
-                      JSOptimizeBlocks + JSOptimizeTailCalls + JSOptimizePatterns +
+                      JSOptimizeBlocks + JSOptimizeTailCalls +
                       JSOptimizeExprs + JSIntrinsic
 
   -- Entry point
@@ -288,18 +288,16 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmConApp _ & t -> errorSingle [infoTm t] "Constructor application in compileMExpr."
   | TmConDef { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type constructor definitions)
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
-    let target: JSExpr = (compileMExpr ctx) target in
-    let pat: JSExpr = compileBindingPattern target pat in
-    let pat = if ctx.options.optimizations then optimizePattern3 pat else pat in
+    let target = (compileMExpr ctx) target in
+    let pat = compileBindingPattern target pat in
     let thn = (compileMExpr ctx) thn in
     let els = (compileMExpr ctx) els in
-    let expr: JSExpr = JSETernary {
+    let expr = JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     } in
-    let expr = if ctx.options.optimizations then optimizeConditionalBranch expr else expr in
-    expr
+    if ctx.options.optimizations then optimizeExpr3 expr else expr
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> JSENop { }

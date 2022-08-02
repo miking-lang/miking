@@ -160,36 +160,27 @@ end
 
 
 
--- Pattern Matching Optimizations
-lang JSOptimizePatterns = JSExprAst
+lang JSOptimizeExprs = JSExprAst
 
-  sem optimizePattern : JSExpr -> JSExpr
-  sem optimizePattern =
+  sem optimizeExpr3 : JSExpr -> JSExpr
+  sem optimizeExpr3 =
+  | expr -> optimizeExpr (optimizeExpr (optimizeExpr expr))
+
+  sem optimizeExpr : JSExpr -> JSExpr
+  sem optimizeExpr =
   | JSEBinOp { op = JSOEq  {}, lhs = lhs, rhs = rhs } & p -- Same as and
   | JSEBinOp { op = JSOAnd {}, lhs = lhs, rhs = rhs } & p ->
-    match lhs with JSEBool { b = true } then optimizePattern rhs else
-    match rhs with JSEBool { b = true } then optimizePattern lhs else p
+    match lhs with JSEBool { b = true } then optimizeExpr rhs else
+    match rhs with JSEBool { b = true } then optimizeExpr lhs else p
+
   | JSEBinOp { op = JSOOr {}, lhs = lhs, rhs = rhs } & p ->
-    match lhs with JSEBool { b = false } then optimizePattern rhs else
-    match rhs with JSEBool { b = false } then optimizePattern lhs else p
-  | e -> e
+    match lhs with JSEBool { b = false } then optimizeExpr rhs else
+    match rhs with JSEBool { b = false } then optimizeExpr lhs else p
 
-  sem optimizePattern3 : JSExpr -> JSExpr
-  sem optimizePattern3 =
-  | expr -> optimizePattern (optimizePattern (optimizePattern expr))
-
-end
-
-
-
-lang JSOptimizeExprs = JSExprAst + JSOptimizePatterns
-
-  sem optimizeConditionalBranch : JSExpr -> JSExpr
-  sem optimizeConditionalBranch =
   | JSETernary { cond = cond, thn = thn, els = els } ->
-    let cond = optimizePattern cond in
-    let thn = optimizeConditionalBranch thn in
-    let els = optimizeConditionalBranch els in
+    let cond = optimizeExpr cond in
+    let thn = optimizeExpr thn in
+    let els = optimizeExpr els in
     match cond with JSEBool { b = true } then thn else
     match cond with JSEBool { b = false } then els else
     -- If the then branch is a boolean, optimize it
@@ -202,6 +193,7 @@ lang JSOptimizeExprs = JSExprAst + JSOptimizePatterns
     else match (thn, els) with (JSEBool { b = false }, JSEBool { b = true }) then
       JSEUnOp { op = JSONot {}, rhs = cond }
     else JSETernary { cond = cond, thn = thn, els = els }
-  | p -> p
+
+  | e -> e
 
 end
