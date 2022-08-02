@@ -223,13 +223,15 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       [iterInitStmt, loopStmt]
   | CudaRecordRepr t ->
     foldl
-      (lam acc. lam field : (SID, CDataRepr).
-        match field with (key, fieldRepr) in
+      (lam acc. lam field : (SID, (Int, CDataRepr)).
+        match field with (key, (idx, fieldRepr)) in
         let fieldId = nameNoSym (sidToString key) in
-        let innerSrc = _accessMember t.ty src fieldId in
+        let innerSrc = CEApp {
+          fun = _getIdentExn "Field",
+          args = [src, CEInt {i = idx}]} in
         let stmts = mapTensorsToStmts env tensorFn innerSrc fieldRepr in
         concat acc stmts)
-      [] (zip t.labels t.fields)
+      [] (zip t.labels (create (length t.fields) (lam i. (i, get t.fields i))))
   | CudaDataTypeRepr t ->
     let counter = ref 0 in
     mapFoldWithKey
