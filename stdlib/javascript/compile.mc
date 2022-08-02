@@ -90,7 +90,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
                       JSOptimizeExprs + JSIntrinsic
 
   -- Entry point
-  sem compileProg (ctx: CompileJSContext) =
+  sem compileProg : CompileJSContext -> Expr -> JSProg
+  sem compileProg ctx =
   | prog ->
     -- Run compiler
     match compileMExpr ctx prog with expr in
@@ -110,7 +111,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
-  sem compileJSOp (info: Info) (ctx: CompileJSContext) (args: [JSExpr]) =
+  sem compileJSOp : Info -> CompileJSContext -> [JSExpr] -> Const -> JSExpr
+  sem compileJSOp info ctx args =
   -- Binary operators
   | CAddi _ & t
   | CAddf _ & t -> optimizedIntrinsicGenStr t "add" args (_binOp (JSOAdd {}))
@@ -194,7 +196,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -----------------
   -- EXPRESSIONS --
   -----------------
-  sem compileMExpr (ctx: CompileJSContext) =
+  sem compileMExpr : CompileJSContext -> Expr -> JSExpr
+  sem compileMExpr ctx =
   | TmVar { ident = id } -> JSEVar { id = id }
   | TmApp { info = info } & app ->
     match foldApp [] app with (fun, args) in

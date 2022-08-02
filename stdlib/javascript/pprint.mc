@@ -57,8 +57,8 @@ let jsKeywords = [
 -------------------------------------------
 lang JSPrettyPrint = JSExprAst
 
-
-  sem printJSExprs (indent: Int) (env: PprintEnv) =
+  sem printJSExprs : Int -> PprintEnv -> [JSExpr] -> (PprintEnv, String)
+  sem printJSExprs indent env =
   | exprs ->
     match mapAccumL (printJSExpr indent) env exprs with (env, exprs) in
     (env, strJoin (pprintNewline indent) exprs)
@@ -82,8 +82,8 @@ lang JSPrettyPrint = JSExprAst
     let sep = if curried then strJoin ")(" else strJoin ", " in
     (env, join [fun, "(", sep args, ")"])
 
-
-  sem printJSExpr (indent : Int) (env: PprintEnv) =
+  sem printJSExpr : Int -> PprintEnv -> JSExpr -> (PprintEnv, String)
+  sem printJSExpr indent env =
   | JSEVar { id = id } -> getNameStrDefault "_" env id
   | JSEApp { fun = fun, args = args, curried = curried } ->
     printJSFunApp env curried fun args
@@ -160,7 +160,8 @@ lang JSPrettyPrint = JSExprAst
     (env, join ["return ", expr])
   | JSENop _ -> (env, "")
 
-  sem printJSBinOp (lhs: String) (rhs: String) =
+  sem printJSBinOp : String -> String -> JSBinOp -> String
+  sem printJSBinOp lhs rhs =
   | JSOAssign    {} -> join [lhs, " = ", rhs]
   | JSOSubScript {} -> join [lhs, "[", rhs, "]"]
   | JSOAdd       {} -> join [lhs, " + ", rhs]
@@ -177,7 +178,8 @@ lang JSPrettyPrint = JSExprAst
   | JSOOr        {} -> join [lhs, " || ", rhs]
   | JSOAnd       {} -> join [lhs, " && ", rhs]
 
-  sem printJSUnOp (arg: String) =
+  sem printJSUnOp : String -> JSUnOp -> String
+  sem printJSUnOp arg =
   | JSONeg       {} -> join ["-", arg]
   | JSONot       {} -> join ["!", arg]
   | JSOSpread    {} -> join ["...", arg]
@@ -191,6 +193,7 @@ end
 ------------------------
 lang JSProgPrettyPrint = JSProgAst + JSPrettyPrint
 
+  sem printJSProg : JSProg -> String
   sem printJSProg =
   | JSPProg { imports = imports, exprs = exprs } ->
     let indent = 0 in
