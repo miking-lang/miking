@@ -188,7 +188,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     match env.targetEnv with CudaTargetEnv cenv in
     let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
     match ty with TyCon _ then errorSingle [infoTy ty] "Could not unwrap type"
-    else  _generateCDataRepresentation env ty
+    else _generateCDataRepresentation env ty
   | ty ->
     CudaBaseTypeRepr {
       ident = nameSym "cuda_tmp",
@@ -1263,26 +1263,7 @@ lang CudaToOCamlWrapper = CudaCWrapperBase
       body = snoc fieldStoreStmts iterIncrementStmt} in
     [seqAllocStmt, iterInitStmt, storeLoopStmt]
   | CudaTensorRepr t ->
-    let bigarrayKind =
-      match t.elemTy with CTyInt _ | CTyInt64 _ then
-        CEVar {id = _getIdentExn "CAML_BA_CAML_INT"}
-      else match t.elemTy with CTyFloat _ | CTyDouble _ then
-        CEVar {id = _getIdentExn "CAML_BA_FLOAT64"}
-      else never in
-    let bigarrayLayoutKind = CEBinOp {
-      op = COBOr (),
-      lhs = bigarrayKind,
-      rhs = CEVar {id = _getIdentExn "CAML_BA_C_LAYOUT"}} in
-    let rankExpr = _accessMember t.ty src _tensorRankKey in
-    let dataExpr = _accessMember t.ty src _tensorDataKey in
-    let dimsExpr = _accessMember t.ty src _tensorDimsKey in
-    let allocTensorStmt = CSExpr {expr = CEBinOp {
-      op = COAssign (),
-      lhs = dst,
-      rhs = CEApp {
-        fun = _getIdentExn "caml_ba_alloc",
-        args = [bigarrayLayoutKind, rankExpr, dataExpr, dimsExpr]}}} in
-    [allocTensorStmt]
+    error "Tensors cannot be returned from accelerated code"
   | CudaRecordRepr t ->
     if null t.fields then []
     else

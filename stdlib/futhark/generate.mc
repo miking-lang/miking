@@ -472,11 +472,14 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
   | TmLet t ->
     recursive let findReturnType = lam params. lam ty : Type.
       if null params then ty
-      else match ty with TyArrow t then
-        findReturnType (tail params) t.to
       else
-        errorSingle [t.info] (join ["Function takes more parameters than ",
-                                    "specified in return type"])
+        match ty with TyAll t then
+          findReturnType params t.ty
+        else match ty with TyArrow t then
+          findReturnType (tail params) t.to
+        else
+          errorSingle [t.info] (join ["Function takes more parameters than ",
+                                      "specified in return type"])
     in
     let decl =
       match _collectParams env t.body with (params, typeParams, body) in

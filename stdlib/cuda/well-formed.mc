@@ -17,6 +17,7 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | CudaAppResultTypeError Expr
   | CudaFunctionDefError Expr
   | CudaFunctionInMatch Expr
+  | CudaHigherOrderArgument Expr
 
   sem wellFormednessBackendName =
   | () -> "CUDA"
@@ -39,6 +40,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
                        "using one lambda per parameter"])
   | CudaFunctionInMatch e ->
     (infoTm e, join ["Result of conditional expression cannot be a function"])
+  | CudaHigherOrderArgument e ->
+    (infoTm e, join ["Unsupported higher-order argument"])
 
   sem cudaWellFormedExpr : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExpr acc =
@@ -46,23 +49,25 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedType acc (tyTm e) in
     cudaWellFormedExprH acc e
 
+  sem _cudaCheckApp : [WFError] -> Expr -> [WFError]
+  sem _cudaCheckApp acc =
+  | TmApp t ->
+    let acc = cudaWellFormedExpr acc t.rhs in
+    let acc =
+      match tyTm t.rhs with TyArrow _ then
+        cons (CudaAppArgTypeError t.rhs) acc
+      else acc in
+    _cudaCheckApp acc t.lhs
+  | e -> cudaWellFormedExpr acc e
+
   sem cudaWellFormedExprH : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExprH acc =
   | TmVar t -> acc
   | (TmApp t) & app ->
-    recursive let checkApp = lam acc. lam e.
-      match e with TmApp t then
-        let acc = cudaWellFormedExpr acc t.rhs in
-        let acc =
-          match tyTm t.rhs with TyArrow _ then
-            cons (CudaAppArgTypeError t.rhs) acc
-          else acc in
-        checkApp acc t.lhs
-      else cudaWellFormedExpr acc e in
     let acc =
       match t.ty with TyArrow _ then cons (CudaAppResultTypeError app) acc
       else acc in
-    checkApp acc app
+    _cudaCheckApp acc app
   | TmLam t -> cudaWellFormedExpr acc t.body
   | TmLet t ->
     let acc =
@@ -104,7 +109,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     cudaWellFormedExpr acc t.inexpr
   | TmSeqFoldl t ->
     let acc = cudaWellFormedExpr acc t.acc in
-    cudaWellFormedExpr acc t.s
+    let acc = cudaWellFormedExpr acc t.s in
+    cudaWellFormedHigherOrder acc t.f
   | TmTensorSliceExn t ->
     let acc = cudaWellFormedExpr acc t.t in
     cudaWellFormedExpr acc t.slice
@@ -113,15 +119,25 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedExpr acc t.ofs in
     cudaWellFormedExpr acc t.len
   | TmLoop t | TmParallelLoop t ->
-    -- TODO(larshum, 2022-07-15): Need to update the handling of higher-order
-    -- function arguments. Currently we cannot apply well-formedness checks on
-    -- the iteration function, as they are special-cased to make them work.
-    cudaWellFormedExpr acc t.n
+    let acc = cudaWellFormedExpr acc t.n in
+    cudaWellFormedHigherOrder acc t.f
   | TmLoopAcc t ->
     let acc = cudaWellFormedExpr acc t.ne in
-    cudaWellFormedExpr acc t.n
+    let acc = cudaWellFormedExpr acc t.n in
+    cudaWellFormedHigherOrder acc t.f
   | TmPrintFloat t -> acc
   | expr -> cons (CudaExprError expr) acc
+
+  sem cudaWellFormedHigherOrder : [WFError] -> Expr -> [WFError]
+  sem cudaWellFormedHigherOrder acc =
+  | TmVar t -> acc
+  | app & (TmApp _) -> _cudaCheckApp acc app
+  | TmLet (t & {inexpr = TmVar {ident = id}}) ->
+    if nameEq t.ident id then
+      cudaWellFormedHigherOrder acc t.body
+    else cons (CudaHigherOrderArgument (TmLet t)) acc
+  | lambda & (TmLam _) -> cudaWellFormedExpr acc lambda
+  | t -> cons (CudaHigherOrderArgument t) acc
 
   sem cudaWellFormedType : [WFError] -> Type -> [WFError]
   sem cudaWellFormedType acc =
