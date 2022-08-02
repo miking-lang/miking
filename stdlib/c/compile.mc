@@ -553,7 +553,13 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     } in
     cons def acc
   | TyTensor { ty = ty } ->
-    let ty = compileType env ty in
+    -- NOTE(larshum, 2022-08-02): The underlying tensor data is always stored
+    -- in 64-bit data types, as that is used by the OCaml tensors. When we read
+    -- the data we can treat it as float values.
+    let ty =
+      match ty with TyInt _ then CTyInt64 ()
+      else match ty with TyFloat _ then CTyDouble ()
+      else error "Unsupported tensor type" in
     let dimsType = TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()} in
     let maxRank = env.options.tensorMaxRank in
     let fields = [
