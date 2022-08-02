@@ -168,7 +168,11 @@ lang JSOptimizeExprs = JSExprAst
 
   sem optimizeExpr : JSExpr -> JSExpr
   sem optimizeExpr =
-  | JSEBinOp { op = JSOEq  {}, lhs = lhs, rhs = rhs } & p -- Same as and
+  | JSEBinOp { op = JSOEq  {}, lhs = lhs, rhs = rhs } & p ->
+    match lhs with JSEBool { b = true } then optimizeExpr rhs else
+    match rhs with JSEBool { b = true } then optimizeExpr lhs else
+    match lhs with JSEBool { b = false } then JSEUnOp { op = JSONot {}, rhs = optimizeExpr rhs } else
+    match rhs with JSEBool { b = false } then JSEUnOp { op = JSONot {}, rhs = optimizeExpr lhs } else p
   | JSEBinOp { op = JSOAnd {}, lhs = lhs, rhs = rhs } & p ->
     match lhs with JSEBool { b = true } then optimizeExpr rhs else
     match rhs with JSEBool { b = true } then optimizeExpr lhs else p
@@ -194,6 +198,6 @@ lang JSOptimizeExprs = JSExprAst
       JSEUnOp { op = JSONot {}, rhs = cond }
     else JSETernary { cond = cond, thn = thn, els = els }
 
-  | e -> e
+  | e -> smapJSExprJSExpr optimizeExpr e
 
 end

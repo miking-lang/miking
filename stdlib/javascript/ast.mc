@@ -52,6 +52,22 @@ lang JSExprAst
   | JSONot       {} -- !arg
   | JSOSpread    {} -- ...arg
 
+  sem smapJSExprJSExpr : (JSExpr -> JSExpr) -> JSExpr -> JSExpr
+  sem smapJSExprJSExpr f =
+  | JSEDef { id = id, expr = expr } -> JSEDef { id = id, expr = f expr }
+  | JSEApp { fun = fun, args = args, curried = curried } -> JSEApp { fun = f fun, args = map f args, curried = curried }
+  | JSEFun { params = params, body = body } -> JSEFun { params = params, body = f body }
+  | JSEMember { expr = expr, id = id } -> JSEMember { expr = f expr, id = id }
+  | JSETernary { cond = cond, thn = thn, els = els } -> JSETernary { cond = f cond, thn = f thn, els = f els }
+  | JSEBinOp { op = op, lhs = lhs, rhs = rhs } -> JSEBinOp { op = op, lhs = f lhs, rhs = f rhs }
+  | JSEUnOp { op = op, rhs = rhs } -> JSEUnOp { op = op, rhs = f rhs }
+  | JSEArray { exprs = exprs } -> JSEArray { exprs = map f exprs }
+  | JSEObject { fields = fields } -> JSEObject { fields = map (lam p. match p with (id, expr) in (id, f expr) ) fields }
+  | JSEIIFE { body = body } -> JSEIIFE { body = f body }
+  | JSEBlock { exprs = exprs, ret = ret } -> JSEBlock { exprs = map f exprs, ret = f ret }
+  | JSEReturn { expr = expr } -> JSEReturn { expr = f expr }
+  | e -> e
+
 end
 
 --------------------------------------
