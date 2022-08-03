@@ -36,5 +36,12 @@ const MExpr_JS_Intrinsics = Object.freeze({
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
-  trampoline: val => { while(val.isTrampolineCapture) val = val.args.reduce((acc, arg) => acc(arg), val.fun); return val; }
+  trampolineValue: val => { while(val.isTrampolineCapture) val = val.args.reduce((acc, arg) => acc(arg), val.fun); return val; },
+  trampolineFunc: funcName => func => {
+    const rectName = "_rec_" + funcName;
+    const body = func.toString().replaceAll(funcName, rectName);
+    const args = body.substring(0, body.lastIndexOf("=>")).trim();
+    const params = args.split("=>").map(arg => arg.trim());
+    return eval(`${args} => MExpr_JS_Intrinsics.trampolineValue( (${rectName} = ${body})(${params.join(")(")}) )`);
+  }
 });

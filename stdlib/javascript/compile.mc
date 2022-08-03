@@ -44,22 +44,14 @@ let compileJSOptionsEmpty : CompileJSOptions = {
 
 type CompileJSContext = {
   options : CompileJSOptions,
-  trampolinedFunctions: Map Name JSExpr,
   currentFunction: Option (Name, Info)
 }
 
 -- Empty compile JS environment
 let compileJSCtxEmpty = {
   options = compileJSOptionsEmpty,
-  trampolinedFunctions = mapEmpty nameCmp,
   currentFunction = None ()
 }
-
-
-let isTrampolinedJs : CompileJSContext -> Name -> Bool =
-  lam ctx. lam name.
-  match mapLookup name ctx.trampolinedFunctions with Some _
-  then true else false
 
 let _lastSubStr : String -> Int -> Option String =
   lam str. lam n.
@@ -204,15 +196,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     -- Function calls
     let args = map (compileMExpr ctx) args in
     match fun with TmVar { ident = ident } then
-      let jsApp = JSEApp {
+      JSEApp {
         fun = JSEVar { id = ident },
         args = args,
         curried = true
-      } in
-      if isTrampolinedJs ctx ident then
-        match mapLookup ident ctx.trampolinedFunctions with Some fun in
-        wrapCallToOptimizedFunction info fun (length args) jsApp
-      else jsApp
+      }
     -- Intrinsics
     else match fun with TmConst { val = val, info = info } then
       compileJSOp info ctx args val
@@ -270,21 +258,20 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       })
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
-    let rctx = ref ctx in
     let compileBind = lam bind : RecLetBinding.
       match bind with { ident = ident, body = body, info = info } in
       match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
         let fun = compileMExpr ctx body in
-        match optimizeTailCall ident info (deref rctx) fun with (ctx, fun) in
-        modref rctx ctx;
+        -- Maybe add a compiler flag to disable tail call optimizations?
+        let fun = optimizeTailCallFunc ident info fun in
         JSEDef { id = ident, expr = fun }
       else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
     in
     let exprs = map compileBind bindings in
     flattenBlock (JSEBlock {
       exprs = exprs,
-      ret = compileMExpr (deref rctx) e
+      ret = compileMExpr ctx e
     })
 
   | TmType { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type declaration)

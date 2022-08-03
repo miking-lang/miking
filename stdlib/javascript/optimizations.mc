@@ -1,6 +1,7 @@
 include "javascript/ast.mc"
 include "javascript/intrinsics.mc"
 
+include "name.mc"
 include "bool.mc"
 
 
@@ -62,34 +63,33 @@ type JSTCOContext = {
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
 
-  sem optimizeTailCall : Name -> Info -> CompileJSContext -> JSExpr -> (CompileJSContext, JSExpr)
-  sem optimizeTailCall name info ctx =
+  -- TODO: replace the original function with a new optimized function that is renamed
+  -- And create a new function with the old name that calls the new optimized function
+  -- and trampolines the result.
+
+  sem optimizeTailCallFunc : Name -> Info -> JSExpr -> JSExpr
+  sem optimizeTailCallFunc name info =
   | JSEFun _ & fun ->
     -- Outer most lambda in the function to be optimized
     let fun = foldFunc fun in
-    match runOnTailPositional trampolineCapture fun with { expr = fun, foundTailCall = true } then
-      let ctx = { ctx with trampolinedFunctions = mapInsert name fun ctx.trampolinedFunctions } in
-      (ctx, fun)
-    else
-      -- Otherwise, return the function as is
-      (ctx, fun)
+    match runOnTailPosition trampolineCapture fun with { expr = fun, foundTailCall = optimized } in
+    if optimized then
+      intrinsicFromString intrGenNS "trampolineFunc" [JSEString { s = nameGetStr name }, fun]
+    else fun
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
-  sem wrapCallToOptimizedFunction : Info -> JSExpr -> Int -> JSExpr -> JSExpr
-  sem wrapCallToOptimizedFunction info fun nrArgs =
-  | JSEApp _ & app ->
-    -- Trampoline fully applied trampoline functions
-    match fun with JSEFun { params = params } in
-    if eqi (length params) nrArgs then
-      -- Wrap the function application in a trampoline intrinsic
-      intrinsicFromString intrGenNS "trampoline" [app]
-    else
-      errorSingle [info] "Tail call optimized functions must be fully applied when compiling to JavaScript"
-  | _ -> errorSingle [info] "trampolineWrapCall invoked with non-function expression"
+  -- Wrap all calls in a trampoline capture that is immediately returned
+  sem trampolineCapture : JSExpr -> JSExpr
+  sem trampolineCapture =
+  | JSEApp { fun = fun, args = args } ->
+    -- Transform function calls to a trampoline capture intrinsic
+    intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
+  | _ -> error "trampolineCapture called on non-function application expression"
 
 
-  -- Fold nested functions to the top level
+
+  -- Fold nested functions to the top level (a single function instead of a nested functions)
   sem foldFunc : JSExpr -> JSExpr
   sem foldFunc =
   | JSEFun { params = params, body = body } ->
@@ -99,8 +99,8 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
     else JSEFun { params = params, body = body }
   | e -> e
 
-  sem runOnTailPositional : (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
-  sem runOnTailPositional action =
+  sem runOnTailPosition : (JSExpr -> JSExpr) -> JSExpr -> JSTCOContext
+  sem runOnTailPosition action =
   | JSEApp { fun = fun } & t ->
     -- If the function is a tail call, run the action on the function
     -- and replace the function with the result
@@ -125,7 +125,7 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
   sem runWithJSTCOCtx : (JSExpr -> JSExpr) -> JSExpr -> (JSExpr -> JSExpr) -> JSTCOContext
   sem runWithJSTCOCtx action expr =
   | constr ->
-    let res = runOnTailPositional action expr in {
+    let res = runOnTailPosition action expr in {
       expr = constr res.expr,
       foundTailCall = res.foundTailCall
     }
@@ -133,28 +133,11 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
   sem runWithJSTCOCtx2 : (JSExpr -> JSExpr) -> JSExpr -> JSExpr -> (JSExpr -> JSExpr -> JSExpr) -> JSTCOContext
   sem runWithJSTCOCtx2 action expr1 expr2 =
   | constr ->
-    let res1 = runOnTailPositional action expr1 in
-    let res2 = runOnTailPositional action expr2 in {
+    let res1 = runOnTailPosition action expr1 in
+    let res2 = runOnTailPosition action expr2 in {
       expr = constr res1.expr res2.expr,
       foundTailCall = or res1.foundTailCall res2.foundTailCall
     }
-
-  -- Strategies for optimizing tail calls
-
-  -- Wrap all calls in a trampoline capture that is immediately returned
-  sem trampolineCapture : JSExpr -> JSExpr
-  sem trampolineCapture =
-  | JSEApp { fun = fun, args = args } ->
-    -- Transform function calls to a trampoline capture intrinsic
-    intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
-  | _ -> error "trampolineCapture called on non-function application expression"
-
-  sem trampolineWrapCall : JSExpr -> JSExpr
-  sem trampolineWrapCall =
-  | JSEApp _ & app ->
-    -- Wrap the function application in a trampoline intrinsic
-    intrinsicFromString intrGenNS "trampoline" [app]
-  | _ -> error "trampolineWrapCall invoked with non-function expression"
 
 end
 
