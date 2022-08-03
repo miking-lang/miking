@@ -234,7 +234,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmSeq {tms = tms} ->
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
-      match (_charSeq2String tms) with Some str in
+      let str: String = _charSeq2String tms in
       JSEString { s = str }
     else
       JSEArray { exprs = map (compileMExpr ctx) tms }

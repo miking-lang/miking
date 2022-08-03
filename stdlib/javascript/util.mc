@@ -19,12 +19,10 @@ let _isCharSeq: [Expr] -> Bool = use MExprAst in lam tms: [Expr].
   ) tms
 
 -- First, always check if the terms are characters using _isCharSeq
-let _charSeq2String: [Expr] -> Option String = use MExprAst in lam tms: [Expr].
+let _charSeq2String: [Expr] -> String = use MExprAst in lam tms: [Expr].
   let toChar = lam expr.
-    match expr with TmConst { val = CChar { val = val } } then Some val else None ()
-  in
-  optionMapM toChar tms -- String is a list of characters
-
+    match expr with TmConst { val = CChar { val = val } } in val
+  in map toChar tms -- String is a list of characters
 
 let _isCharPatSeq: [Pat] -> Bool = use MExprAst in lam pats: [Pat].
   if null pats then false -- Empty list is not a char sequence
@@ -37,8 +35,7 @@ let _isCharPatSeq: [Pat] -> Bool = use MExprAst in lam pats: [Pat].
 let _charPatSeq2String: [Pat] -> String = use MExprAst in lam pats: [Pat].
   let toChar = lam pat.
     match pat with PatChar { val = val } in val
-  in
-  map toChar pats -- String is a list of characters
+  in map toChar pats -- String is a list of characters
 
 
 -------------------------------
