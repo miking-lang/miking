@@ -44,8 +44,6 @@ lang JSExprAst
   | JSOMul       {} -- lhs * rhs
   | JSODiv       {} -- lhs / rhs
   | JSOMod       {} -- lhs % rhs
-  -- TODO: Add support for object member access "lhs.rhs"
-  -- Otherwise replicateable with JOSubScript.
 
   syn JSUnOp =
   | JSONeg       {} -- -arg
