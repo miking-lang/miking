@@ -6,6 +6,7 @@ include "mexpr/info.mc"
 include "mexpr/ast.mc"
 
 include "javascript/ast.mc"
+include "javascript/types.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
 include "javascript/util.mc"
@@ -15,43 +16,13 @@ include "javascript/optimizations.mc"
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
+include "set.mc"
 include "error.mc"
 include "name.mc"
 include "option.mc"
 include "string.mc"
 
 
-
-
--- Supported JS runtime targets
-type CompileJSTargetPlatform
-con CompileJSTP_Normal : () -> CompileJSTargetPlatform
-con CompileJSTP_Web    : () -> CompileJSTargetPlatform
-con CompileJSTP_Node   : () -> CompileJSTargetPlatform
-
--- JS Compiler options
-type CompileJSOptions = {
-  targetPlatform : CompileJSTargetPlatform,
-  debugMode : Bool,
-  optimizations : Bool
-}
-
-let compileJSOptionsEmpty : CompileJSOptions = {
-  targetPlatform = CompileJSTP_Normal (),
-  debugMode = false,
-  optimizations = true
-}
-
-type CompileJSContext = {
-  options : CompileJSOptions,
-  currentFunction: Option (Name, Info)
-}
-
--- Empty compile JS environment
-let compileJSCtxEmpty = {
-  options = compileJSOptionsEmpty,
-  currentFunction = None ()
-}
 
 let _lastSubStr : String -> Int -> Option String =
   lam str. lam n.
@@ -85,6 +56,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileProg : CompileJSContext -> Expr -> JSProg
   sem compileProg ctx =
   | prog ->
+    let recFuncs = if ctx.options.optimizations
+      then extractRecursiveFunctions ctx.recursiveFunctions prog
+      else ctx.recursiveFunctions
+    in
+    let ctx = { ctx with recursiveFunctions = recFuncs } in
     -- Run compiler
     match compileMExpr ctx prog with expr in
     let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
@@ -93,7 +69,17 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     -- Return final top level expressions
     JSPProg { imports = [], exprs = exprs }
 
-
+    -- Look ahead and extract a list of all recursive functions
+    sem extractRecursiveFunctions : Set Name -> Expr -> Set Name
+    sem extractRecursiveFunctions acc =
+    | e ->
+      match e with TmRecLets t then
+        let acc = foldl (lam acc: Set Name. lam b: RecLetBinding.
+          match b with { ident = ident, body = body } in
+          match body with TmLam _ then (setInsert ident acc) else acc
+        ) acc t.bindings in
+        extractRecursiveFunctions acc t.inexpr
+      else sfold_Expr_Expr extractRecursiveFunctions acc e
 
 
   ---------------
@@ -263,9 +249,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
         let fun = compileMExpr ctx body in
-        -- Maybe add a compiler flag to disable tail call optimizations?
-        let fun = optimizeTailCallFunc ident info fun in
-        JSEDef { id = ident, expr = fun }
+        if ctx.options.optimizations
+          then optimizeTailCallFunc ctx ident info fun
+          else JSEDef { id = ident, expr = fun }
       else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
     in
     let exprs = map compileBind bindings in

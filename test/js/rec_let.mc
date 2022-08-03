@@ -2,8 +2,10 @@ include "common.mc"
 include "string.mc"
 
 mexpr
+  -- non-recursive let
+  let add = lam x. lam y. addi x y in
   recursive let _fact = lam acc. lam n.
-    if eqi n 0 then acc
+    if eqi n 0 then add acc 0
     else _fact (muli n acc) (subi n 1)
   in
   let fact = lam n. _fact 1 n in

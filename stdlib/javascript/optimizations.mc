@@ -1,4 +1,5 @@
 include "javascript/ast.mc"
+include "javascript/types.mc"
 include "javascript/intrinsics.mc"
 
 include "name.mc"
@@ -63,33 +64,96 @@ type JSTCOContext = {
 -- Tail Call Optimizations
 lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
 
-  -- TODO: replace the original function with a new optimized function that is renamed
-  -- And create a new function with the old name that calls the new optimized function
-  -- and trampolines the result.
-
-  sem optimizeTailCallFunc : Name -> Info -> JSExpr -> JSExpr
-  sem optimizeTailCallFunc name info =
+  sem optimizeTailCallFunc : CompileJSContext -> Name -> Info -> JSExpr -> JSExpr
+  sem optimizeTailCallFunc ctx name info =
   | JSEFun _ & fun ->
-    -- Outer most lambda in the function to be optimized
     let fun = foldFunc fun in
-    match runOnTailPosition trampolineCapture fun with { expr = fun, foundTailCall = optimized } in
+    match fun with JSEFun r in
+    -- Create a new function with the same name but with the _rec suffix
+    -- This function will be used as the recursive body of the optimized function
+    -- NOTE(william): nameNoSym might clash with a user-defined function!
+    let recFunName = lam n. nameNoSym (concat (nameGetStr n) "_rec$") in
+    let mod = lam fun.
+      -- If found nested tail call, check if it is to a recursive function
+      -- registered in the current context
+      match fun with JSEVar { id = id } then
+        if setMem id ctx.recursiveFunctions then
+          -- If it is, replace the function with a trampoline capture call to
+          -- the recursive function variant
+          (true, JSEVar { id = recFunName id })
+        else (false, fun)
+      else (false, fun)
+    in
+    match runOnTailPosition (trampolineCapture mod) fun with { expr = recFun, foundTailCall = optimized } in
     if optimized then
-      intrinsicFromString intrGenNS "trampolineFunc" [JSEString { s = nameGetStr name }, fun]
-    else fun
+      JSEBlock {
+        exprs = [
+          -- Declare the function as the recursive function variant
+          JSEDef { id = recFunName name, expr = recFun },
+          -- Next, declare a function with the original name that calls the
+          -- recursive function variant and trampolines the result
+          JSEDef {
+            id = name,
+            expr = JSEFun { r with
+              body = intrinsicFromString intrGenNS "trampolineValue" [
+                JSEApp {
+                  fun = JSEVar { id = recFunName name },
+                  args = map (lam p. JSEVar { id = p }) r.params,
+                  curried = true
+                }
+              ]
+            }
+          }
+        ],
+        ret = JSENop { }
+      }
+    else
+      fun
+
+
+
+    -- TODO: replace the original function with a new optimized function that is renamed
+    -- And create a new function with the old name that calls the new optimized function
+    -- and trampolines the result.
+    -- 1. Optimize the original function
+    -- 2. Create a new function with a new name that calls the optimized function
+    --    and trampolines the result
+    -- 3. All non-recursive calls to the original function should be replaced with
+    --    calls to the new function. All recursive calls to the original function
+    --    should be left as is.
+
+    -- 1. Optimize the function
+    -- let fun = foldFunc fun in
+    -- let recFunName = nameSym (concat (nameGetStr name) "_rec") in
+    -- let mod = lam fun.
+    --   match fun with JSEVar { id = id } then
+    --     if nameEq name id then JSEVar { id = recFunName }
+    --     else fun
+    --   else fun
+    -- in
+    -- match runOnTailPosition (trampolineCapture mod) fun with { expr = fun, foundTailCall = optimized } in
+    -- let fun = if optimized
+    --   then intrinsicFromString intrGenNS "trampolineFunc" [JSEString { s = nameGetStr name }, fun]
+    --   else fun in
+    -- JSEDef { id = ident, expr = fun }
+
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
   -- Wrap all calls in a trampoline capture that is immediately returned
-  sem trampolineCapture : JSExpr -> JSExpr
-  sem trampolineCapture =
-  | JSEApp { fun = fun, args = args } ->
+  sem trampolineCapture : (JSExpr -> (Bool, JSExpr)) -> JSExpr -> JSExpr
+  sem trampolineCapture modifier =
+  | JSEApp { fun = fun, args = args } & app ->
     -- Transform function calls to a trampoline capture intrinsic
-    intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
+    match modifier fun with (shouldCapture, fun) in
+    if shouldCapture then
+      intrinsicFromString intrGenNS "trampolineCapture" [fun, JSEArray{ exprs = args }]
+    else app
   | _ -> error "trampolineCapture called on non-function application expression"
 
 
 
-  -- Fold nested functions to the top level (a single function instead of a nested functions)
+  -- Fold (collect) nested functions to the top level (a single function instead of a nested functions)
   sem foldFunc : JSExpr -> JSExpr
   sem foldFunc =
   | JSEFun { params = params, body = body } ->
