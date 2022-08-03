@@ -27,7 +27,7 @@ mexpr
   else 4);
 
   let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
-  match u with [ [hd] ++ tl ] then
+  match u with [ [hd] ++ tl ] ++ rest then
     dprintLn hd;
     dprintLn tl;
     5

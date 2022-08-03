@@ -15,7 +15,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
 
   // Built-in MExpr
   print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(MExpr_JS_Intrinsics.ensureString(msg))),
-  dprint: val => console.log(val),
+  dprint: val => console.log(MExpr_JS_Intrinsics.stringify(val)),
   length: lst => lst.length,
   head: lst => lst[0],
   tail: lst => lst.slice(1),
