@@ -1,3 +1,6 @@
+include "option.mc"
+include "name.mc"
+
 --------------------
 -- COMPILER TYPES --
 --------------------
