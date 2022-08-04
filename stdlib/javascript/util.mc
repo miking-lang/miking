@@ -1,11 +1,85 @@
 
+include "map.mc"
+include "option.mc"
+include "name.mc"
+
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
 
 
-----------------------
--- HELPER FUNCTIONS --
-----------------------
+--------------------
+-- COMPILER TYPES --
+--------------------
+
+-- Supported JS runtime targets
+type CompileJSTargetPlatform
+con CompileJSTP_Normal : () -> CompileJSTargetPlatform
+con CompileJSTP_Web    : () -> CompileJSTargetPlatform
+con CompileJSTP_Node   : () -> CompileJSTargetPlatform
+
+-- JS Compiler options
+type CompileJSOptions = {
+  targetPlatform : CompileJSTargetPlatform,
+  debugMode : Bool,
+  optimizations : Bool
+}
+
+type RecursiveFunctionRegistry = {
+  map: Map Name Name,
+  suffix: String
+}
+
+type CompileJSContext = {
+  options : CompileJSOptions,
+  currentFunction: Option (Name, Info),
+  recursiveFunctions: RecursiveFunctionRegistry
+}
+
+
+--------------------------
+-- TCO HELPER FUNCTIONS --
+--------------------------
+
+-- Functions to keep track of recursive function names
+-- and update the registry with new names if they not found.
+-- * The key in the registry is the original function name.
+-- * The value is the recursive variant of the function name (_rec$ suffix).
+
+let emptyRFR = lam suffix. {
+  map = mapEmpty nameCmp,
+  suffix = suffix
+}
+
+let setRFR : Name -> RecursiveFunctionRegistry -> RecursiveFunctionRegistry =
+  lam name. lam rfr : RecursiveFunctionRegistry.
+    let str = nameGetStr name in
+    let newName = concat str (rfr.suffix) in
+    let recName = nameSym newName in
+    { rfr with map = mapInsert name recName rfr.map }
+
+let getRFR : Name -> RecursiveFunctionRegistry -> Option Name =
+  lam name. lam rfr : RecursiveFunctionRegistry.
+  mapLookup name rfr.map
+
+recursive let extractRFR : RecursiveFunctionRegistry -> Expr -> RecursiveFunctionRegistry =
+  use MExprAst in
+  lam rfr : RecursiveFunctionRegistry. lam e.
+  match e with TmRecLets t then
+    let rfr = foldl (lam rfr: RecursiveFunctionRegistry. lam b: RecLetBinding.
+      match b with { ident = ident, body = body } in
+      match body with TmLam _ then (setRFR ident rfr) else rfr
+    ) rfr t.bindings in
+    extractRFR rfr t.inexpr
+  else sfold_Expr_Expr extractRFR rfr e
+end
+
+let extractRFRctx : CompileJSContext -> Expr -> CompileJSContext =
+  lam ctx : CompileJSContext. lam e.
+  { ctx with recursiveFunctions = extractRFR ctx.recursiveFunctions e }
+
+------------------------
+-- COMPILER FUNCTIONS --
+------------------------
 
 -- Check for unit type
 let _isUnitTy: Type -> Bool = use RecordTypeAst in lam ty: Type.
@@ -60,3 +134,22 @@ let _binOpM : JSBinOp -> [JSExpr] -> JSExpr = use JSExprAst in
     else f (tail args) (_binOp op [acc, head args])
   ) in
   f (tail args) (head args)
+
+
+----------------------------------
+-- EMPTY COMPILER TYPE DEFAULTS --
+----------------------------------
+
+
+let compileJSOptionsEmpty : CompileJSOptions = {
+  targetPlatform = CompileJSTP_Normal (),
+  debugMode = false,
+  optimizations = true
+}
+
+-- Empty compile JS environment
+let compileJSCtxEmpty = {
+  options = compileJSOptionsEmpty,
+  currentFunction = None (),
+  recursiveFunctions = emptyRFR "_rec$"
+}

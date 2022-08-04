@@ -6,10 +6,9 @@ include "mexpr/info.mc"
 include "mexpr/ast.mc"
 
 include "javascript/ast.mc"
-include "javascript/types.mc"
+include "javascript/util.mc"
 include "javascript/pprint.mc"
 include "javascript/patterns.mc"
-include "javascript/util.mc"
 include "javascript/intrinsics.mc"
 include "javascript/optimizations.mc"
 
@@ -56,11 +55,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileProg : CompileJSContext -> Expr -> JSProg
   sem compileProg ctx =
   | prog ->
-    let recFuncs = if ctx.options.optimizations
-      then extractRecursiveFunctions ctx.recursiveFunctions prog
-      else ctx.recursiveFunctions
-    in
-    let ctx = { ctx with recursiveFunctions = recFuncs } in
+    let ctx = if ctx.options.optimizations then extractRFRctx ctx prog else ctx in
     -- Run compiler
     match compileMExpr ctx prog with expr in
     let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }

@@ -1,5 +1,5 @@
 include "javascript/ast.mc"
-include "javascript/types.mc"
+include "javascript/util.mc"
 include "javascript/intrinsics.mc"
 
 include "name.mc"
@@ -68,47 +68,43 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
   sem optimizeTailCallFunc ctx name info =
   | JSEFun _ & fun ->
     let fun = foldFunc fun in
-    match fun with JSEFun r in
-    -- Create a new function with the same name but with the _rec suffix
-    -- This function will be used as the recursive body of the optimized function
-    -- NOTE(william): nameNoSym might clash with a user-defined function!
-    let recFunName = lam n. nameNoSym (concat (nameGetStr n) "_rec$") in
     let mod = lam fun.
       -- If found nested tail call, check if it is to a recursive function
       -- registered in the current context
       match fun with JSEVar { id = id } then
-        if setMem id ctx.recursiveFunctions then
-          -- If it is, replace the function with a trampoline capture call to
-          -- the recursive function variant
-          (true, JSEVar { id = recFunName id })
+        match getRFR id ctx.recursiveFunctions with Some (recFunName) then
+          -- Replace the function call with a trampoline capture call to
+          -- the recursive function variant of the optimized function
+          (true, JSEVar { id = recFunName })
         else (false, fun)
       else (false, fun)
     in
-    match runOnTailPosition (trampolineCapture mod) fun with { expr = recFun, foundTailCall = optimized } in
-    if optimized then
-      JSEBlock {
-        exprs = [
-          -- Declare the function as the recursive function variant
-          JSEDef { id = recFunName name, expr = recFun },
-          -- Next, declare a function with the original name that calls the
-          -- recursive function variant and trampolines the result
-          JSEDef {
-            id = name,
-            expr = JSEFun { r with
-              body = intrinsicFromString intrGenNS "trampolineValue" [
-                JSEApp {
-                  fun = JSEVar { id = recFunName name },
-                  args = map (lam p. JSEVar { id = p }) r.params,
-                  curried = true
-                }
-              ]
-            }
+    match runOnTailPosition (trampolineCapture mod) fun with { expr = recFun } in
+    -- Assume that the optimized function already is registered in the current context
+    match getRFR name ctx.recursiveFunctions with Some (thisRecFunName) in
+    match fun with JSEFun { params = params } in
+    JSEBlock {
+      exprs = [
+        -- Declare the function as the recursive function variant
+        JSEDef { id = thisRecFunName, expr = recFun },
+        -- Next, declare a function with the original name that calls the
+        -- recursive function variant and trampolines the result
+        JSEDef {
+          id = name,
+          expr = JSEFun {
+            params = params,
+            body = intrinsicFromString intrGenNS "trampolineValue" [
+              JSEApp {
+                fun = JSEVar { id = thisRecFunName },
+                args = map (lam p. JSEVar { id = p }) params,
+                curried = true
+              }
+            ]
           }
-        ],
-        ret = JSENop { }
-      }
-    else
-      fun
+        }
+      ],
+      ret = JSENop { }
+    }
 
 
 
