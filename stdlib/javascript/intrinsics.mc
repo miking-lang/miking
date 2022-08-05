@@ -70,6 +70,10 @@ let optimizedIntrinsicGenStr  = use JSIntrinsic in optimizedIntrinsicWithString 
 let optimizedIntrinsicWebStr  = use JSIntrinsic in optimizedIntrinsicWithString intrWebNS
 let optimizedIntrinsicNodeStr = use JSIntrinsic in optimizedIntrinsicWithString intrNodeNS
 
-let externalRefGen  = use JSIntrinsic in lam n. intrinsicFromString intrGenNS n []
-let externalRefWeb  = use JSIntrinsic in lam n. intrinsicFromString intrWebNS n []
-let externalRefNode = use JSIntrinsic in lam n. intrinsicFromString intrNodeNS n []
+let intrinsicStrGen  = use JSIntrinsic in intrinsicFromString intrGenNS
+let intrinsicStrWeb  = use JSIntrinsic in intrinsicFromString intrWebNS
+let intrinsicStrNode = use JSIntrinsic in intrinsicFromString intrNodeNS
+
+let externalRefGen  = use JSIntrinsic in lam n. intrinsicStrGen n []
+let externalRefWeb  = use JSIntrinsic in lam n. intrinsicStrWeb n []
+let externalRefNode = use JSIntrinsic in lam n. intrinsicStrNode n []

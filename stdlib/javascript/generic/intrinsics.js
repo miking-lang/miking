@@ -12,6 +12,17 @@ const MExpr_JS_Intrinsics = Object.freeze({
   gt: lhs => rhs => lhs > rhs,
   ge: lhs => rhs => lhs >= rhs,
   neg: val => -val,
+  exp: Math.exp,
+  log: Math.log,
+  atan: Math.atan,
+  sin: Math.sin,
+  cos: Math.cos,
+  atan2: x => y => Math.atan2(x, y),
+  pow: base => exp => Math.pow(base, exp),
+  sqrt: Math.sqrt,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
 
   // Built-in MExpr
   print: msg => console.log(MExpr_JS_Intrinsics.trimLastNewline(MExpr_JS_Intrinsics.ensureString(msg))),
@@ -23,8 +34,14 @@ const MExpr_JS_Intrinsics = Object.freeze({
   concat: lhs => rhs => lhs.concat(rhs),
   cons: elm => list => (typeof list === "string") ? elm + list : [elm].concat(list),
   foldl: fun => init => list => list.reduce((acc, e) => fun(acc)(e), init),
+
+  // Casting and Conversion
   char2int: c => c.charCodeAt(0),
   int2char: i => String.fromCharCode(i),
+  float2string: f => f.toString(),
+  int2float: i => i,
+
+  // References
   ref: value => ({ value: value }),
   modref: ref => value => { ref.value = value; return ref; },
   deref: ref => ref.value,
@@ -37,14 +54,4 @@ const MExpr_JS_Intrinsics = Object.freeze({
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
   trampolineValue: val => { while(val.isTrampolineCapture) val = val.args.reduce((acc, arg) => acc(arg), val.fun); return val; },
-
-  // External Functions
-  exp: Math.exp,
-  log: Math.log,
-  atan: Math.atan,
-  sin: Math.sin,
-  cos: Math.cos,
-  atan2: x => y => Math.atan2(x, y),
-  pow: base => exp => Math.pow(base, exp),
-  sqrt: Math.sqrt,
 });

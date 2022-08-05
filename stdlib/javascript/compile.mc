@@ -113,6 +113,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Unary operators
   | CNegf _ & t
   | CNegi _ & t -> optimizedIntrinsicGenStr t "neg" args (_unOp (JSONeg {}))
+  | CFloorfi _ & t -> intrinsicStrGen "floor" args
+  | CCeilfi _  & t -> intrinsicStrGen "ceil"  args
+  | CRoundfi _ & t -> intrinsicStrGen "round" args
 
   -- Sequential operators (SeqOpAst)
   | CConcat _ & t -> intrinsicGen t args
@@ -126,6 +129,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Convert operations
   | CChar2Int _ & t -> intrinsicGen t args
   | CInt2Char _ & t -> intrinsicGen t args
+  | CFloat2string _ & t -> intrinsicGen t args
+  | CInt2float _ & t -> intrinsicGen t args
 
   -- References
   | CRef _    & t -> intrinsicGen t args
