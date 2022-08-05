@@ -84,6 +84,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
+  -- Covers all constants in `stdlib/mexpr/builtin.mc`
   sem compileMConst : Info -> CompileJSContext -> [JSExpr] -> Const -> JSExpr
   sem compileMConst info ctx args =
   -- Binary operators
@@ -109,6 +110,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CGeqf _ & t -> optimizedIntrinsicGenStr t "ge" args (_binOp (JSOGe {}))
   | CNeqi _ & t
   | CNeqf _ & t -> optimizedIntrinsicGenStr t "ne" args (_binOp (JSONeq {}))
+  | CSlli _ & t -> intrinsicStrGen "sll" args
+  | CSrli _ & t -> intrinsicStrGen "srl" args
+  | CSrai _ & t -> intrinsicStrGen "sra" args
+
+  | CRandIntU _ & t -> intrinsicGen t args
 
   -- Unary operators
   | CNegf _ & t
@@ -117,20 +123,63 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CCeilfi _  & t -> intrinsicStrGen "ceil"  args
   | CRoundfi _ & t -> intrinsicStrGen "round" args
 
+  -- Convert operations
+  | CInt2Char _ & t -> intrinsicGen t args
+  | CChar2Int _ & t -> intrinsicGen t args
+  | CInt2float _ & t -> intrinsicGen t args
+  | CFloat2string _ & t -> intrinsicGen t args
+  | CString2float _ & t -> intrinsicGen t args
+  | CStringIsFloat _ & t -> intrinsicGen t args
+
+  -- TODO: | CSymb {val : Symbol} -- (("externalExp"),symb(893105)) is of type (String, Symbol)
+  | CGensym _ & t -> intrinsicGen t args
+  | CSym2hash _ & t -> intrinsicGen t args
+  | CEqsym _ & t -> intrinsicGen t args
+
   -- Sequential operators (SeqOpAst)
-  | CConcat _ & t -> intrinsicGen t args
-  | CCons _   & t -> intrinsicGen t args
-  | CFoldl _  & t -> intrinsicGen t args
   | CLength _ & t -> intrinsicGen t args
   | CHead _   & t -> intrinsicGen t args
   | CTail _   & t -> intrinsicGen t args
   | CNull _   & t -> intrinsicGen t args
+  | CSet _ & t -> intrinsicGen t args
+  | CGet _ & t -> intrinsicGen t args
+  | CConcat _ & t -> intrinsicGen t args
+  | CCons _   & t -> intrinsicGen t args
+  | CSnoc _ & t -> intrinsicGen t args
+  | CReverse _ & t -> intrinsicGen t args
+  | CMap _ & t -> intrinsicGen t args
+  | CMapi _ & t -> intrinsicGen t args
+  | CIter _ & t -> intrinsicGen t args
+  | CIteri _ & t -> intrinsicGen t args
+  | CFoldl _  & t -> intrinsicGen t args
+  | CFoldr _ & t -> intrinsicGen t args
+  | CCreate _ & t -> intrinsicGen t args
+  | CCreateList _ & t -> intrinsicGen t args
+  | CCreateRope _ & t -> intrinsicGen t args
+  | CIsList _ & t -> intrinsicGen t args
+  | CIsRope _ & t -> intrinsicGen t args
+  | CSplitAt _ & t -> intrinsicGen t args
+  | CSubsequence _ & t -> intrinsicGen t args
 
-  -- Convert operations
-  | CChar2Int _ & t -> intrinsicGen t args
-  | CInt2Char _ & t -> intrinsicGen t args
-  | CFloat2string _ & t -> intrinsicGen t args
-  | CInt2float _ & t -> intrinsicGen t args
+  -- Map operators (MapAst)
+  | CMapEmpty _ & t -> intrinsicGen t args
+  | CMapInsert _ & t -> intrinsicGen t args
+  | CMapRemove _ & t -> intrinsicGen t args
+  | CMapFindExn _ & t -> intrinsicGen t args
+  | CMapFindOrElse _ & t -> intrinsicGen t args
+  | CMapFindApplyOrElse _ & t -> intrinsicGen t args
+  | CMapBindings _ & t -> intrinsicGen t args
+  | CMapChooseExn _ & t -> intrinsicGen t args
+  | CMapChooseOrElse _ & t -> intrinsicGen t args
+  | CMapSize _ & t -> intrinsicGen t args
+  | CMapMem _ & t -> intrinsicGen t args
+  | CMapAny _ & t -> intrinsicGen t args
+  | CMapMap _ & t -> intrinsicGen t args
+  | CMapMapWithKey _ & t -> intrinsicGen t args
+  | CMapFoldWithKey _ & t -> intrinsicGen t args
+  | CMapEq _ & t -> intrinsicGen t args
+  | CMapCmp _ & t -> intrinsicGen t args
+  | CMapGetCmpFun _ & t -> intrinsicGen t args
 
   -- References
   | CRef _    & t -> intrinsicGen t args
@@ -156,10 +205,22 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           "WARNING: 'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime");
           intrinsicGen t args
       else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
-  | CFlushStdout _ -> JSENop { }
   | CExit _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
+
+  | CConstructorTag _ -- Look at `test/mexpr/constructor-tags.mc` for an example
+  | CError _
+  | CArgv _
+  | CCommand _
+  | CWallTimeMs _
+  | CSleepMs _ -- TODO: inspiration: https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+  | CRandSetSeed _
+  | CPrintError _
+  | CReadLine _
+  | CReadBytesAsString _
+  | CFlushStderr _
+  | CFlushStdout _ -> JSENop { }
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
   ---------------
