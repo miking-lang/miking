@@ -84,8 +84,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Can compile fully and partially applied intrinsicGen operators and optimize them
   -- depending on the number of arguments to either compile as in-place operations or
   -- as a partially applied curried intrinsicGen functions
-  sem compileJSOp : Info -> CompileJSContext -> [JSExpr] -> Const -> JSExpr
-  sem compileJSOp info ctx args =
+  sem compileMConst : Info -> CompileJSContext -> [JSExpr] -> Const -> JSExpr
+  sem compileMConst info ctx args =
   -- Binary operators
   | CAddi _ & t
   | CAddf _ & t -> optimizedIntrinsicGenStr t "add" args (_binOp (JSOAdd {}))
@@ -155,6 +155,21 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CExit _ -> JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
+  ---------------
+  -- EXTERNALS --
+  ---------------
+  sem compileExtRef : Info -> Bool -> Type -> String -> JSExpr
+  sem compileExtRef info effect ty =
+  | "externalExp" -> externalRefGen "exp"
+  | "externalLog" -> externalRefGen "log"
+  | "externalAtan" -> externalRefGen "atan"
+  | "externalSin" -> externalRefGen "sin"
+  | "externalCos" -> externalRefGen "cos"
+  | "externalAtan2" -> externalRefGen "atan2"
+  | "externalPow" -> externalRefGen "pow"
+  | "externalSqrt" -> externalRefGen "sqrt"
+  | t -> errorSingle [info] (join ["Unsupported external '", t, "' when compiling to JavaScript"])
+
 
   -- Extract the name of the function and the arguments from
   -- a function application
@@ -184,7 +199,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       }
     -- Intrinsics
     else match fun with TmConst { val = val, info = info } then
-      compileJSOp info ctx args val
+      compileMConst info ctx args val
     else errorSingle [infoTm app] "Unsupported application in compileMExpr"
 
   -- Anonymous function
@@ -214,7 +229,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileJSOp info ctx [] val with jsexpr in jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else match compileMConst info ctx [] val with jsexpr in jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
   | TmRecordUpdate _ & t -> errorSingle [infoTm t] "Record updates cannot be handled in compileMExpr."
 
 
@@ -270,7 +285,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     } in
     if ctx.options.optimizations then optimizeExpr3 expr else expr
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
-  | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
+  | TmExt { ident = ident, tyIdent = tyIdent, inexpr = inexpr, effect = effect, ty = ty, info = info } & t ->
+    let expr = compileExtRef info effect ty (nameGetStr ident) in
+    flattenBlock (JSEBlock {
+      exprs = [JSEDef { id = ident, expr = expr }],
+      ret = compileMExpr ctx inexpr
+    })
   | TmNever _ -> JSENop { }
 
 end

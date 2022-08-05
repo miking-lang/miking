@@ -36,5 +36,15 @@ const MExpr_JS_Intrinsics = Object.freeze({
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
-  trampolineValue: val => { while(val.isTrampolineCapture) val = val.args.reduce((acc, arg) => acc(arg), val.fun); return val; }
+  trampolineValue: val => { while(val.isTrampolineCapture) val = val.args.reduce((acc, arg) => acc(arg), val.fun); return val; },
+
+  // External Functions
+  exp: Math.exp,
+  log: Math.log,
+  atan: Math.atan,
+  sin: Math.sin,
+  cos: Math.cos,
+  atan2: x => y => Math.atan2(x, y),
+  pow: base => exp => Math.pow(base, exp),
+  sqrt: Math.sqrt,
 });
