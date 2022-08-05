@@ -152,7 +152,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           intrinsicGen t args
       else JSEReturn { expr = intrinsicGen t args } -- Ignores the last newline print call in dprintLn
   | CFlushStdout _ -> JSENop { }
-  | CExit _ -> JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
+  | CExit _ & t ->
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
   ---------------
