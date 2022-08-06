@@ -53,7 +53,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   createList: len => fun => Array.from({ length: len }, (_, i) => fun(i)),
   createRope: MExpr_JS_Intrinsics.createList,
   isList: lst => Array.isArray(lst),
-  isRope: MExpr_Node_JS_Intrinsics.isList,
+  isRope: MExpr_JS_Intrinsics.isList,
   splitAt: lst => elm => { const idx = lst.indexOf(elm); return [lst.slice(0, idx), lst.slice(idx + 1)]; },
   subsequence: lst => from => len => lst.slice(from, from + len),
 
