@@ -12,6 +12,8 @@ include "javascript/patterns.mc"
 include "javascript/intrinsics.mc"
 include "javascript/optimizations.mc"
 
+include "javascript/compile-ext-default.mc"
+
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
@@ -57,7 +59,8 @@ let warnIfNotInModules : all a. CompileJSContext -> [(String, String)] -> Info -
 
 lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
                       JSOptimizeBlocks + JSOptimizeTailCalls +
-                      JSOptimizeExprs + JSIntrinsic
+                      JSOptimizeExprs + JSIntrinsic +
+                      CompileJSDefaultExt
 
   -- Entry point
   sem compileProg : CompileJSContext -> Expr -> JSProg
@@ -229,17 +232,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   ---------------
   -- EXTERNALS --
   ---------------
-  sem compileExtRef : Info -> Bool -> Type -> String -> JSExpr
-  sem compileExtRef info effect ty =
-  | "externalExp" -> externalRefGen "exp"
-  | "externalLog" -> externalRefGen "log"
-  | "externalAtan" -> externalRefGen "atan"
-  | "externalSin" -> externalRefGen "sin"
-  | "externalCos" -> externalRefGen "cos"
-  | "externalAtan2" -> externalRefGen "atan2"
-  | "externalPow" -> externalRefGen "pow"
-  | "externalSqrt" -> externalRefGen "sqrt"
-  | t -> errorSingle [info] (join ["Unsupported external '", t, "' when compiling to JavaScript"])
+  sem compileExtRef : CompileJSContext -> Info -> String -> JSExpr
+  sem compileExtRef ctx info =
+  | t ->
+    match compileExt (ctx.options.targetPlatform) info t with Some expr then expr
+    else errorSingle [info] (join ["Unsupported external '", t, "' when compiling to JavaScript"])
 
 
   -- Extract the name of the function and the arguments from
@@ -357,7 +354,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     if ctx.options.optimizations then optimizeExpr3 expr else expr
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt { ident = ident, tyIdent = tyIdent, inexpr = inexpr, effect = effect, ty = ty, info = info } & t ->
-    let expr = compileExtRef info effect ty (nameGetStr ident) in
+    let expr = compileExtRef ctx info (nameGetStr ident) in
     flattenBlock (JSEBlock {
       exprs = [JSEDef { id = ident, expr = expr }],
       ret = compileMExpr ctx inexpr

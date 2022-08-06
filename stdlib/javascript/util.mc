@@ -13,9 +13,9 @@ include "javascript/ast.mc"
 
 -- Supported JS runtime targets
 type CompileJSTargetPlatform
-con CompileJSTP_Normal : () -> CompileJSTargetPlatform
-con CompileJSTP_Web    : () -> CompileJSTargetPlatform
-con CompileJSTP_Node   : () -> CompileJSTargetPlatform
+con CompileJSTP_Generic : () -> CompileJSTargetPlatform
+con CompileJSTP_Node    : () -> CompileJSTargetPlatform
+con CompileJSTP_Web     : () -> CompileJSTargetPlatform
 
 -- JS Compiler options
 type CompileJSOptions = {
@@ -142,7 +142,7 @@ let _binOpM : JSBinOp -> [JSExpr] -> JSExpr = use JSExprAst in
 
 
 let compileJSOptionsEmpty : CompileJSOptions = {
-  targetPlatform = CompileJSTP_Normal (),
+  targetPlatform = CompileJSTP_Generic (),
   debugMode = false,
   optimizations = true
 }

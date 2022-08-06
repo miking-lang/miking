@@ -4,7 +4,7 @@
 include "javascript/compile.mc"
 
 let platformMapJS = mapFromSeq cmpString
-  [("generic", CompileJSTP_Normal ())
+  [("generic", CompileJSTP_Generic ())
   ,("node", CompileJSTP_Node ())
   ,("web", CompileJSTP_Web ())]
 
