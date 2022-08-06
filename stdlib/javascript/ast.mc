@@ -26,6 +26,7 @@ lang JSExprAst
   | JSEIIFE      { body: JSExpr } -- Immediately-invoked function expression
   | JSEBlock     { exprs: [JSExpr], ret: JSExpr } -- Block
   | JSEReturn    { expr: JSExpr } -- Early return
+  | JSEThrow     { expr: JSExpr } -- Throw
   | JSENop       { } -- No-op
 
   syn JSBinOp =

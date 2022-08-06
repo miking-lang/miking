@@ -359,7 +359,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       exprs = [JSEDef { id = ident, expr = expr }],
       ret = compileMExpr ctx inexpr
     })
-  | TmNever _ -> JSENop { }
+  | TmNever _ -> intrinsicStrGen "never" [JSEInt { i = 0 }]
 
 end
 

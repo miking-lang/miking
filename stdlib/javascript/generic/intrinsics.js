@@ -124,6 +124,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   trimLastNewline: lst => lst[lst.length - 1] === '\n' ? lst.slice(0, -1) : lst,
   ensureString: s => Array.isArray(s) ? s.map(MExpr_JS_Intrinsics.stringify).join('') : s.toString(),
   stringify: val => typeof val === "object" ? JSON.stringify(val) : val.toString(),
+  never: () => { throw new Error("never"); },
 
   // Tail-Call Optimization Functions
   trampolineCapture: fun => args => ({ fun: fun, args: args, isTrampolineCapture: true }),
