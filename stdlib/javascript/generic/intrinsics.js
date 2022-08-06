@@ -51,9 +51,9 @@ const MExpr_JS_Intrinsics = Object.freeze({
   iteri: fun => lst => lst.forEach((e, i) => fun(i)(e)),
   create: len => fun => Array.from({ length: len }, _ => fun()),
   createList: len => fun => Array.from({ length: len }, (_, i) => fun(i)),
-  createRope: MExpr_JS_Intrinsics.createList,
+  createRope: len => fun => Array.from({ length: len }, (_, i) => fun(i)), // TODO: Adapt to ropes
   isList: lst => Array.isArray(lst),
-  isRope: MExpr_JS_Intrinsics.isList,
+  isRope: lst => Array.isArray(lst), // TODO: Adapt to ropes
   splitAt: lst => elm => { const idx = lst.indexOf(elm); return [lst.slice(0, idx), lst.slice(idx + 1)]; },
   subsequence: lst => from => len => lst.slice(from, from + len),
 
@@ -98,7 +98,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   },
   mapFoldWithKey: fun => init => map => map.pairs.reduce((acc, pair) => fun(acc)(pair[0])(pair[1]), init),
   mapEq: cmp => map1 => map2 => map1.pairs.length === map2.pairs.length && map1.pairs.every((pair, i) => cmp(pair[0])(map2.pairs[i][0]) /* && cmp(pair[1])(map2.pairs[i][1]) */ ),
-  mapCmp: MExpr_JS_Intrinsics.mapEq, // TODO: implement mapCmp
+  mapCmp: cmp => map1 => map2 => map1.pairs.length === map2.pairs.length && map1.pairs.every((pair, i) => cmp(pair[0])(map2.pairs[i][0])), // TODO: implement mapCmp
   mapGetCmpFun: map => map.cmpFun,
 
   // Casting and Conversion
