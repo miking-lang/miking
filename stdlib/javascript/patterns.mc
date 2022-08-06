@@ -132,7 +132,9 @@ lang PatJSCompile = PatJSCompileLang
         ]
     end in
     _binOpM (JSOAnd {}) (join [exprs, prefixExtra, postfixExtra])
-  | pat -> errorSingle [infoPat pat] "Pattern not supported"
+  | pat ->
+    dprintLn pat;
+    errorSingle [infoPat pat] "Pattern not supported when compiling to JavaScript."
 
 
   sem reverseExpr : JSExpr -> JSExpr
