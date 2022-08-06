@@ -5,6 +5,7 @@ include "string.mc"
 mexpr
 
 let doc = getDocument () in
-utest eqString doc.location.hostname "" with false in
+let hostname = doc.location.hostname in
+utest eqString hostname "" with false in
 
 ()
