@@ -17,4 +17,4 @@ type Document = {
   location: Location
 }
 
-external getDocument ! : () -> Document
+external getDocument : () -> Document
