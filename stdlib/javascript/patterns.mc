@@ -1,5 +1,6 @@
 include "bool.mc"
 include "error.mc"
+include "common.mc"
 include "stringid.mc"
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
