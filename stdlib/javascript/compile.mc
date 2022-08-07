@@ -50,7 +50,7 @@ let isFuncInModules : all a. CompileJSContext -> [(String, String)] -> Info -> (
   if any (lam p. match p with (name, path) in isFuncInModule ctx name path) funModules then onSuccess ()
   else onError ()
 
-let infoWarn : Info -> String =
+let infoWarn : Info -> String -> () =
     lam info. lam msg.
     printLn (join [(info2str info), "WARNING: ", msg])
 
