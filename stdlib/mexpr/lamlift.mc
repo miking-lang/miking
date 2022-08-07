@@ -368,7 +368,8 @@ end
 -- monomorphic. The analysis should be improved by lifting the type variables
 -- along with the bindings.
 lang LambdaLiftAddTyAlls = MExprAst
-  type TyVarMap = Set Name
+  type TyVars = Set Name
+  type TyVarMap = Map Name Name
 
   sem addTyAlls : Expr -> Expr
   sem addTyAlls =
@@ -376,9 +377,12 @@ lang LambdaLiftAddTyAlls = MExprAst
 
   sem addTyAllsH : TyVarMap -> Expr -> Expr
   sem addTyAllsH bound =
+  | TmLam t ->
+    TmLam {t with tyIdent = subTyIdents bound t.tyIdent,
+                  body = addTyAllsH bound t.body}
   | TmLet t ->
     match addTyAllBinding bound t.tyBody with (bodyTyVars, tyBody) in
-    TmLet {t with tyBody = tyBody,
+    TmLet {t with tyBody = subTyIdents bodyTyVars tyBody,
                   body = addTyAllsH bodyTyVars t.body,
                   inexpr = addTyAllsH bound t.inexpr}
   | TmRecLets t ->
@@ -392,29 +396,42 @@ lang LambdaLiftAddTyAlls = MExprAst
   | TmConDef t -> TmConDef {t with inexpr = addTyAllsH bound t.inexpr}
   | TmUtest t -> TmUtest {t with next = addTyAllsH bound t.next}
   | TmExt t -> TmExt {t with inexpr = addTyAllsH bound t.inexpr}
-  | t -> smap_Expr_Expr (addTyAllsH bound) t
+  | t ->
+    let t = withType (subTyIdents bound (tyTm t)) t in
+    smap_Expr_Expr (addTyAllsH bound) t
 
   sem addTyAllBinding : TyVarMap -> Type -> (TyVarMap, Type)
   sem addTyAllBinding bound =
   | ty ->
     match collectFreeTyVars bound ty with (bound, free) in
+    let resymbFreeMap = mapMapWithKey (lam k. lam. nameSetNewSym k) free in
+    let bound = mapUnion bound resymbFreeMap in
+    let ty = subTyIdents bound ty in
     let ty =
-      foldr
-        (lam ident. lam acc.
-          TyAll {ident = ident, sort = MonoVar (),
+      mapFoldWithKey
+        (lam acc. lam. lam tyAllId.
+          TyAll {ident = tyAllId, sort = PolyVar (),
                  ty = acc, info = infoTy acc})
-        ty (setToSeq free) in
-    (setUnion bound free, ty)
+        ty resymbFreeMap in
+    (bound, ty)
 
-  sem collectFreeTyVars : TyVarMap -> Type -> (TyVarMap, TyVarMap)
+  sem subTyIdents : TyVarMap -> Type -> Type
+  sem subTyIdents subMap =
+  | TyVar t ->
+    match mapLookup t.ident subMap with Some newIdent then
+      TyVar {t with ident = newIdent, level = 1}
+    else TyVar t
+  | ty -> smap_Type_Type (subTyIdents subMap) ty
+
+  sem collectFreeTyVars : TyVarMap -> Type -> (TyVarMap, TyVars)
   sem collectFreeTyVars bound =
   | ty -> collectFreeTyVarsH (bound, mapEmpty nameCmp) ty
 
-  sem collectFreeTyVarsH : (TyVarMap, TyVarMap) -> Type -> (TyVarMap, TyVarMap)
+  sem collectFreeTyVarsH : (TyVarMap, TyVars) -> Type -> (TyVarMap, TyVars)
   sem collectFreeTyVarsH acc =
   | TyVar t ->
     match acc with (bound, free) in
-    if setMem t.ident bound then (bound, free)
+    if mapMem t.ident bound then (bound, free)
     else (bound, setInsert t.ident free)
   | ty -> sfold_Type_Type collectFreeTyVarsH acc ty
 end
