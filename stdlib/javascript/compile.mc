@@ -44,14 +44,15 @@ let isFuncInModule : CompileJSContext -> String -> String -> Bool =
     else false
   else false
 
-let warnIfNotInModules : all a. CompileJSContext -> [(String, String)] -> Info -> String -> (() -> a) -> (() -> a) -> a =
-  lam ctx. lam funModules. lam info. lam msg. lam onError. lam onSuccess.
+let isFuncInModules : all a. CompileJSContext -> [(String, String)] -> Info -> (() -> a) -> (() -> a) -> a =
+  lam ctx. lam funModules. lam info. lam onSuccess. lam onError.
   match info with NoInfo () then onSuccess () else
-  if not (any (lam p. match p with (name, path) in isFuncInModule ctx name path) funModules) then
-    printLn (join [(info2str info), "WARNING: ", msg]);
-    onError ()
-  else onSuccess ()
+  if any (lam p. match p with (name, path) in isFuncInModule ctx name path) funModules then onSuccess ()
+  else onError ()
 
+let infoWarn : Info -> String =
+    lam info. lam msg.
+    printLn (join [(info2str info), "WARNING: ", msg])
 
 -------------------------------------------
 -- MEXPR -> JavaScript COMPILER FRAGMENT --
@@ -201,16 +202,16 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else -- Warning about inconsistent behaviour
-      warnIfNotInModules ctx [("printLn", "stdlib/common.mc"), ("printLn", "internal"), ("utestTestPassed", "internal")]
-        info "'print' might have unexpected behaviour when targeting the web or a generic JS runtime" (lam. ()) (lam. ());
+      isFuncInModules ctx [("printLn", "stdlib/common.mc"), ("printLn", "internal"), ("utestTestPassed", "internal")]
+        info (lam. ()) (lam. infoWarn info "'print' might have unexpected behaviour when targeting the web or a generic JS runtime");
       intrinsicGen t args
   | CDPrint _ & t ->
-    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
-    else -- Warning about inconsistent behaviour
-      warnIfNotInModules ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")]
-        info "'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime"
-        (lam. intrinsicGen t args)
-        (lam. JSEReturn { expr = intrinsicGen t args }) -- Ignores the last newline print call in dprintLn
+    -- Warning about inconsistent behaviour
+    isFuncInModules ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")]
+      info (lam. JSEReturn { expr = intrinsicGen t args }) -- If so, ignore the last newline print call in dprintLn
+      (lam.
+        infoWarn info "'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime";
+        intrinsicGen t args)
   | CExit _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
