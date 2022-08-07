@@ -157,6 +157,10 @@ run_js_test() {
   ./test/js/make.sh run-test-quiet $1
 }
 
+run_js_web_test() {
+  ./test/js/web/make.sh run-test-quiet $1
+}
+
 case $1 in
     boot)
         build_boot
@@ -181,6 +185,9 @@ case $1 in
         ;;
     run-js-test)
         run_js_test "$2"
+        ;;
+    run-js-web-test)
+        run_js_web_test "$2"
         ;;
     lint)
         lint

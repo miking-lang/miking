@@ -1,0 +1,14 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "description": "Miking tests for the JavaScript Web backend",
+  "main": "test_runner.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "William Rågstad",
+  "license": "ISC",
+  "dependencies": {
+    "jsdom": "^20.0.0"
+  }
+}
