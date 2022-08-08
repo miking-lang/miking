@@ -6,6 +6,7 @@ include "futhark/well-formed.mc"
 include "mexpr/anf.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
+include "mexpr/resolve-alias.mc"
 include "pmexpr/build.mc"
 include "pmexpr/classify.mc"
 include "pmexpr/copy-analysis.mc"
@@ -90,7 +91,7 @@ end
 lang PMExprCompileWellFormedBase =
   PMExprCompileWellFormedInstrumentation + PMExprBuild + MExprLambdaLift +
   PMExprExtractAccelerate + PMExprNestedAccelerate + PMExprTensorCopyAnalysis +
-  PMExprClassify
+  PMExprClassify + MExprResolveAlias
 
   type WellFormedConfig = {
     dynamicChecks : Bool,
@@ -144,6 +145,9 @@ lang PMExprCompileWellFormedBase =
           (lam ast. lam class. lam entry.
             match entry with (accelerateData, _) in
             let accelerateIds = mapMap (lam. ()) accelerateData in
+            -- NOTE(larshum, 2022-08-08): We resolve the aliases of all types
+            -- here to simplify the instrumentation.
+            let ast = resolveAliases ast in
             instrumentWellFormedChecks accelerateIds config class ast)
           ast accelerateAsts
       else ast in
