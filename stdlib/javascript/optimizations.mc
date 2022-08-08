@@ -69,8 +69,7 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
   | JSEFun _ & fun ->
     let fun = foldFunc fun in
     let mod = lam fun.
-      -- If found nested tail call, check if it is to a recursive function
-      -- registered in the current context
+      -- Check if the nested tail call is to a recursive function registered in the current context
       match fun with JSEVar { id = id } then
         match getRFR id ctx.recursiveFunctions with Some (recFunName) then
           -- Replace the function call with a trampoline capture call to
@@ -85,10 +84,7 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
     match fun with JSEFun { params = params } in
     JSEBlock {
       exprs = [
-        -- Declare the function as the recursive function variant
         JSEDef { id = thisRecFunName, expr = recFun },
-        -- Next, declare a function with the original name that calls the
-        -- recursive function variant and trampolines the result
         JSEDef {
           id = name,
           expr = JSEFun {
@@ -105,34 +101,6 @@ lang JSOptimizeTailCalls = JSExprAst + JSIntrinsic
       ],
       ret = JSENop { }
     }
-
-
-
-    -- TODO: replace the original function with a new optimized function that is renamed
-    -- And create a new function with the old name that calls the new optimized function
-    -- and trampolines the result.
-    -- 1. Optimize the original function
-    -- 2. Create a new function with a new name that calls the optimized function
-    --    and trampolines the result
-    -- 3. All non-recursive calls to the original function should be replaced with
-    --    calls to the new function. All recursive calls to the original function
-    --    should be left as is.
-
-    -- 1. Optimize the function
-    -- let fun = foldFunc fun in
-    -- let recFunName = nameSym (concat (nameGetStr name) "_rec") in
-    -- let mod = lam fun.
-    --   match fun with JSEVar { id = id } then
-    --     if nameEq name id then JSEVar { id = recFunName }
-    --     else fun
-    --   else fun
-    -- in
-    -- match runOnTailPosition (trampolineCapture mod) fun with { expr = fun, foundTailCall = optimized } in
-    -- let fun = if optimized
-    --   then intrinsicFromString intrGenNS "trampolineFunc" [JSEString { s = nameGetStr name }, fun]
-    --   else fun in
-    -- JSEDef { id = ident, expr = fun }
-
   | _ -> errorSingle [info] "Non-lambda expressions cannot be optimized for tail calls when compiling to JavaScript"
 
 
