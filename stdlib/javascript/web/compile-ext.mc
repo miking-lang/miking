@@ -16,6 +16,7 @@ lang CompileJSWebExt = CompileJSExt
 
   sem compileExt : CompileJSTargetPlatform -> Info -> String -> Option JSExpr
   sem compileExt p i =
+  -- External implementations for `javascript/web/dom-api-ext.mc`
   | "getDocument" -> refWeb p i "getDocument"
 
 end

@@ -16,5 +16,6 @@ lang CompileJSNodeExt = CompileJSExt
 
   sem compileExt : CompileJSTargetPlatform -> Info -> String -> Option JSExpr
   sem compileExt p i = -- No externals for node yet.
+  -- TODO: Add external implementations for `stdlib/ext/file-ext.mc`
 
 end

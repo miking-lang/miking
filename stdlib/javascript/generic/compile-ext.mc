@@ -13,6 +13,7 @@ lang CompileJSGenExt = CompileJSExt
 
   sem compileExt : CompileJSTargetPlatform -> Info -> String -> Option JSExpr
   sem compileExt p i =
+  -- External implementations for `stdlib/ext/math-ext.mc`
   | "externalExp"   -> refGen p i "exp"
   | "externalLog"   -> refGen p i "log"
   | "externalAtan"  -> refGen p i "atan"
