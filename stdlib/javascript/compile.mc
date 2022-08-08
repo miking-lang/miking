@@ -30,24 +30,33 @@ let _lastSubStr : String -> Int -> Option String =
   if lti (length str) n then None ()
   else Some (subsequence str (subi (length str) n) (length str))
 
-let isFuncInModule : CompileJSContext -> String -> String -> Bool =
-  lam ctx. lam funcName. lam modulePath.
-  match ctx.currentFunction with Some (name, info) then
-    -- Check if the name and function name match
-    if eqString funcName (nameGetStr name) then
-      -- Check if the module path matches
-      match info with Info { filename = filename } then
-        match _lastSubStr filename (length modulePath) with Some endpath then
-          if eqString modulePath endpath then true else false
-        else false
+let isInModule : CompileJSContext -> String -> Bool =
+  lam ctx. lam modulePath.
+  match ctx.currentFunction with Some (_, info) then
+    -- Check if the filename ends with the module path
+    match info with Info { filename = filename } then
+      match _lastSubStr filename (length modulePath) with Some endpath then
+        eqString modulePath endpath
       else false
     else false
   else false
 
-let isFuncInModules : all a. CompileJSContext -> [(String, String)] -> Info -> (() -> a) -> (() -> a) -> a =
+let isInFunc : CompileJSContext -> String -> Bool =
+  lam ctx. lam funcName.
+  match ctx.currentFunction with Some (name, _)
+  then eqString funcName (nameGetStr name)
+  else false
+
+let isInModuleFunc : CompileJSContext -> String -> String -> Bool =
+  lam ctx. lam funcName. lam modulePath.
+  if isInModule ctx modulePath
+  then isInFunc ctx funcName
+  else false
+
+let isInModuleFuncs : all a. CompileJSContext -> [(String, String)] -> Info -> (() -> a) -> (() -> a) -> a =
   lam ctx. lam funModules. lam info. lam onSuccess. lam onError.
   match info with NoInfo () then onSuccess () else
-  if any (lam p. match p with (name, path) in isFuncInModule ctx name path) funModules then onSuccess ()
+  if any (lam p. match p with (name, path) in isInModuleFunc ctx name path) funModules then onSuccess ()
   else onError ()
 
 let infoWarn : Info -> String -> () =
@@ -202,12 +211,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else -- Warning about inconsistent behaviour
-      isFuncInModules ctx [("printLn", "stdlib/common.mc"), ("printLn", "internal"), ("utestTestPassed", "internal")]
+      isInModuleFuncs ctx [("printLn", "stdlib/common.mc"), ("printLn", "internal"), ("utestTestPassed", "internal")]
         info (lam. ()) (lam. infoWarn info "'print' might have unexpected behaviour when targeting the web or a generic JS runtime");
       intrinsicGen t args
   | CDPrint _ & t ->
     -- Warning about inconsistent behaviour
-    isFuncInModules ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")]
+    isInModuleFuncs ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")]
       info (lam. JSEReturn { expr = intrinsicGen t args }) -- If so, ignore the last newline print call in dprintLn
       (lam.
         infoWarn info "'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime";
@@ -216,18 +225,20 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
 
-  | CConstructorTag _ -- Look at `test/mexpr/constructor-tags.mc` for an example
-  | CError _
-  | CArgv _
-  | CCommand _
-  | CWallTimeMs _
-  | CSleepMs _ -- TODO: inspiration: https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
-  | CRandSetSeed _
-  | CPrintError _
-  | CReadLine _
-  | CReadBytesAsString _
-  | CFlushStderr _
-  | CFlushStdout _ -> JSENop { }
+  | CConstructorTag _ & t -- Look at `test/mexpr/constructor-tags.mc` for an example
+  | CError _ & t
+  | CArgv _ & t
+  | CCommand _ & t
+  | CWallTimeMs _ & t
+  | CSleepMs _ & t -- TODO: inspiration: https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
+  | CRandSetSeed _ & t
+  | CPrintError _ & t
+  | CReadLine _ & t
+  | CReadBytesAsString _ & t -> infoWarn info (join ["Unsupported intrinsic '", getConstStringCode 0 t, "', emitting a no-op"]); JSENop { }
+  | CFlushStderr _ & t
+  | CFlushStdout _ & t ->
+    (if not (isInModule ctx "stdlib/common.mc") then infoWarn info (join ["Unsupported intrinsic '", getConstStringCode 0 t, "', emitting a no-op"]) else ());
+    JSENop { }
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
   ---------------
