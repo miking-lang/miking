@@ -225,9 +225,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
 
+  | CArgv _ & t ->
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t []
+    else errorSingle [info] "argv is only supported when targeting Node.js"
   | CConstructorTag _ & t -- Look at `test/mexpr/constructor-tags.mc` for an example
   | CError _ & t
-  | CArgv _ & t
   | CCommand _ & t
   | CWallTimeMs _ & t
   | CSleepMs _ & t -- TODO: inspiration: https://stackoverflow.com/questions/951021/what-is-the-javascript-version-of-sleep
