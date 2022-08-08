@@ -1,5 +1,6 @@
 include "ast-builder.mc"
 include "common.mc"
+include "futhark/ext.mc"
 include "ocaml/pprint.mc"
 include "mexpr/record.mc"
 
@@ -25,7 +26,9 @@ lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
 
   sem pprintVarName (env : PprintEnv) =
   | name ->
-    match pprintEnvGetStr env name with (env, str) then
+    -- NOTE(larshum, 2022-08-08): Print the external names without escaping.
+    if setMem name extNames then (env, nameGetStr name)
+    else match pprintEnvGetStr env name with (env, str) then
       let s = escapeVarString str in
       (env, s)
     else never
