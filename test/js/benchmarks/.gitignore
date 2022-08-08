@@ -1,0 +1,4 @@
+*.js
+!*.man.js
+!benchmarkcommon.js
+!run.js
