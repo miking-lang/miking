@@ -45,6 +45,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem cudaWellFormedExpr : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExpr acc =
+  -- NOTE(larshum, 2022-08-09): Currently, the MLang transformation of semantic
+  -- functions produce code containing unknown types, which are not allowed.
+  -- We add the line below as a hack to allow compiling semantic functions.
+  | TmApp {lhs = TmConst {val = CError _}} | TmNever _ -> acc
   | e ->
     let acc = cudaWellFormedType acc (tyTm e) in
     cudaWellFormedExprH acc e
