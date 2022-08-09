@@ -1,15 +1,21 @@
 const { execSync } = require('child_process');
+const fs = require("fs");
 
 const ROOT = process.cwd().substring(0, process.cwd().indexOf("miking")) + "miking/";
 const BUILD = ROOT + "build/";
 const BENCH = ROOT + "test/js/benchmarks/";
 
 function menu() {
-  console.log(`Usage: run <benchmark-name-without-postfix-name> <iteration> (clean?)
+  console.log(`Usage: run (options) [benchmark-name-no-extension] [iterations]
+
+Options:
+  --help                    Show this help
+  --no-compile              Don't compile the benchmark before running it (assumes it already exists)
+  --no-clean                Do not clean up the generated files
 
 Example:
-  run factorial 100      - Run the fibonacci benchmark 100 times
-  run factorial 100 true - Run the fibonacci benchmark 100 times and clean up the generated JavaScript
+  run factorial 100         Run the fibonacci benchmark 100 times
+  run factorial 100 false   Run the fibonacci benchmark 100 times and skip the cleanup
   `);
   process.exit(1);
 }
@@ -61,12 +67,32 @@ function compare(firstName, first, secondName, second) {
   // console.log(`${title}: ${ratio}x`, ratio > 1 ? "faster" : "slower");
 }
 
+function parse(args, availableOptions = []) {
+  const result = {};
+  const newArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith("--")) {
+      const option = arg.substring(2);
+      if (!availableOptions.includes(option)) {
+        console.log(`Unknown option '${arg}'.`);
+        menu();
+      }
+      result[option] = true;
+    } else {
+      newArgs.push(arg);
+    }
+  }
+  return [result, newArgs];
+}
+
 function main(args) {
-  if (args.length < 2) menu();
+  const [options, newArgs] = parse(args, ["help", "no-compile", "no-clean"]);
+  args = newArgs;
+  if (args.length < 2 || options["help"]) menu();
   const benchmark = args[0];
   const iterations = parseInt(args[1]);
-  const clean = args.length > 2 && args[2] === 'true';
-  compile(benchmark);
+  if (!options["no-compile"]) compile(benchmark);
   console.log(`Running benchmark '${benchmark}' for ${iterations} iterations...`);
   const mi   = run("Miking interpreter", `${BUILD}mi eval ${BENCH}${benchmark}.mc -- ${iterations}`);
   const boot = run("Boot interpreter", `${BUILD}boot eval ${BENCH}${benchmark}.mc -- ${iterations}`);
@@ -74,7 +100,6 @@ function main(args) {
   const nodeCmp = run("Node (compiled)", `node ${BENCH}${benchmark}.js ${iterations}`);
   const bunMan = run("Bun  (manual)", `bun run ${BENCH}${benchmark}.man.js ${iterations}`);
   const bunCmp = run("Bun  (compiled)", `bun run ${BENCH}${benchmark}.js ${iterations}`);
-  if (clean) cleanup(benchmark);
 
   // Compare results
   // const bootToNode = node / boot;
@@ -91,6 +116,21 @@ function main(args) {
   compare("(Bun)  Compiled JS code", bunCmp, "interpreted Miking code", mi);
   compare("(Bun)  Compiled JS code", bunCmp, "interpreted Boot code", boot);
   compare("(Bun)  Compiled JS code", bunCmp, "the manual JS implementation (Bun)", bunMan);
+
+  // Output data for gnuplot
+  const file = `${BENCH}${benchmark}_${iterations}.dat`;
+  console.log(`Writing gnuplot data to ${file}...`);
+  fs.writeFileSync(file, `#Runtime "Time (ms)"
+mi                ${mi}
+boot              ${boot}
+"node (manual)"   ${nodeMan}
+"node (compiled)" ${nodeCmp}
+"bun (manual)"    ${bunMan}
+"bun (compiled)"  ${bunCmp}
+`);
+
+  // Cleanup
+  if (!options["no-clean"]) cleanup(benchmark);
 }
 
 if (require.main === module) {

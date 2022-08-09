@@ -1,0 +1,5 @@
+"Benchmark name"     "mi"	"boot"	"node (manual)"	"node (compiled)"	"bun (manual)"	"bun (compiled)"
+"factorial\nfast"     26        11        41        39        9         9
+"factorial\nfast"     1009      396       47        43        15        9
+"factorial\nfast"     9844      3927      101       40        35        9
+"factorial\nfast"     48599     23654     300       40        132       9

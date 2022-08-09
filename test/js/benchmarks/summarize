@@ -1,0 +1,4 @@
+#!/bin/sh
+node summarize_data.js
+cd plots
+gnuplot summary.gnuplot

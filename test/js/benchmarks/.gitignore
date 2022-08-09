@@ -2,3 +2,6 @@
 !*.man.js
 !benchmarkcommon.js
 !run.js
+!summarize_data.js
+*.dat
+!/plots/*.dat
