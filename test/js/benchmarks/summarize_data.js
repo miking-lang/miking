@@ -38,7 +38,7 @@ function main(args) {
 
   const summaryFile = PLOTS + SUMMARY_FILE_NAME;
   if (fs.existsSync(summaryFile)) fs.unlinkSync(summaryFile);
-  fs.writeFileSync(summaryFile, `"Benchmark name"`.padEnd(longestName + 4, " ") + `"mi"\t"boot"\t"node (manual)"\t"node (compiled)"\t"bun (manual)"\t"bun (compiled)"\n`);
+  fs.writeFileSync(summaryFile, `"Benchmark name"`.padEnd(longestName + 4, " ") + `"mi eval"\t"boot eval"\t"node (manual)"\t"node (compiled)"\t"bun (manual)"\t"bun (compiled)"\n`);
   for (const benchmark of benchmarks) {
     const file = `${BENCH}${benchmark.name}_${benchmark.iterations}.dat`;
     const lines = fs.readFileSync(file, "utf8").split("\n");

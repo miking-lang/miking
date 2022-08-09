@@ -22,7 +22,11 @@ Example:
 
 function compile(benchmark) {
   console.log(`Compiling benchmark '${benchmark}'...`);
-  execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --to-js --js-target node ${BENCH}${benchmark}.mc`);
+  try {
+    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --to-js --js-target node ${BENCH}${benchmark}.mc`);
+  } catch (e) {
+    process.exit(1);
+  }
 }
 
 function cleanup(benchmark) {
@@ -121,8 +125,8 @@ function main(args) {
   const file = `${BENCH}${benchmark}_${iterations}.dat`;
   console.log(`Writing gnuplot data to ${file}...`);
   fs.writeFileSync(file, `#Runtime "Time (ms)"
-mi                ${mi}
-boot              ${boot}
+"mi eval"         ${mi}
+"boot eval"       ${boot}
 "node (manual)"   ${nodeMan}
 "node (compiled)" ${nodeCmp}
 "bun (manual)"    ${bunMan}
