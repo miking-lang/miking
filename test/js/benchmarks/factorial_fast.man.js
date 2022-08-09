@@ -8,4 +8,4 @@ function fact(n, acc) {
   else return fact(n - 1, n * acc);
 }
 
-repeat(() => fact(100, 1));
+repeat(() => fact(1000, 1));
