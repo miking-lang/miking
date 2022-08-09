@@ -13,12 +13,14 @@ set grid y
 set terminal png
 set output "summary.png"
 
-plot "summary.dat" using 2:xtic(1) t col, \
-	 "summary.dat" using 3:xtic(1) t col, \
- 	 "summary.dat" using 4:xtic(1) t col, \
-	 "summary.dat" using 5:xtic(1) t col, \
-	 "summary.dat" using 6:xtic(1) t col, \
-	 "summary.dat" using 7:xtic(1) t col, \
+data = "summary.dat"
+
+plot data u 2:xtic(1) t col, \
+	 data u 3:xtic(1) t col, \
+ 	 data u 4:xtic(1) t col, \
+	 data u 5:xtic(1) t col, \
+	 data u 6:xtic(1) t col, \
+	 data u 7:xtic(1) t col, \
 
 set terminal svg
 set output "summary.svg"
