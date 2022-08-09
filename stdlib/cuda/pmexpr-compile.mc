@@ -39,9 +39,12 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
       if any (lam e. setMem e marked) comp then
         foldl
           (lam marked. lam bindId.
+            -- NOTE(larshum, 2022-08-09): The call graph construction includes
+            -- nested functions. We are only interested in marking the bindings
+            -- themselves, so we do nothing if it's not a binding.
             match mapLookup bindId bindMap with Some bindBody then
               markInBody marked bindBody
-            else never)
+            else marked)
           marked comp
       else marked
     in
