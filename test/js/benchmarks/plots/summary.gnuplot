@@ -1,5 +1,3 @@
-set terminal png
-set output "summary.png"
 set title "Summary of benchmark results\nin logarithmic scale"
 set xlabel "Benchmark"
 set ylabel "Time (ms)"
@@ -11,6 +9,9 @@ set style histogram clustered gap 1
 set style fill solid border -1
 set xtics rotate by -33
 set grid y
+
+set terminal png
+set output "summary.png"
 
 plot "summary.dat" using 2:xtic(1) t col, \
 	 "summary.dat" using 3:xtic(1) t col, \
