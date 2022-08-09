@@ -28,7 +28,7 @@ function run(title, cmd) {
   const start = Date.now();
   try { execSync(cmd + " 2>&1") }
   catch(e) {
-    console.log("CMD FAILED:", e.message);
+    console.log(e.message);
     return undefined;
   }
   const end = Date.now();
