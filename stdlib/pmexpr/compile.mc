@@ -1,4 +1,5 @@
 include "cuda/constant-app.mc"
+include "cuda/inline-higher.mc"
 include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/well-formed.mc"
@@ -159,7 +160,7 @@ end
 
 lang PMExprCudaWellFormed =
   PMExprCompileWellFormedBase + CudaPMExprAst + CudaLanguageFragmentFix +
-  CudaConstantApp + MExprANF
+  CudaInlineHigherOrder + MExprANF
 
   sem cudaCheckTensorRank : Int -> Name -> Expr -> Type -> Expr
   sem cudaCheckTensorRank tensorMaxRank id acc =
@@ -217,8 +218,8 @@ lang PMExprCudaWellFormed =
   | Cuda _ ->
     match entry with (_, ast) in
     let ast = fixLanguageFragmentSemanticFunction ast in
-    let ast = constantAppToExpr ast in
     let ast = normalizeTerm ast in
+    let ast = inlinePartialFunctions ast in
     (use CudaWellFormed in wellFormed ast);
     ast
 end

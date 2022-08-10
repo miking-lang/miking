@@ -293,45 +293,52 @@ lang PMExprAst =
     normalizeName (lam e. k (TmFlatten {t with e = e})) t.e
   | TmMap2 t ->
     normalizeNames
-      (lam as.
-        normalizeName
-          (lam bs.
-            k (TmMap2 {{{t with f = normalizeTerm t.f}
-                           with as = as}
-                           with bs = bs}))
-          t.bs)
-      t.as
-  | TmParallelReduce t ->
-    normalizeNames
-      (lam ne.
+      (lam f.
         normalizeName
           (lam as.
-            k (TmParallelReduce {{{t with f = normalizeTerm t.f}
-                                     with ne = ne}
-                                     with as = as}))
+            normalizeName
+              (lam bs.
+                k (TmMap2 {t with f = f, as = as, bs = bs}))
+              t.bs)
           t.as)
-      t.ne
+      t.f
+  | TmParallelReduce t ->
+    normalizeNames
+      (lam f.
+        normalizeName
+          (lam as.
+            normalizeName
+              (lam ne.
+                k (TmParallelReduce {t with f = f, ne = ne, as = as}))
+              t.ne)
+          t.as)
+      t.f
   | TmLoop t ->
-    normalizeName
+    normalizeNames
       (lam n.
-        k (TmLoop {{t with n = n}
-                      with f = normalizeTerm t.f}))
+        normalizeName
+          (lam f.
+            k (TmLoop {t with n = n, f = f}))
+          t.f)
       t.n
   | TmLoopAcc t ->
     normalizeNames
       (lam ne.
         normalizeName
           (lam n.
-            k (TmLoopAcc {{{t with ne = ne}
-                              with n = n}
-                              with f = normalizeTerm t.f}))
+            normalizeName
+              (lam f.
+                k (TmLoopAcc {t with ne = ne, n = n, f = f}))
+              t.f)
           t.n)
       t.ne
   | TmParallelLoop t ->
-    normalizeName
+    normalizeNames
       (lam n.
-        k (TmParallelLoop {{t with n = n}
-                              with f = normalizeTerm t.f}))
+        normalizeName
+          (lam f.
+            k (TmParallelLoop {t with n = n, f = f}))
+          t.f)
       t.n
   | TmPrintFloat t ->
     normalizeName (lam e. k (TmPrintFloat {t with e = e})) t.e

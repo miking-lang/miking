@@ -53,25 +53,43 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedType acc (tyTm e) in
     cudaWellFormedExprH acc e
 
+  sem _cudaCheckConstApp : Info -> [WFError] -> [Expr] -> Const -> [WFError]
+  sem _cudaCheckConstApp info acc args =
+  | CFoldl _ ->
+    let acc = cudaWellFormedHigherOrder acc (get args 0) in
+    let acc = cudaWellFormedExpr acc (get args 1) in
+    cudaWellFormedExpr acc (get args 2)
+  | CTensorSliceExn _ ->
+    let acc = cudaWellFormedExpr acc (get args 0) in
+    cudaWellFormedExpr acc (get args 1)
+  | CTensorSubExn _ ->
+    let acc = cudaWellFormedExpr acc (get args 0) in
+    let acc = cudaWellFormedExpr acc (get args 1) in
+    cudaWellFormedExpr acc (get args 2)
+  | _ -> _cudaCheckAppArgs info acc args
+
+  sem _cudaCheckAppArgs : Info -> [WFError] -> [Expr] -> [WFError]
+  sem _cudaCheckAppArgs info acc =
+  | args ->
+    let checkArg = lam acc. lam arg.
+      match tyTm arg with TyArrow _ then cons (CudaAppArgTypeError arg) acc
+      else acc in
+    foldl checkArg acc args
+
   sem _cudaCheckApp : [WFError] -> Expr -> [WFError]
   sem _cudaCheckApp acc =
-  | TmApp t ->
-    let acc = cudaWellFormedExpr acc t.rhs in
-    let acc =
-      match tyTm t.rhs with TyArrow _ then
-        cons (CudaAppArgTypeError t.rhs) acc
-      else acc in
-    _cudaCheckApp acc t.lhs
-  | e -> cudaWellFormedExpr acc e
+  | (TmApp t) & app ->
+    match collectAppArguments app with (fun, args) in
+    match fun with TmConst {val = c} then _cudaCheckConstApp t.info acc args c
+    else _cudaCheckAppArgs t.info acc args
 
   sem cudaWellFormedExprH : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExprH acc =
   | TmVar t -> acc
   | (TmApp t) & app ->
-    let acc =
-      match t.ty with TyArrow _ then cons (CudaAppResultTypeError app) acc
-      else acc in
-    _cudaCheckApp acc app
+    match t.ty with TyArrow _ then
+      cons (CudaAppResultTypeError app) acc
+    else _cudaCheckApp acc app
   | TmLam t -> cudaWellFormedExpr acc t.body
   | TmLet t ->
     let acc =
@@ -111,17 +129,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | TmConDef t ->
     let acc = cons (CudaExprError (TmConDef t)) acc in
     cudaWellFormedExpr acc t.inexpr
-  | TmSeqFoldl t ->
-    let acc = cudaWellFormedExpr acc t.acc in
-    let acc = cudaWellFormedExpr acc t.s in
-    cudaWellFormedHigherOrder acc t.f
-  | TmTensorSliceExn t ->
-    let acc = cudaWellFormedExpr acc t.t in
-    cudaWellFormedExpr acc t.slice
-  | TmTensorSubExn t ->
-    let acc = cudaWellFormedExpr acc t.t in
-    let acc = cudaWellFormedExpr acc t.ofs in
-    cudaWellFormedExpr acc t.len
   | TmLoop t | TmParallelLoop t ->
     let acc = cudaWellFormedExpr acc t.n in
     cudaWellFormedHigherOrder acc t.f
@@ -136,11 +143,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   sem cudaWellFormedHigherOrder acc =
   | TmVar t -> acc
   | app & (TmApp _) -> _cudaCheckApp acc app
-  | TmLet (t & {inexpr = TmVar {ident = id}}) ->
-    if nameEq t.ident id then
-      cudaWellFormedHigherOrder acc t.body
-    else cons (CudaHigherOrderArgument (TmLet t)) acc
-  | lambda & (TmLam _) -> cudaWellFormedExpr acc lambda
   | t -> cons (CudaHigherOrderArgument t) acc
 
   sem cudaWellFormedType : [WFError] -> Type -> [WFError]

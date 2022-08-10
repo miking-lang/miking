@@ -138,6 +138,7 @@ let futharkTranslation : Set Name -> Expr -> FutProg =
 let cudaTranslation =
   use MExprCudaCompile in
   lam options : Options. lam accelerateData : Map Name AccelerateData. lam ast : Expr.
+  let ast = constantAppToExpr ast in
   let ast = toCudaPMExpr ast in
   match typeLift ast with (typeEnv, ast) in
   let ast = removeTypeAscription ast in
