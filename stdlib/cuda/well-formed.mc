@@ -5,6 +5,7 @@ include "cuda/pmexpr-pprint.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "pmexpr/pprint.mc"
+include "pmexpr/utils.mc"
 include "pmexpr/well-formed.mc"
 
 lang CudaWellFormed = WellFormed + CudaPMExprAst
@@ -80,8 +81,10 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   sem _cudaCheckApp acc =
   | (TmApp t) & app ->
     match collectAppArguments app with (fun, args) in
-    match fun with TmConst {val = c} then _cudaCheckConstApp t.info acc args c
-    else _cudaCheckAppArgs t.info acc args
+    let acc =
+      match fun with TmConst {val = c} then _cudaCheckConstApp t.info acc args c
+      else _cudaCheckAppArgs t.info acc args in
+    cudaWellFormedExpr acc fun
 
   sem cudaWellFormedExprH : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExprH acc =
