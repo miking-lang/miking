@@ -36,7 +36,7 @@ function cleanup(benchmark) {
 function run(title, cmd) {
   process.stdout.write(`- ${title.padEnd(20)}: `);
   const start = Date.now();
-  try { execSync(cmd + " 2>&1") }
+  try { execSync(cmd + " > /dev/null 2>&1") }
   catch(e) {
     console.log(e.message);
     return undefined;
