@@ -226,7 +226,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
 
   | CArgv _ & t ->
-    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t []
+    match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t [JSENop {}]
     else errorSingle [info] "argv is only supported when targeting Node.js"
   | CConstructorTag _ & t -- Look at `test/mexpr/constructor-tags.mc` for an example
   | CError _ & t
@@ -373,7 +373,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       exprs = [JSEDef { id = ident, expr = expr }],
       ret = compileMExpr ctx inexpr
     })
-  | TmNever _ -> intrinsicStrGen "never" [JSEInt { i = 0 }]
+  | TmNever _ -> intrinsicStrGen "never" [JSENop {}]
 
 end
 
