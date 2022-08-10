@@ -53,7 +53,7 @@ function fixed(n, digits) {
 
 function compare(firstName, first, secondName, second) {
   if (!first || !second) {
-    console.log(`${firstName} and ${secondName} are not comparable.`);
+    console.log(`> ${firstName} and ${secondName} are not comparable.`);
     return;
   }
   const ratio = second / first;
