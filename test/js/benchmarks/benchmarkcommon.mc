@@ -1,7 +1,8 @@
 include "string.mc"
+include "common.mc"
 
-recursive let work = lam f. lam n.
-  if eqi n 0 then () else f(); work f (subi n 1)
+recursive let work: all a. (() -> a) -> Int -> a -> a = lam f. lam n. lam prev.
+  if lti n 1 then prev else work f (subi n 1) (f ())
 end
 
-let repeat = lam f. work f (string2int (get argv 1))
+let repeat: all a. (() -> a) -> a = lam f. work f (subi (string2int (get argv 1)) 1) (f ())
