@@ -15,6 +15,9 @@ end
 let tmpIgnoreJS = use PatJSCompileLang in
   JSEVar { id = nameSym "_" }
 
+let compilePatsLen = use PatJSCompileLang in
+  lam pats: [Pat]. lam target: JSExpr.
+  _binOp (JSOEq {}) [JSEMember { expr = target, id = "length" }, JSEInt { i = length pats }]
 
 ------------------------------------
 -- Pattern -> JavaScript FRAGMENT --
@@ -92,8 +95,12 @@ lang PatJSCompile = PatJSCompileLang
       let str: String = _charPatSeq2String pats in
      _binOp (JSOEq {}) [target, JSEString { s = str }]
     else
-      match compileSinglePattern p with (pat, extra) in
-      _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra)
+      -- Check if the sequence is empty
+      let lengthCheck = compilePatsLen pats target in
+      if null pats then lengthCheck
+      else
+        match compileSinglePattern p with (pat, extra) in
+        _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (pat) target], extra])
   | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
