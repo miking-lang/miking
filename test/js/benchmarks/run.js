@@ -23,7 +23,7 @@ Example:
 function compile(benchmark) {
   console.log(`Compiling benchmark '${benchmark}'...`);
   try {
-    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --to-js --js-target node ${BENCH}${benchmark}.mc`);
+    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --to-js --js-target node ${BENCH}${benchmark}.mc`);
   } catch (e) {
     process.exit(1);
   }
