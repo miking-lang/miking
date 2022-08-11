@@ -6,6 +6,7 @@ include "javascript/compile.mc"
 let platformMapJS = mapFromSeq cmpString
   [("generic", CompileJSTP_Generic ())
   ,("node", CompileJSTP_Node ())
+  ,("bun", CompileJSTP_Bun ())
   ,("web", CompileJSTP_Web ())]
 
 let compileMCoreToJS : CompileJSOptions -> Expr -> String -> String =

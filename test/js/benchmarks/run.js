@@ -20,10 +20,10 @@ Example:
   process.exit(1);
 }
 
-function compile(benchmark) {
+function compile(benchmark, target) {
   console.log(`Compiling benchmark '${benchmark}'...`);
   try {
-    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --to-js --js-target node ${BENCH}${benchmark}.mc`);
+    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --to-js --js-target ${target} ${BENCH}${benchmark}.mc`);
   } catch (e) {
     process.exit(1);
   }
@@ -96,12 +96,13 @@ function main(args) {
   if (args.length < 2 || options["help"]) menu();
   const benchmark = args[0];
   const iterations = parseInt(args[1]);
-  if (!options["no-compile"]) compile(benchmark);
   console.log(`Running benchmark '${benchmark}' for ${iterations} iterations...`);
   const mi   = run("Miking interpreter", `${BUILD}mi eval ${BENCH}${benchmark}.mc -- ${iterations}`);
   const boot = run("Boot interpreter", `${BUILD}boot eval ${BENCH}${benchmark}.mc -- ${iterations}`);
+  if (!options["no-compile"]) compile(benchmark, "node");
   const nodeMan = run("Node (manual)", `node ${BENCH}${benchmark}.man.js ${iterations}`);
   const nodeCmp = run("Node (compiled)", `node ${BENCH}${benchmark}.js ${iterations}`);
+  if (!options["no-compile"]) compile(benchmark, "bun");
   const bunMan = run("Bun  (manual)", `bun run ${BENCH}${benchmark}.man.js ${iterations}`);
   const bunCmp = run("Bun  (compiled)", `bun run ${BENCH}${benchmark}.js ${iterations}`);
 

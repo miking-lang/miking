@@ -210,6 +210,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- Not directly mapped to JavaScript operators
   | CPrint _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    else match ctx.options.targetPlatform with CompileJSTP_Bun () then intrinsicBun t args
     else -- Warning about inconsistent behaviour
       isInModuleFuncs ctx [("printLn", "stdlib/common.mc"), ("printLn", "internal"), ("utestTestPassed", "internal")]
         info (lam. ()) (lam. infoWarn info "'print' might have unexpected behaviour when targeting the web or a generic JS runtime");
@@ -223,10 +224,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
         intrinsicGen t args)
   | CExit _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t args
+    else match ctx.options.targetPlatform with CompileJSTP_Bun () then intrinsicBun t args
     else JSEString { s = "exit" } -- TODO: Fix this, inspiration: https://stackoverflow.com/questions/550574/how-to-terminate-the-script-in-javascript
 
   | CArgv _ & t ->
     match ctx.options.targetPlatform with CompileJSTP_Node () then intrinsicNode t [JSENop {}]
+    else match ctx.options.targetPlatform with CompileJSTP_Bun () then intrinsicBun t [JSENop {}]
     else errorSingle [info] "argv is only supported when targeting Node.js"
   | CConstructorTag _ & t -- Look at `test/mexpr/constructor-tags.mc` for an example
   | CError _ & t
@@ -408,6 +411,7 @@ let javascriptCompileFile : CompileJSOptions -> Expr -> String -> String =
     switch opts.targetPlatform
     case CompileJSTP_Web () then readFile jsIntrinsicsFile_web
     case CompileJSTP_Node () then readFile jsIntrinsicsFile_node
+    case CompileJSTP_Bun () then readFile jsIntrinsicsFile_bun
     case _ then "" end
   ), "\n"] in
   writeFile targetPath (concat intrinsics source);

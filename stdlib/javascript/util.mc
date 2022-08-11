@@ -15,6 +15,7 @@ include "javascript/ast.mc"
 type CompileJSTargetPlatform
 con CompileJSTP_Generic : () -> CompileJSTargetPlatform
 con CompileJSTP_Node    : () -> CompileJSTargetPlatform
+con CompileJSTP_Bun     : () -> CompileJSTargetPlatform
 con CompileJSTP_Web     : () -> CompileJSTargetPlatform
 
 -- JS Compiler options

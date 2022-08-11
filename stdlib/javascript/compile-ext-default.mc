@@ -9,8 +9,10 @@ include "option.mc"
 include "javascript/generic/compile-ext.mc"
 include "javascript/node/compile-ext.mc"
 include "javascript/web/compile-ext.mc"
+include "javascript/bun/compile-ext.mc"
 
-lang CompileJSDefaultExt = CompileJSExt + CompileJSGenExt + CompileJSWebExt + CompileJSNodeExt
+lang CompileJSDefaultExt = CompileJSExt + CompileJSGenExt +
+                           CompileJSWebExt + CompileJSNodeExt + CompileJSBunExt
 
 sem compileExt : CompileJSTargetPlatform -> Info -> String -> Option JSExpr
 sem compileExt p i =

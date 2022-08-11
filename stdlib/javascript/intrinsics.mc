@@ -53,27 +53,35 @@ end
 let intrGenNS   = nameSym "MExpr_JS_Intrinsics"
 let intrWebNS   = nameSym "MExpr_Web_JS_Intrinsics"
 let intrNodeNS  = nameSym "MExpr_Node_JS_Intrinsics"
+let intrBunNS   = nameSym "MExpr_Bun_JS_Intrinsics"
 
 let jsIntrinsicsFile_generic  = "stdlib/javascript/generic/intrinsics.js"
 let jsIntrinsicsFile_web      = "stdlib/javascript/web/intrinsics.js"
 let jsIntrinsicsFile_node     = "stdlib/javascript/node/intrinsics.js"
+let jsIntrinsicsFile_bun      = "stdlib/javascript/bun/intrinsics.js"
 
 let intrinsicGen  = use JSIntrinsic in intrinsic intrGenNS
 let intrinsicWeb  = use JSIntrinsic in intrinsic intrWebNS
 let intrinsicNode = use JSIntrinsic in intrinsic intrNodeNS
+let intrinsicBun = use JSIntrinsic in intrinsic intrBunNS
 
 let optimizedIntrinsicGen   = use JSIntrinsic in optimizedIntrinsic intrGenNS
 let optimizedIntrinsicWeb   = use JSIntrinsic in optimizedIntrinsic intrWebNS
 let optimizedIntrinsicNode  = use JSIntrinsic in optimizedIntrinsic intrNodeNS
+let optimizedIntrinsicBun   = use JSIntrinsic in optimizedIntrinsic intrBunNS
 
 let optimizedIntrinsicGenStr  = use JSIntrinsic in optimizedIntrinsicWithString intrGenNS
 let optimizedIntrinsicWebStr  = use JSIntrinsic in optimizedIntrinsicWithString intrWebNS
 let optimizedIntrinsicNodeStr = use JSIntrinsic in optimizedIntrinsicWithString intrNodeNS
+let optimizedIntrinsicBunStr  = use JSIntrinsic in optimizedIntrinsicWithString intrBunNS
+
 
 let intrinsicStrGen  = use JSIntrinsic in intrinsicFromString intrGenNS
 let intrinsicStrWeb  = use JSIntrinsic in intrinsicFromString intrWebNS
 let intrinsicStrNode = use JSIntrinsic in intrinsicFromString intrNodeNS
+let intrinsicStrBun  = use JSIntrinsic in intrinsicFromString intrBunNS
 
-let externalRefGen  = use JSIntrinsic in lam n. intrinsicStrGen n []
-let externalRefWeb  = use JSIntrinsic in lam n. intrinsicStrWeb n []
+let externalRefGen  = use JSIntrinsic in lam n. intrinsicStrGen  n []
+let externalRefWeb  = use JSIntrinsic in lam n. intrinsicStrWeb  n []
 let externalRefNode = use JSIntrinsic in lam n. intrinsicStrNode n []
+let externalRefBun  = use JSIntrinsic in lam n. intrinsicStrBun  n []
