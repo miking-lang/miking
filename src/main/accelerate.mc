@@ -81,7 +81,7 @@ let parallelKeywords = [
   "map2",
   "parallelFlatten",
   "reduce",
-  "parallelLoop",
+  "loop",
   "seqLoop",
   "seqLoopAcc",
   "printFloat"
@@ -92,12 +92,6 @@ let keywordsSymEnv =
     mapFromSeq
       cmpString
       (map (lam s. (s, nameSym s)) parallelKeywords)}
-
-let parallelPatterns = [
-  getMapPattern (),
-  getMap2Pattern (),
-  getReducePattern ()
-]
 
 let pprintOCamlTops = use OCamlPrettyPrint in
   lam tops : [Top].
@@ -277,8 +271,7 @@ let compileAccelerated =
     libs = libs,
     clibs = clibs,
     ocamlTops = ocamlTops,
-    acceleratedCode = gpuResult
-  } in
+    acceleratedCode = gpuResult } in
   buildAccelerated buildOptions
 
 let compileAccelerate = lam files. lam options : Options. lam args.

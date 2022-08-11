@@ -5,7 +5,7 @@ let tensorSum : Tensor[Float] -> Float = lam t.
   let n = foldl muli 1 sh in
   let sum = ref 0.0 in
   let t = tensorReshapeExn t [n] in
-  parallelLoop n (lam i : Int. modref sum (addf (deref sum) (tensorGetExn t [i])));
+  loop n (lam i : Int. modref sum (addf (deref sum) (tensorGetExn t [i])));
   deref sum
 
 mexpr
@@ -34,7 +34,7 @@ printLn (concat "Sum on CPU: " (float2string (tensorSum c)));
 let c = tensorCreateCArrayFloat shape (lam. 0.0) in
 
 accelerate (
-  parallelLoop n
+  loop n
     (lam i : Int.
       let x = modi i 5 in
       let y = modi (divi i 5) 5 in
