@@ -5,12 +5,12 @@ function repeat(f) {
     console.log("Invalid number of iterations! Missing argument, expected an integer.");
     process.exit(1);
   }
-  for (let i = 1; i < n; i++) prev = f();
+  for (let i = 1; i < n; i++) prev = f(i);
   return prev;
 }
 
-function utest(condition) {
-  if (!condition) {
+function utest(lhs, rhs, cmp = (l, r) => l === r) {
+  if (!cmp(lhs, rhs)) {
     throw new Error("Unit test assertion failed!");
   }
 }

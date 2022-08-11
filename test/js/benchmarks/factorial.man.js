@@ -6,4 +6,4 @@ function fact(n) {
 }
 
 const r = repeat(() => fact(20));
-utest(r === 2432902008176640000);
+utest(r, 2432902008176640000);

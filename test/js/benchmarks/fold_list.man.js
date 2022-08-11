@@ -6,4 +6,4 @@ function foldf(n) {
 }
 
 const r = repeat(() => foldf(1000));
-utest(r === 500500);
+utest(r, 500500);
