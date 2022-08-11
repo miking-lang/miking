@@ -82,6 +82,13 @@ lang JSPrettyPrint = JSExprAst
     let sep = if curried then strJoin ")(" else strJoin ", " in
     (env, join [fun, "(", sep args, ")"])
 
+  sem printJSValue : Int -> PprintEnv -> JSExpr -> String
+  sem printJSValue indent env =
+  | JSEObject _ & e ->
+    match printJSExpr indent env e with (env, s) in
+    (env, join ["(", s, ")"])
+  | e -> printJSExpr indent env e
+
   sem printJSExpr : Int -> PprintEnv -> JSExpr -> (PprintEnv, String)
   sem printJSExpr indent env =
   | JSEVar { id = id } -> getNameStrDefault "_" env id
@@ -102,7 +109,7 @@ lang JSPrettyPrint = JSExprAst
   | JSEFun { params = params, body = body } ->
     let i = indent in
     match (printJSFunParams env true params) with (env, args) in
-    match (printJSExpr i) env body with (env,body) in
+    match printJSValue i env body with (env,body) in
     (env, join [args, " => ", body])
   | JSEIIFE { body = body } ->
     let i = indent in
@@ -119,8 +126,8 @@ lang JSPrettyPrint = JSExprAst
   | JSETernary { cond = cond, thn = thn, els = els } ->
     let i = indent in
     match (printJSExpr 0 env) cond with (env, cond) in
-    match (printJSExpr i env) thn with (env, thn) in
-    match (printJSExpr i env) els with (env, els) in
+    match (printJSValue i env) thn with (env, thn) in
+    match (printJSValue i env) els with (env, els) in
     (env, join ["(", cond, " ? ", thn, " : ", els, ")"])
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match (printJSExpr indent) env lhs with (env,lhs) in
