@@ -173,6 +173,12 @@ end
 
 lang JSOptimizeExprs = JSExprAst
 
+  sem cleanStatements : [JSExpr] -> JSExpr -> [JSExpr]
+  sem cleanStatements acc =
+  | JSENop _ -> acc
+  | JSEObject _ -> acc
+  | e -> snoc acc e
+
   sem optimizeExpr3 : JSExpr -> JSExpr
   sem optimizeExpr3 =
   | expr -> optimizeExpr (optimizeExpr (optimizeExpr expr))
@@ -208,6 +214,12 @@ lang JSOptimizeExprs = JSExprAst
     else match (thn, els) with (JSEBool { b = false }, JSEBool { b = true }) then
       JSEUnOp { op = JSONot {}, rhs = cond }
     else JSETernary { cond = cond, thn = thn, els = els }
+
+  | JSEBlock { exprs = exprs, ret = ret } ->
+    let exprs = foldl cleanStatements [] exprs in
+    let ret = optimizeExpr ret in
+    JSEBlock { exprs = exprs, ret = ret }
+  | JSEIIFE { body = JSEBlock { exprs = [], ret = ret } } -> ret
 
   | e -> smapJSExprJSExpr optimizeExpr e
 
