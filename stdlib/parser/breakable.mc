@@ -586,34 +586,43 @@ let _getAllowedGroupings
     end
 
 -- NOTE(vipa, 2021-02-15): This should be a private type, and/or replaced with some standard library type at a later point in time
-type BreakableQueue self = [Ref [TentativeNode self ROpen]]
+type BreakableQueue self = {values : [Ref [TentativeNode self ROpen]], highestIndex : Ref Int}
 let _newQueueFromFrontier
   : all self. all rstyle. [TentativeNode self rstyle]
   -> BreakableQueue self
   = lam frontier.
-    (create
-      (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
-      (lam. ref []))
+    { highestIndex = ref 0
+    , values =
+      create
+        (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
+        (lam. ref [])
+    }
 let _addToQueue
   : all self. TentativeNode self ROpen
   -> BreakableQueue self
   -> ()
   = lam node. lam queue.
     let dist = _maxDistanceFromRoot node in
-    let target = get queue dist in
+    let target = get queue.values dist in
+    (if lti (deref queue.highestIndex) dist
+     then modref queue.highestIndex dist
+     else ());
     modref target (snoc (deref target) node)
-recursive let _popFromQueue
+let _popFromQueue
   : all self. BreakableQueue self
   -> Option (TentativeNode self ROpen)
   = lam queue.
-    match queue with queue ++ [target] then
-      let nodes = deref target in
-      match nodes with [node] ++ nodes then
-        modref target nodes;
-        Some node
-      else _popFromQueue queue
-    else None ()
-end
+    let values = (splitAt queue.values (addi (deref queue.highestIndex) 1)).0 in
+    recursive let work = lam values.
+      match values with values ++ [target] then
+        let nodes = deref target in
+        match nodes with [node] ++ nodes then
+          modref target nodes;
+          modref queue.highestIndex (length values);
+          Some node
+        else work values
+      else modref queue.highestIndex 0; None ()
+    in work values
 
 -- NOTE(vipa, 2021-02-12): The type signatures in this function assume
 -- that type variables are scoped, e.g., `rstyle` on `makeNewParents`
