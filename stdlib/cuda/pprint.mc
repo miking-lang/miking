@@ -60,7 +60,7 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
     let ops = int2string opsPerThread in
     (env, join ["CELoopKernel(", n, ", ", f, ")[opsPerThread=", ops, "]"])
   | CEKernelApp t ->
-    match pprintEnvGetStr env t.fun with (env, fun) in
+    match cPprintEnvGetStr env t.fun with (env, fun) in
     match mapAccumL printCExpr env t.args with (env, args) in
     match printCExpr env t.gridSize with (env, gridSize) in
     match printCExpr env t.blockSize with (env, blockSize) in

@@ -59,7 +59,7 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
       match arg with TmVar {ident = ident} then
         -- NOTE(larshum, 2022-08-01): If the tensor is uninitialized and it has
         -- not been used yet, its data does not need to be copied.
-        if setMem ident (setDifference env.uninitTensors used) then
+        if setMem ident (setSubtract env.uninitTensors used) then
           omitCopyTo status
         else status
       else status in
