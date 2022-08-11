@@ -30,8 +30,8 @@ function main(args) {
 
   let longestName = 0;
   benchmarks = benchmarks.map(benchmark => {
-    // benchmark.title = '"' + benchmark.name.replace(/_/g, " ") + "\\n(" + benchmark.iterations + " iter)\"";
-    benchmark.title = '"' + benchmark.name.replace(/_/g, "\\n") + '"';
+    benchmark.title = '"' + benchmark.name.replace(/_/g, " ") + "\\n(" + benchmark.iterations + " iter)\"";
+    // benchmark.title = '"' + benchmark.name.replace(/_/g, "\\n") + '"';
     longestName = Math.max(longestName, benchmark.title.length);
     return benchmark;
   });

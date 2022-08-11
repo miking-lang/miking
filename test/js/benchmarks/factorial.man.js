@@ -5,5 +5,5 @@ function fact(n) {
   else return n * fact(n - 1);
 }
 
-const r = repeat(() => fact(1000));
-utest(r > 1000000);
+const r = repeat(() => fact(20));
+utest(r === 2432902008176640000);

@@ -3,9 +3,9 @@ include "benchmarkcommon.mc"
 mexpr
 
 recursive let fact = lam n. lam acc.
-  if eqi n 0 then acc else fact (subi n 1) (muli n acc)
+  if lti n 1 then acc else fact (subi n 1) (muli n acc)
 in
 
-let r = repeat (lam. fact 1000 1) in
-utest r with 1000000 using gti in
+let r = repeat (lam. fact 20 1) in
+utest r with 2432902008176640000 using eqi in
 ()
