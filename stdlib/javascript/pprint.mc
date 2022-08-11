@@ -31,6 +31,9 @@ let joinAsStatements = lam indent. lam seq.
 
 let getNameStrDefault =  lam default: String.lam env. lam id: Name.
   if null (nameGetStr id) then (env, default)
+  else if stringIsInt (nameGetStr id) then
+    match pprintEnvGetStr env id with (env, str) in
+    (env, cons 'd' str)
   else pprintEnvGetStr env id
 
 
