@@ -1,11 +1,10 @@
-const { repeat } = require("./benchmarkcommon");
-
-// let rec fact n = if n = 0 then 1 else n * fact (n - 1)
-// let _ = Benchmarkcommon.repeat (fun () -> fact 100)
+const { repeat, utest } = require("./benchmarkcommon");
 
 function fact(n, acc) {
   if (n === 0) return acc;
   else return fact(n - 1, n * acc);
 }
 
-repeat(() => fact(1000, 1));
+const r = repeat(() => fact(1000, 1));
+utest(r > 1000000);
+
