@@ -21,9 +21,9 @@ Example:
 }
 
 function compile(benchmark, target) {
-  console.log(`Compiling benchmark '${benchmark}'...`);
+  console.log(`Compiling benchmark '${benchmark}' target: ${target}...`);
   try {
-    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --to-js --js-target ${target} ${BENCH}${benchmark}.mc`);
+    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --disable-prune-utests --to-js --js-target ${target} ${BENCH}${benchmark}.mc`);
   } catch (e) {
     process.exit(1);
   }
@@ -97,8 +97,8 @@ function main(args) {
   const benchmark = args[0];
   const iterations = parseInt(args[1]);
   console.log(`Running benchmark '${benchmark}' for ${iterations} iterations...`);
-  const mi   = run("Miking interpreter", `${BUILD}mi eval ${BENCH}${benchmark}.mc -- ${iterations}`);
-  const boot = run("Boot interpreter", `${BUILD}boot eval ${BENCH}${benchmark}.mc -- ${iterations}`);
+  const mi   = run("Miking interpreter", `${BUILD}mi eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
+  const boot = run("Boot interpreter", `${BUILD}boot eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
   if (!options["no-compile"]) compile(benchmark, "node");
   const nodeMan = run("Node (manual)", `node ${BENCH}${benchmark}.man.js ${iterations}`);
   const nodeCmp = run("Node (compiled)", `node ${BENCH}${benchmark}.js ${iterations}`);
