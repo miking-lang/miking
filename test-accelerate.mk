@@ -5,5 +5,5 @@ include test-files.mk
 all: $(accelerate_files)
 
 $(accelerate_files):
-	@./make compile-test $@ "build/mi compile --check-well-formed"
+	@./make compile-test $@ "build/mi compile --check-well-formed --runtime-checks"
 	@./make compile-test $@ "build/mi compile --accelerate"
