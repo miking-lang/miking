@@ -25,7 +25,8 @@ let pprintEnvGetStr = lam env. lam id: Name.
     pprintEnvGetStr env id -- Note that this is not a recursive call!
 
 let joinAsStatements = lam indent. lam seq.
-  concat (strJoin (concat ";" (pprintNewline indent)) seq) ";"
+  if null seq then ""
+  else join [pprintNewline indent, (strJoin (concat ";" (pprintNewline indent)) seq), ";"]
 
 
 let getNameStrDefault =  lam default: String.lam env. lam id: Name.
@@ -82,7 +83,7 @@ lang JSPrettyPrint = JSExprAst
     let sep = if curried then strJoin ")(" else strJoin ", " in
     (env, join [fun, "(", sep args, ")"])
 
-  sem printJSValue : Int -> PprintEnv -> JSExpr -> String
+  sem printJSValue : Int -> PprintEnv -> JSExpr -> (PprintEnv, String)
   sem printJSValue indent env =
   | JSEObject _ & e ->
     match printJSExpr indent env e with (env, s) in
@@ -126,8 +127,8 @@ lang JSPrettyPrint = JSExprAst
   | JSETernary { cond = cond, thn = thn, els = els } ->
     let i = indent in
     match (printJSExpr 0 env) cond with (env, cond) in
-    match (printJSValue i env) thn with (env, thn) in
-    match (printJSValue i env) els with (env, els) in
+    match printJSValue i env thn with (env, thn) in
+    match printJSValue i env els with (env, els) in
     (env, join ["(", cond, " ? ", thn, " : ", els, ")"])
   | JSEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match (printJSExpr indent) env lhs with (env,lhs) in
@@ -159,7 +160,7 @@ lang JSPrettyPrint = JSExprAst
         else join [pprintNewline ii, "return ", val, ";"]
       else "" in
     (env, join ["{",
-      pprintNewline ii, joinAsStatements ii exprs,
+      joinAsStatements ii exprs,
       ret,
       pprintNewline i, "}"])
   | JSEReturn { expr = expr } ->
