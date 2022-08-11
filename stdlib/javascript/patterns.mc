@@ -49,7 +49,14 @@ lang PatJSCompile = PatJSCompileLang
   -- Safely compile a pattern that might contain a nested sequence or record pattern.
   sem safeCompileSinglePattern : Pat -> (JSExpr, [JSExpr])
   sem safeCompileSinglePattern =
-  | (PatSeqTot _ | PatSeqEdge _ | PatRecord  _) & p ->
+  | ( PatInt _
+    | PatBool _
+    | PatChar _
+    | PatSeqTot _
+    | PatSeqEdge _
+    | PatRecord _
+    | PatCon _
+    ) & p ->
     -- Replace the sequence pattern with a new variable
     let matchVar = JSEVar { id = nameSym "_nstd" } in
     -- Compile "<p> = <matchVar>" as a new binding operation
@@ -140,6 +147,10 @@ lang PatJSCompile = PatJSCompileLang
         ]
     end in
     _binOpM (JSOAnd {}) (join [exprs, prefixExtra, postfixExtra])
+  | PatCon { ident = ident, subpat = subpat } ->
+    let typeCheck = _binOp (JSOEq {}) [JSEMember { expr = target, id = "type" }, JSEString { s = ident.0 }] in
+    let valueAssign = compileBindingPattern (JSEMember { expr = target, id = "value" }) subpat in
+    _binOp (JSOAnd {}) [typeCheck, valueAssign]
   | pat ->
     dprintLn pat;
     errorSingle [infoPat pat] "Pattern not supported when compiling to JavaScript."

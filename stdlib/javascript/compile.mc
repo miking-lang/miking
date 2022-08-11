@@ -356,9 +356,26 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       ret = compileMExpr ctx e
     })
 
-  | TmType { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type declaration)
-  | TmConApp _ & t -> errorSingle [infoTm t] "Constructor application in compileMExpr."
-  | TmConDef { inexpr = e } -> (compileMExpr ctx) e -- no op (Skip type constructor definitions)
+  | TmType { inexpr = e } -> compileMExpr ctx e
+  | TmConDef { ident = ident, inexpr = e } ->
+    let valueParam = nameSym "v" in
+    flattenBlock (JSEBlock {
+      exprs = [JSEDef { id = ident, expr = JSEFun {
+        params = [valueParam],
+        body = JSEObject { fields = [
+          ("type", JSEString { s = ident.0 }),
+          ("value", JSEVar { id = valueParam })
+        ] }
+      } }],
+      ret = compileMExpr ctx e
+    })
+  | TmConApp { ident = ident, body = body } ->
+    let body = compileMExpr ctx body in
+    JSEApp {
+      fun = JSEVar { id = ident },
+      args = [body],
+      curried = false
+    }
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
     let target = (compileMExpr ctx) target in
     let pat = compileBindingPattern target pat in
