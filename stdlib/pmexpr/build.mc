@@ -121,13 +121,20 @@ lang PMExprBuildConfig = PMExprBuildBase
         strJoin " " [futharkCCodeFile, futharkWrapperFile]
       else ""
     in
+    let outdir = "_build/" in
+    let outexec = concat outdir "default/program.exe" in
+    let rebuildRules = strJoin "\n" [
+      "clean:",
+      join ["\trm -rf ", outdir, " ", extraDependencies],
+      concat "rebuild: clean " outexec] in
     strJoin "\n" [
-      concat "program.exe: program.ml " extraDependencies,
+      join [outexec, ": program.ml ", extraDependencies],
       "\tdune build $@",
       join [cudaLibFile, ": ", cudaCodeName, ".cu"],
       "\tnvcc -I`ocamlc -where` $^ -lib -O3 -o $@",
       join [futharkCCodeFile, ": ", futharkCodeName, ".fut"],
-      "\tfuthark cuda --library $^"]
+      "\tfuthark cuda --library $^",
+      rebuildRules]
 
   sem buildConfig : PMExprBuildOptions -> String -> BuildConfig
   sem buildConfig options =
