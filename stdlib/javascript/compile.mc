@@ -219,8 +219,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       intrinsicGen t args
   | CDPrint _ & t ->
     -- Warning about inconsistent behaviour
-    isInModuleFuncs ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")]
-      info (lam. JSEReturn { expr = intrinsicGen t args }) -- If so, ignore the last newline print call in dprintLn
+    isInModuleFuncs ctx [("dprintLn", "stdlib/common.mc"), ("dprintLn", "internal")] info
+      (lam. JSEReturn { expr = intrinsicGen t args }) -- Ignore the last newline print call in dprintLn
       (lam.
         infoWarn info "'dprint' might have unexpected behaviour when targeting the web or a generic JS runtime";
         intrinsicGen t args)
