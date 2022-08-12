@@ -85,6 +85,8 @@ let _empty : all v. Map Name v = mapEmpty nameCmp
 let _singleton : all v. Name -> v -> Map Name v = lam n. lam p. mapInsert n p _empty
 
 lang ShallowBase = Ast + NamedPat
+  -- TODO(vipa, 2022-08-12): We should store the original type and the
+  -- info field, to generate friendlier code
   syn SPat =
   | SPatWild ()
 
@@ -136,9 +138,9 @@ lang ShallowBase = Ast + NamedPat
   -- | PatNamed _ -> _ssingleton (SPatWild ())
   | shallow -> sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectShallows p)) (_sempty ()) shallow
 
-  sem spatToPat : SPat -> Pat
-  sem spatToPat =
-  | SPatWild _ -> pvarw_
+  sem mkMatch : Name -> Expr -> Expr -> SPat -> Expr
+  sem mkMatch scrutinee t e =
+  | SPatWild _ -> t
 
   -- The singular SPat is just there to choose the implementation,
   -- its contents should be ignored; it's also present in the set.
@@ -227,6 +229,8 @@ lang ShallowBase = Ast + NamedPat
     , if null fails then None () else Some {branch with alts = fails}
     )
 
+  -- # Main interface
+
   sem lower
     : all res. Name
     -> [(Pat, Map Name Name -> res)]
@@ -261,6 +265,18 @@ lang ShallowBase = Ast + NamedPat
           work scrutinee (_processSPats spats) branches
         end
     in work (nameNoSym "") [] branches
+
+  sem lowerToExpr
+    : Name
+    -> [(Pat, Expr)]
+    -> Expr
+  sem lowerToExpr scrutinee = | branches ->
+    -- TODO(vipa, 2022-08-12): Deduplicate the branches, put them in let-expressions before
+    lower
+      scrutinee
+      (map (lam x. (x.0, lam. x.1)) branches)
+      never_
+      (lam name. lam spat. lam t. lam e. mkMatch name t e spat)
 end
 
 lang ShallowAnd = ShallowBase + AndPat
@@ -391,8 +407,8 @@ lang ShallowInt = ShallowBase + IntPat
   sem collectShallows =
   | PatInt x -> _ssingleton (SPatInt x.val)
 
-  sem spatToPat =
-  | SPatInt i -> pint_ i
+  sem mkMatch scrutinee t e =
+  | SPatInt i -> match_ (nvar_ scrutinee) (pint_ i) t e
 
   sem shallowCmp =
   | (SPatInt l, SPatInt r) -> subi l r
@@ -412,8 +428,8 @@ lang ShallowChar = ShallowBase + CharPat
   sem collectShallows =
   | PatChar x -> _ssingleton (SPatChar x.val)
 
-  sem spatToPat =
-  | SPatChar c -> pchar_ c
+  sem mkMatch scrutinee t e =
+  | SPatChar v -> match_ (nvar_ scrutinee) (pchar_ v) t e
 
   sem shallowCmp =
   | (SPatChar l, SPatChar r) -> cmpChar l r
@@ -433,8 +449,8 @@ lang ShallowBool = ShallowBase + BoolPat
   sem collectShallows =
   | PatBool x -> _ssingleton (SPatBool x.val)
 
-  sem spatToPat =
-  | SPatBool v -> pbool_ v
+  sem mkMatch scrutinee t e =
+  | SPatBool v -> match_ (nvar_ scrutinee) (pbool_ v) t e
 
   sem shallowCmp =
   | (SPatBool true, SPatBool true) -> 0
@@ -462,16 +478,14 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst
       _ssingleton (SPatRecord (mapMap (lam. nameSym "field") x.fields))
     else never
 
-  sem spatToPat =
+  sem mkMatch scrutinee t e =
   | SPatRecord fields ->
-    PatRecord
-    { bindings = mapMap npvar_ fields
-    , ty = TyRecord
-      { fields = mapMap (lam. tyunknown_) fields
+    let pat = PatRecord
+      { bindings = mapMap npvar_ fields
+      , ty = tyunknown_
       , info = NoInfo ()
-      }
-    , info = NoInfo ()
-    }
+      } in
+    match_ (nvar_ scrutinee) pat t e
 
   sem shallowIsInfallible =
   | SPatRecord _ -> true
@@ -531,8 +545,8 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   | PatSeqTot x -> _ssingleton (SPatSeqTot (map (lam. nameSym "elem") x.pats))
   | PatSeqEdge x -> _ssingleton (SPatSeqGE { minLength = addi (length x.prefix) (length x.postfix), prefix = ref [], postfix = ref [] })
 
-  sem spatToPat =
-  | SPatSeqTot x -> pseqtot_ (map npvar_ x)
+  sem mkMatch scrutinee t e =
+  | SPatSeqTot x -> match_ (nvar_ scrutinee) (pseqtot_ (map npvar_ x)) t e
   -- TODO(vipa, 2022-08-12): processSpats should ensure that a 'ge' pattern
   -- always happens in an infallible case, thus we don't need to check anything.
   -- However, we do need to bind the pre and post names, and possibly one or
@@ -560,8 +574,8 @@ lang ShallowCon = ShallowBase + DataPat
   sem collectShallows =
   | PatCon x -> _ssingleton (SPatCon {conName = x.ident, subName = nameSym "carried"})
 
-  sem spatToPat =
-  | SPatCon x -> npcon_ x.conName (npvar_ x.subName)
+  sem mkMatch scrutinee t e =
+  | SPatCon x -> match_ (nvar_ scrutinee) (npcon_ x.conName (npvar_ x.subName)) t e
 
   sem shallowCmp =
   | (SPatCon l, SPatCon r) -> nameCmp l.conName r.conName
@@ -579,13 +593,7 @@ let x = npvar_ (nameSym "x") in
 let y = npvar_ (nameSym "y") in
 let bx = nameSym "bx" in
 let patToBranch = lam label : String. lam pat.
-  let label = str_ label in
-  let mk = lam names : Map Name Name.
-    let bindings = map (lam pair. nulet_ pair.0 (nvar_ pair.1)) (mapBindings names) in
-    bindall_ (snoc bindings label) in
-  (pat, mk) in
-let mkMatch : Name -> SPat -> Expr -> Expr -> Expr = lam scrutinee. lam spat. lam t. lam e.
-  match_ (nvar_ scrutinee) (spatToPat spat) t e in
+  (pat, str_ label) in
 let sprec_ = lam bindings: [(String, Name)]. SPatRecord (mapFromSeq cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings)) in
 let stot_ = lam n: Int. SPatSeqTot (create n (lam. nameSym "elem")) in
 let sge_ = lam n: Int. SPatSeqGE { prefix = ref [], postfix = ref [], minLength = n } in
@@ -605,11 +613,11 @@ let psome_ =
   let name = nameSym "Some" in
   npcon_ name in
 let branches =
-  [ patToBranch "a" (pstr_ "foo")
-  , patToBranch "b" (pstr_ "foox")
-  , patToBranch "c" (pstr_ "bar")
-  , patToBranch "d" (pstr_ "bax")
+  [ patToBranch "a" (psome_ (pand_ (pint_ 1) y))
+  , patToBranch "c" (psome_ (pint_ 2))
+  , patToBranch "b" (psome_ (pand_ x (pnot_ (pint_ 3))))
+  , patToBranch "d" (psome_ x)
   ] in
 use MExprPrettyPrint in
-printLn (expr2str (lower (nameSym "scrutinee") branches never_ mkMatch));
+printLn (expr2str (lowerToExpr (nameSym "scrutinee") branches));
 ()
