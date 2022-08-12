@@ -70,9 +70,9 @@ Laws:
 In particular, law 6 is a weakening of `p' = !s & p`, using the fact
 that no efficient pattern compilation will check the same shallow
 pattern twice (since it would be redundant), thus we don't need to
-update `p'` such that it no longer matches `s`. The final clause means
-that the implementation must identify the cases where the pattern is
-dead.
+update `p'` such that it no longer matches `s` when it is difficult to
+do so. The final clause means that the implementation must identify
+the cases where the pattern is dead.
 
 -/
 
@@ -86,8 +86,6 @@ let _empty : all v. Map Name v = mapEmpty nameCmp
 let _singleton : all v. Name -> v -> Map Name v = lam n. lam p. mapInsert n p _empty
 
 lang ShallowBase = Ast + NamedPat
-  -- TODO(vipa, 2022-08-12): We should store the original type and the
-  -- info field, to generate friendlier code
   syn SPat =
   | SPatWild ()
 
@@ -463,28 +461,28 @@ end
 
 lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst
   syn SPat =
-  | SPatRecord (Map SID Name)
+  | SPatRecord { bindings : Map SID Name, ty : Type }
 
   sem decompose name =
-  | (SPatRecord bindings, PatRecord x) ->
+  | (SPatRecord sx, PatRecord x) ->
     -- NOTE(vipa, 2022-05-20): This can only break if there's a
     -- missing name in SPatRecord, but we should have all the fields
     -- based on typechecking earlier
-    let fields = map (lam pair. (mapFindExn pair.0 bindings, pair.1)) (mapBindings x.bindings)
+    let fields = map (lam pair. (mapFindExn pair.0 sx.bindings, pair.1)) (mapBindings x.bindings)
     in ([(mapFromSeq nameCmp fields, _empty)], None ())
 
   sem collectShallows =
-  | PatRecord x ->
+  | PatRecord px ->
     -- TODO(vipa, 2022-05-26): This needs to resolve links and aliases :(
-    match x.ty with TyRecord x then
-      _ssingleton (SPatRecord (mapMap (lam. nameSym "field") x.fields))
+    match px.ty with TyRecord x then
+      _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty })
     else never
 
   sem mkMatch scrutinee t e =
-  | SPatRecord fields ->
+  | SPatRecord x ->
     let pat = PatRecord
-      { bindings = mapMap npvar_ fields
-      , ty = tyunknown_
+      { bindings = mapMap npvar_ x.bindings
+      , ty = x.ty
       , info = NoInfo ()
       } in
     match_ (nvar_ scrutinee) pat t e
@@ -596,21 +594,6 @@ let y = npvar_ (nameSym "y") in
 let bx = nameSym "bx" in
 let patToBranch = lam label : String. lam pat.
   (pat, str_ label) in
-let sprec_ = lam bindings: [(String, Name)]. SPatRecord (mapFromSeq cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings)) in
-let stot_ = lam n: Int. SPatSeqTot (create n (lam. nameSym "elem")) in
-let sge_ = lam n: Int. SPatSeqGE { prefix = ref [], postfix = ref [], minLength = n } in
--- printLn "case";
--- dprintLn (decomposeNorm scrutinee (SPatWild (), pnot_ (por_ (pint_ 1) (pint_ 2))));
--- printLn "case";
--- dprintLn (decomposeNorm scrutinee (stot_ 1, pand_ (pseqedgew_ [x] []) (pnot_ (pseqedgew_ [pvarw_, pvarw_] []))));
--- printLn "case";
--- dprintLn (decomposeNorm scrutinee (sge_ 2, pand_ (pseqedgew_ [x] []) (pnot_ (pseqedgew_ [pvarw_, pvarw_] []))));
--- printLn "case";
--- let branches =
---   [ patToBranch (pseqtot_ [pint_ 1, pint_ 2])
---   , patToBranch (pand_ (pseqedgew_ [pint_ 1] []) (pand_ (pnot_ (pseqedgew_ [pvarw_, pvarw_, pvarw_] [])) x))
---   ] in
--- dprintLn (collectAllShallows branches);
 let psome_ =
   let name = nameSym "Some" in
   npcon_ name in
