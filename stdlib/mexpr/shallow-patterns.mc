@@ -1,3 +1,4 @@
+include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 /-
 
@@ -59,7 +60,7 @@ Laws:
    `!s & p' = !s & p`. Furthermore, if
    `!s & p = !_`, then `p' = !_`.
 8. If `decompose x (s, p) = (p', _)` and `s` is not `_`,
-   then `x` must not appear anywhere in `p'`.
+   then `x` must not be examined any further in `p'`.
 
 1-4 follow from the semantics of pattern matching.
 5-6 defines shallow patterns and must be upheld by an implementation.
@@ -135,7 +136,6 @@ lang ShallowBase = Ast + NamedPat
 
   sem collectShallows : Pat -> Set SPat
   sem collectShallows =
-  -- | PatNamed _ -> _ssingleton (SPatWild ())
   | shallow -> sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectShallows p)) (_sempty ()) shallow
 
   sem mkMatch : Name -> Expr -> Expr -> SPat -> Expr
@@ -215,12 +215,14 @@ lang ShallowBase = Ast + NamedPat
         match mapLookup scrutinee pats with Some pat then
           let pats = mapRemove scrutinee pats in
           match decomposeNorm scrutinee (spat, pat) with (passUpdate, failPat) in
-          let newPasses = map
-            (lam update. (mapUnionWith pand_ pats update.0, mapUnion names update.1))
-            passUpdate in
-          let newFails = match failPat with Some p
-            then [(mapInsert scrutinee p pats, names)]
-            else [] in
+          let applyUpdate = lam update.
+            (mapUnionWith pand_ pats update.0, mapUnion names update.1) in
+          let newPasses = map applyUpdate passUpdate in
+          let newFails = optionMapOr []
+            (lam p.
+              match decompose scrutinee (SPatWild (), p) with (failUpdate, _) in
+              map applyUpdate failUpdate)
+            failPat in
           (concat passes newPasses, concat fails newFails)
         else (snoc passes info, snoc fails info)
     in
