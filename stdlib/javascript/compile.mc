@@ -85,18 +85,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     -- Return final top level expressions
     JSPProg { imports = [], exprs = exprs }
 
-    -- Look ahead and extract a list of all recursive functions
-    sem extractRecursiveFunctions : Set Name -> Expr -> Set Name
-    sem extractRecursiveFunctions acc =
-    | e ->
-      match e with TmRecLets t then
-        let acc = foldl (lam acc: Set Name. lam b: RecLetBinding.
-          match b with { ident = ident, body = body } in
-          match body with TmLam _ then (setInsert ident acc) else acc
-        ) acc t.bindings in
-        extractRecursiveFunctions acc t.inexpr
-      else sfold_Expr_Expr extractRecursiveFunctions acc e
-
 
   ---------------
   -- OPERATORS --
