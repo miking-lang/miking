@@ -9,7 +9,8 @@ lang JSExprAst
 
   syn JSExpr =
   | JSEVar       { id: Name }                   -- Variables
-  | JSEDef       { id: Name, expr: JSExpr }     -- Definitions
+  | JSEDef       { id: Name, expr: JSExpr }     -- Definitions (Constants)
+  | JSEDec       { ids: [Name] }                -- Declarations (Mutable)
   | JSEApp       { fun: JSExpr, args: [JSExpr], curried: Bool }  -- Function application
   | JSEFun       { params: [Name], body: JSExpr } -- Functions
   | JSEMember    { expr: JSExpr, id: String }  -- Member access

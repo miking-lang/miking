@@ -105,6 +105,9 @@ lang JSPrettyPrint = JSExprAst
     match getNameStrDefault "_" env id with (env,id) in
     match (printJSExpr indent env) expr with (env, str) in
     (env, join ["let ", id, " = ", str])
+  | JSEDec { ids = ids } ->
+    match mapAccumL (getNameStrDefault "_") env ids with (env, idents) in
+    (env, join ["let ", strJoin ", " idents])
 
   -- ES6 arrow functions (released 2015)
   -- https://en.wikipedia.org/wiki/ECMAScript#6th_Edition_%E2%80%93_ECMAScript_2015

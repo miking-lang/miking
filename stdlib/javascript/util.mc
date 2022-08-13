@@ -2,6 +2,7 @@
 include "map.mc"
 include "option.mc"
 include "name.mc"
+include "set.mc"
 
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
@@ -33,7 +34,8 @@ type RecursiveFunctionRegistry = {
 type CompileJSContext = {
   options : CompileJSOptions,
   currentFunction: Option (Name, Info),
-  recursiveFunctions: RecursiveFunctionRegistry
+  recursiveFunctions: RecursiveFunctionRegistry,
+  declarations: Set Name -- Block-scoped identifiers that need to be declared/defined
 }
 
 
@@ -77,6 +79,18 @@ end
 let extractRFRctx : CompileJSContext -> Expr -> CompileJSContext =
   lam ctx : CompileJSContext. lam e.
   { ctx with recursiveFunctions = extractRFR ctx.recursiveFunctions e }
+
+let compileDeclarations : CompileJSContext -> (CompileJSContext, JSExpr) =
+  use JSExprAst in
+  lam ctx : CompileJSContext.
+  if setIsEmpty (ctx.declarations) then (ctx, JSENop {})
+  else
+    let ctx2 = { ctx with declarations = setEmpty nameCmp } in
+    (ctx2, JSEDec { ids = setToSeq ctx.declarations })
+
+let combineDeclarations : CompileJSContext -> CompileJSContext -> CompileJSContext =
+  lam ctx : CompileJSContext. lam ctx2 : CompileJSContext.
+  { ctx with declarations = setUnion ctx.declarations ctx2.declarations }
 
 ------------------------
 -- COMPILER FUNCTIONS --
@@ -149,8 +163,9 @@ let compileJSOptionsEmpty : CompileJSOptions = {
 }
 
 -- Empty compile JS environment
-let compileJSCtxEmpty = {
+let compileJSCtxEmpty : CompileJSContext = {
   options = compileJSOptionsEmpty,
   currentFunction = None (),
-  recursiveFunctions = emptyRFR "_rec$"
+  recursiveFunctions = emptyRFR "_rec$",
+  declarations = setEmpty nameCmp
 }

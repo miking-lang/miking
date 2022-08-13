@@ -26,29 +26,31 @@ let compilePatsLen = use PatJSCompileLang in
 lang PatJSCompile = PatJSCompileLang
 
   -- Compile a single pattern without any binding operations.
-  sem compileSinglePattern : Pat -> (JSExpr, [JSExpr])
-  sem compileSinglePattern =
-  | PatInt { val = val } -> (JSEInt { i = val }, [])
-  | PatBool { val = val } -> (JSEBool { b = val }, [])
-  | PatChar { val = val } -> (JSEChar { c = val}, [])
-  | PatNamed { ident = PName name } -> (JSEVar { id = name }, [])
-  | PatNamed { ident = PWildcard () } -> (tmpIgnoreJS, [])
+  sem compileSinglePattern : CompileJSContext -> Pat -> (CompileJSContext, JSExpr, [JSExpr])
+  sem compileSinglePattern ctx =
+  | PatInt { val = val } -> (ctx, JSEInt { i = val }, [])
+  | PatBool { val = val } -> (ctx, JSEBool { b = val }, [])
+  | PatChar { val = val } -> (ctx, JSEChar { c = val}, [])
+  | PatNamed { ident = PName name } ->
+    let ctx = { ctx with declarations = setInsert name ctx.declarations }in
+    (ctx, JSEVar { id = name }, [])
+  | PatNamed { ident = PWildcard () } -> (ctx, tmpIgnoreJS, [])
   | PatSeqTot { pats = patterns } ->
-    match safeMapSinglePattern patterns with (elems, extra) in
-    (JSEArray { exprs = elems }, extra)
+    match safeMapSinglePattern ctx patterns with (ctx, elems, extra) in
+    (ctx, JSEArray { exprs = elems }, extra)
   | PatRecord { bindings = bindings } -> match foldr (
-      lam field: (SID, Pat). lam acc: ([(String, JSExpr)], [JSExpr]).
-      match acc with (patts, extra) in
+      lam field: (SID, Pat). lam acc: (CompileJSContext, [(String, JSExpr)], [JSExpr]).
+      match acc with (ctx, patts, extra) in
       match field with (sid, pat) in
-      match safeCompileSinglePattern pat with (patExpr, patExtras) in
-      (cons (sidToString sid, patExpr) patts, concat patExtras extra)
-    ) ([], []) (mapToSeq bindings) with (fieldsExprs, extra) in
-    (JSEObject { fields = fieldsExprs }, extra)
+      match safeCompileSinglePattern ctx pat with (ctx, patExpr, patExtras) in
+      (ctx, cons (sidToString sid, patExpr) patts, concat patExtras extra)
+    ) (ctx, [], []) (mapToSeq bindings) with (ctx, fields, extra) in
+    (ctx, JSEObject { fields = fields }, extra)
 
 
   -- Safely compile a pattern that might contain a nested sequence or record pattern.
-  sem safeCompileSinglePattern : Pat -> (JSExpr, [JSExpr])
-  sem safeCompileSinglePattern =
+  sem safeCompileSinglePattern : CompileJSContext -> Pat -> (CompileJSContext, JSExpr, [JSExpr])
+  sem safeCompileSinglePattern ctx =
   | ( PatInt _
     | PatBool _
     | PatChar _
@@ -58,16 +60,19 @@ lang PatJSCompile = PatJSCompileLang
     | PatCon _
     ) & p ->
     -- Replace the sequence pattern with a new variable
-    let matchVar = JSEVar { id = nameSym "_nstd" } in
+    let id = nameSym "_nstd" in
+    let matchVar = JSEVar { id = id } in
+    -- Add the undeclared variable to the context
+    let ctx = { ctx with declarations = setInsert id ctx.declarations } in
     -- Compile "<p> = <matchVar>" as a new binding operation
-    let matchBinding = compileBindingPattern matchVar p in
+    match compileBindingPattern ctx matchVar p with (ctx, matchBinding) in
     -- Append the new binding to the list of extra bindings
     -- and add the new variable to the list of elements in the patts list.
-    (matchVar, [matchBinding])
+    (ctx, matchVar, [matchBinding])
   | p ->
     -- Append the new element to the list of elements
     -- and return the new list of elements and the extra bindings.
-    compileSinglePattern p
+    compileSinglePattern ctx p
 
 
   -- Compile a list of patterns into a list of expressions and a list of extra bindings.
@@ -75,46 +80,47 @@ lang PatJSCompile = PatJSCompileLang
   -- and one with the extra binding patterns for sequence or record patterns
   -- those are replaced with a new variable and compiled as an extra
   -- operation in the resulting match expression.
-  sem safeMapSinglePattern : [Pat] -> ([JSExpr], [JSExpr])
-  sem safeMapSinglePattern =
+  sem safeMapSinglePattern : CompileJSContext -> [Pat] -> (CompileJSContext, [JSExpr], [JSExpr])
+  sem safeMapSinglePattern ctx =
   | pats -> foldr (
-      lam pat: Pat. lam acc: ([JSExpr], [JSExpr]).
-      match acc with (patts, extra) in
-      match safeCompileSinglePattern pat with (patJS, extrasJS) in
-      (cons patJS patts, concat extrasJS extra)
-    ) ([], []) pats
+      lam pat: Pat. lam acc: (CompileJSContext, [JSExpr], [JSExpr]).
+      match acc with (ctx, patts, extra) in
+      match safeCompileSinglePattern ctx pat with (ctx, patJS, extrasJS) in
+      (ctx, cons patJS patts, concat extrasJS extra)
+    ) (ctx, [], []) pats
 
 
-  sem compileBindingPattern : JSExpr -> Pat -> JSExpr
-  sem compileBindingPattern (target: JSExpr) =
-  | PatNamed    { ident = PWildcard () } -> JSEBool { b = true }
+  sem compileBindingPattern : CompileJSContext -> JSExpr -> Pat -> (CompileJSContext, JSExpr)
+  sem compileBindingPattern ctx target =
+  | PatNamed    { ident = PWildcard () } -> (ctx, JSEBool { b = true })
+  | PatNamed    { ident = PName name } & p ->
+    match compileSinglePattern ctx p with (ctx, pat, _) in
+    (ctx, _assign pat target )
   | (PatInt _ | PatBool _ | PatChar _) & p ->
-    match compileSinglePattern p with (pat, []) in
-    _binOp (JSOEq {}) [target, pat]
-  | ( PatNamed { ident = PName _ }
-    | PatSeqEdge _
+    match compileSinglePattern ctx p with (ctx, pat, []) in
+    (ctx, _binOp (JSOEq {}) [target, pat])
+  | ( PatSeqEdge _
     | PatRecord  _
     ) & p ->
-    match compileSinglePattern p with (pat, extra) in
-    _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra)
+    match compileSinglePattern ctx p with (ctx, pat, extra) in
+    (ctx, _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra) )
   | PatSeqTot { pats = pats } & p ->
     if _isCharPatSeq pats then
-      let str: String = _charPatSeq2String pats in
-     _binOp (JSOEq {}) [target, JSEString { s = str }]
+      (ctx, _binOp (JSOEq {}) [target, JSEString { s = _charPatSeq2String pats }] )
     else
       -- Check if the sequence is empty
       let lengthCheck = compilePatsLen pats target in
-      if null pats then lengthCheck
+      if null pats then (ctx, lengthCheck)
       else
-        match compileSinglePattern p with (pat, extra) in
-        _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (pat) target], extra])
+        match compileSinglePattern ctx p with (ctx, pat, extra) in
+        (ctx, _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (pat) target], extra]) )
   | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
     let hasPostfix = not (null postfix) in
-    match safeMapSinglePattern prefix with (prefixExprs, prefixExtra) in
-    match compileSinglePattern (PatNamed { ident = middle, ty = ty, info = info }) with (middleExpr, []) in
-    match safeMapSinglePattern postfix with (postfixExprs, postfixExtra) in
+    match safeMapSinglePattern ctx prefix with (ctx, prefixExprs, prefixExtra) in
+    match compileSinglePattern ctx (PatNamed { ident = middle, ty = ty, info = info }) with (ctx, middleExpr, []) in
+    match safeMapSinglePattern ctx postfix with (ctx, postfixExprs, postfixExtra) in
     let exprs: [JSExpr] = switch (hasPrefix, hasMiddle, hasPostfix)
       case (false, false, false) then [] -- Should never happen
       case (true, false, false) then
@@ -146,11 +152,11 @@ lang PatJSCompile = PatJSCompileLang
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnoreJS)
         ]
     end in
-    _binOpM (JSOAnd {}) (join [exprs, prefixExtra, postfixExtra])
+    (ctx, _binOpM (JSOAnd {}) (join [exprs, prefixExtra, postfixExtra]) )
   | PatCon { ident = ident, subpat = subpat } ->
     let typeCheck = _binOp (JSOEq {}) [JSEMember { expr = target, id = "type" }, JSEString { s = ident.0 }] in
-    let valueAssign = compileBindingPattern (JSEMember { expr = target, id = "value" }) subpat in
-    _binOp (JSOAnd {}) [typeCheck, valueAssign]
+    match compileBindingPattern ctx (JSEMember { expr = target, id = "value" }) subpat with (ctx, valueAssign) in
+    (ctx, _binOp (JSOAnd {}) [typeCheck, valueAssign] )
   | pat ->
     dprintLn pat;
     errorSingle [infoPat pat] "Pattern not supported when compiling to JavaScript."

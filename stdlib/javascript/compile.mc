@@ -78,10 +78,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | prog ->
     let ctx = if ctx.options.optimizations then extractRFRctx ctx prog else ctx in
     -- Run compiler
-    match compileMExpr ctx prog with expr in
-    let exprs = match expr with JSEBlock { exprs = exprs, ret = ret }
-      then concat exprs [ret]
-      else [expr] in
+    match compileMExpr ctx prog with (ctx, expr) in
+    let exprs = (match expr with JSEBlock { exprs = exprs, ret = ret }
+      then
+        match compileDeclarations ctx with (ctx, decs) in
+        join [ [decs], exprs, [ret] ]
+      else [expr]) in
     -- Return final top level expressions
     JSPProg { imports = [], exprs = exprs }
 
@@ -251,59 +253,72 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem foldApp acc =
   | TmApp { lhs = lhs, rhs = rhs } ->
     if _isUnitTy (tyTm rhs) then foldApp acc lhs
-    else foldApp (cons rhs acc) lhs
+    else foldApp (snoc acc rhs) lhs
   | t -> (t, acc)
 
+  sem mapCompileMExpr : CompileJSContext -> [Expr] -> (CompileJSContext, [JSExpr])
+  sem mapCompileMExpr ctx =
+  | exprs ->
+    foldl (lam acc: (CompileJSContext, [JSExpr]). lam e: Expr.
+      match acc with (ctx, es) in
+      match compileMExpr ctx e with (ctx, e) in
+      (ctx, cons e es)
+    ) (ctx, []) exprs
 
   -----------------
   -- EXPRESSIONS --
   -----------------
-  sem compileMExpr : CompileJSContext -> Expr -> JSExpr
+  sem compileMExpr : CompileJSContext -> Expr -> (CompileJSContext, JSExpr)
   sem compileMExpr ctx =
-  | TmVar { ident = id } -> JSEVar { id = id }
-  | TmApp { info = info } & app ->
+  | TmVar { ident = id } -> (ctx, JSEVar { id = id })
+  | TmApp _ & app ->
     match foldApp [] app with (fun, args) in
     -- Function calls
-    let args = map (compileMExpr ctx) args in
+    match mapCompileMExpr ctx args with (ctx, args) in
     match fun with TmVar { ident = ident } then
-      JSEApp {
+      (ctx, JSEApp {
         fun = JSEVar { id = ident },
         args = args,
         curried = true
-      }
+      })
     -- Intrinsics
     else match fun with TmConst { val = val, info = info } then
-      compileMConst info ctx args val
+      (ctx, compileMConst info ctx args val)
     else errorSingle [infoTm app] "Unsupported application in compileMExpr"
 
   -- Anonymous function
   | TmLam { ident = arg, body = body } ->
-    let body = (compileMExpr ctx) body in
-    JSEFun { params = [arg], body = body }
+    match compileMExpr ctx body with (ctx, body) in
+    (ctx, JSEFun { params = [arg], body = body })
 
   -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     let fieldSeq = mapToSeq bindings in
-    let compileField = lam f. match f with (sid, expr) in
-      (sidToString sid, (compileMExpr ctx) expr)
-    in
-    JSEObject { fields = map compileField fieldSeq }
+    match foldl (lam acc: (CompileJSContext, [(String, JSExpr)]). lam f: (SID, Expr).
+      match acc with (ctx, es) in
+      match f with (sid, expr) in
+      match compileMExpr ctx expr with (ctx, expr) in
+      (ctx, cons (sidToString sid, expr) es)
+    ) (ctx, []) fieldSeq with (ctx, fields) in
+    (ctx, JSEObject { fields = fields })
 
   | TmSeq {tms = tms} ->
     -- Check if sequence of characters, then concatenate them into a string
     if _isCharSeq tms then
       let str: String = _charSeq2String tms in
-      JSEString { s = str }
+      (ctx, JSEString { s = str })
     else
-      JSEArray { exprs = map (compileMExpr ctx) tms }
+      match mapCompileMExpr ctx tms with (ctx, exprs) in
+      (ctx, JSEArray { exprs = exprs })
 
   -- Literals
   | TmConst { val = val, info = info } ->
-    match val      with CInt   { val = val } then JSEInt   { i = val }
+    let expr = (match val with CInt   { val = val } then JSEInt   { i = val }
     else match val with CFloat { val = val } then JSEFloat { f = val }
     else match val with CChar  { val = val } then JSEChar  { c = val }
     else match val with CBool  { val = val } then JSEBool  { b = val }
-    else match compileMConst info ctx [] val with jsexpr in jsexpr -- SeqOpAst Consts are handled by the compile operator semantics
+    else match compileMConst info ctx [] val with jsexpr in jsexpr) -- SeqOpAst Consts are handled by the compile operator semantics
+    in (ctx, expr)
   | TmRecordUpdate _ & t -> errorSingle [infoTm t] "Record updates cannot be handled in compileMExpr."
 
 
@@ -313,76 +328,92 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
 
   | TmLet { ident = ident, body = body, inexpr = e, info = info } ->
     match nameGetStr ident with [] then
-      flattenBlock (JSEBlock {
-        exprs = [compileMExpr ctx body],
-        ret = compileMExpr ctx e
-      })
+      match compileMExpr ctx body with (ctx1, body) in
+      match compileMExpr ctx e with (ctx2, e) in
+      let ctx = combineDeclarations ctx1 ctx2 in
+      match compileDeclarations ctx with (ctx, decs) in
+      (ctx, flattenBlock (JSEBlock {
+        exprs = [decs, body],
+        ret = e
+      }))
     else
-      let expr = (match body with TmLam _ then
-        let ctx = { ctx with currentFunction = Some (ident, info) } in
-        compileMExpr ctx body
-      else compileMExpr ctx body) in
-      flattenBlock (JSEBlock {
-        exprs = [JSEDef { id = ident, expr = expr }],
-        ret = compileMExpr ctx e
-      })
+      let ctx = (match body with TmLam _ then { ctx with currentFunction = Some (ident, info) } else ctx) in
+      match compileMExpr ctx body with (ctx1, body) in
+      match compileMExpr ctx e with (ctx2, e) in
+      let ctx = combineDeclarations ctx1 ctx2 in
+      match compileDeclarations ctx with (ctx, decs) in
+      (ctx, flattenBlock (JSEBlock {
+        exprs = [decs, JSEDef { id = ident, expr = body }],
+        ret = e
+      }))
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
-    let compileBind = lam bind : RecLetBinding.
+    match compileMExpr ctx e with (ctx, e) in
+    match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : RecLetBinding.
+      match acc with (ctx, es) in
       match bind with { ident = ident, body = body, info = info } in
       match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
-        let fun = compileMExpr ctx body in
-        if ctx.options.optimizations
-          then optimizeTailCallFunc ctx ident info fun
-          else JSEDef { id = ident, expr = fun }
+        match compileMExpr ctx body with (ctx, body) in
+        let expr = (if ctx.options.optimizations
+          then optimizeTailCallFunc ctx ident info body
+          else JSEDef { id = ident, expr = body }) in
+        (ctx, cons expr es)
       else errorSingle [info] "Cannot handle non-lambda in recursive let when compiling to JavaScript"
-    in
-    let exprs = map compileBind bindings in
-    flattenBlock (JSEBlock {
-      exprs = exprs,
-      ret = compileMExpr ctx e
-    })
+      ) (ctx, []) bindings with (ctx, exprs) in
+    match compileDeclarations ctx with (ctx, decs) in
+    (ctx, flattenBlock (JSEBlock {
+      exprs = cons decs exprs,
+      ret = e
+    }))
 
-  | TmType { inexpr = e } -> compileMExpr ctx e
+  | TmType { inexpr = e } -> compileMExpr ctx e -- Ignore
   | TmConDef { ident = ident, inexpr = e } ->
     let valueParam = nameSym "v" in
-    flattenBlock (JSEBlock {
-      exprs = [JSEDef { id = ident, expr = JSEFun {
-        params = [valueParam],
-        body = JSEObject { fields = [
-          ("type", JSEString { s = ident.0 }),
-          ("value", JSEVar { id = valueParam })
-        ] }
-      } }],
-      ret = compileMExpr ctx e
-    })
+    match compileMExpr ctx e with (ctx, e) in
+    match compileDeclarations ctx with (ctx, decs) in
+    (ctx, flattenBlock (JSEBlock {
+      exprs = [
+        decs,
+        JSEDef { id = ident, expr = JSEFun {
+          params = [valueParam],
+          body = JSEObject { fields = [
+            ("type", JSEString { s = ident.0 }),
+            ("value", JSEVar { id = valueParam })
+          ] }
+        } }
+      ],
+      ret = e
+    }))
   | TmConApp { ident = ident, body = body } ->
-    let body = compileMExpr ctx body in
-    JSEApp {
+    match compileMExpr ctx body with (ctx, body) in
+    (ctx, JSEApp {
       fun = JSEVar { id = ident },
       args = [body],
       curried = false
-    }
+    })
   | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
-    let target = (compileMExpr ctx) target in
-    let pat = compileBindingPattern target pat in
-    let thn = (compileMExpr ctx) thn in
-    let els = (compileMExpr ctx) els in
+    match compileMExpr ctx target with (ctx, target) in
+    match compileBindingPattern ctx target pat with (ctx2, pat) in
+    match compileMExpr ctx thn with (ctx, thn) in
+    match compileMExpr ctx els with (ctx, els) in
     let expr = JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els
     } in
-    if ctx.options.optimizations then optimizeExpr3 expr else expr
+    let ctx = combineDeclarations ctx ctx2 in
+    (ctx, if ctx.options.optimizations then optimizeExpr3 expr else expr)
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
-  | TmExt { ident = ident, tyIdent = tyIdent, inexpr = inexpr, effect = effect, ty = ty, info = info } & t ->
+  | TmExt { ident = ident, tyIdent = tyIdent, inexpr = e, effect = effect, ty = ty, info = info } & t ->
+    match compileMExpr ctx e with (ctx, e) in
     let expr = compileExtRef ctx info (nameGetStr ident) in
-    flattenBlock (JSEBlock {
-      exprs = [JSEDef { id = ident, expr = expr }],
-      ret = compileMExpr ctx inexpr
-    })
-  | TmNever _ -> intrinsicStrGen "never" [JSENop {}]
+    match compileDeclarations ctx with (ctx, decs) in
+    (ctx, flattenBlock (JSEBlock {
+      exprs = [decs, JSEDef { id = ident, expr = expr }],
+      ret = e
+    }))
+  | TmNever _ -> (ctx, intrinsicStrGen "never" [JSENop {}])
 
 end
 
