@@ -253,13 +253,13 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem foldApp acc =
   | TmApp { lhs = lhs, rhs = rhs } ->
     if _isUnitTy (tyTm rhs) then foldApp acc lhs
-    else foldApp (snoc acc rhs) lhs
+    else foldApp (cons rhs acc) lhs
   | t -> (t, acc)
 
   sem mapCompileMExpr : CompileJSContext -> [Expr] -> (CompileJSContext, [JSExpr])
   sem mapCompileMExpr ctx =
   | exprs ->
-    foldl (lam acc: (CompileJSContext, [JSExpr]). lam e: Expr.
+    foldr (lam e: Expr. lam acc: (CompileJSContext, [JSExpr]).
       match acc with (ctx, es) in
       match compileMExpr ctx e with (ctx, e) in
       (ctx, cons e es)
