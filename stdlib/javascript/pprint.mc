@@ -104,7 +104,7 @@ lang JSPrettyPrint = JSExprAst
   | JSEDef { id = id, expr = expr } ->
     match getNameStrDefault "_" env id with (env,id) in
     match (printJSExpr indent env) expr with (env, str) in
-    (env, join ["let ", id, " = ", str])
+    (env, join ["const ", id, " = ", str])
   | JSEDec { ids = ids } ->
     match mapAccumL (getNameStrDefault "_") env ids with (env, idents) in
     (env, join ["let ", strJoin ", " idents])
