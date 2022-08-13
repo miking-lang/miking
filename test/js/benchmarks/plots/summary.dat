@@ -1,4 +1,5 @@
 "Benchmark name"                  "mi eval"	"boot eval"	"node (manual)"	"node (compiled)"	"bun (manual)"	"bun (compiled)"
-"factorial\n(80000 iter)"          1380      869       54        67        17        57
-"factorial fast\n(80000 iter)"     1710      901       52        136       15        97
-"fold list\n(80000 iter)"          6605      9612      2892      2941      1077      1710
+"factorial\n(80000 iter)"          1390      978       54        68        24        57
+"factorial fast\n(80000 iter)"     1738      1043      57        131       17        97
+"fold list\n(80000 iter)"          6735      9599      2942      2978      1141      1596
+"tree\n(80000 iter)"               13257     3174      87        119       43        231
