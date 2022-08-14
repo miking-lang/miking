@@ -337,14 +337,14 @@
 	<path stroke='black'  d='M288.9,336.0 L288.9,261.6 L297.9,261.6 L297.9,336.0 L288.9,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
-		<polygon fill = 'rgb(240, 228,  66)' points = '384.5,336.0 393.6,336.0 393.6,173.3 384.5,173.3 '/>
+		<polygon fill = 'rgb(240, 228,  66)' points = '384.5,336.0 393.6,336.0 393.6,176.5 384.5,176.5 '/>
 	</g>
-	<path stroke='black'  d='M384.5,336.0 L384.5,173.4 L393.5,173.4 L393.5,336.0 L384.5,336.0 Z  '/></g>
+	<path stroke='black'  d='M384.5,336.0 L384.5,176.6 L393.5,176.6 L393.5,336.0 L384.5,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
-		<polygon fill = 'rgb(240, 228,  66)' points = '480.2,336.0 489.3,336.0 489.3,267.2 480.2,267.2 '/>
+		<polygon fill = 'rgb(240, 228,  66)' points = '480.2,336.0 489.3,336.0 489.3,269.6 480.2,269.6 '/>
 	</g>
-	<path stroke='black'  d='M480.2,336.0 L480.2,267.3 L489.2,267.3 L489.2,336.0 L480.2,336.0 Z  '/></g>
+	<path stroke='black'  d='M480.2,336.0 L480.2,269.7 L489.2,269.7 L489.2,336.0 L480.2,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 </g>
 	</g>
@@ -429,9 +429,9 @@
 	<path stroke='black'  d='M344.2,466.5 L386.4,466.5 L386.4,457.5 L344.2,457.5 L344.2,466.5 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
-		<polygon fill = 'rgb(  0,   0,   0)' points = '225.1,336.0 234.2,336.0 234.2,286.0 225.1,286.0 '/>
+		<polygon fill = 'rgb(  0,   0,   0)' points = '225.1,336.0 234.2,336.0 234.2,290.4 225.1,290.4 '/>
 	</g>
-	<path stroke='black'  d='M225.1,336.0 L225.1,286.1 L234.1,286.1 L234.1,336.0 L225.1,336.0 Z  '/></g>
+	<path stroke='black'  d='M225.1,336.0 L225.1,290.5 L234.1,290.5 L234.1,336.0 L225.1,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
 		<polygon fill = 'rgb(  0,   0,   0)' points = '320.8,336.0 329.9,336.0 329.9,272.6 320.8,272.6 '/>
@@ -439,14 +439,14 @@
 	<path stroke='black'  d='M320.8,336.0 L320.8,272.7 L329.8,272.7 L329.8,336.0 L320.8,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
-		<polygon fill = 'rgb(  0,   0,   0)' points = '416.4,336.0 425.5,336.0 425.5,192.5 416.4,192.5 '/>
+		<polygon fill = 'rgb(  0,   0,   0)' points = '416.4,336.0 425.5,336.0 425.5,196.6 416.4,196.6 '/>
 	</g>
-	<path stroke='black'  d='M416.4,336.0 L416.4,192.6 L425.4,192.6 L425.4,336.0 L416.4,336.0 Z  '/></g>
+	<path stroke='black'  d='M416.4,336.0 L416.4,196.7 L425.4,196.7 L425.4,336.0 L416.4,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 	<g stroke='none' shape-rendering='crispEdges'>
-		<polygon fill = 'rgb(  0,   0,   0)' points = '512.0,336.0 521.2,336.0 521.2,246.7 512.0,246.7 '/>
+		<polygon fill = 'rgb(  0,   0,   0)' points = '512.0,336.0 521.2,336.0 521.2,249.4 512.0,249.4 '/>
 	</g>
-	<path stroke='black'  d='M512.0,336.0 L512.0,246.8 L521.1,246.8 L521.1,336.0 L512.0,336.0 Z  '/></g>
+	<path stroke='black'  d='M512.0,336.0 L512.0,249.5 L521.1,249.5 L521.1,336.0 L512.0,336.0 Z  '/></g>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
 </g>
 	</g>
@@ -522,11 +522,11 @@
 	<g transform="translate(294.5,255.2)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
 		<text><tspan font-family="Helvetica" >134</tspan></text>
 	</g>
-	<g transform="translate(390.1,167.0)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
-		<text><tspan font-family="Helvetica" >2911</tspan></text>
+	<g transform="translate(390.1,170.2)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
+		<text><tspan font-family="Helvetica" >2611</tspan></text>
 	</g>
-	<g transform="translate(485.7,260.9)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
-		<text><tspan font-family="Helvetica" >110</tspan></text>
+	<g transform="translate(485.7,263.3)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
+		<text><tspan font-family="Helvetica" >101</tspan></text>
 	</g>
 </g>
 	</g>
@@ -564,17 +564,17 @@
 	</g>
 	<g id="gnuplot_plot_16" ><title>gnuplot_plot_16</title>
 <g fill="none" color="black" stroke="currentColor" stroke-width="1.00" stroke-linecap="butt" stroke-linejoin="miter">
-	<g transform="translate(230.7,279.7)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
-		<text><tspan font-family="Helvetica" >57</tspan></text>
+	<g transform="translate(230.7,284.1)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
+		<text><tspan font-family="Helvetica" >49</tspan></text>
 	</g>
 	<g transform="translate(326.3,266.3)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
 		<text><tspan font-family="Helvetica" >91</tspan></text>
 	</g>
-	<g transform="translate(422.0,186.2)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
-		<text><tspan font-family="Helvetica" >1492</tspan></text>
+	<g transform="translate(422.0,190.3)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
+		<text><tspan font-family="Helvetica" >1292</tspan></text>
 	</g>
-	<g transform="translate(517.6,240.4)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
-		<text><tspan font-family="Helvetica" >225</tspan></text>
+	<g transform="translate(517.6,243.1)" stroke="none" fill="black" font-family="Helvetica" font-size="8.00"  text-anchor="middle">
+		<text><tspan font-family="Helvetica" >205</tspan></text>
 	</g>
 </g>
 	</g>
