@@ -4,7 +4,7 @@ To run the benchmarks, first install the following dependencies:
 
 * [Node.js](https://nodejs.org/en/)	*- Required for running the benchmarks*
 * [Bun](https://bun.sh/)			*- Optional, but recommended*
-* [Deno](https://deno.land/)		*- Optional, but recommended*
+<!-- * [Deno](https://deno.land/)		*- Optional, but recommended* -->
 
 It is also recommended to download the most recent version of the [Google Closure Compiler](https://mvnrepository.com/artifact/com.google.javascript/closure-compiler) and extract it to the root of the benchmark directory. Also make sure to rename it to `closure-compiler.jar`.
 
