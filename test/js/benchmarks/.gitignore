@@ -5,3 +5,5 @@
 !summarize_data.js
 *.dat
 !/plots/*.dat
+!externs.js
+closure-compiler*.jar

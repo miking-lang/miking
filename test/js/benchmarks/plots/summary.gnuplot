@@ -14,7 +14,7 @@ set grid ytics linestyle 0
 
 set boxwidth 0.85
 fnt = "Helvetica,8"
-bars = 6
+bars = 8
 
 START = 2
 END = bars+1
@@ -33,12 +33,14 @@ set output "summary.png"
 # 	 data u 7:xtic(1) t col, \
 
 plot for [COL=(START):(END)] data u COL:xtic(1) t col, \
-    data u (align( -0.7)):2:2 w labels font fnt offset 0,0.5 t '', \
-    data u (align(-0.41)):3:3 w labels font fnt offset 0,0.5 t '', \
-    data u (align(-0.13)):4:4 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.15)):5:5 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.44)):6:6 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.73)):7:7 w labels font fnt offset 0,0.5 t ''
+    data u (align(-0.575)):2:2 w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.4)):3:3 w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.23)):4:4 w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.07)):5:5 w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.10)):6:6 w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.25)):7:7 w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.435)):8:8 w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.60)):9:9 w labels font fnt offset 0,0.5 t ''
 
 set terminal svg
 set output "summary.svg"

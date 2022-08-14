@@ -29,6 +29,15 @@ function compile(benchmark, target) {
   }
 }
 
+function optimize(benchmark) {
+  console.log(`Optimizing benchmark '${benchmark}'...`);
+  try {
+    execSync(`java -jar closure-compiler.jar --js=${BENCH}${benchmark}.js --js_output_file=${BENCH}${benchmark}.opt.js --compilation_level=ADVANCED_OPTIMIZATIONS --env CUSTOM --warning_level QUIET --externs ${BENCH}externs.js`);
+  } catch (e) {
+    process.exit(1);
+  }
+}
+
 function cleanup(benchmark) {
   execSync(`rm ${BENCH}${benchmark}.js`);
 }
@@ -100,11 +109,15 @@ function main(args) {
   const mi   = run("Miking interpreter", `${BUILD}mi eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
   const boot = run("Boot interpreter", `${BUILD}boot eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
   if (!options["no-compile"]) compile(benchmark, "node");
+  optimize(benchmark);
   const nodeMan = run("Node (manual)", `node ${BENCH}${benchmark}.man.js ${iterations}`);
   const nodeCmp = run("Node (compiled)", `node ${BENCH}${benchmark}.js ${iterations}`);
+  const nodeOpt = run("Node (compiled+opt)", `node ${BENCH}${benchmark}.opt.js ${iterations}`);
   if (!options["no-compile"]) compile(benchmark, "bun");
+  optimize(benchmark);
   const bunMan = run("Bun  (manual)", `bun run ${BENCH}${benchmark}.man.js ${iterations}`);
   const bunCmp = run("Bun  (compiled)", `bun run ${BENCH}${benchmark}.js ${iterations}`);
+  const bunOpt = run("Bun  (compiled+opt)", `bun run ${BENCH}${benchmark}.opt.js ${iterations}`);
 
   // Compare results
   // const bootToNode = node / boot;
@@ -118,9 +131,11 @@ function main(args) {
   compare("(Node) Compiled JS code", nodeCmp, "interpreted Miking code", mi);
   compare("(Node) Compiled JS code", nodeCmp, "interpreted Boot code", boot);
   compare("(Node) Compiled JS code", nodeCmp, "the manual JS implementation (Node)", nodeMan);
+  compare("(Node) Optimized compiled JS code", nodeOpt, "the manual JS implementation (Node)", nodeMan);
   compare("(Bun)  Compiled JS code", bunCmp, "interpreted Miking code", mi);
   compare("(Bun)  Compiled JS code", bunCmp, "interpreted Boot code", boot);
   compare("(Bun)  Compiled JS code", bunCmp, "the manual JS implementation (Bun)", bunMan);
+  compare("(Bun)  Optimized compiled JS code", bunOpt, "the manual JS implementation (Bun)", bunMan);
 
   // Output data for gnuplot
   const file = `${BENCH}${benchmark}_${iterations}.dat`;
@@ -130,12 +145,17 @@ function main(args) {
 "boot eval"       ${boot}
 "node (manual)"   ${nodeMan}
 "node (compiled)" ${nodeCmp}
+"node (compiled+opt)" ${nodeOpt}
 "bun (manual)"    ${bunMan}
 "bun (compiled)"  ${bunCmp}
+"bun (compiled+opt)"  ${bunOpt}
 `);
 
   // Cleanup
-  if (!options["no-clean"]) cleanup(benchmark);
+  if (!options["no-clean"]) {
+    cleanup(benchmark);
+    cleanup(benchmark + ".opt");
+  }
 }
 
 if (require.main === module) {
