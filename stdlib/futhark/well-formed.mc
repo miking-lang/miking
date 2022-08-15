@@ -1,99 +1,151 @@
+include "pmexpr/utils.mc"
 include "pmexpr/well-formed.mc"
+include "pmexpr/pprint.mc"
 
 lang FutharkWellFormed = WellFormed + PMExprAst
   syn WFError =
-  | FutharkFunctionInArray Info
-  | FutharkFunctionInRecord Info
-  | FutharkFunctionFromIf Info
-  | FutharkFunctionFromCreate Info
-  | FutharkFunctionFromFold Info
-  | FutharkFunctionFromMap Info
-  | FutharkRecLet Info
+  | FutharkFunctionInArray Type
+  | FutharkFunctionInRecord Type
+  | FutharkFunctionFromIf Expr
+  | FutharkFunctionFromCreate Expr
+  | FutharkFunctionFromFold Expr
+  | FutharkFunctionFromMap Expr
+  | FutharkRecLet Expr
+  | FutharkExprError Expr
+  | FutharkTypeError Type
+  | FutharkPatternError Pat
+  | FutharkConstantError Info
 
   sem wellFormednessBackendName =
   | () -> "Futhark"
 
   sem pprintWellFormedError =
-  | FutharkFunctionInArray info ->
-    (info, "Sequences of function-type elements are not supported")
-  | FutharkFunctionInRecord info ->
-    (info, "Records containing function-type fields are not supported")
-  | FutharkFunctionFromCreate info ->
-    (info, "Creating sequences of functions is not supported")
-  | FutharkFunctionFromMap info ->
-    (info, "Map functions producing functions is not supported")
-  | FutharkFunctionFromIf info ->
-    (info, "Conditionals returning functions are not supported")
-  | FutharkFunctionFromFold info ->
-    (info, "Folds with accumulator of function type are not supported")
-  | FutharkRecLet info ->
-    (info, "Recursive let-expressions are not supported")
-
-  sem containsFunctionType : Bool -> Type -> Bool
-  sem containsFunctionType acc =
-  | TyArrow _ -> true
-  | t -> if acc then acc else sfold_Type_Type containsFunctionType acc t
-
-  sem futharkWellFormedType : Info -> [WFError] -> Type -> [WFError]
-  sem futharkWellFormedType info acc =
-  | TySeq {ty = ty} ->
-    match ty with TyArrow _ then cons (FutharkFunctionInArray info) acc
-    else futharkWellFormedType info acc ty
-  | TyRecord t ->
-    let isArrowType = lam ty.
-      match ty with TyArrow _ then true else false in
-    if any isArrowType (mapValues t.fields) then
-      cons (FutharkFunctionInRecord info) acc
-    else
-      mapFoldWithKey
-        (lam acc. lam. lam ty. futharkWellFormedType info acc ty) acc t.fields
-  | t -> sfold_Type_Type (futharkWellFormedType info) acc t
+  | FutharkFunctionInArray ty ->
+    (infoTy ty, "Sequences of function-type elements are not supported")
+  | FutharkFunctionInRecord ty ->
+    (infoTy ty, "Records containing function-type fields are not supported")
+  | FutharkFunctionFromCreate expr ->
+    (infoTm expr, "Creating sequences of functions is not supported")
+  | FutharkFunctionFromMap expr ->
+    (infoTm expr, "Map functions producing functions is not supported")
+  | FutharkFunctionFromIf expr ->
+    (infoTm expr, "Conditionals returning functions are not supported")
+  | FutharkFunctionFromFold expr ->
+    (infoTm expr, "Folds with accumulator of function type are not supported")
+  | FutharkRecLet expr ->
+    (infoTm expr, "Recursive let-expressions are not supported")
+  | FutharkExprError expr ->
+    (infoTm expr, "Expression is not supported")
+  | FutharkTypeError ty ->
+    (infoTy ty, "Type is not supported")
+  | FutharkPatternError pat ->
+    (infoPat pat, "Pattern is not supported")
+  | FutharkConstantError info ->
+    (info, "Constant is not supported")
 
   sem futharkWellFormedExpr : [WFError] -> Expr -> [WFError]
   sem futharkWellFormedExpr acc =
+  | e ->
+    let acc = futharkWellFormedType acc (tyTm e) in
+    futharkWellFormedExprH acc e
+
+  sem futharkWellFormedExprH : [WFError] -> Expr -> [WFError]
+  sem futharkWellFormedExprH acc =
+  | TmVar t -> acc
+  | (TmApp t) & app ->
+    let wellFormedApp = lam fun. lam args.
+      let acc = futharkWellFormedExpr acc fun in
+      foldl futharkWellFormedExpr acc args in
+    match collectAppArguments app with (fun, args) in
+    match fun with TmConst {val = CFoldl _, ty = ty} then
+      match ty with TyArrow {to = TyArrow {from = TyArrow _}} then
+        cons (FutharkFunctionFromFold app) acc
+      else wellFormedApp fun args
+    else wellFormedApp fun args
+  | TmLam t -> futharkWellFormedExpr acc t.body
   | TmLet t ->
     let acc = futharkWellFormedExpr acc t.body in
-    let acc = futharkWellFormedExpr acc t.inexpr in
-    futharkWellFormedType t.info acc t.ty
-  | TmRecLets t ->
-    let acc = cons (FutharkRecLet t.info) acc in
     futharkWellFormedExpr acc t.inexpr
+  | TmRecLets t ->
+    let acc = cons (FutharkRecLet (TmRecLets t)) acc in
+    futharkWellFormedExpr acc t.inexpr
+  | TmConst t ->
+    if isFutharkSupportedConstant t.val then acc
+    else cons (FutharkConstantError t.info) acc
   | TmMatch t ->
-    -- NOTE(larshum, 2021-12-13): An if-expression may not result in a
-    -- functional type.
-    if containsFunctionType false t.ty then
-      cons (FutharkFunctionFromIf t.info) acc
-    else sfold_Expr_Expr futharkWellFormedExpr acc (TmMatch t)
-  | TmConst ({val = CCreate _} & t) ->
-    -- NOTE(larshum, 2021-12-13): A create expression may not produce a
-    -- sequence with elements of functional type.
-    match t.ty with TyArrow {to = TyArrow {to = TySeq {ty = TyArrow _}}} then
-      cons (FutharkFunctionFromCreate t.info) acc
-    else sfold_Expr_Expr futharkWellFormedExpr acc (TmConst t)
-  | TmConst ({val = CFoldl _} & t) ->
-    -- NOTE(larshum, 2021-12-13): A fold-expression may not have an accumulator
-    -- of functional type.
-    match t.ty with TyArrow {to = TyArrow {from = TyArrow _}} then
-      cons (FutharkFunctionFromFold t.info) acc
-    else sfold_Expr_Expr futharkWellFormedExpr acc (TmConst t)
-  | TmConst ({val = CMap _} & t) ->
-    -- NOTE(larshum, 2021-12-13): A map-expression may not produce a sequence
-    -- containing elements of functional type.
-    match t.ty with TyArrow {to = TyArrow {to = TySeq {ty = TyArrow _}}} then
-      cons (FutharkFunctionFromMap t.info) acc
-    else sfold_Expr_Expr futharkWellFormedExpr acc (TmConst t)
+    let acc = futharkWellFormedExpr acc t.target in
+    let acc = futharkWellFormedPattern acc t.pat in
+    let acc = futharkWellFormedExpr acc t.thn in
+    let acc = futharkWellFormedExpr acc t.els in
+    match t.ty with TyArrow _ then cons (FutharkFunctionFromIf (TmMatch t)) acc
+    else acc
+  | TmNever _ -> acc
+  | TmRecord t ->
+    mapFoldWithKey
+      (lam acc. lam. lam expr. futharkWellFormedExpr acc expr)
+      acc t.bindings
+  | TmRecordUpdate t ->
+    let acc = futharkWellFormedExpr acc t.rec in
+    futharkWellFormedExpr acc t.value
+  | TmSeq {tms = tms} -> foldl futharkWellFormedExpr acc tms
+  | TmExt t -> futharkWellFormedExpr acc t.inexpr
+  | TmType t ->
+    let acc = futharkWellFormedType acc t.tyIdent in
+    futharkWellFormedExpr acc t.inexpr
+  | TmFlatten t -> futharkWellFormedExpr acc t.e
+  | TmMap2 t ->
+    let acc = futharkWellFormedExpr acc t.f in
+    let acc = futharkWellFormedExpr acc t.as in
+    futharkWellFormedExpr acc t.bs
   | TmParallelReduce t ->
     -- NOTE(larshum, 2021-12-13): A parallel reduce requires that the
     -- accumulator has the same type as the elements of the provided sequence.
     -- In addition, this type must not be a functional type.
     match t.ty with TyArrow _ then
-      cons (FutharkFunctionFromFold t.info) acc
+      cons (FutharkFunctionFromFold (TmParallelReduce t)) acc
     else sfold_Expr_Expr futharkWellFormedExpr acc (TmParallelReduce t)
-  | t ->
-    let info = infoTm t in
-    let acc = futharkWellFormedType info acc (tyTm t) in
-    let acc = sfold_Expr_Type (futharkWellFormedType info) acc t in
-    sfold_Expr_Expr futharkWellFormedExpr acc t
+  | TmParallelSizeCoercion t -> futharkWellFormedExpr acc t.e
+  | TmParallelSizeEquality t -> acc
+  | expr -> cons (FutharkExprError expr) acc
+
+  sem futharkWellFormedType : [WFError] -> Type -> [WFError]
+  sem futharkWellFormedType acc =
+  | TyInt _ | TyFloat _ | TyChar _ | TyBool _ -> acc
+  | TyArrow {from = from, to = to} ->
+    let acc = futharkWellFormedType acc from in
+    futharkWellFormedType acc to
+  | (TyRecord {fields = fields}) & recTy ->
+    let isArrowType = lam ty. match ty with TyArrow _ then true else false in
+    let acc =
+      if any isArrowType (mapValues fields) then
+        cons (FutharkFunctionInRecord recTy) acc
+      else acc in
+    mapFoldWithKey
+      (lam acc. lam. lam ty. futharkWellFormedType acc ty) acc fields
+  | TySeq {ty = ty & !(TyArrow _)} -> futharkWellFormedType acc ty
+  | (TySeq _) & seqTy -> cons (FutharkFunctionInArray seqTy) acc
+  | TyCon _ -> acc
+  | ty -> cons (FutharkTypeError ty) acc
+
+  sem futharkWellFormedPattern : [WFError] -> Pat -> [WFError]
+  sem futharkWellFormedPattern acc =
+  | PatNamed _ | PatBool _ -> acc
+  | PatRecord {bindings = bindings} ->
+    mapFoldWithKey
+      (lam acc. lam. lam pat. futharkWellFormedPattern acc pat)
+      acc bindings
+  | pat -> cons (FutharkPatternError pat) acc
+
+  sem isFutharkSupportedConstant : Const -> Bool
+  sem isFutharkSupportedConstant =
+  | CInt _ | CFloat _ | CChar _ | CBool _ -> true
+  | CAddi _ | CAddf _ | CSubi _ | CSubf _ | CMuli _ | CMulf _ | CDivi _
+  | CDivf _ | CModi _ | CNegi _ | CNegf _ | CEqi _ | CEqf _ | CLti _ | CLtf _
+  | CGti _ | CGtf _ | CLeqi _ | CLeqf _ | CGeqi _ | CGeqf _ | CNeqi _
+  | CNeqf _ | CFloorfi _ | CInt2float _ -> true
+  | CCreate _ | CLength _ | CReverse _ | CConcat _ | CHead _ | CTail _
+  | CNull _ | CSubsequence _ | CMap _ | CFoldl _ | CGet _ | CSet _ -> true
+  | _ -> false
 
   sem wellFormedExprH : [WFError] -> Expr -> [WFError]
   sem wellFormedExprH acc =
@@ -101,61 +153,72 @@ lang FutharkWellFormed = WellFormed + PMExprAst
 
   sem wellFormedTypeH : [WFError] -> Type -> [WFError]
   sem wellFormedTypeH acc =
-  | t -> futharkWellFormedType (NoInfo ()) acc t
+  | t -> futharkWellFormedType acc t
+end
+
+lang TestLang = FutharkWellFormed + PMExprAst
 end
 
 mexpr
 
-use FutharkWellFormed in
+use TestLang in
 
-let i = Info {filename = "", row1 = 0, row2 = 0, col1 = 0, col2 = 0} in
-let arrowType = TyArrow {from = tyint_, to = tyint_, info = i} in
+let eqFutError = lam lerr. lam rerr.
+  use MExprEq in
+  let t = (lerr, rerr) in
+  match t with (FutharkFunctionInArray lty, FutharkFunctionInArray rty) then
+    eqType lty rty
+  else match t with (FutharkFunctionInRecord lty, FutharkFunctionInRecord rty) then
+    eqType lty rty
+  else match t with (FutharkFunctionFromIf le, FutharkFunctionFromIf re) then
+    eqExpr le re
+  else match t with (FutharkFunctionFromFold le, FutharkFunctionFromFold re) then
+    eqExpr le re
+  else match t with (FutharkRecLet le, FutharkRecLet re) then
+    eqExpr le re
+  else match t with (FutharkExprError le, FutharkExprError re) then
+    eqExpr le re
+  else match t with (FutharkTypeError lty, FutharkTypeError rty) then
+    eqType lty rty
+  else match t with (FutharkPatternError lpat, FutharkPatternError rpat) then
+    let empty = {varEnv = biEmpty, conEnv = biEmpty} in
+    optionIsSome (eqPat empty empty biEmpty lpat rpat)
+  else match t with (FutharkConstantError li, FutharkConstantError ri) then
+    eqi (infoCmp li ri) 0
+  else false
+in
 
-let functionInArray = TmSeq {
-  tms = [withType arrowType (ulam_ "x" (var_ "x"))],
-  ty = tyseq_ arrowType, info = i} in
-utest wellFormedExpr functionInArray with [FutharkFunctionInArray i] in
+let preprocess = lam t. typeCheck (symbolize t) in
+let checkWellFormedExpr = lam t.
+  wellFormedExpr (preprocess t)
+in
+let checkWellFormedType = lam ty.
+  wellFormedTypeH [] ty
+in
+
+let seqTy = tyseq_ (tyarrow_ tyint_ tyint_) in
+utest checkWellFormedType seqTy with [FutharkFunctionInArray seqTy]
+using eqSeq eqFutError in
+
+let recTy = tyrecord_ [("a", tyarrow_ tyint_ tyint_)] in
+utest checkWellFormedType recTy with [FutharkFunctionInRecord recTy]
+using eqSeq eqFutError in
 
 let functionFromIf =
-  withInfo i
-    (withType arrowType
-      (if_ true_ (ulam_ "x" (var_ "x")) (ulam_ "x" (int_ 1)))) in
-utest wellFormedExpr functionFromIf with [FutharkFunctionFromIf i] in
+  if_ true_ (ulam_ "x" (var_ "x")) (ulam_ "x" (int_ 1)) in
+utest checkWellFormedExpr functionFromIf with [FutharkFunctionFromIf functionFromIf]
+using eqSeq eqFutError in
 
-let createType = tyarrows_ [tyint_, tyarrow_ tyint_ arrowType, tyseq_ arrowType] in
-let createTerm = withInfo i (const_ createType (CCreate ())) in
-let createFunctionResult =
-  appSeq_ createTerm [int_ 2, var_ "f"] in
-utest wellFormedExpr createFunctionResult with [FutharkFunctionFromCreate i] in
-
-let foldType =
-  let ty = arrowType in
-  tyarrows_ [tyarrows_ [ty, ty, ty], ty, tyseq_ ty] in
-let foldTerm = withInfo i (const_ foldType (CFoldl ())) in
-let functionFoldParameter =
-  appSeq_ foldTerm [var_ "f", ulam_ "x" (var_ "x"), seq_ []] in
-utest wellFormedExpr functionFoldParameter with [FutharkFunctionFromFold i] in
-
-let mapType =
-  tyarrows_ [tyarrow_ tyint_ arrowType, tyseq_ tyint_, tyseq_ arrowType] in
-let mapTerm = withInfo i (const_ mapType (CMap ())) in
-let mapFunctionResult =
-  appSeq_ mapTerm [var_ "f", seq_ [int_ 1]] in
-utest wellFormedExpr mapFunctionResult with [FutharkFunctionFromMap i] in
-
-let functionInArrayVar = withInfo i (withType (tyseq_ arrowType) (var_ "x")) in
-utest wellFormedExpr functionInArrayVar with [FutharkFunctionInArray i] in
+let funType = tyarrow_ tyint_ tyint_ in
+let foldExpr = foldl_ (var_ "f") (lam_ "x" tyint_ (var_ "x")) (seq_ []) in
+let expr = bindall_ [
+  ulet_ "f" (lam_ "x" funType (lam_ "y" funType (var_ "y"))),
+  foldExpr] in
+utest checkWellFormedExpr expr with [FutharkFunctionFromFold foldExpr]
+using eqSeq eqFutError in
 
 let sumf = ulam_ "a" (ulam_ "b" (addi_ (var_ "a") (var_ "b"))) in
 let sumFold = foldl_ sumf (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest wellFormedExpr sumFold with [] in
-
-utest wellFormedExpr foldTerm with [FutharkFunctionFromFold i] in
-
-let parallelReduceFunctionType = TmParallelReduce {
-  f = var_ "f", ne = ulam_ "x" (var_ "x"), as = seq_ [],
-  ty = foldType, info = i} in
-utest wellFormedExpr parallelReduceFunctionType
-with [FutharkFunctionFromFold i] in
+utest checkWellFormedExpr sumFold with [] using eqSeq eqFutError in
 
 ()

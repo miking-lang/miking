@@ -54,8 +54,8 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedType acc (tyTm e) in
     cudaWellFormedExprH acc e
 
-  sem _cudaCheckConstApp : Info -> [WFError] -> [Expr] -> Const -> [WFError]
-  sem _cudaCheckConstApp info acc args =
+  sem _cudaCheckConstApp : [WFError] -> [Expr] -> Const -> [WFError]
+  sem _cudaCheckConstApp acc args =
   | CFoldl _ ->
     let acc = cudaWellFormedHigherOrder acc (get args 0) in
     let acc = cudaWellFormedExpr acc (get args 1) in
@@ -67,23 +67,15 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedExpr acc (get args 0) in
     let acc = cudaWellFormedExpr acc (get args 1) in
     cudaWellFormedExpr acc (get args 2)
-  | _ -> _cudaCheckAppArgs info acc args
-
-  sem _cudaCheckAppArgs : Info -> [WFError] -> [Expr] -> [WFError]
-  sem _cudaCheckAppArgs info acc =
-  | args ->
-    let checkArg = lam acc. lam arg.
-      match tyTm arg with TyArrow _ then cons (CudaAppArgTypeError arg) acc
-      else acc in
-    foldl checkArg acc args
+  | _ -> foldl cudaWellFormedExpr acc args
 
   sem _cudaCheckApp : [WFError] -> Expr -> [WFError]
   sem _cudaCheckApp acc =
   | (TmApp t) & app ->
     match collectAppArguments app with (fun, args) in
     let acc =
-      match fun with TmConst {val = c} then _cudaCheckConstApp t.info acc args c
-      else _cudaCheckAppArgs t.info acc args in
+      match fun with TmConst {val = c} then _cudaCheckConstApp acc args c
+      else foldl cudaWellFormedExpr acc args in
     cudaWellFormedExpr acc fun
 
   sem cudaWellFormedExprH : [WFError] -> Expr -> [WFError]
