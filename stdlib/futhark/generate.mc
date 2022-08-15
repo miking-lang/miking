@@ -12,6 +12,9 @@ include "mexpr/type-annot.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
+let extMap = mapFromSeq cmpString
+  [("externalSin", "f64.sin"), ("externalCos", "f64.cos")]
+
 type FutharkGenerateEnv = {
   entryPoints : Set Name,
   typeAliases : Map Type Name,
@@ -376,7 +379,10 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                            PMExprAst
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmVar t ->
-    FEVar {ident = t.ident, ty = generateType env t.ty, info = t.info}
+    -- NOTE(larshum, 2022-08-15): Special-case handling of external functions.
+    match mapLookup (nameGetStr t.ident) extMap with Some str then
+      FEVarExt {ident = str, ty = generateType env t.ty, info = t.info}
+    else FEVar {ident = t.ident, ty = generateType env t.ty, info = t.info}
   | TmRecord t ->
     FERecord {fields = mapMap (generateExpr env) t.bindings,
               ty = generateType env t.ty, info = t.info}
@@ -456,7 +462,8 @@ let _collectParams = use FutharkTypeGenerate in
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
-  sem generateToplevel (env : FutharkGenerateEnv) =
+  sem generateToplevel : FutharkGenerateEnv -> Expr -> [FutDecl]
+  sem generateToplevel env =
   | TmType t ->
     let ty = generateType env t.tyIdent in
     let typeParams = _extractTypeParams [] ty in
@@ -500,7 +507,10 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
   | TmRecLets t ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | TmExt t ->
-    errorSingle [t.info] "External functions are not supported by the Futhark backend"
+    match mapLookup (nameGetStr t.ident) extMap with Some str then
+      generateToplevel env t.inexpr
+    else
+      errorSingle [t.info] "External functions are not supported by the Futhark backend"
   | TmUtest t ->
     -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
     -- are removed/replaced in earlier stages of the compilation.
@@ -704,6 +714,21 @@ let expected = FProg {decls = [
         [(futPrecord_ [("a", nFutPvar_ a), ("b", nFutPvar_ b)], nFutVar_ a)],
     info = NoInfo ()}]} in
 utest printFutProg (generateProgram (setEmpty nameCmp) recordMatchNotProj)
+with printFutProg expected using eqString in
+
+let extSinId = nameSym "externalSin" in
+let sinId = nameSym "sin" in
+let x = nameSym "x" in
+let extDefn = typeCheck (bindall_ [
+  next_ extSinId false (tyarrow_ tyfloat_ tyfloat_),
+  nulet_ sinId (nlam_ x tyfloat_ (app_ (nvar_ extSinId) (nvar_ x)))]) in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = sinId, entry = false, typeParams = [],
+    params = [(x, futFloatTy_)], ret = futFloatTy_,
+    body = futApp_ (futVarExt_ "f64.sin") (nFutVar_ x),
+    info = NoInfo ()}]} in
+utest printFutProg (generateProgram (setEmpty nameCmp) extDefn)
 with printFutProg expected using eqString in
 
 ()

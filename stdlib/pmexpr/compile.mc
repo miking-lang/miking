@@ -3,7 +3,6 @@ include "cuda/inline-higher.mc"
 include "cuda/lang-fix.mc"
 include "cuda/pmexpr-ast.mc"
 include "cuda/well-formed.mc"
-include "futhark/ext.mc"
 include "futhark/well-formed.mc"
 include "mexpr/anf.mc"
 include "mexpr/cse.mc"
@@ -227,7 +226,7 @@ end
 lang PMExprFutharkWellFormed =
   PMExprCompileWellFormedBase + PMExprUtestSizeConstraint + PMExprRewrite +
   PMExprTailRecursion + MExprCSE + MExprANF + PMExprParallelPattern +
-  PMExprRecursionElimination + FutharkExternal
+  PMExprRecursionElimination
 
   sem futharkCheckSequenceRegularity : Name -> Expr -> Type -> Expr
   sem futharkCheckSequenceRegularity id acc =
@@ -300,7 +299,6 @@ lang PMExprFutharkWellFormed =
     let ast = normalizeTerm ast in
     let ast = patternRewrite ast in
     let ast = eliminateRecursion ast in
-    let ast = replaceSinCosExternals ast in
     (use FutharkWellFormed in wellFormed ast);
     ast
 end

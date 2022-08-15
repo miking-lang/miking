@@ -323,7 +323,7 @@ lang CToFutharkWrapper = FutharkCWrapperBase
       (foldl (_generateCToFutharkWrapperArg ctxIdent) [] env.arguments)
 end
 
-lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
+lang FutharkCallWrapper = FutharkCWrapperBase
   sem generateFutharkCall : CWrapperEnv -> [CStmt]
   sem generateFutharkCall =
   | env ->
@@ -338,9 +338,8 @@ lang FutharkCallWrapper = FutharkCWrapperBase + FutharkIdentifierPrettyPrint
     -- TODO(larshum, 2021-09-03): This only works under the assumption that the
     -- function name (i.e. the string) is unique.
     let functionStr =
-      match pprintVarName pprintEnvEmpty env.functionIdent with (_, ident) then
-        ident
-      else never
+      match futPprintEnvGetStr pprintEnvEmpty env.functionIdent with (_, ident) in
+      ident
     in
     let funcId = nameSym (concat "futhark_entry_" functionStr) in
     let returnCodeIdent = nameSym "v" in
