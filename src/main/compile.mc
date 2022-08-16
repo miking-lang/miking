@@ -11,6 +11,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
+include "mexpr/shallow-patterns.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
@@ -86,6 +87,8 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
+
+    let ast = use MExprLowerNestedPatterns in lowerAll ast in
 
     if options.toJavaScript then
       javascriptCompileFile ast sourcePath

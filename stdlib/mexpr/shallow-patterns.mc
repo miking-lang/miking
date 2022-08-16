@@ -640,7 +640,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   -- However, we do need to bind the pre and post names, and possibly one or
   -- more middle segments
   | SPatSeqGE x ->
-    let letFrom_ = lam n. lam i. nulet_ n (get_ i (nvar_ scrutinee)) in
+    let letFrom_ = lam n. lam i. nulet_ n (get_ (nvar_ scrutinee) i) in
     let pres = mapi
       (lam i. lam n. letFrom_ n (int_ i))
       (deref x.prefix) in
