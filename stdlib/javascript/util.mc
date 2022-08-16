@@ -23,7 +23,8 @@ con CompileJSTP_Web     : () -> CompileJSTargetPlatform
 type CompileJSOptions = {
   targetPlatform : CompileJSTargetPlatform,
   debugMode : Bool,
-  optimizations : Bool
+  generalOptimizations : Bool,
+  tailCallOptimizations: Bool
 }
 
 type RecursiveFunctionRegistry = {
@@ -159,7 +160,8 @@ let _binOpM : JSBinOp -> [JSExpr] -> JSExpr = use JSExprAst in
 let compileJSOptionsEmpty : CompileJSOptions = {
   targetPlatform = CompileJSTP_Generic (),
   debugMode = false,
-  optimizations = true
+  generalOptimizations = true,
+  tailCallOptimizations = true
 }
 
 -- Empty compile JS environment

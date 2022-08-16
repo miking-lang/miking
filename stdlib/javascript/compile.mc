@@ -76,7 +76,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileProg : CompileJSContext -> Expr -> JSProg
   sem compileProg ctx =
   | prog ->
-    let ctx = if ctx.options.optimizations then extractRFRctx ctx prog else ctx in
+    let ctx = if ctx.options.tailCallOptimizations then extractRFRctx ctx prog else ctx in
     -- Run compiler
     match compileMExpr ctx prog with (ctx, expr) in
     let exprs = (match expr with JSEBlock { exprs = exprs, ret = ret }
@@ -355,7 +355,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       match body with TmLam _ then
         let ctx = { ctx with currentFunction = Some (ident, info) } in
         match compileMExpr ctx body with (ctx, body) in
-        let expr = (if ctx.options.optimizations
+        let expr = (if ctx.options.tailCallOptimizations
           then optimizeTailCallFunc ctx ident info body
           else JSEDef { id = ident, expr = body }) in
         (ctx, cons expr es)
@@ -403,7 +403,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       els = immediatelyInvokeBlock els
     } in
     let ctx = combineDeclarations ctx ctx2 in
-    (ctx, if ctx.options.optimizations then optimizeExpr3 expr else expr)
+    (ctx, if ctx.options.generalOptimizations then optimizeExpr3 expr else expr)
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt { ident = ident, tyIdent = tyIdent, inexpr = e, effect = effect, ty = ty, info = info } & t ->
     match compileMExpr ctx e with (ctx, e) in

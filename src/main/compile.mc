@@ -91,7 +91,8 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     if options.toJavaScript
     then compileMCoreToJS { compileJSOptionsEmpty with
         targetPlatform = parseJSTarget options.jsTarget,
-        optimizations = not options.disableJsOptimizations
+        generalOptimizations = not options.disableJsGeneralOptimizations,
+        tailCallOptimizations = not options.disableJsTCO
       } ast sourcePath
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()

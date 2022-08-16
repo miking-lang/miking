@@ -28,7 +28,8 @@ let optionsDefault : Options = {
   printHelp = false,
   toJavaScript = false,
   jsTarget = "generic",
-  disableJsOptimizations = false,
+  disableJsGeneralOptimizations = false,
+  disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault
 }
