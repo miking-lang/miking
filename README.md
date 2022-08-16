@@ -1578,9 +1578,9 @@ which require a GPU to compile the code. The Futhark backend is used when
 `map`, `map2`, or `reduce` is used within an accelerated expression. To make
 use of this backend, `futhark` and its dependencies must be installed
 (see [installation instructions](https://futhark.readthedocs.io/en/stable/installation.html)).
-Otherwise, the CUDA backend is chosen. This requires an installation of CUDA
-and an Nvidia GPU with support for unified memory (Kepler architecture or
-later).
+Otherwise, the CUDA backend is chosen. Both backends currently require an
+installation of CUDA. The CUDA backend also requires an Nvidia GPU with support
+for unified memory (Kepler architecture or later).
 
 ### Usage
 
@@ -1598,16 +1598,19 @@ the program are ignored, and all parallel constructs are executed sequentially.
 #### Recommended workflow
 
 The recommended workflow when using acceleration is as follows. First, develop
-the program in *debug mode*, using the `--runtime-checks` and
-`--check-well-formed` flags. The former provides clear error messages on errors
-in many built-in functions when executing the program. The latter enables
-well-formedness checks which ensure the accelerated parts of the code are
-supported. This mode produces significantly better error messages.
+the program in *debug mode*, using the `--debug-accelerate` flag. This enables
+static well-formedness checks plus additional dynamic checks for the
+accelerated code, plus provides improved error messages on errors for built-in
+functions. This mode produces significantly better error messages than when
+compiling without any flags, but has an impact on the runtime performance.
 
 Once the program in debug mode works as expected, the program is compiled in
 *accelerate mode*. In this mode, the `--accelerate` flag is set to enable
 acceleration. The accelerated binary produced when compiling in accelerate mode
 does not fail given that the debug binary did not fail.
+
+Note that the `--debug-accelerate` and `--accelerate` flags are mutually
+exclusive. That is, you cannot use both configurations simultaneously.
 
 #### Example
 
@@ -1713,8 +1716,8 @@ other places.
 There are limitations on what kinds of expressions can be accelerated. The
 exact limitations depend on which accelerate backend is used. They apply to
 the accelerated expressions and any code these make use of. Many limitations
-are checked statically when compiling with acceleration enabled. A few
-limitations are also checked dynamically when using `--check-well-formed`.
+are checked statically when compiling with `--accelerate`. When using
+`--debug-accelerate`, a few limitations are also checked dynamically.
 
 In addition, we assume that the parallel operations performed in a `reduce` or
 `loop` yield the same result regardless of execution order. If this requirement
