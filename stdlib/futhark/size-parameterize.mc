@@ -11,69 +11,71 @@ include "futhark/pprint.mc"
 -- A size parameter represents the size of one dimension of an array. As an
 -- array may be multi-dimensional, we distinguish the size parameters using a
 -- dimension index.
-type SizeParam = {
-  id : Name,
-  dim : Int
-}
+lang FutharkSizeType
+  type SizeParam = {
+    id : Name,
+    dim : Int
+  }
 
-let cmpSizeParam : SizeParam -> SizeParam -> Int = lam l. lam r.
-  let c = nameCmp l.id r.id in
-  if eqi c 0 then subi l.dim r.dim
-  else c
+  sem cmpSizeParam : SizeParam -> SizeParam -> Int
+  sem cmpSizeParam l =
+  | r ->
+    let c = nameCmp l.id r.id in
+    if eqi c 0 then subi l.dim r.dim else c
 
-type SizeParamMap = {
-  sizeToIndex : Map SizeParam Int,
-  indexToIdent : Map Int Name
-}
+  type SizeParamMap = {
+    sizeToIndex : Map SizeParam Int,
+    indexToIdent : Map Int Name
+  }
 
-type SizeParameterizeEnv = {
-  paramMap : Map Name FutType,
-  typeParams : Map Name FutTypeParam,
-  retType : FutType,
-  equalSizes : UnionFind
-}
+  type SizeParameterizeEnv = {
+    paramMap : Map Name FutType,
+    typeParams : Map Name FutTypeParam,
+    retType : FutType,
+    equalSizes : UnionFind
+  }
 
-lang FutharkSizeTypeEliminate = FutharkAst
-  sem _incrementUseCount (typeParamUseCount : Map FutTypeParam Int) =
-  | typeParam /- : FutTypeParam -/ ->
+  type LengthParameterizeEnv = {
+    paramMap : Map Name Name,
+    replaceMap : Map Name Name
+  }
+end
+
+lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
+  sem _incrementUseCount : Map Name Int -> Name -> Map Name Int
+  sem _incrementUseCount typeParamUseCount =
+  | typeParamId ->
     optionGetOrElse
       (lam. typeParamUseCount)
       (optionMap
-        (lam count. mapInsert typeParam (addi count 1) typeParamUseCount)
-        (mapLookup typeParam typeParamUseCount))
+        (lam count. mapInsert typeParamId (addi count 1) typeParamUseCount)
+        (mapLookup typeParamId typeParamUseCount))
 
-  sem countSizeTypeParamUsesType (typeParamUseCount : Map FutTypeParam Int) =
+  sem countSizeTypeParamUsesType : Map Name Int -> FutType -> Map Name Int
+  sem countSizeTypeParamUsesType typeParamUseCount =
   | FTyArray {elem = elem, dim = Some dimId} ->
     let typeParamUseCount =
-      let tp = FPSize {val = dimId} in
       let count =
-        match mapLookup tp typeParamUseCount with Some count then
+        match mapLookup dimId typeParamUseCount with Some count then
           addi count 1
         else 1 in
-      mapInsert tp count typeParamUseCount in
+      mapInsert dimId count typeParamUseCount in
     countSizeTypeParamUsesType typeParamUseCount elem
   | t -> sfold_FType_FType countSizeTypeParamUsesType typeParamUseCount t
 
-  sem countSizeTypeParamUsesExpr (typeParamUseCount : Map FutTypeParam Int) =
-  | FEVar t ->
-    let tp = FPSize {val = t.ident} in
-    _incrementUseCount typeParamUseCount tp
+  sem countSizeTypeParamUsesExpr : Map Name Int -> FutExpr -> Map Name Int
+  sem countSizeTypeParamUsesExpr typeParamUseCount =
+  | FEVar t -> _incrementUseCount typeParamUseCount t.ident
   | t -> sfold_FExpr_FExpr countSizeTypeParamUsesExpr typeParamUseCount t
 
-  sem collectUnnecessarySizeTypeParams =
+  sem collectUnnecessarySizeTypes : FutDecl -> Set Name
+  sem collectUnnecessarySizeTypes =
   | FDeclFun t ->
-    let typeParamCmp = lam tp1 : FutTypeParam. lam tp2 : FutTypeParam.
-      let t : (FutTypeParam, FutTypeParam) = (tp1, tp2) in
-      match t with (FPSize {val = v1}, FPSize {val = v2}) then
-        nameCmp v1 v2
-      else match t with (FPType {val = v1}, FPType {val = v2}) then
-        nameCmp v1 v2
-      else subi (constructorTag tp1) (constructorTag tp2) in
-    let typeParamUseCount : Map FutTypeParam Int =
-      mapFromSeq typeParamCmp
+    let typeParamUseCount : Map Name Int =
+      mapFromSeq nameCmp
         (foldl
           (lam acc. lam p : FutTypeParam.
-            match p with FPSize _ then snoc acc (p, 0)
+            match p with FPSize {val = id} then snoc acc (id, 0)
             else acc)
           [] t.typeParams) in
     let typeParamUseCount = countSizeTypeParamUsesType typeParamUseCount t.ret in
@@ -83,93 +85,121 @@ lang FutharkSizeTypeEliminate = FutharkAst
         (foldl countSizeTypeParamUsesType typeParamUseCount paramTypes)
         t.body in
     mapFoldWithKey
-      (lam acc : Set FutTypeParam. lam k : FutTypeParam. lam v : Int.
+      (lam acc : Set Name. lam k : Name. lam v : Int.
         if leqi v 1 then setInsert k acc else acc)
-      (setEmpty typeParamCmp) typeParamUseCount
-  sem eliminateTypeParamsType (unnecessaryTypeParams : Set FutTypeParam) =
-  | FTyArray (t & {dim = Some dimId}) ->
-    let elem = eliminateTypeParamsType unnecessaryTypeParams t.elem in
-    let typeParam = FPSize {val = dimId} in
-    let dim =
-      if setMem typeParam unnecessaryTypeParams then None ()
-      else Some dimId in
-    FTyArray {{t with elem = elem} with dim = dim}
-  | t -> smap_FType_FType (eliminateTypeParamsType unnecessaryTypeParams) t
+      (setEmpty nameCmp) typeParamUseCount
 
-  sem eliminateTypeParamsExpr (unnecessaryTypeParams : Set FutTypeParam) =
+  sem stripUndefSizeParamsExpr : Set Name -> FutExpr -> (Set Name, FutExpr)
+  sem stripUndefSizeParamsExpr vars =
   | FELet t ->
-    let tyBody = eliminateTypeParamsType unnecessaryTypeParams t.tyBody in
-    let body = eliminateTypeParamsExpr unnecessaryTypeParams t.body in
-    let inexpr = eliminateTypeParamsExpr unnecessaryTypeParams t.inexpr in
-    let ty = eliminateTypeParamsType unnecessaryTypeParams t.ty in
-    FELet {{{{t with tyBody = tyBody}
-                with body = body}
-                with inexpr = inexpr}
-                with ty = ty}
-  | t ->
-    let ty = eliminateTypeParamsType unnecessaryTypeParams (tyFutTm t) in
-    let t = withTypeFutTm ty t in
-    smap_FExpr_FExpr (eliminateTypeParamsExpr unnecessaryTypeParams) t
+    let tyBody = stripUndefSizeParamsType vars t.tyBody in
+    match stripUndefSizeParamsExpr vars t.body with (vars, body) in
+    let vars = setInsert t.ident vars in
+    match stripUndefSizeParamsExpr vars t.inexpr with (vars, inexpr) in
+    let ty = stripUndefSizeParamsType vars t.ty in
+    ( vars
+    , FELet {t with tyBody = tyBody, body = body, inexpr = inexpr, ty = ty} )
+  | FESizeCoercion t ->
+    match stripUndefSizeParamsExpr vars t.e with (vars, e) in
+    let ty = stripUndefSizeParamsType vars t.ty in
+    ( vars
+    , FESizeCoercion {t with e = e, ty = ty} )
+  | t -> smapAccumL_FExpr_FExpr stripUndefSizeParamsExpr vars t
 
-  sem removeUnnecessarySizeTypeParams (unnecessaryTypeParams : Set FutTypeParam) =
+  sem stripUndefSizeParamsType : Set Name -> FutType -> FutType
+  sem stripUndefSizeParamsType vars =
+  | FTyArray (t & {dim = Some dimId}) ->
+    let elem = stripUndefSizeParamsType vars t.elem in
+    let dim =
+      if setMem dimId vars then Some dimId
+      else None () in
+    FTyArray {t with elem = elem, dim = dim}
+  | ty -> smap_FType_FType (stripUndefSizeParamsType vars) ty
+
+  sem sizeTypeParamId : FutTypeParam -> [Name]
+  sem sizeTypeParamId =
+  | FPSize t -> [t.val]
+  | FPType _ -> []
+
+  sem removeUnnecessarySizeTypes : Set Name -> FutDecl -> FutDecl
+  sem removeUnnecessarySizeTypes unnecessaryTypeParams =
   | FDeclFun t ->
-    let eliminateTypeParams = lam ty : FutType.
-      eliminateTypeParamsType unnecessaryTypeParams ty in
+    let stripTypeParams = lam vars. lam ty : FutType.
+      stripUndefSizeParamsType vars ty in
     let typeParams =
       foldl
         (lam acc. lam p : FutTypeParam.
-          if setMem p unnecessaryTypeParams then acc else snoc acc p)
+          match p with FPSize t then
+            if setMem t.val unnecessaryTypeParams then acc else snoc acc p
+          else snoc acc p)
         [] t.typeParams in
+    let vars =
+      setUnion
+        (setOfSeq nameCmp (join (map sizeTypeParamId typeParams)))
+        (setOfSeq nameCmp (map (lam param. param.0) t.params)) in
     let params =
       foldl
         (lam acc. lam param : (Name, FutType).
-          match eliminateTypeParams param.1 with paramType in
+          let paramType = stripTypeParams vars param.1 in
           snoc acc (param.0, paramType))
         [] t.params in
-    let ret = eliminateTypeParams t.ret in
-    let body = eliminateTypeParamsExpr unnecessaryTypeParams t.body in
-    FDeclFun {{{{t with typeParams = typeParams}
-                   with params = params}
-                   with ret = ret}
-                   with body = body}
+    let ret = stripTypeParams vars t.ret in
+    match stripUndefSizeParamsExpr vars t.body with (_, body) in
+    FDeclFun {t with typeParams = typeParams, params = params,
+                     ret = ret, body = body}
 
-  -- We eliminate all size type parameters that are unnecessary. A size type
-  -- that is only used once within the type declaration of a function, and
-  -- never within its body, is considered to be unnecessary because it might as
-  -- well be replaced by an anonymous type.
-  sem eliminateUnnecessarySizeParameters =
-  | FDeclFun t ->
-    let unnecessaryTypeParams : Set FutTypeParam =
-      collectUnnecessarySizeTypeParams (FDeclFun t) in
-    removeUnnecessarySizeTypeParams unnecessaryTypeParams (FDeclFun t)
+  sem eliminateUnnecessarySizeTypes : FutDecl -> FutDecl
+  sem eliminateUnnecessarySizeTypes =
+  | (FDeclFun t) & decl ->
+    let unnecessaryTypeParameters = collectUnnecessarySizeTypes decl in
+    removeUnnecessarySizeTypes unnecessaryTypeParameters decl
+  | FDeclType t ->
+    let definedVars = setOfSeq nameCmp (join (map sizeTypeParamId t.typeParams)) in
+    let ty = stripUndefSizeParamsType definedVars t.ty in
+    FDeclType {t with ty = ty}
   | t -> t
 end
 
 lang FutharkSizeParameterize = FutharkSizeTypeEliminate
-  -- Transforms a length expression applied on a function parameter to make it
-  -- instead use a size type variable of the parameter.
-  sem parameterizeLengthExprs (env : SizeParameterizeEnv) =
-  | FEApp ({lhs = FEConst {val = FCLength ()},
-            rhs = FEVar {ident = s}} & t) ->
-    let lengthParamVar = lam ident. lam info.
-      FEVar {ident = ident, ty = FTyInt {info = info}, info = info}
-    in
-    match mapLookup s env.paramMap with Some (FTyArray tyArray) then
-      match tyArray.dim with Some n then
-        (env, lengthParamVar n tyArray.info)
-      else
-        let n = nameSym "n" in
-        let newParamType = FTyArray {tyArray with dim = Some n} in
-        let typeParam = FPSize {val = n} in
-        let typeParams = mapInsert n typeParam env.typeParams in
-        let env = {{env with paramMap = mapInsert s newParamType env.paramMap}
-                        with typeParams = typeParams} in
-        (env, lengthParamVar n tyArray.info)
-    else smapAccumL_FExpr_FExpr parameterizeLengthExprs env (FEApp t)
-  | t -> smapAccumL_FExpr_FExpr parameterizeLengthExprs env t
+  sem parameterizeLengthExprsBody : LengthParameterizeEnv -> FutExpr
+                                 -> (LengthParameterizeEnv, FutExpr)
+  sem parameterizeLengthExprsBody env =
+  | FELet (t & {body = FEApp {lhs = FEConst {val = FCLength ()},
+                              rhs = FEVar {ident = s}}}) ->
+    match mapLookup s env.paramMap with Some id then
+      let env = {env with replaceMap = mapInsert t.ident id env.replaceMap} in
+      parameterizeLengthExprsBody env t.inexpr
+    else smapAccumL_FExpr_FExpr parameterizeLengthExprsBody env (FELet t)
+  | FESizeCoercion t ->
+    match t.ty with FTyArray (tya & {dim = Some id}) then
+      match mapLookup id env.replaceMap with Some newId then
+        (env, FESizeCoercion {t with ty = FTyArray {tya with dim = Some newId}})
+      else (env, FESizeCoercion t)
+    else (env, FESizeCoercion t)
+  | t -> smapAccumL_FExpr_FExpr parameterizeLengthExprsBody env t
 
-  sem eliminateParamAliases (env : SizeParameterizeEnv)
-                            (replacements : Map Name Name) =
+  -- NOTE(larshum, 2022-08-16): Current analysis only considers array
+  -- parameters that are not nested, and only their outermost dimension.
+  sem collectSizeTypeParams : [(Name, FutType)] -> [(Name, Name)]
+  sem collectSizeTypeParams =
+  | [(id, FTyArray {dim = Some dimId})] ++ next ->
+    cons (id, dimId) (collectSizeTypeParams next)
+  | [_] ++ next -> collectSizeTypeParams next
+  | [] -> []
+
+  sem parameterizeLengthExprs : FutDecl -> FutDecl
+  sem parameterizeLengthExprs =
+  | FDeclFun t ->
+    let env = {
+      paramMap = mapFromSeq nameCmp (collectSizeTypeParams t.params),
+      replaceMap = mapEmpty nameCmp} in
+    match parameterizeLengthExprsBody env t.body with (_, body) in
+    FDeclFun {t with body = body}
+  | t -> t
+
+  sem eliminateParamAliases : SizeParameterizeEnv -> Map Name Name -> FutExpr
+                           -> FutExpr
+  sem eliminateParamAliases env replacements =
   | FEVar t ->
     match mapLookup t.ident replacements with Some paramId then
       FEVar {t with ident = paramId}
@@ -187,9 +217,10 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   -- parameter, where multi-dimensional array sizes are distinguished by the
   -- dimension. These size parameters are mapped to a unique index and a name
   -- representing this size type.
-  sem collectSizeParameters (acc : SizeParamMap) =
-  | (id, ty) /- : (Name, FutType) -/ ->
-    recursive let work = lam acc : SizeParamMap. lam dimIdx. lam ty.
+  sem collectSizeParameters : SizeParamMap -> (Name, FutType) -> SizeParamMap
+  sem collectSizeParameters acc =
+  | (id, ty) ->
+    recursive let work = lam acc. lam dimIdx. lam ty.
       match ty with FTyArray {elem = elem, dim = Some dimId} then
         let sizeParam = {id = id, dim = dimIdx} in
         let posIdx = mapSize acc.sizeToIndex in
@@ -200,8 +231,9 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       else acc
     in work acc 1 ty
 
-  sem parameterizeSizeEqualities (sizeParams : SizeParamMap)
-                                 (env : SizeParameterizeEnv) =
+  sem parameterizeSizeEqualities : SizeParamMap -> SizeParameterizeEnv
+                                -> FutExpr -> (SizeParameterizeEnv, FutExpr)
+  sem parameterizeSizeEqualities sizeParams env =
   | FELet {body = FESizeEquality t, inexpr = inexpr} ->
     let p1 : SizeParam = {id = t.x1, dim = t.d1} in
     let p2 : SizeParam = {id = t.x2, dim = t.d2} in
@@ -213,9 +245,10 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
     else error "Invalid size equality constraint"
   | t -> smapAccumL_FExpr_FExpr (parameterizeSizeEqualities sizeParams) env t
 
-  sem includeSizeEqualityConstraints (sizeParams : SizeParamMap) =
+  sem includeSizeEqualityConstraints : SizeParamMap -> SizeParameterizeEnv
+                                    -> SizeParameterizeEnv
+  sem includeSizeEqualityConstraints sizeParams =
   | env ->
-    let env : SizeParameterizeEnv = env in
     recursive let work =
       lam dimIdx : Int. lam id : Name. lam ty : FutType.
       match ty with FTyArray (t & {dim = Some dimId}) then
@@ -233,6 +266,7 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
     {{env with paramMap = mapMapWithKey (work 1) env.paramMap}
           with retType = work 1 (nameNoSym "") env.retType}
 
+  sem parameterizeSizesDecl : FutDecl -> FutDecl
   sem parameterizeSizesDecl =
   | FDeclFun t ->
     let nameAndType : FutTypeParam -> (Name, FutTypeParam) = lam typeParam.
@@ -253,11 +287,9 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       typeParams = mapFromSeq nameCmp (map nameAndType t.typeParams),
       retType = t.ret,
       equalSizes = unionFindInit (mapSize sizeParams.sizeToIndex)} in
-    match parameterizeLengthExprs env t.body with (env, body) in
-    match parameterizeSizeEqualities sizeParams env body with (env, body) in
+    match parameterizeSizeEqualities sizeParams env t.body with (env, body) in
     let env = includeSizeEqualityConstraints sizeParams env in
     let body = eliminateParamAliases env (mapEmpty nameCmp) body in
-    let env : SizeParameterizeEnv = env in
     let params =
       map
         (lam param : (Name, FutType).
@@ -270,10 +302,19 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
                    with body = body}
   | t -> t
 
+  sem parameterizeSizes : FutProg -> FutProg
   sem parameterizeSizes =
   | FProg t ->
+    let f = lam decl.
+      parameterizeLengthExprs
+        (eliminateUnnecessarySizeTypes decl) in
+    --printLn (use FutharkPrettyPrint in printFutProg (FProg {decls = t.decls}));
     let decls = map parameterizeSizesDecl t.decls in
-    FProg {t with decls = map eliminateUnnecessarySizeParameters decls}
+    --printLn (use FutharkPrettyPrint in printFutProg (FProg {decls = decls}));
+    --printLn "======";
+    let r = FProg {t with decls = map f decls} in
+    --printLn (use FutharkPrettyPrint in printFutProg r);
+    r
 end
 
 lang TestLang = FutharkSizeParameterize + FutharkPrettyPrint end
@@ -300,10 +341,12 @@ let t = FProg {decls = [
 let result = parameterizeSizes t in
 let expected = FProg {decls = [
   FDeclFun {
-    ident = f, entry = true, typeParams = [FPSize {val = n}],
-    params = [(s, futSizedArrayTy_ futIntTy_ n)],
+    ident = f, entry = true, typeParams = [],
+    params = [(s, futUnsizedArrayTy_ futIntTy_)],
     ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ n, futInt_ 1],
+    body = futBindall_ [
+      nuFutLet_ x (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
     info = NoInfo ()}]} in
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
@@ -341,14 +384,7 @@ let t = FProg {decls = [
       nuFutLet_ x (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
       futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
     info = NoInfo ()}]} in
-let expected = FProg {decls = [
-  FDeclFun {
-    ident = f, entry = false, typeParams = [FPType {val = y}, FPSize {val = n}],
-    params = [(s, futSizedArrayTy_ (nFutIdentTy_ y) n)],
-    ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ n, futInt_ 1],
-    info = NoInfo ()}]} in
-utest printFutProg (parameterizeSizes t) with printFutProg expected using eqString in
+utest printFutProg (parameterizeSizes t) with printFutProg t using eqString in
 
 let s2 = nameSym "s2" in
 let n1 = nameSym "n1" in
