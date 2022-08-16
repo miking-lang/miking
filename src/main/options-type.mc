@@ -17,7 +17,7 @@ type Options = {
   compileAfterTune : Bool,
   accelerate : Bool,
   accelerateTensorMaxRank : Int,
-  checkWellFormed : Bool,
+  debugAccelerate : Bool,
   cpuOnly : Bool,
   use32BitIntegers : Bool,
   use32BitFloats : Bool,

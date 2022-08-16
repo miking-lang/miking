@@ -194,7 +194,7 @@ let generateGpuCode =
 let checkWellFormedness = lam options. lam ast.
   use PMExprCompile in
   let config = {
-    dynamicChecks = options.checkWellFormed,
+    dynamicChecks = false,
     tensorMaxRank = options.accelerateTensorMaxRank
   } in
   match checkWellFormed config ast
@@ -210,6 +210,11 @@ let generateTests = lam ast. lam testsEnabled.
 let compileAccelerated =
   lam options. lam file.
   use PMExprCompile in
+
+  (if options.debugAccelerate then
+    error "Flags --accelerate and --debug-accelerate are mutually exclusive"
+  else ());
+
   let ast = parseParseMCoreFile {
     keepUtests = true,
     pruneExternalUtests = false,

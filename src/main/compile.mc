@@ -114,14 +114,13 @@ let compile = lam files. lam options : Options. lam args.
     } file in
     let ast = makeKeywords [] ast in
 
-    -- Apply well-formedness checks to the accelerated expressions of the AST,
-    -- when the --check-well-formed flag is set. In the end, we eliminate all
-    -- parallel constructs from the AST and leave it to the default compiler.
+    -- Applies static and dynamic checks on the accelerated expressions, to
+    -- verify that the code within them are supported by the accelerate
+    -- backends.
     -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
-    -- duplicate symbolization and type-checking when compiling with
-    -- well-formedness checks.
+    -- duplicate symbolization and type-checking when compiling in debug mode.
     let ast =
-      if options.checkWellFormed then
+      if options.debugAccelerate then
         let ast = symbolizeExpr keywordsSymEnv ast in
         let ast = typeCheck ast in
         let ast = removeTypeAscription ast in

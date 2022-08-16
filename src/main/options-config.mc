@@ -65,11 +65,12 @@ let optionsConfig : ParseConfig Options = [
     lam p: ArgPart Options.
       let o: Options = p.options in
       {o with accelerateTensorMaxRank = string2int (argToString p)}),
-  ([("--check-well-formed", "", "")],
-    join ["Enables well-formedness checks for accelerated expressions, ",
-          "even when compiling without acceleration"],
+  ([("--debug-accelerate", "", "")],
+    join ["Enables static and dynamic checks for accelerated expressions, ",
+          "and runs the program on the CPU."],
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with checkWellFormed = true}),
+      let o: Options = p.options in {o with debugAccelerate = true,
+                                            runtimeChecks = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.
