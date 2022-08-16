@@ -182,7 +182,7 @@ lang ShallowBase = Ast + NamedPat
         seqMapM (lam dec. (decompose dec.0 (SPatWild (), dec.1)).0) decomposed in
       -- NOTE(vipa, 2022-05-23): Each inner list now contains the
       -- things that should be `and`ed together, thanks to mapM
-      map (foldl andBranchInfo (_empty, _empty)) decomposed
+      map (foldl andBranchInfo (_empty, names)) decomposed
     in
     (join (map normalize update), neg)
 
@@ -244,6 +244,7 @@ lang ShallowBase = Ast + NamedPat
 
     recursive let work : Name -> [SPat] -> [LiveBranch res] -> res
       = lam scrutinee. lam spats. lam branches.
+        -- NOTE(vipa, 2022-08-12): Check the liveness of the branches
         switch branches
         case [] then default
         case [h] ++ _ then
@@ -266,17 +267,44 @@ lang ShallowBase = Ast + NamedPat
         end
     in work (nameNoSym "") [] branches
 
+  sem collectNames : Pat -> Set Name
+  sem collectNames =
+  | PatNamed {ident = PName n} -> setInsert n (setEmpty nameCmp)
+  | p -> sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectNames p)) (setEmpty nameCmp) p
+
   sem lowerToExpr
     : Name
     -> [(Pat, Expr)]
     -> Expr
   sem lowerToExpr scrutinee = | branches ->
     -- TODO(vipa, 2022-08-12): Deduplicate the branches, put them in let-expressions before
-    lower
-      scrutinee
-      (map (lam x. (x.0, lam. x.1)) branches)
-      never_
-      (lam name. lam spat. lam t. lam e. mkMatch name t e spat)
+    match
+      mapAccumL
+        (lam acc. lam branch. match branch with (pat, expr) in
+          let names = setToSeq (collectNames pat) in
+          let fName = nameSym "matchBody" in
+          let acc = snoc acc (nulet_ fName (nulams_ names (ulam_ "" expr))) in
+          let inconsistentError = lam info. lam name.
+            errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
+          let callF = lam nameMap.
+            let lookup = lam n. mapLookupOrElse (lam. inconsistentError (infoPat pat) n) n nameMap in
+            app_
+              (appSeq_
+                (nvar_ fName)
+                (map
+                  (lam n. nvar_ (lookup n)) names))
+              unit_ in
+          (acc, (pat, callF)))
+        []
+        branches
+    with (lets, branches) in
+    let lowered =
+      lower
+        scrutinee
+        branches
+        never_
+        (lam name. lam spat. lam t. lam e. mkMatch name t e spat) in
+    bindall_ (snoc lets lowered)
 end
 
 lang ShallowAnd = ShallowBase + AndPat
@@ -391,6 +419,9 @@ lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
       if optionIsSome subFail then Some pat else Some pvarw_ in
 
     (negSubPatterns, failPat)
+
+  sem collectNames =
+  | PatNot _ -> setEmpty nameCmp
 end
 
 lang ShallowInt = ShallowBase + IntPat
@@ -491,28 +522,43 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst
   | SPatRecord _ -> true
 end
 
+let _emptySlices
+  : Map (Int, Int) Name
+  = mapEmpty (lam a. lam b. let r = subi a.0 b.0 in if eqi r 0 then subi a.1 b.1 else r)
+let _getSliceName
+  : (Int, Int)
+  -> Ref (Map (Int, Int) Name)
+  -> Name
+  = lam margins. lam slices.
+    match mapLookup margins (deref slices) with Some name then name else
+    let name = nameSym "slice" in
+    modref slices (mapInsert margins name (deref slices));
+    name
+
 lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   syn SPat =
-  | SPatSeqTot [Name]
+  | SPatSeqTot {elements : [Name], slices : Ref (Map (Int, Int) Name)}
   -- NOTE(vipa, 2022-05-26): We assume that the translation strategy
   -- we use only uses a GE pattern when it's long enough to
   -- accomodate all Edge patterns
-  | SPatSeqGE {minLength : Int, prefix : Ref [Name], postfix : Ref [Name]}
+  | SPatSeqGE {minLength : Int, prefix : Ref [Name], postfix : Ref [Name], slices : Ref (Map (Int, Int) Name)}
 
   sem decompose name =
-  | (SPatSeqTot elements, pat & PatSeqTot x) ->
-    if neqi (length elements) (length x.pats) then defaultDecomposition pat else
-    ([(mapFromSeq nameCmp (zip elements x.pats), _empty)], None ())
-  | (SPatSeqTot elements, pat & PatSeqEdge x) ->
-    if lti (length elements) (addi (length x.prefix) (length x.postfix))
+  | (SPatSeqTot tot, pat & PatSeqTot x) ->
+    if neqi (length tot.elements) (length x.pats) then defaultDecomposition pat else
+    ([(mapFromSeq nameCmp (zip tot.elements x.pats), _empty)], None ())
+  | (SPatSeqTot tot, pat & PatSeqEdge x) ->
+    if lti (length tot.elements) (addi (length x.prefix) (length x.postfix))
     then defaultDecomposition pat
     else
       -- TODO(vipa, 2022-05-24): I need to make a name for the middle
       -- thing if it's present
-      let pres = zip elements x.prefix in
-      let posts = zip (reverse elements) (reverse x.postfix) in
-      -- TODO(vipa, 2022-05-24): Is it enough to return pat or should I intersect with inverted shallow?
-      ([(mapFromSeq nameCmp (concat pres posts), _empty)], Some pat)
+      let pres = zip tot.elements x.prefix in
+      let posts = zip (reverse tot.elements) (reverse x.postfix) in
+      let mid = match x.middle with PName name
+        then mapInsert name (_getSliceName (length x.prefix, length x.postfix) tot.slices) _empty
+        else _empty in
+      ([(mapFromSeq nameCmp (concat pres posts), mid)], Some pat)
   | (SPatSeqGE shallow, pat & PatSeqEdge x) ->
     let extendUsing
       : ([Name] -> [Name] -> [Name]) -> Ref [Name] -> Int -> ()
@@ -525,11 +571,13 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
     extendUsing (lam old. lam new. concat new old) shallow.postfix (length x.postfix);
     let pres = zip (deref shallow.prefix) x.prefix in
     let posts = zip (reverse (deref shallow.postfix)) (reverse x.postfix) in
-    -- TODO(vipa, 2022-05-26): Need to bind the middle part to a name
-    ([(mapFromSeq nameCmp (concat pres posts), _empty)], None ())
+    let mid = match x.middle with PName name
+      then mapInsert name (_getSliceName (length x.prefix, length x.postfix) shallow.slices) _empty
+      else _empty in
+    ([(mapFromSeq nameCmp (concat pres posts), mid)], None ())
 
   sem shallowMinusIsEmpty =
-  | (SPatSeqTot es, SPatSeqGE x) -> leqi x.minLength (length es)
+  | (SPatSeqTot es, SPatSeqGE x) -> leqi x.minLength (length es.elements)
   | (SPatSeqGE _, SPatSeqTot _) -> false
   | (SPatSeqGE x1, SPatSeqGE x2) -> geqi x1.minLength x2.minLength
 
@@ -539,25 +587,97 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   -- longest 'tot' pattern in spats, or the longest 'ge' pattern minus one, whichever is
   -- longest. The 'ge' pattern should be present iff there is a 'ge' pattern in spats.
   -- There's likely space for optimization here, omitting some of the 'tot' patterns.
-  | SPatSeqTot _ | SPatSeqGE _ -> never
+  | SPatSeqTot _ | SPatSeqGE _ ->
+    let spatToVal = lam v.
+      switch v
+      case SPatSeqTot es then length es.elements
+      case SPatSeqGE x then subi x.minLength 1
+      case _ then negi 1
+      end in
+    let tots = setFold
+      (lam acc. lam spat. maxi acc (spatToVal spat))
+      0
+      spats in
+    let spats = create (addi tots 1) (lam count. SPatSeqTot {elements = create count (lam. nameSym "e"), slices = ref _emptySlices}) in
+    snoc spats
+      (SPatSeqGE {minLength = addi tots 1, prefix = ref [], postfix = ref [], slices = ref _emptySlices})
 
   sem collectShallows =
-  | PatSeqTot x -> _ssingleton (SPatSeqTot (map (lam. nameSym "elem") x.pats))
-  | PatSeqEdge x -> _ssingleton (SPatSeqGE { minLength = addi (length x.prefix) (length x.postfix), prefix = ref [], postfix = ref [] })
+  | PatSeqTot x -> _ssingleton (SPatSeqTot {elements = map (lam. nameSym "elem") x.pats, slices = ref _emptySlices})
+  | PatSeqEdge x -> _ssingleton (SPatSeqGE { minLength = addi (length x.prefix) (length x.postfix), prefix = ref [], postfix = ref [], slices = ref _emptySlices })
+
+  sem collectNames =
+  | pat & PatSeqEdge x ->
+    let here = match x.middle with PName name
+      then setInsert name (setEmpty nameCmp)
+      else setEmpty nameCmp in
+    sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectNames p)) here pat
 
   sem mkMatch scrutinee t e =
-  | SPatSeqTot x -> match_ (nvar_ scrutinee) (pseqtot_ (map npvar_ x)) t e
+  | SPatSeqTot x ->
+    let for = lam s. lam f. map f s in
+    let slices = for (mapBindings (deref x.slices))
+      (lam pair. match pair with (pair, name) in
+        let expr = switch pair
+          case (0, 0) then nvar_ scrutinee
+          case (n, 0) then
+            tupleproj_ 1
+              (withType
+                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (splitat_ (nvar_ scrutinee) (int_ n)))
+          case (0, n) then
+            tupleproj_ 0
+              (withType
+                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (splitat_ (nvar_ scrutinee) (int_ (subi (length x.elements) n))))
+          case (n, m) then
+            subsequence_ (nvar_ scrutinee) (int_ n) (int_ (subi (length x.elements) (addi n m)))
+          end
+        in nulet_ name expr) in
+    match_ (nvar_ scrutinee) (pseqtot_ (map npvar_ x.elements)) (bindall_ (snoc slices t)) e
   -- TODO(vipa, 2022-08-12): processSpats should ensure that a 'ge' pattern
   -- always happens in an infallible case, thus we don't need to check anything.
   -- However, we do need to bind the pre and post names, and possibly one or
   -- more middle segments
-  | SPatSeqGE x -> never
+  | SPatSeqGE x ->
+    let letFrom_ = lam n. lam i. nulet_ n (get_ i (nvar_ scrutinee)) in
+    let pres = mapi
+      (lam i. lam n. letFrom_ n (int_ i))
+      (deref x.prefix) in
+    let lenName = nameSym "len" in
+    let posts = mapi
+      (lam i. lam n. letFrom_ n (subi_ (nvar_ lenName) (int_ (addi i 1))))
+      (reverse (deref x.postfix)) in
+    let needLen = ref (not (null posts)) in
+    let for = lam s. lam f. map f s in
+    let slices = for (mapBindings (deref x.slices))
+      (lam pair. match pair with (pair, name) in
+        let expr = switch pair
+          case (0, 0) then nvar_ scrutinee
+          case (n, 0) then
+            tupleproj_ 1
+              (withType
+                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (splitat_ (nvar_ scrutinee) (int_ n)))
+          case (0, n) then
+            modref needLen true;
+            tupleproj_ 0
+              (withType
+                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (splitat_ (nvar_ scrutinee) (subi_ (nvar_ lenName) (int_ n))))
+          case (n, m) then
+            modref needLen true;
+            subsequence_ (nvar_ scrutinee) (int_ n) (subi_ (nvar_ lenName) (int_ (addi n m)))
+          end
+        in nulet_ name expr) in
+    let len = if deref needLen then [nulet_ lenName (length_ (nvar_ scrutinee))] else [] in
+    bindall_ (join [pres, len, slices, posts, [t]])
 
   sem shallowIsInfallible =
   | SPatSeqGE x -> eqi x.minLength 0
 
   sem shallowCmp =
-  | (SPatSeqTot l, SPatSeqTot r) -> subi (length l) (length r)
+  | (SPatSeqTot l, SPatSeqTot r) -> subi (length l.elements) (length r.elements)
   | (SPatSeqGE l, SPatSeqGE r) -> subi l.minLength r.minLength
 end
 
@@ -584,25 +704,28 @@ end
 lang ShallowMExpr = MExprAst + ShallowRecord + ShallowInt + ShallowOr + ShallowAnd + ShallowNot + ShallowSeq + ShallowCon + ShallowChar + ShallowBool
 end
 
-mexpr
+lang CollectBranches = MatchAst + VarAst
+  sem collectBranches : Expr -> Option (Name, [(Pat, Expr)])
+  sem collectBranches =
+  | t & TmMatch {target = TmVar v} ->
+    let scrutinee = v.ident in
+    recursive let work = lam acc. lam t.
+      match t with TmMatch (x & {target = TmVar v}) then
+        if nameEq scrutinee v.ident then
+          work (snoc acc (x.pat, x.thn)) x.els
+        else snoc acc (pvarw_, t)
+      else snoc acc (pvarw_, t)
+    in Some (scrutinee, work [] t)
+  | _ -> None ()
+end
 
-use ShallowMExpr in
+lang LowerNestedPatterns = CollectBranches + ShallowBase
+  sem lowerAll : Expr -> Expr
+  sem lowerAll = | t ->
+    match collectBranches t with Some (name, branches)
+    then lowerToExpr name branches
+    else smap_Expr_Expr lowerAll t
+end
 
-let scrutinee = nameSym "scrutinee" in
-let x = npvar_ (nameSym "x") in
-let y = npvar_ (nameSym "y") in
-let bx = nameSym "bx" in
-let patToBranch = lam label : String. lam pat.
-  (pat, str_ label) in
-let psome_ =
-  let name = nameSym "Some" in
-  npcon_ name in
-let branches =
-  [ patToBranch "a" (psome_ (pand_ (pint_ 1) y))
-  , patToBranch "c" (psome_ (pint_ 2))
-  , patToBranch "b" (psome_ (pand_ x (pnot_ (pint_ 3))))
-  , patToBranch "d" (psome_ x)
-  ] in
-use MExprPrettyPrint in
-printLn (expr2str (lowerToExpr (nameSym "scrutinee") branches));
-()
+lang MExprLowerNestedPatterns = ShallowMExpr + LowerNestedPatterns
+end
