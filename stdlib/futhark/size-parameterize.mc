@@ -164,6 +164,10 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   sem parameterizeLengthExprsBody : LengthParameterizeEnv -> FutExpr
                                  -> (LengthParameterizeEnv, FutExpr)
   sem parameterizeLengthExprsBody env =
+  | FEVar t ->
+    match mapLookup t.ident env.replaceMap with Some newId then
+      (env, FEVar {t with ident = newId})
+    else (env, FEVar t)
   | FELet (t & {body = FEApp {lhs = FEConst {val = FCLength ()},
                               rhs = FEVar {ident = s}}}) ->
     match mapLookup s env.paramMap with Some id then

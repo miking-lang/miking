@@ -454,7 +454,7 @@ utest printDecl literalsDecl with strJoin "\n" [
   "  let array =",
   "    [1i64,2i64,0i64] in",
   "  let tuple =",
-  "    {_0 = 2i64,_1 = 3i64} in",
+  "    {0 = 2i64,1 = 3i64} in",
   "  let rec =",
   "    {e = 2.718f64,pi = 3.14f64} in",
   "  {}"
