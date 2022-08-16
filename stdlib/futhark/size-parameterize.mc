@@ -66,6 +66,8 @@ lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
   sem countSizeTypeParamUsesExpr : Map Name Int -> FutExpr -> Map Name Int
   sem countSizeTypeParamUsesExpr typeParamUseCount =
   | FEVar t -> _incrementUseCount typeParamUseCount t.ident
+  | FESizeCoercion {ty = FTyArray {dim = Some dimId}} ->
+    _incrementUseCount typeParamUseCount dimId
   | t -> sfold_FExpr_FExpr countSizeTypeParamUsesExpr typeParamUseCount t
 
   sem collectUnnecessarySizeTypes : FutDecl -> Set Name
@@ -161,53 +163,43 @@ lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
 end
 
 lang FutharkSizeParameterize = FutharkSizeTypeEliminate
-  sem parameterizeLengthExprsBody : LengthParameterizeEnv -> FutExpr
-                                 -> (LengthParameterizeEnv, FutExpr)
-  sem parameterizeLengthExprsBody env =
-  | FEVar t ->
-    match mapLookup t.ident env.replaceMap with Some newId then
-      (env, FEVar {t with ident = newId})
-    else (env, FEVar t)
-  | FELet (t & {body = FEApp {lhs = FEConst {val = FCLength ()},
-                              rhs = FEVar {ident = s}}}) ->
-    match mapLookup s env.paramMap with Some id then
-      let env = {env with replaceMap = mapInsert t.ident id env.replaceMap} in
-      parameterizeLengthExprsBody env t.inexpr
-    else smapAccumL_FExpr_FExpr parameterizeLengthExprsBody env (FELet t)
-  | FESizeCoercion t ->
-    match t.ty with FTyArray (tya & {dim = Some id}) then
-      match mapLookup id env.replaceMap with Some newId then
-        (env, FESizeCoercion {t with ty = FTyArray {tya with dim = Some newId}})
-      else (env, FESizeCoercion t)
-    else (env, FESizeCoercion t)
-  | t -> smapAccumL_FExpr_FExpr parameterizeLengthExprsBody env t
+  -- Transforms a length expression applied on a function parameter to make it
+  -- instead use a size type variable of the parameter.
+  sem parameterizeLengthExprs : SizeParameterizeEnv -> FutExpr
+                             -> (SizeParameterizeEnv, FutExpr)
+  sem parameterizeLengthExprs env =
+  | FEApp ({lhs = FEConst {val = FCLength ()},
+            rhs = FEVar {ident = s}} & t) ->
+    let lengthParamVar = lam ident. lam info.
+      FEVar {ident = ident, ty = FTyInt {info = info}, info = info}
+    in
+    match mapLookup s env.paramMap with Some (FTyArray tyArray) then
+      match tyArray.dim with Some n then
+        (env, lengthParamVar n tyArray.info)
+      else
+        let n = nameSym "n" in
+        let newParamType = FTyArray {tyArray with dim = Some n} in
+        let typeParam = FPSize {val = n} in
+        let typeParams = mapInsert n typeParam env.typeParams in
+        let env = {{env with paramMap = mapInsert s newParamType env.paramMap}
+                        with typeParams = typeParams} in
+        (env, lengthParamVar n tyArray.info)
+    else smapAccumL_FExpr_FExpr parameterizeLengthExprs env (FEApp t)
+  | t -> smapAccumL_FExpr_FExpr parameterizeLengthExprs env t
 
-  -- NOTE(larshum, 2022-08-16): Current analysis only considers array
-  -- parameters that are not nested, and only their outermost dimension.
-  sem collectSizeTypeParams : [(Name, FutType)] -> [(Name, Name)]
-  sem collectSizeTypeParams =
-  | [(id, FTyArray {dim = Some dimId})] ++ next ->
-    cons (id, dimId) (collectSizeTypeParams next)
-  | [_] ++ next -> collectSizeTypeParams next
-  | [] -> []
-
-  sem parameterizeLengthExprs : FutDecl -> FutDecl
-  sem parameterizeLengthExprs =
-  | FDeclFun t ->
-    let env = {
-      paramMap = mapFromSeq nameCmp (collectSizeTypeParams t.params),
-      replaceMap = mapEmpty nameCmp} in
-    match parameterizeLengthExprsBody env t.body with (_, body) in
-    FDeclFun {t with body = body}
-  | t -> t
+  sem lookupReplacement : Name -> Map Name Name -> Name
+  sem lookupReplacement id =
+  | replacements ->
+    match mapLookup id replacements with Some newId then
+      lookupReplacement newId replacements
+    else id
 
   sem eliminateParamAliases : SizeParameterizeEnv -> Map Name Name -> FutExpr
                            -> FutExpr
   sem eliminateParamAliases env replacements =
   | FEVar t ->
-    match mapLookup t.ident replacements with Some paramId then
-      FEVar {t with ident = paramId}
-    else FEVar t
+    let paramId = lookupReplacement t.ident replacements in
+    FEVar {t with ident = paramId}
   | FELet ({body = FEVar {ident = id}} & t) ->
     match mapLookup id env.typeParams with Some param then
       let paramId = futTypeParamIdent param in
@@ -215,6 +207,9 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       eliminateParamAliases env replacements t.inexpr
     else
       FELet {t with inexpr = eliminateParamAliases env replacements t.inexpr}
+  | FESizeCoercion (t & {ty = FTyArray (array & {dim = Some dimId})}) ->
+    let newDimId = lookupReplacement dimId replacements in
+    FESizeCoercion {t with ty = FTyArray {array with dim = Some newDimId}}
   | t -> smap_FExpr_FExpr (eliminateParamAliases env replacements) t
 
   -- Collects all size parameters by constructing a map from each distinct size
@@ -253,15 +248,13 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
                                     -> SizeParameterizeEnv
   sem includeSizeEqualityConstraints sizeParams =
   | env ->
-    recursive let work =
-      lam dimIdx : Int. lam id : Name. lam ty : FutType.
+    recursive let work = lam dimIdx. lam id. lam ty.
       match ty with FTyArray (t & {dim = Some dimId}) then
         let sizeParam = {id = id, dim = dimIdx} in
         let newDimId =
           match mapLookup sizeParam sizeParams.sizeToIndex with Some idx then
             let parent = unionFindFind env.equalSizes idx in
-            if neqi idx parent then
-              mapLookup parent sizeParams.indexToIdent
+            if neqi idx parent then mapLookup parent sizeParams.indexToIdent
             else Some dimId
           else Some dimId in
         let elem = work (addi dimIdx 1) id t.elem in
@@ -269,6 +262,28 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       else ty in
     {{env with paramMap = mapMapWithKey (work 1) env.paramMap}
           with retType = work 1 (nameNoSym "") env.retType}
+
+  sem identifySizeTypeReplacements : SizeParamMap -> SizeParameterizeEnv
+                                  -> Map Name Name
+  sem identifySizeTypeReplacements sizeParams =
+  | env ->
+    let uf = env.equalSizes in
+    let insertId = lam fromIdx. lam toIdx. lam acc.
+      match mapLookup fromIdx sizeParams.indexToIdent with Some fromId then
+        match mapLookup toIdx sizeParams.indexToIdent with Some toId then
+          mapInsert fromId toId acc
+        else acc
+      else acc in
+    recursive let work = lam acc. lam idx.
+      if eqi idx uf.size then acc
+      else
+        let parent = unionFindFind uf idx in
+        let acc =
+          if eqi parent idx then acc
+          else insertId idx parent acc in
+        work acc (addi idx 1)
+    in
+    work (mapEmpty nameCmp) 0
 
   sem parameterizeSizesDecl : FutDecl -> FutDecl
   sem parameterizeSizesDecl =
@@ -291,9 +306,11 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       typeParams = mapFromSeq nameCmp (map nameAndType t.typeParams),
       retType = t.ret,
       equalSizes = unionFindInit (mapSize sizeParams.sizeToIndex)} in
-    match parameterizeSizeEqualities sizeParams env t.body with (env, body) in
+    match parameterizeLengthExprs env t.body with (env, body) in
+    match parameterizeSizeEqualities sizeParams env body with (env, body) in
+    let replacements = identifySizeTypeReplacements sizeParams env in
     let env = includeSizeEqualityConstraints sizeParams env in
-    let body = eliminateParamAliases env (mapEmpty nameCmp) body in
+    let body = eliminateParamAliases env replacements body in
     let params =
       map
         (lam param : (Name, FutType).
@@ -309,16 +326,10 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   sem parameterizeSizes : FutProg -> FutProg
   sem parameterizeSizes =
   | FProg t ->
-    let f = lam decl.
-      parameterizeLengthExprs
-        (eliminateUnnecessarySizeTypes decl) in
-    --printLn (use FutharkPrettyPrint in printFutProg (FProg {decls = t.decls}));
+    let f = lam decl. eliminateUnnecessarySizeTypes decl in
     let decls = map parameterizeSizesDecl t.decls in
-    --printLn (use FutharkPrettyPrint in printFutProg (FProg {decls = decls}));
-    --printLn "======";
-    let r = FProg {t with decls = map f decls} in
-    --printLn (use FutharkPrettyPrint in printFutProg r);
-    r
+--    printLn (use FutharkPrettyPrint in printFutProg (FProg {decls = decls}));
+    FProg {t with decls = map f decls}
 end
 
 lang TestLang = FutharkSizeParameterize + FutharkPrettyPrint end
@@ -345,12 +356,10 @@ let t = FProg {decls = [
 let result = parameterizeSizes t in
 let expected = FProg {decls = [
   FDeclFun {
-    ident = f, entry = true, typeParams = [],
-    params = [(s, futUnsizedArrayTy_ futIntTy_)],
+    ident = f, entry = true, typeParams = [FPSize {val = n}],
+    params = [(s, futSizedArrayTy_ futIntTy_ n)],
     ret = futIntTy_,
-    body = futBindall_ [
-      nuFutLet_ x (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
-      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ n, futInt_ 1],
     info = NoInfo ()}]} in
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
@@ -388,7 +397,15 @@ let t = FProg {decls = [
       nuFutLet_ x (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
       futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
     info = NoInfo ()}]} in
-utest printFutProg (parameterizeSizes t) with printFutProg t using eqString in
+let n = nameSym "n" in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = false, typeParams = [FPType {val = y}, FPSize {val = n}],
+    params = [(s, futSizedArrayTy_ (nFutIdentTy_ y) n)],
+    ret = futIntTy_,
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ n, futInt_ 1],
+    info = NoInfo ()}]} in
+utest printFutProg (parameterizeSizes t) with printFutProg expected using eqString in
 
 let s2 = nameSym "s2" in
 let n1 = nameSym "n1" in
