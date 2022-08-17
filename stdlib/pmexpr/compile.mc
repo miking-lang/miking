@@ -12,6 +12,7 @@ include "pmexpr/build.mc"
 include "pmexpr/classify.mc"
 include "pmexpr/copy-analysis.mc"
 include "pmexpr/extract.mc"
+include "pmexpr/inline-higher-order.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-patterns.mc"
 include "pmexpr/parallel-rewrite.mc"
@@ -226,7 +227,7 @@ end
 lang PMExprFutharkWellFormed =
   PMExprCompileWellFormedBase + PMExprUtestSizeConstraint + PMExprRewrite +
   PMExprTailRecursion + MExprCSE + MExprANF + PMExprParallelPattern +
-  PMExprRecursionElimination
+  PMExprRecursionElimination + PMExprInlineFunctions
 
   sem futharkCheckSequenceRegularity : Name -> Expr -> Type -> Expr
   sem futharkCheckSequenceRegularity id acc =
@@ -299,6 +300,7 @@ lang PMExprFutharkWellFormed =
     let ast = normalizeTerm ast in
     let ast = patternRewrite ast in
     let ast = eliminateRecursion ast in
+    let ast = inlineHigherOrderFunctions ast in
     (use FutharkWellFormed in wellFormed ast);
     ast
 end

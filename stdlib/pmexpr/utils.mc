@@ -30,7 +30,8 @@ end
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.
 lang PMExprVariableSub = PMExprAst
-  sem substituteVariables (subMap : Map Name (Info -> Expr)) =
+  sem substituteVariables : Map Name (Info -> Expr) -> Expr -> Expr
+  sem substituteVariables subMap =
   | TmVar t ->
     match mapLookup t.ident subMap with Some exprFn then
       exprFn t.info
