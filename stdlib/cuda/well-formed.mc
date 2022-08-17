@@ -32,8 +32,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     (infoPat pat, "Pattern is not supported")
   | CudaConstantError info ->
     (info, "Constant is not supported")
-  | CudaAppArgTypeError appArg ->
-    (infoTm appArg, "Arguments of function type are not supported")
   | CudaAppResultTypeError app ->
     (infoTm app, "Return values of function type are not supported")
   | CudaFunctionDefError fun ->
@@ -169,7 +167,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
 
   sem cudaWellFormedLambdas : (Expr, Type) -> Bool
   sem cudaWellFormedLambdas =
-  | (TmLam e, TyArrow ty) -> cudaWellFormedLambdas (e.body, ty.to)
+  | (TmLam e, TyArrow ty) ->
+    match ty.from with TyArrow _ then false
+    else cudaWellFormedLambdas (e.body, ty.to)
   | (e, !(TyArrow _)) -> true
   | _ -> false
 
