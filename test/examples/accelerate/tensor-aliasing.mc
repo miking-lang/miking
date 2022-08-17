@@ -22,7 +22,7 @@ let a = tensorSubExn t 1 3 in
 let b = tensorSubExn t 0 2 in
 let c = tensorSubExn t 3 1 in
 let d = tensorSubExn t 2 1 in
-accelerate (writeTensors a b c d)
+accelerate (loop 1 (lam. ()); writeTensors a b c d)
 
 ;
 

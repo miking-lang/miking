@@ -23,7 +23,7 @@ let _futReplaceInvalidChar = lam c.
 let _futEscapeIdentifier = lam str.
   match str with [h] ++ t then
     let h =
-      if isAlphaOrUnderscore h then [h]
+      if isAlpha h then [h]
       else if isDigit h then ['v', '_', h]
       else "v_" in
     concat h (map _futReplaceInvalidChar t)

@@ -8,6 +8,7 @@ let s : [Tensor[Int]] = [t1, t2]
 mexpr
 
 let z : Int = accelerate (
+  loop 1 (lam. ());
   let fst : Tensor[Int] = get s 0 in
   let snd : Tensor[Int] = get s 1 in
   let x = tensorGetExn fst [0] in

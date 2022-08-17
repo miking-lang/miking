@@ -1,5 +1,5 @@
--- Example using mutually recursive bindings, which cannot be accelerated as
--- Futhark does not support recursion.
+-- Example using mutually recursive bindings, which cannot be accelerated using
+-- Futhark, as it does not support recursion.
 
 recursive
   let even = lam x.
@@ -12,5 +12,6 @@ end
 
 mexpr
 
-if accelerate (even 3) then print "3 is even\n"
+if accelerate (loop 1 (lam. ()); even 3) then
+  print "3 is even\n"
 else print "3 is not even\n"

@@ -11,6 +11,7 @@ let t = tensorCreateCArrayInt dim (cartesianToLinearIndex dim) in
 -- propagated back, as shown in the following print expression.
 accelerate
 (
+  loop 1 (lam. ());
   let a = tensorGetExn t [1,2,2] in
   let b = tensorGetExn t [0,1,2] in
   let c = addi a b in

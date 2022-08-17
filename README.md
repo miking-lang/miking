@@ -1574,13 +1574,19 @@ automatically by the compiler.
 ### Accelerate backends
 
 The current compiler has support for two different accelerate backends, both of
-which require a GPU to compile the code. The Futhark backend is used when
-`map`, `map2`, or `reduce` is used within an accelerated expression. To make
-use of this backend, `futhark` and its dependencies must be installed
+which require a GPU to compile the code. The Futhark backend is used when at
+least one of the `map`, `map2`, or `reduce` parallel keywords are used within
+an accelerated expression. To make use of this backend, `futhark` and its
+dependencies must be installed
 (see [installation instructions](https://futhark.readthedocs.io/en/stable/installation.html)).
-Otherwise, the CUDA backend is chosen. Both backends currently require an
-installation of CUDA. The CUDA backend also requires an Nvidia GPU with support
-for unified memory (Kepler architecture or later).
+If the `loop` parallel keyword is used in an accelerated expression, the CUDA
+backend is used. At least one of these keywords must be used in the accelerated
+code, or the compiler will complain as the accelerated code would execute
+sequentially.
+
+Both backends currently require an installation of CUDA. In addition, the CUDA
+backend requires an Nvidia GPU with support for unified memory (Kepler
+architecture or later).
 
 ### Usage
 

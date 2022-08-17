@@ -109,10 +109,11 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
         (lam acc. lam id. lam entry.
           match entry with (info, class) in
           match mapLookup id accelerated with Some data then
-            -- NOTE(larshum, 2022-06-02): If any backend works, we use the CUDA
-            -- backend.
             let cl =
-              match class with Any _ then Cuda ()
+              match class with Any _ then
+                errorSingle [info]
+                  (join [ "The accelerate expression does not use any "
+                        , "parallel keywords. This is not allowed." ])
               else match class with Invalid _ then
                 errorSingle [info]
                   (join [ "Accelerate expression uses parallel "

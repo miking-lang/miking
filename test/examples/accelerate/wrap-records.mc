@@ -13,6 +13,7 @@ mexpr
 let r = {a = {c = 4, d = 2.5}, b = false} in
 
 let t : Int = accelerate (
+  loop 1 (lam. ());
   let t1 : {c : Int, d : Float} =
     { c = addi r.a.c (if r.b then 1 else 0)
     , d = r.a.d } in
