@@ -7,6 +7,6 @@ mexpr
 
 let n = 1000 in
 let s = create n (lam i. i) in
-let x = accelerate (foldl f 0 s) in
+let x = accelerate (loop 1 (lam. ()); foldl f 0 s) in
 utest x with divi (muli n (subi n 1)) 2 in
 printLn (int2string x)

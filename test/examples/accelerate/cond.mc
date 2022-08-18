@@ -5,7 +5,7 @@ include "common.mc" -- printLn
 
 let add : Int -> Int -> Int = lam x. lam y. addi x y
 
-let _sum : [Int] -> Int = lam s. foldl add 0 s
+let _sum : [Int] -> Int = lam s. reduce add 0 s
 
 let sum : [Int] -> Int = lam s.
   if geqi (length s) 1000 then

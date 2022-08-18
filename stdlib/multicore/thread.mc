@@ -78,18 +78,18 @@ utest
   let tid = atomicMake me in
 
   -- Wait for friend to take a step before each step.
-  recursive let loop : Int -> Int -> () = lam n. lam friend.
+  recursive let loopf : Int -> Int -> () = lam n. lam friend.
     match n with 0 then ()
     else
       match atomicCAS tid friend (threadSelf ()) with true then
-        loop (subi n 1) friend
+        loopf (subi n 1) friend
       else
         threadCPURelax ();
-        loop n friend
+        loopf n friend
   in
   let n = 100 in
-  let t = threadSpawn (lam. loop n me) in
-  loop n (threadGetID t);
+  let t = threadSpawn (lam. loopf n me) in
+  loopf n (threadGetID t);
   -- Does not loop forever = the test has passed!
   threadJoin t;
   ()

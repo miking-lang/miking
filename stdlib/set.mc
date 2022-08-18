@@ -46,7 +46,6 @@ let setSubtract : all a. Set a -> Set a -> Set a = lam s1. lam s2.
   let cmp = mapGetCmpFun s1 in
   mapFoldWithKey (lam acc. lam key. lam. mapRemove key acc) s1 s2
 
-
 -- `setOfSeq cmp seq` construct a set ordered by `cmp` from a sequence `seq`.
 let setOfSeq : all a. (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.

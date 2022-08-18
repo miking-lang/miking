@@ -304,6 +304,24 @@ utest distinct eqi [42,42] with [42]
 utest distinct eqi [1,1,2] with [1,2]
 utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0]
 
+-- Removes duplicated elements in a sorted sequence. More efficient than the
+-- 'distinct' function.
+let distinctSorted = lam eq. lam s.
+  recursive let work = lam acc. lam s.
+    match s with [h1] ++ t then
+      match acc with [h2] ++ _ then
+        if eq h1 h2 then work acc t
+        else work (cons h1 acc) t
+      else work [h1] t
+    else acc
+  in
+  reverse (work [] s)
+
+utest distinctSorted eqi [] with [] using eqSeq eqi
+utest distinctSorted eqi [42,42] with [42]
+utest distinctSorted eqi [1,1,2] with [1,2]
+utest distinctSorted eqi [0,1,1,1,2,3,4,5,5] with [0,1,2,3,4,5]
+
 -- Sorting
 recursive
 let quickSort : all a. (a -> a -> Int) -> ([a] -> [a]) = lam cmp. lam seq.

@@ -52,7 +52,7 @@ let sum2 : Int = accelerate (
   let s : [Data] = map2 (lam a : Int. lam b : Float. {a = a, b = b}) sa sb in
   let s : [Data] = map sumToInt s in
   let sa : [Int] = map getInt s in
-  parallelReduce addi 0 sa) in
+  reduce addi 0 sa) in
 
 (if eqi sum1 sum2 then print "sum OK\n" else error "Sum error");
 

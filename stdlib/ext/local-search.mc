@@ -395,7 +395,7 @@ let debug = false in
 let nIters = lam n. lam state : SearchState.
   or (state.stuck) (geqi state.iter n) in
 
-recursive let loop =
+recursive let loopf =
   lam terminate : SearchState -> Bool.
   lam state : (SearchState, MetaState).
   lam debugMeta : MetaState -> ().
@@ -407,7 +407,7 @@ recursive let loop =
     if terminate searchState then
       (searchState, metaState)
     else
-      loop terminate (minimize searchState metaState)
+      loopf terminate (minimize searchState metaState)
         debugMeta debugSearch minimize
   else never in
 
@@ -437,7 +437,7 @@ use _testTspSimulatedAnnealing in
 let metaSA = SimulatedAnnealing {temp = 100.0} in
 
 utest
-  match loop (nIters 100) (startState, metaSA) debugMeta debugSearch minimize
+  match loopf (nIters 100) (startState, metaSA) debugMeta debugSearch minimize
   with ({inc = {cost = TspCost {cost = cost}}}, _) then cost
   else never
 with 251 in
@@ -448,7 +448,7 @@ use _testTspTabuSearch in
 let metaTabu = TabuSearch {tabu = TabuList {list = []}} in
 
 utest
-  match loop (nIters 100) (startState, metaTabu) debugMeta debugSearch minimize
+  match loopf (nIters 100) (startState, metaTabu) debugMeta debugSearch minimize
   with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
     cost
   else never
@@ -458,13 +458,13 @@ with 251 in
 use _testTspSimulatedAnnealing in
 
 utest
-  match loop (nIters 10) (startState, metaSA) debugMeta debugSearch minimize
+  match loopf (nIters 10) (startState, metaSA) debugMeta debugSearch minimize
   with ({inc = {cost = TspCost {cost = cost}}} & searchState, _) then
     use _testTspTabuSearch in
 
     utest
       match
-        loop (nIters 100) (searchState, metaTabu) debugMeta debugSearch minimize
+        loopf (nIters 100) (searchState, metaTabu) debugMeta debugSearch minimize
       with ({inc = {cost = TspCost {cost = cost}}}, metaState) then
         cost
       else never
