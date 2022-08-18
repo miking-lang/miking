@@ -89,6 +89,8 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = symbolizeExpr symEnv ast in
 
     let ast = use MExprLowerNestedPatterns in lowerAll ast in
+    (if options.debugShallow then
+      printLn (pprintMcore ast) else ());
 
     if options.toJavaScript then
       javascriptCompileFile ast sourcePath

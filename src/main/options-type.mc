@@ -7,6 +7,7 @@ type Options = {
   debugTypeAnnot : Bool,
   debugTypeCheck : Bool,
   debugProfile : Bool,
+  debugShallow : Bool,
   exitBefore : Bool,
   disablePruneExternalUtests : Bool,
   disablePruneExternalUtestsWarning : Bool,
