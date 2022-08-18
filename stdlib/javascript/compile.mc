@@ -12,8 +12,6 @@ include "javascript/patterns.mc"
 include "javascript/intrinsics.mc"
 include "javascript/optimizations.mc"
 
-include "javascript/compile-ext-default.mc"
-
 include "sys.mc"
 include "common.mc"
 include "seq.mc"
@@ -69,8 +67,7 @@ let infoWarn : Info -> String -> () =
 
 lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
                       JSOptimizeBlocks + JSOptimizeTailCalls +
-                      JSOptimizeExprs + JSIntrinsic +
-                      CompileJSDefaultExt
+                      JSOptimizeExprs + JSIntrinsic
 
   -- Entry point
   sem compileProg : CompileJSContext -> Expr -> JSProg
@@ -237,15 +234,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     JSENop { }
   | t -> errorSingle [info] (join ["Unsupported literal '", getConstStringCode 0 t, "' when compiling to JavaScript"])
 
-  ---------------
-  -- EXTERNALS --
-  ---------------
-  sem compileExtRef : CompileJSContext -> Info -> String -> JSExpr
-  sem compileExtRef ctx info =
-  | t ->
-    match compileExt (ctx.options.targetPlatform) info t with Some expr then expr
-    else errorSingle [info] (join ["Unsupported external '", t, "' when compiling to JavaScript"])
-
 
   -- Extract the name of the function and the arguments from
   -- a function application
@@ -405,14 +393,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
     let ctx = combineDeclarations ctx ctx2 in
     (ctx, if ctx.options.generalOptimizations then optimizeExpr3 expr else expr)
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
-  | TmExt { ident = ident, tyIdent = tyIdent, inexpr = e, effect = effect, ty = ty, info = info } & t ->
-    match compileMExpr ctx e with (ctx, e) in
-    let expr = compileExtRef ctx info (nameGetStr ident) in
-    match compileDeclarations ctx with (ctx, decs) in
-    (ctx, flattenBlock (JSEBlock {
-      exprs = [decs, JSEDef { id = ident, expr = expr }],
-      ret = e
-    }))
+  | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> (ctx, intrinsicStrGen "never" [JSENop {}])
 
 end
