@@ -101,31 +101,49 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
       in
       match tailPositionsReclet baseCase tailCall letexpr ids acc (TmRecLets r) with
       (tailCalls, _) in
-      let tailCalls = setToSeq (setOfSeq subi tailCalls) in
+      let tailCallsSet = setOfSeq subi tailCalls in
+      let tailCalls = setToSeq tailCallsSet in
 
       -- Instrument the reclet
       let acc = () in
       let ids = [] in
-      let baseCase = lam. lam ids. lam expr.
-        instrumentBaseCase tailCalls ids str2name expr
+      let baseCase = lam. lam. lam expr.
+        instrumentBaseCase tailCalls str2name expr
       in
       let tailCall = lam acc. lam ids. lam expr.
         -- Instrument a tail call: do nothing!
         (acc, expr)
       in
       let acquireLock = str2name "acquireLock" in
+      let releaseLock = str2name "releaseLock" in
       let letexpr = lam ids. lam expr.
         -- Check if a let expression is a measuring point
-        if not (null ids) then (ids, lam x. x)
-        else
-          match expr with TmLet t in
-          match mapLookup t.ident graph.measuringPoints with Some tree then
-            -- Found measuring point, update ids and acquire lock
-            let ids = prefixTreeGetIds tree [] in
-            utest not (null ids) with true in
-            let id: Expr = idExpr (infoTm expr) t.ident graph env tree ids in
+        if not (null ids) then (ids, lam x. x) else
+        match expr with TmLet t in
+        match mapLookup t.ident graph.measuringPoints with Some tree then
+          -- Found measuring point
+          let ids = prefixTreeGetIds tree [] in
+          let id = idExpr (infoTm expr) t.ident graph env tree ids in
+          -- Contains a tail call?
+          if setMem (head ids) tailCallsSet then
+            -- Yes, acquire lock. The lock is released in a base case.
             (ids, lam e. bindSemi_ (app_ (nvar_ acquireLock) id) e)
-          else ([], lam x. x)
+          else
+            -- No, acquire and release lock directly after.
+            let f = lam e.
+              match e with TmLet t in
+              let expr = TmLet {t with inexpr = uunit_} in
+              let i = nameSym "iid" in
+              let semi = nameSym "" in
+              bindall_
+              [ nulet_ i id
+              , nulet_ semi (app_ (nvar_ acquireLock) (nvar_ i))
+              , expr
+              , nulet_ semi (app_ (nvar_ releaseLock) (nvar_ i))
+              , t.inexpr
+              ]
+            in (ids, f)
+        else ([], lam x. x)
       in
       match tailPositionsReclet baseCase tailCall letexpr ids acc (TmRecLets r)
       with (_, TmRecLets r) in
@@ -141,13 +159,11 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
   | t -> smap_Expr_Expr (instrumentH env graph str2name) t
 
 
-  sem instrumentBaseCase (tailCalls: [Int]) (ids: [Int]) (str2name: String -> Name) =
+  sem instrumentBaseCase (ids: [Int]) (str2name: String -> Name) =
   | TmLet t ->
     -- Instrument a base case: Release locks of _all_ measuring points that
-    -- have tail-recursive calls, as well as the current measuring point, if
-    -- any.
+    -- have tail-recursive calls.
     let expr = TmLet {t with inexpr = uunit_} in
-    let ids = setToSeq (setOfSeq subi (concat ids tailCalls)) in
     let releaseExpr =
       if null ids then uunit_ else
       let releaseLock = str2name "releaseLock" in
@@ -806,5 +822,88 @@ utest test debug false table t with {
   epsilon = epsilon
 } using eqTest in
 
+
+-- Recursive function without tail calls
+let t = parse
+"
+recursive let foo = lam x.
+  let h = hole (IntRange {default = 100, min = 1, max = 200}) in
+  let m1 = sleepMs h in
+  let y = addi x 1 in
+  sleepMs 100;
+  let m2 = sleepMs h in
+  let m3 = if eqi h 0 then sleepMs 100 else () in
+  if eqi x 3 then x else foo y
+in
+
+foo 1
+" in
+
+let table =
+[ ( ("h", []), int_ 100 )
+] in
+utest test debug false table t with {
+  data =
+  [ {point = ("m1", []), nbrRuns = 3, totalMs = 300.0}
+  , {point = ("m2", []), nbrRuns = 3, totalMs = 300.0}
+  , {point = ("m3", []), nbrRuns = 3, totalMs = 0.0}
+  ],
+  epsilon = epsilon
+} using eqTest in
+
+
+-- Tail call, but not within a measuring point
+let t = parse
+"
+recursive let foo = lam x.
+  let h = hole (IntRange {default = 100, min = 1, max = 200}) in
+  let m1 = sleepMs h in
+  let y = addi x 1 in
+  sleepMs 100;
+  let m2 = if eqi x h then 1 else foo y in
+  m2
+in
+
+foo 98
+" in
+
+let table =
+[ ( ("h", []), int_ 100 )
+] in
+utest test debug false table t with {
+  data =
+  [ {point = ("m1", []), nbrRuns = 1, totalMs = 100.0}
+  , {point = ("m2", []), nbrRuns = 1, totalMs = 400.0}
+  ],
+  epsilon = epsilon
+} using eqTest in
+
+
+-- Mutual recursion
+let t = parse
+"
+recursive
+  let bar = lam x.
+    let m1 = if x then foo x else 2 in
+    m1
+  let foo = lam x.
+    let m2 = if x then 1 else 2 in
+    m2
+in
+let h = hole (Boolean {default = true}) in
+bar h;
+foo h
+" in
+
+let table =
+[ ( ("h", []), true_ )
+] in
+utest test debug false table t with {
+  data =
+  [ {point = ("m1", []), nbrRuns = 1, totalMs = 0.0}
+  , {point = ("m2", []), nbrRuns = 1, totalMs = 0.0}
+  ],
+  epsilon = epsilon
+} using eqTest in
 
 ()
