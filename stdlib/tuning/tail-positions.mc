@@ -61,8 +61,8 @@ lang TailPositions = MExprAst
     with (acc, inexpr) in
     (acc, TmRecLets {t with inexpr = inexpr})
   | TmLet t ->
-    match acc with (env, tacc, lacc) in
-    match letexpr lacc (TmLet t) with (lacc, prepend) in
+    match acc with (env, tacc, lacc0) in
+    match letexpr lacc0 (TmLet t) with (lacc, prepend) in
     let acc = (env, tacc, lacc) in
     match
     switch t
@@ -113,11 +113,11 @@ lang TailPositions = MExprAst
           setInsert t.ident env
         else env
       in
-      match visitTailPositions baseCase tailCall letexpr (env, tacc, lacc) t.inexpr
+      match visitTailPositions baseCase tailCall letexpr (env, tacc, lacc0) t.inexpr
       with (acc, inexpr) in
       (acc, TmLet { t with inexpr = inexpr })
     case _ then
-      smapAccumL_Expr_Expr (visitTailPositions baseCase tailCall letexpr) acc (TmLet t)
+      smapAccumL_Expr_Expr (visitTailPositions baseCase tailCall letexpr) (env, tacc, lacc0) (TmLet t)
     end
     with (acc, expr) in
     (acc, prepend expr)
