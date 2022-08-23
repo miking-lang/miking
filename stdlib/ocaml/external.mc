@@ -53,7 +53,7 @@ lang OCamlDataConversionOpaque = OCamlDataConversion + OCamlAst
 
   sem convertDataInner info env t =
   | (TyUnknown _ | TyVar _, !(TyAll _)) | (!(TyAll _), TyUnknown _ | TyVar _)
-  | (TyCon {ident = ident}, !(TyAll _)) | (!(TyAll _), TyCon {ident = ident})
+  | (TyCon {ident = _}, !(TyAll _)) | (!(TyAll _), TyCon {ident = _})
   | (TyApp {lhs = TyCon _}, !(TyAll _)) | (!(TyAll _), TyApp {lhs = TyCon _})
   -> (0, t)
   | (TyAll {ty = ty1}, TyAll {ty = ty2})

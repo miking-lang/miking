@@ -10,6 +10,7 @@ let optionsDefault : Options = {
   debugTypeAnnot = false,
   debugTypeCheck = false,
   debugProfile = false,
+  debugShallow = false,
   exitBefore = false,
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,

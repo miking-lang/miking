@@ -9,6 +9,7 @@ include "builtin.mc"
 include "eq.mc"
 include "type-annot.mc"
 include "type-lift.mc"
+include "type-check.mc"
 
 include "common.mc"
 
@@ -118,7 +119,8 @@ let utestRunner = lam.
   match deref _utestRunnerCode with Some t then t
   else
     use BootParser in
-    let code = parseMExprStringKeywords [] _utestRunnerStr in
+    use MExprTypeCheck in
+    let code = typeCheck (parseMExprStringKeywords [] _utestRunnerStr) in
     modref _utestRunnerCode (Some code);
     code
 
@@ -383,7 +385,14 @@ let _pprintRecord = use MExprAst in
       mapMapWithKey (lam id. lam. pvar_ (sidToString id)) fields
     in
     let recordPattern =
-      PatRecord {bindings = recordBindings, info = makeInfo (posVal "utest_pprint" 0 0) (posVal "utest_pprint" 0 0), ty = tyunknown_}
+      PatRecord
+        { bindings = recordBindings
+        , info = makeInfo (posVal "utest_pprint" 0 0) (posVal "utest_pprint" 0 0)
+        , ty = TyRecord
+          { info = makeInfo (posVal "utest_pprint" 0 0) (posVal "utest_pprint" 0 0)
+          , fields = fields
+          }
+        }
     in
     let pprintSeq =
       match record2tuple fields with Some types then

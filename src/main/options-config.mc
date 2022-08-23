@@ -23,6 +23,10 @@ let optionsConfig : ParseConfig Options = [
     "Instrument profiling expressions to AST",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugProfile = true}),
+  ([("--debug-shallow", "", "")],
+    "Print the AST after lowering nested patterns to shallow ones",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugShallow = true}),
   ([("--exit-before", "", "")],
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
