@@ -216,12 +216,10 @@ lang PrettyPrint = IdentifierPrettyPrint
   sem typePrecedence =
   | ty -> 100000
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
-  -- Intentionally left blank
-  sem getPatStringCode (indent : Int) (env: PprintEnv) =
-  -- Intentionally left blank
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
+  -- The first argument is the indentation-level to be used
+  sem pprintCode : Int -> PprintEnv -> Expr -> String
+  sem getPatStringCode : Int -> PprintEnv -> Pat -> String
+  sem getTypeStringCode : Int -> PprintEnv -> Expr -> String
 
   sem exprToString (env: PprintEnv) =
   | expr ->
