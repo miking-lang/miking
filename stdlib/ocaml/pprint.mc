@@ -670,6 +670,10 @@ lang OCamlPrettyPrint =
     match mapAccumL (getPatStringCode indent) env args with (env, args) then
       (env, join [ident, " (", strJoin ", " args, ")"])
     else never
+
+  sem postprocessExpr env str = | _ -> str
+  sem postprocessPat env str = | _ -> str
+  sem postprocessType env str = | _ -> str
 end
 
 lang TestLang = OCamlPrettyPrint + OCamlSym
