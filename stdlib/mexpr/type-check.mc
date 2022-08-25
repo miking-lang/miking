@@ -852,6 +852,12 @@ lang MExprTypeCheck =
 
 end
 
+lang DebugTypeHtml = MExprPrettyPrintAnnotatedHtml
+  sem exprAnnotation env = | e -> typeToString env (tyTm e)
+  sem patAnnotation env = | p -> typeToString env (tyPat p)
+  sem typeAnnotation env = | _ -> ""
+end
+
 lang TestLang = MExprTypeCheck + MExprEq end
 
 mexpr

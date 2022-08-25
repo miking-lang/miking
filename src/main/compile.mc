@@ -34,6 +34,10 @@ let pprintMcore = lam ast.
   use MExprPrettyPrint in
   expr2str ast
 
+let pprintMcoreHtmlWithTy = lam ast.
+  use DebugTypeHtml in
+  mexprToString ast
+
 let pprintType = lam ty.
   use MExprPrettyPrint in
   type2str ty
@@ -73,8 +77,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     in
 
     let ast = typeCheck ast in
-    (if options.debugTypeCheck then
-       printLn (join [pprintMcore ast, "\n : ", pprintType (tyTm ast)]) else ());
+    (if options.debugTypeCheck
+     then printLn (pprintMcoreHtmlWithTy ast)
+     else ());
 
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
