@@ -1,7 +1,7 @@
 reset
 set title "Summary of benchmark results\nin logarithmic scale"
 set xlabel "Benchmark" offset 0,-1
-set ylabel "Time (ms)" rotate by 0 offset 10.5,12.5
+set ylabel "Time (ms)" rotate by 0 offset 10.5,17.5
 set logscale y
 set key under Left reverse
 
