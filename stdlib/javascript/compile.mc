@@ -20,6 +20,7 @@ include "error.mc"
 include "name.mc"
 include "option.mc"
 include "string.mc"
+include "bool.mc"
 
 
 
@@ -380,11 +381,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       args = [body],
       curried = false
     })
-  | TmMatch {target = target, pat = pat, thn = thn, els = els } ->
+  | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
+    match tryCompileOptimizedMatch ctx target pat thn els with Some (ctx, expr) then (ctx, expr) else
     match compileMExpr ctx target with (ctx, target) in
-    match compileBindingPattern ctx target pat with (ctx2, pat) in
     match compileMExpr ctx thn with (ctx, thn) in
     match compileMExpr ctx els with (ctx, els) in
+    match compileBindingPattern ctx target pat with (ctx2, pat) in
     let expr = JSETernary {
       cond = pat,
       thn = immediatelyInvokeBlock thn,
@@ -395,6 +397,30 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> (ctx, intrinsicStrGen "never" [JSENop {}])
+
+
+  sem tryCompileOptimizedMatch : CompileJSContext -> Expr -> Pat -> Expr -> Expr -> Some (CompileJSContext, JSExpr)
+  sem tryCompileOptimizedMatch ctx target pat thn =
+  | els ->
+      let elsIsNever = (match els with TmNever _ then true else false) in
+      match pat with PatRecord { bindings = bindings } then
+        if and (eqi (mapLength bindings) 1) elsIsNever then -- Reduce to an indexing operation
+          match mapToSeq bindings with [(key, val)] in -- match target with { key: SID = value: Pat }
+          -- Check if the then branch returns the value of the record field
+          match val with PatNamed { ident = PName valName } then
+            match thn with TmVar { ident = thnName } then
+              if nameEq valName thnName then
+                -- Return an indexing operation on the target with the key
+                match compileMExpr ctx target with (ctx, expr) in
+                Some (ctx, JSEIndex {
+                  expr = expr,
+                  index = sidToString key
+                })
+              else None ()
+            else None ()
+          else None ()
+        else None ()
+      else None ()
 
 end
 
