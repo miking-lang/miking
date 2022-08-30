@@ -54,7 +54,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   createRope: len => fun => Array.from({ length: len }, (_, i) => fun(i)), // TODO: Adapt to ropes
   isList: lst => Array.isArray(lst),
   isRope: lst => Array.isArray(lst), // TODO: Adapt to ropes
-  splitAt: lst => elm => { const idx = lst.indexOf(elm); return [lst.slice(0, idx), lst.slice(idx + 1)]; },
+  splitAt: lst => idx => [lst.slice(0, idx), lst.slice(idx)],
   subsequence: lst => from => len => lst.slice(from, from + len),
 
   // Maps
