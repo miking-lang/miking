@@ -237,13 +237,14 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
 
 
   -- Extract the name of the function and the arguments from
-  -- a function application
-  sem foldApp : [Expr] -> Expr -> (Expr, [Expr])
-  sem foldApp acc =
+  -- a function application. Also compile the arguments.
+  sem foldApp : CompileJSContext -> [JSExpr] -> Expr -> (CompileJSContext, Expr, [JSExpr])
+  sem foldApp ctx acc =
   | TmApp { lhs = lhs, rhs = rhs } ->
-    if _isUnitTy (tyTm rhs) then foldApp acc lhs
-    else foldApp (cons rhs acc) lhs
-  | t -> (t, acc)
+    match (if _isUnitTy (tyTm rhs) then (ctx, JSENop {})
+      else compileMExpr ctx rhs) with (ctx, e) in
+    foldApp ctx (cons e acc) lhs
+  | t -> (ctx, t, acc)
 
   sem mapCompileMExpr : CompileJSContext -> [Expr] -> (CompileJSContext, [JSExpr])
   sem mapCompileMExpr ctx =
@@ -260,10 +261,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem compileMExpr : CompileJSContext -> Expr -> (CompileJSContext, JSExpr)
   sem compileMExpr ctx =
   | TmVar { ident = id } -> (ctx, JSEVar { id = id })
-  | TmApp _ & app ->
-    match foldApp [] app with (fun, args) in
-    -- Function calls
-    match mapCompileMExpr ctx args with (ctx, args) in
+  | TmApp _ & app -> -- Function calls
+    match foldApp ctx [] app with (ctx, fun, args) in
     match fun with TmVar { ident = ident } then
       (ctx, JSEApp {
         fun = JSEVar { id = ident },
