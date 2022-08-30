@@ -1,4 +1,5 @@
 include "bool.mc"
+include "seq.mc"
 include "error.mc"
 include "common.mc"
 include "stringid.mc"
@@ -105,12 +106,12 @@ lang PatJSCompile = PatJSCompileLang
     match compileSinglePattern ctx p with (ctx, pat, extra) in
     (ctx, _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra) )
   | PatSeqTot { pats = pats } & p ->
-    if _isCharPatSeq pats then
-      (ctx, _binOp (JSOEq {}) [target, JSEString { s = _charPatSeq2String pats }] )
+    if _isCharPatSeq pats then (ctx, _binOp (JSOEq {}) [target, JSEString { s = _charPatSeq2String pats }] )
     else
-      -- Check if the sequence is empty
       let lengthCheck = compilePatsLen pats target in
-      if null pats then (ctx, lengthCheck)
+      let allWildcards = forAll (lam p. match p with PatNamed { ident = PWildcard () } then true else false) pats in
+      dprintLn allWildcards;
+      if allWildcards then (ctx, lengthCheck)
       else
         match compileSinglePattern ctx p with (ctx, pat, extra) in
         (ctx, _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (pat) target], extra]) )
@@ -121,37 +122,38 @@ lang PatJSCompile = PatJSCompileLang
     match safeMapSinglePattern ctx prefix with (ctx, prefixExprs, prefixExtra) in
     match compileSinglePattern ctx (PatNamed { ident = middle, ty = ty, info = info }) with (ctx, middleExpr, []) in
     match safeMapSinglePattern ctx postfix with (ctx, postfixExprs, postfixExtra) in
-    let exprs: [JSExpr] = switch (hasPrefix, hasMiddle, hasPostfix)
-      case (false, false, false) then [] -- Should never happen
+    match (switch (hasPrefix, hasMiddle, hasPostfix)
+      case (false, false, false) then (ctx, []) -- Should never happen
       case (true, false, false) then
-        [_assign (JSEArray { exprs = prefixExprs }) target]
+        match compileBindingPattern ctx target (PatSeqTot { pats = prefix }) with (ctx, prefixBinding) in
+        (ctx, [prefixBinding])
       case (true, true, false) then
-        [_assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target]
+        (ctx, [_assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target])
       case (true, true, true) then
-        [
+        (ctx, [
           _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
           shortenMiddle (length postfixExprs) middleExpr
-        ]
+        ])
       case (false, true, true) then
-        [
+        (ctx, [
           _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr middleExpr),
           shortenMiddle (length postfixExprs) middleExpr
-        ]
+        ])
       case (false, true, false) then
-        [_assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target]
+        (ctx, [_assign (JSEArray { exprs = [_unOp (JSOSpread {}) [middleExpr]] }) target])
       case (false, false, true) then
-        [
+        (ctx, [
           _assign (JSEArray { exprs = [_unOp (JSOSpread {}) [tmpIgnoreJS]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnoreJS)
-        ]
+        ])
       case (true, false, true) then
-        [
+        (ctx, [
           _assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [tmpIgnoreJS]] }) target,
           _assign (JSEArray { exprs = reverse postfixExprs }) (reverseExpr tmpIgnoreJS)
-        ]
-    end in
+        ])
+    end) with (ctx, exprs) in
     (ctx, _binOpM (JSOAnd {}) (join [exprs, prefixExtra, postfixExtra]) )
   | PatCon { ident = ident, subpat = subpat } ->
     let typeCheck = _binOp (JSOEq {}) [JSEMember { expr = target, id = "type" }, JSEString { s = ident.0 }] in
