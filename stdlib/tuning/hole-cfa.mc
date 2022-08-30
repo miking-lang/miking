@@ -117,6 +117,37 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     -- lhs \ {dhole : dhole ∈ rhs} ⊆ res
   | CstrHoleIndependent { lhs: IName, rhs: IName, res: IName }
 
+  sem cmpConstraintH =
+  | (CstrHoleDirectData l, CstrHoleDirectData r) ->
+    let d = subi l.lhs r.lhs in
+    if eqi d 0 then subi l.rhs r.rhs
+    else d
+  | (CstrHoleDirectExe l, CstrHoleDirectExe r) ->
+    let d = subi l.lhs r.lhs in
+    if eqi d 0 then subi l.rhs r.rhs
+    else d
+  | (CstrHoleApp l, CstrHoleApp r) ->
+    let d = subi l.res r.res in
+    if eqi d 0 then subi l.lhs r.lhs
+    else d
+  | (CstrHoleConstApp l, CstrHoleConstApp r) ->
+    let d = subi l.res r.res in
+    if eqi d 0 then
+      let d = subi l.lhs r.lhs in
+      if eqi d 0 then subi l.rhs r.rhs
+      else d
+    else d
+  | (CstrHoleMatch l, CstrHoleMatch r) ->
+    let d = subi l.res r.res in
+    if eqi d 0 then subi l.lhs r.lhs
+    else d
+  | (CstrHoleIndependent l, CstrHoleIndependent r) ->
+    let d = subi l.res r.res in
+    if eqi d 0 then
+      let d = subi l.lhs r.lhs in
+      if eqi d 0 then subi l.rhs r.rhs
+      else d
+    else d
 
   sem initConstraint (graph : CFAGraph) =
   | CstrHoleApp r & cstr -> initConstraintName r.lhs graph cstr

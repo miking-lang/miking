@@ -35,7 +35,9 @@ let cartesianToLinearIndex = lam shape. lam idx.
     foldl
       (lam acc : ([Int], Int). lam i.
         match acc with (shape, ofs) in
-        (tail shape, addi ofs (muli (_prod shape) i)))
+        let ofs = addi ofs (muli (_prod shape) i) in
+        match shape with [] then ([], ofs)
+        else (tail shape, ofs))
       (tail shape, 0)
       idx
    in

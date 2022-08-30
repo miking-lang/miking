@@ -11,6 +11,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
+include "mexpr/shallow-patterns.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
@@ -88,8 +89,12 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
-    if options.toJavaScript
-    then compileMCoreToJS { compileJSOptionsEmpty with
+    let ast = use MExprLowerNestedPatterns in lowerAll ast in
+    (if options.debugShallow then
+      printLn (pprintMcore ast) else ());
+      
+    if options.toJavaScript then compileMCoreToJS {
+        compileJSOptionsEmpty with
         targetPlatform = parseJSTarget options.jsTarget,
         generalOptimizations = not options.disableJsGeneralOptimizations,
         tailCallOptimizations = not options.disableJsTCO
@@ -119,13 +124,19 @@ let compile = lam files. lam options : Options. lam args.
     } file in
     let ast = makeKeywords [] ast in
 
-    -- Performs a CUDA well-formedness check of the AST, when the
-    -- --check-cuda-well-formed flag is set.
-    (if options.checkCudaWellFormed then checkWellFormedCuda ast else ());
-
-    -- Demote parallel constructs to sequential equivalents and remove
-    -- accelerate terms
-    let ast = demoteParallel ast in
+    -- Applies static and dynamic checks on the accelerated expressions, to
+    -- verify that the code within them are supported by the accelerate
+    -- backends.
+    -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
+    -- duplicate symbolization and type-checking when compiling in debug mode.
+    let ast =
+      if options.debugAccelerate then
+        let ast = symbolizeExpr keywordsSymEnv ast in
+        let ast = typeCheck ast in
+        let ast = removeTypeAscription ast in
+        match checkWellFormedness options ast with (ast, _, _) in
+        demoteParallel ast
+      else demoteParallel ast in
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in
@@ -135,6 +146,5 @@ let compile = lam files. lam options : Options. lam args.
 
     compileWithUtests options file ast; ()
   in
-  if or options.accelerateCuda options.accelerateFuthark then
-    compileAccelerate files options args
+  if options.accelerate then compileAccelerate files options args
   else iter compileFile files

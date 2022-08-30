@@ -289,6 +289,10 @@ let pseqtot_ = use MExprAst in
   lam ps.
   PatSeqTot {pats = ps, info = NoInfo(), ty = tyunknown_}
 
+let pstr_ = use MExprAst in
+  lam str.
+  pseqtot_ (map pchar_ str)
+
 let pseqedgew_ = use MExprAst in
   lam pre. lam post.
   PatSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo(), ty = tyunknown_}

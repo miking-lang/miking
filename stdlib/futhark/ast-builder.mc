@@ -86,6 +86,10 @@ let nFutVar_ = use FutharkAst in
 
 let futVar_ = lam str. nFutVar_ (nameNoSym str)
 
+let futVarExt_ = use FutharkAst in
+  lam str.
+  FEVarExt {ident = str, ty = futUnknownTy_, info = NoInfo ()}
+
 let futSizeCoercion_ = use FutharkAst in
   lam e. lam ty.
   FESizeCoercion {e = e, ty = ty, info = NoInfo ()}

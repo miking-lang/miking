@@ -161,6 +161,7 @@ end
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   syn FutExpr =
   | FEVar { ident : Name, ty : FutType, info : Info }
+  | FEVarExt { ident : String, ty : FutType, info : Info }
   | FESizeCoercion { e : FutExpr, ty : FutType, info : Info }
   | FESizeEquality { x1 : Name, d1 : Int, x2 : Name, d2 : Int, ty : FutType,
                      info : Info }
@@ -190,6 +191,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem infoFutTm : FutExpr -> Info
   sem infoFutTm =
   | FEVar t -> t.info
+  | FEVarExt t -> t.info
   | FESizeCoercion t -> t.info
   | FESizeEquality t -> t.info
   | FERecord t -> t.info
@@ -210,6 +212,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem withInfoFutTm : Info -> FutExpr -> FutExpr
   sem withInfoFutTm info =
   | FEVar t -> FEVar {t with info = info}
+  | FEVarExt t -> FEVarExt {t with info = info}
   | FESizeCoercion t -> FESizeCoercion {t with info = info}
   | FESizeEquality t -> FESizeEquality {t with info = info}
   | FERecord t -> FERecord {t with info = info}
@@ -230,6 +233,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem tyFutTm : FutExpr -> FutType
   sem tyFutTm =
   | FEVar t -> t.ty
+  | FEVarExt t -> t.ty
   | FESizeCoercion t -> t.ty
   | FESizeEquality t -> t.ty
   | FERecord t -> t.ty
@@ -250,6 +254,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   sem withTypeFutTm : FutType -> FutExpr -> FutExpr
   sem withTypeFutTm ty =
   | FEVar t -> FEVar {t with ty = ty}
+  | FEVarExt t -> FEVarExt {t with ty = ty}
   | FESizeCoercion t -> FESizeCoercion {t with ty = ty}
   | FESizeEquality t -> FESizeEquality {t with ty = ty}
   | FERecord t -> FERecord {t with ty = ty}

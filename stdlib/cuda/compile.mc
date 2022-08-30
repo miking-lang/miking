@@ -12,7 +12,10 @@ let _cudaFree = nameNoSym "cudaFree"
 let _cudaDeviceSynchronize = nameNoSym "cudaDeviceSynchronize"
 let _malloc = nameNoSym "malloc"
 let _free = nameNoSym "free"
-let _GPU_UTILS_CHECK_CUDA_ERROR = nameNoSym "GPU_UTILS_CHECK_CUDA_ERROR"
+
+let _CUDA_UTILS_CHECK_CUDA_ERROR = nameNoSym "CUDA_UTILS_CHECK_CUDA_ERROR"
+let _CUDA_UTILS_COPY_OCAML_CUDA = nameNoSym "cuda_utils_copyOCamlToCuda"
+let _CUDA_UTILS_COPY_CUDA_OCAML = nameNoSym "cuda_utils_copyCudaToOCaml"
 
 let cudaIncludes = concat cIncludes []
 

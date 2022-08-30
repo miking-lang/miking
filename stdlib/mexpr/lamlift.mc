@@ -108,7 +108,7 @@ lang LambdaLiftFindFreeVariables =
   sem findFreeVariablesReclet (state : LambdaLiftState) =
   | TmLet t ->
     let state =
-      match t.tyBody with TyArrow _ then
+      match t.tyBody with TyAll _ | TyArrow _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -131,7 +131,7 @@ lang LambdaLiftFindFreeVariables =
     findFreeVariables state t.body
   | TmLet t ->
     let state =
-      match t.tyBody with TyArrow _ then
+      match t.tyBody with TyAll _ | TyArrow _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -189,7 +189,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     match mapLookup t.ident subMap with Some subExpr then
       (subMap, subExpr t.info)
     else (subMap, TmVar t)
-  | TmLet (t & {tyBody = TyArrow _}) ->
+  | TmLet (t & {tyBody = TyAll _ | TyArrow _}) ->
     match mapLookup t.ident solutions with Some freeVars then
       let fv = mapBindings freeVars in
       let info = infoTm t.body in
@@ -289,7 +289,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
-    match t.tyBody with TyArrow _ then
+    match t.tyBody with TyAll _ | TyArrow _ then
       let bind : RecLetBinding =
         {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
       let bindings = snoc bindings bind in
@@ -319,7 +319,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
     match liftGlobalH lifted t.body with (lifted, body) in
-    match t.tyBody with TyArrow _ then
+    match t.tyBody with TyAll _ | TyArrow _ then
       let lifted = snoc lifted (TmLet {{t with body = body}
                                           with inexpr = unit_}) in
       liftGlobalH lifted t.inexpr
@@ -360,9 +360,85 @@ lang LambdaLiftLiftGlobal = MExprAst
       t
 end
 
+-- NOTE(larshum, 2022-08-02): This language fragment is added to (re-)add
+-- TyAll's to bindings after lambda lifting. This is required to produce the
+-- correct types, as type variables in a nested binding may become free after
+-- lifting.
+-- TODO(larshum, 2022-08-02): Currently assumes all type variables are
+-- monomorphic. The analysis should be improved by lifting the type variables
+-- along with the bindings.
+lang LambdaLiftAddTyAlls = MExprAst
+  type TyVars = Set Name
+  type TyVarMap = Map Name Name
+
+  sem addTyAlls : Expr -> Expr
+  sem addTyAlls =
+  | t -> addTyAllsH (mapEmpty nameCmp) t
+
+  sem addTyAllsH : TyVarMap -> Expr -> Expr
+  sem addTyAllsH bound =
+  | TmLam t ->
+    TmLam {t with tyIdent = subTyIdents bound t.tyIdent,
+                  body = addTyAllsH bound t.body}
+  | TmLet t ->
+    match addTyAllBinding bound t.tyBody with (bodyTyVars, tyBody) in
+    TmLet {t with tyBody = subTyIdents bodyTyVars tyBody,
+                  body = addTyAllsH bodyTyVars t.body,
+                  inexpr = addTyAllsH bound t.inexpr}
+  | TmRecLets t ->
+    let bindingFn = lam bind.
+      match addTyAllBinding bound bind.tyBody with (bodyTyVars, tyBody) in
+      let body = addTyAllsH bodyTyVars bind.body in
+      {bind with tyBody = tyBody, body = body} in
+    TmRecLets {t with bindings = map bindingFn t.bindings,
+                      inexpr = addTyAllsH bound t.inexpr}
+  | TmType t -> TmType {t with inexpr = addTyAllsH bound t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = addTyAllsH bound t.inexpr}
+  | TmUtest t -> TmUtest {t with next = addTyAllsH bound t.next}
+  | TmExt t -> TmExt {t with inexpr = addTyAllsH bound t.inexpr}
+  | t ->
+    let t = withType (subTyIdents bound (tyTm t)) t in
+    smap_Expr_Expr (addTyAllsH bound) t
+
+  sem addTyAllBinding : TyVarMap -> Type -> (TyVarMap, Type)
+  sem addTyAllBinding bound =
+  | ty ->
+    match collectFreeTyVars bound ty with (bound, free) in
+    let resymbFreeMap = mapMapWithKey (lam k. lam. nameSetNewSym k) free in
+    let bound = mapUnion bound resymbFreeMap in
+    let ty = subTyIdents bound ty in
+    let ty =
+      mapFoldWithKey
+        (lam acc. lam. lam tyAllId.
+          TyAll {ident = tyAllId, sort = PolyVar (),
+                 ty = acc, info = infoTy acc})
+        ty resymbFreeMap in
+    (bound, ty)
+
+  sem subTyIdents : TyVarMap -> Type -> Type
+  sem subTyIdents subMap =
+  | TyVar t ->
+    match mapLookup t.ident subMap with Some newIdent then
+      TyVar {t with ident = newIdent, level = 1}
+    else TyVar t
+  | ty -> smap_Type_Type (subTyIdents subMap) ty
+
+  sem collectFreeTyVars : TyVarMap -> Type -> (TyVarMap, TyVars)
+  sem collectFreeTyVars bound =
+  | ty -> collectFreeTyVarsH (bound, mapEmpty nameCmp) ty
+
+  sem collectFreeTyVarsH : (TyVarMap, TyVars) -> Type -> (TyVarMap, TyVars)
+  sem collectFreeTyVarsH acc =
+  | TyVar t ->
+    match acc with (bound, free) in
+    if mapMem t.ident bound then (bound, free)
+    else (bound, setInsert t.ident free)
+  | ty -> sfold_Type_Type collectFreeTyVarsH acc ty
+end
+
 lang MExprLambdaLift =
   LambdaLiftNameAnonymous + LambdaLiftFindFreeVariables +
-  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal
+  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal + LambdaLiftAddTyAlls
 
   sem liftLambdas =
   | t -> match liftLambdasWithSolutions t with (_, t) in t
@@ -372,7 +448,8 @@ lang MExprLambdaLift =
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
-    (state.sols, liftGlobal t)
+    let t = liftGlobal t in
+    (state.sols, addTyAlls t)
 end
 
 lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot

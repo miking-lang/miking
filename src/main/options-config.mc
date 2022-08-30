@@ -23,6 +23,10 @@ let optionsConfig : ParseConfig Options = [
     "Instrument profiling expressions to AST",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugProfile = true}),
+  ([("--debug-shallow", "", "")],
+    "Print the AST after lowering nested patterns to shallow ones",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugShallow = true}),
   ([("--exit-before", "", "")],
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
@@ -56,19 +60,21 @@ let optionsConfig : ParseConfig Options = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
-  ([("--accelerate-cuda", "", "")],
-    "Compile into an accelerated executable using the CUDA backend",
+  ([("--accelerate", "", "")],
+    "Enables expression acceleration which outputs GPU code by default",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerateCuda = true}),
-  ([("--accelerate-futhark", "", "")],
-    "Compile into an accelerated executable using the Futhark backend",
+      let o: Options = p.options in {o with accelerate = true}),
+  ([("--tensor-max-rank", " ", "<rank>")],
+    "Sets the maximum rank of tensors to <rank> in accelerated code",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerateFuthark = true}),
-  ([("--check-cuda-well-formed", "", "")],
-    join ["Runs the well-formedness checks for the CUDA backend, even when ",
-          "compiling without acceleration"],
+      let o: Options = p.options in
+      {o with accelerateTensorMaxRank = string2int (argToString p)}),
+  ([("--debug-accelerate", "", "")],
+    join ["Enables static and dynamic checks for accelerated expressions, ",
+          "and runs the program on the CPU."],
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with checkCudaWellFormed = true}),
+      let o: Options = p.options in {o with debugAccelerate = true,
+                                            runtimeChecks = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.

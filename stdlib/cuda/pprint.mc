@@ -11,6 +11,12 @@ lang CudaPrettyPrint = CPrettyPrint + CudaAst
   | CuDY _ -> "y"
   | CuDZ _ -> "z"
 
+  sem printCType : String -> PprintEnv -> CType -> (PprintEnv, String)
+  sem printCType decl env =
+  | CTyConst {ty = ty} ->
+    match printCType decl env ty with (env, ty) in
+    (env, _joinSpace "const" ty)
+
   sem printCExpr (env : PprintEnv) =
   | CESeqMap {f = f, s = s} ->
     match printCExpr env f with (env, f) in
@@ -102,6 +108,10 @@ mexpr
 
 use CudaPrettyPrint in
 
+let printType : CType -> String = lam ty.
+  match printCType "" pprintEnvEmpty ty with (_, str) in str
+in
+
 let printExpr : CExpr -> String = lam expr.
   match printCExpr pprintEnvEmpty expr with (_, str) in str
 in
@@ -117,6 +127,9 @@ utest printExpr t with "blockDim.z" in
 
 let t = CEGridDim {dim = CuDX ()} in
 utest printExpr t with "gridDim.x" in
+
+let ty = CTyConst {ty = CTyInt ()} in
+utest printType ty with "const int" in
 
 let cint_ = lam i. CEInt {i = i} in
 let kernelApp = lam args : [CExpr].

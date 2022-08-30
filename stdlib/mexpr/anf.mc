@@ -260,7 +260,7 @@ lang NeverANF = ANF + NeverAst
 
 end
 
-lang ExtANF = ANF + ExtAst
+lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
 
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->
@@ -272,20 +272,52 @@ lang ExtANF = ANF + ExtAst
     let arity = arityFunType t.tyIdent in
     let i = withInfo t.info in
     recursive let vars = lam acc. lam arity.
+      match acc with (acc, tyIdent) in
       if lti arity 1 then acc
       else
         let arg = nameNoSym (concat "a" (int2string arity)) in
-        vars (cons arg acc) (subi arity 1)
+        match
+          match tyIdent with TyArrow {from = from, to = to} then
+            (from, to)
+          else (TyUnknown {info = t.info}, tyIdent)
+        with (argTy, innerTy) in
+        vars (cons (arg, argTy) acc, innerTy) (subi arity 1)
     in
-    let varNames: [Name] = vars [] arity in
-    let inner = foldl (lam acc. lam v.
-        i (app_ acc (nvar_ v))) (nvar_ t.ident) varNames in
+    let varNameTypes : [(Name, Type)] = vars ([], t.tyIdent) arity in
+    let extId = TmVar {
+      ident = t.ident, ty = t.tyIdent,
+      info = t.info, frozen = false} in
+    match
+      foldl
+        (lam acc. lam v.
+          match acc with (acc, tyIdent) in
+          match v with (id, ty) in
+          let appTy =
+            match tyIdent with TyArrow {to = to} then
+              to
+            else TyUnknown {info = t.info} in
+          let app = TmApp {
+            lhs = acc,
+            rhs = TmVar {ident = id, ty = ty, info = t.info, frozen = false},
+            ty = appTy,
+            info = t.info} in
+          (app, appTy))
+        (extId, t.tyIdent)
+        varNameTypes
+    with (inner, _) in
     let etaExpansion =
-      foldr (lam v. lam acc. i (nulam_ v acc )) inner varNames in
+      foldr
+        (lam v. lam acc.
+          match v with (id, ty) in
+          TmLam {
+            ident = id, tyIdent = ty, body = acc,
+            ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
+            info = t.info})
+        inner varNameTypes in
     TmExt { t with
-      inexpr = bindall_
-        [ i (nlet_ t.ident t.tyIdent etaExpansion),
-          normalize k t.inexpr ] }
+      inexpr = TmLet {
+        ident = t.ident, tyBody = t.tyIdent, body = etaExpansion,
+        inexpr = normalize k t.inexpr, ty = tyTm t.inexpr, info = t.info} }
 
 end
 

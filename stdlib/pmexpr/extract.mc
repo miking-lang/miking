@@ -22,15 +22,27 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
   | CopyFromAccelerate ()
   | NoCopy ()
 
+  sem omitCopyTo : CopyStatus -> CopyStatus
   sem omitCopyTo =
   | CopyBoth _ -> CopyFromAccelerate ()
   | CopyToAccelerate _ -> NoCopy ()
   | status -> status
 
+  sem omitCopyFrom : CopyStatus -> CopyStatus
   sem omitCopyFrom =
   | CopyBoth _ -> CopyToAccelerate ()
   | CopyFromAccelerate _ -> NoCopy ()
   | status -> status
+
+  sem copyStatusTo : CopyStatus -> Bool
+  sem copyStatusTo =
+  | CopyBoth _ | CopyToAccelerate _ -> true
+  | _ -> false
+
+  sem copyStatusFrom : CopyStatus -> Bool
+  sem copyStatusFrom =
+  | CopyBoth _ | CopyFromAccelerate _ -> true
+  | _ -> false
 
   type AccelerateData = {
     identifier : Name,
@@ -91,7 +103,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
     let retType = t.ty in
-    let info = infoTm t.e in
+    let info = mergeInfo t.info (infoTm t.e) in
     let paramId = nameSym "x" in
     let paramTy = TyInt {info = info} in
     let functionData : AccelerateData = {
