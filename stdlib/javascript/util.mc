@@ -81,6 +81,10 @@ let extractRFRctx : CompileJSContext -> Expr -> CompileJSContext =
   lam ctx : CompileJSContext. lam e.
   { ctx with recursiveFunctions = extractRFR ctx.recursiveFunctions e }
 
+--------------------------
+-- VARIABLE DECLARATION --
+--------------------------
+
 let compileDeclarations : CompileJSContext -> (CompileJSContext, JSExpr) =
   use JSExprAst in
   lam ctx : CompileJSContext.

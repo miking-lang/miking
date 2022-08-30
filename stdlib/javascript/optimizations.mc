@@ -4,6 +4,7 @@ include "javascript/intrinsics.mc"
 
 include "name.mc"
 include "bool.mc"
+include "set.mc"
 
 
 -- Block Optimizations
@@ -19,8 +20,7 @@ lang JSOptimizeBlocks = JSExprAst
     let flatExprs : [JSExpr] = filterNops (foldr (
       lam e. lam acc.
         let flatE = flattenBlockHelper e in
-        match flatE with ([], e) then
-          cons e acc
+        match flatE with ([], e) then cons e acc
         else match flatE with (flatEExprs, flatERet) in
           join [acc, flatEExprs, [flatERet]]
     ) [] exprs) in
@@ -39,6 +39,8 @@ lang JSOptimizeBlocks = JSExprAst
   sem flattenBlock =
   | JSEBlock _ & block ->
     match flattenBlockHelper block with (exprs, ret) in
+    let exprs = filterDuplicateDeclarations exprs in
+    let exprs = filterNops exprs in
     JSEBlock { exprs = exprs, ret = ret }
   | expr -> expr
 
@@ -53,6 +55,27 @@ lang JSOptimizeBlocks = JSExprAst
     lam e. lam acc.
       match e with JSENop { } then acc else cons e acc
   ) [] lst
+
+  sem filterDuplicateDeclarations : [JSExpr] -> [JSExpr]
+  sem filterDuplicateDeclarations =
+  | lst ->
+    let declAcc = foldl (
+      lam acc: (Set Name, [JSExpr]). lam e: JSExpr.
+      match acc with (decls, exprs) in
+      match e with JSEDec { ids = names } then
+        -- If the current expression is a declaration,
+        -- check if any of the names in the declaration are already in the set of declarations
+        -- If so, remove the name from the list of names in the expression.
+        -- Lastly, add the names in the expression to the set of declarations.
+        let newNames = foldl (lam acc. lam name. if setMem name decls then acc else cons name acc) [] names in
+        -- Create a new set from the list of names and join it with the set of declarations
+        let newDecls = setUnion (setOfSeq nameCmp newNames) decls in
+        let e = (if null newNames then JSENop { } else JSEDec { ids = newNames}) in
+        (newDecls, snoc exprs e)
+      else (decls, snoc exprs e)
+    ) (setEmpty nameCmp, []) lst in
+    match declAcc with (_, exprs) in
+    exprs
 
 end
 
