@@ -13,7 +13,8 @@ lang JSExprAst
   | JSEDec       { ids: [Name] }                -- Declarations (Mutable)
   | JSEApp       { fun: JSExpr, args: [JSExpr], curried: Bool }  -- Function application
   | JSEFun       { params: [Name], body: JSExpr } -- Functions
-  | JSEMember    { expr: JSExpr, id: String }  -- Member access
+  | JSEMember    { expr: JSExpr, id: String }   -- Member access
+  | JSEIndex     { expr: JSExpr, index: String } -- Indexing
   | JSEInt       { i: Int }                     -- Integer literals
   | JSEFloat     { f: Float }                   -- Float literals
   | JSEBool      { b: Bool }                    -- Boolean literals
@@ -22,12 +23,12 @@ lang JSExprAst
   | JSETernary   { cond: JSExpr, thn: JSExpr, els: JSExpr } -- Ternary operator
   | JSEBinOp     { op: JSBinOp, lhs: JSExpr, rhs: JSExpr } -- Binary operators
   | JSEUnOp      { op: JSUnOp, rhs: JSExpr }    -- Unary operators
-  | JSEArray     { exprs : [JSExpr] } -- Sequences
+  | JSEArray     { exprs : [JSExpr] }           -- Sequences
   | JSEObject    { fields: [(String, JSExpr)] } -- Objects
-  | JSEIIFE      { body: JSExpr } -- Immediately-invoked function expression
+  | JSEIIFE      { body: JSExpr }               -- Immediately-invoked function expression
   | JSEBlock     { exprs: [JSExpr], ret: JSExpr } -- Block
-  | JSEReturn    { expr: JSExpr } -- Early return
-  | JSENop       { } -- No-op
+  | JSEReturn    { expr: JSExpr }               -- Early return
+  | JSENop       { }                            -- No-op
 
   syn JSBinOp =
   | JSOAssign    {} -- lhs = rhs

@@ -101,6 +101,9 @@ lang JSPrettyPrint = JSExprAst
   | JSEMember { expr = expr, id = id } ->
     match (printJSExpr indent) env expr with (env,expr) in
     (env, join [expr, ".", id])
+  | JSEIndex { expr = expr, index = index } ->
+    match (printJSExpr indent) env expr with (env,expr) in
+    (env, join [expr, "[", index, "]"])
   | JSEDef { id = id, expr = expr } ->
     match getNameStrDefault "_" env id with (env,id) in
     match (printJSExpr indent env) expr with (env, str) in
