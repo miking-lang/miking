@@ -17,8 +17,9 @@ let tmpIgnoreJS = use PatJSCompileLang in
   JSEVar { id = nameSym "_" }
 
 let compilePatsLen = use PatJSCompileLang in
-  lam pats: [Pat]. lam target: JSExpr.
-  _binOp (JSOEq {}) [JSEMember { expr = target, id = "length" }, JSEInt { i = length pats }]
+  lam pats: [Pat]. lam target: JSExpr. lam checkExactInsteadOfAtLeast: Bool.
+  let op = (if checkExactInsteadOfAtLeast then (JSOEq {}) else (JSOGe {})) in
+  _binOp op [JSEMember { expr = target, id = "length" }, JSEInt { i = length pats }]
 
 ------------------------------------
 -- Pattern -> JavaScript FRAGMENT --
@@ -105,16 +106,7 @@ lang PatJSCompile = PatJSCompileLang
     ) & p ->
     match compileSinglePattern ctx p with (ctx, pat, extra) in
     (ctx, _binOpM (JSOAnd {}) (cons (_assign (pat) target) extra) )
-  | PatSeqTot { pats = pats } & p ->
-    if _isCharPatSeq pats then (ctx, _binOp (JSOEq {}) [target, JSEString { s = _charPatSeq2String pats }] )
-    else
-      let lengthCheck = compilePatsLen pats target in
-      let allWildcards = forAll (lam p. match p with PatNamed { ident = PWildcard () } then true else false) pats in
-      dprintLn allWildcards;
-      if allWildcards then (ctx, lengthCheck)
-      else
-        match compileSinglePattern ctx p with (ctx, pat, extra) in
-        (ctx, _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (pat) target], extra]) )
+  | PatSeqTot { pats = pats } -> compilePats ctx pats target true
   | PatSeqEdge  { prefix = prefix, middle = middle, postfix = postfix, ty = ty, info = info } ->
     let hasPrefix = not (null prefix) in
     let hasMiddle = match middle with PName _ then true else false in
@@ -125,7 +117,7 @@ lang PatJSCompile = PatJSCompileLang
     match (switch (hasPrefix, hasMiddle, hasPostfix)
       case (false, false, false) then (ctx, []) -- Should never happen
       case (true, false, false) then
-        match compileBindingPattern ctx target (PatSeqTot { pats = prefix }) with (ctx, prefixBinding) in
+        match compilePats ctx prefix target false with (ctx, prefixBinding) in
         (ctx, [prefixBinding])
       case (true, true, false) then
         (ctx, [_assign (JSEArray { exprs = concat prefixExprs [_unOp (JSOSpread {}) [middleExpr]] }) target])
@@ -182,5 +174,18 @@ lang PatJSCompile = PatJSCompileLang
       args = [JSEInt { i = 0 }, JSEInt { i = negi n }],
       curried = false
     })
+
+
+  sem compilePats : CompileJSContext -> [Pat] -> JSExpr -> Bool -> (CompileJSContext, JSExpr)
+  sem compilePats ctx pats target =
+  | checkExactInsteadOfAtLeast ->
+    if _isCharPatSeq pats then (ctx, _binOp (JSOEq {}) [target, JSEString { s = _charPatSeq2String pats }] )
+    else
+      let lengthCheck = compilePatsLen pats target checkExactInsteadOfAtLeast in
+      let allWildcards = forAll (lam p. match p with PatNamed { ident = PWildcard () } then true else false) pats in
+      if allWildcards then (ctx, lengthCheck)
+      else
+        match safeMapSinglePattern ctx pats with (ctx, elems, extra) in
+        (ctx, _binOpM (JSOAnd {}) (join [ [lengthCheck], [_assign (JSEArray { exprs = elems }) target], extra]) )
 
 end
