@@ -236,7 +236,7 @@ lang TypeCPS = CPS + TypeAst
   | TmType _ & e -> smap_Expr_Type (tyCps env) e
 end
 
-lang DataCPS = CPS + DataAst
+lang DataCPS = CPS + DataAst + AllTypeAst + FunTypeAst
   sem exprCps env k =
   | TmLet ({ body = TmConApp _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
@@ -246,8 +246,19 @@ lang DataCPS = CPS + DataAst
   -- We do not transform the top-level arrow type of the condef (due to
   -- the nested smap_Type_Type), as data values are constructed as usual even
   -- in CPS.
+  -- NOTE(dlunde,2022-07-13): We currently ignore TyAll wrapping the top-level
+  -- arrow type.
+  -- NOTE(dlunde,2022-07-13): Issues can arise here if the top-level arrow type
+  -- of a condef is a type variable that was defined earlier with TmType. It is
+  -- then CPS transformed.
   sem exprTyCps env =
-  | TmConDef _ & e -> smap_Expr_Type (smap_Type_Type (tyCps env)) e
+  | TmConDef t & e ->
+    recursive let rec = lam ty.
+      match ty with TyAll b then TyAll { b with ty = rec b.ty }
+      else match ty with TyArrow _ & t then smap_Type_Type (tyCps env) t
+      else errorSingle [t.info]
+        "Error in CPS: Problem with TmConDef in exprTyCps"
+    in smap_Expr_Type rec e
 end
 
 lang MatchCPS = CPS + MatchAst
