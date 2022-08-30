@@ -26,7 +26,7 @@ mexpr
     3
   else 4);
 
-  let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
+  (let u = [ [0, 1, 2], [3, 4, 5], [6, 7, 8] ] in
   match u with [ [hd] ++ tl ] ++ rest then
     dprintLn hd;
     dprintLn tl;
@@ -40,4 +40,6 @@ mexpr
     6
   else
     printLn "nothing";
-    7
+    7);
+
+  ()
