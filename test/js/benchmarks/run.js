@@ -1,9 +1,10 @@
 const { execSync } = require('child_process');
 const fs = require("fs");
 
-const ROOT = process.cwd().substring(0, process.cwd().indexOf("miking")) + "miking/";
-const BUILD = ROOT + "build/";
-const BENCH = ROOT + "test/js/benchmarks/";
+const ROOT = process.cwd().substring(0, process.cwd().indexOf("miking")) + "miking";
+const BUILD = `${ROOT}/build`;
+const BENCH = `${ROOT}/test/js/benchmarks`;
+const STDLIB = `cd ${ROOT}/stdlib; export MCORE_STDLIB=\`pwd\`; cd ${ROOT}`;
 
 function menu() {
   console.log(`Usage: run (options) [benchmark-name-no-extension] [iterations]
@@ -20,36 +21,56 @@ Example:
   process.exit(1);
 }
 
-function compile(benchmark, target) {
-  console.log(`Compiling benchmark '${benchmark}' target: ${target}...`);
-  try {
-    execSync(`cd ${ROOT}; cd stdlib; export MCORE_STDLIB=\`pwd\`; cd ..; ${BUILD}boot eval ${ROOT}src/main/mi.mc -- compile --test --disable-prune-utests --to-js --js-target ${target} ${BENCH}${benchmark}.mc`);
-  } catch (e) {
-    process.exit(1);
-  }
+function runCmd(cmd, printError = true, die = true) {
+    try {
+        execSync(cmd);
+        return true;
+    } catch (e) {
+        if (printError) console.log(e.message);
+        if (die) process.exit(1);
+        return false;
+    }
 }
 
-function optimize(benchmark) {
+
+function compileJS(benchmark, target) {
+  console.log(`Compiling JS benchmark '${benchmark}' target: ${target}...`);
+  runCmd(`${STDLIB}; ${BUILD}/boot eval ${ROOT}/src/main/mi.mc -- compile --test --disable-prune-utests --to-js --js-target ${target} ${BENCH}/${benchmark}.mc`);
+}
+
+function optimizeJS(benchmark) {
   console.log(`Optimizing benchmark '${benchmark}'...`);
-  try {
-    execSync(`java -jar closure-compiler.jar --js=${BENCH}${benchmark}.js --js_output_file=${BENCH}${benchmark}.opt.js --compilation_level=ADVANCED_OPTIMIZATIONS --env CUSTOM --warning_level QUIET --externs ${BENCH}externs.js`);
-  } catch (e) {
-    process.exit(1);
-  }
+  runCmd(`java -jar closure-compiler.jar --js=${BENCH}/${benchmark}.js --js_output_file=${BENCH}/${benchmark}.opt.js --compilation_level=ADVANCED_OPTIMIZATIONS --env CUSTOM --warning_level QUIET --externs ${BENCH}/externs.js`);
+}
+
+function sleep(time) {
+    return new Promise(resolve => setTimeout(resolve, time));
+}
+
+async function compileMiking(benchmark) {
+    console.log(`Compiling Miking benchmark '${benchmark}'...`);
+    runCmd(`${STDLIB}; ${BUILD}/mi compile ${BENCH}/${benchmark}.mc`);
+    await sleep(1000);
+    // Check if the binary exists
+    if (!fs.existsSync(`${BENCH}/${benchmark}`)) {
+        console.log(`Failed to compile ${benchmark}... Trying again...`);
+        runCmd(`${BUILD}/mi compile ${BENCH}/${benchmark}.mc`);
+        await sleep(1000);
+        if (!fs.existsSync(`${BENCH}/${benchmark}`)) {
+            console.log(`Failed to compile ${benchmark}...`);
+            process.exit(1);
+        }
+    }
 }
 
 function cleanup(benchmark) {
-  execSync(`rm ${BENCH}${benchmark}.js`);
+    runCmd(`rm ${BENCH}/${benchmark}`);
 }
 
 function run(title, cmd) {
   process.stdout.write(`- ${title.padEnd(20)}: `);
   const start = Date.now();
-  try { execSync(cmd + " > /dev/null 2>&1") }
-  catch(e) {
-    console.log(e.message);
-    return undefined;
-  }
+  if (!runCmd(cmd + " > /dev/null 2>&1", true, false)) return;
   const end = Date.now();
   const time = end - start;
   process.stdout.write(`${time}ms\n`);
@@ -99,25 +120,27 @@ function parse(args, availableOptions = []) {
   return [result, newArgs];
 }
 
-function main(args) {
+async function main(args) {
   const [options, newArgs] = parse(args, ["help", "no-compile", "no-clean"]);
   args = newArgs;
   if (args.length < 2 || options["help"]) menu();
   const benchmark = args[0];
   const iterations = parseInt(args[1]);
   console.log(`Running benchmark '${benchmark}' for ${iterations} iterations...`);
-  const mi   = run("Miking interpreter", `${BUILD}mi eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
-  const boot = run("Boot interpreter", `${BUILD}boot eval --test --disable-prune-utests ${BENCH}${benchmark}.mc -- ${iterations}`);
-  if (!options["no-compile"]) compile(benchmark, "node");
-  optimize(benchmark);
-  const nodeMan = run("Node (manual)", `node ${BENCH}${benchmark}.man.js ${iterations}`);
-  const nodeCmp = run("Node (compiled)", `node ${BENCH}${benchmark}.js ${iterations}`);
-  const nodeOpt = run("Node (compiled+opt)", `node ${BENCH}${benchmark}.opt.js ${iterations}`);
-  if (!options["no-compile"]) compile(benchmark, "bun");
-  optimize(benchmark);
-  const bunMan = run("Bun  (manual)", `bun run ${BENCH}${benchmark}.man.js ${iterations}`);
-  const bunCmp = run("Bun  (compiled)", `bun run ${BENCH}${benchmark}.js ${iterations}`);
-  const bunOpt = run("Bun  (compiled+opt)", `bun run ${BENCH}${benchmark}.opt.js ${iterations}`);
+  const mi   = run("Miking interpreter", `${BUILD}/mi eval --test --disable-prune-utests ${BENCH}/${benchmark}.mc -- ${iterations}`);
+  const boot = run("Boot interpreter", `${BUILD}/boot eval --test --disable-prune-utests ${BENCH}/${benchmark}.mc -- ${iterations}`);
+  if (!options["no-compile"]) await compileMiking(benchmark);
+  const ocml = run("Compiled OCaml ELF", `${BENCH}/${benchmark} ${iterations}`);
+  if (!options["no-compile"]) compileJS(benchmark, "node");
+  optimizeJS(benchmark);
+  const nodeMan = run("Node (manual)", `node ${BENCH}/${benchmark}.man.js ${iterations}`);
+  const nodeCmp = run("Node (compiled)", `node ${BENCH}/${benchmark}.js ${iterations}`);
+  const nodeOpt = run("Node (compiled+opt)", `node ${BENCH}/${benchmark}.opt.js ${iterations}`);
+  if (!options["no-compile"]) compileJS(benchmark, "bun");
+  optimizeJS(benchmark);
+  const bunMan = run("Bun  (manual)", `bun run ${BENCH}/${benchmark}.man.js ${iterations}`);
+  const bunCmp = run("Bun  (compiled)", `bun run ${BENCH}/${benchmark}.js ${iterations}`);
+  const bunOpt = run("Bun  (compiled+opt)", `bun run ${BENCH}/${benchmark}.opt.js ${iterations}`);
 
   // Compare results
   // const bootToNode = node / boot;
@@ -128,6 +151,9 @@ function main(args) {
   // console.log(`Node manual vs compiled: ${ManToCmp}x`, ManToCmp > 1 ? "faster" : "slower");
   // compare("Node manual vs compiled",  nodeMan, nodeCmp);
   console.log("Benchmark finished!");
+  compare("Miking interpreter", mi, "Boot interpreter", boot);
+  compare("Miking interpreter", mi, "Compiled OCaml ELF", ocml);
+  compare("Boot interpreter", boot, "Compiled OCaml ELF", ocml);
   compare("(Node) Compiled JS code", nodeCmp, "interpreted Miking code", mi);
   compare("(Node) Compiled JS code", nodeCmp, "interpreted Boot code", boot);
   compare("(Node) Compiled JS code", nodeCmp, "the manual JS implementation (Node)", nodeMan);
@@ -138,11 +164,12 @@ function main(args) {
   compare("(Bun)  Optimized compiled JS code", bunOpt, "the manual JS implementation (Bun)", bunMan);
 
   // Output data for gnuplot
-  const file = `${BENCH}${benchmark}_${iterations}.dat`;
+  const file = `${BENCH}/${benchmark}_${iterations}.dat`;
   console.log(`Writing gnuplot data to ${file}...`);
   fs.writeFileSync(file, `#Runtime "Time (ms)"
 "mi eval"         ${mi}
 "boot eval"       ${boot}
+"ocaml (compiled)" ${ocml}
 "node (manual)"   ${nodeMan}
 "node (compiled)" ${nodeCmp}
 "node (compiled+opt)" ${nodeOpt}
@@ -153,9 +180,11 @@ function main(args) {
 
   // Cleanup
   if (!options["no-clean"]) {
-    cleanup(benchmark);
-    cleanup(benchmark + ".opt");
+    cleanup(benchmark + ".js");
+    cleanup(benchmark + ".opt.js");
+    cleanup(benchmark)
   }
+  console.log();
 }
 
 if (require.main === module) {

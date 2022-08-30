@@ -1,7 +1,7 @@
 reset
 set title "Summary of benchmark results\nin logarithmic scale"
 set xlabel "Benchmark" offset 0,-1
-set ylabel "Time (ms)" rotate by 0 offset 10.5,17.5
+set ylabel "Time (ms)" rotate by 0 offset 10.5,17
 set logscale y
 set key under Left reverse
 
@@ -15,7 +15,7 @@ set grid ytics linestyle 0
 
 set boxwidth 0.85
 fnt = "Helvetica,8"
-bars = 8
+bars = 9
 
 START = 2
 END = bars+1
@@ -23,7 +23,7 @@ END = bars+1
 align(sh) = ($0 - 1 + sh * (bars / 12.))
 
 data = "summary.dat"
-set terminal png size 1000,600 font "Helvetica,11"
+set terminal png size 1100,600 font "Helvetica,11"
 set output "summary.png"
 
 # plot data u 2:xtic(1) t col, \
@@ -34,18 +34,19 @@ set output "summary.png"
 # 	 data u 7:xtic(1) t col, \
 
 plot for [COL=(START):(END)] data u COL:xtic(1) t col, \
-    data u (align(-0.575)):2:2 w labels font fnt offset 0,0.5 t '', \
-    data u (align(-0.4)):3:3 w labels font fnt offset 0,0.5 t '', \
-    data u (align(-0.23)):4:4 w labels font fnt offset 0,0.5 t '', \
-    data u (align(-0.07)):5:5 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.10)):6:6 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.25)):7:7 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.435)):8:8 w labels font fnt offset 0,0.5 t '', \
-    data u (align( 0.60)):9:9 w labels font fnt offset 0,0.5 t ''
+    data u (align(-0.53)):2:2       w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.4)):3:3        w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.265)):4:4      w labels font fnt offset 0,0.5 t '', \
+    data u (align(-0.13)):5:5       w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.01)):6:6       w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.138)):7:7      w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.265)):8:8      w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.4)):9:9        w labels font fnt offset 0,0.5 t '', \
+    data u (align( 0.535)):10:10    w labels font fnt offset 0,0.5 t ''
 
-set terminal svg size 900,650 font "Helvetica,20"
+set terminal svg size 1300,700 font "Helvetica,20"
 set output "summary.svg"
-fnt = "Helvetica,12"
-set ylabel "Time (ms)" rotate by 0 offset 10.5,6
+fnt = "Helvetica,10"
+set ylabel "Time (ms)" rotate by 0 offset 10.5,7
 set bmargin 9
 replot
