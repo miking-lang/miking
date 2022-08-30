@@ -398,7 +398,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | TmNever _ -> (ctx, intrinsicStrGen "never" [JSENop {}])
 
 
-  sem tryCompileOptimizedMatch : CompileJSContext -> Expr -> Pat -> Expr -> Expr -> Some (CompileJSContext, JSExpr)
+  sem tryCompileOptimizedMatch : CompileJSContext -> Expr -> Pat -> Expr -> Expr -> Option (CompileJSContext, JSExpr)
   sem tryCompileOptimizedMatch ctx target pat thn =
   | els ->
       let elsIsNever = (match els with TmNever _ then true else false) in
