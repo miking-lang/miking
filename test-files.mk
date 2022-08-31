@@ -32,7 +32,7 @@ python_files += $(wildcard test/py/*.mc)
 # being runned with the Miking compiler. All Miking test programs should have
 # the same output as the compiled JavaScript programs for all files.
 js_files += $(wildcard test/js/*.mc)
-js_web_files += $(wildcard test/js/web/*.mc)
+# js_web_files += $(wildcard test/js/web/*.mc) # Disabled until web FFI is implemented
 
 
 # Programs that we currently cannot typecheck. These are programs written
