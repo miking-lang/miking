@@ -92,9 +92,21 @@ let optionsConfig : ParseConfig Options = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with keepDeadCode = true}),
   ([("--to-js", "", "")],
-    "Compile to JavaScript",
+    "Compile a file to JavaScript",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with toJavaScript = true}),
+  ([("--js-target", " ", "[web|node|=generic]")],
+    "Specific JavaScript runtime to target, defaults to generic",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with jsTarget = argToString p}),
+  ([("--js-disable-optimizations", "", "")],
+    "Disable JavaScript general optimizations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableJsGeneralOptimizations = true}),
+  ([("--js-disable-tco", "", "")],
+    "Disable JavaScript tail-call optimizations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableJsTCO = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

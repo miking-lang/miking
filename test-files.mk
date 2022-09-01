@@ -27,6 +27,14 @@ python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
 
+# Test programs for the JavaScript backend. These should be compiled with mi
+# and runned with node.js, the result being compared to the original program
+# being runned with the Miking compiler. All Miking test programs should have
+# the same output as the compiled JavaScript programs for all files.
+js_files += $(wildcard test/js/*.mc)
+# js_web_files += $(wildcard test/js/web/*.mc) # Disabled until web FFI is implemented
+
+
 # Programs that we currently cannot typecheck. These are programs written
 # before the typechecker was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
