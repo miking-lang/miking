@@ -68,7 +68,7 @@ let categoricalSample : [Float] -> Int =
 external externalDirichletLogPdf : [Float] -> [Float] -> Float
 external externalDirichletSample : [Float] -> [Float]
 let dirichletLogPdf : [Float] -> [Float] -> Float =
-  lam alpha. lam xs. externalDirichletLogPdf xs alpha
+  lam alpha. lam xs. if eqfApprox 1e-15 (foldl (lam sum. lam e. addf e sum) 0. xs) 1. then externalDirichletLogPdf xs alpha else negf inf
 let dirichletPdf : [Float] -> [Float] -> Float =
   lam alpha. lam xs. exp (externalDirichletLogPdf xs alpha)
 let dirichletSample : [Float] -> [Float] =
