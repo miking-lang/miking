@@ -10,6 +10,7 @@ include "name.mc"
 include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/call-graph.mc"
+include "mexpr/type-check.mc"
 
 lang MExprExtract = MExprAst + MExprCallGraph
   sem extractAst : Set Name -> Expr -> Expr
@@ -121,3 +122,118 @@ lang MExprExtract = MExprAst + MExprCallGraph
   | PName id -> if setMem id bound then used else setInsert id used
   | PWildcard _ -> used
 end
+
+lang TestLang =
+  MExprExtract + MExprEq + MExprSym + MExprTypeCheck 
+end
+
+mexpr
+
+use TestLang in
+
+let preprocess = lam t. typeCheck (symbolize t) in
+let setOfSeq = lam ids. setOfSeq nameCmp ids in
+
+let f = nameSym "f" in
+let g = nameSym "g" in
+let h = nameSym "h" in
+let tmp = nameSym "tmp" in
+let t = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ g (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
+  nulet_ h (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
+  nulet_ tmp (app_ (nvar_ h) (int_ 2)),
+  nvar_ tmp
+]) in
+let extractF = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [f]) t with extractF using eqExpr in
+
+let extractG = preprocess (bindall_ [
+  nulet_ g (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [g]) t with extractG using eqExpr in
+
+let extractTmp = preprocess (bindall_ [
+  nulet_ h (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
+  nulet_ tmp (app_ (nvar_ h) (int_ 2)),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [tmp]) t with extractTmp using eqExpr in
+
+let t = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ g (ulam_ "x" (muli_ (app_ (nvar_ f) (var_ "x")) (int_ 2))),
+  nulet_ h (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
+  nulet_ tmp (app_ (nvar_ g) (int_ 4)),
+  nvar_ tmp
+]) in
+
+let extracted = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ g (ulam_ "x" (muli_ (app_ (nvar_ f) (var_ "x")) (int_ 2))),
+  nulet_ tmp (app_ (nvar_ g) (int_ 4)),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [tmp]) t with extracted using eqExpr in
+
+let t1 = nameSym "t" in
+let t2 = nameSym "t" in
+let distinctCalls = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
+  nulet_ g (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ t1 (app_ (nvar_ f) (int_ 1)),
+  nulet_ t2 (app_ (nvar_ g) (int_ 0)),
+  addi_ (nvar_ t1) (nvar_ t2)
+]) in
+let extracted = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
+  nulet_ g (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ t1 (app_ (nvar_ f) (int_ 1)),
+  nulet_ t2 (app_ (nvar_ g) (int_ 0)),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [t1, t2]) distinctCalls with extracted using eqExpr in
+
+let inRecursiveBinding = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
+  nureclets_ [
+    (g, ulam_ "x" (app_ (nvar_ f) (addi_ (var_ "x") (int_ 1)))),
+    (h, ulam_ "x" (app_ (nvar_ t1) (var_ "x"))),
+    (t1, ulam_ "x" (app_ (nvar_ g) (var_ "x")))
+  ],
+  app_ (var_ "h") (int_ 3)
+]) in
+let extracted = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
+  nureclets_ [
+    (g, ulam_ "x" (app_ (nvar_ f) (addi_ (var_ "x") (int_ 1)))),
+    (t1, ulam_ "x" (app_ (nvar_ g) (var_ "x")))],
+  int_ 0
+]) in
+utest extractAst (setOfSeq [t1]) inRecursiveBinding with extracted using eqExpr in
+
+-- Tests that a binding that is used by multiple extracted bindings is only
+-- included once in the extracted AST.
+let multipleDependOnSame = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ t1 (ulam_ "x" (ulam_ "y" (
+    addi_ (var_ "x") (app_ (nvar_ f) (var_ "y"))))),
+  nulet_ t2 (ulam_ "x" (ulam_ "y" (
+    muli_ (var_ "x") (app_ (nvar_ f) (var_ "y"))))),
+  addi_ (appf2_ (nvar_ t1) (int_ 0) (int_ 1)) (appf2_ (nvar_ t2) (int_ 3) (int_ 4))
+]) in
+let extracted = preprocess (bindall_ [
+  nulet_ f (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  nulet_ t1 (ulam_ "x" (ulam_ "y" (
+    addi_ (var_ "x") (app_ (nvar_ f) (var_ "y"))))),
+  nulet_ t2 (ulam_ "x" (ulam_ "y" (
+    muli_ (var_ "x") (app_ (nvar_ f) (var_ "y"))))),
+  int_ 0
+]) in
+utest extractAst (setOfSeq [t1, t2]) multipleDependOnSame with extracted using eqExpr in
+
+()
