@@ -474,13 +474,11 @@ let seqCmp : all a. (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam 
       let c = cmp h1 h2 in
       if eqi c 0 then work t1 t2
       else c
+    else match (s1, s2) with (t1, []) then length t1
+    else match (s1, s2) with ([], t2) then negi (length t2)
     else 0
   in
-  let n1 = length s1 in
-  let n2 = length s2 in
-  let ndiff = subi n1 n2 in
-  if eqi ndiff 0 then work s1 s2
-  else ndiff
+  work s1 s2
 
 utest seqCmp subi [] [] with 0
 utest seqCmp subi [1,2,3] [1,2,3] with 0
