@@ -586,16 +586,13 @@ let _getAllowedGroupings
     end
 
 -- NOTE(vipa, 2021-02-15): This should be a private type, and/or replaced with some standard library type at a later point in time
-type BreakableQueue self = {values : [Ref [TentativeNode self ROpen]], highestIndex : Ref Int}
-let _newQueueFromFrontier
-  : all self. all rstyle. [TentativeNode self rstyle]
-  -> BreakableQueue self
-  = lam frontier.
+type BreakableQueue self = {values : Ref [Ref [TentativeNode self ROpen]], highestIndex : Ref Int, lowestIndex : Ref Int}
+let _newQueue
+  : all self. all rstyle. () -> BreakableQueue self
+  = lam.
     { highestIndex = ref 0
-    , values =
-      create
-        (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
-        (lam. ref [])
+    , lowestIndex = ref 10
+    , values = ref (create 10 (lam. ref []))
     }
 let _addToQueue
   : all self. TentativeNode self ROpen
@@ -603,30 +600,46 @@ let _addToQueue
   -> ()
   = lam node. lam queue.
     let dist = _maxDistanceFromRoot node in
-    let target = get queue.values dist in
+    (if leqi (length (deref queue.values)) dist then
+       let target = addi (addi dist 1) (divi dist 3) in
+       let len = length (deref queue.values) in
+       (if eqi (deref queue.lowestIndex) len then
+          modref queue.lowestIndex target
+        else ());
+       modref queue.values (concat (deref queue.values) (create (subi target len) (lam. ref [])))
+     else ());
+    let target = get (deref queue.values) dist in
     (if lti (deref queue.highestIndex) dist
      then modref queue.highestIndex dist
+     else ());
+    (if gti (deref queue.lowestIndex) dist
+     then modref queue.lowestIndex dist
      else ());
     modref target (snoc (deref target) node)
 let _popFromQueue
   : all self. BreakableQueue self
   -> Option (TentativeNode self ROpen)
   = lam queue.
-    let values = (splitAt queue.values (addi (deref queue.highestIndex) 1)).0 in
+    let lowest = deref queue.lowestIndex in
+    let highest = deref queue.highestIndex in
+    let values = if leqi (addi 1 (subi highest lowest)) 0
+      then []
+      else subsequence (deref queue.values) lowest (addi 1 (subi highest lowest)) in
     recursive let work = lam values.
       match values with values ++ [target] then
         let nodes = deref target in
         match nodes with [node] ++ nodes then
           modref target nodes;
-          modref queue.highestIndex (length values);
+          modref queue.highestIndex (addi lowest (length values));
           Some node
         else work values
-      else modref queue.highestIndex 0; None ()
+      else
+        modref queue.highestIndex 0;
+        modref queue.lowestIndex (length (deref queue.values));
+        None ()
     in work values
+let _cachedQueue = _newQueue ()
 
--- NOTE(vipa, 2021-02-12): The type signatures in this function assume
--- that type variables are scoped, e.g., `rstyle` on `makeNewParents`
--- is the same `rstyle` as the one in the top-level type-signature
 let _addLOpen
   : all self. all rstyle. Config self
   -> LOpenSelf self rstyle
@@ -729,9 +742,8 @@ let _addLOpen
     --   maxDistanceFromRoot (pop longest distance first). It's empty
     --   from the start (the frontier is only used to find the highest
     --   possible distance).
-    let queue = _newQueueFromFrontier frontier in
-    let newParents = mapOption (handleLeaf queue) frontier in
-    let newParents = work queue newParents in
+    let newParents = mapOption (handleLeaf _cachedQueue) frontier in
+    let newParents = work _cachedQueue newParents in
     match map makeNewParents newParents with frontier & ([_] ++ _) then
       -- NOTE(vipa, 2022-05-05): The typechecker currently requires
       -- that {x with foo = ...} does not change the type of `foo`,
@@ -856,9 +868,8 @@ let breakableFinalizeParse
     in
 
     let frontier = st.frontier in
-    let queue = _newQueueFromFrontier frontier in
-    iter (handleLeaf queue) frontier;
-    match work queue with res & [_] ++ _ then Some res else None ()
+    iter (handleLeaf _cachedQueue) frontier;
+    match work _cachedQueue with res & [_] ++ _ then Some res else None ()
 
 type Ambiguity pos tokish = {range: {first: pos, last: pos}, partialResolutions: [[tokish]]}
 
