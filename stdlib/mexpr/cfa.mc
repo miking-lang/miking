@@ -882,7 +882,7 @@ lang ExtCFA = CFA + ExtAst
   sem collectConstraints cgfs acc =
   | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } & t ->
     let acc = foldl (lam acc. lam f. concat (f t) acc) acc cgfs in
-    sfold_Expr_Expr (collectConstraints cgfs) acc inexpr
+    collectConstraints cgfs acc inexpr
 
   sem generateConstraints im =
   | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
@@ -894,7 +894,8 @@ lang ExtCFA = CFA + ExtAst
     []
 
   sem exprName =
-  | TmExt t -> exprName t.inexpr
+  -- Skip the eta expanded let added by ANF,
+  | TmExt { inexpr = TmLet { inexpr = inexpr }} -> exprName inexpr
 
 end
 
@@ -2633,7 +2634,7 @@ lang ExtKCFA = KCFA + ExtAst
         match f ctx env t with (env, fcstrs) in
         (env, concat fcstrs cstrs)
       ) acc cgfs in
-    sfold_Expr_Expr (collectConstraints ctx cgfs) acc inexpr
+    collectConstraints ctx cgfs acc inexpr
 
   sem generateConstraints im ctx env =
   | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
@@ -2645,7 +2646,8 @@ lang ExtKCFA = KCFA + ExtAst
     (env,[])
 
   sem exprName =
-  | TmExt t -> exprName t.inexpr
+  -- Skip the eta expanded let added by ANF,
+  | TmExt { inexpr = TmLet { inexpr = inexpr }} -> exprName inexpr
 
 end
 

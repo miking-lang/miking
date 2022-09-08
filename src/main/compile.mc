@@ -19,6 +19,7 @@ include "ocaml/mcore.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/wrap-in-try-with.mc"
 include "javascript/compile.mc"
+include "javascript/mcore.mc"
 include "pmexpr/demote.mc"
 
 lang MCoreCompile =
@@ -91,9 +92,13 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = use MExprLowerNestedPatterns in lowerAll ast in
     (if options.debugShallow then
       printLn (pprintMcore ast) else ());
-
-    if options.toJavaScript then
-      javascriptCompileFile ast sourcePath
+      
+    if options.toJavaScript then compileMCoreToJS {
+        compileJSOptionsEmpty with
+        targetPlatform = parseJSTarget options.jsTarget,
+        generalOptimizations = not options.disableJsGeneralOptimizations,
+        tailCallOptimizations = not options.disableJsTCO
+      } ast sourcePath
     else compileMCore ast
       { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()

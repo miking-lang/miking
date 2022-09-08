@@ -25,6 +25,9 @@ type Options = {
   keepDeadCode : Bool,
   printHelp : Bool,
   toJavaScript : Bool,
+  jsTarget : String,
+  disableJsGeneralOptimizations : Bool,
+  disableJsTCO : Bool,
   output : Option String,
   tuneOptions : TuneOptions
 }

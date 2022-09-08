@@ -27,7 +27,10 @@ let optionsDefault : Options = {
   use32BitFloats = false,
   keepDeadCode = false,
   printHelp = false,
-  toJavaScript = false, -- Compile MExpr to JavaScript
+  toJavaScript = false,
+  jsTarget = "generic",
+  disableJsGeneralOptimizations = false,
+  disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault
 }

@@ -86,6 +86,7 @@ test-all:\
   test-boot-all\
   test-compile\
   test-run\
+  test-js\
 	test-tune
 	@./make lint
 
@@ -157,3 +158,6 @@ test-ipopt: build
 
 test-accelerate: build
 	@$(MAKE) -s -f test-accelerate.mk
+
+test-js: install-boot
+	@$(MAKE) -s -f test-js.mk

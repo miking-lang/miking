@@ -1,0 +1,9 @@
+*.js
+!*.man.js
+!benchmarkcommon.js
+!run.js
+!summarize_data.js
+*.dat
+!/plots/*.dat
+!externs.js
+closure-compiler*.jar
