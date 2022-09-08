@@ -86,7 +86,7 @@ utest
   with true
 utest
   -- Shortlex example
-  match lti (cmpString "aab" "aaaa") 0 with true then true else false
+  match gti (cmpString "aab" "aaaa") 0 with true then true else false
   with true
 
 let str2upper = lam s. map char2upper s

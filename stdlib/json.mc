@@ -395,7 +395,7 @@ utest jsonParse "{\"mylist\" : [{},2,3e-2], \"mystr\" : \n\"foo\", \"mybool\" :\
 with Left myJsonObject using eitherEq jsonEq eqString in
 
 utest json2string myJsonObject
-with "{\"mystr\":\"foo\",\"mybool\":true,\"mylist\":[{},2,0.03],\"mynull\":null}" in
+with "{\"mybool\":true,\"mylist\":[{},2,0.03],\"mynull\":null,\"mystr\":\"foo\"}" in
 
 utest jsonParse (json2string myJsonObject) with Left myJsonObject using eitherEq jsonEq eqString in
 
