@@ -75,15 +75,17 @@ with [true, false]
 let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
   lam timeoutSec. lam cmd. lam stdin. lam cwd.
     let tempDir = sysTempDirMake () in
+    let tempStdin = sysJoinPath tempDir "stdin.txt" in
+    writeFile tempStdin stdin;
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
     let tempStderr = sysJoinPath tempDir "stderr.txt" in
 
     let fullCmd =
     [ "cd", cwd, ";"
-    , "echo", stdin, "|"
     , strJoin " " cmd
     , ">", tempStdout
     , "2>", tempStderr
+    , "<", tempStdin
     , ";"
     ] in
     let fullCmd =
