@@ -84,6 +84,11 @@ lang MExprEliminateDuplicateCode = MExprAst
       env t.ident t.info t.inexpr
       (lam env. TmConDef {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
                                  inexpr = eliminateDuplicateCodeExpr env t.inexpr})
+  | TmExt t ->
+    lookupDefinition
+      env t.ident t.info t.inexpr
+      (lam env. TmExt {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
+                              inexpr = eliminateDuplicateCodeExpr env t.inexpr})
   | TmRecLets t ->
     let eliminateDuplicateBinding = lam env. lam binding.
       let defn = (binding.info, nameGetStr binding.ident) in
@@ -212,5 +217,9 @@ let expected = symbolize (bindall_ [
   addi_ (app_ (var_ "b") (int_ 3)) (app_ (var_ "c") (int_ 1))]) in
 
 utest eliminateDuplicateCode t with expected using eqExpr in
+
+let sinExt = withInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
+let t = bind_ sinExt sinExt in
+utest eliminateDuplicateCode t with sinExt using eqExpr in
 
 ()
