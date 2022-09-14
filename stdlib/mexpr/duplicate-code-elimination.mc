@@ -69,6 +69,11 @@ lang MExprEliminateDuplicateCode = MExprAst
     TmVar {t with ident = lookupReplacement env t.ident}
   | TmConApp t ->
     TmConApp {t with ident = lookupReplacement env t.ident}
+  | TmMatch t ->
+    TmMatch {t with target = eliminateDuplicateCodeExpr env t.target,
+                    pat = eliminateDuplicateCodePat env t.pat,
+                    thn = eliminateDuplicateCodeExpr env t.thn,
+                    els = eliminateDuplicateCodeExpr env t.els}
   | TmLet t ->
     lookupDefinition
       env t.ident t.info t.inexpr
@@ -123,6 +128,13 @@ lang MExprEliminateDuplicateCode = MExprAst
       TyVar {t with ident = newId}
     else TyVar t
   | ty -> smap_Type_Type (eliminateDuplicateCodeType env) ty
+
+  sem eliminateDuplicateCodePat : DuplicateCodeEnv -> Pat -> Pat
+  sem eliminateDuplicateCodePat env =
+  | PatCon t ->
+    PatCon {t with ident = lookupReplacement env t.ident,
+                   subpat = eliminateDuplicateCodePat env t.subpat}
+  | p -> smap_Pat_Pat (eliminateDuplicateCodePat env) p
 end
 
 lang TestLang = MExprEliminateDuplicateCode + MExprEq + MExprSym
@@ -136,6 +148,7 @@ use MExprPrettyPrint in
 let i = lam idx.
   Info {filename = "dummy.txt", row1 = idx, col1 = 0, row2 = idx, col2 = 0} in
 
+-- Tests that it works for expressions
 let fooDef = 
   withInfo (i 0) (ulet_ "foo" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
 let t1 = bindall_ [
@@ -155,6 +168,7 @@ let expected = bindall_ [
 ] in
 utest eliminateDuplicateCode t with expected using eqExpr in
 
+-- Tests that it works for types
 let optionDef = bindall_ [
   withInfo (i 1) (type_ "Option" tyunknown_),
   withInfo (i 2) (condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))),
@@ -168,7 +182,7 @@ let fDef =
 let included = bind_ optionDef fDef in
 let t1 = withInfo (i 5) (ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
 let t2 = bind_
-  (withInfo (i 6) (ulet_ "x" ((conapp_ "Some") (int_ 3))))
+  (withInfo (i 6) (ulet_ "x" ((conapp_ "Some" (int_ 3)))))
   (app_ (var_ "f") (var_ "x")) in
 let t = bind_
   (symbolize (bind_ included t1))
@@ -185,12 +199,13 @@ let expected = symbolize (bindall_ [
   optionDef,
   f,
   t1,
-  ulet_ "x" ((conapp_ "Some") (int_ 3)),
+  ulet_ "x" ((conapp_ "Some" (int_ 3))),
   app_ (nvar_ fId) (var_ "x")]) in
 -- NOTE(larshum, 2022-09-13): Compare pretty-printed strings as expression
 -- equality is not yet implemented for TmType.
 utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
 
+-- Tests that it applies to bindings in recursive let-expressions
 let ireclets = lam bindings.
   let bindFn = lam idx. lam entry : (String, Expr).
     {ident = nameNoSym entry.0, tyBody = tyunknown_, body = entry.1, info = i idx} in
@@ -218,8 +233,22 @@ let expected = symbolize (bindall_ [
 
 utest eliminateDuplicateCode t with expected using eqExpr in
 
+-- Tests that it works for external identifiers
 let sinExt = withInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
 let t = bind_ sinExt sinExt in
 utest eliminateDuplicateCode t with sinExt using eqExpr in
+
+-- Tests that it works for patterns
+let t1 = withInfo (i 4) (ulet_ "x" (conapp_ "Some" (int_ 2))) in
+let t2 = bind_
+  (ulet_ "o" (conapp_ "Some" (int_ 4)))
+  (match_ (var_ "o") (pcon_ "Some" (pvar_ "x"))
+    (var_ "x") never_) in
+let t = bind_
+  (symbolize (bind_ optionDef t1))
+  (symbolize (bind_ optionDef t2)) in
+let expected = symbolize (bindall_ [optionDef, t1, t2]) in
+
+utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
 
 ()
