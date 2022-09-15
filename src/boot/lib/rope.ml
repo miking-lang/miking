@@ -48,16 +48,6 @@ let rec _get_array (s : 'a u) (i : int) : 'a =
 let get_array (s : 'a t) (i : int) : 'a = _get_array !s i
 
 let _collapse_array (s : 'a t) : 'a array =
-  let rec collapse dst s i =
-    match s with
-    | Leaf a ->
-        let n = Array.length a in
-        Array.blit a 0 dst i n ; i + n
-    | Slice {v; off; len} ->
-        Array.blit v off dst i len ; i + len
-    | Concat {lhs; rhs; _} ->
-        collapse dst rhs (collapse dst lhs i)
-  in
   match !s with
   | Leaf a ->
       a
@@ -65,11 +55,31 @@ let _collapse_array (s : 'a t) : 'a array =
       let a = Array.sub v off len in
       s := Leaf a ;
       a
-  | Concat {len; _} ->
+  | Concat {lhs; rhs; len;} ->
       (* NOTE(larshum, 2021-02-12): the implementation guarantees that Concat
        * nodes are non-empty. *)
       let dst = Array.make len (get_array s 0) in
-      let _ = collapse dst !s 0 in
+
+      (* Collapse the rope using an explicit stack to avoid stack overflow. *)
+      let st = Stack.create () in
+      let i = ref 0 in
+      Stack.push rhs st;
+      Stack.push lhs st;
+      while Stack.length st > 0 do
+        let s = Stack.pop st in
+        match s with
+        | Leaf a ->
+            let n = Array.length a in
+            Array.blit a 0 dst !i n ;
+            i := !i + n
+        | Slice {v; off; len} ->
+            Array.blit v off dst !i len ;
+            i := !i + len
+        | Concat {lhs; rhs; _} ->
+            Stack.push rhs st;
+            Stack.push lhs st
+      done;
+
       s := Leaf dst ;
       dst
 
