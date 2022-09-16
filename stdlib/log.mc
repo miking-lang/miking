@@ -30,10 +30,10 @@ let _logLevelToString = lam lvl : LogLevel.
 let logSetLogLevel = lam lvl : LogLevel. modref _logLevel lvl
 
 -- `log lvl msg` logs the message `msg` at the log level `lvl`.
-let logMsg = lam lvl : LogLevel. lam msg : String.
+let logMsg = lam lvl : LogLevel. lam msg : () -> String.
   if eqi lvl logLevel.off then ()
   else if leqi lvl (deref _logLevel) then
-    printError (join ["LOG ", _logLevelToString lvl, ":\t", msg, "\n"]);
+    printError (join ["LOG ", _logLevelToString lvl, ":\t", msg (), "\n"]);
     flushStderr ()
   else ()
 
