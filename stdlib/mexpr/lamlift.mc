@@ -183,8 +183,21 @@ lang LambdaLiftFindFreeVariables =
 end
 
 lang LambdaLiftInsertFreeVariables = MExprAst
-  sem insertFreeVariablesH (solutions : Map Name (Map Name Type))
-                           (subMap : Map Name (Info -> Expr)) =
+  sem updateBindingType : [(Name, Type)] -> Type -> Type
+  sem updateBindingType fv =
+  | TyAll t -> TyAll {t with ty = updateBindingType fv t.ty}
+  | ty -> updateBindingTypeH ty (reverse fv)
+
+  sem updateBindingTypeH : Type -> [(Name, Type)] -> Type
+  sem updateBindingTypeH tyAcc =
+  | [(_, ty)] ++ next ->
+    let tyAcc = TyArrow {from = ty, to = tyAcc, info = infoTy ty} in
+    updateBindingTypeH tyAcc next
+  | [] -> tyAcc
+
+  sem insertFreeVariablesH : Map Name (Map Name Type) -> Map Name (Info -> Expr)
+                          -> Expr -> (Map Name (Info -> Expr), Expr)
+  sem insertFreeVariablesH solutions subMap =
   | TmVar t ->
     match mapLookup t.ident subMap with Some subExpr then
       (subMap, subExpr t.info)
@@ -202,7 +215,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                                  info = info}})
           t.body
           fv in
-      let tyBody = tyTm body in
+      let tyBody = updateBindingType fv t.tyBody in
       let subExpr = lam info.
         foldr
           (lam freeVar : (Name, Type). lam acc.
@@ -218,20 +231,17 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       match insertFreeVariablesH solutions subMap body with (subMap, body) in
       let subMap = mapInsert t.ident subExpr subMap in
       match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-        (subMap, TmLet {{{t with tyBody = tyBody}
-                            with body = body}
-                            with inexpr = inexpr})
+      (subMap, TmLet {{{t with tyBody = tyBody}
+                          with body = body}
+                          with inexpr = inexpr})
     else errorSingle [t.info] (join ["Found no free variable solution for ",
                                      nameGetStr t.ident])
   | TmRecLets t ->
     let addBindingSubExpression =
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
       match mapLookup bind.ident solutions with Some freeVars then
-        let bindType =
-          foldr
-            (lam freeVar : (Name, Type). lam accType : Type.
-              TyArrow {from = freeVar.1, to = accType, info = infoTy accType})
-            bind.tyBody (mapBindings freeVars) in
+        let fv = mapBindings freeVars in
+        let bindType = updateBindingType fv bind.tyBody in
         let subExpr = lam info.
           foldr
             (lam freeVar : (Name, Type). lam acc.
@@ -262,16 +272,16 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                      ty = TyArrow {from = freeVar.1, to = tyTm body,
                                    info = info}})
             bind.body fv in
-        let tyBody = tyTm body in
+        let tyBody = updateBindingType fv bind.tyBody in
         match insertFreeVariablesH solutions subMap body with (subMap, body) in
-        (subMap, {{bind with tyBody = tyBody} with body = body})
+        (subMap, {bind with tyBody = tyBody, body = body})
       else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
                                           nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
     match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in
     match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-    (subMap, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+    (subMap, TmRecLets {t with bindings = bindings, inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
@@ -429,6 +439,10 @@ lang LambdaLiftAddTyAlls = MExprAst
 
   sem collectFreeTyVarsH : (TyVarMap, TyVars) -> Type -> (TyVarMap, TyVars)
   sem collectFreeTyVarsH acc =
+  | TyAll t ->
+    match acc with (bound, free) in
+    let acc = (mapInsert t.ident t.ident bound, free) in
+    collectFreeTyVarsH acc t.ty
   | TyVar t ->
     match acc with (bound, free) in
     if mapMem t.ident bound then (bound, free)
