@@ -38,6 +38,7 @@ include "boot-parser.mc"
 include "eq.mc"
 include "anf.mc"
 include "const-arity.mc"
+include "const-types.mc"
 
 type CPSEnv = {
 
@@ -204,14 +205,23 @@ let wrapDirect = use MExprAst in
       ) inner varNames
 
 lang ConstCPS = CPS + ConstAst + MExprArity
+  sem tyConst: Const -> Type
+
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmConst { val = c } & body} & t) ->
     if not (transform env ident) then
       TmLet { t with inexpr = exprCps env k t.inexpr }
     else
-      -- Constants are not in CPS, so we must wrap them in CPS lambdas
-      let body = wrapDirect (constArity c) body in
-      TmLet { t with body = body, inexpr = exprCps env k t.inexpr }
+      if isHigherOrderFunType (tyConst c) then
+        -- TODO(dlunde,2022-09-19): Add support for higher-order constant
+        -- functions. Not sure how though, as constant functions are opaque
+        -- (i.e., we cannot force them to accept CPS functions as argument)
+        errorSingle [infoTm body]
+          "Higher-order constant functions not yet supported in CPS transformation"
+      else
+        -- Constants are not in CPS, so we must wrap them in CPS lambdas
+        let body = wrapDirect (constArity c) body in
+        TmLet { t with body = body, inexpr = exprCps env k t.inexpr }
 end
 
 -- Thanks to ANF, we don't need to do anything at all when constructing data
@@ -360,7 +370,9 @@ lang MExprCPS =
   CPS + VarCPS + AppCPS + LamCPS + LetCPS + RecLetsCPS + ConstCPS + SeqCPS +
   RecordCPS + TypeCPS + DataCPS + MatchCPS + UtestCPS + NeverCPS + ExtCPS +
 
-  FunTypeCPS
+  FunTypeCPS +
+
+  MExprConstType
 end
 
 -----------
