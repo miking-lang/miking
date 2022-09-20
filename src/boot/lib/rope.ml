@@ -55,16 +55,15 @@ let _collapse_array (s : 'a t) : 'a array =
       let a = Array.sub v off len in
       s := Leaf a ;
       a
-  | Concat {lhs; rhs; len;} ->
+  | Concat {lhs; rhs; len} ->
       (* NOTE(larshum, 2021-02-12): the implementation guarantees that Concat
        * nodes are non-empty. *)
       let dst = Array.make len (get_array s 0) in
-
       (* Collapse the rope using an explicit stack to avoid stack overflow. *)
       let st = Stack.create () in
       let i = ref 0 in
-      Stack.push rhs st;
-      Stack.push lhs st;
+      Stack.push rhs st ;
+      Stack.push lhs st ;
       while Stack.length st > 0 do
         let s = Stack.pop st in
         match s with
@@ -76,10 +75,8 @@ let _collapse_array (s : 'a t) : 'a array =
             Array.blit v off dst !i len ;
             i := !i + len
         | Concat {lhs; rhs; _} ->
-            Stack.push rhs st;
-            Stack.push lhs st
-      done;
-
+            Stack.push rhs st ; Stack.push lhs st
+      done ;
       s := Leaf dst ;
       dst
 

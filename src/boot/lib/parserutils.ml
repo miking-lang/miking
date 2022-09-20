@@ -240,21 +240,24 @@ let rec merge_includes root visited = function
   | Program (includes, tops, tm) ->
       let rec parse_include root = function
         | Include (info, path) as inc ->
-            let filename =
-              Filename.concat root (Ustring.to_utf8 path)
-              |> Utils.normalize_path
-            in
+            let path = Ustring.to_utf8 path in
+            let filename = Filename.concat root path |> Utils.normalize_path in
             let file_stdloc =
-              Filename.concat stdlib_loc (Ustring.to_utf8 path)
-              |> Utils.normalize_path
+              if Filename.is_implicit path then
+                Some (Filename.concat stdlib_loc path |> Utils.normalize_path)
+              else None
             in
             if List.mem filename visited then
               raise_error info ("Cycle detected in included files: " ^ filename)
             else if List.mem filename !parsed_files then None
             else if
               Sys.file_exists filename
-              && Sys.file_exists file_stdloc
-              && file_stdloc <> filename
+              &&
+              match file_stdloc with
+              | Some file_stdloc ->
+                  Sys.file_exists file_stdloc && file_stdloc <> filename
+              | _ ->
+                  false
             then
               raise_error info
                 ( "File exists both locally and in standard library: "
@@ -265,8 +268,15 @@ let rec merge_includes root visited = function
                    (Filename.dirname filename)
                    (filename :: visited)
               |> Option.some
-            else if root != stdlib_loc && Sys.file_exists file_stdloc then
-              parse_include stdlib_loc inc
+            else if
+              root != stdlib_loc
+              &&
+              match file_stdloc with
+              | Some file_stdloc ->
+                  Sys.file_exists file_stdloc
+              | _ ->
+                  false
+            then parse_include stdlib_loc inc
             else raise_error info ("No such file: \"" ^ filename ^ "\"")
       in
       let included = includes |> List.filter_map (parse_include root) in
