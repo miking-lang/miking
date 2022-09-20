@@ -610,7 +610,7 @@ let nrecordproj_ = use MExprAst in
 
 let recordproj_ = use MExprAst in
   lam key. lam r.
-  nrecordproj_ (nameNoSym "x") key r
+  nrecordproj_ (nameSym "x") key r
 
 let ntupleproj_ = use MExprAst in
   lam name. lam i. lam t.

@@ -6,16 +6,16 @@ include "map.mc"
 include "name.mc"
 include "set.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/call-graph.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
+include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
-lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
+lang PMExprExtractAccelerate = PMExprAst + MExprExtract
   syn CopyStatus =
   | CopyBoth ()
   | CopyToAccelerate ()
@@ -133,125 +133,11 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
-  sem _collectPatNamed (bound : Set Name) (used : Set Name) =
-  | PName id -> if setMem id bound then used else setInsert id used
-  | PWildcard _ -> used
-
-  sem collectIdentifiersPat (boundUsed : (Set Name, Set Name)) =
-  | PatNamed t ->
-    match boundUsed with (bound, used) in
-    (bound, _collectPatNamed bound used t.ident)
-  | PatSeqEdge t ->
-    match foldl collectIdentifiersPat boundUsed t.prefix with (bound, used) in
-    let used = _collectPatNamed bound used t.middle in
-    foldl collectIdentifiersPat (bound, used) t.postfix
-  | PatCon t ->
-    match boundUsed with (bound, used) in
-    let used =
-      if setMem t.ident bound then used
-      else setInsert t.ident used in
-    collectIdentifiersPat (bound, used) t.subpat
-  | p -> sfold_Pat_Pat collectIdentifiersPat boundUsed p
-
-  sem collectIdentifiersExprH (bound : Set Name) (used : Set Name) =
-  | TmVar t ->
-    if setMem t.ident bound then used
-    else setInsert t.ident used
-  | TmLam t ->
-    let bound = setInsert t.ident bound in
-    collectIdentifiersExprH bound used t.body
-  | TmMatch t ->
-    let used = collectIdentifiersExprH bound used t.target in
-    match collectIdentifiersPat (bound, used) t.pat with (bound, used) in
-    let used = collectIdentifiersExprH bound used t.thn in
-    collectIdentifiersExprH bound used t.els
-  | TmConApp t ->
-    if setMem t.ident bound then used
-    else setInsert t.ident used
-  | t -> sfold_Expr_Expr (collectIdentifiersExprH bound) used t
-
-  sem collectIdentifiersExpr (used : Set Name) =
-  | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
-
-  sem collectIdentifiersType (used : Set Name) =
-  | TyCon t -> setInsert t.ident used
-  | t -> sfold_Type_Type collectIdentifiersType used t
-
   -- Construct an extracted AST from the given AST, containing all terms that
   -- are used by the accelerate terms.
-  sem extractAccelerateTerms (accelerated : Set Name) =
-  | t ->
-    match extractAccelerateTermsH accelerated t with (_, t) in t
-
-  sem extractAccelerateTermsH (used : Set Name) =
-  | TmLet t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then
-      let used = collectIdentifiersType used t.tyBody in
-      let used = collectIdentifiersExpr used t.body in
-      (used, TmLet {{t with inexpr = inexpr}
-                       with ty = tyTm inexpr})
-    else (used, inexpr)
-  | TmRecLets t ->
-    let bindingIdents = map (lam bind : RecLetBinding. bind.ident) t.bindings in
-    recursive let dfs = lam g. lam visited. lam ident.
-      if setMem ident visited then visited
-      else
-        let visited = setInsert ident visited in
-        foldl
-          (lam visited. lam ident.
-            dfs g visited ident)
-          visited
-          (digraphSuccessors ident g)
-    in
-    let collectBindIdents = lam used. lam bind : RecLetBinding.
-      let used = collectIdentifiersType used bind.tyBody in
-      collectIdentifiersExpr used bind.body
-    in
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    -- NOTE(larshum, 2021-10-03): We find the bindings that are used by
-    -- applying DFS on the call graph.
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
-    let visited = setEmpty nameCmp in
-    let usedIdents =
-      foldl
-        (lam visited. lam ident.
-          if setMem ident used then
-            dfs g visited ident
-          else visited)
-        visited bindingIdents in
-    let usedBinds =
-      filter
-        (lam bind : RecLetBinding. setMem bind.ident usedIdents)
-        t.bindings in
-    let used = foldl collectBindIdents used usedBinds in
-    if null usedBinds then (used, inexpr)
-    else (used, TmRecLets {{t with bindings = usedBinds}
-                              with inexpr = inexpr})
-  | TmType t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmConDef t ->
-    -- NOTE(larshum, 2022-04-01): A constructor definition is included either
-    -- if its identifier is used, or if the variant type to which is belongs is
-    -- used. This is very important, as we may otherwise get the constructor
-    -- indexing wrong.
-    let constructorIsUsed = lam used : Set Name.
-      match t.tyIdent with TyArrow {to = TyCon {ident = varTyId}} then
-        or (setMem t.ident used) (setMem varTyId used)
-      else setMem t.ident used
-    in
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmUtest t -> extractAccelerateTermsH used t.next
-  | TmExt t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmExt {t with inexpr = inexpr})
-    else (used, inexpr)
-  | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
-                         info = infoTm t})
+  sem extractAccelerateTerms : Set Name -> Expr -> Expr
+  sem extractAccelerateTerms accelerated =
+  | t -> extractAst accelerated t
 
   -- NOTE(larshum, 2021-09-17): All accelerated terms are given a dummy
   -- parameter, so that expressions without free variables can also be
