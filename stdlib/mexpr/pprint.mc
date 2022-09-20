@@ -242,7 +242,16 @@ lang PrettyPrint = IdentifierPrettyPrint
     match getTypeStringCode 0 env ty with (_,str) in str
 
   sem expr2str =
-  | expr -> exprToString pprintEnvEmpty expr
+  | expr ->
+    -- Reserve the names of the built-in constants when pretty-printing.
+    let env =
+      foldl
+        (lam env. lam e.
+          match e with (str, _) in
+          let n = nameSym str in
+          pprintEnvAdd n str 1 env)
+        pprintEnvEmpty builtin in
+    exprToString env expr
 
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
