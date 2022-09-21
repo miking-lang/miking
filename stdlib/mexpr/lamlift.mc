@@ -6,8 +6,9 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/call-graph.mc"
 include "mexpr/eq.mc"
+include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 
 type LambdaLiftState = {
   -- Variables in the current scope that can occur as free variables in the
@@ -370,111 +371,133 @@ lang LambdaLiftLiftGlobal = MExprAst
       t
 end
 
--- NOTE(larshum, 2022-08-02): This language fragment is added to (re-)add
--- TyAll's to bindings after lambda lifting. This is required to produce the
--- correct types, as type variables in a nested binding may become free after
--- lifting.
--- TODO(larshum, 2022-08-02): Currently assumes all type variables are
--- monomorphic. The analysis should be improved by lifting the type variables
--- along with the bindings.
-lang LambdaLiftAddTyAlls = MExprAst
-  type TyVars = Set Name
-  type TyVarMap = Map Name Name
+lang LambdaLiftTyAlls = MExprAst
+  type TyAllData = (VarSort, Info)
 
-  sem addTyAlls : Expr -> Expr
-  sem addTyAlls =
-  | t -> addTyAllsH (mapEmpty nameCmp) t
+  sem liftTyAlls : Expr -> (Map Name TyAllData, Expr)
+  sem liftTyAlls =
+  | t -> liftTyAllsExpr (mapEmpty nameCmp) t
 
-  sem addTyAllsH : TyVarMap -> Expr -> Expr
-  sem addTyAllsH bound =
-  | TmLam t ->
-    TmLam {t with tyIdent = subTyIdents bound t.tyIdent,
-                  body = addTyAllsH bound t.body}
+  sem liftTyAllsExpr : Map Name TyAllData -> Expr -> (Map Name TyAllData, Expr)
+  sem liftTyAllsExpr tyAlls =
   | TmLet t ->
-    match addTyAllBinding bound t.tyBody with (bodyTyVars, tyBody) in
-    TmLet {t with tyBody = subTyIdents bodyTyVars tyBody,
-                  body = addTyAllsH bodyTyVars t.body,
-                  inexpr = addTyAllsH bound t.inexpr}
+    match liftTyAllsExpr tyAlls t.body with (tyAlls, body) in
+    match liftTyAllsType tyAlls t.tyBody with (tyAlls, tyBody) in
+    match liftTyAllsExpr tyAlls t.inexpr with (tyAlls, inexpr) in
+    (tyAlls, TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr})
+  | TmRecLets t ->
+    let liftBinding = lam tyAlls. lam binding.
+      match liftTyAllsExpr tyAlls binding.body with (tyAlls, body) in
+      match liftTyAllsType tyAlls binding.tyBody with (tyAlls, tyBody) in
+      (tyAlls, {binding with body = body, tyBody = tyBody})
+    in
+    match mapAccumL liftBinding tyAlls t.bindings with (tyAlls, bindings) in
+    match liftTyAllsExpr tyAlls t.inexpr with (tyAlls, inexpr) in
+    (tyAlls, TmRecLets {t with bindings = bindings, inexpr = inexpr})
+  | t -> smapAccumL_Expr_Expr liftTyAllsExpr tyAlls t
+
+  sem liftTyAllsType : Map Name TyAllData -> Type -> (Map Name TyAllData, Type)
+  sem liftTyAllsType tyAlls =
+  | TyAll t ->
+    let tyAlls = mapInsert t.ident (t.sort, t.info) tyAlls in
+    liftTyAllsType tyAlls t.ty
+  | ty -> smapAccumL_Type_Type liftTyAllsType tyAlls ty
+
+  sem insertTyAlls : Map Name TyAllData -> Expr -> Expr
+  sem insertTyAlls tyAlls =
+  | TmLet t ->
+    -- NOTE(larshum, 2022-09-21): If we find TyFlex anywhere in the type of the
+    -- body, we replace all annotated types with TyUnknown.
+    let tyBody = insertTyAllsType tyAlls t.tyBody in
+    let body =
+      match tyBody with TyUnknown _ then
+        clearAnnotTypes t.body
+      else insertTyAlls tyAlls t.body
+    in
+    TmLet {t with tyBody = tyBody, body = body,
+                  inexpr = insertTyAlls tyAlls t.inexpr}
   | TmRecLets t ->
     let bindingFn = lam bind.
-      match addTyAllBinding bound bind.tyBody with (bodyTyVars, tyBody) in
-      let body = addTyAllsH bodyTyVars bind.body in
-      {bind with tyBody = tyBody, body = body} in
+      let tyBody = insertTyAllsType tyAlls bind.tyBody in
+      let body =
+        match tyBody with TyUnknown _ then
+          clearAnnotTypes bind.body
+        else insertTyAlls tyAlls bind.body
+      in
+      {bind with tyBody = tyBody, body = body}
+    in
     TmRecLets {t with bindings = map bindingFn t.bindings,
-                      inexpr = addTyAllsH bound t.inexpr}
-  | TmType t -> TmType {t with inexpr = addTyAllsH bound t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = addTyAllsH bound t.inexpr}
-  | TmUtest t -> TmUtest {t with next = addTyAllsH bound t.next}
-  | TmExt t -> TmExt {t with inexpr = addTyAllsH bound t.inexpr}
-  | t ->
-    let t = withType (subTyIdents bound (tyTm t)) t in
-    smap_Expr_Expr (addTyAllsH bound) t
+                      inexpr = insertTyAlls tyAlls t.inexpr}
+  | TmType t -> TmType {t with inexpr = insertTyAlls tyAlls t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = insertTyAlls tyAlls t.inexpr}
+  | TmUtest t -> TmUtest {t with next = insertTyAlls tyAlls t.next}
+  | TmExt t -> TmExt {t with inexpr = insertTyAlls tyAlls t.inexpr}
+  | t -> t
 
-  sem addTyAllBinding : TyVarMap -> Type -> (TyVarMap, Type)
-  sem addTyAllBinding bound =
+  sem insertTyAllsType : Map Name TyAllData -> Type -> Type
+  sem insertTyAllsType tyAlls =
   | ty ->
-    match collectFreeTyVars bound ty with (bound, free) in
-    let resymbFreeMap = mapMapWithKey (lam k. lam. nameSetNewSym k) free in
-    let bound = mapUnion bound resymbFreeMap in
-    let ty = subTyIdents bound ty in
-    let ty =
+    -- NOTE(larshum, 2022-09-21): If the type contains TyFlex, we replace it
+    -- with TyUnknown.
+    if containsTyFlex false ty then
+      TyUnknown {info = infoTy ty}
+    else
+      let vars = collectTyVars tyAlls (mapEmpty nameCmp) ty in
       mapFoldWithKey
-        (lam acc. lam. lam tyAllId.
-          TyAll {ident = tyAllId, sort = PolyVar (),
-                 ty = acc, info = infoTy acc})
-        ty resymbFreeMap in
-    (bound, ty)
+        (lam accTy. lam tyId. lam tyAllData.
+          match tyAllData with (varSort, info) in
+          TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
+        ty vars
 
-  sem subTyIdents : TyVarMap -> Type -> Type
-  sem subTyIdents subMap =
+  sem containsTyFlex : Bool -> Type -> Bool
+  sem containsTyFlex acc =
+  | TyFlex _ -> true
+  | ty -> if acc then true else sfold_Type_Type containsTyFlex acc ty
+
+  -- Clears all annotated types within an expression, by replacing them with
+  -- TyUnknowns.
+  sem clearAnnotTypes : Expr -> Expr
+  sem clearAnnotTypes =
+  | t ->
+    let t = smap_Expr_Type (lam ty. TyUnknown {info = infoTy ty}) t in
+    smap_Expr_Expr clearAnnotTypes t
+
+  sem collectTyVars : Map Name TyAllData -> Map Name TyAllData -> Type
+                   -> Map Name TyAllData
+  sem collectTyVars tyAlls acc =
   | TyVar t ->
-    match mapLookup t.ident subMap with Some newIdent then
-      TyVar {t with ident = newIdent, level = 1}
-    else TyVar t
-  | ty -> smap_Type_Type (subTyIdents subMap) ty
-
-  sem collectFreeTyVars : TyVarMap -> Type -> (TyVarMap, TyVars)
-  sem collectFreeTyVars bound =
-  | ty -> collectFreeTyVarsH (bound, mapEmpty nameCmp) ty
-
-  sem collectFreeTyVarsH : (TyVarMap, TyVars) -> Type -> (TyVarMap, TyVars)
-  sem collectFreeTyVarsH acc =
-  | TyAll t ->
-    match acc with (bound, free) in
-    let acc = (mapInsert t.ident t.ident bound, free) in
-    collectFreeTyVarsH acc t.ty
-  | TyVar t ->
-    match acc with (bound, free) in
-    if mapMem t.ident bound then (bound, free)
-    else (bound, setInsert t.ident free)
-  | ty -> sfold_Type_Type collectFreeTyVarsH acc ty
+    match mapLookup t.ident tyAlls with Some entry then
+      mapInsert t.ident entry acc
+    else acc
+  | ty -> sfold_Type_Type (collectTyVars tyAlls) acc ty
 end
 
 lang MExprLambdaLift =
   LambdaLiftNameAnonymous + LambdaLiftFindFreeVariables +
-  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal + LambdaLiftAddTyAlls
+  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal + LambdaLiftTyAlls
 
   sem liftLambdas =
   | t -> match liftLambdasWithSolutions t with (_, t) in t
 
   sem liftLambdasWithSolutions =
   | t ->
+    match liftTyAlls t with (tyAllEnv, t) in
     let t = nameAnonymousLambdas t in
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
     let t = liftGlobal t in
-    (state.sols, addTyAlls t)
+    (state.sols, insertTyAlls tyAllEnv t)
 end
 
-lang TestLang = MExprLambdaLift + MExprEq + MExprSym + MExprTypeAnnot
+lang TestLang =
+  MExprLambdaLift + MExprEq + MExprSym + MExprTypeCheck + MExprPrettyPrint
 end
 
 mexpr
 
 use TestLang in
 
-let preprocess = lam t.
-  typeAnnot (symbolizeExpr {symEnvEmpty with strictTypeVars = false} t) in
+let preprocess = lam t. typeCheck (symbolize t) in
 
 let noLambdas = bind_ (ulet_ "x" (int_ 2)) unit_ in
 utest liftLambdas noLambdas with noLambdas using eqExpr in
@@ -692,14 +715,19 @@ let expected = preprocess (bindall_ [
 utest liftLambdas liftMatchEls with expected using eqExpr in
 
 let conAppLift = preprocess (bindall_ [
+  type_ "Tree" (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   conapp_ "Leaf" fapp
 ]) in
 let expected = preprocess (bindall_ [
+  type_ "Tree" (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   fdef,
   conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in
-utest liftLambdas conAppLift with expected using eqExpr in
+
+-- NOTE(larshum, 2022-09-15): Compare using eqString as equality of TmType has
+-- not been implemented.
+utest expr2str (liftLambdas conAppLift) with expr2str expected using eqString in
 
 let anonymousFunctionLift = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (
@@ -786,12 +814,12 @@ let expected = preprocess (bindall_ [
 utest liftLambdas letMultiParam with expected using eqExpr in
 
 let nestedMap = preprocess (bindall_ [
-  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "s" (seq_ [seq_ [int_ 1, int_ 2, int_ 3]]),
   map_
     (ulam_ "s" (map_ (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (var_ "s")))
     (var_ "s")]) in
 let expected = preprocess (bindall_ [
-  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "s" (seq_ [seq_ [int_ 1, int_ 2, int_ 3]]),
   ulet_ "t1" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "t2" (ulam_ "s" (map_ (var_ "t1") (var_ "s"))),
   map_ (var_ "t2") (var_ "s")]) in
@@ -822,14 +850,14 @@ let expected = preprocess (bindall_ [
 utest liftLambdas nestedAnonymousLambdas with expected using eqExpr in
 
 let nestedMultiArgLambda = preprocess (bindall_ [
-  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "s" (seq_ [seq_ [int_ 1, int_ 2, int_ 3]]),
   map_
     (ulam_ "y"
       (foldl_ (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e"))))
               (int_ 0) (var_ "y")))
     (var_ "s")]) in
 let expected = preprocess (bindall_ [
-  ulet_ "s" (seq_ [int_ 1, int_ 2, int_ 3]),
+  ulet_ "s" (seq_ [seq_ [int_ 1, int_ 2, int_ 3]]),
   ulet_ "t1" (ulam_ "acc" (ulam_ "e" (addi_ (var_ "acc") (var_ "e")))),
   ulet_ "t2" (ulam_ "y" (foldl_ (var_ "t1") (int_ 0) (var_ "y"))),
   map_ (var_ "t2") (var_ "s")]) in
@@ -838,7 +866,7 @@ utest liftLambdas nestedMultiArgLambda with expected using eqExpr in
 let nestedReclets = preprocess (bindall_ [
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (ulam_ "mylist" (
     if_ (eqi_ (var_ "x") (int_ 10))
-        (unit_)
+        unit_
         (bindall_ [
           ureclet_ "inner_foo" (ulam_ "z" (
             if_ (eqi_ (var_ "y") (var_ "z"))
@@ -866,7 +894,7 @@ let expected = preprocess (bindall_ [
   ureclets_ [
     ("deep_foo", (ulam_ "mylist" (ulam_ "z" (ulam_ "i" (
       if_ (eqi_ (var_ "i") (var_ "z"))
-          (unit_)
+          unit_
           (bindall_ [
             ulet_ "" (get_ (var_ "mylist") (var_ "i")),
             appf3_ (var_ "deep_foo")
@@ -896,5 +924,21 @@ let expected = preprocess (bindall_ [
   appf3_ (var_ "foo") (int_ 11) (int_ 12) (seq_ [int_ 1, int_ 2, int_ 3])
   ]) in
 utest liftLambdas nestedReclets with expected using eqExpr in
+
+
+let types = preprocess
+  (ulet_ "f" (ulam_ "s"
+    (bind_
+      (ulet_ "g" (ulam_ "x" (snoc_ (var_ "s") (var_ "x"))))
+      (foldl_ (uconst_ (CConcat ())) (seq_ []) (map_ (var_ "g") (var_ "s")))))) in
+let expected = preprocess
+  (bindall_ [
+    ulet_ "g" (ulam_ "s" (ulam_ "x" (snoc_ (var_ "s") (var_ "x")))),
+    ulet_ "f" (ulam_ "s"
+      (foldl_ (uconst_ (CConcat ())) (seq_ []) (map_ (app_ (var_ "g") (var_ "s")) (var_ "s"))))]) in
+
+-- NOTE(larshum, 2022-09-15): Test that the expressions are equal and that the
+-- let-bodies are given equivalent types.
+utest liftLambdas types with expected using eqExpr in
 
 ()
