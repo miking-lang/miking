@@ -1,6 +1,7 @@
 include "string.mc"
 
-type ExecResult = {stdout: String, stderr: String, returncode: Int}
+type ReturnCode = Int
+type ExecResult = {stdout: String, stderr: String, returncode: ReturnCode}
 
 let _pathSep = "/"
 let _tempBase = "/tmp"
@@ -72,18 +73,17 @@ utest
   [exists, sysFileExists (sysTempDirName d)]
 with [true, false]
 
-let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
-  lam timeoutSec. lam cmd. lam stdin. lam cwd.
-    let tempDir = sysTempDirMake () in
-    let tempStdout = sysJoinPath tempDir "stdout.txt" in
-    let tempStderr = sysJoinPath tempDir "stderr.txt" in
-
+let sysRunCommandWithTimingTimeoutFileIO
+    : Option Float -> [String] -> String -> String -> String -> String
+      -> (Float, ReturnCode) =
+  lam timeoutSec. lam cmd. lam stdinFile.
+  lam stdoutFile. lam stderrFile. lam cwd.
     let fullCmd =
     [ "cd", cwd, ";"
-    , "echo", stdin, "|"
     , strJoin " " cmd
-    , ">", tempStdout
-    , "2>", tempStderr
+    , ">", stdoutFile
+    , "2>", stderrFile
+    , "<", stdinFile
     , ";"
     ] in
     let fullCmd =
@@ -92,22 +92,38 @@ let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> Strin
       else fullCmd
     in
     match _commandListTime fullCmd with (ms, retCode) then
-
-      -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
-      _commandList ["echo", "", ">>", tempStdout];
-      _commandList ["echo", "", ">>", tempStderr];
-      let stdout = init (readFile tempStdout) in
-      let stderr = init (readFile tempStderr) in
-
-      sysTempDirDelete tempDir ();
-      (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
+      (ms, retCode)
     else never
+
+let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> String -> (Float, ExecResult) =
+  lam timeoutSec. lam cmd. lam stdin. lam cwd.
+    let tempDir = sysTempDirMake () in
+    let tempStdin = sysJoinPath tempDir "stdin.txt" in
+    writeFile tempStdin stdin;
+    let tempStdout = sysJoinPath tempDir "stdout.txt" in
+    let tempStderr = sysJoinPath tempDir "stderr.txt" in
+    let res = sysRunCommandWithTimingTimeoutFileIO
+                timeoutSec cmd tempStdin tempStdout tempStderr cwd in
+    -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
+    _commandList ["echo", "", ">>", tempStdout];
+    _commandList ["echo", "", ">>", tempStderr];
+    let stdout = init (readFile tempStdout) in
+    let stderr = init (readFile tempStderr) in
+    sysTempDirDelete tempDir ();
+    (res.0, {stdout = stdout, stderr = stderr, returncode = res.1})
 
 utest sysRunCommandWithTimingTimeout (None ()) ["echo -n \"\""] "" "."; () with ()
 
+let sysRunCommandWithTimingFileIO : [String] -> String -> String -> (Float, ExecResult) =
+  sysRunCommandWithTimingTimeoutFileIO (None ())
+
 let sysRunCommandWithTiming : [String] -> String -> String -> (Float, ExecResult) =
-  lam cmd. lam stdin. lam cwd.
-    sysRunCommandWithTimingTimeout (None ()) cmd stdin cwd
+    sysRunCommandWithTimingTimeout (None ())
+
+let sysRunCommandFileIO : [String] -> String -> String -> ExecResult =
+  lam cmd. lam stdinFile. lam stdoutFile. lam stderrFile. lam cwd.
+    match sysRunCommandWithTimingFileIO cmd stdinFile stdoutFile stderrFile cwd
+    with (_, res) then res else never
 
 let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
@@ -124,3 +140,11 @@ let sysGetEnv : String -> Option String = lam env.
   else Some res
 
 utest sysCommandExists "ls" with true
+
+let sysAppendFile : String -> String -> ReturnCode =
+  lam filename. lam str.
+  let f = sysTempFileMake () in
+  writeFile f str;
+  let r = _commandList ["cat", f, ">>", filename] in
+  sysDeleteFile f;
+  r
