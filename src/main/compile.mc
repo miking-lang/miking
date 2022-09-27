@@ -28,16 +28,10 @@ lang MCoreCompile =
   MExprHoles +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
   MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
+  MExprPrettyPrint +
+  MExprLowerNestedPatterns +
   OCamlTryWithWrap
 end
-
-let pprintMcore = lam ast.
-  use MExprPrettyPrint in
-  expr2str ast
-
-let pprintType = lam ty.
-  use MExprPrettyPrint in
-  type2str ty
 
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
@@ -75,7 +69,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
-       printLn (join [pprintMcore ast, "\n : ", pprintType (tyTm ast)]) else ());
+       printLn (join [expr2str ast, "\n : ", type2str (tyTm ast)]) else ());
 
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
@@ -89,10 +83,10 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
 
-    let ast = use MExprLowerNestedPatterns in lowerAll ast in
+    let ast = lowerAll ast in
     (if options.debugShallow then
-      printLn (pprintMcore ast) else ());
-      
+      printLn (expr2str ast) else ());
+
     if options.toJavaScript then compileMCoreToJS {
         compileJSOptionsEmpty with
         targetPlatform = parseJSTarget options.jsTarget,
@@ -100,7 +94,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
         tailCallOptimizations = not options.disableJsTCO
       } ast sourcePath
     else compileMCore ast
-      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (pprintMcore ast) else ()
+      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (expr2str ast) else ()
       , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
@@ -142,7 +136,7 @@ let compile = lam files. lam options : Options. lam args.
     let ast = insertTunedOrDefaults options ast file in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (pprintMcore ast) else ());
+    (if options.debugParse then printLn (expr2str ast) else ());
 
     compileWithUtests options file ast; ()
   in
