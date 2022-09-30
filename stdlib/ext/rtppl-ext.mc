@@ -1,11 +1,18 @@
 
--- Representation of a file descriptor.
-type FileDescriptor = Int
+type Port = Int
+type TimeStampedValue = (Int, Float)
 
--- A time-stamped value is represented as a sequence of floating-point values.
-type TimeStampedValue = [Float]
+-- Functions for reading and writing time-stamped values (a tuple containing a
+-- time-stamp and a value), using a latest-value semantics.
+external lvRead : Port -> TimeStampedValue
+external lvWrite : Port -> TimeStampedValue -> ()
 
--- Functions for interacting with other processes.
-external openFd : String -> FileDescriptor
-external readFd : FileDescriptor -> Int -> TimeStampedValue
-external writeFd : FileDescriptor -> TimeStampedValue -> ()
+type Signal = Int
+
+external setSignalHandler : Signal -> (Signal -> ()) -> ()
+
+mexpr
+
+utest setSignalHandler 0 (lam. ()) with true using lam. lam. true in
+
+()
