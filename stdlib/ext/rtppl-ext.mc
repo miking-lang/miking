@@ -9,7 +9,13 @@ external lvWrite : Port -> TimeStampedValue -> ()
 
 type Signal = Int
 
+-- Overrides the signal handler for a particular signal (for simplicity, the
+-- signal is simply encoded as an integer).
 external setSignalHandler : Signal -> (Signal -> ()) -> ()
+
+-- External functions used for supporting the 'sdelay' keyword
+external clockGetTime : () -> (Int, Int)
+external clockNanosleep : (Int, Int) -> ()
 
 mexpr
 
