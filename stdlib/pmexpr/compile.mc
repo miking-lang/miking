@@ -134,6 +134,7 @@ lang PMExprCompileWellFormedBase =
   | ast ->
     match addIdentifierToAccelerateTerms ast with (accelerateData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
+    let ast = typeCheck ast in
     let accelerateIds = mapMap (lam. ()) accelerateData in
     let accelerateAst = extractAccelerateTerms accelerateIds ast in
     match eliminateDummyParameter solutions accelerateData accelerateAst
