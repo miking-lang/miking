@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyfloat_]
 let impl = lam arg : {expr : String, ty : Type }.
-  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl"], cLibraries = [] } ]
+  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
 
 let rtpplExtMap =
   use OCamlTypeAst in
