@@ -69,31 +69,35 @@ lang MExprEliminateDuplicateCode = MExprAst
     TmVar {t with ident = lookupReplacement env t.ident}
   | TmConApp t ->
     TmConApp {t with ident = lookupReplacement env t.ident}
-  | TmMatch t ->
-    TmMatch {t with target = eliminateDuplicateCodeExpr env t.target,
-                    pat = eliminateDuplicateCodePat env t.pat,
-                    thn = eliminateDuplicateCodeExpr env t.thn,
-                    els = eliminateDuplicateCodeExpr env t.els}
   | TmLet t ->
     lookupDefinition
       env t.ident t.info t.inexpr
-      (lam env. TmLet {t with body = eliminateDuplicateCodeExpr env t.body,
-                              inexpr = eliminateDuplicateCodeExpr env t.inexpr})
+      (lam env.
+        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
+        TmLet {t with body = eliminateDuplicateCodeExpr env t.body,
+                      tyBody = eliminateDuplicateCodeType env t.tyBody,
+                      inexpr = inexpr, ty = tyTm inexpr})
   | TmType t ->
     lookupDefinition
       env t.ident t.info t.inexpr
-      (lam env. TmType {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                               inexpr = eliminateDuplicateCodeExpr env t.inexpr})
+      (lam env.
+        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
+        TmType {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
+                       inexpr = inexpr, ty = tyTm inexpr})
   | TmConDef t ->
     lookupDefinition
       env t.ident t.info t.inexpr
-      (lam env. TmConDef {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                                 inexpr = eliminateDuplicateCodeExpr env t.inexpr})
+      (lam env.
+        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
+        TmConDef {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
+                         inexpr = inexpr, ty = tyTm inexpr})
   | TmExt t ->
     lookupDefinition
       env t.ident t.info t.inexpr
-      (lam env. TmExt {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                              inexpr = eliminateDuplicateCodeExpr env t.inexpr})
+      (lam env.
+        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
+        TmExt {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
+                      inexpr = inexpr, ty = tyTm inexpr})
   | TmRecLets t ->
     let eliminateDuplicateBinding = lam env. lam binding.
       let defn = (binding.info, nameGetStr binding.ident) in
@@ -105,7 +109,8 @@ lang MExprEliminateDuplicateCode = MExprAst
         (env, Some binding)
     in
     let eliminateDuplicateBody = lam env. lam binding.
-      {binding with body = eliminateDuplicateCodeExpr env binding.body}
+      {binding with body = eliminateDuplicateCodeExpr env binding.body,
+                    tyBody = eliminateDuplicateCodeType env binding.tyBody}
     in
     match mapAccumL eliminateDuplicateBinding env (reverse t.bindings)
     with (env, optBindings) in
@@ -113,9 +118,14 @@ lang MExprEliminateDuplicateCode = MExprAst
       map
         (eliminateDuplicateBody env)
         (mapOption identity optBindings) in
+    let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
     TmRecLets {t with bindings = reverse bindings,
-                      inexpr = eliminateDuplicateCodeExpr env t.inexpr}
-  | t -> smap_Expr_Expr (eliminateDuplicateCodeExpr env) t
+                      inexpr = inexpr, ty = tyTm inexpr}
+  | t ->
+    let t = smap_Expr_Expr (eliminateDuplicateCodeExpr env) t in
+    let t = smap_Expr_Type (eliminateDuplicateCodeType env) t in
+    let t = smap_Expr_Pat (eliminateDuplicateCodePat env) t in
+    withType (eliminateDuplicateCodeType env (tyTm t)) t
 
   sem eliminateDuplicateCodeType : DuplicateCodeEnv -> Type -> Type
   sem eliminateDuplicateCodeType env =
@@ -134,7 +144,9 @@ lang MExprEliminateDuplicateCode = MExprAst
   | PatCon t ->
     PatCon {t with ident = lookupReplacement env t.ident,
                    subpat = eliminateDuplicateCodePat env t.subpat}
-  | p -> smap_Pat_Pat (eliminateDuplicateCodePat env) p
+  | p ->
+    let p = smap_Pat_Pat (eliminateDuplicateCodePat env) p in
+    withTypePat (eliminateDuplicateCodeType env (tyPat p)) p
 end
 
 lang TestLang = MExprEliminateDuplicateCode + MExprEq + MExprSym
