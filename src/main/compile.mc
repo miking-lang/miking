@@ -28,7 +28,7 @@ lang MCoreCompile =
   MExprHoles +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
   MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
-  OCamlTryWithWrap
+  OCamlTryWithWrap + MCoreCompileLang
 end
 
 let pprintMcore = lam ast.

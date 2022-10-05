@@ -13,7 +13,8 @@ include "mexpr/type-check.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
-lang MCoreLiteCompile = BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans
+lang MCoreLiteCompile =
+  BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.

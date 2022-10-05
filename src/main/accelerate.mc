@@ -59,7 +59,8 @@ lang PMExprCompile =
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +
-  OCamlGenerateExternalNaive + PMExprBuild + PMExprCompileWellFormed
+  OCamlGenerateExternalNaive + PMExprBuild + PMExprCompileWellFormed +
+  MCoreCompileLang
 end
 
 lang MExprFutharkCompile =
