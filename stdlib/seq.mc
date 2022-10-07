@@ -257,6 +257,17 @@ utest filter (lam x. eqi x 1) [1,2,4] with [1]
 utest filter (lam. false) [3,5,234,1,43] with [] using eqSeq eqi
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43]
 
+recursive let filterOption : all a. [Option a] -> [a] =
+  lam optSeq.
+  match optSeq with [Some x] ++ optSeq then cons x (filterOption optSeq)
+  else match optSeq with [None _] ++ optSeq then filterOption optSeq
+  else []
+end
+
+utest filterOption [Some 3, Some 2, None (), Some 4] with [3, 2, 4] using eqSeq eqi
+utest filterOption [None (), None ()] with [] using eqSeq eqi
+utest filterOption [None (), Some 1, None (), Some 1] with [1, 1] using eqSeq eqi
+
 recursive
   let find = lam p. lam seq.
     if null seq then None ()

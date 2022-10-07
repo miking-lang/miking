@@ -27,6 +27,10 @@ lang MExprEliminateDuplicateCode = MExprAst
     if eqi i 0 then cmpString lhs.1 rhs.1
     else i
 
+  sem toDefinition : Name -> Info -> Definition
+  sem toDefinition id =
+  | info -> (info, nameGetStr id)
+
   type DuplicateCodeEnv = {
     -- Maps the representation of a definition (as defined above) to an
     -- identifier.
@@ -41,112 +45,135 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem emptyDuplicateCodeEnv =
   | () -> {defIds = mapEmpty cmpDefinition, replace = mapEmpty nameCmp}
 
-  sem lookupReplacement : DuplicateCodeEnv -> Name -> Name
-  sem lookupReplacement env =
+  sem lookupReplacement : DuplicateCodeEnv -> Map Name Name -> Name -> (Map Name Name, Name)
+  sem lookupReplacement env replaced =
   | oldId ->
-    match mapLookup oldId env.replace with Some newId then newId
-    else oldId
+    match mapLookup oldId env.replace with Some newId then
+      (mapInsert oldId newId replaced, newId)
+    else (replaced, oldId)
 
-  sem lookupDefinition : DuplicateCodeEnv -> Name -> Info -> Expr
-                      -> (DuplicateCodeEnv -> Expr) -> Expr
-  sem lookupDefinition env definitionId definitionInfo inexpr =
+  sem lookupDefinition : DuplicateCodeEnv -> Map Name Name -> Name -> Info
+                      -> Expr -> (DuplicateCodeEnv -> (Map Name Name, Expr))
+                      -> (Map Name Name, Expr)
+  sem lookupDefinition env replaced id info inexpr =
   | elsfn ->
-    let definition = (definitionInfo, nameGetStr definitionId) in
+    let definition = toDefinition id info in
     match mapLookup definition env.defIds with Some prevId then
-      let env = {env with replace = mapInsert definitionId prevId env.replace} in
-      eliminateDuplicateCodeExpr env inexpr
+      let env = {env with replace = mapInsert id prevId env.replace} in
+      let replaced = mapInsert id prevId replaced in
+      eliminateDuplicateCodeExpr env replaced inexpr
     else
-      let env = {env with defIds = mapInsert definition definitionId env.defIds} in
+      let env = {env with defIds = mapInsert definition id env.defIds} in
       elsfn env
 
   sem eliminateDuplicateCode : Expr -> Expr
   sem eliminateDuplicateCode =
-  | expr -> eliminateDuplicateCodeExpr (emptyDuplicateCodeEnv ()) expr
+  | ast ->
+    match eliminateDuplicateCodeWithSummary ast with (_, ast) in
+    ast
 
-  sem eliminateDuplicateCodeExpr : DuplicateCodeEnv -> Expr -> Expr
-  sem eliminateDuplicateCodeExpr env =
+  -- Performs the elimination of duplicate code, and includes a map from old to
+  -- new identifiers that were updated in the resulting AST.
+  sem eliminateDuplicateCodeWithSummary : Expr -> (Map Name Name, Expr)
+  sem eliminateDuplicateCodeWithSummary =
+  | ast ->
+    eliminateDuplicateCodeExpr (emptyDuplicateCodeEnv ()) (mapEmpty nameCmp) ast
+
+  sem eliminateDuplicateCodeExpr : DuplicateCodeEnv -> Map Name Name -> Expr -> (Map Name Name, Expr)
+  sem eliminateDuplicateCodeExpr env replaced =
   | TmVar t ->
-    TmVar {t with ident = lookupReplacement env t.ident}
+    match lookupReplacement env replaced t.ident with (replaced, ident) in
+    (replaced, TmVar {t with ident = ident})
   | TmConApp t ->
-    TmConApp {t with ident = lookupReplacement env t.ident}
+    match lookupReplacement env replaced t.ident with (replaced, ident) in
+    (replaced, TmConApp {t with ident = ident})
   | TmLet t ->
     lookupDefinition
-      env t.ident t.info t.inexpr
+      env replaced t.ident t.info t.inexpr
       (lam env.
-        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
-        TmLet {t with body = eliminateDuplicateCodeExpr env t.body,
-                      tyBody = eliminateDuplicateCodeType env t.tyBody,
-                      inexpr = inexpr, ty = tyTm inexpr})
+        match eliminateDuplicateCodeType env replaced t.tyBody with (replaced, tyBody) in
+        match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
+        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        ( replaced
+        , TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr,
+                        ty = tyTm inexpr} ))
   | TmType t ->
     lookupDefinition
-      env t.ident t.info t.inexpr
+      env replaced t.ident t.info t.inexpr
       (lam env.
-        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
-        TmType {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                       inexpr = inexpr, ty = tyTm inexpr})
+        match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
+        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        ( replaced
+        , TmType {t with tyIdent = tyIdent, inexpr = inexpr,
+                         ty = tyTm inexpr} ))
   | TmConDef t ->
     lookupDefinition
-      env t.ident t.info t.inexpr
+      env replaced t.ident t.info t.inexpr
       (lam env.
-        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
-        TmConDef {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                         inexpr = inexpr, ty = tyTm inexpr})
+        match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
+        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        ( replaced
+        , TmConDef {t with tyIdent = tyIdent, inexpr = inexpr,
+                           ty = tyTm inexpr} ))
   | TmExt t ->
     lookupDefinition
-      env t.ident t.info t.inexpr
+      env replaced t.ident t.info t.inexpr
       (lam env.
-        let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
-        TmExt {t with tyIdent = eliminateDuplicateCodeType env t.tyIdent,
-                      inexpr = inexpr, ty = tyTm inexpr})
+        match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
+        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        ( replaced
+        , TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr} ))
   | TmRecLets t ->
-    let eliminateDuplicateBinding = lam env. lam binding.
+    let eliminateDuplicateBinding = lam acc. lam binding.
+      match acc with (replaced, env) in
       let defn = (binding.info, nameGetStr binding.ident) in
       match mapLookup defn env.defIds with Some id then
         let env = {env with replace = mapInsert binding.ident id env.replace} in
-        (env, None ())
+        let replaced = mapInsert binding.ident id replaced in
+        ((replaced, env), None ())
       else
         let env = {env with defIds = mapInsert defn binding.ident env.defIds} in
-        (env, Some binding)
+        ((replaced, env), Some binding)
     in
-    let eliminateDuplicateBody = lam env. lam binding.
-      {binding with body = eliminateDuplicateCodeExpr env binding.body,
-                    tyBody = eliminateDuplicateCodeType env binding.tyBody}
+    let eliminateDuplicateBody = lam env. lam replaced. lam binding.
+      match eliminateDuplicateCodeType env replaced binding.tyBody with (replaced, tyBody) in
+      match eliminateDuplicateCodeExpr env replaced binding.body with (replaced, body) in
+      (replaced, {binding with body = body, tyBody = tyBody})
     in
-    match mapAccumL eliminateDuplicateBinding env (reverse t.bindings)
-    with (env, optBindings) in
-    let bindings =
-      map
-        (eliminateDuplicateBody env)
-        (mapOption identity optBindings) in
-    let inexpr = eliminateDuplicateCodeExpr env t.inexpr in
-    TmRecLets {t with bindings = reverse bindings,
-                      inexpr = inexpr, ty = tyTm inexpr}
+    match mapAccumL eliminateDuplicateBinding (replaced, env) (reverse t.bindings)
+    with ((replaced, env), optBindings) in
+    let bindings = filterOption optBindings in
+    match mapAccumL (eliminateDuplicateBody env) replaced bindings with (replaced, bindings) in
+    match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+    ( replaced
+    , TmRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = tyTm inexpr} )
   | t ->
-    let t = smap_Expr_Expr (eliminateDuplicateCodeExpr env) t in
-    let t = smap_Expr_Type (eliminateDuplicateCodeType env) t in
-    let t = smap_Expr_Pat (eliminateDuplicateCodePat env) t in
-    withType (eliminateDuplicateCodeType env (tyTm t)) t
+    match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
+    match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
+    match smapAccumL_Expr_Pat (eliminateDuplicateCodePat env) replaced t with (replaced, t) in
+    match eliminateDuplicateCodeType env replaced (tyTm t) with (replaced, tmTy) in
+    (replaced, withType tmTy t)
 
-  sem eliminateDuplicateCodeType : DuplicateCodeEnv -> Type -> Type
-  sem eliminateDuplicateCodeType env =
+  sem eliminateDuplicateCodeType : DuplicateCodeEnv -> Map Name Name -> Type -> (Map Name Name, Type)
+  sem eliminateDuplicateCodeType env replaced =
   | TyCon t ->
-    match mapLookup t.ident env.replace with Some newId then
-      TyCon {t with ident = newId}
-    else TyCon t
+    match lookupReplacement env replaced t.ident with (replaced, ident) in
+    (replaced, TyCon {t with ident = ident})
   | TyVar t ->
-    match mapLookup t.ident env.replace with Some newId then
-      TyVar {t with ident = newId}
-    else TyVar t
-  | ty -> smap_Type_Type (eliminateDuplicateCodeType env) ty
+    match lookupReplacement env replaced t.ident with (replaced, ident) in
+    (replaced, TyVar {t with ident = ident})
+  | ty -> smapAccumL_Type_Type (eliminateDuplicateCodeType env) replaced ty
 
-  sem eliminateDuplicateCodePat : DuplicateCodeEnv -> Pat -> Pat
-  sem eliminateDuplicateCodePat env =
+  sem eliminateDuplicateCodePat : DuplicateCodeEnv -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem eliminateDuplicateCodePat env replaced =
   | PatCon t ->
-    PatCon {t with ident = lookupReplacement env t.ident,
-                   subpat = eliminateDuplicateCodePat env t.subpat}
+    match lookupReplacement env replaced t.ident with (replaced, ident) in
+    match eliminateDuplicateCodePat env replaced t.subpat with (replaced, subpat) in
+    (replaced, PatCon {t with ident = ident, subpat = subpat})
   | p ->
-    let p = smap_Pat_Pat (eliminateDuplicateCodePat env) p in
-    withTypePat (eliminateDuplicateCodeType env (tyPat p)) p
+    match smapAccumL_Pat_Pat (eliminateDuplicateCodePat env) replaced p with (replaced, p) in
+    match eliminateDuplicateCodeType env replaced (tyPat p) with (replaced, patTy) in
+    (replaced, withTypePat patTy p)
 end
 
 lang TestLang = MExprEliminateDuplicateCode + MExprEq + MExprSym
@@ -261,6 +288,8 @@ let t = bind_
   (symbolize (bind_ optionDef t2)) in
 let expected = symbolize (bindall_ [optionDef, t1, t2]) in
 
-utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
+match eliminateDuplicateCodeWithSummary t with (summary, t) in
+utest expr2str t with expr2str expected using eqString in
+utest mapSize summary with 3 using eqi in
 
 ()
