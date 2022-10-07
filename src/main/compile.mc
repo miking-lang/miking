@@ -33,6 +33,9 @@ lang MCoreCompile =
   OCamlTryWithWrap
 end
 
+lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
+end
+
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
   if testsEnabled then
@@ -69,7 +72,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
-       printLn (join [expr2str ast, "\n : ", type2str (tyTm ast)]) else ());
+       printLn (use TyAnnotFull in annotateMExpr ast) else ());
 
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence

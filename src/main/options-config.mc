@@ -16,7 +16,7 @@ let optionsConfig : ParseConfig Options = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugTypeAnnot = true}),
   ([("--debug-type-check", "", "")],
-    "Print the AST after type checking",
+    "Print an interactive (HTML) representation of the AST after type checking",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugTypeCheck = true}),
   ([("--debug-profile", "", "")],
