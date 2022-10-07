@@ -109,7 +109,7 @@ lang LambdaLiftFindFreeVariables =
   sem findFreeVariablesReclet (state : LambdaLiftState) =
   | TmLet t ->
     let state =
-      match t.tyBody with TyAll _ | TyArrow _ then
+      match t.tyBody with TyArrow _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -132,7 +132,7 @@ lang LambdaLiftFindFreeVariables =
     findFreeVariables state t.body
   | TmLet t ->
     let state =
-      match t.tyBody with TyAll _ | TyArrow _ then
+      match t.tyBody with TyArrow _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -203,7 +203,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     match mapLookup t.ident subMap with Some subExpr then
       (subMap, subExpr t.info)
     else (subMap, TmVar t)
-  | TmLet (t & {tyBody = TyAll _ | TyArrow _}) ->
+  | TmLet (t & {tyBody = TyArrow _}) ->
     match mapLookup t.ident solutions with Some freeVars then
       let fv = mapBindings freeVars in
       let info = infoTm t.body in
@@ -287,7 +287,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
-    match t.tyBody with TyAll _ | TyArrow _ then
+    match t.tyBody with TyArrow _ then
       let bind : RecLetBinding =
         {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
       let bindings = snoc bindings bind in
@@ -317,7 +317,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
     match liftGlobalH lifted t.body with (lifted, body) in
-    match t.tyBody with TyAll _ | TyArrow _ then
+    match t.tyBody with TyArrow _ then
       let lifted = snoc lifted (TmLet {{t with body = body}
                                           with inexpr = unit_}) in
       liftGlobalH lifted t.inexpr
