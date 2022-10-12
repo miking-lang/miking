@@ -77,22 +77,11 @@ lang MExprCudaCompile =
   CudaLanguageFragmentFix
 end
 
-let parallelKeywords = [
-  "accelerate",
-  "map2",
-  "flatten",
-  "reduce",
-  "loop",
-  "seqLoop",
-  "seqLoopAcc",
-  "printFloat"
-]
-
 let keywordsSymEnv =
   {symEnvEmpty with varEnv =
     mapFromSeq
       cmpString
-      (map (lam s. (s, nameSym s)) parallelKeywords)}
+      (map (lam s. (s, nameSym s)) mexprExtendedKeywords)}
 
 let pprintOCamlTops = use OCamlPrettyPrint in
   lam tops : [Top].
@@ -104,11 +93,11 @@ let pprintFutharkAst = use FutharkPrettyPrint in
 
 let pprintPMExprAst = use PMExprPrettyPrint in
   lam ast : Expr.
-  expr2str ast
+  mexprToString ast
 
 let pprintCudaPMExprAst = use CudaPMExprPrettyPrint in
   lam ast : Expr.
-  expr2str ast
+  mexprToString ast
 
 let pprintCAst =
   use CPrettyPrint in
@@ -222,7 +211,7 @@ let compileAccelerated =
     pruneExternalUtestsWarning = false,
     findExternalsExclude = false,
     eliminateDeadCode = true,
-    keywords = parallelKeywords
+    keywords = mexprExtendedKeywords
   } file in
   let ast = makeKeywords [] ast in
 

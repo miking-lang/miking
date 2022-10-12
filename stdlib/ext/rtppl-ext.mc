@@ -19,6 +19,6 @@ external clockNanosleep : (Int, Int) -> ()
 
 mexpr
 
-utest setSignalHandler 0 (lam. ()) with true using lam. lam. true in
+utest setSignalHandler 1 (lam. print "hello") with true using lam. lam. true in
 
 ()

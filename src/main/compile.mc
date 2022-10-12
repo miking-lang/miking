@@ -33,7 +33,7 @@ end
 
 let pprintMcore = lam ast.
   use MExprPrettyPrint in
-  expr2str ast
+  mexprToString ast
 
 let pprintType = lam ty.
   use MExprPrettyPrint in
@@ -120,7 +120,7 @@ let compile = lam files. lam options : Options. lam args.
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
       eliminateDeadCode = not options.keepDeadCode,
-      keywords = concat holeKeywords parallelKeywords
+      keywords = mexprExtendedKeywords
     } file in
     let ast = makeKeywords [] ast in
 

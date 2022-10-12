@@ -561,7 +561,8 @@ lang MExprTune = MExpr + TuneBase end
 lang TestLang =
   TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
-  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck
+  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck +
+  MCoreCompileLang
 end
 
 mexpr

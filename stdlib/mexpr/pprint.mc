@@ -10,6 +10,7 @@ include "map.mc"
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "keywords.mc"
 include "record.mc"
 
 ----------------------------
@@ -242,16 +243,7 @@ lang PrettyPrint = IdentifierPrettyPrint
     match getTypeStringCode 0 env ty with (_,str) in str
 
   sem expr2str =
-  | expr ->
-    -- Reserve the names of the built-in constants when pretty-printing.
-    let env =
-      foldl
-        (lam env. lam e.
-          match e with (str, _) in
-          let n = nameSym str in
-          pprintEnvAdd n str 1 env)
-        pprintEnvEmpty builtin in
-    exprToString env expr
+  | expr -> exprToString pprintEnvEmpty expr
 
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
@@ -1174,11 +1166,14 @@ end
 -- MEXPR PPRINT FRAGMENT --
 ---------------------------
 
-let mexprKeywords = [
+let mexprBuiltInKeywords = [
   "if", "then", "else", "true", "false", "match", "with", "utest", "type",
   "con", "lang", "let", "recursive", "lam", "in", "end", "syn", "sem", "use",
   "mexpr", "include", "never", "using", "external", "switch", "case", "all"
 ]
+let mexprKeywords =
+  let intrinsicStrs = map (lam e. match e with (str, _) in str) builtin in
+  join [mexprBuiltInKeywords, intrinsicStrs, mexprExtendedKeywords]
 
 lang MExprPrettyPrint =
 
