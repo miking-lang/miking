@@ -83,10 +83,13 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem eliminateDuplicateCodeExpr env replaced =
   | TmVar t ->
     match lookupReplacement env replaced t.ident with (replaced, ident) in
-    (replaced, TmVar {t with ident = ident})
+    match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+    (replaced, TmVar {t with ident = ident, ty = ty})
   | TmConApp t ->
     match lookupReplacement env replaced t.ident with (replaced, ident) in
-    (replaced, TmConApp {t with ident = ident})
+    match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
+    match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+    (replaced, TmConApp {t with ident = ident, body = body, ty = ty})
   | TmLet t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
@@ -94,35 +97,36 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateCodeType env replaced t.tyBody with (replaced, tyBody) in
         match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr,
-                        ty = tyTm inexpr} ))
+        , TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
   | TmType t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmType {t with tyIdent = tyIdent, inexpr = inexpr,
-                         ty = tyTm inexpr} ))
+        , TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
   | TmConDef t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmConDef {t with tyIdent = tyIdent, inexpr = inexpr,
-                           ty = tyTm inexpr} ))
+        , TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
   | TmExt t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr} ))
+        , TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
   | TmRecLets t ->
     let eliminateDuplicateBinding = lam acc. lam binding.
       match acc with (replaced, env) in
@@ -145,8 +149,9 @@ lang MExprEliminateDuplicateCode = MExprAst
     let bindings = filterOption optBindings in
     match mapAccumL (eliminateDuplicateBody env) replaced bindings with (replaced, bindings) in
     match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
+    match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
     ( replaced
-    , TmRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = tyTm inexpr} )
+    , TmRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = ty} )
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
