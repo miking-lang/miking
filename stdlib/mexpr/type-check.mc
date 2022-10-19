@@ -21,6 +21,7 @@ include "error.mc"
 include "math.mc"
 include "pprint.mc"
 include "seq.mc"
+include "mexpr/annotate.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -75,13 +76,6 @@ let unificationError =
   ] in
   errorSingle info msg
 
-let _type2str = use MExprPrettyPrint in
-  type2str
-
-let _fields2str = use RecordTypeAst in
-  lam m.
-  _type2str (TyRecord {info = NoInfo (), fields = m})
-
 let _sort2str = use MExprPrettyPrint in
   lam ident. lam sort.
   match getVarSortStringCode 0 pprintEnvEmpty (nameGetStr ident) sort
@@ -131,7 +125,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst + ResolveAlias
+lang Unify = MExprAst + ResolveAlias + PrettyPrint
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
   sem unify (info : [Info]) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
@@ -146,7 +140,7 @@ lang Unify = MExprAst + ResolveAlias
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
   | (ty1, ty2) ->
-    unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
+    unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
 
   -- unifyCheck is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
@@ -162,10 +156,12 @@ lang Unify = MExprAst + ResolveAlias
   sem unifyCheckBase info boundVars tv =
   | ty ->
     sfold_Type_Type (lam. lam ty. unifyCheckBase info boundVars tv ty) () ty
+
+  sem _fields2str = | fields -> type2str (TyRecord {info = NoInfo (), fields = fields})
 end
 
 -- Helper language providing functions to unify fields of record-like types
-lang UnifyFields = Unify
+lang UnifyFields = Unify + PrettyPrint
   -- Check that 'm1' is a subset of 'm2'
   sem unifyFields (env : UnifyEnv) (m1 : Map SID Type) =
   | m2 ->
@@ -174,7 +170,7 @@ lang UnifyFields = Unify
       match mapLookup k m2 with Some tyfield2 then
         unifyTypes env (tyfield1, tyfield2)
       else
-        unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
+        unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
     in
     iter f (mapBindings m1)
 
@@ -184,15 +180,15 @@ lang UnifyFields = Unify
     if eqi (mapSize m1) (mapSize m2) then
       unifyFields env m1 m2
     else
-      unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
+      unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
 end
 
-lang VarTypeUnify = Unify + VarTypeAst
+lang VarTypeUnify = Unify + VarTypeAst + PrettyPrint
   sem unifyBase (env : UnifyEnv) =
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
     else if biMem (t1.ident, t2.ident) env.names then ()
-    else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
 
   sem unifyCheckBase info boundVars tv =
   | TyVar t ->
@@ -210,7 +206,7 @@ lang VarTypeUnify = Unify + VarTypeAst
     else ()
 end
 
-lang FlexTypeUnify = UnifyFields + FlexTypeAst
+lang FlexTypeUnify = UnifyFields + FlexTypeAst + PrettyPrint
   sem addSorts (env : UnifyEnv) =
   | (RecordVar r1, RecordVar r2) ->
     let f = lam acc. lam b : (SID, Type).
@@ -250,7 +246,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
        unifyFields env r1.fields r2.fields
      else match tv.sort with RecordVar _ then
-       unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
+       unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
      else ());
     modref t1.contents (Link ty2)
 
@@ -290,13 +286,13 @@ lang AppTypeUnify = Unify + AppTypeAst
     unifyTypes env (t1.rhs, t2.rhs)
 end
 
-lang AllTypeUnify = UnifyFields + AllTypeAst
+lang AllTypeUnify = UnifyFields + AllTypeAst + PrettyPrint
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
     (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
        unifyFieldsStrict env r1.fields r2.fields
      else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
-     else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
+     else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
@@ -313,11 +309,11 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
       unifyCheckBase info (setInsert t.ident boundVars) tv t.ty
 end
 
-lang ConTypeUnify = Unify + ConTypeAst
+lang ConTypeUnify = Unify + ConTypeAst + PrettyPrint
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
-    else unificationError env.info (_type2str env.originalLhs) (_type2str env.originalRhs) (_type2str ty1) (_type2str ty2)
+    else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -850,6 +846,36 @@ lang MExprTypeCheck =
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
   BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck
 
+end
+
+-- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it
+-- has to thread a pprint environment, which AnnotateMExprBase doesn't
+-- allow.
+lang TyAnnot = AnnotateSources + PrettyPrint + Ast
+  sem annotateMExpr : Expr -> Output
+  sem annotateMExpr = | tm -> annotateAndReadSources (_annotateExpr pprintEnvEmpty tm).1
+
+  sem _annotateExpr : PprintEnv -> Expr -> (PprintEnv, [(Info, Annotation)])
+  sem _annotateExpr env = | tm ->
+    match getTypeStringCode 0 env (tyTm tm) with (env, annot) in
+    let res = (env, [(infoTm tm, annot)]) in
+    let helper = lam f. lam acc. lam x.
+      match f acc.0 x with (env, new) in
+      (env, concat acc.1 new) in
+    let res = sfold_Expr_Expr (helper _annotateExpr) res tm in
+    let res = sfold_Expr_Pat (helper _annotatePat) res tm in
+    res
+
+  sem _annotatePat : PprintEnv -> Pat -> (PprintEnv, [(Info, Annotation)])
+  sem _annotatePat env = | pat ->
+    match getTypeStringCode 0 env (tyPat pat) with (env, annot) in
+    let res = (env, [(infoPat pat, annot)]) in
+    let helper = lam f. lam acc. lam x.
+      match f acc.0 x with (env, new) in
+      (env, concat acc.1 new) in
+    let res = sfold_Pat_Expr (helper _annotateExpr) res pat in
+    let res = sfold_Pat_Pat (helper _annotatePat) res pat in
+    res
 end
 
 lang TestLang = MExprTypeCheck + MExprEq end

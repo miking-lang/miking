@@ -153,6 +153,38 @@ lang Ast
   | p ->
     let res: (acc, Pat) = smapAccumL_Pat_Pat (lam acc. lam a. (f acc a, a)) acc p in
     res.0
+
+  sem smapAccumL_Pat_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Expr f acc =
+  | p -> (acc, p)
+
+  sem smap_Pat_Expr : (Expr -> Expr) -> Pat -> Pat
+  sem smap_Pat_Expr f =
+  | p ->
+    match smapAccumL_Pat_Expr (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Pat_Expr : all acc. (acc -> Expr -> acc) -> acc -> Pat -> acc
+  sem sfold_Pat_Expr f acc =
+  | p ->
+    match smapAccumL_Pat_Expr (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
+
+  sem smapAccumL_Pat_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Type f acc =
+  | p -> (acc, p)
+
+  sem smap_Pat_Type : (Type -> Type) -> Pat -> Pat
+  sem smap_Pat_Type f =
+  | p ->
+    match smapAccumL_Pat_Type (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Pat_Type : all acc. (acc -> Type -> acc) -> acc -> Pat -> acc
+  sem sfold_Pat_Type f acc =
+  | p ->
+    match smapAccumL_Pat_Type (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
 end
 
 -- TmVar --

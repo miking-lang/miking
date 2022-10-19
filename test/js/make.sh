@@ -33,7 +33,7 @@ run_test() {
 	filename=${file%.*}
 	echo $($RUN_JS "$filename.js" 2>&1) > "$filename.node.out"
 	echo $($RUN_MI "$filename.mc" 2>&1) > "$filename.mi.out"
-	diff_output=$(diff -y "$filename.node.out" "$filename.mi.out" 2>&1)
+	diff_output=$(diff "$filename.node.out" "$filename.mi.out" 2>&1)
   	exit_code=$?
 	clean_out
 	set -e
