@@ -1,11 +1,30 @@
+include "ext/file-ext.mc"
 
-type Port = Int
-type TimeStampedValue = (Int, Float)
+type Opaque
+type TimeStampedValue = (Int, Opaque)
+
+let toTimestampedValue : all a. (Int, a) -> (Int, Opaque) = lam tuple.
+  match tuple with (ts, value) in
+  (ts, unsafeCoerce value)
+
+let timestampValue : all a. Opaque -> a = lam tsv.
+  match tsv with (ts, value) in
+  unsafeCoerce value
 
 -- Functions for reading and writing time-stamped values (a tuple containing a
--- time-stamp and a value), using a latest-value semantics.
-external lvRead : Port -> TimeStampedValue
-external lvWrite : Port -> TimeStampedValue -> ()
+-- time-stamp and an opaque value), using a latest-value semantics.
+external lvRead : Int -> TimeStampedValue
+external lvWrite : Int -> TimeStampedValue -> ()
+
+external readBinary : ReadChannel -> Opaque
+let readBinary : all a. ReadChannel -> a =
+  lam inChannel.
+  unsafeCoerce (readBinary inChannel)
+
+external writeBinary : WriteChannel -> Opaque -> ()
+let writeBinary : all a. WriteChannel -> a -> () =
+  lam outChannel. lam v.
+  writeBinary outChannel (unsafeCoerce v)
 
 type Signal = Int
 
