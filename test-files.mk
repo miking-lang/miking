@@ -14,13 +14,11 @@ ipopt_files = $(wildcard stdlib/ipopt/*.mc)
 accelerate_files = $(wildcard test/examples/accelerate/*.mc)
 cuda_files = $(wildcard test/examples/accelerate/cuda/*.mc)
 futhark_files = $(wildcard test/examples/accelerate/futhark/*.mc)
-rtppl_ext += stdlib/ext/rtppl-ext.mc
 
 special_dependencies_files +=\
 	$(sundials_files)\
 	$(ipopt_files)\
-	$(accelerate_files)\
-	$(rtppl_ext)
+	$(accelerate_files)
 
 
 # These are special, special cases since the python externals are implemented
