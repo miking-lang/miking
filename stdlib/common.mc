@@ -28,6 +28,12 @@ let repeat : (() -> ()) -> Int -> () = lam f. lam n.
     if leqi n 0 then () else (f (); rec (subi n 1))
   in rec n
 
+-- Function repetition (for side-effects)
+let repeati : (Int -> ()) -> Int -> () = lam f. lam n.
+  recursive let rec = lam i.
+    if geqi i n then () else (f i; rec (addi i 1))
+  in rec 0
+
 -- Fixpoint computation for mutual recursion. Thanks Oleg Kiselyov!
 -- (http://okmij.org/ftp/Computation/fixed-point-combinators.html)
 let fixMutual : all a. all b. [[a -> b] -> a -> b] -> [a -> b] =

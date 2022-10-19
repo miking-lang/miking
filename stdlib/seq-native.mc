@@ -9,6 +9,8 @@ let map = lam f. lam s.
     else never
   in rec s
 
+let iter = lam f. lam s.  map f s; ()
+
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
 utest map (lam x. addi x 1) [] with []
 
@@ -19,6 +21,8 @@ let mapi = lam f. lam s.
     else match s with [a] ++ ss then cons (f i a) (rec (addi i 1) ss)
     else never
   in rec 0 s
+
+let iteri = lam f. lam s. mapi f s; ()
 
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
 utest mapi (lam i. lam x. i) [] with []
