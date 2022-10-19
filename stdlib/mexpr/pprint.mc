@@ -1166,11 +1166,6 @@ end
 -- MEXPR PPRINT FRAGMENT --
 ---------------------------
 
-let mexprBuiltInKeywords = [
-  "if", "then", "else", "true", "false", "match", "with", "utest", "type",
-  "con", "lang", "let", "recursive", "lam", "in", "end", "syn", "sem", "use",
-  "mexpr", "include", "never", "using", "external", "switch", "case", "all"
-]
 let mexprKeywords =
   let intrinsicStrs = map (lam e. match e with (str, _) in str) builtin in
   join [mexprBuiltInKeywords, intrinsicStrs, mexprExtendedKeywords]
