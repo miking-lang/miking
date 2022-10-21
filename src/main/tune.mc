@@ -55,7 +55,7 @@ let tune = lam files. lam options : Options. lam args.
       eliminateDeadCode = not options.keepDeadCode,
       keywords = holeKeywords
     } file in
-    let ast = makeKeywords [] ast in
+    let ast = makeKeywords ast in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (mexprToString ast) else ());

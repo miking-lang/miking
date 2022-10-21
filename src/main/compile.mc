@@ -119,7 +119,7 @@ let compile = lam files. lam options : Options. lam args.
       eliminateDeadCode = not options.keepDeadCode,
       keywords = mexprExtendedKeywords
     } file in
-    let ast = makeKeywords [] ast in
+    let ast = makeKeywords ast in
 
     -- Applies static and dynamic checks on the accelerated expressions, to
     -- verify that the code within them are supported by the accelerate

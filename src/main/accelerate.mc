@@ -213,7 +213,7 @@ let compileAccelerated =
     eliminateDeadCode = true,
     keywords = mexprExtendedKeywords
   } file in
-  let ast = makeKeywords [] ast in
+  let ast = makeKeywords ast in
 
   let ast = symbolizeExpr keywordsSymEnv ast in
   let ast = typeCheck ast in

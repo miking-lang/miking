@@ -401,27 +401,27 @@ let unitfn_ = ulam_ "x" unit_ in
 let addfn_ = ulam_ "acc" (ulam_ "i" (addi_ (var_ "acc") (var_ "i"))) in
 
 let expr = app_ (var_ "accelerate") (app_ id_ (int_ 2)) in
-utest makeKeywords [] expr with accelerate_ (app_ id_ (int_ 2)) using eqExpr in
+utest makeKeywords expr with accelerate_ (app_ id_ (int_ 2)) using eqExpr in
 
 let expr = app_ (var_ "flatten") emptySeq_ in
-utest makeKeywords [] expr with flatten_ emptySeq_ using eqExpr in
+utest makeKeywords expr with flatten_ emptySeq_ using eqExpr in
 
 let expr = appf3_ (var_ "map2") zip_ emptySeq_ emptySeq_ in
-utest makeKeywords [] expr with map2_ zip_ emptySeq_ emptySeq_ using eqExpr in
+utest makeKeywords expr with map2_ zip_ emptySeq_ emptySeq_ using eqExpr in
 
 let expr = appf3_ (var_ "reduce") id_ (int_ 0) emptySeq_ in
-utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
+utest makeKeywords expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
 
 let expr = appf2_ (var_ "seqLoop") (int_ 10) unitfn_ in
-utest makeKeywords [] expr with loop_ (int_ 10) unitfn_ using eqExpr in
+utest makeKeywords expr with loop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = appf3_ (var_ "seqLoopAcc") (int_ 0) (int_ 10) addfn_ in
-utest makeKeywords [] expr with loopAcc_ (int_ 0) (int_ 10) addfn_ using eqExpr in
+utest makeKeywords expr with loopAcc_ (int_ 0) (int_ 10) addfn_ using eqExpr in
 
 let expr = appf2_ (var_ "loop") (int_ 10) unitfn_ in
-utest makeKeywords [] expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in
+utest makeKeywords expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = app_ (var_ "printFloat") (float_ 3.14) in
-utest makeKeywords [] expr with printFloat_ (float_ 3.14) using eqExpr in
+utest makeKeywords expr with printFloat_ (float_ 3.14) using eqExpr in
 
 ()
