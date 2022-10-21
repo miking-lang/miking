@@ -325,8 +325,24 @@ lang LambdaLiftLiftGlobal = MExprAst
       (lifted, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let lifted = snoc lifted (liftRecursiveBinding (TmRecLets t)) in
-    match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
-    (lifted, inexpr)
+    liftGlobalH lifted t.inexpr
+  | TmType t ->
+    -- TODO(larshum, 2022-10-20): Lifting type and constructor definitions to
+    -- the top of the program may make an ill-typed program pass the
+    -- type-checking because types are placed on the top-level of the program.
+    -- In the general case, we want something more sophisticated to decide on
+    -- this here.
+    let lifted = snoc lifted (TmType {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
+  | TmConDef t ->
+    let lifted = snoc lifted (TmConDef {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
+  | TmUtest t ->
+    let lifted = snoc lifted (TmUtest {t with next = unit_}) in
+    liftGlobalH lifted t.next
+  | TmExt t ->
+    let lifted = snoc lifted (TmExt {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
 
   sem liftGlobal =
