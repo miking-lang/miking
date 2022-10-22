@@ -435,7 +435,7 @@ lang LambdaLiftTyAlls = MExprAst
   | TmExt t ->
     let inexpr = insertTyAlls tyAlls t.inexpr in
     TmExt {t with ty = tyTm inexpr, inexpr = inexpr}
-  | t -> t
+  | t -> smap_Expr_Expr (insertTyAlls tyAlls) t
 
   -- Replaces TyVar and TyFlex that refer to unbound variables with TyUnknown.
   -- This prevents type variables from escaping their scope, which may happen
