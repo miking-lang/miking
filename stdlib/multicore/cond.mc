@@ -6,26 +6,28 @@
 include "thread.mc"
 include "mutex.mc"
 
+type Cond
+
 -- 'condCreate ()' returns a new condition variable
-external externalCondCreate ! : Unit -> Cond
+external externalCondCreate ! : () -> Cond
 let condCreate = lam.
   externalCondCreate ()
 
 -- 'condWait c m' releases the mutex 'm' and suspends the current thread until
 -- condition variable 'c' is set
-external externalCondWait ! : Cond -> Mutex -> Unit
+external externalCondWait ! : Cond -> Mutex -> ()
 let condWait = lam c. lam m.
   externalCondWait c m
 
 -- 'condSignal c' signals the condition variable 'c', waking up ONE waiting
 -- thread
-external externalCondSignal ! : Cond -> Unit
+external externalCondSignal ! : Cond -> ()
 let condSignal = lam c.
   externalCondSignal c
 
 -- 'condBroadcast c' signals the condition variable 'c', waking up ALL waiting
 -- threads.
-external externalCondBroadcast ! : Cond -> Unit
+external externalCondBroadcast ! : Cond -> ()
 let condBroadcast = lam c.
   externalCondBroadcast c
 

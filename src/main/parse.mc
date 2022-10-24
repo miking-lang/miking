@@ -15,16 +15,11 @@ type ParseOptions = {
   -- Warn if there are pruned utests
   pruneExternalUtestsWarning : Bool,
 
+  -- Run dead code elimination
+  eliminateDeadCode : Bool,
+
   -- Additional keywords
   keywords : [String]
-}
-
-let defaultParseOptions = {
-  keepUtests = true,
-  pruneExternalUtests = false,
-  pruneExternalUtestsWarning = true,
-  findExternalsExclude = false,
-  keywords = []
 }
 
 let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
@@ -35,18 +30,18 @@ let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
         mapKeys (externalGetSupportedExternalImpls ())
       else []
     in
-    parseMCoreFile {
-      keepUtests = opt.keepUtests,
-      pruneExternalUtests = true,
-      externalsExclude = externalsExclude,
-      pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning,
-      keywords = opt.keywords
-    } file
+    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+      with keepUtests = opt.keepUtests }
+      with pruneExternalUtests = true }
+      with externalsExclude = externalsExclude }
+      with pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning }
+      with eliminateDeadCode = opt.eliminateDeadCode }
+      with keywords = opt.keywords } file
   else
-    parseMCoreFile {
-      keepUtests = opt.keepUtests,
-      pruneExternalUtests = false,
-      externalsExclude = [],
-      pruneExternalUtestsWarning = false,
-      keywords = opt.keywords
-  } file
+    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+      with keepUtests = opt.keepUtests }
+      with pruneExternalUtests = false }
+      with externalsExclude = [] }
+      with pruneExternalUtestsWarning = false }
+      with eliminateDeadCode = opt.eliminateDeadCode }
+      with keywords = opt.keywords } file

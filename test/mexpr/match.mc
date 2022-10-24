@@ -14,11 +14,12 @@ utest () with {} in
 
 -- Constructor with arguments
 type T a in
-con K1 : a -> T a in
-con K2 : a -> T a in
-con K3 : a -> T a in
+con K1 : all a. a -> T a in
+con K2 : all a. a -> T a in
+con K3 : all a. a -> T a in
 
-let eqT = lam elemEq. lam t1. lam t2.
+let eqT : all a. (a -> a -> Bool) -> T a -> T a -> Bool =
+  lam elemEq. lam t1. lam t2.
   let m = (t1, t2) in
   match m with (K1 l, K1 r) then
     elemEq l r
@@ -51,11 +52,11 @@ with "k" using eqString in
 
 
 -- Matching two constructors
-type FooBar in
-con Foo : a -> FooBar in
-con Bar : a -> FooBar in
+type FooBar a b in
+con Foo : all a. all b. a -> FooBar a b in
+con Bar : all a. all b. b -> FooBar a b in
 
-let f = lam x : FooBar.
+let f = lam x : FooBar (String, Int) Int.
   match x with Foo (s,n) then
     (n,s)
   else
@@ -123,7 +124,8 @@ utest match (1,2,3) with (_,2,_) then true else false with true in
 utest match (1,2,3) with (_,2,x) then x else 0 with 3 in
 
 -- Helper equality functions
-let eqIntIntEmptySeqTuple = lam t1 : (Int, Int, [a]). lam t2 : (Int, Int, [a]).
+let eqIntIntEmptySeqTuple =
+  lam t1 : (Int, Int, [(Int, Char)]). lam t2 : (Int, Int, [(Int, Char)]).
   and (eqi t1.0 t2.0)
     (and (eqi t1.1 t2.1) (and (eqi (length t1.2) (length t2.2)) (eqi (length t1.2) 0)))
 in
@@ -166,11 +168,11 @@ utest match "foobar" with "fo" ++ mid ++ "ar" then mid else "" with "ob" in
 utest match "foobar" with "fob" ++ mid ++ "ar" then mid else "" with "" in
 
 utest match [["a","b"],["c"]] with [a] then true else false with false in
-utest match [["a","b"],["c"]] with [a,b] then (a,b) else [] with (["a","b"],["c"]) in
+utest match [["a","b"],["c"]] with [a,b] then (a,b) else ([],[]) with (["a","b"],["c"]) in
 utest match (1,[["a","b"],["c"]],76) with (1,[a,b],0) then true else false with false in
-utest match (1,[["a","b"],["c"]],76) with (1,[a,b],76) then (a,b) else [] with (["a","b"],["c"]) in
-utest match (1,[["a","b"],["c"]],76) with (1,[a]++b,76) then (a,b) else [] with (["a","b"],[["c"]]) in
-utest match (1,[["a","b"],["c"]],76) with (1,b++[a],76) then (a,b) else [] with (["c"],[["a","b"]]) in
+utest match (1,[["a","b"],["c"]],76) with (1,[a,b],76) then (a,b) else ([],[]) with (["a","b"],["c"]) in
+utest match (1,[["a","b"],["c"]],76) with (1,[a]++b,76) then (a,b) else ([],[]) with (["a","b"],[["c"]]) in
+utest match (1,[["a","b"],["c"]],76) with (1,b++[a],76) then (a,b) else ([],[]) with (["c"],[["a","b"]]) in
 utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else [] with [["a","b"]] in
 
 -- Matching with records
@@ -183,6 +185,14 @@ utest match {blue = (1, 2)} with {blue = (1,3)} then true else false with false 
 utest match {blue = {red = true}} with {blue = {}} then true else false with true in
 utest match {blue = true, red = true} with {blue = _} & {red = _} then true else false with true in
 --utest match {blue = true} with {blue = _} & {red = _} then true else false with false in
+
+-- Matching with tuples
+utest match ("foo", "bar") with ("foo", "bar") then true else false with true in
+utest match ("foo", "bar") with ("foo", _) then true else false with true in
+utest match ("foo", "bar") with (_, "foo") then true else false with false in
+utest match ("foo",) with ("foo",) then true else false with true in
+utest match ("foo",) with (_,) then true else false with true in
+utest match ("foo",) with ("bar",) then true else false with false in
 
 -- Matching with "&", "|", "!"
 utest match true with !_ then true else false with false in

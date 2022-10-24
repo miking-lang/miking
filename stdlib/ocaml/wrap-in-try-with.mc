@@ -34,7 +34,7 @@ lang OCamlTryWithWrap = MExprAst + OCamlAst
     match foldl wrapTopInTryWith (unit_, []) tops with (tryExpr, tops) in
     let enableBacktracesTop = OTopLet {
       ident = nameSym "",
-      tyBody = TyRecord {fields = mapEmpty cmpSID, labels = [], info = NoInfo ()},
+      tyBody = TyRecord {fields = mapEmpty cmpSID, info = NoInfo ()},
       body = OTmExprExt {expr = "Printexc.record_backtrace true"}} in
     let excId = nameSym "exc" in
     let withExpr = bindall_ [

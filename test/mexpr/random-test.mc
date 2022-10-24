@@ -12,7 +12,7 @@ mexpr
 -- Generates a random number from a uniform distribution in the interval ['l','u').
 -- Self-initializes the random generator if not already set by randSetSeed.
 
--- 'randSetSeed s : Int -> Unit'
+-- 'randSetSeed s : Int -> ()'
 -- Seeds the random generator. The same seeds generates the same sequence of numbers.
 
 -- Generate a sequence of random numbers

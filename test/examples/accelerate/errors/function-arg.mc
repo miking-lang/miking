@@ -5,7 +5,7 @@
 include "common.mc" -- printLn
 include "string.mc" -- int2string
 
-let accmapsum : (Int -> Int) -> [Int] -> [Int] = lam f. lam s.
+let accmapsum : (Int -> Int) -> [Int] -> Int = lam f. lam s.
   accelerate (foldl addi 0 (map f s))
 
 mexpr

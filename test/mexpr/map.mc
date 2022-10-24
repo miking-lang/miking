@@ -62,7 +62,7 @@ with true in
 utest mapChooseOrElse (lam. (0, '0')) (mapEmpty subi)
 with (0, '0') in
 
-let bindsSort = sort (lam t1 : (k, v). lam t2 : (k, v). subi t1.0 t2.0) in
+let bindsSort = sort (lam t1 : (Int, Char). lam t2 : (Int, Char). subi t1.0 t2.0) in
 
 let m = mapMap (lam c. int2char (addi 1 (char2int c))) m in
 utest bindsSort (mapBindings m) with [(1,'2'), (2,'3'), (3,'4'), (4,'6')] in

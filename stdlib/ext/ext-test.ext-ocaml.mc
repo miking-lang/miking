@@ -7,6 +7,35 @@ let implWithLibs = lam arg : { expr : String, ty : Type, libraries : [String] }.
 let impl = lam arg : { expr : String, ty : Type }.
   implWithLibs { expr = arg.expr, ty = arg.ty, libraries = [] }
 
+let myrecty1 = otyrecordext_
+  (otyvarext_ "Boot.Exttest.myrec1_t" [])
+  [
+    { label = "a", asLabel = "c", ty = tyint_ },
+    { label = "b", asLabel = "d", ty = tyfloat_ }
+  ]
+
+let myrecty2 = otyrecordext_
+  (otyvarext_ "Boot.Exttest.myrec2_t" [])
+  [
+    { label = "b", asLabel = "d", ty = tyint_ },
+    { label = "a", asLabel = "c", ty = otylist_ tyint_ }
+  ]
+
+let myrecty3 = otyrecordext_
+  (otyvarext_ "Boot.Exttest.myrec3_t" [])
+  [
+    {
+      label = "a",
+      asLabel = "c",
+      ty = myrecty1
+    },
+    {
+      label = "b",
+      asLabel = "d",
+      ty = myrecty2
+    }
+  ]
+
 let extTestMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
@@ -98,77 +127,42 @@ let extTestMap =
       impl
       {
         expr = "Boot.Exttest.myrec1",
-        ty = otyrecord_
-              (otyvarext_ "Boot.Exttest.myrec1_t" [])
-              [("a", tyint_), ("b", tyfloat_)]
+        ty = myrecty1
       }
     ]),
     ("extTestRecord1A", [
       impl
       {
         expr = "Boot.Exttest.myrec1_a",
-        ty = tyarrow_ (otyrecord_
-                        (otyvarext_ "Boot.Exttest.myrec1_t" [])
-                        [("a", tyint_), ("b", tyfloat_)])
-                      tyint_
+        ty = tyarrow_ myrecty1 tyint_
       }
     ]),
     ("extTestRecord2", [
       impl
       {
         expr = "Boot.Exttest.myrec2",
-        ty = otyrecord_
-              (otyvarext_ "Boot.Exttest.myrec2_t" [])
-              [("a", otylist_ tyint_), ("b", tyint_)]
+        ty = myrecty2
       }
     ]),
     ("extTestRecord2A", [
       impl
       {
         expr = "Boot.Exttest.myrec2_a",
-        ty = tyarrow_ (otyrecord_
-                        (otyvarext_ "Boot.Exttest.myrec2_t" [])
-                        [("a", otylist_ tyint_), ("b", tyint_)])
-                      (otylist_ tyint_)
+        ty = tyarrow_ myrecty2 (otylist_ tyint_)
       }
     ]),
     ("extTestRecord3", [
       impl
       {
         expr = "Boot.Exttest.myrec3",
-        ty = otyrecord_
-              (otyvarext_ "Boot.Exttest.myrec3_t" [])
-              [
-                ("a"
-                ,otyrecord_
-                  (otyvarext_ "Boot.Exttest.myrec1_t" [])
-                  [("a", tyint_), ("b", tyfloat_)]),
-                ("b"
-                ,otyrecord_
-                  (otyvarext_ "Boot.Exttest.myrec2_t" [])
-                  [("a", otylist_ tyint_), ("b", tyint_)])
-              ]
+        ty = myrecty3
       }
     ]),
     ("extTestRecord3BA", [
       impl
       {
         expr = "Boot.Exttest.myrec3_b_a",
-        ty =
-          tyarrow_
-            (otyrecord_
-              (otyvarext_ "Boot.Exttest.myrec3_t" [])
-              [
-                ("a"
-                ,otyrecord_
-                  (otyvarext_ "Boot.Exttest.myrec1_t" [])
-                  [("a", tyint_), ("b", tyfloat_)]),
-                ("b"
-                ,otyrecord_
-                  (otyvarext_ "Boot.Exttest.myrec2_t" [])
-                  [("a", otylist_ tyint_), ("b", tyint_)])
-              ])
-            (otylist_ tyint_)
+        ty = tyarrow_ myrecty3 (otylist_ tyint_)
       }
     ]),
     ("extTestArgLabel", [

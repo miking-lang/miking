@@ -42,7 +42,7 @@ jobs:
           make install
 
       - name: Run tests
-        timeout-minutes: 20
+        timeout-minutes: 60
         run: |
           eval $(opam env)
           make test-all
@@ -73,7 +73,11 @@ jobs:
           brew install openblas
 
           # Export environment variable needed by openblas
-          export PKG_CONFIG_PATH=/usr/local/opt/openblas/lib/pkgconfig
+          export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
+
+          # Hack to fix installation of owl
+          ln -s $(brew --prefix gcc)/lib/gcc/current/libgcc_s.1.1.dylib $(brew --prefix openblas)/lib
+          ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
 
           # Install all opam packages used in make test-all
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
@@ -85,7 +89,7 @@ jobs:
           make install
 
       - name: Run tests
-        timeout-minutes: 20
+        timeout-minutes: 60
         run: |
           eval $(opam env)
           make test-all

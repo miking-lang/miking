@@ -8,13 +8,13 @@ include "eqset.mc"
 -- call graph 'g' for the equivalence classes used for classifying computation
 -- contexts for holes. The paths are suffixes of paths starting in any of the
 -- 'startNodes' and end in 'endNode'.
-let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
+let eqPaths : all v. all l. Digraph v l -> v -> Int -> [v] -> [[(v,v,l)]] =
   lam g. lam endNode. lam depth. lam startNodes.
     -- Reverse graph for forward search (more efficient for adjacency map)
     let gRev = digraphReverse g in
     let eqv = lam v1. lam v2. eqi (digraphCmpv g v1 v2) 0 in
 
-    recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
+    recursive let traverse : Digraph v l -> v -> [(v,v,l)] -> [v] -> Int -> [[(v,v,l)]] =
       lam g. lam v. lam curPath. lam visited. lam d.
         let fromEdges = digraphEdgesFrom v g in
         if eqi d 0 then [curPath]
@@ -31,18 +31,19 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
             else paths in
           foldl concat [] paths
     in
-    let res = traverse gRev endNode [] [] depth in
-    map (lam p. map (lam e : (Unknown, Unknown, Unknown). (e.1, e.0, e.2)) p) res
+    let res: [[(v,v,l)]] = traverse gRev endNode [] [] depth in
+    map (lam p: [(v,v,l)]. map (lam e: (v, v, l). (e.1, e.0, e.2)) p) res
 
-let eqPathsToLbls : [[DigraphEdge v l]] -> [[l]] = lam paths.
+let eqPathsToLbls : all v. all l. [[DigraphEdge v l]] -> [[l]] = lam paths.
   map (lam p. map (lam e : DigraphEdge v l. e.2) p) paths
 
 mexpr
 -- To construct test graphs
 let empty = digraphEmpty subi eqChar in
 let fromList = lam vs. foldl (lam g. lam v. digraphAddVertex v g) empty vs in
-let addEdges = lam g. lam es.
-  foldl (lam acc. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 acc) g es
+let addEdges : all v. all l. Digraph v l -> [DigraphEdge v l] -> Digraph v l =
+  lam g. lam es.
+    foldl (lam acc. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 acc) g es
 in
 
 let eqPaths = lam g. lam endNode. lam depth. lam startNodes.

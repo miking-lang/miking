@@ -1,6 +1,15 @@
-
-include "math-ext.mc"
+include "math.mc"
 include "bool.mc"
+
+-- Gamma
+external externalGammaLogPdf : Float -> Float -> Float -> Float
+external externalGammaSample ! : Float -> Float -> Float
+let gammaPdf = lam shape:Float. lam scale:Float. lam x:Float.
+  exp (externalGammaLogPdf x shape scale)
+let gammaLogPdf = lam shape:Float. lam scale:Float. lam x:Float.
+  externalGammaLogPdf x shape scale
+let gammaSample = lam shape:Float. lam scale:Float.
+  externalGammaSample shape scale
 
 -- Binomial and Bernoulli
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
@@ -11,12 +20,12 @@ let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int.
   externalBinomialLogPmf x p n
 let binomialSample = lam p:Float. lam n:Int.
   externalBinomialSample p n
-let bernoulliPmf = lam p:Float. lam x:Int.
-  if eqi x 0 then subf 1. p else p
-let bernoulliLogPmf = lam p:Float. lam x:Int.
+let bernoulliPmf = lam p:Float. lam x:Bool.
+  if x then p else subf 1. p
+let bernoulliLogPmf = lam p:Float. lam x:Bool.
   log (bernoulliPmf p x)
 let bernoulliSample = lam p:Float.
-  externalBinomialSample p 1
+  if eqi 1 (externalBinomialSample p 1) then true else false
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
@@ -59,22 +68,75 @@ let categoricalSample : [Float] -> Int =
 external externalDirichletLogPdf : [Float] -> [Float] -> Float
 external externalDirichletSample : [Float] -> [Float]
 let dirichletLogPdf : [Float] -> [Float] -> Float =
-  lam alpha. lam xs. externalDirichletLogPdf xs alpha
+  lam alpha. lam xs. if eqfApprox 1e-15 (foldl addf 0. xs) 1. then externalDirichletLogPdf xs alpha else negf inf
 let dirichletPdf : [Float] -> [Float] -> Float =
   lam alpha. lam xs. exp (externalDirichletLogPdf xs alpha)
 let dirichletSample : [Float] -> [Float] =
   lam alpha. externalDirichletSample alpha
 
--- Uniform (continuous)
-external uniformSample ! : Unit -> Float
+-- Uniform (continuous between a and b)
+external externalUniformContinuousSample ! : Float -> Float -> Float
+let uniformContinuousSample = lam a. lam b.
+  externalUniformContinuousSample a b
+let uniformContinuousLogPdf = lam a. lam b. lam x.
+  if geqf x a then
+    if leqf x b then subf (log 1.0) (log (subf b a))
+    else 0.
+  else 0.
+let uniformContinuousPdf = lam a. lam b. lam x.
+  if geqf x a then
+    if leqf x b then divf 1.0 (subf b a)
+    else 0.
+  else 0.
+
+-- Uniform on 0 1
+let uniformSample : () -> Float = lam. uniformContinuousSample 0. 1.
 
 -- Random (discrete)
-external externalRandomSample ! : Int -> Int -> Int
-let randomSample = lam a:Int. lam b:Int.
-  externalRandomSample a b
+external externalUniformDiscreteSample ! : Int -> Int -> Int
+let uniformDiscreteSample = lam a:Int. lam b:Int.
+  externalUniformDiscreteSample a b
+let uniformDiscreteLogPdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
+  if geqi x a then
+    if leqi x b then subf (log 1.0) (log (int2float (addi 1 (subi b a))))
+    else 0.
+  else 0.
+let uniformDiscretePdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
+  if geqi x a then
+    if leqi x b then divf 1.0 (int2float (addi 1 (subi b a)))
+    else 0.
+  else 0.
 
+-- Poisson
+let poissonLogPmf = lam lambda:Float. lam x:Int.
+  subf (subf (mulf (int2float x) (log lambda)) lambda) (logFactorial x)
+let poissonPmf = lam lambda:Float. lam x:Int.
+  exp (poissonLogPmf lambda x)
+-- Simple but inefficient algorithm for drawing from Poisson. Translated from
+-- numpy C source code and originally from Knuth according to Wikipedia.
+-- OPT(dlunde,2022-05-16): We want to use an external for this eventually.
+let poissonSample = lam lambda:Float.
+  let enlam = exp (negf lambda) in
+  let x = 0 in
+  let prod = 1. in
+  recursive let rec = lam x. lam prod.
+    let u = uniformSample () in
+    let prod = mulf prod u in
+    if gtf prod enlam then rec (addi x 1) prod
+    else x
+  in rec x prod
+
+-- Add exponential
+external externalExponentialSample ! : Float -> Float
+let exponentialSample = lam lambda:Float.
+  externalExponentialSample lambda
+let exponentialLogPdf : Float -> Float -> Float = lam lambda. lam x.
+  subf (log lambda) (mulf lambda x)
+let exponentialPdf : Float -> Float -> Float = lam lambda. lam x.
+  exp (exponentialLogPdf lambda x)
 
 mexpr
+
 
 -- Functions for testing floats. Should perhaps be in another library.
 let maxf = lam r. lam l. if gtf r l then r else l in
@@ -89,13 +151,18 @@ let intRange = lam lower. lam upper. lam r. lam l.
 let floatRange = lam lower. lam upper. lam r. lam l.
   and (and (leqf r upper) (geqf r lower)) (and (leqf l upper) (geqf l lower)) in
 
+-- Testing Gamma
+utest gammaPdf 1. 2. 1. with 0.303265329856 using _eqf in
+utest exp (gammaLogPdf 2. 3. 1.) with 0.0796145900638 using _eqf in
+utest gammaSample 1. 2. with 1. using floatRange 0. inf in
+
 -- Testing Binomial and Bernoulli
 utest binomialPmf 0.7 20 15 with 0.17886305057 using _eqf in
 utest exp (binomialLogPmf 0.5 40 20) with 0.12537068762 using _eqf in
 utest binomialSample 0.7 20 with 0 using intRange 0 20 in
-utest bernoulliPmf 0.3 0 with 0.7 using _eqf in
-utest exp (bernoulliLogPmf 0.6 1) with 0.6 using _eqf in
-utest bernoulliSample 0.6 with 0 using intRange 0 1 in
+utest bernoulliPmf 0.3 false with 0.7 using _eqf in
+utest exp (bernoulliLogPmf 0.6 true) with 0.6 using _eqf in
+utest bernoulliSample 0.6 with false using lam. lam. true in
 
 -- Testing Beta
 utest betaPdf 2. 2. 0.5 with 1.5 using _eqf in
@@ -125,10 +192,27 @@ utest dirichletPdf [1.0, 1.0, 2.0] [0.01, 0.01, 0.98] with 5.88 using _eqf in
 utest dirichletSample [5.0, 5.0, 5.0] with [0.] using
   lam l. lam r. _eqf (foldl addf 0. l) 1.0 in
 
--- Testing Uniform
+-- Testing Continuous uniform
+utest uniformContinuousSample 1.0 2.0 with 0. using floatRange 0. 2. in
+utest exp (uniformContinuousLogPdf 1.0 2.0 1.5) with 1.0 using _eqf in
+utest uniformContinuousPdf 1.0 2.0 1.5 with 1.0 using _eqf in
+
+-- Testing (0,1)-uniform
 utest uniformSample () with 0. using floatRange 0. 1. in
 
--- Testing Random
-utest randomSample 3 8 with 3 using intRange 3 8 in
+-- Testing Discrete uniform
+utest uniformDiscreteSample 3 8 with 3 using intRange 3 8 in
+utest exp (uniformDiscreteLogPdf 1 2 1) with 0.5 using _eqf in
+utest uniformDiscretePdf 1 2 1 with 0.5 using _eqf in
+
+-- Testing Poisson
+utest poissonPmf 2.0 2 with 0.270670566473 using _eqf in
+utest exp (poissonLogPmf 3.0 2) with 0.224041807655 using _eqf in
+utest poissonSample 2.0 with 3 using intRange 0 100000 in
+
+-- Testing Exponential
+utest exponentialSample 1.0 with 0. using floatRange 0. inf in
+utest exp (exponentialLogPdf 1.0 2.0) with 0.135335283237 using _eqf in
+utest exponentialPdf 2.0 2.0 with 0.0366312777775 using _eqf in
 
 ()

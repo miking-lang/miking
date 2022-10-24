@@ -18,15 +18,15 @@ type ContextExpanded =
 { table : LookupTable    -- The initial lookup table
 , tempDir : String       -- The temporary directory
 , tempFile : String      -- The file from which hole values are read
-, cleanup : Unit -> Unit -- Removes all temporary files from the disk
+, cleanup : () -> ()     -- Removes all temporary files from the disk
 }
 
 -- Generate code for looking up a value of a hole depending on its call history
-let contextExpansionLookupCallCtx
-  : (Int -> Expr) -> PTree Name -> Name -> CallCtxEnv -> Expr =
-  lam lookup. lam tree. lam incVarName. lam env.
+let contextExpansionLookupCallCtx =
+  use Ast in
+  lam lookup: (Int -> Expr). lam tree: PTree NameInfo. lam incVarName: Name. lam env: CallCtxEnv.
     use MExprAst in
-    recursive let work : NameInfo -> [PTree NameInfo] -> [NameInfo] -> Expr =
+    recursive let work : Name -> Map NameInfo (PTree NameInfo) -> [NameInfo] -> Expr =
       lam incVarName. lam children. lam acc.
         let children = mapValues children in
         match children with [] then never_
@@ -70,7 +70,9 @@ lang ContextExpand = HoleAst
   --  replace them by lookups in a static table.
   sem contextExpand (env : CallCtxEnv) =
   | t ->
-    let lookup = lam i. tensorGetExn_ tyunknown_ (nvar_ _table) (seq_ [int_ i]) in
+    let lookup = _lookupFromInt env (lam i.
+      tensorGetExn_ tyint_ (nvar_ _table) (seq_ [int_ i]))
+    in
     let ast = _contextExpandWithLookup env lookup t in
     let tempDir = sysTempDirMake () in
     let tuneFile = sysJoinPath tempDir ".tune" in
@@ -78,13 +80,19 @@ lang ContextExpand = HoleAst
     ( { table = _initAssignments env
       , tempDir = tempDir
       , tempFile = tuneFile
-      , cleanup = sysTempDirDelete tempDir
+      , cleanup = lam. sysTempDirDelete tempDir (); ()
       }, ast )
 
   -- 'insert public table t' replaces the holes in expression 't' by the values
   -- in 'table'
   sem insert (env : CallCtxEnv) (table : LookupTable) =
-  | t -> _contextExpandWithLookup env (lam i. get table i) t
+  | t ->
+    _contextExpandWithLookup env (_lookupFromInt env (lam i. get table i)) t
+
+  -- Converts the ith table entry from an integer to the type of the hole
+  sem _lookupFromInt (env: CallCtxEnv) (lookup: Int -> Expr) =
+  | i ->
+    fromInt (get env.idx2hole i) (lookup i)
 
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.
@@ -99,11 +107,13 @@ lang ContextExpand = HoleAst
         if nameInfoEq funDefined callGraphTop then
           -- Context-sensitive hole on top-level: handle as a global hole
           lookupGlobal t.info
-        else
-          let iv = callCtxFun2Inc funDefined.0 env in
+        else match callCtxFunLookup funDefined.0 env with Some iv then
           let tree = mapFindExn (ident, t.info) env.contexts in
           let res = contextExpansionLookupCallCtx lookup tree iv env in
           res
+        else
+          -- Context-sensitive hole without any incoming calls
+          lookupGlobal t.info
     in TmLet {{t with body = body}
                  with inexpr = _contextExpandWithLookup env lookup t.inexpr}
 
@@ -119,19 +129,7 @@ lang ContextExpand = HoleAst
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
     use BootParser in
-    let impl = parseMExprString [] "
-    let or: Bool -> Bool -> Bool =
-      lam a. lam b. if a then true else b in
-
-    let zipWith = lam f. lam seq1. lam seq2.
-      recursive let work = lam a. lam s1. lam s2.
-        if or (null s1) (null s2) then a
-        else
-          work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
-        in
-        work [] seq1 seq2
-    in
-
+    let impl = parseMExprStringKeywords [] "
     let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
       recursive let work = lam s1. lam s2.
         match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
@@ -176,12 +174,6 @@ lang ContextExpand = HoleAst
       in
       if null delim then [s]
       else work [] 0 0
-    in
-
-    let string2bool = lam s : String.
-      match s with \"true\" then true
-      else match s with \"false\" then false
-      else error (join [\"Cannot be converted to Bool: \'\", s, \"\'\"])
     in
 
     recursive let any = lam p. lam seq.
@@ -229,28 +221,16 @@ lang ContextExpand = HoleAst
     " in
 
     use MExprSym in
-    let impl = symbolize impl in
+    let impl = symbolizeExpr {symEnvEmpty with strictTypeVars = false} impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
       match findName s expr with Some n then n
       else error (concat "not found: " s) in
 
-    let zipWithName = getName "zipWith" impl in
-    let string2boolName = getName "string2bool" impl in
     let string2intName = getName "string2int" impl in
     let strSplitName = getName "strSplit" impl in
     let strTrimName = getName "strTrim" impl in
     let seq2TensorName = getName "seq2Tensor" impl in
-
-    let convertFuns = map (lam h.
-      match h with TmHole {ty = TyBool _} then string2boolName
-      else match h with TmHole {ty = TyInt _} then string2intName
-      else error "Unsupported type"
-    ) env.idx2hole in
-
-    let x = nameSym "x" in
-    let y = nameSym "y" in
-    let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
 
     let fileContent = nameSym "fileContent" in
     let strVals = nameSym "strVals" in
@@ -270,9 +250,7 @@ lang ContextExpand = HoleAst
         (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
         (nvar_ strVals))
     -- Convert strings into values
-    , nulet_ _table
-      (appf3_ (nvar_ zipWithName) doConvert
-        (seq_ (map nvar_ convertFuns)) (nvar_ strVals))
+    , nulet_ _table (map_ (nvar_ string2intName) (nvar_ strVals))
     -- Convert table into a tensor (for constant-time lookups)
     , nulet_ _table (app_ (nvar_ seq2TensorName) (nvar_ _table))
     , tm
@@ -296,14 +274,15 @@ let anf = compose normalizeTerm symbolize in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprString holeKeywords str in
-  let ast = makeKeywords [] ast in
+  let ast = parseMExprStringKeywords holeKeywords str in
+  let ast = makeKeywords ast in
   symbolize ast
 in
 
 --let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
-let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
-  lam debug: Bool. lam ast: Expr. lam lookupMap: Map String (Map [String] Expr).
+-- let test : Bool -> Expr -> Map String (Map [String] Expr) -> Expr =
+let test : Bool -> Expr -> [(String, [([String],Expr)])] -> String =
+  lam debug: Bool. lam ast: Expr. lam lookupMap: [(String, [([String],Expr)])].
     (if debug then
        printLn "-------- BEFORE ANF --------";
        printLn (expr2str ast)
@@ -323,7 +302,7 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
      else ());
 
     -- Convert map to lookup table, use default for no value provided
-    let lookupMap : [(String, Map [String] Expr)] = map (lam t : (String, [([String],Expr)]).
+    let lookupMap: [(String, Map [String] Expr)] = map (lam t : (String, [([String],Expr)]).
       (t.0, mapFromSeq (seqCmp cmpString) t.1)) lookupMap in
     let lookupMap : Map String (Map [String] Expr) = mapFromSeq cmpString lookupMap in
 
@@ -346,7 +325,8 @@ let test : Bool -> Expr -> [( String, [( [String], Expr )] )] -> Expr =
     let dumpTable = lam table : LookupTable.
       use MExprPrettyPrint in
       let rows = mapi (lam i. lam expr.
-        join [int2string i, ": ", expr2str expr]) table in
+        let v = toInt expr (get env.idx2hole i) in
+        join [int2string i, ": ", int2string v]) table in
       let rows = cons (int2string (length table)) rows in
       let str = strJoin "\n" (concat rows ["="]) in
       writeFile res.tempFile str
@@ -449,5 +429,20 @@ map f [1,2,3]
 utest test debug t
 [ ("h", [ (["a"], int_ 1) ]) ]
 with "[2,3,4]" using eqTest in
+
+
+-- Context-sensitive hole that is not used (dead code). Use default value.
+let t = parse
+"
+let f = lam x.
+  let h = hole (Boolean {depth = 1, default = true}) in
+  h
+in
+1
+" in
+
+utest test debug t
+[ ("h", [ ([], true_) ]) ]
+with "1" using eqTest in
 
 ()

@@ -15,11 +15,13 @@ include "nfa.mc"
 
 -- adds syntactic sugar for DFA type
 -- DFA is based on the same data types as the NFA
-type DFA = NFA
+type DFA v l = NFA v l
 
 -- check for specific duplicate label
 recursive
-let checkSpecificDuplicate = lam trans. lam rest. lam eqv. lam eql.
+let checkSpecificDuplicate : all v. all l.
+  DigraphEdge v l -> [DigraphEdge v l] -> (v -> v -> Bool) -> (l -> l -> Bool) -> Bool =
+  lam trans. lam rest. lam eqv. lam eql.
   if(eqi (length rest) 0) then false
   else
   let first = head rest in
@@ -30,12 +32,14 @@ end
 
 -- check for duplicate labels
 recursive
-let checkDuplicateLabels = lam trans. lam eqv. lam eql.
-  if (leqi (length trans) 1) then (false, (0,0))
+let checkDuplicateLabels : all v. all l.
+  [DigraphEdge v l] -> (v -> v -> Bool) -> (l -> l -> Bool) -> Option (v, l) =
+  lam trans. lam eqv. lam eql.
+  if (leqi (length trans) 1) then None ()
   else
   let first = head trans in
   let rest = tail trans in
-  if(checkSpecificDuplicate first rest eqv eql) then (true, (first.0, first.2))
+  if(checkSpecificDuplicate first rest eqv eql) then Some (first.0, first.2)
   else
   checkDuplicateLabels rest eqv eql
 end
@@ -43,8 +47,8 @@ end
 -- constructor for the DFA
 let dfaConstr = lam s. lam trans. lam startS. lam accS. lam cmpv. lam eql.
   let eqv = lam v1. lam v2. eqi (cmpv v1 v2) 0 in
-	let err = checkDuplicateLabels trans eqv eql in
-	if (err.0) then error "There are duplicate labels for same state outgoing transition at"
+	match checkDuplicateLabels trans eqv eql with
+	Some _ then error "There are duplicate labels for same state outgoing transition at"
 	else nfaConstr s trans startS accS cmpv eql
 
 -- Creat a DFA from a Digraph

@@ -9,6 +9,7 @@ type OCamlTopBinding =
 
 lang OCamlTopAst
   syn Top =
+  | OTopTypeDecl { ident : Name, ty : Type }
   | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
   | OTopCExternalDecl { ident : Name, ty : Type, bytecodeIdent : Name,
                         nativeIdent : Name }
@@ -26,7 +27,9 @@ lang OCamlRecord
   syn Pat =
   | OPatRecord {bindings : Map SID Pat}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmRecord t ->
     let bindFunc = lam acc. lam bind : (String, Expr).
       match f acc bind.1 with (acc, expr) then
@@ -40,7 +43,9 @@ lang OCamlRecord
       (acc, OTmProject {t with tm = tm})
     else never
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat f acc =
   | OPatRecord t ->
     match mapMapAccum (lam acc. lam. lam p. f acc p) acc t.bindings
     with (acc, bindings) then
@@ -57,7 +62,9 @@ lang OCamlMatch
 
   syn Pat =
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmMatch t ->
     let armsFunc = lam acc. lam arm : (Pat, Expr).
       match f acc arm.1 with (acc, expr) then
@@ -75,7 +82,9 @@ lang OCamlArray
   syn Expr =
   | OTmArray {tms : [Expr]}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmArray t ->
     match mapAccumL f acc t.tms with (acc, tms) then
       (acc, OTmArray {t with tms = tms})
@@ -89,13 +98,17 @@ lang OCamlTuple
   syn Pat =
   | OPatTuple { pats : [Pat] }
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmTuple t ->
     match mapAccumL f acc t.values with (acc, values) then
       (acc, OTmTuple {t with values = values})
     else never
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat f acc =
   | OPatTuple t ->
     match mapAccumL f acc t.pats with (acc, pats) then
       (acc, OPatTuple {t with pats = pats})
@@ -109,13 +122,17 @@ lang OCamlData
   syn Pat =
   | OPatCon { ident : Name, args : [Pat] }
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmConApp t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OTmConApp {t with args = args})
     else never
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat f acc =
   | OPatCon t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OPatCon {t with args = args})
@@ -144,13 +161,17 @@ lang OCamlExternal
   syn Pat =
   | OPatConExt { ident : String, args : [Pat] }
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmConAppExt t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OTmConAppExt {t with args = args})
     else never
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat
+    : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat f acc =
   | OPatConExt t ->
     match mapAccumL f acc t.args with (acc, args) then
       (acc, OPatConExt {t with args = args})
@@ -161,7 +182,9 @@ lang OCamlLabel
   syn Expr =
   | OTmLabel { label : String, arg : Expr }
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmLabel t ->
     match f acc t.arg with (acc, arg) then
       (acc, OTmLabel {t with arg = arg})
@@ -172,7 +195,9 @@ lang OCamlLam
   syn Expr =
   | OTmLam {label : Option String, ident : Name, body : Expr}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr
+    : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | OTmLam t ->
     match f acc t.body with (acc, body) then
       (acc, OTmLam {t with body = body})
@@ -187,16 +212,25 @@ lang OCamlTypeAst =
   | OTyList {info : Info, ty : Type}
   | OTyArray {info : Info, ty : Type}
   | OTyTuple {info : Info, tys : [Type]}
-  | OTyBigarrayGenarray {info : Info, tys : [Type]}
-  | OTyBigarrayArray {info : Info, rank : Int, tys : [Type]}
+  | OTyBigarrayGenarray {info : Info, layout : Type, elty : Type, ty : Type}
+  | OTyBigarrayArray {
+      info : Info, rank : Int,  layout : Type, elty : Type, ty : Type
+    }
   | OTyBigarrayFloat64Elt {info : Info}
   | OTyBigarrayIntElt {info : Info}
   | OTyBigarrayClayout {info : Info}
   | OTyLabel {info : Info, label : String, ty : Type}
+  | OTyVar {info : Info, ident : Name}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
   | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
+  | OTyRecordExt {
+      info : Info,
+      fields : [{label : String, asLabel : String, ty : Type}],
+      tyident : Type
+    }
   | OTyString {info: Info}
+  | OTyInlinedRecord {info : Info}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -211,48 +245,61 @@ lang OCamlTypeAst =
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
   | OTyRecord r -> r.info
+  | OTyRecordExt r -> r.info
   | OTyString r -> r.info
+  | OTyInlinedRecord r -> r.info
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type
+    : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
+  sem smapAccumL_Type_Type f acc =
   | OTyList t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyList {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyList {t with ty = ty})
   | OTyArray t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyArray {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyArray {t with ty = ty})
   | OTyTuple t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyTuple {t with tys = tys})
-    else never
+    match mapAccumL f acc t.tys with (acc, tys) in
+    (acc, OTyTuple {t with tys = tys})
   | OTyBigarrayGenarray t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyBigarrayGenarray {t with tys = tys})
-    else never
+    match t with {ty = ty, elty = elty, layout = layout} in
+    match f acc ty with (acc, ty) in
+    match f acc elty with (acc, elty) in
+    match f acc layout with (acc, layout) in
+    let t = {{{t with ty = ty} with elty = elty} with layout = layout} in
+    (acc, OTyBigarrayGenarray t)
   | OTyBigarrayArray t ->
-    match mapAccumL f acc t.tys with (acc, tys) then
-      (acc, OTyBigarrayArray {t with tys = tys})
-    else never
+    match t with {ty = ty, elty = elty, layout = layout} in
+    match f acc ty with (acc, ty) in
+    match f acc elty with (acc, elty) in
+    match f acc layout with (acc, layout) in
+    let t = {{{t with ty = ty} with elty = elty} with layout = layout} in
+    (acc, OTyBigarrayArray t)
   | OTyLabel t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, OTyLabel {t with ty = ty})
-    else never
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyLabel {t with ty = ty})
   | OTyVarExt t ->
-    match mapAccumL f acc t.args with (acc, args) then
-      (acc, OTyVarExt {t with args = args})
-    else never
+    match mapAccumL f acc t.args with (acc, args) in
+    (acc, OTyVarExt {t with args = args})
   | OTyRecord t ->
     let fieldFun = lam acc. lam field : (String, Type).
-      match f acc field.1 with (acc, ty) then
-        (acc, (field.0, ty))
-      else never in
-    match mapAccumL fieldFun acc t.fields with (acc, fields) then
-      match f acc t.tyident with (acc, tyident) then
-        (acc, OTyRecord {{t with fields = fields}
-                            with tyident = tyident})
-      else never
-    else never
+      match f acc field.1 with (acc, ty) in
+      (acc, (field.0, ty))
+    in
+    match mapAccumL fieldFun acc t.fields with (acc, fields) in
+    match f acc t.tyident with (acc, tyident) in
+    (acc, OTyRecord {{t with fields = fields}
+                        with tyident = tyident})
+  | OTyRecordExt t ->
+    let fieldFun =
+      lam acc. lam field : {label : String, asLabel : String, ty : Type}.
+        match f acc field.ty with (acc, ty) in
+        (acc, { field with ty = ty })
+    in
+    match mapAccumL fieldFun acc t.fields with (acc, fields) in
+    match f acc t.tyident with (acc, tyident) in
+    (acc, OTyRecordExt {{t with fields = fields}
+                           with tyident = tyident})
 end
 
 lang OCamlAst =
@@ -287,29 +334,34 @@ let otyarray_ = use OCamlAst in
   lam ty. OTyArray {info = NoInfo (), ty = ty}
 
 let otygenarray_ = use OCamlAst in
-  lam tys. OTyBigarrayGenarray {info = NoInfo (), tys = tys}
+  lam ty. lam elty. lam layout.
+    OTyBigarrayGenarray {
+      info = NoInfo (), layout = layout, elty = elty, ty = ty
+    }
 
 let otybaarray_ = use OCamlAst in
-  lam rank. lam tys.
-    OTyBigarrayArray {info = NoInfo (), rank = rank, tys = tys}
+  lam rank. lam ty. lam elty. lam layout.
+    OTyBigarrayArray {
+      info = NoInfo (), rank = rank, layout = layout, elty = elty, ty = ty
+    }
 
 let oclayout_ = use OCamlAst in
   OTyBigarrayClayout {info = NoInfo ()}
 
 let otygenarrayclayoutint_ = use OCamlAst in
-  otygenarray_ [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+  otygenarray_ tyint_ (OTyBigarrayIntElt {info = NoInfo ()}) oclayout_
 
 let otygenarrayclayoutfloat_ = use OCamlAst in
-  otygenarray_ [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+  otygenarray_ tyfloat_ (OTyBigarrayFloat64Elt {info = NoInfo ()}) oclayout_
 
 let otybaarrayclayoutint_ = use OCamlAst in
   lam rank.
-    otybaarray_ rank [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+    otybaarray_ rank tyint_ (OTyBigarrayIntElt {info = NoInfo ()}) oclayout_
 
 let otybaarrayclayoutfloat_ = use OCamlAst in
   lam rank.
     otybaarray_
-      rank [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+      rank tyfloat_ (OTyBigarrayFloat64Elt {info = NoInfo ()}) oclayout_
 
 let otytuple_ = use OCamlAst in
   lam tys. OTyTuple {info = NoInfo (), tys = tys}
@@ -328,6 +380,10 @@ let otylabel_ = use OCamlAst in
 let otyrecord_ = use OCamlAst in
   lam tyident. lam fields.
     OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
+
+let otyrecordext_ = use OCamlAst in
+  lam tyident. lam fields.
+    OTyRecordExt {info = NoInfo (), tyident = tyident, fields = fields}
 
 let otystring_ = use OCamlAst in
   OTyString {info = NoInfo ()}

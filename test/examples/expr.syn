@@ -1,0 +1,32 @@
+token String
+token LName
+token UName
+token Integer
+
+type File
+type Expr
+type Decl
+
+start File
+
+prod File: File = decl:Decl+
+
+prod Function: Decl =
+  "function" name:LName
+  "(" (args:LName ("," args:LName)*)? ")"
+  "=" body:Expr
+
+prod Int: Expr = val:Integer
+prod String: Expr = val:String
+prod Variable: Expr = ident:LName
+prod left Add: Expr = left:Expr "+" right:Expr
+prod left Sub: Expr = left:Expr "-" right:Expr
+prod left Mul: Expr = left:Expr "*" right:Expr
+prod left Div: Expr = left:Expr "/" right:Expr
+prod FunctionCall: Expr = f:Expr "(" (args:Expr ("," args:Expr)*)? ")"
+
+precedence {
+  FunctionCall;
+  Mul Div;
+  Add Sub;
+}

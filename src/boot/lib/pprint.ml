@@ -37,7 +37,11 @@ let parser_str s prefix cond =
 (** Variable string parser translation *)
 let pprint_var_str s =
   parser_str s (us "#var") (fun s ->
-      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0)
+      || (Ustring.starts_with (us "_") s && Ustring.length s > 1) )
+
+(** Frozen variable string parser translation *)
+let pprint_frozen_str s = parser_str s (us "#frozen") (fun _ -> false)
 
 (** Constructor string parser translation *)
 let pprint_con_str s =
@@ -45,10 +49,17 @@ let pprint_con_str s =
       let c = Ustring.get s 0 in
       is_ascii_upper_alpha c )
 
+(** Type constructor string parser translation *)
+let pprint_type_str s =
+  parser_str s (us "#type") (fun s ->
+      let c = Ustring.get s 0 in
+      is_ascii_upper_alpha c )
+
 (** Label string parser translation *)
 let pprint_label_str s =
   parser_str s (us "#label") (fun s ->
-      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0)
+      || (Ustring.starts_with (us "_") s && Ustring.length s > 1) )
 
 (** Create string representation of an identifier *)
 let ustring_of_ident symbol pprint_ident x s =
@@ -63,13 +74,17 @@ let ustring_of_ident symbol pprint_ident x s =
 let ustring_of_var ?(symbol = !ref_symbol) x s =
   ustring_of_ident symbol pprint_var_str x s
 
+(** Create string representation of a frozen variable *)
+let ustring_of_frozen ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_frozen_str x s
+
 (** Create string representation of a constructor *)
 let ustring_of_con ?(symbol = !ref_symbol) x s =
   ustring_of_ident symbol pprint_con_str x s
 
-(** Create string representation of a type or type variable *)
+(** Create string representation of a type constructor *)
 let ustring_of_type ?(symbol = !ref_symbol) x s =
-  ustring_of_ident symbol (fun x -> x) x s
+  ustring_of_ident symbol pprint_type_str x s
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -167,7 +182,7 @@ let rec ustring_of_ty = function
   | TyArrow (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
   | TyAll (_, var, ty) ->
-      us "all " ^. var ^. us ". " ^. ustring_of_ty ty
+      us "all " ^. pprint_var_str var ^. us ". " ^. ustring_of_ty ty
   | TySeq (_, ty1) -> (
     match ty1 with
     | TyChar _ ->
@@ -176,22 +191,23 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
-  | TyRecord (_, r, _) when r = Record.empty ->
+  | TyRecord (_, r) when r = Record.empty ->
       us "()"
-  | TyRecord (_, r, ls) ->
-      let pprint_ty_label l =
-        let ty = Record.find l r in
+  | TyRecord (_, r) ->
+      let pprint_ty_label (l, ty) =
         pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label ls) ^. us "}"
+      us "{"
+      ^. Ustring.concat (us ",") (List.map pprint_ty_label (Record.bindings r))
+      ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
-  | TyCon (_, x, s) ->
-      ustring_of_type x s
+  | TyCon (_, x) ->
+      pprint_type_str x
   | TyVar (_, x) ->
-      x
+      pprint_var_str x
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -220,6 +236,8 @@ type prec = Match | Lam | Semicolon | If | Tup | App | Atom
  *  TODO(dlunde,?): Precendece?
  *  TODO(dlunde,?): Break hints? *)
 let rec print_const fmt = function
+  | CunsafeCoerce ->
+      fprintf fmt "unsafeCoerce"
   (* MCore intrinsics: Booleans *)
   | CBool b ->
       fprintf fmt "%B" b
@@ -462,8 +480,11 @@ let rec print_const fmt = function
   | CdeRef ->
       fprintf fmt "deref"
   (* MCore intrinsics: Maps *)
-  | CMap _ ->
-      fprintf fmt "map"
+  | CMap (_, m) ->
+      let binds =
+        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record NoInfo [k; v])
+      in
+      print_tm' fmt (TmSeq (NoInfo, binds))
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
   | CmapSize ->
@@ -503,6 +524,10 @@ let rec print_const fmt = function
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _ ->
       fprintf fmt "tensorCreateDense"
+  | CtensorCreateUninitInt ->
+      fprintf fmt "tensorCreateUninitInt"
+  | CtensorCreateUninitFloat ->
+      fprintf fmt "tensorCreateUninitFloat"
   | CtensorCreateCArrayInt _ ->
       fprintf fmt "tensorCreateCArrayInt"
   | CtensorCreateCArrayFloat _ ->
@@ -511,6 +536,10 @@ let rec print_const fmt = function
       fprintf fmt "tensorGetExn"
   | CtensorSetExn _ ->
       fprintf fmt "tensorSetExn"
+  | CtensorLinearGetExn _ ->
+      fprintf fmt "tensorLinearGetExn"
+  | CtensorLinearSetExn _ ->
+      fprintf fmt "tensorLinearSetExn"
   | CtensorRank ->
       fprintf fmt "tensorRank"
   | CtensorShape ->
@@ -613,7 +642,7 @@ and print_tm' fmt t =
   match t with
   | TmVar (_, x, s, frozen) ->
       let var_str =
-        if frozen then string_of_ustring (us "#frozen\"" ^. x ^. us "\"")
+        if frozen then string_of_ustring (ustring_of_frozen x s)
         else string_of_ustring (ustring_of_var x s)
       in
       (*  fprintf fmt "%s#%d" print s *)
@@ -632,11 +661,15 @@ and print_tm' fmt t =
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
-  | TmType (_, x, s, ty, t1) ->
-      let x = string_of_ustring (ustring_of_type x s) in
+  | TmType (_, x, params, ty, t1) ->
+      let x = string_of_ustring (pprint_type_str x) in
+      let params =
+        params |> List.map string_of_ustring |> List.cons ""
+        |> String.concat " "
+      in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
-        ty print_tm (Match, t1)
+      fprintf fmt "@[<hov 0>@[<hov %d>type %s%s =@ %s in@]@ %a@]" !ref_indent x
+        params ty print_tm (Match, t1)
   | TmRecLets (_, lst, t2) -> (
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in

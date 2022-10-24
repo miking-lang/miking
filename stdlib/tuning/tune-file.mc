@@ -59,10 +59,10 @@ let _vertexPath : NameInfo -> Int -> CallCtxEnv -> [NameInfo] = lam h : NameInfo
       destination
   else never
 
-let _tuneTable2str = lam table : LookupTable.
-  use MExprPrettyPrint in
+let _tuneTable2str = lam env: CallCtxEnv. lam table : LookupTable.
+  use HoleAst in
   let rows = mapi (lam i. lam expr.
-    join [int2string i, ": ", expr2str expr]) table in
+    join [int2string i, ": ", int2string (toInt expr (get env.idx2hole i))]) table in
   strJoin _delim rows
 
 let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : TuneFileFormat.
@@ -110,7 +110,7 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
   in
   let taggedEntries =
     mapFoldWithKey
-      (lam acc : [String]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
+      (lam acc : [(Int, String)]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
          concat acc (map (lam b : ([NameInfo], Int). (b.1, entry2str h b.0 b.1)) (mapBindings pathMap)))
       [] hole2idx
   in
@@ -125,16 +125,17 @@ let tuneFileDump = lam env : CallCtxEnv. lam table : LookupTable. lam format : T
     concat "[[hole]]\n" (strJoin (join ["\n", "[[hole]]", "\n"]) entries)
   else never
 
-let tuneFileDumpTable = lam file : String. lam env : Option CallCtxEnv. lam table : LookupTable.
+let tuneFileDumpTable
+= lam file: String. lam env: CallCtxEnv. lam table: LookupTable. lam verbose: Bool.
   let str =
   join
   [ int2string (length table)
   , "\n"
-  , _tuneTable2str table
+  , _tuneTable2str env table
   , "\n"
   , make _sepLength '='
   , "\n"
-  , match env with Some env then tuneFileDump env table (CSV ()) else ""
+  , if verbose then tuneFileDump env table (CSV ()) else ""
   , "\n"
   ] in writeFile file str
 
@@ -145,4 +146,4 @@ let tuneFileReadTable : String -> LookupTable = lam file.
   let n = string2int (head rows) in
   let strVals = subsequence rows 1 n in
   let strVals = map (lam x. get (strSplit ": " x) 1) strVals in
-  map (parseMExprString []) strVals
+  map (parseMExprStringKeywords []) strVals

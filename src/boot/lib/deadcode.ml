@@ -2,6 +2,7 @@ open Ast
 open Symbutils
 open Ustring.Op
 open Printf
+open Intrinsics
 
 (* Can be used when debugging symbol maps *)
 let _symbmap = ref SymbMap.empty
@@ -208,7 +209,11 @@ let extend_symb_map_builtin builtin_name2sym symbmap =
   List.fold_left f symbmap builtin_name2sym
 
 (* Add keywords from the keyword maker to nmap, indicating sideeffect so that
-   they do not disappear *)
+ * they do not disappear.
+ * NOTE(dlunde,2022-05-11): Is this really what we want in general? It seems
+ * likely that some keywords may not have side-effects and should therefore not
+ * affect the dead code elimination.
+ *)
 let add_keywords nmap symKeywords =
   let f acc s = SymbMap.add s (SymbSet.empty, false, true, 0) acc in
   List.fold_left f nmap symKeywords
@@ -225,6 +230,9 @@ let elimination builtin_sym2term builtin_name2sym symKeywords t =
     (* Collect all lets and store a graph in 'nmap' and free variable in 'free' *)
     let nmap = make_builtin_nmap builtin_sym2term in
     let nmap = add_keywords nmap symKeywords in
+    (* The below line ensures that free variables are treated as having a side
+     * effect (as they are unknown) *)
+    let nmap = add_keywords nmap [Symb.Helpers.nosym] in
     let nmap, free = collect_lets nmap t in
     if !enable_debug_dead_code_info then (
       print_endline "-- Dead code info: collected lets --" ;

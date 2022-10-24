@@ -1,4 +1,5 @@
 include "name.mc"
+include "mexpr/info.mc"
 
 -- Defines simple convenience functions for name-info tuples.
 

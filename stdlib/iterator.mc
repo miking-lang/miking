@@ -13,20 +13,21 @@ type Iterator a b =
 -- 'iteratorInit step get' returns an iterator with step function 'step' and get
 -- function 'get'.
 let iteratorInit
-  : (Option a -> Option a)
-  -> (Option a -> Option b)
+  : all a. all b.
+     (Option a -> Option a)
+  -> (a -> b)
   -> Iterator a b
   = lam step. lam getVal.
     {state = None (), step = step, getVal = getVal}
 
 -- 'iteratorStep' moves the iterator one step and returns the new iterator.
-let iteratorStep : Iterator a b -> Iterator a b = lam it.
+let iteratorStep : all a. all b. Iterator a b -> Iterator a b = lam it.
   match it with {state = state, step = step} then
     {it with state = step state}
   else never
 
 -- 'iteratorGet it' returns the current value of the iterator.
-let iteratorGet : Iterator a b -> Option b = lam it.
+let iteratorGet : all a. all b. Iterator a b -> Option b = lam it.
   match it with {state = state, getVal = getVal} then
     match state with Some v then Some (getVal v)
     else None ()
@@ -34,12 +35,12 @@ let iteratorGet : Iterator a b -> Option b = lam it.
 
 -- 'iteratorNext it' moves the iterator one step. Returns both the new iterator
 -- and the current value.
-let iteratorNext : Iterator a b -> (Iterator a b, Option b) = lam it.
+let iteratorNext : all a. all b. Iterator a b -> (Iterator a b, Option b) = lam it.
   let it = iteratorStep it in
   (it, iteratorGet it)
 
--- 'iteratorFromSeq it' converts 'it' into a sequence.
-let iteratorToSeq : Iterator a b -> [b] = lam it.
+-- 'iteratorToSeq it' converts 'it' into a sequence.
+let iteratorToSeq : all a. all b. Iterator a b -> [b] = lam it.
   recursive let work = lam acc. lam it.
     let n = iteratorNext it in
     match n with (_, None ()) then acc
@@ -49,7 +50,7 @@ let iteratorToSeq : Iterator a b -> [b] = lam it.
   in reverse (work [] it)
 
 -- 'iteratorFromSeq seq' converts 'seq' into an iterator.
-let iteratorFromSeq : [a] -> Iterator [a] a = lam seq.
+let iteratorFromSeq : all a. [a] -> Iterator [a] a = lam seq.
   let step = lam state.
     match state with Some ([] | [_]) then None ()
     else match state with Some seq then Some (tail seq)
@@ -62,7 +63,7 @@ let iteratorFromSeq : [a] -> Iterator [a] a = lam seq.
 -- 'iteratorTake n it' returns at most the first 'n' elements in iterator 'it'.
 -- If 'n' is negative, or if 'n' is larger than the number of elements in 'it',
 -- then all elements in 'it' are returned.
-let iteratorTake : Int -> Iterator a b -> [b] = lam n. lam it.
+let iteratorTake : all a. all b. Int -> Iterator a b -> [b] = lam n. lam it.
   recursive let work = lam acc. lam n. lam it.
     if eqi n 0 then acc
     else
@@ -75,7 +76,7 @@ let iteratorTake : Int -> Iterator a b -> [b] = lam n. lam it.
 
 -- 'iteratorFilter p it' returns a new iterator containing those element in 'it'
 -- that satisfy 'p'.
-let iteratorFilter : (b -> Bool) -> Iterator a b -> Iterator a b =
+let iteratorFilter : all a. all b. (b -> Bool) -> Iterator a b -> Iterator a b =
   lam p. lam it.
     {it with step = lam state.
        recursive let step = lam state.

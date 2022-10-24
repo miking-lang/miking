@@ -6,39 +6,61 @@ include "map.mc"
 include "name.mc"
 include "set.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/call-graph.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
+include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
-type AccelerateData = {
-  identifier : Name,
-  bytecodeWrapperId : Name,
-  params : [(Name, Type)],
-  returnType : Type,
-  info : Info
-}
+lang PMExprExtractAccelerate = PMExprAst + MExprExtract
+  syn CopyStatus =
+  | CopyBoth ()
+  | CopyToAccelerate ()
+  | CopyFromAccelerate ()
+  | NoCopy ()
 
-type AddIdentifierAccelerateEnv = {
-  functions : Map Expr AccelerateData,
-  programIdentifiers : Set SID
-}
+  sem omitCopyTo : CopyStatus -> CopyStatus
+  sem omitCopyTo =
+  | CopyBoth _ -> CopyFromAccelerate ()
+  | CopyToAccelerate _ -> NoCopy ()
+  | status -> status
 
--- Generates a random ASCII letter or digit character.
-let _randAlphanum : Unit -> Char = lam.
-  -- NOTE(larshum, 2021-09-15): The total number of digits or ASCII letters
-  -- (lower- and upper-case) is 10 + 26 + 26 = 62.
-  let r = randIntU 0 62 in
-  if lti r 10 then int2char (addi r 48)
-  else if lti r 36 then int2char (addi r 55)
-  else int2char (addi r 61)
+  sem omitCopyFrom : CopyStatus -> CopyStatus
+  sem omitCopyFrom =
+  | CopyBoth _ -> CopyToAccelerate ()
+  | CopyFromAccelerate _ -> NoCopy ()
+  | status -> status
 
-lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
-  sem collectProgramIdentifiers (env : AddIdentifierAccelerateEnv) =
+  sem copyStatusTo : CopyStatus -> Bool
+  sem copyStatusTo =
+  | CopyBoth _ | CopyToAccelerate _ -> true
+  | _ -> false
+
+  sem copyStatusFrom : CopyStatus -> Bool
+  sem copyStatusFrom =
+  | CopyBoth _ | CopyFromAccelerate _ -> true
+  | _ -> false
+
+  type AccelerateData = {
+    identifier : Name,
+    bytecodeWrapperId : Name,
+    params : [(Name, Type)],
+    paramCopyStatus : [CopyStatus],
+    returnType : Type,
+    info : Info
+  }
+
+  type AddIdentifierAccelerateEnv = {
+    functions : Map Name AccelerateData,
+    programIdentifiers : Set SID
+  }
+
+  sem collectProgramIdentifiers : AddIdentifierAccelerateEnv -> Expr
+                               -> AddIdentifierAccelerateEnv
+  sem collectProgramIdentifiers env =
   | TmVar t ->
     let sid = stringToSid (nameGetStr t.ident) in
     {env with programIdentifiers = setInsert sid env.programIdentifiers}
@@ -49,7 +71,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     recursive let genstr = lam acc. lam n.
       if eqi n 0 then acc
       else
-        let nextchr = _randAlphanum () in
+        let nextchr = randAlphanum () in
         genstr (snoc acc nextchr) (subi n 1)
     in
     -- NOTE(larshum, 2021-09-15): Start the string with a hard-coded alphabetic
@@ -81,13 +103,14 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
     let retType = t.ty in
-    let info = infoTm t.e in
+    let info = mergeInfo t.info (infoTm t.e) in
     let paramId = nameSym "x" in
     let paramTy = TyInt {info = info} in
     let functionData : AccelerateData = {
       identifier = accelerateIdent,
       bytecodeWrapperId = bytecodeIdent,
       params = [(paramId, paramTy)],
+      paramCopyStatus = [CopyBoth ()],
       returnType = retType,
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
@@ -110,88 +133,20 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
     (env, accelerateLet)
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
-  sem collectIdentifiersExprH (bound : Set Name) (used : Set Name) =
-  | TmVar t ->
-    if setMem t.ident bound then used
-    else setInsert t.ident used
-  | TmLam t ->
-    let bound = setInsert t.ident bound in
-    collectIdentifiersExprH bound used t.body
-  | t -> sfold_Expr_Expr (collectIdentifiersExprH bound) used t
-
-  sem collectIdentifiersExpr (used : Set Name) =
-  | t -> collectIdentifiersExprH (setEmpty nameCmp) used t
-
-  sem collectIdentifiersType (used : Set Name) =
-  | TyCon t -> setInsert t.ident used
-  | t -> sfold_Type_Type collectIdentifiersType used t
-
   -- Construct an extracted AST from the given AST, containing all terms that
   -- are used by the accelerate terms.
-  sem extractAccelerateTerms (accelerated : Set Name) =
-  | t ->
-    match extractAccelerateTermsH accelerated t with (_, t) in t
-
-  sem extractAccelerateTermsH (used : Set Name) =
-  | TmLet t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then
-      let used = collectIdentifiersType used t.tyBody in
-      let used = collectIdentifiersExpr used t.body in
-      (used, TmLet {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmRecLets t ->
-    let bindingIdents = map (lam bind : RecLetBinding. bind.ident) t.bindings in
-    recursive let dfs = lam g. lam visited. lam ident.
-      if setMem ident visited then visited
-      else
-        let visited = setInsert ident visited in
-        foldl
-          (lam visited. lam ident.
-            dfs g visited ident)
-          visited
-          (digraphSuccessors ident g)
-    in
-    let collectBindIdents = lam used. lam bind : RecLetBinding.
-      let used = collectIdentifiersType used bind.tyBody in
-      collectIdentifiersExpr used bind.body
-    in
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    -- NOTE(larshum, 2021-10-03): We find the bindings that are used by
-    -- applying DFS on the call graph.
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
-    let visited = setEmpty nameCmp in
-    let usedIdents =
-      foldl
-        (lam visited. lam ident.
-          if setMem ident used then
-            dfs g visited ident
-          else visited)
-        visited bindingIdents in
-    let usedBinds =
-      filter
-        (lam bind : RecLetBinding. setMem bind.ident usedIdents)
-        t.bindings in
-    let used = foldl collectBindIdents used usedBinds in
-    if null usedBinds then (used, inexpr)
-    else (used, TmRecLets {{t with bindings = usedBinds}
-                              with inexpr = inexpr})
-  | TmType t ->
-    match extractAccelerateTermsH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmConDef t -> extractAccelerateTermsH used t.inexpr
-  | TmUtest t -> extractAccelerateTermsH used t.next
-  | TmExt t -> extractAccelerateTermsH used t.inexpr
-  | t -> (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
-                         info = infoTm t})
+  sem extractAccelerateTerms : Set Name -> Expr -> Expr
+  sem extractAccelerateTerms accelerated =
+  | t -> extractAst accelerated t
 
   -- NOTE(larshum, 2021-09-17): All accelerated terms are given a dummy
   -- parameter, so that expressions without free variables can also be
   -- accelerated (also for lambda lifting). Here we remove this dummy parameter
   -- for all accelerate terms with at least one free variable parameter.
-  sem eliminateDummyParameter (solutions : Map Name Type)
-                              (accelerated : Map Name AccelerateData) =
+  sem eliminateDummyParameter : Map Name (Map Name Type)
+                             -> Map Name AccelerateData
+                             -> Expr -> (Map Name AccelerateData, Expr)
+  sem eliminateDummyParameter solutions accelerated =
   | ast ->
     let ast = eliminateDummyParameterH solutions accelerated ast in
     let accelerated =
@@ -199,7 +154,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         (lam accId : Name. lam accData : AccelerateData.
           match mapLookup accId solutions with Some fv then
             if gti (mapSize fv) 0 then
-              {accData with params = mapBindings fv}
+              let params = mapBindings fv in
+              let copyStatus = create (length params) (lam. CopyBoth ()) in
+              {{accData with params = params}
+                        with paramCopyStatus = copyStatus}
             else accData
           else accData)
         accelerated in
@@ -218,21 +176,53 @@ lang PMExprExtractAccelerate = PMExprAst + MExprCallGraph
         else TmLet {t with inexpr = inexpr}
       else TmLet {t with inexpr = inexpr}
     else TmLet {t with inexpr = inexpr}
+  | TmRecLets t ->
+    let isAccelerateBinding = lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          true
+        else false
+      else false
+    in
+    let eliminateBinding = lam acc. lam bind : RecLetBinding.
+      if mapMem bind.ident accelerated then
+        match mapLookup bind.ident solutions with Some idSols then
+          match
+            if gti (mapSize idSols) 0 then
+              let tyBody = eliminateInnermostParameterType bind.tyBody in
+              let body = eliminateInnermostLambda bind.body in
+              (tyBody, body)
+            else (bind.tyBody, bind.body)
+          with (tyBody, body) in
+          TmLet {
+            ident = bind.ident,
+            tyBody = tyBody,
+            body = body,
+            inexpr = acc,
+            ty = tyTm acc,
+            info = bind.info}
+        else acc
+      else acc
+    in
+    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+    match partition isAccelerateBinding t.bindings with (accelerated, bindings) in
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = foldl eliminateBinding inexpr accelerated}
   | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
 
   sem eliminateInnermostParameterType =
   | TyArrow {from = TyInt _, to = to & !(TyArrow _)} -> to
   | TyArrow t -> TyArrow {t with to = eliminateInnermostParameterType t.to}
-  | t -> infoErrorExit (infoTy t) "Unexpected type of accelerate function body"
+  | t -> errorSingle [infoTy t] "Unexpected type of accelerate function body"
 
   sem eliminateInnermostLambda =
   | TmLam {body = body & !(TmLam _)} -> body
   | TmLam t -> TmLam {t with body = eliminateInnermostLambda t.body}
-  | t -> infoErrorExit (infoTm t) "Unexpected structure of accelerate body"
+  | t -> errorSingle [infoTm t] "Unexpected structure of accelerate body"
 end
 
 lang TestLang =
-  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeAnnot +
+  PMExprExtractAccelerate + MExprEq + MExprSym + MExprTypeCheck +
   MExprLambdaLift + MExprPrettyPrint
 end
 
@@ -241,7 +231,7 @@ mexpr
 use TestLang in
 
 let preprocess = lam t.
-  typeAnnot (symbolize t)
+  typeCheck (symbolize t)
 in
 
 let extractAccelerate = lam t.

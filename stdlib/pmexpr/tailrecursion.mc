@@ -12,7 +12,7 @@
 
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/utils.mc"
@@ -30,7 +30,7 @@ con Both : () -> Side
 
 -- Combines two options by choosing Some over None. Should both options be
 -- Some, they are combined according to the given function.
-let combineOptions : (a -> a -> Option a) -> Option a -> Option a -> Option a =
+let combineOptions : all a. (a -> a -> Option a) -> Option a -> Option a -> Option a =
   lam f. lam o1. lam o2.
   let t = (o1, o2) in
   match t with (None (), rhs) then rhs
@@ -81,7 +81,8 @@ let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
       (lam. Some {binop = binop, side = side})
   else None ()
 
-lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
+lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
+                           PMExprVariableSub
   -- Attempts to construct a tail-recursion rewrite environment from the given
   -- recursive binding. If this succeeds, this environment can be used to rewrite
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
@@ -109,7 +110,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
         (lam l. lam r.
           if eqExpr l r then Some l else None ())
         acc binop in
-    let compatibleArgumentSide : Option Side -> TailPosInfo -> Option Side =
+    let compatibleArgumentSide : Option Side -> Option TailPosInfo -> Option Side =
       lam acc. lam info.
       let side = optionJoin (optionMap (lam info : TailPosInfo. info.side) info) in
       compatibleSide acc side in
@@ -168,7 +169,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
       -- value on the new function identifier.
       let substituteMap =
         mapFromSeq nameCmp [(oldIdent, lam. t)] in
-      substituteVariables recursiveApp substituteMap
+      substituteVariables substituteMap recursiveApp
     in
 
     -- Handles the base case, where the expression is added as one of the
@@ -301,14 +302,14 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties
 end
 
 lang TestLang =
-  PMExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
+  PMExprTailRecursion + MExprTypeCheck + MExprSym + MExprEq + MExprPrettyPrint
 end
 
 mexpr
 
 use TestLang in
 
-let preprocess = lam e. typeAnnot (symbolize e) in
+let preprocess = lam e. typeCheck (symbolize e) in
 
 let fact = preprocess (bindall_ [
   ureclets_ [

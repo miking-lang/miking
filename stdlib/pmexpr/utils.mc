@@ -3,7 +3,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 
 -- Gets the return type of the body of a function.
@@ -29,16 +29,15 @@ end
 
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.
-let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
-  use PMExprAst in
-  lam e. lam nameMap.
-  recursive let work = lam e.
-    match e with TmVar {ident = id, info = info} then
-      match mapLookup id nameMap with Some exprFn then
-        exprFn info
-      else e
-    else smap_Expr_Expr work e
-  in work e
+lang PMExprVariableSub = PMExprAst
+  sem substituteVariables : Map Name (Info -> Expr) -> Expr -> Expr
+  sem substituteVariables subMap =
+  | TmVar t ->
+    match mapLookup t.ident subMap with Some exprFn then
+      exprFn t.info
+    else TmVar t
+  | t -> smap_Expr_Expr (substituteVariables subMap) t
+end
 
 -- Takes a function expression and produces a tuple containing a list of the
 -- arguments and the function body without the lambdas.
@@ -65,21 +64,32 @@ let collectAppArguments : Expr -> (Expr, [Expr]) =
   in
   work [] e
 
-lang TestLang = MExprEq + MExprSym + MExprTypeAnnot end
+lang TestLang = MExprEq + MExprSym + MExprTypeCheck + PMExprVariableSub
+end
 
 mexpr
 
 use TestLang in
 
-let t = typeAnnot (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
+let typeCheckEnv = lam env : [(Name, Type)]. lam expr.
+  let tcEnv =
+    foldl
+      (lam env. lam x : (Name, Type).
+        match x with (id, ty) in
+        _insertVar id ty env)
+      _tcEnvEmpty env in
+  resolveLinksExpr (typeCheckExpr tcEnv expr)
+in
+
+let t = typeCheck (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
 utest functionBodyReturnType t with tychar_ using eqType in
-let t = typeAnnot (symbolize (lam_ "x" tyint_ (uconst_ (CAddi ())))) in
+let t = typeCheck (symbolize (lam_ "x" tyint_ (uconst_ (CAddi ())))) in
 utest functionBodyReturnType t with tyarrows_ [tyint_, tyint_, tyint_] using eqType in
 
 let x = nameSym "x" in
 let y = nameSym "y" in
-let t = typeAnnot (nlam_ x tyint_ (char_ 'c')) in
-let newBody = typeAnnot (nlam_ y tyint_ (addi_ (nvar_ x) (nvar_ y))) in
+let t = typeCheck (nlam_ x tyint_ (char_ 'c')) in
+let newBody = typeCheckEnv [(x, tyint_)] (nlam_ y tyint_ (addi_ (nvar_ x) (nvar_ y))) in
 let b = replaceFunctionBody t newBody in
 utest b with nulam_ x newBody using eqExpr in
 utest tyTm b with tyarrows_ [tyint_, tyint_, tyint_] using eqType in
@@ -90,7 +100,7 @@ let names = mapFromSeq nameCmp [
   (y, lam. subi_ (int_ 0) (int_ 1))
 ] in
 let t = addi_ (nvar_ x) (nvar_ y) in
-utest substituteVariables t names with addi_ (int_ 2) (subi_ (int_ 0) (int_ 1)) using eqExpr in
+utest substituteVariables names t with addi_ (int_ 2) (subi_ (int_ 0) (int_ 1)) using eqExpr in
 
 let eqVariable = lam a : (Name, Type, Info). lam b : (Name, Type, Info).
   if nameEq a.0 b.0 then

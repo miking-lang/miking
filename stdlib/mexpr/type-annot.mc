@@ -14,7 +14,7 @@ include "const-types.mc"
 include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
-include "mexpr/type.mc"
+include "type.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,
@@ -25,7 +25,9 @@ type TypeEnv = {
 let _typeEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyEnv  = mapEmpty nameCmp
+  tyEnv  = mapFromSeq nameCmp (
+    map (lam t : (String, [String]). (nameNoSym t.0, tyvariant_ [])) builtinTypes
+  )
 }
 
 let _pprintType = use MExprPrettyPrint in
@@ -48,7 +50,7 @@ lang CompatibleType =
   -- environment.  It is equivalent to type equality, except that unknown types
   -- are considered compatible with any other type. If no compatible type can
   -- be found, `None` is returned.
-  sem compatibleType (tyEnv : TypeEnv) (ty1: Type) =
+  sem compatibleType (tyEnv : Map Name Type) (ty1: Type) =
   | ty2 ->
     let ty1 = reduceTyVar ty1 in
     let ty2 = reduceTyVar ty2 in
@@ -69,10 +71,10 @@ lang CompatibleType =
       compatibleType tyEnv ty1 ty2
     else None ()
 
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  sem compatibleTypeBase (tyEnv: Map Name Type) =
   | _ -> None () -- Types are not compatible by default
 
-  sem reduceType (tyEnv: Env) =
+  sem reduceType (tyEnv: Map Name Type) =
   | _ -> None () -- Types cannot be reduced by default
 
   -- NOTE(aathn,2021-10-27): We convert type variables to TyUnknown using this
@@ -84,7 +86,7 @@ end
 
 lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
-  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  sem compatibleTypeBase (tyEnv: Map Name Type) =
   | (TyUnknown _ & ty1, TyUnknown _) -> Some ty1
   | (TyUnknown _, ! TyUnknown _ & ty2) -> Some ty2
   | (! TyUnknown _ & ty1, TyUnknown _) -> Some ty1
@@ -93,14 +95,14 @@ end
 
 lang ConCompatibleType = CompatibleType + ConTypeAst
 
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyCon t1 & ty1, TyCon t2) ->
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      infoErrorExit info (concat "Unbound TyCon in reduceType: " (nameGetStr id))
+      errorSingle [info] (concat "Unbound TyCon in reduceType: " (nameGetStr id))
 
 end
 
@@ -113,51 +115,51 @@ lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
   sem reduceTyVar =
   | TyFlex {info = i} & ty ->
     match resolveLink ty with ! TyFlex _ & ty then
-      ty
+      reduceTyVar ty
     else
       TyUnknown {info = i}
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyAll t -> Some t.ty
 end
 
 lang AppCompatibleType = CompatibleType + AppTypeAst
 
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   -- TODO(dlunde,2021-05-05): Left out for now for compatibility with original
   -- compatibleTypes
 
   -- NOTE(dlunde,2021-05-05): This is NOT how we want to handle TmApp in the
   -- end. We are now just discarding the RHS of all applications
-  sem reduceType (tyEnv : TypeEnv) =
+  sem reduceType (tyEnv : Map Name Type) =
   | TyApp t -> Some t.lhs
 
 end
 
 lang BoolCompatibleType = CompatibleType + BoolTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyBool _ & t1, TyBool _) -> Some t1
 end
 
 lang IntCompatibleType = CompatibleType + IntTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyInt _ & t1, TyInt _) -> Some t1
 end
 
 lang FloatCompatibleType = CompatibleType + FloatTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyFloat _ & t1, TyFloat _) -> Some t1
 end
 
 lang CharCompatibleType = CompatibleType + CharTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyChar _ & t1, TyChar _) -> Some t1
 end
 
 lang FunCompatibleType = CompatibleType + FunTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyArrow t1, TyArrow t2) ->
     match compatibleType tyEnv t1.from t2.from with Some a then
       match compatibleType tyEnv t1.to t2.to with Some b then
@@ -167,7 +169,7 @@ lang FunCompatibleType = CompatibleType + FunTypeAst
 end
 
 lang SeqCompatibleType = CompatibleType + SeqTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TySeq t1, TySeq t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {t1 with ty = t})
@@ -175,7 +177,7 @@ lang SeqCompatibleType = CompatibleType + SeqTypeAst
 end
 
 lang TensorCompatibleType = CompatibleType + TensorTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyTensor t1, TyTensor t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TyTensor {t1 with ty = t})
@@ -183,7 +185,7 @@ lang TensorCompatibleType = CompatibleType + TensorTypeAst
 end
 
 lang RecordCompatibleType = CompatibleType + RecordTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyRecord t1, TyRecord t2) ->
     let f = lam acc. lam p.
       match p with (k, ty1) then
@@ -200,7 +202,7 @@ lang RecordCompatibleType = CompatibleType + RecordTypeAst
 end
 
 lang VariantCompatibleType = CompatibleType + VariantTypeAst
-  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TyVariant t1, TyVariant t2) ->
     let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
       match mapLookup ident t2.constrs with Some ty2 then
@@ -243,7 +245,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
               "Variable annotated with type: ", _pprintType t.ty, "\n",
               "Type in variable environment: ", _pprintType ty
             ] in
-            infoErrorExit t.info msg
+            errorSingle [t.info] msg
         else t.ty
       else never
     in
@@ -285,12 +287,13 @@ lang TypePropagation = TypeAnnot
   | (_, t) -> t
 end
 
-lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
+lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = match t.tyBody with TyUnknown _ then t.body else
-        propagateExpectedType tyEnv (t.tyBody, t.body) in
+        match stripTyAll t.tyBody with (_, tyBody) in
+        propagateExpectedType tyEnv (tyBody, t.body) in
       let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
@@ -305,7 +308,7 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
           "Expected type: ", _pprintType (tyTm body), "\n",
           "Annotated type: ", _pprintType t.tyBody
         ] in
-        infoErrorExit t.info msg
+        errorSingle [t.info] msg
     else never
 end
 
@@ -331,7 +334,7 @@ lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
         "Type from let: ", _pprintType from, "\n",
         "Type from lambda: ", _pprintType t.tyIdent
       ] in
-      infoErrorExit t.info msg
+      errorSingle [t.info] msg
 end
 
 lang ExpTypeAnnot = TypeAnnot + ExtAst
@@ -345,7 +348,7 @@ lang ExpTypeAnnot = TypeAnnot + ExtAst
     else never
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst
+lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     -- Add mapping from binding identifier to annotated type before doing type
@@ -360,7 +363,8 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
       let body = match binding.tyBody with TyUnknown _ then binding.body else
-        propagateExpectedType env.tyEnv (binding.tyBody, binding.body) in
+        match stripTyAll binding.tyBody with (_, tyBody) in
+        propagateExpectedType env.tyEnv (tyBody, binding.body) in
       let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
@@ -372,7 +376,7 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
               "Expected type: ", _pprintType (tyTm body), "\n",
               "Annotated type: ", _pprintType binding.tyBody
             ] in
-            infoErrorExit t.info msg
+            errorSingle [t.info] msg
         in
         {{binding with body = body}
                   with tyBody = tyBody}
@@ -420,8 +424,7 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
   | TmRecord t ->
     let bindings = mapMap (typeAnnotExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
-    let labels = mapKeys t.bindings in
-    let ty = TyRecord {fields = bindingTypes, labels = labels, info = t.info} in
+    let ty = TyRecord {fields = bindingTypes, info = t.info} in
     TmRecord {{t with bindings = bindings}
                  with ty = ty}
   | TmRecordUpdate t ->
@@ -455,7 +458,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
         match mapLookup t.ident conEnv with Some lty then
-          match lty with TyArrow {from = from, to = to} then
+          match stripTyAll lty with (_, TyArrow {from = from, to = to}) then
             recursive let tyvar = lam ty.
               match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
@@ -469,12 +472,12 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (tyTm body)
               ] in
-              infoErrorExit t.info msg
+              errorSingle [t.info] msg
           else (ityunknown_ t.info)
         else
           let msg = join ["Application of untyped constructor: ",
                           nameGetStr t.ident] in
-          infoErrorExit t.info msg
+          errorSingle [t.info] msg
       in
       TmConApp {{t with body = body}
                    with ty = ty}
@@ -510,11 +513,50 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
     let expected = typeAnnotExpr env t.expected in
     let next = typeAnnotExpr env t.next in
     let tusing = optionMap (typeAnnotExpr env) t.tusing in
-    TmUtest {{{{{t with test = test}
-                  with expected = expected}
-                  with next = next}
-                  with tusing = tusing}
-                  with ty = tyTm next}
+    match tusing with Some tu then
+      match tyTm tu with
+        TyArrow (ta1 & {from = lty,
+                        to = TyArrow (ta2 & {from = rty, to = TyBool _})}) then
+        match compatibleType env.tyEnv (tyTm test) lty with Some lty then
+          match compatibleType env.tyEnv (tyTm expected) rty with Some rty then
+            let arrowTy = TyArrow {{ta1 with from = lty}
+                                        with to = TyArrow {ta2 with from = rty}} in
+            TmUtest {{{{{t with test = withType lty test}
+                           with expected = withType rty expected}
+                           with next = next}
+                           with tusing = Some (withType arrowTy tu)}
+                           with ty = tyTm next}
+          else
+            let msg = join [
+              "Custom equality function expected right-hand side of type ",
+              _pprintType rty, ", got argument of incompatible type ",
+              _pprintType (tyTm expected)
+            ] in
+            errorSingle [t.info] msg
+        else
+          let msg = join [
+            "Custom equality function expected left-hand side of type ",
+            _pprintType lty, ", got argument of incompatible type ",
+            _pprintType (tyTm test)
+          ] in
+          errorSingle [t.info] msg
+      else
+        let msg = join [
+          "Equality function was found to have incorrect type.\n",
+          "Type was inferred to be ", _pprintType (tyTm tu)
+        ] in
+        errorSingle [t.info] msg
+    else match compatibleType env.tyEnv (tyTm test) (tyTm expected) with Some eTy then
+      TmUtest {{{{t with test = withType eTy test}
+                    with expected = withType eTy expected}
+                    with next = next}
+                    with ty = tyTm next}
+    else
+      let msg = join [
+        "Arguments to utest have incompatible types\n",
+        "LHS: ", _pprintType (tyTm test), "\nRHS: ", _pprintType (tyTm expected)
+      ] in
+      errorSingle [t.info] msg
 end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
@@ -575,7 +617,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
     let expectedTy = typeUnwrapAlias env.tyEnv expectedTy in
-    let expectedTy = match expectedTy with TyUnknown _ then t.ty else expectedTy in
+    let expectedTy = match expectedTy with TyUnknown _ | TyApp {lhs = TyUnknown _} then t.ty else expectedTy in
     let expectedTy = match expectedTy with TyRecord _ then expectedTy else
       match (record2tuple t.bindings, mapLength t.bindings) with (Some _, length & !1) then
         -- NOTE(vipa, 2021-05-26): This looks like a tuple pattern, so
@@ -601,11 +643,11 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
 end
 
 lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
-                        FunTypeAst
+                        FunTypeAst + AllTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
-    match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = to}) then
+    match optionMap stripTyAll (mapLookup t.ident env.conEnv)
+    with Some (_, TyArrow {from = argTy, to = to}) then
       match typeAnnotPat env argTy t.subpat with (env, subpat) then
         (env, PatCon {{t with subpat = subpat} with ty = to})
       else never
@@ -805,7 +847,7 @@ utest tyTm matchInteger with tyint_ using eqType in
 else never);
 
 let matchDistinct = typeAnnot (
-  match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
+  match_ (int_ 0) (npvar_ n) (int_ 0) (char_ '1')
 ) in
 utest tyTm matchDistinct with tyunknown_ using eqType in
 (match matchDistinct with TmMatch t then
@@ -816,12 +858,12 @@ utest tyTm matchDistinct with tyunknown_ using eqType in
 else never);
 
 let utestAnnot = typeAnnot (
-  utest_ (int_ 0) false_ (char_ 'c')
+  utest_ (int_ 0) (int_ 1) (char_ 'c')
 ) in
 utest tyTm utestAnnot with tychar_ using eqType in
 (match utestAnnot with TmUtest t then
   utest tyTm t.test with tyint_ using eqType in
-  utest tyTm t.expected with tybool_ using eqType in
+  utest tyTm t.expected with tyint_ using eqType in
   utest tyTm t.next with tychar_ using eqType in
   ()
 else never);

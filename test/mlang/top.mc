@@ -1,6 +1,6 @@
 lang WrappedList
   syn List =
-  | List [Dyn]
+  | List [Int]
 
   sem my_head =
   | List l -> head l

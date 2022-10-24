@@ -12,3 +12,6 @@ tags
 .ctags
 .DS_Store
 *.install
+
+.vscode/*
+test/js/*.js

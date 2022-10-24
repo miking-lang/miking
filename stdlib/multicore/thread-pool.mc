@@ -8,13 +8,13 @@ include "atomic.mc"
 include "channel.mc"
 include "map.mc"
 
-type Async a = AtomicRef (Option a)
+type Async a = ARef (Option a)
 
-type ThreadPoolTask
-con Task : {task : Unit -> a, result : Async a} -> ThreadPoolTask
-con Quit : Unit -> ThreadPoolTask
+type ThreadPoolTask a
+con Task : all a. {task : () -> a, result : Async a} -> ThreadPoolTask a
+con Quit : all a. () -> ThreadPoolTask a
 
-type ThreadPool = {threads : [Thread], queue : Channel ThreadPoolTask}
+type ThreadPool a = {threads : [Thread ()], queue : Channel (ThreadPoolTask a)}
 
 -- Helper function for waiting for and executing tasks.
 recursive let _wait = lam chan.
@@ -27,7 +27,7 @@ recursive let _wait = lam chan.
 end
 
 -- 'threadPoolCreate n' creates a new thread pool with 'n' worker threads.
-let threadPoolCreate : Int -> ThreadPool = lam n.
+let threadPoolCreate : all a. Int -> ThreadPool a = lam n.
   let chan = channelEmpty () in
   {threads = create n (lam. threadSpawn (lam. _wait chan)), queue = chan}
 
@@ -35,18 +35,18 @@ let threadPoolCreate : Int -> ThreadPool = lam n.
 --
 -- NOTE: Should be called as soon as a thread pool has finished all intended
 -- tasks. After 'threadPoolTearDown', no more tasks can be sent to the pool.
-let threadPoolTearDown : ThreadPool -> Unit = lam pool.
+let threadPoolTearDown : all a. ThreadPool a -> () = lam pool.
   channelSendMany pool.queue (map (lam. Quit ()) pool.threads);
   iter threadJoin pool.threads
 
 -- 'threadPoolAsync p task' sends a 'task' to the pool 'p'.
-let threadPoolAsync : ThreadPool -> (Unit -> a) -> Async a = lam pool. lam task.
+let threadPoolAsync : all a. ThreadPool a -> (() -> a) -> Async a = lam pool. lam task.
   let r = atomicMake (None ()) in
   channelSend pool.queue (Task {task = task, result = r});
   r
 
 -- 'threadPoolWait p r' waits for a result 'r' to be available.
-recursive let threadPoolWait : ThreadPool -> Async a -> a = lam pool. lam r.
+recursive let threadPoolWait : all a. ThreadPool a -> Async a -> a = lam pool. lam r.
   match atomicGet r with Some v then v
   else match channelRecvOpt pool.queue
   with Some (Task {task = task, result = result})

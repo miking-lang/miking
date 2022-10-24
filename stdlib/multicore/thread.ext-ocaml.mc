@@ -14,7 +14,6 @@ let threadExtMap =
       impl
       { expr = "Domain.spawn"
       , ty = tyarrow_ (tyarrow_ otyunit_ (tygeneric_ "a")) (tyathread_ "a")
-      , libraries = []
       }]),
 
     ("externalThreadJoin", [

@@ -13,16 +13,16 @@ include "mutex.mc"
 include "cond.mc"
 include "option.mc"
 
-type Channel a = {contents : Aref [a], lock : Mutex, nonEmpty : Cond}
+type Channel a = {contents : ARef [a], lock : Mutex, nonEmpty : Cond}
 
-let channelEmpty : Unit -> Channel a = lam.
+let channelEmpty : all a. () -> Channel a = lam.
   { contents = atomicMake []
   , lock = mutexCreate ()
   , nonEmpty = condCreate ()
   }
 
 -- 'channelSend c msg' sends the message 'msg' to the channel 'c'
-let channelSend : Channel a -> a -> Unit = lam chan. lam msg.
+let channelSend : all a. Channel a -> a -> () = lam chan. lam msg.
   mutexLock chan.lock;
 
   let old = atomicGet chan.contents in
@@ -34,7 +34,7 @@ let channelSend : Channel a -> a -> Unit = lam chan. lam msg.
   mutexRelease chan.lock
 
 -- 'channelSendMany c msgs' sends the messages 'msgs' to the channel 'c'
-let channelSendMany : Channel a -> [a] -> Unit = lam chan. lam msgs.
+let channelSendMany : all a. Channel a -> [a] -> () = lam chan. lam msgs.
   mutexLock chan.lock;
 
   let old = atomicGet chan.contents in
@@ -47,10 +47,10 @@ let channelSendMany : Channel a -> [a] -> Unit = lam chan. lam msgs.
 
 -- 'channelRecv c' receives a message from the channel 'c'. Blocks until there
 -- is at least one message in the channel.
-let channelRecv : Channel a -> a = lam chan.
+let channelRecv : all a. Channel a -> a = lam chan.
   mutexLock chan.lock;
 
-  recursive let waitForMsg : Unit -> a = lam.
+  recursive let waitForMsg : () -> a = lam.
     let contents = atomicGet chan.contents in
     match contents with [] then
       condWait chan.nonEmpty chan.lock;
@@ -69,7 +69,7 @@ let channelRecv : Channel a -> a = lam chan.
 
 -- 'channelRecvOpt c' is a non-blocking version of 'channelRecv'. If the channel
 -- is empty, then None () is immediately returned, instead of blocking the call.
-let channelRecvOpt : Channel a -> Option a = lam chan.
+let channelRecvOpt : all a. Channel a -> Option a = lam chan.
   mutexLock chan.lock;
 
   let msg =
@@ -137,7 +137,7 @@ utest
   utest channelRecvOpt c with Some 2 in
 
   let debug = false in
-  let debugPrintLn = if debug then print "\n" else (lam x. x) in
+  let debugPrintLn = if debug then lam x. print (concat x "\n") else (lam x. ()) in
   let n = 100 in
 
   let threads = map (lam.

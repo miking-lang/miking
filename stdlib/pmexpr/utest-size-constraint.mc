@@ -11,6 +11,7 @@
 -- where the same constraint applies recursively to e. This kind of utest
 -- expresses an equality constraint between the parameters x1 and x2.
 
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 
 lang PMExprUtestSizeConstraint = PMExprAst
@@ -79,12 +80,15 @@ lang PMExprUtestSizeConstraint = PMExprAst
   | t -> smap_Expr_Expr replaceUtestsWithSizeConstraint t
 end
 
+lang TestLang = PMExprUtestSizeConstraint + TypeCheck
+end
+
 mexpr
 
-use PMExprUtestSizeConstraint in
+use TestLang in
 
 let preprocess = lam t.
-  typeAnnot (symbolize t)
+  typeCheck (symbolize t)
 in
 
 let topLevelUtest = preprocess (utest_ (addi_ (int_ 1) (int_ 1)) (int_ 2) unit_) in
@@ -124,7 +128,7 @@ let expected =
 utest replaceUtestsWithSizeConstraint utestSizeEquality with expected using eqExpr in
 
 let utestSizeEqMultiDim = preprocess
-  (nlam_ s1 (tyseq_ tyint_) (nlam_ s2 (tyseq_ tyint_)
+  (nlam_ s1 (tyseq_ (tyseq_ (tyseq_ tyint_))) (nlam_ s2 (tyseq_ (tyseq_ tyint_))
     (utest_ (length_ (head_ (nvar_ s2))) (length_ (head_ (head_ (nvar_ s1)))) unit_))) in
 let expected =
   nlam_ s1 (tyseq_ tyint_) (nlam_ s2 (tyseq_ tyint_)

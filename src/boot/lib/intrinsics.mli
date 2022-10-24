@@ -52,6 +52,12 @@ module Mseq : sig
 
   (* Complexity:
    * rope (?): O(1) assuming OCaml's Array.length is O(1)
+   * list (?): O(i), where i is the provided length to compare with
+   *)
+  val is_length_at_least : 'a t -> int -> bool
+
+  (* Complexity:
+   * rope (?): O(1) assuming OCaml's Array.length is O(1)
    * list (?): O(n), where n is the length of the first argument
    *)
   val concat : 'a t -> 'a t -> 'a t
@@ -150,6 +156,8 @@ module Mseq : sig
   val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 
   module Helpers : sig
+    val to_seq : 'a t -> 'a Seq.t
+
     val of_list : 'a list -> 'a t
 
     val of_list_list : 'a list -> 'a t
@@ -254,6 +262,10 @@ module T : sig
 
     val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
 
+    val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
     val shape : ('a, 'b) t -> int Mseq.t
 
     val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
@@ -267,6 +279,10 @@ module T : sig
   module Op_mseq_barray :
     OP_MSEQ with type ('a, 'b) t = ('a, 'b) Tensor.Barray.t
 
+  val uninit_int : int Mseq.t -> (int, int_elt) Tensor.Barray.t
+
+  val uninit_float : int Mseq.t -> (float, float64_elt) Tensor.Barray.t
+
   val create_int :
     int Mseq.t -> (int Mseq.t -> int) -> (int, int_elt) Tensor.Barray.t
 
@@ -275,6 +291,10 @@ module T : sig
 
   val create_generic :
     int Mseq.t -> (int Mseq.t -> 'a) -> ('a, 'a) Tensor.Generic.t
+
+  val uninit_int_packed : int Mseq.t -> (int, int_elt) u
+
+  val uninit_float_packed : int Mseq.t -> (float, float64_elt) u
 
   val create_int_packed : int Mseq.t -> (int Mseq.t -> int) -> (int, int_elt) u
 
@@ -286,6 +306,10 @@ module T : sig
   val get_exn : ('a, 'b) u -> int Mseq.t -> 'a
 
   val set_exn : ('a, 'b) u -> int Mseq.t -> 'a -> unit
+
+  val linear_get_exn : ('a, 'b) u -> int -> 'a
+
+  val linear_set_exn : ('a, 'b) u -> int -> 'a -> unit
 
   val shape : ('a, 'b) u -> int Mseq.t
 

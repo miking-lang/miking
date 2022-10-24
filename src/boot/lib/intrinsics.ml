@@ -25,14 +25,32 @@ module Mseq = struct
     | List s ->
         List.length s
 
+  let is_length_at_least s i =
+    match s with
+    | Rope s ->
+        Rope.length_array s >= i
+    | List s ->
+        let rec work j s =
+          match (j, s) with
+          | 0, _ ->
+              true
+          | _, [] ->
+              false
+          | _, _ :: t ->
+              work (j - 1) t
+        in
+        work i s
+
   let concat s1 s2 =
     match (s1, s2) with
     | Rope s1, Rope s2 ->
         Rope (Rope.concat_array s1 s2)
     | List s1, List s2 ->
         List (s1 @ s2)
-    | _ ->
-        raise (Invalid_argument "Mseq.concat")
+    | List s1, Rope s2 ->
+        List (s1 @ Rope.Convert.to_list_array s2)
+    | Rope s1, List s2 ->
+        List (Rope.foldr_array List.cons s1 s2)
 
   let get s = match s with Rope s -> Rope.get_array s | List s -> List.nth s
 
@@ -141,6 +159,12 @@ module Mseq = struct
         List (List.mapi f s)
 
   module Helpers = struct
+    let to_seq = function
+      | Rope s ->
+          Array.to_seq (Rope.Convert.to_array_array s)
+      | List s ->
+          List.to_seq s
+
     let of_list_rope l = Rope (Rope.Convert.of_list_array l)
 
     let of_list_list l = List l
@@ -186,7 +210,16 @@ module Mseq = struct
       | List s1, List s2 ->
           List.equal f s1 s2
       | _ ->
-          raise (Invalid_argument "Mseq.equal")
+          let rec seq_equal l r =
+            match (l (), r ()) with
+            | Seq.Nil, Seq.Nil ->
+                true
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                f lx rx && seq_equal l r
+            | _ ->
+                false
+          in
+          seq_equal (to_seq s1) (to_seq s2)
 
     let fold_left f a = function
       | Rope s ->
@@ -207,7 +240,14 @@ module Mseq = struct
       | List s1, List s2 ->
           List (List.combine s1 s2)
       | _ ->
-          raise (Invalid_argument "Mseq.combine")
+          let rec seq_combine_to_list s1 s2 =
+            match (s1 (), s2 ()) with
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                (lx, rx) :: seq_combine_to_list l r
+            | _ ->
+                []
+          in
+          List (seq_combine_to_list (to_seq s1) (to_seq s2))
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with
@@ -216,7 +256,14 @@ module Mseq = struct
       | List s1, List s2 ->
           List.fold_right2 f s1 s2 a
       | _ ->
-          raise (Invalid_argument "Mseq.fold_right2")
+          let rec seq_fold_right2 s1 s2 =
+            match (s1 (), s2 ()) with
+            | Seq.Cons (lx, l), Seq.Cons (rx, r) ->
+                f lx rx (seq_fold_right2 l r)
+            | _ ->
+                a
+          in
+          seq_fold_right2 (to_seq s1) (to_seq s2)
 
     let map_accum_left f a = function
       | Rope s ->
@@ -258,6 +305,10 @@ module T = struct
 
     val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
 
+    val linear_get_exn : ('a, 'b) t -> int -> 'a
+
+    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+
     val shape : ('a, 'b) t -> int Mseq.t
 
     val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
@@ -277,6 +328,10 @@ module T = struct
 
     let set_exn t idx = T.set_exn t (to_arr idx)
 
+    let linear_get_exn t idx = T.linear_get_exn t idx
+
+    let linear_set_exn t idx = T.linear_set_exn t idx
+
     let shape t = of_arr (T.shape t)
 
     let reshape_exn t shape = T.reshape_exn t (to_arr shape)
@@ -286,6 +341,10 @@ module T = struct
 
   module Op_mseq_generic = Op_mseq (Tensor.Generic)
   module Op_mseq_barray = Op_mseq (Tensor.Barray)
+
+  let uninit_int shape = Tensor.Barray.uninit_int (to_arr shape)
+
+  let uninit_float shape = Tensor.Barray.uninit_float (to_arr shape)
 
   let create_int shape f =
     Tensor.Barray.create_int (to_arr shape) (fun idx ->
@@ -298,6 +357,10 @@ module T = struct
   let create_generic shape f =
     Tensor.Generic.create (to_arr shape) (fun idx ->
         f (of_arr (Array.copy idx)) )
+
+  let uninit_int_packed shape = TInt (uninit_int shape)
+
+  let uninit_float_packed shape = TFloat (uninit_float shape)
 
   let create_int_packed shape f = TInt (create_int shape f)
 
@@ -322,6 +385,24 @@ module T = struct
         Op_mseq_barray.set_exn t' idx v
     | TGen t' ->
         Op_mseq_generic.set_exn t' idx v
+
+  let linear_get_exn (type a b) (t : (a, b) u) idx : a =
+    match t with
+    | TInt t' ->
+        Op_mseq_barray.linear_get_exn t' idx
+    | TFloat t' ->
+        Op_mseq_barray.linear_get_exn t' idx
+    | TGen t' ->
+        Op_mseq_generic.linear_get_exn t' idx
+
+  let linear_set_exn (type a b) (t : (a, b) u) idx (v : a) : unit =
+    match t with
+    | TInt t' ->
+        Op_mseq_barray.linear_set_exn t' idx v
+    | TFloat t' ->
+        Op_mseq_barray.linear_set_exn t' idx v
+    | TGen t' ->
+        Op_mseq_generic.linear_set_exn t' idx v
 
   let shape (type a b) (t : (a, b) u) : int Mseq.t =
     match t with

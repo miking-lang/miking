@@ -1,21 +1,21 @@
 
 
 
-type Promise
+type Promise a
 
-external asyncSleepSec ! : Float -> Promise a
+external asyncSleepSec ! : Float -> Promise ()
 let asyncSleepSec = lam t. asyncSleepSec t
 
-external asyncRun ! : Promise a -> a
+external asyncRun ! : all a. Promise a -> a
 let asyncRun = lam p. asyncRun p
 
-external asyncBind ! : Promise a -> (a -> Promise b) -> Promise b
+external asyncBind ! : all a. all b. Promise a -> (a -> Promise b) -> Promise b
 let asyncBind = lam p. lam f. asyncBind p f
 
 external asyncPrint ! : String -> Promise ()
 let asyncPrint = lam x. asyncPrint x
 
-external asyncReturn ! : a -> Promise a
+external asyncReturn ! : all a. a -> Promise a
 let asyncReturn = lam x. asyncReturn x
 
 mexpr

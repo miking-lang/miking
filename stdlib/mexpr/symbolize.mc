@@ -11,6 +11,9 @@ include "string.mc"
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
+include "info.mc"
+include "error.mc"
 include "pprint.mc"
 
 ---------------------------
@@ -22,15 +25,29 @@ include "pprint.mc"
 type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
-  tyVarEnv: Map String Name,
-  tyConEnv: Map String Name
+  tyVarEnv: Map String (Name, Level),
+  tyConEnv: Map String Name,
+  currentLvl : Level,
+  strictTypeVars: Bool,
+  allowFree: Bool,
+  ignoreExternals: Bool
 }
 
-let symEnvEmpty =
-  {varEnv = mapEmpty cmpString,
-   conEnv = mapEmpty cmpString,
-   tyVarEnv = mapEmpty cmpString,
-   tyConEnv = mapEmpty cmpString}
+let symEnvEmpty = {
+  varEnv = mapEmpty cmpString,
+  conEnv = mapEmpty cmpString,
+  tyVarEnv = mapEmpty cmpString,
+
+  -- Built-in type constructors
+  tyConEnv = mapFromSeq cmpString (
+    map (lam t: (String, [String]). (t.0, nameNoSym t.0)) builtinTypes
+  ),
+
+  currentLvl = 1,
+  strictTypeVars = true,
+  allowFree = false,
+  ignoreExternals = false
+}
 
 -----------
 -- TERMS --
@@ -46,6 +63,16 @@ lang Sym = Ast
     let t = smap_Expr_Expr (symbolizeExpr env) t in
     withType (symbolizeType env (tyTm t)) t
 
+  -- Same as symbolizeExpr, but also return an env with all names bound at the
+  -- top-level
+  sem symbolizeTopExpr (env : SymEnv) =
+  | t ->
+    let t = symbolizeExpr env t in
+    addTopNames env t
+
+  sem addTopNames (env : SymEnv) =
+  | t -> env
+
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader
   -- monad or something. patEnv on the other hand changes, it would be
@@ -60,6 +87,18 @@ lang Sym = Ast
   | expr ->
     let env = symEnvEmpty in
     symbolizeExpr env expr
+
+  sem symbolizeTop =
+  | expr ->
+    let env = symEnvEmpty in
+    symbolizeTopExpr env expr
+
+  -- Symbolize with builtin environment and ignore errors
+  sem symbolizeAllowFree =
+  | expr ->
+    let env = { symEnvEmpty with allowFree = true } in
+    symbolizeExpr env expr
+
 end
 
 lang VarSym = Sym + VarAst
@@ -69,10 +108,13 @@ lang VarSym = Sym + VarAst
       if nameHasSym t.ident then TmVar t
       else
         let str = nameGetStr t.ident in
-        match mapLookup str varEnv with Some ident then
-          TmVar {{t with ident = ident}
-                    with ty = symbolizeType env t.ty}
-        else error (concat "Unknown variable in symbolizeExpr: " str)
+        let ident =
+          match mapLookup str varEnv with Some ident then ident
+          else if env.allowFree then t.ident
+          else errorSingle [t.info] (concat "Unknown variable in symbolizeExpr: " str)
+        in
+        TmVar {{t with ident = ident}
+                  with ty = symbolizeType env t.ty}
     else never
 end
 
@@ -107,9 +149,11 @@ lang LetSym = Sym + LetAst + AllTypeAst
       let body =
         match stripTyAll tyBody with (vars, _) in
         let tyVarEnv =
-          foldr (lam v: (Name, VarSort). mapInsert (nameGetStr v.0) v.0)
+          foldr (lam v: (Name, VarSort).
+              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
             env.tyVarEnv vars in
-        symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
+        symbolizeExpr {{env with tyVarEnv = tyVarEnv}
+                            with currentLvl = addi 1 env.currentLvl} t.body
       in
       if nameHasSym t.ident then
         TmLet {{{{t with tyBody = tyBody}
@@ -127,6 +171,12 @@ lang LetSym = Sym + LetAst + AllTypeAst
                      with inexpr = symbolizeExpr env t.inexpr}
                      with ty = ty}
     else never
+
+  sem addTopNames (env : SymEnv) =
+  | TmLet t ->
+    let str = nameGetStr t.ident in
+    let varEnv = mapInsert str t.ident env.varEnv in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang ExtSym = Sym + ExtAst
@@ -134,7 +184,7 @@ lang ExtSym = Sym + ExtAst
   | TmExt t ->
     match env with {varEnv = varEnv} then
       let tyIdent = symbolizeType env t.tyIdent in
-      if nameHasSym t.ident then
+      if or env.ignoreExternals (nameHasSym t.ident) then
         TmExt {{t with inexpr = symbolizeExpr env t.inexpr}
                   with tyIdent = tyIdent}
       else
@@ -146,31 +196,49 @@ lang ExtSym = Sym + ExtAst
                    with inexpr = symbolizeExpr env t.inexpr}
                    with tyIdent = tyIdent}
     else never
+
+  sem addTopNames (env : SymEnv) =
+  | TmExt t ->
+    let str = nameGetStr t.ident in
+    let varEnv = mapInsert str t.ident env.varEnv in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang TypeSym = Sym + TypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmType t ->
-    match env with {tyConEnv = tyConEnv} then
-      let tyIdent = symbolizeType env t.tyIdent in
-      let ty = symbolizeType env t.ty in
-      if nameHasSym t.ident then
-        TmType {{{t with tyIdent = tyIdent}
+    match env with {tyConEnv = tyConEnv, tyVarEnv = tyVarEnv} in
+    let ty = symbolizeType env t.ty in
+    if nameHasSym t.ident then
+      TmType {{{t with tyIdent = symbolizeType env t.tyIdent}
+                  with inexpr = symbolizeExpr env t.inexpr}
+                  with ty = ty}
+    else
+      let params = map nameSetNewSym t.params in
+      let paramStrs = map nameGetStr params in
+      let tyVarEnv =
+        foldl2 (lam e. lam s. lam i. mapInsert s (i, env.currentLvl) e) tyVarEnv paramStrs params
+      in
+      let paramEnv = {env with tyVarEnv = tyVarEnv} in
+      let tyIdent = symbolizeType paramEnv t.tyIdent in
+      let ident = nameSetNewSym t.ident in
+      let str = nameGetStr ident in
+      let tyConEnv = mapInsert str ident tyConEnv in
+      let env = {env with tyConEnv = tyConEnv} in
+      TmType {{{{{t with ident = ident}
+                    with params = params}
+                    with tyIdent = tyIdent}
                     with inexpr = symbolizeExpr env t.inexpr}
                     with ty = ty}
-      else
-        let ident = nameSetNewSym t.ident in
-        let str = nameGetStr ident in
-        let tyConEnv = mapInsert str ident tyConEnv in
-        let env = {env with tyConEnv = tyConEnv} in
-        TmType {{{{t with ident = ident}
-                     with tyIdent = tyIdent}
-                     with inexpr = symbolizeExpr env t.inexpr}
-                     with ty = ty}
-    else never
+
+  sem addTopNames (env : SymEnv) =
+  | TmType t ->
+    let str = nameGetStr t.ident in
+    let tyConEnv = mapInsert str t.ident env.tyConEnv in
+    addTopNames {env with tyConEnv = tyConEnv} t.inexpr
 end
 
-lang RecLetsSym = Sym + RecLetsAst
+lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmRecLets t ->
     match env with {varEnv = varEnv} then
@@ -193,14 +261,32 @@ lang RecLetsSym = Sym + RecLetsAst
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam bind : RecLetBinding.
-        {{bind with body = symbolizeExpr env bind.body}
-               with tyBody = symbolizeType env bind.tyBody})
+        let tyBody = symbolizeType env bind.tyBody in
+        match stripTyAll tyBody with (vars, _) in
+        let tyVarEnv =
+          foldr (lam v: (Name, VarSort).
+              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
+            env.tyVarEnv vars in
+        {{bind with body = symbolizeExpr
+                             {{env with tyVarEnv = tyVarEnv}
+                                   with currentLvl = addi 1 env.currentLvl} bind.body}
+               with tyBody = tyBody})
         bindings in
 
     TmRecLets {{t with bindings = bindings}
                   with inexpr = symbolizeExpr env t.inexpr}
 
     else never
+
+  sem addTopNames (env : SymEnv) =
+  | TmRecLets t ->
+    let varEnv =
+      foldl
+        (lam varEnv. lam bind : RecLetBinding.
+           mapInsert (nameGetStr bind.ident) bind.ident varEnv)
+        env.varEnv t.bindings
+    in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang DataSym = Sym + DataAst
@@ -232,12 +318,21 @@ lang DataSym = Sym + DataAst
                      with ty = ty}
       else
         let str = nameGetStr t.ident in
-        match mapLookup str conEnv with Some ident then
-          TmConApp {{{t with ident = ident}
-                        with body = symbolizeExpr env t.body}
-                        with ty = ty}
-        else error (concat "Unknown constructor in symbolizeExpr: " str)
+        let ident =
+          match mapLookup str conEnv with Some ident then ident
+          else if env.allowFree then t.ident
+          else errorSingle [t.info] (concat "Unknown constructor in symbolizeExpr: " str)
+        in
+        TmConApp {{{t with ident = ident}
+                      with body = symbolizeExpr env t.body}
+                      with ty = ty}
     else never
+
+  sem addTopNames (env : SymEnv) =
+  | TmConDef t ->
+    let str = nameGetStr t.ident in
+    let conEnv = mapInsert str t.ident env.conEnv in
+    addTopNames {env with conEnv = conEnv} t.inexpr
 end
 
 lang MatchSym = Sym + MatchAst
@@ -262,7 +357,7 @@ lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyVariant t & ty ->
     if eqi (mapLength t.constrs) 0 then ty
-    else error "Symbolizing non-empty variant types not yet supported"
+    else errorSingle [t.info] "Symbolizing non-empty variant types not yet supported"
 end
 
 lang ConTypeSym = ConTypeAst + UnknownTypeAst
@@ -274,9 +369,10 @@ lang ConTypeSym = ConTypeAst + UnknownTypeAst
         let str = nameGetStr t.ident in
         match mapLookup str tyConEnv with Some ident then
           TyCon {t with ident = ident}
+        else if env.strictTypeVars then
+          if env.allowFree then TyCon t
+          else errorSingle [t.info] (concat "Unknown type constructor in symbolizeExpr: " str)
         else
-          -- NOTE(larshum, 2021-03-24): Unknown type variables are symbolized
-          -- as TyUnknown for now.
           TyUnknown {info = t.info}
     else never
 end
@@ -287,33 +383,37 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
     if nameHasSym t.ident then ty
     else
       let str = nameGetStr t.ident in
-      match mapLookup str env.tyVarEnv with Some ident then
-        TyVar {t with ident = ident}
+      match mapLookup str env.tyVarEnv with Some (ident, lvl) then
+        TyVar {{t with ident = ident}
+                  with level = lvl}
+      else if env.strictTypeVars then
+        if env.allowFree then TyVar t
+        else errorSingle [t.info] (concat "Unknown type variable in symbolizeExpr: " str)
       else
-        -- NOTE(aathn, 2021-09-29): Unknown type variables are symbolized
-        -- as TyUnknown for now.
         TyUnknown {info = t.info}
 end
 
 lang AllTypeSym = AllTypeAst + VarSortAst
   sem symbolizeType (env : SymEnv) =
   | TyAll t & ty ->
-    if nameHasSym t.ident then ty
-    else
       let sort = smap_VarSort_Type (symbolizeType env) t.sort in
-      let str = nameGetStr t.ident in
-      let ident = nameSetNewSym t.ident in
-      let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
-      TyAll {{{t with ident = ident}
-                 with ty = symbolizeType env t.ty}
-                 with sort = sort}
+      if nameHasSym t.ident then
+        TyAll {{t with ty = symbolizeType env t.ty}
+                  with sort = sort}
+      else
+        let str = nameGetStr t.ident in
+        let ident = nameSetNewSym t.ident in
+        let env = {env with tyVarEnv = mapInsert str (ident, env.currentLvl) env.tyVarEnv} in
+        TyAll {{{t with ident = ident}
+                   with ty = symbolizeType env t.ty}
+                   with sort = sort}
 end
 
 --------------
 -- PATTERNS --
 --------------
 
-let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
+let _symbolize_patname: Map String Name -> PatName -> (Map String Name, PatName) =
   lam varEnv. lam pname.
     match pname with PName name then
       if nameHasSym name then (varEnv, PName name)
@@ -358,7 +458,7 @@ lang DataPatSym = DataPat
         else
           let str = nameGetStr r.ident in
           match mapLookup str conEnv with Some ident then ident
-          else error (concat "Unknown constructor in symbolizeExpr: " str)
+          else errorSingle [r.info] (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match symbolizePat env patEnv r.subpat with (patEnv, subpat) then
         (patEnv, PatCon {{r with ident = ident} with subpat = subpat})
@@ -374,7 +474,7 @@ lang NotPatSym = NotPat
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
     -- symbolizeExpr though, constructors must refer to the right symbol.
-    let res : (SymEnv, Pat) = symbolizePat env patEnv p.subpat in
+    let res : (Map String Name, Pat) = symbolizePat env patEnv p.subpat in
     (patEnv, PatNot {p with subpat = res.1})
 end
 

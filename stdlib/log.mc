@@ -7,7 +7,7 @@ include "seq.mc"
   is set to off.
 -/
 
-type Loglevel = Int
+type LogLevel = Int
 let logLevel = {
   off = 0,
   error = 1,
@@ -27,13 +27,16 @@ let _logLevelToString = lam lvl : LogLevel.
   else ""
 
 -- Sets the log level
-let logSetLogLevel = lam lvl : Loglevel. modref _logLevel lvl
+let logSetLogLevel = lam lvl : LogLevel. modref _logLevel lvl
+
+-- Checks if given level is printed under the current log level
+let logLevelPrinted = lam lvl. leqi lvl (deref _logLevel)
 
 -- `log lvl msg` logs the message `msg` at the log level `lvl`.
-let logMsg = lam lvl : LogLevel. lam msg : String.
+let logMsg = lam lvl : LogLevel. lam msg : () -> String.
   if eqi lvl logLevel.off then ()
-  else if leqi lvl (deref _logLevel) then
-    printError (join ["LOG ", _logLevelToString lvl, ":\t", msg, "\n"]);
+  else if logLevelPrinted lvl then
+    printError (join ["LOG ", _logLevelToString lvl, ":\t", msg (), "\n"]);
     flushStderr ()
   else ()
 

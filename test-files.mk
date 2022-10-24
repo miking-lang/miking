@@ -12,6 +12,8 @@ src_files_all =\
 sundials_files = $(wildcard stdlib/sundials/*.mc)
 ipopt_files = $(wildcard stdlib/ipopt/*.mc)
 accelerate_files = $(wildcard test/examples/accelerate/*.mc)
+cuda_files = $(wildcard test/examples/accelerate/cuda/*.mc)
+futhark_files = $(wildcard test/examples/accelerate/futhark/*.mc)
 
 special_dependencies_files +=\
 	$(sundials_files)\
@@ -24,17 +26,28 @@ special_dependencies_files +=\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
-# Programs that should be compiled with type-checking enabled. These are
-# excluded from the default compile rules, so that we don't test them twice.
-compile_type_checked += test/mlang/type-alias.mc
+
+# Test programs for the JavaScript backend. These should be compiled with mi
+# and runned with node.js, the result being compared to the original program
+# being runned with the Miking compiler. All Miking test programs should have
+# the same output as the compiled JavaScript programs for all files.
+js_files += $(wildcard test/js/*.mc)
+# js_web_files += $(wildcard test/js/web/*.mc) # Disabled until web FFI is implemented
+
+
+# Programs that we currently cannot typecheck. These are programs written
+# before the typechecker was implemented. It is forbidden to add to this list of
+# programs but removing from it is very welcome.
+typecheck_files_exclude += stdlib/parser/breakable-helper.mc
+typecheck_files_exclude += test/mexpr/nestedpatterns.mc
+typecheck_files_exclude += test/mlang/nestedpatterns.mc
+typecheck_files_exclude += test/mlang/mlang.mc
+typecheck_files_exclude += test/mlang/catchall.mc
 
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
 # programs but removing from it is very welcome.
-compile_files_exclude += stdlib/dfa.mc
-compile_files_exclude += stdlib/json.mc
-compile_files_exclude += stdlib/nfa.mc
 compile_files_exclude += stdlib/parser-combinators.mc
 compile_files_exclude += stdlib/regex.mc
 compile_files_exclude += test/mexpr/nestedpatterns.mc
@@ -52,20 +65,21 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
-
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
 	$(filter-out $(python_files) $(compile_files_exclude), $(src_files_all))
 
 # Programs that we should be able to compile/test, even without utest pruning,
-# if all, except the special, external dependencies are met. Excludes files
-# that are to be compiled with type checking enabled.
+# if all, except the special, external dependencies are met.
 compile_files =\
-	$(filter-out $(special_dependencies_files) $(compile_type_checked), $(compile_files_prune))
+	$(filter-out $(special_dependencies_files) $(typecheck_files_exclude),\
+		$(compile_files_prune))
 
 
 # Programs the we should be able to interpret/test with the interpreter.
-run_files = $(filter-out $(python_files) $(run_files_exclude), $(src_files_all))
+run_files =\
+	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude),\
+		$(src_files_all))
 
 
 # Programs that we should be able to interpret/test with boot.

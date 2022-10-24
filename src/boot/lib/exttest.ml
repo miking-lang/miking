@@ -1,6 +1,6 @@
 type myrec1_t = {a: int; b: float}
 
-type myrec2_t = {a: int list; b: int}
+type myrec2_t = {b: int; a: int list}
 
 type myrec3_t = {a: myrec1_t; b: myrec2_t}
 
@@ -32,7 +32,7 @@ let myrec1 : myrec1_t = {a= 1; b= 3.}
 
 let myrec1_a (r : myrec1_t) = r.a + 1
 
-let myrec2 : myrec2_t = {a= [1]; b= 2}
+let myrec2 : myrec2_t = {b= 2; a= [1]}
 
 let myrec2_a (r : myrec2_t) = List.map (( + ) 1) r.a
 

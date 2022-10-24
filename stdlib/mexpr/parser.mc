@@ -9,7 +9,7 @@ include "ast-builder.mc"
 include "eq.mc"
 include "info.mc"
 
-type ParseResult = {val : Expr, pos : Pos, str: String}
+type ParseResult a = {val : a, pos : Pos, str: String}
 type StrPos = {str : String, pos : Pos}
 
 let tabSpace = 2
@@ -67,7 +67,7 @@ end
 lang ExprParser = WSACParser
   sem parseExpr (p: Pos) =
   | s ->
-    let r1 : ParseResult = parseExprMain p 0 s in
+    let r1 : ParseResult Expr = parseExprMain p 0 s in
     let r2 : StrPos = eatWSAC r1.pos r1.str in
     if eqi (length r2.str) 0 then r1.val
     else posErrorExit r2.pos "Parse error. Unknown characters."
@@ -75,11 +75,11 @@ lang ExprParser = WSACParser
   sem parseExprMain (p: Pos) (prec: Int) =
   | s ->
     let r1 : StrPos = eatWSAC p s in
-    let exp : ParseResult = parseExprImp r1.pos r1.str in
+    let exp : ParseResult Expr = parseExprImp r1.pos r1.str in
     let r2 : StrPos = eatWSAC exp.pos exp.str in
     parseInfix r2.pos prec exp r2.str
 
-  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) =
 
   sem parseExprImp (p: Pos) =
   | _ -> posErrorExit p "Parse error. Unknown character sequence."
@@ -88,7 +88,7 @@ end
 
 -- Include this fragment if there are no infix operations
 lang ExprParserNoInfix = ExprParser
-  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) =
   | _ -> exp
 end
 
@@ -135,10 +135,10 @@ lang IdentParser = ExprParser
   | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ] ++ s) & xs ->
-    let r : ParseResult = parseIdent false p xs in
+    let r : ParseResult String = parseIdent false p xs in
     nextIdent p r.str r.val
 
-  sem nextIdent (p: Pos) (xs: string) =
+  sem nextIdent (p: Pos) (xs: String) =
 end
 
 
@@ -185,7 +185,7 @@ utest parseUInt (initPos "") "Not a number"
 let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
   lam p. lam str.
     match str with ['+' | '-'] ++ xs & s then
-      let n : ParseResult = parseUInt (advanceCol p 1) xs in
+      let n : ParseResult String = parseUInt (advanceCol p 1) xs in
       match n.val with "" then n
       else {val = cons (head s) n.val, pos = n.pos, str = n.str}
     else
@@ -206,7 +206,7 @@ utest parseFloatExponent (initPos "") "Not an exponent"
 lang UNumParser = ExprParser
   sem parseExprImp (p : Pos) =
   | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ s) & xs ->
-    let n : ParseResult = parseUInt p xs in
+    let n : ParseResult String = parseUInt p xs in
     let nextChar = if null n.str then None () else Some (head n.str) in
     nextNum p n.str n.val nextChar
 
@@ -229,7 +229,7 @@ lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst + UnknownTypeAst
   sem nextNum (p: Pos) (xs: String) (nval: String) =
   | Some (('.' | 'e' | 'E') & c) ->
     let exponentHelper = lam pos. lam pre. lam expChar. lam s. lam isFloat.
-      let exp : ParseResult = parseFloatExponent (advanceCol pos 1) s in
+      let exp : ParseResult String = parseFloatExponent (advanceCol pos 1) s in
       match exp.val with "" then
         let constVal =
           if isFloat then
@@ -253,7 +253,7 @@ lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst + UnknownTypeAst
       let s = tail xs in
       match s with ['0' | '1' | '2' | '3' | '4' |
                     '5' | '6' | '7' | '8' | '9'] ++ s2 then
-        let n2 : ParseResult = parseUInt p3 s in
+        let n2 : ParseResult String = parseUInt p3 s in
         let preExponentStr = join [nval, ".", n2.val] in
         match n2.str with ['e' | 'E'] ++ s3 then
           exponentHelper n2.pos preExponentStr (head n2.str) s3 true
@@ -294,11 +294,11 @@ lang IfParser =
 
   sem nextIdent (p: Pos) (xs: String) =
   | "if" ->
-     let e1 : ParseResult = parseExprMain (advanceCol p 2) 0 xs in
+     let e1 : ParseResult Expr = parseExprMain (advanceCol p 2) 0 xs in
      let r1 : StrPos = matchKeyword "then" e1.pos e1.str in
-     let e2 : ParseResult = parseExprMain r1.pos 0 r1.str in
+     let e2 : ParseResult Expr = parseExprMain r1.pos 0 r1.str in
      let r2 : StrPos = matchKeyword "else" e2.pos e2.str  in
-     let e3 : ParseResult = parseExprMain r2.pos 0 r2.str in
+     let e3 : ParseResult Expr = parseExprMain r2.pos 0 r2.str in
      {val = TmMatch {target = e1.val, pat = ptrue_,
                      thn = e2.val, els = e3.val, ty = tyunknown_,
                      info = makeInfo p e3.pos},
@@ -312,7 +312,7 @@ lang IfParser =
 lang ParenthesesParser = ExprParser + KeywordUtils
   sem parseExprImp (p: Pos) =
   | "(" ++ xs ->
-    let e : ParseResult = parseExprMain (advanceCol p 1) 0 xs in
+    let e : ParseResult Expr = parseExprMain (advanceCol p 1) 0 xs in
     let r : StrPos = matchKeyword ")" e.pos e.str in
     {val = e.val, pos = r.pos, str = r.str}
 end
@@ -329,7 +329,7 @@ lang SeqParser = ExprParser + KeywordUtils + SeqAst + UnknownTypeAst
       else
         let r2 : StrPos =
           if first then r else matchKeyword "," r.pos r.str in
-        let e : ParseResult = parseExprMain r2.pos 0 r2.str in
+        let e : ParseResult Expr = parseExprMain r2.pos 0 r2.str in
         work (snoc acc e.val) false e.pos e.str
     in work [] true (advanceCol p 1) xs
 end
@@ -361,7 +361,7 @@ lang StringParser = ExprParser + SeqAst + CharAst + UnknownTypeAst
                       info = makeInfo p (advanceCol p2 1)},
 	                    pos = advanceCol p2 1, str = xs}
       else
-        let r : ParseResult = matchChar p2 str in
+        let r : ParseResult Char = matchChar p2 str in
         let v = TmConst {val = CChar {val = r.val}, ty = tyunknown_,
                          info = makeInfo p2 r.pos} in
 	      work (snoc acc v) r.pos r.str
@@ -373,7 +373,7 @@ end
 lang CharParser = ExprParser + KeywordUtils + CharAst + UnknownTypeAst
   sem parseExprImp (p: Pos) =
   | "\'" ++ xs ->
-      let r : ParseResult = matchChar (advanceCol p 1) xs in
+      let r : ParseResult Char = matchChar (advanceCol p 1) xs in
       let r2 : StrPos = matchKeyword "\'" r.pos r.str in
       {val = TmConst {val = CChar {val = r.val}, ty = tyunknown_,
                       info = makeInfo p r2.pos},
@@ -384,7 +384,7 @@ end
 
 -- Parse variable
 lang VarParser = ExprParser + IdentParser + VarAst + UnknownTypeAst
-  sem nextIdent (p: Pos) (xs: string) =
+  sem nextIdent (p: Pos) (xs: String) =
   | x ->
       let p2 = advanceCol p (length x) in
       {val = TmVar {ident = nameNoSym x, ty = tyunknown_, info = makeInfo p p2, frozen = false},
@@ -399,9 +399,9 @@ lang FunParser =
   sem nextIdent (p: Pos) (xs: String) =
   | "lam" ->
     let r : StrPos = eatWSAC (advanceCol p 3) xs in
-    let r2 : ParseResult = parseIdent false r.pos r.str in
+    let r2 : ParseResult String = parseIdent false r.pos r.str in
     let r3 : StrPos = matchKeyword "." r2.pos r2.str in
-    let e : ParseResult = parseExprMain r3.pos 0 r3.str in
+    let e : ParseResult Expr = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, ty = tyunknown_,
                   tyIdent = tyunknown_, body = e.val,
                   info = makeInfo p e.pos},
@@ -415,11 +415,11 @@ lang LetParser =
   sem nextIdent (p: Pos) (xs: String) =
   | "let" ->
     let r : StrPos = eatWSAC (advanceCol p 3) xs in
-    let r2 : ParseResult = parseIdent false r.pos r.str in
+    let r2 : ParseResult String = parseIdent false r.pos r.str in
     let r3 : StrPos = matchKeyword "=" r2.pos r2.str in
-    let e1 : ParseResult = parseExprMain r3.pos 0 r3.str in
+    let e1 : ParseResult Expr = parseExprMain r3.pos 0 r3.str in
     let r4 : StrPos = matchKeyword "in" e1.pos e1.str in
-    let e2 : ParseResult = parseExprMain r4.pos 0 r4.str in
+    let e2 : ParseResult Expr = parseExprMain r4.pos 0 r4.str in
     {val = TmLet {ident = nameNoSym r2.val, tyBody = tyunknown_,
                   body = e1.val, inexpr = e2.val, ty = tyunknown_,
                   info = makeInfo p e2.pos},
@@ -433,17 +433,17 @@ lang ExprInfixParser = ExprParser
   | LeftAssoc ()
   | RightAssoc ()
 
-  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) =
   | str ->
     let r : StrPos = eatWSAC p str in
     match parseInfixImp r.pos r.str with Some op then
-      let op : {val : Expr, pos : Pos, str : String,
+      let op : {val : Expr -> Expr -> Expr, pos : Pos, str : String,
                 assoc : Associativity, prec : Int} = op in
       if geqi op.prec prec then
         let prec2 = match op.assoc with LeftAssoc ()
                     then addi op.prec 1
                     else op.prec in
-        let exp2 : ParseResult = parseExprMain op.pos prec2 op.str in
+        let exp2 : ParseResult Expr = parseExprMain op.pos prec2 op.str in
         let exp3 = {val = op.val exp.val exp2.val,
                     pos = exp2.pos, str = exp2.str} in
 	      parseInfix exp3.pos prec exp3 exp3.str
@@ -518,7 +518,7 @@ in
 let eqExpr = lam l : Expr. lam r : Expr.
   eqExpr l r
 in
-let eqParseResult = lam l : ParseResult. lam r : ParseResult.
+let eqParseResult = lam l : ParseResult Expr. lam r : ParseResult Expr.
   and (eqExpr l.val r.val)
       (and (eqPos l.pos r.pos) (eqString l.str r.str))
 in
@@ -603,7 +603,7 @@ utest parseExprMain (initPos "file") 0 " 3.1992e--2 " with
        pos = posVal "file" 1 7, str = "e--2 "} using eqParseResult in
 
 --If expression
-let ifexpr : ParseResult = parseExprMain (initPos "") 0 "  if 1 then 22 else 3" in
+let ifexpr : ParseResult Expr = parseExprMain (initPos "") 0 "  if 1 then 22 else 3" in
 utest ifexpr.pos
   with posVal "" 1 21 in
 -- Boolean literal 'true'
@@ -658,15 +658,15 @@ utest parseExpr (initPos "") " \'\\n\' " with
   TmConst {val = CChar {val = '\n'}, ty = tyunknown_,
            info = infoVal "" 1 1 1 5} using eqExpr in
 -- Var
-let var : ParseResult = parseExprMain (initPos "") 0 " _xs " in
+let var : ParseResult Expr = parseExprMain (initPos "") 0 " _xs " in
 utest var.pos with posVal "" 1 4 in
-let var : ParseResult = parseExprMain (initPos "") 0 " fOO_12a " in
+let var : ParseResult Expr = parseExprMain (initPos "") 0 " fOO_12a " in
 utest var.pos with posVal "" 1 8 in
 -- Lambda
-let lambda : ParseResult = parseExprMain (initPos "") 0 " lam x . x " in
+let lambda : ParseResult Expr = parseExprMain (initPos "") 0 " lam x . x " in
 utest lambda.pos with posVal "" 1 10 in
 -- Let
-let letexpr : ParseResult = parseExprMain (initPos "") 0 "  let x = 5 in 8 " in
+let letexpr : ParseResult Expr = parseExprMain (initPos "") 0 "  let x = 5 in 8 " in
 utest letexpr.pos with posVal "" 1 16 in
 
 

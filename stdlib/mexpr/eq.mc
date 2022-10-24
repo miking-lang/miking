@@ -74,7 +74,7 @@ type EqTypeFreeEnv = {
 -- environment. If (i1,i2) is inconsistent with either environment, return None
 -- (). If i1 (lhs) or i2 (rhs) does not exist in any environment, return the
 -- free environment with (i1,i2) added.
-let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
+let _eqCheck : Name -> Name -> BiNameMap -> BiNameMap -> Option BiNameMap =
   lam i1. lam i2. lam env. lam free.
     match biLookup (i1,i2) env with Some n then
       let n : (Name, Name) = n in
@@ -209,12 +209,12 @@ end
 
 lang RecLetsEq = Eq + RecLetsAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmRecLets {bindings = bs2} ->
+  | TmRecLets {bindings = bs2, inexpr = ie2} ->
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
     match env with {varEnv = varEnv} then
-      match lhs with TmRecLets {bindings = bs1} then
+      match lhs with TmRecLets {bindings = bs1, inexpr = ie1} then
         if eqi (length bs1) (length bs2) then
           let bszip = zipWith (lam b1. lam b2. (b1, b2)) bs1 bs2 in
           let varEnv =
@@ -224,10 +224,13 @@ lang RecLetsEq = Eq + RecLetsAst
               varEnv bszip
           in
           let env = {env with varEnv = varEnv} in
-          optionFoldlM
+          match optionFoldlM
             (lam free. lam t : (RecLetBinding, RecLetBinding).
               eqExprH env free (t.0).body (t.1).body)
             free bszip
+          with Some free then
+            eqExprH env free ie1 ie2
+          else None ()
         else None ()
       else None ()
     else never
@@ -262,7 +265,7 @@ lang DataEq = Eq + DataAst
 end
 
 lang MatchEq = Eq + MatchAst
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   -- Intentionally left blank
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
@@ -271,7 +274,7 @@ lang MatchEq = Eq + MatchAst
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free els1 els2 with Some free then
           match eqPat env free biEmpty p1 p2 with Some n then
-            let n : (EqEnv, EqEnv) = n in
+            let n : (EqEnv, BiNameMap) = n in
             match n with (free, patEnv) then
               match env with {varEnv = varEnv} then
                 eqExprH {env with varEnv = biMergePreferRight varEnv patEnv}
@@ -292,7 +295,7 @@ lang UtestEq = Eq + UtestAst
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free e1 e2 with Some free then
           match (u1, u2) with (Some tu1, Some tu2) then
-            match eqExprH env free u1 u2 with Some free then
+            match eqExprH env free tu1 tu2 with Some free then
               eqExprH env free n1 n2
             else None ()
           else
@@ -318,6 +321,18 @@ end
 lang NeverEq = Eq + NeverAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
+end
+
+lang ExtEq = Eq + ExtAst
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmExt {ident = i2, inexpr = ie2} ->
+    match lhs with TmExt {ident = i1, inexpr = ie1} then
+      match env with {varEnv = varEnv} in
+      if nameEqStr i1 i2 then -- Externals are a bit special, as the string component of their names are required to be identical
+        let varEnv = biInsert (i1,i2) varEnv in
+        eqExprH {env with varEnv = varEnv} free ie1 ie2
+      else None ()
+    else None ()
 end
 
 ---------------
@@ -353,7 +368,7 @@ end
 -- PATTERNS --
 --------------
 
-let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
+let _eqpatname : BiNameMap -> EqEnv -> PatName -> PatName -> Option (EqEnv, BiNameMap) =
   lam penv. lam free. lam p1. lam p2.
     match (p1,p2) with (PName i1,PName i2) then
       match biLookup (i1,i2) penv with Some n then
@@ -368,7 +383,7 @@ let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
     else None ()
 
 lang NamedPatEq = NamedPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatNamed {ident = p2} ->
     match lhs with PatNamed {ident = p1} then
       _eqpatname patEnv free p1 p2
@@ -376,7 +391,7 @@ lang NamedPatEq = NamedPat
 end
 
 lang SeqTotPatEq = SeqTotPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatSeqTot {pats = ps2} ->
     match lhs with PatSeqTot {pats = ps1} then
       if eqi (length ps2) (length ps1) then
@@ -391,7 +406,7 @@ lang SeqTotPatEq = SeqTotPat
 end
 
 lang SeqEdgePatEq = SeqEdgePat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
       match _eqpatname patEnv free mid1 mid2 with Some n then
@@ -420,7 +435,7 @@ lang SeqEdgePatEq = SeqEdgePat
 end
 
 lang RecordPatEq = RecordPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
       if eqi (mapLength bs1) (mapLength bs2) then
@@ -437,7 +452,7 @@ lang RecordPatEq = RecordPat
 end
 
 lang DataPatEq = DataPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatCon {ident = i2, subpat = s2} ->
     match lhs with PatCon {ident = i1, subpat = s1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
@@ -449,7 +464,7 @@ lang DataPatEq = DataPat
 end
 
 lang IntPatEq = IntPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatInt {val = i2} ->
     match lhs with PatInt {val = i1} then
       if eqi i1 i2 then Some (free,patEnv) else None ()
@@ -457,7 +472,7 @@ lang IntPatEq = IntPat
 end
 
 lang CharPatEq = CharPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatChar {val = c2} ->
     match lhs with PatChar {val = c1} then
       if eqChar c1 c2 then Some (free,patEnv) else None ()
@@ -465,7 +480,7 @@ lang CharPatEq = CharPat
 end
 
 lang BoolPatEq = BoolPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatBool {val = b2} ->
     match lhs with PatBool {val = b1} then
       if eqBool b1 b2 then Some (free,patEnv) else None ()
@@ -473,11 +488,11 @@ lang BoolPatEq = BoolPat
 end
 
 lang AndPatEq = AndPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatAnd {lpat = l2, rpat = r2} ->
     match lhs with PatAnd {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some envs then
-        let envs : (EqEnv, EqEnv) = envs in
+        let envs : (EqEnv, BiNameMap) = envs in
         match envs with (free, patEnv) then
           eqPat env free patEnv r1 r2
         else never
@@ -486,11 +501,11 @@ lang AndPatEq = AndPat
 end
 
 lang OrPatEq = OrPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatOr {lpat = l2, rpat = r2} ->
     match lhs with PatOr {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some envs then
-        let envs : (EqEnv, EqEnv) = envs in
+        let envs : (EqEnv, BiNameMap) = envs in
         match envs with (free, patEnv) then
           eqPat env free patEnv r1 r2
         else never
@@ -499,7 +514,7 @@ lang OrPatEq = OrPat
 end
 
 lang NotPatEq = NotPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatNot {subpat = p2} ->
     match lhs with PatNot {subpat = p1} then
       eqPat env free patEnv p1 p2
@@ -686,7 +701,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  MatchEq + UtestEq + SeqEq + NeverEq
+  MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
@@ -1165,6 +1180,12 @@ utest eqExpr (seq_ [c1]) (seq_ [c2]) with false in
 -- Never
 utest never_ with never_ using eqExpr in
 utest eqExpr never_ true_ with false in
+
+-- Ext
+let ext1 = bind_ (ext_ "x" false tyunit_) a1 in
+let ext2 = bind_ (ext_ "y" false tyunit_) a2 in
+utest ext1 with ext1 using eqExpr in
+utest eqExpr ext1 ext2 with false in
 
 -- Symbolized (and partially symbolized) terms are also supported.
 let sm = symbolize in

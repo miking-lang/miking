@@ -2,10 +2,10 @@ include "dfa.mc"
 include "eqset.mc"
 
 -- Represents basic regular expressions.
-type RegEx
+type RegEx a
   con Empty   : ()             -> RegEx
   con Epsilon : ()             -> RegEx
-  con Symbol  : (a)            -> RegEx
+  con Symbol  : all a. (a)     -> RegEx
   con Union   : (RegEx, RegEx) -> RegEx
   con Concat  : (RegEx, RegEx) -> RegEx
   con Kleene  : (RegEx)        -> RegEx
@@ -169,7 +169,7 @@ let regexFromDFA = lam dfa.
       let trans = nfaTransitionsBetween from to dfa in
       match trans with [] then Empty () else
       match trans with [t] then t.2 else
-      error (strJoin ["getSymOrEmpty expected 0 or 1 transitions, was ", length trans])
+      error (join ["getSymOrEmpty expected 0 or 1 transitions, was ", int2string (length trans)])
 
     in
     -- Handle 1-state DFA
@@ -177,7 +177,7 @@ let regexFromDFA = lam dfa.
       let trans = nfaTransitions dfa in
       match trans with [] then Epsilon () else
       match trans with [t] then Kleene(t.2) else
-      error (join ["Expected 0 or 1 transitions in 1-state DFA, not ", length trans])
+      error (join ["Expected 0 or 1 transitions in 1-state DFA, not ", int2string (length trans)])
     in
     -- Handle 2-state DFA
     let generic2State = lam dfa.
@@ -201,7 +201,7 @@ let regexFromDFA = lam dfa.
     let nStates = length (nfaStates dfa) in
     match nStates with 1 then generic1State dfa else
     match nStates with 2 then generic2State dfa else
-    error (join ["Expected DFA of size 1 or 2, not ", nStates, "."])
+    error (join ["Expected DFA of size 1 or 2, not ", int2string nStates, "."])
   in
 
   -- Get the regex from a DFA with one accept state

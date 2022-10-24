@@ -136,23 +136,33 @@ let reportErrorAndExit err =
   Printf.fprintf stderr "%s\n" error_string ;
   exit 1
 
-let parseMExprString keywords str =
+let parseMExprString allow_free keywords str =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
-    PTreeTm
-      ( str |> Intrinsics.Mseq.Helpers.to_ustring
-      |> Parserutils.parse_mexpr_string
-      |> Parserutils.raise_parse_error_on_non_unique_external_id
-      |> Symbolize.symbolize
-           (Symbolize.merge_sym_envs_pick_left builtin_name2sym
-              (symbolizeEnvWithKeywords keywords) )
-      |> Parserutils.raise_parse_error_on_partially_applied_external )
+    let allow_free_prev = !Symbolize.allow_free in
+    Symbolize.allow_free := allow_free ;
+    let r =
+      PTreeTm
+        ( str |> Intrinsics.Mseq.Helpers.to_ustring
+        |> Parserutils.parse_mexpr_string
+        |> Parserutils.raise_parse_error_on_non_unique_external_id
+        |> Symbolize.symbolize
+             (Symbolize.merge_sym_envs_pick_left builtin_name2sym
+                (symbolizeEnvWithKeywords keywords) )
+        |> Parserutils.raise_parse_error_on_partially_applied_external )
+    in
+    Symbolize.allow_free := allow_free_prev ;
+    r
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 
 let parseMCoreFile
-    (keep_utests, prune_external_utests, externals_exclude, warn) keywords
-    filename =
+    ( keep_utests
+    , prune_external_utests
+    , externals_exclude
+    , warn
+    , eliminate_deadcode
+    , allow_free ) keywords filename =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
@@ -172,19 +182,30 @@ let parseMCoreFile
       Intrinsics.Mseq.Helpers.to_list
         (Mseq.map Intrinsics.Mseq.Helpers.to_ustring externals_exclude)
     in
-    PTreeTm
-      ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
-      |> Utils.normalize_path |> Parserutils.parse_mcore_file |> Mlang.flatten
-      |> Mlang.desugar_post_flatten
-      |> Parserutils.raise_parse_error_on_non_unique_external_id
-      |> Symbolize.symbolize name2sym
-      |> Parserutils.raise_parse_error_on_partially_applied_external
-      |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
-      |> Deadcode.elimination builtin_sym2term name2sym symKeywords
-      |> Parserutils.prune_external_utests
-           ~enable:(keep_utests && prune_external_utests)
-           ~externals_exclude ~warn
-      |> Deadcode.elimination builtin_sym2term name2sym symKeywords )
+    let deadcode_elimination =
+      if eliminate_deadcode then
+        Deadcode.elimination builtin_sym2term name2sym symKeywords
+      else fun x -> x
+    in
+    let allow_free_prev = !Symbolize.allow_free in
+    Symbolize.allow_free := allow_free ;
+    let r =
+      PTreeTm
+        ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
+        |> Utils.normalize_path |> Parserutils.parse_mcore_file
+        |> Mlang.flatten |> Mlang.desugar_post_flatten
+        |> Parserutils.raise_parse_error_on_non_unique_external_id
+        |> Symbolize.symbolize name2sym
+        |> Parserutils.raise_parse_error_on_partially_applied_external
+        |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
+        |> deadcode_elimination
+        |> Parserutils.prune_external_utests
+             ~enable:(keep_utests && prune_external_utests)
+             ~externals_exclude ~warn
+        |> deadcode_elimination )
+    in
+    Symbolize.allow_free := allow_free_prev ;
+    r
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 
@@ -229,8 +250,9 @@ let getData = function
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmType (fi, x, params, ty, t)) ->
+      let len = List.length params + 1 in
+      (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [])
   | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
       (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmConApp (fi, x, _, t)) ->
@@ -266,15 +288,14 @@ let getData = function
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
       (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
-  | PTreeTy (TyRecord (fi, tymap, slst)) ->
-      let tylst = List.map (fun s -> Record.find s tymap) slst in
+  | PTreeTy (TyRecord (fi, tymap)) ->
+      let slst, tylst = List.split (Record.bindings tymap) in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
-  | PTreeTy (TyVariant (fi, lst)) ->
-      let strs = List.map (fun (x, _) -> x) lst in
-      let len = List.length lst in
+  | PTreeTy (TyVariant (fi, strs)) ->
+      let len = List.length strs in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyCon (fi, x, _)) ->
+  | PTreeTy (TyCon (fi, x)) ->
       (idTyCon, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])

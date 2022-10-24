@@ -2,7 +2,7 @@ include "pmexpr/pattern-match.mc"
 include "pmexpr/parallel-patterns.mc"
 include "pmexpr/promote.mc"
 
-lang PMExprParallelPattern = PMExprAst + PMExprPromote
+lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
     let binding : RecLetBinding = t in
@@ -25,7 +25,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
     promote t
 
   sem parallelPatternRewriteH (patterns : [Pattern])
-                              (replacements : Map Name ([Name], Expr)) =
+                              (replacements : Map Name ([(Name, Type, Info)], Expr)) =
   | TmRecLets t ->
     -- Collect the parameters
     let replacements =
@@ -74,7 +74,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
             match paramArg with ((id, ty, info), expr) in
             (id, lam info. withInfo info (withType ty expr)))
           (zip params args)) in
-      substituteVariables e substMap
+      substituteVariables substMap e
     in
     match collectAppArguments t with (f, args) in
     let appBody =
@@ -99,11 +99,17 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote
                     info = info})
                 expr
                 extraNames in
-            let args = concat args (reverse extraNames) in
+            let extraVars =
+              map
+                (lam id : Name.
+                  TmVar {ident = id, ty = TyUnknown {info = info},
+                         info = info, frozen = false})
+                extraNames in
+            let args = concat args (reverse extraVars) in
             Some (performSubstitution exprWrappedInLambdas params args)
           else if eqi nargs nparams then
             Some (performSubstitution expr params args)
-          else infoErrorExit info (concat "Too many arguments passed to "
+          else errorSingle [info] (concat "Too many arguments passed to "
                                           (nameGetStr ident))
         else None ()
       else None ()
@@ -183,23 +189,23 @@ let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
 utest containsParallelKeyword expr with true in
 
-let reduce = nameSym "reduce" in
+let red = nameSym "reduce" in
 let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let expr = preprocess (bindall_ [
   nureclets_ [
-    (reduce, nulam_ acc (nulam_ s (
+    (red, nulam_ acc (nulam_ s (
       match_ (nvar_ s)
         (pseqedgen_ [npvar_ h] t [])
-        (appf2_ (nvar_ reduce)
+        (appf2_ (nvar_ red)
           (addi_ (nvar_ acc) (nvar_ h))
           (nvar_ t))
         (match_ (nvar_ s)
           (pseqtot_ [])
           (nvar_ acc)
           never_))))],
-  ulet_ "sum" (appf2_ (nvar_ reduce) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
+  ulet_ "sum" (appf2_ (nvar_ red) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in

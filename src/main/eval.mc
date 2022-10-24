@@ -14,7 +14,6 @@ include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eval.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
@@ -23,8 +22,9 @@ include "mexpr/utesttrans.mc"
 
 
 lang ExtMCore =
-  BootParser + MExpr + MExprTypeAnnot + MExprTypeCheck + MExprTypeLift +
-  MExprUtestTrans + MExprProfileInstrument + MExprEval
+  BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
+  MExprTypeCheck + MExprTypeLift + MExprUtestTrans + MExprProfileInstrument +
+  MExprEval
 
   sem updateArgv (args : [String]) =
   | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
@@ -35,8 +35,6 @@ end
 let generateTests = lam ast. lam testsEnabled.
   use ExtMCore in
   if testsEnabled then
-    let ast = symbolize ast in
-    let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
     utestGen ast
   else
@@ -55,20 +53,24 @@ let eval = lam files. lam options : Options. lam args.
       keywords = [],
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
-      findExternalsExclude = false -- the interpreter does not support externals
+      findExternalsExclude = false, -- the interpreter does not support externals
+      eliminateDeadCode = not options.keepDeadCode
     } file in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (expr2str ast) else ());
+    (if options.debugParse then printLn (mexprToString ast) else ());
+
+    let ast = symbolize ast in
 
     let ast =
       if options.debugProfile then
-        instrumentProfiling (symbolize ast)
+        instrumentProfiling ast
       else ast
     in
 
-    -- If option --typecheck, type check the AST
-    let ast = if options.typeCheck then typeCheck (symbolize ast) else ast in
+    let ast = typeCheck ast in
+    (if options.debugTypeCheck then
+       printLn (join [mexprToString ast, "\n : ", type2str (tyTm ast)]) else ());
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.

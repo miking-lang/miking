@@ -13,7 +13,8 @@ let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
-let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
+let eqSeq : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool =
+  lam eq. lam s1. lam s2.
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       if eq h1 h2 then work t1 t2
@@ -44,7 +45,8 @@ utest toRope (toList [1,2,3]) with [1,2,3]
 
 -- Maps
 let mapOption
-  : (a -> Option b)
+  : all a. all b.
+     (a -> Option b)
   -> [a]
   -> [b]
   = lam f.
@@ -66,7 +68,8 @@ utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
 let for_
-  : [a]
+  : all a.
+     [a]
   -> (a -> ())
   -> ()
   = lam xs. lam f. iter f xs
@@ -92,12 +95,11 @@ utest foldr cons [] [1,2,3] with [1,2,3]
 utest foldr1 addi [1,2] with 3
 
 recursive
-let unfoldr = lam f. lam b.
-  let fb = f b in
+let unfoldr : all a. all c. (a -> Option (c, a)) -> a -> [c] = lam f. lam b0.
+  let fb = f b0 in
   match fb with None _ then [] else
-  match fb with Some tup then
-    let tup : (Unknown, Unknown) = tup in
-    cons tup.0 (unfoldr f tup.1)
+  match fb with Some (x, b1) then
+    cons x (unfoldr f b1)
   else never
 end
 
@@ -147,14 +149,14 @@ utest zipWith addi [] [] with [] using eqSeq eqi
 let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps
-let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+let mapAccumL : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldl
       (lam tacc : (a, [c]). lam x.
          match f tacc.0 x with (acc, y) then (acc, snoc tacc.1 y) else never)
       (acc, []) seq
 
-let mapAccumR : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+let mapAccumR : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldr
       (lam x. lam tacc : (a, [c]).
@@ -232,12 +234,16 @@ utest join [[],[],[]] with [] using eqSeq eqi
 -- Monadic and Applicative operations
 
 let seqLiftA2
-  : (a -> b -> c) -> [a] -> [b] -> [c]
+  : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c]
   = lam f. lam as. lam bs.
     join (map (lam a. map (f a) bs) as)
 
 utest seqLiftA2 addi [10, 20, 30] [1, 2, 3]
 with [11, 12, 13, 21, 22, 23, 31, 32, 33]
+
+let seqMapM
+  : all a. all b. (a -> [b]) -> [a] -> [[b]]
+  = lam f. foldr (lam a. lam acc. seqLiftA2 cons (f a) acc) [[]]
 
 -- Searching
 recursive
@@ -251,6 +257,17 @@ utest filter (lam x. eqi x 1) [1,2,4] with [1]
 utest filter (lam. false) [3,5,234,1,43] with [] using eqSeq eqi
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43]
 
+recursive let filterOption : all a. [Option a] -> [a] =
+  lam optSeq.
+  match optSeq with [Some x] ++ optSeq then cons x (filterOption optSeq)
+  else match optSeq with [None _] ++ optSeq then filterOption optSeq
+  else []
+end
+
+utest filterOption [Some 3, Some 2, None (), Some 4] with [3, 2, 4] using eqSeq eqi
+utest filterOption [None (), None ()] with [] using eqSeq eqi
+utest filterOption [None (), Some 1, None (), Some 1] with [1, 1] using eqSeq eqi
+
 recursive
   let find = lam p. lam seq.
     if null seq then None ()
@@ -262,7 +279,7 @@ utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
 recursive
-  let findMap : (a -> Option b) -> [a] -> Option b = lam f. lam seq.
+  let findMap : all a. all b. (a -> Option b) -> [a] -> Option b = lam f. lam seq.
     match seq with [h] ++ t then
       match f h with Some x then Some x else findMap f t
     else None ()
@@ -302,6 +319,24 @@ utest distinct eqi [42,42] with [42]
 utest distinct eqi [1,1,2] with [1,2]
 utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0]
 
+-- Removes duplicated elements in a sorted sequence. More efficient than the
+-- 'distinct' function.
+let distinctSorted = lam eq. lam s.
+  recursive let work = lam acc. lam s.
+    match s with [h1] ++ t then
+      match acc with [h2] ++ _ then
+        if eq h1 h2 then work acc t
+        else work (cons h1 acc) t
+      else work [h1] t
+    else acc
+  in
+  reverse (work [] s)
+
+utest distinctSorted eqi [] with [] using eqSeq eqi
+utest distinctSorted eqi [42,42] with [42]
+utest distinctSorted eqi [1,1,2] with [1,2]
+utest distinctSorted eqi [0,1,1,1,2,3,4,5,5] with [0,1,2,3,4,5]
+
 -- Sorting
 recursive
 let quickSort : all a. (a -> a -> Int) -> ([a] -> [a]) = lam cmp. lam seq.
@@ -333,50 +368,59 @@ end
 
 let sort = quickSort
 
-utest quickSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest quickSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest quickSort subi [3,4,8,9,20] with [3,4,8,9,20]
+utest quickSort subi [9,8,4,20,3] with [3,4,8,9,20]
 utest quickSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
 utest quickSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest quickSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest quickSort subi [] with [] using eqSeq eqi
 
-utest mergeSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest mergeSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest mergeSort subi [3,4,8,9,20] with [3,4,8,9,20]
+utest mergeSort subi [9,8,4,20,3] with [3,4,8,9,20]
 utest mergeSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
 utest mergeSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest mergeSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest mergeSort subi [] with [] using eqSeq eqi
 
 
 -- Max/Min
-let min = lam cmp. lam seq.
-  recursive let work = lam e. lam seq.
-    if null seq then Some e
+let minIdx : all a. (a -> a -> Int) -> [a] -> Option (Int, a) =
+  lam cmp : a -> a -> Int. lam seq : [a].
+    if null seq then None ()
     else
-      let h = head seq in
-      let t = tail seq in
-      if lti (cmp e h) 0 then work e t else work h t
-  in
-  if null seq then None () else work (head seq) (tail seq)
+      match foldl (
+        lam acc : (Int, Int, a). lam e : a.
+          match acc with (curi, mini, m) in
+          if lti (cmp m e) 0 then (addi curi 1, mini, m)
+          else (addi curi 1, curi, e)
+        ) (1, 0, head seq) (tail seq)
+      with (_,i,m) in Some (i,m)
 
-utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 using optionEq eqi
-utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 using optionEq eqi
-utest min (lam l. lam r. subi l r) [] with None () using optionEq eqi
+utest minIdx subi [3,4,8,9,20] with Some (0,3)
+utest minIdx subi [9,8,4,20,3] with Some (4,3)
+utest minIdx subi [] with None ()
+
+let min : all a. (a -> a -> Int) -> [a] -> Option a = lam cmp. lam seq.
+  optionMap (lam r. match r with (_,m) in m) (minIdx cmp seq)
+
+utest min subi [3,4,8,9,20] with Some 3
+utest min subi [9,8,4,20,3] with Some 3
+utest min subi [] with None ()
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
-utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 using optionEq eqi
-utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 using optionEq eqi
-utest max (lam l. lam r. subi l r) [] with None () using optionEq eqi
+utest max subi [3,4,8,9,20] with Some 20
+utest max subi [9,8,4,20,3] with Some 20
+utest max subi [] with None ()
 
 let minOrElse = lam d. lam cmp. lam seq.
   optionGetOrElse d (min cmp seq)
 
-utest minOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
-utest minOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
+utest minOrElse (lam. 0) subi [3,4,8,9,20] with 3
+utest minOrElse (lam. 0) subi [9,8,4,20,3] with 3
 
 let maxOrElse = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
 
-utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 20
-utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 20
+utest maxOrElse (lam. 0) subi [3,4,8,9,20] with 20
+utest maxOrElse (lam. 0) subi [9,8,4,20,3] with 20
 
 -- First index in seq that satifies pred
 let index = lam pred. lam seq.
@@ -435,7 +479,7 @@ utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
 
-let seqCmp : (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
+let seqCmp : all a. (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
   recursive let work = lam s1. lam s2.
     match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
       let c = cmp h1 h2 in
@@ -465,7 +509,7 @@ utest
   with true
 
 -- Select an index uniformly at random.
-let randIndex : [a] -> Option Int = lam seq.
+let randIndex : all a. [a] -> Option Int = lam seq.
   match seq with [] then None ()
   else Some (randIntU 0 (length seq))
 
@@ -476,7 +520,7 @@ utest
   with true
 
 -- Select an element uniformly at random.
-let randElem : [a] -> Option a = lam seq.
+let randElem : all a. [a] -> Option a = lam seq.
   optionMap (get seq) (randIndex seq)
 
 utest randElem [] with None ()
@@ -488,7 +532,7 @@ utest
 -- Permute the order of elements according to a sequence of integers, which is
 -- assumed to represent the target position of the elements in the permuted
 -- sequence.
-let permute : [a] -> [Int] -> [a] = lam elems. lam permutation.
+let permute : all a. [a] -> [Int] -> [a] = lam elems. lam permutation.
   if eqi (length elems) (length permutation) then
     let ordered = sort (lam x : (a, Int). lam y : (a, Int). subi x.1 y.1)
                        (zip elems permutation) in

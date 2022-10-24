@@ -1,5 +1,5 @@
 include "string.mc"
-include "common.mc" 
+include "common.mc"
 
 -- Debug stuff
 let debugFlag = false
@@ -50,38 +50,31 @@ let bumpCol = lam pos. {pos with col = addi 1 pos.col}
 type State = (String, Pos)
 -- The parser state is the remaining input and the current position
 
-type ParseResult
-con Success : (Dyn, State) -> ParseResult
-con Failure : (String, String, State) -> ParseResult
+type ParseResult a
+con Success : all a. (a, State) -> ParseResult a
+con Failure : all a. (String, String, State) -> ParseResult a
 -- Success stores result of parsing
 -- Failure stores found and expected token
 
-type Parser = State -> ParseResult
+type Parser a = State -> ParseResult a
 
 type Filename = String
 
--- runParser : Filename -> Parser a -> String -> ParseResult a
---
 -- Run a parser with a specified filename and input.
-let runParser = lam f : Filename. lam p : Parser. lam input : String.
-    p (input, (initPos f))
+let runParser : all a. Filename -> Parser a -> String -> ParseResult a =
+  lam f. lam p. lam input.
+  p (input, (initPos f))
 
--- testParser : Parser a -> String -> ParseResult
---
 -- Run a parser without a current file.
-let testParser = runParser ""
+let testParser : all a. Parser a -> String -> ParseResult a = runParser ""
 
--- fail : String -> String -> Parser a
---
 -- Fail parsing with custom info
-let fail = lam found. lam expected. lam st.
+let fail : all a. String -> String -> Parser a = lam found. lam expected. lam st.
   Failure (found, expected, st)
 
--- showError : ParseResult a -> String
---
 -- Show human readable error message from failed parse.
 -- Fails if argument is not a failure.
-let showError = lam f : ParseResult.
+let showError : all a. ParseResult a -> String = lam f.
   match f with Failure t then
     let found = t.0 in
     let expected = t.1 in
@@ -95,22 +88,20 @@ let showError = lam f : ParseResult.
 
 -- Parser is a functor
 
--- fmap : (a -> b) -> Parser a -> Parser b
-let fmap = lam f. lam p. lam st.
+let fmap : all a. all b. (a -> b) -> Parser a -> Parser b = lam f. lam p. lam st.
   let res = p st in
   match res with Success t then
     let v = t.0 in
     let rest = t.1 in
     Success (f v, rest)
-  else res
+  else match res with Failure t in Failure t
 
 -- Parser is an applicative functor
 
--- pure : a -> Parser a
-let pure = lam v. lam st. Success(v, st)
+let pure : all a. a -> Parser a = lam v. lam st. Success(v, st)
 
--- ap : Parser (a -> b) -> Parser a -> Parser b
-let ap = lam pf. lam p. lam st.
+let ap : all a. all b. Parser (a -> b) -> Parser a -> Parser b =
+  lam pf. lam p. lam st.
   let res1 = pf st in
   match res1 with Success t1 then
     let f = t1.0 in
@@ -120,61 +111,50 @@ let ap = lam pf. lam p. lam st.
       let x = t2.0 in
       let rest2 = t2.1 in
       pure (f x) rest2
-    else res2
-  else res1
+    else match res2 with Failure t in Failure t
+  else match res1 with Failure t in Failure t
 
--- liftA2 : (a -> b -> c) -> Parser a -> Parser b -> Parser c
-let liftA2 = lam f. lam px. lam py.
+let liftA2 : all a. all b. all c. (a -> b -> c) -> Parser a -> Parser b -> Parser c =
+  lam f. lam px. lam py.
   ap (fmap f px) py
 
--- apl : Parser a -> Parser b -> Parser a
---
 -- Run two parsers, use result of first one
-let apl = lam p1. lam p2.
+let apl : all a. all b. Parser a -> Parser b -> Parser a = lam p1. lam p2.
   liftA2 const p1 p2
 
--- apr : Parser a -> Parser b -> Parser b
---
 -- Run two parsers, use result of second one
-let apr = lam p1. lam p2.
+let apr : all a. all b. Parser a -> Parser b -> Parser b = lam p1. lam p2.
   ap (fmap (const identity) p1) p2
 
 -- Parser is a monad
 
--- bind : Parser a -> (a -> Parser b) -> Parser b
---
 -- Typical usage is `bind p1 (lam x. p2)`, i.e. run `p1` and
 -- pass result to a function running another parser.
-let bind = lam p. lam f. lam st.
+let bind : all a. all b. Parser a -> (a -> Parser b) -> Parser b =
+  lam p. lam f. lam st.
   let res = p st in
   match res with Success t then
     let x = t.0 in
     let rest = t.1 in
     f x rest
   else -- propagate Failure
-    res
+    match res with Failure t in Failure t
 
 -- Control combinators
 
--- void: Parser a -> Parser ()
---
 -- Run parser and ignore result
-let void = apl (pure ())
+let void : all a. Parser a -> Parser () = apl (pure ())
 
--- when : bool -> Parser a -> Parser ()
---
 -- Monadic conditional. `when b p` runs `p` (ignoring the
 -- result) if `b` is true.
-let when = lam b. lam p. lam st.
+let when : all a. Bool -> Parser a -> Parser () = lam b. lam p.
   if b then void p else pure ()
 
 
 -- Core ------------------------------------------------
 
--- endOfInput : Parser ()
---
 -- Fail parsing, unless the input stream is empty
-let endOfInput = lam st.
+let endOfInput : Parser () = lam st.
   let input = st.0 in
   if null input
   then pure () st
@@ -182,12 +162,10 @@ let endOfInput = lam st.
 
 utest testParser endOfInput "" with Success((), ("", initPos ""))
 
--- next : Parser char
---
 -- Read next character from input stream
 -- TODO(?,?): It would most likely be faster to index into
 --       an array than to take the tail of a string
-let next = lam st.
+let next : Parser Char = lam st.
   let input = st.0 in
   let pos = st.1 in
   if null input
@@ -224,11 +202,9 @@ utest
 with "Parse error at 1:2: Unexpected end of input"
 
 
--- alt : Parser a -> Parser a -> Parser a
---
 -- `alt p1 p2` tries to parse `p1`, but falls back
 -- to `p2` if `p1` fails without consuming any input.
-let alt = lam p1. lam p2. lam st.
+let alt : all a. Parser a -> Parser a -> Parser a = lam p1. lam p2. lam st.
   let res1 = p1 st in
   match res1 with Failure t1 then
     let st2 = t1.2 in
@@ -244,11 +220,9 @@ let alt = lam p1. lam p2. lam st.
     else res1 -- p1 consumed input, don't backtrack
   else res1 -- Propagate Success
 
--- notFollowedBy : Parser a -> Parser ()
---
 -- `notFollowedBy p` succeeds (without consuming input)
 -- only if `p` does not succeed.
-let notFollowedBy = lam p. lam st.
+let notFollowedBy : all a. Parser a -> Parser () = lam p. lam st.
   let res1 = p st in
   match res1 with Failure _ then
     pure () st
@@ -257,36 +231,30 @@ let notFollowedBy = lam p. lam st.
     match res2 with Success t then
       let c = t.0 in
       fail (showChar c) "" st
-    else res2
+    else match res2 with Failure t in Failure t
 
--- satisfy : (Char -> Bool) -> String -> Parser Char
---
 -- `satisfy cnd exp` succeeds with the next character
 -- if `cnd` returns true for that character. `exp` is
 -- the expected token.
-let satisfy = lam cnd. lam expected. lam st.
+let satisfy : (Char -> Bool) -> String -> Parser Char = lam cnd. lam expected. lam st.
   bind next (lam c.
   if cnd c
   then pure c
   else lam. fail (showChar c) expected st) st
 
--- try : Parser a -> Parser a
---
 -- `try p` is used for backtracking. It parses `p`, but
 -- fails without consuming input if `p` fails.
-let try = lam p. lam st.
+let try : all a. Parser a -> Parser a = lam p. lam st.
   let res = p st in
   match res with Failure t then
     Failure (t.0, t.1, st)
   else -- Propagate Success
     res
 
--- label : String -> Parser p -> Parser p
---
 -- `label l p` parses `p` but changes the "expected" token
 -- to `l` if `p` fails. Typical use is for big chains of
 -- `alt`, e.g., `label "expression" (alt (alt let Lam) ...)`
-let label = lam l. lam p. lam st.
+let label : all p. String -> Parser p -> Parser p = lam l. lam p. lam st.
   let res = p st in
   match res with Failure t then
   if eqpos (t.2).1 st.1
@@ -297,41 +265,33 @@ let label = lam l. lam p. lam st.
 
 -- Combinators ---------------------------------
 
--- many : Parser a -> Parser [a]
---
 -- Parse zero or more occurrences of a parser.
 recursive
-  let many = lam p.
+  let many : all a. Parser a -> Parser [a] = lam p.
     bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
     if null hd
     then pure []
     else bind (many p) (lam tl. pure (concat hd tl)))
 end
 
--- many1 : Parser a -> Parser [a]
---
 -- Parse one or more occurrences of a parser.
-let many1 = lam p.
+let many1 : all a. Parser a -> Parser [a] = lam p.
   bind p (lam hd.
   bind (many p) (lam tl.
   pure (cons hd tl)))
 
--- optional : Parser a -> Parser (Option a)
-let optional = lam p.
+let optional : all a. Parser a -> Parser (Option a) = lam p.
   alt (fmap (lam x. Some x) p) (pure (None()))
 
--- wrappedIn : Parser l -> Parser r -> Parser a -> Parser a
---
 -- `wrappedIn pl pr p` parses `p` preceded by `pl` and
 -- succeeded by `pr`.
-let wrappedIn = lam pl. lam pr. lam p.
+let wrappedIn : all l. all r. all a. Parser l -> Parser r -> Parser a -> Parser a =
+  lam pl. lam pr. lam p.
   apr pl (apl p pr)
 
--- sepBy : Parser s -> Parser a -> Parser [a]
---
 -- `sepBy sep p` parses zero or more occurrences of
 -- `p` separated by single occurrences of `sep`.
-let sepBy = lam sep. lam p.
+let sepBy : all s. all a. Parser s -> Parser a -> Parser [a] = lam sep. lam p.
   bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
   bind (many (apr sep p)) (lam tl.
   pure (concat hd tl)))
@@ -341,10 +301,8 @@ let sepBy = lam sep. lam p.
 
 -- Lexers are parsers that do not consume trailing whitespace
 
--- lexChar : Char -> Parser Char
---
 -- Parse a specific character.
-let lexChar = lam c. satisfy (eqChar c) (showChar c)
+let lexChar : Char -> Parser Char = lam c. satisfy (eqChar c) (showChar c)
 
 utest testParser (lexChar 'a') "ab"
 with Success ('a', ("b", {file = "", row = 1, col = 2}))
@@ -414,15 +372,11 @@ utest showError (
   ) "bc")
 with "Parse error at 1:1: Unexpected 'b'. Expected 'a'"
 
--- lexDigits : Parser String
---
 -- Parse a sequence of digits
-let lexDigits = many1 (satisfy isDigit "digit")
+let lexDigits : Parser String = many1 (satisfy isDigit "digit")
 
--- lexNumber : Parser Int
---
 -- Parse a natural number.
-let lexNumber = fmap string2int lexDigits
+let lexNumber : Parser Int = fmap string2int lexDigits
 
 utest testParser (lexNumber) "123abc"
 with Success(123, ("abc", {file = "", row = 1, col = 4}))
@@ -430,11 +384,9 @@ with Success(123, ("abc", {file = "", row = 1, col = 4}))
 utest showError (testParser lexNumber "abc")
 with "Parse error at 1:1: Unexpected 'a'. Expected digit"
 
--- lexString : String -> Parser String
---
 -- Parse a specific string.
 recursive
-  let lexString = lam s.
+  let lexString : String -> Parser String = lam s.
     if null s
     then pure ""
     else
@@ -463,19 +415,15 @@ utest
   ) "abcde"
 with Success ("abcd", ("e", {file = "", row = 1, col = 5}))
 
--- lexCharLit : Parser Char
---
 -- Parse a character literal.
 -- TODO(?,?): Support escaped characters (also in OCaml parser)
-let lexCharLit = wrappedIn (lexChar ''') (lexChar ''') next
+let lexCharLit : Parser Char = wrappedIn (lexChar ''') (lexChar ''') next
 
 utest testParser lexCharLit "'\n'"
 with Success (head "\n", ("", {file = "", row = 2, col = 2}))
 
--- lexStringLit : Parser String
---
 -- Parse a string literal.
-let lexStringLit =
+let lexStringLit : Parser String =
   -- TODO(?,?): Are other escaped characters handled correctly?
   let escaped =
     try (alt (apr (lexString "\\\\") (pure (head "\\")))
@@ -493,10 +441,8 @@ with Success ("FILE \"foo.mc\"", ("", {file = "", row = 1, col = 18}))
 utest testParser (apr (lexString "foo") lexStringLit) "foo\"\\\"\""
 with Success ("\"", ("", {file = "", row = 1, col = 8}))
 
--- lexNumeral : Parser String
---
 -- Parse a string representing a floating point numeral
-let lexNumeral =
+let lexNumeral : Parser String =
   let maybe = lam p. alt p (pure "") in
   let decimals = label "decimals" (liftA2 cons (lexChar '.') lexDigits) in
   let exponent = label "exponent" (
@@ -506,10 +452,8 @@ let lexNumeral =
   in liftA2 concat lexDigits
             (alt exponent (liftA2 concat decimals (maybe exponent)))
 
--- lexFloat : Parser Float
---
 -- Parse a floating point number
-let lexFloat = fmap string2float lexNumeral
+let lexFloat : Parser Float = fmap string2float lexNumeral
 
 utest testParser lexFloat "3.14159"
 with Success(3.14159, ("", {file = "", row = 1, col = 8}))
@@ -526,15 +470,11 @@ with Success(300.0, ("", {file = "", row = 1, col = 5}))
 utest showError(testParser lexFloat "42")
 with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals"
 
--- spaces : Parser ()
---
 -- Parse zero or more whitespace characters.
-let spaces = void (many (satisfy isWhitespace "whitespace"))
+let spaces : Parser () = void (many (satisfy isWhitespace "whitespace"))
 
--- spaces1 : Parser ()
---
 -- Parse one or more whitespace characters.
-let spaces1 = void (many1 (satisfy isWhitespace "whitespace"))
+let spaces1 : Parser () = void (many1 (satisfy isWhitespace "whitespace"))
 
 utest testParser spaces "   abc"
 with Success ((), ("abc", {file = "", row = 1, col = 4}))
@@ -581,9 +521,9 @@ con If  : (Expr, Expr, Expr) -> Expr in
 --
 -- Parse a line comment, ignoring its contents.
 let lineComment =
-  void (apr (apr (lexString "--")
-                 (many (satisfy (lam c. not (eqString "\n" [c])) "")))
-            (alt (lexString "\n") endOfInput))
+  apr (apr (lexString "--")
+           (many (satisfy (lam c. not (eqString "\n" [c])) "")))
+      (alt (void (lexString "\n")) endOfInput)
 in
 
 -- ws : Parser ()

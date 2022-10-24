@@ -7,6 +7,27 @@ let distExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
+    ("externalExponentialSample", [
+      { expr = "Owl_stats.exponential_rvs",
+        ty = tyarrows_ [otylabel_ "lambda" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalGammaLogPdf", [
+      { expr = "Owl_stats.gamma_logpdf",
+        ty = tyarrows_ [tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalGammaSample", [
+      { expr = "Owl_stats.gamma_rvs",
+        ty = tyarrows_ [otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
     ("externalBinomialLogPmf", [
       { expr = "Owl_stats.binomial_logpdf",
         ty = tyarrows_ [tyint_, otylabel_ "p" tyfloat_, otylabel_ "n" tyint_, tyfloat_],
@@ -84,14 +105,14 @@ let distExtMap =
         cLibraries = []
       }
     ]),
-    ("uniformSample", [
-      { expr = "Owl_stats.std_uniform_rvs",
-        ty = tyarrows_ [tyunit_, tyfloat_],
+    ("externalUniformContinuousSample", [
+      { expr = "Owl_stats.uniform_rvs",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
         libraries = ["owl"],
         cLibraries = []
       }
     ]),
-    ("externalRandomSample", [
+    ("externalUniformDiscreteSample", [
       { expr = "Owl_stats.uniform_int_rvs",
         ty = tyarrows_ [tyint_, tyint_, tyint_],
         libraries = ["owl"],

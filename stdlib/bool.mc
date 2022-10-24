@@ -63,3 +63,22 @@ utest eqBool false true  with false
 utest eqBool true  false with false
 utest eqBool true  true  with true
 
+
+-- Boolean comparison
+let cmpBool: Bool -> Bool -> Int =
+  lam b1: Bool. lam b2: Bool.
+  if b1 then if b2 then 0 else 1
+  else if b2 then negi 1 else 0
+
+utest cmpBool false false with 0
+utest cmpBool false true  with negi 1
+utest cmpBool true  false with 1
+utest cmpBool true  true  with 0
+
+
+-- Boolean to string
+let bool2string: Bool -> String = lam b.
+  if b then "true" else "false"
+
+utest bool2string true with "true"
+utest bool2string false with "false"

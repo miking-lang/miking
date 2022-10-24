@@ -1,0 +1,112 @@
+language Selfhost
+
+start File
+
+type File
+type Decl
+type Regex {
+  grouping = "(" ")",
+}
+type Expr {
+  grouping = "(" ")",
+}
+
+-- Basic tokens
+token String {
+  repr = StringRepr {},
+  constructor = StringTok,
+  fragment = StringTokenParser,
+}
+token LIdent {
+  repr = LIdentRepr {},
+  constructor = LIdentTok,
+  fragment = LIdentTokenParser,
+  ty = String,
+}
+token UIdent {
+  repr = UIdentRepr {},
+  constructor = UIdentTok,
+  fragment = UIdentTokenParser,
+  ty = String,
+}
+
+-- Wrapping tokens that just change the type in the AST
+token UName {
+  base = UIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token LName {
+  base = LIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+
+-- Token types only used through literals
+token {fragment = OperatorTokenParser,}
+token {fragment = CommaTokenParser,}
+token {fragment = SemiTokenParser,}
+token {fragment = BracketTokenParser,}
+
+-- Whitespace and comments
+token {fragment = LineCommentParser,}
+token {fragment = MultilineCommentParser,}
+token {fragment = WhitespaceParser,}
+
+prod File: File =
+  "language" name:UIdent
+  decls:Decl+
+
+prod Start: Decl = "start" name:UName
+prod Include: Decl = "include" path:String
+prod Type: Decl =
+  "type" name:UName
+  ( "{"
+    properties:{name:LIdent "=" val:Expr ","}*
+  "}"
+  )?
+prod TokenDecl: Decl =
+  "token" name:UName?
+  ( "{"
+    properties:{name:LIdent "=" val:Expr ","}*
+  "}"
+  )?
+prod PrecedenceTable: Decl =
+  "precedence" "{"
+    levels:{noeq:"~"? operators:UName+ ";"}*
+  "}"
+  ( "except" "{"
+    exceptions:{lefts:UName+ "?" rights:UName+ ";"}*
+  "}"
+  )?
+prod Production: Decl =
+  (kprod:"prod" | kinf:"infix" | kpref:"prefix" | kpostf:"postfix")
+  assoc:LIdent? name:UName ":" nt:UName "=" regex:Regex
+
+prod Record: Regex = "{" regex:Regex "}"
+prod Empty: Regex = "empty"
+prod Literal: Regex = val:String
+prod Token: Regex = name:UName ("[" arg:Expr "]")?
+postfix RepeatPlus: Regex = "+"
+postfix RepeatStar: Regex = "*"
+postfix RepeatQuestion: Regex = "?"
+prefix Named: Regex = name:LIdent ":"
+infix left Alternative: Regex = "|"
+infix left Concat: Regex = empty
+
+precedence {
+  Named;
+  RepeatPlus RepeatStar RepeatQuestion;
+  Concat;
+  Alternative;
+}
+
+infix left App: Expr = empty
+prod Con: Expr = name:UName
+prod String: Expr = val:String
+prod Variable: Expr = name:LName
+prod RecordExpr: Expr =
+  "{"
+    (fields:{name:LIdent "=" val:Expr}
+     fields:{"," name:LIdent "=" val:Expr}*)?
+  "}"

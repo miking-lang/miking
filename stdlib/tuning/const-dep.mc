@@ -239,6 +239,8 @@ lang TensorOpDep = TensorOpAst
   | CTensorCreate _ -> error "TensorOpDep not implemented yet"
   | CTensorGetExn _ -> error "TensorOpDep not implemented yet"
   | CTensorSetExn _ -> error "TensorOpDep not implemented yet"
+  | CTensorLinearGetExn _ -> error "TensorOpDep not implemented yet"
+  | CTensorLinearSetExn _ -> error "TensorOpDep not implemented yet"
   | CTensorRank _ -> error "TensorOpDep not implemented yet"
   | CTensorShape _ -> error "TensorOpDep not implemented yet"
   | CTensorReshapeExn _ -> error "TensorOpDep not implemented yet"
@@ -253,18 +255,18 @@ end
 
 lang BootParserDep = BootParserAst
   sem constDep =
-  | CBootParserParseMExprString _ -> error "BootParserDep not implemented yet"
-  | CBootParserParseMCoreFile _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetId _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetTerm _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetType _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetString _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetInt _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetFloat _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetListLength _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetConst _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetPat _ -> error "BootParserDep not implemented yet"
-  | CBootParserGetInfo _ -> error "BootParserDep not implemented yet"
+  | CBootParserParseMExprString _ -> []
+  | CBootParserParseMCoreFile _ -> []
+  | CBootParserGetId _ -> []
+  | CBootParserGetTerm _ -> []
+  | CBootParserGetType _ -> []
+  | CBootParserGetString _ -> []
+  | CBootParserGetInt _ -> []
+  | CBootParserGetFloat _ -> []
+  | CBootParserGetListLength _ -> []
+  | CBootParserGetConst _ -> []
+  | CBootParserGetPat _ -> []
+  | CBootParserGetInfo _ -> []
 end
 
 lang MExprConstDep =

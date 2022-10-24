@@ -11,7 +11,7 @@ external fileExists ! : String -> Bool
 -- Deletes the file from the file system. If the file does not
 -- exist, no error is reported. Use function fileExists to check
 -- if the file exists.
-external deleteFile ! : String -> Unit
+external deleteFile ! : String -> ()
 let deleteFile = lam s. if fileExists s then deleteFile s else ()
 
 -- Returns the size in bytes of a given file
@@ -29,15 +29,15 @@ let writeOpen : String -> Option WriteChannel =
 -- Write a text string to the output channel
 -- Right now, it does not handle Unicode correctly
 -- It should default to UTF-8
-external writeString ! : WriteChannel -> String -> Unit
-let writeString : WriteChannel -> String -> Unit =
+external writeString ! : WriteChannel -> String -> ()
+let writeString : WriteChannel -> String -> () =
   lam c. lam s. writeString c s
 
 -- Flush output channel
-external writeFlush ! : WriteChannel -> Unit
+external writeFlush ! : WriteChannel -> ()
 
 -- Close a write channel
-external writeClose ! : WriteChannel -> Unit
+external writeClose ! : WriteChannel -> ()
 
 -- Open a file for reading. Read open either return
 -- Note: the external function is shadowed. Use the second signature
@@ -59,7 +59,7 @@ let readLine : ReadChannel -> Option String =
 external readString ! : ReadChannel -> String
 
 -- Closes a channel that was opened for reading
-external readClose ! : ReadChannel -> Unit
+external readClose ! : ReadChannel -> ()
 
 -- Standard in read channel
 external stdin ! : ReadChannel

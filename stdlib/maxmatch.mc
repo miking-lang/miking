@@ -53,7 +53,7 @@ lam w.
       preds = negv
     }
 
-let debugShowState = lam state.
+let debugShowState = lam state : State.
   printLn "===";
   print "\nlus: ";
   dprint state.lus;

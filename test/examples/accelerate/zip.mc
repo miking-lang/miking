@@ -3,9 +3,11 @@ include "string.mc" -- int2string
 
 mexpr
 
+let add : Int -> Int -> Int = lam x. lam y. addi x y in
+
 let zip : [Int] -> [Int] -> Int = lam a. lam b.
   utest length a with length b in
-  parallelReduce addi 0 (map2 (lam x : Int. lam y : Int. addi x y) a b)
+  reduce add 0 (map2 add a b)
 in
 
 let s1 : [Int] = create 100 (lam i. i) in

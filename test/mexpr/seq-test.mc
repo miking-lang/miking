@@ -6,7 +6,8 @@
 include "common.mc"
 
 -- Helper function for tests
-let eqSeq = lam eq : (a -> a -> Bool).
+let eqSeq : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+  lam eq : (a -> a -> Bool).
   recursive let work = lam as. lam bs.
     let pair = (as, bs) in
     match pair with ([], []) then true else
@@ -71,6 +72,18 @@ utest concat [1,2,3] [10] with [1,2,3,10] in
 utest concat [1] [3] with [1,3] in
 utest concat [] [3,10] with [3,10] in
 utest concat ['a','b'] [] with ['a','b'] in
+
+-- concat preserves the representation if the inputs agree, otherwise
+-- the result is a list
+utest isRope (concat (createRope 3 (lam i. i)) (createRope 3 (lam i. i))) with true in
+utest isRope (concat (createList 3 (lam i. i)) (createRope 3 (lam i. i))) with false in
+utest isList (concat (createList 3 (lam i. i)) (createRope 3 (lam i. i))) with true in
+utest isList (concat (createRope 3 (lam i. i)) (createList 3 (lam i. i))) with true in
+utest isList (concat (createList 3 (lam i. i)) (createList 3 (lam i. i))) with true in
+
+-- Lists and ropes are otherwise indistinguishable
+utest createList 3 (lam i. i) with [0, 1, 2] in
+utest createList 3 (lam i. i) with [0, 1, 2] using eqSeq eqi in
 
 -- 'get s n' returns element with index 'n' from sequence 's'
 -- [a] -> Int -> a
@@ -137,7 +150,7 @@ utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
 utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi in
 
 -- 'iter f s' applies 'f' to every element in 's'
--- (a -> Unit) -> [a] -> Unit
+-- (a -> ()) -> [a] -> ()
 utest iter (lam x. addi x 1; ()) [1, 2, 3]
 with () in
 
@@ -156,7 +169,7 @@ with 10 in
 
 -- 'iteri f s' is like 'iter' but 'f' takes the index of the element as its
 -- first argument and the element as its second argument.
--- (Int -> a -> Unit) -> [a] -> Unit
+-- (Int -> a -> ()) -> [a] -> ()
 utest iteri (lam i. lam x. addi x i; ()) [1, 2, 3]
 with () in
 

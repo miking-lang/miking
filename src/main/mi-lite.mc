@@ -9,10 +9,12 @@ include "options.mc"
 include "parse.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/type-check.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
-lang MCoreLiteCompile = BootParser + MExprSym + MExprUtestTrans
+lang MCoreLiteCompile =
+  BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
@@ -50,19 +52,22 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
   p.cleanup ();
   destinationFile
 
-let compile : Options -> String -> Unit = lam options. lam file.
+let compile : Options -> String -> () = lam options. lam file.
   use MCoreLiteCompile in
   let ast = parseParseMCoreFile {
     keepUtests = options.runTests,
     pruneExternalUtests = not options.disablePruneExternalUtests,
     pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
     findExternalsExclude = true,
+    eliminateDeadCode = not options.keepDeadCode,
     keywords = []
   } file in
   let ast = utestStrip ast in
   let ast = symbolize ast in
-  let hooks = {emptyHooks with compileOcaml = ocamlCompile options file} in
-  compileMCore ast hooks
+  let ast = typeCheck ast in
+  let hooks = mkEmptyHooks (ocamlCompile options file) in
+  compileMCore ast hooks;
+  ()
 
 mexpr
 

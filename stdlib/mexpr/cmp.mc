@@ -17,7 +17,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Expr, Expr) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      error "Missing case in cmpExprH for expressions with equal indices."
+      errorSingle [infoTm lhs, infoTm rhs]
+                    "Missing case in cmpExprH for expressions with equal indices."
     else res
 
   sem cmpConst (lhs: Const) =
@@ -36,7 +37,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Pat, Pat) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      error "Missing case in cmpPatH for patterns with equal indices."
+      errorSingle [infoPat lhs, infoPat rhs]
+                    "Missing case in cmpPatH for patterns with equal indices."
     else res
 
   sem cmpType (lhs: Type) =
@@ -47,7 +49,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      error "Missing case in cmpTypeH for types with equal indices."
+      errorSingle [infoTy lhs, infoTy rhs]
+                    "Missing case in cmpTypeH for types with equal indices."
     else res
 end
 
@@ -88,7 +91,7 @@ lang LetCmp = Cmp + LetAst
     else identDiff
 end
 
-lang RecLetBindingCmp = Cmp
+lang RecLetBindingCmp = Cmp + RecLetsAst
   sem cmpRecLetBinding (lhs : RecLetBinding) =
   | rhs ->
     let rhs : RecLetBinding = rhs in
@@ -737,6 +740,8 @@ utest cmpConst (CTensorCreateFloat {}) (CTensorCreateFloat {}) with 0 in
 utest cmpConst (CTensorCreate {}) (CTensorCreate {}) with 0 in
 utest cmpConst (CTensorGetExn {}) (CTensorGetExn {}) with 0 in
 utest cmpConst (CTensorSetExn {}) (CTensorSetExn {}) with 0 in
+utest cmpConst (CTensorLinearGetExn {}) (CTensorLinearGetExn {}) with 0 in
+utest cmpConst (CTensorLinearSetExn {}) (CTensorLinearSetExn {}) with 0 in
 utest cmpConst (CTensorRank {}) (CTensorRank {}) with 0 in
 utest cmpConst (CTensorShape {}) (CTensorShape {}) with 0 in
 utest cmpConst (CTensorReshapeExn {}) (CTensorReshapeExn {}) with 0 in

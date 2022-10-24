@@ -15,10 +15,6 @@ utest f 5 with 7 in
 let a:() = () in
 utest (lam x:(). 7) a with 7 in
 
--- Dynamic type
-let f = lam x:Dyn. x in
-utest f 5 with 5 in
-
 -- Int type
 let v : Int = 5 in
 let f = lam x:Int. muli x 5 in
@@ -38,6 +34,10 @@ let f1 : Int -> Int = lam x. addi x 1 in
 utest f1 5 with 6 in
 let f2 : Int -> Float -> Float = lam x:Int. lam y:Float. addf (int2float x) y in
 utest f2 10 17.2 with 27.2 using eqf in
+
+-- Polymorphic type
+let f : all a. a -> a = lam x. x in
+utest f 5 with 5 in
 
 -- Tuple type
 let eqIntFloatTuple = lam t1 : (Int, Float). lam t2 : (Int, Float).

@@ -2,7 +2,7 @@ include "arg.mc"
 include "options-type.mc"
 
 -- Options configuration
-let optionsConfig : ParseConfig = [
+let optionsConfig : ParseConfig Options = [
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.
@@ -15,10 +15,18 @@ let optionsConfig : ParseConfig = [
     "Print the AST after adding type annotations",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugTypeAnnot = true}),
+  ([("--debug-type-check", "", "")],
+    "Print an interactive (HTML) representation of the AST after type checking",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugTypeCheck = true}),
   ([("--debug-profile", "", "")],
     "Instrument profiling expressions to AST",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugProfile = true}),
+  ([("--debug-shallow", "", "")],
+    "Print the AST after lowering nested patterns to shallow ones",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugShallow = true}),
   ([("--exit-before", "", "")],
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
@@ -53,17 +61,52 @@ let optionsConfig : ParseConfig = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
   ([("--accelerate", "", "")],
-    "Compile into an accelerated executable",
+    "Enables expression acceleration which outputs GPU code by default",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with accelerate = true}),
+  ([("--tensor-max-rank", " ", "<rank>")],
+    "Sets the maximum rank of tensors to <rank> in accelerated code",
+    lam p: ArgPart Options.
+      let o: Options = p.options in
+      {o with accelerateTensorMaxRank = string2int (argToString p)}),
+  ([("--debug-accelerate", "", "")],
+    join ["Enables static and dynamic checks for accelerated expressions, ",
+          "and runs the program on the CPU."],
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugAccelerate = true,
+                                            runtimeChecks = true}),
   ([("--cpu-only", "", "")],
     "Translate accelerated code to multicore CPU code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with cpuOnly = true}),
-  ([("--typecheck", "", "")],
-    "Type check the program before evaluation or compilation",
+  ([("--use-32bit-integers", "", "")],
+    "Enables use of 32-bit integers in the C compiler",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with typeCheck = true}),
+      let o: Options = p.options in {o with use32BitIntegers = true}),
+  ([("--use-32bit-floats", "", "")],
+    "Enables use of 32-bit floating-point numbers in the C compiler",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with use32BitFloats = true}),
+  ([("--keep-dead-code", "", "")],
+    "Disable dead code elimination pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with keepDeadCode = true}),
+  ([("--to-js", "", "")],
+    "Compile a file to JavaScript",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with toJavaScript = true}),
+  ([("--js-target", " ", "[web|node|=generic]")],
+    "Specific JavaScript runtime to target, defaults to generic",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with jsTarget = argToString p}),
+  ([("--js-disable-optimizations", "", "")],
+    "Disable JavaScript general optimizations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableJsGeneralOptimizations = true}),
+  ([("--js-disable-tco", "", "")],
+    "Disable JavaScript tail-call optimizations",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with disableJsTCO = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

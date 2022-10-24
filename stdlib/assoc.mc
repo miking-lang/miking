@@ -11,17 +11,17 @@ type AssocMap k v = [(k, v)]
 type AssocTraits k = {eq : k -> k -> Bool}
 
 -- 'assocEmpty' is an empty associate map
-let assocEmpty : AssocMap k v =
+let assocEmpty : all k. all v. AssocMap k v =
   []
 
 -- 'assocLength m' returns the number of key-value pairs in m
-let assocLength : AssocMap k v -> Int =
+let assocLength : all k. all v. AssocMap k v -> Int =
   length
 
 -- 'assocInsert traits k v m' returns a new map, where the key-value pair
 -- ('k','v') is stored. If 'k' is already a key in 'm', its old value will be
 -- overwritten.
-let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
+let assocInsert : all k. all v. AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam v. lam m.
     optionMapOrElse (lam. cons (k,v) m)
                     (lam i. set m i (k,v))
@@ -30,19 +30,19 @@ let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
 -- 'seq2assoc traits ls' constructs a new association map from a sequence
 -- of tuples 'ls'. Bindings to the right overwrites previous equal bindings to
 -- the left.
-let seq2assoc : AssocTraits k -> [(k,v)] -> AssocMap k v =
+let seq2assoc : all k. all v. AssocTraits k -> [(k,v)] -> AssocMap k v =
   lam traits. lam ls.
     foldl (lam acc. lam t : (k, v). assocInsert traits t.0 t.1 acc) assocEmpty ls
 
 -- 'assoc2seq traits m' constructs a new sequence of tuples representing the association map 'm'.
 -- The order of the elements in the sequence is unspecified.
-let assoc2seq : AssocTraits k -> AssocMap k v -> [(k,v)] =
+let assoc2seq : all k. all v. AssocTraits k -> AssocMap k v -> [(k,v)] =
   lam traits. lam m.
     m
 
 -- 'assocRemove traits k m' returns a new map, where 'k' is not a key. If 'k' is
 -- not a key in 'm', the map remains unchanged after the operation.
-let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
+let assocRemove : all k. all v. AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam m.
     optionMapOr m
                 (lam i.
@@ -54,7 +54,7 @@ let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
 -- 'assocLookup traits k m' looks up the key 'k' and returns an Option type.
 -- If 'm' has the key 'k' stored, its value is returned, otherwise None () is
 -- returned.
-let assocLookup : AssocTraits k -> k -> AssocMap k v -> Option v =
+let assocLookup : all k. all v. AssocTraits k -> k -> AssocMap k v -> Option v =
   lam traits. lam k. lam m.
     optionMapOr (None ())
                 (lam t : (k, v). Some t.1)
@@ -62,7 +62,8 @@ let assocLookup : AssocTraits k -> k -> AssocMap k v -> Option v =
 
 -- 'assocLookupOrElse traits d k m' returns the value of key 'k' in 'm' if it
 -- exists, otherwise returns the result of 'd ()'.
-let assocLookupOrElse : AssocTraits k -> (Unit -> v) -> k -> AssocMap k v -> v =
+let assocLookupOrElse : all k. all v.
+  AssocTraits k -> (() -> v) -> k -> AssocMap k v -> v =
   lam traits. lam d. lam k. lam m.
     optionGetOrElse d
                     (assocLookup traits k m)
@@ -70,7 +71,7 @@ let assocLookupOrElse : AssocTraits k -> (Unit -> v) -> k -> AssocMap k v -> v =
 -- 'assocLookupPred p m' returns the associated value of a key that satisfies
 -- the predicate 'p'. If several keys satisfies 'p', the one that happens to be
 -- found first is returned.
-let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
+let assocLookupPred : all k. all v. (k -> Bool) -> AssocMap k v -> Option v =
   lam p. lam m.
     optionMapOr (None ())
                 (lam t : (k, v). Some t.1)
@@ -78,45 +79,47 @@ let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
 
 -- 'assocAny p m' returns true if at least one (k,v) pair in the map satisfies
 -- the predicate 'p'.
-let assocAny : (k -> v -> Bool) -> AssocMap k v -> Bool =
+let assocAny : all k. all v. (k -> v -> Bool) -> AssocMap k v -> Bool =
   lam p. lam m.
     any (lam t : (k, v). p t.0 t.1) m
 
 -- 'assocAll p m' returns true if all (k,v) pair in the map satisfies
 -- the predicate 'p'.
-let assocAll : (k -> v -> Bool) -> AssocMap k v -> Bool =
+let assocAll : all k. all v. (k -> v -> Bool) -> AssocMap k v -> Bool =
   lam p. lam m.
     forAll (lam t : (k, v). p t.0 t.1) m
 
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
-let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
+let assocMem : all k. all v. AssocTraits k -> k -> AssocMap k v -> Bool =
   lam traits. lam k. lam m.
     optionIsSome (assocLookup traits k m)
 
 -- 'assocKeys traits m' returns a list of all keys stored in 'm'
-let assocKeys : AssocTraits k -> AssocMap k v -> [k] =
+let assocKeys : all k. all v. AssocTraits k -> AssocMap k v -> [k] =
   lam. lam m.
     map (lam t : (k, v). t.0) m
 
 -- 'assocValues traits m' returns a list of all values stored in 'm'
-let assocValues : AssocTraits k -> AssocMap k v -> [v] =
+let assocValues : all k. all v. AssocTraits k -> AssocMap k v -> [v] =
   lam. lam m.
     map (lam t : (k, v). t.1) m
 
 -- 'assocMap traits f m' maps over the values of 'm' using function 'f'.
-let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
+let assocMap : all k. all v1. all v2.
+  AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
   lam. lam f. lam m.
-    map (lam t : (k, v). (t.0, f t.1)) m
+    map (lam t : (k, v1). (t.0, f t.1)) m
 
 -- 'assocMapWithKey f m' maps over the values of 'm' using function 'f', where 'f' additionally has access to the key of the value being operated upon.
-let assocMapWithKey : AssocTraits k -> (k -> v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
+let assocMapWithKey : all k. all v1. all v2.
+  AssocTraits k -> (k -> v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
   lam. lam f. lam m.
-    map (lam t : (k, v). (t.0, f t.0 t.1)) m
+    map (lam t : (k, v1). (t.0, f t.0 t.1)) m
 
 -- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'.
 -- IMPORTANT: The folding order is unspecified.
-let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
+let assocFold : all k. all v. all acc. AssocTraits k -> (acc -> k -> v -> acc)
                   -> acc -> AssocMap k v -> acc =
   lam. lam f. lam acc. lam m.
     foldl (lam acc. lam t : (k, v). f acc t.0 t.1) acc m
@@ -124,7 +127,7 @@ let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
 -- 'assocFoldlM traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'. The folding stops immediately if 'f' returns 'None ()'.
 -- IMPORTANT: The folding order is unspecified.
-let assocFoldlM : AssocTraits k -> (acc -> k -> v -> Option acc)
+let assocFoldlM : all k. all v. all acc. AssocTraits k -> (acc -> k -> v -> Option acc)
                         -> acc -> AssocMap k v -> Option acc =
   lam. lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t : (k, v). f acc t.0 t.1) acc m
@@ -132,24 +135,27 @@ let assocFoldlM : AssocTraits k -> (acc -> k -> v -> Option acc)
 -- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
 -- and fold over 'm' using function 'f' and accumulator 'acc'.
 -- IMPORTANT: The folding order is unspecified.
-let assocMapAccum : AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
-                      -> acc -> AssocMap k v1 -> (acc, AssocMap k v2) =
+let assocMapAccum : all k. all v1. all v2. all acc.
+  AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
+                -> acc -> AssocMap k v1 -> (acc, AssocMap k v2) =
   lam. lam f. lam acc. lam m.
     mapAccumL
-      (lam acc. lam t : (k, v).
+      (lam acc. lam t : (k, v1).
          let fval : (acc, v2) = f acc t.0 t.1 in
          match fval with (acc, b) then (acc, (t.0, b)) else never)
       acc m
 
 -- 'assocMergePreferRight traits l r' merges two maps, keeping values from r in case a key
 -- exists in both maps. See also 'assocMergePreferLeft'
-let assocMergePreferRight : AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
+let assocMergePreferRight
+  : all k. all v. AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
   lam traits. lam l. lam r.
     assocFold traits (lam m. lam k. lam v. assocInsert traits k v m) l r
 
 -- 'assocMergePreferLeft traits l r' merges two maps, keeping values from l in case a key
 -- exists in both maps. See also 'assocMergePreferRight'
-let assocMergePreferLeft : AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
+let assocMergePreferLeft
+  : all k. all v. AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
   lam traits. lam l. lam r. assocMergePreferRight traits r l
 
 mexpr
@@ -187,9 +193,9 @@ utest lookup 1 m with Some '1' using optionEq eqChar in
 utest lookup 2 m with Some '2' using optionEq eqChar in
 utest lookup 3 m with Some '3' using optionEq eqChar in
 utest lookup 4 m with None () using optionEq eqChar in
-utest lookupOrElse (lam. 42) 1 m with '1' in
-utest lookupOrElse (lam. 42) 2 m with '2' in
-utest lookupOrElse (lam. 42) 3 m with '3' in
+utest lookupOrElse (lam. 'x') 1 m with '1' in
+utest lookupOrElse (lam. 'x') 2 m with '2' in
+utest lookupOrElse (lam. 'x') 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' using optionEq eqChar in
 utest any (lam k. lam v. eqChar v '2') m with true in
 utest any (lam k. lam v. eqChar v '4') m with false in
@@ -207,12 +213,12 @@ with true in
 let seq = [(1, '1'), (2, '2'), (3, '3')] in
 let m = seq2assoc seq in
 
-utest sort (lam l : (k, v). lam r : (k, v). subi l.0 r.0) (assoc2seq m)
+utest sort (lam l : (Int, Char). lam r : (Int, Char). subi l.0 r.0) (assoc2seq m)
 with [(1, '1'), (2, '2'), (3, '3')] in
 
 let withKeyMap = mapWithKey (lam k. lam v. (k, v)) m in
 let eqOptionTuple =
-  optionEq (lam t1 : (k, v). lam t2 : (k, v).
+  optionEq (lam t1 : (Int, Char). lam t2 : (Int, Char).
               and (eqi t1.0 t2.0) (eqChar t1.1 t2.1)) in
 utest lookup 1 withKeyMap with Some (1, '1') using eqOptionTuple in
 utest lookup 2 withKeyMap with Some (2, '2') using eqOptionTuple in
@@ -293,7 +299,7 @@ let ml = mergePreferLeft m1 m2 in
 let mr = mergePreferRight m1 m2 in
 
 let eqIntOptStringTuple =
-  lam t1 : (Int, Option String). lam t2 : (Int, Option String).
+  lam t1 : (Int, String). lam t2 : (Int, String).
     and (eqi t1.0 t2.0) (eqString t1.1 t2.1)
 in
 

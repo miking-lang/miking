@@ -5,11 +5,14 @@ include "name.mc"
 include "stringid.mc"
 
 include "ast.mc"
+include "type.mc"
 include "ast-builder.mc"
+include "boot-parser.mc"
 include "pprint.mc"
 include "symbolize.mc"
 include "eq.mc"
 include "info.mc"
+include "error.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
 
@@ -150,10 +153,8 @@ end
 lang TypeANF = ANF + TypeAst
 
   sem normalize (k : Expr -> Expr) =
-  | TmType {ident = ident, tyIdent = tyIdent, inexpr = m1, ty = ty, info = info} ->
-    TmType {ident = ident, tyIdent = tyIdent, ty = ty,
-            inexpr = normalizeName k m1, info = info}
-
+  | TmType t ->
+    TmType {t with inexpr = normalizeName k t.inexpr}
 end
 
 lang RecLetsANFBase = ANF + RecLetsAst + LamAst
@@ -168,7 +169,7 @@ lang RecLetsANFBase = ANF + RecLetsAst + LamAst
     let bindings = map (
       lam b: RecLetBinding. { b with body =
         match b.body with TmLam _ & t then normalizeLams t
-        else infoErrorExit (infoTm b.body)
+        else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in ANF transformation"
       }
     )
@@ -217,10 +218,22 @@ lang UtestANF = ANF + UtestAst
 
   sem normalize (k : Expr -> Expr) =
   | TmUtest t -> let tusing = optionMap normalizeTerm t.tusing in
-    TmUtest {{{{t with test = normalizeTerm t.test}
-                 with expected = normalizeTerm t.expected}
-                 with next = normalize k t.next}
-                 with tusing = tusing}
+    normalizeName
+      (lam test.
+         normalizeName
+           (lam expected.
+              let inner = lam tusing.
+                TmUtest { t with test = test,
+                                 expected = expected,
+                                 next = normalize k t.next,
+                                 tusing = tusing }
+              in
+              match t.tusing with Some tusing then
+                normalizeName (lam tusing. inner (Some tusing)) tusing
+              else
+                inner (None ()))
+           t.expected)
+      t.test
 
 end
 
@@ -247,11 +260,73 @@ lang NeverANF = ANF + NeverAst
 
 end
 
-lang ExtANF = ANF + ExtAst
+lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
 
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->
-    TmExt {t with inexpr = normalize k t.inexpr}
+    -- NOTE(dlunde,2022-06-14): Externals must always be fully applied
+    -- (otherwise the parser throws an error). To make this compatible with
+    -- ANF, we eta expand definitions of externals. In this way, the only
+    -- application of the external is in the body of the eta expansion (where
+    -- it is always fully applied).
+    --
+    let arity = arityFunType t.tyIdent in
+    let i = withInfo t.info in
+
+    -- Introduce variable names for each external parameter
+    recursive let vars = lam acc. lam arity.
+      match acc with (acc, tyIdent) in
+      if lti arity 1 then acc
+      else
+        let arg = nameNoSym (concat "a" (int2string arity)) in
+        match
+          match tyIdent with TyArrow {from = from, to = to} then
+            (from, to)
+          else (TyUnknown {info = t.info}, tyIdent)
+        with (argTy, innerTy) in
+        vars (cons (arg, argTy) acc, innerTy) (subi arity 1)
+    in
+    let varNameTypes : [(Name, Type)] = vars ([], t.tyIdent) arity in
+
+    -- Variable for the external itself
+    let extId = TmVar {
+      ident = t.ident, ty = t.tyIdent,
+      info = t.info, frozen = false}
+    in
+
+    -- The body of the eta expansion
+    match
+      foldl
+        (lam acc. lam v.
+          match acc with (acc, tyIdent) in
+          match v with (id, ty) in
+          let appTy =
+            match tyIdent with TyArrow {to = to} then
+              to
+            else TyUnknown {info = t.info} in
+          let app = TmApp {
+            lhs = acc,
+            rhs = TmVar {ident = id, ty = ty, info = t.info, frozen = false},
+            ty = appTy,
+            info = t.info} in
+          (app, appTy))
+        (extId, t.tyIdent)
+        varNameTypes
+    with (inner, _) in
+
+    let etaExpansion =
+      foldr
+        (lam v. lam acc.
+          match v with (id, ty) in
+          TmLam {
+            ident = id, tyIdent = ty, body = acc,
+            ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
+            info = t.info})
+        inner varNameTypes in
+    TmExt { t with
+      inexpr = TmLet {
+        ident = t.ident, tyBody = t.tyIdent, body = etaExpansion,
+        inexpr = normalize k t.inexpr, ty = tyTm t.inexpr, info = t.info} }
 
 end
 
@@ -268,7 +343,7 @@ lang MExprANF =
 
 end
 
--- Full ANF transformation. Lifts everything
+-- Full ANF transformation. Lifts everything.
 lang MExprANFAll =
   VarANF + AppANFAll + LamANFAll + RecordANF + LetANF + TypeANF + RecLetsANFAll +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
@@ -280,9 +355,9 @@ end
 
 lang TestBase = MExprSym + MExprPrettyPrint end
 
-lang TestANF = MExprANF + MExprEq end
+lang TestANF = MExprANF + MExprEq + BootParser end
 
-lang TestANFAll = MExprANFAll + MExprEq end
+lang TestANFAll = MExprANFAll + MExprEq + BootParser end
 
 mexpr
 
@@ -308,220 +383,201 @@ in
 use TestANF in
 
 let _test = _testConstr normalizeTerm in
+let _parse = parseMExprStringKeywords [] in
 
-let basic =
-  bind_ (ulet_ "f" (ulam_ "x" (var_ "x")))
-  (addi_ (addi_ (int_ 2) (int_ 2))
-    (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
-utest _test basic with
-  bindall_ [
-    ulet_ "f" (ulam_ "x" (var_ "x")),
-    ulet_ "t" (addi_ (int_ 2) (int_ 2)),
-    ulet_ "x1" (int_ 1),
-    ulet_ "t1" (app_ (var_ "f") (var_ "x1")),
-    ulet_ "t2" (addi_ (var_ "t") (var_ "t1")),
-    var_ "t2"
-  ]
-using eqExpr in
+let basic = _parse "
+  let f = (lam x. x) in
+  addi (addi 2 2) (let x = 1 in f x)
+" in
+utest _test basic with _parse "
+  let f = (lam x. x) in
+  let t = addi 2 2 in
+  let x1 = 1 in
+  let t1 = f x1 in
+  let t2 = addi t t1 in
+  t2
+" using eqExpr in
 
 
-let ext =
-  bindall_
-    [ulet_ "f" (ulam_ "x" (var_ "x")),
-     ulet_ "x" (int_ 3),
-     (addi_ (addi_ (int_ 2) (var_ "x")))
-       (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
-utest _test ext with
-  bindall_ [
-    ulet_ "f" (ulam_ "x" (var_ "x")),
-    ulet_ "x1" (int_ 3),
-    ulet_ "t" (addi_ (int_ 2) (var_ "x1")),
-    ulet_ "x2" (int_ 1),
-    ulet_ "t1" (app_ (var_ "f") (var_ "x2")),
-    ulet_ "t2" (addi_ (var_ "t") (var_ "t1")),
-    var_ "t2"
-  ]
-using eqExpr in
+let ext = _parse "
+  let f = (lam x. x) in
+  let x = 3 in
+  addi (addi 2 x) (let x = 1 in f x)
+" in
+utest _test ext with _parse "
+  let f = (lam x. x) in
+  let x1 = 3 in
+  let t = addi 2 x1 in
+  let x2 = 1 in
+  let t1 = f x2 in
+  let t2 = addi t t1 in
+  t2
+" using eqExpr in
 
-let lambda =
-  app_
-    (ulam_ "x" (bind_ (ulet_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
-    (int_ 4)
-in
-utest _test lambda with
-  bindall_ [
-    ulet_ "t"
-      (app_
-        (ulam_ "x" (bindall_ [
-          (ulet_ "y" (int_ 3)),
-          (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
-          (var_ "t1")
-        ]))
-        (int_ 4)),
-    var_ "t"
-  ]
-using eqExpr in
+let lambda = _parse "
+  (lam x. let y = 3 in addi x y) 4
+" in
+utest _test lambda with _parse "
+  let t = (lam x. let y = 3 in let t1 = addi x y in t1) 4 in
+  t
+" using eqExpr in
 
-let apps =
-  app_ (app_ (int_ 1) (app_ (int_ 2) (int_ 3))) (app_ (int_ 4) (app_ (int_ 5) (int_ 6)))
-in
-utest _test apps with
-  bindall_ [
-    ulet_ "x"  (app_ (int_ 2) (int_ 3)),
-    ulet_ "x1" (app_ (int_ 5) (int_ 6)),
-    ulet_ "x2" (app_ (int_ 4) (var_ "x1")),
-    ulet_ "x3" (app_ (app_ (int_ 1) (var_ "x")) (var_ "x2")),
-    var_ "x3"
-  ]
-using eqExpr in
+let apps = _parse "
+  (1 (2 3)) (4 (5 6))
+" in
+utest _test apps with _parse "
+  let x = 2 3 in
+  let x1 = 5 6 in
+  let x2 = 4 x1 in
+  let x3 = 1 x x2 in
+  x3
+" using eqExpr in
 
-let record =
-  urecord_ [
-    ("a",(app_ (int_ 1) (app_ (int_ 2) (int_ 3)))),
-    ("b", (int_ 4)),
-    ("c", (app_ (int_ 5) (int_ 6)))
-  ]
-in
-let rupdate = recordupdate_ record "b" (int_ 7) in
+let record = _parse "
+  {a = 1 (2 3), b = 4, c = 5 6}
+" in
+-- printLn (mexprToString (_test record));
+utest _test record with _parse "
+  let t = 5 6 in
+  let t1 = 2 3 in
+  let t2 = 1 t1 in
+  let t3 = { a = t2, b = 4, c = t } in
+  t3
+" using eqExpr in
 
-let factorial =
-  ureclet_ "fact"
-    (ulam_ "n"
-      (if_ (eqi_ (var_ "n") (int_ 0))
-        (int_ 1)
-        (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))
-in
-utest _test factorial with
-  bindall_ [
-    ureclet_ "fact"
-      (ulam_ "n" (bindall_ [
-        ulet_ "t" (eqi_ (var_ "n") (int_ 0)),
-        ulet_ "t1" (if_ (var_ "t")
-          (int_ 1)
-          (bindall_ [
-            ulet_ "t2" (subi_ (var_ "n") (int_ 1)),
-            ulet_ "t3" (app_ (var_ "fact") (var_ "t2")),
-            ulet_ "t4" (muli_ (var_ "n") (var_ "t3")),
-            var_ "t4"
-          ])
-        ),
-        var_ "t1"
-      ])),
-    ulet_ "t5" uunit_,
-    var_ "t5"
-  ]
-using eqExpr in
+let rupdate = _parse "
+  {{a = 1 (2 3), b = 4, c = 5 6} with b = 7}
+" in
+utest _test rupdate with _parse "
+  let t = 5 6 in
+  let t1 = 2 3 in
+  let t2 = 1 t1 in
+  let t3 = { a = t2, b = 4, c = t } in
+  let t4 = { t3 with b = 7 } in
+  t4
+" using eqExpr in
 
-let const = (int_ 1) in
-utest _test const with
-  (int_ 1)
-using eqExpr in
+let factorial = _parse "
+  recursive let fact = lam n. if eqi n 0 then 1 else muli n (fact (subi n 1)) in
+  ()
+" in
+-- printLn (mexprToString (_test factorial));
+utest _test factorial with _parse "
+  recursive let fact = lam n.
+    let t = eqi n 0 in
+    let t1 = if t then 1 else
+      let t2 = subi n 1 in
+      let t3 = fact t2 in
+      let t4 = muli n t3 in
+      t4
+    in
+    t1
+  in
+  let t5 = () in
+  t5
+" using eqExpr in
 
-let data = bind_ (ucondef_ "A") (conapp_ "A" (app_ (int_ 1) (int_ 2))) in
-utest _test data with
-  bindall_ [
-    (ucondef_ "A"),
-    ulet_ "t" (app_ (int_ 1) (int_ 2)),
-    ulet_ "t1" (conapp_ "A" (var_ "t")),
-    var_ "t1"
-  ]
-using eqExpr in
+let const = _parse "1" in
+utest _test const with const using eqExpr in
 
-let seq =
-  seq_ [
-    (app_ (int_ 1) (app_ (int_ 2) (int_ 3))),
-    (int_ 4),
-    (app_ (int_ 5) (int_ 6))
-  ]
-in
-utest _test seq with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
-    ulet_ "t3" (seq_ [var_ "t2", (int_ 4), var_ "t"]),
-    var_ "t3"
-  ]
-using eqExpr in
+let data = _parse "
+  con A: Unknown in A (1 2)
+" in
+utest _test data with _parse "
+  con A: Unknown in
+  let t = 1 2 in
+  let t1 = A t in
+  t1
+" using eqExpr in
 
-let smatch = if_ (app_ (int_ 1) (int_ 2)) (int_ 3) (int_ 4) in
-utest _test smatch with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 1) (int_ 2)),
-    ulet_ "t1" (if_ (var_ "t") (int_ 3) (int_ 4)),
-    var_ "t1"
-  ]
-using eqExpr in
+let seq = _parse " [1 (2 3), 4, 5 6] " in
+utest _test seq with _parse "
+  let t = 5 6 in
+  let t1 = 2 3 in
+  let t2 = 1 t1 in
+  let t3 = [t2, 4, t] in
+  t3
+" using eqExpr in
 
-let simple = bind_ (ulet_ "x" (int_ 1)) (var_ "x") in
+let smatch = _parse "
+  if 1 2 then 3 else 4
+" in
+utest _test smatch with _parse "
+  let t = 1 2 in
+  let t1 = if t then 3 else 4 in
+  t1
+" using eqExpr in
+
+let simple = _parse "let x = 1 in x" in
 utest _test simple with simple using eqExpr in
 
-let simple2 = app_ (int_ 1) simple in
-utest _test simple2 with
-  bindall_ [
-    ulet_ "x" (int_ 1),
-    ulet_ "t" (app_ (int_ 1) (var_ "x")),
-    var_ "t"
-  ]
-using eqExpr in
+let simple2 = _parse "1 (let x = 1 in x)" in
+utest _test simple2 with _parse "
+  let x = 1 in
+  let t = 1 x in
+  t
+" using eqExpr in
 
-let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
+let inv1 = _parse "let x = 1 2 in x" in
 utest _test inv1 with inv1 using eqExpr in
 
-let nested = ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x"))) in
-utest _test nested with
-  (ulam_ "x" (ulam_ "x" (ulam_ "x" (var_ "x"))))
-using eqExpr in
+let nested = _parse "lam x. lam x. lam x. x" in
+utest _test nested with nested using eqExpr in
 
-let nestedreclet =
-  ureclet_ "f"
-    (ulam_ "a"
-      (ulam_ "b"
-        (ulam_ "c" (int_ 1)))) in
-utest _test nestedreclet with
-  ureclet_ "f"
-    (ulam_ "a"
-      (ulam_ "b"
-        (ulam_ "c" (int_ 1))))
-using eqExpr in
-
-let constant = int_ 1 in
-utest _test constant with int_ 1
-using eqExpr in
+let nestedreclet = _parse "
+  recursive let f = lam a. lam b. lam c. 1 in
+  ()
+" in
+utest _test nestedreclet with _parse "
+  recursive let f = lam a. lam b. lam c. 1 in
+  let t = () in t
+" using eqExpr in
 
 -- Tests for full ANF
 use TestANFAll in
 
 let _test = _testConstr normalizeTerm in
 
-let appseq = addi_ (int_ 1) (int_ 2) in
-utest _test appseq with
-  bindall_ [
-    ulet_ "t" (uconst_ (CAddi {})),
-    ulet_ "t1" (int_ 1),
-    ulet_ "t2" (app_ (var_ "t") (var_ "t1")),
-    ulet_ "t3" (int_ 2),
-    ulet_ "t4" (app_ (var_ "t2") (var_ "t3")),
-    var_ "t4"
-  ]
-using eqExpr in
+let appseq = _parse "addi 1 2" in
+utest _test appseq with _parse "
+  let t = addi in
+  let t1 = 1 in
+  let t2 = t t1 in
+  let t3 = 2 in
+  let t4 = t2 t3 in
+  t4
+" using eqExpr in
 
-let lamseq = ulam_ "x" (ulam_ "y" (ulam_ "z" (int_ 1))) in
-utest _test lamseq with
-  let ulet_ = lam s. lam body. lam inexpr. bind_ (ulet_ s body) inexpr in
-  ulet_ "t" (
-    ulam_ "x" (
-      ulet_ "t1" (
-        ulam_ "y" (
-          ulet_ "t2" (
-            ulam_ "z" (
-              ulet_ "t3" (int_ 1) (var_ "t3")
-            )
-          ) (var_ "t2")
-        )
-      ) (var_ "t1")
-    )
-  ) (var_ "t")
-using eqExpr in
+let lamseq = _parse "lam x. lam y. lam z. 1" in
+-- printLn (mexprToString (_test lamseq));
+utest _test lamseq with _parse "
+  let t = lam x.
+    let t1 = lam y.
+      let t2 = lam z.
+        let t3 = 1 in
+        t3
+      in
+      t2
+    in
+    t1
+  in
+  t
+" using eqExpr in
+
+-- Externals
+let ext = _parse "
+  external e: Int -> Int -> Int in
+  e 1 2
+" in
+-- printLn (mexprToString (_test ext));
+utest _test ext with _parse "
+external e : Int -> Int -> Int in
+let e: Int -> Int -> Int = lam a1.  lam a2.  e a1 a2 in
+let t = 1 in
+let t1 = e t in
+let t2 = 2 in
+let t3 = t1 t2 in
+t3
+" using eqExpr in
 
 ()

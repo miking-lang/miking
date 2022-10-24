@@ -1,0 +1,5 @@
+#!/bin/sh
+./run factorial 80000
+./run factorial_fast 80000
+./run fold_list 80000
+./run tree 80000

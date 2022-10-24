@@ -5,6 +5,7 @@ include "assoc.mc"
 include "info.mc"
 include "name.mc"
 include "string.mc"
+include "stringid.mc"
 include "map.mc"
 
 -----------
@@ -23,76 +24,167 @@ lang Ast
   syn Pat =
   -- Intentionally left blank
 
-  sem infoTm =
-  -- Intentionally left blank
+  sem infoTm: Expr -> Info
+  sem tyTm: Expr -> Type
+  sem withInfo: Info -> Expr -> Expr
+  sem withType: Type -> Expr -> Expr
 
-  sem tyTm =
-  -- Intentionally left blank
+  sem infoPat: Pat -> Info
+  sem tyPat: Pat -> Type
+  sem withInfoPat: Info -> Pat -> Pat
+  sem withTypePat: Type -> Pat -> Pat
 
-  sem withType (ty : Type) =
-  -- Intentionally left blank
-
-  sem tyPat =
-  -- Intentionally left blank
-
-  sem withTypePat (ty : Type) =
-  -- Intentionally left blank
+  sem infoTy: Type -> Info
+  sem tyWithInfo: Info -> Type -> Type
 
   -- TODO(vipa, 2021-05-27): Replace smap and sfold with smapAccumL for Expr and Type as well
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
   | p -> (acc, p)
 
-  sem smap_Expr_Expr (f : a -> b) =
+  sem smap_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
+  sem smap_Expr_Expr f =
   | p ->
     let res: ((), Expr) = smapAccumL_Expr_Expr (lam. lam a. ((), f a)) () p in
     res.1
 
-  sem sfold_Expr_Expr (f : acc -> a -> acc) (acc : acc) =
+  sem sfold_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_Expr f acc =
   | p ->
     let res: (acc, Expr) = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  sem mapAccumLPre_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem mapAccumLPre_Expr_Expr f acc =
+  | expr ->
+    match f acc expr with (acc,expr) in
+    smapAccumL_Expr_Expr (mapAccumLPre_Expr_Expr f) acc expr
+
+  sem mapAccumLPost_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem mapAccumLPost_Expr_Expr f acc =
+  | expr ->
+    match smapAccumL_Expr_Expr (mapAccumLPost_Expr_Expr f) acc expr with (acc,expr) in
+    f acc expr
+
+  sem mapPre_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
+  sem mapPre_Expr_Expr f =
+  | expr ->
+    let expr = f expr in
+    smap_Expr_Expr (mapPre_Expr_Expr f) expr
+
+  sem mapPost_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
+  sem mapPost_Expr_Expr f =
+  | expr -> f (smap_Expr_Expr (mapPost_Expr_Expr f) expr)
+
+  sem foldPre_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem foldPre_Expr_Expr f acc =
+  | expr ->
+    let acc = f acc expr in
+    sfold_Expr_Expr (foldPre_Expr_Expr f) acc expr
+
+  sem foldPost_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
+  sem foldPost_Expr_Expr f acc =
+  | expr ->
+    f (sfold_Expr_Expr (foldPost_Expr_Expr f) acc expr) expr
+
   -- NOTE(vipa, 2021-05-28): This function *does not* touch the `ty`
   -- field. It only covers nodes in the AST, so to speak, not
   -- annotations thereof.
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Type f acc =
   | p -> (acc, p)
 
-  sem smap_Expr_Type (f : a -> b) =
+  sem smap_Expr_Type : (Type -> Type) -> Expr -> Expr
+  sem smap_Expr_Type f =
   | p ->
     let res: ((), Expr) = smapAccumL_Expr_Type (lam. lam a. ((), f a)) () p in
     res.1
 
-  sem sfold_Expr_Type (f : acc -> a -> acc) (acc : acc) =
+  sem sfold_Expr_Type : all acc. (acc -> Type -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_Type f acc =
   | p ->
     let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Pat f acc =
   | p -> (acc, p)
 
-  sem smap_Type_Type (f : a -> b) =
+  sem smap_Expr_Pat : (Pat -> Pat) -> Expr -> Expr
+  sem smap_Expr_Pat f =
+  | p ->
+    match smapAccumL_Expr_Pat (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Expr_Pat : all acc. (acc -> Pat -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_Pat f acc =
+  | p ->
+    match smapAccumL_Expr_Pat (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
+
+  sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
+  sem smapAccumL_Type_Type f acc =
+  | p -> (acc, p)
+
+  sem smap_Type_Type : (Type -> Type) -> Type -> Type
+  sem smap_Type_Type f =
   | p ->
     let res: ((), Type) = smapAccumL_Type_Type (lam. lam a. ((), f a)) () p in
     res.1
 
-  sem sfold_Type_Type (f : acc -> a -> acc) (acc : acc) =
+  sem sfold_Type_Type : all acc. (acc -> Type -> acc) -> acc -> Type -> acc
+  sem sfold_Type_Type f acc =
   | p ->
     let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Pat f acc =
   | p -> (acc, p)
 
-  sem smap_Pat_Pat (f : a -> b) =
+  sem smap_Pat_Pat : (Pat -> Pat) -> Pat -> Pat
+  sem smap_Pat_Pat f =
   | p ->
     let res: ((), Pat) = smapAccumL_Pat_Pat (lam. lam a. ((), f a)) () p in
     res.1
 
-  sem sfold_Pat_Pat (f : acc -> a -> acc) (acc : acc) =
+  sem sfold_Pat_Pat : all acc. (acc -> Pat -> acc) -> acc -> Pat -> acc
+  sem sfold_Pat_Pat f acc =
   | p ->
     let res: (acc, Pat) = smapAccumL_Pat_Pat (lam acc. lam a. (f acc a, a)) acc p in
     res.0
+
+  sem smapAccumL_Pat_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Expr f acc =
+  | p -> (acc, p)
+
+  sem smap_Pat_Expr : (Expr -> Expr) -> Pat -> Pat
+  sem smap_Pat_Expr f =
+  | p ->
+    match smapAccumL_Pat_Expr (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Pat_Expr : all acc. (acc -> Expr -> acc) -> acc -> Pat -> acc
+  sem sfold_Pat_Expr f acc =
+  | p ->
+    match smapAccumL_Pat_Expr (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
+
+  sem smapAccumL_Pat_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Pat -> (acc, Pat)
+  sem smapAccumL_Pat_Type f acc =
+  | p -> (acc, p)
+
+  sem smap_Pat_Type : (Type -> Type) -> Pat -> Pat
+  sem smap_Pat_Type f =
+  | p ->
+    match smapAccumL_Pat_Type (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Pat_Type : all acc. (acc -> Type -> acc) -> acc -> Pat -> acc
+  sem sfold_Pat_Type f acc =
+  | p ->
+    match smapAccumL_Pat_Type (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
 end
 
 -- TmVar --
@@ -137,7 +229,7 @@ lang AppAst = Ast
   sem withType (ty : Type) =
   | TmApp t -> TmApp {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmApp t ->
     match f acc t.lhs with (acc, lhs) then
       match f acc t.rhs with (acc, rhs) then
@@ -168,13 +260,13 @@ lang LamAst = Ast + VarAst + AppAst
   sem withType (ty : Type) =
   | TmLam t -> TmLam {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLam t ->
     match f acc t.tyIdent with (acc, tyIdent) then
       (acc, TmLam {t with tyIdent = tyIdent})
     else never
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLam t ->
     match f acc t.body with (acc, body) then
       (acc, TmLam {t with body = body})
@@ -204,13 +296,13 @@ lang LetAst = Ast + VarAst
   sem withType (ty : Type) =
   | TmLet t -> TmLet {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLet t ->
     match f acc t.tyBody with (acc, tyBody) then
       (acc, TmLet {t with tyBody = tyBody})
     else never
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLet t ->
     match f acc t.body with (acc, body) then
       match f acc t.inexpr with (acc, inexpr) then
@@ -245,7 +337,7 @@ lang RecLetsAst = Ast + VarAst
   sem withType (ty : Type) =
   | TmRecLets t -> TmRecLets {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f:  acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f:  acc -> Type -> (acc, Type)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
       match f acc b.tyBody with (acc, tyBody) in
@@ -253,7 +345,7 @@ lang RecLetsAst = Ast + VarAst
     match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
     (acc, TmRecLets {t with bindings = bindings})
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
       match f acc b.body with (acc, body) then
@@ -308,7 +400,7 @@ lang SeqAst = Ast
   sem withType (ty : Type) =
   | TmSeq t -> TmSeq {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmSeq t ->
     match mapAccumL f acc t.tms with (acc, tms) then
       (acc, TmSeq {t with tms = tms})
@@ -344,7 +436,7 @@ lang RecordAst = Ast
   | TmRecord t -> TmRecord {t with ty = ty}
   | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmRecord t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings with (acc, bindings) then
       (acc, TmRecord {t with bindings = bindings})
@@ -361,6 +453,7 @@ end
 lang TypeAst = Ast
   syn Expr =
   | TmType {ident : Name,
+            params : [Name],
             tyIdent : Type,
             inexpr : Expr,
             ty : Type,
@@ -378,13 +471,13 @@ lang TypeAst = Ast
   sem withType (ty : Type) =
   | TmType t -> TmType {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmType t ->
     match f acc t.tyIdent with (acc, tyIdent) then
       (acc, TmType {t with tyIdent = tyIdent})
     else never
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmType t ->
     match f acc t.inexpr with (acc, inexpr) then
       (acc, TmType {t with inexpr = inexpr})
@@ -420,13 +513,13 @@ lang DataAst = Ast
   | TmConDef t -> TmConDef {t with ty = ty}
   | TmConApp t -> TmConApp {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmConDef t ->
     match f acc t.tyIdent with (acc, tyIdent) then
       (acc, TmConDef {t with tyIdent = tyIdent})
     else never
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmConDef t ->
     match f acc t.inexpr with (acc, inexpr) then
       (acc, TmConDef {t with inexpr = inexpr})
@@ -462,7 +555,7 @@ lang MatchAst = Ast
   sem withType (ty : Type) =
   | TmMatch t -> TmMatch {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmMatch t ->
     match f acc t.target with (acc, target) then
       match f acc t.thn with (acc, thn) then
@@ -471,6 +564,11 @@ lang MatchAst = Ast
         else never
       else never
     else never
+
+  sem smapAccumL_Expr_Pat f acc =
+  | TmMatch t ->
+    match f acc t.pat with (acc, pat) in
+    (acc, TmMatch {t with pat = pat})
 end
 
 
@@ -496,7 +594,7 @@ lang UtestAst = Ast
   sem withType (ty : Type) =
   | TmUtest t -> TmUtest {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmUtest t ->
     match f acc t.test with (acc, test) then
       match f acc t.expected with (acc, expected) then
@@ -557,13 +655,13 @@ lang ExtAst = Ast + VarAst
   sem withType (ty : Type) =
   | TmExt t -> TmExt {t with ty = ty}
 
-  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmExt t ->
     match f acc t.tyIdent with (acc, tyIdent) then
       (acc, TmExt {t with tyIdent = tyIdent})
     else never
 
-  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmExt t ->
     match f acc t.inexpr with (acc, inexpr) then
       (acc, TmExt {t with inexpr = inexpr})
@@ -573,6 +671,11 @@ end
 ---------------
 -- CONSTANTS --
 ---------------
+
+lang UnsafeCoerceAst = ConstAst
+  syn Const =
+  | CUnsafeCoerce {}
+end
 
 lang IntAst = ConstAst
   syn Const =
@@ -668,7 +771,7 @@ end
 
 lang SymbAst = ConstAst
   syn Const =
-  | CSymb {val : Symb}
+  | CSymb {val : Symbol}
   | CGensym {}
   | CSym2hash {}
 end
@@ -780,11 +883,15 @@ end
 
 lang TensorOpAst = ConstAst
   syn Const =
+  | CTensorCreateUninitInt {}
+  | CTensorCreateUninitFloat {}
   | CTensorCreateInt {}
   | CTensorCreateFloat {}
   | CTensorCreate {}
   | CTensorGetExn {}
   | CTensorSetExn {}
+  | CTensorLinearGetExn {}
+  | CTensorLinearSetExn {}
   | CTensorRank {}
   | CTensorShape {}
   | CTensorReshapeExn {}
@@ -830,6 +937,9 @@ lang NamedPat = MatchAst
   sem infoPat =
   | PatNamed r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatNamed r -> PatNamed {r with info = info}
+
   sem tyPat =
   | PatNamed r -> r.ty
 
@@ -846,13 +956,16 @@ lang SeqTotPat = MatchAst
   sem infoPat =
   | PatSeqTot r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatSeqTot r -> PatSeqTot {r with info = info}
+
   sem tyPat =
   | PatSeqTot r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatSeqTot r -> PatSeqTot {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatSeqTot r ->
     match mapAccumL f acc r.pats with (acc, pats) then
       (acc, PatSeqTot {r with pats = pats})
@@ -870,13 +983,16 @@ lang SeqEdgePat = MatchAst
   sem infoPat =
   | PatSeqEdge r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatSeqEdge r -> PatSeqEdge {r with info = info}
+
   sem tyPat =
   | PatSeqEdge r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatSeqEdge r -> PatSeqEdge {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatSeqEdge p ->
     match mapAccumL f acc p.prefix with (acc, prefix) then
       match mapAccumL f acc p.postfix with (acc, postfix) then
@@ -894,13 +1010,16 @@ lang RecordPat = MatchAst
   sem infoPat =
   | PatRecord r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatRecord r -> PatRecord {r with info = info}
+
   sem tyPat =
   | PatRecord r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatRecord r -> PatRecord {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatRecord p ->
     match mapMapAccum (lam acc. lam. lam p. f acc p) acc p.bindings with (acc, bindings) then
       (acc, PatRecord {p with bindings = bindings})
@@ -917,13 +1036,16 @@ lang DataPat = MatchAst + DataAst
   sem infoPat =
   | PatCon r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatCon r -> PatCon {r with info = info}
+
   sem tyPat =
   | PatCon r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatCon r -> PatCon {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatCon c ->
     match f acc c.subpat with (acc, subpat) then
       (acc, PatCon {c with subpat = subpat})
@@ -938,6 +1060,9 @@ lang IntPat = MatchAst + IntAst
 
   sem infoPat =
   | PatInt r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatInt r -> PatInt {r with info = info}
 
   sem tyPat =
   | PatInt r -> r.ty
@@ -955,6 +1080,9 @@ lang CharPat = MatchAst
   sem infoPat =
   | PatChar r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatChar r -> PatChar {r with info = info}
+
   sem tyPat =
   | PatChar r -> r.ty
 
@@ -970,6 +1098,9 @@ lang BoolPat = MatchAst + BoolAst
 
   sem infoPat =
   | PatBool r -> r.info
+
+  sem withInfoPat (info : Info) =
+  | PatBool r -> PatBool {r with info = info}
 
   sem tyPat =
   | PatBool r -> r.ty
@@ -988,13 +1119,16 @@ lang AndPat = MatchAst
   sem infoPat =
   | PatAnd r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatAnd r -> PatAnd {r with info = info}
+
   sem tyPat =
   | PatAnd r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatAnd r -> PatAnd {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatAnd p ->
     match f acc p.lpat with (acc, lpat) then
       match f acc p.rpat with (acc, rpat) then
@@ -1013,13 +1147,16 @@ lang OrPat = MatchAst
   sem infoPat =
   | PatOr r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatOr r -> PatOr {r with info = info}
+
   sem tyPat =
   | PatOr r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatOr r -> PatOr {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatOr p ->
     match f acc p.lpat with (acc, lpat) then
       match f acc p.rpat with (acc, rpat) then
@@ -1037,13 +1174,16 @@ lang NotPat = MatchAst
   sem infoPat =
   | PatNot r -> r.info
 
+  sem withInfoPat (info : Info) =
+  | PatNot r -> PatNot {r with info = info}
+
   sem tyPat =
   | PatNot r -> r.ty
 
   sem withTypePat (ty : Type) =
   | PatNot r -> PatNot {r with ty = ty}
 
-  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Pat_Pat (f : acc -> Pat -> (acc, Pat)) (acc : acc) =
   | PatNot p ->
     match f acc p.subpat with (acc, subpat) then
       (acc, PatNot {p with subpat = subpat})
@@ -1122,7 +1262,7 @@ lang FunTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyArrow t -> TyArrow {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyArrow t ->
     match f acc t.from with (acc, from) then
       match f acc t.to with (acc, to) then
@@ -1142,7 +1282,7 @@ lang SeqTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TySeq t -> TySeq {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TySeq t ->
     match f acc t.ty with (acc, ty) then
       (acc, TySeq {t with ty = ty})
@@ -1160,7 +1300,7 @@ lang TensorTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyTensor t -> TyTensor {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyTensor t ->
     match f acc t.ty with (acc, ty) then
       (acc, TyTensor {t with ty = ty})
@@ -1172,14 +1312,13 @@ end
 
 lang RecordTypeAst = Ast
   syn Type =
-  | TyRecord {info    : Info,
-              fields  : Map SID Type,
-              labels  : [SID]}
+  | TyRecord {info   : Info,
+              fields : Map SID Type}
 
   sem tyWithInfo (info : Info) =
   | TyRecord t -> TyRecord {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyRecord t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) then
       (acc, TyRecord {t with fields = fields})
@@ -1197,7 +1336,7 @@ lang VariantTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyVariant t -> TyVariant {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyVariant t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.constrs with (acc, constrs) then
       (acc, TyVariant {t with constrs = constrs})
@@ -1219,11 +1358,15 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+-- A Level denotes the nesting level of the let that a type variable is introduced by
+type Level = Int
+
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
   | TyVar  {info     : Info,
-            ident    : Name}
+            ident    : Name,
+            level    : Level}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
@@ -1237,30 +1380,33 @@ lang VarSortAst
   -- VarSort indicates the sort of a type variable, like type variable or
   -- record variable, and contains related data
   syn VarSort =
-  | TypeVar ()
-  | WeakVar ()
+  | PolyVar ()
+  | MonoVar ()
   | RecordVar {fields : Map SID Type}
 
-  sem smapAccumL_VarSort_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_VarSort_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> VarSort -> (acc, VarSort)
+  sem smapAccumL_VarSort_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | RecordVar r ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
     (acc, RecordVar {r with fields = flds})
   | s ->
     (acc, s)
 
-  sem smap_VarSort_Type (f : a -> b) =
+  sem smap_VarSort_Type : (Type -> Type) -> VarSort -> VarSort
+  sem smap_VarSort_Type (f : Type -> Type) =
   | s ->
     match smapAccumL_VarSort_Type (lam. lam x. ((), f x)) () s with (_, s) in s
 
-  sem sfold_VarSort_Type (f : acc -> a -> acc) (acc : acc) =
+  sem sfold_VarSort_Type : all acc. (acc -> Type -> acc) -> acc -> VarSort -> acc
+  sem sfold_VarSort_Type (f : acc -> Type -> acc) (acc : acc) =
   | s ->
     match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-type Level = Int
-type FlexVarRec = {ident : Name,
-                   level : Level,
-                   sort  : VarSort}
+type FlexVarRec = {ident  : Name,
+                   level  : Level,
+                   sort   : VarSort,
+                   isWeak : Bool}
 
 lang FlexTypeAst = VarSortAst + Ast
   syn FlexVar =
@@ -1292,7 +1438,7 @@ lang FlexTypeAst = VarSortAst + Ast
   sem infoTy =
   | TyFlex {info = info} -> info
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
       match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
@@ -1315,7 +1461,7 @@ lang AllTypeAst = VarSortAst + Ast
   sem infoTy =
   | TyAll t -> t.info
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAll t ->
     match smapAccumL_VarSort_Type f acc t.sort with (acc, sort) in
     match f acc t.ty with (acc, ty) in
@@ -1339,7 +1485,7 @@ lang AppTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyApp t -> TyApp {t with info = info}
 
-  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyApp t ->
     match f acc t.lhs with (acc, lhs) then
       match f acc t.rhs with (acc, rhs) then
@@ -1367,7 +1513,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst +
+  TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

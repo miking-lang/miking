@@ -2,6 +2,7 @@ include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/symbolize.mc"
 include "mexpr/pprint.mc"
+include "mexpr/record.mc"
 include "char.mc"
 include "name.mc"
 include "intrinsics-ops.mc"
@@ -67,47 +68,35 @@ let noSymConPrefix = "N"
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
-  FunTypePrettyPrint + OCamlTypeAst
-
-  sem pprintLabelString =
+  FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyRecord t ->
+  | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
+      let orderedFields = tyRecordOrderedFields ty in
       let f = lam env. lam field : (String, Type).
-        match field with (str, ty) then
-          match getTypeStringCode indent env ty with (env,ty) then
-            let str = pprintLabelString str in
-            (env, join [str, ": ", ty])
-          else never
-        else never
+        match field with (str, ty) in
+        match getTypeStringCode indent env ty with (env,ty) in
+        let str = pprintLabelString str in
+        (env, join [str, ": ", ty])
       in
-      let fieldStrs =
-        match record2tuple t.fields with Some tupleFields then
-          mapi (lam i. lam f. (int2string i, f)) tupleFields
-        else
-          map
-            (lam f : (SID, Type).
-              (sidToString f.0, f.1))
-            (mapBindings t.fields) in
-      match mapAccumL f env fieldStrs with (env, fields) then
-        (env, join ["{", strJoin ";" fields, "}"])
-      else never
+      let fieldStrs = map (lam x: (SID, Type). (sidToString x.0, x.1)) orderedFields in
+      match mapAccumL f env fieldStrs with (env, fields) in
+      (env, join ["{", strJoin ";" fields, "}"])
+  | OTyVar {ident = ident} -> pprintVarName env ident
   | OTyVarExt {ident = ident, args = []} -> (env, ident)
   | OTyVarExt {ident = ident, args = [arg]} ->
-    match getTypeStringCode indent env arg with (env, arg) then
-      (env, join [arg, " ", ident])
-    else never
+    match getTypeStringCode indent env arg with (env, arg) in
+    (env, join [arg, " ", ident])
   | OTyVarExt {ident = ident, args = args} ->
-    match mapAccumL (getTypeStringCode indent) env args with (env, args) then
-      (env, join ["(", strJoin ", " args, ") ", ident])
-    else never
+    match mapAccumL (getTypeStringCode indent) env args with (env, args) in
+    (env, join ["(", strJoin ", " args, ") ", ident])
   | _ -> (env, "Obj.t")
 end
 
 lang OCamlPrettyPrint =
-  VarPrettyPrint + ConstPrettyPrint + OCamlAst +
+  ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
@@ -170,6 +159,7 @@ lang OCamlPrettyPrint =
   | OTmRecord _ -> true
   | OTmProject _ -> true
   | OTmLam _ -> false
+  | TmVar _ -> true
 
   sem patIsAtomic =
   | OPatRecord _ -> false
@@ -179,6 +169,7 @@ lang OCamlPrettyPrint =
   | OPatConExt _ -> false
 
   sem getConstStringCode (indent : Int) =
+  | CUnsafeCoerce _ -> "(fun x -> x)"
   | CInt {val = i} -> int2string i
   | CAddi _ -> "Int.add"
   | CSubi _ -> "Int.sub"
@@ -286,6 +277,8 @@ lang OCamlPrettyPrint =
   | CMapCmp _ -> intrinsicOpMap "cmp"
   | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
   | CTensorIterSlice _ -> intrinsicOpTensor "iter_slice"
+  | CTensorCreateUninitInt _ -> intrinsicOpTensor "uninit_int_packed"
+  | CTensorCreateUninitFloat _ -> intrinsicOpTensor "uninit_float_packed"
   | CTensorCreateInt _ -> intrinsicOpTensor "create_int_packed"
   | CTensorCreateFloat _ -> intrinsicOpTensor "create_float_packed"
   | CTensorCreate _ -> intrinsicOpTensor "create_generic_packed"
@@ -293,6 +286,8 @@ lang OCamlPrettyPrint =
   | CTensorShape _ -> intrinsicOpTensor "shape"
   | CTensorGetExn _ -> intrinsicOpTensor "get_exn"
   | CTensorSetExn _ -> intrinsicOpTensor "set_exn"
+  | CTensorLinearGetExn _ -> intrinsicOpTensor "linear_get_exn"
+  | CTensorLinearSetExn _ -> intrinsicOpTensor "linear_set_exn"
   | CTensorReshapeExn _ -> intrinsicOpTensor "reshape_exn"
   | CTensorCopy _ -> intrinsicOpTensor "copy"
   | CTensorTransposeExn _ -> intrinsicOpTensor "transpose_exn"
@@ -320,7 +315,7 @@ lang OCamlPrettyPrint =
         env
       else
         {{env with nameMap = mapInsert name str env.nameMap}
-              with strings = mapInsert str 1 env.strings}
+              with strings = setInsert str env.strings}
     in
     let f = lam top. lam env.
       switch top
@@ -337,6 +332,11 @@ lang OCamlPrettyPrint =
     foldr f pprintEnvEmpty tops
 
   sem pprintTop (env : PprintEnv) =
+  | OTopTypeDecl t ->
+    let indent = 0 in
+    match pprintVarName env t.ident with (env, ident) in
+    match getTypeStringCode indent env t.ty with (env, ty) in
+    (env, join ["type ", ident, " = ", ty, ";;"])
   | OTopVariantTypeDecl t ->
     let indent = 0 in
     let f = lam env. lam ident. lam ty.
@@ -359,16 +359,19 @@ lang OCamlPrettyPrint =
       else never
     else never
   | OTopCExternalDecl t ->
-    match pprintVarName env t.ident with (env, ident) then
-      match getTypeStringCode 0 env t.ty with (env, ty) then
-        -- NOTE(larshum, 2021-09-17): We use the string of the names
-        -- directly, as we know it is unique and we do not want it to be
-        -- escaped.
-        (env, join ["external ", ident, " : ", ty, " = ",
-                    "\"", nameGetStr t.bytecodeIdent, "\" ",
-                    "\"", nameGetStr t.nativeIdent, "\";;"])
-      else never
-    else never
+    -- NOTE(larshum, 2022-03-10): Externals are declared before type
+    -- definitions, so we cannot refer to them here. The below function
+    -- produces a type string with the correct number of arguments, but
+    -- otherwise unspecified types.
+    recursive let objTypeString = lam ty.
+      match ty with TyArrow {from = from, to = to} then
+        join [objTypeString from, " -> ", objTypeString to]
+      else "Obj.t" in
+    match pprintVarName env t.ident with (env, ident) in
+    let ty = objTypeString t.ty in
+    (env, join ["external ", ident, " : ", ty, " = ",
+                "\"", nameGetStr t.bytecodeIdent, "\" ",
+                "\"", nameGetStr t.nativeIdent, "\";;"])
   | OTopLet t ->
     let indent = 0 in
     match pprintVarName env t.ident with (env, ident) then
@@ -424,6 +427,7 @@ lang OCamlPrettyPrint =
 
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmVar {ident = ident} -> pprintVarName env ident
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmExprExt {expr = expr} -> (env, expr)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
@@ -441,7 +445,7 @@ lang OCamlPrettyPrint =
     else never
   | OTmConAppExt {ident = ident, args = []} -> (env, ident)
   | OTmConAppExt {ident = ident, args = [arg]} ->
-    match printParen ident env arg with (env, arg) then
+    match printParen indent env arg with (env, arg) then
       (env, join [ident, " ", arg])
     else never
   | OTmConAppExt {ident = ident, args = args} ->
@@ -481,15 +485,16 @@ lang OCamlPrettyPrint =
     if mapIsEmpty t.bindings then (env, "()")
     else
       let innerIndent = pprintIncr (pprintIncr indent) in
+      let orderedLabels = recordOrderedLabels (mapKeys t.bindings) in
       match
-        mapMapAccum (lam env. lam k. lam v.
+        mapAccumL (lam env. lam k.
+          let v = mapFindExn k t.bindings in
           let k = sidToString k in
           match pprintCode innerIndent env v with (env, str) then
             (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
                         "(", str, ")"])
-          else never) env t.bindings
+          else never) env orderedLabels
       with (env, binds) then
-        let binds = mapValues binds in
         let merged =
           strJoin (concat ";" (pprintNewline (pprintIncr indent))) binds
         in
@@ -606,22 +611,25 @@ lang OCamlPrettyPrint =
     else never
   | OTmRecord {bindings = bindings, tyident = tyident} ->
     let innerIndent = pprintIncr (pprintIncr indent) in
-    match unzip bindings with (labels, tms) then
-      match mapAccumL (pprintCode innerIndent) env tms with (env, tms) then
-        let strs =
-          mapi
-            (lam i. lam t.
-              join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
-            tms
-        in
-        match getTypeStringCode indent env tyident with (env, tyident) then
-          let merged =
-            strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
-          in
-          (env, join ["({", merged , "} : ", tyident, ")"])
-        else never
-      else never
-    else never
+    match unzip bindings with (labels, tms) in
+    match mapAccumL (pprintCode innerIndent) env tms with (env, tms) in
+    let strs =
+      mapi
+        (lam i. lam t.
+          join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
+        tms
+    in
+    match getTypeStringCode indent env tyident with (env, tystr) in
+    let tystr =
+      -- NOTE(larshum, 2022-04-06): Do not add type annotations for an inlined
+      -- record.
+      match tyident with OTyInlinedRecord _ then ""
+      else concat " : " tystr
+    in
+    let merged =
+      strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
+    in
+    (env, join ["({", merged , "}", tystr, ")"])
   | OTmProject {field = field, tm = tm} ->
     match pprintCode indent env tm with (env, tm) then
       (env, join [tm, ".", field])

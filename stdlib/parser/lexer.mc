@@ -12,6 +12,7 @@ let tabSpace = 2
 -- Base language for whitespace and comments (WSAC) parsing
 lang WSACParser
   sem eatWSAC (p : Pos) =
+  | x -> {str = x, pos = p}
 end
 
 type Stream = {pos : Pos, str : String}
@@ -20,6 +21,7 @@ type NextTokenResult = {token : Token, lit : String, info : Info, stream : Strea
 -- Base language for parsing tokens preceeded by WSAC
 lang TokenParser = WSACParser
   syn Token =
+  syn TokenRepr =
   sem nextToken /- : Stream -> NextTokenResult -/ =
   | stream ->
     let stream: Stream = stream in
@@ -27,9 +29,13 @@ lang TokenParser = WSACParser
     parseToken stream.pos stream.str
 
   sem parseToken (pos : Pos) /- : String -> NextTokenResult -/ =
-  sem tokKindEq (tok : Token) /- : Token -> Bool -/ =
+  sem tokKindEq (tokRepr : TokenRepr) /- : Token -> Bool -/ =
   sem tokInfo /- : Token -> Info -/ =
   sem tokToStr /- : Token -> String -/ =
+  sem tokReprCompare /- : (TokenRepr, TokenRepr) -> Int -/ =
+  | (l, r) -> subi (constructorTag l) (constructorTag r)
+  sem tokReprToStr /- : TokenRepr -> String -/ =
+  sem tokToRepr /- : Token -> TokenRepr -/ =
 end
 
 -- Eats whitespace
@@ -39,7 +45,6 @@ lang WhitespaceParser = WSACParser
   | "\t" ++ xs -> eatWSAC (advanceCol p tabSpace) xs
   | "\n" ++ xs -> eatWSAC (advanceRow p 1) xs
   | "\r" ++ xs -> eatWSAC p xs
-  | x -> {str = x, pos = p}
 end
 
 
@@ -78,20 +83,28 @@ end
 lang EOFTokenParser = TokenParser
   syn Token =
   | EOFTok {info : Info}
+  syn TokenRepr =
+  | EOFRepr ()
 
   sem parseToken (pos : Pos) =
   | [] ->
     let info = makeInfo pos pos in
     {token = EOFTok {info = info}, lit = "", info = info, stream = {pos = pos, str = []}}
 
-  sem tokKindEq (tok : Tok) =
-  | EOFTok _ -> match tok with EOFTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | EOFTok _ -> match tokRepr with EOFRepr _ then true else false
 
   sem tokInfo =
   | EOFTok {info = info} -> info
 
   sem tokToStr =
   | EOFTok _ -> "<EOF>"
+
+  sem tokReprToStr =
+  | EOFRepr _ -> "<EOF>"
+
+  sem tokToRepr =
+  | EOFTok _ -> EOFRepr ()
 end
 
 -- Parses the continuation of an identifier, i.e., upper and lower
@@ -120,6 +133,8 @@ with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 lang LIdentTokenParser = TokenParser
   syn Token =
   | LIdentTok {info : Info, val : String}
+  syn TokenRepr =
+  | LIdentRepr ()
 
   sem parseToken (pos : Pos) =
   | [('_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
@@ -136,19 +151,27 @@ lang LIdentTokenParser = TokenParser
       }
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | LIdentTok _ -> match tok with LIdentTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | LIdentTok _ -> match tokRepr with LIdentRepr _ then true else false
 
   sem tokInfo =
   | LIdentTok {info = info} -> info
 
+  sem tokReprToStr =
+  | LIdentRepr _ -> "<LIdent>"
+
   sem tokToStr =
   | LIdentTok tok -> concat "<LIdent>" tok.val
+
+  sem tokToRepr =
+  | LIdentTok _ -> LIdentRepr ()
 end
 
 lang UIdentTokenParser = TokenParser
   syn Token =
   | UIdentTok {info : Info, val : String}
+  syn TokenRepr =
+  | UIdentRepr ()
 
   sem parseToken (pos : Pos) =
   | [('A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' |
@@ -165,14 +188,20 @@ lang UIdentTokenParser = TokenParser
       }
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | UIdentTok _ -> match tok with UIdentTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | UIdentTok _ -> match tokRepr with UIdentRepr _ then true else false
 
   sem tokInfo =
   | UIdentTok {info = info} -> info
 
+  sem tokReprToStr =
+  | UIdentRepr _ -> "<UIdent>"
+
   sem tokToStr =
   | UIdentTok tok -> concat "<UIdent>" tok.val
+
+  sem tokToRepr =
+  | UIdentTok _ -> UIdentRepr ()
 end
 
 let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -201,6 +230,8 @@ utest parseUInt (initPos "") "Not a number"
 lang UIntTokenParser = TokenParser
   syn Token =
   | IntTok {info : Info, val : Int}
+  syn TokenRepr =
+  | IntRepr ()
 
   sem parseToken (pos : Pos) =
   | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _) & str ->
@@ -217,14 +248,20 @@ lang UIntTokenParser = TokenParser
     , stream = {pos = pos2, str = str}
     }
 
-  sem tokKindEq (tok : Tok) =
-  | IntTok _ -> match tok with IntTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | IntTok _ -> match tokRepr with IntRepr _ then true else false
 
   sem tokInfo =
   | IntTok {info = info} -> info
 
+  sem tokReprToStr =
+  | IntRepr _ -> "<Int>"
+
   sem tokToStr =
   | IntTok tok -> concat "<Int>" (int2string tok.val)
+
+  sem tokToRepr =
+  | IntTok _ -> IntRepr ()
 end
 
 let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -250,6 +287,8 @@ utest parseFloatExponent (initPos "") "Not an exponent"
 lang UFloatTokenParser = UIntTokenParser
   syn Token =
   | FloatTok {info : Info, val : Float}
+  syn TokenRepr =
+  | FloatRepr ()
 
   sem parseIntCont (acc : String) (pos1 : Pos) (pos2 : Pos) =
   | ['.'] ++ str ->
@@ -290,15 +329,20 @@ lang UFloatTokenParser = UIntTokenParser
     , stream = {pos = pos2, str = str}
     }
 
-  sem tokKindEq (tok : Tok) =
-  | FloatTok _ -> match tok with FloatTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | FloatTok _ -> match tokRepr with FloatRepr _ then true else false
 
   sem tokInfo =
   | FloatTok {info = info} -> info
 
+  sem tokReprToStr =
+  | FloatRepr _ -> "<Float>"
+
   sem tokToStr =
   | FloatTok tok -> concat "<Float>" (float2string tok.val)
 
+  sem tokToRepr =
+  | FloatTok _ -> FloatRepr ()
 end
 
 let parseOperatorCont : Pos -> String -> {val : String, stream : {pos : Pos, str : String}} = lam p. lam str.
@@ -324,6 +368,8 @@ with {val = "<&>", stream = {str = " ", pos = posVal "" 1 3}}
 lang OperatorTokenParser = TokenParser
   syn Token =
   | OperatorTok {info : Info, val : String}
+  syn TokenRepr =
+  | OperatorRepr ()
 
   sem parseToken (pos : Pos) =
   | [('%' | '<' | '>' | '!' | '?' | '~' | ':' | '.' | '$' | '&' | '*' |
@@ -338,14 +384,20 @@ lang OperatorTokenParser = TokenParser
       , stream = stream}
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | OperatorTok _ -> match tok with OperatorTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | OperatorTok _ -> match tokRepr with OperatorRepr _ then true else false
 
   sem tokInfo =
   | OperatorTok {info = info} -> info
 
+  sem tokReprToStr =
+  | OperatorRepr _ -> "<Operator>"
+
   sem tokToStr =
   | OperatorTok tok -> concat "<Operator>" tok.val
+
+  sem tokToRepr =
+  | OperatorTok _ -> OperatorRepr ()
 end
 
 lang BracketTokenParser = TokenParser
@@ -356,6 +408,13 @@ lang BracketTokenParser = TokenParser
   | RBracketTok {info : Info}
   | LBraceTok {info : Info}
   | RBraceTok {info : Info}
+  syn TokenRepr =
+  | LParenRepr ()
+  | RParenRepr ()
+  | LBracketRepr ()
+  | RBracketRepr ()
+  | LBraceRepr ()
+  | RBraceRepr ()
 
   sem parseToken (pos : Pos) =
   | "(" ++ str ->
@@ -383,13 +442,13 @@ lang BracketTokenParser = TokenParser
     let info = makeInfo pos pos2 in
     {token = RBraceTok {info = info}, lit = "}", info = info, stream = {pos = pos2, str = str}}
 
-  sem tokKindEq (tok : Tok) =
-  | LParenTok _ -> match tok with LParenTok _ then true else false
-  | RParenTok _ -> match tok with RParenTok _ then true else false
-  | LBracketTok _ -> match tok with LBracketTok _ then true else false
-  | RBracketTok _ -> match tok with RBracketTok _ then true else false
-  | LBraceTok _ -> match tok with LBraceTok _ then true else false
-  | RBraceTok _ -> match tok with RBraceTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | LParenTok _ -> match tokRepr with LParenRepr _ then true else false
+  | RParenTok _ -> match tokRepr with RParenRepr _ then true else false
+  | LBracketTok _ -> match tokRepr with LBracketRepr _ then true else false
+  | RBracketTok _ -> match tokRepr with RBracketRepr _ then true else false
+  | LBraceTok _ -> match tokRepr with LBraceRepr _ then true else false
+  | RBraceTok _ -> match tokRepr with RBraceRepr _ then true else false
 
   sem tokInfo =
   | LParenTok {info = info} -> info
@@ -399,6 +458,14 @@ lang BracketTokenParser = TokenParser
   | LBraceTok {info = info} -> info
   | RBraceTok {info = info} -> info
 
+  sem tokReprToStr =
+  | LParenRepr _ -> "<LParen>"
+  | RParenRepr _ -> "<RParen>"
+  | LBracketRepr _ -> "<LBracket>"
+  | RBracketRepr _ -> "<RBracket>"
+  | LBraceRepr _ -> "<LBrace>"
+  | RBraceRepr _ -> "<RBrace>"
+
   sem tokToStr =
   | LParenTok _ -> "<LParen>"
   | RParenTok _ -> "<RParen>"
@@ -406,11 +473,21 @@ lang BracketTokenParser = TokenParser
   | RBracketTok _ -> "<RBracket>"
   | LBraceTok _ -> "<LBrace>"
   | RBraceTok _ -> "<RBrace>"
+
+  sem tokToRepr =
+  | LParenTok _ -> LParenRepr ()
+  | RParenTok _ -> RParenRepr ()
+  | LBracketTok _ -> LBracketRepr ()
+  | RBracketTok _ -> RBracketRepr ()
+  | LBraceTok _ -> LBraceRepr ()
+  | RBraceTok _ -> RBraceRepr ()
 end
 
 lang SemiTokenParser = TokenParser
   syn Token =
   | SemiTok {info : Info}
+  syn TokenRepr =
+  | SemiRepr ()
 
   sem parseToken (pos : Pos) =
   | ";" ++ str ->
@@ -418,19 +495,27 @@ lang SemiTokenParser = TokenParser
     let info = makeInfo pos pos2 in
     {token = SemiTok {info = info}, lit = ";", info = info, stream = {pos = pos2, str = str}}
 
-  sem tokKindEq (tok : Tok) =
-  | SemiTok _ -> match tok with SemiTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | SemiTok _ -> match tokRepr with SemiRepr _ then true else false
 
   sem tokInfo =
   | SemiTok {info = info} -> info
 
+  sem tokReprToStr =
+  | SemiRepr _ -> "<Semi>"
+
   sem tokToStr =
   | SemiTok _ -> "<Semi>"
+
+  sem tokToRepr =
+  | SemiTok _ -> SemiRepr ()
 end
 
 lang CommaTokenParser = TokenParser
   syn Token =
   | CommaTok {info : Info}
+  syn TokenRepr =
+  | CommaRepr ()
 
   sem parseToken (pos : Pos) =
   | "," ++ str ->
@@ -438,14 +523,20 @@ lang CommaTokenParser = TokenParser
     let info = makeInfo pos pos2 in
     {token = CommaTok {info = info}, lit = ",", info = info, stream = {pos = pos2, str = str}}
 
-  sem tokKindEq (tok : Tok) =
-  | CommaTok _ -> match tok with CommaTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | CommaTok _ -> match tokRepr with CommaRepr _ then true else false
 
   sem tokInfo =
   | CommaTok {info = info} -> info
 
+  sem tokReprToStr =
+  | CommaRepr _ -> "<Comma>"
+
   sem tokToStr =
   | CommaTok _ -> "<Comma>"
+
+  sem tokToRepr =
+  | CommaTok _ -> CommaRepr ()
 end
 
 -- Matches a character (including escape character).
@@ -469,6 +560,8 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
 lang StringTokenParser = TokenParser
   syn Token =
   | StringTok {info : Info, val : String}
+  syn TokenRepr =
+  | StringRepr ()
 
   sem parseToken (pos : Pos) =
   | "\"" ++ str ->
@@ -487,19 +580,27 @@ lang StringTokenParser = TokenParser
       }
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | StringTok _ -> match tok with StringTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | StringTok _ -> match tokRepr with StringRepr _ then true else false
 
   sem tokInfo =
   | StringTok {info = info} -> info
 
+  sem tokReprToStr =
+  | StringRepr _ -> "<String>"
+
   sem tokToStr =
   | StringTok tok -> concat "<String>" tok.val
+
+  sem tokToRepr =
+  | StringTok _ -> StringRepr ()
 end
 
 lang CharTokenParser = TokenParser
   syn Token =
   | CharTok {info : Info, val : Char}
+  syn TokenRepr =
+  | CharRepr ()
 
   sem parseToken (pos : Pos) =
   | "'" ++ str ->
@@ -515,19 +616,27 @@ lang CharTokenParser = TokenParser
       else posErrorExit pos "Expected ' to close character literal."
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | CharTok _ -> match tok with CharTok _ then true else false
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | CharTok _ -> match tokRepr with CharRepr _ then true else false
 
   sem tokInfo =
   | CharTok {info = info} -> info
 
+  sem tokReprToStr =
+  | CharRepr _ -> "<Char>"
+
   sem tokToStr =
   | CharTok tok -> snoc "<Char>" tok.val
+
+  sem tokToRepr =
+  | CharTok _ -> CharRepr ()
 end
 
 lang HashStringTokenParser = TokenParser
   syn Token =
   | HashStringTok {info : Info, hash : String, val : String}
+  syn TokenRepr =
+  | HashStringRepr {hash : String}
 
   sem parseToken (pos : Pos) =
   | "#" ++ str ->
@@ -550,16 +659,25 @@ lang HashStringTokenParser = TokenParser
       else posErrorExit pos2 "Expected \" to begin hash string"
     else never
 
-  sem tokKindEq (tok : Tok) =
-  | HashStringTok {hash = hash} -> match tok with HashStringTok {hash = hash2}
+  sem tokKindEq (tokRepr : TokenRepr) =
+  | HashStringTok {hash = hash} -> match tokRepr with HashStringRepr {hash = hash2}
     then eqString hash hash2
     else false
 
   sem tokInfo =
   | HashStringTok {info = info} -> info
 
+  sem tokReprToStr =
+  | HashStringRepr {hash = hash} -> join ["<", hash, " HashString>"]
+
   sem tokToStr =
   | HashStringTok tok -> join ["<Hash:", tok.hash, ">", tok.val]
+
+  sem tokReprCompare =
+  | (HashStringRepr l, HashStringRepr r) -> cmpString l.hash r.hash
+
+  sem tokToRepr =
+  | HashStringTok x -> HashStringRepr {hash = x.hash}
 end
 
 lang Lexer
@@ -570,37 +688,6 @@ lang Lexer
   + StringTokenParser + CharTokenParser
   + HashStringTokenParser
 end
-
--- NOTE(vipa, 2021-02-05): This is not a semantic function in a
--- language fragment since the output for each case must be distinct
--- from the output for any other fragment, meaning that there would be
--- an invisible dependency between them
-let _tokKindInt = use Lexer in lam tok.
-  match tok with EOFTok _ then 1 else
-  match tok with LIdentTok _ then 2 else
-  match tok with UIdentTok _ then 3 else
-  match tok with IntTok _ then 4 else
-  match tok with FloatTok _ then 5 else
-  match tok with OperatorTok _ then 6 else
-  match tok with LParenTok _ then 7 else
-  match tok with RParenTok _ then 8 else
-  match tok with LBracketTok _ then 9 else
-  match tok with RBracketTok _ then 10 else
-  match tok with LBraceTok _ then 11 else
-  match tok with RBraceTok _ then 12 else
-  match tok with SemiTok _ then 13 else
-  match tok with CommaTok _ then 14 else
-  match tok with StringTok _ then 15 else
-  match tok with CharTok _ then 16 else
-  match tok with HashStringTok _ then 17 else
-  never
-
-let compareTokKind = use Lexer in lam ltok. lam rtok.
-  let pair = (ltok, rtok) in
-  match pair with (HashStringTok {hash = h1}, HashStringTok {hash = h2}) then cmpString h1 h2 else
-  match pair with (HashStringTok _, _) then negi 1 else
-  match pair with (_, HashStringTok _) then 1 else
-  subi (_tokKindInt ltok) (_tokKindInt rtok)
 
 mexpr
 

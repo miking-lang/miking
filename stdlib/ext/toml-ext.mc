@@ -15,6 +15,9 @@ include "map.mc"
   Boolean and date data types are currently not supported.
 -/
 
+type TomlTable
+type TomlValue
+
 ------------------
 -- READING TOML --
 ------------------

@@ -1,39 +1,46 @@
--- Defines a language fragment that reports an error if nested accelerate terms
--- are used in the AST. This step assumes all accelerate terms have been
--- replaced with let-expressions, and that the AST has been lambda lifted.
+-- Defines a function for checking whether nested accelerated expressions occur
+-- within the program. This is currently not supported, so we explicitly
+-- prevent it.
 --
--- This step assumes the pattern transformation, where recursion is eliminated,
--- at which point we know no recursive bindings remain in the program.
+-- This can easily be checked after the extraction has taken place. The key
+-- observation is that the accelerated expressions are the entry points of the
+-- accelerated code, produced from extraction. Therefore, if the accelerated
+-- code contains a call to one of these functions, the original program makes
+-- use of nested acceleration.
 
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/extract.mc"
 
+let _nestedAccMsg = join [
+  "The accelerated expression is used within another accelerated expression, ",
+  "which is not supported."]
+
 lang PMExprNestedAccelerate = PMExprAst
-  sem _reportNestedAccelerateError =
-  | info /- : Info -/ ->
-    infoErrorExit info "Nested accelerate terms are not supported"
+  sem checkIdentifiers : Set Name -> Expr -> ()
+  sem checkIdentifiers env =
+  | TmVar t ->
+    if setMem t.ident env then
+      errorSingle [t.info] _nestedAccMsg
+    else ()
+  | t -> sfold_Expr_Expr (lam. lam t. checkIdentifiers env t) () t
 
-  sem containsMarkedTerm (marked : Set Name) (flag : Bool) =
-  | TmVar t -> if flag then flag else setMem t.ident marked
-  | t -> sfold_Expr_Expr (containsMarkedTerm marked) flag t
-
-  sem reportNestedAccelerate (accelerated : Set Name) =
-  | t ->
-    let marked = reportNestedAccelerateH accelerated t in
-    ()
-
-  sem reportNestedAccelerateH (marked : Set Name) =
+  sem containsNestedAccelerate : Set Name -> Expr -> ()
+  sem containsNestedAccelerate env =
   | TmLet t ->
-    let marked =
-      if containsMarkedTerm marked false t.body then
-        if setMem t.ident marked then
-          _reportNestedAccelerateError t.info
-        else setInsert t.ident marked
-      else marked
-    in
-    reportNestedAccelerateH marked t.inexpr
-  | t -> marked
+    checkIdentifiers env t.body;
+    containsNestedAccelerate env t.inexpr
+  | TmRecLets t ->
+    iter (lam bind. checkIdentifiers env bind.body) t.bindings;
+    containsNestedAccelerate env t.inexpr
+  | TmType t -> containsNestedAccelerate env t.inexpr
+  | TmConDef t -> containsNestedAccelerate env t.inexpr
+  | TmUtest t -> containsNestedAccelerate env t.next
+  | TmExt t -> containsNestedAccelerate env t.inexpr
+  | _ -> ()
+
+  sem checkNestedAccelerate : Set Name -> Expr -> ()
+  sem checkNestedAccelerate accelerateIds =
+  | t -> containsNestedAccelerate accelerateIds t
 end

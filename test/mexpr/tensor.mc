@@ -3,11 +3,14 @@ include "seq.mc"
 include "string.mc"
 
 -- Run all tests
-let testTensors =
-  lam tcreate.
-  lam eq : a -> a -> Bool.
-  lam fromInt : Int -> a.
-  lam vs : [a].
+let testTensors
+  : all a.
+  ([Int] -> (([Int] -> a) -> Tensor[a]))
+  -> (a -> a -> Bool)
+  -> (Int -> a)
+  -> [a]
+  -> ()
+  = lam tcreate. lam eq. lam fromInt. lam vs.
 
   let v0 = get vs 0 in
   let v1 = get vs 1 in
@@ -67,6 +70,23 @@ let testTensors =
   utest tensorGetExn t [2, 1] with v10 using eq in
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
+
+  -- Linear Get
+  let t = mkRank2TestTensor () in
+  utest tensorRank t with 2 in
+  utest tensorShape t with [3, 4] in
+  utest tensorLinearGetExn t 0 with v1 using eq in
+  utest tensorLinearGetExn t 1 with v2 using eq in
+  utest tensorLinearGetExn t 2 with v3 using eq in
+  utest tensorLinearGetExn t 3 with v4 using eq in
+  utest tensorLinearGetExn t 4 with v5 using eq in
+  utest tensorLinearGetExn t 5 with v6 using eq in
+  utest tensorLinearGetExn t 6 with v7 using eq in
+  utest tensorLinearGetExn t 7 with v8 using eq in
+  utest tensorLinearGetExn t 8 with v9 using eq in
+  utest tensorLinearGetExn t 9 with v10 using eq in
+  utest tensorLinearGetExn t 10 with v11 using eq in
+  utest tensorLinearGetExn t 11 with v12 using eq in
 
   -- Copy
   let t1 = mkRank2TestTensor () in
@@ -342,6 +362,52 @@ let testTensors =
   utest tensorGetExn t [1, 1, 0] with v10 using eq in
   utest tensorGetExn t [1, 1, 1] with v11 using eq in
   utest tensorGetExn t [1, 1, 2] with v12 using eq in
+
+  -- Linear Get
+  let t = mkRank3TestTensor () in
+  utest tensorRank t with 3 in
+  utest tensorShape t with [2, 2, 3] in
+  utest tensorLinearGetExn t 0 with v1 using eq in
+  utest tensorLinearGetExn t 1 with v2 using eq in
+  utest tensorLinearGetExn t 2 with v3 using eq in
+  utest tensorLinearGetExn t 3 with v4 using eq in
+  utest tensorLinearGetExn t 4 with v5 using eq in
+  utest tensorLinearGetExn t 5 with v6 using eq in
+  utest tensorLinearGetExn t 6 with v7 using eq in
+  utest tensorLinearGetExn t 7 with v8 using eq in
+  utest tensorLinearGetExn t 8 with v9 using eq in
+  utest tensorLinearGetExn t 9 with v10 using eq in
+  utest tensorLinearGetExn t 10 with v11 using eq in
+  utest tensorLinearGetExn t 11 with v12 using eq in
+
+  -- Linear Set
+  let t = mkRank3TestTensor () in
+  utest tensorRank t with 3 in
+  utest tensorShape t with [2, 2, 3] in
+  tensorLinearSetExn t 0 v12;
+  tensorLinearSetExn t 1 v11;
+  tensorLinearSetExn t 2 v10;
+  tensorLinearSetExn t 3 v9;
+  tensorLinearSetExn t 4 v8;
+  tensorLinearSetExn t 5 v7;
+  tensorLinearSetExn t 6 v6;
+  tensorLinearSetExn t 7 v5;
+  tensorLinearSetExn t 8 v4;
+  tensorLinearSetExn t 9 v3;
+  tensorLinearSetExn t 10 v2;
+  tensorLinearSetExn t 11 v1;
+  utest tensorGetExn t [0, 0, 0] with v12 using eq in
+  utest tensorGetExn t [0, 0, 1] with v11 using eq in
+  utest tensorGetExn t [0, 0, 2] with v10 using eq in
+  utest tensorGetExn t [0, 1, 0] with v9 using eq in
+  utest tensorGetExn t [0, 1, 1] with v8 using eq in
+  utest tensorGetExn t [0, 1, 2] with v7 using eq in
+  utest tensorGetExn t [1, 0, 0] with v6 using eq in
+  utest tensorGetExn t [1, 0, 1] with v5 using eq in
+  utest tensorGetExn t [1, 0, 2] with v4 using eq in
+  utest tensorGetExn t [1, 1, 0] with v3 using eq in
+  utest tensorGetExn t [1, 1, 1] with v2 using eq in
+  utest tensorGetExn t [1, 1, 2] with v1 using eq in
 
   -- Transpose
   let t1 = mkRank3TestTensor () in

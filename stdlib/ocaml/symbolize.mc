@@ -48,7 +48,7 @@ lang OCamlSym =
     OTmRecord {t with bindings = bindings}
   | OTmProject t -> OTmProject {t with tm = symbolizeExpr env t.tm}
 
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
   | OPatTuple { pats = pats } ->
     match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
       (patEnv, OPatTuple { pats = pats })

@@ -59,10 +59,10 @@ let getVariableIdentifier : Expr -> Option Name =
   match varExpr with TmVar {ident = ident} then Some ident
   else None ()
 
-let findVariableDependencies : PatternMatchState -> Expr -> Set Int =
+let findVariableDependencies : PatternMatchState -> Expr -> Set VarPattern =
   use PMExprAst in
   lam state. lam expr.
-  recursive let work : Set Int -> Expr -> Set Int = lam acc. lam expr.
+  recursive let work : Set VarPattern -> Expr -> Set VarPattern = lam acc. lam expr.
     match expr with TmVar {ident = ident} then
       match mapLookup ident state.variableDependencies with Some deps then
         setUnion acc deps
@@ -165,10 +165,11 @@ recursive
                         -> PatternMatchState -> Int -> Option PatternMatchState =
     use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state. lam patIdx.
-    let checkVarPatterns : [VarPattern] -> [Expr] -> State -> Option State =
+    let checkVarPatterns : [VarPattern] -> [Expr] -> PatternMatchState -> Option PatternMatchState =
       lam patterns. lam exprs. lam state.
       let n = length patterns in
-      recursive let work : State -> Int -> Option State = lam state. lam i.
+      recursive let work : PatternMatchState -> Int -> Option PatternMatchState =
+        lam state. lam i.
         if lti i n then
           let pat = get patterns i in
           let expr = get exprs i in
@@ -291,7 +292,8 @@ recursive
           match collectAppArguments expr with (f, args) then
             match getVariableIdentifier f with Some fId then
               if nameEq bindingIdent fId then
-                let matchWithParams : State -> (Name, Expr) -> Option State =
+                let matchWithParams : PatternMatchState -> (Name, VarPattern)
+                                   -> Option PatternMatchState =
                   lam state. lam binding.
                   matchArgsWithParams args state binding.1 (Some binding.0)
                 in
@@ -340,7 +342,7 @@ recursive
     else None ()
 end
 
-let constructLookup : PatternMatchState -> Map VarPattern Expr =
+let constructLookup : PatternMatchState -> Map VarPattern (Name, Expr) =
   use MExprAst in
   lam state.
   let lookup =
@@ -359,9 +361,9 @@ let constructLookup : PatternMatchState -> Map VarPattern Expr =
       mapInsert key (id, param) acc)
     lookup state.nameMatches
 
-let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
+let matchPattern =
   use PMExprAst in
-  lam binding : RecLetBinding. lam pattern.
+  lam binding : RecLetBinding. lam pattern : Pattern.
   let initState =
     {{emptyPatternMatchState pattern
         with active = pattern.activePatterns}
@@ -397,7 +399,7 @@ let matchBindingsWithPattern : Expr -> Pattern -> [PatternMatchResult] =
   else never
 in
 
-let lookupSnd : VarPattern -> PatternMatchResult -> Option Expr =
+let lookupSnd : VarPattern -> Map VarPattern (Name, Expr) -> Option Expr =
   lam pat. lam result.
   optionMap
     (lam p : (Name, Expr). p.1)
@@ -409,7 +411,7 @@ let f = nameSym "f" in
 let s = nameSym "s" in
 let h = nameSym "h" in
 let t = nameSym "t" in
-let expr = typeAnnot (preprocess (nreclets_ [
+let expr = typeCheck (preprocess (nreclets_ [
   (map, tyunknown_, nlam_ f (tyarrow_ tyint_ tyint_) (nulam_ s (
     match_ (nvar_ s)
       (pseqtot_ [])

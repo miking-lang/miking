@@ -15,13 +15,14 @@ include "name-info.mc"
 
 type Edge = (NameInfo, NameInfo, NameInfo)
 type Path = [Edge]
+type EqPaths = {id: NameInfo, home: NameInfo, eqPaths: [Path]}
 
 let edgeCmp = lam e1 : Edge. lam e2 : Edge.
   nameInfoCmp e1.2 e2.2
 
-let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Map Name v =
-  lam items. lam toKey. lam toVal.
-    foldl (lam acc. lam e. mapInsert (toKey e) (toVal e) acc)
+let _nameMapInit : all a. all v. [a] -> (a -> Name) -> (a -> v) -> Map Name v =
+  lam items: [a]. lam toKey: a -> Name. lam toVal: a -> v.
+    foldl (lam acc: Map Name v. lam e: a. mapInsert (toKey e) (toVal e) acc)
       (mapEmpty nameCmp)
       items
 
@@ -85,7 +86,7 @@ type CallCtxEnv = {
 }
 
 -- Create a new name from a prefix string and name.
-let _newNameFromStr : Str -> Name -> Name = lam prefix. lam name.
+let _newNameFromStr : String -> Name -> Name = lam prefix. lam name.
   nameSym (concat prefix (nameGetStr name))
 -- Get the name of the incoming variable from a name.
 let _incVarFromName = _newNameFromStr "inc_"
@@ -421,11 +422,11 @@ lang GraphColoring = HoleAst + HoleCallGraph
     let g = toCallGraph tm in
 
     -- Prune the call graph
-    let eqPaths : [{id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}] =
-      _eqPaths g publicFns callGraphTop tm
+    let eqPaths : [EqPaths] =
+      _eqPaths g publicFns callGraphTop [] tm
     in
     let eqPathsAssoc =
-      map (lam e: {id:NameInfo, home:NameInfo, eqPaths:[[NameInfo]]}.
+      map (lam e: EqPaths.
         (e.id, e.eqPaths)) eqPaths
     in
     let eqPathsMap : Map NameInfo [Path] = mapFromSeq nameInfoCmp eqPathsAssoc in
@@ -582,15 +583,15 @@ lang GraphColoring = HoleAst + HoleCallGraph
   | tm -> smap_Expr_Expr (_replacePublic pub2priv) tm
 
   -- Finds the home vertex and equivalence path for each hole.
-  -- Type: CallGraph -> [NameInfo] -> NameInfo -> Expr -> [{id : NameInfo, home : NameInfo, eqPaths : [[NameInfo]]}]
-  sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) =
+  sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) (acc: [EqPaths]) =
   | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
     let paths = eqPaths g cur depth public in
-    cons {id=(ident, t.info), home=cur, eqPaths=paths} (_eqPaths g public cur t.inexpr)
+    cons {id=(ident, t.info), home=cur, eqPaths=paths}
+      (_eqPaths g public cur acc t.inexpr)
 
   | TmLet ({ body = TmLam lm } & t) ->
-    concat (_eqPaths g public (t.ident, t.info) t.body)
-           (_eqPaths g public cur t.inexpr)
+    concat (_eqPaths g public (t.ident, t.info) acc t.body)
+           (_eqPaths g public cur [] t.inexpr)
 
   | TmRecLets t ->
     concat
@@ -598,11 +599,11 @@ lang GraphColoring = HoleAst + HoleCallGraph
          let cur =
            match bind with { body = TmLam lm } then (bind.ident, bind.info)
            else cur
-         in concat acc (_eqPaths g public cur bind.body))
+         in concat acc (_eqPaths g public cur [] bind.body))
          [] t.bindings)
-      (_eqPaths g public cur t.inexpr)
+      (_eqPaths g public cur acc t.inexpr)
 
   | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr (_eqPaths g public cur) tm)
+    sfold_Expr_Expr (_eqPaths g public cur) acc tm
 
 end

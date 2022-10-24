@@ -3,21 +3,23 @@
 
 include "seq.mc"
 
+include "common.mc"
 mexpr
+
 
 external extTestListOfLists : [[Int]] in
 utest extTestListOfLists with [[0]] in
 
-external extTestListHeadHead : [[a]] -> a in
+external extTestListHeadHead : all a. [[a]] -> a in
 utest extTestListHeadHead [[0]] with 0 in
 
 external extTestArrayOfArrays : [[Int]] in
 utest extTestArrayOfArrays with [[0]] in
 
-external extTestArrayHeadHead : [[a]] -> a in
+external extTestArrayHeadHead : all a. [[a]] -> a in
 utest extTestArrayHeadHead [[0]] with 0 in
 
-external extTestFlip : (a -> b -> c) -> b -> a -> c in
+external extTestFlip : all a. all b. all c. (a -> b -> c) -> b -> a -> c in
 utest extTestFlip (lam x. lam y. subi x y) 1 2 with 1 in
 
 external extTestUnit1 : Int -> () in

@@ -35,7 +35,9 @@ let cartesianToLinearIndex = lam shape. lam idx.
     foldl
       (lam acc : ([Int], Int). lam i.
         match acc with (shape, ofs) in
-        (tail shape, addi ofs (muli (_prod shape) i)))
+        let ofs = addi ofs (muli (_prod shape) i) in
+        match shape with [] then ([], ofs)
+        else (tail shape, ofs))
       (tail shape, 0)
       idx
    in
@@ -48,7 +50,7 @@ utest cartesianToLinearIndex [2, 3] [1, 0] with 3
 
 
 -- Folds `f` over the range `start` `stop` using accumulator `acc`
-let indexFoldu : (a -> Int -> a) -> a -> Int -> Int -> a =
+let indexFoldu : all a. (a -> Int -> a) -> a -> Int -> Int -> a =
 lam f. lam acc. lam start. lam stop.
   recursive let work = lam acc. lam i.
     if lti i stop then work (f acc i) (addi i 1) else acc
@@ -63,7 +65,7 @@ utest indexFoldu (lam seq. lam i. snoc seq i) [] 2 1 with [] using (eqSeq eqi)
 
 -- Folds `f` over the indexes up to `shape` in row-major order and accumulator
 -- `acc`
-let indexFoldRM : (a -> [Int] -> a) -> a -> [Int] -> a =
+let indexFoldRM : all a. (a -> [Int] -> a) -> a -> [Int] -> a =
 lam f. lam acc. lam shape.
   let size = _prod shape in
   recursive let work = lam acc. lam k.
@@ -83,7 +85,7 @@ with [[0, 0], [0, 1], [1, 0], [1, 1]] using eqSeq (eqSeq eqi)
 
 -- Folds `f` over the indexes of `shape` in row-major order with accumulator
 -- `acc`. If `f acc idx` is `None ()` then the result is `None ()`.
-let optionIndexFoldRMM : (a -> [Int] -> Option a) -> a -> [Int] -> Option a =
+let optionIndexFoldRMM : all a. (a -> [Int] -> Option a) -> a -> [Int] -> Option a =
 lam f. lam acc. lam shape.
   let size = _prod shape in
   recursive let work = lam acc. lam k.
@@ -125,7 +127,7 @@ with None () using optionEq (eqSeq (eqSeq eqi))
 -- SHAPE AND RANK CHECKS --
 ---------------------------
 
-let tensorHasRank : Tensor[a] -> Int -> Bool =
+let tensorHasRank : all a. Tensor[a] -> Int -> Bool =
   lam t. lam rank. eqi (tensorRank t) rank
 
 utest
@@ -138,7 +140,7 @@ utest
   tensorHasRank t 1
 with false
 
-let tensorHasShape : Tensor[a] -> [Int] -> Bool =
+let tensorHasShape : all a. Tensor[a] -> [Int] -> Bool =
   lam t. lam shape. eqSeq eqi (tensorShape t) shape
 
 utest
@@ -152,7 +154,7 @@ utest
 with false
 
 
-let tensorHasSameShape : Tensor[a] -> Tensor[b] -> Bool =
+let tensorHasSameShape : all a. all b.  Tensor[a] -> Tensor[b] -> Bool =
 lam t1. lam t2. eqSeq eqi (tensorShape t1) (tensorShape t2)
 
 utest
@@ -175,8 +177,8 @@ with false
 let tensorCreate = tensorCreateDense
 
 -- Construct a tensor of shape `shape` from a sequence `seq`.
-let tensorOfSeqOrElse :
-  (Unit -> Tensor[a]) ->
+let tensorOfSeqOrElse : all a.
+  (() -> Tensor[a]) ->
   ([Int] -> ([Int] -> a) -> Tensor[a]) ->
   [Int] ->
   [a] ->
@@ -189,12 +191,12 @@ lam f. lam tcreate. lam shape. lam seq.
     tensorReshapeExn t shape
 
 let tensorOfSeqExn
-  : ([Int] -> ([Int] -> a) -> Tensor[a]) -> [Int] -> [a] -> Tensor[a] =
+  : all a. ([Int] -> ([Int] -> a) -> Tensor[a]) -> [Int] -> [a] -> Tensor[a] =
   tensorOfSeqOrElse
     (lam. error "Empty seq in tensorOfSeqExn")
 
 -- Construct a sequence from a rank 1 tensor `t`.
-let tensorToSeqOrElse : (Unit -> [a]) -> Tensor[a] -> [a] =
+let tensorToSeqOrElse : all a. (() -> [a]) -> Tensor[a] -> [a] =
 lam f. lam t.
   if neqi (tensorRank t) 1 then f ()
   else
@@ -203,7 +205,7 @@ lam f. lam t.
                then Some (tensorGetExn t [i], addi i 1) else None ())
             0
 
-let tensorToSeqExn : Tensor[a] -> [a] =
+let tensorToSeqExn : all a. Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
 utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [0] [])
@@ -221,7 +223,7 @@ utest tensorToSeqExn (tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4])
 with [1, 2, 3, 4] using eqSeq eqi
 
 -- Create a tensor filled with values `v`.
-let tensorDenseRepeat : [Int] -> a -> Tensor[a] =
+let tensorDenseRepeat : all a. [Int] -> a -> Tensor[a] =
 lam shape. lam v.
   tensorCreateDense shape (lam. v)
 
@@ -232,7 +234,7 @@ with [0, 0, 0, 0] using eqSeq eqi
 
 
 -- The number of elements in a tensor `t`.
-let tensorSize : Tensor[a] -> Int =
+let tensorSize : all a. Tensor[a] -> Int =
 lam t. _prod (tensorShape t)
 
 utest tensorSize (tensorCreateDense [1, 2, 3] (lam. 0)) with 6
@@ -243,7 +245,7 @@ utest tensorSize (tensorCreateDense [0] (lam. 0)) with 0
 -- Map the elements of `t1` to the elements of `t2` via the function `f`,
 -- where `t1` and `t2` has to have the same shape.
 let tensorMapOrElse
-  : (Unit -> Unit) -> (a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+  : all a. all b. (() -> ()) -> (a -> b -> b) -> Tensor[a] -> Tensor[b] -> () =
 lam f. lam g. lam t1. lam t2.
   if tensorHasSameShape t1 t2 then
     let n = tensorSize t1 in
@@ -293,7 +295,7 @@ with 2
 
 
 -- Applies function `f` to the elements of `t`.
-let tensorMapInplace : (a -> a) -> Tensor[a] -> Unit =
+let tensorMapInplace : all a. (a -> a) -> Tensor[a] -> () =
   lam f. lam t. tensorMapExn (lam. f) t t
 
 utest
@@ -304,7 +306,7 @@ with [2, 3, 4, 5]
 
 
 -- Applies function `f` to the elements of a copy of `t`.
-let tensorMapCopy : (a -> a) -> Tensor[a] -> Tensor[a] =
+let tensorMapCopy : all a. (a -> a) -> Tensor[a] -> Tensor[a] =
   lam f. lam t.
     let r = tensorCopy t in
     tensorMapExn (lam. f) t r; r
@@ -318,7 +320,7 @@ with [2, 3, 4, 5]
 -- Map the index and elements of `t1` to the elements of `t2` via the function
 -- `f`, where `t1` and `t2` has to have the same shape.
 let tensorMapiOrElse
-  : (Unit -> Unit) -> ([Int] -> a -> b -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+  : all a. all b. (() -> ()) -> ([Int] -> a -> b -> b) -> Tensor[a] -> Tensor[b] -> () =
 lam f. lam g. lam t1. lam t2.
   let shape = tensorShape t1 in
   if tensorHasShape t2 shape then
@@ -343,15 +345,15 @@ utest
     [1, 2
     ,3, 4]
   in
-  let t2 = tensorCreateDense [2, 2] (lam. ([], 0)) in
-  tensorMapiExn (lam idx. lam x1. lam x2 : ([a], Int). (idx, cons x1 x2.0)) t1 t2;
+  let t2 = tensorCreateDense [2, 2] (lam. ([], [])) in
+  tensorMapiExn (lam idx. lam x1. lam x2 : ([Int], [Int]). (idx, cons x1 x2.0)) t1 t2;
   tensorToSeqExn (tensorReshapeExn t2 [tensorSize t2])
 with [([0, 0], [1]), ([0, 1], [2]), ([1, 0], [3]), ([1, 1], [4])]
 
-let tensorMapiInplace : ([Int] -> a -> a) -> Tensor[a] -> Unit =
+let tensorMapiInplace : all a. ([Int] -> a -> a) -> Tensor[a] -> () =
   lam f. lam t. tensorMapiExn (lam idx. lam x. lam. f idx x) t t
 
-let tensorMapiCopy : ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
+let tensorMapiCopy : all a. ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
   lam f. lam t.
     let r = tensorCopy t in
     tensorMapiExn (lam idx. lam x. lam. f idx x) t r; r
@@ -359,7 +361,7 @@ let tensorMapiCopy : ([Int] -> a -> a) -> Tensor[a] -> Tensor[a] =
 
 -- Copies the content of `t1` to `t2`. Gives an error if `t1` and `t2` does no
 -- have the same shape.
-let tensorBlitExn : Tensor[a] -> Tensor[a] -> () =
+let tensorBlitExn : all a. Tensor[a] -> Tensor[a] -> () =
 lam t1. lam t2.
   if tensorHasSameShape t1 t2 then tensorMapExn (lam x. lam. x) t1 t2
   else error "Invalid Argument: tensor.tensorBlitExn"
@@ -378,7 +380,7 @@ let test =
 -- the accumulator, `idx` is the index of the slice, and `t` is the i'th slice
 -- of `t1`.
 let tensorFoldliSlice
-  : (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+  : all a. all b. (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t1.
   let accr = ref acc in
   tensorIterSlice
@@ -397,7 +399,7 @@ with 9
 
 -- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
 -- accumulator and `t` is the i'th slice of `t1`.
-let tensorFoldlSlice : (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+let tensorFoldlSlice : all a. all b. (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. tensorFoldliSlice (lam acc. lam. f acc)
 
 utest
@@ -409,7 +411,7 @@ with 6
 
 -- Folds `f acc el` over all elements `el` of `t` in row-major order, where
 -- `acc` is the accumulator.
-let tensorFold : (b -> a -> b) -> b -> Tensor[a] -> b =
+let tensorFold : all a. all b. (b -> a -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t.
   let t = tensorReshapeExn t [tensorSize t] in
   tensorFoldlSlice (lam acc. lam t. f acc (tensorGetExn t [])) acc t
@@ -422,7 +424,7 @@ with 6
 
 -- Folds `f idx acc el` over all elements `el` of `t` in row-major order, where
 -- `acc` is the accumulator and `idx` is the index of the element.
-let tensorFoldi : (b -> [Int] -> a -> b) -> b -> Tensor[a] -> b =
+let tensorFoldi : all a. all b. (b -> [Int] -> a -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t.
   let shape = tensorShape t in
   let t = tensorReshapeExn t [tensorSize t] in
@@ -450,7 +452,7 @@ with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
 
 -- Iterates through the elements of `t` in row-major order, applying the
 -- function `f` on each index and element.
-let tensorIteri : ([Int] -> a -> Unit) -> Tensor[a] -> Unit =
+let tensorIteri : all a. ([Int] -> a -> ()) -> Tensor[a] -> () =
   lam f. lam t.
   let shape = tensorShape t in
   let t = tensorReshapeExn t [tensorSize t] in
@@ -466,12 +468,12 @@ with [2, 4, 6]
 
 -- Iterates through the elements of `t` in row-major order, applying the
 -- function `f` on each element.
-let tensorIter : (a -> Unit) -> Tensor[a] -> Unit =
+let tensorIter : all a. (a -> ()) -> Tensor[a] -> () =
   lam f. tensorIteri (lam. lam x. f x)
 
 
 -- The maximum element in `t` as defined by `cmp`.
-let tensorMax : (a -> a -> Int) -> Tensor[a] -> Option a =
+let tensorMax : all a. (a -> a -> Int) -> Tensor[a] -> Option a =
   lam cmp. lam t.
     if eqi (tensorRank t) 0 then Some (tensorGetExn t [])
     else if eqi (tensorSize t) 0 then None ()
@@ -513,7 +515,7 @@ with Some 6
 
 
 -- The minimum element in `t` as defined by `cmp`.
-let tensorMin : (a -> a -> Int) -> Tensor[a] -> Option a =
+let tensorMin : all a. (a -> a -> Int) -> Tensor[a] -> Option a =
   lam cmp. lam t. tensorMax (lam x. lam y. cmp y x) t
 
 utest
@@ -532,7 +534,7 @@ with Some 1
 
 -- Finds element and index `Some (el, i)` in `t` satisfying predicate `p`. If
 -- no such element is found then `None` is returned.
-let tensorFindi : (a -> Bool) -> Tensor[a] -> Option (a, [Int]) =
+let tensorFindi : all a. (a -> Bool) -> Tensor[a] -> Option (a, [Int]) =
   lam p. lam t.
     let n = tensorSize t in
     let shape = tensorShape t in
@@ -562,7 +564,7 @@ with (3, [0, 2])
 
 -- Finds element `Some el` in `t` satisfying predicate `p`. If
 -- no such element is found then `None` is returned.
-let tensorFind : (a -> Bool) -> Tensor[a] -> Option a =
+let tensorFind : all a. (a -> Bool) -> Tensor[a] -> Option a =
   lam p. lam t.
     let x = tensorFindi p t in
     match x with Some (x, _) then Some x
@@ -585,7 +587,7 @@ with 3
 
 -- Finds index `Some i` in `t` of element satisfying predicate `p`. If no such
 -- element is found then `None` is returned.
-let tensorIndex : (a -> Bool) -> Tensor[a] -> Option [Int] =
+let tensorIndex : all a. (a -> Bool) -> Tensor[a] -> Option [Int] =
   lam p. lam t.
     let x = tensorFindi p t in
     match x with Some (_, idx) then Some idx
@@ -609,7 +611,7 @@ with [0, 2]
 
 
 -- `true` if `p x` for some `x` in `t`, else `false`.
-let tensorAny : (a -> Bool) -> Tensor[a] -> Bool =
+let tensorAny : all a. (a -> Bool) -> Tensor[a] -> Bool =
   lam p. lam t.
     let x = tensorFindi p t in
     match x with Some _ then true
@@ -634,7 +636,7 @@ with false
 
 
 -- `true` if `p x` for all `x` in `t`, else `false`.
-let tensorAll : (a -> Bool) -> Tensor[a] -> Bool =
+let tensorAll : all a. (a -> Bool) -> Tensor[a] -> Bool =
   lam p. lam t.
     let x = tensorFindi (lam x. not (p x)) t in
     match x with Some _ then false
@@ -679,7 +681,7 @@ with false
 
 
 -- Filter elements of `t` given predicate `p`.
-let tensorFilter : (a -> Bool) -> Tensor[a] -> [a] =
+let tensorFilter : all a. (a -> Bool) -> Tensor[a] -> [a] =
   lam p. lam t.
     let t = tensorReshapeExn t [tensorSize t] in
     tensorFold
@@ -696,7 +698,7 @@ with [4, 5, 6]
 
 
 -- Filter index of elements of `t` given predicate `p`.
-let tensorFilteri : ([Int] -> a -> Bool) -> Tensor[a] -> [[Int]] =
+let tensorFilteri : all a. ([Int] -> a -> Bool) -> Tensor[a] -> [[Int]] =
   lam p. lam t.
     tensorFoldi
       (lam a. lam idx. lam x. if p idx x then snoc a idx else a)
@@ -714,14 +716,14 @@ with [[1, 0], [1, 1], [1, 2]]
 -- INTEGER TENSOR FUNCTIONS --
 ------------------------------
 
-let tensorCumsumiExn : Tensor[Int] -> Tensor[Int] -> Unit =
+let tensorCumsumiExn : Tensor[Int] -> Tensor[Int] -> () =
   lam t. lam r.
     if tensorHasSameShape t r then
       tensorFoldi
         (lam acc. lam idx. lam x.
           let acc = addi acc x in
           tensorSetExn r idx acc; acc)
-        0 t
+        0 t; ()
     else error "Invalid Argument: tensor.tensorCumsumiExn"
 
 utest
@@ -730,7 +732,7 @@ utest
   tensorCumsumiExn t r; tensorToSeqExn r
 with [1, 3, 6]
 
-let tensorCumsumiInplace : Tensor[Int] -> Unit =
+let tensorCumsumiInplace : Tensor[Int] -> () =
   lam t. tensorCumsumiExn t t
 
 utest

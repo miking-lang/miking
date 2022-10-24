@@ -14,22 +14,6 @@ include "futhark/ast.mc"
 include "futhark/ast-builder.mc"
 include "futhark/pprint.mc"
 
-type ParamData = (Name, FutType)
-
-type FunctionReplaceData = {
-  -- Contains the type of the function after replacing record parameters with a
-  -- record field parameters.
-  newType : FutType,
-
-  -- The sequence of parameter names and type, as expected by the function
-  -- prior to the record parameter lifting.
-  oldParams : [ParamData],
-
-  -- Maps the name of a replaced record parameter to the parameters of the
-  -- fields that replaced it.
-  paramReplace : Map Name (Map SID ParamData)
-}
-
 let _collectAppTargetAndArgs = use FutharkAst in
   lam e : FutExpr.
   recursive let work = lam args : [FutExpr]. lam e : FutExpr.
@@ -54,54 +38,80 @@ let _constructAppSeq = use FutharkAst in
     args
 
 lang FutharkRecordParamLift = FutharkAst
-  sem updateApplicationParameters (replaceMap : Map Name FunctionReplaceData) =
-  | FEApp t ->
-    match _collectAppTargetAndArgs (FEApp t) with (target, args) then
-      match target with FEVar {ident = id} then
-        match mapLookup id replaceMap with Some data then
-          let data : FunctionReplaceData = data in
-          let nargs = length args in
-          let nparams = length data.oldParams in
-          let addedArgs =
-            if lti nargs nparams then
-              let diff = subi nparams nargs in
-              create diff (lam i.
-                let idx = addi i nargs in
-                let param : ParamData = get data.oldParams idx in
-                FEVar {ident = nameSym "x", ty = param.1, info = t.info})
-            else [] in
-          let args = concat args addedArgs in
-          let appArgs : [FutExpr] =
-            join
-              (map
-                (lam argParam : (FutExpr, ParamData).
-                  let argExpr = argParam.0 in
-                  let param = argParam.1 in
-                  match mapLookup param.0 data.paramReplace with Some fields then
-                    mapValues
-                      (mapMapWithKey
-                        (lam k : SID. lam v : ParamData.
-                          FERecordProj {
-                            rec = argExpr, key = k, ty = v.1,
-                            info = infoFutTm argExpr})
-                        fields)
-                  else [argExpr])
-                (zip args data.oldParams)) in
-          let target = withTypeFutTm data.newType target in
-          foldr
-            (lam extraArg : FutExpr. lam acc : FutExpr.
-              let info = mergeInfo (infoFutTm extraArg) (infoFutTm acc) in
-              match extraArg with FEVar t then
-                FELam {ident = t.ident, body = acc, info = info,
-                       ty = FTyArrow {from = tyFutTm extraArg,
-                                      to = tyFutTm acc,
-                                      info = info}}
-              else infoErrorExit info "")
-            (_constructAppSeq target appArgs)
-            addedArgs
-        else FEApp t
-      else FEApp t
-    else never
+  type ParamData = (Name, FutType)
+
+  type FunctionReplaceData = {
+    -- Contains the type of the function after replacing record parameters with a
+    -- record field parameters.
+    newType : FutType,
+
+    -- The sequence of parameter names and type, as expected by the function
+    -- prior to the record parameter lifting.
+    oldParams : [ParamData],
+
+    -- Maps the name of a replaced record parameter to the parameters of the
+    -- fields that replaced it.
+    paramReplace : Map Name (Map SID ParamData)
+  }
+
+  sem updateParams : FunctionReplaceData -> FutExpr -> [FutExpr] -> Info -> FutExpr
+  sem updateParams data target args =
+  | info ->
+    let data : FunctionReplaceData = data in
+    let nargs = length args in
+    let nparams = length data.oldParams in
+    let addedArgs =
+      if lti nargs nparams then
+        let diff = subi nparams nargs in
+        create diff (lam i.
+          let idx = addi i nargs in
+          let param : ParamData = get data.oldParams idx in
+          FEVar {ident = nameSym "x", ty = param.1, info = info})
+      else [] in
+    let args = concat args addedArgs in
+    let appArgs : [FutExpr] =
+      join
+        (map
+          (lam argParam : (FutExpr, ParamData).
+            let argExpr = argParam.0 in
+            let param = argParam.1 in
+            match mapLookup param.0 data.paramReplace with Some fields then
+              mapValues
+                (mapMapWithKey
+                  (lam k : SID. lam v : ParamData.
+                    FERecordProj {
+                      rec = argExpr, key = k, ty = v.1,
+                      info = infoFutTm argExpr})
+                  fields)
+            else [argExpr])
+          (zip args data.oldParams)) in
+    let target = withTypeFutTm data.newType target in
+    foldr
+      (lam extraArg : FutExpr. lam acc : FutExpr.
+        let info = mergeInfo (infoFutTm extraArg) (infoFutTm acc) in
+        match extraArg with FEVar t then
+          FELam {ident = t.ident, body = acc, info = info,
+                 ty = FTyArrow {from = tyFutTm extraArg,
+                                to = tyFutTm acc,
+                                info = info}}
+        else errorSingle [info] "")
+      (_constructAppSeq target appArgs)
+      addedArgs
+
+  sem updateApplicationParameters : Map Name FunctionReplaceData -> FutExpr -> FutExpr
+  sem updateApplicationParameters replaceMap =
+  | FEVar t ->
+    match mapLookup t.ident replaceMap with Some data then
+      let data : FunctionReplaceData = data in
+      updateParams data (FEVar t) [] t.info
+    else FEVar t
+  | app & (FEApp t) ->
+    match _collectAppTargetAndArgs app with (target, args) in
+    match target with FEVar {ident = id} then
+      match mapLookup id replaceMap with Some data then
+        updateParams data target args t.info
+      else smap_FExpr_FExpr (updateApplicationParameters replaceMap) app
+    else smap_FExpr_FExpr (updateApplicationParameters replaceMap) app
   | t -> smap_FExpr_FExpr (updateApplicationParameters replaceMap) t
 
   sem collectRecordFields (paramReplace : Map Name (Map SID ParamData)) =
@@ -141,7 +151,7 @@ lang FutharkRecordParamLift = FutharkAst
           -- record projections found here should also be found in the
           -- collection phase. If we were to get here, there is a bug in the
           -- implementation. What would be a good error message here?
-          infoErrorExit t.info "Failed to replace record with its fields"
+          errorSingle [t.info] "Failed to replace record with its fields"
       else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
     else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
   | t -> smap_FExpr_FExpr (replaceProjections paramReplace) t

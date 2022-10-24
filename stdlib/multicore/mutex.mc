@@ -5,13 +5,15 @@
 
 include "thread.mc"
 
+type Mutex
+
 -- 'mutexCreate ()' returns a new mutex.
-external externalMutexCreate ! : Unit -> Mutex
+external externalMutexCreate ! : () -> Mutex
 let mutexCreate = lam.
   externalMutexCreate ()
 
 -- 'mutexLock m' locks the mutex 'm'.
-external externalMutexLock ! : Mutex -> Unit
+external externalMutexLock ! : Mutex -> ()
 let mutexLock = lam m.
   externalMutexLock m
 
@@ -21,14 +23,14 @@ let mutexTryLock = lam m.
   externalMutexTryLock m
 
 -- 'mutexRelease m' releases the mutex 'm'.
-external externalMutexRelease ! : Mutex -> Unit
+external externalMutexRelease ! : Mutex -> ()
 let mutexRelease = lam m.
   externalMutexRelease m
 
 mexpr
 
 let debug = false in
-let debugPrint = if debug then print else lam x. x in
+let debugPrint = if debug then print else lam x. () in
 
 -- Used for debug printing, included to avoid dependency on seq.mc
 let int2string = lam n.

@@ -4,7 +4,6 @@ include test-files.mk
 
 all: $(accelerate_files)
 
-# Run the accelerated files with and without enabling the accelerated mode
 $(accelerate_files):
-	@./make compile-test $@ "build/mi compile --accelerate --cpu-only"
-	@./make compile-test $@ "build/mi compile"
+	@./make compile-test $@ "build/mi compile --debug-accelerate"
+	@./make compile-test $@ "build/mi compile --accelerate"

@@ -113,25 +113,25 @@ fix () {
 
 compile_test () {
   set +e
+  binary=$(mktemp)
   output=$1
-  output="$output\n$($2 $1 2>&1)"
+  compile="$2 --output $binary"
+  output="$output\n$($compile $1 2>&1)"
   exit_code=$?
   if [ $exit_code -eq 0 ]
   then
-    binary=$(basename "$1" .mc)
-    output="$output$(./$binary)"
+    output="$output$($binary)"
     exit_code=$?
-    if [ $exit_code -eq 0 ]
+    rm $binary
+    if [ $exit_code -ne 0 ]
     then
-        rm $binary
-    else
-        echo "ERROR: command ./$binary exited with $exit_code"
-        rm $binary
+        echo "ERROR: the compiled binary for $1 exited with $exit_code"
         exit 1
     fi
   else
-      echo "ERROR: command '$2 $1 2>&1' exited with $exit_code"
-      exit 1
+    echo "ERROR: command '$compile $1 2>&1' exited with $exit_code"
+    rm $binary
+    exit 1
   fi
   echo "$output\n"
   set -e
@@ -151,6 +151,14 @@ run_test() {
 
 run_test_boot() {
   run_test_prototype "build/boot eval src/main/mi.mc -- run --test --disable-prune-warning" $1
+}
+
+run_js_test() {
+  ./test/js/make.sh run-test-quiet $1
+}
+
+run_js_web_test() {
+  ./test/js/web/make.sh run-test-quiet $1
 }
 
 case $1 in
@@ -174,6 +182,12 @@ case $1 in
         ;;
     compile-test)
         compile_test "$2" "$3"
+        ;;
+    run-js-test)
+        run_js_test "$2"
+        ;;
+    run-js-web-test)
+        run_js_web_test "$2"
         ;;
     lint)
         lint

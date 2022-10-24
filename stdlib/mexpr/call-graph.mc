@@ -15,7 +15,7 @@ lang MExprCallGraph = MExprAst
     let g = _addGraphVertices g (TmRecLets {t with inexpr = unit_}) in
     _addGraphCallEdges g t.bindings
   | t ->
-    infoErrorExit (infoTm t) (join ["A call graph can only be constructed ",
+    errorSingle [infoTm t] (join ["A call graph can only be constructed ",
                                     "from a recursive let-expression"])
 
   sem _addGraphVertices (g : Digraph Name Int) =

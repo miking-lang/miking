@@ -16,10 +16,8 @@ let symbmap t =
   let rec work acc = function
     | TmVar (_, x, s, _) ->
         SymbMap.add s x acc
-    | TmLam (_, x, s, _, t)
-    | TmType (_, x, s, _, t)
-    | TmConDef (_, x, s, _, t)
-    | TmConApp (_, x, s, t) ->
+    | TmLam (_, x, s, _, t) | TmConDef (_, x, s, _, t) | TmConApp (_, x, s, t)
+      ->
         work (SymbMap.add s x acc) t
     | TmLet (_, x, s, _, t1, t2) ->
         work (work (SymbMap.add s x acc) t1) t2

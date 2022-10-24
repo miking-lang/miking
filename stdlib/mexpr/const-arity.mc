@@ -1,5 +1,10 @@
 include "ast.mc"
 
+lang UnsafeCoerceArity = UnsafeCoerceAst
+  sem constArity =
+  | CUnsafeCoerce _ -> 1
+end
+
 lang IntArity = IntAst
   sem constArity =
   | CInt _ -> 0
@@ -206,11 +211,15 @@ end
 
 lang TensorOpArity = TensorOpAst
   sem constArity =
+  | CTensorCreateUninitInt _ -> 1
+  | CTensorCreateUninitFloat _ -> 1
   | CTensorCreateInt _ -> 2
   | CTensorCreateFloat _ -> 2
   | CTensorCreate _ -> 2
   | CTensorGetExn _ -> 2
   | CTensorSetExn _ -> 3
+  | CTensorLinearGetExn _ -> 2
+  | CTensorLinearSetExn _ -> 3
   | CTensorRank _ -> 1
   | CTensorShape _ -> 1
   | CTensorReshapeExn _ -> 2
@@ -245,7 +254,8 @@ lang MExprArity =
   CharArity + CmpCharArity + IntCharConversionArity +
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
-  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity
+  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity +
+  UnsafeCoerceArity
 end
 
 mexpr

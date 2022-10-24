@@ -10,6 +10,7 @@
 
 include "ast.mc"
 include "info.mc"
+include "error.mc"
 include "mexpr.mc"
 include "ast-builder.mc"
 include "eq.mc"
@@ -17,24 +18,41 @@ include "eq.mc"
 -- The base fragment that includes the keyword maker, but
 -- no checks for incorrect bindings in e.g. let or lam.
 -- See the separate fragments to include this.
-lang KeywordMakerBase = VarAst + AppAst
+lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
   sem isKeyword =
+  | _ -> false
+
+  sem isTypeKeyword =
   | _ -> false
 
   sem matchKeywordString (info: Info) =
   | _ -> None ()
 
+  sem matchTypeKeywordString : Info -> String -> Option (Int, [Type] -> Type)
+  sem matchTypeKeywordString (info: Info) =
+  | _ -> None ()
+
+  sem makeKeywordError : all a. Info -> Int -> Int -> String -> a
   sem makeKeywordError (info: Info) (n1: Int) (n2: Int) =
-  | ident -> infoErrorExit info (join ["Unexpected number of arguments for construct '",
+  | ident -> errorSingle [info] (join ["Unexpected number of arguments for construct '",
              ident, "'. ", "Expected ", int2string n1,
              " arguments, but found ", int2string n2, "."])
 
-  sem makeKeywords (args: [Expr]) =
+  sem makeKeywords : Expr -> Expr
+  sem makeKeywords =
+  | expr ->
+    let expr = makeExprKeywords [] expr in
+    let expr = mapPre_Expr_Expr (lam expr.
+        smap_Expr_Type (makeTypeKeywords []) expr
+      ) expr
+    in expr
+
+  sem makeExprKeywords (args: [Expr]) =
   | TmApp r ->
-     let rhs = makeKeywords [] r.rhs in
-     let lhs = makeKeywords (cons rhs args) r.lhs in
+     let rhs = makeExprKeywords [] r.rhs in
+     let lhs = makeExprKeywords (cons rhs args) r.lhs in
      if isKeyword lhs then lhs
-     else TmApp {{r with lhs = lhs} with rhs = rhs}
+     else TmApp {r with lhs = lhs, rhs = rhs}
   | TmVar r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some n then
@@ -43,12 +61,30 @@ lang KeywordMakerBase = VarAst + AppAst
          else makeKeywordError r.info noArgs (length args) ident
        else never
      else TmVar r
-  | expr -> smap_Expr_Expr (makeKeywords []) expr
+  | expr -> smap_Expr_Expr (makeExprKeywords []) expr
+
+  sem makeTypeKeywords : [Type] -> Type -> Type
+  sem makeTypeKeywords args =
+  | TyApp r ->
+    let rhs = makeTypeKeywords [] r.rhs in
+    let lhs = makeTypeKeywords (cons rhs args) r.lhs in
+    if isTypeKeyword lhs then lhs
+    else TyApp {r with lhs = lhs, rhs = rhs}
+  | TyCon r ->
+    let ident = nameGetStr r.ident in
+    match matchTypeKeywordString r.info ident with Some n then
+       match n with (noArgs, f) then
+         if eqi noArgs (length args) then f args
+         else makeKeywordError r.info noArgs (length args) ident
+       else never
+     else TyCon r
+  | ty -> smap_Type_Type (makeTypeKeywords []) ty
+
 end
 
 -- Support for keywords starting with capital letter. Uses ConApp and ConDef
 lang KeywordMakerData = KeywordMakerBase + DataAst
-  sem makeKeywords (args: [Expr]) =
+  sem makeExprKeywords (args: [Expr]) =
   | TmConApp r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some n then
@@ -61,31 +97,41 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
   | TmConDef r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident,
+       errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
-     else TmConDef {r with inexpr = makeKeywords [] r.inexpr}
+     else TmConDef {r with inexpr = makeExprKeywords [] r.inexpr}
+end
+
+lang KeywordMakerType = KeywordMakerBase + TypeAst
+  sem makeExprKeywords (args: [Expr]) =
+  | TmType r ->
+     let ident = nameGetStr r.ident in
+     match matchTypeKeywordString r.info ident with Some _ then
+       errorSingle [r.info] (join ["Type keyword '", ident,
+       "' cannot be used in a type definition."])
+     else TmType {r with inexpr = makeExprKeywords [] r.inexpr}
 end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
 lang KeywordMakerLam = KeywordMakerBase + LamAst
-  sem makeKeywords (args: [Expr]) =
+  sem makeExprKeywords (args: [Expr]) =
   | TmLam r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
-     else TmLam {r with body = makeKeywords [] r.body}
+       errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
+     else TmLam {r with body = makeExprKeywords [] r.body}
 end
 
 
 -- Includes a check that a keyword cannot be used as a binding variable in a let expression
 lang KeywordMakerLet = KeywordMakerBase + LetAst
-  sem makeKeywords (args: [Expr]) =
+  sem makeExprKeywords (args: [Expr]) =
   | TmLet r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
+       errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
-       TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr}
+       TmLet {{r with body = makeExprKeywords [] r.body} with inexpr = makeExprKeywords [] r.inexpr}
 end
 
 
@@ -96,23 +142,23 @@ lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
       match r.ident with PName name then
         let ident = nameGetStr name in
         match matchKeywordString r.info ident with Some _ then
-          infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used inside a pattern."])
+          errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used inside a pattern."])
         else PatNamed r
       else PatNamed r
   | pat -> smap_Pat_Pat matchKeywordPat pat
 
-  sem makeKeywords (args: [Expr]) =
+  sem makeExprKeywords (args: [Expr]) =
   | TmMatch r ->
-      TmMatch {{{{r with target = makeKeywords [] r.target}
+      TmMatch {{{{r with target = makeExprKeywords [] r.target}
                     with pat = matchKeywordPat r.pat}
-                    with thn = makeKeywords [] r.thn}
-                    with els = makeKeywords [] r.els}
+                    with thn = makeExprKeywords [] r.thn}
+                    with els = makeExprKeywords [] r.els}
 end
 
 
 -- The keyword maker fragment, that includes all checks
 lang KeywordMaker = KeywordMakerBase + KeywordMakerLam + KeywordMakerLet +
-                    KeywordMakerMatch + KeywordMakerData
+                    KeywordMakerMatch + KeywordMakerData + KeywordMakerType
 end
 
 -- A test fragment that is used to test the approach. This
@@ -132,12 +178,24 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
   | TmTwoArgs {arg1: Expr, arg2: Expr, info: Info}
   | TmThreeArgs {arg1: Expr, arg2: Expr, arg3: Expr, info: Info}
 
+  syn Type =
+  | TyNoArgs {info: Info}
+  | TyOneArg {arg1: Type, info: Info}
+  | TyTwoArgs {arg1: Type, arg2: Type, info: Info}
+  | TyThreeArgs {arg1: Type, arg2: Type, arg3: Type, info: Info}
+
   -- States that the new terms are indeed mapping from keywords
   sem isKeyword =
   | TmNoArgs _ -> true
   | TmOneArg _ -> true
   | TmTwoArgs _ -> true
   | TmThreeArgs _ -> true
+
+  sem isTypeKeyword =
+  | TyNoArgs _ -> true
+  | TyOneArg _ -> true
+  | TyTwoArgs _ -> true
+  | TyThreeArgs _ -> true
 
   -- Defines the new mapping from keyword to new terms
   sem matchKeywordString (info: Info) =
@@ -147,12 +205,26 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
   | "ThreeArgs" -> Some (3, lam lst. TmThreeArgs{arg1 = get lst 0, arg2 = get lst 1,
                                                  arg3 = get lst 2, info = info})
 
+  sem matchTypeKeywordString (info: Info) =
+  | "TyNoArgs" -> Some (0, lam lst. TyNoArgs{info = info})
+  | "TyOneArg" -> Some (1, lam lst. TyOneArg{arg1 = get lst 0, info = info})
+  | "TyTwoArgs" -> Some (2, lam lst. TyTwoArgs{arg1 = get lst 0, arg2 = get lst 1, info = info})
+  | "TyThreeArgs" -> Some (3, lam lst. TyThreeArgs{arg1 = get lst 0, arg2 = get lst 1,
+                                                 arg3 = get lst 2, info = info})
+
   -- smap for the new terms
-  sem smap_Expr_Expr (f : Expr -> a) =
+  sem smap_Expr_Expr (f : Expr -> Expr) =
   | TmNoArgs t -> TmNoArgs t
   | TmOneArg t -> TmOneArg {t with arg1 = f t.arg1}
   | TmTwoArgs t -> TmTwoArgs {{t with arg1 = f t.arg1} with arg2 = f t.arg2}
   | TmThreeArgs t -> TmThreeArgs {{{t with arg1 = f t.arg1}
+                                      with arg2 = f t.arg2} with arg3 = f t.arg3}
+
+  sem smap_Type_Type (f : Type -> Type) =
+  | TyNoArgs t -> TyNoArgs t
+  | TyOneArg t -> TyOneArg {t with arg1 = f t.arg1}
+  | TyTwoArgs t -> TyTwoArgs {{t with arg1 = f t.arg1} with arg2 = f t.arg2}
+  | TyThreeArgs t -> TyThreeArgs {{{t with arg1 = f t.arg1}
                                       with arg2 = f t.arg2} with arg3 = f t.arg3}
 
   -- Equality of the new terms
@@ -177,6 +249,29 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
           else None ()
         else None ()
       else None ()
+
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyNoArgs _ ->
+      match unwrapType typeEnv lhs with Some (TyNoArgs _) then Some free
+      else None ()
+  | TyOneArg r ->
+      match unwrapType typeEnv lhs with Some (TyOneArg l) then
+        eqTypeH typeEnv free l.arg1 r.arg1
+      else None ()
+  | TyTwoArgs r ->
+      match unwrapType typeEnv lhs with Some (TyTwoArgs l) then
+        match eqTypeH typeEnv free l.arg1 r.arg1 with Some free then
+          eqTypeH typeEnv free l.arg2 r.arg2
+        else None ()
+      else None ()
+  | TyThreeArgs r ->
+      match unwrapType typeEnv lhs with Some (TyThreeArgs l) then
+        match eqTypeH typeEnv free l.arg1 r.arg1 with Some free then
+          match eqTypeH typeEnv free l.arg2 r.arg2 with Some free then
+            eqTypeH typeEnv free l.arg3 r.arg3
+          else None ()
+        else None ()
+      else None ()
 end
 
 
@@ -196,28 +291,47 @@ let threeargs_ = lam x. lam y. lam z.
 -- Same with the forth, replace "Ok" with "OneArg"
 
 let expr = ulam_ "ok" true_ in
-utest makeKeywords [] expr with expr using eqExpr in
+utest makeKeywords expr with expr using eqExpr in
 
 let expr = bind_ (ulet_ "ok" true_) false_ in
-utest makeKeywords [] expr with expr using eqExpr in
+utest makeKeywords expr with expr using eqExpr in
 
 let expr = match_ true_  (pvar_ "ok") true_ false_ in
-utest makeKeywords [] expr with expr using eqExpr in
+utest makeKeywords expr with expr using eqExpr in
 
 let expr = ucondef_ "Ok" in
-utest makeKeywords [] expr with expr using eqExpr in
+utest makeKeywords expr with expr using eqExpr in
 
 let expr = ulam_ "x" (var_ "noargs") in
-utest makeKeywords [] expr with ulam_ "x" noargs_ using eqExpr in
+utest makeKeywords expr with ulam_ "x" noargs_ using eqExpr in
 
 let expr = ulam_ "x" (conapp_ "OneArg" (true_))  in
-utest makeKeywords [] expr with ulam_ "x" (onearg_ true_) using eqExpr in
+utest makeKeywords expr with ulam_ "x" (onearg_ true_) using eqExpr in
 
 let expr = ulam_ "x" (app_ (app_ (var_ "twoargs") (true_)) false_) in
-utest makeKeywords [] expr with ulam_ "x" (twoargs_ true_ false_) using eqExpr in
+utest makeKeywords expr with ulam_ "x" (twoargs_ true_ false_) using eqExpr in
 
 let expr = ulam_ "x" (app_ (app_ (conapp_ "ThreeArgs" (true_)) (false_)) true_) in
-utest makeKeywords [] expr
+utest makeKeywords expr
 with ulam_ "x" (threeargs_ true_ false_ true_) using eqExpr in
+
+let tynoargs_ = TyNoArgs {info = NoInfo()} in
+let tyonearg_ = lam x. TyOneArg {arg1 = x, info = NoInfo()} in
+let tytwoargs_ = lam x. lam y. TyTwoArgs {arg1 = x, arg2 = y, info = NoInfo()} in
+let tythreeargs_ = lam x. lam y. lam z.
+                 TyThreeArgs {arg1 = x, arg2 = y, arg3 = z, info = NoInfo()} in
+
+let expr = lam_ "x" (tycon_ "NoArgs") true_ in
+utest makeKeywords expr with lam_ "x" tynoargs_ true_ using eqExpr in
+
+let expr = lam_ "x" (tyapp_ (tycon_ "OneArg") tybool_) true_ in
+utest makeKeywords expr with lam_ "x" (tyonearg_ tybool_) true_ using eqExpr in
+
+let expr = lam_ "x" (tyapp_ (tyapp_ (tycon_ "TwoArgs") tybool_) tyint_) true_ in
+utest makeKeywords expr with lam_ "x" (tytwoargs_ tybool_ tyint_) true_ using eqExpr in
+
+let expr = lam_ "x" (tyapp_ (tyapp_ (tyapp_ (tycon_ "ThreeArgs") tybool_) tyint_) tybool_) true_ in
+utest makeKeywords expr
+with lam_ "x" (tythreeargs_ tybool_ tyint_ tybool_) true_ using eqExpr in
 
 ()

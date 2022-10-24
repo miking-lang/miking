@@ -24,7 +24,8 @@
 
   let unique_ident = us"X"
 
-
+  let set_con_params params = function
+    | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
 
 %}
@@ -154,7 +155,7 @@ tops:
 
 type_params:
   | var_ident type_params
-    { $1 :: $2 }
+    { $1.v :: $2 }
   |
     { [] }
 
@@ -181,13 +182,11 @@ toplet:
 
 toptype:
   | TYPE type_ident type_params
-     // Type parameters are currently ignored
      { let fi = mkinfo $1.i $2.i in
-       Type (fi, $2.v, TyVariant (fi, [])) }
+       Type (fi, $2.v, $3, TyVariant (fi, [])) }
   | TYPE type_ident type_params EQ ty
-     // Type parameters are currently ignored
      { let fi = mkinfo $1.i (ty_info $5) in
-       Type (fi, $2.v, $5) }
+       Type (fi, $2.v, $3, $5) }
 
 topRecLet:
   | REC lets END
@@ -241,15 +240,18 @@ decls:
   |
     { [] }
 decl:
-  | SYN type_ident EQ constrs
-    { let fi = mkinfo $1.i $3.i in
-      Data (fi, $2.v, $4) }
+  | SYN type_ident type_params EQ constrs
+    { let fi = mkinfo $1.i $4.i in
+      Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5) }
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
-      Inter (fi, $2.v, $3, $5) }
-  | TYPE type_ident EQ ty
-    { let fi = mkinfo $1.i $3.i in
-      Alias (fi, $2.v, $4) }
+      Inter (fi, $2.v, TyUnknown fi, Some $3, $5) }
+  | SEM var_ident COLON ty
+    { let fi = mkinfo $1.i (ty_info $4) in
+      Inter (fi, $2.v, $4, None, []) }
+  | TYPE type_ident type_params EQ ty
+    { let fi = mkinfo $1.i $4.i in
+      Alias (fi, $2.v, $3, $5) }
 
 constrs:
   | constr constrs
@@ -259,7 +261,7 @@ constrs:
 constr:
   | BAR con_ident constr_params
     { let fi = mkinfo $1.i $2.i in
-      CDecl(fi, $2.v, $3 $1.i) }
+      CDecl(fi, [], $2.v, $3 $1.i) }
 
 constr_params:
   | ty
@@ -271,6 +273,9 @@ params:
   | LPAREN var_ident COLON ty RPAREN params
     { let fi = mkinfo $1.i $5.i in
       Param (fi, $2.v, $4) :: $6 }
+  | var_ident params
+    { let fi = mkinfo $1.i $1.i in
+      Param (fi, $1.v, TyUnknown fi) :: $2 }
   |
     { [] }
 
@@ -291,13 +296,11 @@ mexpr:
   | sequence
       { $1 }
   | TYPE type_ident type_params IN mexpr
-      // Type parameters are currently ignored
       { let fi = mkinfo $1.i $4.i in
-        TmType(fi, $2.v, Symb.Helpers.nosym, TyVariant (fi, []), $5) }
+        TmType(fi, $2.v, $3, TyVariant (fi, []), $5) }
   | TYPE type_ident type_params EQ ty IN mexpr
-      // Type parameters are currently ignored
       { let fi = mkinfo $1.i (tm_info $7) in
-        TmType(fi, $2.v, Symb.Helpers.nosym, $5, $7) }
+        TmType(fi, $2.v, $3, $5, $7) }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
@@ -405,8 +408,10 @@ atom:
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, Record.empty)}
-  | LBRACKET mexpr WITH label_ident EQ mexpr RBRACKET
-      { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
+  | LBRACKET mexpr WITH labels RBRACKET
+      { List.fold_left (fun acc (k,v) ->
+          TmRecordUpdate (mkinfo $1.i $5.i, acc, k, v)
+        ) $2 $4}
 
 proj_label:
   | UINT
@@ -486,6 +491,9 @@ pat_atom:
       { PatSeqEdge(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
+  | LPAREN pat COMMA RPAREN
+      { let fi = mkinfo $1.i $4.i in
+        PatRecord(fi,Record.singleton (us"0") $2) }
   | LPAREN pat COMMA pat_list RPAREN
       { let fi = mkinfo $1.i $5.i in
         let r = List.fold_left (fun (i,a) x ->
@@ -547,6 +555,8 @@ ty_atom:
     { TySeq(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
+  | LPAREN ty COMMA RPAREN
+    { TyRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LBRACKET RBRACKET
     { ty_unit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
@@ -554,8 +564,7 @@ ty_atom:
                       (fun acc (k,v) -> Record.add k v acc)
                       Record.empty
       in
-      let ls = List.map (fun (l, _) -> l) $2 in
-        TyRecord(mkinfo $1.i $3.i, r, ls) }
+      TyRecord(mkinfo $1.i $3.i, r) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN
@@ -571,7 +580,7 @@ ty_atom:
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
-    { TyCon($1.i,$1.v,Symb.Helpers.nosym) }
+    { TyCon($1.i,$1.v) }
   | var_ident
     { TyVar($1.i,$1.v)}
 
