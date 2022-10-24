@@ -6,6 +6,81 @@ include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 
+lang MExprSubstitute = MExprAst
+  -- Applies the substitutions of the provided map to the identifiers of the
+  -- given AST.
+  sem substituteIdentifiers : Map Name Name -> Expr -> Expr
+  sem substituteIdentifiers replacements =
+  | ast -> substituteIdentifiersExpr replacements ast
+
+  sem subIdent : Map Name Name -> Name -> Name
+  sem subIdent replacements =
+  | id -> optionGetOrElse (lam. id) (mapLookup id replacements)
+
+  sem substituteIdentifiersExpr : Map Name Name -> Expr -> Expr
+  sem substituteIdentifiersExpr replacements =
+  | TmVar t -> TmVar {t with ident = subIdent replacements t.ident}
+  | TmConApp t ->
+    TmConApp {t with ident = subIdent replacements t.ident,
+                     body = substituteIdentifiersExpr replacements t.body,
+                     ty = substituteIdentifiersType replacements t.ty}
+  | TmLet t ->
+    TmLet {t with ident = subIdent replacements t.ident,
+                  tyBody = substituteIdentifiersType replacements t.tyBody,
+                  body = substituteIdentifiersExpr replacements t.body,
+                  inexpr = substituteIdentifiersExpr replacements t.inexpr,
+                  ty = substituteIdentifiersType replacements t.ty}
+  | TmLam t ->
+    TmLam {t with ident = subIdent replacements t.ident,
+                  tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                  body = substituteIdentifiersExpr replacements t.body,
+                  ty = substituteIdentifiersType replacements t.ty}
+  | TmType t ->
+    TmType {t with ident = subIdent replacements t.ident,
+                   tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                   inexpr = substituteIdentifiersExpr replacements t.inexpr,
+                   ty = substituteIdentifiersType replacements t.ty}
+  | TmConDef t ->
+    TmConDef {t with ident = subIdent replacements t.ident,
+                     tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                     inexpr = substituteIdentifiersExpr replacements t.inexpr,
+                     ty = substituteIdentifiersType replacements t.ty}
+  | TmExt t ->
+    TmExt {t with ident = subIdent replacements t.ident,
+                  tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                  inexpr = substituteIdentifiersExpr replacements t.inexpr,
+                  ty = substituteIdentifiersType replacements t.ty}
+  | TmRecLets t ->
+    let subBinding = lam bind.
+      {bind with ident = subIdent replacements bind.ident,
+                 body = substituteIdentifiersExpr replacements bind.body,
+                 tyBody = substituteIdentifiersType replacements bind.tyBody}
+    in
+    TmRecLets {t with bindings = map subBinding t.bindings,
+                      inexpr = substituteIdentifiersExpr replacements t.inexpr,
+                      ty = substituteIdentifiersType replacements t.ty}
+  | ast ->
+    let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
+    let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
+    let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
+    withType (substituteIdentifiersType replacements (tyTm ast)) ast
+
+  sem substituteIdentifiersType : Map Name Name -> Type -> Type
+  sem substituteIdentifiersType replacements =
+  | TyCon t -> TyCon {t with ident = subIdent replacements t.ident}
+  | TyVar t -> TyVar {t with ident = subIdent replacements t.ident}
+  | ty -> smap_Type_Type (substituteIdentifiersType replacements) ty
+
+  sem substituteIdentifiersPat : Map Name Name -> Pat -> Pat
+  sem substituteIdentifiersPat replacements =
+  | PatCon t ->
+    PatCon {t with ident = subIdent replacements t.ident,
+                   subpat = substituteIdentifiersPat replacements t.subpat}
+  | p ->
+    let p = smap_Pat_Pat (substituteIdentifiersPat replacements) p in
+    withTypePat (substituteIdentifiersType replacements (tyPat p)) p
+end
+
 lang MExprFindSym = MExprAst
   -- Finds the names corresponding to a provided sequence of strings in a given
   -- AST. If 'id' is the first bound name matching a provided string, then
@@ -62,12 +137,26 @@ lang MExprFindSym = MExprAst
     else acc
 end
 
-lang TestLang = MExprFindSym + BootParser + MExprSym
+lang TestLang =
+  MExprFindSym + MExprSubstitute + BootParser + MExprSym + MExprPrettyPrint
 end
 
 mexpr
 
 use TestLang in
+
+let pp = lam e. mexprToString e in
+
+let expr = lam id. bindall_ [
+  ulet_ id (ulam_ id (var_ id)),
+  ureclets_ [(id, var_ id)],
+  type_ id (tyapp_ (tycon_ id) tyint_),
+  condef_ id (tyarrow_ tyint_ (tycon_ id)),
+  ext_ id false tyunknown_,
+  conapp_ id (int_ 2)
+] in
+let replace = mapFromSeq nameCmp [(nameNoSym "x", nameNoSym "y")] in
+utest pp (substituteIdentifiers replace (expr "x")) with pp (expr "y") using eqString in
 
 let parseProgram : String -> Expr = 
   lam str.

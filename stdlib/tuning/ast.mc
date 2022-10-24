@@ -7,8 +7,6 @@ include "mexpr/type-check.mc"
 
 -- Defines AST nodes for holes.
 
-let holeKeywords = ["hole", "Boolean", "IntRange", "independent"]
-
 let _lookupExit : all a. Info -> String -> Map String a -> a =
   lam info : Info. lam s : String. lam m : Map String a.
     mapLookupOrElse (lam. errorSingle [info] (concat s " not found")) s m

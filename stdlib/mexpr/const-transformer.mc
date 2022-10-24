@@ -7,7 +7,6 @@
 include "string.mc"
 include "name.mc"
 include "map.mc"
-include "builtin.mc"
 include "ast-builder.mc"
 include "ast.mc"
 
@@ -22,7 +21,7 @@ let _constWithInfos: Info -> Expr -> Expr = use MExprAst in
 
 lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAst + NamedPat
 
-  sem constTransform =
+  sem constTransform builtin =
   | t ->
       let f = lam acc. lam v.
         match v with (x, c) then mapInsert x (Some (uconst_ c)) acc else never in

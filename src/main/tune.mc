@@ -55,10 +55,10 @@ let tune = lam files. lam options : Options. lam args.
       eliminateDeadCode = not options.keepDeadCode,
       keywords = holeKeywords
     } file in
-    let ast = makeKeywords [] ast in
+    let ast = makeKeywords ast in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (expr2str ast) else ());
+    (if options.debugParse then printLn (mexprToString ast) else ());
 
     let ast = symbolize ast in
     let ast = use HoleANF in normalizeTerm ast in
@@ -73,13 +73,13 @@ let tune = lam files. lam options : Options. lam args.
     match instrument env dep ast with (instRes, ast) in
 
     -- If option --debug-instrumentation, then pretty print the instrumented AST
-    (if tuneOptions.debugInstrumentation then printLn (expr2str ast) else ());
+    (if tuneOptions.debugInstrumentation then printLn (mexprToString ast) else ());
 
     -- Context expand the holes
     match contextExpand env ast with (r, ast) in
 
     -- If option --debug-expansion, then pretty print the expanded AST
-    (if tuneOptions.debugExpansion then printLn (expr2str ast) else ());
+    (if tuneOptions.debugExpansion then printLn (mexprToString ast) else ());
 
     -- If option --tuned is given, then use tune file as defaults
     let table =

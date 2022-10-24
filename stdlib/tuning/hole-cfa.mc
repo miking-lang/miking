@@ -455,7 +455,7 @@ use Test in
 let debug = false in
 let parse = lam str.
   let ast = parseMExprStringKeywords holeKeywords str in
-  let ast = makeKeywords [] ast in
+  let ast = makeKeywords ast in
   symbolizeExpr {symEnvEmpty with strictTypeVars = false} ast
 in
 let test

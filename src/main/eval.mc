@@ -58,7 +58,7 @@ let eval = lam files. lam options : Options. lam args.
     } file in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (expr2str ast) else ());
+    (if options.debugParse then printLn (mexprToString ast) else ());
 
     let ast = symbolize ast in
 
@@ -70,7 +70,7 @@ let eval = lam files. lam options : Options. lam args.
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
-       printLn (join [expr2str ast, "\n : ", type2str (tyTm ast)]) else ());
+       printLn (join [mexprToString ast, "\n : ", type2str (tyTm ast)]) else ());
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.

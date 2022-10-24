@@ -109,7 +109,7 @@ lang LambdaLiftFindFreeVariables =
   sem findFreeVariablesReclet (state : LambdaLiftState) =
   | TmLet t ->
     let state =
-      match t.tyBody with TyAll _ | TyArrow _ then
+      match t.body with TmLam _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -132,7 +132,7 @@ lang LambdaLiftFindFreeVariables =
     findFreeVariables state t.body
   | TmLet t ->
     let state =
-      match t.tyBody with TyAll _ | TyArrow _ then
+      match t.body with TmLam _ then
         let fv = findFreeVariablesInBody state (mapEmpty nameCmp) t.body in
         {{state with funs = setInsert t.ident state.funs}
                 with sols = mapInsert t.ident fv state.sols}
@@ -203,7 +203,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
     match mapLookup t.ident subMap with Some subExpr then
       (subMap, subExpr t.info)
     else (subMap, TmVar t)
-  | TmLet (t & {tyBody = TyAll _ | TyArrow _}) ->
+  | TmLet (t & {body = TmLam _}) ->
     match mapLookup t.ident solutions with Some freeVars then
       let fv = mapBindings freeVars in
       let info = infoTm t.body in
@@ -212,8 +212,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           (lam freeVar : (Name, Type). lam body.
             TmLam {ident = freeVar.0, tyIdent = freeVar.1,
                    body = body, info = info,
-                   ty = TyArrow {from = freeVar.1, to = tyTm body,
-                                 info = info}})
+                   ty = TyUnknown {info = info}})
           t.body
           fv in
       let tyBody = updateBindingType fv t.tyBody in
@@ -221,13 +220,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
         foldr
           (lam freeVar : (Name, Type). lam acc.
             let x = TmVar {ident = freeVar.0, ty = freeVar.1, info = info, frozen = false} in
-            let appType =
-              match tyTm acc with TyArrow {to = to} then
-                to
-              else errorSingle [info] "Application on non-arrow type"
-            in
-            TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-          (TmVar {ident = t.ident, ty = tyBody, info = info, frozen = false})
+            TmApp {lhs = acc, rhs = x, ty = TyUnknown {info = info}, info = info})
+          (TmVar {ident = t.ident, ty = TyUnknown {info = info}, info = info, frozen = false})
           (reverse fv) in
       match insertFreeVariablesH solutions subMap body with (subMap, body) in
       let subMap = mapInsert t.ident subExpr subMap in
@@ -242,19 +236,13 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       lam subMap : Map Name (Info -> Expr). lam bind : RecLetBinding.
       match mapLookup bind.ident solutions with Some freeVars then
         let fv = mapBindings freeVars in
-        let bindType = updateBindingType fv bind.tyBody in
         let subExpr = lam info.
           foldr
             (lam freeVar : (Name, Type). lam acc.
               let x = TmVar {ident = freeVar.0, ty = freeVar.1,
                              info = info, frozen = false} in
-              let appType =
-                match tyTm acc with TyArrow {to = to} then
-                  to
-                else errorSingle [info] "Application on non-arrow type"
-              in
-              TmApp {lhs = acc, rhs = x, ty = appType, info = info})
-            (TmVar {ident = bind.ident, ty = bindType, info = info, frozen = false})
+              TmApp {lhs = acc, rhs = x, ty = TyUnknown {info = info}, info = info})
+            (TmVar {ident = bind.ident, ty = TyUnknown {info = info}, info = info, frozen = false})
             (reverse (mapBindings freeVars)) in
         mapInsert bind.ident subExpr subMap
       else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
@@ -270,8 +258,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
               let info = infoTm body in
               TmLam {ident = freeVar.0, tyIdent = freeVar.1,
                      body = body, info = info,
-                     ty = TyArrow {from = freeVar.1, to = tyTm body,
-                                   info = info}})
+                     ty = TyUnknown {info = info}})
             bind.body fv in
         let tyBody = updateBindingType fv bind.tyBody in
         match insertFreeVariablesH solutions subMap body with (subMap, body) in
@@ -300,7 +287,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
-    match t.tyBody with TyAll _ | TyArrow _ then
+    match t.body with TmLam _ then
       let bind : RecLetBinding =
         {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
       let bindings = snoc bindings bind in
@@ -330,7 +317,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftGlobalH (lifted : [Expr]) =
   | TmLet t ->
     match liftGlobalH lifted t.body with (lifted, body) in
-    match t.tyBody with TyAll _ | TyArrow _ then
+    match t.body with TmLam _ then
       let lifted = snoc lifted (TmLet {{t with body = body}
                                           with inexpr = unit_}) in
       liftGlobalH lifted t.inexpr
@@ -338,8 +325,24 @@ lang LambdaLiftLiftGlobal = MExprAst
       (lifted, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
     let lifted = snoc lifted (liftRecursiveBinding (TmRecLets t)) in
-    match liftGlobalH lifted t.inexpr with (lifted, inexpr) in
-    (lifted, inexpr)
+    liftGlobalH lifted t.inexpr
+  | TmType t ->
+    -- TODO(larshum, 2022-10-20): Lifting type and constructor definitions to
+    -- the top of the program may make an ill-typed program pass the
+    -- type-checking because types are placed on the top-level of the program.
+    -- In the general case, we want something more sophisticated to decide on
+    -- this here.
+    let lifted = snoc lifted (TmType {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
+  | TmConDef t ->
+    let lifted = snoc lifted (TmConDef {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
+  | TmUtest t ->
+    let lifted = snoc lifted (TmUtest {t with next = unit_}) in
+    liftGlobalH lifted t.next
+  | TmExt t ->
+    let lifted = snoc lifted (TmExt {t with inexpr = unit_}) in
+    liftGlobalH lifted t.inexpr
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
 
   sem liftGlobal =
@@ -406,61 +409,79 @@ lang LambdaLiftTyAlls = MExprAst
   sem insertTyAlls : Map Name TyAllData -> Expr -> Expr
   sem insertTyAlls tyAlls =
   | TmLet t ->
-    -- NOTE(larshum, 2022-09-21): If we find TyFlex anywhere in the type of the
-    -- body, we replace all annotated types with TyUnknown.
-    let tyBody = insertTyAllsType tyAlls t.tyBody in
-    let body =
-      match tyBody with TyUnknown _ then
-        clearAnnotTypes t.body
-      else insertTyAlls tyAlls t.body
-    in
+    match insertTyAllsType tyAlls t.tyBody with (tyBody, bound) in
+    let body = eraseUnboundTypesExpr bound t.body in
+    let inexpr = insertTyAlls tyAlls t.inexpr in
     TmLet {t with tyBody = tyBody, body = body,
-                  inexpr = insertTyAlls tyAlls t.inexpr}
+                  ty = tyTm inexpr, inexpr = inexpr}
   | TmRecLets t ->
     let bindingFn = lam bind.
-      let tyBody = insertTyAllsType tyAlls bind.tyBody in
-      let body =
-        match tyBody with TyUnknown _ then
-          clearAnnotTypes bind.body
-        else insertTyAlls tyAlls bind.body
-      in
+      match insertTyAllsType tyAlls bind.tyBody with (tyBody, bound) in
+      let body = eraseUnboundTypesExpr bound bind.body in
       {bind with tyBody = tyBody, body = body}
     in
+    let inexpr = insertTyAlls tyAlls t.inexpr in
     TmRecLets {t with bindings = map bindingFn t.bindings,
-                      inexpr = insertTyAlls tyAlls t.inexpr}
-  | TmType t -> TmType {t with inexpr = insertTyAlls tyAlls t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = insertTyAlls tyAlls t.inexpr}
-  | TmUtest t -> TmUtest {t with next = insertTyAlls tyAlls t.next}
-  | TmExt t -> TmExt {t with inexpr = insertTyAlls tyAlls t.inexpr}
-  | t -> t
+                      ty = tyTm inexpr, inexpr = inexpr}
+  | TmType t ->
+    let inexpr = insertTyAlls tyAlls t.inexpr in
+    TmType {t with ty = tyTm inexpr, inexpr = inexpr}
+  | TmConDef t ->
+    let inexpr = insertTyAlls tyAlls t.inexpr in
+    TmConDef {t with ty = tyTm inexpr, inexpr = inexpr}
+  | TmUtest t ->
+    let next = insertTyAlls tyAlls t.next in
+    TmUtest {t with ty = tyTm next, next = next}
+  | TmExt t ->
+    let inexpr = insertTyAlls tyAlls t.inexpr in
+    TmExt {t with ty = tyTm inexpr, inexpr = inexpr}
+  | t -> smap_Expr_Expr (insertTyAlls tyAlls) t
 
-  sem insertTyAllsType : Map Name TyAllData -> Type -> Type
+  -- Replaces TyVar and TyFlex that refer to unbound variables with TyUnknown.
+  -- This prevents type variables from escaping their scope, which may happen
+  -- due to the lambda lifting.
+  sem eraseUnboundTypesExpr : Map Name TyAllData -> Expr -> Expr
+  sem eraseUnboundTypesExpr bound =
+  | t ->
+    let t = smap_Expr_Expr (eraseUnboundTypesExpr bound) t in
+    let t = smap_Expr_Type (eraseUnboundTypesType bound) t in
+    let t = smap_Expr_Pat (eraseUnboundTypesPat bound) t in
+    withType (eraseUnboundTypesType bound (tyTm t)) t
+
+  sem eraseUnboundTypesType : Map Name TyAllData -> Type -> Type
+  sem eraseUnboundTypesType bound =
+  | TyFlex t -> TyUnknown {info = t.info}
+  | TyVar t ->
+    match mapLookup t.ident bound with Some (_, info) then
+      TyVar {t with info = info, level = 1}
+    else TyUnknown {info = t.info}
+  | ty -> smap_Type_Type (eraseUnboundTypesType bound) ty
+
+  sem eraseUnboundTypesPat : Map Name TyAllData -> Pat -> Pat
+  sem eraseUnboundTypesPat bound =
+  | p ->
+    let p = smap_Pat_Pat (eraseUnboundTypesPat bound) p in
+    withTypePat (eraseUnboundTypesType bound (tyPat p)) p
+
+  sem insertTyAllsType : Map Name TyAllData -> Type -> (Type, Map Name TyAllData)
   sem insertTyAllsType tyAlls =
   | ty ->
-    -- NOTE(larshum, 2022-09-21): If the type contains TyFlex, we replace it
-    -- with TyUnknown.
     if containsTyFlex false ty then
-      TyUnknown {info = infoTy ty}
+      (TyUnknown {info = infoTy ty}, mapEmpty nameCmp)
     else
       let vars = collectTyVars tyAlls (mapEmpty nameCmp) ty in
-      mapFoldWithKey
-        (lam accTy. lam tyId. lam tyAllData.
-          match tyAllData with (varSort, info) in
-          TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
-        ty vars
+      let ty = eraseUnboundTypesType vars ty in
+      ( mapFoldWithKey
+          (lam accTy. lam tyId. lam tyAllData.
+            match tyAllData with (varSort, info) in
+            TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
+          ty vars
+      , vars )
 
   sem containsTyFlex : Bool -> Type -> Bool
   sem containsTyFlex acc =
   | TyFlex _ -> true
-  | ty -> if acc then true else sfold_Type_Type containsTyFlex acc ty
-
-  -- Clears all annotated types within an expression, by replacing them with
-  -- TyUnknowns.
-  sem clearAnnotTypes : Expr -> Expr
-  sem clearAnnotTypes =
-  | t ->
-    let t = smap_Expr_Type (lam ty. TyUnknown {info = infoTy ty}) t in
-    smap_Expr_Expr clearAnnotTypes t
+  | ty -> if acc then true else sfold_Type_Type containsTyFlex false ty
 
   sem collectTyVars : Map Name TyAllData -> Map Name TyAllData -> Type
                    -> Map Name TyAllData

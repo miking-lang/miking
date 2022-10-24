@@ -561,7 +561,8 @@ lang MExprTune = MExpr + TuneBase end
 lang TestLang =
   TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
-  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck
+  BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck +
+  MCoreCompileLang
 end
 
 mexpr
@@ -575,7 +576,7 @@ let timeSensitive = false in
 
 let parse = lam str.
   let ast = parseMExprStringKeywords holeKeywords str in
-  let ast = makeKeywords [] ast in
+  let ast = makeKeywords ast in
   symbolizeExpr {symEnvEmpty with strictTypeVars = false} ast
 in
 

@@ -9,6 +9,7 @@ include "pprint.mc"
 include "const-transformer.mc"
 include "string.mc"
 include "stringid.mc"
+include "builtin.mc"
 include "seq.mc"
 include "name.mc"
 
@@ -18,50 +19,67 @@ let gint = lam t. lam n. bootParserGetInt t n
 let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
 
-type BootParserParseMCoreFileArg = {
-  -- Should we keep utests
-  keepUtests : Bool,
-
-  -- Prune external dependent utests
-  pruneExternalUtests : Bool,
-
-  -- Warn on pruned external dependent utests
-  pruneExternalUtestsWarning : Bool,
-
-  -- Run dead code elimination
-  eliminateDeadCode : Bool,
-
-  -- Exclude pruning of utest for externals with whose dependencies are met on
-  -- this system.
-  externalsExclude : [String],
-
-  -- Additional keywords
-  keywords : [String],
-
-  allowFree : Bool
-}
-
-let defaultBootParserParseMCoreFileArg = {
-  keepUtests = true,
-  pruneExternalUtests = false,
-  pruneExternalUtestsWarning = true,
-  eliminateDeadCode = true,
-  externalsExclude = [],
-  keywords = [],
-  allowFree = false
-}
-
-type BootParserParseMExprStringArg = {
-  keywords : [String],
-  allowFree : Bool
-}
-
-let defaultBootParserParseMExprStringArg = {
-  keywords = [],
-  allowFree = false
-}
-
 lang BootParser = MExprAst + ConstTransformer
+
+  type BootParserParseMCoreFileArg = {
+    -- Should we keep utests
+    keepUtests : Bool,
+
+    -- Prune external dependent utests
+    pruneExternalUtests : Bool,
+
+    -- Warn on pruned external dependent utests
+    pruneExternalUtestsWarning : Bool,
+
+    -- Run dead code elimination
+    eliminateDeadCode : Bool,
+
+    -- Exclude pruning of utest for externals with whose dependencies are met on
+    -- this system.
+    externalsExclude : [String],
+
+    -- Additional keywords
+    keywords : [String],
+
+    -- Allow free variables
+    allowFree : Bool,
+
+    -- The builtins to replace with constants
+    builtin : [(String,Const)]
+  }
+
+  type BootParserParseMExprStringArg = {
+
+    -- Additional keywords
+    keywords : [String],
+
+    -- Allow free variables
+    allowFree : Bool,
+
+    -- The builtins to replace with constants
+    builtin : [(String,Const)]
+  }
+
+  sem _defaultBootParserParseMCoreFileArg : () -> BootParserParseMCoreFileArg
+  sem _defaultBootParserParseMCoreFileArg =
+  | _ -> {
+    keepUtests = true,
+    pruneExternalUtests = false,
+    pruneExternalUtestsWarning = true,
+    eliminateDeadCode = true,
+    externalsExclude = [],
+    keywords = [],
+    allowFree = false,
+    builtin = builtin
+  }
+
+  sem _defaultBootParserParseMExprStringArg : () -> BootParserParseMExprStringArg
+  sem _defaultBootParserParseMExprStringArg =
+  | _ -> {
+    keywords = [],
+    allowFree = false,
+    builtin = builtin
+  }
 
   -- Parse a complete MCore file, including MLang code
   -- This function returns the final MExpr AST. The MCore
@@ -81,7 +99,7 @@ lang BootParser = MExprAst + ConstTransformer
         arg.keywords
         filename
     in
-    constTransform (matchTerm t (bootParserGetId t))
+    constTransform arg.builtin (matchTerm t (bootParserGetId t))
 
   -- Parses an MExpr string and returns the final MExpr AST
   sem parseMExprString (arg : BootParserParseMExprStringArg) =
@@ -94,12 +112,12 @@ lang BootParser = MExprAst + ConstTransformer
         arg.keywords
         str
     in
-    constTransform (matchTerm t (bootParserGetId t))
+    constTransform arg.builtin (matchTerm t (bootParserGetId t))
 
   sem parseMExprStringKeywords (keywords : [String]) =
   | str ->
     parseMExprString
-      { defaultBootParserParseMExprStringArg with keywords = keywords }
+      { _defaultBootParserParseMExprStringArg () with keywords = keywords }
       str
 
   -- Get term help function
@@ -362,6 +380,12 @@ lang BootParser = MExprAst + ConstTransformer
   | x -> PName (nameNoSym x)
 
 end
+
+let defaultBootParserParseMCoreFileArg =
+  use BootParser in _defaultBootParserParseMCoreFileArg ()
+
+let defaultBootParserParseMExprStringArg =
+  use BootParser in _defaultBootParserParseMExprStringArg ()
 
 lang BootParserTest = BootParser + MExprPrettyPrint + MExprEq
 end

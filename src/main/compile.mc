@@ -30,7 +30,7 @@ lang MCoreCompile =
   MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
-  OCamlTryWithWrap
+  OCamlTryWithWrap + MCoreCompileLang
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
@@ -117,9 +117,9 @@ let compile = lam files. lam options : Options. lam args.
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = true,
       eliminateDeadCode = not options.keepDeadCode,
-      keywords = concat holeKeywords parallelKeywords
+      keywords = mexprExtendedKeywords
     } file in
-    let ast = makeKeywords [] ast in
+    let ast = makeKeywords ast in
 
     -- Applies static and dynamic checks on the accelerated expressions, to
     -- verify that the code within them are supported by the accelerate
