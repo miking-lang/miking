@@ -77,14 +77,14 @@ const MExpr_JS_Intrinsics = Object.freeze({
     const pair = map.pairs.find(pair => map.cmpFun(key)(pair[0]));
     return pair && pair[1];
   },
-  mapFindOrElse: els => key => map => MExpr_JS_Intrinsics.mapFindExn(key)(map) ?? els(),
+  mapFindOrElse: els => key => map => MExpr_JS_Intrinsics.undefinedCoalesce(MExpr_JS_Intrinsics.mapFindExn(key)(map))(els),
   mapFindApplyOrElse: fun => els => key => map => {
     const val = MExpr_JS_Intrinsics.mapFindExn(key)(map);
     return val ? fun(val) : els();
   },
   mapBindings: map => map.pairs,
   mapChooseExn: map => map.pairs[0],
-  mapChooseOrElse: els => map => MExpr_JS_Intrinsics.mapChooseExn(map) ?? els(),
+  mapChooseOrElse: els => map => MExpr_JS_Intrinsics.undefinedCoalesce(MExpr_JS_Intrinsics.mapChooseExn(map))(els),
   mapSize: map => map.pairs.length,
   mapMem: key => map => map.pairs.some(pair => map.cmpFun(key)(pair[0])),
   mapAny: fun => map => map.pairs.some(pair => fun(pair[0])(pair[1])),
@@ -121,6 +121,7 @@ const MExpr_JS_Intrinsics = Object.freeze({
   eqsym: lhs => rhs => lhs.symbol === rhs.symbol,
 
   // Helper Functions
+  undefinedCoalesce: v => els => v === undefined ? els() : v,
   trimLastNewline: lst => lst[lst.length - 1] === '\n' ? lst.slice(0, -1) : lst,
   ensureString: s => Array.isArray(s) ? s.map(MExpr_JS_Intrinsics.stringify).join('') : s.toString(),
   stringify: val => typeof val === "object" ? JSON.stringify(val) : val.toString(),
