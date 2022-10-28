@@ -58,7 +58,10 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem lookupDefinition env replaced id info inexpr =
   | elsfn ->
     let definition = toDefinition id info in
-    match mapLookup definition env.defIds with Some prevId then
+    -- NOTE(larshum, 2022-10-28): All definitions containing NoInfo are
+    -- considered not to be equal. This prevents eliminating code generated as
+    -- part of the compilation.
+    match (info, mapLookup definition env.defIds) with (!NoInfo _, Some prevId) then
       let env = {env with replace = mapInsert id prevId env.replace} in
       let replaced = mapInsert id prevId replaced in
       eliminateDuplicateCodeExpr env replaced inexpr
@@ -296,5 +299,14 @@ let expected = symbolize (bindall_ [optionDef, t1, t2]) in
 match eliminateDuplicateCodeWithSummary t with (summary, t) in
 utest expr2str t with expr2str expected using eqString in
 utest mapSize summary with 3 using eqi in
+
+-- Test that it does not eliminate bindings with the same identifier string if
+-- they have no info-fields.
+let t = bindall_ [
+  ulet_ "t" (addi_ (int_ 2) (int_ 3)),
+  ulet_ "t" (addi_ (int_ 4) (var_ "t")),
+  var_ "t"
+] in
+utest eliminateDuplicateCode t with t using eqExpr in
 
 ()
