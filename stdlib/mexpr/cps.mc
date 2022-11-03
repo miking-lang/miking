@@ -42,13 +42,17 @@ include "const-types.mc"
 
 type CPSEnv = {
 
-  -- The names to CPS transform (None = full CPS transformation).
-  names: Option (Set Name)
+  -- Predicate that determines which names to CPS transform
+  transform: Name -> Bool,
+
+  -- If the CPS transformation is partial or not (true if transform = lam. true)
+  partial: Bool
 
 }
 
 let _cpsEnvDefault = {
-  names = None ()
+  transform = lam. true,
+  partial = false
 }
 
 lang CPS = LamAst + VarAst + LetAst
@@ -66,16 +70,16 @@ lang CPS = LamAst + VarAst + LetAst
     let e = exprCps env (Some k) e in
     mapPre_Expr_Expr (exprTyCps env) e
 
-  sem cpsPartialIdentity : Set Name -> Expr -> Expr
-  sem cpsPartialIdentity names =
+  sem cpsPartialIdentity : (Name -> Bool) -> Expr -> Expr
+  sem cpsPartialIdentity transformFun =
   | e ->
     let id = withInfo (infoTm e) (ulam_ "x" (var_ "x")) in
-    cpsPartialCont names id e
+    cpsPartialCont transformFun id e
 
-  sem cpsPartialCont : Set Name -> Expr -> Expr -> Expr
-  sem cpsPartialCont names k =
+  sem cpsPartialCont : (Name -> Bool) -> Expr -> Expr -> Expr
+  sem cpsPartialCont transformFun k =
   | e ->
-    let env = { _cpsEnvDefault with names = Some names } in
+    let env = { _cpsEnvDefault with transform = transformFun, partial = true } in
     let e = exprCps env (Some k) e in
     mapPre_Expr_Expr (exprTyCps env) e
 
@@ -96,9 +100,7 @@ lang CPS = LamAst + VarAst + LetAst
 
   sem transform : CPSEnv -> Name -> Bool
   sem transform env =
-  | n ->
-    match env.names with Some names then setMem n names
-    else true
+  | n -> env.transform n
 
 end
 
@@ -344,7 +346,7 @@ lang FunTypeCPS = CPS + FunTypeAst
   -- Function type a -> b becomes (b -> res) -> a -> res
   | TyArrow ({ from = from, to = to } & b) ->
     let i = tyWithInfo b.info in
-    match env.names with Some _ then
+    if env.partial then
       -- NOTE(dlunde,2022-06-14): It is not obvious how to transform the types
       -- when the CPS transformation is partial. For now, we simply replace
       -- arrow types with unknown and rely on the type checker to infer the new
@@ -654,7 +656,8 @@ in
 
 let _cps = lam names. lam e.
   let names = setOfSeq nameCmp (map nameNoSym names) in
-  cpsPartialIdentity names (normalizeTerm (_parse e))
+  let transformFun = lam n. setMem n names in
+  cpsPartialIdentity transformFun (normalizeTerm (_parse e))
 in
 
 -- Variables
