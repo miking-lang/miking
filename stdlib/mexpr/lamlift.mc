@@ -9,6 +9,7 @@ include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+include "mexpr/utils.mc"
 
 type LambdaLiftState = {
   -- Variables in the current scope that can occur as free variables in the
@@ -369,6 +370,38 @@ lang LambdaLiftLiftGlobal = MExprAst
       t
 end
 
+lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
+  sem replaceCapturedParameters : Map Name (Map Name Type) -> Expr -> Expr
+  sem replaceCapturedParameters solutions =
+  | ast ->
+    let subName = lam id. lam. nameSetNewSym id in
+    let subMap : Map Name (Map Name Name) =
+      mapMapWithKey (lam. lam sol. mapMapWithKey subName sol) solutions
+    in
+    replaceCapturedParametersH subMap ast
+
+  sem replaceCapturedParametersH : Map Name (Map Name Name) -> Expr -> Expr
+  sem replaceCapturedParametersH subMap =
+  | TmLet t ->
+    let body =
+      match mapLookup t.ident subMap with Some subs then
+        substituteIdentifiers subs t.body
+      else t.body
+    in
+    TmLet {t with body = body,
+                  inexpr = replaceCapturedParametersH subMap t.inexpr}
+  | TmRecLets t ->
+    let replaceCapturedParametersBinding = lam bind.
+      match mapLookup bind.ident subMap with Some subs then
+        {bind with body = substituteIdentifiers subs bind.body}
+      else bind
+    in
+    let bindings = map replaceCapturedParametersBinding t.bindings in
+    TmRecLets {t with bindings = bindings,
+                      inexpr = replaceCapturedParametersH subMap t.inexpr}
+  | t -> smap_Expr_Expr (replaceCapturedParametersH subMap) t
+end
+
 lang LambdaLiftTyAlls = MExprAst
   type TyAllData = (VarSort, Info)
 
@@ -490,7 +523,8 @@ end
 
 lang MExprLambdaLift =
   LambdaLiftNameAnonymous + LambdaLiftFindFreeVariables +
-  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal + LambdaLiftTyAlls
+  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal +
+  LambdaLiftReplaceCapturedParameters + LambdaLiftTyAlls
 
   sem liftLambdas =
   | t -> match liftLambdasWithSolutions t with (_, t) in t
@@ -502,6 +536,7 @@ lang MExprLambdaLift =
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
     let t = liftGlobal t in
+    let t = replaceCapturedParameters state.sols t in
     (state.sols, insertTyAlls tyAllEnv t)
 end
 
