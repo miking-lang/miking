@@ -371,14 +371,39 @@ lang LambdaLiftLiftGlobal = MExprAst
 end
 
 lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
-  sem replaceCapturedParameters : Map Name (Map Name Type) -> Expr -> Expr
+  sem replaceCapturedParameters : Map Name (Map Name Type) -> Expr
+                               -> (Map Name (Map Name Type), Expr)
   sem replaceCapturedParameters solutions =
   | ast ->
-    let subName = lam id. lam. nameSetNewSym id in
+    let subs : Map Name [(Name, Name, Type)] =
+      mapMapWithKey
+        (lam. lam sol.
+          map
+            (lam idTy.
+              match idTy with (oldId, ty) in
+              (oldId, nameSetNewSym oldId, ty))
+            (mapBindings sol))
+        solutions in
+
+    -- Construct a substitution map from the old ID to the updated ID.
+    let nameSub = lam sub.
+      match sub with (oldId, newId, _) in
+      (oldId, newId) in
     let subMap : Map Name (Map Name Name) =
-      mapMapWithKey (lam. lam sol. mapMapWithKey subName sol) solutions
-    in
-    replaceCapturedParametersH subMap ast
+      mapMapWithKey
+        (lam. lam subs. mapFromSeq nameCmp (map nameSub subs))
+        subs in
+
+    -- Reconstruct the solutions map using the new ID.
+    let newIdSub = lam sub.
+      match sub with (_, newId, ty) in
+      (newId, ty) in
+    let solutions : Map Name (Map Name Type) =
+      mapMapWithKey
+        (lam. lam subs. mapFromSeq nameCmp (map newIdSub subs))
+        subs in
+
+    (solutions, replaceCapturedParametersH subMap ast)
 
   sem replaceCapturedParametersH : Map Name (Map Name Name) -> Expr -> Expr
   sem replaceCapturedParametersH subMap =
@@ -536,8 +561,8 @@ lang MExprLambdaLift =
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
     let t = liftGlobal t in
-    let t = replaceCapturedParameters state.sols t in
-    (state.sols, insertTyAlls tyAllEnv t)
+    match replaceCapturedParameters state.sols t with (solutions, t) in
+    (solutions, insertTyAlls tyAllEnv t)
 end
 
 lang TestLang =
