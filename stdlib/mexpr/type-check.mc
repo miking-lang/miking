@@ -492,7 +492,25 @@ lang TypeCheck = Unify + Generalize + ResolveLinks
 end
 
 lang PatTypeCheck = Unify
+  -- `typeCheckPat env patEnv pat' type checks `pat' under environment `env'
+  -- supposing the variables in `patEnv' have been bound previously in the
+  -- pattern.  Returns an updated `patEnv' and the type checked `pat'.
   sem typeCheckPat : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
+
+  -- Type check a pattern whose subpatterns must all be of the same type as the
+  -- pattern itself.
+  sem typeCheckPatSimple : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
+  sem typeCheckPatSimple env patEnv =
+  | pat ->
+    let patTy = newvar env.currentLvl (infoPat pat) in
+    match smapAccumL_Pat_Pat
+      (lam patEnv. lam pat.
+        match typeCheckPat env patEnv pat with (patEnv, pat) in
+        unify [infoPat pat] env patTy (tyPat pat);
+        (patEnv, pat))
+      patEnv pat
+    with (patEnv, pat) in
+    (patEnv, withTypePat patTy pat)
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -753,10 +771,8 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
     iter unifyPat postfix;
     let patEnv =
       match t.middle with PName n then
-        match mapLookup n patEnv with Some ty then
-          unify [t.info] env seqTy ty; patEnv
-        else
-          mapInsert n seqTy patEnv
+        mapInsertWith
+          (lam ty1. lam ty2. unify [t.info] env ty1 ty2; ty2) n seqTy patEnv
       else patEnv
     in
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
@@ -805,27 +821,17 @@ end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
   sem typeCheckPat env patEnv =
-  | PatAnd t ->
-    match typeCheckPat env patEnv t.lpat with (patEnv, lpat) in
-    match typeCheckPat env patEnv t.rpat with (patEnv, rpat) in
-    unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (patEnv, PatAnd {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
+  | PatAnd t -> typeCheckPatSimple env patEnv (PatAnd t)
 end
 
 lang OrPatTypeCheck = PatTypeCheck + OrPat
   sem typeCheckPat env patEnv =
-  | PatOr t ->
-    match typeCheckPat env patEnv t.lpat with (patEnv, lpat) in
-    match typeCheckPat env patEnv t.rpat with (patEnv, rpat) in
-    unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (patEnv, PatOr {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
+  | PatOr t -> typeCheckPatSimple env patEnv (PatOr t)
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
   sem typeCheckPat env patEnv =
-  | PatNot t ->
-    match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
-    (patEnv, PatNot {t with subpat = subpat, ty = tyPat subpat})
+  | PatNot t -> typeCheckPatSimple env patEnv (PatNot t)
 end
 
 
