@@ -1625,16 +1625,16 @@ lang TensorOpEval =
       errorSingle [info] "Tensor and value type does not match in CTensorLinearSetExn"
   | CTensorRank _ ->
     match arg with TmTensor { val = t } then
-      match t with TInt t | TFloat t | TExpr t then
-        let val = tensorRank t in
-        int_ val
+      match t with TInt t then int_ (tensorRank t)
+      else match t with TFloat t then int_ (tensorRank t)
+      else match t with TExpr t then int_ (tensorRank t)
       else never
     else errorSingle [info] "First argument to CTensorRank not a tensor"
   | CTensorShape _ ->
     match arg with TmTensor { val = t } then
-      match t with TInt t | TFloat t | TExpr t then
-        let shape = tensorShape t in
-        _toTmSeq shape
+      match t with TInt t then _toTmSeq (tensorShape t)
+      else match t with TFloat t then _toTmSeq (tensorShape t)
+      else match t with TExpr t then _toTmSeq (tensorShape t)
       else never
     else errorSingle [info] "First argument to CTensorRank not a tensor"
   | CTensorReshapeExn _ ->

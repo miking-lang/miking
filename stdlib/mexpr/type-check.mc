@@ -492,7 +492,7 @@ lang TypeCheck = Unify + Generalize + ResolveLinks
 end
 
 lang PatTypeCheck = Unify
-  sem typeCheckPat : TCEnv -> Pat -> (TCEnv, Pat)
+  sem typeCheckPat : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -596,8 +596,9 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
   sem typeCheckExpr env =
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
-    match typeCheckPat env t.pat with (thnEnv, pat) in
+    match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
     unify [infoTm target, infoPat pat] env (tyTm target) (tyPat pat);
+    let thnEnv : TCEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr env t.els in
     unify [infoTm thn, infoTm els] env (tyTm thn) (tyTm els);
@@ -719,62 +720,66 @@ end
 ---------------------------
 
 lang NamedPatTypeCheck = PatTypeCheck + NamedPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatNamed t ->
-    let patTy = newvar env.currentLvl t.info in
-    let env =
-      match t.ident with PName n then
-        _insertVar n patTy env
-      else env
-    in
-    (env, PatNamed {t with ty = patTy})
+    match t.ident with PName n then
+      match mapLookup n patEnv with Some ty then
+        (patEnv, PatNamed {t with ty = ty})
+      else
+        let patTy = newvar env.currentLvl t.info in
+        (mapInsert n patTy patEnv, PatNamed {t with ty = patTy})
+    else
+      (patEnv, PatNamed {t with ty = newvar env.currentLvl t.info})
 end
 
 lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
-    match mapAccumL typeCheckPat env t.pats with (env, pats) in
+    match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
     iter (lam pat. unify [infoPat pat] env elemTy (tyPat pat)) pats;
-    (env, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
+    (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
     let unifyPat = lam pat. unify [infoPat pat] env elemTy (tyPat pat) in
-    match mapAccumL typeCheckPat env t.prefix with (env, prefix) in
+    match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
     iter unifyPat prefix;
-    match mapAccumL typeCheckPat env t.postfix with (env, postfix) in
+    match mapAccumL (typeCheckPat env) patEnv t.postfix with (patEnv, postfix) in
     iter unifyPat postfix;
-    let env =
-      match t.middle with PName n then _insertVar n seqTy env
-      else env
+    let patEnv =
+      match t.middle with PName n then
+        match mapLookup n patEnv with Some ty then
+          unify [t.info] env seqTy ty; patEnv
+        else
+          mapInsert n seqTy patEnv
+      else patEnv
     in
-    (env, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
+    (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatRecord t ->
-    let typeCheckBinding = lam env. lam. lam pat. typeCheckPat env pat in
-    match mapMapAccum typeCheckBinding env t.bindings with (env, bindings) in
-    let env : TCEnv = env in
+    let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
+    match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
     (if env.disableRecordPolymorphism then disableGeneralize ty else ());
-    (env, PatRecord {t with bindings = bindings, ty = ty})
+    (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
 lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
       match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
-      match typeCheckPat env t.subpat with (env, subpat) in
+      match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
       unify [infoPat subpat] env (tyPat subpat) from;
-      (env, PatCon {t with subpat = subpat, ty = to})
+      (patEnv, PatCon {t with subpat = subpat, ty = to})
     else
       let msg = join [
         "Type check failed: reference to unbound constructor: ",
@@ -784,45 +789,43 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
 end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat
-  sem typeCheckPat env =
-  | PatInt t -> (env, PatInt {t with ty = TyInt {info = t.info}})
+  sem typeCheckPat env patEnv =
+  | PatInt t -> (patEnv, PatInt {t with ty = TyInt {info = t.info}})
 end
 
 lang CharPatTypeCheck = PatTypeCheck + CharPat
-  sem typeCheckPat env =
-  | PatChar t -> (env, PatChar {t with ty = TyChar {info = t.info}})
+  sem typeCheckPat env patEnv =
+  | PatChar t -> (patEnv, PatChar {t with ty = TyChar {info = t.info}})
 end
 
 lang BoolPatTypeCheck = PatTypeCheck + BoolPat
-  sem typeCheckPat env =
-  | PatBool t -> (env, PatBool {t with ty = TyBool {info = t.info}})
+  sem typeCheckPat env patEnv =
+  | PatBool t -> (patEnv, PatBool {t with ty = TyBool {info = t.info}})
 end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatAnd t ->
-    match typeCheckPat env t.lpat with (env, lpat) in
-    match typeCheckPat env t.rpat with (env, rpat) in
+    match typeCheckPat env patEnv t.lpat with (patEnv, lpat) in
+    match typeCheckPat env patEnv t.rpat with (patEnv, rpat) in
     unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (env, PatAnd {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
+    (patEnv, PatAnd {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
 end
 
--- TODO(aathn, 2021-11-11): This definition is incorrect as it does not check
--- that variables from different branches have the same type
 lang OrPatTypeCheck = PatTypeCheck + OrPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatOr t ->
-    match typeCheckPat env t.lpat with (env, lpat) in
-    match typeCheckPat env t.rpat with (env, rpat) in
+    match typeCheckPat env patEnv t.lpat with (patEnv, lpat) in
+    match typeCheckPat env patEnv t.rpat with (patEnv, rpat) in
     unify [infoPat lpat, infoPat rpat] env (tyPat lpat) (tyPat rpat);
-    (env, PatOr {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
+    (patEnv, PatOr {t with lpat = lpat, rpat = rpat, ty = tyPat lpat})
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
-  sem typeCheckPat env =
+  sem typeCheckPat env patEnv =
   | PatNot t ->
-    match typeCheckPat env t.subpat with (env, subpat) in
-    (env, PatNot {t with subpat = subpat, ty = tyPat subpat})
+    match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
+    (patEnv, PatNot {t with subpat = subpat, ty = tyPat subpat})
 end
 
 
