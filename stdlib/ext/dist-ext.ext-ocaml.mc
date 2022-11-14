@@ -120,12 +120,15 @@ let distExtMap =
       }
     ]),
     ("externalSetSeed", [
-      impl { expr = "
+      { expr = "
         fun seed -> (
           Random.init seed;
           Owl_stats_prng.sfmt_seed seed;
           Owl_stats_prng.init seed
         )",
-      ty = tyarrows_ [tyint_, otyunit_] }
+        ty = tyarrows_ [tyint_, otyunit_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
     ])
   ]
