@@ -32,6 +32,9 @@ lang ExtMCore =
 
 end
 
+lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
+end
+
 let generateTests = lam ast. lam testsEnabled.
   use ExtMCore in
   if testsEnabled then
@@ -70,7 +73,7 @@ let eval = lam files. lam options : Options. lam args.
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
-       printLn (join [mexprToString ast, "\n : ", type2str (tyTm ast)]) else ());
+       printLn (use TyAnnotFull in annotateMExpr ast) else ());
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
