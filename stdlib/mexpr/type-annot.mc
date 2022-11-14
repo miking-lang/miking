@@ -111,15 +111,6 @@ lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
   | TyVar {info = i} -> TyUnknown {info = i}
 end
 
-lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
-  sem reduceTyVar =
-  | TyFlex {info = i} & ty ->
-    match resolveLink ty with ! TyFlex _ & ty then
-      reduceTyVar ty
-    else
-      TyUnknown {info = i}
-end
-
 lang AllCompatibleType = CompatibleType + AllTypeAst
   sem reduceType (tyEnv : Map Name Type) =
   | TyAll t -> Some t.ty
@@ -708,7 +699,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  FlexCompatibleType + AllCompatibleType +
+  AllCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

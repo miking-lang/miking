@@ -122,11 +122,90 @@ lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTyp
   | ty -> optionGetOr ty (tryResolveAlias env ty)
 end
 
+-- Unification (or 'flexible') variables.  These variables represent some
+-- specific but as-of-yet undetermined type, and are used only in type checking.
+lang FlexTypeAst = VarSortAst + Ast
+  type FlexVarRec = {ident  : Name,
+                     level  : Level,
+    -- The level indicates at what depth the variable was bound introduced,
+    -- which is used to determine which variables can be generalized.
+                     sort   : VarSort,
+    -- The sort of a variable can be polymorphic, monomorphic or a record.
+                     isWeak : Bool
+    -- Weak variables must never be generalized.
+                     }
+
+  syn FlexVar =
+  | Unbound FlexVarRec
+  | Link Type
+
+  syn Type =
+  -- Flexible type variable
+  | TyFlex {info     : Info,
+            contents : Ref FlexVar}
+
+  -- Recursively follow links, producing something guaranteed not to be a link.
+  sem resolveLink =
+  | TyFlex t & ty ->
+    match deref t.contents with Link ty then
+      resolveLink ty
+    else
+      ty
+  | ty ->
+    ty
+
+  sem tyWithInfo (info : Info) =
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound _ then
+      TyFlex {t with info = info}
+    else
+      tyWithInfo info (resolveLink ty)
+
+  sem infoTy =
+  | TyFlex {info = info} -> info
+
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound r then
+      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
+      modref t.contents (Unbound {r with sort = sort});
+      (acc, ty)
+    else
+      smapAccumL_Type_Type f acc (resolveLink ty)
+end
+
+lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound t then
+      match pprintVarName env t.ident with (env, idstr) in
+      match getVarSortStringCode indent env idstr t.sort with (env, str) in
+      let weakPrefix = if t.isWeak then "_" else "" in
+      (env, concat weakPrefix str)
+    else
+      getTypeStringCode indent env (resolveLink ty)
+end
+
+lang FlexTypeEq = VarSortEq + FlexTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyFlex _ & rhs ->
+    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
+    match (lhs, rhs) with (TyFlex l, TyFlex r) then
+      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
+      optionBind
+        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
+        (lam freeTyFlex.
+          eqVarSort typeEnv {free with freeTyFlex = freeTyFlex} (n1.sort, n2.sort))
+    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then
+      eqTypeH typeEnv free lhs rhs
+    else None ()
+end
+
 ----------------------
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst + ResolveAlias + PrettyPrint
+lang Unify = MExprAst + FlexTypeAst + ResolveAlias + PrettyPrint
   -- Unify the types `ty1' and `ty2'. Modifies the types in place.
   sem unify (info : [Info]) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
@@ -162,7 +241,7 @@ lang Unify = MExprAst + ResolveAlias + PrettyPrint
 end
 
 -- Helper language providing functions to unify fields of record-like types
-lang UnifyFields = Unify + PrettyPrint
+lang UnifyFields = Unify
   -- Check that 'm1' is a subset of 'm2'
   sem unifyFields (env : UnifyEnv) (m1 : Map SID Type) =
   | m2 ->
@@ -184,7 +263,7 @@ lang UnifyFields = Unify + PrettyPrint
       unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
 end
 
-lang VarTypeUnify = Unify + VarTypeAst + PrettyPrint
+lang VarTypeUnify = Unify + VarTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
@@ -207,7 +286,7 @@ lang VarTypeUnify = Unify + VarTypeAst + PrettyPrint
     else ()
 end
 
-lang FlexTypeUnify = UnifyFields + FlexTypeAst + PrettyPrint
+lang FlexTypeUnify = UnifyFields + FlexTypeAst
   sem addSorts (env : UnifyEnv) =
   | (RecordVar r1, RecordVar r2) ->
     let f = lam acc. lam b : (SID, Type).
@@ -287,7 +366,7 @@ lang AppTypeUnify = Unify + AppTypeAst
     unifyTypes env (t1.rhs, t2.rhs)
 end
 
-lang AllTypeUnify = UnifyFields + AllTypeAst + PrettyPrint
+lang AllTypeUnify = UnifyFields + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
     (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
@@ -310,7 +389,7 @@ lang AllTypeUnify = UnifyFields + AllTypeAst + PrettyPrint
       unifyCheckBase info (setInsert t.ident boundVars) tv t.ty
 end
 
-lang ConTypeUnify = Unify + ConTypeAst + PrettyPrint
+lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
@@ -360,8 +439,12 @@ end
 ------------------------------------
 
 let newflexvar =
-  lam sort. lam level. lam info.
-  tyFlexUnbound info (nameSym "a") level sort false
+  lam sort. lam level. lam info. use FlexTypeAst in
+  TyFlex {info = info,
+          contents = ref (Unbound {ident = nameSym "a",
+                                   level = level,
+                                   sort = sort,
+                                   isWeak = false})}
 
 let newvarMono = use VarSortAst in
   newflexvar (MonoVar ())
@@ -441,22 +524,25 @@ end
 -- TYPE CHECKING --
 -------------------
 
-lang ResolveLinks = FlexTypeAst
-  sem resolveLinks =
+lang RemoveFlex = FlexTypeAst + UnknownTypeAst
+  sem removeFlexType =
+  | TyFlex t & ty ->
+    match deref t.contents with Unbound _ then TyUnknown { info = t.info }
+    else removeFlexType (resolveLink ty)
   | ty ->
-    smap_Type_Type resolveLinks (resolveLink ty)
+    smap_Type_Type removeFlexType ty
 
-  sem resolveLinksExpr =
+  sem removeFlexExpr =
   | tm ->
-    let tm = smap_Expr_TypeLabel resolveLinks tm in
-    let tm = smap_Expr_Type resolveLinks tm in
-    let tm = smap_Expr_Pat resolveLinksPat tm in
-    smap_Expr_Expr resolveLinksExpr tm
+    let tm = smap_Expr_TypeLabel removeFlexType tm in
+    let tm = smap_Expr_Type removeFlexType tm in
+    let tm = smap_Expr_Pat removeFlexPat tm in
+    smap_Expr_Expr removeFlexExpr tm
 
-  sem resolveLinksPat =
+  sem removeFlexPat =
   | pat ->
-    let pat = withTypePat (resolveLinks (tyPat pat)) pat in
-    smap_Pat_Pat resolveLinksPat pat
+    let pat = withTypePat (removeFlexType (tyPat pat)) pat in
+    smap_Pat_Pat removeFlexPat pat
 end
 
 lang SubstituteUnknown = UnknownTypeAst + VarSortAst
@@ -478,17 +564,17 @@ lang SubstituteUnknown = UnknownTypeAst + VarSortAst
     sfold_Type_Type (lam. lam ty. checkUnknown info ty) () ty
 end
 
-lang TypeCheck = Unify + Generalize + ResolveLinks
+lang TypeCheck = Unify + Generalize + RemoveFlex
   -- Type check `tm', with FreezeML-style type inference. Returns the
   -- term annotated with its type. The resulting type contains no
-  -- TyFlex links.
+  -- unification variables or links.
   sem typeCheck : Expr -> Expr
   sem typeCheck =
   | tm ->
-    resolveLinksExpr (typeCheckExpr _tcEnvEmpty tm)
+    removeFlexExpr (typeCheckExpr _tcEnvEmpty tm)
 
   -- Type check `expr' under the type environment `env'. The resulting
-  -- type may contain TyFlex links.
+  -- type may contain unification variables and links.
   sem typeCheckExpr : TCEnv -> Expr -> Expr
 end
 
@@ -891,7 +977,11 @@ lang TyAnnot = AnnotateSources + PrettyPrint + Ast
     res
 end
 
-lang TestLang = MExprTypeCheck + MExprEq end
+lang TestLang = MExprTypeCheck + MExprEq + FlexTypeEq
+  sem resolveLinks =
+  | ty ->
+    smap_Type_Type resolveLinks (resolveLink ty)
+end
 
 mexpr
 
@@ -945,7 +1035,7 @@ in
 let typeOf = lam test : TypeTest.
   let env = foldr (lam n : (String, Type).
     mapInsert (nameNoSym n.0) n.1) (mapEmpty nameCmp) test.env in
-  tyTm (typeCheckExpr {_tcEnvEmpty with varEnv = env} test.tm)
+  resolveLinks (tyTm (typeCheckExpr {_tcEnvEmpty with varEnv = env} test.tm))
 in
 
 let runTest =

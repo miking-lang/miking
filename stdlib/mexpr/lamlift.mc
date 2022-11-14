@@ -490,7 +490,7 @@ lang LambdaLiftTyAlls = MExprAst
     TmExt {t with ty = tyTm inexpr, inexpr = inexpr}
   | t -> smap_Expr_Expr (insertTyAlls tyAlls) t
 
-  -- Replaces TyVar and TyFlex that refer to unbound variables with TyUnknown.
+  -- Replaces TyVar that refer to unbound variables with TyUnknown.
   -- This prevents type variables from escaping their scope, which may happen
   -- due to the lambda lifting.
   sem eraseUnboundTypesExpr : Map Name TyAllData -> Expr -> Expr
@@ -499,11 +499,10 @@ lang LambdaLiftTyAlls = MExprAst
     let t = smap_Expr_Expr (eraseUnboundTypesExpr bound) t in
     let t = smap_Expr_Type (eraseUnboundTypesType bound) t in
     let t = smap_Expr_Pat (eraseUnboundTypesPat bound) t in
-    withType (eraseUnboundTypesType bound (tyTm t)) t
+    smap_Expr_TypeLabel (eraseUnboundTypesType bound) t
 
   sem eraseUnboundTypesType : Map Name TyAllData -> Type -> Type
   sem eraseUnboundTypesType bound =
-  | TyFlex t -> TyUnknown {info = t.info}
   | TyVar t ->
     match mapLookup t.ident bound with Some (_, info) then
       TyVar {t with info = info, level = 1}
@@ -519,22 +518,14 @@ lang LambdaLiftTyAlls = MExprAst
   sem insertTyAllsType : Map Name TyAllData -> Type -> (Type, Map Name TyAllData)
   sem insertTyAllsType tyAlls =
   | ty ->
-    if containsTyFlex false ty then
-      (TyUnknown {info = infoTy ty}, mapEmpty nameCmp)
-    else
-      let vars = collectTyVars tyAlls (mapEmpty nameCmp) ty in
-      let ty = eraseUnboundTypesType vars ty in
-      ( mapFoldWithKey
-          (lam accTy. lam tyId. lam tyAllData.
-            match tyAllData with (varSort, info) in
-            TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
-          ty vars
-      , vars )
-
-  sem containsTyFlex : Bool -> Type -> Bool
-  sem containsTyFlex acc =
-  | TyFlex _ -> true
-  | ty -> if acc then true else sfold_Type_Type containsTyFlex false ty
+    let vars = collectTyVars tyAlls (mapEmpty nameCmp) ty in
+    let ty = eraseUnboundTypesType vars ty in
+    ( mapFoldWithKey
+        (lam accTy. lam tyId. lam tyAllData.
+          match tyAllData with (varSort, info) in
+          TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
+        ty vars
+    , vars )
 
   sem collectTyVars : Map Name TyAllData -> Map Name TyAllData -> Type
                    -> Map Name TyAllData

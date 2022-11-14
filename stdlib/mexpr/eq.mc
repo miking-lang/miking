@@ -67,6 +67,10 @@ type EqTypeEnv = {
 type EqTypeFreeEnv = {
   freeTyVars : BiNameMap,
   freeTyFlex : BiNameMap
+  -- freeTyFlex is only used in `type-check.mc` for unification variables.
+  -- It is included here to avoid having to duplicate code, but ideally we
+  -- should have some facility to extend the arguments of a semantic function
+  -- (e.g. row polymorphism or some way of untying the recursive knot).
 }
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
@@ -92,7 +96,6 @@ let _eqCheck : Name -> Name -> BiNameMap -> BiNameMap -> Option BiNameMap =
 
 let unwrapType = use MExprAst in
   lam typeEnv : EqTypeEnv. lam ty.
-  let ty = resolveLink ty in
   match ty with TyCon {ident = id} then
     assocSeqLookup {eq=nameEq} id typeEnv.tyConEnv
   else Some ty
@@ -654,21 +657,6 @@ lang VarSortEq = Eq + VarSortAst
     else None ()
 end
 
-lang FlexTypeEq = VarSortEq + FlexTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
-  | TyFlex _ & rhs ->
-    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
-    match (lhs, rhs) with (TyFlex l, TyFlex r) then
-      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
-      optionBind
-        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        (lam freeTyVars.
-          eqVarSort typeEnv {free with freeTyVars = freeTyVars} (n1.sort, n2.sort))
-    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then
-      eqTypeH typeEnv free lhs rhs
-    else None ()
-end
-
 lang AllTypeEq = VarSortEq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
@@ -713,7 +701,7 @@ lang MExprEq =
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  FlexTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq
+  AllTypeEq + AppTypeEq + TensorTypeEq
 end
 
 -----------
@@ -1148,15 +1136,6 @@ utest eqType tyAll1 tyAll2 with false in
 utest eqType tyAll1 tyAll4 with false in
 utest eqType tyAll2 tyAll4 with false in
 utest eqType tyAll4 tyAll6 with false in
-
-let tyFlex1 = tyarrow_ (tyflexunbound_ "a") (tyflexunbound_ "b") in
-let tyFlex2 = tyarrow_ (tyflexunbound_ "b") (tyflexunbound_ "a") in
-let tyFlex3 = tyflexlink_ tyVar1 in
-utest tyFlex1 with tyFlex1 using eqType in
-utest tyFlex1 with tyFlex2 using eqType in
-utest tyFlex3 with tyVar1 using eqType in
-utest eqType tyFlex1 tyFlex3 with false in
-utest eqType tyFlex3 tyVar3 with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
