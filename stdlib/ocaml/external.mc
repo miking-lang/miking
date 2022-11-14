@@ -151,6 +151,7 @@ lang OCamlDataConversionHelpers =
                   rhs =
                     TmLam {
                       ident = ident,
+                      tyAnnot = TyUnknown { info = info },
                       tyIdent = TyUnknown { info = info },
                       body = body,
                       ty = TyUnknown { info = info },

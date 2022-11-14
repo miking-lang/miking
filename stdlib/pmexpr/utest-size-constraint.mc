@@ -31,7 +31,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
           let inexpr = replaceUtestsWithSizeConstraintH params t.next in
           let eq = TmParallelSizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
                                            ty = ty, info = t.info} in
-          Some (TmLet {ident = nameNoSym "", tyBody = ty, body = eq,
+          Some (TmLet {ident = nameNoSym "", tyAnnot = ty, tyBody = ty, body = eq,
                        inexpr = inexpr, ty = t.ty, info = t.info})
         else None ()
       else None () in
@@ -40,7 +40,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
       let coercion =
         TmParallelSizeCoercion {e = s, size = sizeId,
                                 ty = tyTm s, info = infoTm s} in
-      TmLet {ident = id, tyBody = tyTm s, body = coercion,
+      TmLet {ident = id, tyAnnot = tyTm s, tyBody = tyTm s, body = coercion,
              inexpr = inexpr, ty = t.ty, info = t.info} in
     let result =
       match t.tusing with None _ | Some (TmConst {val = CEqi _}) then

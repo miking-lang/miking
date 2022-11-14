@@ -428,6 +428,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
     let inexpr = generate env inexpr in
     TmLet {
       ident = ident,
+      tyAnnot = tyIdent,
       tyBody = tyIdent,
       body = body,
       inexpr = inexpr,

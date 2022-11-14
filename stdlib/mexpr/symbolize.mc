@@ -123,9 +123,9 @@ lang LamSym = Sym + LamAst + VarSym
   | TmLam t ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env t.ty in
-      let tyIdent = symbolizeType env t.tyIdent in
+      let tyAnnot = symbolizeType env t.tyAnnot in
       if nameHasSym t.ident then
-        TmLam {{{t with tyIdent = tyIdent}
+        TmLam {{{t with tyAnnot = tyAnnot}
                    with body = symbolizeExpr env t.body}
                    with ty = ty}
       else
@@ -134,7 +134,7 @@ lang LamSym = Sym + LamAst + VarSym
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLam {{{{t with ident = ident}
-                    with tyIdent = tyIdent}
+                    with tyAnnot = tyAnnot}
                     with body = symbolizeExpr env t.body}
                     with ty = ty}
     else never
@@ -144,10 +144,10 @@ lang LetSym = Sym + LetAst + AllTypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv} then
-      let tyBody = symbolizeType env t.tyBody in
+      let tyAnnot = symbolizeType env t.tyAnnot in
       let ty = symbolizeType env t.ty in
       let body =
-        match stripTyAll tyBody with (vars, _) in
+        match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
           foldr (lam v: (Name, VarSort).
               mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
@@ -156,7 +156,7 @@ lang LetSym = Sym + LetAst + AllTypeAst
                             with currentLvl = addi 1 env.currentLvl} t.body
       in
       if nameHasSym t.ident then
-        TmLet {{{{t with tyBody = tyBody}
+        TmLet {{{{t with tyAnnot = tyAnnot}
                     with body = body}
                     with inexpr = symbolizeExpr env t.inexpr}
                     with ty = ty}
@@ -166,7 +166,7 @@ lang LetSym = Sym + LetAst + AllTypeAst
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLet {{{{{t with ident = ident}
-                     with tyBody = tyBody}
+                     with tyAnnot = tyAnnot}
                      with body = body}
                      with inexpr = symbolizeExpr env t.inexpr}
                      with ty = ty}
@@ -261,8 +261,8 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam bind : RecLetBinding.
-        let tyBody = symbolizeType env bind.tyBody in
-        match stripTyAll tyBody with (vars, _) in
+        let tyAnnot = symbolizeType env bind.tyAnnot in
+        match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
           foldr (lam v: (Name, VarSort).
               mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
@@ -270,7 +270,7 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
         {{bind with body = symbolizeExpr
                              {{env with tyVarEnv = tyVarEnv}
                                    with currentLvl = addi 1 env.currentLvl} bind.body}
-               with tyBody = tyBody})
+               with tyAnnot = tyAnnot})
         bindings in
 
     TmRecLets {{t with bindings = bindings}

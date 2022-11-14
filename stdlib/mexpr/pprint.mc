@@ -316,7 +316,7 @@ lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
     match pprintVarName env t.ident with (env,str) in
-    match getTypeStringCode indent env t.tyIdent with (env, ty) in
+    match getTypeStringCode indent env t.tyAnnot with (env, ty) in
     let ty = if eqString ty "Unknown" then "" else concat ": " ty in
     match pprintCode (pprintIncr indent) env t.body with (env,body) in
     (env,
@@ -380,8 +380,8 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
       in (env, join [body, pprintNewline indent, "; ", inexpr])
     else
       match
-        match t.tyBody with TyUnknown _ then (env,"") else
-        match getTypeStringCode indent env t.tyBody with (env, ty) in
+        match t.tyAnnot with TyUnknown _ then (env,"") else
+        match getTypeStringCode indent env t.tyAnnot with (env, ty) in
         (env, concat ": " ty)
       with (env, ty) in
       match pprintCode (pprintIncr indent) env t.body with (env,body) in
@@ -446,7 +446,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let f = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) in
       match pprintCode iii env bind.body with (env,body) in
-      match getTypeStringCode indent env bind.tyBody with (env, ty) in
+      match getTypeStringCode indent env bind.tyAnnot with (env, ty) in
         let ty = if eqString ty "Unknown" then "" else concat ": " ty in
         (env, join ["let ", str, ty, " =", pprintNewline iii, body])
     in

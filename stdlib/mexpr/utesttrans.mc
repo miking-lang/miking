@@ -825,7 +825,7 @@ lang MExprUtestTrans = MExprAst
       target = testsFailedCond,
       pat = PatBool {val = true, info = info, ty = TyBool {info = info}},
       thn = TmLet {
-        ident = nameSym "", tyBody = tyTm t, body = t,
+        ident = nameSym "", tyAnnot = tyTm t, tyBody = tyTm t, body = t,
         inexpr = TmApp {
           lhs = TmConst {
             val = CExit (), info = info,

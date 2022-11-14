@@ -56,8 +56,8 @@ lang CSE = MExprCmp
           foldl
             (lam acc. lam namedExpr : (Name, Expr).
               match namedExpr with (id, e) then
-                TmLet {ident = id, tyBody = tyTm e, body = e, inexpr = acc,
-                       ty = tyTm acc, info = infoTm e}
+                TmLet {ident = id, tyAnnot = tyTm e, tyBody = tyTm e,
+                       body = e, inexpr = acc, ty = tyTm acc, info = infoTm e}
               else never)
             t
             exprs)

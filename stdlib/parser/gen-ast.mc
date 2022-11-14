@@ -203,6 +203,7 @@ let _typeToString = use MExprPrettyPrint in lam ty. (getTypeStringCode 0 pprintE
 let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
   { ident = n
   , body = body
+  , tyAnnot = tyunknown_
   , tyBody = tyunknown_
   , inexpr = inexpr
   , info = NoInfo ()

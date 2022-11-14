@@ -15,12 +15,12 @@ lang OCamlTryWithWrap = MExprAst + OCamlAst
     (acc.0, snoc acc.1 t)
   | OTopLet t ->
     let letExpr = TmLet {
-      ident = t.ident, tyBody = t.tyBody, body = t.body, inexpr = unit_,
-      ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
+      ident = t.ident, tyAnnot = t.tyBody, tyBody = t.tyBody, body = t.body,
+      inexpr = unit_, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
     (bind_ acc.0 letExpr, acc.1)
   | OTopRecLets t ->
     let toRecLetBinding = lam bind : OCamlTopBinding.
-      { ident = bind.ident, tyBody = bind.tyBody
+      { ident = bind.ident, tyAnnot = bind.tyBody, tyBody = bind.tyBody
       ,  body = bind.body, info = NoInfo ()} in
     let recLetExpr = TmRecLets {
       bindings = map toRecLetBinding t.bindings, inexpr = unit_,
