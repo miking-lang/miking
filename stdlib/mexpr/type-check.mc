@@ -742,8 +742,7 @@ lang FlexDisableGeneralize = FlexTypeAst
       sfold_VarSort_Type (lam. lam ty. disableGeneralize ty) () r.sort
     else
       disableGeneralize (resolveLink ty)
-  | ty ->
-    sfold_Type_Type (lam. lam ty. disableGeneralize ty) () ty
+  | ty -> ()
 end
 
 lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGeneralize
