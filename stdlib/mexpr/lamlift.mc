@@ -9,6 +9,7 @@ include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+include "mexpr/utils.mc"
 
 type LambdaLiftState = {
   -- Variables in the current scope that can occur as free variables in the
@@ -197,12 +198,11 @@ lang LambdaLiftInsertFreeVariables = MExprAst
   | [] -> tyAcc
 
   sem insertFreeVariablesH : Map Name (Map Name Type) -> Map Name (Info -> Expr)
-                          -> Expr -> (Map Name (Info -> Expr), Expr)
+                          -> Expr -> Expr
   sem insertFreeVariablesH solutions subMap =
   | TmVar t ->
-    match mapLookup t.ident subMap with Some subExpr then
-      (subMap, subExpr t.info)
-    else (subMap, TmVar t)
+    match mapLookup t.ident subMap with Some subExpr then subExpr t.info
+    else TmVar t
   | TmLet (t & {body = TmLam _}) ->
     match mapLookup t.ident solutions with Some freeVars then
       let fv = mapBindings freeVars in
@@ -223,12 +223,10 @@ lang LambdaLiftInsertFreeVariables = MExprAst
             TmApp {lhs = acc, rhs = x, ty = TyUnknown {info = info}, info = info})
           (TmVar {ident = t.ident, ty = TyUnknown {info = info}, info = info, frozen = false})
           (reverse fv) in
-      match insertFreeVariablesH solutions subMap body with (subMap, body) in
+      let body = insertFreeVariablesH solutions subMap body in
       let subMap = mapInsert t.ident subExpr subMap in
-      match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-      (subMap, TmLet {{{t with tyBody = tyBody}
-                          with body = body}
-                          with inexpr = inexpr})
+      TmLet {t with tyBody = tyBody, body = body,
+                    inexpr = insertFreeVariablesH solutions subMap t.inexpr}
     else errorSingle [t.info] (join ["Found no free variable solution for ",
                                      nameGetStr t.ident])
   | TmRecLets t ->
@@ -261,21 +259,19 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                      ty = TyUnknown {info = info}})
             bind.body fv in
         let tyBody = updateBindingType fv bind.tyBody in
-        match insertFreeVariablesH solutions subMap body with (subMap, body) in
-        (subMap, {bind with tyBody = tyBody, body = body})
+        let body = insertFreeVariablesH solutions subMap body in
+        {bind with tyBody = tyBody, body = body}
       else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
                                           nameGetStr bind.ident])
     in
     let subMap = foldl addBindingSubExpression subMap t.bindings in
-    match mapAccumL insertFreeVarsBinding subMap t.bindings with (subMap, bindings) in
-    match insertFreeVariablesH solutions subMap t.inexpr with (subMap, inexpr) in
-    (subMap, TmRecLets {t with bindings = bindings, inexpr = inexpr})
-  | t -> smapAccumL_Expr_Expr (insertFreeVariablesH solutions) subMap t
+    let bindings = map (insertFreeVarsBinding subMap) t.bindings in
+    TmRecLets {t with bindings = bindings,
+                      inexpr = insertFreeVariablesH solutions subMap t.inexpr}
+  | t -> smap_Expr_Expr (insertFreeVariablesH solutions subMap) t
 
   sem insertFreeVariables (solutions : Map Name (Map Name Type)) =
-  | t ->
-    match insertFreeVariablesH solutions (mapEmpty nameCmp) t with (_, t) in
-    t
+  | t -> insertFreeVariablesH solutions (mapEmpty nameCmp) t
 end
 
 lang LambdaLiftLiftGlobal = MExprAst
@@ -372,6 +368,63 @@ lang LambdaLiftLiftGlobal = MExprAst
     _bindIfNonEmpty
       lifted
       t
+end
+
+lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
+  sem replaceCapturedParameters : Map Name (Map Name Type) -> Expr
+                               -> (Map Name (Map Name Type), Expr)
+  sem replaceCapturedParameters solutions =
+  | ast ->
+    let subs : Map Name [(Name, Name, Type)] =
+      mapMapWithKey
+        (lam. lam sol.
+          map
+            (lam idTy.
+              match idTy with (oldId, ty) in
+              (oldId, nameSetNewSym oldId, ty))
+            (mapBindings sol))
+        solutions in
+
+    -- Construct a substitution map from the old ID to the updated ID.
+    let nameSub = lam sub.
+      match sub with (oldId, newId, _) in
+      (oldId, newId) in
+    let subMap : Map Name (Map Name Name) =
+      mapMapWithKey
+        (lam. lam subs. mapFromSeq nameCmp (map nameSub subs))
+        subs in
+
+    -- Reconstruct the solutions map using the new ID.
+    let newIdSub = lam sub.
+      match sub with (_, newId, ty) in
+      (newId, ty) in
+    let solutions : Map Name (Map Name Type) =
+      mapMapWithKey
+        (lam. lam subs. mapFromSeq nameCmp (map newIdSub subs))
+        subs in
+
+    (solutions, replaceCapturedParametersH subMap ast)
+
+  sem replaceCapturedParametersH : Map Name (Map Name Name) -> Expr -> Expr
+  sem replaceCapturedParametersH subMap =
+  | TmLet t ->
+    let body =
+      match mapLookup t.ident subMap with Some subs then
+        substituteIdentifiers subs t.body
+      else t.body
+    in
+    TmLet {t with body = body,
+                  inexpr = replaceCapturedParametersH subMap t.inexpr}
+  | TmRecLets t ->
+    let replaceCapturedParametersBinding = lam bind.
+      match mapLookup bind.ident subMap with Some subs then
+        {bind with body = substituteIdentifiers subs bind.body}
+      else bind
+    in
+    let bindings = map replaceCapturedParametersBinding t.bindings in
+    TmRecLets {t with bindings = bindings,
+                      inexpr = replaceCapturedParametersH subMap t.inexpr}
+  | t -> smap_Expr_Expr (replaceCapturedParametersH subMap) t
 end
 
 lang LambdaLiftTyAlls = MExprAst
@@ -495,7 +548,8 @@ end
 
 lang MExprLambdaLift =
   LambdaLiftNameAnonymous + LambdaLiftFindFreeVariables +
-  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal + LambdaLiftTyAlls
+  LambdaLiftInsertFreeVariables + LambdaLiftLiftGlobal +
+  LambdaLiftReplaceCapturedParameters + LambdaLiftTyAlls
 
   sem liftLambdas =
   | t -> match liftLambdasWithSolutions t with (_, t) in t
@@ -507,7 +561,8 @@ lang MExprLambdaLift =
     let state : LambdaLiftState = findFreeVariables emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
     let t = liftGlobal t in
-    (state.sols, insertTyAlls tyAllEnv t)
+    match replaceCapturedParameters state.sols t with (solutions, t) in
+    (solutions, insertTyAlls tyAllEnv t)
 end
 
 lang TestLang =

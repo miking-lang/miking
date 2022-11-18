@@ -135,6 +135,10 @@ let exponentialLogPdf : Float -> Float -> Float = lam lambda. lam x.
 let exponentialPdf : Float -> Float -> Float = lam lambda. lam x.
   exp (exponentialLogPdf lambda x)
 
+-- Seed
+external externalSetSeed ! : Int -> ()
+let setSeed : Int -> () = lam seed. externalSetSeed seed
+
 mexpr
 
 
@@ -214,5 +218,8 @@ utest poissonSample 2.0 with 3 using intRange 0 100000 in
 utest exponentialSample 1.0 with 0. using floatRange 0. inf in
 utest exp (exponentialLogPdf 1.0 2.0) with 0.135335283237 using _eqf in
 utest exponentialPdf 2.0 2.0 with 0.0366312777775 using _eqf in
+
+-- Testing seed
+utest setSeed 0; uniformSample () with setSeed 0; uniformSample () in
 
 ()
