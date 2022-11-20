@@ -66,7 +66,7 @@ let _mergeInfos_ : [Expr] -> Expr = lam exprs. switch exprs
 let _nletin_ : Name -> Type -> Expr -> Expr -> Expr
   = lam name. lam ty. lam val. lam body.
     use MExprAst in
-    TmLet {ident = name, tyBody = ty, body = val, inexpr = body, ty = tyunknown_, info = NoInfo ()}
+    TmLet {ident = name, tyAnnot = ty, tyBody = tyunknown_, body = val, inexpr = body, ty = tyunknown_, info = NoInfo ()}
 
 let _letin_ : String -> Type -> Expr -> Expr -> Expr
   = lam name. lam ty. lam val. lam body.

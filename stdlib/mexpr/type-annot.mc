@@ -274,9 +274,9 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
+      let env = {env with varEnv = mapInsert t.ident t.tyAnnot varEnv} in
       let body = typeAnnotExpr env t.body in
-      let ty = ityarrow_ t.info t.tyIdent (tyTm body) in
+      let ty = ityarrow_ t.info t.tyAnnot (tyTm body) in
       TmLam {{t with body = body}
                 with ty = ty}
     else never
@@ -291,22 +291,23 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + All
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
-      let body = match t.tyBody with TyUnknown _ then t.body else
-        match stripTyAll t.tyBody with (_, tyBody) in
-        propagateExpectedType tyEnv (tyBody, t.body) in
+      let body = match t.tyAnnot with TyUnknown _ then t.body else
+        match stripTyAll t.tyAnnot with (_, tyAnnot) in
+        propagateExpectedType tyEnv (tyAnnot, t.body) in
       let body = typeAnnotExpr env body in
-      match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
+      match compatibleType tyEnv t.tyAnnot (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
         let inexpr = typeAnnotExpr env t.inexpr in
-        TmLet {{{{t with tyBody = tyBody}
-                    with body = withType tyBody body}
-                    with inexpr = inexpr}
-                    with ty = tyTm inexpr}
+        TmLet {t with tyAnnot = tyBody,
+                      tyBody = tyBody,
+                      body = withType tyBody body,
+                      inexpr = inexpr,
+                      ty = tyTm inexpr}
       else
         let msg = join [
           "Inconsistent type annotation of let-expression\n",
           "Expected type: ", _pprintType (tyTm body), "\n",
-          "Annotated type: ", _pprintType t.tyBody
+          "Annotated type: ", _pprintType t.tyAnnot
         ] in
         errorSingle [t.info] msg
     else never
@@ -325,14 +326,15 @@ end
 lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
   sem propagateExpectedType (tyEnv : Map Name Type) =
   | (TyArrow {from = from, to = to}, TmLam t) ->
-    match compatibleType tyEnv from t.tyIdent with Some ty then
-      TmLam {{t with tyIdent = ty}
-                with body = propagateExpectedType tyEnv (to, t.body)}
+    match compatibleType tyEnv from t.tyAnnot with Some ty then
+      TmLam {t with tyAnnot = ty,
+                    tyIdent = ty,
+                    body = propagateExpectedType tyEnv (to, t.body)}
     else
       let msg = join [
         "Inconsistent type annotation of let-expression and lambda\n",
         "Type from let: ", _pprintType from, "\n",
-        "Type from lambda: ", _pprintType t.tyIdent
+        "Type from lambda: ", _pprintType t.tyAnnot
       ] in
       errorSingle [t.info] msg
 end
@@ -355,31 +357,32 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     -- annotations of the bindings. This is to make annotations work for
     -- mutually recursive functions, given correct type annotations.
     let foldBindingInit = lam acc. lam binding : RecLetBinding.
-      mapInsert binding.ident binding.tyBody acc
+      mapInsert binding.ident binding.tyAnnot acc
     in
     -- Add mapping from binding identifier to the inferred type.
     let foldBindingAfter = lam acc. lam binding : RecLetBinding.
-      mapInsert binding.ident binding.tyBody acc
+      mapInsert binding.ident binding.tyAnnot acc
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
-      let body = match binding.tyBody with TyUnknown _ then binding.body else
-        match stripTyAll binding.tyBody with (_, tyBody) in
-        propagateExpectedType env.tyEnv (tyBody, binding.body) in
+      let body = match binding.tyAnnot with TyUnknown _ then binding.body else
+        match stripTyAll binding.tyAnnot with (_, tyAnnot) in
+        propagateExpectedType env.tyEnv (tyAnnot, binding.body) in
       let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match compatibleType tyEnv binding.tyBody (tyTm body) with Some tyBody then
+          match compatibleType tyEnv binding.tyAnnot (tyTm body) with Some tyBody then
             tyBody
           else
             let msg = join [
               "Inconsistent type annotation of recursive let-expression\n",
               "Expected type: ", _pprintType (tyTm body), "\n",
-              "Annotated type: ", _pprintType binding.tyBody
+              "Annotated type: ", _pprintType binding.tyAnnot
             ] in
             errorSingle [t.info] msg
         in
-        {{binding with body = body}
-                  with tyBody = tyBody}
+        {binding with body = body,
+                      tyAnnot = tyBody,
+                      tyBody = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then

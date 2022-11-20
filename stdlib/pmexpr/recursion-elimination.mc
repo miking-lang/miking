@@ -78,7 +78,7 @@ lang PMExprRecursionElimination = PMExprAst
   sem eliminateRecursion =
   | TmRecLets t ->
     let toLetBinding : Expr -> RecLetBinding -> Expr = lam inexpr. lam binding.
-      TmLet {ident = binding.ident, tyBody = binding.tyBody,
+      TmLet {ident = binding.ident, tyAnnot = binding.tyAnnot, tyBody = binding.tyBody,
              body = binding.body, inexpr = inexpr,
              ty = tyTm inexpr, info = binding.info}
     in

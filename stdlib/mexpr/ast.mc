@@ -106,6 +106,26 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  -- NOTE(aathn, 2022-11-15): This function covers the compiler-added annotations
+  -- which are not touched by smapAccumL_Expr_Type.
+  sem smapAccumL_Expr_TypeLabel : all acc. (acc -> Type -> (acc, Type)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_TypeLabel f acc =
+  | p ->
+    match f acc (tyTm p) with (acc, ty) in
+    (acc, withType ty p)
+
+  sem smap_Expr_TypeLabel : (Type -> Type) -> Expr -> Expr
+  sem smap_Expr_TypeLabel f =
+  | p ->
+    let res: ((), Expr) = smapAccumL_Expr_TypeLabel (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Expr_TypeLabel : all acc. (acc -> Type -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_TypeLabel f acc =
+  | p ->
+    let res: (acc, Expr) = smapAccumL_Expr_TypeLabel (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
+
   sem smapAccumL_Expr_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Pat f acc =
   | p -> (acc, p)
@@ -243,6 +263,7 @@ end
 lang LamAst = Ast + VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
+           tyAnnot : Type,
            tyIdent : Type,
            body : Expr,
            ty : Type,
@@ -262,15 +283,19 @@ lang LamAst = Ast + VarAst + AppAst
 
   sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLam t ->
-    match f acc t.tyIdent with (acc, tyIdent) then
-      (acc, TmLam {t with tyIdent = tyIdent})
-    else never
+    match f acc t.tyAnnot with (acc, tyAnnot) in
+    (acc, TmLam {t with tyAnnot = tyAnnot})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmLam t ->
+    match f acc t.tyIdent with (acc, tyIdent) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmLam {t with tyIdent = tyIdent, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLam t ->
-    match f acc t.body with (acc, body) then
-      (acc, TmLam {t with body = body})
-    else never
+    match f acc t.body with (acc, body) in
+    (acc, TmLam {t with body = body})
 end
 
 
@@ -278,6 +303,7 @@ end
 lang LetAst = Ast + VarAst
   syn Expr =
   | TmLet {ident : Name,
+           tyAnnot : Type,
            tyBody : Type,
            body : Expr,
            inexpr : Expr,
@@ -298,23 +324,27 @@ lang LetAst = Ast + VarAst
 
   sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLet t ->
-    match f acc t.tyBody with (acc, tyBody) then
-      (acc, TmLet {t with tyBody = tyBody})
-    else never
+    match f acc t.tyAnnot with (acc, tyAnnot) in
+    (acc, TmLet {t with tyAnnot = tyAnnot})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmLet t ->
+    match f acc t.tyBody with (acc, tyBody) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmLet {t with tyBody = tyBody, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLet t ->
-    match f acc t.body with (acc, body) then
-      match f acc t.inexpr with (acc, inexpr) then
-        (acc, TmLet {{t with body = body} with inexpr = inexpr})
-      else never
-    else never
+    match f acc t.body with (acc, body) in
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, TmLet {{t with body = body} with inexpr = inexpr})
 end
 
 -- TmRecLets --
 lang RecLetsAst = Ast + VarAst
   type RecLetBinding = {
     ident : Name,
+    tyAnnot : Type,
     tyBody : Type,
     body : Expr,
     info : Info }
@@ -340,22 +370,30 @@ lang RecLetsAst = Ast + VarAst
   sem smapAccumL_Expr_Type (f:  acc -> Type -> (acc, Type)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
-      match f acc b.tyBody with (acc, tyBody) in
-      (acc, {b with tyBody = tyBody}) in
+      match f acc b.tyAnnot with (acc, tyAnnot) in
+      (acc, {b with tyAnnot = tyAnnot}) in
     match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
     (acc, TmRecLets {t with bindings = bindings})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmRecLets t ->
+    let bindingFunc = lam acc. lam b: RecLetBinding.
+      match f acc b.tyBody with (acc, tyBody) in
+      (acc, {b with tyBody = tyBody})
+    in
+    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmRecLets {t with bindings = bindings, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
-      match f acc b.body with (acc, body) then
-        (acc, {b with body = body})
-      else never in
-    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) then
-      match f acc t.inexpr with (acc, inexpr) then
-        (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
-      else never
-    else never
+      match f acc b.body with (acc, body) in
+      (acc, {b with body = body})
+    in
+    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
 end
 
 

@@ -118,9 +118,10 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let accelerateLet =
       TmLet {
         ident = accelerateIdent,
+        tyAnnot = funcType,
         tyBody = funcType,
         body = TmLam {
-          ident = paramId, tyIdent = paramTy, body = t.e,
+          ident = paramId, tyAnnot = paramTy, tyIdent = paramTy, body = t.e,
           ty = TyArrow {from = paramTy, to = retType, info = info},
           info = info},
         inexpr = TmApp {
@@ -196,6 +197,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
           with (tyBody, body) in
           TmLet {
             ident = bind.ident,
+            tyAnnot = tyBody,
             tyBody = tyBody,
             body = body,
             inexpr = acc,

@@ -350,7 +350,7 @@ let unit_ = use MExprAst in
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLet {ident = n, tyBody = ty, body = body,
+  TmLet {ident = n, tyAnnot = ty, tyBody = ty, body = body,
   inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
 
 let let_ = use MExprAst in
@@ -386,6 +386,7 @@ let nreclets_ = use MExprAst in
   lam bs.
   let bindingMapFunc = lam t : (Name, Type, Expr).
     { ident = t.0
+    , tyAnnot = t.1
     , tyBody = t.1
     , body = t.2
     , info = NoInfo ()
@@ -429,7 +430,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
+    let newbind = {ident = n, tyAnnot = ty, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     errorSingle [infoTm reclets] "reclets is not a TmRecLets construct"
@@ -494,11 +495,12 @@ let tmLam = use MExprAst in
   lam info : Info.
   lam ty : Type.
   lam ident : Name.
-  lam tyIdent : Type.
+  lam tyAnnot : Type.
   lam body : Expr.
   TmLam {
     ident = ident,
-    tyIdent = tyIdent,
+    tyAnnot = tyAnnot,
+    tyIdent = tyAnnot,
     ty = ty,
     body = body,
     info = info

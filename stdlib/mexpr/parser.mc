@@ -403,7 +403,7 @@ lang FunParser =
     let r3 : StrPos = matchKeyword "." r2.pos r2.str in
     let e : ParseResult Expr = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, ty = tyunknown_,
-                  tyIdent = tyunknown_, body = e.val,
+                  tyAnnot = tyunknown_, tyIdent = tyunknown_, body = e.val,
                   info = makeInfo p e.pos},
      pos = e.pos, str = e.str}
 end
@@ -420,7 +420,7 @@ lang LetParser =
     let e1 : ParseResult Expr = parseExprMain r3.pos 0 r3.str in
     let r4 : StrPos = matchKeyword "in" e1.pos e1.str in
     let e2 : ParseResult Expr = parseExprMain r4.pos 0 r4.str in
-    {val = TmLet {ident = nameNoSym r2.val, tyBody = tyunknown_,
+    {val = TmLet {ident = nameNoSym r2.val, tyAnnot = tyunknown_, tyBody = tyunknown_,
                   body = e1.val, inexpr = e2.val, ty = tyunknown_,
                   info = makeInfo p e2.pos},
      pos = e2.pos, str = e2.str}

@@ -230,7 +230,7 @@ let mapPattern : () -> Pattern =
           lhs = TmApp {
             lhs = TmConst {val = CMap (), ty = mapTy, info = info},
             rhs = TmLam {
-              ident = x, tyIdent = tyTm headExpr, body = els,
+              ident = x, tyAnnot = tyTm headExpr, tyIdent = tyTm headExpr, body = els,
               ty = fType, info = infoTm els},
             ty = innerAppType, info = info},
           rhs = sExpr,
@@ -311,9 +311,9 @@ let map2Pattern : () -> Pattern =
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
         TmMap2 {
           f = TmLam {
-            ident = x, tyIdent = tyTm headFstExpr,
+            ident = x, tyAnnot = tyTm headFstExpr, tyIdent = tyTm headFstExpr,
             body = TmLam {
-              ident = y, tyIdent = tyTm headSndExpr, body = els,
+              ident = y, tyAnnot = tyTm headSndExpr, tyIdent = tyTm headSndExpr, body = els,
               ty = TyArrow {from = tyTm headSndExpr, to = tyTm els, info = info},
               info = infoTm els},
             ty = TyArrow {
@@ -422,9 +422,9 @@ let reducePattern : () -> Pattern =
       let elemTy = tyTm headExpr in
       let accTy = tyTm accExpr in
       let f = TmLam {
-        ident = x, tyIdent = accTy,
+        ident = x, tyAnnot = accTy, tyIdent = accTy,
         body = TmLam {
-          ident = y, tyIdent = elemTy, body = els,
+          ident = y, tyAnnot = elemTy, tyIdent = elemTy, body = els,
           ty = TyArrow {from = elemTy, to = accTy,
                         info = infoTm els},
           info = info},

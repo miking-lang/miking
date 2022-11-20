@@ -229,6 +229,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
       let functionBody = replaceFunctionBody binding.body body in
       let bodyWithAcc = TmLam {
         ident = accIdent,
+        tyAnnot = accType,
         tyIdent = accType,
         body = functionBody,
         ty = TyArrow {from = accType, to = binding.tyBody, info = binding.info},

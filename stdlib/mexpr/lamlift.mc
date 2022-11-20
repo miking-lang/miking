@@ -49,7 +49,7 @@ lang LambdaLiftNameAnonymous = MExprAst
     in
     let lambdaName = nameSym "t" in
     let letBody = TmLam {t with body = recurseInLambdaBody t.body} in
-    TmLet {ident = lambdaName, tyBody = t.ty, body = letBody,
+    TmLet {ident = lambdaName, tyAnnot = t.ty, tyBody = t.ty, body = letBody,
            inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info, frozen = false},
            ty = t.ty, info = t.info}
   | TmLet t ->
@@ -210,7 +210,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyIdent = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyIdent = freeVar.1,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
@@ -254,7 +254,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyIdent = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyIdent = freeVar.1,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
@@ -285,7 +285,7 @@ lang LambdaLiftLiftGlobal = MExprAst
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
     match t.body with TmLam _ then
       let bind : RecLetBinding =
-        {ident = t.ident, tyBody = t.tyBody, body = body, info = t.info} in
+        {ident = t.ident, tyAnnot = t.tyAnnot, tyBody = t.tyBody, body = body, info = t.info} in
       let bindings = snoc bindings bind in
       liftRecursiveBindingH bindings t.inexpr
     else match liftRecursiveBindingH bindings t.inexpr with (bindings, inexpr) in

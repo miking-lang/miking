@@ -255,7 +255,7 @@ utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString 
 -- Tests that it applies to bindings in recursive let-expressions
 let ireclets = lam bindings.
   let bindFn = lam idx. lam entry : (String, Expr).
-    {ident = nameNoSym entry.0, tyBody = tyunknown_, body = entry.1, info = i idx} in
+    {ident = nameNoSym entry.0, tyAnnot = tyunknown_, tyBody = tyunknown_, body = entry.1, info = i idx} in
   TmRecLets { bindings = mapi bindFn bindings, inexpr = uunit_,
               ty = tyunknown_, info = NoInfo () } in
 let baseBindings = [

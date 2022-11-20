@@ -144,15 +144,11 @@ lang TypeLift = TypeLiftBase + Cmp
   sem typeLiftExpr (env : TypeLiftEnv) =
   | t ->
     -- Lift all sub-expressions
-    match smapAccumL_Expr_Expr typeLiftExpr env t with (env, t) then
-      -- Lift the contained types
-      match smapAccumL_Expr_Type typeLiftType env t with (env, t) then
-        -- Lift the annotated type
-        match typeLiftType env (tyTm t) with (env, ty) then
-          (env, withType ty t)
-        else never
-      else never
-    else never
+    match smapAccumL_Expr_Expr typeLiftExpr env t with (env, t) in
+    -- Lift the contained types
+    match smapAccumL_Expr_Type typeLiftType env t with (env, t) in
+    -- Lift the annotated types
+    smapAccumL_Expr_TypeLabel typeLiftType env t
 
   sem typeLiftType (env : TypeLiftEnv) =
   | t -> smapAccumL_Type_Type typeLiftType env t

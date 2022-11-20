@@ -180,12 +180,14 @@ lang RecLetsEval =
       foldli
         (lam i. lam bodyacc. lam binding : RecLetBinding.
           TmLet {ident = binding.ident,
+                 tyAnnot = tyunknown_,
                  tyBody = tyunknown_,
                  body = TmLam {ident = eta_name,
                                body = TmApp {lhs = _evalDTupleProj i var,
                                              rhs = eta_var,
                                              ty = tyunknown_,
                                              info = NoInfo()},
+                               tyAnnot = tyunknown_,
                                tyIdent = tyunknown_,
                                ty = tyunknown_,
                                info = NoInfo()
@@ -205,6 +207,7 @@ lang RecLetsEval =
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
                                tyIdent = tyunknown_,
+                               tyAnnot = tyunknown_,
                                ty = tyunknown_,
                                info = NoInfo()} in
     eval {ctx with env =

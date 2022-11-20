@@ -93,6 +93,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
                   -- types, which are known.
                   TmLam {
                     ident = name,
+                    tyAnnot = TyUnknown {info = info},
                     tyIdent = TyUnknown {info = info},
                     body = e,
                     ty = tyTm e,

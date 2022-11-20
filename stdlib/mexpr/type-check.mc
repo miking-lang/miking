@@ -114,7 +114,8 @@ lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTyp
           let ty = substituteVars subst def in
           optionOr (tryResolveAlias env ty) (Some ty)
         else None ()
-      else error "Encountered unknown constructor in resolveAlias!"
+      else error (join ["Encountered unknown type constructor ",
+                        t.ident.0, " in resolveAlias!"])
     else None ()
 
   sem resolveAlias (env : Map Name ([Name], Type)) =
@@ -447,7 +448,7 @@ lang ResolveLinks = FlexTypeAst
 
   sem resolveLinksExpr =
   | tm ->
-    let tm = withType (resolveLinks (tyTm tm)) tm in
+    let tm = smap_Expr_TypeLabel resolveLinks tm in
     let tm = smap_Expr_Type resolveLinks tm in
     let tm = smap_Expr_Pat resolveLinksPat tm in
     smap_Expr_Expr resolveLinksExpr tm
@@ -533,10 +534,13 @@ end
 lang LamTypeCheck = TypeCheck + LamAst + SubstituteUnknown
   sem typeCheckExpr env =
   | TmLam t ->
-    let tyX = substituteUnknown (MonoVar ()) env.currentLvl t.info t.tyIdent in
-    let body = typeCheckExpr (_insertVar t.ident tyX env) t.body in
-    let tyLam = ityarrow_ t.info tyX (tyTm body) in
-    TmLam {t with body = body, tyIdent = tyX, ty = tyLam}
+    -- If there is a programmer annotation, use it; otherwise, use the tyIdent field,
+    -- in which there may be a propagated type from an earlier annotation.
+    let tyAnnot = optionGetOr t.tyIdent (sremoveUnknown t.tyAnnot) in
+    let tyIdent = substituteUnknown (MonoVar ()) env.currentLvl t.info tyAnnot in
+    let body = typeCheckExpr (_insertVar t.ident tyIdent env) t.body in
+    let tyLam = ityarrow_ t.info tyIdent (tyTm body) in
+    TmLam {t with body = body, tyIdent = tyIdent, ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -554,13 +558,13 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
   | TmLet t ->
     let lvl = env.currentLvl in
     let body = optionMapOr t.body
-      (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyBody) in
+      (lam ty. propagateTyAnnot (t.body, ty)) (sremoveUnknown t.tyAnnot) in
     let body = typeCheckExpr {env with currentLvl = addi 1 lvl} body in
-    let tyAnnot = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info t.tyBody in
-    match stripTyAll (resolveAlias env.tyConEnv tyAnnot) with (_, tyStripped) in
+    let tyBody = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info t.tyAnnot in
+    match stripTyAll (resolveAlias env.tyConEnv tyBody) with (_, tyStripped) in
     -- Unify the annotated type with the inferred one and generalize
-    unify [infoTy tyAnnot, infoTm body] env tyStripped (tyTm body);
-    let tyBody = gen lvl tyAnnot in
+    unify [infoTy t.tyAnnot, infoTm body] env tyStripped (tyTm body);
+    let tyBody = gen lvl tyBody in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
                 , tyBody = tyBody
@@ -571,7 +575,7 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
   | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
   | (TmLam l, TyArrow a) ->
     let body = propagateTyAnnot (l.body, a.to) in
-    let ty = optionGetOr a.from (sremoveUnknown l.tyIdent) in
+    let ty = optionGetOr a.from (sremoveUnknown l.tyAnnot) in
     TmLam {l with body = body, tyIdent = ty}
   | (tm, ty) -> tm
 end
@@ -583,7 +587,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
 
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
-      let tyBody = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info b.tyBody in
+      let tyBody = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info b.tyAnnot in
       (_insertVar b.ident tyBody acc, {b with tyBody = tyBody})
     in
     match mapAccumL recLetEnvIteratee env t.bindings with (recLetEnv, bindings) in
@@ -591,11 +595,11 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
       let body = optionMapOr b.body
-        (lam ty. propagateTyAnnot (b.body, ty)) (sremoveUnknown b.tyBody) in
+        (lam ty. propagateTyAnnot (b.body, ty)) (sremoveUnknown b.tyAnnot) in
       let body = typeCheckExpr {recLetEnv with currentLvl = addi 1 lvl} body in
       -- Unify the inferred type of the body with the annotated one
       match stripTyAll (resolveAlias env.tyConEnv b.tyBody) with (_, tyStripped) in
-      unify [infoTy b.tyBody, infoTm body] env tyStripped (tyTm body);
+      unify [infoTy b.tyAnnot, infoTm body] env tyStripped (tyTm body);
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
