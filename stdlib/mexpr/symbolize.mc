@@ -124,19 +124,22 @@ lang LamSym = Sym + LamAst + VarSym
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env t.ty in
       let tyAnnot = symbolizeType env t.tyAnnot in
+      let tyIdent = symbolizeType env t.tyIdent in
       if nameHasSym t.ident then
-        TmLam {{{t with tyAnnot = tyAnnot}
-                   with body = symbolizeExpr env t.body}
-                   with ty = ty}
+        TmLam {t with tyAnnot = tyAnnot,
+                      tyIdent = tyIdent,
+                      body = symbolizeExpr env t.body,
+                      ty = ty}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLam {{{{t with ident = ident}
-                    with tyAnnot = tyAnnot}
-                    with body = symbolizeExpr env t.body}
-                    with ty = ty}
+        TmLam {t with ident = ident,
+                      tyAnnot = tyAnnot,
+                      tyIdent = tyIdent,
+                      body = symbolizeExpr env t.body,
+                      ty = ty}
     else never
 end
 
@@ -145,6 +148,7 @@ lang LetSym = Sym + LetAst + AllTypeAst
   | TmLet t ->
     match env with {varEnv = varEnv} then
       let tyAnnot = symbolizeType env t.tyAnnot in
+      let tyBody = symbolizeType env t.tyBody in
       let ty = symbolizeType env t.ty in
       let body =
         match stripTyAll tyAnnot with (vars, _) in
@@ -156,20 +160,22 @@ lang LetSym = Sym + LetAst + AllTypeAst
                             with currentLvl = addi 1 env.currentLvl} t.body
       in
       if nameHasSym t.ident then
-        TmLet {{{{t with tyAnnot = tyAnnot}
-                    with body = body}
-                    with inexpr = symbolizeExpr env t.inexpr}
-                    with ty = ty}
+        TmLet {t with tyAnnot = tyAnnot,
+                      tyBody = tyBody,
+                      body = body,
+                      inexpr = symbolizeExpr env t.inexpr,
+                      ty = ty}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLet {{{{{t with ident = ident}
-                     with tyAnnot = tyAnnot}
-                     with body = body}
-                     with inexpr = symbolizeExpr env t.inexpr}
-                     with ty = ty}
+        TmLet {t with ident = ident,
+                      tyAnnot = tyAnnot,
+                      tyBody = tyBody,
+                      body = body,
+                      inexpr = symbolizeExpr env t.inexpr,
+                      ty = ty}
     else never
 
   sem addTopNames (env : SymEnv) =
@@ -262,15 +268,17 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
     let bindings =
       map (lam bind : RecLetBinding.
         let tyAnnot = symbolizeType env bind.tyAnnot in
+        let tyBody = symbolizeType env bind.tyBody in
         match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
           foldr (lam v: (Name, VarSort).
               mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
             env.tyVarEnv vars in
-        {{bind with body = symbolizeExpr
-                             {{env with tyVarEnv = tyVarEnv}
-                                   with currentLvl = addi 1 env.currentLvl} bind.body}
-               with tyAnnot = tyAnnot})
+        {bind with body = symbolizeExpr
+                            {{env with tyVarEnv = tyVarEnv}
+                                  with currentLvl = addi 1 env.currentLvl} bind.body,
+                   tyAnnot = tyAnnot,
+                   tyBody = tyBody})
         bindings in
 
     TmRecLets {{t with bindings = bindings}
