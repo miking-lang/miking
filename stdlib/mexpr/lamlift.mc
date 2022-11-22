@@ -49,7 +49,7 @@ lang LambdaLiftNameAnonymous = MExprAst
     in
     let lambdaName = nameSym "t" in
     let letBody = TmLam {t with body = recurseInLambdaBody t.body} in
-    TmLet {ident = lambdaName, tyAnnot = t.ty, tyBody = t.ty, body = letBody,
+    TmLet {ident = lambdaName, tyAnnot = ityunknown_ t.info, tyBody = t.ty, body = letBody,
            inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info, frozen = false},
            ty = t.ty, info = t.info}
   | TmLet t ->
@@ -210,12 +210,14 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyIdent = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
           fv in
-      let tyBody = updateBindingType fv t.tyBody in
+      let annot = optionGetOr t.tyBody (sremoveUnknown t.tyAnnot) in
+      let tyBody = updateBindingType fv annot in
+      let tyAnnot = if null fv then t.tyAnnot else ityunknown_ t.info in
       let subExpr = lam info.
         foldr
           (lam freeVar : (Name, Type). lam acc.
@@ -225,7 +227,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           (reverse fv) in
       let body = insertFreeVariablesH solutions subMap body in
       let subMap = mapInsert t.ident subExpr subMap in
-      TmLet {t with tyBody = tyBody, body = body,
+      TmLet {t with tyBody = tyBody, tyAnnot = tyAnnot, body = body,
                     inexpr = insertFreeVariablesH solutions subMap t.inexpr}
     else errorSingle [t.info] (join ["Found no free variable solution for ",
                                      nameGetStr t.ident])
@@ -254,13 +256,15 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyIdent = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
-        let tyBody = updateBindingType fv bind.tyBody in
+        let annot = optionGetOr bind.tyBody (sremoveUnknown bind.tyAnnot) in
+        let tyBody = updateBindingType fv annot in
+        let tyAnnot = if null fv then bind.tyAnnot else ityunknown_ bind.info in
         let body = insertFreeVariablesH solutions subMap body in
-        {bind with tyBody = tyBody, body = body}
+        {bind with tyBody = tyBody, tyAnnot = tyAnnot, body = body}
       else errorSingle [bind.info] (join ["Lambda lifting error: No solution found for binding ",
                                           nameGetStr bind.ident])
     in
@@ -285,7 +289,8 @@ lang LambdaLiftLiftGlobal = MExprAst
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
     match t.body with TmLam _ then
       let bind : RecLetBinding =
-        {ident = t.ident, tyAnnot = t.tyAnnot, tyBody = t.tyBody, body = body, info = t.info} in
+        { ident = t.ident, tyAnnot = ityunknown_ t.info, tyBody = t.tyBody
+        , body = body, info = t.info } in
       let bindings = snoc bindings bind in
       liftRecursiveBindingH bindings t.inexpr
     else match liftRecursiveBindingH bindings t.inexpr with (bindings, inexpr) in
