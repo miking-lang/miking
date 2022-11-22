@@ -41,6 +41,11 @@ let generate_dune name =
     \         (modes byte exe))" name ;
   close_out oc
 
+let generate_dune_project () =
+  let oc = open_out "dune-project" in
+  Printf.fprintf oc "(lang dune 2.0)" ;
+  close_out oc
+
 let main =
   let len = Array.length Sys.argv in
   let name, iterations =
@@ -61,6 +66,7 @@ let main =
       ("rm -f " ^ name) ;
     if Sys.file_exists (name ^ ".ml") then (
       generate_dune name ;
+      generate_dune_project () ;
       measure excludes 4 "Ocaml byte code    "
         ("dune build --root ." ^ " " ^ name ^ ".bc")
         ("ocamlrun _build/default/" ^ name ^ ".bc" ^ " " ^ iterations)
