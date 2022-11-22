@@ -26,12 +26,14 @@ lang MExprSubstitute = MExprAst
                      ty = substituteIdentifiersType replacements t.ty}
   | TmLet t ->
     TmLet {t with ident = subIdent replacements t.ident,
+                  tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyBody = substituteIdentifiersType replacements t.tyBody,
                   body = substituteIdentifiersExpr replacements t.body,
                   inexpr = substituteIdentifiersExpr replacements t.inexpr,
                   ty = substituteIdentifiersType replacements t.ty}
   | TmLam t ->
     TmLam {t with ident = subIdent replacements t.ident,
+                  tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyIdent = substituteIdentifiersType replacements t.tyIdent,
                   body = substituteIdentifiersExpr replacements t.body,
                   ty = substituteIdentifiersType replacements t.ty}
@@ -54,6 +56,7 @@ lang MExprSubstitute = MExprAst
     let subBinding = lam bind.
       {bind with ident = subIdent replacements bind.ident,
                  body = substituteIdentifiersExpr replacements bind.body,
+                 tyAnnot = substituteIdentifiersType replacements bind.tyAnnot,
                  tyBody = substituteIdentifiersType replacements bind.tyBody}
     in
     TmRecLets {t with bindings = map subBinding t.bindings,
@@ -62,6 +65,7 @@ lang MExprSubstitute = MExprAst
   | ast ->
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
+    let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
     withType (substituteIdentifiersType replacements (tyTm ast)) ast
 
