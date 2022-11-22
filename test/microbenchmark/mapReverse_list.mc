@@ -12,4 +12,4 @@ in
 
 -- iter (lam x. print (int2string x)) (mapf n);
 
-repeat (lam. mapf n)
+bc_repeat (lam. mapf n)

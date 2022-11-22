@@ -22,7 +22,7 @@ let mapf = lam n.
   res
 in
 
-let res = repeat (lam. mapf n) in
+let res = bc_repeat (lam. mapf n) in
 
 threadPoolTearDown pool;
 

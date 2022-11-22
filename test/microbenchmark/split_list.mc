@@ -12,4 +12,4 @@ recursive let sum = lam acc. lam s.
 in
 
 let s = createList 1000 (lam i. i) in
-repeat (lam. sum 0 s)
+bc_repeat (lam. sum 0 s)

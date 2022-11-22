@@ -12,4 +12,4 @@ in
 
 -- printLn (int2string (foldf n));
 
-repeat (lam. foldf n)
+bc_repeat (lam. foldf n)

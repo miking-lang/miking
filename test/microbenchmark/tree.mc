@@ -20,4 +20,4 @@ in
 
 let tree = Node(Node(Leaf(3),Node(Leaf(2),Leaf(6))),Leaf(12)) in
 
-repeat (lam. count tree)
+bc_repeat (lam. count tree)

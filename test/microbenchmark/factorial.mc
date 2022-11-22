@@ -10,4 +10,4 @@ let fact = lam n.
     else muli n (fact (subi n 1))
 in
 
-repeat (lam. fact 100)
+bc_repeat (lam. fact 100)
