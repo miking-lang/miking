@@ -97,12 +97,13 @@ lang MExprEliminateDuplicateCode = MExprAst
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
+        match eliminateDuplicateCodeType env replaced t.tyAnnot with (replaced, tyAnnot) in
         match eliminateDuplicateCodeType env replaced t.tyBody with (replaced, tyBody) in
         match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
+        , TmLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
   | TmType t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
@@ -143,9 +144,10 @@ lang MExprEliminateDuplicateCode = MExprAst
         ((replaced, env), Some binding)
     in
     let eliminateDuplicateBody = lam env. lam replaced. lam binding.
+      match eliminateDuplicateCodeType env replaced binding.tyAnnot with (replaced, tyAnnot) in
       match eliminateDuplicateCodeType env replaced binding.tyBody with (replaced, tyBody) in
       match eliminateDuplicateCodeExpr env replaced binding.body with (replaced, body) in
-      (replaced, {binding with body = body, tyBody = tyBody})
+      (replaced, {binding with body = body, tyAnnot = tyAnnot, tyBody = tyBody})
     in
     match mapAccumL eliminateDuplicateBinding (replaced, env) (reverse t.bindings)
     with ((replaced, env), optBindings) in
@@ -158,6 +160,7 @@ lang MExprEliminateDuplicateCode = MExprAst
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
+    match smapAccumL_Expr_TypeLabel (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Pat (eliminateDuplicateCodePat env) replaced t with (replaced, t) in
     match eliminateDuplicateCodeType env replaced (tyTm t) with (replaced, tmTy) in
     (replaced, withType tmTy t)
