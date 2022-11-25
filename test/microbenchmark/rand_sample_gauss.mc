@@ -36,5 +36,5 @@ let randFloatGaussBoxMuller: () -> Float = lam.
   get (randFloatGaussBoxMullerMany 1) 0
 
 mexpr
-repeat (lam. randFloatGaussBoxMullerMany n)
+bc_repeat (lam. randFloatGaussBoxMullerMany n)
 

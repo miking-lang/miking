@@ -8,4 +8,4 @@ let iterf = lam n.
   iter (lam. ()) (createRope n (lam i. i))
 in
 
-repeat (lam. iterf n)
+bc_repeat (lam. iterf n)
