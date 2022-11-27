@@ -413,22 +413,6 @@ lang VarSortCmp = Cmp + VarSortAst
     subi (constructorTag lhs) (constructorTag rhs)
 end
 
-lang FlexTypeCmp = VarSortCmp + FlexTypeAst
-  sem cmpTypeH =
-  | (TyFlex _ & lhs, rhs)
-  | (lhs, TyFlex _ & rhs) ->
-    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
-    match (lhs, rhs) with (TyFlex t1, TyFlex t2) then
-      match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) in
-      let identDiff = nameCmp n1.ident n2.ident in
-      if eqi identDiff 0 then
-        cmpVarSort (n1.sort, n2.sort)
-      else
-        identDiff
-    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then cmpType lhs rhs
-    else subi (constructorTag lhs) (constructorTag rhs)
-end
-
 lang AllTypeCmp = VarSortCmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
@@ -469,7 +453,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + FlexTypeCmp + AppTypeCmp + AllTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
 end
 
 -----------
@@ -855,10 +839,5 @@ utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tybool_) with 0 in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tyfloat_) with 0 using neqi in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "b" tybool_) with 0 using neqi in
-
-utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "a") with 0 in
-utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "b") with 0 using neqi in
-utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "a") with 0 in
-utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "b") with 0 using neqi in
 
 ()

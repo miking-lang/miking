@@ -1441,51 +1441,6 @@ lang VarSortAst
     match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-type FlexVarRec = {ident  : Name,
-                   level  : Level,
-                   sort   : VarSort,
-                   isWeak : Bool}
-
-lang FlexTypeAst = VarSortAst + Ast
-  syn FlexVar =
-  | Unbound FlexVarRec
-  | Link Type
-
-  syn Type =
-  -- Flexible type variable
-  | TyFlex {info     : Info,
-            contents : Ref FlexVar}
-
-  -- Recursively follow links, producing something guaranteed not to be a link.
-  sem resolveLink =
-  | TyFlex t & ty ->
-    match deref t.contents with Link ty then
-      resolveLink ty
-    else
-      ty
-  | ty ->
-    ty
-
-  sem tyWithInfo (info : Info) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound _ then
-      TyFlex {t with info = info}
-    else
-      tyWithInfo info (resolveLink ty)
-
-  sem infoTy =
-  | TyFlex {info = info} -> info
-
-  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound r then
-      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
-      modref t.contents (Unbound {r with sort = sort});
-      (acc, ty)
-    else
-      smapAccumL_Type_Type f acc (resolveLink ty)
-end
-
 lang AllTypeAst = VarSortAst + Ast
   syn Type =
   | TyAll {info  : Info,
@@ -1560,5 +1515,5 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
 end

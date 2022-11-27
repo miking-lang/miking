@@ -1126,18 +1126,6 @@ lang VarSortPrettyPrint = RecordTypePrettyPrint + VarSortAst
   | _ -> (env, idstr)
 end
 
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getVarSortStringCode indent env idstr t.sort with (env, str) in
-      let weakPrefix = if t.isWeak then "_" else "" in
-      (env, concat weakPrefix str)
-    else
-      getTypeStringCode indent env (resolveLink ty)
-end
-
 lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + VarSortPrettyPrint
   sem typePrecedence =
   | TyAll _ -> 0
@@ -1199,7 +1187,7 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint + FlexTypePrettyPrint +
+  ConTypePrettyPrint + VarTypePrettyPrint +
   AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
 
   -- Identifiers

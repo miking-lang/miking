@@ -78,7 +78,7 @@ let typeCheckEnv = lam env : [(Name, Type)]. lam expr.
         match x with (id, ty) in
         _insertVar id ty env)
       _tcEnvEmpty env in
-  resolveLinksExpr (typeCheckExpr tcEnv expr)
+  removeFlexExpr (typeCheckExpr tcEnv expr)
 in
 
 let t = typeCheck (symbolize (lam_ "x" tyint_ (char_ 'c'))) in
