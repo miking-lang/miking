@@ -1,4 +1,4 @@
-include "sundials/sundials.mc"
+include "sundials/ida.mc"
 include "ad/dualnum.mc"
 include "ad/dualtensor-tree.mc"
 
