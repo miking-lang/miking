@@ -21,19 +21,40 @@ jobs:
             default: https://github.com/ocaml/opam-repository.git
             multicore: https://github.com/ocaml-multicore/multicore-opam.git
 
-      - name: Cache opam packages
-        uses: actions/cache@v2
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
+      # - name: Cache opam packages
+      #   uses: actions/cache@v2
+      #   with:
+      #     path: ~/.opam
+      #     key: ${{ runner.os }}-opam-build
 
       - name: Install opam packages
         run: |
           # Install dependencies of owl
-          sudo apt-get install -y liblapacke-dev libopenblas-dev
+          # sudo apt-get install -y liblapacke-dev libopenblas-dev
 
           # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
+          # opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
+          opam install -y dune linenoise pyml toml lwt ocamlformat.0.20.1
+
+      - name: Build Sundials and SundialsML
+        run: |
+          # build Sundials
+          sudo apt-get install cmake
+          wget https://github.com/LLNL/sundials/releases/download/v6.1.1/sundials-6.1.1.tar.gz
+          tar -xzvf sundials-6.1.1.tar.gz
+          cd sundials-6.1.1
+          mkdir build && cd build && cmake .. && make && sudo make install
+          cd ..
+          rm -rf sundials-6.1.1
+
+          # build SundialsML
+          eval $(opam env)
+          wget https://github.com/inria-parkas/sundialsml/archive/refs/tags/v6.1.1p1.zip
+          unzip v6.1.1p1.zip
+          cd sundialsml-6.1.1p1
+          ./configure && make && make install
+          cd ..
+          rm -rf sundialsml-6.1.1p1
 
       - name: Build Miking
         timeout-minutes: 10
@@ -41,55 +62,85 @@ jobs:
           eval $(opam env)
           make install
 
-      - name: Run tests
-        timeout-minutes: 60
+      # - name: Run test all
+      #   timeout-minutes: 60
+      #   run: |
+      #     eval $(opam env)
+      #     make test-all
+
+      - name: Run test sundials
         run: |
           eval $(opam env)
-          make test-all
+          # make test-sundials
+          build/mi compile --test --disable-prune-utests stdlib/sundials/cvode.mc && ./cvode
 
-  build-and-test-mac-os:
-    runs-on: macos-latest
+  # build-and-test-mac-os:
+  #   runs-on: macos-latest
 
-    steps:
-      - uses: actions/checkout@v2
+  #   steps:
+  #     - uses: actions/checkout@v2
 
-      - name: Install OCaml and opam for Miking
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: ocaml-variants.4.12.0+domains
-          opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git
-            multicore: https://github.com/ocaml-multicore/multicore-opam.git
+  #     - name: Install OCaml and opam for Miking
+  #       uses: ocaml/setup-ocaml@v2
+  #       with:
+  #         ocaml-compiler: ocaml-variants.4.12.0+domains
+  #         opam-repositories: |
+  #           default: https://github.com/ocaml/opam-repository.git
+  #           multicore: https://github.com/ocaml-multicore/multicore-opam.git
 
-      - name: Cache opam packages
-        uses: actions/cache@v2
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
+  #     - name: Cache opam packages
+  #       uses: actions/cache@v2
+  #       with:
+  #         path: ~/.opam
+  #         key: ${{ runner.os }}-opam-build
 
-      - name: Install opam packages
-        run: |
-          # Install dependencies of owl
-          brew install openblas
+  #     - name: Install opam packages
+  #       run: |
+  #         # Install dependencies of owl
+  #         brew install openblas
 
-          # Export environment variable needed by openblas
-          export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
+  #         # Export environment variable needed by openblas
+  #         export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
 
-          # Hack to fix installation of owl
-          ln -s $(brew --prefix gcc)/lib/gcc/current/libgcc_s.1.1.dylib $(brew --prefix openblas)/lib
-          ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
+  #         # Hack to fix installation of owl
+  #         ln -s $(brew --prefix gcc)/lib/gcc/current/libgcc_s.1.1.dylib $(brew --prefix openblas)/lib
+  #         ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
 
-          # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
+  #         # Install all opam packages used in make test-all
+  #         opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
 
-      - name: Build Miking
-        timeout-minutes: 10
-        run: |
-          eval $(opam env)
-          make install
+  #     - name: Build Sundials and SundialsML
+  #       run: |
+  #         # build Sundials
+  #         brew install cmake
+  #         wget https://github.com/LLNL/sundials/releases/download/v6.1.1/sundials-6.1.1.tar.gz
+  #         tar -xzvf sundials-6.1.1.tar.gz
+  #         cd sundials-6.1.1
+  #         mkdir build && cd build && cmake .. && make && sudo make install
+  #         cd ..
+  #         rm -rf sundials-6.1.1
 
-      - name: Run tests
-        timeout-minutes: 60
-        run: |
-          eval $(opam env)
-          make test-all
+  #         # build SundialsML
+  #         wget https://github.com/inria-parkas/sundialsml/archive/refs/tags/v6.1.1p1.zip
+  #         unzip v6.1.1p1.zip
+  #         cd sundialsml-6.1.1p1
+  #         ./configure && make && sudo make install
+  #         cd ..
+  #         rm -rf sundialsml-6.1.1p1
+
+  #     - name: Build Miking
+  #       timeout-minutes: 10
+  #       run: |
+  #         eval $(opam env)
+  #         make install
+
+  #     - name: Run test all
+  #       timeout-minutes: 60
+  #       run: |
+  #         eval $(opam env)
+  #         make test-all
+
+  #     - name: Run test sundials
+  #       run: |
+  #         eval $(opam env)
+  #         make test-sundials
