@@ -73,7 +73,7 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
     run =
       lam stdin. lam args.
         let command =
-          concat ["dune", "exec", "./program.exe", "--"] args
+          concat ["dune", "exec", "--no-build", "./program.exe", "--"] args
         in
         sysRunCommand command stdin (tempfile ""),
     cleanup = lam. sysTempDirDelete td (); (),
