@@ -8,6 +8,9 @@ include "ext/file-ext.ext-ocaml.mc"
 include "ext/toml-ext.ext-ocaml.mc"
 include "ext/async-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
+include "sundials/ida.ext-ocaml.mc"
+include "sundials/cvode.ext-ocaml.mc"
+include "sundials/kinsol.ext-ocaml.mc"
 include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
 include "multicore/mutex.ext-ocaml.mc"
@@ -31,6 +34,9 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       extTestMap,               -- For testing purposes
       mathExtMap,
       sundialsExtMap,
+      idaExtMap,
+      cvodeExtMap,
+      kinsolExtMap,
       atomicExtMap,
       threadExtMap,
       mutexExtMap,
