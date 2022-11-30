@@ -465,13 +465,13 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + ResolveAlias + FlexTypeAst
     else (vars, ty)
 
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
-  sem inst (env : Map Name ([Name], Type)) (lvl : Level) =
+  sem inst (env : Map Name ([Name], Type)) (info : Info) (lvl : Level) =
   | ty ->
     match stripTyAllAlias env ty with (vars, ty) in
     if gti (length vars) 0 then
       let inserter = lam subst. lam v : (Name, VarSort).
         let sort = smap_VarSort_Type (substituteVars subst) v.1 in
-        mapInsert v.0 (newflexvar sort lvl (infoTy ty)) subst
+        mapInsert v.0 (newflexvar sort lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
       substituteVars subst ty
@@ -606,7 +606,7 @@ lang VarTypeCheck = TypeCheck + VarAst
     match mapLookup t.ident env.varEnv with Some ty then
       let ty =
         if t.frozen then ty
-        else inst env.tyConEnv env.currentLvl ty
+        else inst env.tyConEnv t.info env.currentLvl ty
       in
       TmVar {t with ty = ty}
     else
@@ -721,7 +721,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
   sem typeCheckExpr env =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = inst env.tyConEnv env.currentLvl (f (tyConst t.val)) in
+    let ty = inst env.tyConEnv t.info env.currentLvl (f (tyConst t.val)) in
     TmConst {t with ty = ty}
 end
 
@@ -779,7 +779,7 @@ lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
-      match inst env.tyConEnv env.currentLvl lty with TyArrow {from = from, to = to} in
+      match inst env.tyConEnv t.info env.currentLvl lty with TyArrow {from = from, to = to} in
       unify [infoTm body] env (tyTm body) from;
       TmConApp {t with body = body, ty = to}
     else
@@ -881,7 +881,7 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
   sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
-      match inst env.tyConEnv env.currentLvl ty with TyArrow {from = from, to = to} in
+      match inst env.tyConEnv t.info env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
       unify [infoPat subpat] env (tyPat subpat) from;
       (patEnv, PatCon {t with subpat = subpat, ty = to})
