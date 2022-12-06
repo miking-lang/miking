@@ -36,7 +36,7 @@ let threadExtMap =
 
     ("externalThreadCPURelax", [
       impl
-      { expr = "Domain.Sync.cpu_relax"
+      { expr = "Domain.cpu_relax"
       , ty = tyarrow_ otyunit_ otyunit_
       }])
   ]
