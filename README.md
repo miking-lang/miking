@@ -9,11 +9,11 @@ Before you can use the Miking system, you need to install
 [OCaml](https://ocaml.org/) and the
 [OPAM](https://opam.ocaml.org/) package manager.
 
-After the installation, you need to install the OCaml multicore compiler by
+After the installation, you need to install the OCaml compiler by
 running the following:
 ```
 opam update
-opam switch create 4.12.0+domains --packages=ocaml-variants.4.12.0+domains --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+opam switch create miking-ocaml 5.0.0~beta2
 eval $(opam env)
 ```
 
@@ -25,8 +25,8 @@ opam install dune linenoise
 ```
 
 Note that the `opam switch` command lets you have several OCaml installations on
-your system. When using the Miking system, you need to use the `4.12.0+domains`
-switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
+your system. When using the Miking system, you need to use the `miking-ocaml`
+switch. Running `opam switch miking-ocaml` followed by `eval $(opam env)`
 always takes you back to the correct switch.
 
 To compile the project, go back to the Miking repository and execute:
@@ -1380,10 +1380,6 @@ The parallel programming primitives consist of atomic references and functions
 for creating and synchronizing threads. In addition to the examples below, more
 documentation can be found in the standard library at
 [stdlib/multicore](stdlib/multicore/).
-
-To use the parallel programming externals, ensure that you are on the
-`4.12.0+domains`
-[switch](https://github.com/ocaml-multicore/ocaml-multicore/tree/4.12+domains).
 
 #### Atomic References
 
