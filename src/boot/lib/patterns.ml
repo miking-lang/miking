@@ -73,7 +73,8 @@ type snpat =
   | NPatChar of int
   | NPatBool of bool
   | NPatCon of ustring * npat
-  | NPatRecord of npat Record.t * UstringSet.t (* The set is disallowed labels *)
+  | NPatRecord of
+      npat Record.t * UstringSet.t (* The set is disallowed labels *)
   | NPatSeqTot of npat list
   | NPatSeqEdge of
       npat list * IntSet.t (* The set of disallowed lengths *) * npat list
