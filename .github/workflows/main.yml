@@ -16,7 +16,7 @@ jobs:
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
         with:
-          ocaml-compiler: 5.0.0~beta2
+          ocaml-compiler: ocaml-base-compiler.5.0.0~rc1
           opam-repositories: |
             default: https://github.com/ocaml/opam-repository.git
 
@@ -55,7 +55,7 @@ jobs:
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
         with:
-          ocaml-compiler: 5.0.0~beta2
+          ocaml-compiler: ocaml-base-compiler.5.0.0~rc1
           opam-repositories: |
             default: https://github.com/ocaml/opam-repository.git
 
