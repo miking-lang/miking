@@ -942,8 +942,10 @@ lang MExprTypeCheck =
   -- Patterns
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
-  BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck
+  BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck +
 
+  -- Pretty Printing
+  FlexTypePrettyPrint
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it

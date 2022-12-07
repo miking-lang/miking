@@ -1117,7 +1117,7 @@ lang VarTypePrettyPrint = IdentifierPrettyPrint + VarTypeAst
     pprintVarName env t.ident
 end
 
-lang VarSortPrettyPrint = RecordTypePrettyPrint + VarSortAst
+lang VarSortPrettyPrint = PrettyPrint + RecordTypeAst + VarSortAst
   sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
   | RecordVar r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
