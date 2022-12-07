@@ -14,6 +14,7 @@ include "options.mc"
 include "options-config.mc"
 include "tune.mc"
 include "tune-config.mc"
+include "parser/tool.mc"
 
 mexpr
 
@@ -27,6 +28,7 @@ Commands:
   compile    Compiles a .mc file into an executable with the same name
   run        Combines eval and compile, to run the program as fast as possible
   tune       Tunes a program with holes
+  syn        Run the built-in parser generator
 
 If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
@@ -66,12 +68,21 @@ type SubConfig = {
   config : ParseConfig Options
 } in
 
+let parserGen = lam args. lam. lam.
+  match args with [synFile, outFile] then
+    runParserGenerator {synFile = synFile, outFile = outFile}
+  else
+    printLn "Please provide exactly two arguments: the '.syn' file and the output '.mc' file.";
+    exit 1
+in
+
 -- Commands map, maps command strings to functions.
 let commandsMap : [(String, SubConfig)] = map (lam c : SubConfig. (c.name, c))
 [ {name = "run", cmd = run, config = optionsConfig}
 , {name = "eval", cmd = eval, config = optionsConfig}
 , {name = "compile", cmd = compile, config = optionsConfig}
 , {name = "tune", cmd = tune, config = tuneOptionsConfig}
+, {name = "syn", cmd = parserGen, config = optionsConfig}
 ] in
 
 -- Print the usage message and exit.
