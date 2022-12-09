@@ -11,53 +11,56 @@ type CVODESession
 
 type CVODEError
 -- Missing or illegal solver inputs.
-con CVODEIllInput : {} -> CVODEError  
+con CVODEIllInput : {} -> CVODEError
 -- The initial and final times are too close to each other and not initial step
 -- size was specified.
-con CVODETooClose : {} -> CVODEError 
+con CVODETooClose : {} -> CVODEError
 -- The requested time could not be reached in mxstep internal steps.
-con CVODETooMuchWork : {} -> CVODEError 
+con CVODETooMuchWork : {} -> CVODEError
 -- The requested accuracy could not be satisfied.
-con CVODETooMuchAccuracy : {} -> CVODEError 
+con CVODETooMuchAccuracy : {} -> CVODEError
 -- Too many error test failures within a step or at the minimum step size.
-con CVODEErrFailure : {} -> CVODEError 
+con CVODEErrFailure : {} -> CVODEError
 -- Too many convergence test failures within a step or at the minimum step size.
-con CVODEConvergenceFailure : {} -> CVODEError 
+con CVODEConvergenceFailure : {} -> CVODEError
 -- Linear solver initialization failed.
 con CVODELinearInitFailure : {} -> CVODEError
 -- Linear solver setup failed unrecoverably.
-con CVODELinearSetupFailure : {} -> CVODEError 
+con CVODELinearSetupFailure : {} -> CVODEError
 -- Linear solver solution failed unrecoverably.
-con CVODELinearSolveFailure : {} -> CVODEError 
+con CVODELinearSolveFailure : {} -> CVODEError
 -- Unrecoverable failure in the RHS function f.
-con CVODERhsFuncFailure : {} -> CVODEError 
+con CVODERhsFuncFailure : {} -> CVODEError
 -- Initial unrecoverable failure in the RHS function f.
-con CVODEFirstRhsFuncFailure : {} -> CVODEError 
+con CVODEFirstRhsFuncFailure : {} -> CVODEError
 -- Too many convergence test failures, or unable to estimate the initial step
 -- size, due to repeated recoverable errors in the right-hand side function.
-con CVODERepeatedRhsFuncFailure : {} -> CVODEError 
+con CVODERepeatedRhsFuncFailure : {} -> CVODEError
 -- The right-hand side function had a recoverable error, but no recovery was
 -- possible. This error can only occur after an error test failure at order one.
-con CVODEUnrecoverableRhsFuncFailure : {} -> CVODEError 
+con CVODEUnrecoverableRhsFuncFailure : {} -> CVODEError
 -- Failure in the rootfinding function g.
-con CVODERootFuncFailure : {} -> CVODEError 
+con CVODERootFuncFailure : {} -> CVODEError
+-- Unspecified solver failure.
+con CVODEErrUnspecified : {} -> CVODEError
 
 let _cvodeErrorCodeToError = lam errorCode : Int.
   switch errorCode
-    case 0 then CVODEIllInput {}  
-    case 1 then CVODETooClose {} 
-    case 2 then CVODETooMuchWork {} 
-    case 3 then CVODETooMuchAccuracy {} 
-    case 4 then CVODEErrFailure {} 
-    case 5 then CVODEConvergenceFailure {} 
+    case 0 then CVODEIllInput {}
+    case 1 then CVODETooClose {}
+    case 2 then CVODETooMuchWork {}
+    case 3 then CVODETooMuchAccuracy {}
+    case 4 then CVODEErrFailure {}
+    case 5 then CVODEConvergenceFailure {}
     case 6 then CVODELinearInitFailure {}
-    case 7 then CVODELinearSetupFailure {} 
-    case 8 then CVODELinearSolveFailure {} 
-    case 9 then CVODERhsFuncFailure {} 
-    case 10 then CVODEFirstRhsFuncFailure {} 
-    case 11 then CVODERepeatedRhsFuncFailure {} 
-    case 12 then CVODEUnrecoverableRhsFuncFailure {} 
-    case 13 then CVODERootFuncFailure {} 
+    case 7 then CVODELinearSetupFailure {}
+    case 8 then CVODELinearSolveFailure {}
+    case 9 then CVODERhsFuncFailure {}
+    case 10 then CVODEFirstRhsFuncFailure {}
+    case 11 then CVODERepeatedRhsFuncFailure {}
+    case 12 then CVODEUnrecoverableRhsFuncFailure {}
+    case 13 then CVODERootFuncFailure {}
+    case 14 then CVODEErrUnspecified {}
   end
 
 type CVODESolverResult
@@ -85,7 +88,7 @@ let _cvodeSolverCodeToSolverResult = lam solverCode : (Int, Int).
 -- - y', a vector for storing the value of f(t,y).
 type CVODERHS = Float -> Tensor[Float] -> Tensor[Float] -> ()
 
-external cvodeDlsDense ! 
+external cvodeDlsDense !
   : NvectorSerial -> SundialsMatrixDense -> CVODEDlsDense
 
 -- `cvodeDlsDense y m` returns a linear solver associated with the state vector
@@ -120,7 +123,7 @@ external cvodeInit !
     CVODESession
 
 type CVODEInitArg = {
-  -- The linear multistep method. 
+  -- The linear multistep method.
   lmm : CVODELinearMultistepMethod,
 
   -- The integration tolerances.
@@ -143,7 +146,7 @@ type CVODEInitArg = {
 let cvodeInit = lam arg : CVODEInitArg.
   cvodeInit arg.lmm arg.tol arg.lsolver arg.rhs arg.t0 arg.y0
 
-external cvodeSolveNormal ! 
+external cvodeSolveNormal !
   : CVODESession ->
     Float ->
     NvectorSerial ->
@@ -165,6 +168,13 @@ let cvodeSolveNormal = lam arg : CVODESolveNormalArg.
   match cvodeSolveNormal arg.s arg.tend arg.y with (tend, rc) in
   (tend, _cvodeSolverCodeToSolverResult rc)
 
+external cvodeSetStopTime ! : CVODESession -> Float -> ()
+
+-- Limits the value of the independent variable t when solving. By default no
+-- stop time is imposed.
+let cvodeSetStopTime = lam s : CVODESession. lam tend : Float.
+  cvodeSetStopTime s tend
+
 mexpr
 
 utest
@@ -184,12 +194,12 @@ utest
     let y = tcreate [2] (lam. 0.) in
     tset y 0 1.;
     let v = nvectorSerialWrap y in
-    
+
     let m = sundialsMatrixDense 2 in
     let lsolver = cvodeDlsSolver (cvodeDlsDense v m) in
-    
+
     let t0 = 0. in
-    
+
     let s = cvodeInit {
       lmm      = cvodeLMMBDF,
       tol      = cvodeDefaultTolerances,
@@ -199,9 +209,16 @@ utest
       y0       = v
     } in
 
-    match cvodeSolveNormal { s = s, tend = 2., y = v } with (tend, r) in
-    utest r with CVODESuccess {} in
-    utest tend with 2. using eqf in
+    cvodeSetStopTime s 10.;
+
+    recursive let recur = lam t.
+      switch cvodeSolveNormal { s = s, tend = addf t 0.1, y = v }
+        case (tend, CVODEStopTimeReached _) then (tend, true)
+        case (tend, CVODESuccess _) then recur tend
+        case _ then (t, false)
+      end
+    in
+    utest recur 0. with (10., true) in
     ()
   in
   runTests ();
