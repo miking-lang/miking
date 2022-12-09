@@ -9,11 +9,11 @@ Before you can use the Miking system, you need to install
 [OCaml](https://ocaml.org/) and the
 [OPAM](https://opam.ocaml.org/) package manager.
 
-After the installation, you need to install the OCaml multicore compiler by
+After the installation, you need to install the OCaml compiler by
 running the following:
 ```
 opam update
-opam switch create 4.12.0+domains --packages=ocaml-variants.4.12.0+domains --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+opam switch create miking-ocaml 5.0.0~rc1
 eval $(opam env)
 ```
 
@@ -25,8 +25,8 @@ opam install dune linenoise
 ```
 
 Note that the `opam switch` command lets you have several OCaml installations on
-your system. When using the Miking system, you need to use the `4.12.0+domains`
-switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
+your system. When using the Miking system, you need to use the `miking-ocaml`
+switch. Running `opam switch miking-ocaml` followed by `eval $(opam env)`
 always takes you back to the correct switch.
 
 To compile the project, go back to the Miking repository and execute:
@@ -1381,10 +1381,6 @@ for creating and synchronizing threads. In addition to the examples below, more
 documentation can be found in the standard library at
 [stdlib/multicore](stdlib/multicore/).
 
-To use the parallel programming externals, ensure that you are on the
-`4.12.0+domains`
-[switch](https://github.com/ocaml-multicore/ocaml-multicore/tree/4.12+domains).
-
 #### Atomic References
 
 Atomic references are similar to ordinary references, except that operations
@@ -1819,10 +1815,10 @@ automatically format ocaml source code.
 
 ###  Setup and use `ocamlformat`
 
-We are currently using this package at version `0.20.1`. To pin and/or install
+We are currently using this package at version `0.24.1`. To pin and/or install
 the package at this version using `opam` do
 ```
-opam pin ocamlformat 0.20.1
+opam pin ocamlformat 0.24.1
 ```
 Then you can then run `dune build @fmt` to see a
 diff between your code and the formatted code. To promote the changes run `dune

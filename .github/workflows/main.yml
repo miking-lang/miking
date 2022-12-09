@@ -16,10 +16,9 @@ jobs:
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
         with:
-          ocaml-compiler: ocaml-variants.4.12.0+domains
+          ocaml-compiler: ocaml-base-compiler.5.0.0~rc1
           opam-repositories: |
             default: https://github.com/ocaml/opam-repository.git
-            multicore: https://github.com/ocaml-multicore/multicore-opam.git
 
       - name: Cache opam packages
         uses: actions/cache@v2
@@ -33,7 +32,7 @@ jobs:
           sudo apt-get install -y liblapacke-dev libopenblas-dev
 
           # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
         timeout-minutes: 10
@@ -56,10 +55,9 @@ jobs:
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
         with:
-          ocaml-compiler: ocaml-variants.4.12.0+domains
+          ocaml-compiler: ocaml-base-compiler.5.0.0~rc1
           opam-repositories: |
             default: https://github.com/ocaml/opam-repository.git
-            multicore: https://github.com/ocaml-multicore/multicore-opam.git
 
       - name: Cache opam packages
         uses: actions/cache@v2
@@ -80,7 +78,7 @@ jobs:
           ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
 
           # Install all opam packages used in make test-all
-          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.20.1
+          opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
         timeout-minutes: 10
