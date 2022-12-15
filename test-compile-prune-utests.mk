@@ -7,4 +7,4 @@ all: $(src_files_all)
 selected: $(compile_files_prune)
 
 $(src_files_all):
-	@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+	@./make.sh compile-test $@ "build/mi compile --test --disable-optimizations"

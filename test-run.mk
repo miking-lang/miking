@@ -7,4 +7,4 @@ all: $(src_files_all)
 selected: $(run_files)
 
 $(src_files_all):
-	@./make run-test $@
+	@./make.sh run-test $@
