@@ -1,5 +1,7 @@
+include "either.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "mexpr/type-check.mc"
 /-
 
 NOTE(vipa, 2022-05-20): This file decomposes nested patterns into a
@@ -491,7 +493,7 @@ lang ShallowBool = ShallowBase + BoolPat
   | (SPatBool false, SPatBool false) -> 0
 end
 
-lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
+lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint + FlexTypeAst
   syn SPat =
   | SPatRecord { bindings : Map SID Name, ty : Type }
 
@@ -508,7 +510,10 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
     -- TODO(vipa, 2022-05-26): This needs to resolve aliases :(
     match px.ty with TyRecord x then
       _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty })
-    else errorSingle [px.info]
+    else match resolveLink px.ty with TyFlex t then
+      dprintLn (deref t.contents);
+      errorSingle [px.info] "Why is there still a TyFlex here?"
+    else dprintLn px; errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
 
   sem mkMatch scrutinee t e =
@@ -723,7 +728,7 @@ lang ShallowMExpr = MExprAst + ShallowRecord + ShallowInt + ShallowOr + ShallowA
 end
 
 lang CollectBranches = MatchAst + VarAst + NamedPat
-  sem collectBranches : Expr -> Option (Name, [(Pat, Expr)], Expr)
+  sem collectBranches : Expr -> Option (Either Expr Name, [(Pat, Expr)], Expr)
   sem collectBranches =
   | t & TmMatch (x & {target = TmVar v}) ->
     let scrutinee = v.ident in
@@ -742,7 +747,9 @@ lang CollectBranches = MatchAst + VarAst + NamedPat
       sfold_Pat_Pat isWild true x.pat in
     if alreadyShallow
     then None ()
-    else Some (scrutinee, branches, fallthrough)
+    else Some (Right scrutinee, branches, fallthrough)
+  | TmMatch (t & {target = !TmVar _}) ->
+    Some (Left t.target, [(t.pat, t.thn)], t.els)
   | _ -> None ()
 end
 
@@ -750,8 +757,16 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
   sem lowerAll : Expr -> Expr
   sem lowerAll = | t ->
     let f = lam pair. (pair.0, lowerAll pair.1) in
-    match collectBranches t with Some (name, branches, fallthrough)
-    then lowerToExpr name (map f branches) (lowerAll fallthrough)
+    match collectBranches t with Some (target, branches, fallthrough)
+    then
+      match target with Left expr then
+        let targetId = nameSym "_target" in
+        bind_
+          (nulet_ targetId expr)
+          (lowerToExpr targetId (map f branches) (lowerAll fallthrough))
+      else match target with Right name then
+        lowerToExpr name (map f branches) (lowerAll fallthrough)
+      else never
     else smap_Expr_Expr lowerAll t
 end
 
