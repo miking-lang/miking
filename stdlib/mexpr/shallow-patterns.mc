@@ -727,7 +727,7 @@ end
 lang ShallowMExpr = MExprAst + ShallowRecord + ShallowInt + ShallowOr + ShallowAnd + ShallowNot + ShallowSeq + ShallowCon + ShallowChar + ShallowBool
 end
 
-lang CollectBranches = MatchAst + VarAst + NamedPat
+lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
   sem collectBranches : Expr -> Option (Either Expr Name, [(Pat, Expr)], Expr)
   sem collectBranches =
   | t & TmMatch (x & {target = TmVar v}) ->
@@ -742,6 +742,7 @@ lang CollectBranches = MatchAst + VarAst + NamedPat
     match work [] t with (branches, fallthrough) in
     let alreadyShallow =
       if geqi (length branches) 2 then false else
+      match x.pat with PatAnd _ | PatOr _ | PatNot _ then false else
       let isWild = lam acc. lam sub.
         match (acc, sub) with (true, PatNamed _) then true else false in
       sfold_Pat_Pat isWild true x.pat in
@@ -762,7 +763,7 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
       match target with Left expr then
         let targetId = nameSym "_target" in
         bind_
-          (nulet_ targetId expr)
+          (nulet_ targetId (lowerAll expr))
           (lowerToExpr targetId (map f branches) (lowerAll fallthrough))
       else match target with Right name then
         lowerToExpr name (map f branches) (lowerAll fallthrough)
