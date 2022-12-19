@@ -1,7 +1,6 @@
 include "either.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
-include "mexpr/type-check.mc"
 /-
 
 NOTE(vipa, 2022-05-20): This file decomposes nested patterns into a
@@ -493,7 +492,7 @@ lang ShallowBool = ShallowBase + BoolPat
   | (SPatBool false, SPatBool false) -> 0
 end
 
-lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint + FlexTypeAst
+lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
   syn SPat =
   | SPatRecord { bindings : Map SID Name, ty : Type }
 
