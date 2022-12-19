@@ -758,9 +758,11 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
     then
       match target with Left expr then
         let targetId = nameSym "_target" in
-        bind_
-          (nulet_ targetId (lowerAll expr))
-          (lowerToExpr targetId (map f branches) (lowerAll fallthrough))
+        let elseId = nameSym "_elsBranch" in
+        bindall_ [
+          nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
+          nulet_ targetId (lowerAll expr),
+          lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_)]
       else match target with Right name then
         lowerToExpr name (map f branches) (lowerAll fallthrough)
       else never
