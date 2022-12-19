@@ -67,9 +67,15 @@ lang MCoreCompileLang =
     printNestedPatterns acc t.target;
     (if isRegular t.pat then
       printLn "Found regular pattern";
-      dprintLn t.pat
+      use MExprPrettyPrint in
+      match getPatStringCode 0 pprintEnvEmpty t.pat with (_, pstr) in
+      printLn (info2str (infoPat t.pat));
+      printLn pstr
     else if isNested false t.pat then
-      dprintLn t.pat
+      use MExprPrettyPrint in
+      match getPatStringCode 0 pprintEnvEmpty t.pat with (_, pstr) in
+      printLn (info2str (infoPat t.pat));
+      printLn pstr
     else ());
     printNestedPatterns acc t.thn;
     printNestedPatterns acc t.els

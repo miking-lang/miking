@@ -8,6 +8,7 @@
 include "options.mc"
 include "parse.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/pprint.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
@@ -16,7 +17,7 @@ include "ocaml/mcore.mc"
 
 lang MCoreLiteCompile =
   BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang +
-  MExprLowerNestedPatterns
+  MExprLowerNestedPatterns + MExprPrettyPrint
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
@@ -68,7 +69,6 @@ let compile : Options -> String -> () = lam options. lam file.
   let ast = symbolize ast in
   let ast = typeCheck ast in
   let ast = lowerAll ast in
-  printLn "After pattern lowering";
   let hooks = mkEmptyHooks (ocamlCompile options file) in
   compileMCore ast hooks;
   ()
