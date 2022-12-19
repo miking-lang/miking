@@ -510,10 +510,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint + Fle
     -- TODO(vipa, 2022-05-26): This needs to resolve aliases :(
     match px.ty with TyRecord x then
       _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty })
-    else match resolveLink px.ty with TyFlex t then
-      dprintLn (deref t.contents);
-      errorSingle [px.info] "Why is there still a TyFlex here?"
-    else dprintLn px; errorSingle [px.info]
+    else errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
 
   sem mkMatch scrutinee t e =

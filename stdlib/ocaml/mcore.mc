@@ -43,48 +43,9 @@ lang MCoreCompileLang =
       (setToSeq libs, setToSeq clibs)
     else never
 
-  sem isRegular : Pat -> Bool
-  sem isRegular =
-  | PatAnd _ | PatOr _ | PatNot _ -> true
-  | _ -> false
-
-  sem isPatNamed : Bool -> Pat -> Bool
-  sem isPatNamed acc =
-  | PatNamed _ -> acc
-  | _ -> false
-
-  sem isNested : Bool -> Pat -> Bool
-  sem isNested acc =
-  | PatNamed _ | PatInt _ | PatChar _ | PatBool _ -> false
-  | PatSeqTot t -> not (foldl isPatNamed true t.pats)
-  | PatSeqEdge t -> not (foldl isPatNamed true (concat t.prefix t.postfix))
-  | PatRecord t -> not (foldl isPatNamed true (mapValues t.bindings))
-  | PatCon t -> not (isPatNamed true t.subpat)
-
-  sem printNestedPatterns : () -> Expr -> ()
-  sem printNestedPatterns acc =
-  | TmMatch t ->
-    printNestedPatterns acc t.target;
-    (if isRegular t.pat then
-      printLn "Found regular pattern";
-      use MExprPrettyPrint in
-      match getPatStringCode 0 pprintEnvEmpty t.pat with (_, pstr) in
-      printLn (info2str (infoPat t.pat));
-      printLn pstr
-    else if isNested false t.pat then
-      use MExprPrettyPrint in
-      match getPatStringCode 0 pprintEnvEmpty t.pat with (_, pstr) in
-      printLn (info2str (infoPat t.pat));
-      printLn pstr
-    else ());
-    printNestedPatterns acc t.thn;
-    printNestedPatterns acc t.els
-  | t -> sfold_Expr_Expr printNestedPatterns acc t
-
   sem compileMCore : all a. Expr -> Hooks a -> a
   sem compileMCore ast =
   | hooks ->
-    printNestedPatterns () ast;
     let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
 
