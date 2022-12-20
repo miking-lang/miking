@@ -5,7 +5,7 @@
 #  To make the build system platform independent,
 #  all scripts are done in OCaml instead of being
 #  dependent on make. If make is installed on
-#  the system, we just run the batch make file.
+#  the system, we just run the batch make.sh file.
 ###################################################
 
 .PHONY :\
@@ -47,39 +47,39 @@
 all: build
 
 boot:
-	@./make boot
+	@./make.sh boot
 
 install-boot: boot
-	@./make install-boot
+	@./make.sh install-boot
 
 lite: install-boot
-	@./make lite
+	@./make.sh lite
 
 test: test-boot
 
 build: install-boot
 # Run the complete bootstrapping process to compile `mi`.
-	@./make
+	@./make.sh
 
 build-mi:
 # Build `mi` using the current version in `build`, skipping bootstrapping.
 # The result is named `build/mi-tmp`.
-	@./make build-mi
+	@./make.sh build-mi
 
 install: build
-	@./make install
+	@./make.sh install
 
 lint:
-	@./make lint
+	@./make.sh lint
 
 fix:
-	@./make fix
+	@./make.sh fix
 
 clean:
-	@./make clean
+	@./make.sh clean
 
 uninstall:
-	@./make uninstall
+	@./make.sh uninstall
 
 # Tests everything except some files with very special external dependencies
 test-all:\
@@ -88,7 +88,7 @@ test-all:\
   test-run\
   test-js\
 	test-tune
-	@./make lint
+	@./make.sh lint
 
 # The same as test-all but prunes utests whose external dependencies are not met
 # on this system
@@ -97,7 +97,7 @@ test-all-prune-utests:\
   test-compile-prune-utests\
   test-run\
 	test-tune
-	@./make lint
+	@./make.sh lint
 
 test-boot-compile: boot
 	@$(MAKE) -s -f test-boot-compile.mk selected

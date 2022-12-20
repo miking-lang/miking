@@ -7,4 +7,4 @@ tune_files += test/examples/tuning/tune-context.mc
 all: $(tune_files)
 
 $(tune_files):
-	@./make compile-test $@ "build/mi tune --test --disable-optimizations --compile --disable-exit-early --enable-cleanup"
+	@./make.sh compile-test $@ "build/mi tune --test --disable-optimizations --compile --disable-exit-early --enable-cleanup"

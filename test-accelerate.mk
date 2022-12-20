@@ -5,5 +5,5 @@ include test-files.mk
 all: $(accelerate_files)
 
 $(accelerate_files):
-	@./make compile-test $@ "build/mi compile --debug-accelerate"
-	@./make compile-test $@ "build/mi compile --accelerate"
+	@./make.sh compile-test $@ "build/mi compile --debug-accelerate"
+	@./make.sh compile-test $@ "build/mi compile --accelerate"
