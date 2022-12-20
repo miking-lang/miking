@@ -330,10 +330,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       match compileMExpr ctx e with (ctx2, e) in
       let ctx = combineDeclarations ctx1 ctx2 in
       match compileDeclarations ctx with (ctx, decs) in
-      (ctx, flattenBlock (JSEBlock {
-        exprs = [decs, JSEDef { id = ident, expr = body }],
-        ret = e
-      }))
+      let bindingExpr = JSEIIFE {
+        body = flattenBlock (JSEBlock {
+          exprs = [decs, JSEDef { id = ident, expr = body }],
+          ret = e})} in
+      (ctx, bindingExpr)
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     match compileMExpr ctx e with (ctx, e) in
@@ -380,18 +381,15 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       args = [body],
       curried = false
     })
-  | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
-    match tryCompileOptimizedMatch ctx target pat thn els with Some (ctx, expr) then (ctx, expr) else
-    match compileMExpr ctx target with (ctx, target) in
-    match compileMExpr ctx thn with (ctx, thn) in
-    match compileMExpr ctx els with (ctx, els) in
-    match compileBindingPattern ctx target pat with (ctx2, pat) in
+  | TmMatch t ->
+    match compileMExpr ctx t.target with (ctx, target) in
+    match compileMExpr ctx t.thn with (ctx, thn) in
+    match compileMExpr ctx t.els with (ctx, els) in
+    match compilePattern ctx target t.pat with (ctx, cond) in
     let expr = JSETernary {
-      cond = pat,
+      cond = cond,
       thn = immediatelyInvokeBlock thn,
-      els = immediatelyInvokeBlock els
-    } in
-    let ctx = combineDeclarations ctx ctx2 in
+      els = immediatelyInvokeBlock els} in
     (ctx, if ctx.options.generalOptimizations then optimizeExpr3 expr else expr)
   | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
   | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"

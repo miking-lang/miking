@@ -524,11 +524,15 @@ end
 -- TYPE CHECKING --
 -------------------
 
-lang RemoveFlex = FlexTypeAst + UnknownTypeAst
+lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
   sem removeFlexType =
   | TyFlex t & ty ->
-    match deref t.contents with Unbound _ then TyUnknown { info = t.info }
-    else removeFlexType (resolveLink ty)
+    switch deref t.contents
+    case Unbound {sort = RecordVar x} then
+      TyRecord {info = t.info, fields = mapMap removeFlexType x.fields}
+    case Unbound _ then TyUnknown { info = t.info }
+    case _ then removeFlexType (resolveLink ty)
+    end
   | ty ->
     smap_Type_Type removeFlexType ty
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-COMPILE_JS="./build/boot eval src/main/mi.mc -- compile --test --disable-prune-utests --to-js --js-target node"
+COMPILE_JS="./build/mi compile --test --disable-prune-utests --to-js --js-target node"
 RUN_JS="node"
 RUN_MI="./build/boot eval"
 TEST_MI="./build/mi run --test --disable-prune-warning"

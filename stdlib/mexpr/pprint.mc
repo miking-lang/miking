@@ -146,10 +146,10 @@ let record2tuple
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintVarName  (env : PprintEnv) =
-  sem pprintConName  (env : PprintEnv) =
-  sem pprintTypeName (env : PprintEnv) =
-  sem pprintLabelString =                -- Record label string parser translation
+  sem pprintVarName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintConName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintTypeName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintLabelString : SID -> String
 
   -- Get a string for the given name. Returns both the string and a new
   -- environment.

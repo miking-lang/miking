@@ -1,3 +1,4 @@
+include "either.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 /-
@@ -722,8 +723,8 @@ end
 lang ShallowMExpr = MExprAst + ShallowRecord + ShallowInt + ShallowOr + ShallowAnd + ShallowNot + ShallowSeq + ShallowCon + ShallowChar + ShallowBool
 end
 
-lang CollectBranches = MatchAst + VarAst + NamedPat
-  sem collectBranches : Expr -> Option (Name, [(Pat, Expr)], Expr)
+lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
+  sem collectBranches : Expr -> Option (Either Expr Name, [(Pat, Expr)], Expr)
   sem collectBranches =
   | t & TmMatch (x & {target = TmVar v}) ->
     let scrutinee = v.ident in
@@ -737,12 +738,15 @@ lang CollectBranches = MatchAst + VarAst + NamedPat
     match work [] t with (branches, fallthrough) in
     let alreadyShallow =
       if geqi (length branches) 2 then false else
+      match x.pat with PatAnd _ | PatOr _ | PatNot _ then false else
       let isWild = lam acc. lam sub.
         match (acc, sub) with (true, PatNamed _) then true else false in
       sfold_Pat_Pat isWild true x.pat in
     if alreadyShallow
     then None ()
-    else Some (scrutinee, branches, fallthrough)
+    else Some (Right scrutinee, branches, fallthrough)
+  | TmMatch (t & {target = !TmVar _}) ->
+    Some (Left t.target, [(t.pat, t.thn)], t.els)
   | _ -> None ()
 end
 
@@ -750,8 +754,18 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
   sem lowerAll : Expr -> Expr
   sem lowerAll = | t ->
     let f = lam pair. (pair.0, lowerAll pair.1) in
-    match collectBranches t with Some (name, branches, fallthrough)
-    then lowerToExpr name (map f branches) (lowerAll fallthrough)
+    match collectBranches t with Some (target, branches, fallthrough)
+    then
+      match target with Left expr then
+        let targetId = nameSym "_target" in
+        let elseId = nameSym "_elsBranch" in
+        bindall_ [
+          nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
+          nulet_ targetId (lowerAll expr),
+          lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_)]
+      else match target with Right name then
+        lowerToExpr name (map f branches) (lowerAll fallthrough)
+      else never
     else smap_Expr_Expr lowerAll t
 end
 

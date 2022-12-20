@@ -427,17 +427,24 @@ let _pprintRecord = use MExprAst in
         (app_ (var_ "join") pprintSeq)
         never_)
 
-let _equalRecord = use MExprAst in
+let _equalRecord =
   lam env. lam ty. lam fields.
+  use MExprAst in
   let recordBindings = lam prefix.
     mapMapWithKey (lam id. lam. pvar_ (join [prefix, sidToString id])) fields
   in
   let lhsPrefix = "lhs_" in
   let rhsPrefix = "rhs_" in
-  let matchPattern =
-    ptuple_ [
-      PatRecord {bindings = recordBindings lhsPrefix, info = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0), ty = tyunknown_},
-      PatRecord {bindings = recordBindings rhsPrefix, info = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0), ty = tyunknown_}] in
+  let intSid = lam i. lam v. (stringToSid (int2string i), v) in
+  let eqInfo = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0) in
+  let eqPats = [
+    PatRecord {bindings = recordBindings lhsPrefix, info = eqInfo, ty = ty},
+    PatRecord {bindings = recordBindings rhsPrefix, info = eqInfo, ty = ty}] in
+  let matchPatternTy = TyRecord {
+    fields = mapFromSeq cmpSID (mapi intSid [ty, ty]), info = eqInfo} in
+  let matchPattern = PatRecord {
+    bindings = mapFromSeq cmpSID (mapi intSid eqPats),
+    info = eqInfo, ty = matchPatternTy} in
   let fieldEquals = lam seq. lam id. lam fieldTy.
     let fieldEqName = getEqualFuncName env fieldTy in
     let lhs = var_ (join [lhsPrefix, sidToString id]) in
@@ -472,14 +479,22 @@ let _pprintVariant = lam env. lam ty. lam constrs.
   lam_ "a" ty constructorMatches
 
 let _equalVariant = lam env. lam ty. lam constrs.
+  use MExprAst in
   let constrEqual = lam cont. lam constrId. lam argTy.
     let equalFuncId = getEqualFuncName env argTy in
     let lhsId = nameSym "lhs" in
     let rhsId = nameSym "rhs" in
-    let constructorPattern = ptuple_ [
-      pcon_ (nameGetStr constrId) (npvar_ lhsId),
-      pcon_ (nameGetStr constrId) (npvar_ rhsId)
-    ] in
+    let intSid = lam i. lam v. (stringToSid (int2string i), v) in
+    let eqInfo = makeInfo (posVal "utest_eq" 0 0) (posVal "utest_eq" 0 0) in
+    let pvar = lam id. PatNamed {ident = PName id, info = eqInfo, ty = argTy} in
+    let eqPats = [
+      PatCon {ident = constrId, subpat = pvar lhsId, info = eqInfo, ty = ty},
+      PatCon {ident = constrId, subpat = pvar rhsId, info = eqInfo, ty = ty}] in
+    let constructorPatternTy = TyRecord {
+      fields = mapFromSeq cmpSID (mapi intSid [ty, ty]), info = eqInfo} in
+    let constructorPattern = PatRecord {
+      bindings = mapFromSeq cmpSID (mapi intSid eqPats),
+      info = eqInfo, ty = constructorPatternTy} in
     match_ (utuple_ [var_ "a", var_ "b"])
       constructorPattern
       (appf2_ (nvar_ equalFuncId) (nvar_ lhsId) (nvar_ rhsId))

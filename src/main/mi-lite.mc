@@ -8,13 +8,16 @@
 include "options.mc"
 include "parse.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/pprint.mc"
+include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
 lang MCoreLiteCompile =
-  BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang
+  BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang +
+  MExprLowerNestedPatterns + MExprPrettyPrint
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.

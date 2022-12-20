@@ -75,14 +75,13 @@ lang OCamlTypePrettyPrint =
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
       let orderedFields = tyRecordOrderedFields ty in
-      let f = lam env. lam field : (String, Type).
-        match field with (str, ty) in
+      let f = lam env. lam field : (SID, Type).
+        match field with (sid, ty) in
         match getTypeStringCode indent env ty with (env,ty) in
-        let str = pprintLabelString str in
+        let str = pprintLabelString sid in
         (env, join [str, ": ", ty])
       in
-      let fieldStrs = map (lam x: (SID, Type). (sidToString x.0, x.1)) orderedFields in
-      match mapAccumL f env fieldStrs with (env, fields) in
+      match mapAccumL f env orderedFields with (env, fields) in
       (env, join ["{", strJoin ";" fields, "}"])
   | OTyVar {ident = ident} -> pprintVarName env ident
   | OTyVarExt {ident = ident, args = []} -> (env, ident)
@@ -138,7 +137,7 @@ lang OCamlPrettyPrint =
        _nameNoSymString noSymVarPrefix escapeName name)
 
   sem pprintLabelString =
-  | s -> escapeLabelString s
+  | s -> escapeLabelString (sidToString s)
 
   sem isAtomic =
   | TmLam _ -> false
@@ -489,7 +488,6 @@ lang OCamlPrettyPrint =
       match
         mapAccumL (lam env. lam k.
           let v = mapFindExn k t.bindings in
-          let k = sidToString k in
           match pprintCode innerIndent env v with (env, str) then
             (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
                         "(", str, ")"])
@@ -505,10 +503,9 @@ lang OCamlPrettyPrint =
     let ii = pprintIncr i in
     match pprintCode i env t.rec with (env,rec) then
       match pprintCode ii env t.value with (env,value) then
-        let key = sidToString t.key in
         (env,join ["{ ", rec, pprintNewline i,
                    "with", pprintNewline i,
-                   pprintLabelString key, " =", pprintNewline ii, value,
+                   pprintLabelString t.key, " =", pprintNewline ii, value,
                    " }"])
       else never
     else never
@@ -637,8 +634,7 @@ lang OCamlPrettyPrint =
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | OPatRecord {bindings = bindings} ->
-    let bindingLabels = map sidToString (mapKeys bindings) in
-    let labels = map pprintLabelString bindingLabels in
+    let labels = map pprintLabelString (mapKeys bindings) in
     let pats = mapValues bindings in
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       let strs = mapi (lam i. lam p. join [get labels i, " = ", p]) pats in

@@ -21,7 +21,6 @@ let pprintEnvGetStr = lam env. lam id: Name.
       match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
     ])
   else
-    let id = nameSetStr id (nameGetStr id) in
     pprintEnvGetStr env id -- Note that this is not a recursive call!
 
 let joinAsStatements = lam indent. lam seq.
@@ -152,13 +151,12 @@ lang JSPrettyPrint = JSExprAst
     match mapAccumL (printJSExpr indent) env exprs with (env,exprs) in
     (env, join ["[", strJoin ", " exprs, "]"])
   | JSEObject { fields = fields } ->
-
-    let printPair = lam field.
+    let printPair = lam env. lam field.
       match field with (n, e) in
       match (printJSExpr 0) env e with (env,e) in
-      join [n, ": ", e]
+      (env, join [n, ": ", e])
     in
-    match map (printPair) fields with prs in
+    match mapAccumL printPair env fields with (env, prs) in
     (env, join ["{", strJoin ", " prs, "}"])
   | JSEBlock { exprs = exprs, ret = ret } ->
     let i = indent in
