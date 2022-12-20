@@ -8,24 +8,13 @@ include "javascript/ast.mc"
 include "javascript/util.mc"
 
 
-lang PatJSCompileLang = JSProgAst + NamedPat + SeqTotPat + SeqEdgePat +
-                    RecordPat + DataPat + IntPat + OrPat +
-                    CharPat + BoolPat + AndPat + NotPat
-end
-
-let tmpIgnoreJS = use PatJSCompileLang in
-  JSEVar { id = nameSym "_" }
-
-let compilePatsLen = use PatJSCompileLang in
-  lam pats: [Pat]. lam target: JSExpr. lam checkExactInsteadOfAtLeast: Bool.
-  let op = (if checkExactInsteadOfAtLeast then (JSOEq {}) else (JSOGe {})) in
-  _binOp op [JSEMember { expr = target, id = "length" }, JSEInt { i = length pats }]
-
 ------------------------------------
 -- Pattern -> JavaScript FRAGMENT --
 ------------------------------------
 
-lang PatJSCompile = PatJSCompileLang
+lang PatJSCompile =
+  JSProgAst + NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat +
+  IntPat + OrPat + CharPat + BoolPat + AndPat + NotPat
 
   sem getPatNameVar : PatName -> JSExpr
   sem getPatNameVar =

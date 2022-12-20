@@ -330,10 +330,11 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       match compileMExpr ctx e with (ctx2, e) in
       let ctx = combineDeclarations ctx1 ctx2 in
       match compileDeclarations ctx with (ctx, decs) in
-      (ctx, flattenBlock (JSEBlock {
-        exprs = [decs, JSEDef { id = ident, expr = body }],
-        ret = e
-      }))
+      let bindingExpr = JSEIIFE {
+        body = flattenBlock (JSEBlock {
+          exprs = [decs, JSEDef { id = ident, expr = body }],
+          ret = e})} in
+      (ctx, bindingExpr)
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     match compileMExpr ctx e with (ctx, e) in
