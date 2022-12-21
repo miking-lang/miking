@@ -59,23 +59,11 @@ let _insertTyCon = lam name. lam ty. lam env : TCEnv.
 
 type UnifyEnv = {
   info: [Info],  -- The info of the expression(s) triggering the unification
-  originalLhs: Type,
-  originalRhs: Type,
+  expectedType: Type,
+  foundType: Type,
   names: BiNameMap,
   tyConEnv: Map Name ([Name], Type)
 }
-
-let unificationError =
-  lam info. lam originalLhs. lam originalRhs. lam lhs. lam rhs.
-    let msg = join [
-      "Encountered a type mismatch:\n",
-      "  ", lhs, "  !=  ", rhs, "\n\n",
-      "* when trying to match the signatures\n",
-      "  - ", originalLhs, "\n",
-      "  - ", originalRhs, "\n",
-      "* when type checking the expression\n"
-    ] in
-    errorSingle info msg
 
 let _sort2str = use MExprPrettyPrint in
   lam ident. lam sort.
@@ -208,10 +196,13 @@ end
 ----------------------
 
 lang Unify = MExprAst + FlexTypeAst + ResolveAlias + PrettyPrint
-  -- Unify the types `ty1' and `ty2'. Modifies the types in place.
+  -- Unify the types `ty1' and `ty2', where
+  -- `ty1' is the expected type of an expression, and
+  -- `ty2' is the inferred type of the expression.
+  -- Modifies the types in place.
   sem unify (info : [Info]) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
-    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info, originalLhs = ty1, originalRhs = ty2} in
+    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info, expectedType = ty1, foundType = ty2} in
     unifyTypes env (ty1, ty2)
 
   sem unifyTypes (env : UnifyEnv) =
@@ -222,7 +213,7 @@ lang Unify = MExprAst + FlexTypeAst + ResolveAlias + PrettyPrint
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
   | (ty1, ty2) ->
-    unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
+    unificationError env
 
   -- unifyCheck is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
@@ -239,7 +230,17 @@ lang Unify = MExprAst + FlexTypeAst + ResolveAlias + PrettyPrint
   | ty ->
     sfold_Type_Type (lam. lam ty. unifyCheckBase info boundVars tv ty) () ty
 
-  sem _fields2str = | fields -> type2str (TyRecord {info = NoInfo (), fields = fields})
+  sem unificationError : UnifyEnv -> ()
+  sem unificationError =
+  | env ->
+    let msg = join [
+      "* Expected an expression of type: ",
+      type2str env.expectedType, "\n",
+      "* Found an expression of type: ",
+      type2str env.foundType, "\n",
+      "* When type checking the expression\n"
+    ] in
+    errorSingle env.info msg
 end
 
 -- Helper language providing functions to unify fields of record-like types
@@ -252,7 +253,7 @@ lang UnifyFields = Unify
       match mapLookup k m2 with Some tyfield2 then
         unifyTypes env (tyfield1, tyfield2)
       else
-        unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
+        unificationError env
     in
     iter f (mapBindings m1)
 
@@ -262,7 +263,7 @@ lang UnifyFields = Unify
     if eqi (mapSize m1) (mapSize m2) then
       unifyFields env m1 m2
     else
-      unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_fields2str m1) (_fields2str m2)
+      unificationError env
 end
 
 lang VarTypeUnify = Unify + VarTypeAst
@@ -270,7 +271,7 @@ lang VarTypeUnify = Unify + VarTypeAst
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
     else if biMem (t1.ident, t2.ident) env.names then ()
-    else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
+    else unificationError env
 
   sem unifyCheckBase info boundVars tv =
   | TyVar t ->
@@ -280,10 +281,10 @@ lang VarTypeUnify = Unify + VarTypeAst
     if leqi tv.level t.level then
       if not (setMem t.ident boundVars) then
         let msg = join [
-          "Encountered a type variable escaping its scope:\n",
-          "  ", nameGetStr t.ident, "\n\n",
-          "* perhaps the annotation of the associated let-binding is too general?\n",
-          "* when type checking the expression\n"
+          "* Encountered a type variable escaping its scope: ",
+          nameGetStr t.ident, "\n",
+          "* Perhaps the annotation of the associated let-binding is too general?\n",
+          "* When type checking the expression\n"
         ] in
         errorSingle info msg
       else ()
@@ -330,7 +331,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
        unifyFields env r1.fields r2.fields
      else match tv.sort with RecordVar _ then
-       unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
+       unificationError env
      else ());
     modref t1.contents (Link ty2)
 
@@ -339,9 +340,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
     match deref t.contents with Unbound r then
       if nameEq r.ident tv.ident then
         let msg = join [
-          "Encountered a type occurring within itself.\n\n",
-          "* recursive types are only permitted using data constructors.\n",
-          "* when type checking the expression\n"
+          "* Encountered a type occurring within itself.\n",
+          "* Recursive types are only permitted using data constructors.\n",
+          "* When type checking the expression\n"
         ] in
         errorSingle info msg
       else
@@ -378,9 +379,9 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
     (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
-       unifyFieldsStrict env r1.fields r2.fields
-     else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
-     else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (_sort2str t1.ident t1.sort) (_sort2str t2.ident t2.sort));
+      unifyFieldsStrict env r1.fields r2.fields
+    else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
+    else unificationError env);
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
@@ -388,9 +389,9 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
   | TyAll t ->
     match tv.sort with MonoVar _ then
       let msg = join [
-        "Encountered a function parameter used in a polymorphic position.\n\n",
-        "* perhaps you need a type annotation for the parameter?\n",
-        "* when type checking the expression\n"
+        "* Encountered a function parameter used in a polymorphic position.\n",
+        "* Perhaps you need a type annotation for the parameter?\n",
+        "* When type checking the expression\n"
       ] in
       errorSingle info msg
     else
@@ -402,7 +403,7 @@ lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
-    else unificationError env.info (type2str env.originalLhs) (type2str env.originalRhs) (type2str ty1) (type2str ty2)
+    else unificationError env
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -568,9 +569,9 @@ lang SubstituteUnknown = UnknownTypeAst + VarSortAst
   sem checkUnknown (info : Info) =
   | TyUnknown _ ->
     let msg = join [
-      "Encountered Unknown type in an illegal position.\n\n",
+      "* Encountered Unknown type in an illegal position.\n",
       "* Unknown is only allowed in annotations, not in definitions or declarations.\n",
-      "* when type checking the expression\n"
+      "* When type checking the expression\n"
     ] in
     errorSingle [info] msg
   | ty ->
@@ -624,9 +625,9 @@ lang VarTypeCheck = TypeCheck + VarAst
       TmVar {t with ty = ty}
     else
       let msg = join [
-        "Encountered an unbound variable:\n",
-        "  ", nameGetStr t.ident, "\n\n",
-        "* when type checking the expression\n"
+        "* Encountered an unbound variable: ",
+        nameGetStr t.ident, "\n",
+        "* When type checking the expression\n"
       ] in
       errorSingle [t.info] msg
 end
@@ -648,8 +649,10 @@ lang AppTypeCheck = TypeCheck + AppAst
   | TmApp t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
+    let tyRhs = newvar env.currentLvl t.info in
     let tyRes = newvar env.currentLvl t.info in
-    unify [infoTm t.lhs] env (tyTm lhs) (ityarrow_ (infoTm lhs) (tyTm rhs) tyRes);
+    unify [infoTm t.lhs] env (ityarrow_ (infoTm lhs) tyRhs tyRes) (tyTm lhs);
+    unify [infoTm t.rhs] env tyRhs (tyTm rhs);
     TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
 end
 
@@ -770,7 +773,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
-    unify [infoTm rec] env (tyTm rec) (newrecvar fields env.currentLvl (infoTm rec));
+    unify [infoTm rec] env (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
     (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
@@ -794,13 +797,13 @@ lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
       match inst env.tyConEnv t.info env.currentLvl lty with TyArrow {from = from, to = to} in
-      unify [infoTm body] env (tyTm body) from;
+      unify [infoTm body] env from (tyTm body);
       TmConApp {t with body = body, ty = to}
     else
       let msg = join [
-        "Encountered an unbound constructor:\n",
-        "  ", nameGetStr t.ident, "\n\n",
-        "* when type checking the expression\n"
+        "* Encountered an unbound constructor: ",
+        nameGetStr t.ident, "\n",
+        "* When type checking the expression\n"
       ] in
       errorSingle [t.info] msg
 end
@@ -813,7 +816,7 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckExpr env t.next in
     let tusing = optionMap (typeCheckExpr env) t.tusing in
     (match tusing with Some tu then
-       unify [infoTm tu] env (tyTm tu) (tyarrows_ [tyTm test, tyTm expected, tybool_])
+       unify [infoTm tu] env (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
      else
        unify [infoTm test, infoTm expected] env (tyTm test) (tyTm expected));
     TmUtest {t with test = test
@@ -898,12 +901,12 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
     match mapLookup t.ident env.conEnv with Some ty then
       match inst env.tyConEnv t.info env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
-      unify [infoPat subpat] env (tyPat subpat) from;
+      unify [infoPat subpat] env from (tyPat subpat);
       (patEnv, PatCon {t with subpat = subpat, ty = to})
     else
       let msg = join [
-        "Encountered an unbound constructor:\n",
-        "  ", nameGetStr t.ident, "\n\n",
+        "* Encountered an unbound constructor: ",
+        nameGetStr t.ident, "\n",
         "* when type checking the pattern\n"
       ] in
       errorSingle [t.info] msg
