@@ -207,13 +207,13 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     let els = generate env t.els in
     _if (objMagic (generate env t.target))
       (if val then thn else els)
-      (objMagic (if val then els else thn))
+      (if val then els else thn)
   | TmMatch (t & {pat = PatInt {val = val}}) ->
     _if (eqi_ (objMagic (generate env t.target)) (int_ val))
-      (generate env t.thn) (objMagic (generate env t.els))
+      (generate env t.thn) (generate env t.els)
   | TmMatch (t & {pat = PatChar {val = val}}) ->
     _if (eqc_ (objMagic (generate env t.target)) (char_ val))
-      (generate env t.thn) (objMagic (generate env t.els))
+      (generate env t.thn) (generate env t.els)
   | TmMatch (t & {pat = PatSeqTot {pats = pats}}) ->
     let n = length pats in
     let targetId = nameSym "_target" in
@@ -232,7 +232,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     in
     bind_
       (nulet_ targetId (objMagic (generate env t.target)))
-      (_if cond thn (objMagic (generate env t.els)))
+      (_if cond thn (generate env t.els))
   | TmMatch (t & {pat = PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix}}) ->
     let n1 = length prefix in
     let n2 = length postfix in
@@ -266,7 +266,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     bindall_ [
       nulet_ targetId (objMagic (generate env t.target)),
       nulet_ lenId (length_ (nvar_ targetId)),
-      _if cond thn (objMagic (generate env t.els))]
+      _if cond thn (generate env t.els)]
   | TmMatch (t & {pat = PatRecord {bindings = bindings, ty = ty}}) ->
     if mapIsEmpty bindings then
       generate env t.thn
