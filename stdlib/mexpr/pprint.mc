@@ -1122,7 +1122,7 @@ lang VarSortPrettyPrint = PrettyPrint + RecordTypeAst + VarSortAst
   | RecordVar r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
-    (env, join [idstr, "<:", recstr])
+    (env, concat (init recstr) " ... }")
   | _ -> (env, idstr)
 end
 

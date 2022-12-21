@@ -181,7 +181,8 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexType
     match deref t.contents with Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
       match getVarSortStringCode indent env idstr t.sort with (env, str) in
-      let weakPrefix = if t.isWeak then "_" else "" in
+      let weakPrefix =
+        match (t.isWeak, t.sort) with (true, !RecordVar _) then "_" else "" in
       (env, concat weakPrefix str)
     else
       getTypeStringCode indent env (resolveLink ty)
