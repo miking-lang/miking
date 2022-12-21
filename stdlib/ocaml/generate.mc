@@ -132,21 +132,161 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
 end
 
 lang OCamlMatchGenerate = MExprAst + OCamlAst
-  sem generateDefaultMatchCase (env : GenerateEnv) =
-  | t ->
-    let t : MatchRecord = t in
-    let tname = nameSym "_target" in
-    match generatePat env tname t.pat with (nameMap, wrap) then
-      match _mkFinalPatExpr nameMap with (pat, expr) then
-        _optMatch
-          (objMagic
-            (bind_ (nulet_ tname (generate env t.target))
-                   (generate env (wrap (_some expr)))))
-          pat
-          (generate env t.thn)
-          (generate env t.els)
-      else never
-    else never
+  sem getPatName : PatName -> Option Name
+  sem getPatName =
+  | PWildcard _ -> None ()
+  | PName id -> Some id
+
+  sem getPatNamedId : Pat -> Option Name
+  sem getPatNamedId =
+  | PatNamed {ident = id} -> getPatName id
+  | p ->
+    errorSingle [infoPat p] "Nested pattern found in OCaml code generation"
+
+  sem bindPat : Expr -> Expr -> Pat -> Expr
+  sem bindPat acc target =
+  | p ->
+    match getPatNamedId p with Some patId then
+      bind_ (nulet_ patId target) acc
+    else acc
+
+  sem generateMatchBaseCase : GenerateEnv -> Expr -> Expr
+  sem generateMatchBaseCase env =
+  | TmMatch (t & {pat = PatNamed {ident = PWildcard _}}) -> generate env t.thn
+  | TmMatch (t & {pat = PatNamed {ident = PName id}}) ->
+    bind_
+      (nulet_ id (generate env t.target))
+      (generate env t.thn)
+  | TmMatch (t & {pat = PatBool {val = val}}) ->
+    let thn = generate env t.thn in
+    let els = generate env t.els in
+    _if (objMagic (generate env t.target))
+      (if val then thn else els)
+      (objMagic (if val then els else thn))
+  | TmMatch (t & {pat = PatInt {val = val}}) ->
+    _if (eqi_ (objMagic (generate env t.target)) (int_ val))
+      (generate env t.thn) (objMagic (generate env t.els))
+  | TmMatch (t & {pat = PatChar {val = val}}) ->
+    _if (eqc_ (objMagic (generate env t.target)) (char_ val))
+      (generate env t.thn) (objMagic (generate env t.els))
+  | TmMatch (t & {pat = PatSeqTot {pats = pats}}) ->
+    let n = length pats in
+    let targetId = nameSym "_target" in
+    -- Bind the variables in the sequence pattern before evaluating the then
+    -- branch expression, in case the branch is taken.
+    let thn =
+      foldl
+        (lam acc. lam pi.
+          match pi with (pat, idx) in
+          bindPat acc (get_ (nvar_ targetId) (int_ idx)) pat)
+        (generate env t.thn) (mapi (lam i. lam p. (p, i)) pats) in
+    let cond =
+      let target = nvar_ targetId in
+      if eqi n 0 then null_ target
+      else eqi_ (length_ target) (int_ n)
+    in
+    bind_
+      (nulet_ targetId (objMagic (generate env t.target)))
+      (_if cond thn (objMagic (generate env t.els)))
+  | TmMatch (t & {pat = PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix}}) ->
+    let n1 = length prefix in
+    let n2 = length postfix in
+    let targetId = nameSym "_target" in
+    let lenId = nameSym "n" in
+    let cond = _isLengthAtLeast (nvar_ targetId) (addi_ (int_ n1) (int_ n2)) in
+    -- NOTE(larshum, 2022-12-20): Add a binding for each of the non-wildcard
+    -- patterns in the sequence pattern, starting with the postfix and prefix,
+    -- followed by the middle.
+    let prefixIndexedPats = mapi (lam i. lam p. (p, int_ i)) prefix in
+    let postfixIndexedPats =
+      mapi
+        (lam i. lam p. (p, subi_ (nvar_ lenId) (int_ (addi i 1))))
+        (reverse postfix) in
+    let thn =
+      let thn = generate env t.thn in
+      let thn =
+        foldl
+          (lam acc. lam pi.
+            match pi with (pat, idx) in
+            bindPat acc (get_ (nvar_ targetId) idx) pat)
+          thn (concat postfixIndexedPats prefixIndexedPats) in
+      match middle with PName id then
+        let midExpr =
+          subsequence_ (nvar_ targetId) (int_ n1)
+            (subi_ (nvar_ lenId) (addi_ (int_ n1) (int_ n2)))
+        in
+        bind_ (nulet_ id midExpr) thn
+      else thn
+    in
+    bindall_ [
+      nulet_ targetId (objMagic (generate env t.target)),
+      nulet_ lenId (length_ (nvar_ targetId)),
+      _if cond thn (objMagic (generate env t.els))]
+  | TmMatch (t & {pat = PatRecord {bindings = bindings, ty = ty}}) ->
+    if mapIsEmpty bindings then
+      generate env t.thn
+    else
+      match env with {records = records, constrs = constrs} in
+      let targetTy = typeUnwrapAlias env.aliases ty in
+      match lookupRecordFields targetTy constrs with Some fields then
+        let fieldTypes = ocamlTypedFields fields in
+        match mapLookup fieldTypes records with Some name then
+          let recPat = OPatRecord {bindings = bindings} in
+          let conPat = OPatCon {ident = name, args = [recPat]} in
+          OTmMatch {
+            target = objMagic (generate env t.target),
+            arms = [(conPat, generate env t.thn)]}
+        else
+          let msg = join [
+            "The OCaml code generation failed due to a bug in the ",
+            "type-lifting.\nThe match pattern refers to a record type that ",
+            "was not included in the type-lifting."] in
+          errorSingle [t.info] msg
+      else
+        let msg = join [
+          "Pattern refers to an unknown record type.\n",
+          "The type must be known in the OCaml code generation."] in
+        errorSingle [t.info] msg
+  | TmMatch (t & {pat = PatCon {ident = ident, subpat = subpat}}) ->
+    match env with {constrs = constrs} in
+    match mapLookup ident constrs with Some innerTy then
+      let containsRecord = match innerTy with TyRecord _ then true else false in
+      let targetId = nameSym "_target" in
+      -- NOTE(larshum, 2022-12-20): We make use of inline records in
+      -- constructors when compiling to OCaml. In this case, we cannot access
+      -- them directly, so we access them via the constructor directly.
+      let ocamlSubpat =
+        let patName =
+          if containsRecord then PWildcard ()
+          else
+            match getPatNamedId subpat with Some id then PName id
+            else PWildcard ()
+        in
+        PatNamed {ident = patName, info = infoPat subpat, ty = tyPat subpat}
+      in
+      let thn =
+        let thn = generate env t.thn in
+        if containsRecord then
+          match getPatNamedId subpat with Some id then
+            bind_ (nulet_ id (nvar_ targetId)) thn
+          else thn
+        else thn
+      in
+      let conPat = OPatCon {ident = ident, args = [ocamlSubpat]} in
+      bind_
+        (nulet_ targetId (objMagic (generate env t.target)))
+        (OTmMatch {target = nvar_ targetId,
+                   arms = [ (conPat, thn)
+                          , (pvarw_, objMagic (generate env t.els)) ]})
+    else
+      let msg = join [
+        "Match pattern refers to unknown type constructor ",
+        nameGetStr ident] in
+      errorSingle [t.info] msg
+  | TmMatch {pat = PatAnd _ | PatOr _ | PatNot _, info = info} ->
+    errorSingle [info] "Regular patterns are not supported by OCaml backend"
+  | TmMatch t ->
+    errorSingle [t.info] "Match expression is not supported by OCaml backend"
 
   sem collectNestedMatches
     : all acc. GenerateEnv
@@ -196,111 +336,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
          else never) t
 
   sem generate (env : GenerateEnv) =
-  | TmMatch ({pat = (PatBool {val = true})} & t) ->
-    _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
-  | TmMatch ({pat = (PatBool {val = false})} & t) ->
-    _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
-  | TmMatch ({pat = PatInt _, target = TmVar _} & t) ->
-    match
-      collectNestedMatches env
-        (lam pat. match pat with PatInt _ then true else false) []
-        (lam acc. lam t : MatchRecord. snoc acc (t.pat, generate env t.thn)) t
-    with (arms, defaultCase) then
-      _omatch_ (generate env t.target)
-        (snoc arms (pvarw_, generate env defaultCase))
-    else never
-  | TmMatch ({pat = PatInt _} & t) ->
-    _omatch_ (generate env t.target)
-      [(t.pat, generate env t.thn), (pvarw_, generate env t.els)]
-  | TmMatch ({pat = PatChar {val = c}, target = TmVar _} & t) ->
-    match
-      collectNestedMatches env
-        (lam pat. match pat with PatChar _ then true else false) []
-        (lam acc. lam t : MatchRecord.
-          match t.pat with PatChar pc then
-            let pat =
-              PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty}
-            in snoc acc (pat, generate env t.thn)
-          else never) t
-    with (arms, defaultCase) then
-      _omatch_ (generate env t.target)
-        (snoc arms (pvarw_, generate env defaultCase))
-    else never
-  | TmMatch ({pat = PatChar pc} & t) ->
-    let pat = PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty} in
-    _omatch_ (generate env t.target)
-      [(pat, generate env t.thn), (pvarw_, generate env t.els)]
-  | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
-    generate env t.thn
-  | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
-    generate env (bind_
-      (nulet_ n t.target)
-       t.thn)
-  | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
-    let cond = generate env (null_ t.target) in
-    _if cond (generate env t.thn) (generate env t.els)
-  | TmMatch ({info = info, pat = PatRecord pr, thn = TmVar thnv, els = TmNever _} & t) ->
-    let binds : [(SID, Pat)] = mapBindings pr.bindings in
-    match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
-      if nameEq patName thnv.ident then
-        let targetTy = typeUnwrapAlias env.aliases pr.ty in
-        match lookupRecordFields targetTy env.constrs with Some fields then
-          let fieldTypes = ocamlTypedFields fields in
-          match mapLookup fieldTypes env.records with Some name then
-            let pat = PatNamed p in
-            let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
-            _omatch_ (objMagic (generate env t.target))
-              [(OPatCon {ident = name, args = [precord]}, objMagic (nvar_ patName))]
-          else error "Record type not handled by type-lifting"
-        else errorSingle [info] "Unknown record type"
-      else generateDefaultMatchCase env t
-    else generateDefaultMatchCase env t
-  | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
-    match collectNestedMatchesByConstructor env t with (arms, defaultCase) then
-      -- Assign the term of the final else-branch to a variable so that we
-      -- don't introduce unnecessary code duplication (the default case could
-      -- be large).
-      let defaultCaseName = nameSym "defaultCase" in
-      let defaultCaseVal = ulam_ "" (generate env defaultCase) in
-      let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
-
-      let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
-        assocSeqFold
-          (lam acc. lam pat. lam thn. match_ target pat thn acc)
-          (app_ (nvar_ defaultCaseName) uunit_)
-          patExpr
-      in
-      let f = lam arm : (Name, [(Pat, Expr)]).
-        match mapLookup arm.0 env.constrs with Some argTy then
-          let patVarName = nameSym "x" in
-          let target =
-            match argTy with TyRecord _ then t.target
-            else nvar_ patVarName
-          in
-          let isUnit = match argTy with TyRecord {fields = fields} then
-            mapIsEmpty fields else false in
-          let pat = if isUnit
-            then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
-            else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
-          let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
-          (pat, generate env innerPatternTerm)
-        else
-          let msg = join [
-            "Unknown constructor referenced in nested match expression: ",
-            nameGetStr arm.0
-          ] in
-          errorSingle [t.info] msg
-      in
-      let flattenedMatch =
-        _omatch_ (objMagic (generate env t.target))
-          (snoc
-              (map f (mapBindings arms))
-              (pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
-      in bind_ defaultCaseLet flattenedMatch
-    else never
-  | TmMatch t -> generateDefaultMatchCase env t
-
-  sem generatePat (env : GenerateEnv) (targetName : Name) =
+  | TmMatch t -> generateMatchBaseCase env (TmMatch t)
 end
 
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
@@ -436,247 +472,6 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
       info = info
     }
   | t -> smap_Expr_Expr (generate env) t
-
-  /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
-  sem generatePat (env : GenerateEnv) (targetName : Name) =
-  | PatNamed {ident = PWildcard _} ->
-    (assocEmpty, identity)
-  | PatNamed {ident = PName n} ->
-    (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
-  | PatBool {val = val} ->
-    let wrap = lam cont.
-      _if (objMagic (nvar_ targetName))
-        (if val then cont else _none)
-        (if val then _none else cont)
-    in (assocEmpty, wrap)
-  | PatInt {val = val} ->
-    (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
-  | PatChar {val = val} ->
-    (assocEmpty, lam cont. _if (eqc_ (nvar_ targetName) (char_ val)) cont _none)
-  | PatSeqTot {pats = pats} ->
-    let genOne = lam i. lam pat.
-      let n = nameSym "_seqElem" in
-      match generatePat env n pat with (names, innerWrap) in
-      let wrap = lam cont.
-        bind_
-          (nulet_ n (get_ (nvar_ targetName) (int_ i)))
-          (innerWrap cont)
-      in (names, wrap) in
-    match unzip (mapi genOne pats) with (allNames, allWraps) in
-    let cond =
-      if null pats then _if (null_ (nvar_ targetName))
-      else _if (eqi_ (length_ (nvar_ targetName)) (int_ (length pats))) in
-    let wrap = lam cont.
-      cond
-        (foldr (lam f. lam v. f v) cont allWraps)
-        _none in
-    ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
-    , wrap
-    )
-  | PatSeqEdge {prefix = [head], middle = middle, postfix = []} ->
-    let apply = lam f. lam x. f x in
-    let headName = nameSym "_hd" in
-    let tailName = nameSym "_tl" in
-    match generatePat env headName head with (headNames, headWrap) in
-    match middle with PName mid then
-      let tl = PatNamed {ident = middle, info = NoInfo (), ty = tyunknown_} in
-      match generatePat env tailName tl with (tailNames, tailWrap) in
-      let wrap = lam cont.
-        _if (null_ (nvar_ targetName))
-          _none
-          (bindall_ [
-            nulet_ headName (head_ (nvar_ targetName)),
-            nulet_ tailName (tail_ (nvar_ targetName)),
-            headWrap (tailWrap cont)]) in
-      (assocMergePreferRight {eq=nameEqSym} headNames tailNames, wrap)
-    else
-      let wrap = lam cont.
-        _if (null_ (nvar_ targetName))
-          _none
-          (bind_ (nulet_ headName (head_ (nvar_ targetName))) (headWrap cont)) in
-      (headNames, wrap)
-  | PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
-    let apply = lam f. lam x. f x in
-    let mergeNames = assocMergePreferRight {eq=nameEqSym} in
-    let minLen = addi (length prefix) (length postfix) in
-    let preName = nameSym "_prefix" in
-    let tempName = nameSym "_splitTemp" in
-    let midName = nameSym "_middle" in
-    let postName = nameSym "_postfix" in
-    let lenName = nameSym "_len" in
-    let genOne = lam targetName. lam i. lam pat.
-      let n = nameSym "_seqElem" in
-      match generatePat env n pat with (names, innerWrap) in
-      let wrap = lam cont.
-        bind_
-          (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
-          (innerWrap cont)
-      in (names, wrap) in
-    match
-      match prefix with [] then (identity, [], targetName) else
-      match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) in
-      let wrap = lam cont.
-        _tuplet [npvar_ preName, npvar_ tempName]
-          (splitat_ (nvar_ targetName) (int_ (length prefix)))
-          (foldr apply cont preWraps) in
-      (wrap, preNames, tempName)
-    with (preWrap, preNames, tempName) in
-    match
-      match postfix with [] then (identity, [], tempName) else
-      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) in
-      let wrap = lam cont.
-        _tuplet [npvar_ midName, npvar_ postName]
-          (splitat_ (nvar_ tempName) (subi_ (nvar_ lenName) (int_ minLen)))
-          (foldr apply cont postWraps) in
-      (wrap, postNames, midName)
-    with (postWrap, postNames, midName) in
-    let wrap = lam cont.
-      match postfix with [] then
-        _if (_isLengthAtLeast (nvar_ targetName) (int_ minLen))
-          (preWrap (postWrap cont))
-          _none
-      else
-        bind_
-          (nulet_ lenName (length_ (nvar_ targetName)))
-          (_if (lti_ (nvar_ lenName) (int_ minLen))
-            _none
-            (preWrap (postWrap cont))) in
-    let names = foldl mergeNames assocEmpty (concat preNames postNames) in
-    let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
-    (names, wrap)
-  | PatOr {lpat = lpat, rpat = rpat} ->
-    match generatePat env targetName lpat with (lnames, lwrap) then
-      match generatePat env targetName rpat with (rnames, rwrap) then
-        match _mkFinalPatExpr lnames with (lpat, lexpr) then
-          match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
-            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam. k) lnames in
-            let xname = nameSym "_x" in
-            let wrap = lam cont.
-              _optMatch
-                (_optMatch
-                   (lwrap (_some lexpr))
-                   (npvar_ xname)
-                   (_some (nvar_ xname))
-                   (rwrap (_some rexpr)))
-                lpat
-                cont
-                _none
-            in (names, wrap)
-          else never
-        else never
-      else never
-    else never
-  | PatAnd {lpat = lpat, rpat = rpat} ->
-    match generatePat env targetName lpat with (lnames, lwrap) then
-      match generatePat env targetName rpat with (rnames, rwrap) then
-        let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
-        let wrap = lam cont. lwrap (rwrap cont) in
-        (names, wrap)
-      else never
-    else never
-  | PatNot {subpat = pat} ->
-    match generatePat env targetName pat with (_, innerWrap) then
-      let wrap = lam cont.
-        _optMatch (innerWrap (_some (OTmTuple {values = []})))
-          pvarw_
-          _none
-          cont in
-      (assocEmpty, wrap)
-    else never
-  | PatRecord t ->
-    let genBindingPat = lam patNames. lam fields. lam id. lam pat.
-      let ty =
-        match mapLookup id fields with Some ty then
-          ty
-        else
-          let strFields = strJoin ", " (map sidToString (mapKeys fields)) in
-          errorSingle [t.info] (join ["Field ", sidToString id, " not found in record with fields {", strFields, "}"])
-      in
-      match mapLookup id patNames with Some n then
-        match generatePat env n pat with (names, innerWrap) then
-          let wrap = lam cont. innerWrap cont in
-          (names, wrap)
-        else never
-      else never
-    in
-    if mapIsEmpty t.bindings then
-      let wrap = lam cont.
-        _omatch_ (objMagic (nvar_ targetName))
-          [(OPatTuple {pats = []}, cont)]
-      in
-      (assocEmpty, wrap)
-    else match env with {records = records, constrs = constrs} then
-      let targetTy = typeUnwrapAlias env.aliases t.ty in
-      match lookupRecordFields targetTy constrs with Some fields then
-        let fieldTypes = ocamlTypedFields fields in
-        match mapLookup fieldTypes records with Some name then
-          let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
-          let genPats = mapValues
-            (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) t.bindings)
-          in
-          match unzip genPats with (allNames, allWraps) then
-            let f = lam id. lam.
-              match mapLookup id patNames with Some n then
-                npvar_ n
-              else never
-            in
-            let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
-            let wrap = lam cont.
-              _omatch_ (objMagic (nvar_ targetName))
-                [ (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
-                ]
-            in
-            ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
-            , wrap
-            )
-          else never
-        else
-          let msg = join ["Pattern refers to record type that was not handled by type-lifting. ",
-                          "This is an internal error."] in
-          errorSingle [t.info] msg
-      else
-        let msg = join ["Pattern refers to an unknown record type. ",
-                        "The target term must be annotated with a type."] in
-        errorSingle [t.info] msg
-    else never
-  | PatCon t ->
-    match env with {constrs = constrs} then
-      match mapLookup t.ident constrs with Some innerTy then
-        let conVarName = nameSym "_n" in
-        let innerTargetName =
-          -- Records are treated differently because we are not allowed to
-          -- access an inlined record. Instead of returning the inlined record,
-          -- the constructor containing it is returned. When we want to access
-          -- the inlined record, the constructor will be treated as a record
-          -- specific constructor. This works for both inlined records and
-          -- free records, as they are wrapped in this record-specific
-          -- constructor.
-          match innerTy with TyRecord _ then
-            targetName
-          else conVarName
-        in
-        match generatePat env innerTargetName t.subpat with (names, subwrap) then
-          let isUnit = match innerTy with TyRecord {fields = fields} then
-            mapIsEmpty fields else false in
-          let wrap = lam cont.
-            _omatch_ (objMagic (nvar_ targetName))
-              [ ( OPatCon
-                  { ident = t.ident
-                  , args = if isUnit then [] else [npvar_ conVarName] -- TODO(vipa, 2021-05-14): This will break if the sub-pattern actually examines the unit
-                  }
-                , subwrap cont
-                ),
-                (pvarw_, _none)
-              ]
-          in
-          (names, wrap)
-        else never
-      else
-        let msg = join ["Pattern refers to unknown type constructor: ",
-                        nameGetStr t.ident,
-                        ". The target term must be annotated with a type."] in
-        errorSingle [t.info] msg
-    else never
 end
 
 let _makeTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv.
