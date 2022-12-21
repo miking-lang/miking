@@ -11,17 +11,18 @@
 -- [1]: https://dl.acm.org/doi/abs/10.1145/3385412.3386003
 -- [2]: http://okmij.org/ftp/ML/generalization.html.
 
-include "ast.mc"
-include "ast-builder.mc"
-include "builtin.mc"
-include "const-types.mc"
-include "eq.mc"
-include "info.mc"
 include "error.mc"
 include "math.mc"
-include "pprint.mc"
 include "seq.mc"
+
 include "mexpr/annotate.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/builtin.mc"
+include "mexpr/const-types.mc"
+include "mexpr/eq.mc"
+include "mexpr/info.mc"
+include "mexpr/pprint.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -66,15 +67,15 @@ type UnifyEnv = {
 
 let unificationError =
   lam info. lam originalLhs. lam originalRhs. lam lhs. lam rhs.
-  let msg = join [
-    "Type check failed: unification failure\n",
-    "LHS: ", lhs, "\n",
-    "RHS: ", rhs, "\n",
-    "while unifying these:\n",
-    "LHS: ", originalLhs, "\n",
-    "RHS: ", originalRhs, "\n"
-  ] in
-  errorSingle info msg
+    let msg = join [
+      "Encountered a type mismatch:\n",
+      "  ", lhs, "  !=  ", rhs, "\n\n",
+      "* when trying to match the signatures\n",
+      "  - ", originalLhs, "\n",
+      "  - ", originalRhs, "\n",
+      "* when type checking the expression\n"
+    ] in
+    errorSingle info msg
 
 let _sort2str = use MExprPrettyPrint in
   lam ident. lam sort.
@@ -114,8 +115,8 @@ lang ResolveAlias = VarTypeSubstitute + AppTypeGetArgs + ConTypeAst + VariantTyp
           let ty = substituteVars subst def in
           optionOr (tryResolveAlias env ty) (Some ty)
         else None ()
-      else error (join ["Encountered unknown type constructor ",
-                        t.ident.0, " in resolveAlias!"])
+      else error (join ["INTERNAL: Encountered unknown type constructor ",
+                        t.ident.0, " in type-check.mc:tryResolveAlias"])
     else None ()
 
   sem resolveAlias (env : Map Name ([Name], Type)) =
@@ -278,8 +279,10 @@ lang VarTypeUnify = Unify + VarTypeAst
     if leqi tv.level t.level then
       if not (setMem t.ident boundVars) then
         let msg = join [
-          "Type check failed: unification failure\n",
-          "Attempted to unify with type variable escaping its scope!\n"
+          "Encountered a type variable escaping its scope:\n",
+          "  ", nameGetStr t.ident, "\n\n",
+          "* perhaps the annotation of the associated let-binding is too general?\n",
+          "* when type checking the expression\n"
         ] in
         errorSingle info msg
       else ()
@@ -334,7 +337,11 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
   | TyFlex t & ty ->
     match deref t.contents with Unbound r then
       if nameEq r.ident tv.ident then
-        let msg = "Type check failed: occurs check\n" in
+        let msg = join [
+          "Encountered a type occurring within itself.\n\n",
+          "* recursive types are only permitted using data constructors.\n",
+          "* when type checking the expression\n"
+        ] in
         errorSingle info msg
       else
         let sort =
@@ -380,8 +387,9 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
   | TyAll t ->
     match tv.sort with MonoVar _ then
       let msg = join [
-        "Type check failed: unification failure\n",
-        "Attempted to unify monomorphic type variable with polymorphic type!\n"
+        "Encountered a function parameter used in a polymorphic position.\n\n",
+        "* perhaps you need a type annotation for the parameter?\n",
+        "* when type checking the expression\n"
       ] in
       errorSingle info msg
     else
@@ -559,9 +567,9 @@ lang SubstituteUnknown = UnknownTypeAst + VarSortAst
   sem checkUnknown (info : Info) =
   | TyUnknown _ ->
     let msg = join [
-      "Type check failed: encountered unexpected Unknown type.\n",
-      "Unknown types are only allowed in type annotations, not in ",
-      "definitions or declarations!"
+      "Encountered Unknown type in an illegal position.\n\n",
+      "* Unknown is only allowed in annotations, not in definitions or declarations.\n",
+      "* when type checking the expression\n"
     ] in
     errorSingle [info] msg
   | ty ->
@@ -615,8 +623,9 @@ lang VarTypeCheck = TypeCheck + VarAst
       TmVar {t with ty = ty}
     else
       let msg = join [
-        "Type check failed: reference to unbound variable: ",
-        nameGetStr t.ident, "\n"
+        "Encountered an unbound variable:\n",
+        "  ", nameGetStr t.ident, "\n\n",
+        "* when type checking the expression\n"
       ] in
       errorSingle [t.info] msg
 end
@@ -788,8 +797,9 @@ lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
       TmConApp {t with body = body, ty = to}
     else
       let msg = join [
-        "Type check failed: reference to unbound constructor: ",
-        nameGetStr t.ident, "\n"
+        "Encountered an unbound constructor:\n",
+        "  ", nameGetStr t.ident, "\n\n",
+        "* when type checking the expression\n"
       ] in
       errorSingle [t.info] msg
 end
@@ -891,8 +901,9 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
       (patEnv, PatCon {t with subpat = subpat, ty = to})
     else
       let msg = join [
-        "Type check failed: reference to unbound constructor: ",
-        nameGetStr t.ident, "\n"
+        "Encountered an unbound constructor:\n",
+        "  ", nameGetStr t.ident, "\n\n",
+        "* when type checking the pattern\n"
       ] in
       errorSingle [t.info] msg
 end
