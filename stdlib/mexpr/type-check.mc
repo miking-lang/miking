@@ -61,6 +61,8 @@ type UnifyEnv = {
   info: [Info],  -- The info of the expression(s) triggering the unification
   expectedType: Type,
   foundType: Type,
+  lhsName: Type,
+  rhsName: Type,
   names: BiNameMap,
   tyConEnv: Map Name ([Name], Type)
 }
@@ -202,13 +204,23 @@ lang Unify = MExprAst + FlexTypeAst + ResolveAlias + PrettyPrint
   -- Modifies the types in place.
   sem unify (info : [Info]) (env : TCEnv) (ty1 : Type) =
   | ty2 ->
-    let env : UnifyEnv = {names = biEmpty, tyConEnv = env.tyConEnv, info = info, expectedType = ty1, foundType = ty2} in
+    let env : UnifyEnv = {
+      names = biEmpty,
+      tyConEnv = env.tyConEnv,
+      info = info,
+      expectedType = ty1,
+      foundType = ty2,
+      lhsName = ty1,
+      rhsName = ty2
+    } in
     unifyTypes env (ty1, ty2)
 
   sem unifyTypes (env : UnifyEnv) =
   | (ty1, ty2) ->
-    let resolve = compose (resolveAlias env.tyConEnv) resolveLink in
-    unifyBase env (resolve ty1, resolve ty2)
+    let lhsName = resolveLink ty1 in
+    let rhsName = resolveLink ty2 in
+    unifyBase {env with lhsName = lhsName, rhsName = rhsName}
+      (resolveAlias env.tyConEnv lhsName, resolveAlias env.tyConEnv rhsName)
 
   -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
   sem unifyBase (env : UnifyEnv) =
@@ -324,8 +336,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
-  | (TyFlex t1 & ty1, !TyFlex _ & ty2)
-  | (!TyFlex _ & ty2, TyFlex t1 & ty1) ->
+  | (TyFlex t1 & ty1, !TyFlex _ & ty2) ->
     match deref t1.contents with Unbound tv in
     unifyCheck env.info tv ty2;
     (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
@@ -333,7 +344,9 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
      else match tv.sort with RecordVar _ then
        unificationError env
      else ());
-    modref t1.contents (Link ty2)
+    modref t1.contents (Link env.rhsName)
+  | (!TyFlex _ & ty2, TyFlex t1 & ty1) ->
+    unifyBase {env with lhsName = env.rhsName, rhsName = env.lhsName} (ty1, ty2)
 
   sem unifyCheckBase info boundVars tv =
   | TyFlex t & ty ->
