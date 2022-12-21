@@ -13,6 +13,7 @@ include "database.mc"
 include "tune-stats.mc"
 
 -- Included for testing
+include "mexpr/shallow-patterns.mc"
 include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
 
@@ -562,7 +563,7 @@ lang TestLang =
   TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
   BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck +
-  MCoreCompileLang
+  MExprLowerNestedPatterns + MCoreCompileLang
 end
 
 mexpr
@@ -610,6 +611,9 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
 
     -- Transformations should produce an AST that type checks
     let ast = typeCheck ast in
+
+    -- Run pattern lowering
+    let ast = lowerAll ast in
 
     -- Compile the program
     let compileOCaml = lam libs. lam clibs. lam ocamlProg.
