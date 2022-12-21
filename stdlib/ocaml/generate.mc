@@ -459,23 +459,40 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
           else never
         else errorSingle [infoTy ty] "env.constrs lookup failed"
       else errorSingle [infoTy ty] "expected TyCon"
-  | TmRecordUpdate t ->
+  | TmRecordUpdate t & upd->
+    recursive let collectNestedUpdates = lam acc. lam rec.
+      match rec with TmRecordUpdate t then
+        collectNestedUpdates
+          (cons (t.key, objRepr (generate env t.value)) acc)
+          t.rec
+      else (acc, rec)
+    in
+    let f = lam binds. lam update.
+      match update with (key, value) in
+      let id = nameSym "_value" in
+      (bind_ (nulet_ id value) binds, (key, id))
+    in
+    match collectNestedUpdates [] upd with (updateEntries, rec) in
     let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyCon {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes env.records with Some id then
-          let rec = objMagic (generate env t.rec) in
-          let key = sidToString t.key in
-          let value = objRepr (generate env t.value) in
+          let rec = objMagic (generate env rec) in
           let inlineRecordName = nameSym "rec" in
+          -- NOTE(larshum, 2022-12-21): To ensure record updates are evaluated
+          -- in declaration order, we add bindings for each of the inner values.
+          match mapAccumL f uunit_ (reverse updateEntries) with (binds, updates) in
+          let combinedUpdate = OTmConApp {
+            ident = id,
+            args = [ OTmRecordUpdate {
+              rec = nvar_ inlineRecordName,
+              updates = map (lam u. match u with (sid, id) in (sid, nvar_ id)) updates
+            } ]
+          } in
+          let thn = bind_ binds combinedUpdate in
           _omatch_ rec
-            [ ( OPatCon {ident = id, args = [npvar_ inlineRecordName]}
-              , OTmConApp {ident = id, args =
-                [ recordupdate_ (nvar_ inlineRecordName) key value ]
-                }
-              )
-            ]
+            [(OPatCon {ident = id, args = [npvar_ inlineRecordName]}, thn)]
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in

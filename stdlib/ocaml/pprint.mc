@@ -157,6 +157,7 @@ lang OCamlPrettyPrint =
   | OTmLabel _ -> true
   | OTmRecord _ -> true
   | OTmProject _ -> true
+  | OTmRecordUpdate _ -> true
   | OTmLam _ -> false
   | TmVar _ -> true
 
@@ -509,6 +510,22 @@ lang OCamlPrettyPrint =
                    " }"])
       else never
     else never
+  | OTmRecordUpdate {rec = rec, updates = updates} ->
+    let i = pprintIncr indent in
+    let ii = pprintIncr i in
+    let pprintUpdate = lam env. lam update.
+      match update with (key, value) in
+      match pprintCode ii env value with (env, value) in
+      (env, join [pprintLabelString key, " =", pprintNewline ii, value])
+    in
+    let pprintUpdates = lam env. lam updates.
+      match mapAccumL pprintUpdate env updates with (env, updates) in
+      (env, strJoin (concat ";" (pprintNewline i)) updates)
+    in
+    match pprintCode i env rec with (env, rec) in
+    match pprintUpdates env updates with (env, updates) in
+    (env, join ["{ ", rec, pprintNewline i,
+                "with", pprintNewline i, updates, " }"])
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
     let lname = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) then
