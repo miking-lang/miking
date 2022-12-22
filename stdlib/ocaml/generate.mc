@@ -17,18 +17,6 @@ include "ocaml/generate-env.mc"
 include "ocaml/external.mc"
 include "common.mc"
 
--- Input is a map from name to be introduced to name containing the value to be bound to that location
--- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
--- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
--- (where ' splices things into expressions) binds the appropriate names to the appropriate values
--- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
-let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
-  let cmp = lam n1 : (Name, Name). lam n2 : (Name, Name).
-    subi (sym2hash (optionGetOr _noSymbol (nameGetSym n1.0))) (sym2hash (optionGetOr _noSymbol (nameGetSym n2.0))) in
-  match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
-    (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
-  else never
-
 let _omatch_ = lam target. lam arms.
   use OCamlAst in
   match arms with [h] ++ rest
@@ -36,7 +24,6 @@ let _omatch_ = lam target. lam arms.
   else OTmMatch { target = target, arms = arms }
 
 let _if = use OCamlAst in lam cond. lam thn. lam els. _omatch_ cond [(ptrue_, thn), (pfalse_, els)]
-let _tuplet = use OCamlAst in lam pats. lam val. lam body. _omatch_ val [(OPatTuple {pats = pats}, body)]
 
 let _isLengthAtLeastName = intrinsicOpSeq "is_length_at_least"
 let _isLengthAtLeast = use OCamlAst in
