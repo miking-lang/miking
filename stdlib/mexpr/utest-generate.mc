@@ -1,3 +1,25 @@
+-- Defines the generation of unit test code from utest expressions. This
+-- includes a small runtime which keeps track of the number of failing tests
+-- (defined in stdlib/mexpr/utest-runtime.mc), as well as the automated
+-- generation of equality functions for comparing the arguments (unless
+-- one is provided by the user) and pretty-print functions for printing the
+-- arguments in case they are not equal.
+--
+-- The implementation supports automatic generation of equality and
+-- pretty-print functions for all built-in types, with a few exceptions and
+-- limitations:
+-- * Pretty-printing of references use a hard-coded string literal instead of
+-- inspecting the referenced value, as references may be cyclic. For the same
+-- reason, an equality function must be user-defined. This includes all types
+-- that may contain a reference.
+-- * Boot parse trees are treated similarly, because they require a lot of work
+-- to properly support.
+-- * It assumes that a variant type is not extended with more constructors
+-- after the first time it is used (in a utest). It would be possible to
+-- support, by keeping track of which constructors were introduced at each
+-- utest. As it was not required to pass all tests, this has not been
+-- implemented.
+
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
@@ -42,10 +64,15 @@ let _utestInfo =
   let pos = initPos "utest-generated" in
   makeInfo pos pos
 
-let _unknownTy = use MExprAst in TyUnknown {info = _utestInfo}
+-- AST builder functions defined specifically for the utest generation. These
+-- include an info-field to signify the origin of the generated code, and they
+-- require concrete type information.
+-- NOTE(larshum, 2022-12-30): Should these be merged with the AST-builder
+-- functions?
 let _boolTy = use MExprAst in TyBool {info = _utestInfo}
 let _intTy = use MExprAst in TyInt {info = _utestInfo}
 let _charTy = use MExprAst in TyChar {info = _utestInfo}
+let _floatTy = use MExprAst in TyFloat {info = _utestInfo}
 let _seqTy = lam ty.
   use MExprAst in
   TySeq {ty = ty, info = _utestInfo}
@@ -185,6 +212,8 @@ let _concat =
   use MExprAst in
   _const (CConcat ()) (_tyarrows [_stringTy, _stringTy, _stringTy])
 
+-- The base fragment for the utest generation. This defines the utest
+-- environment as well as basic functions used in the generation of utest code.
 lang UtestBase =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + RecordTypeCmp + VariantTypeCmp + ConTypeCmp + VarTypeCmp +
@@ -199,19 +228,31 @@ lang UtestBase =
   | (TyTensor _, TyTensor _) -> 0
 
   type UtestEnv = {
-    eq : Map Type Name,
-    eqDef : Set Type,
+    -- Maps a type to the identifier of its pretty-print or equality function,
+    -- respectively.
     pprint : Map Type Name,
+    eq : Map Type Name,
+
+    -- Set containing the types for which we have defined a pretty-print or
+    -- equality function, respectively.
     pprintDef : Set Type,
+    eqDef : Set Type,
+
+    -- Maps the identifier of a variant type to an inner map, which in turn
+    -- maps constructor names to their types.
     variants : Map Name (Map Name Type),
+
+    -- Maps the identifier of an alias type to its declared type as well as the
+    -- names of its type parameters.
     aliases : Map Name (Type, [Name])
   }
 
   sem utestEnvEmpty : () -> UtestEnv
   sem utestEnvEmpty =
   | _ ->
-    { eq = mapEmpty cmpType, eqDef = setEmpty cmpType
-    , pprint = mapEmpty cmpType, pprintDef = setEmpty cmpType
+    let baseTypes = [_boolTy, _intTy, _charTy, _floatTy] in
+    { eq = mapEmpty cmpType, eqDef = setOfSeq cmpType baseTypes
+    , pprint = mapEmpty cmpType, pprintDef = setOfSeq cmpType baseTypes
     , variants = mapEmpty nameCmp, aliases = mapEmpty nameCmp }
 
   sem lookupVariant : Name -> UtestEnv -> Info -> Map Name Type
@@ -220,6 +261,9 @@ lang UtestBase =
     match mapLookup id env.variants with Some constrs then constrs
     else errorSingle [info] "Unknown constructor type"
 
+  -- Performs an unwrapping of all alias types.
+  -- NOTE(larshum, 2022-12-30): Should we do this unwrapping globally, rather
+  -- than repeating it locally here as well as in other places?
   sem unwrapAlias : UtestEnv -> Type -> Type
   sem unwrapAlias env =
   | (TyCon _ | TyApp _) & ty ->
@@ -230,6 +274,7 @@ lang UtestBase =
     else smap_Type_Type (unwrapAlias env) ty
   | ty -> smap_Type_Type (unwrapAlias env) ty
 
+  -- Produces a sequence of the direct "child" types of a given type.
   sem shallowInnerTypes : UtestEnv -> Type -> [Type]
   sem shallowInnerTypes env =
   | ty ->
@@ -251,52 +296,63 @@ lang UtestBase =
       mapValues constrArgTypes
   | _ -> []
 
-  sem getPrettyPrintExpr : UtestEnv -> Type -> (UtestEnv, Expr)
-  sem getPrettyPrintExpr env =
-  | ty -> getPrettyPrintExprH env (unwrapAlias env ty)
+  -- Generates an expression of type 'ty -> String' which we can use to
+  -- pretty-print a value of type 'ty'.
+  sem getPrettyPrintExpr : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
+  sem getPrettyPrintExpr info env =
+  | ty -> getPrettyPrintExprH info env (unwrapAlias env ty)
 
-  sem getPrettyPrintExprH : UtestEnv -> Type -> (UtestEnv, Expr)
-  sem getPrettyPrintExprH env =
+  sem getPrettyPrintExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
+  sem getPrettyPrintExprH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
-    match prettyPrintId env ty with (env, pprintId) in
-    match getPrettyPrintExprH env elemTy with (env, ppElem) in
+    match prettyPrintId info env ty with (env, pprintId) in
+    match getPrettyPrintExprH info env elemTy with (env, ppElem) in
     (env, _apps (_var pprintId (_pprintTy ty)) [ppElem])
   | ty ->
     match
       match mapLookup ty env.pprint with Some pprintId then (env, pprintId)
       else
-        match prettyPrintId env ty with (env, pprintId) in
+        match prettyPrintId info env ty with (env, pprintId) in
         let innerTypes = shallowInnerTypes env ty in
-        match mapAccumL getPrettyPrintExprH env innerTypes with (env, _) in
+        match mapAccumL (getPrettyPrintExprH info) env innerTypes with (env, _) in
         (env, pprintId)
     with (env, pprintId) in
     (env, _var pprintId (_pprintTy ty))
 
-  sem getEqualityExpr : UtestEnv -> Type -> (UtestEnv, Expr)
-  sem getEqualityExpr env =
-  | ty -> getEqualityExprH env (unwrapAlias env ty)
+  -- Generates an expression of type 'ty -> ty -> bool' which we can use to
+  -- determine equality of values of type 'ty'.
+  sem getEqualityExpr : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
+  sem getEqualityExpr info env =
+  | ty -> getEqualityExprH info env (unwrapAlias env ty)
 
-  sem getEqualityExprH : UtestEnv -> Type -> (UtestEnv, Expr)
-  sem getEqualityExprH env =
+  sem getEqualityExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
+  sem getEqualityExprH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
-    match equalityId env ty with (env, eqId) in
-    match getEqualityExprH env elemTy with (env, elemEq) in
+    match equalityId info env ty with (env, eqId) in
+    match getEqualityExprH info env elemTy with (env, elemEq) in
     (env, _apps (_var eqId (_eqTy ty)) [elemEq])
   | ty ->
     match
       match mapLookup ty env.eq with Some eqId then (env, eqId)
       else
-        match equalityId env ty with (env, eqId) in
+        match equalityId info env ty with (env, eqId) in
         let innerTypes = shallowInnerTypes env ty in
-        match mapAccumL getEqualityExprH env innerTypes with (env, _) in
+        match mapAccumL (getEqualityExprH info) env innerTypes with (env, _) in
         (env, eqId)
     with (env, eqId) in
     (env, _var eqId (_eqTy ty))
 
-  sem generatePrettyPrint : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem generateEquality : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem prettyPrintId : UtestEnv -> Type -> (UtestEnv, Name)
-  sem equalityId : UtestEnv -> Type -> (UtestEnv, Name)
+  -- Generates an identifier for the pretty-print or equality function for a
+  -- given type, respectively. We use this before generating the bodies of the
+  -- functions to avoid infinite recursion when handling recursive ADTs.
+  sem prettyPrintId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
+  sem equalityId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
+
+  -- Generates a body for the pretty-print or equality functions of a given
+  -- type. These functions must be used after their corresponding functions
+  -- above, so that an ID has already been generated for the tpye.
+  sem generatePrettyPrintBody : Info -> UtestEnv -> Type -> (Name, Expr)
+  sem generateEqualityBody : Info -> UtestEnv -> Type -> (Name, Expr)
 
   sem collectTypeArguments : [Type] -> Type -> (Name, [Type])
   sem collectTypeArguments args =
@@ -321,7 +377,9 @@ lang UtestBase =
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"
 end
 
--- 0. Loading the utest runtime files
+-- The language fragment for handling the utest runtime. This includes a
+-- function that produces a typed AST for the runtime file (utest-runtime.mc),
+-- as well as functions for accessing identifiers defined in the runtime file.
 lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
   sem loadRuntime : () -> Expr
   sem loadRuntime =
@@ -405,57 +463,56 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
   | _ -> get (findRuntimeIds ()) 13
 end
 
--- 1. Generation of pretty-print functions
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
-  sem prettyPrintId : UtestEnv -> Type -> (UtestEnv, Name)
-  sem prettyPrintId env =
+  sem prettyPrintId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
+  sem prettyPrintId info env =
   | ty ->
-    let id = prettyPrintIdH env ty in
+    let id = prettyPrintIdH info env ty in
     ({env with pprint = mapInsert ty id env.pprint}, id)
 
-  sem prettyPrintIdH : UtestEnv -> Type -> Name
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH : Info -> UtestEnv -> Type -> Name
+  sem prettyPrintIdH info env =
   | ty -> defaultPrettyPrintName ()
 
-  sem generatePrettyPrint : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem generatePrettyPrint info env =
+  sem generatePrettyPrintBody : Info -> UtestEnv -> Type -> (Name, Expr)
+  sem generatePrettyPrintBody info env =
   | ty ->
     match mapLookup ty env.pprint with Some id then
-      (id, generatePrettyPrintH info env ty)
+      (id, generatePrettyPrintBodyH info env ty)
     else
       errorSingle [info]
         (concat "Cannot generate pretty-print function for type " (type2str ty))
 
-  sem generatePrettyPrintH : Info -> UtestEnv -> Type -> Expr
-  sem generatePrettyPrintH info env =
+  sem generatePrettyPrintBodyH : Info -> UtestEnv -> Type -> Expr
+  sem generatePrettyPrintBodyH info env =
   | ty -> _unit
 end
 
 lang BoolPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyBool _ -> ppBoolName ()
 end
 
 lang IntPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyInt _ -> ppIntName ()
 end
 
 lang FloatPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyFloat _ -> ppFloatName ()
 end
 
 lang CharPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyChar _ -> ppCharName ()
 end
 
 lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TySeq _ -> _ppSeqName
 
-  sem generatePrettyPrintH info env =
+  sem generatePrettyPrintBodyH info env =
   | TySeq t ->
     let ppElem = nameSym "ppElem" in
     let target = nameSym "s" in
@@ -467,10 +524,10 @@ lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang TensorPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyTensor _ -> _ppTensorName
 
-  sem generatePrettyPrintH info env =
+  sem generatePrettyPrintBodyH info env =
   | TyTensor t ->
     let ppElem = nameSym "ppElem" in
     let target = nameSym "t" in
@@ -482,12 +539,12 @@ lang TensorPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | TyRecord _ & ty ->
     match mapLookup ty env.pprint with Some id then id
     else newRecordPprintName ()
 
-  sem generatePrettyPrintH info env =
+  sem generatePrettyPrintBodyH info env =
   | TyRecord {fields = fields} & ty ->
     recursive let intersperseComma : [Expr] -> [Expr] = lam strExprs.
       match strExprs with [] | [_] then
@@ -501,7 +558,7 @@ lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
     let printSeq =
       match record2tuple fields with Some types then
         let printTupleField = lam count. lam ty.
-          match getPrettyPrintExpr env ty with (_, ppExpr) in
+          match getPrettyPrintExpr info env ty with (_, ppExpr) in
           let key = stringToSid (int2string count) in
           (addi count 1, _apps ppExpr [_recordproj key ty record])
         in
@@ -509,7 +566,7 @@ lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
         join [[_stringLit "("], intersperseComma strs, [_stringLit ")"]]
       else
         let printRecordField = lam fields. lam sid. lam ty.
-          match getPrettyPrintExpr env ty with (_, ppExpr) in
+          match getPrettyPrintExpr info env ty with (_, ppExpr) in
           let str =
             _apps _concat
               [ _stringLit (concat (sidToString sid) " = ")
@@ -529,14 +586,14 @@ lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH env =
+  sem prettyPrintIdH info env =
   | (TyApp _ | TyCon _) & ty ->
     match mapLookup ty env.pprint with Some id then id
     else
       match collectTypeArguments [] ty with (id, argTypes) in
       nameSym (concat (concat "pp" (nameGetStr id)) (strJoin "" (map type2str argTypes)))
 
-  sem generatePrettyPrintH info env =
+  sem generatePrettyPrintBodyH info env =
   | (TyApp _ | TyCon _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
     if nameEq id (nameNoSym "Symbol") then
@@ -544,7 +601,7 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
     else if nameEq id (nameNoSym "Ref") then
       generateReferencePrettyPrint env ty
     else if nameEq id (nameNoSym "Map") then
-      generateMapPrettyPrint env id tyArgs ty
+      generateMapPrettyPrint info env id tyArgs ty
     else if nameEq id (nameNoSym "BootParseTree") then
       generateBootParseTreePrettyPrint env ty
     else defaultVariantPrettyPrint info env id tyArgs ty
@@ -566,8 +623,8 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem generateReferencePrettyPrint env =
   | ty -> _lam (nameNoSym "") ty (_stringLit "<ref>")
 
-  sem generateMapPrettyPrint : UtestEnv -> Name -> [Type] -> Type -> Expr
-  sem generateMapPrettyPrint env id tyArgs =
+  sem generateMapPrettyPrint : Info -> UtestEnv -> Name -> [Type] -> Type -> Expr
+  sem generateMapPrettyPrint info env id tyArgs =
   | ty ->
     match tyArgs with [k, v] in
     let target = nameSym "m" in
@@ -576,10 +633,10 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
     let vId = nameSym "v" in
     let entryTy = _tupleTy [k, v] in
     let joinTy = _tyarrows [_seqTy _stringTy, _stringTy] in
-    match getPrettyPrintExpr env k with (env, ppKey) in
-    match getPrettyPrintExpr env v with (env, ppValue) in
-    -- NOTE(larshum, 2022-12-29): Defines the format in which to pretty print
-    -- each entry of the map.
+    match getPrettyPrintExpr info env k with (env, ppKey) in
+    match getPrettyPrintExpr info env v with (env, ppValue) in
+    -- NOTE(larshum, 2022-12-30): This defines the format in which to pretty
+    -- print each entry of a map.
     let format =
       _apps _concat
         [ _apps ppKey [_var kId k]
@@ -610,7 +667,7 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
     let constrArgTypes = mapMapWithKey (specializeConstructorArgument tyArgs) constrs in
     let target = nameSym "a" in
     let constrPprint = lam acc. lam constrId. lam constrArgTy.
-      match getPrettyPrintExpr env constrArgTy with (_, ppExpr) in
+      match getPrettyPrintExpr info env constrArgTy with (_, ppExpr) in
       let innerId = nameSym "x" in
       let thn =
         _apps _concat
@@ -630,76 +687,74 @@ lang MExprGeneratePrettyPrint =
   SeqPrettyPrint + TensorPrettyPrint + RecordPrettyPrint + VariantPrettyPrint
 end
 
--- 2. Generation of equality functions
 lang GenerateEqualityBase = UtestBase + MExprAst + PrettyPrint
-  sem equalityId : UtestEnv -> Type -> (UtestEnv, Name)
-  sem equalityId env =
+  sem equalityId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
+  sem equalityId info env =
   | ty ->
-    let id = equalityIdH env ty in
+    let id = equalityIdH info env ty in
     ({env with eq = mapInsert ty id env.eq}, id)
 
-  sem equalityIdH : UtestEnv -> Type -> Name
-  sem equalityIdH env =
+  sem equalityIdH : Info -> UtestEnv -> Type -> Name
+  sem equalityIdH info env =
   | ty ->
-    -- TODO(larshum, 2022-12-29): This error may happen even without compiler
-    -- bugs, so it could be improved quite a bit. It should state that the user
-    -- must provide a custom equality function, and remind them how to do that.
-    errorSingle [infoTy ty]
-      (concat "Cannot generate equality function for type " (type2str ty))
+    let msg = join [
+      "A custom equality function is required for type ", type2str ty, ".\n"
+    ] in
+    errorSingle [info] msg
 
-  sem generateEquality : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem generateEquality info env =
+  sem generateEqualityBody : Info -> UtestEnv -> Type -> (Name, Expr)
+  sem generateEqualityBody info env =
   | ty ->
     match mapLookup ty env.eq with Some id then
-      (id, generateEqualityH info env ty)
+      (id, generateEqualityBodyH info env ty)
     else
       errorSingle [infoTy ty]
         (concat "Cannot generate equality function for type " (type2str ty))
 
-  sem generateEqualityH : Info -> UtestEnv -> Type -> Expr
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH : Info -> UtestEnv -> Type -> Expr
+  sem generateEqualityBodyH info env =
   | ty ->
     errorSingle [infoTy ty]
       (concat "Cannot generate equality function for type " (type2str ty))
 end
 
 lang BoolEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyBool _ -> eqBoolName ()
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyBool _ -> _unit
 end
 
 lang IntEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyInt _ -> eqIntName ()
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyInt _ -> _unit
 end
 
 lang FloatEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyFloat _ -> eqFloatName ()
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyFloat _ -> _unit
 end
 
 lang CharEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyChar _ -> eqCharName ()
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyChar _ -> _unit
 end
 
 lang SeqEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TySeq _ -> _eqSeqName
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TySeq t ->
     let eqElem = nameSym "eqElem" in
     let larg = nameSym "l" in
@@ -712,10 +767,10 @@ lang SeqEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang TensorEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyTensor _ -> _eqTensorName
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyTensor t ->
     let eqElem = nameSym "eqElem" in
     let larg = nameSym "l" in
@@ -728,17 +783,17 @@ lang TensorEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang RecordEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | TyRecord _ & ty ->
     match mapLookup ty env.eq with Some id then id
     else newRecordEqualityName ()
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | TyRecord {fields = fields} & ty ->
     let larg = nameSym "l" in
     let rarg = nameSym "r" in
     let fieldEqual = lam acc. lam fieldSid. lam fieldTy.
-      match getEqualityExpr env fieldTy with (_, eqExpr) in
+      match getEqualityExpr info env fieldTy with (_, eqExpr) in
       let l = _recordproj fieldSid fieldTy (_var larg ty) in
       let r = _recordproj fieldSid fieldTy (_var rarg ty) in
       let cond = _apps eqExpr [l, r] in
@@ -750,14 +805,14 @@ lang RecordEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang VariantEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH env =
+  sem equalityIdH info env =
   | (TyApp _ | TyCon _) & ty ->
     match mapLookup ty env.eq with Some id then id
     else
       match collectTypeArguments [] ty with (id, argTypes) in
       nameSym (concat (concat "eq" (nameGetStr id)) (strJoin "" (map type2str argTypes)))
 
-  sem generateEqualityH info env =
+  sem generateEqualityBodyH info env =
   | (TyCon _ | TyApp _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
     if nameEq id (nameNoSym "Symbol") then
@@ -780,7 +835,9 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
 
   sem generateReferenceEquality : Info -> UtestEnv -> Type -> Expr
   sem generateReferenceEquality info env =
-  | ty -> errorSingle [info] "Cannot generate equality for references"
+  | ty ->
+    errorSingle [info]
+      "A custom equality function must be provided for reference types.\n"
 
   sem generateMapEquality : Info -> UtestEnv -> [Type] -> Type -> Expr
   sem generateMapEquality info env tyArgs =
@@ -788,7 +845,7 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
     match tyArgs with [k, v] then
       let larg = nameSym "l" in
       let rarg = nameSym "r" in
-      match getEqualityExpr env v with (env, valueEq) in
+      match getEqualityExpr info env v with (env, valueEq) in
       let eqmap = _const (CMapEq ()) (_tyarrows [_eqTy v, _eqTy ty]) in
       _lam larg ty (_lam rarg ty
         (_apps eqmap [valueEq, _var larg ty, _var rarg ty]))
@@ -808,7 +865,7 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
     let lid = nameSym "lhs" in
     let rid = nameSym "rhs" in
     let constrEq = lam acc. lam constrId. lam constrArgTy.
-      match getEqualityExpr env constrArgTy with (_, argEq) in
+      match getEqualityExpr info env constrArgTy with (_, argEq) in
       let target = _tuple [_var larg ty, _var rarg ty] (_tupleTy [ty, ty]) in
       let conPat = lam id. lam argTy. _patCon constrId (_patVar id argTy) ty in
       let pat =
@@ -826,11 +883,17 @@ lang MExprGenerateEquality =
   TensorEquality + RecordEquality + VariantEquality
 end
 
--- 3. Replace unit tests with utest runtime code
+-- The main utest generation language fragment. Here, we define functions for
+-- replacing utest expressions with references to the utest runtime, as well as
+-- the insertion of recursive bindings for pretty-print and equality functions
+-- into the original AST.
 lang MExprUtestGenerate =
   UtestRuntime + MExprGeneratePrettyPrint + MExprGenerateEquality +
   MExprEliminateDuplicateCode
 
+  -- Generates a recursive let-expression containing pretty-print binding
+  -- definitions for each subtype required to support pretty-printing all
+  -- types in the provided sequence.
   sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> (UtestEnv, Expr)
   sem generatePrettyPrintBindings info env =
   | types ->
@@ -843,12 +906,11 @@ lang MExprUtestGenerate =
   sem generatePrettyPrintBindingsH : Info -> UtestEnv -> Type
                                   -> (UtestEnv, [RecLetBinding])
   sem generatePrettyPrintBindingsH info env =
-  | TyBool _ | TyInt _ | TyFloat _ | TyChar _ -> (env, [])
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.pprintDef then
       generatePrettyPrintBindingsH info env elemTy
     else
-      match generatePrettyPrint info env ty with (id, body) in
+      match generatePrettyPrintBody info env ty with (id, body) in
       match generatePrettyPrintBindingsH info env elemTy with (env, binds) in
       let varId =
         match ty with TySeq _ then _ppSeqTyVarName
@@ -869,10 +931,15 @@ lang MExprUtestGenerate =
       let env = {env with pprintDef = setInsert ty env.pprintDef} in
       let innerTys = shallowInnerTypes env ty in
       match mapAccumL (generatePrettyPrintBindingsH info) env innerTys with (env, binds) in
-      match generatePrettyPrint info env ty with (id, body) in
+      match generatePrettyPrintBody info env ty with (id, body) in
       if nameEq id (defaultPrettyPrintName ()) then (env, join binds)
       else (env, cons (_recbind id (_pprintTy ty) body) (join binds))
 
+  -- Conditionally generates a recursive let-expression containing equality
+  -- binding definitions for all subtypes required to support an equality
+  -- operation on the provided type. If a user has provided a custom equality
+  -- function (i.e., the tusing field is Some), we do not generate any
+  -- bindings.
   sem generateEqualityBindings : Info -> UtestEnv -> Type -> Option Expr
                               -> (UtestEnv, Expr)
   sem generateEqualityBindings info env ty =
@@ -886,12 +953,11 @@ lang MExprUtestGenerate =
   sem generateEqualityBindingsH : Info -> UtestEnv -> Type
                                -> (UtestEnv, [RecLetBinding])
   sem generateEqualityBindingsH info env =
-  | TyBool _ | TyInt _ | TyFloat _ | TyChar _ -> (env, [])
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.eqDef then
       generateEqualityBindingsH info env elemTy
     else
-      match generateEquality info env ty with (id, body) in
+      match generateEqualityBody info env ty with (id, body) in
       match generateEqualityBindingsH info env elemTy with (env, binds) in
       let varId =
         match ty with TySeq _ then _eqSeqTyVarName
@@ -912,9 +978,11 @@ lang MExprUtestGenerate =
       let env = {env with eqDef = setInsert ty env.eqDef} in
       let innerTys = shallowInnerTypes env ty in
       match mapAccumL (generateEqualityBindingsH info) env innerTys with (env, binds) in
-      match generateEquality info env ty with (id, body) in
+      match generateEqualityBody info env ty with (id, body) in
       (env, cons (_recbind id (_eqTy ty) body) (join binds))
 
+  -- Replaces all TmUtest expressions found in the provided AST, with support
+  -- for nested utests.
   sem replaceUtests : UtestEnv -> Expr -> (UtestEnv, Expr)
   sem replaceUtests env =
   | TmUtest t ->
@@ -927,14 +995,14 @@ lang MExprUtestGenerate =
     in
     let lty = tyTm t.test in
     let rty = tyTm t.expected in
-    match getPrettyPrintExpr env lty with (env, lpp) in
-    match getPrettyPrintExpr env rty with (env, rpp) in
+    match getPrettyPrintExpr t.info env lty with (env, lpp) in
+    match getPrettyPrintExpr t.info env rty with (env, rpp) in
     match
       match t.tusing with Some eqfn then (env, eqfn)
       else
         -- NOTE(larshum, 2022-12-26): Both arguments to the utest must have the
         -- same type if no equality function was provided.
-        getEqualityExpr env lty
+        getEqualityExpr t.info env lty
     with (env, eqfn) in
     let utestRunnerType =
       let infoTy = _stringTy in
@@ -1002,6 +1070,10 @@ lang MExprUtestGenerate =
     (env, TmRecLets {t with bindings = bindings, inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr replaceUtests env t
 
+  -- Inserts utest runtime code at the tail of the program. In case any test
+  -- failed, this code ensures that the program exits with return code 1. The
+  -- insertion is performed such that the final in-expression is always
+  -- evaluated, regardless of whether tests failed or not.
   sem insertUtestTail : Expr -> Expr
   sem insertUtestTail =
   | TmLet t ->
@@ -1045,6 +1117,8 @@ lang MExprUtestGenerate =
     } in
     _match testsFailedCond (_patBool true) thn t (tyTm t)
 
+  -- Merges the AST with the utest header, which consists of the runtime
+  -- definitions from 'utest-runtime.mc'.
   sem mergeWithUtestHeader : UtestEnv -> Expr -> Expr
   sem mergeWithUtestHeader env =
   | ast -> mergeWithUtestHeaderH env ast (loadRuntime ())
@@ -1103,14 +1177,14 @@ in
 
 let evalEquality : UtestEnv -> Type -> Expr -> Expr -> Expr =
   lam env. lam ty. lam l. lam r.
-  match getEqualityExpr env ty with (env, expr) in
+  match getEqualityExpr (NoInfo ()) env ty with (env, expr) in
   match generateEqualityBindings (NoInfo ()) env ty (None ()) with (env, binds) in
   eval env (bind_ binds (appf2_ expr l r))
 in
 
 let evalPrettyPrint : UtestEnv -> Type -> Expr -> Expr =
   lam env. lam ty. lam t.
-  match getPrettyPrintExpr env ty with (env, expr) in
+  match getPrettyPrintExpr (NoInfo ()) env ty with (env, expr) in
   match generatePrettyPrintBindings (NoInfo ()) env [ty] with (env, binds) in
   eval env (bind_ binds (app_ expr t))
 in
