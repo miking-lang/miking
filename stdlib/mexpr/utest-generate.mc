@@ -10,8 +10,8 @@ include "mexpr/utils.mc"
 
 let _utestRuntimeExpected = [
   "numFailed", "utestRunner", "defaultPprint", "ppBool", "ppInt",
-  "ppFloat", "ppChar", "ppSeq", "ppTensor", "eqBool", "eqInt", "eqFloat",
-  "eqChar", "eqSeq", "eqTensor", "join"
+  "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt", "eqFloat", "eqChar",
+  "eqSeq", "join"
 ]
 let _utestRuntimeCode = ref (None ())
 let _utestRuntimeIds = ref (None ())
@@ -27,6 +27,15 @@ let newRecordEqualityName = lam.
   let idx = deref _eqId in
   nameSym (concat "eqRecord" (int2string idx))
 
+let _ppSeqName = nameSym "ppSeq"
+let _ppSeqTyVarName = nameSym "a"
+let _eqSeqName = nameSym "eqSeq"
+let _eqSeqTyVarName = nameSym "a"
+let _ppTensorName = nameSym "ppTensor"
+let _ppTensorTyVarName = nameSym "a"
+let _eqTensorName = nameSym "eqTensor"
+let _eqTensorTyVarName = nameSym "a"
+
 let _builtinTypes = map (lam s. nameNoSym s.0) builtinTypes
 
 let _utestInfo =
@@ -41,9 +50,15 @@ let _seqTy = lam ty.
   use MExprAst in
   TySeq {ty = ty, info = _utestInfo}
 let _stringTy = _seqTy _charTy
+let _tensorTy = lam ty.
+  use MExprAst in
+  TyTensor {ty = ty, info = _utestInfo}
 let _conTy = lam id.
   use MExprAst in
   TyCon {ident = id, info = _utestInfo}
+let _varTy = lam id.
+  use MExprAst in
+  TyVar {ident = id, level = 1, info = _utestInfo}
 let _recordTy = lam fields.
   use MExprAst in
   let fields = map (lam f. match f with (s, ty) in (stringToSid s, ty)) fields in
@@ -56,17 +71,14 @@ let _tyarrows = lam tys.
   foldr1
     (lam ty. lam acc. TyArrow {from = ty, to = acc, info = _utestInfo})
     tys
-let _tyalls = lam vars. lam arg.
+let _tyalls = lam vars. lam ty.
   use MExprAst in
   if null vars then error "" else
-  let ty =
-    foldr
-      (lam tyvar. lam acc.
-        TyAll {ident = tyvar, sort = PolyVar (), ty = acc,
-               info = _utestInfo})
-      (tyTm arg) vars 
-  in
-  withType ty arg
+  foldr
+    (lam tyvar. lam acc.
+      TyAll {ident = tyvar, sort = PolyVar (), ty = acc,
+             info = _utestInfo})
+    ty vars
 recursive let _pprintTy = lam ty.
   use MExprAst in
   match ty with TySeq {ty = elemTy} | TyTensor {ty = elemTy} then
@@ -316,9 +328,7 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
   | _ ->
     match deref _utestRuntimeCode with Some ast then ast
     else
-      let args =
-        {defaultBootParserParseMCoreFileArg with eliminateDeadCode = false}
-      in
+      let args = defaultBootParserParseMCoreFileArg in
       -- TODO: use a more "stable" path to the utest runtime file
       let ast =
         typeCheck (symbolize (parseMCoreFile args "stdlib/mexpr/utest-runtime.mc"))
@@ -370,37 +380,29 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
   sem ppSeqName =
   | _ -> get (findRuntimeIds ()) 7
 
-  sem ppTensorName : () -> Name
-  sem ppTensorName =
-  | _ -> get (findRuntimeIds ()) 8
-
   sem eqBoolName : () -> Name
   sem eqBoolName =
-  | _ -> get (findRuntimeIds ()) 9
+  | _ -> get (findRuntimeIds ()) 8
 
   sem eqIntName : () -> Name
   sem eqIntName =
-  | _ -> get (findRuntimeIds ()) 10
+  | _ -> get (findRuntimeIds ()) 9
 
   sem eqFloatName : () -> Name
   sem eqFloatName =
-  | _ -> get (findRuntimeIds ()) 11
+  | _ -> get (findRuntimeIds ()) 10
 
   sem eqCharName : () -> Name
   sem eqCharName =
-  | _ -> get (findRuntimeIds ()) 12
+  | _ -> get (findRuntimeIds ()) 11
 
   sem eqSeqName : () -> Name
   sem eqSeqName =
-  | _ -> get (findRuntimeIds ()) 13
-
-  sem eqTensorName : () -> Name
-  sem eqTensorName =
-  | _ -> get (findRuntimeIds ()) 14
+  | _ -> get (findRuntimeIds ()) 12
 
   sem joinName : () -> Name
   sem joinName =
-  | _ -> get (findRuntimeIds ()) 15
+  | _ -> get (findRuntimeIds ()) 13
 end
 
 -- 1. Generation of pretty-print functions
@@ -451,12 +453,32 @@ end
 
 lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem prettyPrintIdH env =
-  | TySeq _ -> ppSeqName ()
+  | TySeq _ -> _ppSeqName
+
+  sem generatePrettyPrintH info env =
+  | TySeq t ->
+    let ppElem = nameSym "ppElem" in
+    let target = nameSym "s" in
+    let elemTy = _varTy _ppSeqTyVarName in
+    let ty = TySeq {t with ty = elemTy} in
+    let ppSeq = _var (ppSeqName ()) (_pprintTy (_seqTy elemTy)) in
+    _lam ppElem (_pprintTy elemTy) (_lam target ty
+      (_apps ppSeq [_var ppElem (_pprintTy elemTy), _var target ty]))
 end
 
 lang TensorPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem prettyPrintIdH env =
-  | TyTensor _ -> ppTensorName ()
+  | TyTensor _ -> _ppTensorName
+
+  sem generatePrettyPrintH info env =
+  | TyTensor t ->
+    let ppElem = nameSym "ppElem" in
+    let target = nameSym "t" in
+    let elemTy = _varTy _ppTensorTyVarName in
+    let ty = TyTensor {t with ty = elemTy} in
+    let tensorPp = _const (CTensorToString ()) (_pprintTy (_tensorTy elemTy)) in
+    _lam ppElem (_pprintTy elemTy) (_lam target ty
+      (_apps tensorPp [_var ppElem (_pprintTy elemTy), _var target ty]))
 end
 
 lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
@@ -675,18 +697,34 @@ end
 
 lang SeqEquality = GenerateEqualityBase + UtestRuntime
   sem equalityIdH env =
-  | TySeq _ -> eqSeqName ()
+  | TySeq _ -> _eqSeqName
 
   sem generateEqualityH info env =
-  | TySeq _ -> _unit
+  | TySeq t ->
+    let eqElem = nameSym "eqElem" in
+    let larg = nameSym "l" in
+    let rarg = nameSym "r" in
+    let elemTy = _varTy _eqSeqTyVarName in
+    let ty = TySeq {t with ty = elemTy} in
+    let eqSeq = _var (eqSeqName ()) (_eqTy (_seqTy elemTy)) in
+    _lam eqElem (_eqTy elemTy) (_lam larg ty (_lam rarg ty
+      (_apps eqSeq [_var eqElem (_eqTy elemTy), _var larg ty, _var rarg ty])))
 end
 
 lang TensorEquality = GenerateEqualityBase + UtestRuntime
   sem equalityIdH env =
-  | TyTensor _ -> eqTensorName ()
+  | TyTensor _ -> _eqTensorName
 
   sem generateEqualityH info env =
-  | TyTensor _ -> _unit
+  | TyTensor t ->
+    let eqElem = nameSym "eqElem" in
+    let larg = nameSym "l" in
+    let rarg = nameSym "r" in
+    let elemTy = _varTy _eqTensorTyVarName in
+    let ty = TyTensor {t with ty = elemTy} in
+    let tensorEq = _const (CTensorEq ()) (_eqTy (_tensorTy elemTy)) in
+    _lam eqElem (_eqTy elemTy) (_lam larg ty (_lam rarg ty
+      (_apps tensorEq [_var eqElem (_eqTy elemTy), _var larg ty, _var rarg ty])))
 end
 
 lang RecordEquality = GenerateEqualityBase + UtestRuntime
@@ -806,8 +844,25 @@ lang MExprUtestGenerate =
                                   -> (UtestEnv, [RecLetBinding])
   sem generatePrettyPrintBindingsH info env =
   | TyBool _ | TyInt _ | TyFloat _ | TyChar _ -> (env, [])
-  | TySeq {ty = elemTy} | TyTensor {ty = elemTy} ->
-    generatePrettyPrintBindingsH info env elemTy
+  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+    if setMem ty env.pprintDef then
+      generatePrettyPrintBindingsH info env elemTy
+    else
+      match generatePrettyPrint info env ty with (id, body) in
+      match generatePrettyPrintBindingsH info env elemTy with (env, binds) in
+      let varId =
+        match ty with TySeq _ then _ppSeqTyVarName
+        else _ppTensorTyVarName
+      in
+      let ty =
+        let elemTy = _varTy varId in
+        switch ty
+        case TySeq t then TySeq {t with ty = elemTy}
+        case TyTensor t then TyTensor {t with ty = elemTy}
+        end
+      in
+      let ppTy = _tyalls [varId] (_pprintTy ty) in
+      (env, cons (_recbind id ppTy body) binds)
   | ty ->
     if setMem ty env.pprintDef then (env, [])
     else
@@ -816,9 +871,7 @@ lang MExprUtestGenerate =
       match mapAccumL (generatePrettyPrintBindingsH info) env innerTys with (env, binds) in
       match generatePrettyPrint info env ty with (id, body) in
       if nameEq id (defaultPrettyPrintName ()) then (env, join binds)
-      else
-        let bind = _recbind id (_pprintTy ty) body in
-        (env, cons bind (join binds))
+      else (env, cons (_recbind id (_pprintTy ty) body) (join binds))
 
   sem generateEqualityBindings : Info -> UtestEnv -> Type -> Option Expr
                               -> (UtestEnv, Expr)
@@ -834,8 +887,25 @@ lang MExprUtestGenerate =
                                -> (UtestEnv, [RecLetBinding])
   sem generateEqualityBindingsH info env =
   | TyBool _ | TyInt _ | TyFloat _ | TyChar _ -> (env, [])
-  | TySeq {ty = elemTy} | TyTensor {ty = elemTy} ->
-    generateEqualityBindingsH info env elemTy
+  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+    if setMem ty env.eqDef then
+      generateEqualityBindingsH info env elemTy
+    else
+      match generateEquality info env ty with (id, body) in
+      match generateEqualityBindingsH info env elemTy with (env, binds) in
+      let varId =
+        match ty with TySeq _ then _eqSeqTyVarName
+        else _eqTensorTyVarName
+      in
+      let ty =
+        let elemTy = _varTy varId in
+        switch ty
+        case TySeq t then TySeq {t with ty = elemTy}
+        case TyTensor t then TyTensor {t with ty = elemTy}
+        end
+      in
+      let eqTy = _tyalls [varId] (_eqTy ty) in
+      (env, cons (_recbind id eqTy body) binds)
   | ty ->
     if setMem ty env.eqDef then (env, [])
     else
@@ -843,8 +913,7 @@ lang MExprUtestGenerate =
       let innerTys = shallowInnerTypes env ty in
       match mapAccumL (generateEqualityBindingsH info) env innerTys with (env, binds) in
       match generateEquality info env ty with (id, body) in
-      let bind = _recbind id (_eqTy ty) body in
-      (env, cons bind (join binds))
+      (env, cons (_recbind id (_eqTy ty) body) (join binds))
 
   sem replaceUtests : UtestEnv -> Expr -> (UtestEnv, Expr)
   sem replaceUtests env =
@@ -888,20 +957,13 @@ lang MExprUtestGenerate =
     match replaceUtests env t.test with (_, test) in
     match replaceUtests env t.expected with (_, expected) in
     match replaceUtests env t.next with (env, next) in
-    let lhs = nameSym "lhs" in
-    let rhs = nameSym "rhs" in
     let testExpr =
-      _apps utestRunner [info, usingStr, lpp, rpp, eqfn, _var lhs lty, _var rhs rty]
+      _apps utestRunner [info, usingStr, lpp, rpp, eqfn, test, expected]
     in
     let utestBinds = TmLet {
-      ident = lhs, tyAnnot = lty, tyBody = lty, body = test,
-      inexpr = TmLet {
-        ident = rhs, tyAnnot = rty, tyBody = rty, body = expected,
-        inexpr = TmLet {
-          ident = nameNoSym "", tyAnnot = _unitTy, tyBody = _unitTy,
-          body = testExpr, inexpr = next, ty = tyTm next, info = t.info},
-        ty = tyTm next, info = infoTm expected},
-      ty = tyTm next, info = infoTm test} in
+      ident = nameNoSym "", tyAnnot = _unitTy, tyBody = _unitTy,
+      body = testExpr, inexpr = next, ty = tyTm next, info = t.info
+    } in
     (env, _binds [eqBinds, ppBinds, utestBinds])
   | TmType t ->
     let env =

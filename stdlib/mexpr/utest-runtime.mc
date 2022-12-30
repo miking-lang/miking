@@ -28,9 +28,15 @@ let ppFloat : Float -> String = float2string
 let ppChar : Char -> String = showChar
 let ppSeq : all a. (a -> String) -> [a] -> String = lam pp. lam s.
   join ["[", strJoin "," (map pp s), "]"]
-let ppTensor : all a. (a -> String) -> Tensor[a] -> String = lam pp. lam t.
-  tensor2string pp t
 
 let eqInt : Int -> Int -> Bool = eqi
 let eqFloat : Float -> Float -> Bool = eqf
-let eqTensor : all a. (a -> a -> Bool) -> Tensor[a] -> Tensor[a] -> Bool = tensorEq
+
+mexpr
+
+-- NOTE(larshum, 2022-12-30): Declare a tuple containing the functions that we
+-- want to be included. This allows us to remove other functions that are not
+-- of interest through deadcode elimination.
+( numFailed, utestTestPassed, utestTestFailed, utestRunner, defaultPprint
+, ppBool, ppInt, ppFloat, ppChar, ppSeq, eqBool, eqInt, eqFloat, eqChar
+, eqSeq, join )
