@@ -1,6 +1,5 @@
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/utesttrans.mc"
 include "mexpr/pprint.mc"
 include "mexpr/info.mc"
 include "mexpr/ast.mc"
