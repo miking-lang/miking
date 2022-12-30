@@ -12,12 +12,19 @@ include "mexpr/pprint.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
-include "mexpr/utesttrans.mc"
 include "ocaml/mcore.mc"
 
 lang MCoreLiteCompile =
-  BootParser + MExprSym + MExprTypeCheck + MExprUtestTrans + MCoreCompileLang +
+  BootParser + MExprSym + MExprTypeCheck + MCoreCompileLang +
   MExprLowerNestedPatterns + MExprPrettyPrint
+
+  -- NOTE(larshum, 2022-12-30): We define the stripping of utests here instead
+  -- of reusing the definition from utest-generate to significantly reduce the
+  -- code size.
+  sem stripUtests : Expr -> Expr
+  sem stripUtests =
+  | TmUtest t -> stripUtests t.next
+  | t -> smap_Expr_Expr stripUtests t
 end
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
@@ -65,7 +72,7 @@ let compile : Options -> String -> () = lam options. lam file.
     eliminateDeadCode = not options.keepDeadCode,
     keywords = []
   } file in
-  let ast = utestStrip ast in
+  let ast = stripUtests ast in
   let ast = symbolize ast in
   let ast = typeCheck ast in
   let hooks = mkEmptyHooks (ocamlCompile options file) in

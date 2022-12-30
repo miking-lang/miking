@@ -36,7 +36,7 @@ let _split : all a. [a] -> Int -> [[a]] = lam seq. lam chunkSize.
 
 utest _split [1,2,3] 1 with [[1], [2], [3]]
 utest _split [1,2,3,4,5,6] 4 with [[1,2,3,4], [5,6]]
-utest _split [] 4 with [[]]
+utest _split [] 4 with [[]] using eqSeq (eqSeq eqi)
 
 -- 'pmap pool nbrChunks f s' applies 'f' to all elements in 's' in parallel,
 -- using the thread pool 'pool'. The sequence 's' is splitted into

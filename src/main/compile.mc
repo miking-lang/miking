@@ -10,8 +10,8 @@ include "mexpr/runtime-check.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
-include "mexpr/utesttrans.mc"
 include "mexpr/shallow-patterns.mc"
+include "mexpr/utest-generate.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "ocaml/ast.mc"
@@ -27,7 +27,7 @@ lang MCoreCompile =
   PMExprDemote +
   MExprHoles +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
-  MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
+  MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
   OCamlTryWithWrap + MCoreCompileLang
@@ -35,15 +35,6 @@ end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
 end
-
-let generateTests = lam ast. lam testsEnabled.
-  use MCoreCompile in
-  if testsEnabled then
-    let ast = removeTypeAscription ast in
-    utestGen ast
-  else
-    let symEnv = symEnvEmpty in
-    (symEnv, utestStrip ast)
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   use MCoreCompile in
@@ -81,10 +72,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) in
-
-    -- Re-symbolize the MExpr AST and re-annotate it with types
-    let ast = symbolizeExpr symEnv ast in
+    let ast = generateUtest options.runTests ast in
 
     let ast = lowerAll ast in
     (if options.debugShallow then

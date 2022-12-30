@@ -17,32 +17,24 @@ include "mexpr/eval.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
-include "mexpr/utesttrans.mc"
+include "mexpr/utest-generate.mc"
 
 
 
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
-  MExprTypeCheck + MExprTypeLift + MExprUtestTrans + MExprProfileInstrument +
-  MExprEval
+  MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
+  MExprProfileInstrument + MExprEval
 
-  sem updateArgv (args : [String]) =
-  | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
+  sem updateArgv : [String] -> Expr -> Expr
+  sem updateArgv args =
+  | TmConst {val = CArgv ()} -> seq_ (map str_ args)
   | t -> smap_Expr_Expr (updateArgv args) t
 
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
 end
-
-let generateTests = lam ast. lam testsEnabled.
-  use ExtMCore in
-  if testsEnabled then
-    let ast = removeTypeAscription ast in
-    utestGen ast
-  else
-    let symEnv = symEnvEmpty in
-    (symEnv, utestStrip ast)
 
 -- Main function for evaluating a program using the interpreter
 -- files: a list of files
@@ -77,11 +69,9 @@ let eval = lam files. lam options : Options. lam args.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) then
-      let ast = symbolizeExpr symEnv ast in
-      if options.exitBefore then exit 0
-      else
-        eval {env = evalEnvEmpty} (updateArgv args ast); ()
-    else never
+    let ast = generateUtest options.runTests ast in
+    if options.exitBefore then exit 0
+    else
+      eval {env = evalEnvEmpty} (updateArgv args ast); ()
   in
   iter evalFile files

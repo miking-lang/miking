@@ -1,13 +1,13 @@
 -- Implements graph coloring for maintaining the call context during runtime of
 -- the program.
 
-include "mexpr/utesttrans.mc"
-
 include "ast.mc"
 include "eq-paths.mc"
 include "prefix-tree.mc"
 include "call-graph.mc"
 include "name-info.mc"
+
+include "mexpr/utils.mc"
 
 ------------------------------
 -- Call context environment --
@@ -146,6 +146,7 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
     let threadPoolInfo =
       use MExprAst in
       switch
+        use MExprFindSym in
         (findName _threadPoolNbrThreadsStr tm, findName _threadPoolId2idxStr tm)
       case (Some n1, Some n2) then
         match _findLetBinding n1 tm
