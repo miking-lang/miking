@@ -172,12 +172,12 @@ let _match = lam target. lam pat. lam thn. lam els. lam ty.
 let _never = lam ty.
   use MExprAst in
   TmNever {ty = ty, info = _utestInfo}
-let _recordproj = lam key. lam ty. lam r.
+let _recordproj = lam key. lam fieldTy. lam r.
   use MExprAst in
   let fieldId = nameSym "x" in
-  _match r (_patRecord [(sidToString key, _patVar fieldId ty)]
-    (_recordTy [(sidToString key, ty)]))
-    (_var fieldId ty) (_never ty) ty
+  _match r
+    (_patRecord [(sidToString key, _patVar fieldId fieldTy)] (tyTm r))
+    (_var fieldId fieldTy) (_never fieldTy) fieldTy
 let _unit = _record [] _unitTy
 let _recbind = lam id. lam ty. lam body.
   use MExprAst in
@@ -557,20 +557,20 @@ lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
     let record = _var recordId ty in
     let printSeq =
       match record2tuple fields with Some types then
-        let printTupleField = lam count. lam ty.
-          match getPrettyPrintExpr info env ty with (_, ppExpr) in
+        let printTupleField = lam count. lam fieldTy.
+          match getPrettyPrintExpr info env fieldTy with (_, ppExpr) in
           let key = stringToSid (int2string count) in
-          (addi count 1, _apps ppExpr [_recordproj key ty record])
+          (addi count 1, _apps ppExpr [_recordproj key fieldTy record])
         in
         match mapAccumL printTupleField 0 types with (_, strs) in
         join [[_stringLit "("], intersperseComma strs, [_stringLit ")"]]
       else
-        let printRecordField = lam fields. lam sid. lam ty.
-          match getPrettyPrintExpr info env ty with (_, ppExpr) in
+        let printRecordField = lam fields. lam sid. lam fieldTy.
+          match getPrettyPrintExpr info env fieldTy with (_, ppExpr) in
           let str =
             _apps _concat
               [ _stringLit (concat (sidToString sid) " = ")
-              , _apps ppExpr [_recordproj sid ty record] ]
+              , _apps ppExpr [_recordproj sid fieldTy record] ]
           in
           snoc fields str
         in
