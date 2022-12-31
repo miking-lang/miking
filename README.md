@@ -13,7 +13,7 @@ After the installation, you need to install the OCaml compiler by
 running the following:
 ```
 opam update
-opam switch create miking-ocaml 5.0.0~rc1
+opam switch create miking-ocaml 5.0.0
 eval $(opam env)
 ```
 
