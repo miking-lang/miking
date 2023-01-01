@@ -224,7 +224,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
       else None ()
     in
     let env =
-      match stripTyAll t.tyIdent with (_, TyArrow {from = from, to = to}) then
+      match inspectType t.tyIdent with TyArrow {from = from, to = to} then
         match unwrapTypeVarIdent to with Some ident then
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in
@@ -301,10 +301,7 @@ end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyApp t ->
-    match typeLiftType env t.lhs with (env, lhs) then
-      (env, lhs)
-    else never
+  | TyApp t -> typeLiftType env t.lhs
 end
 
 lang MExprTypeLift =
@@ -375,7 +372,7 @@ let treeName = nameSym "Tree" in
 let branchName = nameSym "Branch" in
 let leafName = nameSym "Leaf" in
 let variant = typeAnnot (symbolize (bindall_ [
-  ntype_ treeName tyunknown_,
+  ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tytuple_ [
     ntycon_ treeName,
     ntycon_ treeName]) (ntycon_ treeName)),
@@ -390,7 +387,7 @@ let lastTerm = nconapp_ branchName (urecord_ [
   ("rhs", nconapp_ leafName (int_ 2))
 ]) in
 let variantWithRecords = typeAnnot (symbolize (bindall_ [
-  ntype_ treeName (tyvariant_ []),
+  ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tyrecord_ [
     ("lhs", ntycon_ treeName),
     ("rhs", ntycon_ treeName)]) (ntycon_ treeName)),
@@ -503,9 +500,9 @@ match assocSeqLookup {eq=nameEq} ident env with Some ty in
 utest ty with recordType using eqType in
 
 let typeAliases = typeAnnot (symbolize (bindall_ [
-  type_ "GlobalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
-  type_ "LocalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
-  type_ "Env" (tyrecord_ [
+  type_ "GlobalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "LocalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "Env" [] (tyrecord_ [
     ("global", tycon_ "GlobalEnv"),
     ("local", tycon_ "LocalEnv")
   ]),

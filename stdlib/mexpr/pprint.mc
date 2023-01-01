@@ -1149,6 +1149,11 @@ lang AppTypePrettyPrint = PrettyPrint + AppTypeAst
     (env, join [lhs, " ", rhs])
 end
 
+lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyAlias t -> getTypeStringCode indent env t.display
+end
+
 
 ---------------------------
 -- MEXPR PPRINT FRAGMENT --
@@ -1188,7 +1193,8 @@ lang MExprPrettyPrint =
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
   ConTypePrettyPrint + VarTypePrettyPrint +
-  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
+  AliasTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

@@ -158,6 +158,23 @@ lang Ast
     let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  -- Resolving application -- apply an accumulating function through links and aliases
+  sem rappAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
+  sem rappAccumL_Type_Type f acc = | ty -> (acc, ty)
+
+  sem rapp_Type_Type : (Type -> Type) -> Type -> Type
+  sem rapp_Type_Type f = | ty ->
+    let res : ((), Type) = rappAccumL_Type_Type (lam. lam t. ((), f t)) () ty in
+    res.1
+
+  -- Strip all-quantifiers and aliases to inspect the structure of the type
+  sem inspectType : Type -> Type
+  sem inspectType = | ty -> rapp_Type_Type inspectType ty
+
+  -- Unwrap links and aliases to expose the underlying type
+  sem unwrapType : Type -> Type
+  sem unwrapType = | ty -> rapp_Type_Type unwrapType ty
+
   sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
   | p -> (acc, p)
@@ -1461,12 +1478,15 @@ lang AllTypeAst = VarSortAst + Ast
     (acc, TyAll {{t with sort = sort}
                     with ty = ty})
 
+  sem inspectType =
+  | TyAll t -> inspectType t.ty
+
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty
 
   sem stripTyAllBase (vars : [(Name, VarSort)]) =
   | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.sort)) t.ty
-  | ty -> (vars, ty)
+  | ty -> rappAccumL_Type_Type stripTyAllBase vars ty
 end
 
 lang AppTypeAst = Ast
@@ -1488,6 +1508,27 @@ lang AppTypeAst = Ast
 
   sem infoTy =
   | TyApp r -> r.info
+end
+
+lang AliasTypeAst = Ast
+  syn Type =
+  -- An aliased type, treated as content but printed as display.
+  | TyAlias {display : Type,
+             content : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyAlias t -> TyAlias {t with display = tyWithInfo info t.display}
+
+  sem infoTy =
+  | TyAlias t -> infoTy t.display
+
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyAlias t ->
+    match f acc t.content with (acc, content) in
+    (acc, TyAlias {t with content = content})
+
+  sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyAlias t -> f acc t.content
 end
 
 ------------------------
@@ -1515,5 +1556,5 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
 end

@@ -585,8 +585,8 @@ let f3 = nameSym "f" in
 let s = nameSym "s" in
 
 let t = typeAnnot (bindall_ [
-  ntype_ intseq (tyseq_ tyint_),
-  ntype_ floatseq (tyseq_ tyfloat_),
+  ntype_ intseq [] (tyseq_ tyint_),
+  ntype_ floatseq [] (tyseq_ tyfloat_),
   nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
   nlet_ b (ntycon_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
   nlet_ c (tyrecord_ [("a", tyint_), ("b", tyfloat_)])

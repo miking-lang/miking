@@ -220,7 +220,7 @@ utest eliminateDuplicateCode t with expected using eqExpr in
 
 -- Tests that it works for types
 let optionDef = bindall_ [
-  withInfo (i 1) (type_ "Option" tyunknown_),
+  withInfo (i 1) (type_ "Option" ["a"] (tyvariant_ [])),
   withInfo (i 2) (condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))),
   withInfo (i 3) (condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))))] in
 let fDef =

@@ -29,10 +29,10 @@ lang PMExprReplaceAccelerate =
   sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
   | ty & (TyCon {info = info, ident = ident}) ->
     let unwrapType = lam ty.
-      let ty = typeUnwrapAlias env.aliases ty in
+      let ty = unwrapType ty in
       match ty with TyCon {ident = ident} then
         match mapLookup ident env.constrs with Some ty then
-         ty
+          ty
         else ty
       else ty
     in

@@ -3,6 +3,26 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/const-types.mc"
 
+-- Substitutes type variables
+lang VarTypeSubstitute = VarTypeAst
+  sem substituteVars (subst : Map Name Type) =
+  | TyVar t & ty ->
+    match mapLookup t.ident subst with Some tyvar then tyvar
+    else ty
+  | ty ->
+    smap_Type_Type (substituteVars subst) ty
+end
+
+-- Returns the argument list in a type application
+lang AppTypeGetArgs = AppTypeAst
+  sem getTypeArgs =
+  | TyApp t ->
+    match getTypeArgs t.lhs with (tycon, args) in
+    (tycon, snoc args t.rhs)
+  | ty ->
+    (ty, [])
+end
+
 -- Returns the arity of a function type
 recursive let arityFunType = use MExprAst in lam ty.
   match ty with TyArrow t then addi 1 (arityFunType t.to) else 0
@@ -18,16 +38,6 @@ let isHigherOrderFunType = use MExprAst in lam ty.
       sfold_Type_Type (rec under) acc ty
   in
   rec false false ty
-
--- Unwraps type alias `ty` from `aliases`.
-recursive let typeUnwrapAlias = use MExprAst in
-  lam aliases : Map Name Type. lam ty : Type.
-  match ty with TyCon {ident = ident} then
-    match mapLookup ident aliases with Some ty then
-      typeUnwrapAlias aliases ty
-    else ty
-  else ty
-end
 
 lang Test = MExprAst + MExprConstType end
 

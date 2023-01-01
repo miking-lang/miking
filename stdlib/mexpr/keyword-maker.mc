@@ -252,20 +252,20 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
 
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyNoArgs _ ->
-      match unwrapType typeEnv lhs with Some (TyNoArgs _) then Some free
+      match unwrapType lhs with TyNoArgs _ then Some free
       else None ()
   | TyOneArg r ->
-      match unwrapType typeEnv lhs with Some (TyOneArg l) then
+      match unwrapType lhs with TyOneArg l then
         eqTypeH typeEnv free l.arg1 r.arg1
       else None ()
   | TyTwoArgs r ->
-      match unwrapType typeEnv lhs with Some (TyTwoArgs l) then
+      match unwrapType lhs with TyTwoArgs l then
         match eqTypeH typeEnv free l.arg1 r.arg1 with Some free then
           eqTypeH typeEnv free l.arg2 r.arg2
         else None ()
       else None ()
   | TyThreeArgs r ->
-      match unwrapType typeEnv lhs with Some (TyThreeArgs l) then
+      match unwrapType lhs with TyThreeArgs l then
         match eqTypeH typeEnv free l.arg1 r.arg1 with Some free then
           match eqTypeH typeEnv free l.arg2 r.arg2 with Some free then
             eqTypeH typeEnv free l.arg3 r.arg3
