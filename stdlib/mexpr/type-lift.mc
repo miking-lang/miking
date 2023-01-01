@@ -517,23 +517,18 @@ match typeLift typeAliases with (env, t) in
 -- as they are processed, so the last record in the given term will be first
 -- in the environment.
 let ids = map fst env in
-let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
-let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
-let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
-let globalEnvId = get ids 4 in -- type GlobalEnv = Seq2
-let localEnvId = get ids 3 in  -- type LocalEnv = Seq2
-let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
-let envId = get ids 1 in       -- type Env = Rec2
-let trdRecordId = get ids 0 in -- type Rec3 = {global : Seq2, local : Seq2}
+let fstSeqId = get ids 6 in    -- type Seq1 = [Char]
+let fstRecordId = get ids 5 in -- type Rec1 = {0 : Seq1, 1 : Int}
+let sndSeqId = get ids 4 in    -- type Seq2 = [Rec1]
+let globalEnvId = get ids 3 in -- type GlobalEnv = Seq2
+let localEnvId = get ids 2 in  -- type LocalEnv = Seq2
+let sndRecordId = get ids 1 in -- type Rec2 = {global : Seq2, local : Seq2}
+let envId = get ids 0 in       -- type Env = Rec2
 let expectedEnv = [
-  (trdRecordId, tyrecord_ [
-    ("local", ntycon_ sndSeqId),
-    ("global", ntycon_ sndSeqId)
-  ]),
   (envId, ntycon_ sndRecordId),
   (sndRecordId, tyrecord_ [
-    ("local", ntycon_ localEnvId),
-    ("global", ntycon_ globalEnvId)
+    ("local", ntycon_ sndSeqId),
+    ("global", ntycon_ sndSeqId)
   ]),
   (localEnvId, ntycon_ sndSeqId),
   (globalEnvId, ntycon_ sndSeqId),
