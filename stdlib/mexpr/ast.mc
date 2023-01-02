@@ -1510,7 +1510,7 @@ lang AppTypeAst = Ast
   | TyApp r -> r.info
 end
 
-lang AliasTypeAst = Ast
+lang AliasTypeAst = AllTypeAst
   syn Type =
   -- An aliased type, treated as content but printed as display.
   | TyAlias {display : Type,
@@ -1529,6 +1529,13 @@ lang AliasTypeAst = Ast
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAlias t -> f acc t.content
+
+  sem stripTyAll =
+  | TyAlias t & ty ->
+    switch stripTyAll t.content
+    case ([], _) then ([], ty)
+    case stripped then stripped
+    end
 end
 
 ------------------------

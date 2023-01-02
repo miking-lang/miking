@@ -423,16 +423,16 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
   sem inst (info : Info) (lvl : Level) =
   | ty ->
-    match stripTyAll ty with (vars, ty) in
-    if gti (length vars) 0 then
+    switch stripTyAll ty
+    case ([], _) then ty
+    case (vars, stripped) then
       let inserter = lam subst. lam v : (Name, VarSort).
         let sort = smap_VarSort_Type (substituteVars subst) v.1 in
         mapInsert v.0 (newflexvar sort lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
-      substituteVars subst ty
-    else
-      ty
+      substituteVars subst stripped
+    end
 
   -- Generalize the unification variables in `ty' introduced at least at level `lvl`.
   sem gen (lvl : Level) =
@@ -615,7 +615,8 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
     let body = typeCheckExpr {env with currentLvl = addi 1 lvl} body in
     let tyBody = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info t.tyAnnot in
     -- Unify the annotated type with the inferred one and generalize
-    unify [infoTy t.tyAnnot, infoTm body] (inspectType tyBody) (tyTm body);
+    match stripTyAll tyBody with (_, stripped) in
+    unify [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
     let tyBody = gen lvl tyBody in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
@@ -650,7 +651,8 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
         (lam ty. propagateTyAnnot (b.body, ty)) (sremoveUnknown b.tyAnnot) in
       let body = typeCheckExpr {recLetEnv with currentLvl = addi 1 lvl} body in
       -- Unify the inferred type of the body with the annotated one
-      unify [infoTy b.tyAnnot, infoTm body] (inspectType b.tyBody) (tyTm body);
+      match stripTyAll b.tyBody with (_, stripped) in
+      unify [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
