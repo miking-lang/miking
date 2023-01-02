@@ -146,7 +146,7 @@ lang Unify = MExprAst + FlexTypeAst + PrettyPrint
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
   -- Modifies the types in place.
-  sem unify (info : [Info]) (env : TCEnv) (ty1 : Type) =
+  sem unify (info : [Info]) (ty1 : Type) =
   | ty2 ->
     let env : UnifyEnv = {
       names = biEmpty,
@@ -557,7 +557,7 @@ lang PatTypeCheck = Unify
     match smapAccumL_Pat_Pat
       (lam patEnv. lam pat.
         match typeCheckPat env patEnv pat with (patEnv, pat) in
-        unify [infoPat pat] env patTy (tyPat pat);
+        unify [infoPat pat] patTy (tyPat pat);
         (patEnv, pat))
       patEnv pat
     with (patEnv, pat) in
@@ -601,8 +601,8 @@ lang AppTypeCheck = TypeCheck + AppAst
     let rhs = typeCheckExpr env t.rhs in
     let tyRhs = newvar env.currentLvl t.info in
     let tyRes = newvar env.currentLvl t.info in
-    unify [infoTm t.lhs] env (ityarrow_ (infoTm lhs) tyRhs tyRes) (tyTm lhs);
-    unify [infoTm t.rhs] env tyRhs (tyTm rhs);
+    unify [infoTm t.lhs] (ityarrow_ (infoTm lhs) tyRhs tyRes) (tyTm lhs);
+    unify [infoTm t.rhs] tyRhs (tyTm rhs);
     TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
 end
 
@@ -615,7 +615,7 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
     let body = typeCheckExpr {env with currentLvl = addi 1 lvl} body in
     let tyBody = substituteUnknown (PolyVar ()) (addi 1 lvl) t.info t.tyAnnot in
     -- Unify the annotated type with the inferred one and generalize
-    unify [infoTy t.tyAnnot, infoTm body] env (inspectType tyBody) (tyTm body);
+    unify [infoTy t.tyAnnot, infoTm body] (inspectType tyBody) (tyTm body);
     let tyBody = gen lvl tyBody in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
@@ -650,7 +650,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
         (lam ty. propagateTyAnnot (b.body, ty)) (sremoveUnknown b.tyAnnot) in
       let body = typeCheckExpr {recLetEnv with currentLvl = addi 1 lvl} body in
       -- Unify the inferred type of the body with the annotated one
-      unify [infoTy b.tyAnnot, infoTm body] env (inspectType b.tyBody) (tyTm body);
+      unify [infoTy b.tyAnnot, infoTm body] (inspectType b.tyBody) (tyTm body);
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
@@ -670,11 +670,11 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
-    unify [infoTm target, infoPat pat] env (tyTm target) (tyPat pat);
+    unify [infoTm target, infoPat pat] (tyTm target) (tyPat pat);
     let thnEnv : TCEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr env t.els in
-    unify [infoTm thn, infoTm els] env (tyTm thn) (tyTm els);
+    unify [infoTm thn, infoTm els] (tyTm thn) (tyTm els);
     TmMatch {t with target = target
                   , thn = thn
                   , els = els
@@ -695,7 +695,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
   | TmSeq t ->
     let elemTy = newvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
-    iter (lam tm. unify [infoTm tm] env elemTy (tyTm tm)) tms;
+    iter (lam tm. unify [infoTm tm] elemTy (tyTm tm)) tms;
     TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
 end
 
@@ -723,7 +723,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
-    unify [infoTm rec] env (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
+    unify [infoTm rec] (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
     (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
@@ -746,7 +746,7 @@ lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
       match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} in
-      unify [infoTm body] env from (tyTm body);
+      unify [infoTm body] from (tyTm body);
       TmConApp {t with body = body, ty = to}
     else
       let msg = join [
@@ -765,9 +765,9 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let next = typeCheckExpr env t.next in
     let tusing = optionMap (typeCheckExpr env) t.tusing in
     (match tusing with Some tu then
-       unify [infoTm tu] env (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
+       unify [infoTm tu] (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
      else
-       unify [infoTm test, infoTm expected] env (tyTm test) (tyTm expected));
+       unify [infoTm test, infoTm expected] (tyTm test) (tyTm expected));
     TmUtest {t with test = test
                   , expected = expected
                   , next = next
@@ -811,7 +811,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
-    iter (lam pat. unify [infoPat pat] env elemTy (tyPat pat)) pats;
+    iter (lam pat. unify [infoPat pat] elemTy (tyPat pat)) pats;
     (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
@@ -820,7 +820,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   | PatSeqEdge t ->
     let elemTy = newvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
-    let unifyPat = lam pat. unify [infoPat pat] env elemTy (tyPat pat) in
+    let unifyPat = lam pat. unify [infoPat pat] elemTy (tyPat pat) in
     match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
     iter unifyPat prefix;
     match mapAccumL (typeCheckPat env) patEnv t.postfix with (patEnv, postfix) in
@@ -828,7 +828,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
     let patEnv =
       match t.middle with PName n then
         mapInsertWith
-          (lam ty1. lam ty2. unify [t.info] env ty1 ty2; ty2) n seqTy patEnv
+          (lam ty1. lam ty2. unify [t.info] ty1 ty2; ty2) n seqTy patEnv
       else patEnv
     in
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
@@ -850,7 +850,7 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
     match mapLookup t.ident env.conEnv with Some ty then
       match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} in
       match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
-      unify [infoPat subpat] env from (tyPat subpat);
+      unify [infoPat subpat] from (tyPat subpat);
       (patEnv, PatCon {t with subpat = subpat, ty = to})
     else
       let msg = join [
