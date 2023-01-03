@@ -44,17 +44,6 @@ let evalCtxEmpty = { env = evalEnvEmpty }
 -------------
 -- HELPERS --
 -------------
--- Dynamic versions of recordproj_ and tupleproj_ in ast.mc. Usable on the fly
--- during evaluation (generates a fresh symbol for the internally matched
--- variable).
-
-let _evalDRecordProj = use MExprAst in
-  lam key. lam r.
-  nrecordproj_ (nameSym "x") key r
-
-let _evalDTupleProj = use MExprAst in
-  lam i. lam t.
-  _evalDRecordProj (int2string i) t
 
 -- Converts a sequence of characters to a string
 let _evalSeqOfCharsToString = use MExprAst in
@@ -76,19 +65,10 @@ lang Eval
   sem eval : EvalCtx -> Expr -> Expr
 end
 
--- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
-lang FixAst = LamAst
-  syn Expr =
-  | TmFix ()
-end
-
-lang VarEval = Eval + VarAst + FixAst + AppAst
+lang VarEval = Eval + VarAst + AppAst
   sem eval ctx =
   | TmVar r ->
-    match evalEnvLookup r.ident ctx.env with Some t then
-      match t with TmApp {lhs = TmFix _} then
-        eval ctx t
-      else t
+    match evalEnvLookup r.ident ctx.env with Some t then t
     else
       errorSingle [r.info] (concat "Unknown variable: " (pprintVarString (nameGetStr r.ident)))
 end
@@ -103,14 +83,16 @@ lang AppEval = Eval + AppAst
 end
 
 lang LamEval = Eval + LamAst + VarEval + AppEval
+  type Lazy a = () -> a
+
   syn Expr =
-  | TmClos {ident : Name, body : Expr, env : Env}
+  | TmClos {ident : Name, body : Expr, env : Lazy Env}
 
   sem apply ctx info arg =
-  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg t.env} t.body
+  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
 
   sem eval ctx =
-  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
+  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = lam. ctx.env}
   | TmClos t -> TmClos t
 end
 
@@ -120,25 +102,6 @@ lang LetEval = Eval + LetAst + VarEval
     eval {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
-
-lang FixEval = Eval + FixAst + LamEval + UnknownTypeAst
-  sem apply ctx info arg =
-  | TmFix _ ->
-    match arg with TmClos clos then
-      let ident = clos.ident in
-      let body = clos.body in
-      let env =
-        evalEnvInsert ident (TmApp {lhs = TmFix (),
-                                rhs = TmClos clos,
-                                ty = tyunknown_,
-                                info = NoInfo()}) clos.env in
-      eval {ctx with env = env} body
-    else
-      errorSingle [info] "Not fixing a function"
-
-  sem eval ctx =
-  | TmFix _ -> TmFix ()
- end
 
 lang RecordEval = Eval + RecordAst
   sem eval ctx =
@@ -155,68 +118,23 @@ lang RecordEval = Eval + RecordAst
 end
 
 lang RecLetsEval =
-  Eval + RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
+  Eval + RecLetsAst + VarEval + RecordEval + LetEval + LamEval +
   UnknownTypeAst
 
   sem eval ctx =
   | TmRecLets t ->
-    let foldli : all a. all acc. (Int -> acc -> a -> acc) -> acc -> [a] -> acc =
-      lam f. lam init. lam seq.
-      let foldres : (Int, acc) = foldl (lam acc : (Int, acc). lam x.
-                                         (addi acc.0 1, f acc.0 acc.1 x))
-                                       (0, init) seq in
-      foldres.1
+    recursive let envPrime : Lazy Env = lam.
+      let wraplambda = lam v.
+        match v with TmLam t then
+          TmClos {ident = t.ident, body = t.body, env = envPrime}
+        else errorSingle [infoTm v] "Right-hand side of recursive let must be a lambda"
+      in
+      foldl
+        (lam env. lam bind.
+          evalEnvInsert bind.ident (wraplambda bind.body) env)
+        ctx.env t.bindings
     in
-    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x)
-                 ""
-                 ["a", "b", "c"]
-    with "0a1b2c" in
-    let eta_name = nameSym "eta" in
-    let eta_var = TmVar {ident = eta_name,
-                         ty = tyunknown_,
-                         info = NoInfo(),
-                         frozen = false} in
-    let unpack_from = lam var. lam body.
-      foldli
-        (lam i. lam bodyacc. lam binding : RecLetBinding.
-          TmLet {ident = binding.ident,
-                 tyAnnot = tyunknown_,
-                 tyBody = tyunknown_,
-                 body = TmLam {ident = eta_name,
-                               body = TmApp {lhs = _evalDTupleProj i var,
-                                             rhs = eta_var,
-                                             ty = tyunknown_,
-                                             info = NoInfo()},
-                               tyAnnot = tyunknown_,
-                               tyIdent = tyunknown_,
-                               ty = tyunknown_,
-                               info = NoInfo()
-                               },
-                 inexpr = bodyacc,
-                 ty = tyunknown_,
-                 info = NoInfo()}
-        )
-        body
-        t.bindings in
-    let lst_name = nameSym "lst" in
-    let lst_var = TmVar {ident = lst_name,
-                         ty = tyunknown_,
-                         info = NoInfo(),
-                         frozen = false} in
-    let func_tuple = utuple_ (map (lam x : RecLetBinding. x.body) t.bindings) in
-    let unfixed_tuple = TmLam {ident = lst_name,
-                               body = unpack_from lst_var func_tuple,
-                               tyIdent = tyunknown_,
-                               tyAnnot = tyunknown_,
-                               ty = tyunknown_,
-                               info = NoInfo()} in
-    eval {ctx with env =
-            evalEnvInsert lst_name (TmApp {lhs = TmFix (),
-                                       rhs = unfixed_tuple,
-                                       ty = tyunknown_,
-                                       info = NoInfo()})
-            ctx.env}
-         (unpack_from lst_var t.inexpr)
+    eval {ctx with env = envPrime ()} t.inexpr
 end
 
 lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst
@@ -2145,7 +2063,7 @@ end
 lang MExprEval =
 
   -- Terms
-  VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
+  VarEval + AppEval + LamEval + RecordEval + RecLetsEval +
   ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
   NeverEval + RefEval + ExtEval
 
