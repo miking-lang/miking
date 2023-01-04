@@ -26,13 +26,6 @@ let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEqSymUnsafe} id env
 
 let evalEnvInsert = lam id. lam e. lam env. assocSeqInsert id e env
 
-let _evalEqNameWithInfo =
-  lam info. lam n1. lam n2.
-    if and (nameHasSym n1) (nameHasSym n2) then
-      nameEqSym n1 n2
-    else
-      errorSingle [info] "Found name without symbol in eval. Did you run symbolize?"
-
 ------------------------
 -- EVALUATION CONTEXT --
 ------------------------
@@ -1997,11 +1990,9 @@ lang DataPatEval = DataAst + DataPat
   sem tryMatch (env : Env) (t : Expr) =
   | PatCon {ident = ident, subpat = subpat, info = info} ->
     match t with TmConApp cn then
-      let constructor = cn.ident in
-      let subexpr = cn.body in
-      if _evalEqNameWithInfo info ident constructor
-        then tryMatch env subexpr subpat
-        else None ()
+      if nameEqSymUnsafe ident cn.ident then
+        tryMatch env cn.body subpat
+      else None ()
     else None ()
 end
 
