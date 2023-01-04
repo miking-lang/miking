@@ -2,9 +2,8 @@
 
 include "string.mc"
 include "char.mc"
-include "assoc.mc"
 include "name.mc"
-include "map.mc"
+include "list.mc"
 
 include "info.mc"
 include "error.mc"
@@ -18,13 +17,15 @@ include "pprint.mc"
 -- EVALUATION ENVIRONMENT --
 ----------------------------
 
-type Env = [(Name, Expr)]
+type Env = List (Name, Expr)
 
-let evalEnvEmpty = createList 0 (lam. (nameNoSym "", unit_))
+let evalEnvEmpty = listEmpty
 
-let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEqSymUnsafe} id env
+let evalEnvLookup = lam id. lam env.
+  let p = lam entry. nameEqSymUnsafe id entry.0 in
+  match listFind p env with Some (_, e) then Some e else None ()
 
-let evalEnvInsert = lam id. lam e. lam env. assocSeqInsert id e env
+let evalEnvInsert = lam id. lam e. lam env. listCons (id, e) env
 
 ------------------------
 -- EVALUATION CONTEXT --
