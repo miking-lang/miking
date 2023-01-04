@@ -22,7 +22,7 @@ type Env = [(Name, Expr)]
 
 let evalEnvEmpty = createList 0 (lam. (nameNoSym "", unit_))
 
-let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEq} id env
+let evalEnvLookup = lam id. lam env. assocSeqLookup {eq=nameEqSymUnsafe} id env
 
 let evalEnvInsert = lam id. lam e. lam env. assocSeqInsert id e env
 
