@@ -25,6 +25,7 @@
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/eval.mc"
+include "mexpr/symbolize.mc"
 
 include "sys.mc"
 
@@ -256,7 +257,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
       getProfilerReportCode ()]
 end
 
-lang TestLang = MExprProfileInstrument + MExprEval
+lang TestLang = MExprProfileInstrument + MExprSym + MExprEval
 end
 
 mexpr
@@ -277,7 +278,7 @@ let t = bindall_ [
   app_ (var_ "f") (int_ 4)
 ] in
 let t = instrumentProfiling t in
-eval {env = evalEnvEmpty} t;
+eval {env = evalEnvEmpty} (symbolize t);
 utest fileExists profilingResultFileName with true in
 (if fileExists profilingResultFileName then
   let lines =
