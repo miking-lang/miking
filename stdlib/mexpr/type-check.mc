@@ -672,7 +672,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
-    unify [infoTm target, infoPat pat] (tyTm target) (tyPat pat);
+    unify [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
     let thnEnv : TCEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr env t.els in
