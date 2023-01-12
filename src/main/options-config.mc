@@ -27,6 +27,10 @@ let optionsConfig : ParseConfig Options = [
     "Print the AST after lowering nested patterns to shallow ones",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugShallow = true}),
+  ([("--debug-phases", "", "")],
+    "Show debug and profiling information about each pass",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugPhases = true}),
   ([("--exit-before", "", "")],
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
