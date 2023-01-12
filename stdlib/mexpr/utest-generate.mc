@@ -20,6 +20,7 @@
 -- utest. As it was not required to pass all tests, this has not been
 -- implemented.
 
+include "stdlib.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
@@ -387,10 +388,8 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
     match deref _utestRuntimeCode with Some ast then ast
     else
       let args = defaultBootParserParseMCoreFileArg in
-      -- TODO: use a more "stable" path to the utest runtime file
-      let ast =
-        typeCheck (symbolize (parseMCoreFile args "stdlib/mexpr/utest-runtime.mc"))
-      in
+      let utestRuntimeFile = concat stdlibLoc "/mexpr/utest-runtime.mc" in
+      let ast = typeCheck (symbolize (parseMCoreFile args utestRuntimeFile)) in
       modref _utestRuntimeCode (Some ast);
       ast
 
