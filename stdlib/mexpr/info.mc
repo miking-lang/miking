@@ -51,20 +51,20 @@ let infoVal : String -> Int -> Int -> Int -> Int -> Info =
 
 -- Generate a string from an info
 let info2str : Info -> String = lam fi.
-  match fi with NoInfo () then "[No file info] " else
+  match fi with NoInfo () then "<No file info>" else
   match fi with Info (r & {row1 = 0}) then
-    join ["FILE \"", r.filename, "\" "]
+    join ["<", r.filename, ">"]
   else match fi with Info r then
-    join ["FILE \"", r.filename, "\" ", int2string r.row1, ":", int2string r.col1,
-    "-", int2string r.row2, ":", int2string r.col2, " "]
+    join ["<", r.filename, " ", int2string r.row1, ":", int2string r.col1,
+    "-", int2string r.row2, ":", int2string r.col2, ">"]
   else never
 
 -- Generate an info error string
 let infoErrorString : Info -> String -> String = lam fi. lam str.
-    join [info2str fi, "ERROR: ", str]
+    join ["ERROR ", info2str fi, ":\n", str]
 
 let infoWarningString : Info -> String -> String = lam fi. lam str.
-    join [info2str fi, "WARNING: ", str]
+    join ["WARNING ", info2str fi, ":\n", str]
 
 -- Print an error with info struct info and exit (error code 1)
 let infoErrorExit : Info -> String -> Unknown = lam fi. lam str.
