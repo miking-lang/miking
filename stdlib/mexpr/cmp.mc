@@ -433,6 +433,12 @@ lang AppTypeCmp = Cmp + AppTypeAst
     else lhsDiff
 end
 
+lang AliasTypeCmp = Cmp + AliasTypeAst
+  sem cmpTypeH =
+  | (TyAlias t1, ty2) -> cmpTypeH (t1.content, ty2)
+  | (ty1 & !TyAlias _, TyAlias t2) -> cmpTypeH (ty1, t2.content)
+end
+
 --------------------
 -- MEXPR FRAGMENT --
 --------------------
@@ -453,7 +459,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
 end
 
 -----------
@@ -517,9 +523,9 @@ utest cmpExpr (recordupdate_ r "a" (int_ 0))
 utest cmpExpr (recordupdate_ r "b" (int_ 0))
               (recordupdate_ r "a" (int_ 1)) with 0 using neqi in
 
-utest cmpExpr (type_ "a" tyint_) (type_ "a" tyint_) with 0 in
-utest cmpExpr (type_ "b" tyint_) (type_ "a" tyint_) with 0 using neqi in
-utest cmpExpr (type_ "a" tyfloat_) (type_ "a" tyint_) with 0 using neqi in
+utest cmpExpr (type_ "a" [] tyint_) (type_ "a" [] tyint_) with 0 in
+utest cmpExpr (type_ "b" [] tyint_) (type_ "a" [] tyint_) with 0 using neqi in
+utest cmpExpr (type_ "a" [] tyfloat_) (type_ "a" [] tyint_) with 0 using neqi in
 
 utest cmpExpr (condef_ "a" tyint_) (condef_ "a" tyint_) with 0 in
 utest cmpExpr (condef_ "b" tyint_) (condef_ "a" tyint_) with 0 using neqi in
@@ -839,5 +845,8 @@ utest cmpType (tyvar_ "a") (tyvar_ "b") with 0 using neqi in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tybool_) with 0 in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tyfloat_) with 0 using neqi in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "b" tybool_) with 0 using neqi in
+
+utest cmpType (tyalias_ (tycon_ "t") tyint_) tyint_ with 0 in
+utest cmpType (tyalias_ (tycon_ "t") tybool_) tyint_ with 0 using neqi in
 
 ()

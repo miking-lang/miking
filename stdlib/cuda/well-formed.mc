@@ -284,7 +284,7 @@ using eqSeq eqCudaError in
 let t = nameSym "Tree" in
 let recursiveConstructorExpr = condef_ "Con" (tyarrow_ (ntyvar_ t) (ntyvar_ t)) in
 let conDef = bindall_ [
-  ntype_ t (tyvariant_ []),
+  ntype_ t [] (tyvariant_ []),
   recursiveConstructorExpr,
   int_ 0] in
 let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in

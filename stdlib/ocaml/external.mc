@@ -21,7 +21,7 @@ lang OCamlChooseExternalImpl
     : Map String [ExternalImpl] -> GenerateEnv -> Expr -> GenerateEnv
 end
 
-lang OCamlDataConversion
+lang OCamlDataConversion = Ast
   -- `convertDataInner info env tm2 (ty1, ty2)` converts the term `t` from
   -- `ty1` to `ty2`, returning a tuple `(cost, t2)`, where `tm2` is the
   -- converted term and `cost` which is the cost of the conversion. The cost is
@@ -36,8 +36,8 @@ lang OCamlDataConversion
     : Info -> GenerateEnv -> Expr -> (Type, Type) -> (Int, Expr)
   sem convertData info env t =
   | (ty1, ty2) ->
-    let ty1 = typeUnwrapAlias env.aliases ty1 in
-    let ty2 = typeUnwrapAlias env.aliases ty2 in
+    let ty1 = unwrapType ty1 in
+    let ty2 = unwrapType ty2 in
     convertDataInner info env t (ty1, ty2)
 end
 

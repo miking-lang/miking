@@ -154,7 +154,7 @@ let pp = lam e. mexprToString e in
 let expr = lam id. bindall_ [
   ulet_ id (ulam_ id (var_ id)),
   ureclets_ [(id, var_ id)],
-  type_ id (tyapp_ (tycon_ id) tyint_),
+  type_ id [] (tyapp_ (tycon_ id) tyint_),
   condef_ id (tyarrow_ tyint_ (tycon_ id)),
   ext_ id false tyunknown_,
   conapp_ id (int_ 2)

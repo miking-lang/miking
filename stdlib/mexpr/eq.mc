@@ -60,8 +60,7 @@ type EqEnv = {
 }
 
 type EqTypeEnv = {
-  tyVarEnv : BiNameMap,
-  tyConEnv : AssocSeq Name Type
+  tyVarEnv : BiNameMap
 }
 
 type EqTypeFreeEnv = {
@@ -94,12 +93,6 @@ let _eqCheck : Name -> Name -> BiNameMap -> BiNameMap -> Option BiNameMap =
       -- unbound variables cannot shadow one another).
       Some (biInsert (i1,i2) free)
 
-let unwrapType = use MExprAst in
-  lam typeEnv : EqTypeEnv. lam ty.
-  match ty with TyCon {ident = id} then
-    assocSeqLookup {eq=nameEq} id typeEnv.tyConEnv
-  else Some ty
-
 -----------
 -- TERMS --
 -----------
@@ -117,7 +110,7 @@ lang Eq
 
   sem eqType (lhs : Type) =
   | rhs ->
-    let emptyEnv = {tyVarEnv = biEmpty, tyConEnv = assocEmpty} in
+    let emptyEnv = {tyVarEnv = biEmpty} in
     let emptyFree = {freeTyVars = biEmpty, freeTyFlex = biEmpty} in
     match eqTypeH emptyEnv emptyFree lhs rhs with Some _ then true else false
 
@@ -531,42 +524,42 @@ end
 lang UnknownTypeEq = Eq + UnknownTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyUnknown _ ->
-    match unwrapType typeEnv lhs with Some (TyUnknown _) then Some free
+    match unwrapType lhs with TyUnknown _ then Some free
     else None ()
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyBool _ ->
-    match unwrapType typeEnv lhs with Some (TyBool _) then Some free
+    match unwrapType lhs with TyBool _ then Some free
     else None ()
 end
 
 lang IntTypeEq = Eq + IntTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyInt _ ->
-    match unwrapType typeEnv lhs with Some (TyInt _) then Some free
+    match unwrapType lhs with TyInt _ then Some free
     else None ()
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFloat _ ->
-    match unwrapType typeEnv lhs with Some (TyFloat _) then Some free
+    match unwrapType lhs with TyFloat _ then Some free
     else None ()
 end
 
 lang CharTypeEq = Eq + CharTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyChar _ ->
-    match unwrapType typeEnv lhs with Some (TyChar _) then Some free
+    match unwrapType lhs with TyChar _ then Some free
     else None ()
 end
 
 lang FunTypeEq = Eq + FunTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyArrow r ->
-    match unwrapType typeEnv lhs with Some (TyArrow l) then
+    match unwrapType lhs with TyArrow l then
       match eqTypeH typeEnv free l.from r.from with Some free then
         eqTypeH typeEnv free l.to r.to
       else None ()
@@ -576,7 +569,7 @@ end
 lang SeqTypeEq = Eq + SeqTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TySeq r ->
-    match unwrapType typeEnv lhs with Some (TySeq l) then
+    match unwrapType lhs with TySeq l then
       eqTypeH typeEnv free l.ty r.ty
     else None ()
 end
@@ -584,7 +577,7 @@ end
 lang TensorTypeEq = Eq + TensorTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyTensor r ->
-    match unwrapType typeEnv lhs with Some (TyTensor l) then
+    match unwrapType lhs with TyTensor l then
       eqTypeH typeEnv free l.ty r.ty
     else None ()
 end
@@ -592,7 +585,7 @@ end
 lang RecordTypeEq = Eq + RecordTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyRecord r ->
-    match unwrapType typeEnv lhs with Some (TyRecord l) then
+    match unwrapType lhs with TyRecord l then
       if eqi (mapLength l.fields) (mapLength r.fields) then
         mapFoldlOption
           (lam free. lam k1. lam v1.
@@ -607,7 +600,7 @@ end
 lang VariantTypeEq = Eq + VariantTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVariant r ->
-    match unwrapType typeEnv lhs with Some (TyVariant l) then
+    match unwrapType lhs with TyVariant l then
       if eqi (mapLength l.constrs) (mapLength r.constrs) then
         mapFoldlOption
           (lam free. lam k1. lam v1.
@@ -622,11 +615,7 @@ end
 lang ConTypeEq = Eq + ConTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | rhs & TyCon r ->
-    match unwrapType typeEnv lhs with Some lty then
-      match unwrapType typeEnv rhs with Some rty then
-        eqTypeH typeEnv free lty rty
-      else None ()
-    else match lhs with TyCon l then
+    match unwrapType lhs with TyCon l then
       if nameEq l.ident r.ident then Some free else None ()
     else None ()
 end
@@ -660,7 +649,7 @@ end
 lang AllTypeEq = VarSortEq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
-    match unwrapType typeEnv lhs with Some (TyAll l) then
+    match unwrapType lhs with TyAll l then
       optionBind (eqVarSort typeEnv free (l.sort, r.sort))
         (lam free.
           eqTypeH
@@ -672,11 +661,16 @@ end
 lang AppTypeEq = Eq + AppTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyApp r ->
-    match unwrapType typeEnv lhs with Some (TyApp l) then
+    match unwrapType lhs with TyApp l then
       match eqTypeH typeEnv free l.lhs r.lhs with Some free then
         eqTypeH typeEnv free l.rhs r.rhs
       else None ()
     else None ()
+end
+
+lang AliasTypeEq = Eq + AliasTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | TyAlias t -> eqTypeH typeEnv free lhs t.content
 end
 
 -----------------------------
@@ -701,7 +695,7 @@ lang MExprEq =
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq
+  AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
 end
 
 -----------
@@ -711,12 +705,6 @@ end
 mexpr
 
 use MExprEq in
-
--- Define a variant of eqType taking only an environment argument
-let eqType_Env = lam env : EqTypeEnv. lam l : Type. lam r : Type.
-  let emptyFree = {freeTyVars = biEmpty, freeTyFlex = biEmpty} in
-  match eqTypeH env emptyFree l r with Some _ then true else false
-in
 
 -- Simple variables
 let v1 = var_ "x" in
@@ -1094,26 +1082,22 @@ utest tyrec1 with tyrec1 using eqType in
 utest tyrec2 with tyrec3 using eqType in
 utest eqType tyrec1 tyrec2 with false in
 
-let tyEnv1 = {tyVarEnv = biEmpty, tyConEnv = [(t, tyint_)]} in
-let tyEnv2 = {tyVarEnv = biEmpty, tyConEnv = [(t, tybool_)]} in
 utest eqType (ntycon_ t) tyint_ with false in
 utest eqType tyint_ (ntycon_ t) with false in
-utest ntycon_ t with tyint_ using eqType_Env tyEnv1 in
-utest tyint_ with ntycon_ t using eqType_Env tyEnv1 in
-utest eqType_Env tyEnv1 (ntycon_ t) tybool_ with false in
-utest ntycon_ t with tybool_ using eqType_Env tyEnv2 in
+utest tyalias_ (ntycon_ t) tyint_ with tyint_ using eqType in
+utest tyint_ with tyalias_ (ntycon_ t) tyint_ using eqType in
+utest eqType (tyalias_ (ntycon_ t) tyint_) tybool_ with false in
+utest tyalias_ (ntycon_ t) tybool_ with tybool_ using eqType in
 
 let tyApp1 = tyapp_ tyint_ tyint_ in
-let tyApp2 = tyapp_ (ntycon_ t) tyint_ in
-let tyApp3 = tyapp_ tyint_ (ntycon_ t) in
+let tyApp2 = tyapp_ (tyalias_ (ntycon_ t) tyint_) tyint_ in
+let tyApp3 = tyapp_ tyint_ (tyalias_ (ntycon_ t) tybool_) in
 utest tyApp1 with tyApp1 using eqType in
 utest tyApp2 with tyApp2 using eqType in
 utest tyApp3 with tyApp3 using eqType in
-utest tyApp1 with tyApp2 using eqType_Env tyEnv1 in
-utest tyApp2 with tyApp3 using eqType_Env tyEnv1 in
-utest eqType_Env tyEnv2 tyApp1 tyApp2 with false in
-utest eqType_Env tyEnv2 tyApp2 tyApp3 with false in
-utest eqType_Env tyEnv2 tyApp1 tyApp3 with false in
+utest tyApp1 with tyApp2 using eqType in
+utest eqType tyApp2 tyApp3 with false in
+utest eqType tyApp1 tyApp3 with false in
 
 let tyVar1 = tyarrow_ (tyvar_ "a") (tyvar_ "a") in
 let tyVar2 = tyarrow_ (tyvar_ "b") (tyvar_ "b") in

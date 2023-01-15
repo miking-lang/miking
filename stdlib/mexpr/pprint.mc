@@ -1122,7 +1122,7 @@ lang VarSortPrettyPrint = PrettyPrint + RecordTypeAst + VarSortAst
   | RecordVar r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
-    (env, join [idstr, "<:", recstr])
+    (env, join [init recstr, " ... ", [last recstr]])
   | _ -> (env, idstr)
 end
 
@@ -1147,6 +1147,11 @@ lang AppTypePrettyPrint = PrettyPrint + AppTypeAst
     match printTypeParen indent 1 env t.lhs with (env,lhs) in
     match printTypeParen indent 2 env t.rhs with (env,rhs) in
     (env, join [lhs, " ", rhs])
+end
+
+lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyAlias t -> getTypeStringCode indent env t.display
 end
 
 
@@ -1188,7 +1193,8 @@ lang MExprPrettyPrint =
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
   ConTypePrettyPrint + VarTypePrettyPrint +
-  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
+  AliasTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

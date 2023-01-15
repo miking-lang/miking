@@ -259,7 +259,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       generate env t.thn
     else
       match env with {records = records, constrs = constrs} in
-      let targetTy = typeUnwrapAlias env.aliases ty in
+      let targetTy = unwrapType ty in
       match lookupRecordFields targetTy constrs with Some fields then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes records with Some name then
@@ -433,7 +433,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
-      let ty = typeUnwrapAlias env.aliases t.ty in
+      let ty = unwrapType t.ty in
       match ty with TyCon {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields} & ty) then
           let fieldTypes = ocamlTypedFields fields in
@@ -460,7 +460,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
       (bind_ (nulet_ id value) binds, (key, id))
     in
     match collectNestedUpdates [] upd with (updateEntries, rec) in
-    let ty = typeUnwrapAlias env.aliases t.ty in
+    let ty = unwrapType t.ty in
     match ty with TyCon {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
@@ -590,7 +590,7 @@ let _makeTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv.
           (snoc tops decl, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
         let fixConstrType = lam ty.
-          let ty = typeUnwrapAlias typeLiftEnvMap ty in
+          let ty = unwrapType ty in
           match ty with TyRecord tr then
             TyRecord {tr with fields = ocamlTypedFields tr.fields}
           else tyunknown_ in
@@ -618,10 +618,10 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
               with constrs = mapInsert name ty env.constrs}
       else error "Type lifting error"
     else match ty with TyVariant {constrs = constrs} then
-      let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
+      let constrs = mapMap unwrapType constrs in
       {env with constrs = mapUnion env.constrs constrs}
     else
-      {env with aliases = mapInsert name ty env.aliases}
+      env
   in
   assocSeqFold f emptyGenerateEnv typeLiftEnv
 

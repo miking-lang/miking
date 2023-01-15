@@ -506,8 +506,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
 
   sem collectShallows =
   | PatRecord px ->
-    -- TODO(vipa, 2022-05-26): This needs to resolve aliases :(
-    match px.ty with TyRecord x then
+    match inspectType px.ty with TyRecord x then
       _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty })
     else errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
