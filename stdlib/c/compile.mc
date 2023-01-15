@@ -40,9 +40,10 @@ let _isUnitTy = use RecordTypeAst in lam ty.
   else false
 
 -- Unwrap type variables until something useful falls out
-recursive let _unwrapType = use ConTypeAst in
-    lam tyEnv: AssocSeq Name Type. lam ty: Type.
-    match ty with TyCon { ident = ident } then
+recursive let _unwrapType =
+  use MExprAst in
+  lam tyEnv: AssocSeq Name Type. lam ty: Type.
+    match unwrapType ty with TyCon { ident = ident } then
       match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
         _unwrapType tyEnv ty
       else errorSingle [infoTy ty] "TyCon not defined in environment"
@@ -655,6 +656,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     --     else never
     --   else never
     -- else never
+
+  | TyAlias t -> compileType env t.display
 
   | ty -> errorSingle [infoTy ty] "Unsupported type in compileType"
 
@@ -1644,11 +1647,11 @@ utest testCompile oddEven with strJoin "\n" [
 
 let typedefs = bindall_ [
 
-  type_ "Tree" (tyvariant_ []),
-  type_ "Integer" tyint_,
-  type_ "MyRec" (tyrecord_ [("k", (tycon_ "Integer"))]),
-  type_ "MyRec2" (tyrecord_ [("k", (tycon_ "MyRec")), ("t", (tycon_ "Tree"))]),
-  type_ "Integer2" (tycon_ "Integer"),
+  type_ "Tree" [] (tyvariant_ []),
+  type_ "Integer" [] tyint_,
+  type_ "MyRec" [] (tyrecord_ [("k", (tycon_ "Integer"))]),
+  type_ "MyRec2" [] (tyrecord_ [("k", (tycon_ "MyRec")), ("t", (tycon_ "Tree"))]),
+  type_ "Integer2" [] (tycon_ "Integer"),
 
   condef_ "Leaf"
     (tyarrow_ (tyrecord_ [("v", (tycon_ "Integer2"))]) (tycon_ "Tree")),
@@ -1680,7 +1683,7 @@ utest testCompile typedefs with strJoin "\n" [
 
 -- Potentially tricky case with type aliases
 let alias = bindall_ [
-  type_ "MyRec" (tyrecord_ [("k", tyint_)]),
+  type_ "MyRec" [] (tyrecord_ [("k", tyint_)]),
   let_ "myRec" (tycon_ "MyRec") (urecord_ [("k", int_ 0)]),
   int_ 0
 ] in
@@ -1725,7 +1728,7 @@ let node_ = lam v. lam left. lam right.
 
 let trees = bindall_ [
 
-  type_ "Tree" (tyvariant_ []),
+  type_ "Tree" [] (tyvariant_ []),
 
   condef_ "Leaf"
     (tyarrow_ (tyrecord_ [("v", tyint_)]) (tycon_ "Tree")),

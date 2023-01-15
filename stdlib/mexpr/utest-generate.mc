@@ -241,11 +241,7 @@ lang UtestBase =
 
     -- Maps the identifier of a variant type to an inner map, which in turn
     -- maps constructor names to their types.
-    variants : Map Name (Map Name Type),
-
-    -- Maps the identifier of an alias type to its declared type as well as the
-    -- names of its type parameters.
-    aliases : Map Name (Type, [Name])
+    variants : Map Name (Map Name Type)
   }
 
   sem utestEnvEmpty : () -> UtestEnv
@@ -254,7 +250,7 @@ lang UtestBase =
     let baseTypes = [_boolTy, _intTy, _charTy, _floatTy] in
     { eq = mapEmpty cmpType, eqDef = setOfSeq cmpType baseTypes
     , pprint = mapEmpty cmpType, pprintDef = setOfSeq cmpType baseTypes
-    , variants = mapEmpty nameCmp, aliases = mapEmpty nameCmp }
+    , variants = mapEmpty nameCmp }
 
   sem lookupVariant : Name -> UtestEnv -> Info -> Map Name Type
   sem lookupVariant id env =
@@ -263,24 +259,16 @@ lang UtestBase =
     else errorSingle [info] "Unknown constructor type"
 
   -- Performs an unwrapping of all alias types.
-  -- NOTE(larshum, 2022-12-30): Should we do this unwrapping globally, rather
-  -- than repeating it locally here as well as in other places?
-  sem unwrapAlias : UtestEnv -> Type -> Type
-  sem unwrapAlias env =
-  | (TyCon _ | TyApp _) & ty ->
-    match collectTypeArguments [] ty with (id, args) in
-    match mapLookup id env.aliases with Some (aliasedTy, params) then
-      let subMap = mapFromSeq nameCmp (zip params args) in
-      unwrapAlias env (substituteVars subMap aliasedTy)
-    else smap_Type_Type (unwrapAlias env) ty
-  | ty -> smap_Type_Type (unwrapAlias env) ty
+  sem unwrapAlias : Type -> Type
+  sem unwrapAlias =
+  | ty -> smap_Type_Type unwrapAlias (unwrapType ty)
 
   -- Produces a sequence of the direct "child" types of a given type.
   sem shallowInnerTypes : UtestEnv -> Type -> [Type]
   sem shallowInnerTypes env =
   | ty ->
     let types = shallowInnerTypesH env ty in
-    map (unwrapAlias env) types
+    map unwrapAlias types
 
   sem shallowInnerTypesH : UtestEnv -> Type -> [Type]
   sem shallowInnerTypesH env =
@@ -301,7 +289,7 @@ lang UtestBase =
   -- pretty-print a value of type 'ty'.
   sem getPrettyPrintExpr : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getPrettyPrintExpr info env =
-  | ty -> getPrettyPrintExprH info env (unwrapAlias env ty)
+  | ty -> getPrettyPrintExprH info env (unwrapAlias ty)
 
   sem getPrettyPrintExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getPrettyPrintExprH info env =
@@ -324,7 +312,7 @@ lang UtestBase =
   -- determine equality of values of type 'ty'.
   sem getEqualityExpr : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getEqualityExpr info env =
-  | ty -> getEqualityExprH info env (unwrapAlias env ty)
+  | ty -> getEqualityExprH info env (unwrapAlias ty)
 
   sem getEqualityExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getEqualityExprH info env =
@@ -896,7 +884,7 @@ lang MExprUtestGenerate =
   sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> (UtestEnv, Expr)
   sem generatePrettyPrintBindings info env =
   | types ->
-    let types = map (unwrapAlias env) types in
+    let types = map unwrapAlias types in
     match mapAccumL (generatePrettyPrintBindingsH info) env types with (env, binds) in
     ( env
     , TmRecLets {bindings = join binds, inexpr = _unit, ty = _unitTy,
@@ -944,7 +932,7 @@ lang MExprUtestGenerate =
   sem generateEqualityBindings info env ty =
   | Some _ -> (env, _unit)
   | None _ ->
-    let ty = unwrapAlias env ty in
+    let ty = unwrapAlias ty in
     match generateEqualityBindingsH info env ty with (env, binds) in
     ( env
     , TmRecLets {bindings = binds, inexpr = _unit, ty = _unitTy, info = _utestInfo} )
@@ -1036,8 +1024,7 @@ lang MExprUtestGenerate =
     let env =
       match t.tyIdent with TyVariant _ then
         {env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
-      else
-        {env with aliases = mapInsert t.ident (t.tyIdent, t.params) env.aliases}
+      else env
     in
     match replaceUtests env t.inexpr with (env, inexpr) in
     (env, TmType {t with inexpr = inexpr})

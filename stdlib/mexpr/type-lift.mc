@@ -224,7 +224,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
       else None ()
     in
     let env =
-      match stripTyAll t.tyIdent with (_, TyArrow {from = from, to = to}) then
+      match inspectType t.tyIdent with TyArrow {from = from, to = to} then
         match unwrapTypeVarIdent to with Some ident then
           match typeLiftType env from with (env, from) then
             let f = lam variantMap. mapInsert t.ident from variantMap in
@@ -301,10 +301,7 @@ end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyApp t ->
-    match typeLiftType env t.lhs with (env, lhs) then
-      (env, lhs)
-    else never
+  | TyApp t -> typeLiftType env t.lhs
 end
 
 lang MExprTypeLift =
@@ -375,7 +372,7 @@ let treeName = nameSym "Tree" in
 let branchName = nameSym "Branch" in
 let leafName = nameSym "Leaf" in
 let variant = typeAnnot (symbolize (bindall_ [
-  ntype_ treeName tyunknown_,
+  ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tytuple_ [
     ntycon_ treeName,
     ntycon_ treeName]) (ntycon_ treeName)),
@@ -390,7 +387,7 @@ let lastTerm = nconapp_ branchName (urecord_ [
   ("rhs", nconapp_ leafName (int_ 2))
 ]) in
 let variantWithRecords = typeAnnot (symbolize (bindall_ [
-  ntype_ treeName (tyvariant_ []),
+  ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tyrecord_ [
     ("lhs", ntycon_ treeName),
     ("rhs", ntycon_ treeName)]) (ntycon_ treeName)),
@@ -503,9 +500,9 @@ match assocSeqLookup {eq=nameEq} ident env with Some ty in
 utest ty with recordType using eqType in
 
 let typeAliases = typeAnnot (symbolize (bindall_ [
-  type_ "GlobalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
-  type_ "LocalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
-  type_ "Env" (tyrecord_ [
+  type_ "GlobalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "LocalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "Env" [] (tyrecord_ [
     ("global", tycon_ "GlobalEnv"),
     ("local", tycon_ "LocalEnv")
   ]),
@@ -520,23 +517,18 @@ match typeLift typeAliases with (env, t) in
 -- as they are processed, so the last record in the given term will be first
 -- in the environment.
 let ids = map fst env in
-let fstSeqId = get ids 7 in    -- type Seq1 = [Char]
-let fstRecordId = get ids 6 in -- type Rec1 = {0 : Seq1, 1 : Int}
-let sndSeqId = get ids 5 in    -- type Seq2 = [Rec1]
-let globalEnvId = get ids 4 in -- type GlobalEnv = Seq2
-let localEnvId = get ids 3 in  -- type LocalEnv = Seq2
-let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
-let envId = get ids 1 in       -- type Env = Rec2
-let trdRecordId = get ids 0 in -- type Rec3 = {global : Seq2, local : Seq2}
+let fstSeqId = get ids 6 in    -- type Seq1 = [Char]
+let fstRecordId = get ids 5 in -- type Rec1 = {0 : Seq1, 1 : Int}
+let sndSeqId = get ids 4 in    -- type Seq2 = [Rec1]
+let globalEnvId = get ids 3 in -- type GlobalEnv = Seq2
+let localEnvId = get ids 2 in  -- type LocalEnv = Seq2
+let sndRecordId = get ids 1 in -- type Rec2 = {global : Seq2, local : Seq2}
+let envId = get ids 0 in       -- type Env = Rec2
 let expectedEnv = [
-  (trdRecordId, tyrecord_ [
-    ("local", ntycon_ sndSeqId),
-    ("global", ntycon_ sndSeqId)
-  ]),
   (envId, ntycon_ sndRecordId),
   (sndRecordId, tyrecord_ [
-    ("local", ntycon_ localEnvId),
-    ("global", ntycon_ globalEnvId)
+    ("local", ntycon_ sndSeqId),
+    ("global", ntycon_ sndSeqId)
   ]),
   (localEnvId, ntycon_ sndSeqId),
   (globalEnvId, ntycon_ sndSeqId),

@@ -787,12 +787,12 @@ let expected = preprocess (bindall_ [
 utest liftLambdas liftMatchEls with expected using eqExpr in
 
 let conAppLift = preprocess (bindall_ [
-  type_ "Tree" (tyvariant_ []),
+  type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   conapp_ "Leaf" fapp
 ]) in
 let expected = preprocess (bindall_ [
-  type_ "Tree" (tyvariant_ []),
+  type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   fdef,
   conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in

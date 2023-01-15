@@ -49,7 +49,7 @@ let tmLet = bind_ (ulet_ "y" tmLam) tmVarY in
 utest smap_Expr_Expr map2varX tmLet with bind_ (ulet_ "y" tmVarX) tmVarX using eqExpr in
 utest sfold_Expr_Expr fold2seq [] tmLet with [tmVarY, tmLam] using eqSeq eqExpr in
 
-let tmTy = bind_ (type_ "X" tyint_) tmVarY in
+let tmTy = bind_ (type_ "X" [] tyint_) tmVarY in
 
 -- NOTE(larshum, 2021-04-13): TmType is currently not supported by eqExpr.
 --utest smap_Expr_Expr map2varX tmTy with bind_ (type_ "X" tyint_) tmVarX using eqExpr in

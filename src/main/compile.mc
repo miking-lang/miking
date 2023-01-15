@@ -5,22 +5,23 @@ include "accelerate.mc"
 include "mi-lite.mc"
 include "options.mc"
 include "parse.mc"
-include "mexpr/profiling.mc"
-include "mexpr/runtime-check.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-check.mc"
-include "mexpr/remove-ascription.mc"
-include "mexpr/shallow-patterns.mc"
-include "mexpr/utest-generate.mc"
-include "tuning/context-expansion.mc"
-include "tuning/tune-file.mc"
-include "ocaml/ast.mc"
-include "ocaml/mcore.mc"
-include "ocaml/external-includes.mc"
-include "ocaml/wrap-in-try-with.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
+include "mexpr/phase-stats.mc"
+include "mexpr/profiling.mc"
+include "mexpr/remove-ascription.mc"
+include "mexpr/runtime-check.mc"
+include "mexpr/shallow-patterns.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-check.mc"
+include "mexpr/utest-generate.mc"
+include "ocaml/ast.mc"
+include "ocaml/external-includes.mc"
+include "ocaml/mcore.mc"
+include "ocaml/wrap-in-try-with.mc"
 include "pmexpr/demote.mc"
+include "tuning/context-expansion.mc"
+include "tuning/tune-file.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -30,7 +31,7 @@ lang MCoreCompile =
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
-  OCamlTryWithWrap + MCoreCompileLang
+  OCamlTryWithWrap + MCoreCompileLang + PhaseStats
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
@@ -52,7 +53,9 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
 
 let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
+    let log = mkPhaseLogState options.debugPhases in
     let ast = symbolize ast in
+    endPhaseStats log "symbolize" ast;
 
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -60,37 +63,44 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       if options.debugProfile then instrumentProfiling ast
       else ast
     in
+    endPhaseStats log "instrument-profiling" ast;
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
        printLn (use TyAnnotFull in annotateMExpr ast) else ());
+    endPhaseStats log "typecheck" ast;
 
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
     -- operations.
     let ast = if options.runtimeChecks then injectRuntimeChecks ast else ast in
+    endPhaseStats log "runtime-checks" ast;
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     let ast = generateUtest options.runTests ast in
 
     let ast = lowerAll ast in
+    endPhaseStats log "pattern-lowering" ast;
     (if options.debugShallow then
       printLn (expr2str ast) else ());
 
-    if options.toJavaScript then compileMCoreToJS {
-        compileJSOptionsEmpty with
-        targetPlatform = parseJSTarget options.jsTarget,
-        generalOptimizations = not options.disableJsGeneralOptimizations,
-        tailCallOptimizations = not options.disableJsTCO
-      } ast sourcePath
-    else compileMCore ast
-      { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (expr2str ast) else ()
-      , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
-      , exitBefore = lam. if options.exitBefore then exit 0 else ()
-      , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
-      , compileOcaml = ocamlCompile options sourcePath
-      }
+    let res =
+      if options.toJavaScript then compileMCoreToJS
+        { compileJSOptionsEmpty with
+          targetPlatform = parseJSTarget options.jsTarget
+        , generalOptimizations = not options.disableJsGeneralOptimizations
+        , tailCallOptimizations = not options.disableJsTCO
+        } ast sourcePath
+      else compileMCore ast
+        { debugTypeAnnot = lam ast. if options.debugTypeAnnot then printLn (expr2str ast) else ()
+        , debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+        , exitBefore = lam. if options.exitBefore then exit 0 else ()
+        , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
+        , compileOcaml = ocamlCompile options sourcePath
+        } in
+    endPhaseStats log "backend" ast;
+    res
 
 -- Main function for compiling a program
 -- files: a list of files
@@ -99,6 +109,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
+    let log = mkPhaseLogState options.debugPhases in
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
       pruneExternalUtests = not options.disablePruneExternalUtests,
@@ -107,7 +118,9 @@ let compile = lam files. lam options : Options. lam args.
       eliminateDeadCode = not options.keepDeadCode,
       keywords = mexprExtendedKeywords
     } file in
+    endPhaseStats log "parsing" ast;
     let ast = makeKeywords ast in
+    endPhaseStats log "make-keywords" ast;
 
     -- Applies static and dynamic checks on the accelerated expressions, to
     -- verify that the code within them are supported by the accelerate
@@ -122,9 +135,11 @@ let compile = lam files. lam options : Options. lam args.
         match checkWellFormedness options ast with (ast, _, _) in
         demoteParallel ast
       else demoteParallel ast in
+    endPhaseStats log "accelerate" ast;
 
     -- Insert tuned values, or use default values if no .tune file present
     let ast = insertTunedOrDefaults options ast file in
+    endPhaseStats log "tuning" ast;
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
