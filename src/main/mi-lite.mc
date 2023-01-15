@@ -68,6 +68,7 @@ let compile : Options -> String -> () = lam options. lam file.
   let ast = utestStrip ast in
   let ast = symbolize ast in
   let ast = typeCheck ast in
+  let ast = lowerAll ast in
   let hooks = mkEmptyHooks (ocamlCompile options file) in
   compileMCore ast hooks;
   ()
