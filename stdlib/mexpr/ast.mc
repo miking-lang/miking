@@ -222,6 +222,24 @@ lang Ast
   | p ->
     match smapAccumL_Pat_Type (lam acc. lam a. (f acc a, a)) acc p
     with (acc, _) in acc
+
+  sem countExprNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Expr_Expr countExprNodes count t in
+    let count = sfold_Expr_Type countTypeNodes count t in
+    let count = sfold_Expr_TypeLabel countTypeNodes count t in
+    let count = sfold_Expr_Pat countPatNodes count t in
+    count
+  sem countTypeNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Type_Type countTypeNodes count t in
+    count
+  sem countPatNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Pat_Pat countPatNodes count t in
+    let count = sfold_Pat_Expr countExprNodes count t in
+    let count = sfold_Pat_Type countTypeNodes count t in
+    count
 end
 
 -- TmVar --
