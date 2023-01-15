@@ -132,7 +132,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
   | TmHole t ->
     let default = typeCheckExpr env t.default in
     let ty = hty t.info t.inner in
-    unify [t.info] env ty (tyTm default);
+    unify [t.info] ty (tyTm default);
     TmHole {{t with default = default}
                with ty = ty}
 

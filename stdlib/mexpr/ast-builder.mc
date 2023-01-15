@@ -79,6 +79,10 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
+let tyalias_ = use AliasTypeAst in
+  lam display. lam content.
+  TyAlias {display = display, content = content}
+
 let ntycon_ = use ConTypeAst in
   lam n.
   TyCon {ident = n, info = NoInfo ()}
@@ -358,12 +362,12 @@ let ext_ = use MExprAst in
   next_ (nameNoSym s) e ty
 
 let ntype_ = use MExprAst in
-  lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, params = [], ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
+  lam n. lam params. lam ty.
+  TmType {ident = n, tyIdent = ty, params = params, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
-  lam s. lam ty.
-  ntype_ (nameNoSym s) ty
+  lam s. lam params. lam ty.
+  ntype_ (nameNoSym s) (map nameNoSym params) ty
 
 let nreclets_ = use MExprAst in
   lam bs.
