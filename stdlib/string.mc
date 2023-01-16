@@ -1,7 +1,6 @@
 include "char.mc"
 include "option.mc"
 include "seq.mc"
-include "math.mc"
 
 let emptyStr : String = ""
 

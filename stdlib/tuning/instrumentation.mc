@@ -20,6 +20,7 @@ include "sys.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
+include "mexpr/utils.mc"
 
 type InstrumentedResult = {
   -- The filename to where the profiling data is written
@@ -221,6 +222,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
     ] in
     let ex = use BootParser in parseMExprStringKeywords [] str in
     let str2name = lam str.
+      use MExprFindSym in
       match findName str ex with Some n then n
       else error (concat str " not found in instrumentation header")
     in
@@ -324,7 +326,8 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
     , "()\n"
     ] in
     let ex = use BootParser in parseMExprStringKeywords [] str in
-    let fun = match findName "dumpLog" ex with Some n then n else error "impossible" in
+    let fun = use MExprFindSym in
+      match findName "dumpLog" ex with Some n then n else error "impossible" in
     (ex, fun)
 
   -- Reads the profiled result after the instrumented program has been run.

@@ -5,30 +5,30 @@ include "accelerate.mc"
 include "mi-lite.mc"
 include "options.mc"
 include "parse.mc"
-include "mexpr/profiling.mc"
-include "mexpr/runtime-check.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-check.mc"
-include "mexpr/remove-ascription.mc"
-include "mexpr/utesttrans.mc"
-include "mexpr/shallow-patterns.mc"
-include "mexpr/phase-stats.mc"
-include "tuning/context-expansion.mc"
-include "tuning/tune-file.mc"
-include "ocaml/ast.mc"
-include "ocaml/mcore.mc"
-include "ocaml/external-includes.mc"
-include "ocaml/wrap-in-try-with.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
+include "mexpr/phase-stats.mc"
+include "mexpr/profiling.mc"
+include "mexpr/remove-ascription.mc"
+include "mexpr/runtime-check.mc"
+include "mexpr/shallow-patterns.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-check.mc"
+include "mexpr/utest-generate.mc"
+include "ocaml/ast.mc"
+include "ocaml/external-includes.mc"
+include "ocaml/mcore.mc"
+include "ocaml/wrap-in-try-with.mc"
 include "pmexpr/demote.mc"
+include "tuning/context-expansion.mc"
+include "tuning/tune-file.mc"
 
 lang MCoreCompile =
   BootParser +
   PMExprDemote +
   MExprHoles +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
-  MExprUtestTrans + MExprRuntimeCheck + MExprProfileInstrument +
+  MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats
@@ -36,15 +36,6 @@ end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
 end
-
-let generateTests = lam ast. lam testsEnabled.
-  use MCoreCompile in
-  if testsEnabled then
-    let ast = removeTypeAscription ast in
-    utestGen ast
-  else
-    let symEnv = symEnvEmpty in
-    (symEnv, utestStrip ast)
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   use MCoreCompile in
@@ -83,17 +74,11 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- the AST. This includes for example bounds checking on sequence
     -- operations.
     let ast = if options.runtimeChecks then injectRuntimeChecks ast else ast in
-
     endPhaseStats log "runtime-checks" ast;
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) in
-    endPhaseStats log "generate-tests" ast;
-
-    -- Re-symbolize the MExpr AST and re-annotate it with types
-    let ast = symbolizeExpr symEnv ast in
-    endPhaseStats log "symbolize2" ast;
+    let ast = generateUtest options.runTests ast in
 
     let ast = lowerAll ast in
     endPhaseStats log "pattern-lowering" ast;

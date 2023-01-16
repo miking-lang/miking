@@ -18,6 +18,7 @@
 include "option.mc"
 include "seq.mc"
 include "map.mc"
+include "math.mc"
 include "eqset.mc"
 include "set.mc"
 

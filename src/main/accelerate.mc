@@ -26,7 +26,7 @@ include "mexpr/remove-ascription.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
-include "mexpr/utesttrans.mc"
+include "mexpr/utest-generate.mc"
 include "ocaml/generate.mc"
 include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
@@ -53,7 +53,7 @@ include "sys.mc"
 lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeCheck + MExprRemoveTypeAscription +
-  MExprUtestTrans + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
+  MExprUtestGenerate + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
   PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
@@ -70,7 +70,7 @@ lang MExprFutharkCompile =
 end
 
 lang MExprCudaCompile =
-  MExprUtestTrans + MExprRemoveTypeAscription + CudaPMExprAst +
+  MExprUtestGenerate + MExprRemoveTypeAscription + CudaPMExprAst +
   CudaPMExprCompile + MExprTypeLift +
   SeqTypeNoStringTypeLift + TensorTypeTypeLift + CudaCompile + CudaKernelTranslate +
   CudaPrettyPrint + CudaCWrapper + CudaWellFormed + CudaConstantApp +
@@ -192,11 +192,6 @@ let checkWellFormedness = lam options. lam ast.
         accelerateAsts = accelerateAsts} in
   (seqAst, accelerateData, accelerateAsts)
 
-let generateTests = lam ast. lam testsEnabled.
-  use PMExprCompile in
-  if testsEnabled then utestGen (removeTypeAscription ast)
-  else (symEnvEmpty, utestStrip ast)
-
 let compileAccelerated =
   lam options. lam file.
   use PMExprCompile in
@@ -230,8 +225,7 @@ let compileAccelerated =
   let ast = demoteParallel ast in
 
   -- Generate utests or strip them from the program.
-  match generateTests ast options.runTests with (symEnv, ast) in
-  let ast = symbolizeExpr symEnv ast in
+  let ast = generateUtest options.runTests ast in
 
   match typeLift ast with (typeLiftEnv, ast) in
   match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in

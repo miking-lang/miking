@@ -132,7 +132,7 @@ utest
   utest channelRecv c with 1 in
   utest channelRecv c with 2 in
 
-  utest channelRecvOpt c with None () in
+  utest channelRecvOpt c with None () using optionEq eqi in
   channelSend c 2;
   utest channelRecvOpt c with Some 2 in
 

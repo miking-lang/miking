@@ -1,6 +1,7 @@
 include "selfhost-gen.mc"
 include "gen-ast.mc"
 include "gen-op-ast.mc"
+include "math.mc"
 include "result.mc"
 include "seq.mc"
 include "mexpr/cmp.mc"

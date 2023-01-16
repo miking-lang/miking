@@ -102,6 +102,13 @@ lang MExprFindSym = MExprAst
         (mapEmpty subi) t in
     create (length strs) (lam i. mapLookup i result)
 
+  sem findName : String -> Expr -> Option Name
+  sem findName str =
+  | t ->
+    match findNamesOfStrings [str] t with [Some id] then
+      Some id
+    else None ()
+
   sem findNamesOfStringsExpr : Map String Int -> Map Int Name -> Expr -> Map Int Name
   sem findNamesOfStringsExpr strs acc =
   | TmLet t ->

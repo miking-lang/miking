@@ -264,8 +264,8 @@ utest
   let t1 = tensorCreateDense [0] (lam. []) in
   let t2 = tensorCreateDense [0] (lam. []) in
   tensorMapExn (lam x. lam. [x]) t1 t2;
-  tensorToSeqExn t2
-with []
+  match tensorToSeqExn t2 with [] then true else false
+with true
 
 utest
   let t1 = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
