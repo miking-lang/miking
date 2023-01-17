@@ -2,6 +2,8 @@
 
 include "bool.mc"
 include "common.mc"
+include "either.mc"
+include "error.mc"
 include "map.mc"
 include "name.mc"
 include "option.mc"
@@ -56,11 +58,10 @@ lang LRBase = LRTokens
   type LRParseTable = {
     k_lookahead: Int,
     entrypointIdx: Int,
-    _debugStates: [Set LRStateItem],
-    nStates: Int,
+    states: [Set LRStateItem],
     syntaxDef: LRSyntaxDef,
     shifts: Map Int [{lookahead: [LRToken], toIdx: Int}],
-    gotos: Map Int [{name: Name, lookahead: [LRToken], toIdx: Int}],
+    gotos: Map Int [{name: Name, toIdx: Int}],
     reductions: Map Int [{lookahead: [LRToken], ruleIdx: Int}]
   }
 
@@ -280,7 +281,7 @@ lang LRBase = LRTokens
   -- for each state I in T
   --   for each item (A -> a., z) in I
   --     R <- R U {(I, z, A -> a)}
-  sem lrCreateParseTable: Int -> LRSyntaxDef -> LRParseTable
+  sem lrCreateParseTable: Int -> LRSyntaxDef -> Either LRParseTable ErrorSection
   sem lrCreateParseTable k =
   | syntaxDef ->
     let initRule: LRRule = {
@@ -288,7 +289,12 @@ lang LRBase = LRTokens
       terms = [NonTerminal syntaxDef.entrypoint, Terminal (LRTokenEOF ())]
     } in
     let syntaxDef = {syntaxDef with rules = snoc syntaxDef.rules initRule} in
-    let firstK = lrFirst k syntaxDef in
+    let firstK: Map LRTerm (Set [LRToken]) = lrFirst k syntaxDef in
+
+    if not (mapAll (lam fst. not (setIsEmpty fst)) firstK) then
+      Right {errorDefault with msg = "Invalid grammar. The FIRST set is not defined for one or more of its non-terminals."}
+    else --continue
+
     let initState: Set LRStateItem = setInsert {
       name = initRule.name,
       terms = initRule.terms,
@@ -300,8 +306,7 @@ lang LRBase = LRTokens
     let table: LRParseTable = {
       k_lookahead = k,
       entrypointIdx = 0,
-      _debugStates = [initState],
-      nStates = 1,
+      states = [initState],
       syntaxDef = syntaxDef,
       shifts = mapEmpty subi,
       gotos = mapEmpty subi,
@@ -310,10 +315,10 @@ lang LRBase = LRTokens
 
     -- Iterate to create all states and transitions
     recursive let iterate = lam table: LRParseTable. lam stateIdxLookup: Map (Set LRStateItem) Int. lam nextStateIdx: Int.
-      if geqi nextStateIdx table.nStates then
+      if geqi nextStateIdx (length table.states) then
         table
       else --continue
-      let state = get table._debugStates nextStateIdx in
+      let state = get table.states nextStateIdx in
 
       let cmpShift = lam lhs. lam rhs.
         let cLookahead = seqCmp tokenCmp lhs.lookahead rhs.lookahead in
@@ -322,13 +327,11 @@ lang LRBase = LRTokens
       in
       let cmpGoto = lam lhs. lam rhs.
         let cName = nameCmp lhs.name rhs.name in
-        let cLookahead = seqCmp tokenCmp lhs.lookahead rhs.lookahead in
         if neqi cName 0 then cName
-        else if neqi cLookahead 0 then cLookahead
         else subi lhs.toIdx rhs.toIdx
       in
 
-      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [LRToken], toIdx: Int}, Set {name: Name, lookahead: [LRToken], toIdx: Int}). lam item: LRStateItem.
+      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [LRToken], toIdx: Int}, Set {name: Name, toIdx: Int}). lam item: LRStateItem.
         match acc with (table, stateIdxLookup, stateShifts, stateGotos) in
         match subsequence item.terms item.stackPointer (length item.terms)
         with ([x] ++ b) & postStackTerms then
@@ -339,8 +342,8 @@ lang LRBase = LRTokens
               (table, stateIdxLookup, jIdx)
             else
               -- the state j is new, add it to the table
-              let jIdx = length table._debugStates in
-              let table = {table with _debugStates = snoc table._debugStates j, nStates = addi table.nStates 1} in
+              let jIdx = length table.states in
+              let table = {table with states = snoc table.states j} in
               let stateIdxLookup = mapInsert j jIdx stateIdxLookup in
               (table, stateIdxLookup, jIdx)
           in
@@ -354,8 +357,7 @@ lang LRBase = LRTokens
             (table, stateIdxLookup, stateShifts, stateGotos)
           case NonTerminal n then
             -- This is a Goto action
-            let possibleLookaheads = lrComposeFirst k firstK (concat b (map (lam t2. Terminal t2) item.lookahead)) in
-            let stateGotos = setFold (lam acc. lam lh. setInsert {name = n, lookahead = lh, toIdx = jIdx} acc) stateGotos possibleLookaheads in
+            let stateGotos = setInsert {name = n, toIdx = jIdx} stateGotos in
             (table, stateIdxLookup, stateShifts, stateGotos)
           end
         else
@@ -381,11 +383,118 @@ lang LRBase = LRTokens
           redAcc
       ) [] state in
       {tableAcc with reductions = mapInsert stateIdx stateReductions tableAcc.reductions}
-    ) table table._debugStates in
+    ) table table.states in
 
-    -- Table is now constructed
-    table
+    -- Check for conflicts
+    let conflicts = foldli (lam acc. lam stateIdx. lam.
+      match (mapLookup stateIdx table.shifts, mapLookup stateIdx table.reductions) with (Some shifts, Some reductions) then
+        foldli (lam acc. lam reduceIdx. lam r1: {lookahead: [LRToken], ruleIdx: Int}.
+          -- reduce-reduce check
+          let acc = foldl (lam acc. lam r2: {lookahead: [LRToken], ruleIdx: Int}.
+            if and (eqSeq tokenEq r1.lookahead r2.lookahead) (neqi r1.ruleIdx r2.ruleIdx) then
+              snoc acc (join [
+                "reduce-reduce conflict in state ", int2string stateIdx, " on lookahead ",
+                "[", strJoin ", " (map token2string r1.lookahead), "] (reduce by rule ",
+                int2string r1.ruleIdx, " and ", int2string r2.ruleIdx, ")"
+              ])
+            else
+              acc
+          ) acc (subsequence reductions (addi reduceIdx 1) (length reductions)) in
+          -- shift-reduce check
+          foldl (lam acc. lam sh: {lookahead: [LRToken], toIdx: Int}.
+            if eqSeq tokenEq r1.lookahead sh.lookahead then
+              snoc acc (join [
+                "shift-reduce conflict in state ", int2string stateIdx, " on lookahead ",
+                "[", strJoin ", " (map token2string r1.lookahead), "] (reduce by rule ",
+                int2string r1.ruleIdx, " and shift into state ", int2string sh.toIdx, ")"
+              ])
+            else
+              acc
+          ) acc shifts
+        ) acc reductions
+      else
+        acc
+    ) [] table.states in
+
+    match conflicts with [] then
+      -- Table is now constructed and well-formed
+      Left table
+    else
+      Right {errorDefault with msg = strJoin "\n" (cons "Found following conflicts:" (map (concat " - ") conflicts))}
+
+
+  sem lrtable2string : Int -> LRParseTable -> String
+  sem lrtable2string indent =
+  | lrtable ->
+    let lines = [] in
+
+    let lines = snoc lines (concat (make indent ' ') "Rules:") in
+    let ruleIndent = addi (addi indent 2) (length (int2string (length lrtable.syntaxDef.rules))) in
+    let lines = foldli (lam lines. lam ruleIdx. lam rule: LRRule.
+      let rulenum = int2string ruleIdx in
+      snoc lines (join [
+        make (subi ruleIndent (length rulenum)) ' ', rulenum, ": ",
+        nameGetStr rule.name, " -> ",
+        strJoin " " (map lrTerm2string rule.terms)
+      ])
+    ) lines lrtable.syntaxDef.rules in
+
+    let lines = snoc lines (concat (make indent ' ') "States:") in
+    let lines = foldli (lam lines. lam stateIdx. lam state: Set LRStateItem.
+      let lines = snoc lines (join [make (addi indent 2) ' ', "State ", int2string stateIdx, ":"]) in
+      let stateStrs = setFold (lam acc: [(String, String)]. lam item: LRStateItem.
+        let prefix = [make (addi indent 4) ' ', nameGetStr item.name, " ->"] in
+        let prefix = foldli (lam pfxacc. lam termIdx: Int. lam term: LRTerm.
+          if eqi item.stackPointer termIdx then
+            concat pfxacc [" [STACK]", " ", lrTerm2string term]
+          else
+            concat pfxacc [" ", lrTerm2string term]
+        ) prefix item.terms in
+        let prefix = if eqi item.stackPointer (length item.terms) then snoc prefix " [STACK]" else prefix in
+        let suffix = join [
+          " | (rule ", int2string item.ruleIdx, ")",
+          " | (lookahead [", strJoin ", " (map token2string item.lookahead), "])"
+        ] in
+        snoc acc (join prefix, suffix)
+      ) [] state in
+      let maxLen = foldl (lam cand. lam s. match s with (prefix, _) in maxi cand (length prefix)) 0 stateStrs in
+      foldl (lam lines. lam pfxsfx: (String, String).
+        match pfxsfx with (prefix, suffix) in
+        snoc lines (join [prefix, make (subi maxLen (length prefix)) ' ', suffix])
+      ) lines stateStrs
+    ) lines lrtable.states in
+
+    let lines = snoc lines (concat (make indent ' ') "Shifts:") in
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateShifts: [{lookahead: [LRToken], toIdx: Int}].
+      foldl (lam lines. lam shift: {lookahead: [LRToken], toIdx: Int}.
+        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --[", strJoin "," (map token2string shift.lookahead), "]--> ", int2string shift.toIdx])
+      ) lines stateShifts
+    ) lines lrtable.shifts in
+
+    let lines = snoc lines (concat (make indent ' ') "Gotos:") in
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateGotos: [{name: Name, toIdx: Int}].
+      foldl (lam lines. lam goto: {name: Name, toIdx: Int}.
+        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --(", nameGetStr goto.name, ")--> ", int2string goto.toIdx])
+      ) lines stateGotos
+    ) lines lrtable.gotos in
+
+    let lines = snoc lines (concat (make indent ' ') "Reductions:") in
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateReductions: [{lookahead: [LRToken], ruleIdx: Int}].
+      foldl (lam lines. lam red: {lookahead: [LRToken], ruleIdx: Int}.
+        snoc lines (join [
+          make (addi indent 2) ' ',
+          "in state ", int2string stateIdx,
+          ", reduce by rule ", int2string red.ruleIdx,
+          " on lookahead [", strJoin ", " (map token2string red.lookahead), "]"
+        ])
+      ) lines stateReductions
+    ) lines lrtable.reductions in
+
+    strJoin "\n" lines
 end
+
+
+
 
 lang LRBaseTest = LRBase
   syn LRToken =
@@ -421,6 +530,7 @@ use LRBaseTest in
 type LRTestCase = {
   name: String,
   syntaxDef: LRSyntaxDef,
+  isLR1: Bool,
   first1: Map LRTerm (Set [LRToken]),
   first2: Map LRTerm (Set [LRToken]),
   first3: Map LRTerm (Set [LRToken])
@@ -444,6 +554,7 @@ let testcases = [
         {name = _V, terms = [Terminal (LRTokenStar ()), NonTerminal _E]}
       ]
     },
+    isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
       (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
       (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
@@ -524,6 +635,7 @@ let testcases = [
         {name = _T, terms = []}
       ]
     },
+    isLR1 = false,
     first1 = mapFromSeq lrTermCmp [
       (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
       (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
@@ -581,13 +693,14 @@ let testcases = [
     {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [Terminal (LRTokenStar ()), NonTerminal _R, NonTerminal _S, Terminal (LRTokenEquals ()), Terminal (LRTokenStar ())]},
+        {name = _S, terms = [Terminal (LRTokenStar ()), NonTerminal _R, NonTerminal _T, Terminal (LRTokenEquals ()), Terminal (LRTokenStar ())]},
         {name = _S, terms = [Terminal (LRTokenStar ()), NonTerminal _R, NonTerminal _T, Terminal (LRTokenStar ()), Terminal (LRTokenEquals ())]},
         {name = _R, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenIdentifier ""), Terminal (LRTokenEquals ())]},
         {name = _T, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenEquals ())]},
         {name = _T, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenIdentifier "")]}
       ]
     },
+    isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
       (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
       (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
@@ -647,67 +760,6 @@ let printFirst: Int -> Map LRTerm (Set [LRToken]) -> () = lam k. lam firstMap.
 in
 
 
-let printStates: [Set LRStateItem] -> () = lam states.
-  printLn "  States:";
-  foldli (lam. lam stateIdx: Int. lam state: Set LRStateItem.
-    printLn (join ["    State ", int2string stateIdx, ":"]);
-    let stateStrs = setFold (lam acc: [(String, String)]. lam item: LRStateItem.
-      let prefix = ["      ", nameGetStr item.name, " ->"] in
-      let prefix = foldli (lam pfxacc. lam termIdx: Int. lam term: LRTerm.
-        if eqi item.stackPointer termIdx then
-          concat pfxacc [" [STACK]", " ", lrTerm2string term]
-        else
-          concat pfxacc [" ", lrTerm2string term]
-      ) prefix item.terms in
-      let prefix = if eqi item.stackPointer (length item.terms) then snoc prefix " [STACK]" else prefix in
-      let suffix = join [
-        " | (rule ", int2string item.ruleIdx, ")",
-        " | (lookahead [", strJoin ", " (map token2string item.lookahead), "])"
-      ] in
-      snoc acc (join prefix, suffix)
-    ) [] state in
-    let maxLen = foldl (lam cand. lam s. match s with (prefix, _) in maxi cand (length prefix)) 0 stateStrs in
-    foldl (lam. lam pfxsfx: (String, String).
-      match pfxsfx with (prefix, suffix) in
-      print prefix;
-      print (make (subi maxLen (length prefix)) ' ');
-      printLn suffix
-    ) () stateStrs
-  ) () states
-in
-
-
-let printShifts: Map Int [{lookahead: [LRToken], toIdx: Int}] -> () = lam shifts.
-  printLn "  Shifts:";
-  mapFoldWithKey (lam. lam stateIdx: Int. lam stateShifts: [{lookahead: [LRToken], toIdx: Int}].
-    foldl (lam. lam shift: {lookahead: [LRToken], toIdx: Int}.
-      printLn (join ["    ", int2string stateIdx, " --[", strJoin "," (map token2string shift.lookahead), "]--> ", int2string shift.toIdx])
-    ) () stateShifts
-  ) () shifts
-in
-
-
-let printGotos: Map Int [{name: Name, lookahead: [LRToken], toIdx: Int}] -> () = lam gotos.
-  printLn "  Gotos:";
-  mapFoldWithKey (lam. lam stateIdx: Int. lam stateGotos: [{name: Name, lookahead: [LRToken], toIdx: Int}].
-    foldl (lam. lam goto: {name: Name, lookahead: [LRToken], toIdx: Int}.
-      printLn (join ["    ", int2string stateIdx, " --(", nameGetStr goto.name, ")--[", strJoin "," (map token2string goto.lookahead), "]--> ", int2string goto.toIdx])
-    ) () stateGotos
-  ) () gotos
-in
-
-
-let printReductions: Map Int [{lookahead: [LRToken], ruleIdx: Int}] -> () = lam reductions.
-  printLn "  Reductions:";
-  mapFoldWithKey (lam. lam stateIdx: Int. lam stateReductions: [{lookahead: [LRToken], ruleIdx: Int}].
-    foldl (lam. lam red: {lookahead: [LRToken], ruleIdx: Int}.
-      printLn (join [
-        "    in state ", int2string stateIdx,
-        ", reduce by rule ", int2string red.ruleIdx,
-        " on lookahead [", strJoin ", " (map token2string red.lookahead), "]"])
-    ) () stateReductions
-  ) () reductions
-in
 
 
 
@@ -717,12 +769,16 @@ foldl (lam. lam tc: LRTestCase.
   utest lrFirst 1 tc.syntaxDef with tc.first1 using mapEq setEq in
   utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest lrFirst 3 tc.syntaxDef with tc.first3 using mapEq setEq in
+
+  let isLR1_table = match lrCreateParseTable 1 tc.syntaxDef with Left _ then true else false in
+  utest isLR1_table with tc.isLR1 in
+
   printLn "";
-  let lrtable = lrCreateParseTable 2 tc.syntaxDef in
-  printStates lrtable._debugStates;
-  printShifts lrtable.shifts;
-  printGotos lrtable.gotos;
-  printReductions lrtable.reductions;
-  printLn "\n\n";
-  ()
+  switch lrCreateParseTable 2 tc.syntaxDef
+  case Left lrtable then
+    printLn (lrtable2string 2 lrtable);
+    printLn "\n\n"
+  case Right err then
+    errorGeneral [err] {single = "", multi = ""}
+  end
 ) () testcases
