@@ -11,6 +11,7 @@ include "seq.mc"
 include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/cmp.mc"
 include "mexpr/info.mc"
 
 lang LRTokens
@@ -30,7 +31,7 @@ lang LRTokens
   | t -> eqi (tokenCmp other t) 0
 end
 
-lang LRParser = LRTokens + MExprAst
+lang LRParser = LRTokens + MExprAst + MExprCmp
   syn LRTerm =
   | Terminal LRToken
   | NonTerminal Name
@@ -57,8 +58,9 @@ lang LRParser = LRTokens + MExprAst
   type LRParseTable = {
     k_lookahead: Int,
     entrypointIdx: Int,
-    states: [Set LRStateItem],
     syntaxDef: LRSyntaxDef,
+    nonTerminalTypes: Map Name Type,
+    states: [Set LRStateItem],
     shifts: Map Int [{lookahead: [LRToken], toIdx: Int}],
     gotos: Map Int [{name: Name, toIdx: Int}],
     reductions: Map Int [{lookahead: [LRToken], ruleIdx: Int}]
@@ -280,15 +282,41 @@ lang LRParser = LRTokens + MExprAst
   -- for each state I in T
   --   for each item (A -> a., z) in I
   --     R <- R U {(I, z, A -> a)}
-  sem lrCreateParseTable: Int -> LRSyntaxDef -> Either LRParseTable ErrorSection
-  sem lrCreateParseTable k =
+  sem lrCreateParseTable: Int -> Type -> LRSyntaxDef -> Either LRParseTable ErrorSection
+  sem lrCreateParseTable k tokenType =
   | syntaxDef ->
+    -- Infer types for each non-terminal
+    let nonTerminalTypesResult = foldl (lam acc: ([Name], Map Name Type). lam rule: LRRule.
+      recursive let getFinalType = lam ty: Type.
+        match ty with TyArrow r then getFinalType r.to else ty
+      in
+      match acc with (errs, mapAcc) in
+      match mapLookup rule.name mapAcc with Some prevTy then
+        if neqi 0 (cmpTypeH (prevTy, getFinalType rule.prodfun.ty)) then
+          (snoc errs rule.name, mapAcc)
+        else
+          acc
+      else
+        (errs, mapInsert rule.name (getFinalType rule.prodfun.ty) mapAcc)
+    ) ([], mapEmpty nameCmp) syntaxDef.rules in
+    match nonTerminalTypesResult with (([_] ++ _) & errs, _) then
+      Right {errorDefault with msg = join ["Conflicting types for the non-terminal(s): ", strJoin ", " (map nameGetStr (distinct nameEq errs))]}
+    else match nonTerminalTypesResult with (_, nonTerminalTypes) in
+
+    -- TODO(johnwikman, 2023-01-17): Type-check the type signature, make sure
+    -- the production function correspond to the types of the symbols that it
+    -- consumes
+
+    let entryType = mapLookupOrElse (lam. tyunknown_) syntaxDef.entrypoint nonTerminalTypes in
+
+    -- create the entrypoint rule
     let initRule: LRRule = {
       name = nameSym "_entrypoint_",
       terms = [NonTerminal syntaxDef.entrypoint, Terminal (LRTokenEOF {info = NoInfo ()})],
-      prodfun = {name = nameNoSym "TODO, infer the type here...", ty = tyunknown_}
+      prodfun = {name = nameNoSym "lrParseGenEntrypoint", ty = tyarrows_ [entryType, tokenType, entryType]}
     } in
     let syntaxDef = {syntaxDef with rules = snoc syntaxDef.rules initRule} in
+    let nonTerminalTypes = mapInsert initRule.name entryType nonTerminalTypes in
     let firstK: Map LRTerm (Set [LRToken]) = lrFirst k syntaxDef in
 
     if not (mapAll (lam fst. not (setIsEmpty fst)) firstK) then
@@ -306,8 +334,9 @@ lang LRParser = LRTokens + MExprAst
     let table: LRParseTable = {
       k_lookahead = k,
       entrypointIdx = 0,
-      states = [initState],
       syntaxDef = syntaxDef,
+      nonTerminalTypes = nonTerminalTypes,
+      states = [initState],
       shifts = mapEmpty subi,
       gotos = mapEmpty subi,
       reductions = mapEmpty subi
@@ -528,6 +557,8 @@ let tokComma = LRTokenComma {info = NoInfo ()} in
 let tokStar = LRTokenStar {info = NoInfo ()} in
 let tokEquals = LRTokenEquals {info = NoInfo ()} in
 
+let tyLRToken_ = tyvar_ "LRToken" in
+
 type LRTestCase = {
   name: String,
   syntaxDef: LRSyntaxDef,
@@ -548,11 +579,16 @@ let testcases: [LRTestCase] = [
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _V, Terminal tokEquals, NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _S, terms = [NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _E, terms = [NonTerminal _V], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _V, terms = [Terminal tokIdent], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _V, terms = [Terminal tokStar, NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
+        {name = _S, terms = [NonTerminal _V, Terminal tokEquals, NonTerminal _E],
+         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tystr_, tyLRToken_, tystr_, tyvar_ "Assignment"]}},
+        {name = _S, terms = [NonTerminal _E],
+         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tystr_, tyvar_ "Assignment"]}},
+        {name = _E, terms = [NonTerminal _V],
+         prodfun = {name = nameNoSym "E1", ty = tyarrows_ [tystr_, tystr_]}},
+        {name = _V, terms = [Terminal tokIdent],
+         prodfun = {name = nameNoSym "V1", ty = tyarrows_ [tyLRToken_, tystr_]}},
+        {name = _V, terms = [Terminal tokStar, NonTerminal _E],
+         prodfun = {name = nameNoSym "V2", ty = tyarrows_ [tyLRToken_, tystr_, tystr_]}}
       ]
     },
     isLR1 = true,
@@ -628,12 +664,18 @@ let testcases: [LRTestCase] = [
     {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _R, NonTerminal _S], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _S, terms = [NonTerminal _R], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, NonTerminal _T], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _T, terms = [Terminal tokStar], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _T, terms = [Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _T, terms = [], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
+        {name = _S, terms = [NonTerminal _R, NonTerminal _S],
+         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tyunit_, tyunit_, tyunit_]}},
+        {name = _S, terms = [NonTerminal _R],
+         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tyunit_, tyunit_]}},
+        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, NonTerminal _T],
+         prodfun = {name = nameNoSym "R1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tyunit_, tyunit_]}},
+        {name = _T, terms = [Terminal tokStar],
+         prodfun = {name = nameNoSym "T1", ty = tyarrows_ [tyLRToken_, tyunit_]}},
+        {name = _T, terms = [Terminal tokEquals],
+         prodfun = {name = nameNoSym "T2", ty = tyarrows_ [tyLRToken_, tyunit_]}},
+        {name = _T, terms = [],
+         prodfun = {name = nameNoSym "T3", ty = tyunit_}}
       ]
     },
     isLR1 = false,
@@ -694,11 +736,16 @@ let testcases: [LRTestCase] = [
     {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokEquals, Terminal tokStar], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokStar, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _T, terms = [Terminal tokStar, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
-        {name = _T, terms = [Terminal tokStar, Terminal tokIdent], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
+        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokEquals, Terminal tokStar],
+         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tyLRToken_, tystr_, tystr_, tyLRToken_, tyLRToken_, tyvar_ "SType"]}},
+        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokStar, Terminal tokEquals],
+         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tyLRToken_, tystr_, tystr_, tyLRToken_, tyLRToken_, tyvar_ "SType"]}},
+        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, Terminal tokEquals],
+         prodfun = {name = nameNoSym "R1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tyLRToken_, tystr_]}},
+        {name = _T, terms = [Terminal tokStar, Terminal tokEquals],
+         prodfun = {name = nameNoSym "T1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tystr_]}},
+        {name = _T, terms = [Terminal tokStar, Terminal tokIdent],
+         prodfun = {name = nameNoSym "T2", ty = tyarrows_ [tyLRToken_, tyLRToken_, tystr_]}}
       ]
     },
     isLR1 = true,
@@ -769,11 +816,11 @@ foldl (lam. lam tc: LRTestCase.
   utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest lrFirst 3 tc.syntaxDef with tc.first3 using mapEq setEq in
 
-  let isLR1_table = match lrCreateParseTable 1 tc.syntaxDef with Left _ then true else false in
+  let isLR1_table = match lrCreateParseTable 1 tyLRToken_ tc.syntaxDef with Left _ then true else false in
   utest isLR1_table with tc.isLR1 in
 
   printLn "";
-  switch lrCreateParseTable 2 tc.syntaxDef
+  switch lrCreateParseTable 2 tyLRToken_ tc.syntaxDef
   case Left lrtable then
     printLn (lrtable2string 2 lrtable);
     printLn "\n\n"
