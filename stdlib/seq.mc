@@ -137,6 +137,25 @@ with [(1, 4), (2, 5)]
 utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2, 3] [4, 5]
 with [(1, 4), (2, 5)]
 
+-- `foldli f acc seq` folds over a sequence together with the index of element
+-- in the sequence. (Similar to `mapi`)
+let foldli: all a. all b. (a -> Int -> b -> a) -> a -> [b] -> a =
+  lam fn. lam initAcc. lam seq.
+  recursive let work = lam acc. lam i. lam s.
+    match s with [e] ++ rest then
+      work (fn acc i e) (addi i 1) rest
+    else
+      acc
+  in
+  work initAcc 0 seq
+
+utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] []
+with []
+utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] [5.0]
+with [(0, 5.0)]
+utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] ["foo", "bar", "babar"]
+with [(0, "foo"), (1, "bar"), (2, "babar")]
+
 -- zips
 let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
   lam f. foldl2 (lam acc. lam x1. lam x2. snoc acc (f x1 x2)) []
