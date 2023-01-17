@@ -9,37 +9,36 @@ include "name.mc"
 include "option.mc"
 include "seq.mc"
 include "set.mc"
-
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/info.mc"
 
 lang LRTokens
   syn LRToken =
-  | LRTokenEOF ()
+  | LRTokenEOF {info: Info}
 
-  sem token2string : LRToken -> String
-  sem token2string =
+  sem lrtoken2string : LRToken -> String
+  sem lrtoken2string =
   | LRTokenEOF _ -> "EOF"
-
-  sem tokenId : LRToken -> Int
-  sem tokenId =
-  | LRTokenEOF _ -> negi 100
 
   sem tokenCmp : LRToken -> LRToken -> Int
   sem tokenCmp other =
-  | t -> subi (tokenId other) (tokenId t)
+  | t -> subi (constructorTag other) (constructorTag t)
 
   sem tokenEq : LRToken -> LRToken -> Bool
   sem tokenEq other =
   | t -> eqi (tokenCmp other t) 0
 end
 
-lang LRBase = LRTokens
+lang LRParser = LRTokens + MExprAst
   syn LRTerm =
   | Terminal LRToken
   | NonTerminal Name
 
   type LRRule = {
     name: Name,
-    terms: [LRTerm]
+    terms: [LRTerm],
+    prodfun: {name: Name, ty: Type}
   }
 
   type LRSyntaxDef = {
@@ -68,7 +67,7 @@ lang LRBase = LRTokens
 
   sem lrTerm2string : LRTerm -> String
   sem lrTerm2string =
-  | Terminal t -> join (["Term(", token2string t, ")"])
+  | Terminal t -> join (["Term(", lrtoken2string t, ")"])
   | NonTerminal n -> join (["NonTerminal(", nameGetStr n, ")"])
 
 
@@ -286,7 +285,8 @@ lang LRBase = LRTokens
   | syntaxDef ->
     let initRule: LRRule = {
       name = nameSym "_entrypoint_",
-      terms = [NonTerminal syntaxDef.entrypoint, Terminal (LRTokenEOF ())]
+      terms = [NonTerminal syntaxDef.entrypoint, Terminal (LRTokenEOF {info = NoInfo ()})],
+      prodfun = {name = nameNoSym "TODO, infer the type here...", ty = tyunknown_}
     } in
     let syntaxDef = {syntaxDef with rules = snoc syntaxDef.rules initRule} in
     let firstK: Map LRTerm (Set [LRToken]) = lrFirst k syntaxDef in
@@ -394,7 +394,7 @@ lang LRBase = LRTokens
             if and (eqSeq tokenEq r1.lookahead r2.lookahead) (neqi r1.ruleIdx r2.ruleIdx) then
               snoc acc (join [
                 "reduce-reduce conflict in state ", int2string stateIdx, " on lookahead ",
-                "[", strJoin ", " (map token2string r1.lookahead), "] (reduce by rule ",
+                "[", strJoin ", " (map lrtoken2string r1.lookahead), "] (reduce by rule ",
                 int2string r1.ruleIdx, " and ", int2string r2.ruleIdx, ")"
               ])
             else
@@ -405,7 +405,7 @@ lang LRBase = LRTokens
             if eqSeq tokenEq r1.lookahead sh.lookahead then
               snoc acc (join [
                 "shift-reduce conflict in state ", int2string stateIdx, " on lookahead ",
-                "[", strJoin ", " (map token2string r1.lookahead), "] (reduce by rule ",
+                "[", strJoin ", " (map lrtoken2string r1.lookahead), "] (reduce by rule ",
                 int2string r1.ruleIdx, " and shift into state ", int2string sh.toIdx, ")"
               ])
             else
@@ -423,6 +423,8 @@ lang LRBase = LRTokens
       Right {errorDefault with msg = strJoin "\n" (cons "Found following conflicts:" (map (concat " - ") conflicts))}
 
 
+  -- Creates a multi-line representation of the LR parse table, with each line
+  -- indented by the specified amount of whitespaces.
   sem lrtable2string : Int -> LRParseTable -> String
   sem lrtable2string indent =
   | lrtable ->
@@ -453,7 +455,7 @@ lang LRBase = LRTokens
         let prefix = if eqi item.stackPointer (length item.terms) then snoc prefix " [STACK]" else prefix in
         let suffix = join [
           " | (rule ", int2string item.ruleIdx, ")",
-          " | (lookahead [", strJoin ", " (map token2string item.lookahead), "])"
+          " | (lookahead [", strJoin ", " (map lrtoken2string item.lookahead), "])"
         ] in
         snoc acc (join prefix, suffix)
       ) [] state in
@@ -467,7 +469,7 @@ lang LRBase = LRTokens
     let lines = snoc lines (concat (make indent ' ') "Shifts:") in
     let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateShifts: [{lookahead: [LRToken], toIdx: Int}].
       foldl (lam lines. lam shift: {lookahead: [LRToken], toIdx: Int}.
-        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --[", strJoin "," (map token2string shift.lookahead), "]--> ", int2string shift.toIdx])
+        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --[", strJoin "," (map lrtoken2string shift.lookahead), "]--> ", int2string shift.toIdx])
       ) lines stateShifts
     ) lines lrtable.shifts in
 
@@ -485,7 +487,7 @@ lang LRBase = LRTokens
           make (addi indent 2) ' ',
           "in state ", int2string stateIdx,
           ", reduce by rule ", int2string red.ruleIdx,
-          " on lookahead [", strJoin ", " (map token2string red.lookahead), "]"
+          " on lookahead [", strJoin ", " (map lrtoken2string red.lookahead), "]"
         ])
       ) lines stateReductions
     ) lines lrtable.reductions in
@@ -496,36 +498,35 @@ end
 
 
 
-lang LRBaseTest = LRBase
+lang LRParserTest = LRParser
   syn LRToken =
-  | LRTokenIdentifier String
-  | LRTokenLParen {}
-  | LRTokenRParen {}
-  | LRTokenComma {}
-  | LRTokenStar {}
-  | LRTokenEquals {}
+  | LRTokenIdentifier {info: Info, val: String}
+  | LRTokenLParen {info: Info}
+  | LRTokenRParen {info: Info}
+  | LRTokenComma {info: Info}
+  | LRTokenStar {info: Info}
+  | LRTokenEquals {info: Info}
 
-  sem token2string =
-  | LRTokenIdentifier s -> join ["Ident\"", s, "\""]
-  | LRTokenLParen {} -> "("
-  | LRTokenRParen {} -> ")"
-  | LRTokenComma {} -> ","
-  | LRTokenStar {} -> "*"
-  | LRTokenEquals {} -> "="
-
-  sem tokenId =
-  | LRTokenIdentifier _ -> 1
-  | LRTokenLParen {} -> 2
-  | LRTokenRParen {} -> 3
-  | LRTokenComma {} -> 4
-  | LRTokenStar {} -> 5
-  | LRTokenEquals {} -> 6
+  sem lrtoken2string =
+  | LRTokenIdentifier r -> join ["Ident\"", r.val, "\""]
+  | LRTokenLParen _ -> "("
+  | LRTokenRParen _ -> ")"
+  | LRTokenComma _ -> ","
+  | LRTokenStar _ -> "*"
+  | LRTokenEquals _ -> "="
 end
 
 
 mexpr
-use LRBaseTest in
+use LRParserTest in
 
+let tokEOF = LRTokenEOF {info = NoInfo ()} in
+let tokIdent = LRTokenIdentifier {info = NoInfo (), val = ""} in
+let tokLParen = LRTokenLParen {info = NoInfo ()} in
+let tokRParen = LRTokenRParen {info = NoInfo ()} in
+let tokComma = LRTokenComma {info = NoInfo ()} in
+let tokStar = LRTokenStar {info = NoInfo ()} in
+let tokEquals = LRTokenEquals {info = NoInfo ()} in
 
 type LRTestCase = {
   name: String,
@@ -537,7 +538,7 @@ type LRTestCase = {
 } in
 
 
-let testcases = [
+let testcases: [LRTestCase] = [
   -- LR1 example from the book by Appel
   let _S = nameSym "S" in
   let _E = nameSym "E" in
@@ -547,73 +548,73 @@ let testcases = [
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _V, Terminal (LRTokenEquals ()), NonTerminal _E]},
-        {name = _S, terms = [NonTerminal _E]},
-        {name = _E, terms = [NonTerminal _V]},
-        {name = _V, terms = [Terminal (LRTokenIdentifier "")]},
-        {name = _V, terms = [Terminal (LRTokenStar ()), NonTerminal _E]}
+        {name = _S, terms = [NonTerminal _V, Terminal tokEquals, NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _S, terms = [NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _E, terms = [NonTerminal _V], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _V, terms = [Terminal tokIdent], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _V, terms = [Terminal tokStar, NonTerminal _E], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
       ]
     },
     isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""], [LRTokenStar ()]
+        [tokIdent], [tokStar]
        ]),
       (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""], [LRTokenStar ()]
+        [tokIdent], [tokStar]
        ]),
       (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""], [LRTokenStar ()]
+        [tokIdent], [tokStar]
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenIdentifier "", LRTokenEquals ()],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokIdent, tokEquals],
+        [tokStar, tokIdent],
+        [tokStar, tokStar]
        ]),
       (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokStar, tokIdent],
+        [tokStar, tokStar]
        ]),
       (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokStar, tokIdent],
+        [tokStar, tokStar]
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenIdentifier "", LRTokenEquals (), LRTokenStar ()],
-        [LRTokenIdentifier "", LRTokenEquals (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenEquals ()],
-        [LRTokenStar (), LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokIdent, tokEquals, tokStar],
+        [tokIdent, tokEquals, tokIdent],
+        [tokStar, tokIdent],
+        [tokStar, tokIdent, tokEquals],
+        [tokStar, tokStar, tokIdent],
+        [tokStar, tokStar, tokStar]
        ]),
       (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokStar, tokIdent],
+        [tokStar, tokStar, tokIdent],
+        [tokStar, tokStar, tokStar]
        ]),
       (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenStar (), LRTokenStar ()]
+        [tokIdent],
+        [tokStar, tokIdent],
+        [tokStar, tokStar, tokIdent],
+        [tokStar, tokStar, tokStar]
        ])
     ]
   },
@@ -627,59 +628,59 @@ let testcases = [
     {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _R, NonTerminal _S]},
-        {name = _S, terms = [NonTerminal _R]},
-        {name = _R, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenIdentifier ""), NonTerminal _T]},
-        {name = _T, terms = [Terminal (LRTokenStar ())]},
-        {name = _T, terms = [Terminal (LRTokenEquals ())]},
-        {name = _T, terms = []}
+        {name = _S, terms = [NonTerminal _R, NonTerminal _S], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _S, terms = [NonTerminal _R], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, NonTerminal _T], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _T, terms = [Terminal tokStar], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _T, terms = [Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _T, terms = [], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
       ]
     },
     isLR1 = false,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar ()]
+        [tokStar]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar ()]
+        [tokStar]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenEquals ()], [LRTokenStar ()], []
+        [tokEquals], [tokStar], []
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier ""]
+        [tokStar, tokIdent]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier ""]
+        [tokStar, tokIdent]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenEquals ()], [LRTokenStar ()], []
+        [tokEquals], [tokStar], []
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenStar ()],
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenEquals ()]
+        [tokStar, tokIdent],
+        [tokStar, tokIdent, tokStar],
+        [tokStar, tokIdent, tokEquals]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier ""],
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenStar ()],
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenEquals ()]
+        [tokStar, tokIdent],
+        [tokStar, tokIdent, tokStar],
+        [tokStar, tokIdent, tokEquals]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenEquals ()], [LRTokenStar ()], []
+        [tokEquals], [tokStar], []
        ])
     ]
   },
@@ -693,54 +694,54 @@ let testcases = [
     {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [Terminal (LRTokenStar ()), NonTerminal _R, NonTerminal _T, Terminal (LRTokenEquals ()), Terminal (LRTokenStar ())]},
-        {name = _S, terms = [Terminal (LRTokenStar ()), NonTerminal _R, NonTerminal _T, Terminal (LRTokenStar ()), Terminal (LRTokenEquals ())]},
-        {name = _R, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenIdentifier ""), Terminal (LRTokenEquals ())]},
-        {name = _T, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenEquals ())]},
-        {name = _T, terms = [Terminal (LRTokenStar ()), Terminal (LRTokenIdentifier "")]}
+        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokEquals, Terminal tokStar], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokStar, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _T, terms = [Terminal tokStar, Terminal tokEquals], prodfun = {name = nameNoSym "", ty = tyunknown_ }},
+        {name = _T, terms = [Terminal tokStar, Terminal tokIdent], prodfun = {name = nameNoSym "", ty = tyunknown_ }}
       ]
     },
     isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar ()]
+        [tokStar]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar ()]
+        [tokStar]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar ()]
+        [tokStar]
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenStar ()]
+        [tokStar, tokStar]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier ""]
+        [tokStar, tokIdent]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (),  LRTokenIdentifier ""], [LRTokenStar (),  LRTokenEquals ()]
+        [tokStar,  tokIdent], [tokStar,  tokEquals]
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal (LRTokenEquals ()), setOfSeq (seqCmp tokenCmp) [[LRTokenEquals ()]]),
-      (Terminal (LRTokenIdentifier ""), setOfSeq (seqCmp tokenCmp) [[LRTokenIdentifier ""]]),
-      (Terminal (LRTokenStar ()), setOfSeq (seqCmp tokenCmp) [[LRTokenStar ()]]),
+      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
+      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
+      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
       (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenStar (), LRTokenIdentifier ""]
+        [tokStar, tokStar, tokIdent]
        ]),
       (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (), LRTokenIdentifier "", LRTokenEquals ()]
+        [tokStar, tokIdent, tokEquals]
        ]),
       (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [LRTokenStar (),  LRTokenIdentifier ""], [LRTokenStar (),  LRTokenEquals ()]
+        [tokStar,  tokIdent], [tokStar,  tokEquals]
        ])
     ]
   }
@@ -752,14 +753,12 @@ let printFirst: Int -> Map LRTerm (Set [LRToken]) -> () = lam k. lam firstMap.
     match term with NonTerminal _ then
       printLn (join ["First_", int2string k, "(", lrTerm2string term, "):"]);
       setFold (lam. lam tokens: [LRToken].
-        printLn (join ["  [", strJoin ", " (map token2string tokens), "]"])
+        printLn (join ["  [", strJoin ", " (map lrtoken2string tokens), "]"])
       ) () first1
     else
       ()
   ) () firstMap
 in
-
-
 
 
 
