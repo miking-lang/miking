@@ -144,7 +144,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     setInsert [] (setEmpty (seqCmp tokenCmp))
 
 
-  -- FIRST_k(S) is the set of sequences of all non-terminals that can appear
+  -- FIRST_k(S) is the set of sequences of all terminals that can appear
   -- for a term S, truncated to the first k symbols.
   sem lrFirst : Int -> LRSyntaxDef -> Map LRTerm (Set [LRToken])
   sem lrFirst k =
