@@ -72,6 +72,14 @@ utest nameEqSym _t1 _t2 with false
 utest nameEqSym _t2 _t3 with false
 utest _t3 with _t3 using nameEqSym
 
+-- 'nameEqSymUnsafe' returns true if names 'n1' and 'n2' contain the same
+-- symbols, without checking whether they contain a symbol. This means two
+-- unsymbolized names will be considered equal.
+--
+-- This function is to be used in performance critical situations where we know
+-- both names have been symbolized.
+let nameEqSymUnsafe : Name -> Name -> Bool = lam n1. lam n2. eqsym n1.1 n2.1
+
 -- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
 -- a symbol and their strings are equal. Otherwise, return false.
 let nameEq : Name -> Name -> Bool =

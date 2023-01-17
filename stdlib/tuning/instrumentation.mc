@@ -456,6 +456,7 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   debugPrintLn debug "";
 
   -- Transformations should produce an AST that type checks
+  let ast = symbolize ast in
   let ast = typeCheck ast in
 
   -- Evaluate the program
