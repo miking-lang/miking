@@ -1,7 +1,7 @@
 include "mexpr/mexpr.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
-include "mexpr/utesttrans.mc"
+include "mexpr/utils.mc"
 include "mexpr/anf.mc"
 include "mexpr/ast-builder.mc"
 
@@ -224,6 +224,7 @@ lang ContextExpand = HoleAst
     let impl = symbolizeExpr {symEnvEmpty with strictTypeVars = false} impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
+      use MExprFindSym in
       match findName s expr with Some n then n
       else error (concat "not found: " s) in
 

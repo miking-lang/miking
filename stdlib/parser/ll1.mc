@@ -566,15 +566,16 @@ let gFailOnce : Grammar String () =
     ]
   } in
 
-utest errorMapToBindingsExc (genParser gFailOnce)
-with [ ( "Declaration"
-  , [ ( LitSpec { lit = "let" }
-      , [ "decllet" , "declletrec" ]
-      )
-    ]
-  )
-]
-in
+utest
+  match errorMapToBindingsExc (genParser gFailOnce)
+  with [ ( "Declaration"
+    , [ ( LitSpec { lit = "let" }
+        , [ "decllet" , "declletrec" ]
+        )
+      ]
+    )
+  ] then true else false
+with true in
 
 let gFailTwice : Grammar String () =
   { start = top
@@ -591,15 +592,16 @@ let gFailTwice : Grammar String () =
     ]
   } in
 
-utest errorMapToBindingsExc (genParser gFailTwice)
-with [ ( "Declaration"
-  , [ ( LitSpec { lit = "let" }
-      , [ "decllet" , "declletrec" , "declletmut" ]
-      )
-    ]
-  )
-]
-in
+utest
+  match errorMapToBindingsExc (genParser gFailTwice)
+  with [ ( "Declaration"
+    , [ ( LitSpec { lit = "let" }
+        , [ "decllet" , "declletrec" , "declletmut" ]
+        )
+      ]
+    )
+  ] then true else false
+with true in
 
 let gFailLet : Grammar String () =
   { start = top
@@ -621,14 +623,17 @@ let gFailLet : Grammar String () =
     ]
   } in
 
-utest errorMapToBindingsExc (genParser gFailLet)
-with [ ( "ExpressionFollow"
-  , [ ( LitSpec { lit = "let" }
-      , [ "exprfollowsome" , "exprfollownone" ]
-      )
-    ]
-  )
-]
+utest
+  match errorMapToBindingsExc (genParser gFailLet)
+  with [ ( "ExpressionFollow"
+    , [ ( LitSpec { lit = "let" }
+        , [ "exprfollowsome" , "exprfollownone" ]
+        )
+      ]
+    )
+  ]
+  then true else false
+with true
 in
 
 let g : Grammar String () =
@@ -647,157 +652,163 @@ let g : Grammar String () =
 let table = unwrapTableExc (genParser g) in
 let parse = lam content. eitherMapRight dynToWrap (parseWithTable table "file" () content) in
 
-utest parse "let a = 1"
-with Right
-  ( Wrapped
-    { label = "toptop"
-    , val =
-      [ WThing
-        ( Wrapped
-          { label = "topdecl"
-          , val =
-            [ WThing
-              (Wrapped
-                { label = "decllet"
-                , val =
-                  [ WLit
-                    { lit = "let"
-                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
-                    }
-                  , WTok
-                    ( LIdentTok
-                      { val = "a"
-                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+utest
+  match parse "let a = 1"
+  with Right
+    ( Wrapped
+      { label = "toptop"
+      , val =
+        [ WThing
+          ( Wrapped
+            { label = "topdecl"
+            , val =
+              [ WThing
+                (Wrapped
+                  { label = "decllet"
+                  , val =
+                    [ WLit
+                      { lit = "let"
+                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
                       }
-                    )
-                  , WLit
-                    { lit = "="
-                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
-                    }
-                  , WThing
-                    ( Wrapped
-                      { label = "exprint"
-                      , val =
-                        [ WTok
-                          ( IntTok
-                            { val = 1
-                            , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
-                            }
-                          )
-                        ]
+                    , WTok
+                      ( LIdentTok
+                        { val = "a"
+                        , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+                        }
+                      )
+                    , WLit
+                      { lit = "="
+                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
                       }
-                    )
-                  ]
-                }
-              )
-            ]
-          }
-        )
-      , WThing (Wrapped { label = "topfollownone" , val = [] })
-      ]
-    }
-  )
+                    , WThing
+                      ( Wrapped
+                        { label = "exprint"
+                        , val =
+                          [ WTok
+                            ( IntTok
+                              { val = 1
+                              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
+                              }
+                            )
+                          ]
+                        }
+                      )
+                    ]
+                  }
+                )
+              ]
+            }
+          )
+        , WThing (Wrapped { label = "topfollownone" , val = [] })
+        ]
+      }
+    )
+  then true else false
+with true
 in
 
-utest parse "let a = 1\nlet b = 4"
-with Right
-  ( Wrapped
-    { label = "toptop"
-    , val =
-      [ WThing
-        ( Wrapped
-          { label = "topdecl"
-          , val =
-            [ WThing
-              ( Wrapped
-                { label = "decllet"
-                , val =
-                  [ WLit
-                    { lit = "let"
-                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
-                    }
-                  , WTok
-                    ( LIdentTok
-                      { val = "a"
-                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+utest
+  match parse "let a = 1\nlet b = 4"
+  with Right
+    ( Wrapped
+      { label = "toptop"
+      , val =
+        [ WThing
+          ( Wrapped
+            { label = "topdecl"
+            , val =
+              [ WThing
+                ( Wrapped
+                  { label = "decllet"
+                  , val =
+                    [ WLit
+                      { lit = "let"
+                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
                       }
-                    )
-                  , WLit
-                    { lit = "="
-                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
-                    }
-                  , WThing
-                    ( Wrapped
-                      { label = "exprint"
-                      , val =
-                        [ WTok
-                          ( IntTok
-                            { val = 1
-                            , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
-                            }
-                          )
-                        ]
+                    , WTok
+                      ( LIdentTok
+                        { val = "a"
+                        , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+                        }
+                      )
+                    , WLit
+                      { lit = "="
+                      , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
                       }
-                    )
-                  ]
-                }
-              )
-            ]
-          }
-        )
-      , WThing
-        ( Wrapped
-          { label = "topfollowsome"
-          , val =
-            [ WThing (Wrapped { label = "topinfixjuxt" , val = [] })
-            , WThing
-              ( Wrapped
-                { label = "topdecl"
-                , val =
-                  [ WThing
-                    ( Wrapped
-                      { label = "decllet"
-                      , val =
-                        [ WLit
-                          { lit = "let"
-                          , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 3 , col1 = 0 }
-                          }
-                        , WTok
-                          ( LIdentTok
-                            { val = "b"
-                            , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 5 , col1 = 4 }
+                    , WThing
+                      ( Wrapped
+                        { label = "exprint"
+                        , val =
+                          [ WTok
+                            ( IntTok
+                              { val = 1
+                              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
+                              }
+                            )
+                          ]
+                        }
+                      )
+                    ]
+                  }
+                )
+              ]
+            }
+          )
+        , WThing
+          ( Wrapped
+            { label = "topfollowsome"
+            , val =
+              [ WThing (Wrapped { label = "topinfixjuxt" , val = [] })
+              , WThing
+                ( Wrapped
+                  { label = "topdecl"
+                  , val =
+                    [ WThing
+                      ( Wrapped
+                        { label = "decllet"
+                        , val =
+                          [ WLit
+                            { lit = "let"
+                            , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 3 , col1 = 0 }
                             }
-                          )
-                        , WLit
-                          { lit = "="
-                          , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 7 , col1 = 6 }
-                          }
-                        , WThing
-                          ( Wrapped
-                            { label = "exprint"
-                            , val =
-                              [ WTok
-                                ( IntTok
-                                  { val = 4
-                                  , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 9 , col1 = 8 }
-                                  }
-                                )
-                              ]
+                          , WTok
+                            ( LIdentTok
+                              { val = "b"
+                              , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 5 , col1 = 4 }
+                              }
+                            )
+                          , WLit
+                            { lit = "="
+                            , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 7 , col1 = 6 }
                             }
-                          )
-                        ]
-                      }
-                    )
-                  ]
-                }
-              )
-            , WThing (Wrapped { label = "topfollownone" , val = [] })
-            ]
-          }
-        )
-      ]
-    }
-  )
+                          , WThing
+                            ( Wrapped
+                              { label = "exprint"
+                              , val =
+                                [ WTok
+                                  ( IntTok
+                                    { val = 4
+                                    , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 9 , col1 = 8 }
+                                    }
+                                  )
+                                ]
+                              }
+                            )
+                          ]
+                        }
+                      )
+                    ]
+                  }
+                )
+              , WThing (Wrapped { label = "topfollownone" , val = [] })
+              ]
+            }
+          )
+        ]
+      }
+    )
+  then true else false
+with true
 in
 
 utest parse "let" with () using lam l. lam. match l

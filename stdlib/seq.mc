@@ -516,37 +516,41 @@ utest seqCmp subi [] [] with 0
 utest seqCmp subi [1,2,3] [1,2,3] with 0
 utest
   match lti (seqCmp subi [1,2] [1,2,3]) 0 with true then true else false
-  with true
+with true
 utest
   match gti (seqCmp subi [1,2,3] [1,2]) 0 with true then true else false
-  with true
+with true
 utest
   match lti (seqCmp subi [1,1] [1,2]) 0 with true then true else false
-  with true
+with true
 utest
   match gti (seqCmp subi [1,2] [1,1]) 0 with true then true else false
-  with true
+with true
 
 -- Select an index uniformly at random.
 let randIndex : all a. [a] -> Option Int = lam seq.
   match seq with [] then None ()
   else Some (randIntU 0 (length seq))
 
-utest randIndex [] with None ()
+utest
+  match randIndex [] with None () then true else false
+with true
 utest randIndex [1] with Some 0
 utest
   match randIndex [1,2] with Some (0 | 1) then true else false
-  with true
+with true
 
 -- Select an element uniformly at random.
 let randElem : all a. [a] -> Option a = lam seq.
   optionMap (get seq) (randIndex seq)
 
-utest randElem [] with None ()
+utest
+  match randElem [] with None () then true else false
+with true
 utest randElem [1] with Some 1
 utest
   match randElem [1,2] with Some (1 | 2) then true else false
-  with true
+with true
 
 -- Permute the order of elements according to a sequence of integers, which is
 -- assumed to represent the target position of the elements in the permuted

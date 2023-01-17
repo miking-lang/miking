@@ -105,7 +105,8 @@ let _err
     let id = gensym () in
     ResultErr { warnings = _emptyMap, errors = mapInsert id err _emptyMap }
 
-utest _prepTest (_err 1) with ([], Left [1])
+utest match _prepTest (_err 1) with ([], Left [1]) then true else false
+with true
 
 -- Produce a single warning. Note that this function is not
 -- referentially transparent, different invocations produce distinct
@@ -174,10 +175,13 @@ let _apply
 utest _prepTest (_apply (_ok (addi 1)) (_ok 2)) with ([], Right 3)
 utest _prepTest (_apply (_map (lam. lam x. x) (_warn 'a')) (_warn 'b')) with (['a', 'b'], Right ())
 utest _prepTest (_apply (_map (lam. addi 1) (_warn 'b')) (_ok 2)) with (['b'], Right 3)
-utest _prepTest (_apply (_err 7) (_ok 8)) with ([], Left [7])
-utest _prepTest (_apply (_err 7) (_warn 'c')) with (['c'], Left [7])
+utest match _prepTest (_apply (_err 7) (_ok 8)) with ([], Left [7]) then true else false
+with true
+utest match _prepTest (_apply (_err 7) (_warn 'c')) with (['c'], Left [7]) then true else false
+with true
 utest _prepTest (_apply (_ok (addi 1)) (_err 8)) with ([], Left [8])
-utest _prepTest (_apply (_err 7) (_err 8)) with ([], Left [7, 8])
+utest match _prepTest (_apply (_err 7) (_err 8)) with ([], Left [7, 8]) then true else false
+with true
 
 -- Perform a computation on the values present in two `Results` if
 -- neither is an error. Preserves the errors and warnings of both
@@ -362,9 +366,12 @@ let _bind
     case ResultErr r then ResultErr r
     end
 
-utest _prepTest (_bind (_err 0) (lam. _err 1)) with ([], Left [0])
-utest _prepTest (_bind (_ok 0) (lam. _err 1)) with ([], Left [1])
-utest _prepTest (_bind (_withAnnotations (_warn 'a') (_ok 0)) (lam. _err 1)) with (['a'], Left [1])
+utest match _prepTest (_bind (_err 0) (lam. _err 1)) with ([], Left [0]) then true else false
+with true
+utest match _prepTest (_bind (_ok 0) (lam. _err 1)) with ([], Left [1]) then true else false
+with true
+utest match _prepTest (_bind (_withAnnotations (_warn 'a') (_ok 0)) (lam. _err 1)) with (['a'], Left [1]) then true else false
+with true
 utest _prepTest (_bind (_withAnnotations (_warn 'a') (_ok 0)) (lam x. _ok (addi x 1))) with (['a'], Right 1)
 utest _prepTest (_bind (_withAnnotations (_warn 'a') (_ok 0)) (lam x. _withAnnotations (_warn 'b') (_ok (addi x 1)))) with (['a', 'b'], Right 1)
 

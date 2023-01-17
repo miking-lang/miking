@@ -8,6 +8,7 @@
 -- Functions part of the API are prefixed with dual. Other functions are
 -- internal.
 
+include "math.mc"
 include "string.mc"
 
 type Eps = Int

@@ -3,12 +3,12 @@ include "eqset.mc"
 
 -- Represents basic regular expressions.
 type RegEx a
-  con Empty   : ()             -> RegEx
-  con Epsilon : ()             -> RegEx
-  con Symbol  : all a. (a)     -> RegEx
-  con Union   : (RegEx, RegEx) -> RegEx
-  con Concat  : (RegEx, RegEx) -> RegEx
-  con Kleene  : (RegEx)        -> RegEx
+con Empty   : all a. ()                 -> RegEx a
+con Epsilon : all a. ()                 -> RegEx a
+con Symbol  : all a. a                  -> RegEx a
+con Union   : all a. (RegEx a, RegEx a) -> RegEx a
+con Concat  : all a. (RegEx a, RegEx a) -> RegEx a
+con Kleene  : all a. RegEx a            -> RegEx a
 
 let prec = lam reg.
   match reg with Empty () then 2 else
