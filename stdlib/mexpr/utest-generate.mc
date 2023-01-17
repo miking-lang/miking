@@ -1296,7 +1296,10 @@ let r = ref_ (int_ 0) in
 utest evalPrettyPrint env refTy r with str_ "<ref>" using eqExpr in
 
 let mapTy = tyapp_ (tyapp_ (tycon_ "Map") tyint_) tyint_ in
-let subExpr = ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y"))) in
+let subExpr =
+  let x = nameSym "x" in
+  let y = nameSym "y" in
+  nulam_ x (nulam_ y (subi_ (nvar_ x) (nvar_ y))) in
 let m1 = mapEmpty_ subExpr in
 let m2 = mapInsert_ (int_ 2) (int_ 3) m1 in
 let m3 = mapInsert_ (int_ 3) (int_ 4) m2 in
