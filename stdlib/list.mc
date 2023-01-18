@@ -53,12 +53,24 @@ let listMap : all a. all b. (a -> b) -> List a -> List b = lam f. lam li.
 
 let listToSeq : all a. List a -> [a] = listFoldl snoc []
 
+let listEq : all a. all b. (a -> b -> Bool) -> List a -> List b -> Bool =
+  lam eqElem.
+  recursive let work = lam l. lam r.
+    switch (l, r)
+    case (Cons (lh, lt), Cons (rh, rt)) then
+      if eqElem lh rh then work lt rt
+      else false
+    case (Nil _, Nil _) then true
+    case _ then false
+    end
+  in work
+
 mexpr
 
 let l1 = listEmpty in
 let l2 = listCons 3 l1 in
 let l3 = listCons 4 (listCons 3 l2) in
-utest l1 with Nil () in
+utest l1 with Nil () using listEq eqi in
 utest l2 with Cons (3, Nil ()) in
 utest l3 with Cons (4, Cons (3, Cons (3, Nil ()))) in
 
