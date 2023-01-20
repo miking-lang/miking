@@ -342,7 +342,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
             else None ()
         end
       ) rule.terms argtypes in
-      match optionGetAll maybeErrs with ([_] ++ _) & actualErrs then
+      match filterOption maybeErrs with ([_] ++ _) & actualErrs then
         snoc errs (strJoin "\n - " (
           cons (join ["Argument type mismatch for rule ", int2string ruleIdx, ":"])
                actualErrs

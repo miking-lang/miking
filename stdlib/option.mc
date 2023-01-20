@@ -1,4 +1,4 @@
-include "bool.mc"
+include "./bool.mc"
 
 type Option a
 con Some : all a. a -> Option a
@@ -132,15 +132,6 @@ let optionGetOr: all a. a -> Option a -> a = lam d.
 
 utest optionGetOr 3 (Some 1) with 1
 utest optionGetOr 3 (None ()) with 3
-
--- Retrieve all contained values that are not None in the sequence
-let optionGetAll: all a. [Option a] -> [a] = lam s.
-  reverse (foldl (lam acc. lam e. match e with Some v then cons v acc else acc) [] s)
-
-utest optionGetAll [] with []
-utest optionGetAll [None (), None ()] with []
-utest optionGetAll [Some 1, Some 10, Some 100] with [1, 10, 100]
-utest optionGetAll [Some 1, None (), None (), Some 10, None ()] with [1, 10]
 
 -- Applies a function to the contained value (if any),
 -- or computes a default (if not).
