@@ -553,47 +553,161 @@ end
 -----------
 -- TESTS --
 -----------
--- It is difficult to directly do unit testing for the above due to the nature
--- of symbols, so we are just evaluating the below for errors. Unit
--- testing in eval.mc also implicitly covers symbolizeExpr.
 
+-- To test that the symbolization works as expected, we define functions that
+-- verify all names in the AST have been symbolized.
 lang TestLang = MExprSym + MExprPrettyPrint
+  sem isFullySymbolized : Expr -> Bool
+  sem isFullySymbolized =
+  | ast -> isFullySymbolizedExpr true ast
+
+  sem isFullySymbolizedExpr : Bool -> Expr -> Bool
+  sem isFullySymbolizedExpr acc =
+  | TmVar t -> if acc then nameHasSym t.ident else false
+  | TmLam t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedType acc t.tyAnnot in
+    let acc = isFullySymbolizedType acc t.tyIdent in
+    let acc = isFullySymbolizedExpr acc t.body in
+    isFullySymbolizedType acc t.ty
+  | TmLet t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedType acc t.tyAnnot in
+    let acc = isFullySymbolizedType acc t.tyBody in
+    let acc = isFullySymbolizedExpr acc t.body in
+    let acc = isFullySymbolizedExpr acc t.inexpr in
+    isFullySymbolizedType acc t.ty
+  | TmRecLets t ->
+    let isFullySymbolizedBinding = lam acc. lam bind.
+      let acc = if acc then nameHasSym bind.ident else acc in
+      let acc = isFullySymbolizedType acc bind.tyAnnot in
+      let acc = isFullySymbolizedType acc bind.tyBody in
+      isFullySymbolizedExpr acc bind.body
+    in
+    let acc = foldl isFullySymbolizedBinding acc t.bindings in
+    let acc = isFullySymbolizedExpr acc t.inexpr in
+    isFullySymbolizedType acc t.ty
+  | TmType t ->
+    let acc =
+      foldl
+        (lam acc. lam id. if acc then nameHasSym id else acc)
+        acc (cons t.ident t.params)
+    in
+    let acc = isFullySymbolizedType acc t.tyIdent in
+    let acc = isFullySymbolizedExpr acc t.inexpr in
+    isFullySymbolizedType acc t.ty
+  | TmConDef t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedType acc t.tyIdent in
+    let acc = isFullySymbolizedExpr acc t.inexpr in
+    isFullySymbolizedType acc t.ty
+  | TmConApp t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedExpr acc t.body in
+    isFullySymbolizedType acc t.ty
+  | TmExt t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedType acc t.tyIdent in
+    let acc = isFullySymbolizedExpr acc t.inexpr in
+    isFullySymbolizedType acc t.ty
+  | t ->
+    if acc then
+      let acc = sfold_Expr_Expr isFullySymbolizedExpr acc t in
+      let acc = sfold_Expr_Type isFullySymbolizedType acc t in
+      let acc = sfold_Expr_Pat isFullySymbolizedPat acc t in
+      sfold_Expr_TypeLabel isFullySymbolizedType acc t
+    else false
+
+  sem isFullySymbolizedPat : Bool -> Pat -> Bool
+  sem isFullySymbolizedPat acc =
+  | PatNamed {ident = PName id, ty = ty} ->
+    let acc = if acc then nameHasSym id else acc in
+    isFullySymbolizedType acc ty
+  | PatCon t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    let acc = isFullySymbolizedPat acc t.subpat in
+    isFullySymbolizedType acc t.ty
+  | p ->
+    if acc then
+      let acc = sfold_Pat_Pat isFullySymbolizedPat acc p in
+      sfold_Pat_Type isFullySymbolizedType acc p
+    else false
+
+  sem isFullySymbolizedType : Bool -> Type -> Bool
+  sem isFullySymbolizedType acc =
+  | TyCon {ident = ident} | TyVar {ident = ident} ->
+    if acc then nameHasSym ident else acc
+  | TyAll t ->
+    let acc = if acc then nameHasSym t.ident else acc in
+    isFullySymbolizedType acc t.ty
+  | ty ->
+    if acc then sfold_Type_Type isFullySymbolizedType acc ty
+    else false
 end
 
 mexpr
 
 use TestLang in
 
+let x = nameSym "x" in
+utest isFullySymbolized (ulam_ "x" (var_ "x")) with false in
+utest isFullySymbolized (nulam_ x (var_ "x")) with false in
+utest isFullySymbolized (nulam_ x (nvar_ x)) with true in
+
+let testSymbolize = lam ast. lam testEqStr.
+  let symbolizeCalls =
+    [ symbolize
+    , symbolizeExpr {symEnvEmpty with allowFree = true}
+    , symbolizeExpr {symEnvEmpty with strictTypeVars = false} ] in
+  foldl
+    (lam acc. lam symb.
+      if acc then
+        let symAst = symb ast in
+        isFullySymbolized symAst
+      else false)
+    true symbolizeCalls
+in
+
 let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
+utest testSymbolize base false with true in
 
 let rec = urecord_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
+utest testSymbolize rec false with true in
 
 let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
+utest testSymbolize letin false with true in
 
 let lettypein = bindall_ [
   type_ "Type" [] tystr_,
   type_ "Type" [] (tycon_ "Type"),
   lam_ "Type" (tycon_ "Type") (var_ "Type")
 ] in
+utest testSymbolize lettypein false with true in
 
 let rlets =
   bind_ (ureclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
     (app_ (var_ "x") (var_ "y")) in
+utest testSymbolize rlets false with true in
 
 let const = int_ 1 in
+utest testSymbolize const false with true in
 
 let data = bind_ (ucondef_ "Test") (conapp_ "Test" base) in
+utest testSymbolize data false with true in
 
 let varpat = match_ uunit_ (pvar_ "x") (var_ "x") base in
+utest testSymbolize varpat false with true in
 
 let recpat =
   match_ base
     (prec_ [("k1", (pvar_ "x")), ("k2", pvarw_), ("k3", (pvar_ "x"))])
     (var_ "x") uunit_ in
+utest testSymbolize recpat false with true in
 
 let datapat =
   bind_ (ucondef_ "Test")
     (match_ uunit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") uunit_) in
+utest testSymbolize datapat false with true in
 
 let litpat =
   match_ uunit_ (pint_ 1)
@@ -603,63 +717,44 @@ let litpat =
           uunit_)
        uunit_)
     uunit_ in
+utest testSymbolize litpat false with true in
 
 let ut = utest_ base base base in
+utest testSymbolize ut false with true in
 
 let utu = utestu_ base base base (uconst_ (CEqi{})) in
+utest testSymbolize utu false with true in
 
 let seq = seq_ [base, data, const, utu] in
+utest testSymbolize seq false with true in
 
 let nev = never_ in
+utest testSymbolize nev false with true in
 
 let matchand = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (pand_ (pint_ 1) (pvar_ "a")) (var_ "a") (never_)) in
+utest testSymbolize matchand false with true in
 
 let matchor = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar_ "a")) (var_ "a") (never_)) in
+utest testSymbolize matchor false with true in
 
 -- NOTE(vipa, 2020-09-23): (var_ "a") should refer to the "a" from ulet_, not the pattern, that's intended, in case someone happens to notice and finds it odd
 let matchnot = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
+utest testSymbolize matchnot false with true in
 
 let matchoredge = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
+utest testSymbolize matchoredge false with true in
 
 let lettyvar = let_ "f" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
                         (lam_ "x" (tyvar_ "a") (var_ "x")) in
+utest testSymbolize lettyvar false with true in
 
-let debug = false in
-
-let debugPrint = lam i. lam t.
-  let r = symbolize t in
-  if debug then
-    printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]);
-    printLn (expr2str t);
-    print "\n";
-    printLn "--- AFTER SYMBOLIZE ---";
-    printLn (expr2str r);
-    print "\n";
-    ()
-  else ()
-in
-
-mapi debugPrint [
-    base,
-    rec,
-    letin,
-    lettypein,
-    rlets,
-    const,
-    data,
-    varpat,
-    recpat,
-    datapat,
-    litpat,
-    ut,
-    seq,
-    nev,
-    matchand,
-    matchor,
-    matchnot,
-    matchoredge,
-    lettyvar
-  ];
-
+-- NOTE(larshum, 2023-01-20): This test checks that the type parameters of a
+-- type application are not erased when the constructor is a free variable.
+let tyconApps = bindall_ [
+  let_ "f"
+    (tyall_ "a" (tyarrow_ (tyapp_ (tycon_ "Con") (tyvar_ "a")) (tyvar_ "a")))
+    (ulam_ "x" never_)
+] in
+utest expr2str (symbolizeAllowFree tyconApps) with expr2str tyconApps using eqString in
 
 ()
