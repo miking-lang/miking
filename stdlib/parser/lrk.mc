@@ -5,6 +5,7 @@ include "common.mc"
 include "either.mc"
 include "error.mc"
 include "map.mc"
+include "math.mc"
 include "name.mc"
 include "option.mc"
 include "seq.mc"
@@ -56,10 +57,16 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   }
 
   type LRParseTable = {
+    -- k_lookahead as in LR(k)
     k_lookahead: Int,
+    -- Index of the initial LR state
     entrypointIdx: Int,
+    -- The original syntax definition
     syntaxDef: LRSyntaxDef,
+    -- Types for non-terminal symbols and tokens
     nonTerminalTypes: Map Name Type,
+    tokenType: Type,
+    -- The generated LR states, shifts, gotos, and reductions
     states: [Set LRStateItem],
     shifts: Map Int [{lookahead: [LRToken], toIdx: Int}],
     gotos: Map Int [{name: Name, toIdx: Int}],
@@ -303,9 +310,49 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
       Right {errorDefault with msg = join ["Conflicting types for the non-terminal(s): ", strJoin ", " (map nameGetStr (distinct nameEq errs))]}
     else match nonTerminalTypesResult with (_, nonTerminalTypes) in
 
-    -- TODO(johnwikman, 2023-01-17): Type-check the type signature, make sure
-    -- the production function correspond to the types of the symbols that it
-    -- consumes
+    -- Type-check the type signature, make sure the production function
+    -- correspond to the types of the symbols that it consumes
+    let ruleArgTypesResult = foldli (lam errs: [String]. lam ruleIdx: Int. lam rule: LRRule.
+      recursive let getArgTypes = lam acc: [Type]. lam ty: Type.
+        match ty with TyArrow r
+          then getArgTypes (snoc acc r.from) r.to
+          else acc -- skip the final return type
+      in
+      let argtypes: [Type] = getArgTypes [] rule.prodfun.ty in
+      if neqi (length argtypes) (length rule.terms) then
+        snoc errs (join [
+          "Argument type mismatch for rule ", int2string ruleIdx, ". Got ",
+          int2string (length argtypes), " argument in production function, expected ",
+          int2string (length rule.terms), " arguments."
+        ])
+      else --continue
+      let maybeErrs = zipWith (lam term: LRTerm. lam ty: Type.
+        switch term
+        case NonTerminal n then
+          match mapLookup n nonTerminalTypes with Some ntType then
+            if neqi 0 (cmpTypeH (ty, ntType))
+              then Some (join ["Type mismatch for non-terminal \"", nameGetStr n, "\""])
+              else None ()
+          else
+            Some (join ["Unrecognized non-terminal \"", nameGetStr n, "\""])
+        case Terminal t then
+          -- NOTE(johnwikman, 2022-01-20): Maybe we want more than one type for tokens?
+          if neqi 0 (cmpTypeH (ty, tokenType))
+            then Some "Type mismatch for token"
+            else None ()
+        end
+      ) rule.terms argtypes in
+      match optionGetAll maybeErrs with ([_] ++ _) & actualErrs then
+        snoc errs (strJoin "\n - " (
+          cons (join ["Argument type mismatch for rule ", int2string ruleIdx, ":"])
+               actualErrs
+        ))
+      else
+        errs
+    ) [] syntaxDef.rules in
+    match ruleArgTypesResult with ([_] ++ _) & errs then
+      Right {errorDefault with msg = strJoin "\n" errs}
+    else -- Types are OK! Continue
 
     let entryType = mapLookupOrElse (lam. tyunknown_) syntaxDef.entrypoint nonTerminalTypes in
 
@@ -336,6 +383,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
       entrypointIdx = 0,
       syntaxDef = syntaxDef,
       nonTerminalTypes = nonTerminalTypes,
+      tokenType = tokenType,
       states = [initState],
       shifts = mapEmpty subi,
       gotos = mapEmpty subi,
