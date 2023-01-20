@@ -411,7 +411,7 @@ lang ConAppTypeSym = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
             appTy
         else
           if env.strictTypeVars then
-            if env.allowFree then ty
+            if env.allowFree then smap_Type_Type (symbolizeType env) ty
             else errorSingle [t.info] (join [
               "* Encountered an unknown type constructor: ", str, "\n",
               "* When symbolizing the type"
