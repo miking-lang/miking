@@ -149,7 +149,7 @@ let foldli: all a. all b. (a -> Int -> b -> a) -> a -> [b] -> a =
   in
   work initAcc 0 seq
 
-utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] []
+utest foldli (lam acc. lam i. lam e: Float. snoc acc (i, e)) [] []
 with []
 utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] [5.0]
 with [(0, 5.0)]
