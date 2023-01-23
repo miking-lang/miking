@@ -1,4 +1,4 @@
-include "./bool.mc"
+include "bool.mc"
 
 type Option a
 con Some : all a. a -> Option a

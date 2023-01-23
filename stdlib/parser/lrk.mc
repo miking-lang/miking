@@ -570,6 +570,75 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     ) lines lrtable.reductions in
 
     strJoin "\n" lines
+
+
+  -- Generates AST-code for an LR parser corresponding to the provided parse
+  -- table. The generated code will follow this structure:
+  -- let myLRParser: all a. (a -> (a, Option LRToken)) -> a -> Either (a, <EntrypointReturnType>) [ErrorSection] =
+  --   lam nextToken. lam lexerState.
+  --   let stack_LRToken: [<LRTokenType>] = createList () in
+  --   let stack_NType0: [<NonTerminalType0>] = createList () in
+  --   let stack_NType1: [<NonTerminalType1>] = createList () in
+  --   ...
+  --   let stack_NType(k-1): [<NonTerminalType(k-1)>] = createList () in
+  --   let stacks = {
+  --     stack_LRToken = stack_LRToken,
+  --     stack_NType0 = stack_NType0,
+  --     stack_NType1 = stack_NType1,
+  --     ...
+  --     stack_NType(k-1) = stack_NType(k-1)
+  --   } in
+  --   let gotos_ON_NonTerminal0: [Int] = asRope [..., ..., ..., ...] in
+  --   let gotos_ON_NonTerminal1: [Int] = asRope [..., ..., ..., ...] in
+  --   ...
+  --   recursive let runLRParser =
+  --     lam stacks: {...}.
+  --     lam trace: [Int].
+  --     lam lookahead: [LRToken].
+  --     ...
+  --     let currentState: Int = head trace in
+  --     switch currentState
+  --     case 0 then
+  --       switch lookahead
+  --       case [..., ...] then
+  --         <perform action on this lookahead and tail-recurse on runLRParser>
+  --       case [..., ...] then
+  --         -- let's pretend this is a reduce action
+  --         let stack_NTypeX = stacks.stack.NTypeX in
+  --         let stack_NTypeY = stacks.stack.NTypeY in
+  --         let stack_NTypeZ = stacks.stack.NTypeZ in
+  --         let stack_NTypeW = stacks.stack.NTypeW in
+  --         let a3 = head stack_NTypeX in
+  --         let stack_NTypeX = tail stack_NTypeX in
+  --         let a2 = head stack_NTypeY in
+  --         let stack_NTypeY = tail stack_NTypeY in
+  --         let a1 = head stack_NTypeZ in
+  --         let stack_NTypeZ = tail stack_NTypeZ in
+  --         let prodresult = prodfun a1 a2 a3 in
+  --         let stack_NTypeW = cons prodresult stack_NTypeW in
+  --         let stacks = {stacks with stack_NTypeX = stack_NTypeX,
+  --                                   stack_NTypeY = stack_NTypeY,
+  --                                   stack_NTypeZ = stack_NTypeZ,
+  --                                   stack_NTypeW = stack_NTypeW} in
+  --         let trace = subsequence trace 3 (length trace) in
+  --         let currentState = head trace in
+  --         let nextState = get gotos_ON_NonTerminal0 currentState in
+  --         let trace = cons nextState trace in
+  --         -- NOTE: lookahead is unchanged by a reduce action
+  --         runLRParser stacks trace lookahead ...
+  --       ...
+  --       case _ then
+  --         <parse error, expected>
+  --       end
+  --     ...
+  --     end
+  --   in
+  /-
+  sem lrGenerateParser: Name -> LRParseTable -> Expr
+  sem lrGenerateParser functionName =
+  | table ->
+    TODO ()
+  -/
 end
 
 
@@ -708,8 +777,7 @@ let testcases: [LRTestCase] = [
   let _T = nameSym "T" in
   {
     name = "LR2 Example",
-    syntaxDef = 
-    {
+    syntaxDef = {
       entrypoint = _S,
       rules = [
         {name = _S, terms = [NonTerminal _R, NonTerminal _S],
@@ -780,8 +848,7 @@ let testcases: [LRTestCase] = [
   let _T = nameSym "T" in
   {
     name = "GOTO Example",
-    syntaxDef = 
-    {
+    syntaxDef = {
       entrypoint = _S,
       rules = [
         {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokEquals, Terminal tokStar],
