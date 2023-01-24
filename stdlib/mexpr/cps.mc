@@ -238,6 +238,8 @@ lang RecordCPS = CPS + RecordAst
   sem exprCps env k =
   | TmLet ({ body = TmRecord _ } & t) ->
     TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmLet ({ body = TmRecordUpdate _ } & t) ->
+    TmLet { t with inexpr = exprCps env k t.inexpr }
 end
 
 lang TypeCPS = CPS + TypeAst
