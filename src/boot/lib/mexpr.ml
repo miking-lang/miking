@@ -1754,6 +1754,8 @@ let rec val_equal v1 v2 =
       Mseq.Helpers.equal val_equal s1 s2
   | TmRecord (_, r1), TmRecord (_, r2) ->
       Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
+  | TmConst (_, CMap (_, m1)), TmConst (_, CMap (_, m2)) ->
+      Mmap.eq val_equal m1 m2
   | TmConst (_, c1), TmConst (_, c2) ->
       c1 = c2
   | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
