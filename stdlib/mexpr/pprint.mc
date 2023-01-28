@@ -575,7 +575,7 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
     let extract_char = lam e.
       match e with TmConst t1 then
         match t1.val with CChar c then
-          Some (c.val)
+          Some c.val
         else None ()
       else None ()
     in
@@ -885,7 +885,7 @@ lam recur. lam indent. lam env. lam pats.
     match e with PatChar c then Some c.val
     else None () in
   match optionMapM extract_char pats with Some str then
-    (env, join ["\"", str, "\""])
+    (env, join ["\"", escapeString str, "\""])
   else match mapAccumL (recur (pprintIncr indent)) env pats
   with (env, pats) in
   let merged =
