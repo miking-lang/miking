@@ -97,7 +97,9 @@ let _parserStr = lam str. lam prefix. lam cond.
 let _isValidLowerIdent = lam str.
   match str with [x]
   then isLowerAlpha x
-  else isLowerAlphaOrUnderscore (head str)
+  else if isLowerAlphaOrUnderscore (head str) then
+    forAll (lam c. or (isAlphanum c) (eqc c '_')) (tail str)
+  else false
 
 -- Variable string parser translation
 let pprintVarString = lam str.
