@@ -1,58 +1,58 @@
--- LR(k >= 1)
+-- A parser generator for LR(k >= 1).
+--
+-- The implementation is based on the algorithm for LR(1) described in the book
+-- by Appel (2002), but extended to LR(k). This parser generator does not work
+-- for LR(0) since the implemented lookahead checks for LR(k) is not compatible
+-- with the shift semantics of LR(0).
 
 include "bool.mc"
 include "common.mc"
-include "either.mc"
 include "error.mc"
 include "map.mc"
 include "math.mc"
 include "name.mc"
 include "option.mc"
+include "result.mc"
 include "seq.mc"
 include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
 include "mexpr/info.mc"
+include "parser/lexer.mc"
 
-lang LRTokens
-  syn LRToken =
-  | LRTokenEOF {info: Info}
 
-  sem lrtoken2string : LRToken -> String
-  sem lrtoken2string =
-  | LRTokenEOF _ -> "EOF"
-
-  sem tokenCmp : LRToken -> LRToken -> Int
-  sem tokenCmp other =
-  | t -> subi (constructorTag other) (constructorTag t)
-
-  sem tokenEq : LRToken -> LRToken -> Bool
-  sem tokenEq other =
-  | t -> eqi (tokenCmp other t) 0
-end
-
-lang LRParser = LRTokens + MExprAst + MExprCmp
+lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   syn LRTerm =
-  | Terminal LRToken
-  | NonTerminal Name
+  | LRTerminal TokenRepr
+  | LRNonTerminal Name
 
+  -- A rule in the syntax definition of an LR parser
   type LRRule = {
+    -- Name of the non-terminal associated with this rule
     name: Name,
+    -- The terms associated with this rule
     terms: [LRTerm],
-    prodfun: {name: Name, ty: Type}
+    -- The semantic action to take when reducing on this rule. This action
+    -- expression has to be fully typed, with a type on the form
+    --   tyState -> tyArg1 -> tyArg2 -> ... -> tyArgn -> tyRet
+    -- where tyState is an arbitrary state type that has to be the same type
+    -- for all actions in the syntax definition.
+    action: Expr
   }
 
   type LRSyntaxDef = {
     entrypoint: Name,
-    rules: [LRRule]
+    rules: [LRRule],
+    -- thing that generates the initial action state, i.e. let state = <Expr> in
+    initActionState: Expr
   }
 
   type LRStateItem = {
     name: Name,
     terms: [LRTerm],
     stackPointer: Int,
-    lookahead: [LRToken],
+    lookahead: [TokenRepr],
     ruleIdx: Int -- index of the rule that this item originates from
   }
 
@@ -65,27 +65,27 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     syntaxDef: LRSyntaxDef,
     -- Types for non-terminal symbols and tokens
     nonTerminalTypes: Map Name Type,
-    tokenType: Type,
+    tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
     -- The generated LR states, shifts, gotos, and reductions
     states: [Set LRStateItem],
-    shifts: Map Int [{lookahead: [LRToken], toIdx: Int}],
+    shifts: Map Int [{lookahead: [TokenRepr], toIdx: Int}],
     gotos: Map Int [{name: Name, toIdx: Int}],
-    reductions: Map Int [{lookahead: [LRToken], ruleIdx: Int}]
+    reductions: Map Int [{lookahead: [TokenRepr], ruleIdx: Int}]
   }
 
 
   sem lrTerm2string : LRTerm -> String
   sem lrTerm2string =
-  | Terminal t -> join (["Term(", lrtoken2string t, ")"])
-  | NonTerminal n -> join (["NonTerminal(", nameGetStr n, ")"])
+  | LRTerminal t -> join (["Term(", tokReprToStr t, ")"])
+  | LRNonTerminal n -> join (["NonTerminal(", nameGetStr n, ")"])
 
 
   sem lrTermCmp2 : (LRTerm, LRTerm) -> Int
   sem lrTermCmp2 =
-  | (Terminal t1, Terminal t2) -> tokenCmp t1 t2
-  | (NonTerminal n1, NonTerminal n2) -> nameCmp n1 n2
-  | (Terminal _, NonTerminal _) -> negi 1
-  | (NonTerminal _, Terminal _) -> 1
+  | (LRTerminal t1, LRTerminal t2) -> tokReprCompare t1 t2
+  | (LRNonTerminal n1, LRNonTerminal n2) -> nameCmp n1 n2
+  | (LRTerminal _, LRNonTerminal _) -> negi 1
+  | (LRNonTerminal _, LRTerminal _) -> 1
 
 
   sem lrTermCmp : LRTerm -> LRTerm -> Int
@@ -107,7 +107,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     if neqi cTerms 0 then cTerms else
     let cStackPointer = subi lhs.stackPointer rhs.stackPointer in
     if neqi cStackPointer 0 then cStackPointer else
-    let cLookahead = seqCmp tokenCmp lhs.lookahead rhs.lookahead in
+    let cLookahead = seqCmp tokReprCompare lhs.lookahead rhs.lookahead in
     if neqi cLookahead 0 then cLookahead else
     let cRuleIdx = subi lhs.ruleIdx rhs.ruleIdx in
     cRuleIdx
@@ -131,34 +131,34 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   --         for [t_{i+1},...t_j] in ComposeFirst(n - i, rest):
   --           ret <- ret U {[t_1,..t_i,t_{i+1},...t_j]}
   --     return ret
-  sem lrComposeFirst: Int -> Map LRTerm (Set [LRToken]) -> [LRTerm] -> Set [LRToken]
+  sem lrComposeFirst: Int -> Map LRTerm (Set [TokenRepr]) -> [LRTerm] -> Set [TokenRepr]
   sem lrComposeFirst k firstMap =
   | [y1] ->
     -- Return first k from the firstMap
-    setFold (lam acc: Set [LRToken]. lam y1_tokens: [LRToken].
+    setFold (lam acc: Set [TokenRepr]. lam y1_tokens: [TokenRepr].
       setInsert (subsequence y1_tokens 0 k) acc
-    ) (setEmpty (seqCmp tokenCmp)) (mapLookupOrElse (lam. setEmpty (seqCmp tokenCmp)) y1 firstMap)
+    ) (setEmpty (seqCmp tokReprCompare)) (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) y1 firstMap)
   | [y1, y2] ++ rest ->
-    setFold (lam acc: Set [LRToken]. lam y1_tokens: [LRToken].
+    setFold (lam acc: Set [TokenRepr]. lam y1_tokens: [TokenRepr].
       if geqi (length y1_tokens) k then
         setInsert (subsequence y1_tokens 0 k) acc
       else
-        setFold (lam acc: Set [LRToken]. lam rest_tokens: [LRToken].
+        setFold (lam acc: Set [TokenRepr]. lam rest_tokens: [TokenRepr].
           setInsert (concat y1_tokens rest_tokens) acc
         ) acc (lrComposeFirst (subi k (length y1_tokens)) firstMap (cons y2 rest))
-    ) (setEmpty (seqCmp tokenCmp)) (mapLookupOrElse (lam. setEmpty (seqCmp tokenCmp)) y1 firstMap)
+    ) (setEmpty (seqCmp tokReprCompare)) (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) y1 firstMap)
   | [] ->
-    setInsert [] (setEmpty (seqCmp tokenCmp))
+    setInsert [] (setEmpty (seqCmp tokReprCompare))
 
 
   -- FIRST_k(S) is the set of sequences of all terminals that can appear
   -- for a term S, truncated to the first k symbols.
-  sem lrFirst : Int -> LRSyntaxDef -> Map LRTerm (Set [LRToken])
+  sem lrFirst : Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr])
   sem lrFirst k =
   | syntaxDef ->
     -- Compile a set of all terms in the syntax definition
     let allTerms: Set LRTerm = foldl (lam acc: Set LRTerm. lam rule: LRRule.
-      let acc = setInsert (NonTerminal rule.name) acc in
+      let acc = setInsert (LRNonTerminal rule.name) acc in
       foldl (lam acc: Set LRTerm. lam term: LRTerm. setInsert term acc) acc rule.terms
     ) (setEmpty lrTermCmp) syntaxDef.rules in
 
@@ -167,18 +167,18 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     --     FIRSK_k(t) = {[t]}
     --   for all non-terminals S:
     --     FIRST_k(S) = {}
-    let firstK: Map LRTerm (Set [LRToken]) = setFold (lam acc: Map LRTerm (Set [LRToken]). lam term: LRTerm.
+    let firstK: Map LRTerm (Set [TokenRepr]) = setFold (lam acc: Map LRTerm (Set [TokenRepr]). lam term: LRTerm.
       switch term
-      case Terminal t then mapInsert term (setInsert [t] (setEmpty (seqCmp tokenCmp))) acc
-      case NonTerminal _ then mapInsert term (setEmpty (seqCmp tokenCmp)) acc
+      case LRTerminal t then mapInsert term (setInsert [t] (setEmpty (seqCmp tokReprCompare))) acc
+      case LRNonTerminal _ then mapInsert term (setEmpty (seqCmp tokReprCompare)) acc
       end
     ) (mapEmpty lrTermCmp) allTerms in
 
     -- Convenience functions for insertions
-    let firstInsert: LRTerm -> Set [LRToken] -> Map LRTerm (Set [LRToken]) -> Map LRTerm (Set [LRToken]) = lam term. lam tokenSet. lam firstMap.
+    let firstInsert: LRTerm -> Set [TokenRepr] -> Map LRTerm (Set [TokenRepr]) -> Map LRTerm (Set [TokenRepr]) = lam term. lam tokenSet. lam firstMap.
       mapInsert term
                 (setUnion tokenSet
-                          (mapLookupOrElse (lam. setEmpty (seqCmp tokenCmp))
+                          (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare))
                                            term
                                            firstMap))
                 firstMap
@@ -190,14 +190,14 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     --       FIRST_k(S) <- FIRST_k(S) U {[]}  -- empty production
     --     else if for all Y_i, FIRST_k(Y_i) != ø:
     --       FIRST_k(S) <- FIRST_k(S) U ComposeFirst(k, [Y_1,Y_2,...,Y_n])
-    recursive let iterate = lam firstMap: Map LRTerm (Set [LRToken]).
-      let resultMap = foldl (lam firstMap: Map LRTerm (Set [LRToken]). lam rule: LRRule.
+    recursive let iterate = lam firstMap: Map LRTerm (Set [TokenRepr]).
+      let resultMap = foldl (lam firstMap: Map LRTerm (Set [TokenRepr]). lam rule: LRRule.
         if eqi (length rule.terms) 0 then
-          firstInsert (NonTerminal rule.name) (setInsert [] (setEmpty (seqCmp tokenCmp))) firstMap
-        else if any (lam term: LRTerm. setIsEmpty (mapLookupOrElse (lam. setEmpty (seqCmp tokenCmp)) term firstMap)) rule.terms then
+          firstInsert (LRNonTerminal rule.name) (setInsert [] (setEmpty (seqCmp tokReprCompare))) firstMap
+        else if any (lam term: LRTerm. setIsEmpty (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) term firstMap)) rule.terms then
           firstMap -- one of symbols for these rules lack an instance of firskK, skip this for now
         else
-          firstInsert (NonTerminal rule.name) (lrComposeFirst k firstMap rule.terms) firstMap
+          firstInsert (LRNonTerminal rule.name) (lrComposeFirst k firstMap rule.terms) firstMap
       ) firstMap (syntaxDef.rules) in
       if mapEq setEq resultMap firstMap then
         resultMap
@@ -216,7 +216,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   --           I <- I U {(X -> .y, W)}
   --   until I does not change
   --   return I
-  sem lrClosure: Int -> LRSyntaxDef -> Map LRTerm (Set [LRToken]) -> Set LRStateItem -> Set LRStateItem
+  sem lrClosure: Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr]) -> Set LRStateItem -> Set LRStateItem
   sem lrClosure k syntaxDef firstMap =
   | inSet ->
     -- OPT(johnwikman, 2023-01-14): This performs a bunch of unnecessary checks
@@ -226,13 +226,13 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     recursive let iterate = lam inSet: Set LRStateItem.
       let resultSet = setFold (lam accSet: Set LRStateItem. lam item: LRStateItem.
         match subsequence item.terms item.stackPointer (length item.terms)
-        with [NonTerminal x] ++ b then
-          let bL: [LRTerm] = concat b (map (lam t. Terminal t) item.lookahead) in
-          let firstK_bL: Set [LRToken] = lrComposeFirst k firstMap bL in
+        with [LRNonTerminal x] ++ b then
+          let bL: [LRTerm] = concat b (map (lam t. LRTerminal t) item.lookahead) in
+          let firstK_bL: Set [TokenRepr] = lrComposeFirst k firstMap bL in
           foldli (lam accSet: Set LRStateItem. lam ruleIdx: Int. lam rule: LRRule.
             if nameEq x rule.name then
               -- Process this rule
-              setFold (lam accSet: Set LRStateItem. lam w: [LRToken].
+              setFold (lam accSet: Set LRStateItem. lam w: [TokenRepr].
                 let newItem: LRStateItem = {
                   name = x,
                   terms = rule.terms,
@@ -261,7 +261,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   --   for any item (A -> a.Xb, L) in I
   --     add (A -> aX.b, L) to J
   --   return Closure(J)
-  sem lrGoto: Int -> LRSyntaxDef -> Map LRTerm (Set [LRToken]) -> Set LRStateItem -> LRTerm -> Set LRStateItem
+  sem lrGoto: Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr]) -> Set LRStateItem -> LRTerm -> Set LRStateItem
   sem lrGoto k syntaxDef firstMap inSet =
   | x ->
     let j = setFold (lam jAcc: Set LRStateItem. lam item: LRStateItem.
@@ -276,21 +276,25 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     lrClosure k syntaxDef firstMap j
 
 
-  -- Initialize T to {Closure(({S' -> .S$}, $))}
-  -- Initialize E to empty
-  -- repeat
-  --  for each state I in T
-  --    for each item (A -> a.Xb, z) in I
-  --      let J be GOTO(I, X)
-  --      T <- T U {J}
-  --      E <- E U {I --X-> J}
-  -- until E and T did not change in this iteration
-  -- R <- {}
-  -- for each state I in T
-  --   for each item (A -> a., z) in I
-  --     R <- R U {(I, z, A -> a)}
-  sem lrCreateParseTable: Int -> Type -> LRSyntaxDef -> Either LRParseTable ErrorSection
-  sem lrCreateParseTable k tokenType =
+  /-
+  -- Generate the LR(k) parse table.
+  --
+  -- Arguments:
+  --  - k: Int
+  --      Lookahead for the parser. Must be greater than or equal to 1.
+  --  - tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type}
+  --      A lookup for each token representation to its constructor name in the
+  --      tokenType ADT as well as the type of its argument.
+  --  - syntaxDef: LRSyntaxDef
+  --      The syntax definition for the grammar to be parsed. See documentation
+  --      for LRRule for how each rule must be specified.
+  --
+  -- Returns:
+  --   A result type containing the generated parse table on success. Otherwise
+  --   a list of errors.
+  -/
+  sem lrCreateParseTable: Int -> Map TokenRepr {conIdent: Name, conArg: Type} -> LRSyntaxDef -> Result String String LRParseTable
+  sem lrCreateParseTable k tokenConTypes =
   | syntaxDef ->
     -- Infer types for each non-terminal
     let nonTerminalTypesResult = foldl (lam acc: ([Name], Map Name Type). lam rule: LRRule.
@@ -299,15 +303,15 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
       in
       match acc with (errs, mapAcc) in
       match mapLookup rule.name mapAcc with Some prevTy then
-        if neqi 0 (cmpTypeH (prevTy, getFinalType rule.prodfun.ty)) then
+        if neqi 0 (cmpTypeH (prevTy, getFinalType (tyTm rule.action))) then
           (snoc errs rule.name, mapAcc)
         else
           acc
       else
-        (errs, mapInsert rule.name (getFinalType rule.prodfun.ty) mapAcc)
+        (errs, mapInsert rule.name (getFinalType (tyTm rule.action)) mapAcc)
     ) ([], mapEmpty nameCmp) syntaxDef.rules in
     match nonTerminalTypesResult with (([_] ++ _) & errs, _) then
-      Right {errorDefault with msg = join ["Conflicting types for the non-terminal(s): ", strJoin ", " (map nameGetStr (distinct nameEq errs))]}
+      result.err (join ["Conflicting types for the non-terminal(s): ", strJoin ", " (map nameGetStr (distinct nameEq errs))])
     else match nonTerminalTypesResult with (_, nonTerminalTypes) in
 
     -- Type-check the type signature, make sure the production function
@@ -318,30 +322,34 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
           then getArgTypes (snoc acc r.from) r.to
           else acc -- skip the final return type
       in
-      let argtypes: [Type] = getArgTypes [] rule.prodfun.ty in
-      if neqi (length argtypes) (length rule.terms) then
+      let argtypes = getArgTypes [] (tyTm rule.action) in
+      if neqi (length argtypes) (addi 1 (length rule.terms)) then
         snoc errs (join [
           "Argument type mismatch for rule ", int2string ruleIdx, ". Got ",
           int2string (length argtypes), " argument in production function, expected ",
-          int2string (length rule.terms), " arguments."
+          int2string (addi 1 (length rule.terms)), " arguments."
         ])
       else --continue
+      let stackTypes = tail argtypes in -- these can be part of arguments on the stack
       let maybeErrs = zipWith (lam term: LRTerm. lam ty: Type.
         switch term
-        case NonTerminal n then
+        case LRNonTerminal n then
           match mapLookup n nonTerminalTypes with Some ntType then
             if neqi 0 (cmpTypeH (ty, ntType))
               then Some (join ["Type mismatch for non-terminal \"", nameGetStr n, "\""])
               else None ()
           else
             Some (join ["Unrecognized non-terminal \"", nameGetStr n, "\""])
-        case Terminal t then
+        case LRTerminal t then
           -- NOTE(johnwikman, 2022-01-20): Maybe we want more than one type for tokens?
-          if neqi 0 (cmpTypeH (ty, tokenType))
-            then Some "Type mismatch for token"
-            else None ()
+          match mapLookup t tokenConTypes with Some tokCon then
+            if neqi 0 (cmpTypeH (ty, tokCon.conArg))
+              then Some (join ["Type mismatch for token ", tokReprToStr t])
+              else None ()
+          else
+            Some (join ["could not find a type for token ", tokReprToStr t])
         end
-      ) rule.terms argtypes in
+      ) rule.terms stackTypes in
       match filterOption maybeErrs with ([_] ++ _) & actualErrs then
         snoc errs (strJoin "\n - " (
           cons (join ["Argument type mismatch for rule ", int2string ruleIdx, ":"])
@@ -351,30 +359,41 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
         errs
     ) [] syntaxDef.rules in
     match ruleArgTypesResult with ([_] ++ _) & errs then
-      Right {errorDefault with msg = strJoin "\n" errs}
+      result.err (strJoin "\n" errs)
     else -- Types are OK! Continue
 
+    let _noEOFtype = nameSym "NoEOF" in
     let entryType = mapLookupOrElse (lam. tyunknown_) syntaxDef.entrypoint nonTerminalTypes in
+    let eofCon = mapLookupOrElse (lam. {conIdent = _noEOFtype, conArg = tyunknown_}) (EOFRepr {}) tokenConTypes in
+
+    if nameEq eofCon.conIdent _noEOFtype then
+      result.err "No type provided for EOF tokens"
+    else --continue
 
     -- create the entrypoint rule
     let initRule: LRRule = {
       name = nameSym "_entrypoint_",
-      terms = [NonTerminal syntaxDef.entrypoint, Terminal (LRTokenEOF {info = NoInfo ()})],
-      prodfun = {name = nameNoSym "lrParseGenEntrypoint", ty = tyarrows_ [entryType, tokenType, entryType]}
+      terms = [LRNonTerminal syntaxDef.entrypoint, LRTerminal (EOFRepr {})],
+      action = let entryArgName = nameSym "entryArg" in
+               withType (tyarrows_ [tyunknown_, entryType, eofCon.conArg, entryType])
+                        (nlams_ [(nameNoSym "state", tyunknown_),
+                                 (entryArgName, entryType),
+                                 (nameNoSym "eofToken", eofCon.conArg)]
+                                (nvar_ entryArgName))
     } in
     let syntaxDef = {syntaxDef with rules = snoc syntaxDef.rules initRule} in
     let nonTerminalTypes = mapInsert initRule.name entryType nonTerminalTypes in
-    let firstK: Map LRTerm (Set [LRToken]) = lrFirst k syntaxDef in
+    let firstK: Map LRTerm (Set [TokenRepr]) = lrFirst k syntaxDef in
 
     if not (mapAll (lam fst. not (setIsEmpty fst)) firstK) then
-      Right {errorDefault with msg = "Invalid grammar. The FIRST set is not defined for one or more of its non-terminals."}
+      result.err ("Invalid grammar. The FIRST set is not defined for one or more of its non-terminals.")
     else --continue
 
     let initState: Set LRStateItem = setInsert {
       name = initRule.name,
       terms = initRule.terms,
       stackPointer = 0,
-      lookahead = [],
+      lookahead = make k (EOFRepr {}),
       ruleIdx = subi (length syntaxDef.rules) 1 -- We inserted the initial rule at the back
     } (setEmpty lrStateItemCmp) in
     let initState: Set LRStateItem = lrClosure k syntaxDef firstK initState in
@@ -383,12 +402,26 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
       entrypointIdx = 0,
       syntaxDef = syntaxDef,
       nonTerminalTypes = nonTerminalTypes,
-      tokenType = tokenType,
+      tokenConTypes = tokenConTypes,
       states = [initState],
       shifts = mapEmpty subi,
       gotos = mapEmpty subi,
       reductions = mapEmpty subi
     } in
+
+    -- Initialize T to {Closure(({S' -> .S$}, $))}
+    -- Initialize E to empty
+    -- repeat
+    --  for each state I in T
+    --    for each item (A -> a.Xb, z) in I
+    --      let J be GOTO(I, X)
+    --      T <- T U {J}
+    --      E <- E U {I --X-> J}
+    -- until E and T did not change in this iteration
+    -- R <- {}
+    -- for each state I in T
+    --   for each item (A -> a., z) in I
+    --     R <- R U {(I, z, A -> a)}
 
     -- Iterate to create all states and transitions
     recursive let iterate = lam table: LRParseTable. lam stateIdxLookup: Map (Set LRStateItem) Int. lam nextStateIdx: Int.
@@ -398,7 +431,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
       let state = get table.states nextStateIdx in
 
       let cmpShift = lam lhs. lam rhs.
-        let cLookahead = seqCmp tokenCmp lhs.lookahead rhs.lookahead in
+        let cLookahead = seqCmp tokReprCompare lhs.lookahead rhs.lookahead in
         if neqi cLookahead 0 then cLookahead
         else subi lhs.toIdx rhs.toIdx
       in
@@ -408,7 +441,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
         else subi lhs.toIdx rhs.toIdx
       in
 
-      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [LRToken], toIdx: Int}, Set {name: Name, toIdx: Int}). lam item: LRStateItem.
+      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [TokenRepr], toIdx: Int}, Set {name: Name, toIdx: Int}). lam item: LRStateItem.
         match acc with (table, stateIdxLookup, stateShifts, stateGotos) in
         match subsequence item.terms item.stackPointer (length item.terms)
         with ([x] ++ b) & postStackTerms then
@@ -427,12 +460,12 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
           match jInsertResult with (table, stateIdxLookup, jIdx) in
 
           switch x
-          case Terminal t then
+          case LRTerminal t then
             -- This is a shift action
-            let possibleLookaheads = lrComposeFirst k firstK (concat postStackTerms (map (lam t2. Terminal t2) item.lookahead)) in
+            let possibleLookaheads = lrComposeFirst k firstK (concat postStackTerms (map (lam t2. LRTerminal t2) item.lookahead)) in
             let stateShifts = setFold (lam acc. lam lh. setInsert {lookahead = lh, toIdx = jIdx} acc) stateShifts possibleLookaheads in
             (table, stateIdxLookup, stateShifts, stateGotos)
-          case NonTerminal n then
+          case LRNonTerminal n then
             -- This is a Goto action
             let stateGotos = setInsert {name = n, toIdx = jIdx} stateGotos in
             (table, stateIdxLookup, stateShifts, stateGotos)
@@ -453,7 +486,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
 
     -- Construct the reductions
     let table = foldli (lam tableAcc: LRParseTable. lam stateIdx: Int. lam state: Set LRStateItem.
-      let stateReductions = setFold (lam redAcc: [{lookahead: [LRToken], ruleIdx: Int}]. lam item: LRStateItem.
+      let stateReductions = setFold (lam redAcc: [{lookahead: [TokenRepr], ruleIdx: Int}]. lam item: LRStateItem.
         if eqi item.stackPointer (length item.terms) then
           snoc redAcc {lookahead = item.lookahead, ruleIdx = item.ruleIdx}
         else
@@ -465,24 +498,24 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     -- Check for conflicts
     let conflicts = foldli (lam acc. lam stateIdx. lam.
       match (mapLookup stateIdx table.shifts, mapLookup stateIdx table.reductions) with (Some shifts, Some reductions) then
-        foldli (lam acc. lam reduceIdx. lam r1: {lookahead: [LRToken], ruleIdx: Int}.
+        foldli (lam acc. lam reduceIdx. lam r1: {lookahead: [TokenRepr], ruleIdx: Int}.
           -- reduce-reduce check
-          let acc = foldl (lam acc. lam r2: {lookahead: [LRToken], ruleIdx: Int}.
-            if and (eqSeq tokenEq r1.lookahead r2.lookahead) (neqi r1.ruleIdx r2.ruleIdx) then
+          let acc = foldl (lam acc. lam r2: {lookahead: [TokenRepr], ruleIdx: Int}.
+            if and (eqSeq tokReprEq r1.lookahead r2.lookahead) (neqi r1.ruleIdx r2.ruleIdx) then
               snoc acc (join [
                 "reduce-reduce conflict in state ", int2string stateIdx, " on lookahead ",
-                "[", strJoin ", " (map lrtoken2string r1.lookahead), "] (reduce by rule ",
+                "[", strJoin ", " (map tokReprToStr r1.lookahead), "] (reduce by rule ",
                 int2string r1.ruleIdx, " and ", int2string r2.ruleIdx, ")"
               ])
             else
               acc
           ) acc (subsequence reductions (addi reduceIdx 1) (length reductions)) in
           -- shift-reduce check
-          foldl (lam acc. lam sh: {lookahead: [LRToken], toIdx: Int}.
-            if eqSeq tokenEq r1.lookahead sh.lookahead then
+          foldl (lam acc. lam sh: {lookahead: [TokenRepr], toIdx: Int}.
+            if eqSeq tokReprEq r1.lookahead sh.lookahead then
               snoc acc (join [
                 "shift-reduce conflict in state ", int2string stateIdx, " on lookahead ",
-                "[", strJoin ", " (map lrtoken2string r1.lookahead), "] (reduce by rule ",
+                "[", strJoin ", " (map tokReprToStr r1.lookahead), "] (reduce by rule ",
                 int2string r1.ruleIdx, " and shift into state ", int2string sh.toIdx, ")"
               ])
             else
@@ -495,9 +528,9 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
 
     match conflicts with [] then
       -- Table is now constructed and well-formed
-      Left table
+      result.ok table
     else
-      Right {errorDefault with msg = strJoin "\n" (cons "Found following conflicts:" (map (concat " - ") conflicts))}
+      result.err (strJoin "\n" (cons "Found following conflicts:" (map (concat " - ") conflicts)))
 
 
   -- Creates a multi-line representation of the LR parse table, with each line
@@ -532,7 +565,7 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
         let prefix = if eqi item.stackPointer (length item.terms) then snoc prefix " [STACK]" else prefix in
         let suffix = join [
           " | (rule ", int2string item.ruleIdx, ")",
-          " | (lookahead [", strJoin ", " (map lrtoken2string item.lookahead), "])"
+          " | (lookahead [", strJoin ", " (map tokReprToStr item.lookahead), "])"
         ] in
         snoc acc (join prefix, suffix)
       ) [] state in
@@ -544,9 +577,9 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     ) lines lrtable.states in
 
     let lines = snoc lines (concat (make indent ' ') "Shifts:") in
-    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateShifts: [{lookahead: [LRToken], toIdx: Int}].
-      foldl (lam lines. lam shift: {lookahead: [LRToken], toIdx: Int}.
-        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --[", strJoin "," (map lrtoken2string shift.lookahead), "]--> ", int2string shift.toIdx])
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateShifts: [{lookahead: [TokenRepr], toIdx: Int}].
+      foldl (lam lines. lam shift: {lookahead: [TokenRepr], toIdx: Int}.
+        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --[", strJoin "," (map tokReprToStr shift.lookahead), "]--> ", int2string shift.toIdx])
       ) lines stateShifts
     ) lines lrtable.shifts in
 
@@ -558,13 +591,13 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
     ) lines lrtable.gotos in
 
     let lines = snoc lines (concat (make indent ' ') "Reductions:") in
-    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateReductions: [{lookahead: [LRToken], ruleIdx: Int}].
-      foldl (lam lines. lam red: {lookahead: [LRToken], ruleIdx: Int}.
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateReductions: [{lookahead: [TokenRepr], ruleIdx: Int}].
+      foldl (lam lines. lam red: {lookahead: [TokenRepr], ruleIdx: Int}.
         snoc lines (join [
           make (addi indent 2) ' ',
           "in state ", int2string stateIdx,
           ", reduce by rule ", int2string red.ruleIdx,
-          " on lookahead [", strJoin ", " (map lrtoken2string red.lookahead), "]"
+          " on lookahead [", strJoin ", " (map tokReprToStr red.lookahead), "]"
         ])
       ) lines stateReductions
     ) lines lrtable.reductions in
@@ -574,13 +607,13 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
 
   -- Generates AST-code for an LR parser corresponding to the provided parse
   -- table. The generated code will follow this structure:
-  -- let myLRParser: all a. (a -> (a, Option LRToken)) -> a -> Either (a, <EntrypointReturnType>) [ErrorSection] =
+  -- let myLRParser: all a. (a -> (a, Option LRToken)) -> a -> Result String String a =
   --   lam nextToken. lam lexerState.
-  --   let stack_LRToken: [<LRTokenType>] = createList () in
-  --   let stack_NType0: [<NonTerminalType0>] = createList () in
-  --   let stack_NType1: [<NonTerminalType1>] = createList () in
+  --   let stack_LRToken: [<LRTokenType>] = toList [] in
+  --   let stack_NType0: [<NonTerminalType0>] = toList [] in
+  --   let stack_NType1: [<NonTerminalType1>] = toList [] in
   --   ...
-  --   let stack_NType(k-1): [<NonTerminalType(k-1)>] = createList () in
+  --   let stack_NType(k-1): [<NonTerminalType(k-1)>] = toList [] in
   --   let stacks = {
   --     stack_LRToken = stack_LRToken,
   --     stack_NType0 = stack_NType0,
@@ -588,13 +621,13 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   --     ...
   --     stack_NType(k-1) = stack_NType(k-1)
   --   } in
-  --   let gotos_ON_NonTerminal0: [Int] = asRope [..., ..., ..., ...] in
-  --   let gotos_ON_NonTerminal1: [Int] = asRope [..., ..., ..., ...] in
+  --   let gotos_ON_NonTerminal0: [Int] = toRope [..., ..., ..., ...] in
+  --   let gotos_ON_NonTerminal1: [Int] = toRope [..., ..., ..., ...] in
   --   ...
   --   recursive let runLRParser =
   --     lam stacks: {...}.
   --     lam trace: [Int].
-  --     lam lookahead: [LRToken].
+  --     lam lookahead: [a].
   --     ...
   --     let currentState: Int = head trace in
   --     switch currentState
@@ -637,52 +670,42 @@ lang LRParser = LRTokens + MExprAst + MExprCmp
   sem lrGenerateParser: Name -> LRParseTable -> Expr
   sem lrGenerateParser functionName =
   | table ->
+    match token with MyTok a in
     TODO ()
-  -/
+  -- -/
 end
 
 
 
 
 lang LRParserTest = LRParser
-  syn LRToken =
-  | LRTokenIdentifier {info: Info, val: String}
-  | LRTokenLParen {info: Info}
-  | LRTokenRParen {info: Info}
-  | LRTokenComma {info: Info}
-  | LRTokenStar {info: Info}
-  | LRTokenEquals {info: Info}
-
-  sem lrtoken2string =
-  | LRTokenIdentifier r -> join ["Ident\"", r.val, "\""]
-  | LRTokenLParen _ -> "("
-  | LRTokenRParen _ -> ")"
-  | LRTokenComma _ -> ","
-  | LRTokenStar _ -> "*"
-  | LRTokenEquals _ -> "="
+                  + LIdentTokenParser
+                  + BracketTokenParser
+                  + CommaTokenParser
+                  + CharTokenParser
 end
 
 
 mexpr
 use LRParserTest in
 
-let tokEOF = LRTokenEOF {info = NoInfo ()} in
-let tokIdent = LRTokenIdentifier {info = NoInfo (), val = ""} in
-let tokLParen = LRTokenLParen {info = NoInfo ()} in
-let tokRParen = LRTokenRParen {info = NoInfo ()} in
-let tokComma = LRTokenComma {info = NoInfo ()} in
-let tokStar = LRTokenStar {info = NoInfo ()} in
-let tokEquals = LRTokenEquals {info = NoInfo ()} in
+let tokEOF = EOFRepr {} in
+let tokIdent = LIdentRepr {} in
+let tokLParen = LParenRepr {} in
+let tokRParen = RParenRepr {} in
+let tokComma = CommaRepr {} in
+let tokChar = CharRepr {} in
 
-let tyLRToken_ = tyvar_ "LRToken" in
+let tyLRToken_ = tyvar_ "TokenRepr" in
 
 type LRTestCase = {
+  tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
   name: String,
   syntaxDef: LRSyntaxDef,
   isLR1: Bool,
-  first1: Map LRTerm (Set [LRToken]),
-  first2: Map LRTerm (Set [LRToken]),
-  first3: Map LRTerm (Set [LRToken])
+  first1: Map LRTerm (Set [TokenRepr]),
+  first2: Map LRTerm (Set [TokenRepr]),
+  first3: Map LRTerm (Set [TokenRepr])
 } in
 
 
@@ -691,83 +714,106 @@ let testcases: [LRTestCase] = [
   let _S = nameSym "S" in
   let _E = nameSym "E" in
   let _V = nameSym "V" in
+  let _tyComma = tyunit_ in
+  let _tyIdent = tystr_ in
+  let _tyChar = tychar_ in 
+  let _tyS = tystr_ in
+  let _tyE = tystr_ in
+  let _tyV = tystr_ in 
   {
+    tokenConTypes = mapFromSeq tokReprCompare [
+      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
+      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
+      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
+      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
+    ],
     name = "LR1 Example",
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _V, Terminal tokEquals, NonTerminal _E],
-         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tystr_, tyLRToken_, tystr_, tyvar_ "Assignment"]}},
-        {name = _S, terms = [NonTerminal _E],
-         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tystr_, tyvar_ "Assignment"]}},
-        {name = _E, terms = [NonTerminal _V],
-         prodfun = {name = nameNoSym "E1", ty = tyarrows_ [tystr_, tystr_]}},
-        {name = _V, terms = [Terminal tokIdent],
-         prodfun = {name = nameNoSym "V1", ty = tyarrows_ [tyLRToken_, tystr_]}},
-        {name = _V, terms = [Terminal tokStar, NonTerminal _E],
-         prodfun = {name = nameNoSym "V2", ty = tyarrows_ [tyLRToken_, tystr_, tystr_]}}
-      ]
+        {name = _S, terms = [LRNonTerminal _V, LRTerminal tokComma, LRNonTerminal _E],
+         action = withType (tyarrows_ [tyunknown_, _tyV, _tyComma, _tyE, _tyS])
+                           (ulams_ ["actionState", "a1_V", "a2_Comma", "a3_State"]
+                                   (str_ "S1"))},
+        {name = _S, terms = [LRNonTerminal _E],
+         action = withType (tyarrows_ [tyunknown_, _tyE, _tyS])
+                           (ulams_ ["actionState", "a1_E"]
+                                   (str_ "S2"))},
+        {name = _E, terms = [LRNonTerminal _V],
+         action = withType (tyarrows_ [tyunknown_, _tyV, _tyE])
+                           (ulams_ ["actionState", "a1_V"]
+                                   (str_ "E1"))},
+        {name = _V, terms = [LRTerminal tokIdent],
+         action = withType (tyarrows_ [tyunknown_, _tyIdent, _tyV])
+                           (ulams_ ["actionState", "a1_Ident"]
+                                   (str_ "V1"))},
+        {name = _V, terms = [LRTerminal tokChar, LRNonTerminal _E],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyE, _tyV])
+                           (ulams_ ["actionState", "a1_Char", "a2_E"]
+                                   (str_ "V2"))}
+      ],
+      initActionState = unit_
     },
     isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokIdent], [tokStar]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokIdent], [tokChar]
        ]),
-      (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
-        [tokIdent], [tokStar]
+      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
+        [tokIdent], [tokChar]
        ]),
-      (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
-        [tokIdent], [tokStar]
+      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
+        [tokIdent], [tokChar]
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokIdent, tokEquals],
-        [tokStar, tokIdent],
-        [tokStar, tokStar]
+        [tokIdent, tokComma],
+        [tokChar, tokIdent],
+        [tokChar, tokChar]
        ]),
-      (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
+      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokStar, tokIdent],
-        [tokStar, tokStar]
+        [tokChar, tokIdent],
+        [tokChar, tokChar]
        ]),
-      (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
+      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokStar, tokIdent],
-        [tokStar, tokStar]
+        [tokChar, tokIdent],
+        [tokChar, tokChar]
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokIdent, tokEquals, tokStar],
-        [tokIdent, tokEquals, tokIdent],
-        [tokStar, tokIdent],
-        [tokStar, tokIdent, tokEquals],
-        [tokStar, tokStar, tokIdent],
-        [tokStar, tokStar, tokStar]
+        [tokIdent, tokComma, tokChar],
+        [tokIdent, tokComma, tokIdent],
+        [tokChar, tokIdent],
+        [tokChar, tokIdent, tokComma],
+        [tokChar, tokChar, tokIdent],
+        [tokChar, tokChar, tokChar]
        ]),
-      (NonTerminal _E, setOfSeq (seqCmp tokenCmp) [
+      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokStar, tokIdent],
-        [tokStar, tokStar, tokIdent],
-        [tokStar, tokStar, tokStar]
+        [tokChar, tokIdent],
+        [tokChar, tokChar, tokIdent],
+        [tokChar, tokChar, tokChar]
        ]),
-      (NonTerminal _V, setOfSeq (seqCmp tokenCmp) [
+      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
         [tokIdent],
-        [tokStar, tokIdent],
-        [tokStar, tokStar, tokIdent],
-        [tokStar, tokStar, tokStar]
+        [tokChar, tokIdent],
+        [tokChar, tokChar, tokIdent],
+        [tokChar, tokChar, tokChar]
        ])
     ]
   },
@@ -775,70 +821,95 @@ let testcases: [LRTestCase] = [
   let _S = nameSym "S" in
   let _R = nameSym "R" in
   let _T = nameSym "T" in
+  let _tyComma = tyunit_ in
+  let _tyIdent = tystr_ in
+  let _tyChar = tychar_ in 
+  let _tyS = tystr_ in
+  let _tyR = tystr_ in
+  let _tyT = tystr_ in 
   {
+    tokenConTypes = mapFromSeq tokReprCompare [
+      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
+      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
+      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
+      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
+    ],
     name = "LR2 Example",
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [NonTerminal _R, NonTerminal _S],
-         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tyunit_, tyunit_, tyunit_]}},
-        {name = _S, terms = [NonTerminal _R],
-         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tyunit_, tyunit_]}},
-        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, NonTerminal _T],
-         prodfun = {name = nameNoSym "R1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tyunit_, tyunit_]}},
-        {name = _T, terms = [Terminal tokStar],
-         prodfun = {name = nameNoSym "T1", ty = tyarrows_ [tyLRToken_, tyunit_]}},
-        {name = _T, terms = [Terminal tokEquals],
-         prodfun = {name = nameNoSym "T2", ty = tyarrows_ [tyLRToken_, tyunit_]}},
+        {name = _S, terms = [LRNonTerminal _R, LRNonTerminal _S],
+         action = withType (tyarrows_ [tyunknown_, _tyR, _tyS, _tyS])
+                           (ulams_ ["actionState", "a1_R", "a2_S"]
+                                   (str_ "S1"))},
+        {name = _S, terms = [LRNonTerminal _R],
+         action = withType (tyarrows_ [tyunknown_, _tyR, _tyS])
+                           (ulams_ ["actionState", "a1_R"]
+                                   (str_ "S2"))},
+        {name = _R, terms = [LRTerminal tokChar, LRTerminal tokIdent, LRNonTerminal _T],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyT, _tyR])
+                           (ulams_ ["actionState", "a1_Char", "a2_Ident", "a3_T"]
+                                   (str_ "R1"))},
+        {name = _T, terms = [LRTerminal tokChar],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyT])
+                           (ulams_ ["actionState", "a1_Char"]
+                                   (str_ "T1"))},
+        {name = _T, terms = [LRTerminal tokComma],
+         action = withType (tyarrows_ [tyunknown_, _tyComma, _tyT])
+                           (ulams_ ["actionState", "a1_Comma"]
+                                   (str_ "T2"))},
         {name = _T, terms = [],
-         prodfun = {name = nameNoSym "T3", ty = tyunit_}}
-      ]
+         action = withType (tyarrows_ [tyunknown_, _tyT])
+                           (ulams_ ["actionState"]
+                                   (str_ "T1"))}
+      ],
+      initActionState = unit_
     },
     isLR1 = false,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokEquals], [tokStar], []
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokComma], [tokChar], []
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokEquals], [tokStar], []
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokComma], [tokChar], []
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent],
-        [tokStar, tokIdent, tokStar],
-        [tokStar, tokIdent, tokEquals]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent],
+        [tokChar, tokIdent, tokChar],
+        [tokChar, tokIdent, tokComma]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent],
-        [tokStar, tokIdent, tokStar],
-        [tokStar, tokIdent, tokEquals]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent],
+        [tokChar, tokIdent, tokChar],
+        [tokChar, tokIdent, tokComma]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokEquals], [tokStar], []
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokComma], [tokChar], []
        ])
     ]
   },
@@ -846,76 +917,99 @@ let testcases: [LRTestCase] = [
   let _S = nameSym "S" in
   let _R = nameSym "R" in
   let _T = nameSym "T" in
+  let _tyComma = tyunit_ in
+  let _tyIdent = tystr_ in
+  let _tyChar = tychar_ in 
+  let _tyS = tystr_ in
+  let _tyR = tystr_ in
+  let _tyT = tystr_ in 
   {
+    tokenConTypes = mapFromSeq tokReprCompare [
+      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
+      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
+      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
+      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
+    ],
     name = "GOTO Example",
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokEquals, Terminal tokStar],
-         prodfun = {name = nameNoSym "S1", ty = tyarrows_ [tyLRToken_, tystr_, tystr_, tyLRToken_, tyLRToken_, tyvar_ "SType"]}},
-        {name = _S, terms = [Terminal tokStar, NonTerminal _R, NonTerminal _T, Terminal tokStar, Terminal tokEquals],
-         prodfun = {name = nameNoSym "S2", ty = tyarrows_ [tyLRToken_, tystr_, tystr_, tyLRToken_, tyLRToken_, tyvar_ "SType"]}},
-        {name = _R, terms = [Terminal tokStar, Terminal tokIdent, Terminal tokEquals],
-         prodfun = {name = nameNoSym "R1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tyLRToken_, tystr_]}},
-        {name = _T, terms = [Terminal tokStar, Terminal tokEquals],
-         prodfun = {name = nameNoSym "T1", ty = tyarrows_ [tyLRToken_, tyLRToken_, tystr_]}},
-        {name = _T, terms = [Terminal tokStar, Terminal tokIdent],
-         prodfun = {name = nameNoSym "T2", ty = tyarrows_ [tyLRToken_, tyLRToken_, tystr_]}}
-      ]
+        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokComma, LRTerminal tokChar],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyComma, _tyChar, _tyS])
+                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Comma", "a5_Char"]
+                                   (str_ "S1"))},
+        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokChar, LRTerminal tokComma],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyChar, _tyComma, _tyS])
+                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Char", "a5_Comma"]
+                                   (str_ "S2"))},
+        {name = _R, terms = [LRTerminal tokChar, LRTerminal tokIdent, LRTerminal tokComma],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyComma, _tyR])
+                           (ulams_ ["actionState", "a1_Char", "a2_Ident", "a3_Comma"]
+                                   (str_ "R1"))},
+        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokComma],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyComma, _tyT])
+                           (ulams_ ["actionState", "a1_Char", "a2_Comma"]
+                                   (str_ "T1"))},
+        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokIdent],
+         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyT])
+                           (ulams_ ["actionState", "a1_Char", "a2_Ident"]
+                                   (str_ "T2"))}
+      ],
+      initActionState = unit_
     },
     isLR1 = true,
     first1 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokStar]
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar]
        ])
     ],
     first2 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokStar]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokChar]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokStar,  tokIdent], [tokStar,  tokEquals]
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar,  tokIdent], [tokChar,  tokComma]
        ])
     ],
     first3 = mapFromSeq lrTermCmp [
-      (Terminal tokEquals, setOfSeq (seqCmp tokenCmp) [[tokEquals]]),
-      (Terminal tokIdent, setOfSeq (seqCmp tokenCmp) [[tokIdent]]),
-      (Terminal tokStar, setOfSeq (seqCmp tokenCmp) [[tokStar]]),
-      (NonTerminal _S, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokStar, tokIdent]
+      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
+      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
+      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
+      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokChar, tokIdent]
        ]),
-      (NonTerminal _R, setOfSeq (seqCmp tokenCmp) [
-        [tokStar, tokIdent, tokEquals]
+      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar, tokIdent, tokComma]
        ]),
-      (NonTerminal _T, setOfSeq (seqCmp tokenCmp) [
-        [tokStar,  tokIdent], [tokStar,  tokEquals]
+      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
+        [tokChar,  tokIdent], [tokChar,  tokComma]
        ])
     ]
   }
 ] in
 
 
-let printFirst: Int -> Map LRTerm (Set [LRToken]) -> () = lam k. lam firstMap.
-  mapFoldWithKey (lam. lam term: LRTerm. lam first1: Set [LRToken].
-    match term with NonTerminal _ then
+let printFirst: Int -> Map LRTerm (Set [TokenRepr]) -> () = lam k. lam firstMap.
+  mapFoldWithKey (lam. lam term: LRTerm. lam first1: Set [TokenRepr].
+    match term with LRNonTerminal _ then
       printLn (join ["First_", int2string k, "(", lrTerm2string term, "):"]);
-      setFold (lam. lam tokens: [LRToken].
-        printLn (join ["  [", strJoin ", " (map lrtoken2string tokens), "]"])
+      setFold (lam. lam tokens: [TokenRepr].
+        printLn (join ["  [", strJoin ", " (map tokReprToStr tokens), "]"])
       ) () first1
     else
       ()
@@ -931,15 +1025,15 @@ foldl (lam. lam tc: LRTestCase.
   utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest lrFirst 3 tc.syntaxDef with tc.first3 using mapEq setEq in
 
-  let isLR1_table = match lrCreateParseTable 1 tyLRToken_ tc.syntaxDef with Left _ then true else false in
+  let isLR1_table = match lrCreateParseTable 1 tc.tokenConTypes tc.syntaxDef with ResultOk _ then true else false in
   utest isLR1_table with tc.isLR1 in
 
   printLn "";
-  switch lrCreateParseTable 2 tyLRToken_ tc.syntaxDef
-  case Left lrtable then
+  switch lrCreateParseTable 2 tc.tokenConTypes tc.syntaxDef
+  case ResultOk {value = lrtable} then
     printLn (lrtable2string 2 lrtable);
     printLn "\n\n"
-  case Right err then
-    errorGeneral [err] {single = "", multi = ""}
+  case ResultErr {errors = errors} then
+    errorSingle [] (join (mapValues errors))
   end
 ) () testcases
