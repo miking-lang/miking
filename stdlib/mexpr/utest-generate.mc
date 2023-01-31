@@ -32,7 +32,7 @@ include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
 
 let _utestRuntimeExpected = [
-  "numFailed", "utestRunner", "defaultPprint", "ppBool", "ppInt",
+  "utestRunner", "utestExitOnFailure", "defaultPprint", "ppBool", "ppInt",
   "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt", "eqFloat", "eqChar",
   "eqSeq", "join"
 ]
@@ -393,12 +393,12 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
         ids
       else error "Missing required identifiers in utest runtime file"
 
-  sem numFailedName : () -> Name
-  sem numFailedName =
-  | _ -> get (findRuntimeIds ()) 0
-
   sem utestRunnerName : () -> Name
   sem utestRunnerName =
+  | _ -> get (findRuntimeIds ()) 0
+
+  sem utestExitOnFailureName : () -> Name
+  sem utestExitOnFailureName =
   | _ -> get (findRuntimeIds ()) 1
 
   sem defaultPrettyPrintName : () -> Name
@@ -1081,27 +1081,9 @@ lang MExprUtestGenerate =
     let inexpr = insertUtestTail t.inexpr in
     TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
   | t ->
-    let refTy = TyApp {
-      lhs = _conTy (nameNoSym "Ref"), rhs = _intTy, info = _utestInfo
-    } in
-    let derefExpr = TmConst {
-      val = CDeRef (), ty = _tyarrows [refTy, _intTy], info = _utestInfo
-    } in
-    let testsFailedCond =
-      _apps
-        (_const (CGti ()) (_tyarrows [_intTy, _intTy, _boolTy]))
-        [ _apps derefExpr [_var (numFailedName ()) refTy]
-        , _const (CInt {val = 0}) _intTy ]
-    in
-    let thn = TmLet {
-      ident = nameNoSym "", tyAnnot = tyTm t, tyBody = tyTm t, body = t,
-      inexpr =
-        _apps
-          (_const (CExit ()) (_tyarrows [_intTy, tyTm t]))
-          [_const (CInt {val = 1}) _intTy],
-      ty = tyTm t, info = _utestInfo
-    } in
-    _match testsFailedCond (_patBool true) thn t (tyTm t)
+    let exitOnFailure =
+      _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
+    _apps exitOnFailure [t]
 
   -- Merges the AST with the utest header, which consists of the runtime
   -- definitions from 'utest-runtime.mc'.

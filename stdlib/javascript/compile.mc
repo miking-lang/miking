@@ -240,8 +240,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem foldApp : CompileJSContext -> [JSExpr] -> Expr -> (CompileJSContext, Expr, [JSExpr])
   sem foldApp ctx acc =
   | TmApp { lhs = lhs, rhs = rhs } ->
-    match (if _isUnitTy (tyTm rhs) then (ctx, JSENop {})
-      else compileMExpr ctx rhs) with (ctx, e) in
+    match
+      match rhs with TmRecord {bindings = bindings} then
+        if mapIsEmpty bindings then (ctx, JSENop {})
+        else compileMExpr ctx rhs
+      else compileMExpr ctx rhs
+    with (ctx, e) in
     foldApp ctx (cons e acc) lhs
   | t -> (ctx, t, acc)
 
