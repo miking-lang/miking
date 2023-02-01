@@ -295,7 +295,7 @@ end
 
 
 -- TmLam --
-lang LamAst = Ast + VarAst + AppAst
+lang LamAst = Ast
   syn Expr =
   | TmLam {ident : Name,
            tyAnnot : Type,

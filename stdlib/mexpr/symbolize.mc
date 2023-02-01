@@ -530,7 +530,7 @@ end
 lang MExprSym =
 
   -- Default implementations (Terms)
-  RecordAst + ConstAst + UtestAst + SeqAst + NeverAst +
+  RecordAst + ConstAst + UtestAst + SeqAst + NeverAst + AppAst +
 
   -- Default implementations (Types)
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +

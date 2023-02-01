@@ -2070,8 +2070,8 @@ lang MExprEval =
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
-  -- Pretty Printing of Identifiers
-  + MExprIdentifierPrettyPrint
+  -- Pretty Printing
+  + MExprPrettyPrint
 end
 
 
