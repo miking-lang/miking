@@ -666,13 +666,165 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   --     ...
   --     end
   --   in
-  /-
-  sem lrGenerateParser: Name -> LRParseTable -> Expr
-  sem lrGenerateParser functionName =
+  sem lrGenerateParser: LRParseTable -> Expr
+  sem lrGenerateParser =
   | table ->
-    match token with MyTok a in
+    /---- Assumed to exist "public" identifiers ----/
+    let #var"global: result.err" = recordproj_ "err" (var_ "result") in
+    let #var"global: result.ok" = recordproj_ "ok" (var_ "result") in
+
+    /---- Set up the types ----/
+    let errorType = tytuple_ [tyvar_ "Info", tystr_] in
+    let warningType = errorType in
+    let tokenTypeName = nameSym "tokenType" in
+    let tokenType = ntyvar_ tokenTypeName in
+    let lexerStreamTypeName = nameSym "lexerStreamType" in
+    let lexerStreamType = ntyvar_ lexerStreamTypeName in
+    -- Note: assuming that this type is a record {... with token: tokenType, stream: lexerStreamType}
+    let lexerNextTokenResultTypeName = nameSym "lexerNextTokenResult" in
+    let lexerNextTokenResultType = ntyvar_ lexerNextTokenResultTypeName in
+
+    let entrypointType = mapLookupOrElse (lam. tyunknown_) table.syntaxDef.entrypoint table.nonTerminalTypes in
+    let resultType = tyapps_ (tyvar_ "Result") [warningType, errorType, entrypointType] in
+
+    let parserExpressionType = ntyall_ tokenTypeName (
+                               ntyall_ lexerStreamTypeName (
+                               ntyall_ lexerNextTokenResultTypeName (tyarrows_ [
+      -- Initial lexer state
+      lexerStateType,
+      -- Result (Info, String) (Info, String) NextTokenResult
+      -- Lexer argument (state -> Result w e (state, token))
+      tyarrow_ lexerStateType (tyapps_ (tyvar_ "Result") [warningType, errorType, lexerNextTokenResultType]),
+      -- Resulting type
+      resultType
+    ]))) in
+
+    /---- Set up the lambdas ----/
+    let varInitialLexerState = nameSym "initialLexerState" in
+    let varNextToken = nameSym "lexerState" in
+
+    /---- Set up the stacks ----/
+    -- Map types to stack labels
+    let cmpType = lam l. lam r. cmpTypeH (l, r) in
+    let stackTypeLabel: Map Type String = mapEmpty cmpType in
+    -- Check non-terminal types
+    let stackTypeLabel = mapFoldWithKey (lam stlAcc: Map Type String. lam. lam ty: Type.
+      match mapLookup ty stlAcc with None () then
+        let label = join ["typeStack", int2string (mapLength stlAcc)] in
+        mapInsert ty label stlAcc
+      else
+        stlAcc
+    ) stackTypeLabel nonTerminalTypes in
+    -- Check token types
+    let stackTypeLabel = mapFoldWithKey (lam stlAcc: Map Type String. lam. lam c: {conIdent: Name, conArg: Type}.
+      match mapLookup c.conArg stlAcc with None () then
+        let label = join ["typeStack", int2string (mapLength stlAcc)] in
+        mapInsert c.conArg label stlAcc
+      else
+        stlAcc
+    ) stackTypeLabel tokenConTypes in
+
+    let stackRecordExpr = urecord_ (mapFoldWithKey (lam acc: [(String, Expr)]. lam ty: Type. lam label: String.
+      cons (label, withType (tyseq_ ty) (seq_ [])) acc -- TODO: (toList or createList here)
+    ) [] stackTypeLabel) in
+
+    /---- Set up the GOTO lists ----/
+    let missingGOTO = negi 2 in
+
+    let gotoLookup: Map Name (Map Int Int) = mapFoldWithKey (lam acc. lam nt. lam.
+      mapInsert nt (mapEmpty subi) acc
+    ) (mapEmpty nameCmp) nonTerminalTypes in
+    let gotoLookup = mapFoldWithKey (lam acc. lam fromIdx. lam stateGotos: [{name: Name, toIdx: Int}].
+      foldl (lam acc. lam stateGoto: {name: Name, toIdx: Int}.
+        mapInsert stateGoto.name
+                  (mapInsert fromIdx stateGoto.toIdx
+                             (mapLookupOrElse (lam. error "PANIC. Internal parser generator logic error")
+                                              stateGoto.name acc))
+                  acc
+      ) acc stateGotos
+    ) gotoLookup table.gotos in
+
+    let gotoLookupVarExpressions: Map Name Expr = mapFoldWithKey (lam acc. lam nt: Name. lam gotos: Map Int Int.
+      let nameGotos = createRope (length table.states) (lam i. mapLookupOrElse (lam. missingGOTO) i gotos) in
+      mapInsert nt (seq_ nameGotos) acc
+    ) (mapEmpty nameCmp) gotoLookup in
+    let gotoLookupVarNames: Map Name Name = mapFoldWithKey (lam acc: Map Name Name. lam nt: Name. lam.
+      let lookupName = nameSym (join ["gotoLookup", int2string (mapLength acc), "_", nameGetStr nt]) in
+      mapInsert nt lookupName acc
+    ) (mapEmpty nameCmp) gotoLookupVarExpressions in
+
+    /---- Set up the tail-recursive parsing function ----/
+    let parseFunctionIdent = nameSym "parseLoop" in
+    let parseFunctionBody =
+      nreclets_ [(parseFunctionIdent, tyunknown_,
+        let lamStacks = nameSym "stacks" in
+        let lamLexerState = nameSym "lexerState" in
+        let lamStateTrace = nameSym "stateTrace" in
+        let lamLookahead = nameSym "lookahead" in
+        nlams_ [(lamStacks, tyunknown_),
+                (lamLexerState, lexerStateType),
+                (lamTrace, tyseq_ tyint_),
+                (lamLookahead, tyseq_ tokenTypeName)] (
+          -- Recursive function body here:
+          -- match stateTrace with [currentState] ++ _ then
+          --   switch currentState
+          --   case <i> then
+          --     switch lookahead
+          --     case [TokenX x, TokenY y] & ([_] ++ rest) then
+          --       <if shift>
+          --       let stacks = {stacks with stackX = cons x stacks.stackX} in
+          --       let stateTrace = cons <shiftIdx> stateStrace in
+          --       let nextTokenResult = nextToken lexerState in
+          --       match nextTokenResult with ResultOk {value = lexres} then
+          --         parseLoop stacks lexres.stream stateTrace (snoc lookahead lexres.token)
+          --       else match nextTokenResult with ResultErr {errors = errors} then
+          --         result.err errors
+          --       else never
+          --
+          --       <if reduce>
+          --       let stackA = stacks.stackA in -- extract the relevant stacks for this reduce
+          --       let stackB = stacks.stackB in
+          --       let stackC = stacks.stackC in
+          --       let tokenA2 = head stackA in
+          --       let stackA = tail stackA in
+          --       let tokenB1 = head stackB in
+          --       let stackB = tail stackB in
+          --       let tokenA1 = head stackA in
+          --       let stackA = tail stackA in
+          --       let newProduce = semanticAction actionState tokenA1 tokenB1 tokenA2 in
+          --       <if reduce by entrypoint rule>
+          --         result.ok newProduce
+          --       <otherwise (pretty much always)>
+          --         let stackC = cons newProduce stackC in
+          --         let stacks = {stacks with stackA = stackA, stackB = stackB, stackC = stackC} in
+          --         let stateTrace = subsequence stateTrace 3 (length stateTrace) in
+          --         let currentState = head stateTrace in
+          --         let nextState = get currentState gotoLookup_<nt_idx>_<nt> in
+          --         let stateTrace = cons nextState stateTrace in
+          --         parseLoop stacks lexerState stateTrace lookahead
+          --     ..
+          --     case _ then
+          --       result.err "Unexpected token bla, expected one of... bla bla"
+          --     end
+          --   ..
+          --   case _ then
+          --     result.err "Invalid state"
+          --   end
+          -- else
+          --   result.err "Missing state"
+          BODY ()
+          match_ varStateTrace thn els ...
+          matchall_ [never_]
+        )
+      )]
+    in
+
+    /---- Set up all the expressions ----/
+    -- Step 1: Fill up the lookahead from the lexer.
+    -- Step 2: Set initial state trace.
+    -- Step 3. Set up the stacks
+    -- Step 4. ??? Profit
     TODO ()
-  -- -/
 end
 
 
@@ -695,8 +847,6 @@ let tokLParen = LParenRepr {} in
 let tokRParen = RParenRepr {} in
 let tokComma = CommaRepr {} in
 let tokChar = CharRepr {} in
-
-let tyLRToken_ = tyvar_ "TokenRepr" in
 
 type LRTestCase = {
   tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
