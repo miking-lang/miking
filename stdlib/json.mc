@@ -88,6 +88,7 @@ recursive
         switch _jsonParse s pos
         case Left (value, s, pos) then
           let acc = mapInsert key value acc in
+          match _jsonEatWhitespace s pos with (s, pos) in
           match s with [','] ++ ws then
             _jsonParseObjectContents acc ws (addi pos 1)
           else match s with ['}'] ++ ws then
@@ -398,5 +399,30 @@ utest json2string myJsonObject
 with "{\"mystr\":\"foo\",\"mybool\":true,\"mylist\":[{},2,0.03],\"mynull\":null}" in
 
 utest jsonParse (json2string myJsonObject) with Left myJsonObject using eitherEq jsonEq eqString in
+
+let myOtherJsonObject =
+  JsonObject (mapFromSeq cmpString
+             [ ("mylist", JsonArray [JsonObject (mapFromSeq cmpString [
+                                       ("f1", JsonFloat 1.0),
+                                       ("f2", JsonFloat (negf 1.0))
+                                     ]),
+                                     JsonInt 2,
+                                     JsonFloat 5e-1])
+             , ("mystr", JsonString "foo")
+             , ("mybool", JsonBool true)
+             , ("mynull", JsonNull ())
+             ])
+in
+
+utest jsonParse "    {\t\t\t
+  \"mylist\":
+  [   {
+\"f1\": 1.0,
+\"f2\": -1.0         }
+    , 2 ,    5e-1     ]   , \"mystr\" : \n   \"foo\"
+  , \"mybool\" \t:\ttrue,
+   \"mynull\":
+   null}"
+with Left myOtherJsonObject using eitherEq jsonEq eqString in
 
 ()
