@@ -629,6 +629,7 @@ module IO = struct
     in
     let rec work indent v =
       if Obj.is_int v then string_of_int (Obj.obj v) ^ "\n"
+      else if Obj.tag v = Obj.custom_tag then "<custom>\n"
       else if Obj.tag v = Obj.double_tag then
         string_of_float (Obj.obj v) ^ "\n"
       else if Obj.tag v = Obj.closure_tag then "<closure>\n"
