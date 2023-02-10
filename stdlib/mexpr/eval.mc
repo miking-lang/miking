@@ -12,6 +12,7 @@ include "ast-builder.mc"
 include "symbolize.mc"
 include "eq.mc"
 include "pprint.mc"
+include "const-arity.mc"
 
 ----------------------------
 -- EVALUATION ENVIRONMENT --
@@ -64,7 +65,8 @@ lang VarEval = Eval + VarAst + AppAst
   | TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then t
     else
-      errorSingle [r.info] (concat "Unknown variable: " (pprintVarString (nameGetStr r.ident)))
+      errorSingle [r.info]
+        (concat "Unknown variable: " (pprintVarString (nameGetStr r.ident)))
 end
 
 lang AppEval = Eval + AppAst
@@ -121,7 +123,9 @@ lang RecLetsEval =
       let wraplambda = lam v.
         match v with TmLam t then
           TmClos {ident = t.ident, body = t.body, env = envPrime}
-        else errorSingle [infoTm v] "Right-hand side of recursive let must be a lambda"
+        else
+          errorSingle [infoTm v]
+            "Right-hand side of recursive let must be a lambda"
       in
       foldl
         (lam env. lam bind.
@@ -131,15 +135,27 @@ lang RecLetsEval =
     eval {ctx with env = envPrime ()} t.inexpr
 end
 
-lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst
-  sem delta : Info -> Expr -> Const -> Expr
+lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst + ConstArity
+  syn Expr =
+  | TmConstApp {
+    const : Const,
+    args : [Expr]
+  }
+
+  sem delta : Info -> (Const, [Expr]) -> Expr
+  sem delta info =
+  | (const, args) ->
+    if lti (length args) (constArity const) then
+      TmConstApp {const = const, args = args}
+    else errorSingle [info] "Invalid application"
 
   sem apply ctx info arg =
-  | TmConst c -> delta info arg c.val
+  | TmConst r -> delta info (r.val, [arg])
+  | TmConstApp r -> delta info (r.const, snoc r.args arg)
 
   sem eval ctx =
-  | TmConst {val = CArgv {}} ->
-    TmSeq {tms = map str_ argv, ty = tyunknown_, info = NoInfo()}
+  | TmConst {val = CArgv {}, info = info} ->
+    TmSeq {tms = map str_ argv, ty = tyunknown_, info = info}
   | TmConst c -> TmConst c
 end
 
@@ -214,7 +230,7 @@ con TExpr : Tensor[Expr] -> T
 
 lang TensorEval = Eval
   syn Expr =
-  | TmTensor { val : T }
+  | TmTensor {val : T}
 
   sem eval ctx =
   | TmTensor t -> TmTensor t
@@ -231,868 +247,326 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
-lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEval
-  sem delta info arg =
-  | CUnsafeCoerce _ -> arg
+lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEval + UnsafeCoerceArity
+  sem delta info =
+  | (CUnsafeCoerce _, [arg]) -> arg
 end
 
-lang ArithIntEval = ArithIntAst + ConstEval
-  syn Const =
-  | CAddi2 Int
-  | CSubi2 Int
-  | CMuli2 Int
-  | CDivi2 Int
-  | CModi2 Int
-
-  sem constArity =
-  | CAddi2 _ -> 1
-  | CSubi2 _ -> 1
-  | CMuli2 _ -> 1
-  | CDivi2 _ -> 1
-  | CModi2 _ -> 1
-
-  sem delta info arg =
-  | CAddi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CAddi2 n}
-    else errorSingle [info] "Not adding an integer"
-  | CAddi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = addi n1 n2}}
-    else errorSingle [info] "Not adding an integer"
-  | CSubi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CSubi2 n}
-    else errorSingle [info] "Not subtracting an integer"
-  | CSubi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = subi n1 n2}}
-    else errorSingle [info] "Not subtracting an integer"
-  | CMuli _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CMuli2 n}
-    else errorSingle [info] "Not multiplying an integer"
-  | CMuli2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = muli n1 n2}}
-    else errorSingle [info] "Not multiplying an integer"
-  | CDivi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CDivi2 n}
-    else errorSingle [info] "Not dividing number"
-  | CDivi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = divi n1 n2}}
-    else errorSingle [info] "Not dividing with number"
-  | CModi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CModi2 n}
-    else errorSingle [info] "Not taking modulo of number"
-  | CModi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = modi n1 n2}}
-    else errorSingle [info] "Not taking modulo with number"
-  | CNegi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CInt {val = negi n}}
-    else errorSingle [info] "Not negating a number"
+lang ArithIntEval = ArithIntAst + ConstEval + ArithIntArity
+  sem delta info =
+  | (CAddi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = addi n1.val n2.val}}
+  | (CSubi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = subi n1.val n2.val}}
+  | (CMuli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = muli n1.val n2.val}}
+  | (CDivi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = divi n1.val n2.val}}
+  | (CModi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = modi n1.val n2.val}}
+  | (CNegi _, [TmConst (t & {val = CInt n})]) ->
+    TmConst {t with val = CInt {val = negi n.val}}
 end
 
-lang ShiftIntEval = ShiftIntAst + ConstEval
-  syn Const =
-  | CSlli2 Int
-  | CSrli2 Int
-  | CSrai2 Int
-
-  sem constArity =
-  | CSlli2 _ -> 1
-  | CSrli2 _ -> 1
-  | CSrai2 _ -> 1
-
-  sem delta info arg =
-  | CSlli _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CSlli2 n}
-    else errorSingle [info] "Not shifting a constant integer"
-  | CSlli2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = slli n1 n2}}
-    else errorSingle [info] "Not shifting by a constant integer"
-  | CSrli _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CSrli2 n}
-    else errorSingle [info] "Not shifting a constant integer"
-  | CSrli2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = srli n1 n2}}
-    else errorSingle [info] "Not shifting by a constant integer"
-  | CSrai _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CSrai2 n}
-    else errorSingle [info] "Not shifting a constant integer"
-  | CSrai2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CInt {val = srai n1 n2}}
-    else errorSingle [info] "Not shifting by a constant integer"
+lang ShiftIntEval = ShiftIntAst + ConstEval + ShiftIntArity
+  sem delta info =
+  | (CSlli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = slli n1.val n2.val}}
+  | (CSrli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = srli n1.val n2.val}}
+  | (CSrai _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CInt {val = srai n1.val n2.val}}
 end
 
-lang ArithFloatEval = ArithFloatAst + ConstEval
-  syn Const =
-  | CAddf2 Float
-  | CSubf2 Float
-  | CMulf2 Float
-  | CDivf2 Float
-
-  sem constArity =
-  | CAddf2 _ -> 1
-  | CSubf2 _ -> 1
-  | CMulf2 _ -> 1
-  | CDivf2 _ -> 1
-
-  sem delta info arg =
-  | CAddf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CAddf2 f.val}
-      else errorSingle [info] "Not adding a numeric constant"
-    else errorSingle [info] "Not adding a constant"
-  | CAddf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CFloat {val = addf f1 f2.val}}
-      else errorSingle [info] "Not adding a numeric constant"
-    else errorSingle [info] "Not adding a constant"
-  | CSubf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CSubf2 f.val}
-      else errorSingle [info] "Not subtracting a numeric constant"
-    else errorSingle [info] "Not subtracting a constant"
-  | CSubf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CFloat {val = subf f1 f2.val}}
-      else errorSingle [info] "Not subtracting a numeric constant"
-    else errorSingle [info] "Not subtracting a constant"
-  | CMulf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CMulf2 f.val}
-      else errorSingle [info] "Not multiplying a numeric constant"
-    else errorSingle [info] "Not multiplying a constant"
-  | CMulf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CFloat {val = mulf f1 f2.val}}
-      else errorSingle [info] "Not multiplying a numeric constant"
-    else errorSingle [info] "Not multiplying a constant"
-  | CDivf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CDivf2 f.val}
-      else errorSingle [info] "Not dividing a numeric constant"
-    else errorSingle [info] "Not dividing a constant"
-  | CDivf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CFloat {val = divf f1 f2.val}}
-      else errorSingle [info] "Not dividing a numeric constant"
-    else errorSingle [info] "Not dividing a constant"
-  | CNegf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CFloat {val = negf f.val}}
-      else errorSingle [info] "Not negating a numeric constant"
-    else errorSingle [info] "Not negating a constant"
+lang ArithFloatEval = ArithFloatAst + ConstEval + ArithFloatArity
+  sem delta info =
+  | (CAddf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CFloat {val = addf f1.val f2.val}}
+  | (CSubf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CFloat {val = subf f1.val f2.val}}
+  | (CMulf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CFloat {val = mulf f1.val f2.val}}
+  | (CDivf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CFloat {val = divf f1.val f2.val}}
+  | (CNegf _, [TmConst (t & {val = CFloat f})]) ->
+    TmConst {t with val = CFloat {val = negf f.val}}
 end
 
-lang FloatIntConversionEval = FloatIntConversionAst
-  sem delta info arg =
-  | CFloorfi _ ->
-    match arg with TmConst (t & {val = CFloat {val = r}}) then
-      TmConst {t with val = CInt {val = floorfi r}}
-    else errorSingle [info] "Not flooring a float"
-  | CCeilfi _ ->
-    match arg with TmConst (t & {val = CFloat {val = r}}) then
-      TmConst {t with val = CInt {val = ceilfi r}}
-    else errorSingle [info] "Not ceiling a float"
-  | CRoundfi _ ->
-    match arg with TmConst (t & {val = CFloat {val = r}}) then
-      TmConst {t with val = CInt {val = roundfi r}}
-    else errorSingle [info] "Not rounding a float"
-  | CInt2float _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CFloat {val = int2float n}}
-    else errorSingle [info] "Not converting a integer"
+lang FloatIntConversionEval = FloatIntConversionAst + FloatIntConversionArity
+  sem delta info =
+  | (CFloorfi _, [TmConst (t & {val = CFloat r})]) ->
+    TmConst {t with val = CInt {val = floorfi r.val}}
+  | (CCeilfi _, [TmConst (t & {val = CFloat r})]) ->
+    TmConst {t with val = CInt {val = ceilfi r.val}}
+  | (CRoundfi _, [TmConst (t & {val = CFloat r})]) ->
+    TmConst {t with val = CInt {val = roundfi r.val}}
+  | (CInt2float _, [TmConst (t & {val = CInt n})]) ->
+    TmConst {t with val = CFloat {val = int2float n.val}}
 end
 
-lang CmpIntEval = CmpIntAst + ConstEval
-  syn Const =
-  | CEqi2 Int
-  | CNeqi2 Int
-  | CLti2 Int
-  | CGti2 Int
-  | CLeqi2 Int
-  | CGeqi2 Int
-
-  sem constArity =
-  | CEqi2 _ -> 1
-  | CNeqi2 _ -> 1
-  | CLti2 _ -> 1
-  | CGti2 _ -> 1
-  | CLeqi2 _ -> 1
-  | CGeqi2 _ -> 1
-
-  sem delta info arg =
-  | CEqi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CEqi2 n}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CEqi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = eqi n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CNeqi _ ->
-    match arg with TmConst (t & {val = CInt {val = n1}}) then
-      TmConst {t with val = CNeqi2 n1}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CNeqi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = neqi n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CLti _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CLti2 n}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CLti2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = lti n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CGti _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CGti2 n}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CGti2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = gti n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CLeqi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CLeqi2 n}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CLeqi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = leqi n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CGeqi _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CGeqi2 n}
-    else errorSingle [info] "Not comparing an integer constant"
-  | CGeqi2 n1 ->
-    match arg with TmConst (t & {val = CInt {val = n2}}) then
-      TmConst {t with val = CBool {val = geqi n1 n2}}
-    else errorSingle [info] "Not comparing an integer constant"
+lang CmpIntEval = CmpIntAst + ConstEval + CmpIntArity
+  sem delta info =
+  | (CEqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = eqi n1.val n2.val}}
+  | (CNeqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = neqi n1.val n2.val}}
+  | (CLti _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = lti n1.val n2.val}}
+  | (CGti _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = gti n1.val n2.val}}
+  | (CLeqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = leqi n1.val n2.val}}
+  | (CGeqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
+    TmConst {t with val = CBool {val = geqi n1.val n2.val}}
 end
 
-lang CmpCharEval = CmpCharAst + ConstEval
-  syn Const =
-  | CEqc2 Char
-
-  sem constArity =
-  | CEqc2 _ -> 1
-
-  sem delta info arg =
-  | CEqc _ ->
-    match arg with TmConst (t & {val = CChar {val = c}}) then
-      TmConst {t with val = CEqc2 c}
-    else errorSingle [info] "Not comparing a character constant"
-  | CEqc2 c1 ->
-    match arg with TmConst (t & {val = CChar {val = c2}}) then
-      TmConst {t with val = CBool {val = eqc c1 c2}}
-    else errorSingle [info] "Not comparing a character constant"
+lang CmpCharEval = CmpCharAst + ConstEval + CmpCharArity
+  sem delta info =
+  | (CEqc _, [TmConst {val = CChar c1}, TmConst (t & {val = CChar c2})]) ->
+    TmConst {t with val = CBool {val = eqc c1.val c2.val}}
 end
 
-lang IntCharConversionEval = IntCharConversionAst + ConstEval
-  sem delta info arg =
-  | CInt2Char _ ->
-    match arg with TmConst (t & {val = CInt {val = n}}) then
-      TmConst {t with val = CChar {val = int2char n}}
-    else errorSingle [info] "Not int2char of an integer constant"
-  | CChar2Int _ ->
-    match arg with TmConst (t & {val = CChar {val = c}}) then
-      TmConst {t with val = CInt {val = char2int c}}
-    else errorSingle [info] "Not char2int of a character constant"
+lang IntCharConversionEval =
+  IntCharConversionAst + ConstEval + IntCharConversionArity
+
+  sem delta info =
+  | (CInt2Char _, [TmConst (t & {val = CInt n})]) ->
+    TmConst {t with val = CChar {val = int2char n.val}}
+  | (CChar2Int _, [TmConst (t & {val = CChar c})]) ->
+    TmConst {t with val = CInt {val = char2int c.val}}
 end
 
-lang CmpFloatEval = CmpFloatAst + ConstEval
-  syn Const =
-  | CEqf2 Float
-  | CLtf2 Float
-  | CLeqf2 Float
-  | CGtf2 Float
-  | CGeqf2 Float
-  | CNeqf2 Float
-
-  sem constArity =
-  | CEqf2 _ -> 1
-  | CLtf2 _ -> 1
-  | CLeqf2 _ -> 1
-  | CGtf2 _ -> 1
-  | CGeqf2 _ -> 1
-  | CNeqf2 _ -> 1
-
-  sem delta info arg =
-  | CEqf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CEqf2 f.val}
-      else errorSingle [info] "Not comparing a numeric constant"
-    else errorSingle [info] "Not comparing a constant"
-  | CEqf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CBool {val = eqf f1 f2.val}}
-      else errorSingle [info] "Not comparing a numeric constant"
-    else errorSingle [info] "Not comparing a constant"
-  | CLtf _ ->
-    match arg with TmConst c then
-      match c.val with CFloat f then
-        TmConst {c with val = CLtf2 f.val}
-      else errorSingle [info] "Not comparing a numeric constant"
-    else errorSingle [info] "Not comparing a constant"
-  | CLtf2 f1 ->
-    match arg with TmConst c then
-      match c.val with CFloat f2 then
-        TmConst {c with val = CBool {val = ltf f1 f2.val}}
-      else errorSingle [info] "Not comparing a numeric constant"
-    else errorSingle [info] "Not comparing a constant"
-  | CLeqf _ ->
-    match arg with TmConst (t & {val = CFloat {val = f1}}) then
-      TmConst {t with val = CLeqf2 f1}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CLeqf2 f1 ->
-    match arg with TmConst (t & {val = CFloat {val = f2}}) then
-      TmConst {t with val = CBool {val = leqf f1 f2}}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CGtf _ ->
-    match arg with TmConst (t & {val = CFloat {val = f1}}) then
-      TmConst {t with val = CGtf2 f1}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CGtf2 f1 ->
-    match arg with TmConst (t & {val = CFloat {val = f2}}) then
-      TmConst {t with val = CBool {val = gtf f1 f2}}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CGeqf _ ->
-    match arg with TmConst (t & {val = CFloat {val = f1}}) then
-      TmConst {t with val = CGeqf2 f1}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CGeqf2 f1 ->
-    match arg with TmConst (t & {val = CFloat {val = f2}}) then
-      TmConst {t with val = CBool {val = geqf f1 f2}}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CNeqf _ ->
-    match arg with TmConst (t & {val = CFloat {val = f1}}) then
-      TmConst {t with val = CNeqf2 f1}
-    else errorSingle [info] "Not comparing a floating-point constant"
-  | CNeqf2 f1 ->
-    match arg with TmConst (t & {val = CFloat {val = f2}}) then
-      TmConst {t with val = CBool {val = neqf f1 f2}}
-    else errorSingle [info] "Not comparing a floating-point constant"
+lang CmpFloatEval = CmpFloatAst + ConstEval + CmpFloatArity
+  sem delta info =
+  | (CEqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = eqf f1.val f2.val}}
+  | (CLtf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = ltf f1.val f2.val}}
+  | (CLeqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = leqf f1.val f2.val}}
+  | (CGtf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = gtf f1.val f2.val}}
+  | (CGeqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = geqf f1.val f2.val}}
+  | (CNeqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
+    TmConst {t with val = CBool {val = neqf f1.val f2.val}}
 end
 
-lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
-  sem delta info arg =
-  | CGensym _ ->
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        TmConst {val = CSymb {val = gensym ()}, ty = tyunknown_, info = NoInfo()}
-      else errorSingle [info] "Argument in gensym is not unit"
-    else errorSingle [info] "Argument in gensym is not unit"
-  | CSym2hash _ ->
-    match arg with TmConst (t & {val = CSymb s}) then
-      TmConst {t with val = CInt {val = sym2hash s.val}}
-    else errorSingle [info] "Argument in sym2hash is not a symbol"
+lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval + SymbArity
+  sem delta info =
+  | (CGensym _, [_]) ->
+    TmConst {val = CSymb {val = gensym ()}, ty = tyunknown_, info = NoInfo ()}
+  | (CSym2hash _, [TmConst (t & {val = CSymb s})]) ->
+    TmConst {t with val = CInt {val = sym2hash s.val}}
 end
 
-lang CmpSymbEval = CmpSymbAst + ConstEval
-  syn Const =
-  | CEqsym2 Symbol
-
-  sem constArity =
-  | CEqsym2 _ -> 1
-
-  sem delta info arg =
-  | CEqsym _ ->
-    match arg with TmConst (t & {val = CSymb s}) then
-      TmConst {t with val = CEqsym2 s.val}
-    else errorSingle [info] "First argument in eqsym is not a symbol"
-  | CEqsym2 s1 ->
-    match arg with TmConst (t & {val = CSymb s2}) then
-      TmConst {t with val = CBool {val = eqsym s1 s2.val}}
-    else errorSingle [info] "Second argument in eqsym is not a symbol"
+lang CmpSymbEval = CmpSymbAst + ConstEval + CmpSymbArity
+  sem delta info =
+  | (CEqsym _, [TmConst {val = CSymb s1}, TmConst (t & {val = CSymb s2})]) ->
+    TmConst {t with val = CBool {val = eqsym s1.val s2.val}}
 end
 
-lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
-
-  syn Const =
-  | CGet2 [Expr]
-  | CSet2 [Expr]
-  | CSet3 ([Expr], Int)
-  | CCons2 Expr
-  | CSnoc2 [Expr]
-  | CConcat2 [Expr]
-  | CSplitAt2 [Expr]
-  | CCreate2 Int
-  | CCreateList2 Int
-  | CCreateRope2 Int
-  | CSubsequence2 [Expr]
-  | CSubsequence3 ([Expr], Int)
-  | CMap2 Expr
-  | CMapi2 Expr
-  | CIter2 Expr
-  | CIteri2 Expr
-  | CFoldl2 Expr
-  | CFoldl3 (Expr, Expr)
-  | CFoldr2 Expr
-  | CFoldr3 (Expr, Expr)
-
-  sem constArity =
-  | CGet2 _ -> 1
-  | CSet2 _ -> 2
-  | CSet3 _ -> 3
-  | CCons2 _ -> 1
-  | CSnoc2 _ -> 1
-  | CConcat2 _ -> 1
-  | CSplitAt2 _ -> 1
-  | CCreate2 _ -> 1
-  | CCreateList2 _ -> 1
-  | CCreateRope2 _ -> 1
-  | CSubsequence2 _ -> 2
-  | CSubsequence3 _ -> 1
-  | CMap2 _ -> 1
-  | CMapi2 _ -> 1
-  | CIter2 _ -> 1
-  | CIteri2 _ -> 1
-  | CFoldl2 _ -> 2
-  | CFoldl3 _ -> 1
-  | CFoldr2 _ -> 2
-  | CFoldr3 _ -> 1
-
-  sem delta info arg =
-  | CHead _ ->
-    match arg with TmSeq {tms = tms} then
-      head tms
-    else errorSingle [info] "Not head of a sequence"
-  | CTail _ ->
-    match arg with TmSeq s then
-      TmSeq {s with tms = tail s.tms}
-    else errorSingle [info] "Not tail of a sequence"
-  | CNull _ ->
-    match arg with TmSeq {tms = tms} then
-      TmConst {val = CBool {val = null tms}, ty = tyunknown_, info = NoInfo ()}
-    else errorSingle [info] "Not null of a sequence"
-  | CMap _ ->
-    TmConst {val = CMap2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CMap2 f ->
-    match arg with TmSeq s then
-      let f = lam x. apply evalCtxEmpty info x f in
-      TmSeq {s with tms = map f s.tms}
-    else errorSingle [info] "Second argument to map not a sequence"
-  | CMapi _ ->
-    TmConst {val = CMapi2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CMapi2 f ->
-    match arg with TmSeq s then
-      let f = lam i. lam x.
-        apply evalCtxEmpty info x
-          (apply evalCtxEmpty info (int_ i) f) in
-      TmSeq {s with tms = mapi f s.tms}
-    else errorSingle [info] "Second argument to mapi not a sequence"
-  | CIter _ ->
-    TmConst {val = CIter2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CIter2 f ->
-    match arg with TmSeq s then
-      let f = lam x. apply evalCtxEmpty info x f; () in
-      iter f s.tms;
-      uunit_
-    else errorSingle [info] "Second argument to iter not a sequence"
-  | CIteri _ ->
-    TmConst {val = CIteri2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CIteri2 f ->
-    match arg with TmSeq s then
-      let f = lam i. lam x.
-        apply evalCtxEmpty info x
-          (apply evalCtxEmpty info (int_ i) f); () in
-      iteri f s.tms;
-      uunit_
-    else errorSingle [info] "Second argument to iteri not a sequence"
-  | CFoldl _ ->
-    TmConst {val = CFoldl2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CFoldl2 f ->
-    TmConst {val = CFoldl3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-  | CFoldl3 (f, acc) ->
-    match arg with TmSeq s then
-      let f = lam acc. lam x.
-        apply evalCtxEmpty info x
-          (apply evalCtxEmpty info acc f) in
-      foldl f acc s.tms
-    else errorSingle [info] "Third argument to foldl not a sequence"
-  | CFoldr _ ->
-    TmConst {val = CFoldr2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CFoldr2 f ->
-    TmConst {val = CFoldr3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-  | CFoldr3 (f, acc) ->
-    match arg with TmSeq s then
-      let f = lam x. lam acc.
-        apply evalCtxEmpty info acc
-          (apply evalCtxEmpty info x f) in
-      foldr f acc s.tms
-    else errorSingle [info] "Third argument to foldr not a sequence"
-  | CGet _ ->
-    match arg with TmSeq s then
-      TmConst {val = CGet2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not a get of a constant sequence"
-  | CGet2 tms ->
-    match arg with TmConst {val = CInt {val = n}} then
-      get tms n
-    else errorSingle [info] "n in get is not a number"
-  | CSet _ ->
-    match arg with TmSeq s then
-      TmConst {val = CSet2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not a set of a constant sequence"
-  | CSet2 tms ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CSet3 (tms, n), ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "n in set is not a number"
-  | CSet3 (tms,n) ->
-    TmSeq {tms = set tms n arg, ty = tyunknown_, info = NoInfo()}
-  | CCons _ ->
-    TmConst {val = CCons2 arg, ty = tyunknown_, info = NoInfo()}
-  | CCons2 tm ->
-    match arg with TmSeq s then
-      TmSeq {s with tms = cons tm s.tms}
-    else errorSingle [info] "Not a cons of a constant sequence"
-  | CSnoc _ ->
-    match arg with TmSeq s then
-      TmConst {val = CSnoc2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not a snoc of a constant sequence"
-  | CSnoc2 tms ->
-    TmSeq {tms = snoc tms arg, ty = tyunknown_, info = NoInfo()}
-  | CConcat _ ->
-    match arg with TmSeq s then
-      TmConst {val = CConcat2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not a concat of a constant sequence"
-  | CConcat2 tms ->
-    match arg with TmSeq s then
-      TmSeq {tms = concat tms s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not a concat of a constant sequence"
-  | CLength _ ->
-    match arg with TmSeq s then
-      TmConst {val = CInt {val = length s.tms}, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not length of a constant sequence"
-  | CReverse _ ->
-    match arg with TmSeq s then
-      TmSeq {tms = reverse s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not reverse of a constant sequence"
-  | CSplitAt _ ->
-    match arg with TmSeq s then
-      TmConst {val = CSplitAt2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not splitAt of a constant sequence"
-  | CSplitAt2 tms ->
-    match arg with TmConst {val = CInt {val = n}} then
-      let t = splitAt tms n in
-      utuple_ [seq_ t.0, seq_ t.1]
-    else errorSingle [info] "n in splitAt is not a number"
-  | CCreate _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CCreate2 n, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "n in create is not a number"
-  | CCreate2 n ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) arg in
-    TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
-  | CCreateList _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CCreateList2 n, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "n in create is not a number"
-  | CCreateList2 n ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) arg in
-    TmSeq {tms = createList n f, ty = tyunknown_, info = NoInfo()}
-  | CCreateRope _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CCreateRope2 n, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "n in create is not a number"
-  | CCreateRope2 n ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) arg in
-    TmSeq {tms = createRope n f, ty = tyunknown_, info = NoInfo()}
-  | CIsList _ ->
-    match arg with TmSeq s then
-      TmConst {
-        val = CBool {val = isList s.tms}, ty = tyunknown_, info = NoInfo()
-      }
-    else errorSingle [info] "Argument to isList is not a sequence"
-  | CIsRope _ ->
-    match arg with TmSeq s then
-      TmConst {
-        val = CBool {val = isRope s.tms}, ty = tyunknown_, info = NoInfo()
-      }
-    else errorSingle [info] "Argument to isRope is not a sequence"
-  | CSubsequence _ ->
-    match arg with TmSeq s then
-      TmConst {val = CSubsequence2 s.tms, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Not subsequence of a constant sequence"
-  | CSubsequence2 tms ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CSubsequence3 (tms, i)}
-    else errorSingle [info] "Second argument to subsequence not a number"
-  | CSubsequence3 (tms,offset) ->
-    match arg with TmConst ({val = CInt {val = len}} & t) then
-      TmSeq {tms = subsequence tms offset len, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "Third argument to subsequence not a number"
+lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
+  sem delta info =
+  | (CHead _, [TmSeq s]) -> head s.tms
+  | (CTail _, [TmSeq s]) -> TmSeq {s with tms = tail s.tms}
+  | (CNull _, [TmSeq s]) -> TmConst {
+    val = CBool {val = null s.tms}, ty = tyunknown_, info = NoInfo ()
+  }
+  | (CMap _, [f, TmSeq s]) ->
+    let f = lam x. apply evalCtxEmpty info x f in
+    TmSeq {s with tms = map f s.tms}
+  | (CMapi _, [f, TmSeq s]) ->
+    let f = lam i. lam x.
+      apply evalCtxEmpty info x (apply evalCtxEmpty info (int_ i) f)
+    in
+    TmSeq {s with tms = mapi f s.tms}
+  | (CIter _, [f, TmSeq s]) ->
+    let f = lam x. apply evalCtxEmpty info x f; () in
+    iter f s.tms;
+    uunit_
+  | (CIteri _, [f, TmSeq s]) ->
+    let f = lam i. lam x.
+      apply evalCtxEmpty info x (apply evalCtxEmpty info (int_ i) f); ()
+    in
+    iteri f s.tms;
+    uunit_
+  | (CFoldl _, [f, acc, TmSeq s]) ->
+    let f = lam acc. lam x.
+      apply evalCtxEmpty info x (apply evalCtxEmpty info acc f)
+    in
+    foldl f acc s.tms
+  | (CFoldr _, [f, acc, TmSeq s]) ->
+    let f = lam x. lam acc.
+      apply evalCtxEmpty info acc (apply evalCtxEmpty info x f)
+    in
+    foldr f acc s.tms
+  | (CGet _, [TmSeq s, TmConst {val = CInt n}]) -> get s.tms n.val
+  | (CSet _, [TmSeq s, TmConst {val = CInt n}, val]) ->
+    TmSeq {s with tms = set s.tms n.val val}
+  | (CCons _, [tm, TmSeq s]) -> TmSeq {s with tms = cons tm s.tms}
+  | (CSnoc _, [TmSeq s, tm]) -> TmSeq {s with tms = snoc s.tms tm}
+  | (CConcat _, [TmSeq s1, TmSeq s2]) ->
+    TmSeq {s2 with tms = concat s1.tms s2.tms}
+  | (CLength _, [TmSeq s]) ->
+    TmConst {val = CInt {val = length s.tms}, ty = tyunknown_, info = NoInfo ()}
+  | (CReverse _, [TmSeq s]) -> TmSeq {s with tms = reverse s.tms}
+  | (CSplitAt _, [TmSeq s, TmConst {val = CInt n}]) ->
+    let t = splitAt s.tms n.val in
+    utuple_ [TmSeq {s with tms = t.0}, TmSeq {s with tms = t.1}]
+  | (CCreate _, [TmConst {val = CInt n}, f]) ->
+    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    TmSeq {tms = create n.val f, ty = tyunknown_, info = NoInfo ()}
+  | (CCreateList _, [TmConst {val = CInt n}, f]) ->
+    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    TmSeq {tms = createList n.val f, ty = tyunknown_, info = NoInfo ()}
+  | (CCreateRope _, [TmConst {val = CInt n}, f]) ->
+    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    TmSeq {tms = createRope n.val f, ty = tyunknown_, info = NoInfo ()}
+  | (CIsList _, [TmSeq s]) ->
+    TmConst {
+      val = CBool {val = isList s.tms}, ty = tyunknown_, info = NoInfo ()
+    }
+  | (CIsRope _, [TmSeq s]) ->
+    TmConst {
+      val = CBool {val = isRope s.tms}, ty = tyunknown_, info = NoInfo ()
+    }
+  | (CSubsequence _, [
+    TmSeq s, TmConst {val = CInt ofs}, TmConst {val = CInt len}
+  ]) ->
+    TmSeq {s with tms = subsequence s.tms ofs.val len.val}
 end
 
-lang FloatStringConversionEval = FloatStringConversionAst + BoolAst
-  sem delta info arg =
-  | CStringIsFloat _ ->
-    match arg with TmSeq {tms = tms} then
-      let s = _evalSeqOfCharsToString info tms in
-      TmConst {
-        val = CBool { val = stringIsFloat s },
-        ty = tyunknown_,
-        info = NoInfo ()
-      }
-    else errorSingle [info] "First argument not a sequence"
-  | CString2float _ ->
-    match arg with TmSeq {tms = tms} then
-      let s = _evalSeqOfCharsToString info tms in
-      float_ (string2float s)
-    else errorSingle [info] "Not converting a sequence"
-  | CFloat2string _ ->
-    match arg with TmConst {val = CFloat {val = f}} then
-      let tms = _evalStringToSeqOfChars (float2string f) in
-      seq_ tms
-    else errorSingle [info] "Not converting a float"
+lang FloatStringConversionEval =
+  FloatStringConversionAst + BoolAst + FloatStringConversionArity
+
+  sem delta info =
+  | (CStringIsFloat _, [TmSeq {tms = tms}]) ->
+    TmConst {
+      val = CBool {val = stringIsFloat (_evalSeqOfCharsToString info tms)},
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
+  | (CString2float _, [TmSeq {tms = tms}]) ->
+    TmConst {
+      val = CFloat {val = string2float (_evalSeqOfCharsToString info tms)},
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
+  | (CFloat2string _, [TmConst {val = CFloat f}]) ->
+    TmSeq {
+      tms = _evalStringToSeqOfChars (float2string f.val),
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
 end
 
-lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
-  syn Const =
-  | CFileWrite2 String
+lang FileOpEval =
+  FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst + FileOpArity
 
-  sem constArity =
-  | CFileWrite2 _ -> 1
-
-  sem delta info arg =
-  | CFileRead _ ->
-    match arg with TmSeq s then
-      let f = _evalSeqOfCharsToString info s.tms in
-      str_ (readFile f)
-    else errorSingle [info] "f in readFile not a sequence"
-  | CFileWrite _ ->
-    match arg with TmSeq s then
-      let f = _evalSeqOfCharsToString info s.tms in
-      TmConst {val = CFileWrite2 f, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "f in writeFile not a sequence"
-  | CFileWrite2 f ->
-    match arg with TmSeq s then
-      let d = _evalSeqOfCharsToString info s.tms in
-      writeFile f d;
-      uunit_
-    else errorSingle [info] "d in writeFile not a sequence"
-  | CFileExists _ ->
-    match arg with TmSeq s then
-      let f = _evalSeqOfCharsToString info s.tms in
-      TmConst {
-        val = CBool {val = fileExists f}, ty = tyunknown_, info = NoInfo()
-      }
-    else errorSingle [info] "f in fileExists not a sequence"
-  | CFileDelete _ ->
-    match arg with TmSeq s then
-      let f = _evalSeqOfCharsToString info s.tms in
-      deleteFile f;
-      uunit_
-    else errorSingle [info] "f in deleteFile not a sequence"
+  sem delta info =
+  | (CFileRead _, [TmSeq s]) ->
+    let f = _evalSeqOfCharsToString info s.tms in
+    str_ (readFile f)
+  | (CFileWrite _, [TmSeq f, TmSeq s]) ->
+    let f = _evalSeqOfCharsToString info f.tms in
+    let d = _evalSeqOfCharsToString info s.tms in
+    writeFile f d;
+    uunit_
+  | (CFileExists _, [TmSeq s]) ->
+    let f = _evalSeqOfCharsToString info s.tms in
+    TmConst {
+      val = CBool {val = fileExists f}, ty = tyunknown_, info = NoInfo ()
+    }
+  | (CFileDelete _, [TmSeq s]) ->
+    let f = _evalSeqOfCharsToString info s.tms in
+    deleteFile f;
+    uunit_
 end
 
-lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst
-  sem delta info arg =
-  | CPrint _ ->
-    match arg with TmSeq s then
-      let s = _evalSeqOfCharsToString info s.tms in
-      print s;
-      uunit_
-    else errorSingle [info] "string to print is not a string"
-  | CPrintError _ ->
-    match arg with TmSeq s then
-      let s = _evalSeqOfCharsToString info s.tms in
-      printError s;
-      uunit_
-    else errorSingle [info] "string to print is not a string"
-  | CDPrint _ -> uunit_
-  | CFlushStdout _ ->
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        flushStdout ();
-        uunit_
-      else errorSingle [info] "Argument to flushStdout is not unit"
-    else errorSingle [info] "Argument to flushStdout is not unit"
-  | CFlushStderr _ ->
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        flushStderr ();
-        uunit_
-      else errorSingle [info] "Argument to flushStderr is not unit"
-    else errorSingle [info] "Argument to flushStderr is not unit"
-  | CReadLine _ ->
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        let s = readLine () in
-        TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo()}
-      else errorSingle [info] "Argument to readLine is not unit"
-    else errorSingle [info] "Argument to readLine is not unit"
+lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst + IOArity
+  sem delta info =
+  | (CPrint _, [TmSeq s]) ->
+    let s = _evalSeqOfCharsToString info s.tms in
+    print s;
+    uunit_
+  | (CPrintError _, [TmSeq s]) ->
+    let s = _evalSeqOfCharsToString info s.tms in
+    printError s;
+    uunit_
+  | (CDPrint _, [_]) -> uunit_
+  | (CFlushStdout _, [_]) ->
+    flushStdout ();
+    uunit_
+  | (CFlushStderr _, [_]) ->
+    flushStderr ();
+    uunit_
+  | (CReadLine _, [_]) ->
+    let s = readLine () in
+    TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo ()}
 end
 
-lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
-  syn Const =
-  | CRandIntU2 Int
+lang RandomNumberGeneratorEval =
+  RandomNumberGeneratorAst + IntAst + RandomNumberGeneratorArity
 
-  sem constArity =
-  | CRandIntU2 _ -> 1
-
-  sem delta info arg =
-  | CRandIntU _ ->
-    match arg with TmConst c then
-      match c.val with CInt lo then
-        TmConst {c with val = CRandIntU2 lo.val}
-      else errorSingle [info] "lo in randIntU not a constant integer"
-    else errorSingle [info] "lo in randIntU not a constant"
-  | CRandIntU2 lo ->
-    match arg with TmConst c then
-      match c.val with CInt hi then
-        TmConst {c with val = CInt {val = randIntU lo hi.val}}
-      else errorSingle [info] "hi in randIntU not a constant integer"
-    else errorSingle [info] "hi in randIntU not a constant"
-  | CRandSetSeed _ ->
-    match arg with TmConst {val = CInt {val = s}} then
-      randSetSeed s;
-      uunit_
-    else errorSingle [info] "s in randSetSeed not a constant integer"
+  sem delta info =
+  | (CRandIntU _, [TmConst {val = CInt lo}, TmConst (t & {val = CInt hi})]) ->
+    TmConst {t with val = CInt {val = randIntU lo.val hi.val}}
+  | (CRandSetSeed _, [TmConst {val = CInt n}]) ->
+    randSetSeed n.val;
+    uunit_
 end
 
-lang SysEval = SysAst + SeqAst + IntAst + CharAst
-  sem delta info arg =
-  | CError _ ->
-    match arg with TmSeq s then
-      errorSingle [info] (_evalSeqOfCharsToString info s.tms)
-    else
-      errorSingle [info] "s in error not a sequence"
-  | CExit _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      exit n
-    else
-      errorSingle [info] "n in exit not an integer"
-  | CCommand _ ->
-    match arg with TmSeq s then
-      TmConst {val = CInt {val = command (_evalSeqOfCharsToString info s.tms)},
-               ty = tyunknown_, info = NoInfo ()}
-    else
-      errorSingle [info] "argument to command not a sequence"
+lang SysEval = SysAst + SeqAst + IntAst + CharAst + SysArity
+  sem delta info =
+  | (CError _, [TmSeq s]) ->
+    errorSingle [info] (_evalSeqOfCharsToString info s.tms)
+  | (CExit _, [TmConst {val = CInt n}]) -> exit n.val
+  | (CCommand _, [TmSeq s]) ->
+    TmConst {
+      val = CInt {val = command (_evalSeqOfCharsToString info s.tms)},
+      ty = tyunknown_, info = NoInfo ()
+    }
 end
 
-lang TimeEval = TimeAst + IntAst
-  sem delta info arg =
-  | CSleepMs _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      sleepMs n;
-      uunit_
-    else errorSingle [info] "n in sleepMs not a constant integer"
-  | CWallTimeMs _ ->
+lang TimeEval = TimeAst + IntAst + TimeArity
+  sem delta info =
+  | (CSleepMs _, [TmConst {val = CInt n}]) ->
+    sleepMs n.val;
+    uunit_
+  | (CWallTimeMs _, [_]) ->
     float_ (wallTimeMs ())
 end
 
-lang RefOpEval = RefOpAst + RefEval + IntAst
-  syn Const =
-  | CModRef2 (Ref Expr)
-
-  sem constArity =
-  | CModRef2 _ -> 1
-
-  sem delta info arg =
-  | CRef _ -> TmRef {ref = ref arg}
-  | CModRef _ ->
-    match arg with TmRef {ref = r} then
-      TmConst {val = CModRef2 r, ty = tyunknown_, info = NoInfo()}
-    else errorSingle [info] "first argument of modref not a reference"
-  | CModRef2 r ->
-    modref r arg;
+lang RefOpEval = RefOpAst + RefEval + IntAst + RefOpArity
+  sem delta info =
+  | (CRef _, [arg]) -> TmRef {ref = ref arg}
+  | (CModRef _, [TmRef r, arg]) ->
+    modref r.ref arg;
     uunit_
-  | CDeRef _ ->
-    match arg with TmRef {ref = r} then
-      deref r
-    else errorSingle [info] "not a deref of a reference"
+  | (CDeRef _, [TmRef r]) -> deref r.ref
 end
 
-lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst
-  sem delta info arg =
-  | CConstructorTag _ ->
-    let zeroConst = lam.
-      TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()},
-               info = NoInfo ()}
-    in
-    match arg with TmConApp {ident = id} then
-      match nameGetSym id with Some sym then
-        TmConst {val = CInt {val = sym2hash sym}, ty = TyInt {info = NoInfo ()},
-                 info = NoInfo ()}
-      else zeroConst ()
-    else zeroConst ()
+lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
+  sem delta info =
+  | (CConstructorTag _, [TmConApp {ident = id}]) ->
+    match nameGetSym id with Some sym then TmConst {
+      val = CInt {val = sym2hash sym},
+      ty = TyInt {info = NoInfo ()},
+      info = NoInfo ()
+    }
+    else
+      TmConst {
+        val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()
+      }
 end
 
 lang MapEval =
   MapAst + UnknownTypeAst + IntAst + IntTypeAst + BoolAst + BoolTypeAst +
-  SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval
+  SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval + MapArity
 
   syn Const =
   | CMapVal {cmp : Expr, val : Map Expr Expr}
-  | CMapInsert2 Expr
-  | CMapInsert3 (Expr, Expr)
-  | CMapRemove2 Expr
-  | CMapFindExn2 Expr
-  | CMapFindOrElse2 Expr
-  | CMapFindOrElse3 (Expr, Expr)
-  | CMapFindApplyOrElse2 Expr
-  | CMapFindApplyOrElse3 (Expr, Expr)
-  | CMapFindApplyOrElse4 (Expr, Expr, Expr)
-  | CMapMem2 Expr
-  | CMapAny2 Expr
-  | CMapMap2 Expr
-  | CMapMapWithKey2 Expr
-  | CMapFoldWithKey2 Expr
-  | CMapFoldWithKey3 (Expr, Expr)
-  | CMapChooseOrElse2 Expr
-  | CMapEq2 Expr
-  | CMapEq3 (Expr, Map Expr Expr)
-  | CMapCmp2 Expr
-  | CMapCmp3 (Expr, Map Expr Expr)
-
-  sem constArity =
-  | CMapVal _ -> 0
-  | CMapInsert2 _ -> 2
-  | CMapInsert3 _ -> 1
-  | CMapRemove2 _ -> 1
-  | CMapFindExn2 _ -> 1
-  | CMapFindOrElse2 _ -> 2
-  | CMapFindOrElse3 _ -> 1
-  | CMapFindApplyOrElse2 _ -> 3
-  | CMapFindApplyOrElse3 _ -> 2
-  | CMapFindApplyOrElse4 _ -> 1
-  | CMapMem2 _ -> 1
-  | CMapAny2 _ -> 1
-  | CMapMap2 _ -> 1
-  | CMapMapWithKey2 _ -> 1
-  | CMapFoldWithKey2 _ -> 2
-  | CMapFoldWithKey3 _ -> 1
-  | CMapChooseOrElse2 _ -> 1
-  | CMapEq2 _ -> 2
-  | CMapEq3 _ -> 1
-  | CMapCmp2 _ -> 2
-  | CMapCmp3 _ -> 1
 
   sem _bindToRecord =
   | (k, v) ->
@@ -1105,242 +579,125 @@ lang MapEval =
         info = NoInfo ()},
       info = NoInfo ()}
 
-  sem delta info arg =
-  | CMapEmpty _ ->
+  sem delta info =
+  | (CMapEmpty _, [arg]) ->
     let cmp = lam x. lam y.
       let result =
         apply evalCtxEmpty info y
           (apply evalCtxEmpty info x arg) in
       match result with TmConst {val = CInt {val = i}} then i
       else
-        errorSingle [info] "Comparison function of map did not return integer value"
+        errorSingle [info]
+          "Comparison function of map did not return integer value"
     in
     TmConst {val = CMapVal {cmp = arg, val = mapEmpty cmp},
              ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-  | CMapInsert _ ->
-    TmConst {val = CMapInsert2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapInsert2 key ->
-    TmConst {val = CMapInsert3 (key, arg), ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapInsert3 (key, value) ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      TmConst {t with val = CMapVal {m with val = mapInsert key value m.val}}
-    else errorSingle [info] "Third argument of mapInsert not a map"
-  | CMapRemove _ ->
-    TmConst {val = CMapRemove2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapRemove2 key ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
-    else errorSingle [info] "Second argument of mapRemove not a map"
-  | CMapFindExn _ ->
-    TmConst {val = CMapFindExn2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapFindExn2 key ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      mapFindExn key m
-    else errorSingle [info] "Second argument of mapFindExn not a map"
-  | CMapFindOrElse _ ->
-    TmConst {val = CMapFindOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapFindOrElse2 elseFn ->
-    TmConst {val = CMapFindOrElse3 (elseFn, arg),
-             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-  | CMapFindOrElse3 (elseFn, key) ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      let elseFn = lam. apply evalCtxEmpty info unit_ elseFn in
-      mapFindOrElse elseFn key m
-    else errorSingle [info] "Third argument of mapFindOrElse not a map"
-  | CMapFindApplyOrElse _ ->
-    TmConst {val = CMapFindApplyOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapFindApplyOrElse2 fapply ->
-    TmConst {val = CMapFindApplyOrElse3 (fapply, arg),
-             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-  | CMapFindApplyOrElse3 (fapply, felse) ->
-    TmConst {val = CMapFindApplyOrElse4 (fapply, felse, arg),
-             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-  | CMapFindApplyOrElse4 (fapply, felse, key) ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      let fapply = lam v. apply evalCtxEmpty info v fapply in
-      let felse = lam. apply evalCtxEmpty info unit_ felse in
-      mapFindApplyOrElse fapply felse key m
-    else errorSingle [info] "Fourth argument of findApplyOrElse not a map"
-  | CMapBindings _ ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      TmSeq {tms = map _bindToRecord (mapBindings m.val),
-             ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
-             info = NoInfo ()}
-    else errorSingle [info] "Argument of mapBindings not a map"
-  | CMapChooseExn _ ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      _bindToRecord (mapChooseExn m)
-    else errorSingle [info] "Argument of mapChooseExn not a map"
-  | CMapChooseOrElse _ ->
-    TmConst {val = CMapChooseOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapChooseOrElse2 elseFn ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      if gti (mapSize m) 0 then _bindToRecord (mapChooseExn m)
-      else apply evalCtxEmpty info unit_ elseFn
-    else errorSingle [info] "Second argument of mapChooseOrElse not a map"
-  | CMapSize _ ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      TmConst {val = CInt {val = mapSize m}, ty = TyInt {info = NoInfo ()},
-               info = NoInfo ()}
-    else errorSingle [info] "Argument of mapSize not a map"
-  | CMapMem _ ->
-    TmConst {val = CMapMem2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapMem2 key ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      TmConst {val = CBool {val = mapMem key m}, ty = TyBool {info = NoInfo ()},
-               info = NoInfo ()}
-    else errorSingle [info] "Second argument of mapMem not a map"
-  | CMapAny _ ->
-    TmConst {val = CMapAny2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapAny2 pred ->
-    match arg with TmConst {val = CMapVal {val = m}} then
-      let pred = lam k. lam v.
-        let result =
-          apply evalCtxEmpty info v
-            (apply evalCtxEmpty info k pred) in
-        match result with TmConst {val = CBool {val = b}} then b
-        else
-          errorSingle [info] "Predicate of mapAny did not return boolean value"
-      in
-      TmConst {val = CBool {val = mapAny pred m},
-               ty = TyBool {info = NoInfo ()}, info = NoInfo ()}
-    else errorSingle [info] "Second argument of mapAny not a map"
-  | CMapMap _ ->
-    TmConst {val = CMapMap2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapMap2 f ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      let f = lam x. apply evalCtxEmpty info x f in
-      TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
-    else errorSingle [info] "Second argument of mapMap not a map"
-  | CMapMapWithKey _ ->
-    TmConst {val = CMapMapWithKey2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapMapWithKey2 f ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      let f = lam k. lam v.
+  | (CMapInsert _, [key, value, TmConst (t & {val = CMapVal m})]) ->
+    TmConst {t with val = CMapVal {m with val = mapInsert key value m.val}}
+  | (CMapRemove _, [key, TmConst (t & {val = CMapVal m})]) ->
+    TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
+  | (CMapFindExn _, [key, TmConst {val = CMapVal m}]) -> mapFindExn key m.val
+  | (CMapFindOrElse _, [elseFn, key, TmConst {val = CMapVal m}]) ->
+    let elseFn = lam. apply evalCtxEmpty info unit_ elseFn in
+    mapFindOrElse elseFn key m.val
+  | (CMapFindApplyOrElse _, [fapply, felse, key, TmConst {val = CMapVal m}]) ->
+    let fapply = lam v. apply evalCtxEmpty info v fapply in
+    let felse = lam. apply evalCtxEmpty info unit_ felse in
+    mapFindApplyOrElse fapply felse key m.val
+  | (CMapBindings _, [TmConst {val = CMapVal m}]) ->
+    TmSeq {
+      tms = map _bindToRecord (mapBindings m.val),
+      ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapChooseExn _, [TmConst {val = CMapVal m}]) ->
+    _bindToRecord (mapChooseExn m.val)
+  | (CMapChooseOrElse _, [elseFn, TmConst {val = CMapVal m}]) ->
+    if gti (mapSize m.val) 0 then _bindToRecord (mapChooseExn m.val)
+    else apply evalCtxEmpty info unit_ elseFn
+  | (CMapSize _, [TmConst {val = CMapVal m}]) ->
+    TmConst {
+      val = CInt {val = mapSize m.val},
+      ty = TyInt {info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapMem _, [key, TmConst {val = CMapVal m}]) ->
+    TmConst {
+      val = CBool {val = mapMem key m.val},
+      ty = TyBool {info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapAny _, [pred, TmConst {val = CMapVal m}]) ->
+    let pred = lam k. lam v.
+      let result =
         apply evalCtxEmpty info v
-          (apply evalCtxEmpty info k f) in
-      TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
-    else errorSingle [info] "Second argument of mapMapWithKey not a map"
-  | CMapFoldWithKey _ ->
-    TmConst {val = CMapFoldWithKey2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapFoldWithKey2 f ->
-    TmConst {val = CMapFoldWithKey3 (f, arg), ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapFoldWithKey3 (f, acc) ->
-    match arg with TmConst ({val = CMapVal m} & t) then
-      let f = lam acc. lam k. lam v.
-        apply evalCtxEmpty info v
-          (apply evalCtxEmpty info k
-            (apply evalCtxEmpty info acc f)) in
-      mapFoldWithKey f acc m.val
-    else errorSingle [info] "Third argument of mapFoldWithKey not a map"
-  | CMapEq _ ->
-    TmConst {val = CMapEq2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapEq2 eq ->
-    match arg with TmConst {val = CMapVal m1} then
-      TmConst {val = CMapEq3 (eq, m1.val), ty = TyUnknown {info = NoInfo ()},
-               info = NoInfo ()}
-    else errorSingle [info] "Second argument of mapEq not a map"
-  | CMapEq3 (eq, m1) ->
-    match arg with TmConst {val = CMapVal m2} then
-      let eq = lam v1. lam v2.
-        let result =
-          apply evalCtxEmpty info v2
-            (apply evalCtxEmpty info v1 eq) in
-        match result with TmConst {val = CBool {val = b}} then b
-        else
-          errorSingle [info] "Equality function of mapEq did not return boolean"
-      in
-      TmConst {val = CBool {val = mapEq eq m1 m2.val},
-               ty = TyBool {info = NoInfo ()}, info = NoInfo ()}
-    else errorSingle [info] "Third argument of mapEq not a map"
-  | CMapCmp _ ->
-    TmConst {val = CMapCmp2 arg, ty = TyUnknown {info = NoInfo ()},
-             info = NoInfo ()}
-  | CMapCmp2 cmp ->
-    match arg with TmConst {val = CMapVal m1} then
-      TmConst {val = CMapCmp3 (cmp, m1.val), ty = TyUnknown {info = NoInfo ()},
-               info = NoInfo ()}
-    else errorSingle [info] "Second argument of mapCmp not a map"
-  | CMapCmp3 (cmp, m1) ->
-    match arg with TmConst {val = CMapVal m2} then
-      let cmp = lam v1. lam v2.
-        let result =
-          apply evalCtxEmpty info v2
-            (apply evalCtxEmpty info v1 cmp) in
-        match result with TmConst {val = CInt {val = i}} then i
-        else
-          errorSingle [info] "Comparison function of mapCmp did not return integer"
-      in
-      TmConst {val = CInt {val = mapCmp cmp m1 m2.val},
-               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
-    else errorSingle [info] "Third argument of mapCmp not a map"
-  | CMapGetCmpFun _ ->
-    match arg with TmConst {val = CMapVal {cmp = cmp}} then
-      cmp
-    else errorSingle [info] "Argument to mapGetCmpFun not a map"
+          (apply evalCtxEmpty info k pred) in
+      match result with TmConst {val = CBool {val = b}} then b
+      else
+        errorSingle [info] "Predicate of mapAny did not return boolean value"
+    in
+    TmConst {
+      val = CBool {val = mapAny pred m.val},
+      ty = TyBool {info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapMap _, [f, TmConst (t & {val = CMapVal m})]) ->
+    let f = lam x. apply evalCtxEmpty info x f in
+    TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
+  | (CMapMapWithKey _, [f, TmConst (t & {val = CMapVal m})]) ->
+    let f = lam k. lam v.
+      apply evalCtxEmpty info v
+        (apply evalCtxEmpty info k f) in
+    TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
+  | (CMapFoldWithKey _, [f, acc, TmConst (t & {val = CMapVal m})]) ->
+    let f = lam acc. lam k. lam v.
+      apply evalCtxEmpty info v
+        (apply evalCtxEmpty info k
+           (apply evalCtxEmpty info acc f)) in
+    mapFoldWithKey f acc m.val
+  | (CMapEq _, [eq, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
+    let eq = lam v1. lam v2.
+      let result =
+        apply evalCtxEmpty info v2
+          (apply evalCtxEmpty info v1 eq) in
+      match result with TmConst {val = CBool {val = b}} then b
+      else
+        errorSingle [info] "Equality function of mapEq did not return boolean"
+    in
+    TmConst {
+      val = CBool {val = mapEq eq m1.val m2.val},
+      ty = TyBool {info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapCmp _, [cmp, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
+    let cmp = lam v1. lam v2.
+      let result =
+        apply evalCtxEmpty info v2
+          (apply evalCtxEmpty info v1 cmp) in
+      match result with TmConst {val = CInt {val = i}} then i
+      else
+        errorSingle [info]
+          "Comparison function of mapCmp did not return integer"
+    in
+    TmConst {
+      val = CInt {val = mapCmp cmp m1.val m2.val},
+      ty = TyInt {info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CMapGetCmpFun _, [TmConst {val = CMapVal m}]) -> m.cmp
 end
 
 lang TensorOpEval =
-  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst
-
-  syn Const =
-  | CTensorCreateInt2 [Int]
-  | CTensorCreateFloat2 [Int]
-  | CTensorCreate2 [Int]
-  | CTensorGetExn2 T
-  | CTensorSetExn2 T
-  | CTensorSetExn3 (T, [Int])
-  | CTensorLinearGetExn2 T
-  | CTensorLinearSetExn2 T
-  | CTensorLinearSetExn3 (T, Int)
-  | CTensorReshapeExn2 T
-  | CTensorTransposeExn2 T
-  | CTensorTransposeExn3 (T, Int)
-  | CTensorSliceExn2 T
-  | CTensorSubExn2 T
-  | CTensorSubExn3 (T, Int)
-  | CTensorIterSlice2 Expr
-  | CTensorEq2 Expr
-  | CTensorEq3 (Expr, T)
-  | CTensorToString2 Expr
-
-  sem constArity =
-  | CTensorCreateInt2 _ -> 1
-  | CTensorCreateFloat2 _ -> 1
-  | CTensorCreate2 _ -> 1
-  | CTensorGetExn2 _ -> 1
-  | CTensorSetExn2 _ -> 2
-  | CTensorSetExn3 _ -> 1
-  | CTensorReshapeExn2 _ -> 1
-  | CTensorTransposeExn2 _ -> 2
-  | CTensorTransposeExn3 _ -> 1
-  | CTensorSliceExn2 _ -> 1
-  | CTensorSubExn2 _ -> 2
-  | CTensorSubExn3 _ -> 1
-  | CTensorIterSlice2 _ -> 1
-  | CTensorEq2 _ -> 2
-  | CTensorEq3 _ -> 1
-  | CTensorToString2 _ -> 1
+  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst +
+  TensorOpArity
 
   sem _ofTmSeq (info : Info) =
-  | TmSeq { tms = tms } ->
-    map (lam tm. match tm with TmConst { val = CInt { val = n }} then n
-                 else errorSingle [info] "Not an integer sequence")
-        tms
+  | TmSeq {tms = tms} ->
+    map
+      (lam tm.
+        match tm with TmConst {val = CInt {val = n}} then n
+        else errorSingle [info] "Not an integer sequence")
+      tms
   | tm -> dprint tm; errorSingle [info] "Not an integer sequence"
 
   sem _toTmSeq =
@@ -1348,375 +705,250 @@ lang TensorOpEval =
     let tms = map (lam i. int_ i) is in
     seq_ tms
 
-  sem delta info arg =
-  | CTensorCreateUninitInt _ ->
-    TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq info arg)) }
-  | CTensorCreateUninitFloat _ ->
-    TmTensor { val = TFloat (tensorCreateUninitFloat (_ofTmSeq info arg)) }
-  | CTensorCreateInt _ ->
-    let val = CTensorCreateInt2 (_ofTmSeq info arg) in
-    uconst_ val
-  | CTensorCreateInt2 shape ->
+  sem delta info =
+  | (CTensorCreateUninitInt _, [shape]) ->
+    TmTensor {val = TInt (tensorCreateUninitInt (_ofTmSeq info shape))}
+  | (CTensorCreateUninitFloat _, [shape]) ->
+    TmTensor {val = TFloat (tensorCreateUninitFloat (_ofTmSeq info shape))}
+  | (CTensorCreateInt _, [shape, f]) ->
     let f = lam is.
-      match apply evalCtxEmpty info (_toTmSeq is) arg
-      with TmConst { val = CInt { val = n } } then n
+      match apply evalCtxEmpty info (_toTmSeq is) f
+        with TmConst {val = CInt n} then n.val
       else errorSingle [info] "Expected integer from f in CTensorCreateInt"
     in
-    TmTensor { val = TInt (tensorCreateCArrayInt shape f) }
-  | CTensorCreateFloat _ ->
-    let val = CTensorCreateFloat2 (_ofTmSeq info arg) in
-    uconst_ val
-  | CTensorCreateFloat2 shape ->
+    TmTensor {val = TInt (tensorCreateCArrayInt (_ofTmSeq info shape) f)}
+  | (CTensorCreateFloat _, [shape, f]) ->
     let f = lam is.
-      match apply evalCtxEmpty info (_toTmSeq is) arg
-      with TmConst { val = CFloat { val = r } } then r
+      match apply evalCtxEmpty info (_toTmSeq is) f
+        with TmConst {val = CFloat r} then r.val
       else errorSingle [info] "Expected float from f in CTensorCreateFloat"
     in
-    TmTensor { val = TFloat (tensorCreateCArrayFloat shape f) }
-  | CTensorCreate _ ->
-    let val = CTensorCreate2 (_ofTmSeq info arg) in
-    uconst_ val
-  | CTensorCreate2 shape ->
-    let f = lam is. apply evalCtxEmpty info (_toTmSeq is) arg in
-    TmTensor { val = TExpr (tensorCreateDense shape f) }
-  | CTensorGetExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorGetExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorGetExn not a tensor"
-  | CTensorGetExn2 t ->
-    let is = _ofTmSeq info arg in
-    match t with TInt t then
-      let val = tensorGetExn t is in
+    TmTensor {val = TFloat (tensorCreateCArrayFloat (_ofTmSeq info shape) f)}
+  | (CTensorCreate _, [shape, f]) ->
+    let f = lam is. apply evalCtxEmpty info (_toTmSeq is) f in
+    TmTensor {val = TExpr (tensorCreateDense (_ofTmSeq info shape) f)}
+  | (CTensorGetExn _, [TmTensor t, idx]) ->
+    let idx = _ofTmSeq info idx in
+    switch t.val
+      case TInt t then
+      let val = tensorGetExn t idx in
       int_ val
-    else match t with TFloat t then
-      let val = tensorGetExn t is in
+      case TFloat t then
+      let val = tensorGetExn t idx in
       float_ val
-    else match t with TExpr t then
-      let val = tensorGetExn t is in
+      case TExpr t then
+      let val = tensorGetExn t idx in
       val
-    else never
-  | CTensorSetExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorSetExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorSetExn not a tensor"
-  | CTensorSetExn2 t ->
-    let is = _ofTmSeq info arg in
-    let val = CTensorSetExn3 (t, is) in
-    uconst_ val
-  | CTensorSetExn3 (t, is) ->
-    match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
-      tensorSetExn t is v;
+    end
+  | (CTensorSetExn _, [TmTensor t, idx, val]) ->
+    let idx = _ofTmSeq info idx in
+    switch (t.val, val)
+      case (TInt t, TmConst {val = CInt v}) then
+      tensorSetExn t idx v.val;
       uunit_
-    else
-    match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
-      tensorSetExn t is v;
+      case (TFloat t, TmConst {val = CFloat v}) then
+      tensorSetExn t idx v.val;
       uunit_
-    else
-    match (t, arg) with (TExpr t, v) then
-      tensorSetExn t is v;
+      case (TExpr t, v) then
+      tensorSetExn t idx v;
       uunit_
-    else
-      errorSingle [info] "Tensor and value type does not match in CTensorSetExn"
-  | CTensorLinearGetExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorLinearGetExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorLinearGetExn not a tensor"
-  | CTensorLinearGetExn2 t ->
-    match arg with TmConst { val = CInt { val = i } } then
-      match t with TInt t then
-        let val = tensorLinearGetExn t i in
-        int_ val
-      else match t with TFloat t then
-        let val = tensorLinearGetExn t i in
-        float_ val
-      else match t with TExpr t then
-        let val = tensorLinearGetExn t i in
-        val
-      else never
-    else
-      errorSingle [info] "Second argument to CTensorLinearGetExn not an integer"
-  | CTensorLinearSetExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorLinearSetExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorLinearSetExn not a tensor"
-  | CTensorLinearSetExn2 t ->
-    match arg with TmConst { val = CInt { val = i } } then
-      let val = CTensorLinearSetExn3 (t, i) in
-      uconst_ val
-    else
-      errorSingle [info] "Second argument to CTensorLinearSetExn not an integer"
-  | CTensorLinearSetExn3 (t, i) ->
-    match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
-      tensorLinearSetExn t i v;
+    end
+  | (CTensorLinearGetExn _, [TmTensor t, TmConst {val = CInt n}]) ->
+    switch t.val
+      case TInt t then
+      let val = tensorLinearGetExn t n.val in
+      int_ val
+      case TFloat t then
+      let val = tensorLinearGetExn t n.val in
+      float_ val
+      case TExpr t then
+      let val = tensorLinearGetExn t n.val in
+      val
+    end
+  | (CTensorLinearSetExn _, [TmTensor t, TmConst {val = CInt n}, val]) ->
+    switch (t.val, val)
+      case (TInt t, TmConst {val = CInt {val = v}}) then
+      tensorLinearSetExn t n.val v;
       uunit_
-    else
-    match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
-      tensorLinearSetExn t i v;
+      case (TFloat t, TmConst {val = CFloat {val = v}}) then
+      tensorLinearSetExn t n.val v;
       uunit_
-    else
-    match (t, arg) with (TExpr t, v) then
-      tensorLinearSetExn t i v;
+      case (TExpr t, v) then
+      tensorLinearSetExn t n.val v;
       uunit_
-    else
-      errorSingle [info]
-        "Tensor and value type does not match in CTensorLinearSetExn"
-  | CTensorRank _ ->
-    match arg with TmTensor { val = t } then
-      match t with TInt t then int_ (tensorRank t)
-      else match t with TFloat t then int_ (tensorRank t)
-      else match t with TExpr t then int_ (tensorRank t)
-      else never
-    else errorSingle [info] "First argument to CTensorRank not a tensor"
-  | CTensorShape _ ->
-    match arg with TmTensor { val = t } then
-      match t with TInt t then _toTmSeq (tensorShape t)
-      else match t with TFloat t then _toTmSeq (tensorShape t)
-      else match t with TExpr t then _toTmSeq (tensorShape t)
-      else never
-    else errorSingle [info] "First argument to CTensorRank not a tensor"
-  | CTensorReshapeExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorReshapeExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorReshapeExn not a tensor"
-  | CTensorReshapeExn2 t ->
-    let is = _ofTmSeq info arg in
-    match t with TInt t then
-      let view = tensorReshapeExn t is in
-      TmTensor { val = TInt view }
-    else match t with TFloat t then
-      let view = tensorReshapeExn t is in
-      TmTensor { val = TFloat view }
-    else match t with TExpr t then
-      let view = tensorReshapeExn t is in
-      TmTensor { val = TExpr view }
-    else never
-  | CTensorCopy _ ->
-    match arg with TmTensor { val = t } then
-      match t with TInt t then
-        let tt = tensorCopy t in
-        TmTensor { val = TInt tt }
-      else match t with TFloat t then
-        let tt = tensorCopy t in
-        TmTensor { val = TFloat tt }
-      else match t with TExpr t then
-        let tt = tensorCopy t in
-        TmTensor { val = TExpr tt }
-      else never
-    else errorSingle [info] "First argument to CTensorCopy not a tensor"
-  | CTensorTransposeExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorTransposeExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorTransposeExn not a tensor"
-  | CTensorTransposeExn2 t ->
-    match arg with TmConst { val = CInt { val = n } } then
-      let val = CTensorTransposeExn3 (t, n) in
-      uconst_ val
-    else
-      errorSingle [info] "Second argument to CTensorTransposeExn not an integer"
-  | CTensorTransposeExn3 (t, n1) ->
-    match arg with TmConst { val = CInt { val = n2 } } then
-      match t with TInt t then
-        let tt = tensorTransposeExn t n1 n2 in
-        TmTensor { val = TInt tt }
-      else match t with TFloat t then
-        let tt = tensorTransposeExn t n1 n2 in
-        TmTensor { val = TFloat tt }
-      else match t with TExpr t then
-        let tt = tensorTransposeExn t n1 n2 in
-        TmTensor { val = TExpr tt }
-      else never
-    else
-      errorSingle [info] "Second argument to CTensorTransposeExn not an integer"
-  | CTensorSliceExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorSliceExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorSliceExn not a tensor"
-  | CTensorSliceExn2 t ->
-    let is = _ofTmSeq info arg in
-    match t with TInt t then
-      let view = tensorSliceExn t is in
-      TmTensor { val = TInt view }
-    else match t with TFloat t then
-      let view = tensorSliceExn t is in
-      TmTensor { val = TFloat view }
-    else match t with TExpr t then
-      let view = tensorSliceExn t is in
-      TmTensor { val = TExpr view }
-    else never
-  | CTensorSubExn _ ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorSubExn2 t in
-      uconst_ val
-    else errorSingle [info] "First argument to CTensorSubExn not a tensor"
-  | CTensorSubExn2 t ->
-    match arg with TmConst { val = CInt { val = ofs }} then
-      let val = CTensorSubExn3 (t, ofs) in
-      uconst_ val
-    else errorSingle [info] "Second argument to CTensorSubExn not an integer"
-  | CTensorSubExn3 (t, ofs) ->
-    match arg with TmConst { val = CInt { val = len }} then
-      match t with TInt t then
-        let view = tensorSubExn t ofs len in
-        TmTensor { val = TInt view }
-      else match t with TFloat t then
-        let view = tensorSubExn t ofs len in
-        TmTensor { val = TFloat view }
-      else match t with TExpr t then
-        let view = tensorSubExn t ofs len in
-        TmTensor { val = TExpr view }
-      else never
-    else errorSingle [info] "Second argument to CTensorSubExn not an integer"
-  | CTensorIterSlice _ ->
-    let val = CTensorIterSlice2 arg in
-    uconst_ val
-  | CTensorIterSlice2 f ->
-    match arg with TmTensor { val = t } then
-      let mkg = lam mkt. lam i. lam r.
-        let res =
-          apply evalCtxEmpty info (TmTensor { val = mkt r })
-            (apply evalCtxEmpty info (int_ i) f)
-        in
-        ()
+    end
+  | (CTensorRank _, [TmTensor t]) ->
+    switch t.val
+      case TInt t then int_ (tensorRank t)
+      case TFloat t then int_ (tensorRank t)
+      case TExpr t then int_ (tensorRank t)
+    end
+  | (CTensorShape _, [TmTensor t]) ->
+    switch t.val
+      case TInt t then _toTmSeq (tensorShape t)
+      case TFloat t then _toTmSeq (tensorShape t)
+      case TExpr t then _toTmSeq (tensorShape t)
+    end
+  | (CTensorReshapeExn _, [TmTensor t, idx]) ->
+    let idx = _ofTmSeq info idx in
+    switch t.val
+      case TInt t then
+      let view = tensorReshapeExn t idx in
+      TmTensor {val = TInt view}
+      case TFloat t then
+      let view = tensorReshapeExn t idx in
+      TmTensor {val = TFloat view}
+      case TExpr t then
+      let view = tensorReshapeExn t idx in
+      TmTensor {val = TExpr view}
+    end
+  | (CTensorCopy _, [TmTensor t]) ->
+    switch t.val
+      case TInt t then
+      let tt = tensorCopy t in
+      TmTensor {val = TInt tt}
+      case TFloat t then
+      let tt = tensorCopy t in
+      TmTensor {val = TFloat tt}
+      case TExpr t then
+      let tt = tensorCopy t in
+      TmTensor {val = TExpr tt}
+    end
+  | (CTensorTransposeExn _, [
+    TmTensor t, TmConst {val = CInt n1}, TmConst {val = CInt n2}
+  ]) ->
+    switch t.val
+      case TInt t then
+      let tt = tensorTransposeExn t n1.val n2.val in
+      TmTensor {val = TInt tt}
+      case TFloat t then
+      let tt = tensorTransposeExn t n1.val n2.val in
+      TmTensor {val = TFloat tt}
+      case TExpr t then
+      let tt = tensorTransposeExn t n1.val n2.val in
+      TmTensor {val = TExpr tt}
+    end
+  | (CTensorSliceExn _, [TmTensor t, idx]) ->
+    let idx = _ofTmSeq info idx in
+    switch t.val
+      case TInt t then
+      let view = tensorSliceExn t idx in
+      TmTensor {val = TInt view}
+      case TFloat t then
+      let view = tensorSliceExn t idx in
+      TmTensor {val = TFloat view}
+      case TExpr t then
+      let view = tensorSliceExn t idx in
+      TmTensor {val = TExpr view}
+    end
+  | (CTensorSubExn _, [
+    TmTensor t, TmConst {val = CInt ofs}, TmConst {val = CInt len}
+  ]) ->
+    switch t.val
+      case TInt t then
+      let view = tensorSubExn t ofs.val len.val in
+      TmTensor {val = TInt view}
+      case TFloat t then
+      let view = tensorSubExn t ofs.val len.val in
+      TmTensor {val = TFloat view}
+      case TExpr t then
+      let view = tensorSubExn t ofs.val len.val in
+      TmTensor {val = TExpr view}
+    end
+  | (CTensorIterSlice _, [f, TmTensor t]) ->
+    let mkg = lam mkt. lam i. lam r.
+      let res =
+        apply evalCtxEmpty info (TmTensor {val = mkt r})
+          (apply evalCtxEmpty info (int_ i) f)
       in
-      match t with TInt t then
-        let g = mkg (lam t. TInt t) in
-        tensorIterSlice g t;
-        uunit_
-      else match t with TFloat t then
-        let g = mkg (lam t. TFloat t) in
-        tensorIterSlice g t;
-        uunit_
-      else match t with TExpr t then
-        let g = mkg (lam t. TExpr t) in
-        tensorIterSlice g t;
-        uunit_
-      else never
-    else errorSingle [info] "Second argument to CTensorIterSlice not a tensor"
-  | CTensorEq _ ->
-    let val = CTensorEq2 arg in
-    uconst_ val
-  | CTensorEq2 eq ->
-    match arg with TmTensor { val = t } then
-      let val = CTensorEq3 (eq, t) in
-      uconst_ val
-    else errorSingle [info] "Second argument to CTensorEq not a tensor"
-  | CTensorEq3 (eq, t1) ->
-    match arg with TmTensor { val = t2 } then
+      ()
+    in
+    switch t.val
+      case TInt t then
+      let g = mkg (lam t. TInt t) in
+      tensorIterSlice g t;
+      uunit_
+      case TFloat t then
+      let g = mkg (lam t. TFloat t) in
+      tensorIterSlice g t;
+      uunit_
+      case TExpr t then
+      let g = mkg (lam t. TExpr t) in
+      tensorIterSlice g t;
+      uunit_
+    end
+  | (CTensorEq _, [eq, TmTensor t1, TmTensor t2]) ->
     let mkeq
       : all a. all b.
         (a -> Expr) -> (b -> Expr) -> Tensor[a] -> Tensor[b] -> Bool =
       lam wrapx. lam wrapy. lam t1. lam t2.
-      let eq = lam x. lam y.
-        match
-          apply evalCtxEmpty info (wrapy y)
-            (apply evalCtxEmpty info (wrapx x) eq)
-          with TmConst { val = CBool { val = b } }
-        then b else errorSingle [info] "Invalid equality function"
-      in
-      tensorEq eq t1 t2
+        let eq = lam x. lam y.
+          match
+            apply evalCtxEmpty info (wrapy y)
+              (apply evalCtxEmpty info (wrapx x) eq)
+            with TmConst {val = CBool {val = b}}
+          then b
+          else errorSingle [info] "Invalid equality function"
+        in
+        tensorEq eq t1 t2
     in
     let result =
-      match t1 with TInt t1 then
-        match t2 with TInt t2 then mkeq int_ int_ t1 t2
-        else match t2 with TFloat t2 then mkeq int_ float_ t1 t2
-        else match t2 with TExpr t2 then mkeq int_ (lam x. x) t1 t2
-        else never
-      else match t1 with TFloat t1 then
-        match t2 with TInt t2 then mkeq float_ int_ t1 t2
-        else match t2 with TFloat t2 then mkeq float_ float_ t1 t2
-        else match t2 with TExpr t2 then mkeq float_ (lam x. x) t1 t2
-        else never
-      else match t1 with TExpr t1 then
-        match t2 with TInt t2 then mkeq (lam x. x) int_ t1 t2
-        else match t2 with TFloat t2 then mkeq (lam x. x) float_ t1 t2
-        else match t2 with TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
-        else never
-      else never
+      switch t1.val
+        case TInt t1 then
+        switch t2.val
+          case TInt t2 then mkeq int_ int_ t1 t2
+          case TFloat t2 then mkeq int_ float_ t1 t2
+          case TExpr t2 then mkeq int_ (lam x. x) t1 t2
+        end
+        case TFloat t1 then
+        switch t2.val
+          case TInt t2 then mkeq float_ int_ t1 t2
+          case TFloat t2 then mkeq float_ float_ t1 t2
+          case TExpr t2 then mkeq float_ (lam x. x) t1 t2
+        end
+        case TExpr t1 then
+        switch t2.val
+          case TInt t2 then mkeq (lam x. x) int_ t1 t2
+          case TFloat t2 then mkeq (lam x. x) float_ t1 t2
+          case TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
+        end
+      end
     in
     bool_ result
-    else errorSingle [info] "Third argument to CTensorEq not a tensor"
-  | CTensorToString _ ->
-    let val = CTensorToString2 arg in
-    uconst_ val
-  | CTensorToString2 el2str ->
-    match arg with TmTensor { val = t } then
-      let el2str = lam x.
-        match apply evalCtxEmpty info x el2str with TmSeq { tms = tms } then
-          _evalSeqOfCharsToString info tms
-        else errorSingle [info] "Invalid element to string function"
-      in
-      let str =
-        match t with TInt t then tensor2string (lam x. el2str (int_ x)) t
-        else match t with TFloat t then
-          tensor2string (lam x. el2str (float_ x)) t
-        else match t with TExpr t then tensor2string el2str t
-        else never
-      in
-      seq_ (_evalStringToSeqOfChars str)
-    else errorSingle [info] "Second argument to CTensorToString not a tensor"
+  | (CTensorToString _, [el2str, TmTensor t]) ->
+    let el2str = lam x.
+      match apply evalCtxEmpty info x el2str with TmSeq {tms = tms} then
+        _evalSeqOfCharsToString info tms
+      else errorSingle [info] "Invalid element to string function"
+    in
+    let str =
+      switch t.val
+        case TInt t then tensor2string (lam x. el2str (int_ x)) t
+        case TFloat t then tensor2string (lam x. el2str (float_ x)) t
+        case TExpr t then tensor2string el2str t
+      end
+    in
+    seq_ (_evalStringToSeqOfChars str)
 end
 
 lang BootParserEval =
   BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
   FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
-  RecordAst
+  RecordAst + BootParserArity
 
   syn Const =
   | CBootParserTree {val : BootParseTree}
-  | CBootParserParseMExprString2 (Bool)
-  | CBootParserParseMExprString3 (Bool, [String])
-  | CBootParserParseMCoreFile2 (Bool, Bool, [String], Bool, Bool, Bool)
-  | CBootParserParseMCoreFile3 ((Bool, Bool, [String], Bool, Bool, Bool), [String])
-  | CBootParserGetTerm2 BootParseTree
-  | CBootParserGetType2 BootParseTree
-  | CBootParserGetString2 BootParseTree
-  | CBootParserGetInt2 BootParseTree
-  | CBootParserGetFloat2 BootParseTree
-  | CBootParserGetListLength2 BootParseTree
-  | CBootParserGetConst2 BootParseTree
-  | CBootParserGetPat2 BootParseTree
-  | CBootParserGetInfo2 BootParseTree
 
-  sem constArity =
-  | CBootParserTree _ -> 0
-  | CBootParserParseMExprString2 _ -> 2
-  | CBootParserParseMExprString3 _ -> 3
-  | CBootParserParseMCoreFile2 _ -> 2
-  | CBootParserParseMCoreFile3 _ -> 3
-  | CBootParserGetTerm2 _ -> 1
-  | CBootParserGetType2 _ -> 1
-  | CBootParserGetString2 _ -> 1
-  | CBootParserGetInt2 _ -> 1
-  | CBootParserGetFloat2 _ -> 1
-  | CBootParserGetListLength2 _ -> 1
-  | CBootParserGetConst2 _ -> 1
-  | CBootParserGetPat2 _ -> 1
-  | CBootParserGetInfo2 _ -> 1
-
-  sem delta info arg =
-  | CBootParserParseMExprString _ ->
-    match arg with TmRecord {bindings = bs} then
-      match
-        map (lam b. mapLookup b bs) (map stringToSid ["0"])
+  sem delta info =
+  | (CBootParserParseMExprString _, [
+    TmRecord {bindings = bs}, TmSeq {tms = seq1}, TmSeq {tms = seq2}
+  ]) ->
+    match
+      map (lam b. mapLookup b bs) (map stringToSid ["0"])
       with [
-        Some (TmConst { val = CBool { val = allowFree } })
+        Some (TmConst {val = CBool {val = allowFree}})
       ]
-      then
-        TmConst {val = CBootParserParseMExprString2 ( allowFree ),
-                 ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-      else
-        errorSingle [info] "First argument to bootParserParseMExprString incorrect record"
-    else
-      errorSingle [info] "First argument to bootParserParseMExprString not a record"
-  | CBootParserParseMExprString2 options ->
-    match arg with TmSeq {tms = seq} then
+    then
       let keywords =
         map
           (lam keyword.
@@ -1724,62 +956,55 @@ lang BootParserEval =
               _evalSeqOfCharsToString info s
             else
               errorSingle [info] (join [
-                  "Keyword of first argument passed to ",
-                  "bootParserParseMExprString not a sequence"
-                ]))
-          seq in
-      TmConst {val = CBootParserParseMExprString3 (options,keywords),
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserParseMExprString not a sequence"
-  | CBootParserParseMExprString3 (options, keywords) ->
-    match arg with TmSeq {tms = seq} then
+                "Keyword of first argument passed to ",
+                "bootParserParseMExprString not a sequence"
+              ]))
+          seq1 in
       let t =
-        bootParserParseMExprString (options,) keywords (_evalSeqOfCharsToString info seq)
+        bootParserParseMExprString
+          (allowFree,) keywords (_evalSeqOfCharsToString info seq2)
       in
-      TmConst {val = CBootParserTree {val = t},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+      TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+      }
     else
-      errorSingle [info] "Second argument to bootParserParseMExprString not a sequence"
-  | CBootParserParseMCoreFile _ ->
-    match arg with TmRecord {bindings = bs} then
-      match
-        map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3", "4", "5"])
+      errorSingle [info]
+        "First argument to bootParserParseMExprString incorrect record"
+  | (CBootParserParseMCoreFile _, [
+    TmRecord {bindings = bs}, TmSeq {tms = keywords}, TmSeq {tms = filename}
+  ]) ->
+    match
+      map (lam b. mapLookup b bs) (map stringToSid ["0", "1", "2", "3", "4", "5"])
       with [
-        Some (TmConst { val = CBool { val = keepUtests } }),
-        Some (TmConst { val = CBool { val = pruneExternalUtests } }),
-        Some (TmSeq { tms = externalsExclude }),
-        Some (TmConst { val = CBool { val = warn } }),
-        Some (TmConst { val = CBool { val = eliminateDeadCode } }),
-        Some (TmConst { val = CBool { val = allowFree } })
+        Some (TmConst {val = CBool {val = keepUtests}}),
+        Some (TmConst {val = CBool {val = pruneExternalUtests}}),
+        Some (TmSeq {tms = externalsExclude}),
+        Some (TmConst {val = CBool {val = warn}}),
+        Some (TmConst {val = CBool {val = eliminateDeadCode}}),
+        Some (TmConst {val = CBool {val = allowFree}})
       ]
-      then
-        let externalsExclude =
-          map
-            (lam x.
-              match x with TmSeq {tms = s} then
-                _evalSeqOfCharsToString info s
-              else
-                errorSingle [info] (join [
-                    "External identifier of first argument passed to ",
-                    "bootParserParseMCoreFile not a sequence"
-                  ]))
-            externalsExclude
-        in
-        TmConst {val = CBootParserParseMCoreFile2 (
-                  keepUtests,
-                  pruneExternalUtests,
-                  externalsExclude,
-                  warn,
-                  eliminateDeadCode,
-                  allowFree ),
-                 ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-      else
-        errorSingle [info] "First argument to bootParserParseMCoreFile incorrect record"
-    else
-      errorSingle [info] "First argument to bootParserParseMCoreFile not a record"
-  | CBootParserParseMCoreFile2 pruneArg ->
-    match arg with TmSeq {tms = keywords} then
+    then
+      let externalsExclude =
+        map
+          (lam x.
+            match x with TmSeq {tms = s} then
+              _evalSeqOfCharsToString info s
+            else
+              errorSingle [info] (join [
+                "External identifier of first argument passed to ",
+                "bootParserParseMCoreFile not a sequence"
+              ]))
+          externalsExclude
+      in
+      let pruneArg = (keepUtests,
+                      pruneExternalUtests,
+                      externalsExclude,
+                      warn,
+                      eliminateDeadCode,
+                      allowFree)
+      in
       let keywords =
         map
           (lam keyword.
@@ -1787,142 +1012,87 @@ lang BootParserEval =
               _evalSeqOfCharsToString info s
             else
               errorSingle [info] (join [
-                  "Keyword of third argument passed to ",
-                  "bootParserParseMCoreFile not a sequence"
-                ]))
+                "Keyword of third argument passed to ",
+                "bootParserParseMCoreFile not a sequence"
+              ]))
           keywords
       in
-      TmConst {val = CBootParserParseMCoreFile3 (pruneArg, keywords),
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Third argument to bootParserParseMCoreFile not a sequence"
-  | CBootParserParseMCoreFile3 (pruneArg, keywords) ->
-    match arg with TmSeq {tms = filename} then
+
       let filename = _evalSeqOfCharsToString info filename in
       let t = bootParserParseMCoreFile pruneArg keywords filename in
-      TmConst {val = CBootParserTree {val = t},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+      TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+      }
     else
-      errorSingle [info] "Second argument to bootParserParseMCoreFile not a sequence"
-  | CBootParserGetId _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CInt {val = bootParserGetId ptree},
-               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
-    else errorSingle [info] "Argument to bootParserGetId not a parse tree"
-  | CBootParserGetTerm _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetTerm2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetTerm not a parse tree"
-  | CBootParserGetTerm2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CBootParserTree {val = bootParserGetTerm ptree n},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetTerm not an integer"
-  | CBootParserGetType _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetType2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetType not a parse tree"
-  | CBootParserGetType2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CBootParserTree {val = bootParserGetType ptree n},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetType not an integer"
-  | CBootParserGetString _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetString2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetString not a parse tree"
-  | CBootParserGetString2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      let str =
-        map
-          (lam c. TmConst {val = CChar {val = c},
-                           ty = TyChar {info = NoInfo ()}, info = NoInfo ()})
-          (bootParserGetString ptree n) in
-      TmSeq {tms = str, ty = TySeq {ty = TyChar {info = NoInfo ()},
-                                    info = NoInfo ()},
-             info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetString not an integer"
-  | CBootParserGetInt _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetInt2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetInt not a parse tree"
-  | CBootParserGetInt2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CInt {val = bootParserGetInt ptree n},
-               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetInt not an integer"
-  | CBootParserGetFloat _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetFloat2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetFloat not a parse tree"
-  | CBootParserGetFloat2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CFloat {val = bootParserGetFloat ptree n},
-               ty = TyFloat {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetFloat not an integer"
-  | CBootParserGetListLength _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetListLength2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetListLength not a parse tree"
-  | CBootParserGetListLength2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CInt {val = bootParserGetListLength ptree n},
-               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetListLength not an integer"
-  | CBootParserGetConst _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetConst2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetConst not a parse tree"
-  | CBootParserGetConst2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CBootParserTree {val = bootParserGetConst ptree n},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetConst not an integer"
-  | CBootParserGetPat _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetPat2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetPat not a parse tree"
-  | CBootParserGetPat2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CBootParserTree {val = bootParserGetPat ptree n},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetPat not an integer"
-  | CBootParserGetInfo _ ->
-    match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetInfo2 ptree,
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "First argument to bootParserGetInfo not a parse tree"
-  | CBootParserGetInfo2 ptree ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CBootParserTree {val = bootParserGetInfo ptree n},
-               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-    else
-      errorSingle [info] "Second argument to bootParserGetInfo not an integer"
+      errorSingle [info]
+        "First argument to bootParserParseMCoreFile incorrect record"
+  | (CBootParserGetId _, [TmConst {val = CBootParserTree {val = ptree}}]) ->
+    TmConst {val = CInt {val = bootParserGetId ptree},
+             ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetTerm _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetTerm ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetType _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetType ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetString _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    let str =
+      map
+        (lam c. TmConst {val = CChar {val = c},
+                       ty = TyChar {info = NoInfo ()}, info = NoInfo ()})
+        (bootParserGetString ptree n) in
+    TmSeq {
+      tms = str,
+      ty = TySeq {ty = TyChar {info = NoInfo ()}, info = NoInfo ()},
+      info = NoInfo ()
+    }
+  | (CBootParserGetInt _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CInt {val = bootParserGetInt ptree n},
+             ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetFloat _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CFloat {val = bootParserGetFloat ptree n},
+             ty = TyFloat {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetListLength _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CInt {val = bootParserGetListLength ptree n},
+             ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetConst _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetConst ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetPat _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetPat ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetInfo _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetInfo ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
 end
 
 --------------
