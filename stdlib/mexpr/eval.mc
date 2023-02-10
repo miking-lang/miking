@@ -4,6 +4,7 @@ include "string.mc"
 include "char.mc"
 include "name.mc"
 include "list.mc"
+include "tensor.mc"
 
 include "info.mc"
 include "error.mc"
@@ -212,12 +213,53 @@ con TInt : Tensor[Int] -> T
 con TFloat : Tensor[Float] -> T
 con TExpr : Tensor[Expr] -> T
 
-lang TensorEval = Eval
+lang TensorEval = Eval + Eq + PrettyPrint
   syn Expr =
   | TmTensor { val : T }
 
   sem eval ctx =
   | TmTensor t -> TmTensor t
+
+  sem isAtomic =
+  | TmTensor _ -> true
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmTensor r ->
+    switch r.val
+      case TInt t then (env, tensor2string int2string t)
+      case TFloat t then (env, tensor2string float2string t)
+      case TExpr t1 then
+      let t2 = tensorCreateDense (tensorShape t1) (lam. " ") in
+      let env =
+        tensorFoldi
+          (lam env. lam idx. lam e. match pprintCode 0 env e with (env, str) in
+                              tensorSetExn t2 idx str; env)
+          env t1
+      in
+      (env, tensor2string (lam x. x) t2)
+      end
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmTensor r1 ->
+    match lhs with TmTensor r2 then
+      switch (r1.val, r2.val)
+        case (TInt t1, TInt t2) then
+        if tensorEq eqi t1 t2 then Some free
+        else None ()
+        case (TFloat t1, TFloat t2) then
+        if tensorEq eqf t1 t2 then Some free
+        else None ()
+        case (TExpr t1, TExpr t2) then
+        if tensorHasSameShape t1 t2 then
+          tensorFoldi
+            (lam free. lam idx. lam e1.
+              optionBind free
+                (lam free. eqExprH env free e1 (tensorGetExn t2 idx)))
+            (Some free) t1
+        else None ()
+        case (_, _) then None ()
+      end
+    else None ()
 end
 
 lang ExtEval = Eval + ExtAst
