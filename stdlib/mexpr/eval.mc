@@ -1348,98 +1348,6 @@ lang TensorOpEval =
     let tms = map (lam i. int_ i) is in
     seq_ tms
 
-  sem apply ctx info arg =
-  | TmConst { val = CTensorCreateInt2 shape } ->
-    let f = lam is.
-      match apply ctx info (_toTmSeq is) arg
-      with TmConst { val = CInt { val = n } } then n
-      else errorSingle [info] "Expected integer from f in CTensorCreateInt"
-    in
-    TmTensor { val = TInt (tensorCreateCArrayInt shape f) }
-  | TmConst { val = CTensorCreateFloat2 shape } ->
-    let f = lam is.
-      match apply ctx info (_toTmSeq is) arg
-      with TmConst { val = CFloat { val = r } } then r
-      else errorSingle [info] "Expected float from f in CTensorCreateFloat"
-    in
-    TmTensor { val = TFloat (tensorCreateCArrayFloat shape f) }
-  | TmConst { val = CTensorCreate2 shape } ->
-    let f = lam is. apply ctx info (_toTmSeq is) arg in
-    TmTensor { val = TExpr (tensorCreateDense shape f) }
-  | TmConst { val = CTensorIterSlice2 f } ->
-    match arg with TmTensor { val = t } then
-
-      let mkg = lam mkt. lam i. lam r.
-        let res =
-          apply ctx info (TmTensor { val = mkt r })  (apply ctx info (int_ i) f)
-        in
-        ()
-      in
-
-      match t with TInt t then
-        let g = mkg (lam t. TInt t) in
-        tensorIterSlice g t;
-        uunit_
-      else match t with TFloat t then
-        let g = mkg (lam t. TFloat t) in
-        tensorIterSlice g t;
-        uunit_
-      else match t with TExpr t then
-        let g = mkg (lam t. TExpr t) in
-        tensorIterSlice g t;
-        uunit_
-      else never
-    else errorSingle [info] "Second argument to CTensorIterSlice not a tensor"
-  | TmConst { val = CTensorEq3 (eq, t1) } ->
-    match arg with TmTensor { val = t2 } then
-    let mkeq
-      : all a. all b.
-        (a -> Expr) -> (b -> Expr) -> Tensor[a] -> Tensor[b] -> Bool =
-      lam wrapx. lam wrapy. lam t1. lam t2.
-      let eq = lam x. lam y.
-        match apply ctx info (wrapy y) (apply ctx info (wrapx x) eq) with
-          TmConst { val = CBool { val = b } }
-        then b else errorSingle [info] "Invalid equality function"
-      in
-      tensorEq eq t1 t2
-    in
-    let result =
-      match t1 with TInt t1 then
-        match t2 with TInt t2 then mkeq int_ int_ t1 t2
-        else match t2 with TFloat t2 then mkeq int_ float_ t1 t2
-        else match t2 with TExpr t2 then mkeq int_ (lam x. x) t1 t2
-        else never
-      else match t1 with TFloat t1 then
-        match t2 with TInt t2 then mkeq float_ int_ t1 t2
-        else match t2 with TFloat t2 then mkeq float_ float_ t1 t2
-        else match t2 with TExpr t2 then mkeq float_ (lam x. x) t1 t2
-        else never
-      else match t1 with TExpr t1 then
-        match t2 with TInt t2 then mkeq (lam x. x) int_ t1 t2
-        else match t2 with TFloat t2 then mkeq (lam x. x) float_ t1 t2
-        else match t2 with TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
-        else never
-      else never
-    in
-    bool_ result
-    else errorSingle [info] "Third argument to CTensorEq not a tensor"
-  | TmConst { val = CTensorToString2 el2str } ->
-    match arg with TmTensor { val = t } then
-      let el2str = lam x.
-        match apply ctx info x el2str with TmSeq { tms = tms } then
-          _evalSeqOfCharsToString info tms
-        else errorSingle [info] "Invalid element to string function"
-      in
-      let str =
-        match t with TInt t then tensor2string (lam x. el2str (int_ x)) t
-        else match t with TFloat t then
-          tensor2string (lam x. el2str (float_ x)) t
-        else match t with TExpr t then tensor2string el2str t
-        else never
-      in
-      seq_ (_evalStringToSeqOfChars str)
-    else errorSingle [info] "Second argument to CTensorToString not a tensor"
-
   sem delta info arg =
   | CTensorCreateUninitInt _ ->
     TmTensor { val = TInt (tensorCreateUninitInt (_ofTmSeq info arg)) }
@@ -1448,12 +1356,29 @@ lang TensorOpEval =
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq info arg) in
     uconst_ val
+  | CTensorCreateInt2 shape ->
+    let f = lam is.
+      match apply evalCtxEmpty info (_toTmSeq is) arg
+      with TmConst { val = CInt { val = n } } then n
+      else errorSingle [info] "Expected integer from f in CTensorCreateInt"
+    in
+    TmTensor { val = TInt (tensorCreateCArrayInt shape f) }
   | CTensorCreateFloat _ ->
     let val = CTensorCreateFloat2 (_ofTmSeq info arg) in
     uconst_ val
+  | CTensorCreateFloat2 shape ->
+    let f = lam is.
+      match apply evalCtxEmpty info (_toTmSeq is) arg
+      with TmConst { val = CFloat { val = r } } then r
+      else errorSingle [info] "Expected float from f in CTensorCreateFloat"
+    in
+    TmTensor { val = TFloat (tensorCreateCArrayFloat shape f) }
   | CTensorCreate _ ->
     let val = CTensorCreate2 (_ofTmSeq info arg) in
     uconst_ val
+  | CTensorCreate2 shape ->
+    let f = lam is. apply evalCtxEmpty info (_toTmSeq is) arg in
+    TmTensor { val = TExpr (tensorCreateDense shape f) }
   | CTensorGetExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorGetExn2 t in
@@ -1537,7 +1462,8 @@ lang TensorOpEval =
       tensorLinearSetExn t i v;
       uunit_
     else
-      errorSingle [info] "Tensor and value type does not match in CTensorLinearSetExn"
+      errorSingle [info]
+        "Tensor and value type does not match in CTensorLinearSetExn"
   | CTensorRank _ ->
     match arg with TmTensor { val = t } then
       match t with TInt t then int_ (tensorRank t)
@@ -1650,6 +1576,29 @@ lang TensorOpEval =
   | CTensorIterSlice _ ->
     let val = CTensorIterSlice2 arg in
     uconst_ val
+  | CTensorIterSlice2 f ->
+    match arg with TmTensor { val = t } then
+      let mkg = lam mkt. lam i. lam r.
+        let res =
+          apply evalCtxEmpty info (TmTensor { val = mkt r })
+            (apply evalCtxEmpty info (int_ i) f)
+        in
+        ()
+      in
+      match t with TInt t then
+        let g = mkg (lam t. TInt t) in
+        tensorIterSlice g t;
+        uunit_
+      else match t with TFloat t then
+        let g = mkg (lam t. TFloat t) in
+        tensorIterSlice g t;
+        uunit_
+      else match t with TExpr t then
+        let g = mkg (lam t. TExpr t) in
+        tensorIterSlice g t;
+        uunit_
+      else never
+    else errorSingle [info] "Second argument to CTensorIterSlice not a tensor"
   | CTensorEq _ ->
     let val = CTensorEq2 arg in
     uconst_ val
@@ -1658,9 +1607,60 @@ lang TensorOpEval =
       let val = CTensorEq3 (eq, t) in
       uconst_ val
     else errorSingle [info] "Second argument to CTensorEq not a tensor"
+  | CTensorEq3 (eq, t1) ->
+    match arg with TmTensor { val = t2 } then
+    let mkeq
+      : all a. all b.
+        (a -> Expr) -> (b -> Expr) -> Tensor[a] -> Tensor[b] -> Bool =
+      lam wrapx. lam wrapy. lam t1. lam t2.
+      let eq = lam x. lam y.
+        match
+          apply evalCtxEmpty info (wrapy y)
+            (apply evalCtxEmpty info (wrapx x) eq)
+          with TmConst { val = CBool { val = b } }
+        then b else errorSingle [info] "Invalid equality function"
+      in
+      tensorEq eq t1 t2
+    in
+    let result =
+      match t1 with TInt t1 then
+        match t2 with TInt t2 then mkeq int_ int_ t1 t2
+        else match t2 with TFloat t2 then mkeq int_ float_ t1 t2
+        else match t2 with TExpr t2 then mkeq int_ (lam x. x) t1 t2
+        else never
+      else match t1 with TFloat t1 then
+        match t2 with TInt t2 then mkeq float_ int_ t1 t2
+        else match t2 with TFloat t2 then mkeq float_ float_ t1 t2
+        else match t2 with TExpr t2 then mkeq float_ (lam x. x) t1 t2
+        else never
+      else match t1 with TExpr t1 then
+        match t2 with TInt t2 then mkeq (lam x. x) int_ t1 t2
+        else match t2 with TFloat t2 then mkeq (lam x. x) float_ t1 t2
+        else match t2 with TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
+        else never
+      else never
+    in
+    bool_ result
+    else errorSingle [info] "Third argument to CTensorEq not a tensor"
   | CTensorToString _ ->
     let val = CTensorToString2 arg in
     uconst_ val
+  | CTensorToString2 el2str ->
+    match arg with TmTensor { val = t } then
+      let el2str = lam x.
+        match apply evalCtxEmpty info x el2str with TmSeq { tms = tms } then
+          _evalSeqOfCharsToString info tms
+        else errorSingle [info] "Invalid element to string function"
+      in
+      let str =
+        match t with TInt t then tensor2string (lam x. el2str (int_ x)) t
+        else match t with TFloat t then
+          tensor2string (lam x. el2str (float_ x)) t
+        else match t with TExpr t then tensor2string el2str t
+        else never
+      in
+      seq_ (_evalStringToSeqOfChars str)
+    else errorSingle [info] "Second argument to CTensorToString not a tensor"
 end
 
 lang BootParserEval =
