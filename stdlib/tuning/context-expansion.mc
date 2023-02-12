@@ -334,7 +334,7 @@ let test : Bool -> Expr -> [(String, [([String],Expr)])] -> String =
     in
     dumpTable lookupTable;
     use MExprEval in
-    let s = expr2str (eval { env = evalEnvEmpty } ast) in
+    let s = expr2str (eval (evalCtxEmpty ()) ast) in
 
     -- Clean up and return result
     res.cleanup ();

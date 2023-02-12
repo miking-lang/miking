@@ -14,27 +14,6 @@ include "eq.mc"
 include "pprint.mc"
 include "const-arity.mc"
 
-----------------------------
--- EVALUATION ENVIRONMENT --
-----------------------------
-
-type Env = List (Name, Expr)
-
-let evalEnvEmpty = listEmpty
-
-let evalEnvLookup = lam id. lam env.
-  let p = lam entry. nameEqSymUnsafe id entry.0 in
-  match listFind p env with Some (_, e) then Some e else None ()
-
-let evalEnvInsert = lam id. lam e. lam env. listCons (id, e) env
-
-------------------------
--- EVALUATION CONTEXT --
-------------------------
-
-type EvalCtx = { env : Env }
-
-let evalCtxEmpty = { env = evalEnvEmpty }
 
 -------------
 -- HELPERS --
@@ -52,13 +31,34 @@ let _evalSeqOfCharsToString = use MExprAst in
 
 let _evalStringToSeqOfChars = map char_
 
+
+--------------------
+-- EVAL INTERFACE --
+--------------------
+
+lang Eval = Ast
+  type EvalEnv = List (Name, Expr)
+  sem evalEnvEmpty : () -> EvalEnv
+  sem evalEnvEmpty =| _ -> listEmpty
+
+  sem evalEnvLookup : Name -> EvalEnv -> Option Expr
+  sem evalEnvLookup id =| env ->
+    let p = lam entry. nameEqSymUnsafe id entry.0 in
+    match listFind p env with Some (_, e) then Some e else None ()
+
+  sem evalEnvInsert : Name -> Expr -> EvalEnv -> EvalEnv
+  sem evalEnvInsert id e =| env -> listCons (id, e) env
+
+  type EvalCtx = { env : EvalEnv }
+  sem evalCtxEmpty : () -> EvalCtx
+  sem evalCtxEmpty =| _ -> { env = evalEnvEmpty () }
+
+  sem eval : EvalCtx -> Expr -> Expr
+end
+
 -----------
 -- TERMS --
 -----------
-
-lang Eval
-  sem eval : EvalCtx -> Expr -> Expr
-end
 
 lang VarEval = Eval + VarAst + AppAst
   sem eval ctx =
@@ -82,7 +82,7 @@ lang LamEval = Eval + LamAst + VarEval + AppEval
   type Lazy a = () -> a
 
   syn Expr =
-  | TmClos {ident : Name, body : Expr, env : Lazy Env}
+  | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv}
 
   sem apply ctx info arg =
   | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
@@ -119,7 +119,7 @@ lang RecLetsEval =
 
   sem eval ctx =
   | TmRecLets t ->
-    recursive let envPrime : Lazy Env = lam.
+    recursive let envPrime : Lazy EvalEnv = lam.
       let wraplambda = lam v.
         match v with TmLam t then
           TmClos {ident = t.ident, body = t.body, env = envPrime}
@@ -177,7 +177,7 @@ lang MatchEval = Eval + MatchAst
       eval {ctx with env = newEnv} t.thn
     else eval ctx t.els
 
-  sem tryMatch (env : Env) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | _ -> None ()
 end
 
@@ -374,31 +374,32 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
     val = CBool {val = null s.tms}, ty = tyunknown_, info = NoInfo ()
   }
   | (CMap _, [f, TmSeq s]) ->
-    let f = lam x. apply evalCtxEmpty info x f in
+    let f = lam x. apply (evalCtxEmpty ()) info x f in
     TmSeq {s with tms = map f s.tms}
   | (CMapi _, [f, TmSeq s]) ->
     let f = lam i. lam x.
-      apply evalCtxEmpty info x (apply evalCtxEmpty info (int_ i) f)
+      apply (evalCtxEmpty ()) info x (apply (evalCtxEmpty ()) info (int_ i) f)
     in
     TmSeq {s with tms = mapi f s.tms}
   | (CIter _, [f, TmSeq s]) ->
-    let f = lam x. apply evalCtxEmpty info x f; () in
+    let f = lam x. apply (evalCtxEmpty ()) info x f; () in
     iter f s.tms;
     uunit_
   | (CIteri _, [f, TmSeq s]) ->
     let f = lam i. lam x.
-      apply evalCtxEmpty info x (apply evalCtxEmpty info (int_ i) f); ()
+      apply (evalCtxEmpty ()) info x
+        (apply (evalCtxEmpty ()) info (int_ i) f); ()
     in
     iteri f s.tms;
     uunit_
   | (CFoldl _, [f, acc, TmSeq s]) ->
     let f = lam acc. lam x.
-      apply evalCtxEmpty info x (apply evalCtxEmpty info acc f)
+      apply (evalCtxEmpty ()) info x (apply (evalCtxEmpty ()) info acc f)
     in
     foldl f acc s.tms
   | (CFoldr _, [f, acc, TmSeq s]) ->
     let f = lam x. lam acc.
-      apply evalCtxEmpty info acc (apply evalCtxEmpty info x f)
+      apply (evalCtxEmpty ()) info acc (apply (evalCtxEmpty ()) info x f)
     in
     foldr f acc s.tms
   | (CGet _, [TmSeq s, TmConst {val = CInt n}]) -> get s.tms n.val
@@ -415,13 +416,13 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
     let t = splitAt s.tms n.val in
     utuple_ [TmSeq {s with tms = t.0}, TmSeq {s with tms = t.1}]
   | (CCreate _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
     TmSeq {tms = create n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CCreateList _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
     TmSeq {tms = createList n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CCreateRope _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply evalCtxEmpty info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
     TmSeq {tms = createRope n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CIsList _, [TmSeq s]) ->
     TmConst {
@@ -583,8 +584,8 @@ lang MapEval =
   | (CMapEmpty _, [arg]) ->
     let cmp = lam x. lam y.
       let result =
-        apply evalCtxEmpty info y
-          (apply evalCtxEmpty info x arg) in
+        apply (evalCtxEmpty ()) info y
+          (apply (evalCtxEmpty ()) info x arg) in
       match result with TmConst {val = CInt {val = i}} then i
       else
         errorSingle [info]
@@ -598,11 +599,11 @@ lang MapEval =
     TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
   | (CMapFindExn _, [key, TmConst {val = CMapVal m}]) -> mapFindExn key m.val
   | (CMapFindOrElse _, [elseFn, key, TmConst {val = CMapVal m}]) ->
-    let elseFn = lam. apply evalCtxEmpty info unit_ elseFn in
+    let elseFn = lam. apply (evalCtxEmpty ()) info unit_ elseFn in
     mapFindOrElse elseFn key m.val
   | (CMapFindApplyOrElse _, [fapply, felse, key, TmConst {val = CMapVal m}]) ->
-    let fapply = lam v. apply evalCtxEmpty info v fapply in
-    let felse = lam. apply evalCtxEmpty info unit_ felse in
+    let fapply = lam v. apply (evalCtxEmpty ()) info v fapply in
+    let felse = lam. apply (evalCtxEmpty ()) info unit_ felse in
     mapFindApplyOrElse fapply felse key m.val
   | (CMapBindings _, [TmConst {val = CMapVal m}]) ->
     TmSeq {
@@ -614,7 +615,7 @@ lang MapEval =
     _bindToRecord (mapChooseExn m.val)
   | (CMapChooseOrElse _, [elseFn, TmConst {val = CMapVal m}]) ->
     if gti (mapSize m.val) 0 then _bindToRecord (mapChooseExn m.val)
-    else apply evalCtxEmpty info unit_ elseFn
+    else apply (evalCtxEmpty ()) info unit_ elseFn
   | (CMapSize _, [TmConst {val = CMapVal m}]) ->
     TmConst {
       val = CInt {val = mapSize m.val},
@@ -630,8 +631,8 @@ lang MapEval =
   | (CMapAny _, [pred, TmConst {val = CMapVal m}]) ->
     let pred = lam k. lam v.
       let result =
-        apply evalCtxEmpty info v
-          (apply evalCtxEmpty info k pred) in
+        apply (evalCtxEmpty ()) info v
+          (apply (evalCtxEmpty ()) info k pred) in
       match result with TmConst {val = CBool {val = b}} then b
       else
         errorSingle [info] "Predicate of mapAny did not return boolean value"
@@ -642,24 +643,24 @@ lang MapEval =
       info = NoInfo ()
     }
   | (CMapMap _, [f, TmConst (t & {val = CMapVal m})]) ->
-    let f = lam x. apply evalCtxEmpty info x f in
+    let f = lam x. apply (evalCtxEmpty ()) info x f in
     TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
   | (CMapMapWithKey _, [f, TmConst (t & {val = CMapVal m})]) ->
     let f = lam k. lam v.
-      apply evalCtxEmpty info v
-        (apply evalCtxEmpty info k f) in
+      apply (evalCtxEmpty ()) info v
+        (apply (evalCtxEmpty ()) info k f) in
     TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
   | (CMapFoldWithKey _, [f, acc, TmConst (t & {val = CMapVal m})]) ->
     let f = lam acc. lam k. lam v.
-      apply evalCtxEmpty info v
-        (apply evalCtxEmpty info k
-           (apply evalCtxEmpty info acc f)) in
+      apply (evalCtxEmpty ()) info v
+        (apply (evalCtxEmpty ()) info k
+           (apply (evalCtxEmpty ()) info acc f)) in
     mapFoldWithKey f acc m.val
   | (CMapEq _, [eq, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
     let eq = lam v1. lam v2.
       let result =
-        apply evalCtxEmpty info v2
-          (apply evalCtxEmpty info v1 eq) in
+        apply (evalCtxEmpty ()) info v2
+          (apply (evalCtxEmpty ()) info v1 eq) in
       match result with TmConst {val = CBool {val = b}} then b
       else
         errorSingle [info] "Equality function of mapEq did not return boolean"
@@ -672,8 +673,8 @@ lang MapEval =
   | (CMapCmp _, [cmp, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
     let cmp = lam v1. lam v2.
       let result =
-        apply evalCtxEmpty info v2
-          (apply evalCtxEmpty info v1 cmp) in
+        apply (evalCtxEmpty ()) info v2
+          (apply (evalCtxEmpty ()) info v1 cmp) in
       match result with TmConst {val = CInt {val = i}} then i
       else
         errorSingle [info]
@@ -712,20 +713,20 @@ lang TensorOpEval =
     TmTensor {val = TFloat (tensorCreateUninitFloat (_ofTmSeq info shape))}
   | (CTensorCreateInt _, [shape, f]) ->
     let f = lam is.
-      match apply evalCtxEmpty info (_toTmSeq is) f
+      match apply (evalCtxEmpty ()) info (_toTmSeq is) f
         with TmConst {val = CInt n} then n.val
       else errorSingle [info] "Expected integer from f in CTensorCreateInt"
     in
     TmTensor {val = TInt (tensorCreateCArrayInt (_ofTmSeq info shape) f)}
   | (CTensorCreateFloat _, [shape, f]) ->
     let f = lam is.
-      match apply evalCtxEmpty info (_toTmSeq is) f
+      match apply (evalCtxEmpty ()) info (_toTmSeq is) f
         with TmConst {val = CFloat r} then r.val
       else errorSingle [info] "Expected float from f in CTensorCreateFloat"
     in
     TmTensor {val = TFloat (tensorCreateCArrayFloat (_ofTmSeq info shape) f)}
   | (CTensorCreate _, [shape, f]) ->
-    let f = lam is. apply evalCtxEmpty info (_toTmSeq is) f in
+    let f = lam is. apply (evalCtxEmpty ()) info (_toTmSeq is) f in
     TmTensor {val = TExpr (tensorCreateDense (_ofTmSeq info shape) f)}
   | (CTensorGetExn _, [TmTensor t, idx]) ->
     let idx = _ofTmSeq info idx in
@@ -858,8 +859,8 @@ lang TensorOpEval =
   | (CTensorIterSlice _, [f, TmTensor t]) ->
     let mkg = lam mkt. lam i. lam r.
       let res =
-        apply evalCtxEmpty info (TmTensor {val = mkt r})
-          (apply evalCtxEmpty info (int_ i) f)
+        apply (evalCtxEmpty ()) info (TmTensor {val = mkt r})
+          (apply (evalCtxEmpty ()) info (int_ i) f)
       in
       ()
     in
@@ -884,8 +885,8 @@ lang TensorOpEval =
       lam wrapx. lam wrapy. lam t1. lam t2.
         let eq = lam x. lam y.
           match
-            apply evalCtxEmpty info (wrapy y)
-              (apply evalCtxEmpty info (wrapx x) eq)
+            apply (evalCtxEmpty ()) info (wrapy y)
+              (apply (evalCtxEmpty ()) info (wrapx x) eq)
             with TmConst {val = CBool {val = b}}
           then b
           else errorSingle [info] "Invalid equality function"
@@ -917,7 +918,7 @@ lang TensorOpEval =
     bool_ result
   | (CTensorToString _, [el2str, TmTensor t]) ->
     let el2str = lam x.
-      match apply evalCtxEmpty info x el2str with TmSeq {tms = tms} then
+      match apply (evalCtxEmpty ()) info x el2str with TmSeq {tms = tms} then
         _evalSeqOfCharsToString info tms
       else errorSingle [info] "Invalid element to string function"
     in
@@ -1099,14 +1100,14 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatEval = NamedPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang NamedPatEval = Eval + NamedPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
 lang SeqTotPatEval = SeqTotPat + SeqAst
-  sem tryMatch (env : Env) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
       if eqi (length tms) (length pats) then
@@ -1118,8 +1119,8 @@ lang SeqTotPatEval = SeqTotPat + SeqAst
     else None ()
 end
 
-lang SeqEdgePatEval = SeqEdgePat + SeqAst
-  sem tryMatch (env : Env) (t : Expr) =
+lang SeqEdgePatEval = Eval + SeqEdgePat + SeqAst
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq {tms = tms} then
       if geqi (length tms) (addi (length pre) (length post)) then
@@ -1143,8 +1144,8 @@ lang SeqEdgePatEval = SeqEdgePat + SeqAst
     else None ()
 end
 
-lang RecordPatEval = RecordAst + RecordPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang RecordPatEval = Eval + RecordAst + RecordPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
       mapFoldlOption
@@ -1157,8 +1158,8 @@ lang RecordPatEval = RecordAst + RecordPat
     else None ()
 end
 
-lang DataPatEval = DataAst + DataPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang DataPatEval = Eval + DataAst + DataPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatCon {ident = ident, subpat = subpat, info = info} ->
     match t with TmConApp cn then
       if nameEqSymUnsafe ident cn.ident then
@@ -1167,8 +1168,8 @@ lang DataPatEval = DataAst + DataPat
     else None ()
 end
 
-lang IntPatEval = IntAst + IntPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang IntPatEval = Eval + IntAst + IntPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatInt i ->
     match t with TmConst c then
       match c.val with CInt i2 then
@@ -1177,8 +1178,8 @@ lang IntPatEval = IntAst + IntPat
     else None ()
 end
 
-lang CharPatEval = CharAst + CharPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang CharPatEval = Eval + CharAst + CharPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
@@ -1187,8 +1188,8 @@ lang CharPatEval = CharAst + CharPat
     else None ()
 end
 
-lang BoolPatEval = BoolAst + BoolPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang BoolPatEval = Eval + BoolAst + BoolPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
     match t with TmConst c then
@@ -1198,20 +1199,20 @@ lang BoolPatEval = BoolAst + BoolPat
     else None ()
 end
 
-lang AndPatEval = AndPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang AndPatEval = Eval + AndPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
-lang OrPatEval = OrPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang OrPatEval = Eval + OrPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
     optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
 end
 
-lang NotPatEval = NotPat
-  sem tryMatch (env : Env) (t : Expr) =
+lang NotPatEval = Eval + NotPat
+  sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNot {subpat = p} ->
     let res = tryMatch env t p in
     match res with None _ then Some env else
@@ -1258,7 +1259,7 @@ use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize : Expr -> Expr =
-  lam t : Expr. eval evalCtxEmpty t in
+  lam t : Expr. eval (evalCtxEmpty ()) t in
 
 let eval : Expr -> Expr =
   lam t : Expr. evalNoSymbolize (symbolize t) in

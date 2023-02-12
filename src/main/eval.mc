@@ -72,6 +72,6 @@ let eval = lam files. lam options : Options. lam args.
     let ast = generateUtest options.runTests ast in
     if options.exitBefore then exit 0
     else
-      eval {env = evalEnvEmpty} (updateArgv args ast); ()
+      eval (evalCtxEmpty ()) (updateArgv args ast); ()
   in
   iter evalFile files
