@@ -70,12 +70,12 @@ lang VarEval = Eval + VarAst + AppAst
 end
 
 lang AppEval = Eval + AppAst
-  sem apply : EvalCtx -> Info -> Expr -> Expr -> Expr
-  sem apply ctx info arg =
-  | _ -> errorSingle [info] "Bad application"
+  sem apply : EvalCtx -> Info -> (Expr, Expr) -> Expr
+  sem apply ctx info =
+  | (_, _) -> errorSingle [info] "Bad application"
 
   sem eval ctx =
-  | TmApp r -> apply ctx r.info (eval ctx r.rhs) (eval ctx r.lhs)
+  | TmApp r -> apply ctx r.info (eval ctx r.lhs, eval ctx r.rhs)
 end
 
 lang LamEval = Eval + LamAst + VarEval + AppEval
@@ -84,8 +84,9 @@ lang LamEval = Eval + LamAst + VarEval + AppEval
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv}
 
-  sem apply ctx info arg =
-  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
+  sem apply ctx info =
+  | (TmClos t, arg) ->
+    eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
 
   sem eval ctx =
   | TmLam t -> TmClos {ident = t.ident, body = t.body, env = lam. ctx.env}
@@ -149,9 +150,9 @@ lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst + ConstArity
       TmConstApp {const = const, args = args}
     else errorSingle [info] "Invalid application"
 
-  sem apply ctx info arg =
-  | TmConst r -> delta info (r.val, [arg])
-  | TmConstApp r -> delta info (r.const, snoc r.args arg)
+  sem apply ctx info =
+  | (TmConst r, arg) -> delta info (r.val, [arg])
+  | (TmConstApp r, arg) -> delta info (r.const, snoc r.args arg)
 
   sem eval ctx =
   | TmConst {val = CArgv {}, info = info} ->
@@ -191,7 +192,7 @@ lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
     let v2 = eval ctx r.expected in
     let tusing = optionMap (eval ctx) r.tusing in
     let result = match tusing with Some tusing then
-      match apply ctx r.info v2 (apply ctx r.info v1 tusing)
+      match apply ctx r.info (apply ctx r.info (tusing, v1), v2)
       with TmConst {val = CBool {val = b}} then b
       else errorSingle [r.info] "Invalid utest equivalence function"
     else
@@ -374,32 +375,32 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
     val = CBool {val = null s.tms}, ty = tyunknown_, info = NoInfo ()
   }
   | (CMap _, [f, TmSeq s]) ->
-    let f = lam x. apply (evalCtxEmpty ()) info x f in
+    let f = lam x. apply (evalCtxEmpty ()) info (f, x) in
     TmSeq {s with tms = map f s.tms}
   | (CMapi _, [f, TmSeq s]) ->
     let f = lam i. lam x.
-      apply (evalCtxEmpty ()) info x (apply (evalCtxEmpty ()) info (int_ i) f)
+      apply (evalCtxEmpty ()) info (apply (evalCtxEmpty ()) info (f, int_ i), x)
     in
     TmSeq {s with tms = mapi f s.tms}
   | (CIter _, [f, TmSeq s]) ->
-    let f = lam x. apply (evalCtxEmpty ()) info x f; () in
+    let f = lam x. apply (evalCtxEmpty ()) info (f, x); () in
     iter f s.tms;
     uunit_
   | (CIteri _, [f, TmSeq s]) ->
     let f = lam i. lam x.
-      apply (evalCtxEmpty ()) info x
-        (apply (evalCtxEmpty ()) info (int_ i) f); ()
+      apply (evalCtxEmpty ()) info
+        (apply (evalCtxEmpty ()) info (f, int_ i), x); ()
     in
     iteri f s.tms;
     uunit_
   | (CFoldl _, [f, acc, TmSeq s]) ->
     let f = lam acc. lam x.
-      apply (evalCtxEmpty ()) info x (apply (evalCtxEmpty ()) info acc f)
+      apply (evalCtxEmpty ()) info (apply (evalCtxEmpty ()) info (f, acc), x)
     in
     foldl f acc s.tms
   | (CFoldr _, [f, acc, TmSeq s]) ->
     let f = lam x. lam acc.
-      apply (evalCtxEmpty ()) info acc (apply (evalCtxEmpty ()) info x f)
+      apply (evalCtxEmpty ()) info (apply (evalCtxEmpty ()) info (f, x), acc)
     in
     foldr f acc s.tms
   | (CGet _, [TmSeq s, TmConst {val = CInt n}]) -> get s.tms n.val
@@ -416,13 +417,13 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
     let t = splitAt s.tms n.val in
     utuple_ [TmSeq {s with tms = t.0}, TmSeq {s with tms = t.1}]
   | (CCreate _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
     TmSeq {tms = create n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CCreateList _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
     TmSeq {tms = createList n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CCreateRope _, [TmConst {val = CInt n}, f]) ->
-    let f = lam i. apply (evalCtxEmpty ()) info (int_ i) f in
+    let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
     TmSeq {tms = createRope n.val f, ty = tyunknown_, info = NoInfo ()}
   | (CIsList _, [TmSeq s]) ->
     TmConst {
@@ -584,8 +585,8 @@ lang MapEval =
   | (CMapEmpty _, [arg]) ->
     let cmp = lam x. lam y.
       let result =
-        apply (evalCtxEmpty ()) info y
-          (apply (evalCtxEmpty ()) info x arg) in
+        apply (evalCtxEmpty ()) info
+          (apply (evalCtxEmpty ()) info (arg, x), y) in
       match result with TmConst {val = CInt {val = i}} then i
       else
         errorSingle [info]
@@ -599,11 +600,11 @@ lang MapEval =
     TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
   | (CMapFindExn _, [key, TmConst {val = CMapVal m}]) -> mapFindExn key m.val
   | (CMapFindOrElse _, [elseFn, key, TmConst {val = CMapVal m}]) ->
-    let elseFn = lam. apply (evalCtxEmpty ()) info unit_ elseFn in
+    let elseFn = lam. apply (evalCtxEmpty ()) info (elseFn, unit_) in
     mapFindOrElse elseFn key m.val
   | (CMapFindApplyOrElse _, [fapply, felse, key, TmConst {val = CMapVal m}]) ->
-    let fapply = lam v. apply (evalCtxEmpty ()) info v fapply in
-    let felse = lam. apply (evalCtxEmpty ()) info unit_ felse in
+    let fapply = lam v. apply (evalCtxEmpty ()) info (fapply, v) in
+    let felse = lam. apply (evalCtxEmpty ()) info (felse, unit_) in
     mapFindApplyOrElse fapply felse key m.val
   | (CMapBindings _, [TmConst {val = CMapVal m}]) ->
     TmSeq {
@@ -615,7 +616,7 @@ lang MapEval =
     _bindToRecord (mapChooseExn m.val)
   | (CMapChooseOrElse _, [elseFn, TmConst {val = CMapVal m}]) ->
     if gti (mapSize m.val) 0 then _bindToRecord (mapChooseExn m.val)
-    else apply (evalCtxEmpty ()) info unit_ elseFn
+    else apply (evalCtxEmpty ()) info (elseFn, unit_)
   | (CMapSize _, [TmConst {val = CMapVal m}]) ->
     TmConst {
       val = CInt {val = mapSize m.val},
@@ -631,8 +632,8 @@ lang MapEval =
   | (CMapAny _, [pred, TmConst {val = CMapVal m}]) ->
     let pred = lam k. lam v.
       let result =
-        apply (evalCtxEmpty ()) info v
-          (apply (evalCtxEmpty ()) info k pred) in
+        apply (evalCtxEmpty ()) info
+          (apply (evalCtxEmpty ()) info (pred, k), v) in
       match result with TmConst {val = CBool {val = b}} then b
       else
         errorSingle [info] "Predicate of mapAny did not return boolean value"
@@ -643,24 +644,24 @@ lang MapEval =
       info = NoInfo ()
     }
   | (CMapMap _, [f, TmConst (t & {val = CMapVal m})]) ->
-    let f = lam x. apply (evalCtxEmpty ()) info x f in
+    let f = lam x. apply (evalCtxEmpty ()) info (f, x) in
     TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
   | (CMapMapWithKey _, [f, TmConst (t & {val = CMapVal m})]) ->
     let f = lam k. lam v.
-      apply (evalCtxEmpty ()) info v
-        (apply (evalCtxEmpty ()) info k f) in
+      apply (evalCtxEmpty ()) info
+        (apply (evalCtxEmpty ()) info (f, k), v) in
     TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
   | (CMapFoldWithKey _, [f, acc, TmConst (t & {val = CMapVal m})]) ->
     let f = lam acc. lam k. lam v.
-      apply (evalCtxEmpty ()) info v
-        (apply (evalCtxEmpty ()) info k
-           (apply (evalCtxEmpty ()) info acc f)) in
+      apply (evalCtxEmpty ()) info
+        (apply (evalCtxEmpty ()) info
+           (apply (evalCtxEmpty ()) info (f, acc), k), v) in
     mapFoldWithKey f acc m.val
   | (CMapEq _, [eq, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
     let eq = lam v1. lam v2.
       let result =
-        apply (evalCtxEmpty ()) info v2
-          (apply (evalCtxEmpty ()) info v1 eq) in
+        apply (evalCtxEmpty ()) info
+          (apply (evalCtxEmpty ()) info (eq, v1), v2) in
       match result with TmConst {val = CBool {val = b}} then b
       else
         errorSingle [info] "Equality function of mapEq did not return boolean"
@@ -673,8 +674,8 @@ lang MapEval =
   | (CMapCmp _, [cmp, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
     let cmp = lam v1. lam v2.
       let result =
-        apply (evalCtxEmpty ()) info v2
-          (apply (evalCtxEmpty ()) info v1 cmp) in
+        apply (evalCtxEmpty ()) info
+          (apply (evalCtxEmpty ()) info (cmp, v1), v2) in
       match result with TmConst {val = CInt {val = i}} then i
       else
         errorSingle [info]
@@ -713,20 +714,20 @@ lang TensorOpEval =
     TmTensor {val = TFloat (tensorCreateUninitFloat (_ofTmSeq info shape))}
   | (CTensorCreateInt _, [shape, f]) ->
     let f = lam is.
-      match apply (evalCtxEmpty ()) info (_toTmSeq is) f
+      match apply (evalCtxEmpty ()) info (f, _toTmSeq is)
         with TmConst {val = CInt n} then n.val
       else errorSingle [info] "Expected integer from f in CTensorCreateInt"
     in
     TmTensor {val = TInt (tensorCreateCArrayInt (_ofTmSeq info shape) f)}
   | (CTensorCreateFloat _, [shape, f]) ->
     let f = lam is.
-      match apply (evalCtxEmpty ()) info (_toTmSeq is) f
+      match apply (evalCtxEmpty ()) info (f, _toTmSeq is)
         with TmConst {val = CFloat r} then r.val
       else errorSingle [info] "Expected float from f in CTensorCreateFloat"
     in
     TmTensor {val = TFloat (tensorCreateCArrayFloat (_ofTmSeq info shape) f)}
   | (CTensorCreate _, [shape, f]) ->
-    let f = lam is. apply (evalCtxEmpty ()) info (_toTmSeq is) f in
+    let f = lam is. apply (evalCtxEmpty ()) info (f, _toTmSeq is) in
     TmTensor {val = TExpr (tensorCreateDense (_ofTmSeq info shape) f)}
   | (CTensorGetExn _, [TmTensor t, idx]) ->
     let idx = _ofTmSeq info idx in
@@ -859,8 +860,8 @@ lang TensorOpEval =
   | (CTensorIterSlice _, [f, TmTensor t]) ->
     let mkg = lam mkt. lam i. lam r.
       let res =
-        apply (evalCtxEmpty ()) info (TmTensor {val = mkt r})
-          (apply (evalCtxEmpty ()) info (int_ i) f)
+        apply (evalCtxEmpty ()) info
+          (apply (evalCtxEmpty ()) info (f, int_ i), TmTensor {val = mkt r})
       in
       ()
     in
@@ -885,8 +886,8 @@ lang TensorOpEval =
       lam wrapx. lam wrapy. lam t1. lam t2.
         let eq = lam x. lam y.
           match
-            apply (evalCtxEmpty ()) info (wrapy y)
-              (apply (evalCtxEmpty ()) info (wrapx x) eq)
+            apply (evalCtxEmpty ()) info
+              (apply (evalCtxEmpty ()) info (eq, wrapx x), wrapy y)
             with TmConst {val = CBool {val = b}}
           then b
           else errorSingle [info] "Invalid equality function"
@@ -918,7 +919,7 @@ lang TensorOpEval =
     bool_ result
   | (CTensorToString _, [el2str, TmTensor t]) ->
     let el2str = lam x.
-      match apply (evalCtxEmpty ()) info x el2str with TmSeq {tms = tms} then
+      match apply (evalCtxEmpty ()) info (el2str, x) with TmSeq {tms = tms} then
         _evalSeqOfCharsToString info tms
       else errorSingle [info] "Invalid element to string function"
     in
