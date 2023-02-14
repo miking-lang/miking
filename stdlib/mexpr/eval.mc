@@ -136,12 +136,16 @@ lang RecLetsEval =
     eval {ctx with env = envPrime ()} t.inexpr
 end
 
-lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst + ConstArity
+lang ConstAppAst = ConstAst
   syn Expr =
   | TmConstApp {
     const : Const,
     args : [Expr]
   }
+end
+
+lang ConstEval =
+  Eval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst + ConstArity
 
   sem delta : Info -> (Const, [Expr]) -> Expr
   sem delta info =
