@@ -78,6 +78,24 @@ let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
 let mapChoose : all k. all v. Map k v -> Option (k, v) = lam m.
   if mapIsEmpty m then None () else Some (mapChooseExn m)
 
+-- `mapMapWithKeyK f m k` maps the continuation passing function `f` over the
+-- values of `m`, passing the result of the mapping to the continuation `k`.
+let mapMapWithKeyK
+  : all k. all v1. all v2. all a.
+    (k -> v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
+  = lam f. lam m. lam k.
+  mapFoldWithKey
+    (lam k. lam key. lam val.
+      (lam m. f key val (lam val. k (mapInsert key val m))))
+    k m (mapEmpty (mapGetCmpFun m))
+
+-- `mapMapK f m k` maps the continuation passing function `f` over the values of
+-- `m`, passing the result of the mapping to the continuation `k`.
+let mapMapK
+  : all k. all v1. all v2. all a.
+    (v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
+  = lam f. mapMapWithKeyK (lam. f)
+
 mexpr
 
 let m = mapEmpty subi in
@@ -171,5 +189,19 @@ utest mapAllWithKey (lam i. lam. lti i 123) m with false in
 utest mapAll (lam str. geqi (length str) 1) m with true in
 utest mapAll (lam str. leqi (length str) 3) m with true in
 utest mapAll (lam str. lti (length str) 2) m with false in
+
+let m = mapFromSeq subi
+  [ (1, "1")
+  , (2, "2")
+  , (3, "3")
+  ] in
+utest
+  (mapMapWithKeyK (lam key. lam val. lam k. k (key, val)) m (lam m. mapBindings m))
+  with [(1, (1, "1")), (2, (2, "2")), (3, (3, "3"))]
+in
+utest
+  (mapMapK (lam val. lam k. k (join [val, val])) m (lam m. mapBindings m))
+  with [(1, "11"), (2, "22"), (3, "33")]
+in
 
 ()

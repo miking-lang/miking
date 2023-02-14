@@ -80,6 +80,16 @@ let mapReverse = lam f. lam lst.
 
 utest toRope (mapReverse (lam x. addi x 1) [10,20,30]) with [31,21,11]
 
+-- `mapK f seq k` maps the continuation passing function `f` over the sequence
+-- `seq`, passing the result of the mapping to the continuation `k`.
+let mapK : all a. all b. all c. (a -> (b -> c) -> c) -> [a] -> ([b] -> c) -> c =
+  lam f. lam seq. lam k.
+    foldl (lam k. lam x. (lam xs. f x (lam x. k (cons x xs)))) k seq []
+
+utest mapK (lam x. lam k. k (addi x 1)) [] (lam seq. reverse seq) with []
+utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. reverse seq) with [4,3,2]
+utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. foldl addi 0 seq) with 9
+
 -- Folds
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
