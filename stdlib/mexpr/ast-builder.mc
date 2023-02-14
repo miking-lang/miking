@@ -13,6 +13,9 @@ include "map.mc"
 let tyint_ = use IntTypeAst in
   TyInt {info = NoInfo ()}
 
+let ityfloat_ = use FloatTypeAst in
+  lam i. TyFloat {info = i}
+
 let tyfloat_ = use FloatTypeAst in
   TyFloat {info = NoInfo ()}
 
@@ -55,13 +58,15 @@ let tyarrows_ = use FunTypeAst in
   lam tys.
   foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
-  lam fields.
+let tyRecord : Info -> [(String, Type)] -> Type = use RecordTypeAst in
+  lam info. lam fields.
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    info = NoInfo ()
+    info = info
   }
+
+let tyrecord_ = tyRecord (NoInfo ())
 
 let tytuple_ = lam tys.
   tyrecord_ (mapi (lam i. lam ty. (int2string i, ty)) tys)
