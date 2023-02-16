@@ -97,7 +97,9 @@ let _parserStr = lam str. lam prefix. lam cond.
 let _isValidLowerIdent = lam str.
   match str with [x]
   then isLowerAlpha x
-  else isLowerAlphaOrUnderscore (head str)
+  else if isLowerAlphaOrUnderscore (head str) then
+    forAll (lam c. or (isAlphanum c) (eqc c '_')) (tail str)
+  else false
 
 -- Variable string parser translation
 let pprintVarString = lam str.
@@ -573,7 +575,7 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
     let extract_char = lam e.
       match e with TmConst t1 then
         match t1.val with CChar c then
-          Some (c.val)
+          Some c.val
         else None ()
       else None ()
     in
@@ -883,7 +885,7 @@ lam recur. lam indent. lam env. lam pats.
     match e with PatChar c then Some c.val
     else None () in
   match optionMapM extract_char pats with Some str then
-    (env, join ["\"", str, "\""])
+    (env, join ["\"", escapeString str, "\""])
   else match mapAccumL (recur (pprintIncr indent)) env pats
   with (env, pats) in
   let merged =
@@ -1150,6 +1152,9 @@ lang AppTypePrettyPrint = PrettyPrint + AppTypeAst
 end
 
 lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
+  sem typePrecedence =
+  | TyAlias _ -> 1
+
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyAlias t -> getTypeStringCode indent env t.display
 end
