@@ -17,11 +17,9 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
-          opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git
 
       - name: Cache opam packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.opam
           key: ${{ runner.os }}-opam-build
@@ -50,17 +48,15 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
-          opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git
 
       - name: Cache opam packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.opam
           key: ${{ runner.os }}-opam-build
@@ -68,7 +64,7 @@ jobs:
       - name: Install opam packages
         run: |
           # Install dependencies of owl
-          brew install openblas
+          brew install pkg-config
 
           # Export environment variable needed by openblas
           export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
