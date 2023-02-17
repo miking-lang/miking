@@ -68,7 +68,7 @@ jobs:
       - name: Install opam packages
         run: |
           # Install dependencies of owl
-          brew install openblas
+          brew install pkg-config
 
           # Export environment variable needed by openblas
           export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
