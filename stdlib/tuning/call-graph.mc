@@ -56,7 +56,7 @@ let _handleApps = use AppAst in use VarAst in
 -- node exactly once and each time potentially perform a graph union operation,
 -- which we assume has complexity O(|F|). V is the set of nodes in the AST and F
 -- is the set of nodes in the call graph (i.e. set of functions in the AST).
-lang HoleCallGraph = LetAst + LamAst + RecLetsAst
+lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
     let gempty = digraphAddVertex callGraphTop
