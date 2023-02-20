@@ -1,19 +1,20 @@
+include "seq.mc"
 
 --helper functions
 
 recursive
     let commaSeparateHelper = lam seq. lam res.
-        if (eqi 0 (length seq)) then 
+        if eqi 0 (length seq) then 
             res
-        else if (eqi 1 (length seq)) then
-            (concat res (concat "," (get seq 0)))
-        else (commaSeparateHelper (tail seq) (concat res (concat "," (head seq))))
+        else if eqi 1 (length seq) then
+            join [res, ",", get seq 0]
+        else commaSeparateHelper (tail seq) (join [res, ",", head seq])
 end
 
 let commaSeparate = lam seq.
-    if (eqi 0 (length seq)) then 
+    if eqi 0 (length seq) then 
         ""
-    else (commaSeparateHelper (tail seq) (head seq))
+    else commaSeparateHelper (tail seq) (head seq)
 
 -- TODO: make sure to escape
 let stringify = lam string.
@@ -80,7 +81,7 @@ lang JVMAst
 
     sem toStringProg : Prog -> String 
     sem toStringProg = 
-    | Prog {classes = classes} -> (foldl concat "" ["{\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
+    | Prog {classes = classes} -> (join ["{\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
 
     sem toStringClass : Class -> String
     sem toStringClass =
