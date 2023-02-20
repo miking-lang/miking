@@ -278,7 +278,7 @@ let t = bindall_ [
   app_ (var_ "f") (int_ 4)
 ] in
 let t = instrumentProfiling t in
-eval {env = evalEnvEmpty} (symbolize t);
+eval (evalCtxEmpty ()) (symbolize t);
 utest fileExists profilingResultFileName with true in
 (if fileExists profilingResultFileName then
   let lines =

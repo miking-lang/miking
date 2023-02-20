@@ -1140,7 +1140,7 @@ let emptyEnv = utestEnvEmpty () in
 
 let eval = lam env. lam e.
   let e = mergeWithUtestHeader env e in
-  eval {env = evalEnvEmpty} e
+  eval (evalCtxEmpty ()) e
 in
 
 let evalEquality : UtestEnv -> Type -> Expr -> Expr -> Expr =

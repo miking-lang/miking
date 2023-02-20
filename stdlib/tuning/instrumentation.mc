@@ -460,7 +460,7 @@ let test = lam debug. lam full: Bool. lam table : [((String,[String]),Expr)]. la
   let ast = typeCheck ast in
 
   -- Evaluate the program
-  eval { env = evalEnvEmpty } ast;
+  eval (evalCtxEmpty ()) ast;
 
   -- Read the profiled data
   let logStr = readFile res.fileName in

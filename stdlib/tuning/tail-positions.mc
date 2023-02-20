@@ -157,7 +157,7 @@ let test = lam debug. lam t. lam acc. lam lacc. lam baseCase. lam tailCall. lam 
   match tailPositionsReclet baseCase tailCall letexpr lacc acc t with (acc, t) in
   debugPrint debug (expr2str t);
   debugPrint debug "-------------";
-  let res = eval {env = evalEnvEmpty} t in
+  let res = eval (evalCtxEmpty ()) t in
   debugPrint debug (expr2str res);
   (acc, expr2str res)
 in

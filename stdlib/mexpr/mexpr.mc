@@ -15,7 +15,7 @@ end
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExpr in lam t. eval {env = evalEnvEmpty} (symbolize t)
+  use MExpr in lam t. eval (evalCtxEmpty ()) (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =
