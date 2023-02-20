@@ -769,28 +769,13 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                 (lamLookahead, tyseq_ tokenTypeName)] (
           -- Recursive function body here:
 
-          --     case _ then
-          --       result.err "Unexpected token bla, expected one of... bla bla"
-          --     end
-          --   ..
-          --   case _ then
-          --     result.err "Invalid state"
-          --   end
-          -- else
-          --   result.err "Missing state"
-
-
           -- match stateTrace with [currentState] ++ _
           let varCurrentState = nameSym "currentState" in
           match_ (nvar_ lamStateTrace)
                  (pseqedgew_ (pseqtot_ [npvar_ varCurrentState]) (pseqtot_ [])) (
             -- then
-            let basecase = str_ "(TODO: Return A Result Type). Internal error: Unrecognized state." in
             -- switch currentState
-            matchall_ [
-              -- generic form:
-              matchex_ pat thn,
-              -- example of generated code
+            let stateMatches = mapi (lam i. lam.
               -- case <i> then
               matchex_ (pint_ i) (
                 let stateShifts: [{lookahead: [TokenRepr], toIdx: Int}] = mapLookupOrElse (lam. []) i table.shifts in
@@ -928,20 +913,20 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                   )
                 ) stateReductions in
 
-                matchall_ [
-                  -- Note: Token should be the constructor's, only the value for the first constructor actually matters.
-                  matchex_ (pand_ (pseqtot_ [pcon_ "TOKEN" (subpat_value1), pcon_ "TOKEN" pvarw_]) (pseqedgen_ (pseqtot_ [pvarw_]) (pvar_ "rest") (pseqtot_ []))) (
-                    -- Handle shift or reduce here
-                    TODO
-                  ),
-                  str_ "(TODO: Return A Result Type). Wrong lookahead, expected a symbol X, Y, or Z."
-                ]
-              ),
-              basecase
-            ]
+                let lookaheadFailCase =
+                  #var"global: result.err" (str_ "unexpected <TOKEN> at position <??>, expected <??, ??, ...> (TODO: improve this message!)")
+                in
+
+                matchall_ (join [shiftMatches, reductionMatches, [lookaheadFailCase]])
+              )
+            ) table.states in
+
+            let stateShiftFailCase = #var"global: result.err" (str_ "Internal error: Unrecognized state.") in
+
+            matchall_ (snoc stateMatches stateShiftFailCase)
           ) (
             -- else
-            str_ "(TODO: Return A Result Type) Internal error: Empty state-trace before parsing is finished."
+            #var"global: result.err" (str_ "Internal error: Empty state-trace before parsing is finished.")
           )
         )
       )]
