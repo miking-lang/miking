@@ -36,13 +36,13 @@ lang JVMAst
     | Function {name: String, descriptor: String, bytecode: [Bytecode]}
 
     syn Class =
-    | Class {name: String, fields: [Field], constructor: Function, functions: [Function]}
+    | Class {implements: String, name: String, fields: [Field], constructor: Function, functions: [Function]}
+
+    syn Interface =
+    | Interface {name: String, fields: [Field], functions: [Function]}
 
     syn Prog = 
-    | Prog {classes: [Class]}
-
-    type JVMEnv = {
-        bytecode : [Bytecode]}
+    | Prog {package: String, classes: [Class], interfaces: [Interface]}
 
     -- create constructs
 
@@ -66,13 +66,17 @@ lang JVMAst
     sem createFunction name descriptor =
     | bytecode -> Function {name = name, descriptor = descriptor, bytecode = bytecode}
 
-    sem createProg : [Class] -> Prog
-    sem createProg =
-    | classes -> Prog {classes = classes}
+    sem createProg : String -> [Class] -> [Interface] -> Prog
+    sem createProg package classes =
+    | interfaces -> Prog {package = package, classes = classes, interfaces = interfaces}
 
-    sem createClass : String -> [Field] -> Function -> [Function] -> Class
-    sem createClass name fields constructor =
-    | functions -> Class {name = name, fields = fields, constructor = constructor, functions = functions}
+    sem createClass : String -> String -> [Field] -> Function -> [Function] -> Class
+    sem createClass name implements fields constructor =
+    | functions -> Class {name = name, implements = implements, fields = fields, constructor = constructor, functions = functions}
+
+    sem createInterface : String -> [Field] -> [Function] -> Class
+    sem createInterface name fields =
+    | functions -> Class {name = name, fields = fields, functions = functions}
 
     sem createField : String -> String -> Field
     sem createField name =
@@ -82,12 +86,18 @@ lang JVMAst
 
     sem toStringProg : Prog -> String 
     sem toStringProg = 
-    | Prog {classes = classes} -> (join ["{\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
+    | Prog {package = package, classes = classes, interfaces = interfaces} -> 
+        (join["{", "\"package\":", (stringify package), ",\"interfaces\":[", (commaSeparate (map toStringInterface interfaces)), "],\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
 
     sem toStringClass : Class -> String
     sem toStringClass =
-    | Class {name = n, fields = f, constructor = c, functions = fun} ->
-        (join ["{", "\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"constructor\":", (toStringFunction c), ",\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
+    | Class {name = n, implements = implements, fields = f, constructor = c, functions = fun} ->
+        (join ["{", "\"implements\":", (stringify implements), ",\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"constructor\":", (toStringFunction c), ",\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
+
+    sem toStringInterface : Interface -> String
+    sem toStringinterface =
+    | Interface {name = n, fields = f, functions = fun} ->
+        (join ["{", "\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
 
     sem toStringField : Field -> String
     sem toStringField =
@@ -102,12 +112,12 @@ lang JVMAst
     sem toStringBytecode : Bytecode -> String
     sem toStringBytecode =
     | BApply {instr = i, owner = o, name = n, descriptor = d} ->
-        (join ["{\"instr\":", (stringify i), ",\"owner\":", (stringify o), ",\"name\":", (stringify n), ",\"descriptor\":", (stringify d), "}"])
+        (join ["{", "\"type\":", "\"apply\"", ",\"instr\":", (stringify i), ",\"owner\":", (stringify o), ",\"name\":", (stringify n), ",\"descriptor\":", (stringify d), "}"])
     | BString {instr = i, constant = c} ->
-        (join ["{\"instr\":", (stringify i), ",\"constant\":", (stringify c), "}"])
+        (join ["{", "\"type\":", "\"arg_constant\"", ",\"instr\":", (stringify i), ",\"constant\":", (stringify c), "}"])
     | BInt {instr = i, nr = nr } ->
-        (join ["{", "\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
+        (join ["{", "\"type\":", "\"arg_int\"", ",\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
     | BEmpty {instr = i} ->
-        (join ["{\"instr\":", (stringify i), "}"])
+        (join ["{", "\"type\":", "\"empty\"", ",\"instr\":", (stringify i), "}"])
 
 end
