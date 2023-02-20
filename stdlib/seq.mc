@@ -165,6 +165,23 @@ utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
 utest zipWith addi [] [] with [] using eqSeq eqi
 
+let zipWithIndex : all a. all b. all c. (Int -> a -> b -> c) -> [a] -> [b] -> [c] =
+  lam f. lam a1. lam a2.
+  recursive let work = lam acc. lam i. lam seq1. lam seq2.
+    match seq1 with [e1] ++ seq1tail then
+      match seq2 with [e2] ++ seq2tail then
+        work (cons (f i e1 e2) acc)
+             (addi i 1)
+             seq1tail
+             seq2tail
+      else reverse acc
+    else reverse acc
+  in
+  work (toList []) 0 a1 a2
+
+utest zipWithIndex (lam i. lam a. lam b. addi i (addi a b)) [100, 200, 300] [4000, 5000, 6000]
+      with [4100, 5201, 6302] using eqSeq eqi
+
 let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps

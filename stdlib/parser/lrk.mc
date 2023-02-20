@@ -61,6 +61,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     k_lookahead: Int,
     -- Index of the initial LR state
     entrypointIdx: Int,
+    entrypointRuleIdx: Int,
     -- The original syntax definition
     syntaxDef: LRSyntaxDef,
     -- Types for non-terminal symbols and tokens
@@ -400,6 +401,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     let table: LRParseTable = {
       k_lookahead = k,
       entrypointIdx = 0,
+      entrypointRuleIdx = subi (length syntaxDef.rules) 1, -- We inserted the initial rule at the back
       syntaxDef = syntaxDef,
       nonTerminalTypes = nonTerminalTypes,
       tokenConTypes = tokenConTypes,
@@ -670,8 +672,8 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   sem lrGenerateParser =
   | table ->
     /---- Assumed to exist "public" identifiers ----/
-    let #var"global: result.err" = recordproj_ "err" (var_ "result") in
-    let #var"global: result.ok" = recordproj_ "ok" (var_ "result") in
+    let #var"global: result.err" = lam v. appf1_ (recordproj_ "err" (var_ "result")) v in
+    let #var"global: result.ok" = lam v. appf1_ (recordproj_ "ok" (var_ "result")) v in
 
     /---- Set up the types ----/
     let errorType = tytuple_ [tyvar_ "Info", tystr_] in
@@ -763,46 +765,10 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
         let lamLookahead = nameSym "lookahead" in
         nlams_ [(lamStacks, tyunknown_),
                 (lamLexerState, lexerStateType),
-                (lamTrace, tyseq_ tyint_),
+                (lamStateTrace, tyseq_ tyint_),
                 (lamLookahead, tyseq_ tokenTypeName)] (
           -- Recursive function body here:
-          -- match stateTrace with [currentState] ++ _ then
-          --   switch currentState
-          --   case <i> then
-          --     switch lookahead
-          --     case [TokenX x, TokenY y] & ([_] ++ rest) then
-          --       <if shift>
-          --       let stacks = {stacks with stackX = cons x stacks.stackX} in
-          --       let stateTrace = cons <shiftIdx> stateStrace in
-          --       let nextTokenResult = nextToken lexerState in
-          --       match nextTokenResult with ResultOk {value = lexres} then
-          --         parseLoop stacks lexres.stream stateTrace (snoc lookahead lexres.token)
-          --       else match nextTokenResult with ResultErr {errors = errors} then
-          --         result.err errors
-          --       else never
-          --
-          --       <if reduce>
-          --       let stackA = stacks.stackA in -- extract the relevant stacks for this reduce
-          --       let stackB = stacks.stackB in
-          --       let stackC = stacks.stackC in
-          --       let tokenA2 = head stackA in
-          --       let stackA = tail stackA in
-          --       let tokenB1 = head stackB in
-          --       let stackB = tail stackB in
-          --       let tokenA1 = head stackA in
-          --       let stackA = tail stackA in
-          --       let newProduce = semanticAction actionState tokenA1 tokenB1 tokenA2 in
-          --       <if reduce by entrypoint rule>
-          --         result.ok newProduce
-          --       <otherwise (pretty much always)>
-          --         let stackC = cons newProduce stackC in
-          --         let stacks = {stacks with stackA = stackA, stackB = stackB, stackC = stackC} in
-          --         let stateTrace = subsequence stateTrace 3 (length stateTrace) in
-          --         let currentState = head stateTrace in
-          --         let nextState = get currentState gotoLookup_<nt_idx>_<nt> in
-          --         let stateTrace = cons nextState stateTrace in
-          --         parseLoop stacks lexerState stateTrace lookahead
-          --     ..
+
           --     case _ then
           --       result.err "Unexpected token bla, expected one of... bla bla"
           --     end
@@ -812,9 +778,171 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
           --   end
           -- else
           --   result.err "Missing state"
-          BODY ()
-          match_ varStateTrace thn els ...
-          matchall_ [never_]
+
+
+          -- match stateTrace with [currentState] ++ _
+          let varCurrentState = nameSym "currentState" in
+          match_ (nvar_ lamStateTrace)
+                 (pseqedgew_ (pseqtot_ [npvar_ varCurrentState]) (pseqtot_ [])) (
+            -- then
+            let basecase = str_ "(TODO: Return A Result Type). Internal error: Unrecognized state." in
+            -- switch currentState
+            matchall_ [
+              -- generic form:
+              matchex_ pat thn,
+              -- example of generated code
+              -- case <i> then
+              matchex_ (pint_ i) (
+                let stateShifts: [{lookahead: [TokenRepr], toIdx: Int}] = mapLookupOrElse (lam. []) i table.shifts in
+                let stateReductions: [{lookahead: [TokenRepr], ruleIdx: Int}] = mapLookupOrElse (lam. []) i table.reductions in
+
+                let shiftMatches = map (lam shift: {lookahead: [TokenRepr], toIdx: Int}.
+                  let lhCons: [{conIdent: Name, conArg: Type}] = map (lam repr. mapLookupOrElse (lam. error "malformed parse table! (1)") repr table.tokenConTypes) shift.lookahead in
+                  -- We only need value for the first lookahead token when shifting
+                  let v = nameSym "shiftValue" in
+                  let h = head lhCons in
+                  let hCon = npcon_ h.conIdent (npvar_ v) in
+                  let restCons = map (lam lh. npcon_ lh.conIdent pvarw_) (tail lhCons) in
+                  let matchCons = cons hCon tailCons in
+                  -- Name for the "tail", to avoid naming conflict with tail
+                  let varRest = nameSym "rest" in
+                  matchex_ (nvar_ lamLookahead) (pand_ (pseqtot_ matchCons) (pseqedgen_ (pseqtot_ [pvarw_]) (npvar_ varRest) (pseqtot_ []))) (
+                    -- case [TokenX x, TokenY y, ...] & ([_] ++ rest) then
+                    --   <if shift>
+                    --   let stacks = {stacks with stackX = cons x stacks.stackX} in
+                    --   let stateTrace = cons <shiftIdx> stateStrace in
+                    --   let nextTokenResult = nextToken lexerState in
+                    --   match nextTokenResult with ResultOk {value = lexres} then
+                    --     parseLoop stacks lexres.stream stateTrace (snoc lookahead lexres.token)
+                    --   else match nextTokenResult with ResultErr {errors = errors} then
+                    --     result.err errors
+                    --   else never
+                    let stackLabel = mapLookupOrElse (lam. error "internal error (2)") h.conArg stackTypeLabel in
+                    bindall_ [
+                      ulet_ "shiftStack" (recordproj_ stackLabel (nvar_ lamStacks)),
+                      ulet_ "newTypeStack" (cons_ (nvar_ v) (var_ "shiftStack")),
+                      ulet_ "newStacks" (recordupdate_ (nvar_ lamStacks) stackLabel (var_ "newTypeStack")),
+                      ulet_ "nextTokenResult" (appf1_ (nvar_ varNextToken) (nvar_ lamLexerState)),
+                      matchall_ [
+                        matchex_ (var_ "nextTokenResult") (pcon_ "ResultOk" (prec_ [("value", pvar_ "lexres")])) (
+                          bindall_ [
+                            ulet_ "newLookahead" (snoc_ (nvar_ varRest) (recordproj_ "token" (var_ "lexres"))),
+                            ulet_ "newLexerState" (recordproj_ "stream" (var_ "lexres")),
+                            ulet_ "newStateTrace" (cons_ shift.toIdx (nvar_ lamStateTrace)),
+                            appf4_ parseFunctionIdent
+                                   (var_ "newStacks")
+                                   (var_ "newLexerState")
+                                   (var_ "newStateTrace")
+                                   (var_ "newLookahead")
+                          ]
+                        ),
+                        matchex_ (var_ "nextTokenResult") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors")])) (
+                          #var"global: result.err" (var_ "errors")
+                        )
+                      ]
+                    ]
+                  )
+                ) stateShifts in
+
+                let reductionMatches = map (lam reduction: {lookahead: [TokenRepr], ruleIdx: Int}.
+                  let lhCons: [{conIdent: Name, conArg: Type}] = map (lam repr. mapLookupOrElse (lam. error "malformed parse table! (2)") repr table.tokenConTypes) reduction.lookahead in
+                  let rule = get reduction.ruleIdx table.syntaxDef.rules in
+                  let termTypes = map (lam term: LRTerm.
+                    switch term
+                    case LRTerminal repr then
+                      let contype = mapLookupOrElse (lam. error "malformed parse table! (3)") repr table.tokenConTypes in
+                      contype.conArg
+                    case LRNonTerminal name then
+                      mapLookupOrElse (lam. error "malformed parse table! (4)") name nonTerminalTypes
+                    end
+                  ) rule.terms in
+                  -- We don't need any value information here, so all variables can be wildcards
+                  let matchCons = map (lam lh. npcon_ lh.conIdent pvarw_) lhCons in
+                  matchex_ (nvar_ lamLookahead) (pseqtot_ matchCons) (
+                    -- case [TokenX _, TokenY _, ...] then
+                    --   <if reduce>
+                    --   let stackA = stacks.stackA in -- extract the relevant stacks for this reduce
+                    --   let stackB = stacks.stackB in
+                    --   let stackC = stacks.stackC in
+                    --   let tokenA2 = head stackA in
+                    --   let stackA = tail stackA in
+                    --   let tokenB1 = head stackB in
+                    --   let stackB = tail stackB in
+                    --   let tokenA1 = head stackA in
+                    --   let stackA = tail stackA in
+                    --   let newProduce = semanticAction actionState tokenA1 tokenB1 tokenA2 in
+                    --   <if reduce by entrypoint rule>
+                    --     result.ok newProduce
+                    --   <otherwise (pretty much always)>
+                    --     let stackC = cons newProduce stackC in
+                    --     let stacks = {stacks with stackA = stackA, stackB = stackB, stackC = stackC} in
+                    --     let stateTrace = subsequence stateTrace 3 (length stateTrace) in
+                    --     let currentState = head stateTrace in
+                    --     let nextState = get currentState gotoLookup_<nt_idx>_<nt> in
+                    --     let stateTrace = cons nextState stateTrace in
+                    --     parseLoop stacks lexerState stateTrace lookahead
+                    let stackLabels = map (lam ty. mapLookupOrElse (lam. error "internal error (3)") ty stackTypeLabel) termTypes in
+                    let stackVars = map (lam lbl. (var_ (concat "var" lbl), lbl)) (distinct eqString stackLabels) in
+
+                    let actionRetType =
+                      recursive let work = lam ty. match ty with TyArrow t then work t.to else ty in
+                      work (tyTm rule.action)
+                    in
+                    let returnLabel = mapLookupOrElse (lam. error "internal error (4)") ty stackTypeLabel in
+                    bindall_ [
+                      -- extract all stacks to variables
+                      bindall_ (map (lam lbl: String.
+                        ulet_ (concat "var" lbl) (recordproj_ lbl (nvar_ lamStacks))
+                      ) (distinct eqString (cons returnLabel stackLabels))),
+                      -- extract all values from the stacks and pop that value from the stack
+                      bindall_ (mapi (lam i. lam lbl.
+                        bindall_ [
+                          ulet_ (join ["tokenValue", int2string i]) (head_ (recordproj_ lbl (var_ (concat "var" lbl)))),
+                          ulet_ (concat "var" lbl) (tail_ (var_ (concat "var" lbl)))
+                        ]
+                      ) stackLabels),
+                      -- Create the new production
+                      ulet_ "newProduce" (appSeq_ rule.action (cons (var_ "actionStateTODO!") (mapi (lam i. lam. var_ (join ["tokenValue", int2string i])) stackLabels))),
+                      -- If we reduce on the entrypoint rule, then we return. Otherwise push to the stack and run the GOTO action
+                      if eqi reduction.ruleIdx table.entrypointRuleIdx then
+                        #var"global: result.ok" (var_ "newProduce")
+                      else
+                        ulet_ (concat "var" returnLabel) (cons_ (var_ "newProduce") (concat "var" returnLabel))
+                        -- Update the stack state
+                        ulet_ "newStacks" (foldl (lam rec. lam lbl.
+                          recordupdate_ rec lbl (var_ (concat "var" lbl))
+                        ) (nvar_ lamStacks) (distinct eqString (cons returnLabel stackLabels))),
+                        ulet_ "newStateTrace" (subsequence_ (nvar_ lamStateTrace) (length stackLabels) (length_ (nvar_ lamStateTrace))),
+                        ulet_ "currentState" (head_ (var_ "newStateTrace")),
+
+                        let varLookupName = mapLookupOrElse (lam. error "malformed parse table! (5)") rule.name gotoLookupVarNames in
+                        ulet_ "nextState" (get_ (var_ "currentState") (nvar_ varLookupName)),
+                        ulet_ "newStateTrace" (cons_ (var_ "nextState") (var_ "newStateTrace")),
+
+                        appf4_ parseFunctionIdent
+                               (var_ "newStacks")
+                               (nvar_ lamLexerState)
+                               (var_ "newStateTrace")
+                               (nvar_ lamLookahead)
+                    ]
+                  )
+                ) stateReductions in
+
+                matchall_ [
+                  -- Note: Token should be the constructor's, only the value for the first constructor actually matters.
+                  matchex_ (pand_ (pseqtot_ [pcon_ "TOKEN" (subpat_value1), pcon_ "TOKEN" pvarw_]) (pseqedgen_ (pseqtot_ [pvarw_]) (pvar_ "rest") (pseqtot_ []))) (
+                    -- Handle shift or reduce here
+                    TODO
+                  ),
+                  str_ "(TODO: Return A Result Type). Wrong lookahead, expected a symbol X, Y, or Z."
+                ]
+              ),
+              basecase
+            ]
+          ) (
+            -- else
+            str_ "(TODO: Return A Result Type) Internal error: Empty state-trace before parsing is finished."
+          )
         )
       )]
     in
