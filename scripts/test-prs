@@ -1,0 +1,82 @@
+#!/usr/bin/env fish
+
+# Try merging a sequence of PRs locally and see that tests pass
+
+# Usage: test-prs <pr-nr>*
+# Example: test-prs 12 163 47
+# This would merge prs #12, #163, #47, in that order, using the git
+# repo in the current working directory, on top of the currently
+# checked out commit
+
+# The script tries fairly hard to return to a clean state when it
+# quits, even if it was interrupted (Ctrl+c), but it would surprise me
+# if there wasn't some weird case where that doesn't quite work as
+# intended.
+
+# The script hopes for a happy case by default, which is merging
+# everything and testing the final result immediately, without testing
+# intermediate states. If that fails it falls back to a binary search,
+# trying to find the first PR in the sequence that makes the tests
+# fail.
+
+
+set branch tmp-testing-branch
+
+set prs $argv
+set picked
+set commit (git symbolic-ref --short HEAD)
+set statuses
+
+function cleanup
+    git bisect reset >/dev/null 2>&1
+    git checkout $commit >/dev/null 2>&1
+    git branch -D $branch >/dev/null 2>&1
+end
+
+function catch --on-signal SIGINT
+    cleanup
+    exit 1
+end
+
+function printMergeStatus
+    echo -ne "\33[2K\r" $statuses "?"$prs
+end
+
+git checkout -b $branch
+echo "Attempting to squash merge PRs:"
+printMergeStatus
+
+for pr in $prs
+    set --erase prs[1]
+    if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
+        set picked $picked $pr
+        set statuses $statuses "✓"$pr
+    else
+        set statuses $statuses "✗"$pr
+        git merge --abort >/dev/null 2>&1
+    end
+    printMergeStatus
+end
+
+echo
+
+if make test-all
+    echo "make test-all succeeded with this sequence of PRs merged:"
+    echo $picked
+    exit 0
+end
+
+# Testing failed, now we'd like to bisect to find the PR that
+# introduced the failure
+
+echo "make test-all failed with this sequence of PRs merged:"
+echo $picked
+
+echo "Using git bisect to find the PR that introduced the issue."
+echo "Hiding output from make test-all to make it easier to see where we're at."
+
+git bisect start $branch develop
+git bisect run sh -c "make test-all >/dev/null 2>&1"
+
+cleanup
+exit 1
