@@ -674,6 +674,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     /---- Assumed to exist "public" identifiers ----/
     let #var"global: result.err" = lam v. appf1_ (recordproj_ "err" (var_ "result")) v in
     let #var"global: result.ok" = lam v. appf1_ (recordproj_ "ok" (var_ "result")) v in
+    let resErrNoInfo = lam s: String.  #var"global: result.err" (utuple_ [conapp_ "NoInfo" unit_, str_ s]) in
 
     /---- Set up the types ----/
     let errorType = tytuple_ [tyvar_ "Info", tystr_] in
@@ -693,17 +694,21 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                                ntyall_ lexerStreamTypeName (
                                ntyall_ lexerNextTokenResultTypeName (tyarrows_ [
       -- Initial lexer state
-      lexerStateType,
+      lexerStreamType,
       -- Result (Info, String) (Info, String) NextTokenResult
       -- Lexer argument (state -> Result w e (state, token))
-      tyarrow_ lexerStateType (tyapps_ (tyvar_ "Result") [warningType, errorType, lexerNextTokenResultType]),
+      tyarrow_ lexerStreamType (tyapps_ (tyvar_ "Result") [warningType, errorType, lexerNextTokenResultType]),
       -- Resulting type
       resultType
     ]))) in
 
     /---- Set up the lambdas ----/
-    let varInitialLexerState = nameSym "initialLexerState" in
-    let varNextToken = nameSym "lexerState" in
+    let lamInitialLexerState = nameSym "initialLexerState" in
+    let lamNextToken = nameSym "nextToken" in
+    /---- Set up names for initialized values ----/
+    let varActionState = nameSym "actionState" in
+    let varInitialStacks = nameSym "initialStacks" in
+    let varInitialStateTrace = nameSym "initialStateTrace" in
 
     /---- Set up the stacks ----/
     -- Map types to stack labels
@@ -716,7 +721,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
         mapInsert ty label stlAcc
       else
         stlAcc
-    ) stackTypeLabel nonTerminalTypes in
+    ) stackTypeLabel table.nonTerminalTypes in
     -- Check token types
     let stackTypeLabel = mapFoldWithKey (lam stlAcc: Map Type String. lam. lam c: {conIdent: Name, conArg: Type}.
       match mapLookup c.conArg stlAcc with None () then
@@ -724,7 +729,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
         mapInsert c.conArg label stlAcc
       else
         stlAcc
-    ) stackTypeLabel tokenConTypes in
+    ) stackTypeLabel table.tokenConTypes in
 
     let stackRecordExpr = urecord_ (mapFoldWithKey (lam acc: [(String, Expr)]. lam ty: Type. lam label: String.
       cons (label, withType (tyseq_ ty) (seq_ [])) acc -- TODO: (toList or createList here)
@@ -735,7 +740,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
 
     let gotoLookup: Map Name (Map Int Int) = mapFoldWithKey (lam acc. lam nt. lam.
       mapInsert nt (mapEmpty subi) acc
-    ) (mapEmpty nameCmp) nonTerminalTypes in
+    ) (mapEmpty nameCmp) table.nonTerminalTypes in
     let gotoLookup = mapFoldWithKey (lam acc. lam fromIdx. lam stateGotos: [{name: Name, toIdx: Int}].
       foldl (lam acc. lam stateGoto: {name: Name, toIdx: Int}.
         mapInsert stateGoto.name
@@ -747,7 +752,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     ) gotoLookup table.gotos in
 
     let gotoLookupVarExpressions: Map Name Expr = mapFoldWithKey (lam acc. lam nt: Name. lam gotos: Map Int Int.
-      let nameGotos = createRope (length table.states) (lam i. mapLookupOrElse (lam. missingGOTO) i gotos) in
+      let nameGotos = createRope (length table.states) (lam i. int_ (mapLookupOrElse (lam. missingGOTO) i gotos)) in
       mapInsert nt (seq_ nameGotos) acc
     ) (mapEmpty nameCmp) gotoLookup in
     let gotoLookupVarNames: Map Name Name = mapFoldWithKey (lam acc: Map Name Name. lam nt: Name. lam.
@@ -764,20 +769,20 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
         let lamStateTrace = nameSym "stateTrace" in
         let lamLookahead = nameSym "lookahead" in
         nlams_ [(lamStacks, tyunknown_),
-                (lamLexerState, lexerStateType),
+                (lamLexerState, lexerStreamType),
                 (lamStateTrace, tyseq_ tyint_),
-                (lamLookahead, tyseq_ tokenTypeName)] (
+                (lamLookahead, tyseq_ tokenType)] (
           -- Recursive function body here:
 
           -- match stateTrace with [currentState] ++ _
           let varCurrentState = nameSym "currentState" in
           match_ (nvar_ lamStateTrace)
-                 (pseqedgew_ (pseqtot_ [npvar_ varCurrentState]) (pseqtot_ [])) (
+                 (pseqedgew_ [npvar_ varCurrentState] []) (
             -- then
             -- switch currentState
             let stateMatches = mapi (lam i. lam.
               -- case <i> then
-              matchex_ (pint_ i) (
+              matchex_ (nvar_ varCurrentState) (pint_ i) (
                 let stateShifts: [{lookahead: [TokenRepr], toIdx: Int}] = mapLookupOrElse (lam. []) i table.shifts in
                 let stateReductions: [{lookahead: [TokenRepr], ruleIdx: Int}] = mapLookupOrElse (lam. []) i table.reductions in
 
@@ -788,10 +793,10 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                   let h = head lhCons in
                   let hCon = npcon_ h.conIdent (npvar_ v) in
                   let restCons = map (lam lh. npcon_ lh.conIdent pvarw_) (tail lhCons) in
-                  let matchCons = cons hCon tailCons in
+                  let matchCons = cons hCon restCons in
                   -- Name for the "tail", to avoid naming conflict with tail
                   let varRest = nameSym "rest" in
-                  matchex_ (nvar_ lamLookahead) (pand_ (pseqtot_ matchCons) (pseqedgen_ (pseqtot_ [pvarw_]) (npvar_ varRest) (pseqtot_ []))) (
+                  matchex_ (nvar_ lamLookahead) (pand_ (pseqtot_ matchCons) (pseqedgen_ [pvarw_] varRest [])) (
                     -- case [TokenX x, TokenY y, ...] & ([_] ++ rest) then
                     --   <if shift>
                     --   let stacks = {stacks with stackX = cons x stacks.stackX} in
@@ -807,14 +812,14 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                       ulet_ "shiftStack" (recordproj_ stackLabel (nvar_ lamStacks)),
                       ulet_ "newTypeStack" (cons_ (nvar_ v) (var_ "shiftStack")),
                       ulet_ "newStacks" (recordupdate_ (nvar_ lamStacks) stackLabel (var_ "newTypeStack")),
-                      ulet_ "nextTokenResult" (appf1_ (nvar_ varNextToken) (nvar_ lamLexerState)),
+                      ulet_ "nextTokenResult" (appf1_ (nvar_ lamNextToken) (nvar_ lamLexerState)),
                       matchall_ [
                         matchex_ (var_ "nextTokenResult") (pcon_ "ResultOk" (prec_ [("value", pvar_ "lexres")])) (
                           bindall_ [
                             ulet_ "newLookahead" (snoc_ (nvar_ varRest) (recordproj_ "token" (var_ "lexres"))),
                             ulet_ "newLexerState" (recordproj_ "stream" (var_ "lexres")),
-                            ulet_ "newStateTrace" (cons_ shift.toIdx (nvar_ lamStateTrace)),
-                            appf4_ parseFunctionIdent
+                            ulet_ "newStateTrace" (cons_ (int_ shift.toIdx) (nvar_ lamStateTrace)),
+                            appf4_ (nvar_ parseFunctionIdent)
                                    (var_ "newStacks")
                                    (var_ "newLexerState")
                                    (var_ "newStateTrace")
@@ -831,14 +836,14 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
 
                 let reductionMatches = map (lam reduction: {lookahead: [TokenRepr], ruleIdx: Int}.
                   let lhCons: [{conIdent: Name, conArg: Type}] = map (lam repr. mapLookupOrElse (lam. error "malformed parse table! (2)") repr table.tokenConTypes) reduction.lookahead in
-                  let rule = get reduction.ruleIdx table.syntaxDef.rules in
+                  let rule = get table.syntaxDef.rules reduction.ruleIdx in
                   let termTypes = map (lam term: LRTerm.
                     switch term
                     case LRTerminal repr then
                       let contype = mapLookupOrElse (lam. error "malformed parse table! (3)") repr table.tokenConTypes in
                       contype.conArg
                     case LRNonTerminal name then
-                      mapLookupOrElse (lam. error "malformed parse table! (4)") name nonTerminalTypes
+                      mapLookupOrElse (lam. error "malformed parse table! (4)") name table.nonTerminalTypes
                     end
                   ) rule.terms in
                   -- We don't need any value information here, so all variables can be wildcards
@@ -873,7 +878,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                       recursive let work = lam ty. match ty with TyArrow t then work t.to else ty in
                       work (tyTm rule.action)
                     in
-                    let returnLabel = mapLookupOrElse (lam. error "internal error (4)") ty stackTypeLabel in
+                    let returnLabel = mapLookupOrElse (lam. error "internal error (4)") actionRetType stackTypeLabel in
                     bindall_ [
                       -- extract all stacks to variables
                       bindall_ (map (lam lbl: String.
@@ -887,24 +892,24 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                         ]
                       ) stackLabels),
                       -- Create the new production
-                      ulet_ "newProduce" (appSeq_ rule.action (cons (var_ "actionStateTODO!") (mapi (lam i. lam. var_ (join ["tokenValue", int2string i])) stackLabels))),
+                      ulet_ "newProduce" (appSeq_ rule.action (cons (nvar_ varActionState) (mapi (lam i. lam. var_ (join ["tokenValue", int2string i])) stackLabels))),
                       -- If we reduce on the entrypoint rule, then we return. Otherwise push to the stack and run the GOTO action
                       if eqi reduction.ruleIdx table.entrypointRuleIdx then
                         #var"global: result.ok" (var_ "newProduce")
                       else
-                        ulet_ (concat "var" returnLabel) (cons_ (var_ "newProduce") (concat "var" returnLabel))
+                        ulet_ (concat "var" returnLabel) (cons_ (var_ "newProduce") (var_ (concat "var" returnLabel))),
                         -- Update the stack state
                         ulet_ "newStacks" (foldl (lam rec. lam lbl.
                           recordupdate_ rec lbl (var_ (concat "var" lbl))
                         ) (nvar_ lamStacks) (distinct eqString (cons returnLabel stackLabels))),
-                        ulet_ "newStateTrace" (subsequence_ (nvar_ lamStateTrace) (length stackLabels) (length_ (nvar_ lamStateTrace))),
+                        ulet_ "newStateTrace" (subsequence_ (nvar_ lamStateTrace) (int_ (length stackLabels)) (length_ (nvar_ lamStateTrace))),
                         ulet_ "currentState" (head_ (var_ "newStateTrace")),
 
                         let varLookupName = mapLookupOrElse (lam. error "malformed parse table! (5)") rule.name gotoLookupVarNames in
                         ulet_ "nextState" (get_ (var_ "currentState") (nvar_ varLookupName)),
                         ulet_ "newStateTrace" (cons_ (var_ "nextState") (var_ "newStateTrace")),
 
-                        appf4_ parseFunctionIdent
+                        appf4_ (nvar_ parseFunctionIdent)
                                (var_ "newStacks")
                                (nvar_ lamLexerState)
                                (var_ "newStateTrace")
@@ -914,32 +919,110 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                 ) stateReductions in
 
                 let lookaheadFailCase =
-                  #var"global: result.err" (str_ "unexpected <TOKEN> at position <??>, expected <??, ??, ...> (TODO: improve this message!)")
+                  resErrNoInfo "unexpected <TOKEN> at position <??>, expected <??, ??, ...> (TODO: improve this message!)"
                 in
 
                 matchall_ (join [shiftMatches, reductionMatches, [lookaheadFailCase]])
               )
             ) table.states in
 
-            let stateShiftFailCase = #var"global: result.err" (str_ "Internal error: Unrecognized state.") in
+            let stateShiftFailCase = resErrNoInfo "Internal error: Unrecognized state." in
 
             matchall_ (snoc stateMatches stateShiftFailCase)
           ) (
             -- else
-            #var"global: result.err" (str_ "Internal error: Empty state-trace before parsing is finished.")
+            resErrNoInfo "Internal error: Empty state-trace before parsing is finished."
           )
         )
       )]
     in
 
-    /---- Set up all the expressions ----/
+    /---- Set up the expression ----/
     -- Step 1: Fill up the lookahead from the lexer.
     -- Step 2: Set initial state trace.
     -- Step 3. Set up the stacks
     -- Step 4. ??? Profit
-    TODO ()
-end
+    nlams_ [(lamInitialLexerState, tyunknown_),
+            (lamNextToken, tyunknown_)] (bindall_ [
+      -- The initial action state
+      nulet_ varActionState table.syntaxDef.initActionState,
 
+      -- Initialize the stacks as lists
+      nulet_ varInitialStacks (urecord_ (
+        map (lam lbl. (lbl, appf1_ (var_ "toList") (seq_ []))
+        ) (mapValues stackTypeLabel)
+      )),
+
+      -- Initialize the state trace
+      nulet_ varInitialStateTrace (seq_ [int_ table.entrypointIdx]),
+
+      /- Initialize the lookahead as
+      let lookahead_check: Result w e (LexerStateType, [Tokens]) =
+        recursive let work = lam lexerState. lam acc. lam i.
+          if eqi i 0 then acc else
+          let r = lexerState nextToken in
+          match r with ResultOk {value = rexres} then
+            work lexres.stream (snoc acc lexres.token) (subi i 1)
+          else match r with ResultErr {errors = errors} in
+            result.err errors
+        in
+        work lexerState [] k
+      in
+      -/
+      ulet_ "lookahead_check" (
+        bindall_ [
+          ureclet_ "work" (ulams_ ["lhLexerState", "lhAcc", "i"] (
+            if_ (eqi_ (var_ "i") (int_ 0)) (
+              #var"global: result.ok" (utuple_ [var_ "lhLexerState", var_ "lhAcc"])
+            ) (bindall_ [
+              ulet_ "r" (appf1_ (nvar_ lamNextToken) (var_ "lhLexerState")),
+              matchall_ [
+                matchex_ (var_ "r") (pcon_ "ResultOk" (prec_ [("value", pvar_ "lexres")])) (
+                  bindall_ [
+                    ulet_ "newLhAcc" (snoc_ (var_ "lhAcc") (recordproj_ "token" (var_ "lexres"))),
+                    ulet_ "newLhLexerState" (recordproj_ "stream" (var_ "lexres")),
+                    appf3_ (var_ "work")
+                           (var_ "newLhLexerState")
+                           (var_ "newLhAcc")
+                           (addi_ (var_ "i") (int_ 1))
+                  ]
+                ),
+                matchex_ (var_ "r") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors")])) (
+                  #var"global: result.err" (var_ "errors")
+                )
+              ]
+            ])
+          )),
+          appf3_ (var_ "work")
+                 (nvar_ lamInitialLexerState)
+                 (seq_ [])
+                 (int_ 0)
+        ]
+      ),
+
+      /- Extract the lookahead and run the parser:
+      match lookahead_check with ResultOk {value = (lexerState, lookahead)} then
+        <parser body>
+        runparser
+      else match lookahead_check with ResultErr {errors = errors} in
+        result.err errors
+      -/
+      matchall_ [
+        matchex_ (var_ "lookahead_check") (pcon_ "ResultOk" (ptuple_ [pvar_ "lhLexerState", pvar_ "lhLookahead"])) (
+          bindall_ [
+            parseFunctionBody,
+            appf4_ (nvar_ parseFunctionIdent) (nvar_ varInitialStacks)
+                                              (var_ "lhLexerState")
+                                              (nvar_ varInitialStateTrace)
+                                              (var_ "lhLookahead")
+          ]
+        ),
+        matchex_ (var_ "lookahead_check") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors")])) (
+          #var"global: result.err" (var_ "errors")
+        )
+      ]
+    ])
+end
 
 
 
