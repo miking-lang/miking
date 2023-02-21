@@ -56,26 +56,38 @@ do
   tup.rule({}, display..mkdir..dune..cp..rm, {'build/boot', extra_outputs = {'^'..ignore}})
 end
 
--- Bootstrapping, interpret mi-lite on itself
-do
-  local compile = 'build/boot eval %f -- 0 %f %o'
-  local display = '^o '..compile..'^ '
-  local inputs = {'src/main/mi-lite.mc', extra_inputs={'build/boot'}}
-  tup.rule(inputs, display..setStdlib..compile, 'build/mi-lite')
+if USE_BUILT then
+  -- Bootstrapping, interpret mi-lite on itself
+  do
+    local compile = 'build/boot eval %f -- 0 %f %o'
+    local display = '^o '..compile..'^ '
+    local inputs = {'src/main/mi-lite.mc', extra_inputs = {'build/boot'}}
+    tup.rule(inputs, display..setStdlib..compile, 'build/mi-lite')
+  end
+
+  -- Bootstrapping, use compiled mi-lite to build mi
+  do
+    local compile = 'build/mi-lite 1 %f %o'
+    local display = '^o '..compile..'^ '
+    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi-lite'}}
+    tup.rule(inputs, display..setStdlib..compile, 'build/mi1')
+  end
+
+  -- Bootstrapping, use compiled mi to compile itself
+  do
+    local compile = 'build/mi1 compile %f --output %o'
+    local display = '^o '..compile..'^ '
+    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi1'}}
+    tup.rule(inputs, display..setStdlib..compile, {'build/mi', miGroup})
+  end
 end
 
--- Bootstrapping, use compiled mi-lite to build mi
-do
-  local compile = 'build/mi-lite 1 %f %o'
-  local display = '^o '..compile..'^ '
-  local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi-lite'}}
-  tup.rule(inputs, display..setStdlib..compile, 'build/mi1')
-end
-
--- Bootstrapping, use compiled mi to compile itself
-do
-  local compile = 'build/mi1 compile %f --output %o'
-  local display = '^o '..compile..'^ '
-  local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi1'}}
-  tup.rule(inputs, display..setStdlib..compile, {'build/mi', miGroup})
+if USE_CHEATED then
+  -- Cheatstrapping, use installed mi to compile a new mi
+  do
+    local compile = 'mi compile %f --output %o'
+    local display = '^o '..compile..'^ '
+    local inputs = {'src/main/mi.mc'}
+    tup.rule(inputs, display..setStdlib..compile, {'build/mi-cheat', miCheatGroup})
+  end
 end

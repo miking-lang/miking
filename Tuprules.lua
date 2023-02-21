@@ -20,11 +20,55 @@ tup.export("CAML_LD_LIBRARY_PATH")
 tup.export("OCAML_TOPLEVEL_PATH")
 
 root = tup.getcwd()
-mi = root..'/build/mi '
 miGroup = root..'/<mi>'
+miCheatGroup = root..'/<mi-cheat>'
 local cwd = tup.getrelativedir(root)
-
 setStdlib = 'MCORE_STDLIB='..root..'/stdlib '
+
+local builtKind = 'built'
+local builtMi = root..'/build/mi '
+local addBuiltDep = function(sources)
+  sources.extra_inputs = {miGroup}
+  return sources
+end
+local installedKind = 'installed'
+local installedMi = 'mi '
+local addInstalledDep = function(sources)
+  return sources
+end
+
+modes = {
+  built = {
+    kind = 'built',
+    mi = root..'/build/mi ',
+    addMiDep = function(sources)
+      sources.extra_inputs = {miGroup}
+      return sources
+    end,
+  },
+  installed = {
+    kind = 'installed',
+    mi = 'mi ',
+    addMiDep = function(x) return x end,
+  },
+  cheated = {
+    kind = 'cheated',
+    mi = root..'/build/mi-cheat ',
+    addMiDep = function(sources)
+      sources.extra_inputs = {miCheatGroup}
+      return sources
+    end,
+  }
+}
+mode = modes.built
+
+function withMiKind(kind, f)
+  local old = mode
+  mode = modes[kind]
+  local res = f()
+  mode = old
+  return res
+end
 
 -- Set up exception lists
 local compileShouldFail = {}
@@ -221,24 +265,24 @@ end
 
 -- Compile a given .mc file to an executable
 function miCompile(source, destination, options)
-  local inputs = {source, extra_inputs = {miGroup}}
+  local inputs = mode.addMiDep{source}
   local transient = options.transient and '^t ' or '^ '
   local test = options.test and ' --test' or ''
-  local display = transient..'COMPILE'..test..' %f > %o^ '
-  local compile = setStdlib..mi..'compile %f --output %o'..test
+  local display = transient..'('..mode.kind..') COMPILE'..test..' %f > %o^ '
+  local compile = setStdlib..mode.mi..'compile %f --output %o'..test
   return tup.rule(inputs, display..formatFailOutput(compile, 10, 10), destination)
 end
 
 function miCompileExpectFail(source)
-  local inputs = {source, extra_inputs = {miGroup}}
-  local display = '^ COMPILE-EXPECT-FAIL --test %f^ '
-  local compile = setStdlib..mi..'compile --test %f --output /dev/null'
+  local inputs = mode.addMiDep{source}
+  local display = '^ ('..mode.kind..') COMPILE-EXPECT-FAIL --test %f^ '
+  local compile = setStdlib..mode.mi..'compile --test %f --output /dev/null'
   local msg = 'Expected compilation to fail, but it succeeded.'
   return tup.rule(inputs, display..expectFail(compile, msg), {})
 end
 
 function runExec(executable, expectSuccess)
-  local display = '^ RUN'..(expectSuccess and '' or '-EXPECT-FAIL')..' %f^ '
+  local display = '^ ('..mode.kind..') RUN'..(expectSuccess and '' or '-EXPECT-FAIL')..' %f^ '
   local msg = 'Expected running to fail, but it succeeded.'
   local run = setStdlib..'./%f'
   local run = expectSuccess and formatFailOutput(run) or expectFail(run, msg)
@@ -246,34 +290,60 @@ function runExec(executable, expectSuccess)
 end
 
 function miEvalTest(source, expectSuccess)
-  local display = '^ EVAL'..(expectSuccess and '' or '-EXPECT-FAIL')..' --test %f^ '
+  local display = '^ ('..mode.kind..') EVAL'..(expectSuccess and '' or '-EXPECT-FAIL')..' --test %f^ '
   local msg = 'Expected evaluating to fail, but it succeeded.'
-  local run = setStdlib..mi..'eval --test %f'
+  local run = setStdlib..mode.mi..'eval --test %f'
   run = expectSuccess and formatFailOutput(run) or expectFail(run, msg)
-  local inputs = {source, extra_inputs = {miGroup}}
+  local inputs = mode.addMiDep{source}
   return tup.rule(inputs, display..run, {})
 end
 
--- Wrap a command, save the return value in $rv, print an elided
--- version of the output if it doesn't conform to expectations
+function getBoolOpt(opt, default)
+  local conf = tup.getconfig(opt)
+  if conf == "y" then
+    return true
+  elseif conf == "n" then
+    return false
+  elseif conf == "" then
+    return default
+  else
+    print("Unknown option for "..opt..", expected 'y' or 'n'.")
+    exit(1)
+  end
+end
+
+USE_INSTALLED = getBoolOpt("USE_INSTALLED_MI", false)
+USE_BUILT = getBoolOpt("USE_BUILT_MI", true)
+USE_CHEATED = getBoolOpt("USE_CHEATED_MI", false)
 
 function testsFor(source)
   local realSource = cwd..'/'..source
-  if compileShouldFail[realSource] then
-    miCompileExpectFail(source)
-  else
-    local executable = miCompile(source, '%B-test.exe', {test = true, transient = true})
+  local f = function()
+    if compileShouldFail[realSource] then
+      miCompileExpectFail(source)
+    else
+      local executable = miCompile(source, '%B-test-'..mode.kind..'.exe', {test = true, transient = true})
 
-    if noRun[realSource] then
-      return
+      if noRun[realSource] then
+        return
+      end
+
+      runExec(executable, not runShouldFail[realSource])
+
+      if noEval[realSource] then
+        return
+      end
+
+      miEvalTest(source, not (runShouldFail[realSource] or evalShouldFail[realSource]))
     end
-
-    runExec(executable, not runShouldFail[realSource])
-
-    if noEval[realSource] then
-      return
-    end
-
-    miEvalTest(source, not (runShouldFail[realSource] or evalShouldFail[realSource]))
+  end
+  if USE_BUILT then
+    withMiKind('built', f)
+  end
+  if USE_INSTALLED then
+    withMiKind('installed', f)
+  end
+  if USE_CHEATED then
+    withMiKind('cheated', f)
   end
 end
