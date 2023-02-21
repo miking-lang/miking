@@ -905,20 +905,18 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                       -- extract all values from the stacks and pop that value from the stack
                       -- and create the new production
                       bindall_ (snoc
-                        (mapi (lam i. lam lbl.
+                        -- Stack semantics, so we pop in reverse order
+                        (reverse (mapi (lam i. lam lbl.
                         bindall_ [
                           ulet_ (join ["tokenValue", int2string i]) (head_ (var_ (concat "var" lbl))),
                           ulet_ (concat "var" lbl) (tail_ (var_ (concat "var" lbl)))
                         ]
-                        ) stackLabels)
+                        ) stackLabels))
                         (ulet_ "newProduce" (appSeq_ rule.action (cons (nvar_ varActionState) (mapi (lam i. lam. var_ (join ["tokenValue", int2string i])) stackLabels))))
                       ),
                       --printLn "     If we reduce on the entrypoint rule, then we return...";
                       -- If we reduce on the entrypoint rule, then we return. Otherwise push to the stack and run the GOTO action
                       if eqi reduction.ruleIdx table.entrypointRuleIdx then (
-                        printLn (join ["TADA! reduction.ruleIdx: ", int2string reduction.ruleIdx,
-                                       ", table.entrypointRuleIdx: ", int2string table.entrypointRuleIdx,
-                                       ", stateIdx: ", int2string i]);
                         #var"global: result.ok" (var_ "newProduce")
                       ) else (bindall_ [
                         ulet_ (concat "var" returnLabel) (cons_ (var_ "newProduce") (var_ (concat "var" returnLabel))),
