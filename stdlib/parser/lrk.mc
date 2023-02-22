@@ -1424,10 +1424,13 @@ let printFirst: Int -> Map LRTerm (Set [TokenRepr]) -> () = lam k. lam firstMap.
 in
 
 
+let printLRInfo = false in
 
 -- Run tests
 foldl (lam. lam tc: LRTestCase.
-  print (join ["Running testcase ", tc.name, " "]);
+  (if printLRInfo then (
+    print (join ["Running testcase ", tc.name, " "])
+  ) else ());
   utest lrFirst 1 tc.syntaxDef with tc.first1 using mapEq setEq in
   utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest lrFirst 3 tc.syntaxDef with tc.first3 using mapEq setEq in
@@ -1435,12 +1438,14 @@ foldl (lam. lam tc: LRTestCase.
   let isLR1_table = match lrCreateParseTable 1 tc.tokenConTypes tc.syntaxDef with ResultOk _ then true else false in
   utest isLR1_table with tc.isLR1 in
 
-  printLn "";
-  switch lrCreateParseTable 2 tc.tokenConTypes tc.syntaxDef
-  case ResultOk {value = lrtable} then
-    printLn (lrtable2string 2 lrtable);
-    printLn "\n\n"
-  case ResultErr {errors = errors} then
-    errorSingle [] (join (mapValues errors))
-  end
+  (if printLRInfo then (
+    printLn "";
+    switch lrCreateParseTable 2 tc.tokenConTypes tc.syntaxDef
+    case ResultOk {value = lrtable} then
+      printLn (lrtable2string 2 lrtable);
+      printLn "\n\n"
+    case ResultErr {errors = errors} then
+      errorSingle [] (join (mapValues errors))
+    end
+  ) else ())
 ) () testcases
