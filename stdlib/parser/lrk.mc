@@ -941,9 +941,28 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                   )
                 ) stateReductions in
 
-                --printLn " - Generating lookahead fail case";
+                -- Error messages in the case of invalid lookahead
+                let allLookaheads: [[TokenRepr]] =
+                  concat (map (lam x. x.lookahead) stateShifts)
+                         (map (lam x. x.lookahead) stateReductions)
+                in
+                let allLookaheadStrings: [String] = map (lam lh: [TokenRepr].
+                  let t: [String] = map tokReprToStr lh in
+                  if eqi 1 (length t) then
+                    head t
+                  else
+                    join [head t, " followed by ", strJoin ", " (tail t)]
+                ) allLookaheads in
                 let lookaheadFailCase =
-                  resErrNoInfo "unexpected <TOKEN> at position <??>, expected <??, ??, ...> (TODO: improve this message!)"
+                  resErrNoInfo (join [
+                    "unexpected ",
+                    if eqi 1 table.k_lookahead then "token" else "tokens",
+                    " at position <??>. Expected ",
+                    if eqi 1 (length allLookaheads) then
+                      head allLookaheadStrings
+                    else
+                      strJoin "\n - " (cons "one of" allLookaheadStrings)
+                  ])
                 in
 
                 matchall_ (join [shiftMatches, reductionMatches, [lookaheadFailCase]])
@@ -962,7 +981,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                   str_ "currentState: ",
                   appf1_ (var_ "int2string") (nvar_ varCurrentState),
                   str_ "\nlookahead: [",
-                  appf2_ (var_ "strJoin") (str_ "\n") (map_ (var_ "tokToStr") (nvar_ lamLookahead)),
+                  appf2_ (var_ "strJoin") (str_ ", ") (map_ (var_ "tokToStr") (nvar_ lamLookahead)),
                   str_ "]"
                 ]))
               )
