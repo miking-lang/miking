@@ -173,6 +173,10 @@ lang MExprEliminateDuplicateCode = MExprAst
   | TyVar t ->
     match lookupReplacement env replaced t.ident with (replaced, ident) in
     (replaced, TyVar {t with ident = ident})
+  | TyAlias t ->
+    match eliminateDuplicateCodeType env replaced t.display with (replaced, display) in
+    match eliminateDuplicateCodeType env replaced t.content with (replaced, content) in
+    (replaced, TyAlias {t with display = display, content = content})
   | ty -> smapAccumL_Type_Type (eliminateDuplicateCodeType env) replaced ty
 
   sem eliminateDuplicateCodePat : DuplicateCodeEnv -> Map Name Name -> Pat -> (Map Name Name, Pat)
@@ -199,7 +203,7 @@ let i = lam idx.
   Info {filename = "dummy.txt", row1 = idx, col1 = 0, row2 = idx, col2 = 0} in
 
 -- Tests that it works for expressions
-let fooDef = 
+let fooDef =
   withInfo (i 0) (ulet_ "foo" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
 let t1 = bindall_ [
   fooDef,
@@ -311,5 +315,16 @@ let t = bindall_ [
   var_ "t"
 ] in
 utest eliminateDuplicateCode t with t using eqExpr in
+
+let t = symbolize (bindall_ [
+  withInfo (i 0) (type_ "T1" [] tyint_),
+  withInfo (i 0) (type_ "T1" [] tyint_),
+  type_ "T2" [] (tyseq_ (tycon_ "T1"))
+]) in
+let expected = symbolize (bindall_ [
+  type_ "T1" [] tyint_,
+  type_ "T2" [] (tyseq_ (tycon_ "T1"))
+]) in
+utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
 
 ()
