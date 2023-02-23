@@ -71,16 +71,16 @@ let info2str_startline fi =
 
 let info2str = function
   | Info (filename, l1, c1, l2, c2) ->
-      us "FILE \"" ^. filename ^. us "\" " ^. ustring_of_int l1 ^. us ":"
+      us "<" ^. filename ^. us " " ^. ustring_of_int l1 ^. us ":"
       ^. ustring_of_int c1 ^. us "-" ^. ustring_of_int l2 ^. us ":"
-      ^. ustring_of_int c2
+      ^. ustring_of_int c2 ^. us ">"
   | NoInfo ->
       us "NO INFO"
 
 (** [message2str m] returns a string representation of message [m].
     Is message is not intended to be read by humans. *)
 let message2str (id, sev, info, _) =
-  info2str info ^. us " " ^. severity2str sev ^. us ": " ^. id2str id
+  severity2str sev ^. us " " ^. info2str info ^. us ": " ^. id2str id
   ^. us "\n"
 
 let raise_error fi msg = raise (Error (ERROR msg, ERROR, fi, []))
