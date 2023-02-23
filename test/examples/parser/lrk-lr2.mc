@@ -3,9 +3,6 @@
 --   R -> , <name> T
 --   T -> , | <uint> |
 
--- example of something that is not LL-parsable
--- L = { (^m )^n | forall n >= 0, forall m >= n}
-
 include "common.mc"
 include "ext/file-ext.mc"
 include "mexpr/ast.mc"
