@@ -150,12 +150,11 @@ lang MExprSideEffect =
         (map (lam bind : RecLetBinding. (bind.ident, bind)) t.bindings) in
     let sideEffectsScc = lam env : SideEffectEnv. lam scc : [Name].
       let sccBindings : [RecLetBinding] =
-        map
-          (lam id : Name.
-            optionGetOrElse
-              (lam. never)
-              (mapLookup id bindMap))
-          scc in
+        foldl
+          (lam acc. lam id. optionMapOr acc (snoc acc) (mapLookup id bindMap))
+          []
+          scc
+      in
       -- Determine whether the body of any binding within this strongly
       -- connected component contains side-effects. If we find any side-effect,
       -- we know they must all contain a side-effect as they can be called from
