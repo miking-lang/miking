@@ -28,6 +28,7 @@ set commit (git symbolic-ref --short HEAD)
 set statuses
 
 function cleanup
+    git reset --merge >/dev/null 2>&1
     git bisect reset >/dev/null 2>&1
     git checkout $commit >/dev/null 2>&1
     git branch -D $branch >/dev/null 2>&1
@@ -53,7 +54,7 @@ for pr in $prs
         set statuses $statuses "✓"$pr
     else
         set statuses $statuses "✗"$pr
-        git merge --abort >/dev/null 2>&1
+        git reset --merge >/dev/null 2>&1
     end
     printMergeStatus
 end
@@ -63,6 +64,7 @@ echo
 if make test-all
     echo "make test-all succeeded with this sequence of PRs merged:"
     echo $picked
+    cleanup
     exit 0
 end
 
