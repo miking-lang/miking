@@ -108,11 +108,17 @@ class ClassfileMaker {
                         case "ALOAD":
                             mv.visitVarInsn(ALOAD, bytecode.get("nr").asInt());
                             break;
+                        case "ILOAD":
+                            mv.visitVarInsn(ILOAD, bytecode.get("nr").asInt());
+                            break;
                         case "ASTORE":
                             mv.visitVarInsn(ASTORE, bytecode.get("nr").asInt());
                             break;
+                        case "LDC":
+                            mv.visitLdcInsn(bytecode.get("nr").asInt());
+                            break;
                         default:
-                            System.out.println("Unknown arg_int");
+                            System.out.println("Unknown arg_int: " + bytecode.get("instr").asText());
                     }
                     break;
                 case "empty":
@@ -126,8 +132,14 @@ class ClassfileMaker {
                         case "DUP":
                             mv.visitInsn(DUP);
                             break;
+                        case "ARETURN":
+                            mv.visitInsn(ARETURN);
+                            break;
+                        case "POP":
+                            mv.visitInsn(POP);
+                            break;
                         default:
-                            System.out.println("Unknown empty");
+                            System.out.println("Unknown empty: " + bytecode.get("instr").asText());
                     }
                     break;
                 case "apply":
@@ -145,8 +157,11 @@ class ClassfileMaker {
                         case "INVOKEINTERFACE":
                             mv.visitMethodInsn(INVOKEINTERFACE, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText(), true);
                             break;
+                        case "INVOKESTATIC":
+                            mv.visitMethodInsn(INVOKESTATIC, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText(), false);
+                            break;
                         default:
-                            System.out.println("Unknown apply");
+                            System.out.println("Unknown apply: " + bytecode.get("instr").asText());
                     }
                     break;
                 case "arg_constant":
@@ -157,12 +172,15 @@ class ClassfileMaker {
                         case "NEW":
                             mv.visitTypeInsn(NEW, bytecode.get("constant").asText());
                             break;
+                        case "CHECKCAST":
+                            mv.visitTypeInsn(CHECKCAST, bytecode.get("constant").asText());
+                            break;
                         default:
                             System.out.println("Unknown arg_constant");
                     }
                     break;
                 default:
-                    System.out.println("Unknown type");
+                    System.out.println("Unknown type: " + bytecode.get("instr").asText());
             }
         }
         mv.visitMaxs(0, 0);

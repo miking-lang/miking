@@ -2,3 +2,4 @@
 /jar
 out.json
 *.class
+/pkg

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ -d "jars/" ]
+if [ -d "jar/" ]
 then 
     # compile Java program
     javac -cp jar/jackson-annotations-2.14.2.jar:jar/jackson-core-2.14.2.jar:jar/jackson-databind-2.14.2.jar:jar/asm-9.4.jar codegen/ClassfileMaker.java codegen/Parser.java -d out/

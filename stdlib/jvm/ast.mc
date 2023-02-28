@@ -41,8 +41,8 @@ lang JVMAst
     syn Interface =
     | Interface {name: String, fields: [Field], functions: [Function]}
 
-    syn Prog = 
-    | Prog {package: String, classes: [Class], interfaces: [Interface]}
+    syn JVMProgram = 
+    | JVMProgram {package: String, classes: [Class], interfaces: [Interface]}
 
     -- create constructs
 
@@ -66,17 +66,17 @@ lang JVMAst
     sem createFunction name descriptor =
     | bytecode -> Function {name = name, descriptor = descriptor, bytecode = bytecode}
 
-    sem createProg : String -> [Class] -> [Interface] -> Prog
+    sem createProg : String -> [Class] -> [Interface] -> JVMProgram
     sem createProg package classes =
-    | interfaces -> Prog {package = package, classes = classes, interfaces = interfaces}
+    | interfaces -> JVMProgram {package = package, classes = classes, interfaces = interfaces}
 
     sem createClass : String -> String -> [Field] -> Function -> [Function] -> Class
     sem createClass name implements fields constructor =
     | functions -> Class {name = name, implements = implements, fields = fields, constructor = constructor, functions = functions}
 
-    sem createInterface : String -> [Field] -> [Function] -> Class
+    sem createInterface : String -> [Field] -> [Function] -> Interface
     sem createInterface name fields =
-    | functions -> Class {name = name, fields = fields, functions = functions}
+    | functions -> Interface {name = name, fields = fields, functions = functions}
 
     sem createField : String -> String -> Field
     sem createField name =
@@ -84,9 +84,9 @@ lang JVMAst
 
     -- toString JSON
 
-    sem toStringProg : Prog -> String 
+    sem toStringProg : JVMProgram -> String 
     sem toStringProg = 
-    | Prog {package = package, classes = classes, interfaces = interfaces} -> 
+    | JVMProgram {package = package, classes = classes, interfaces = interfaces} -> 
         (join["{", "\"package\":", (stringify package), ",\"interfaces\":[", (commaSeparate (map toStringInterface interfaces)), "],\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
 
     sem toStringClass : Class -> String
@@ -95,7 +95,7 @@ lang JVMAst
         (join ["{", "\"implements\":", (stringify implements), ",\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"constructor\":", (toStringFunction c), ",\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
 
     sem toStringInterface : Interface -> String
-    sem toStringinterface =
+    sem toStringInterface =
     | Interface {name = n, fields = f, functions = fun} ->
         (join ["{", "\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
 
