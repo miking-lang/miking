@@ -7,14 +7,9 @@ include "pmexpr/utils.mc"
 
 lang MExprJVMCompile = MExprAst + JVMAst
 
-    type VarMap = {
-        ident : Name,
-        typ : String
-    }
-
     type JVMEnv = {
         bytecode : [Bytecode],
-        vars : [VarMap], 
+        vars : Map Name Int, 
         localVars : Int, -- number of local vars on the JVM
         classes : [Class]
     }
@@ -38,35 +33,34 @@ lang MExprJVMCompile = MExprAst + JVMAst
     | TmSeq { tms = tms } -> { env with bytecode = concat env.bytecode [createBString "LDC" (_charSeq2String tms)]} -- only for strings now
     | TmConst { val = val } -> 
         let bc = (match val with CInt { val = val } then [createBInt "LDC" val, createBApply "INVOKESTATIC" "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;"]
-        else (toJSONConst env val).bytecode)
+        else never)
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
         let to = ty in 
-        let arg = toJSONExpr {bytecode = [], vars = [], localVars = 1, classes = []} rhs in
+        let arg = toJSONExpr { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [] } rhs in
         match lhs with TmConst { val = CPrint _ } then
-            { env with bytecode = foldl concat env.bytecode [[createBApply "GETSTATIC" "java/lang/System" "out" "Ljava/io/PrintStream;"], arg.bytecode, [createBApply "INVOKEVIRTUAL" "java/io/PrintStream" "print" "(Ljava/lang/String;)V"]] }
+            { env with bytecode = foldl concat env.bytecode [[createBApply "GETSTATIC" "java/lang/System" "out" "Ljava/io/PrintStream;"], arg.bytecode, [createBApply "INVOKEVIRTUAL" "java/io/PrintStream" "print" "(Ljava/lang/String;)V"]], classes = concat env.classes arg.classes }
         else match lhs with TmConst { val = CAddi _ } then 
             let defaultConstructor = createFunction "constructor" "()V" [(createBInt "ALOAD" 0), (createBApply "INVOKESPECIAL" "java/lang/Object" "<init>" "()V"), (createBEmpty "RETURN")] in
-            let name = (concat "Func" (int2string (length env.classes))) in
+            let name = (concat "Func" (create 3 (lam. randAlphanum ()))) in
             let add = createClass name "pkg/Function" [] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [createBInt "ALOAD" 1] [unwrapPrimitive "I", arg.bytecode, unwrapPrimitive "I", [createBEmpty "IADD"], wrapPrimitive "I", [createBEmpty "ARETURN"]])] in
-            let res = { env with classes = snoc env.classes add, bytecode = foldl concat env.bytecode [[createBString "NEW" (concat "pkg/" name), createBEmpty "DUP" , createBApply "INVOKESPECIAL" (concat "pkg/" name) "<init>" "()V"]] } in
+            let res = { env with classes = snoc (concat env.classes arg.classes) add, bytecode = foldl concat env.bytecode [[createBString "NEW" (concat "pkg/" name), createBEmpty "DUP" , createBApply "INVOKESPECIAL" (concat "pkg/" name) "<init>" "()V"]] } in
             res            
         else
             let fun = toJSONExpr env lhs in 
             { fun with bytecode = foldl concat env.bytecode [fun.bytecode, arg.bytecode, [createBApply "INVOKEINTERFACE" "pkg/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]] }
     | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } -> 
         let b = toJSONExpr env body in
-        match tyBody with TyArrow _ then 
-            never -- add function types
-        else 
-            let javaTyp = getJavaType tyBody in
-            let store = (match javaTyp with "I" then createBInt (concat "ISTORE_" (int2string env.localVars)) env.localVars
-                else never) -- add other types
-            in toJSONExpr { env with localVars = addi env.localVars 1, vars = snoc env.vars { ident = ident, typ = javaTyp }, bytecode = concat env.bytecode (snoc b.bytecode store) } inexpr
+        let bodyJSONExpr = { b with bytecode = snoc b.bytecode (createBInt "ASTORE" env.localVars), localVars = addi 1 env.localVars, vars = mapInsert ident env.localVars env.vars } in
+        toJSONExpr bodyJSONExpr inexpr 
     --| TmLam { ident = ident, body = body } ->
-    | TmVar _ -> 
-        (print "TmVar\n");
-        env
+    | TmVar { ident = ident } -> 
+        let store = (match mapLookup ident env.vars with Some i then
+            [createBInt "ALOAD" i]
+        else
+            (print "No identifier!\n");
+            []) in
+        { env with bytecode = concat env.bytecode store }
     | a -> 
         (print "unknown expr\n");
         env
@@ -90,11 +84,12 @@ let compileMCoreToJVM = lam ast.
     -- empty constructor
     let defaultConstructor = createFunction "constructor" "()V" [createBInt "ALOAD" 0, createBApply "INVOKESPECIAL" "java/lang/Object" "<init>" "()V", createBEmpty "RETURN"] in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
-    let env = {bytecode = [], vars = [], localVars = 1, classes = [] } in
+    let env = {bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [] } in
     let compiledEnv = (toJSONExpr env ast) in
     --let bytecode = concat compiledEnv.bytecode [createBEmpty "RETURN"] in
-    let bytecode = concat compiledEnv.bytecode [createBEmpty "POP", createBEmpty "RETURN"] in
-    --let bytecode = concat compiledEnv.bytecode [createBInt "ASTORE" env.localVars, createBApply "GETSTATIC" "java/lang/System" "out" "Ljava/io/PrintStream;", createBInt "ALOAD" env.localVars, createBApply "INVOKEVIRTUAL" "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", createBEmpty "RETURN"] in -- should not print out result!
+    --let bytecode = concat compiledEnv.bytecode [createBEmpty "POP", createBEmpty "RETURN"] in
+    -- see result
+    let bytecode = concat compiledEnv.bytecode [createBInt "ASTORE" env.localVars, createBApply "GETSTATIC" "java/lang/System" "out" "Ljava/io/PrintStream;", createBInt "ALOAD" env.localVars, createBApply "INVOKEVIRTUAL" "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", createBEmpty "RETURN"] in -- should not print out result!
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
     let prog = createProg "pkg/" (snoc compiledEnv.classes (createClass "Hello" "" [] defaultConstructor [mainFunc])) [objToObj] in
 
