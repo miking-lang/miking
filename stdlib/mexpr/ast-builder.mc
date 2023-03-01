@@ -79,6 +79,10 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
+let tyapps_ = use AppTypeAst in
+  lam lhs. lam args.
+  foldl tyapp_ lhs args
+
 let tyalias_ = use AliasTypeAst in
   lam display. lam content.
   TyAlias {display = display, content = content}

@@ -147,6 +147,25 @@ with [(1, 4), (2, 5)]
 utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2, 3] [4, 5]
 with [(1, 4), (2, 5)]
 
+-- `foldli f acc seq` folds over a sequence together with the index of element
+-- in the sequence. (Similar to `mapi`)
+let foldli: all a. all b. (a -> Int -> b -> a) -> a -> [b] -> a =
+  lam fn. lam initAcc. lam seq.
+  recursive let work = lam acc. lam i. lam s.
+    match s with [e] ++ rest then
+      work (fn acc i e) (addi i 1) rest
+    else
+      acc
+  in
+  work initAcc 0 seq
+
+utest foldli (lam acc. lam i. lam e: Float. snoc acc (i, e)) [] []
+with []
+utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] [5.0]
+with [(0, 5.0)]
+utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] ["foo", "bar", "babar"]
+with [(0, "foo"), (1, "bar"), (2, "babar")]
+
 -- zips
 let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
   lam f. foldl2 (lam acc. lam x1. lam x2. snoc acc (f x1 x2)) []
@@ -155,6 +174,23 @@ utest zipWith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6]
 utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
 utest zipWith addi [] [] with [] using eqSeq eqi
+
+let zipWithIndex : all a. all b. all c. (Int -> a -> b -> c) -> [a] -> [b] -> [c] =
+  lam f. lam a1. lam a2.
+  recursive let work = lam acc. lam i. lam seq1. lam seq2.
+    match seq1 with [e1] ++ seq1tail then
+      match seq2 with [e2] ++ seq2tail then
+        work (cons (f i e1 e2) acc)
+             (addi i 1)
+             seq1tail
+             seq2tail
+      else reverse acc
+    else reverse acc
+  in
+  work (toList []) 0 a1 a2
+
+utest zipWithIndex (lam i. lam a. lam b. addi i (addi a b)) [100, 200, 300] [4000, 5000, 6000]
+      with [4100, 5201, 6302] using eqSeq eqi
 
 let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
