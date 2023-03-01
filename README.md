@@ -78,7 +78,7 @@ user, issue:
 make install
 ```
 
-This will install `mi` to `$HOME/.local/bin` (NOTE: on some systems, you may need to _manually_ add `$HOME/.local/bin` to your `PATH`) and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location.
+This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location. NOTE: on some systems, you may need to _manually_ add `$HOME/.local/bin` to your `PATH` environment variable to access the `mi` command from your shell.
 
 Conversely, to uninstall, issue:
 
