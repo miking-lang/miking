@@ -13,6 +13,7 @@ include "symbolize.mc"
 include "eq.mc"
 include "info.mc"
 include "error.mc"
+include "map.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
 
@@ -117,16 +118,10 @@ lang RecordANF = ANF + RecordAst
 
   sem normalize (k : Expr -> Expr) =
   | TmRecord t ->
-    let acc = lam bs. k (TmRecord {t with bindings = bs}) in
-    let f =
-      (lam acc. lam k. lam e.
-         (lam bs.
-            normalizeName
-              (lam v. acc (mapInsert k v bs))
-              e))
-    in
-    let tmp = mapFoldWithKey f acc t.bindings in
-    tmp (mapEmpty (mapGetCmpFun t.bindings))
+    mapMapK
+      (lam e. lam k. normalizeName k e)
+      t.bindings
+      (lam bs. k (TmRecord {t with bindings = bs}))
 
   | TmRecordUpdate t ->
     normalizeName
@@ -242,15 +237,7 @@ lang SeqANF = ANF + SeqAst
 
   sem normalize (k : Expr -> Expr) =
   | TmSeq t ->
-    let acc = lam ts. k (TmSeq {t with tms = ts}) in
-    let f =
-      (lam acc. lam e.
-         (lam ts.
-            normalizeName
-              (lam v. acc (cons v ts))
-              e))
-    in
-    (foldl f acc t.tms) []
+    mapK (lam e. lam k. normalizeName k e) t.tms (lam ts. k (TmSeq {t with tms = ts}))
 
 end
 

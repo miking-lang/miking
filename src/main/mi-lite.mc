@@ -82,13 +82,14 @@ let compile : Options -> String -> () = lam options. lam file.
 
 mexpr
 
-let printMenu = lam. print "Usage: mi-lite [0|1] file" in
+let printMenu = lam. print "Usage: mi-lite [0|1] file outfile" in
 
-if neqi (length argv) 3 then
+if neqi (length argv) 4 then
   printMenu ()
 else match get argv 1 with "0" then
-  let options = {optionsDefault with disableOptimizations = true} in
+  let options = {optionsDefault with disableOptimizations = true, output = Some (get argv 3)} in
   compile options (get argv 2)
 else match get argv 1 with "1" then
-  compile optionsDefault (get argv 2)
+  let options = {optionsDefault with output = Some (get argv 3)} in
+  compile options (get argv 2)
 else printMenu ()

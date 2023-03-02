@@ -32,8 +32,14 @@ lang TokenParser = WSACParser
   sem tokKindEq (tokRepr : TokenRepr) /- : Token -> Bool -/ =
   sem tokInfo /- : Token -> Info -/ =
   sem tokToStr /- : Token -> String -/ =
-  sem tokReprCompare /- : (TokenRepr, TokenRepr) -> Int -/ =
+  sem tokReprCompare2 : (TokenRepr, TokenRepr) -> Int
+  sem tokReprCompare2 /- : (TokenRepr, TokenRepr) -> Int -/ =
   | (l, r) -> subi (constructorTag l) (constructorTag r)
+  sem tokReprCompare l =
+  | r -> tokReprCompare2 (l, r)
+  sem tokReprEq : TokenRepr -> TokenRepr -> Bool
+  sem tokReprEq l /- : TokenRepr -> TokenRepr -> Bool -/ =
+  | r -> eqi 0 (tokReprCompare l r)
   sem tokReprToStr /- : TokenRepr -> String -/ =
   sem tokToRepr /- : Token -> TokenRepr -/ =
 end
@@ -673,7 +679,7 @@ lang HashStringTokenParser = TokenParser
   sem tokToStr =
   | HashStringTok tok -> join ["<Hash:", tok.hash, ">", tok.val]
 
-  sem tokReprCompare =
+  sem tokReprCompare2 =
   | (HashStringRepr l, HashStringRepr r) -> cmpString l.hash r.hash
 
   sem tokToRepr =
