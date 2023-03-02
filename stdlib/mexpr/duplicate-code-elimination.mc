@@ -173,10 +173,6 @@ lang MExprEliminateDuplicateCode = MExprAst
   | TyVar t ->
     match lookupReplacement env replaced t.ident with (replaced, ident) in
     (replaced, TyVar {t with ident = ident})
-  | TyAlias t ->
-    match eliminateDuplicateCodeType env replaced t.display with (replaced, display) in
-    match eliminateDuplicateCodeType env replaced t.content with (replaced, content) in
-    (replaced, TyAlias {t with display = display, content = content})
   | ty -> smapAccumL_Type_Type (eliminateDuplicateCodeType env) replaced ty
 
   sem eliminateDuplicateCodePat : DuplicateCodeEnv -> Map Name Name -> Pat -> (Map Name Name, Pat)
