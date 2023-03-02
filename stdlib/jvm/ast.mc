@@ -1,4 +1,5 @@
 include "seq.mc"
+include "string.mc"
 
 --helper functions
 
