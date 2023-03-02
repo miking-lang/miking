@@ -1,12 +1,12 @@
 -- Language fragments for MLang, extending those of MExpr
 
-include "info.mc"
 include "map.mc"
 include "name.mc"
 include "option.mc"
 include "string.mc"
 include "stringid.mc"
 include "mexpr/ast.mc"
+include "mexpr/info.mc"
 
 
 -- TmUse --
@@ -69,27 +69,27 @@ end
 -- DeclLang --
 lang LangDeclAst = DeclAst
   syn Decl =
-  | DeclLang {name : Name,
+  | DeclLang {ident : Name,
               includes : [Name],
               decls : [Decl],
               info : Info}
 end
 
--- syn --
+-- DeclSyn --
 lang SynDeclAst = DeclAst
   syn Decl =
-  | DeclSyn {name : Name,
+  | DeclSyn {ident : Name,
              defs : [{ident : Name, tyIdent : Type}],
              info : Info}
 end
 
--- sem --
+-- DeclSem --
 lang SemDeclAst = DeclAst
   syn Decl =
-  | DeclSem {name : Name,
+  | DeclSem {ident : Name,
              tyAnnot : Type,
              tyBody : Type,
-             args : [{ident : Name, ty : Type}],
+             args : [{ident : Name, tyAnnot : Type}],
              cases : [{pat : Pat, thn : Expr}],
              info : Info}
 end
@@ -114,14 +114,14 @@ lang TypeDeclAst = DeclAst
 end
 
 -- DeclRecLets --
-lang RecLetDeclAst = DeclAst + RecLetsAst
+lang RecLetsDeclAst = DeclAst + RecLetsAst
   syn Decl =
   | DeclRecLets {bindings : [RecLetBinding],
                  info : Info}
 end
 
 -- DeclConDef --
-lang ConDeclAst = DeclAst
+lang DataDeclAst = DeclAst
   syn Decl =
   | DeclConDef {ident : Name,
                 tyIdent : Type,
@@ -151,4 +151,27 @@ lang IncludeDeclAst = DeclAst
   syn Decl =
   | DeclInclude {path : String,
                  info : Info}
+end
+
+
+lang MLangTopLevel = DeclAst
+  type MLangProgram = {
+    decls : [Decl],
+    expr : Expr
+  }
+end
+
+
+lang MLangAst =
+
+  -- Top level program
+  MLangTopLevel
+
+  -- Additional expressions
+  + UseAst + IncludeAst
+
+  -- Declarations
+  + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
+  + RecLetsDeclAst + DataDeclAst + UtestDeclAst + ExtDeclAst + IncludeDeclAst
+
 end
