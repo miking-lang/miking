@@ -37,18 +37,20 @@ lang MExprJVMCompile = MExprAst + JVMAst
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
         let to = ty in 
-        let arg = toJSONExpr { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [] } rhs in
+        let arg = toJSONExpr { env with bytecode = [], classes = [] } rhs in
         match lhs with TmConst { val = CPrint _ } then
             { env with bytecode = foldl concat env.bytecode [[createBApply "GETSTATIC" "java/lang/System" "out" "Ljava/io/PrintStream;"], arg.bytecode, [createBApply "INVOKEVIRTUAL" "java/io/PrintStream" "print" "(Ljava/lang/String;)V"]], classes = concat env.classes arg.classes }
         else match lhs with TmConst { val = CAddi _ } then 
             let defaultConstructor = createFunction "constructor" "()V" [(createBInt "ALOAD" 0), (createBApply "INVOKESPECIAL" "java/lang/Object" "<init>" "()V"), (createBEmpty "RETURN")] in
-            let name = (concat "Func" (create 3 (lam. randAlphanum ()))) in
-            let add = createClass name "pkg/Function" [] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [createBInt "ALOAD" 1] [unwrapPrimitive "I", arg.bytecode, unwrapPrimitive "I", [createBEmpty "IADD"], wrapPrimitive "I", [createBEmpty "ARETURN"]])] in
-            let res = { env with classes = snoc (concat env.classes arg.classes) add, bytecode = foldl concat env.bytecode [[createBString "NEW" (concat "pkg/" name), createBEmpty "DUP" , createBApply "INVOKESPECIAL" (concat "pkg/" name) "<init>" "()V"]] } in
+            let className = (concat "Func" (create 3 (lam. randAlphanum ()))) in
+            let freeVar = (concat "var" (create 3 (lam. randAlphanum ()))) in
+            let varTy = "Ljava/lang/Integer;" in
+            let add = createClass className "pkg/Function" [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [createBInt "ALOAD" 1] [unwrapPrimitive "I", [createBInt "ALOAD" 0, createBApply "GETFIELD" (concat "pkg/" className) freeVar varTy], unwrapPrimitive "I", [createBEmpty "IADD"], wrapPrimitive "I", [createBEmpty "ARETURN"]])] in
+            let res = { env with classes = snoc (concat env.classes arg.classes) add, bytecode = foldl concat env.bytecode [[createBString "NEW" (concat "pkg/" className), createBEmpty "DUP", createBApply "INVOKESPECIAL" (concat "pkg/" className) "<init>" "()V", createBEmpty "DUP"], arg.bytecode, [createBString "CHECKCAST" "java/lang/Integer", createBApply "PUTFIELD" (concat "pkg/" className) freeVar varTy]] } in
             res            
         else
             let fun = toJSONExpr env lhs in 
-            { fun with bytecode = foldl concat env.bytecode [fun.bytecode, arg.bytecode, [createBApply "INVOKEINTERFACE" "pkg/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]] }
+            { fun with bytecode = foldl concat fun.bytecode [arg.bytecode, [createBApply "INVOKEINTERFACE" "pkg/Function" "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], classes = concat fun.classes arg.classes }
     | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } -> 
         let b = toJSONExpr env body in
         let bodyJSONExpr = { b with bytecode = snoc b.bytecode (createBInt "ASTORE" env.localVars), localVars = addi 1 env.localVars, vars = mapInsert ident env.localVars env.vars } in
@@ -84,7 +86,7 @@ let compileMCoreToJVM = lam ast.
     -- empty constructor
     let defaultConstructor = createFunction "constructor" "()V" [createBInt "ALOAD" 0, createBApply "INVOKESPECIAL" "java/lang/Object" "<init>" "()V", createBEmpty "RETURN"] in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
-    let env = {bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [] } in
+    let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [] } in
     let compiledEnv = (toJSONExpr env ast) in
     --let bytecode = concat compiledEnv.bytecode [createBEmpty "RETURN"] in
     --let bytecode = concat compiledEnv.bytecode [createBEmpty "POP", createBEmpty "RETURN"] in

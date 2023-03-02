@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.File;
 
 import javax.swing.event.CaretEvent;
+import javax.swing.text.FieldView;
 
 import com.fasterxml.jackson.databind.*;
 
@@ -33,6 +34,7 @@ class ClassfileMaker {
                 JsonNode function = functions.get(j);
                 iw.visitMethod(ACC_PUBLIC + ACC_ABSTRACT, function.get("name").asText(), function.get("descriptor").asText(), null, null);
             }
+            iw.visitEnd();
 
             outputClassfile(interf.get("name").asText(), iw);
         }
@@ -49,6 +51,16 @@ class ClassfileMaker {
             cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             // version, access, name, signature, superName, String[] interfaces
             cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, pkg + c.get("name").asText(), null, "java/lang/Object", interf);
+
+
+            // create fields
+            JsonNode fields = c.get("fields");
+            for (int j = 0; j < fields.size(); j++) {
+                JsonNode field = fields.get(j);
+                System.out.println("FIELD: " + field.get("name").asText());
+                cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
+            }
+
             createConstructor(i);
             // create functions
             JsonNode functions = c.get("functions");
@@ -150,6 +162,13 @@ class ClassfileMaker {
                         case "GETSTATIC":
                             //opcode, owner, name, descriptor
                             mv.visitFieldInsn(GETSTATIC, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
+                            break;
+                        case "GETFIELD":
+                            //opcode, owner, name, descriptor
+                            mv.visitFieldInsn(GETFIELD, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
+                            break;
+                        case "PUTFIELD":
+                            mv.visitFieldInsn(PUTFIELD, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
                             break;
                         case "INVOKEVIRTUAL":
                             mv.visitMethodInsn(INVOKEVIRTUAL, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText(), false);

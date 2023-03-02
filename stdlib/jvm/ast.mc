@@ -102,7 +102,7 @@ lang JVMAst
     sem toStringField : Field -> String
     sem toStringField =
     | Field {name = name,  t = t} ->
-        (join ["{", "\"name\":", (stringify name), ",\"type\":", t, "}"])
+        (join ["{", "\"name\":", (stringify name), ",\"type\":", (stringify t), "}"])
 
     sem toStringFunction : Function -> String
     sem toStringFunction =
