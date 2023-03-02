@@ -6,7 +6,7 @@ include "name.mc"
 include "option.mc"
 include "string.mc"
 include "stringid.mc"
-include "../mexpr/ast.mc"
+include "mexpr/ast.mc"
 
 
 -- TmUse --
@@ -147,7 +147,7 @@ lang ExtDeclAst = DeclAst
 end
 
 -- DeclInclude --
-lang IncludeAst = DeclAst
+lang IncludeDeclAst = DeclAst
   syn Decl =
   | DeclInclude {path : String,
                  info : Info}
