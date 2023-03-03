@@ -57,7 +57,6 @@ class ClassfileMaker {
             JsonNode fields = c.get("fields");
             for (int j = 0; j < fields.size(); j++) {
                 JsonNode field = fields.get(j);
-                System.out.println("FIELD: " + field.get("name").asText());
                 cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
             }
 
