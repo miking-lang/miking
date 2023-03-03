@@ -201,11 +201,11 @@ let decl_ucondef_ = use MLangAst in
 
 
 let decl_utestu_ = use MLangAst in
-  lam t. lam e. lam n. lam u.
+  lam t. lam e. lam u.
   DeclUtest {test = t, expected = e, tusing = Some u, info = NoInfo ()}
 
 let decl_utest_ = use MLangAst in
-  lam t. lam e. lam n.
+  lam t. lam e.
   DeclUtest {test = t, expected = e, tusing = None (), info = NoInfo ()}
 
 

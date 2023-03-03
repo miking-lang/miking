@@ -208,6 +208,10 @@ end
 
 
 lang MLangTopLevelPrettyPrint = DeclPrettyPrint + MLangTopLevel
+  sem mlang2str : MLangProgram -> String
+  sem mlang2str =
+  | prog -> match pprintMLangProgram 0 pprintEnvEmpty prog with (_, s) in s
+
   sem pprintMLangProgram (indent : Int) (env : PprintEnv) =
   | {decls = decls, expr = expr} ->
     match mapAccumL (pprintDeclCode indent) env decls with (env, declStrs) in
@@ -244,6 +248,8 @@ let prog: MLangProgram = {
     decl_langi_ "Test1" [] [],
     decl_langi_ "test2" ["Test1"] [],
     decl_langi_ "The 3rd Test" ["Test1", "test2"] [],
+    decl_ext_ "my_external" false (tyarrow_ tyfloat_ tystr_),
+    decl_ext_ "my_external2" true (tyarrow_ tyint_ tystr_),
     decl_lang_ "Foo" [
       decl_syn_ "Bar" [
         ("Apple", tyint_),
@@ -252,11 +258,26 @@ let prog: MLangProgram = {
       decl_usem_ "getFruit" ["x"] [
         (pcon_ "Apple" (pvar_ "i"), appf1_ (var_ "int2string") (var_ "i")),
         (pcon_ "Pear" (pvar_ "fs"),
-         appf2_ (var_ "strJoin")
-                (var_ "x")
-                (appf2_ (var_ "map") (var_ "float2string") (var_ "fs")))
+         bindall_ [
+           ulet_ "strJoin" (unit_),
+           include_ "string.mc",
+           appf2_ (var_ "strJoin")
+                  (var_ "x")
+                  (appf2_ (var_ "map") (var_ "float2string") (var_ "fs"))
+         ])
       ]
     ],
+    decl_type_ "MyType" ["x"] tyunknown_,
+    decl_condef_ "MyCon" (tyall_ "x" (tyarrows_ [tyseq_ (tyvar_ "x"), tyapp_ (tycon_ "MyType") (tyvar_ "x")])),
+    decl_ureclets_ [
+      ("rec_foo", ulams_ ["x"] (appf1_ (var_ "printLn") (var_ "x"))),
+      ("rec_bar", ulams_ ["y"] (appf2_ (var_ "concat") (var_ "y") (var_ "y")))
+    ],
+    decl_ureclets_ [
+      ("rec_babar", ulams_ ["z"] (seq_ [var_ "z"]))
+    ],
+    decl_ureclets_ [],
+    decl_utest_ (appf1_ (var_ "rec_babar") (int_ 5)) (seq_ [int_ 5]),
     decl_ulet_ "foo" (
       ulams_ ["x", "y"] (bindall_ [
         use_ "Foo",
@@ -270,6 +291,7 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
 } in
 
-match pprintMLangProgram 0 pprintEnvEmpty prog with (_, progStr) in
-print progStr;
-print "\n"
+print (mlang2str prog); print "\n";
+utest length (mlang2str prog) with 0 using geqi in
+
+()
