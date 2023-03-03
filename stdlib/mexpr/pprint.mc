@@ -469,9 +469,8 @@ lang RecLetsPrettyPrint = PrettyPrint + LetPrettyPrint + RecLetsAst + UnknownTyp
   | bindings ->
     let i = indent in
     let ii = pprintIncr i in
-    let iii = pprintIncr ii in
     let f = lam env. lam bind : RecLetBinding.
-      pprintLetAssignmentCode iii env {
+      pprintLetAssignmentCode ii env {
         ident = bind.ident, body = bind.body, tyAnnot = bind.tyAnnot}
     in
     match mapAccumL f env bindings with (env,bindingStrs) in

@@ -239,11 +239,11 @@ use MLangPrettyPrint in
 
 let prog: MLangProgram = {
   decls = [
-    DeclInclude {path = "common.mc", info = NoInfo {}},
-    DeclInclude {path = "string.mc", info = NoInfo {}},
+    decl_include_ "common.mc",
+    decl_include_ "string.mc",
     decl_langi_ "Test1" [] [],
-    decl_langi_ "Test2" ["Test1"] [],
-    decl_langi_ "Test3" ["Test1", "Test2"] [],
+    decl_langi_ "test2" ["Test1"] [],
+    decl_langi_ "The 3rd Test" ["Test1", "test2"] [],
     decl_lang_ "Foo" [
       decl_syn_ "Bar" [
         ("Apple", tyint_),
@@ -257,13 +257,14 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "map") (var_ "float2string") (var_ "fs")))
       ]
     ],
-    DeclLet {ident = nameNoSym "foo",
-             tyAnnot = tyunknown_, tyBody = tyunknown_,
-             body = ulams_ ["x", "y"] (
-               concat_ (appf1_ (var_ "int2string") (var_ "x"))
-                       (appf1_ (var_ "float2string") (var_ "y"))
-             ),
-             info = NoInfo {}}
+    decl_ulet_ "foo" (
+      ulams_ ["x", "y"] (bindall_ [
+        use_ "Foo",
+        concat_ (appf1_ (var_ "getFruit")
+                        (conapp_ "Apple" (var_ "x")))
+                (appf1_ (var_ "float2string") (var_ "y"))
+      ])
+    )
   ],
   expr = appf1_ (var_ "printLn")
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
