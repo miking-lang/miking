@@ -16,7 +16,6 @@ include "result.mc"
 include "seq.mc"
 include "set.mc"
 include "sys.mc"
-include "ext/file-ext.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
@@ -1502,11 +1501,7 @@ foldl (lam. lam tc: LRTestCase.
     -- Put the program in a tempfile and compile that
     -- (Can't wait for bootstapping to be done...)
     let tmpFilePath = sysTempFileMake () in
-    (match writeOpen tmpFilePath with Some wc then (
-      writeString wc program;
-      writeFlush wc;
-      writeClose wc
-    ) else errorSingle [] "Could not open TempFile");
+    writeFile tmpFilePath program;
 
     let ast = parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
       with keepUtests = false }
