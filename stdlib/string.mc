@@ -1,3 +1,4 @@
+include "bool.mc"
 include "char.mc"
 include "option.mc"
 include "seq.mc"
@@ -19,6 +20,14 @@ utest eqString "" "a" with false
 utest eqString "a" "" with false
 utest eqString "a" "a" with true
 utest eqString "a" "aa" with false
+
+let neqString = lam s1. lam s2. not (eqString s1 s2)
+
+utest neqString "" "" with false
+utest neqString "" "a" with true
+utest neqString "a" "" with true
+utest neqString "a" "a" with false
+utest neqString "a" "aa" with true
 
 -- Compares a string with a slice of another string for equality. This avoids
 -- creating a copy of the second string, which is beneficial when Ropes are the
