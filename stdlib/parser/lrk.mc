@@ -1350,95 +1350,82 @@ let testcases: [LRTestCase] = [
       LRPTFail {input = ""},
       LRPTFail {input = "5;"}
     ]
-  }/-,
-  -- Custom example showing GOTO lookaheads
-  let _S = nameSym "S" in
-  let _R = nameSym "R" in
-  let _T = nameSym "T" in
-  let _tyComma = tyunit_ in
-  let _tyIdent = tystr_ in
-  let _tyChar = tychar_ in 
-  let _tyS = tystr_ in
-  let _tyR = tystr_ in
-  let _tyT = tystr_ in 
+  },
+  -- non-LL language (more left parentheses than right parentheses)
+  let _LeftOnly = nameSym "LeftOnly" in
+  let _LeftRight = nameSym "LeftRight" in
+  let nt_LeftOnly = LRNonTerminal _LeftOnly in
+  let nt_LeftRight = LRNonTerminal _LeftRight in
   {
-    tokenConTypes = mapFromSeq tokReprCompare [
-      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
-      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
-      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
-      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
-    ],
-    name = "GOTO Example",
+    tokenConTypes = allTokenConTypes,
+    name = "non-LL Example",
     syntaxDef = {
-      entrypoint = _S,
+      entrypoint = _LeftOnly,
       rules = [
-        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokComma, LRTerminal tokChar],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyComma, _tyChar, _tyS])
-                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Comma", "a5_Char"]
-                                   (str_ "S1"))},
-        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokChar, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyChar, _tyComma, _tyS])
-                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Char", "a5_Comma"]
-                                   (str_ "S2"))},
-        {name = _R, terms = [LRTerminal tokChar, LRTerminal tokIdent, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyComma, _tyR])
-                           (ulams_ ["actionState", "a1_Char", "a2_Ident", "a3_Comma"]
-                                   (str_ "R1"))},
-        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyComma, _tyT])
-                           (ulams_ ["actionState", "a1_Char", "a2_Comma"]
-                                   (str_ "T1"))},
-        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokIdent],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyT])
-                           (ulams_ ["actionState", "a1_Char", "a2_Ident"]
-                                   (str_ "T2"))}
+        {name = _LeftOnly, terms = [t_LParen, nt_LeftOnly],
+         action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tystr_])
+                           (ulams_ ["actionState", "lparen", "lprod"]
+                                   (cons_ (char_ '(') (var_ "lprod")))},
+        {name = _LeftOnly, terms = [nt_LeftRight],
+         action = withType (tyarrows_ [tyunit_, tystr_, tystr_])
+                           (ulams_ ["actionState", "lrprod"]
+                                   (cons_ (char_ '|') (var_ "lrprod")))},
+        {name = _LeftRight, terms = [t_LParen, nt_LeftRight, t_RParen],
+         action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tokEmptyTy, tystr_])
+                           (ulams_ ["actionState", "lparen", "middle", "rparen"]
+                                   (cons_ (char_ '(') (snoc_ (var_ "middle") (char_ ')'))))},
+        {name = _LeftRight, terms = [],
+         action = withType (tyarrows_ [tyunit_, tystr_])
+                           (ulams_ ["actionState"]
+                                   (str_ "e"))}
       ],
       initActionState = unit_
     },
     isLR1 = true,
-    first1 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ])
+    first1 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen], []]),
+      (nt_LeftRight, [[t_LParen], []])
     ],
-    first2 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokChar]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar,  tokIdent], [tokChar,  tokComma]
-       ])
+    first2 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen], []]),
+      (nt_LeftRight, [[t_LParen, t_LParen], [t_LParen, t_RParen],
+                      []])
     ],
-    first3 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent, tokComma]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar,  tokIdent], [tokChar,  tokComma]
-       ])
+    first3 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen, t_LParen, t_RParen],
+                     [t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen], []]),
+      (nt_LeftRight, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
+                      [t_LParen, t_LParen, t_RParen], []])
+    ],
+    parseTests = [
+      LRPTSucceed {
+        input = "()",
+        expectedOutput = "|(e)"},
+      LRPTSucceed {
+        input = "( ( (  ) )",
+        expectedOutput = "(|((e))"},
+      LRPTSucceed {
+        input = "(((((((((((()",
+        expectedOutput = "(((((((((((|(e)"},
+      LRPTSucceed {
+        input = "",
+        expectedOutput = "|e"},
+      LRPTSucceed {
+        input = "(((((((((((",
+        expectedOutput = "(((((((((((|e"},
+      LRPTFail {input = "(((()))))))))))))))))"},
+      LRPTFail {input = "(((()]"}
     ]
-  }-/
+  }
 ] in
 
 
