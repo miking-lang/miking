@@ -35,16 +35,12 @@ let setUnion : all a. Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 
 -- `setIntersect s1 s2` is the intersection of set `s1` and `s2`.
 let setIntersect : all a. Set a -> Set a -> Set a = lam s1. lam s2.
-  let cmp = mapGetCmpFun s1 in
-  mapFoldWithKey (lam acc. lam key. lam.
-    if setMem key s2 then setInsert key acc else acc
-  ) (setEmpty cmp) s1
+  mapIntersectWith (lam. lam. ()) s1 s2
 
 -- `setSubtract s1 s2` is the relative complement of set `s2` in `s1` (set
 -- difference, i.e., s1 - s2).
 let setSubtract : all a. Set a -> Set a -> Set a = lam s1. lam s2.
-  let cmp = mapGetCmpFun s1 in
-  mapFoldWithKey (lam acc. lam key. lam. mapRemove key acc) s1 s2
+  mapDifference s1 s2
 
 -- `setOfSeq cmp seq` construct a set ordered by `cmp` from a sequence `seq`.
 let setOfSeq : all a. (a -> a -> Int) -> [a] -> Set a =

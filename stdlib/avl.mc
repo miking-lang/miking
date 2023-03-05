@@ -22,6 +22,11 @@ lang AVLTreeImpl
   sem avlEmpty =
   | () -> Leaf ()
 
+  sem avlIsEmpty : all k. all v. AVL k v -> Bool
+  sem avlIsEmpty =
+  | Leaf _ -> true
+  | Node _ -> false
+
   sem avlCreate : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlCreate k v l =
   | r ->

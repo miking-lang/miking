@@ -5,6 +5,7 @@ include "char.mc"
 include "name.mc"
 include "list.mc"
 include "tensor.mc"
+include "map.mc"
 
 include "info.mc"
 include "error.mc"
@@ -1069,13 +1070,18 @@ lang RecordPatEval = Eval + RecordAst + RecordPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
+      let f : Option Pat -> Option Expr -> Option (EvalEnv -> Option EvalEnv) =
+        lam pat. lam val.
+        match pat with Some p then
+          match val with Some v then
+            Some (lam env. tryMatch env v p)
+          else None ()
+        else None ()
+      in
       mapFoldlOption
-        (lam env. lam k. lam p.
-          match mapLookup k bs with Some v then
-            tryMatch env v p
-          else None ())
+        (lam env. lam. lam f. f env)
         env
-        r.bindings
+        (mapMerge f r.bindings bs)
     else None ()
 end
 

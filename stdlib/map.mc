@@ -110,11 +110,14 @@ let mapLookupApplyOrElse : all k. all v1. all v2.
   lam f1. lam f2. lam k. lam m.
   mapFindApplyOrElse f1 f2 k m
 
-let mapIsEmpty : all k. all v. Map k v -> Bool = lam m. eqi (mapSize m) 0
+let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
+  use AVLTreeImpl in
+  avlIsEmpty m.root
 
 let mapLookup : all k. all v. k -> Map k v -> Option v =
   lam k. lam m.
-    mapFindApplyOrElse (lam v. Some v) (lam. None ()) k m
+  use AVLTreeImpl in
+  avlLookup m.cmp k m.root
 
 let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v =
   lam f. lam k. lam v. lam m.
@@ -122,18 +125,34 @@ let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v 
       mapInsert k (f prev v) m
     else mapInsert k v m
 
+let mapMerge : all k. all a. all b. all c.
+  (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlMerge l.cmp f l.root r.root}
+
 let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
-  foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
-        l (mapBindings r)
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp (lam. lam rv. rv) l.root r.root}
 
 let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v = lam f. lam l. lam r.
-  foldl (lam acc. lam binding : (k, v). mapInsertWith f binding.0 binding.1 acc)
-        l (mapBindings r)
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp f l.root r.root}
+
+let mapIntersectWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlIntersectWith l.cmp f l.root r.root}
+
+let mapDifference : all k. all v. Map k v -> Map k v -> Map k v =
+  lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlDifference l.cmp l.root r.root}
 
 let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
   lam cmp. lam bindings.
-  foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
-        (mapEmpty cmp) bindings
+  use AVLTreeImpl in
+  {cmp = cmp, root = avlFromSeq cmp bindings}
 
 let mapKeys : all k. all v. Map k v -> [k] = lam m.
   mapFoldWithKey (lam ks. lam k. lam. snoc ks k) [] m
@@ -168,7 +187,8 @@ let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
 -- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
 -- empty.
 let mapChoose : all k. all v. Map k v -> Option (k, v) = lam m.
-  if mapIsEmpty m then None () else Some (mapChooseExn m)
+  use AVLTreeImpl in
+  avlChoose m.root
 
 -- `mapMapWithKeyK f m k` maps the continuation passing function `f` over the
 -- values of `m`, passing the result of the mapping to the continuation `k`.
