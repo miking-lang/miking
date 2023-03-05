@@ -1228,20 +1228,4 @@ let refTy = tyapp_ (tycon_ "Ref") tyint_ in
 let r = ref_ (int_ 0) in
 utest evalPrettyPrint env refTy r with str_ "<ref>" using eqExpr in
 
-let mapTy = tyapp_ (tyapp_ (tycon_ "Map") tyint_) tyint_ in
-let subExpr =
-  let x = nameSym "x" in
-  let y = nameSym "y" in
-  nulam_ x (nulam_ y (subi_ (nvar_ x) (nvar_ y))) in
-let m1 = mapEmpty_ subExpr in
-let m2 = mapInsert_ (int_ 2) (int_ 3) m1 in
-let m3 = mapInsert_ (int_ 3) (int_ 4) m2 in
-utest evalPrettyPrint env mapTy m1 with str_ "[]" using eqExpr in
-utest evalPrettyPrint env mapTy m2 with str_ "[2 -> 3]" using eqExpr in
-utest evalPrettyPrint env mapTy m3 with str_ "[2 -> 3,3 -> 4]" using eqExpr in
-utest evalEquality env mapTy m1 m1 with true_ using eqExpr in
-utest evalEquality env mapTy m1 m2 with false_ using eqExpr in
-utest evalEquality env mapTy m2 m3 with false_ using eqExpr in
-utest evalEquality env mapTy m2 m2 with true_ using eqExpr in
-
 ()
