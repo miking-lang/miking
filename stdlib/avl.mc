@@ -18,6 +18,10 @@ lang AVLTreeImpl
   | Leaf _ -> 0
   | Node {h = h} -> h
 
+  sem avlEmpty : all k. all v. () -> AVL k v
+  sem avlEmpty =
+  | () -> Leaf ()
+
   sem avlCreate : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlCreate k v l =
   | r ->
@@ -193,6 +197,11 @@ lang AVLTreeImpl
     if lti d 0 then avlLookup cmp k t.l
     else if gti d 0 then avlLookup cmp k t.r
     else Some t.value
+
+  sem avlChoose : all k. all v. AVL k v -> Option (k, v)
+  sem avlChoose =
+  | Leaf _ -> None ()
+  | Node t -> Some (t.key, t.value)
 
   sem avlMap : all k. all a. all b. (k -> a -> b) -> AVL k a -> AVL k b
   sem avlMap f =
@@ -420,15 +429,15 @@ mexpr
 
 use AVLTreeImpl in
 
-let t1 = Leaf () in
-let t2 : AVL Int Char = avlCreate 0 '0' (Leaf ()) (Leaf ()) in
+let t1 = avlEmpty () in
+let t2 : AVL Int Char = avlCreate 0 '0' (avlEmpty ()) (avlEmpty ()) in
 utest avlSize t1 with 0 in
 utest avlHeight t1 with 0 in
 utest avlSize t2 with 1 in
 utest avlHeight t2 with 1 in
 
 let mknode = lam k. lam l. lam r. avlCreate k () l r in
-let mkleaf = lam k. mknode k (Leaf ()) (Leaf ()) in
+let mkleaf = lam k. mknode k (avlEmpty ()) (avlEmpty ()) in
 let deconstruct = lam n.
   match n with Node t then (t.key, t.value, t.l, t.r)
   else error "Cannot deconstruct empty tree"
@@ -460,7 +469,7 @@ utest avlRotateRightLeft rk rv rl rr with bal using eqset subi in
 let l = mknode 1 (mkleaf 0) (mkleaf 2) in
 let r = mknode 5 (mkleaf 4) (mkleaf 6) in
 utest avlJoin 3 () l r with bal using eqset subi in
-let joined = mknode 4 l (mknode 5 (Leaf ()) (mkleaf 6)) in
+let joined = mknode 4 l (mknode 5 (avlEmpty ()) (mkleaf 6)) in
 utest avlJoin2 l r with joined using eqset subi in
 
 -- NOTE(larshum, 2023-03-05): Below are a couple of carefully designed tests
@@ -510,7 +519,7 @@ let r = mknode 5 (mkleaf 4) (mkleaf 6) in
 match avlSplit subi 3 l with (lhs, v, rhs) in
 utest lhs with l using eqset subi in
 utest v with None () in
-utest rhs with Leaf () using eqset subi in
+utest rhs with avlEmpty () using eqset subi in
 match avlSplit subi 5 r with (lhs, v, rhs) in
 utest lhs with mkleaf 4 using eqset subi in
 utest v with Some () in
@@ -518,12 +527,12 @@ utest rhs with mkleaf 6 using eqset subi in
 
 match avlSplitFirst l with (k, _, rest) in
 utest k with 0 in
-utest rest with mknode 1 (Leaf ()) (mkleaf 2) using eqset subi in
+utest rest with mknode 1 (avlEmpty ()) (mkleaf 2) using eqset subi in
 match avlSplitFirst joined with (k, _, rest2) in
 utest k with 0 in
-utest rest2 with mknode 4 rest (mknode 5 (Leaf ()) (mkleaf 6)) using eqset subi in
+utest rest2 with mknode 4 rest (mknode 5 (avlEmpty ()) (mkleaf 6)) using eqset subi in
 
-let t1 = avlInsert subi 0 '0' (Leaf ()) in
+let t1 = avlInsert subi 0 '0' (avlEmpty ()) in
 utest avlSize t1 with 1 in
 utest avlLookup subi 0 t1 with Some '0' in
 
@@ -552,12 +561,15 @@ utest avlSize t6 with 3 in
 utest avlLookup subi 0 t6 with Some 1 in
 utest avlToSeq [] t6 with [(0, 1), (4, 5), (7, 8)] in
 
+utest avlChoose (avlEmpty ()) with None () using optionEq (lam. lam. true) in
+utest optionIsSome (avlChoose t5) with true in
+
 let f = lam acc. lam. lam v. addi acc v in
 let tot = avlFold f 0 t6 in
 utest tot with 14 in
 
-let lhs = mknode 1 (mkleaf 0) (Leaf ()) in
-let rhs = mknode 0 (Leaf ()) (mkleaf 1) in
+let lhs = mknode 1 (mkleaf 0) (avlEmpty ()) in
+let rhs = mknode 0 (avlEmpty ()) (mkleaf 1) in
 utest lhs with rhs using eqset subi in
 
 utest avlCmp subi cmpChar t3 t4 with 0 using lti in
@@ -583,7 +595,7 @@ using avlEq subi eqi in
 utest avlIntersectWith subi chooseLeft t1 t2 with [(3, 4), (4, 5)] using eqAvlSeq subi eqi in
 utest avlIntersectWith subi chooseRight t1 t2 with [(3, 2), (4, 3)] using eqAvlSeq subi eqi in
 utest avlIntersectWith subi chooseLeft t1 t3 with [(1, 2), (2, 3)] using eqAvlSeq subi eqi in
-utest avlIntersectWith subi chooseLeft t2 t3 with Leaf () using avlEq subi eqi in
+utest avlIntersectWith subi chooseLeft t2 t3 with avlEmpty () using avlEq subi eqi in
 
 utest avlDifference subi t1 t2 with [(0, 1), (1, 2), (2, 3)] using eqAvlSeq subi eqi in
 utest avlDifference subi t2 t1 with [(5, 4)] using eqAvlSeq subi eqi in
@@ -596,6 +608,6 @@ let sumLessThanFive = lam k. lam v. lti (addi k v) 5 in
 let falseFn = lam. lam. false in
 utest avlFilter evenKey t1 with [(0, 1), (2, 3), (4, 5)] using eqAvlSeq subi eqi in
 utest avlFilter sumLessThanFive t1 with [(0, 1), (1, 2)] using eqAvlSeq subi eqi in
-utest avlFilter falseFn t1 with Leaf () using avlEq subi eqi in
+utest avlFilter falseFn t1 with avlEmpty () using avlEq subi eqi in
 
 ()
