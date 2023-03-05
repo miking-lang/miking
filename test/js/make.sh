@@ -34,8 +34,8 @@ run_test() {
 	echo $($RUN_JS "$filename.js" 2>&1) > "$filename.node.out"
 	echo $($RUN_MI "$filename.mc" 2>&1) > "$filename.mi.out"
 	diff_output=$(diff "$filename.node.out" "$filename.mi.out" 2>&1)
-  	exit_code=$?
-	clean_out
+	exit_code=$?
+	rm "$filename.node.out" "$filename.mi.out" "$filename.js"
 	set -e
 	if [ $exit_code -eq 0 ]
 	then
@@ -48,25 +48,15 @@ run_test() {
 	fi
 }
 
-clean_tests() {
-	rm -rf test/js/*.js
-}
-
-clean_out() {
-	rm -rf test/js/*.out
-}
-
 case $1 in
 	compile-test)
 		compile_test "$2" true
 		;;
 	run-test)
 		run_test "$2" true
-		clean_tests
 		;;
 	run-test-quiet)
 		run_test "$2" false
-		clean_tests
 		;;
 	clean)
 		clean_tests
