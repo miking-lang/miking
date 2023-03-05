@@ -7,6 +7,7 @@
 -- of the string is inserted instead. Since the string ID is internally
 -- represented as an integer, it is much faster to compare for equality.
 
+include "map.mc"
 include "string.mc"
 
 -- Right now, we use an integer as the identifier,

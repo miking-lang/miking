@@ -191,28 +191,6 @@ lang RefOpArity = ConstArity + RefOpAst
   | CDeRef _ -> 1
 end
 
-lang MapArity = ConstArity + MapAst
-  sem constArity =
-  | CMapEmpty _ -> 1
-  | CMapInsert _ -> 3
-  | CMapRemove _ -> 2
-  | CMapFindExn _ -> 2
-  | CMapFindOrElse _ -> 3
-  | CMapFindApplyOrElse _ -> 4
-  | CMapBindings _ -> 1
-  | CMapChooseExn _ -> 1
-  | CMapChooseOrElse _ -> 2
-  | CMapSize _ -> 1
-  | CMapMem _ -> 2
-  | CMapAny _ -> 2
-  | CMapMap _ -> 2
-  | CMapMapWithKey _ -> 2
-  | CMapFoldWithKey _ -> 3
-  | CMapEq _ -> 3
-  | CMapCmp _ -> 3
-  | CMapGetCmpFun _ -> 1
-end
-
 lang TensorOpArity = ConstArity + TensorOpAst
   sem constArity =
   | CTensorCreateUninitInt _ -> 1
@@ -258,7 +236,7 @@ lang MExprArity =
   CharArity + CmpCharArity + IntCharConversionArity +
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
-  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity +
+  ConTagArity + RefOpArity + TensorOpArity + BootParserArity +
   UnsafeCoerceArity
 end
 

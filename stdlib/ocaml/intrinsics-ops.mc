@@ -32,6 +32,3 @@ let intrinsicOpTensor = use OCamlAst in
 
 let intrinsicOpBootparser = use OCamlAst in
   concat "Boot.Bootparser."
-
-let intrinsicOpMap = use OCamlAst in
-  concat "Boot.Intrinsics.Mmap."

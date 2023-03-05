@@ -72,11 +72,6 @@ lang ConstSideEffect = MExprAst
   | CWallTimeMs _ | CSleepMs _ -> true
   | CConstructorTag _ -> true
   | CRef _ | CModRef _ | CDeRef _ -> true
-  | CMapEmpty _ | CMapInsert _ | CMapRemove _ | CMapFindExn _
-  | CMapFindOrElse _ | CMapFindApplyOrElse _ | CMapBindings _ | CMapChooseExn _
-  | CMapChooseOrElse _ | CMapSize _ | CMapMem _ | CMapAny _ | CMapMap _
-  | CMapMapWithKey _ | CMapFoldWithKey _ | CMapEq _ | CMapCmp _
-  | CMapGetCmpFun _ -> true
   | CTensorCreateInt _ | CTensorCreateFloat _ | CTensorCreate _
   | CTensorGetExn _ | CTensorSetExn _
   | CTensorLinearGetExn _ | CTensorLinearSetExn _

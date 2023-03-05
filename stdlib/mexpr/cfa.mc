@@ -1374,29 +1374,6 @@ lang RefOpCFA = CFA + ConstCFA + RefOpAst
   -- | CDeRef _ -> []
 end
 
--- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
-lang MapCFA = CFA + ConstCFA + MapAst
-  sem generateConstraintsConst info ident =
-  -- | CMapEmpty _ -> []
-  -- | CMapInsert _ -> []
-  -- | CMapRemove _ -> []
-  -- | CMapFindExn _ -> []
-  -- | CMapFindOrElse _ -> []
-  -- | CMapFindApplyOrElse _ -> []
-  -- | CMapBindings _ -> []
-  -- | CMapChooseExn _ -> []
-  -- | CMapChooseOrElse _ -> []
-  -- | CMapSize _ -> []
-  -- | CMapMem _ -> []
-  -- | CMapAny _ -> []
-  -- | CMapMap _ -> []
-  -- | CMapMapWithKey _ -> []
-  -- | CMapFoldWithKey _ -> []
-  -- | CMapEq _ -> []
-  -- | CMapCmp _ -> []
-  -- | CMapGetCmpFun _ -> []
-end
-
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
@@ -1558,8 +1535,7 @@ lang MExprCFA = CFA +
   FloatIntConversionCFA + BoolCFA + CmpIntCFA + CmpFloatCFA + CharCFA +
   CmpCharCFA + IntCharConversionCFA + FloatStringConversionCFA + SymbCFA +
   CmpSymbCFA + SeqOpCFA + FileOpCFA + IOCFA + RandomNumberGeneratorCFA +
-  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + MapCFA + TensorOpCFA +
-  BootParserCFA +
+  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + TensorOpCFA + BootParserCFA +
 
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
@@ -3155,29 +3131,6 @@ lang RefOpKCFA = KCFA + ConstKCFA + RefOpAst
   -- | CDeRef _ -> []
 end
 
--- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
-lang MapKCFA = KCFA + ConstKCFA + MapAst
-  sem generateConstraintsConst info ident =
-  -- | CMapEmpty _ -> []
-  -- | CMapInsert _ -> []
-  -- | CMapRemove _ -> []
-  -- | CMapFindExn _ -> []
-  -- | CMapFindOrElse _ -> []
-  -- | CMapFindApplyOrElse _ -> []
-  -- | CMapBindings _ -> []
-  -- | CMapChooseExn _ -> []
-  -- | CMapChooseOrElse _ -> []
-  -- | CMapSize _ -> []
-  -- | CMapMem _ -> []
-  -- | CMapAny _ -> []
-  -- | CMapMap _ -> []
-  -- | CMapMapWithKey _ -> []
-  -- | CMapFoldWithKey _ -> []
-  -- | CMapEq _ -> []
-  -- | CMapCmp _ -> []
-  -- | CMapGetCmpFun _ -> []
-end
-
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang TensorOpKCFA = KCFA + ConstKCFA + TensorOpAst
@@ -3347,8 +3300,7 @@ lang MExprKCFA = KCFA +
   FloatIntConversionKCFA + BoolKCFA + CmpIntKCFA + CmpFloatKCFA + CharKCFA +
   CmpCharKCFA + IntCharConversionKCFA + FloatStringConversionKCFA + SymbKCFA +
   CmpSymbKCFA + SeqOpKCFA + FileOpKCFA + IOKCFA + RandomNumberGeneratorKCFA +
-  SysKCFA + TimeKCFA + ConTagKCFA + RefOpKCFA + MapKCFA + TensorOpKCFA +
-  BootParserKCFA +
+  SysKCFA + TimeKCFA + ConTagKCFA + RefOpKCFA + TensorOpKCFA + BootParserKCFA +
 
   -- Patterns
   NamedPatKCFA + SeqTotPatKCFA + SeqEdgePatKCFA + RecordPatKCFA + DataPatKCFA +

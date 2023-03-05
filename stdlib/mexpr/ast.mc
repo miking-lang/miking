@@ -932,28 +932,6 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
-lang MapAst = ConstAst
-  syn Const =
-  | CMapEmpty {}
-  | CMapInsert {}
-  | CMapRemove {}
-  | CMapFindExn {}
-  | CMapFindOrElse {}
-  | CMapFindApplyOrElse {}
-  | CMapBindings {}
-  | CMapChooseExn {}
-  | CMapChooseOrElse {}
-  | CMapSize {}
-  | CMapMem {}
-  | CMapAny {}
-  | CMapMap {}
-  | CMapMapWithKey {}
-  | CMapFoldWithKey {}
-  | CMapEq {}
-  | CMapCmp {}
-  | CMapGetCmpFun {}
-end
-
 lang TensorOpAst = ConstAst
   syn Const =
   | CTensorCreateUninitInt {}
@@ -1571,8 +1549,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst + UnsafeCoerceAst +
+  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
+  BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

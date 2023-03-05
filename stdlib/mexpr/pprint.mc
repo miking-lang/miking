@@ -808,28 +808,6 @@ lang ConTagPrettyPrint = ConTagAst + ConstPrettyPrint
   | CConstructorTag _ -> "constructorTag"
 end
 
-lang MapPrettyPrint = MapAst + ConstPrettyPrint
-  sem getConstStringCode (indent : Int) =
-  | CMapEmpty _ -> "mapEmpty"
-  | CMapInsert _ -> "mapInsert"
-  | CMapRemove _ -> "mapRemove"
-  | CMapFindExn _ -> "mapFindExn"
-  | CMapFindOrElse _ -> "mapFindOrElse"
-  | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
-  | CMapBindings _ -> "mapBindings"
-  | CMapChooseExn _ -> "mapChooseExn"
-  | CMapChooseOrElse _ -> "mapChooseOrElse"
-  | CMapSize _ -> "mapSize"
-  | CMapMem _ -> "mapMem"
-  | CMapAny _ -> "mapAny"
-  | CMapMap _ -> "mapMap"
-  | CMapMapWithKey _ -> "mapMapWithKey"
-  | CMapFoldWithKey _ -> "mapFoldWithKey"
-  | CMapEq _ -> "mapEq"
-  | CMapCmp _ -> "mapCmp"
-  | CMapGetCmpFun _ -> "mapGetCmpFun"
-end
-
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CTensorCreateUninitInt _ -> "tensorCreateUninitInt"
@@ -1195,7 +1173,7 @@ lang MExprPrettyPrint =
   FloatStringConversionPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint +
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
-  ConTagPrettyPrint + RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
+  ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
   BootParserPrettyPrint + UnsafeCoercePrettyPrint +
 
   -- Patterns

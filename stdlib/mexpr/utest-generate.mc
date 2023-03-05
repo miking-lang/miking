@@ -587,8 +587,6 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
       generateSymbolPrettyPrint env ty
     else if nameEq id (nameNoSym "Ref") then
       generateReferencePrettyPrint env ty
-    else if nameEq id (nameNoSym "Map") then
-      generateMapPrettyPrint info env id tyArgs ty
     else if nameEq id (nameNoSym "BootParseTree") then
       generateBootParseTreePrettyPrint env ty
     else defaultVariantPrettyPrint info env id tyArgs ty
@@ -609,39 +607,6 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem generateReferencePrettyPrint : UtestEnv -> Type -> Expr
   sem generateReferencePrettyPrint env =
   | ty -> _lam (nameNoSym "") ty (_stringLit "<ref>")
-
-  sem generateMapPrettyPrint : Info -> UtestEnv -> Name -> [Type] -> Type -> Expr
-  sem generateMapPrettyPrint info env id tyArgs =
-  | ty ->
-    match tyArgs with [k, v] in
-    let target = nameSym "m" in
-    let entry = nameSym "entry" in
-    let kId = nameSym "k" in
-    let vId = nameSym "v" in
-    let entryTy = _tupleTy [k, v] in
-    let joinTy = _tyarrows [_seqTy _stringTy, _stringTy] in
-    match getPrettyPrintExpr info env k with (env, ppKey) in
-    match getPrettyPrintExpr info env v with (env, ppValue) in
-    -- NOTE(larshum, 2022-12-30): This defines the format in which to pretty
-    -- print each entry of a map.
-    let format =
-      _apps _concat
-        [ _apps ppKey [_var kId k]
-        , _apps _concat
-            [ _stringLit " -> "
-            , _apps ppValue [_var vId v] ] ]
-    in
-    let ppEntry =
-      _lam entry entryTy
-        (_match (_var entry entryTy)
-          (_patTuple [_patVar kId k, _patVar vId v] entryTy)
-          format (_never _stringTy) _stringTy)
-    in
-    let bindingTy = _seqTy (_tupleTy [k, v]) in
-    let ppSeq = _var (ppSeqName ()) (_pprintTy bindingTy) in
-    let mapBindings = _const (CMapBindings ()) (tyarrows_ [ty, bindingTy]) in
-    _lam target ty
-      (_apps ppSeq [ppEntry, _apps mapBindings [_var target ty]])
 
   sem generateBootParseTreePrettyPrint : UtestEnv -> Type -> Expr
   sem generateBootParseTreePrettyPrint env =
@@ -806,8 +771,6 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
       generateSymbolEquality info env ty
     else if nameEq id (nameNoSym "Ref") then
       generateReferenceEquality info env ty
-    else if nameEq id (nameNoSym "Map") then
-      generateMapEquality info env tyArgs ty
     else if nameEq id (nameNoSym "BootParseTree") then
       generateBootParseTreeEquality info env ty
     else defaultVariantEq info env id tyArgs ty
@@ -825,18 +788,6 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
   | ty ->
     errorSingle [info]
       "A custom equality function must be provided for reference types.\n"
-
-  sem generateMapEquality : Info -> UtestEnv -> [Type] -> Type -> Expr
-  sem generateMapEquality info env tyArgs =
-  | ty ->
-    match tyArgs with [k, v] then
-      let larg = nameSym "l" in
-      let rarg = nameSym "r" in
-      match getEqualityExpr info env v with (env, valueEq) in
-      let eqmap = _const (CMapEq ()) (_tyarrows [_eqTy v, _eqTy ty]) in
-      _lam larg ty (_lam rarg ty
-        (_apps eqmap [valueEq, _var larg ty, _var rarg ty]))
-    else errorSingle [info] "Invalid Map type"
 
   sem generateBootParseTreeEquality : Info -> UtestEnv -> Type -> Expr
   sem generateBootParseTreeEquality info env =
