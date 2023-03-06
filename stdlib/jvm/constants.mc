@@ -64,8 +64,44 @@ let checkcast_ = use JVMAst in
 
 ---
 
-let defaultConstructor = use JVMAst in
-    createFunction "constructor" "()V" [createBInt "ALOAD" 0, createBApply "INVOKESPECIAL" "java/lang/Object" "<init>" "()V", createBEmpty "RETURN"]
+let ltype_T = lam x. join ["L", x, ";"]
 
-let createName_ = use JVMAst in
+let methodtype_T = lam arg. lam ret. join ["(", arg, ")", ret]
+
+let object_T = "java/lang/Object"
+
+let lobject_T = ltype_T object_T
+
+let integer_T = "java/lang/Integer" 
+
+let linteger_T = ltype_T integer_T
+
+----
+
+let pkg_ = "pkg/"
+
+let apply_ = use JVMAst in 
+    lam bytecode.
+    createFunction "apply" (methodtype_T lobject_T lobject_T) (concat bytecode [areturn_])
+
+let wrapInteger_ = 
+    [invokestatic_ "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;"]
+
+let unwrapInteger_ = 
+    [checkcast_ "java/lang/Integer", invokevirtual_ "java/lang/Integer" "intValue" "()I"]
+
+let defaultConstructor = use JVMAst in
+    createFunction "constructor" "()V" [aload_ 0, invokespecial_ "java/lang/Object" "<init>" "()V", return_]
+
+let createName_ = 
     lam prefix. concat prefix (create 3 (lam. randAlphanum ()))
+
+let initClass_ = 
+    lam name. 
+        [new_ (concat pkg_ name), dup_, invokespecial_ (concat pkg_ name) "<init>" "()V"]
+
+let addiClass_ = use JVMAst in
+    let name = "Addi" in
+    let freeVar = "var" in
+    let varTy = "Ljava/lang/Integer;" in
+    createClass name (concat pkg_"Function") [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [aload_ 1] [unwrapInteger_, [aload_ 0, getfield_ (concat pkg_ name) freeVar varTy], unwrapInteger_, [iadd_], wrapInteger_, [areturn_]])]

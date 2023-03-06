@@ -44,6 +44,11 @@ lang JVMAst
     syn JVMProgram = 
     | JVMProgram {package: String, classes: [Class], interfaces: [Interface]}
 
+    ----
+    sem getNameField : Field -> String
+    sem getNameField =
+    | Field {name = name} -> name
+
     -- create constructs
 
     sem createBString : String -> String -> Bytecode
