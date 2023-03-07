@@ -12,8 +12,6 @@ recursive let mlang_bindF_ = use MLangAst in
   bindF_ (lam letexpr. lam expr.
     match letexpr with TmUse t then
       TmUse {t with inexpr = mlang_bindF_ f t.inexpr expr}
-    else match letexpr with TmInclude t then
-      TmInclude {t with inexpr = mlang_bindF_ f t.inexpr expr}
     else
       f letexpr expr -- Insert at the end of the chain
   ) letexpr expr
@@ -35,10 +33,6 @@ let nuse_ = use UseAst in
 let use_ = use UseAst in
   lam s.
   nuse_ (nameNoSym s)
-
-let include_ = use IncludeAst in
-  lam p.
-  TmInclude {path = p, inexpr = uunit_, ty = tyunknown_, info = NoInfo {}}
 
 
 -- Declarations --

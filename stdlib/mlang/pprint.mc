@@ -34,22 +34,6 @@ lang UsePrettyPrint = PrettyPrint + UseAst + MLangIdentifierPrettyPrint
                 inexpr])
 end
 
-lang IncludePrettyPrint = PrettyPrint + IncludeAst
-  sem isAtomic =
-  | TmInclude _ -> false
-
-  sem pprintIncludeCode (indent : Int) (env : PprintEnv) =
-  | {path = path} -> (env, join ["include \"", escapeString path, "\""])
-
-  sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmInclude t ->
-    match pprintIncludeCode indent env {path = t.path} with (env, inclStr) in
-    match pprintCode indent env t.inexpr with (env,inexpr) in
-    (env, join [inclStr, pprintNewline indent,
-                "in", pprintNewline indent,
-                inexpr])
-end
-
 
 lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint
   sem pprintDeclCode : Int -> PprintEnv -> Decl -> (PprintEnv, String)
@@ -201,9 +185,9 @@ lang ExtDeclPrettyPrint = DeclPrettyPrint + ExtDeclAst + ExtPrettyPrint
 end
 
 
-lang IncludeDeclPrettyPrint = DeclPrettyPrint + IncludeDeclAst + IncludePrettyPrint
+lang IncludeDeclPrettyPrint = DeclPrettyPrint + IncludeDeclAst
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
-  | DeclInclude t -> pprintIncludeCode indent env {path = t.path}
+  | DeclInclude t -> (env, join ["include \"", escapeString t.path, "\""])
 end
 
 
@@ -223,7 +207,7 @@ end
 lang MLangPrettyPrint = MExprPrettyPrint +
 
   -- Extended expressions
-  UsePrettyPrint + IncludePrettyPrint +
+  UsePrettyPrint +
 
   -- Declarations
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
@@ -260,7 +244,6 @@ let prog: MLangProgram = {
         (pcon_ "Pear" (pvar_ "fs"),
          bindall_ [
            ulet_ "strJoin" (unit_),
-           include_ "string.mc",
            appf2_ (var_ "strJoin")
                   (var_ "x")
                   (appf2_ (var_ "map") (var_ "float2string") (var_ "fs"))
@@ -291,7 +274,7 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
 } in
 
-print (mlang2str prog); print "\n";
+--print (mlang2str prog); print "\n";
 utest length (mlang2str prog) with 0 using geqi in
 
 ()
