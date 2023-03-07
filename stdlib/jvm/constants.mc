@@ -29,6 +29,12 @@ let iadd_ = use JVMAst in
 let isub_ = use JVMAst in 
     createBEmpty "ISUB"
 
+let imul_ = use JVMAst in 
+    createBEmpty "IMUL"
+
+let idiv_ = use JVMAst in 
+    createBEmpty "IDIV"
+
 let dup_ = use JVMAst in
     createBEmpty "DUP"
 
@@ -67,17 +73,17 @@ let checkcast_ = use JVMAst in
 
 ---
 
-let ltype_T = lam x. join ["L", x, ";"]
+let type_LT = lam x. join ["L", x, ";"]
 
 let methodtype_T = lam arg. lam ret. join ["(", arg, ")", ret]
 
 let object_T = "java/lang/Object"
 
-let lobject_T = ltype_T object_T
+let object_LT = type_LT object_T
 
 let integer_T = "java/lang/Integer" 
 
-let linteger_T = ltype_T integer_T
+let integer_LT = type_LT integer_T
 
 ----
 
@@ -85,7 +91,7 @@ let pkg_ = "pkg/"
 
 let apply_ = use JVMAst in 
     lam bytecode.
-    createFunction "apply" (methodtype_T lobject_T lobject_T) (concat bytecode [areturn_])
+    createFunction "apply" (methodtype_T object_LT object_LT) (concat bytecode [areturn_])
 
 let wrapInteger_ = 
     [invokestatic_ "java/lang/Integer" "valueOf" "(I)Ljava/lang/Integer;"]
@@ -103,14 +109,43 @@ let initClass_ =
     lam name. 
         [new_ (concat pkg_ name), dup_, invokespecial_ (concat pkg_ name) "<init>" "()V"]
 
-let addiClass_ = use JVMAst in
-    let name = "Addi" in
-    let freeVar = "var" in
-    let varTy = "Ljava/lang/Integer;" in
-    createClass name (concat pkg_"Function") [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [aload_ 1] [unwrapInteger_, [aload_ 0, getfield_ (concat pkg_ name) freeVar varTy], unwrapInteger_, [iadd_], wrapInteger_, [areturn_]])]
 
-let subiClass_ = use JVMAst in
-    let name = "Subi" in
+let arithClass_ = use JVMAst in
+    lam name. lam op.
     let freeVar = "var" in
     let varTy = "Ljava/lang/Integer;" in
-    createClass name (concat pkg_"Function") [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [aload_ 0, getfield_ (concat pkg_ name) freeVar varTy] [unwrapInteger_, [aload_ 1], unwrapInteger_, [isub_], wrapInteger_, [areturn_]])]
+    createClass 
+        name 
+        (concat pkg_"Function") 
+        [createField freeVar varTy] 
+        defaultConstructor 
+        [createFunction 
+            "apply" 
+            "(Ljava/lang/Object;)Ljava/lang/Object;" 
+            (foldl concat 
+                [aload_ 0, 
+                getfield_ (concat pkg_ name) freeVar varTy] 
+                [unwrapInteger_, 
+                [aload_ 1], 
+                unwrapInteger_, 
+                op, 
+                wrapInteger_, 
+                [areturn_]])]
+
+let subiClass_ = arithClass_ "Subi" [isub_]
+
+let addiClass_ = arithClass_ "Addi" [iadd_]
+
+let muliClass_ = arithClass_ "Muli" [imul_]
+
+let diviClass_ = arithClass_ "Divi" [idiv_] 
+
+let applyArith_ = use JVMAst in
+    lam name. lam env. lam argBytecode. 
+    { env with 
+    bytecode = foldl concat env.bytecode 
+        [initClass_ name, 
+        [dup_], 
+        argBytecode,
+        [checkcast_ integer_T, 
+        putfield_ (concat pkg_ name) "var" integer_LT]] } 

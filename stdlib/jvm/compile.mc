@@ -44,31 +44,27 @@ lang MExprJVMCompile = MExprAst + JVMAst
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
         let to = ty in 
         let arg = toJSONExpr { env with bytecode = [], classes = [] } rhs in
-        match lhs with TmConst { val = CPrint _ } then
-            { env with 
-                bytecode = foldl concat env.bytecode 
-                    [[getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;"], 
-                    arg.bytecode, 
-                    [invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V"],
-                    [ldcInt_ 1],
-                    wrapInteger_], -- change this to () later 
-                classes = concat env.classes arg.classes }
-        else match lhs with TmConst { val = CAddi _ } then 
-            { env with 
-                bytecode = foldl concat env.bytecode 
-                    [initClass_ "Addi", 
-                    [dup_], 
-                    arg.bytecode,
-                    [checkcast_ "java/lang/Integer", 
-                    putfield_ (concat pkg_ "Addi") "var" "Ljava/lang/Integer;"]] } 
-        else match lhs with TmConst { val = CSubi _ } then 
-            { env with 
-                bytecode = foldl concat env.bytecode 
-                    [initClass_ "Subi", 
-                    [dup_], 
-                    arg.bytecode,
-                    [checkcast_ "java/lang/Integer", 
-                    putfield_ (concat pkg_ "Subi") "var" "Ljava/lang/Integer;"]] } 
+        match lhs with TmConst _ then 
+            match lhs with TmConst { val = CPrint _ } then
+                { env with 
+                    bytecode = foldl concat env.bytecode 
+                        [[getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;"], 
+                        arg.bytecode, 
+                        [invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V"],
+                        [ldcInt_ 1],
+                        wrapInteger_], -- change this to () later 
+                    classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CAddi _ } then 
+                applyArith_ "Addi" env arg.bytecode 
+            else match lhs with TmConst { val = CSubi _ } then 
+                applyArith_ "Subi" env arg.bytecode
+            else match lhs with TmConst { val = CMuli _ } then 
+                applyArith_ "Muli" env arg.bytecode
+            else match lhs with TmConst { val = CDivi _ } then 
+                applyArith_ "Divi" env arg.bytecode
+            else 
+                (print "Unknown Const!\n");
+                env
         else
             let fun = toJSONExpr env lhs in 
             { fun with 
@@ -86,14 +82,14 @@ lang MExprJVMCompile = MExprAst + JVMAst
                         vars = mapInsert ident env.localVars env.vars } inexpr
     | TmLam { ident = ident, body = body } ->
         let className = env.nextClass in
-        let newField = (createField (nameGetStr ident) lobject_T) in
+        let newField = (createField (nameGetStr ident) object_LT) in
         let nextClass = createName_ "Func" in
         let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, localVars = 2, vars = mapInsert ident 1 (mapEmpty nameCmp), fieldVars = mapInsert ident newField env.fieldVars } body in 
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
-            let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) lobject_T, putfield_ (concat pkg_ nextClass) (getNameField x) lobject_T]) fields) in
+            let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) object_LT, putfield_ (concat pkg_ nextClass) (getNameField x) object_LT]) fields) in
             let dups = map (lam x. dup_) fields in
-            let apply = apply_ (foldl concat bodyEnv.bytecode [dups, [dup_, aload_ 1, putfield_ (concat pkg_ nextClass) (nameGetStr ident) lobject_T], putfields]) in
+            let apply = apply_ (foldl concat bodyEnv.bytecode [dups, [dup_, aload_ 1, putfield_ (concat pkg_ nextClass) (nameGetStr ident) object_LT], putfields]) in
             let funcClass = createClass className (concat pkg_ "Function") (snoc fields newField) defaultConstructor [apply] in
             { env with 
                 classes = snoc bodyEnv.classes funcClass,
@@ -143,7 +139,7 @@ let compileMCoreToJVM = lam ast.
     -- see result
     let bytecode = concat compiledEnv.bytecode [astore_ env.localVars, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ env.localVars, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in -- should not print out result!
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
-    let constClasses = [addiClass_, subiClass_] in
+    let constClasses = [addiClass_, subiClass_, muliClass_] in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Hello" "" [] defaultConstructor [mainFunc])) [objToObj] in
 
     (print (toStringProg prog));
