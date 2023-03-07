@@ -70,15 +70,17 @@ lang MExprJVMCompile = MExprAst + JVMAst
                     [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], 
                     classes = concat fun.classes arg.classes }
     | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } -> 
-        let b = toJSONExpr env body in
-        let bodyJSONExpr = { b with bytecode = snoc b.bytecode (astore_ env.localVars), localVars = addi 1 env.localVars, vars = mapInsert ident env.localVars env.vars } in
-        let res = toJSONExpr bodyJSONExpr inexpr in
-        { res with fieldVars = mapEmpty nameCmp }
+        let b = toJSONExpr { env with fieldVars = mapEmpty nameCmp } body in
+        toJSONExpr { b with 
+                        bytecode = snoc b.bytecode (astore_ env.localVars), 
+                        fieldVars = mapEmpty nameCmp, 
+                        localVars = addi 1 env.localVars, 
+                        vars = mapInsert ident env.localVars env.vars } inexpr
     | TmLam { ident = ident, body = body } ->
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) lobject_T) in
         let nextClass = createName_ "Func" in
-        let bodyEnv = toJSONExpr { env with name = className, nextClass = nextClass, localVars = 2, vars = mapInsert ident 1 (mapEmpty nameCmp), fieldVars = mapInsert ident newField env.fieldVars } body in 
+        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, localVars = 2, vars = mapInsert ident 1 (mapEmpty nameCmp), fieldVars = mapInsert ident newField env.fieldVars } body in 
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
             let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) lobject_T, putfield_ (concat pkg_ nextClass) (getNameField x) lobject_T]) fields) in
@@ -88,7 +90,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
             { env with 
                 classes = snoc bodyEnv.classes funcClass,
                 bytecode = foldl concat env.bytecode [initClass_ className],
-                fieldVars = mapInsert ident newField env.fieldVars,
                 nextClass = bodyEnv.nextClass }
         else 
             let apply = apply_ bodyEnv.bytecode in
@@ -96,7 +97,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
             { env with 
                 classes = snoc bodyEnv.classes funcClass,
                 bytecode = foldl concat env.bytecode [initClass_ className],
-                fieldVars = mapInsert ident newField env.fieldVars,
                 nextClass = bodyEnv.nextClass }
     | TmVar { ident = ident } -> 
         let store = (match mapLookup ident env.vars with Some i then
