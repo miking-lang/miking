@@ -140,6 +140,9 @@ class ClassfileMaker {
                         case "IADD":
                             mv.visitInsn(IADD);
                             break;
+                        case "ISUB":
+                            mv.visitInsn(ISUB);
+                            break;
                         case "DUP":
                             mv.visitInsn(DUP);
                             break;

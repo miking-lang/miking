@@ -26,6 +26,9 @@ let return_ = use JVMAst in
 let iadd_ = use JVMAst in
     createBEmpty "IADD"
 
+let isub_ = use JVMAst in 
+    createBEmpty "ISUB"
+
 let dup_ = use JVMAst in
     createBEmpty "DUP"
 
@@ -105,3 +108,9 @@ let addiClass_ = use JVMAst in
     let freeVar = "var" in
     let varTy = "Ljava/lang/Integer;" in
     createClass name (concat pkg_"Function") [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [aload_ 1] [unwrapInteger_, [aload_ 0, getfield_ (concat pkg_ name) freeVar varTy], unwrapInteger_, [iadd_], wrapInteger_, [areturn_]])]
+
+let subiClass_ = use JVMAst in
+    let name = "Subi" in
+    let freeVar = "var" in
+    let varTy = "Ljava/lang/Integer;" in
+    createClass name (concat pkg_"Function") [createField freeVar varTy] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" (foldl concat [aload_ 0, getfield_ (concat pkg_ name) freeVar varTy] [unwrapInteger_, [aload_ 1], unwrapInteger_, [isub_], wrapInteger_, [areturn_]])]

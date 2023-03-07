@@ -60,7 +60,15 @@ lang MExprJVMCompile = MExprAst + JVMAst
                     [dup_], 
                     arg.bytecode,
                     [checkcast_ "java/lang/Integer", 
-                    putfield_ (concat pkg_ "Addi") "var" "Ljava/lang/Integer;"]] }         
+                    putfield_ (concat pkg_ "Addi") "var" "Ljava/lang/Integer;"]] } 
+        else match lhs with TmConst { val = CSubi _ } then 
+            { env with 
+                bytecode = foldl concat env.bytecode 
+                    [initClass_ "Subi", 
+                    [dup_], 
+                    arg.bytecode,
+                    [checkcast_ "java/lang/Integer", 
+                    putfield_ (concat pkg_ "Subi") "var" "Ljava/lang/Integer;"]] } 
         else
             let fun = toJSONExpr env lhs in 
             { fun with 
@@ -135,7 +143,7 @@ let compileMCoreToJVM = lam ast.
     -- see result
     let bytecode = concat compiledEnv.bytecode [astore_ env.localVars, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ env.localVars, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in -- should not print out result!
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
-    let constClasses = [addiClass_] in
+    let constClasses = [addiClass_, subiClass_] in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Hello" "" [] defaultConstructor [mainFunc])) [objToObj] in
 
     (print (toStringProg prog));
