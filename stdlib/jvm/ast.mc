@@ -28,6 +28,7 @@ lang JVMAst
     | BApply {instr: String, owner: String, name: String, descriptor: String}
     | BEmpty {instr: String}
     | BInt {instr: String, nr: Int}
+    | BFloat {instr: String, nr: Float}
 
     syn Field =
     | Field {name: String, t: String}
@@ -66,6 +67,10 @@ lang JVMAst
     sem createBInt : String -> Int -> Bytecode
     sem createBInt instr =
     | nr -> BInt {instr = instr, nr = nr}
+
+    sem createBFloat : String -> Float -> Bytecode
+    sem createBFloat instr =
+    | nr -> BFloat {instr = instr, nr = nr}
 
     sem createFunction : String -> String -> [Bytecode] -> Function
     sem createFunction name descriptor =
@@ -122,6 +127,8 @@ lang JVMAst
         (join ["{", "\"type\":", "\"arg_constant\"", ",\"instr\":", (stringify i), ",\"constant\":", (stringify c), "}"])
     | BInt {instr = i, nr = nr } ->
         (join ["{", "\"type\":", "\"arg_int\"", ",\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
+    | BFloat {instr = i, nr = nr } ->
+        (join ["{", "\"type\":", "\"arg_float\"", ",\"instr\":", (stringify i), ",\"nr\":", (concat (float2string nr) "0"), "}"])
     | BEmpty {instr = i} ->
         (join ["{", "\"type\":", "\"empty\"", ",\"instr\":", (stringify i), "}"])
 

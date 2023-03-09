@@ -114,6 +114,13 @@ class ClassfileMaker {
         for (int i = 0; i < bytecodes.size(); i++) {
             JsonNode bytecode = bytecodes.get(i);
             switch (bytecode.get("type").asText()) {
+                case "arg_float":
+                    switch (bytecode.get("instr").asText()) { 
+                        case "LDC":
+                            mv.visitLdcInsn((float) bytecode.get("nr").asDouble());
+                            break;
+                    }
+                    break;
                 case "arg_int":
                     switch (bytecode.get("instr").asText()) {
                         case "ALOAD":
@@ -148,6 +155,27 @@ class ClassfileMaker {
                             break;
                         case "IDIV":
                             mv.visitInsn(IDIV);
+                            break;
+                        case "INEG":
+                            mv.visitInsn(INEG);
+                            break;
+                        case "FADD":
+                            mv.visitInsn(FADD);
+                            break;
+                        case "FSUB":
+                            mv.visitInsn(FSUB);
+                            break;
+                        case "FMUL":
+                            mv.visitInsn(FMUL);
+                            break;
+                        case "FDIV":
+                            mv.visitInsn(FDIV);
+                            break;
+                        case "FNEG":
+                            mv.visitInsn(FNEG);
+                            break;
+                        case "IREM":
+                            mv.visitInsn(IREM);
                             break;
                         case "DUP":
                             mv.visitInsn(DUP);
