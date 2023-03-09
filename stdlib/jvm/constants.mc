@@ -8,11 +8,11 @@ let aload_ = use JVMAst in
 let astore_ = use JVMAst in
     lam i. createBInt "ASTORE" i
 
-let iload_ = use JVMAst in
-    lam i. createBInt "ILOAD" i
+let lload_ = use JVMAst in
+    lam i. createBInt "LLOAD" i
 
-let istore_ = use JVMAst in
-    lam i. createBInt "ISTORE" i
+let lstore_ = use JVMAst in
+    lam i. createBInt "LSTORE" i
 
 let ldcInt_ = use JVMAst in
     lam i. createBInt "LDC" i
@@ -20,44 +20,51 @@ let ldcInt_ = use JVMAst in
 let ldcString_ = use JVMAst in
     lam s. createBString "LDC" s
 
+-- loads double on JVM
 let ldcFloat_ = use JVMAst in
     lam i. createBFloat "LDC" i
+
+let ldcLong_ = use JVMAst in
+    lam i. createBLong "LDC" i
 
 let return_ = use JVMAst in
     createBEmpty "RETURN"
 
-let iadd_ = use JVMAst in
-    createBEmpty "IADD"
+let pop_ = use JVMAst in
+    createBEmpty "POP"
 
-let fadd_ = use JVMAst in
-    createBEmpty "FADD"
+let ladd_ = use JVMAst in
+    createBEmpty "LADD"
 
-let isub_ = use JVMAst in 
-    createBEmpty "ISUB"
+let dadd_ = use JVMAst in
+    createBEmpty "DADD"
 
-let fsub_ = use JVMAst in 
-    createBEmpty "FSUB"
+let lsub_ = use JVMAst in 
+    createBEmpty "LSUB"
 
-let imul_ = use JVMAst in 
-    createBEmpty "IMUL"
+let dsub_ = use JVMAst in 
+    createBEmpty "DSUB"
 
-let fmul_ = use JVMAst in 
-    createBEmpty "FMUL"
+let lmul_ = use JVMAst in 
+    createBEmpty "LMUL"
 
-let idiv_ = use JVMAst in 
-    createBEmpty "IDIV"
+let dmul_ = use JVMAst in 
+    createBEmpty "DMUL"
 
-let fdiv_ = use JVMAst in 
-    createBEmpty "FDIV"
+let ldiv_ = use JVMAst in 
+    createBEmpty "LDIV"
 
-let irem_ = use JVMAst in 
-    createBEmpty "IREM"
+let ddiv_ = use JVMAst in 
+    createBEmpty "DDIV"
 
-let ineg_ = use JVMAst in 
-    createBEmpty "INEG"
+let lrem_ = use JVMAst in 
+    createBEmpty "LREM"
 
-let fneg_ = use JVMAst in 
-    createBEmpty "FNEG"
+let lneg_ = use JVMAst in 
+    createBEmpty "LNEG"
+
+let dneg_ = use JVMAst in 
+    createBEmpty "DNEG"
 
 let dup_ = use JVMAst in
     createBEmpty "DUP"
@@ -95,6 +102,21 @@ let new_ = use JVMAst in
 let checkcast_ = use JVMAst in
     lam name. createBString "CHECKCAST" name
 
+let ifeq_ = use JVMAst in 
+    lam label. createBString "IFEQ" label
+
+let ificmpeq_ = use JVMAst in 
+    lam label. createBString "IF_ICMPEQ" label
+
+let label_ = use JVMAst in 
+    lam name. createBString "LABEL" name
+
+let dcmpeq_= use JVMAst in
+    lam label. createBString "DCMPEQ" label
+
+let lcmp_ = use JVMAst in 
+    createBEmpty "LCMP"
+
 ---
 
 let jvmTrue = 1
@@ -111,11 +133,11 @@ let object_T = "java/lang/Object"
 
 let object_LT = type_LT object_T
 
-let integer_T = "java/lang/Integer" 
+let integer_T = "java/lang/Long" 
 
 let integer_LT = type_LT integer_T
 
-let float_T = "java/lang/Float" 
+let float_T = "java/lang/Double" 
 
 let float_LT = type_LT float_T
 
@@ -133,10 +155,10 @@ let apply_ = use JVMAst in
     createFunction "apply" (methodtype_T object_LT object_LT) (concat bytecode [areturn_])
 
 let wrapInteger_ = 
-    [invokestatic_ integer_T "valueOf" (methodtype_T "I" integer_LT)]
+    [invokestatic_ integer_T "valueOf" (methodtype_T "J" integer_LT)]
 
 let unwrapInteger_ = 
-    [checkcast_ integer_T, invokevirtual_ integer_T "intValue" "()I"]
+    [checkcast_ integer_T, invokevirtual_ integer_T "longValue" "()J"]
 
 let wrapFloat_ = 
     [invokestatic_ float_T "valueOf" (methodtype_T "F" float_LT)]
@@ -205,23 +227,63 @@ let arithClassF_ = use JVMAst in
                 wrapFloat_, 
                 [areturn_]])]
 
-let subiClass_ = arithClassI_ "Subi" [isub_]
+let arithClassIB_ = use JVMAst in 
+    lam name. lam op. lam label.
+    let freeVar = "var" in
+    let varTy = integer_LT in
+    createClass 
+        name 
+        (concat pkg_"Function") 
+        [createField freeVar varTy] 
+        defaultConstructor 
+        [createFunction 
+            "apply" 
+            "(Ljava/lang/Object;)Ljava/lang/Object;" 
+            (foldl concat 
+                [ldcInt_ 1,
+                aload_ 0, 
+                getfield_ (concat pkg_ name) freeVar varTy] 
+                [unwrapInteger_, 
+                [aload_ 1], 
+                unwrapInteger_, 
+                op,
+                [pop_, 
+                ldcInt_ 0,
+                label_ label],
+                wrapBoolean_,
+                [areturn_]])]
 
-let subiClass_ = arithClassF_ "Subf" [fsub_]
+let subiClass_ = arithClassI_ "Subi" [lsub_]
 
-let addiClass_ = arithClassI_ "Addi" [iadd_]
+let subfClass_ = arithClassF_ "Subf" [dsub_]
 
-let addiClass_ = arithClassF_ "Addf" [fadd_]
+let addiClass_ = arithClassI_ "Addi" [ladd_]
 
-let muliClass_ = arithClassI_ "Muli" [imul_]
+let addfClass_ = arithClassF_ "Addf" [dadd_]
 
-let muliClass_ = arithClassF_ "Mulf" [fmul_]
+let muliClass_ = arithClassI_ "Muli" [lmul_]
 
-let diviClass_ = arithClassI_ "Divi" [idiv_] 
+let mulfClass_ = arithClassF_ "Mulf" [dmul_]
 
-let diviClass_ = arithClassF_ "Divf" [fdiv_] 
+let diviClass_ = arithClassI_ "Divi" [ldiv_] 
 
-let modiClass_ = arithClassI_ "Modi" [irem_] 
+let divfClass_ = arithClassF_ "Divf" [ddiv_] 
+
+let modiClass_ = arithClassI_ "Modi" [lrem_] 
+
+let eqiClass_ = arithClassIB_ "Eqi" [lcmp_, ifeq_ "end"] "end"
+
+let constClassList_ = 
+    [addiClass_, 
+    subiClass_, 
+    muliClass_, 
+    diviClass_, 
+    modiClass_,
+    addfClass_, 
+    subfClass_, 
+    mulfClass_, 
+    divfClass_,
+    eqiClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam argBytecode. 

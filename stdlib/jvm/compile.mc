@@ -18,18 +18,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
         nextClass : String
     }
 
-    sem wrapPrimitive : String -> [Bytecode]
-    sem wrapPrimitive =
-    | "I" -> wrapInteger_
-    | "F" -> wrapFloat_
-    | a -> []
-
-    sem unwrapPrimitive : String -> [Bytecode]
-    sem unwrapPrimitive = 
-    | "I" -> unwrapInteger_
-    | "F" -> unwrapFloat_
-    | a -> []
-
     -- callConstructor var?
 
     -- go through AST and translate to JVM bytecode
@@ -39,7 +27,7 @@ lang MExprJVMCompile = MExprAst + JVMAst
     | TmSeq { tms = tms } -> { env with bytecode = concat env.bytecode [ldcString_ (_charSeq2String tms)]} -- only for strings now
     | TmConst { val = val } -> 
         let bc = (match val with CInt { val = val } then 
-            concat [ldcInt_ val] wrapInteger_
+            concat [ldcLong_ val] wrapInteger_
         else match val with CFloat { val = val } then
             concat [ldcFloat_ val] wrapFloat_ 
         else match val with CBool { val = val } then 
@@ -80,12 +68,14 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithF_ "Mulf" env arg.bytecode
             else match lhs with TmConst { val = CDivf _ } then 
                 applyArithF_ "Divf" env arg.bytecode
+            else match lhs with TmConst { val = CEqi _ } then
+                applyArithI_ "Eqi" env arg.bytecode
             else match lhs with TmConst { val = CNegf _ } then
                 { env with 
                     bytecode = foldl concat env.bytecode 
                         [arg.bytecode,
                         unwrapFloat_,
-                        [fneg_],
+                        [dneg_],
                         wrapFloat_], 
                     classes = concat env.classes arg.classes }
             else match lhs with TmConst { val = CNegi _ } then
@@ -93,7 +83,7 @@ lang MExprJVMCompile = MExprAst + JVMAst
                     bytecode = foldl concat env.bytecode 
                         [arg.bytecode,
                         unwrapInteger_,
-                        [ineg_],
+                        [lneg_],
                         wrapInteger_], 
                     classes = concat env.classes arg.classes }
             else 
@@ -173,7 +163,7 @@ let compileMCoreToJVM = lam ast.
     -- see result
     let bytecode = concat compiledEnv.bytecode [astore_ env.localVars, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ env.localVars, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in -- should not print out result!
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
-    let constClasses = [addiClass_, subiClass_, muliClass_, diviClass_, modiClass_] in
+    let constClasses = constClassList_ in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Hello" "" [] defaultConstructor [mainFunc])) [objToObj] in
 
     (print (toStringProg prog));

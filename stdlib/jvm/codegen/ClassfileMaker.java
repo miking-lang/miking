@@ -3,8 +3,11 @@ package codegen;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import static org.objectweb.asm.Opcodes.*;
+import org.objectweb.asm.Label;
 import java.io.FileOutputStream;
 import java.io.File;
+
+import java.util.*;
 
 import javax.swing.event.CaretEvent;
 import javax.swing.text.FieldView;
@@ -17,14 +20,16 @@ class ClassfileMaker {
     JsonNode interfaces;
     ClassWriter iw;
     String pkg;
+    Map<String, Label> labels;
 
     public ClassfileMaker(JsonNode json) {
         pkg = json.get("package").asText();
+        labels = new HashMap<String, Label>();
 
         interfaces = json.get("interfaces");
         
         for (int i = 0; i < interfaces.size(); i++) {
-            iw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+            iw = new ClassWriter(ClassWriter.COMPUTE_MAXS+ClassWriter.COMPUTE_FRAMES);
             JsonNode interf = interfaces.get(i);
 
             iw.visit(V1_5, ACC_PUBLIC + ACC_ABSTRACT + ACC_INTERFACE, pkg + interf.get("name").asText(), null, "java/lang/Object", null);
@@ -109,6 +114,10 @@ class ClassfileMaker {
         mv.visitEnd();
     }
 
+    private void createLabel(String name) {
+        labels.putIfAbsent(name, new Label());
+    }
+
     private void emitBytecode(MethodVisitor mv, JsonNode bytecodes) {
         mv.visitCode();
         for (int i = 0; i < bytecodes.size(); i++) {
@@ -121,13 +130,17 @@ class ClassfileMaker {
                             break;
                     }
                     break;
+                case "arg_long":
+                    switch (bytecode.get("instr").asText()) { 
+                        case "LDC":
+                            mv.visitLdcInsn(bytecode.get("nr").asLong());
+                            break;
+                    }
+                    break;
                 case "arg_int":
                     switch (bytecode.get("instr").asText()) {
                         case "ALOAD":
                             mv.visitVarInsn(ALOAD, bytecode.get("nr").asInt());
-                            break;
-                        case "ILOAD":
-                            mv.visitVarInsn(ILOAD, bytecode.get("nr").asInt());
                             break;
                         case "ASTORE":
                             mv.visitVarInsn(ASTORE, bytecode.get("nr").asInt());
@@ -144,38 +157,38 @@ class ClassfileMaker {
                         case "RETURN":
                             mv.visitInsn(RETURN);
                             break;
-                        case "IADD":
-                            mv.visitInsn(IADD);
+                        case "LADD":
+                            mv.visitInsn(LADD);
                             break;
-                        case "ISUB":
-                            mv.visitInsn(ISUB);
+                        case "LSUB":
+                            mv.visitInsn(LSUB);
                             break;
-                        case "IMUL":
-                            mv.visitInsn(IMUL);
+                        case "LMUL":
+                            mv.visitInsn(LMUL);
                             break;
-                        case "IDIV":
-                            mv.visitInsn(IDIV);
+                        case "LDIV":
+                            mv.visitInsn(LDIV);
                             break;
-                        case "INEG":
-                            mv.visitInsn(INEG);
+                        case "LNEG":
+                            mv.visitInsn(LNEG);
                             break;
-                        case "FADD":
-                            mv.visitInsn(FADD);
+                        case "DADD":
+                            mv.visitInsn(DADD);
                             break;
-                        case "FSUB":
-                            mv.visitInsn(FSUB);
+                        case "DSUB":
+                            mv.visitInsn(DSUB);
                             break;
-                        case "FMUL":
-                            mv.visitInsn(FMUL);
+                        case "DMUL":
+                            mv.visitInsn(DMUL);
                             break;
-                        case "FDIV":
-                            mv.visitInsn(FDIV);
+                        case "DDIV":
+                            mv.visitInsn(DDIV);
                             break;
-                        case "FNEG":
-                            mv.visitInsn(FNEG);
+                        case "DNEG":
+                            mv.visitInsn(DNEG);
                             break;
-                        case "IREM":
-                            mv.visitInsn(IREM);
+                        case "LREM":
+                            mv.visitInsn(LREM);
                             break;
                         case "DUP":
                             mv.visitInsn(DUP);
@@ -185,6 +198,9 @@ class ClassfileMaker {
                             break;
                         case "POP":
                             mv.visitInsn(POP);
+                            break;
+                        case "LCMP":
+                            mv.visitInsn(LCMP);
                             break;
                         default:
                             System.out.println("Unknown empty: " + bytecode.get("instr").asText());
@@ -220,22 +236,35 @@ class ClassfileMaker {
                     }
                     break;
                 case "arg_constant":
+                    String constant = bytecode.get("constant").asText();
                     switch (bytecode.get("instr").asText()) {
                         case "LDC":
-                            mv.visitLdcInsn(bytecode.get("constant").asText());
+                            mv.visitLdcInsn(constant);
                             break;
                         case "NEW":
-                            mv.visitTypeInsn(NEW, bytecode.get("constant").asText());
+                            mv.visitTypeInsn(NEW, constant);
                             break;
                         case "CHECKCAST":
-                            mv.visitTypeInsn(CHECKCAST, bytecode.get("constant").asText());
+                            mv.visitTypeInsn(CHECKCAST, constant);
+                            break;
+                        case "LABEL":
+                            createLabel(constant);
+                            mv.visitLabel(labels.get(constant));
+                            break;
+                        case "IFEQ":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFEQ, labels.get(constant));
+                            break;
+                        case "IF_ICMPEQ":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
                             break;
                         default:
-                            System.out.println("Unknown arg_constant");
+                            System.out.println("Unknown arg_constant: " + bytecode.get("instr").asText());
                     }
                     break;
                 default:
-                    System.out.println("Unknown type: " + bytecode.get("instr").asText());
+                    System.out.println("Unknown type: " + bytecode.get("type").asText());
             }
         }
         mv.visitMaxs(0, 0);
