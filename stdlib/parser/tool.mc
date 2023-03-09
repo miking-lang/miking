@@ -1645,6 +1645,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
       in result.bind2 precedences badConstructors (lam precedences. lam cs. result.mapM (f precedences) cs)
     in
     let f : [(Name, {bad : Name, grouping : Option (String, String), precedence : Map (Name, Name) Ordering})] -> [ConstructorInfo] -> [GenOperator] -> [String] -> GenOpResult = lam syns. lam constructors. lam groupingOperators. lam extraFragments.
+      use MkOpLanguages in
       let genOpInput =
         { infoFieldLabel = infoFieldLabel
         , termsFieldLabel = termsFieldLabel

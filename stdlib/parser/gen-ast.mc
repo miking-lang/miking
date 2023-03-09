@@ -593,7 +593,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
       (setEmpty nameCmp)
       input.constructors in
     let synTypes = setFold
-      (lam acc. lam synType. cons (DeclSyn {ident = synType, defs = [], info = NoInfo ()}) acc)
+      (lam acc. lam synType. cons (DeclSyn {ident = synType, params = [], defs = [], info = NoInfo ()}) acc)
       []
       synTypes in
     type DeclLangRec =
@@ -626,7 +626,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
         , decls =
           join
             [ [ DeclType {ident = recordTyName, params = [], tyIdent = carriedRepr carried, info = NoInfo ()}
-              , DeclSyn {ident = synType, defs = [{ident = name, tyIdent = ntycon_ recordTyName}], info = NoInfo ()}
+              , DeclSyn {ident = synType, params = [], defs = [{ident = name, tyIdent = ntycon_ recordTyName}], info = NoInfo ()}
               ]
             , sfunctions
             , join accessors
