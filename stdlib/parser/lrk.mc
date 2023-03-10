@@ -15,12 +15,16 @@ include "option.mc"
 include "result.mc"
 include "seq.mc"
 include "set.mc"
+include "sys.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/boot-parser.mc"
 include "mexpr/cmp.mc"
 include "mexpr/info.mc"
+include "mexpr/shallow-patterns.mc"
+include "mexpr/type-check.mc"
+include "ocaml/mcore.mc"
 include "parser/lexer.mc"
-
 
 lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   syn LRTerm =
@@ -1085,22 +1089,69 @@ end
 
 
 lang LRParserTest = LRParser
-                  + LIdentTokenParser
-                  + BracketTokenParser
-                  + CommaTokenParser
-                  + CharTokenParser
+  -- Lexer fragments
+  + LIdentTokenParser
+  + UIntTokenParser
+  + BracketTokenParser
+  + CommaTokenParser
+  + SemiTokenParser
+
+  -- Compilation fragments for testing the generated parser
+  + MCoreCompileLang
+  + BootParser
+  + MExprPrettyPrint
+  + MExprLowerNestedPatterns
+  + MExprTypeCheck
+  + MExprSym
 end
 
 
 mexpr
 use LRParserTest in
 
-let tokEOF = EOFRepr {} in
-let tokIdent = LIdentRepr {} in
-let tokLParen = LParenRepr {} in
-let tokRParen = RParenRepr {} in
-let tokComma = CommaRepr {} in
-let tokChar = CharRepr {} in
+let t_EOF = LRTerminal (EOFRepr {}) in
+let t_LIdent = LRTerminal (LIdentRepr {}) in
+let t_Int = LRTerminal (IntRepr {}) in
+let t_LParen = LRTerminal (LParenRepr {}) in
+let t_RParen = LRTerminal (RParenRepr {}) in
+let t_Comma = LRTerminal (CommaRepr {}) in
+let t_Semi = LRTerminal (SemiRepr {}) in
+
+let tokEmptyTy = tyrecord_ [("info", tycon_ "Info")] in
+let tokStrvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tystr_)] in
+let tokIntvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tyint_)] in
+
+let allTokenConTypes = mapFromSeq tokReprCompare [
+  (EOFRepr {}, {conIdent = nameNoSym "EOFTok", conArg = tokEmptyTy}),
+  (LIdentRepr {}, {conIdent = nameNoSym "LIdentTok", conArg = tokStrvalTy}),
+  (IntRepr {}, {conIdent = nameNoSym "IntTok", conArg = tokIntvalTy}),
+  (LParenRepr {}, {conIdent = nameNoSym "LParenTok", conArg = tokEmptyTy}),
+  (RParenRepr {}, {conIdent = nameNoSym "RParenTok", conArg = tokEmptyTy}),
+  (CommaRepr {}, {conIdent = nameNoSym "CommaTok", conArg = tokEmptyTy}),
+  (SemiRepr {}, {conIdent = nameNoSym "SemiTok", conArg = tokEmptyTy})
+] in
+
+let mkFirstEntry: LRTerm -> [[LRTerm]] -> (LRTerm, Set [TokenRepr]) = lam term. lam firsts.
+  (term, setOfSeq (seqCmp tokReprCompare) (map (map (lam t.
+           match t with LRTerminal x then x else error "expected terminals only in firsts")
+         ) firsts))
+in
+
+let mkFirsts: [(LRTerm, [[LRTerm]])] -> Map LRTerm (Set [TokenRepr]) = lam firstlist.
+  mapFromSeq lrTermCmp (map (lam t.
+    match t with (term, fsts) in
+    mkFirstEntry term fsts
+  ) firstlist)
+in
+
+type LRParseTest in
+con LRPTSucceed: {input: String, expectedOutput: String} -> LRParseTest in
+con LRPTFail: {input: String} -> LRParseTest in
+
+let lrptInput = lam parseTest. switch parseTest
+  case LRPTSucceed t then t.input
+  case LRPTFail t then t.input
+end in
 
 type LRTestCase = {
   tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
@@ -1109,300 +1160,269 @@ type LRTestCase = {
   isLR1: Bool,
   first1: Map LRTerm (Set [TokenRepr]),
   first2: Map LRTerm (Set [TokenRepr]),
-  first3: Map LRTerm (Set [TokenRepr])
+  first3: Map LRTerm (Set [TokenRepr]),
+  parseTests: [LRParseTest]
 } in
 
 
 let testcases: [LRTestCase] = [
-  -- LR1 example from the book by Appel
+  -- LR1 example from the book by Appel (using slightly different non-terminal tokens)
   let _S = nameSym "S" in
   let _E = nameSym "E" in
   let _V = nameSym "V" in
-  let _tyComma = tyunit_ in
-  let _tyIdent = tystr_ in
-  let _tyChar = tychar_ in 
-  let _tyS = tystr_ in
-  let _tyE = tystr_ in
-  let _tyV = tystr_ in 
+  let nt_S = LRNonTerminal _S in
+  let nt_E = LRNonTerminal _E in
+  let nt_V = LRNonTerminal _V in
   {
-    tokenConTypes = mapFromSeq tokReprCompare [
-      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
-      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
-      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
-      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
-    ],
-    name = "LR1 Example",
+    tokenConTypes = allTokenConTypes,
+    name = "LR1 Example (from Tiger Book)",
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [LRNonTerminal _V, LRTerminal tokComma, LRNonTerminal _E],
-         action = withType (tyarrows_ [tyunknown_, _tyV, _tyComma, _tyE, _tyS])
-                           (ulams_ ["actionState", "a1_V", "a2_Comma", "a3_State"]
-                                   (str_ "S1"))},
-        {name = _S, terms = [LRNonTerminal _E],
-         action = withType (tyarrows_ [tyunknown_, _tyE, _tyS])
+        {name = _S, terms = [nt_V, t_Semi, nt_E],
+         action = withType (tyarrows_ [tyunknown_, tystr_, tokEmptyTy, tystr_, tystr_])
+                           (ulams_ ["actionState", "a1_V", "a2_Semi", "a3_S"]
+                                   (appf1_ (var_ "join")
+                                           (seq_ [var_ "a1_V", str_ " = ", var_ "a3_S"])))},
+        {name = _S, terms = [nt_E],
+         action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_E"]
-                                   (str_ "S2"))},
-        {name = _E, terms = [LRNonTerminal _V],
-         action = withType (tyarrows_ [tyunknown_, _tyV, _tyE])
+                                   (var_ "a1_E"))},
+        {name = _E, terms = [nt_V],
+         action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_V"]
-                                   (str_ "E1"))},
-        {name = _V, terms = [LRTerminal tokIdent],
-         action = withType (tyarrows_ [tyunknown_, _tyIdent, _tyV])
-                           (ulams_ ["actionState", "a1_Ident"]
-                                   (str_ "V1"))},
-        {name = _V, terms = [LRTerminal tokChar, LRNonTerminal _E],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyE, _tyV])
-                           (ulams_ ["actionState", "a1_Char", "a2_E"]
-                                   (str_ "V2"))}
+                                   (var_ "a1_V"))},
+        {name = _V, terms = [t_LIdent],
+         action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tystr_])
+                           (ulams_ ["actionState", "a1_LIdent"]
+                                   (recordproj_ "val" (var_ "a1_LIdent")))},
+        {name = _V, terms = [t_Comma, nt_E],
+         action = withType (tyarrows_ [tyunknown_, tokEmptyTy, tystr_, tystr_])
+                           (ulams_ ["actionState", "a1_Comma", "a2_E"]
+                                   (cons_ (char_ '*') (var_ "a2_E")))}
       ],
       initActionState = unit_
     },
     isLR1 = true,
-    first1 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent], [tokChar]
-       ]),
-      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent], [tokChar]
-       ]),
-      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent], [tokChar]
-       ])
+    first1 = mkFirsts [
+      (t_Comma,  [[t_Comma]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent], [t_Comma]]),
+      (nt_E, [[t_LIdent], [t_Comma]]),
+      (nt_V, [[t_LIdent], [t_Comma]])
     ],
-    first2 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokIdent, tokComma],
-        [tokChar, tokIdent],
-        [tokChar, tokChar]
-       ]),
-      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokChar, tokIdent],
-        [tokChar, tokChar]
-       ]),
-      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokChar, tokIdent],
-        [tokChar, tokChar]
-       ])
+    first2 = mkFirsts [
+      (t_Comma,  [[t_Comma]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent], [t_LIdent, t_Semi], [t_Comma, t_LIdent], [t_Comma, t_Comma]]),
+      (nt_E, [[t_LIdent], [t_Comma, t_LIdent], [t_Comma, t_Comma]]),
+      (nt_V, [[t_LIdent], [t_Comma, t_LIdent], [t_Comma, t_Comma]])
     ],
-    first3 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokIdent, tokComma, tokChar],
-        [tokIdent, tokComma, tokIdent],
-        [tokChar, tokIdent],
-        [tokChar, tokIdent, tokComma],
-        [tokChar, tokChar, tokIdent],
-        [tokChar, tokChar, tokChar]
-       ]),
-      (LRNonTerminal _E, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokChar, tokIdent],
-        [tokChar, tokChar, tokIdent],
-        [tokChar, tokChar, tokChar]
-       ]),
-      (LRNonTerminal _V, setOfSeq (seqCmp tokReprCompare) [
-        [tokIdent],
-        [tokChar, tokIdent],
-        [tokChar, tokChar, tokIdent],
-        [tokChar, tokChar, tokChar]
-       ])
+    first3 = mkFirsts [
+      (t_Comma,  [[t_Comma]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent],
+              [t_LIdent, t_Semi, t_Comma],
+              [t_LIdent, t_Semi, t_LIdent],
+              [t_Comma, t_LIdent],
+              [t_Comma, t_LIdent, t_Semi],
+              [t_Comma, t_Comma, t_LIdent],
+              [t_Comma, t_Comma, t_Comma]]),
+      (nt_E, [[t_LIdent],
+              [t_Comma, t_LIdent],
+              [t_Comma, t_Comma, t_LIdent],
+              [t_Comma, t_Comma, t_Comma]]),
+      (nt_V, [[t_LIdent],
+              [t_Comma, t_LIdent],
+              [t_Comma, t_Comma, t_LIdent],
+              [t_Comma, t_Comma, t_Comma]])
+    ],
+    parseTests = [
+      LRPTSucceed {
+        input = ",x;z",
+        expectedOutput = "*x = z"},
+      LRPTSucceed {
+        input = "abc",
+        expectedOutput = "abc"},
+      LRPTSucceed {
+        input = " , abc",
+        expectedOutput = "*abc"},
+      LRPTSucceed {
+        input = "x ; , ,,   y  \n",
+        expectedOutput = "x = ***y"},
+      LRPTFail {input = ""},
+      LRPTFail {input = " , "},
+      LRPTFail {input = " ????????? "}
     ]
   },
   -- LR2 example from https://stackoverflow.com/questions/62075086/what-is-an-lr2-parser-how-does-it-differ-from-an-lr1-parser
   let _S = nameSym "S" in
   let _R = nameSym "R" in
   let _T = nameSym "T" in
-  let _tyComma = tyunit_ in
-  let _tyIdent = tystr_ in
-  let _tyChar = tychar_ in 
-  let _tyS = tystr_ in
-  let _tyR = tystr_ in
-  let _tyT = tystr_ in 
+  let nt_S = LRNonTerminal _S in
+  let nt_R = LRNonTerminal _R in
+  let nt_T = LRNonTerminal _T in
   {
-    tokenConTypes = mapFromSeq tokReprCompare [
-      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
-      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
-      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
-      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
-    ],
+    tokenConTypes = allTokenConTypes,
     name = "LR2 Example",
     syntaxDef = {
       entrypoint = _S,
       rules = [
-        {name = _S, terms = [LRNonTerminal _R, LRNonTerminal _S],
-         action = withType (tyarrows_ [tyunknown_, _tyR, _tyS, _tyS])
+        {name = _S, terms = [nt_R, nt_S],
+         action = withType (tyarrows_ [tyunknown_, tystr_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_R", "a2_S"]
-                                   (str_ "S1"))},
-        {name = _S, terms = [LRNonTerminal _R],
-         action = withType (tyarrows_ [tyunknown_, _tyR, _tyS])
+                                   (appf1_ (var_ "join") (seq_ [
+                                      var_ "a1_R",
+                                      str_ " | ",
+                                      var_ "a2_S"
+                                    ])))},
+        {name = _S, terms = [nt_R],
+         action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_R"]
-                                   (str_ "S2"))},
-        {name = _R, terms = [LRTerminal tokChar, LRTerminal tokIdent, LRNonTerminal _T],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyT, _tyR])
-                           (ulams_ ["actionState", "a1_Char", "a2_Ident", "a3_T"]
-                                   (str_ "R1"))},
-        {name = _T, terms = [LRTerminal tokChar],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyT])
-                           (ulams_ ["actionState", "a1_Char"]
-                                   (str_ "T1"))},
-        {name = _T, terms = [LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyComma, _tyT])
-                           (ulams_ ["actionState", "a1_Comma"]
-                                   (str_ "T2"))},
+                                   (var_ "a1_R"))},
+        {name = _R, terms = [t_LIdent, t_Semi, nt_T],
+         action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tokEmptyTy, tyseq_ tystr_, tystr_])
+                           (ulams_ ["actionState", "a1_LIdent", "a2_Semi", "a3_T"]
+                                   (appf1_ (var_ "join") (seq_ [
+                                      recordproj_ "val" (var_ "a1_LIdent"),
+                                      str_ "[",
+                                      appf2_ (var_ "strJoin") (str_ ", ") (var_ "a3_T"),
+                                      str_ "]"
+                                    ])))},
+        {name = _T, terms = [t_LIdent, nt_T],
+         action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tyseq_ tystr_, tyseq_ tystr_])
+                           (ulams_ ["actionState", "a1_LIdent", "a2_T"]
+                                   (cons_ (recordproj_ "val" (var_ "a1_LIdent")) (var_ "a2_T")))},
+        {name = _T, terms = [t_Int],
+         action = withType (tyarrows_ [tyunknown_, tokIntvalTy, tyseq_ tystr_])
+                           (ulams_ ["actionState", "a1_Int"]
+                                   (seq_ [appf1_ (var_ "int2string")
+                                                 (recordproj_ "val" (var_ "a1_Int"))]))},
         {name = _T, terms = [],
-         action = withType (tyarrows_ [tyunknown_, _tyT])
+         action = withType (tyarrows_ [tyunknown_, tyseq_ tystr_])
                            (ulams_ ["actionState"]
-                                   (str_ "T1"))}
+                                   (seq_ []))}
       ],
       initActionState = unit_
     },
     isLR1 = false,
-    first1 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokComma], [tokChar], []
-       ])
+    first1 = mkFirsts [
+      (t_Int,    [[t_Int]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent]]),
+      (nt_R, [[t_LIdent]]),
+      (nt_T, [[t_LIdent], [t_Int], []])
     ],
-    first2 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokComma], [tokChar], []
-       ])
+    first2 = mkFirsts [
+      (t_Int,    [[t_Int]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent, t_Semi]]),
+      (nt_R, [[t_LIdent, t_Semi]]),
+      (nt_T, [[t_LIdent], [t_LIdent, t_LIdent], [t_LIdent, t_Int],
+              [t_Int], []])
     ],
-    first3 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent],
-        [tokChar, tokIdent, tokChar],
-        [tokChar, tokIdent, tokComma]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent],
-        [tokChar, tokIdent, tokChar],
-        [tokChar, tokIdent, tokComma]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokComma], [tokChar], []
-       ])
+    first3 = mkFirsts [
+      (t_Int,    [[t_Int]]),
+      (t_LIdent, [[t_LIdent]]),
+      (t_Semi,   [[t_Semi]]),
+      (nt_S, [[t_LIdent, t_Semi], [t_LIdent, t_Semi, t_LIdent], [t_LIdent, t_Semi, t_Int]]),
+      (nt_R, [[t_LIdent, t_Semi], [t_LIdent, t_Semi, t_LIdent], [t_LIdent, t_Semi, t_Int]]),
+      (nt_T, [[t_LIdent], [t_LIdent, t_LIdent], [t_LIdent, t_Int],
+              [t_LIdent, t_LIdent, t_LIdent], [t_LIdent, t_LIdent, t_Int],
+              [t_Int], []])
+    ],
+    parseTests = [
+      LRPTSucceed {
+        input = "foo;",
+        expectedOutput = "foo[]"},
+      LRPTSucceed {
+        input = "foo; a 5 bar; babar",
+        expectedOutput = "foo[a, 5] | bar[babar]"},
+      LRPTSucceed {
+        input = "foo; a 5 bar; babar    ;",
+        expectedOutput = "foo[a, 5] | bar[] | babar[]"},
+      LRPTFail {input = ""},
+      LRPTFail {input = "5;"}
     ]
   },
-  -- Custom example showing GOTO lookaheads
-  let _S = nameSym "S" in
-  let _R = nameSym "R" in
-  let _T = nameSym "T" in
-  let _tyComma = tyunit_ in
-  let _tyIdent = tystr_ in
-  let _tyChar = tychar_ in 
-  let _tyS = tystr_ in
-  let _tyR = tystr_ in
-  let _tyT = tystr_ in 
+  -- non-LL language (more left parentheses than right parentheses)
+  let _LeftOnly = nameSym "LeftOnly" in
+  let _LeftRight = nameSym "LeftRight" in
+  let nt_LeftOnly = LRNonTerminal _LeftOnly in
+  let nt_LeftRight = LRNonTerminal _LeftRight in
   {
-    tokenConTypes = mapFromSeq tokReprCompare [
-      (tokEOF, {conIdent = nameNoSym "EOF", conArg = tyunit_}),
-      (tokComma, {conIdent = nameNoSym "Comma", conArg = _tyComma}),
-      (tokIdent, {conIdent = nameNoSym "Ident", conArg = _tyIdent}),
-      (tokChar, {conIdent = nameNoSym "Char", conArg = _tyChar})
-    ],
-    name = "GOTO Example",
+    tokenConTypes = allTokenConTypes,
+    name = "non-LL Example",
     syntaxDef = {
-      entrypoint = _S,
+      entrypoint = _LeftOnly,
       rules = [
-        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokComma, LRTerminal tokChar],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyComma, _tyChar, _tyS])
-                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Comma", "a5_Char"]
-                                   (str_ "S1"))},
-        {name = _S, terms = [LRTerminal tokChar, LRNonTerminal _R, LRNonTerminal _T, LRTerminal tokChar, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyR, _tyT, _tyChar, _tyComma, _tyS])
-                           (ulams_ ["actionState", "a1_Char", "a2_R", "a3_T", "a4_Char", "a5_Comma"]
-                                   (str_ "S2"))},
-        {name = _R, terms = [LRTerminal tokChar, LRTerminal tokIdent, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyComma, _tyR])
-                           (ulams_ ["actionState", "a1_Char", "a2_Ident", "a3_Comma"]
-                                   (str_ "R1"))},
-        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokComma],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyComma, _tyT])
-                           (ulams_ ["actionState", "a1_Char", "a2_Comma"]
-                                   (str_ "T1"))},
-        {name = _T, terms = [LRTerminal tokChar, LRTerminal tokIdent],
-         action = withType (tyarrows_ [tyunknown_, _tyChar, _tyIdent, _tyT])
-                           (ulams_ ["actionState", "a1_Char", "a2_Ident"]
-                                   (str_ "T2"))}
+        {name = _LeftOnly, terms = [t_LParen, nt_LeftOnly],
+         action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tystr_])
+                           (ulams_ ["actionState", "lparen", "lprod"]
+                                   (cons_ (char_ '(') (var_ "lprod")))},
+        {name = _LeftOnly, terms = [nt_LeftRight],
+         action = withType (tyarrows_ [tyunit_, tystr_, tystr_])
+                           (ulams_ ["actionState", "lrprod"]
+                                   (cons_ (char_ '|') (var_ "lrprod")))},
+        {name = _LeftRight, terms = [t_LParen, nt_LeftRight, t_RParen],
+         action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tokEmptyTy, tystr_])
+                           (ulams_ ["actionState", "lparen", "middle", "rparen"]
+                                   (cons_ (char_ '(') (snoc_ (var_ "middle") (char_ ')'))))},
+        {name = _LeftRight, terms = [],
+         action = withType (tyarrows_ [tyunit_, tystr_])
+                           (ulams_ ["actionState"]
+                                   (str_ "e"))}
       ],
       initActionState = unit_
     },
     isLR1 = true,
-    first1 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar]
-       ])
+    first1 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen], []]),
+      (nt_LeftRight, [[t_LParen], []])
     ],
-    first2 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokChar]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar,  tokIdent], [tokChar,  tokComma]
-       ])
+    first2 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen], []]),
+      (nt_LeftRight, [[t_LParen, t_LParen], [t_LParen, t_RParen],
+                      []])
     ],
-    first3 = mapFromSeq lrTermCmp [
-      (LRTerminal tokComma, setOfSeq (seqCmp tokReprCompare) [[tokComma]]),
-      (LRTerminal tokIdent, setOfSeq (seqCmp tokReprCompare) [[tokIdent]]),
-      (LRTerminal tokChar, setOfSeq (seqCmp tokReprCompare) [[tokChar]]),
-      (LRNonTerminal _S, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokChar, tokIdent]
-       ]),
-      (LRNonTerminal _R, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar, tokIdent, tokComma]
-       ]),
-      (LRNonTerminal _T, setOfSeq (seqCmp tokReprCompare) [
-        [tokChar,  tokIdent], [tokChar,  tokComma]
-       ])
+    first3 = mkFirsts [
+      (t_LParen, [[t_LParen]]),
+      (t_RParen, [[t_RParen]]),
+      (nt_LeftOnly, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen, t_LParen, t_RParen],
+                     [t_LParen, t_LParen], [t_LParen, t_RParen],
+                     [t_LParen], []]),
+      (nt_LeftRight, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
+                      [t_LParen, t_LParen, t_RParen], []])
+    ],
+    parseTests = [
+      LRPTSucceed {
+        input = "()",
+        expectedOutput = "|(e)"},
+      LRPTSucceed {
+        input = "( ( (  ) )",
+        expectedOutput = "(|((e))"},
+      LRPTSucceed {
+        input = "(((((((((((()",
+        expectedOutput = "(((((((((((|(e)"},
+      LRPTSucceed {
+        input = "",
+        expectedOutput = "|e"},
+      LRPTSucceed {
+        input = "(((((((((((",
+        expectedOutput = "(((((((((((|e"},
+      LRPTFail {input = "(((()))))))))))))))))"},
+      LRPTFail {input = "(((()]"}
     ]
   }
 ] in
@@ -1426,7 +1446,7 @@ let printLRInfo = false in
 -- Run tests
 foldl (lam. lam tc: LRTestCase.
   (if printLRInfo then (
-    print (join ["Running testcase ", tc.name, " "])
+    printLn (join ["Running testcase ", tc.name, " "])
   ) else ());
   utest lrFirst 1 tc.syntaxDef with tc.first1 using mapEq setEq in
   utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
@@ -1435,14 +1455,93 @@ foldl (lam. lam tc: LRTestCase.
   let isLR1_table = match lrCreateParseTable 1 tc.tokenConTypes tc.syntaxDef with ResultOk _ then true else false in
   utest isLR1_table with tc.isLR1 in
 
-  (if printLRInfo then (
-    printLn "";
-    switch lrCreateParseTable 2 tc.tokenConTypes tc.syntaxDef
-    case ResultOk {value = lrtable} then
+  let k = if tc.isLR1 then 1 else 2 in
+
+  switch lrCreateParseTable k tc.tokenConTypes tc.syntaxDef
+  case ResultOk {value = lrtable} then
+    (if printLRInfo then (
       printLn (lrtable2string 2 lrtable);
       printLn "\n\n"
-    case ResultErr {errors = errors} then
-      errorSingle [] (join (mapValues errors))
-    end
-  ) else ())
+    ) else ());
+    let parser = lrGenerateParser lrtable in
+    let program: String = strJoin "\n" [
+      "include \"error.mc\"",
+      "include \"map.mc\"",
+      "include \"result.mc\"",
+      "include \"seq.mc\"",
+      "include \"string.mc\"",
+      "include \"mexpr/info.mc\"",
+      "include \"parser/lexer.mc\"",
+      "mexpr",
+      "use Lexer in",
+      "let wrappedNextToken = lam s. result.ok (nextToken s) in",
+      expr2str (bindall_ [
+        let_ "parse" (tyTm parser) parser,
+        let_ "lexerState" (tycon_ "Stream")
+                          (urecord_ [("pos", appf1_ (var_ "initPos") (str_ "file")),
+                                     ("str", get_ (var_ "argv") (int_ 1))]),
+        ulet_ "parse_result" (appf2_ (var_ "parse")
+                                     (var_ "lexerState")
+                                     (var_ "wrappedNextToken")),
+        matchall_ [
+          matchex_ (var_ "parse_result") (pcon_ "ResultOk" (prec_ [("value", (pvar_ "result"))])) (
+            appf1_ (var_ "print") (var_ "result")
+          ),
+          matchex_ (var_ "parse_result") (pcon_ "ResultErr" (prec_ [("errors", (pvar_ "errors"))])) (
+            appf2_ (var_ "errorSingle") (seq_ [])
+                   (appf2_ (var_ "strJoin") (str_ "\n")
+                           (map_ (ulam_ "v" (tupleproj_ 1 (var_ "v")))
+                                 (appf1_ (var_ "mapValues") (var_ "errors"))))
+          )
+        ]
+      ]),
+      ""
+    ] in
+
+    -- Put the program in a tempfile and compile that
+    -- (Can't wait for bootstapping to be done...)
+    let tmpFilePath = sysTempFileMake () in
+    writeFile tmpFilePath program;
+
+    let ast = parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+      with keepUtests = false }
+      with pruneExternalUtests = true }
+      with externalsExclude = [] }
+      with pruneExternalUtestsWarning = false }
+      with eliminateDeadCode = true }
+      with keywords = mexprExtendedKeywords } tmpFilePath
+    in
+
+    let ast = symbolize ast in
+    let ast = typeCheck ast in
+    let ast = lowerAll ast in
+
+    -- Compile the program
+    let compileOCaml = lam libs. lam clibs. lam ocamlProg.
+      let opt = {optimize = true, libraries = libs, cLibraries = clibs} in
+      ocamlCompileWithConfig opt ocamlProg
+    in
+    let cunit: CompileResult = compileMCore ast (mkEmptyHooks compileOCaml) in
+
+    foldl (lam. lam parseTest: LRParseTest.
+      let res = cunit.run "" [join ["\"", lrptInput parseTest, "\""]] in
+      switch parseTest
+      case LRPTSucceed t then
+        utest res.stdout with t.expectedOutput in
+        utest res.stderr with "" in
+        utest res.returncode with 0 in ()
+      case LRPTFail _ then
+        utest res.stdout with "" using eqString in
+        utest res.stderr with "" using neqString in
+        utest res.returncode with 0 using neqi in ()
+      end
+    ) () tc.parseTests;
+
+    cunit.cleanup ();
+    sysDeleteFile tmpFilePath;
+    ()
+  case ResultErr {errors = errors} then
+    utest tc.name with "I should not fail!" in ()
+  end
+
 ) () testcases
