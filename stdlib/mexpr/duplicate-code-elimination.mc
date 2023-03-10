@@ -199,7 +199,7 @@ let i = lam idx.
   Info {filename = "dummy.txt", row1 = idx, col1 = 0, row2 = idx, col2 = 0} in
 
 -- Tests that it works for expressions
-let fooDef = 
+let fooDef =
   withInfo (i 0) (ulet_ "foo" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
 let t1 = bindall_ [
   fooDef,
@@ -311,5 +311,16 @@ let t = bindall_ [
   var_ "t"
 ] in
 utest eliminateDuplicateCode t with t using eqExpr in
+
+let t = symbolize (bindall_ [
+  withInfo (i 0) (type_ "T1" [] tyint_),
+  withInfo (i 0) (type_ "T1" [] tyint_),
+  type_ "T2" [] (tyseq_ (tycon_ "T1"))
+]) in
+let expected = symbolize (bindall_ [
+  type_ "T1" [] tyint_,
+  type_ "T2" [] (tyseq_ (tycon_ "T1"))
+]) in
+utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
 
 ()

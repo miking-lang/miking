@@ -1543,7 +1543,8 @@ lang AliasTypeAst = AllTypeAst
   sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAlias t ->
     match f acc t.content with (acc, content) in
-    (acc, TyAlias {t with content = content})
+    match f acc t.display with (acc, display) in
+    (acc, TyAlias {t with content = content, display = display})
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAlias t -> f acc t.content
