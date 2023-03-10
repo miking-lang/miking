@@ -205,33 +205,6 @@ lang RefOpDep = RefOpAst
   | CDeRef _ -> [_constDepData]
 end
 
--- NOTE(Linnea, 2021-11-22): Assumes that all elements take equal time to
--- insert, delete, or find.
-lang MapDep = MapAst
-  sem constDep =
-  | CMapEmpty _ -> [_constDepData]
-  | CMapInsert _ -> [_constDepData,_constDepData,_constDepBoth]
-  | CMapRemove _ -> [_constDepData,_constDepBoth]
-  | CMapFindExn _ -> [_constDepData,_constDepBoth]
-  | CMapFindOrElse _ -> [_constDepBoth,_constDepData,_constDepBoth]
-  | CMapFindApplyOrElse _ -> [_constDepBoth,_constDepBoth,_constDepData,_constDepBoth]
-  | CMapBindings _ -> [_constDepBoth]
-  | CMapChooseExn _ -> [_constDepData] -- NOTE(Linnea, 2021-11-22): Assuming O(1).
-  | CMapChooseOrElse _ -> [_constDepBoth,_constDepData]
-  | CMapSize _ -> [_constDepBoth] -- NOTE(Linnea, 2021-11-22): Assuming O(n).
-  | CMapMem _ -> [_constDepData,_constDepBoth]
-  | CMapAny _ -> [_constDepBoth,_constDepBoth]
-  | CMapMap _ -> [_constDepBoth,_constDepBoth]
-  | CMapMapWithKey _ -> [_constDepBoth,_constDepBoth]
-  | CMapFoldWithKey _ -> [_constDepBoth,_constDepBoth,_constDepBoth] -- NOTE(Linnea, 2021-11-22): Assuming accumulator's start value affects execution time, which it does in the general case, but perhaps not so often in practice.
-  | CMapEq _ -> [_constDepBoth,_constDepBoth,_constDepBoth]
-  | CMapCmp _ -> [_constDepBoth,_constDepBoth,_constDepBoth]
-  | CMapGetCmpFun _ -> [_constDepData] -- NOTE(Linnea, 2021-11-22): Implies that
-                                       -- a data dependency that entered through
-                                       -- an element in the map may
-                                       -- "contaminate" the compare function.
-end
-
 lang TensorOpDep = TensorOpAst
   sem constDep =
   | CTensorCreateInt _ -> error "TensorOpDep not implemented yet"
@@ -275,7 +248,7 @@ lang MExprConstDep =
   CharDep + CmpCharDep + IntCharConversionDep +
   FloatStringConversionDep + SymbDep + CmpSymbDep + SeqOpDep +
   FileOpDep + IODep + RandomNumberGeneratorDep + SysDep + TimeDep +
-  ConTagDep + RefOpDep + MapDep + TensorOpDep + BootParserDep
+  ConTagDep + RefOpDep + TensorOpDep + BootParserDep
 end
 
 mexpr

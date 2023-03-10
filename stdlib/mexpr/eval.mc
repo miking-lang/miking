@@ -5,6 +5,7 @@ include "char.mc"
 include "name.mc"
 include "list.mc"
 include "tensor.mc"
+include "map.mc"
 
 include "info.mc"
 include "error.mc"
@@ -609,132 +610,6 @@ lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
       }
 end
 
-lang MapEval =
-  MapAst + UnknownTypeAst + IntAst + IntTypeAst + BoolAst + BoolTypeAst +
-  SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval + MapArity
-
-  syn Const =
-  | CMapVal {cmp : Expr, val : Map Expr Expr}
-
-  sem _bindToRecord =
-  | (k, v) ->
-    let labels = map stringToSid ["0", "1"] in
-    let bindings = mapFromSeq cmpSID (zip labels [k, v]) in
-    TmRecord {
-      bindings = bindings,
-      ty = TyRecord {
-        fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
-        info = NoInfo ()},
-      info = NoInfo ()}
-
-  sem delta info =
-  | (CMapEmpty _, [arg]) ->
-    let cmp = lam x. lam y.
-      let result =
-        apply (evalCtxEmpty ()) info
-          (apply (evalCtxEmpty ()) info (arg, x), y) in
-      match result with TmConst {val = CInt {val = i}} then i
-      else
-        errorSingle [info]
-          "Comparison function of map did not return integer value"
-    in
-    TmConst {val = CMapVal {cmp = arg, val = mapEmpty cmp},
-             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
-  | (CMapInsert _, [key, value, TmConst (t & {val = CMapVal m})]) ->
-    TmConst {t with val = CMapVal {m with val = mapInsert key value m.val}}
-  | (CMapRemove _, [key, TmConst (t & {val = CMapVal m})]) ->
-    TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
-  | (CMapFindExn _, [key, TmConst {val = CMapVal m}]) -> mapFindExn key m.val
-  | (CMapFindOrElse _, [elseFn, key, TmConst {val = CMapVal m}]) ->
-    let elseFn = lam. apply (evalCtxEmpty ()) info (elseFn, unit_) in
-    mapFindOrElse elseFn key m.val
-  | (CMapFindApplyOrElse _, [fapply, felse, key, TmConst {val = CMapVal m}]) ->
-    let fapply = lam v. apply (evalCtxEmpty ()) info (fapply, v) in
-    let felse = lam. apply (evalCtxEmpty ()) info (felse, unit_) in
-    mapFindApplyOrElse fapply felse key m.val
-  | (CMapBindings _, [TmConst {val = CMapVal m}]) ->
-    TmSeq {
-      tms = map _bindToRecord (mapBindings m.val),
-      ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapChooseExn _, [TmConst {val = CMapVal m}]) ->
-    _bindToRecord (mapChooseExn m.val)
-  | (CMapChooseOrElse _, [elseFn, TmConst {val = CMapVal m}]) ->
-    if gti (mapSize m.val) 0 then _bindToRecord (mapChooseExn m.val)
-    else apply (evalCtxEmpty ()) info (elseFn, unit_)
-  | (CMapSize _, [TmConst {val = CMapVal m}]) ->
-    TmConst {
-      val = CInt {val = mapSize m.val},
-      ty = TyInt {info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapMem _, [key, TmConst {val = CMapVal m}]) ->
-    TmConst {
-      val = CBool {val = mapMem key m.val},
-      ty = TyBool {info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapAny _, [pred, TmConst {val = CMapVal m}]) ->
-    let pred = lam k. lam v.
-      let result =
-        apply (evalCtxEmpty ()) info
-          (apply (evalCtxEmpty ()) info (pred, k), v) in
-      match result with TmConst {val = CBool {val = b}} then b
-      else
-        errorSingle [info] "Predicate of mapAny did not return boolean value"
-    in
-    TmConst {
-      val = CBool {val = mapAny pred m.val},
-      ty = TyBool {info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapMap _, [f, TmConst (t & {val = CMapVal m})]) ->
-    let f = lam x. apply (evalCtxEmpty ()) info (f, x) in
-    TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
-  | (CMapMapWithKey _, [f, TmConst (t & {val = CMapVal m})]) ->
-    let f = lam k. lam v.
-      apply (evalCtxEmpty ()) info
-        (apply (evalCtxEmpty ()) info (f, k), v) in
-    TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
-  | (CMapFoldWithKey _, [f, acc, TmConst (t & {val = CMapVal m})]) ->
-    let f = lam acc. lam k. lam v.
-      apply (evalCtxEmpty ()) info
-        (apply (evalCtxEmpty ()) info
-           (apply (evalCtxEmpty ()) info (f, acc), k), v) in
-    mapFoldWithKey f acc m.val
-  | (CMapEq _, [eq, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
-    let eq = lam v1. lam v2.
-      let result =
-        apply (evalCtxEmpty ()) info
-          (apply (evalCtxEmpty ()) info (eq, v1), v2) in
-      match result with TmConst {val = CBool {val = b}} then b
-      else
-        errorSingle [info] "Equality function of mapEq did not return boolean"
-    in
-    TmConst {
-      val = CBool {val = mapEq eq m1.val m2.val},
-      ty = TyBool {info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapCmp _, [cmp, TmConst {val = CMapVal m1}, TmConst {val = CMapVal m2}]) ->
-    let cmp = lam v1. lam v2.
-      let result =
-        apply (evalCtxEmpty ()) info
-          (apply (evalCtxEmpty ()) info (cmp, v1), v2) in
-      match result with TmConst {val = CInt {val = i}} then i
-      else
-        errorSingle [info]
-          "Comparison function of mapCmp did not return integer"
-    in
-    TmConst {
-      val = CInt {val = mapCmp cmp m1.val m2.val},
-      ty = TyInt {info = NoInfo ()},
-      info = NoInfo ()
-    }
-  | (CMapGetCmpFun _, [TmConst {val = CMapVal m}]) -> m.cmp
-end
-
 lang TensorOpEval =
   TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst +
   TensorOpArity
@@ -1195,13 +1070,18 @@ lang RecordPatEval = Eval + RecordAst + RecordPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
+      let f : Option Pat -> Option Expr -> Option (EvalEnv -> Option EvalEnv) =
+        lam pat. lam val.
+        match pat with Some p then
+          match val with Some v then
+            Some (lam env. tryMatch env v p)
+          else None ()
+        else None ()
+      in
       mapFoldlOption
-        (lam env. lam k. lam p.
-          match mapLookup k bs with Some v then
-            tryMatch env v p
-          else None ())
+        (lam env. lam. lam f. f env)
         env
-        r.bindings
+        (mapMerge f r.bindings bs)
     else None ()
 end
 
@@ -1282,7 +1162,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
+  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1982,78 +1862,6 @@ utest
      utuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
 with utuple_ [int_ 4, float_ 3.14, int_ 4]
 using eqExpr in
-
--- Maps
-
-let m1 = mapEmpty_ (uconst_ (CSubi ())) in
-utest eval (mapBindings_ m1) with seq_ [] using eqExpr in
-
-let m2 = mapInsert_ (int_ 0) (int_ 1) m1 in
-let m3 = mapInsert_ (int_ 1) (int_ 4) m2 in
-utest eval (mapBindings_ m2) with seq_ [utuple_ [int_ 0, int_ 1]] using eqExpr in
-utest eval (mapBindings_ m3)
-with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
-
-let m4 = mapRemove_ (int_ 0) m3 in
-let m5 = mapRemove_ (int_ 2) m3 in
-utest eval (mapBindings_ m4) with seq_ [utuple_ [int_ 1, int_ 4]] using eqExpr in
-utest eval (mapBindings_ m5)
-with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
-
-utest eval (mapFindExn_ (int_ 0) m2) with int_ 1 using eqExpr in
-
-let elsef = ulam_ "" (int_ 2) in
-utest eval (mapFindOrElse_ elsef (int_ 0) m1) with int_ 2 using eqExpr in
-utest eval (mapFindOrElse_ elsef (int_ 0) m2) with int_ 1 using eqExpr in
-
-let applyf = ulam_ "k" (addi_ (var_ "k") (int_ 3)) in
-utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m1)
-with int_ 2 using eqExpr in
-
-utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m2)
-with int_ 4 using eqExpr in
-
-utest eval (mapSize_ m1) with int_ 0 using eqExpr in
-utest eval (mapSize_ m2) with int_ 1 using eqExpr in
-utest eval (mapSize_ m3) with int_ 2 using eqExpr in
-utest eval (mapSize_ m4) with int_ 1 using eqExpr in
-utest eval (mapSize_ m5) with int_ 2 using eqExpr in
-
-utest eval (mapMem_ (int_ 0) m3) with true_ using eqExpr in
-utest eval (mapMem_ (int_ 0) m4) with false_ using eqExpr in
-utest eval (mapMem_ (int_ 2) m3) with false_ using eqExpr in
-
-let p = ulam_ "k" (ulam_ "v" (eqi_ (addi_ (var_ "k") (var_ "v")) (int_ 5))) in
-utest eval (mapAny_ p m2) with false_ using eqExpr in
-utest eval (mapAny_ p m3) with true_ using eqExpr in
-
-let mapf = ulam_ "v" (addi_ (var_ "v") (int_ 1)) in
-utest eval (mapBindings_ (mapMap_ mapf m3))
-with seq_ [utuple_ [int_ 0, int_ 2], utuple_ [int_ 1, int_ 5]] using eqExpr in
-utest eval (mapBindings_ (mapMap_ mapf m4))
-with seq_ [utuple_ [int_ 1, int_ 5]] using eqExpr in
-
-let mapkv = ulam_ "k" (ulam_ "v" (addi_ (var_ "k") (var_ "v"))) in
-utest eval (mapBindings_ (mapMapWithKey_ mapkv m3))
-with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 5]] using eqExpr in
-utest eval (mapBindings_ (mapMapWithKey_ mapkv m1)) with seq_ [] using eqExpr in
-
-let foldf = ulam_ "acc" (ulam_ "k" (ulam_ "v" (
-  addi_ (var_ "acc") (addi_ (var_ "k") (var_ "v"))))) in
-utest eval (mapFoldWithKey_ foldf (int_ 0) m1) with int_ 0 using eqExpr in
-utest eval (mapFoldWithKey_ foldf (int_ 0) m3) with int_ 6 using eqExpr in
-
-let eqf = ulam_ "v1" (ulam_ "v2" (eqi_ (var_ "v1") (var_ "v2"))) in
-utest eval (mapEq_ eqf m1 m2) with false_ using eqExpr in
-utest eval (mapEq_ eqf m3 m4) with false_ using eqExpr in
-utest eval (mapEq_ eqf m3 m5) with true_ using eqExpr in
-
-let cmpf = ulam_ "v1" (ulam_ "v2" (subi_ (var_ "v1") (var_ "v2"))) in
-utest eval (neqi_ (mapCmp_ cmpf m1 m2) (int_ 0)) with true_ using eqExpr in
-utest eval (neqi_ (mapCmp_ cmpf m3 m4) (int_ 0)) with true_ using eqExpr in
-utest eval (mapCmp_ cmpf m3 m5) with int_ 0 using eqExpr in
-
-utest eval (mapGetCmpFun_ m1) with uconst_ (CSubi ()) using eqExpr in
 
 -- Tensors
 let testTensors = lam tcreate_. lam v : (Expr, Expr, Expr).

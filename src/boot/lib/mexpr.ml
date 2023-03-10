@@ -306,85 +306,6 @@ let arity = function
       1
   | CdeRef ->
       1
-  (* MCore intrinsics: Maps *)
-  | CMap _ ->
-      0
-  | CmapEmpty ->
-      1
-  | CmapSize ->
-      1
-  | CmapGetCmpFun ->
-      1
-  | CmapInsert (None, None) ->
-      3
-  | CmapInsert (Some _, None) ->
-      2
-  | CmapInsert (_, Some _) ->
-      1
-  | CmapRemove None ->
-      2
-  | CmapRemove (Some _) ->
-      1
-  | CmapFindExn None ->
-      2
-  | CmapFindExn (Some _) ->
-      1
-  | CmapFindOrElse (None, None) ->
-      3
-  | CmapFindOrElse (Some _, None) ->
-      2
-  | CmapFindOrElse (_, Some _) ->
-      1
-  | CmapFindApplyOrElse (None, None, None) ->
-      4
-  | CmapFindApplyOrElse (Some _, None, None) ->
-      3
-  | CmapFindApplyOrElse (_, Some _, None) ->
-      2
-  | CmapFindApplyOrElse (_, _, Some _) ->
-      1
-  | CmapAny None ->
-      2
-  | CmapAny (Some _) ->
-      1
-  | CmapMem None ->
-      2
-  | CmapMem (Some _) ->
-      1
-  | CmapMap None ->
-      2
-  | CmapMap (Some _) ->
-      1
-  | CmapMapWithKey None ->
-      2
-  | CmapMapWithKey (Some _) ->
-      1
-  | CmapFoldWithKey (None, None) ->
-      3
-  | CmapFoldWithKey (Some _, None) ->
-      2
-  | CmapFoldWithKey (_, Some _) ->
-      1
-  | CmapBindings ->
-      1
-  | CmapChooseExn ->
-      1
-  | CmapChooseOrElse None ->
-      2
-  | CmapChooseOrElse (Some _) ->
-      1
-  | CmapEq (None, None) ->
-      3
-  | CmapEq (Some _, None) ->
-      2
-  | CmapEq (_, Some _) ->
-      1
-  | CmapCmp (None, None) ->
-      3
-  | CmapCmp (Some _, None) ->
-      2
-  | CmapCmp (_, Some _) ->
-      1
   (* MCore intrinsics: Tensor *)
   | CtensorCreateDense None ->
       2
@@ -554,13 +475,6 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   in
   let int_seq2int_tm_seq fi intseq =
     TmSeq (fi, Mseq.map (fun n -> TmConst (fi, CInt n)) intseq)
-  in
-  let map_compare cmp x y =
-    match apply_args cmp [x; y] with
-    | TmConst (_, CInt i) ->
-        i
-    | _ ->
-        fail_constapp fi
   in
   match (c, v) with
   | CunsafeCoerce, v ->
@@ -1066,152 +980,6 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CdeRef, TmRef (_, r) ->
       !r
   | CdeRef, _ ->
-      fail_constapp fi
-  (* MCore intrinsics: Map *)
-  | CMap _, _ ->
-      fail_constapp fi
-  | CmapEmpty, cmp ->
-      TmConst (fi, CMap (cmp, Mmap.empty (map_compare cmp)))
-  | CmapSize, TmConst (_, CMap (_, m)) ->
-      TmConst (fi, CInt (Mmap.size m))
-  | CmapSize, _ ->
-      fail_constapp fi
-  | CmapGetCmpFun, TmConst (_, CMap (cmp, _)) ->
-      cmp
-  | CmapGetCmpFun, _ ->
-      fail_constapp fi
-  | CmapInsert (None, None), key ->
-      TmConst (fi, CmapInsert (Some key, None))
-  | CmapInsert (Some key, None), v ->
-      TmConst (fi, CmapInsert (Some key, Some v))
-  | CmapInsert (Some k, Some v), TmConst (_, CMap (cmp, m)) ->
-      TmConst (fi, CMap (cmp, Mmap.insert k v m))
-  | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
-      fail_constapp fi
-  | CmapRemove None, key ->
-      TmConst (fi, CmapRemove (Some key))
-  | CmapRemove (Some k), TmConst (_, CMap (cmp, m)) ->
-      TmConst (fi, CMap (cmp, Mmap.remove k m))
-  | CmapRemove (Some _), _ ->
-      fail_constapp fi
-  | CmapFindExn None, k ->
-      TmConst (fi, CmapFindExn (Some k))
-  | CmapFindExn (Some k), TmConst (_, CMap (_, m)) ->
-      Mmap.find_exn k m
-  | CmapFindExn (Some _), _ ->
-      fail_constapp fi
-  | CmapFindOrElse (None, None), f ->
-      TmConst (fi, CmapFindOrElse (Some f, None))
-  | CmapFindOrElse (Some f, None), k ->
-      TmConst (fi, CmapFindOrElse (Some f, Some k))
-  | CmapFindOrElse (Some f, Some k), TmConst (_, CMap (_, m)) ->
-      let f () = apply f tm_unit in
-      Mmap.find_or_else f k m
-  | CmapFindOrElse _, _ ->
-      fail_constapp fi
-  | CmapFindApplyOrElse (None, None, None), f ->
-      TmConst (fi, CmapFindApplyOrElse (Some f, None, None))
-  | CmapFindApplyOrElse (Some f, None, None), felse ->
-      TmConst (fi, CmapFindApplyOrElse (Some f, Some felse, None))
-  | CmapFindApplyOrElse (Some f, Some felse, None), k ->
-      TmConst (fi, CmapFindApplyOrElse (Some f, Some felse, Some k))
-  | CmapFindApplyOrElse (Some f, Some felse, Some k), TmConst (_, CMap (_, m))
-    ->
-      let felse () = apply felse tm_unit in
-      Mmap.find_apply_or_else (apply f) felse k m
-  | CmapFindApplyOrElse _, _ ->
-      fail_constapp fi
-  | CmapAny None, p ->
-      let pred x y =
-        match apply_args p [x; y] with
-        | TmConst (_, CBool b) ->
-            b
-        | _ ->
-            fail_constapp fi
-      in
-      TmConst (fi, CmapAny (Some pred))
-  | CmapAny (Some p), TmConst (_, CMap (_, m)) ->
-      TmConst (fi, CBool (Mmap.any p m))
-  | CmapAny (Some _), _ ->
-      fail_constapp fi
-  | CmapMem None, key ->
-      TmConst (fi, CmapMem (Some key))
-  | CmapMem (Some k), TmConst (_, CMap (_, m)) ->
-      TmConst (fi, CBool (Mmap.mem k m))
-  | CmapMem (Some _), _ ->
-      fail_constapp fi
-  | CmapMap None, f ->
-      TmConst (fi, CmapMap (Some (apply f)))
-  | CmapMap (Some f), TmConst (_, CMap (cmp, m)) ->
-      TmConst (fi, CMap (cmp, Mmap.map f m))
-  | CmapMap (Some _), _ ->
-      fail_constapp fi
-  | CmapMapWithKey None, f ->
-      let mapf k v = apply_args f [k; v] in
-      TmConst (fi, CmapMapWithKey (Some mapf))
-  | CmapMapWithKey (Some f), TmConst (_, CMap (cmp, m)) ->
-      TmConst (fi, CMap (cmp, Mmap.map_with_key f m))
-  | CmapMapWithKey (Some _), _ ->
-      fail_constapp fi
-  | CmapFoldWithKey (None, None), f ->
-      let foldf acc k v = apply_args f [acc; k; v] in
-      TmConst (fi, CmapFoldWithKey (Some foldf, None))
-  | CmapFoldWithKey (Some f, None), acc ->
-      TmConst (fi, CmapFoldWithKey (Some f, Some acc))
-  | CmapFoldWithKey (Some f, Some acc), TmConst (_, CMap (_, m)) ->
-      Mmap.fold_with_key f acc m
-  | CmapFoldWithKey _, _ ->
-      fail_constapp fi
-  | CmapBindings, TmConst (_, CMap (_, m)) ->
-      let binds =
-        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record fi [k; v])
-      in
-      TmSeq (fi, binds)
-  | CmapBindings, _ ->
-      fail_constapp fi
-  | CmapChooseExn, TmConst (_, CMap (_, m)) ->
-      let k, v = Mmap.choose_exn m in
-      tuple2record fi [k; v]
-  | CmapChooseExn, _ ->
-      fail_constapp fi
-  | CmapChooseOrElse None, f ->
-      TmConst (fi, CmapChooseOrElse (Some f))
-  | CmapChooseOrElse (Some f), TmConst (_, CMap (_, m)) ->
-      if Mmap.size m > 0 then
-        let k, v = Mmap.choose_exn m in
-        tuple2record fi [k; v]
-      else apply f tm_unit
-  | CmapChooseOrElse _, _ ->
-      fail_constapp fi
-  | CmapEq (None, None), f ->
-      let veq v1 v2 =
-        match apply_args f [v1; v2] with
-        | TmConst (_, CBool b) ->
-            b
-        | _ ->
-            fail_constapp fi
-      in
-      TmConst (fi, CmapEq (Some veq, None))
-  | CmapEq (Some veq, None), TmConst (_, CMap (kcmp, m1)) ->
-      TmConst (fi, CmapEq (Some veq, Some (kcmp, m1)))
-  | CmapEq (Some veq, Some (_, m1)), TmConst (_, CMap (_, m2)) ->
-      TmConst (fi, CBool (Mmap.eq veq m1 m2))
-  | CmapEq _, _ ->
-      fail_constapp fi
-  | CmapCmp (None, None), f ->
-      let vcmp v1 v2 =
-        match apply_args f [v1; v2] with
-        | TmConst (_, CInt i) ->
-            i
-        | _ ->
-            fail_constapp fi
-      in
-      TmConst (fi, CmapCmp (Some vcmp, None))
-  | CmapCmp (Some vcmp, None), TmConst (_, CMap (kcmp, m1)) ->
-      TmConst (fi, CmapCmp (Some vcmp, Some (kcmp, m1)))
-  | CmapCmp (Some vcmp, Some (_, m1)), TmConst (_, CMap (_, m2)) ->
-      TmConst (fi, CInt (Mmap.cmp vcmp m1 m2))
-  | CmapCmp _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
   | CtensorCreateUninitInt, TmSeq (_, seq) ->
@@ -1720,8 +1488,6 @@ let shape_str = function
       us "Char"
   | TmConst (_, CSymb _) ->
       us "Symbol"
-  | TmConst (_, CMap _) ->
-      us "Intrinsic Map"
   | TmConst (_, CPy _) ->
       us "Python Const"
   | TmConst (_, _) ->
@@ -1754,8 +1520,6 @@ let rec val_equal v1 v2 =
       Mseq.Helpers.equal val_equal s1 s2
   | TmRecord (_, r1), TmRecord (_, r2) ->
       Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
-  | TmConst (_, CMap (_, m1)), TmConst (_, CMap (_, m2)) ->
-      Mmap.eq val_equal m1 m2
   | TmConst (_, c1), TmConst (_, c2) ->
       c1 = c2
   | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->

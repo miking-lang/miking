@@ -181,27 +181,6 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
-  (* MCore intrinsics: Maps *)
-  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
-  | CMap of tm * Obj.t
-  | CmapEmpty
-  | CmapSize
-  | CmapGetCmpFun
-  | CmapInsert of tm option * tm option
-  | CmapRemove of tm option
-  | CmapFindExn of tm option
-  | CmapFindOrElse of tm option * tm option
-  | CmapFindApplyOrElse of tm option * tm option * tm option
-  | CmapMem of tm option
-  | CmapAny of (tm -> tm -> bool) option
-  | CmapMap of (tm -> tm) option
-  | CmapMapWithKey of (tm -> tm -> tm) option
-  | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
-  | CmapBindings
-  | CmapChooseExn
-  | CmapChooseOrElse of tm option
-  | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
-  | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense of int Mseq.t option
   | CtensorCreateUninitInt
@@ -654,28 +633,6 @@ let const_has_side_effect = function
   (* MCore intrinsics: References *)
   | Cref | CmodRef _ | CdeRef ->
       true
-  (* MCore intrinsics: Maps *)
-  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
-  | CMap _
-  | CmapEmpty
-  | CmapSize
-  | CmapGetCmpFun
-  | CmapInsert _
-  | CmapRemove _
-  | CmapFindExn _
-  | CmapFindOrElse _
-  | CmapFindApplyOrElse _
-  | CmapMem _
-  | CmapAny _
-  | CmapMap _
-  | CmapMapWithKey _
-  | CmapFoldWithKey _
-  | CmapBindings
-  | CmapChooseExn
-  | CmapChooseOrElse _
-  | CmapEq _
-  | CmapCmp _ ->
-      false
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _
   | CtensorCreateUninitInt

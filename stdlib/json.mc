@@ -340,38 +340,38 @@ end
 
 mexpr
 
-utest jsonParse "123.45" with Left (JsonFloat 123.45) in
+utest jsonParse "123.45" with Left (JsonFloat 123.45) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat 123.45) with "123.45" in
 
-utest jsonParse "-1e-5" with Left (JsonFloat (negf 1e-5)) in
+utest jsonParse "-1e-5" with Left (JsonFloat (negf 1e-5)) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat (negf 1e-5)) with "-1e-05" in
 
-utest jsonParse "1233" with Left (JsonInt 1233) in
+utest jsonParse "1233" with Left (JsonInt 1233) using eitherEq jsonEq eqString in
 utest json2string (JsonInt 1233) with "1233" in
 
-utest jsonParse "-1233" with Left (JsonInt (negi 1233)) in
+utest jsonParse "-1233" with Left (JsonInt (negi 1233)) using eitherEq jsonEq eqString in
 utest json2string (JsonInt (negi 1233)) with "-1233" in
 
-utest jsonParse "\"foo\\u0020bar\"" with Left (JsonString "foo bar") in
+utest jsonParse "\"foo\\u0020bar\"" with Left (JsonString "foo bar") using eitherEq jsonEq eqString in
 utest json2string (JsonString "foo bar") with "\"foo bar\"" in
 
-utest jsonParse "true" with Left (JsonBool true) in
+utest jsonParse "true" with Left (JsonBool true) using eitherEq jsonEq eqString in
 utest json2string (JsonBool true) with "true" in
 
-utest jsonParse "false" with Left (JsonBool false) in
+utest jsonParse "false" with Left (JsonBool false) using eitherEq jsonEq eqString in
 utest json2string (JsonBool false) with "false" in
 
-utest jsonParse "null" with Left (JsonNull ()) in
+utest jsonParse "null" with Left (JsonNull ()) using eitherEq jsonEq eqString in
 utest json2string (JsonNull ()) with "null" in
 
 utest jsonParse "{}" with Left (JsonObject (mapEmpty cmpString)) using eitherEq jsonEq eqString in
 utest json2string (JsonObject (mapEmpty cmpString)) with "{}" in
 
-utest jsonParse "[]" with Left (JsonArray []) in
+utest jsonParse "[]" with Left (JsonArray []) using eitherEq jsonEq eqString  in
 utest json2string (JsonArray []) with "[]" in
 
 utest jsonParse "{ \t\n}" with Left (JsonObject (mapEmpty cmpString)) using eitherEq jsonEq eqString in
-utest jsonParse "[ \n\t]" with Left (JsonArray []) in
+utest jsonParse "[ \n\t]" with Left (JsonArray []) using eitherEq jsonEq eqString in
 
 
 utest jsonParse "{\"list\":[{},{}]}" with Left (JsonObject (mapFromSeq cmpString [("list", JsonArray [JsonObject (mapEmpty cmpString), JsonObject (mapEmpty cmpString)])])) using eitherEq jsonEq eqString in
@@ -379,7 +379,7 @@ utest json2string (JsonObject (mapFromSeq cmpString [("list", JsonArray [JsonObj
 utest jsonParse "[{\n}\n,[\n{\t}]\n]" with Left (JsonArray [JsonObject (mapEmpty cmpString), JsonArray [JsonObject (mapEmpty cmpString)]]) using eitherEq jsonEq eqString in
 utest json2string (JsonArray [JsonObject (mapEmpty cmpString), JsonArray [JsonObject (mapEmpty cmpString)]]) with "[{},[{}]]" in
 
-utest jsonParse " [5, \"a\\nb\"]\t" with Left (JsonArray [JsonInt 5, JsonString "a\nb"]) in
+utest jsonParse " [5, \"a\\nb\"]\t" with Left (JsonArray [JsonInt 5, JsonString "a\nb"]) using eitherEq jsonEq eqString in
 
 utest jsonParse "{\"mystr\" : foo}" with Right "Error at position 11: Invalid start to a JSON value." using eitherEq jsonEq eqString in
 

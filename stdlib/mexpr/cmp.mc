@@ -706,25 +706,6 @@ utest cmpConst (CRef {}) (CRef {}) with 0 in
 utest cmpConst (CModRef {}) (CModRef {}) with 0 in
 utest cmpConst (CDeRef {}) (CDeRef {}) with 0 in
 
-utest cmpConst (CMapEmpty {}) (CMapEmpty {}) with 0 in
-utest cmpConst (CMapInsert {}) (CMapInsert {}) with 0 in
-utest cmpConst (CMapRemove {}) (CMapRemove {}) with 0 in
-utest cmpConst (CMapFindExn {}) (CMapFindExn {}) with 0 in
-utest cmpConst (CMapFindOrElse {}) (CMapFindOrElse {}) with 0 in
-utest cmpConst (CMapFindApplyOrElse {}) (CMapFindApplyOrElse {}) with 0 in
-utest cmpConst (CMapBindings {}) (CMapBindings {}) with 0 in
-utest cmpConst (CMapChooseExn {}) (CMapChooseExn {}) with 0 in
-utest cmpConst (CMapChooseOrElse {}) (CMapChooseOrElse {}) with 0 in
-utest cmpConst (CMapSize {}) (CMapSize {}) with 0 in
-utest cmpConst (CMapMem {}) (CMapMem {}) with 0 in
-utest cmpConst (CMapAny {}) (CMapAny {}) with 0 in
-utest cmpConst (CMapMap {}) (CMapMap {}) with 0 in
-utest cmpConst (CMapMapWithKey {}) (CMapMapWithKey {}) with 0 in
-utest cmpConst (CMapFoldWithKey {}) (CMapFoldWithKey {}) with 0 in
-utest cmpConst (CMapEq {}) (CMapEq {}) with 0 in
-utest cmpConst (CMapCmp {}) (CMapCmp {}) with 0 in
-utest cmpConst (CMapGetCmpFun {}) (CMapGetCmpFun {}) with 0 in
-
 utest cmpConst (CTensorCreateInt {}) (CTensorCreateInt {}) with 0 in
 utest cmpConst (CTensorCreateFloat {}) (CTensorCreateFloat {}) with 0 in
 utest cmpConst (CTensorCreate {}) (CTensorCreate {}) with 0 in

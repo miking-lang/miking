@@ -479,48 +479,6 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
-  (* MCore intrinsics: Maps *)
-  | CMap (_, m) ->
-      let binds =
-        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record NoInfo [k; v])
-      in
-      print_tm' fmt (TmSeq (NoInfo, binds))
-  | CmapEmpty ->
-      fprintf fmt "mapEmpty"
-  | CmapSize ->
-      fprintf fmt "mapSize"
-  | CmapGetCmpFun ->
-      fprintf fmt "mapGetCmpFun"
-  | CmapInsert _ ->
-      fprintf fmt "mapInsert"
-  | CmapRemove _ ->
-      fprintf fmt "mapRemove"
-  | CmapFindExn _ ->
-      fprintf fmt "mapFindExn"
-  | CmapFindOrElse _ ->
-      fprintf fmt "mapFindOrElse"
-  | CmapFindApplyOrElse _ ->
-      fprintf fmt "mapFindOrElse"
-  | CmapAny _ ->
-      fprintf fmt "mapAny"
-  | CmapMem _ ->
-      fprintf fmt "mapMem"
-  | CmapMap _ ->
-      fprintf fmt "mapMap"
-  | CmapMapWithKey _ ->
-      fprintf fmt "mapMapWithKey"
-  | CmapFoldWithKey _ ->
-      fprintf fmt "mapFoldWithKey"
-  | CmapBindings ->
-      fprintf fmt "mapBindings"
-  | CmapChooseExn ->
-      fprintf fmt "mapChooseExn"
-  | CmapChooseOrElse _ ->
-      fprintf fmt "mapChooseOrElse"
-  | CmapEq _ ->
-      fprintf fmt "mapEq"
-  | CmapCmp _ ->
-      fprintf fmt "mapCmp"
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _ ->
       fprintf fmt "tensorCreateDense"
