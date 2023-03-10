@@ -114,6 +114,7 @@ case ResultOk {value = lrtable} then
     "include \"result.mc\"",
     "include \"seq.mc\"",
     "include \"string.mc\"",
+    "include \"mexpr/info.mc\"",
     "include \"parser/lexer.mc\"",
 "
 lang PMLexer = Lexer
@@ -174,7 +175,14 @@ end
         ),
         matchex_ (var_ "parse_result") (pcon_ "ResultErr" (prec_ [("errors", (pvar_ "errors"))])) (
           appf1_ (var_ "printLn") (appf2_ (var_ "strJoin") (str_ "\n")
-                                          (map_ (ulam_ "v" (tupleproj_ 1 (var_ "v")))
+                                          (map_ (ulam_ "v" (
+                                                  appf1_ (var_ "join") (seq_ [
+                                                    str_ "Parse error at ",
+                                                    appf1_ (var_ "info2str") (tupleproj_ 0 (var_ "v")),
+                                                    str_ ": ",
+                                                    tupleproj_ 1 (var_ "v")
+                                                  ])
+                                                ))
                                                 (appf1_ (var_ "mapValues") (var_ "errors"))))
         )
       ]

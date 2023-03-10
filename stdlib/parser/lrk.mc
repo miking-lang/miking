@@ -678,7 +678,9 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     /---- Assumed to exist "public" identifiers ----/
     let #var"global: result.err" = lam v. appf1_ (recordproj_ "err" (var_ "result")) v in
     let #var"global: result.ok" = lam v. appf1_ (recordproj_ "ok" (var_ "result")) v in
-    let resExprErrNoInfo = lam e: Expr.  #var"global: result.err" (utuple_ [conapp_ "NoInfo" unit_, e]) in
+    let resExprErr = lam i: Expr. lam e: Expr.  #var"global: result.err" (utuple_ [i, e]) in
+    let resErr = lam i. lam s. resExprErr (str_ s) i in
+    let resExprErrNoInfo = lam e: Expr. resExprErr (conapp_ "NoInfo" unit_) e in
     let resErrNoInfo = lam s: String. resExprErrNoInfo (str_ s) in
 
     /---- Set up the types ----/
@@ -954,15 +956,25 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                     join [head t, " followed by ", strJoin ", " (tail t)]
                 ) allLookaheads in
                 let lookaheadFailCase =
-                  resErrNoInfo (join [
-                    "unexpected ",
-                    if eqi 1 table.k_lookahead then "token" else "tokens",
-                    " at position <??>. Expected ",
-                    if eqi 1 (length allLookaheads) then
-                      head allLookaheadStrings
-                    else
-                      strJoin "\n - " (cons "one of" allLookaheadStrings)
-                  ])
+                  resExprErr (appf2_ (var_ "mergeInfo")
+                                     (appf1_ (var_ "tokInfo") (head_ (nvar_ lamLookahead)))
+                                     (appf1_ (var_ "tokInfo") (head_ (reverse_ (nvar_ lamLookahead)))))
+                             (appf1_ (var_ "join") (seq_ [
+                    str_ (join [
+                      "Unexpected ",
+                      if eqi 1 table.k_lookahead then "token" else "tokens"
+                    ]),
+                    str_ " ",
+                    appf2_ (var_ "strJoin") (str_ ", ")
+                           (map_ (var_ "tokToStr") (nvar_ lamLookahead)),
+                    str_ ". Expected ",
+                    str_ (
+                      if eqi 1 (length allLookaheads) then
+                        head allLookaheadStrings
+                      else
+                        strJoin "\n - " (cons "one of" allLookaheadStrings)
+                    )
+                  ]))
                 in
 
                 matchall_ (join [shiftMatches, reductionMatches, [lookaheadFailCase]])
@@ -1049,7 +1061,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                   ]
                 ),
                 matchex_ (var_ "r") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
-          conapp_ "ResultErr" (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
+                  conapp_ "ResultErr" (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
                 )
               ]
             ])
