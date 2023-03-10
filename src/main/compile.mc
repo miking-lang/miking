@@ -22,6 +22,7 @@ include "ocaml/wrap-in-try-with.mc"
 include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
+include "jvm/compile.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -86,6 +87,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       printLn (expr2str ast) else ());
 
     let res =
+      if options.toJVM then compileMCoreToJVM ast else
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget

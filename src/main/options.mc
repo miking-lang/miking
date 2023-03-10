@@ -5,6 +5,7 @@ include "tuning/tune-options.mc"
 
 -- Default values for options
 let optionsDefault : Options = {
+  toJVM = false,
   debugParse = false,
   debugGenerate = false,
   debugTypeAnnot = false,

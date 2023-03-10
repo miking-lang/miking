@@ -3,6 +3,10 @@ include "options-type.mc"
 
 -- Options configuration
 let optionsConfig : ParseConfig Options = [
+  ([("--to-jvm", "", "")],
+    "Compile to JVM",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with toJVM = true}),
   ([("--debug-parse", "", "")],
     "Print the AST after parsing",
     lam p: ArgPart Options.

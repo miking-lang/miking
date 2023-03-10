@@ -2,6 +2,7 @@ include "tuning/tune-options.mc"
 
 -- Options type
 type Options = {
+  toJVM : Bool,
   debugParse : Bool,
   debugGenerate : Bool,
   debugTypeAnnot : Bool,
