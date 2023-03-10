@@ -39,7 +39,7 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     } in
     let inexpr = k var in
     TmLet {ident = ident,
-           tyAnnot = tyTm n,
+           tyAnnot = TyUnknown {info = infoTm n},
            tyBody = tyTm n,
            body = n,
            inexpr = inexpr,
@@ -307,14 +307,15 @@ lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
         (lam v. lam acc.
           match v with (id, ty) in
           TmLam {
-            ident = id, tyAnnot = ty, tyIdent = ty, body = acc,
-            ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
+            ident = id, tyAnnot = TyUnknown {info = t.info}, tyIdent = ty,
+            body = acc, ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
             info = t.info})
         inner varNameTypes in
     TmExt { t with
       inexpr = TmLet {
-        ident = t.ident, tyAnnot = t.tyIdent, tyBody = t.tyIdent, body = etaExpansion,
-        inexpr = normalize k t.inexpr, ty = tyTm t.inexpr, info = t.info} }
+        ident = t.ident, tyAnnot = TyUnknown {info = t.info},
+        tyBody = t.tyIdent, body = etaExpansion, inexpr = normalize k t.inexpr,
+        ty = tyTm t.inexpr, info = t.info} }
 
 end
 
