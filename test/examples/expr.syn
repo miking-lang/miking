@@ -1,7 +1,42 @@
-token String
-token LName
-token UName
-token Integer
+language Expr
+
+
+-- Basic tokens
+token String {
+  repr = StringRepr {},
+  constructor = StringTok,
+  fragment = StringTokenParser,
+}
+token LIdent {
+  repr = LIdentRepr {},
+  constructor = LIdentTok,
+  fragment = LIdentTokenParser,
+  ty = String,
+}
+token UIdent {
+  repr = UIdentRepr {},
+  constructor = UIdentTok,
+  fragment = UIdentTokenParser,
+  ty = String,
+}
+token Integer {
+  repr = UIntRepr {},
+  constructor = UIntTok,
+  fragment = UIntTokenParser,
+  ty = Int,
+}
+
+-- Wrapping tokens that just change the type in the AST
+token UName {
+  base = UIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token LName {
+  base = LIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
 
 type File
 type Expr

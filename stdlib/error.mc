@@ -47,6 +47,7 @@ include "seq.mc"
 include "char.mc"
 include "map.mc"
 include "mexpr/info.mc"
+include "common.mc"
 
 type Highlight
 -- A section of the code inside the area to be highlighted, but that
@@ -118,6 +119,9 @@ let _getRange
     case Irrelevant (Info x) then Some ({row = x.row1, col = x.col1}, {row = x.row2, col = x.col2})
     case Relevant (Info x) then Some ({row = x.row1, col = x.col1}, {row = x.row2, col = x.col2})
     case Added _ then None ()
+    case _ then
+      printLn "WARNING: (implementation error) missing info field in _getRange";
+      None ()
     end
 
 -- Take a sequence of sections to be highlighted (positioned through
@@ -155,10 +159,11 @@ let formatHighlights
             case Irrelevant _ then IIrrelevant ()
             case _ then error "impossible"
             end in
-          work (concat sections [(irr, IIrrelevant()), (sec, label)]) input highlights
+          work (concat sections [(irr, IIrrelevant ()), (sec, label)]) input highlights
         else match h with Added x then
           work (snoc sections (x.content, IAdded {ensureSurroundedBySpaces = x.ensureSurroundedBySpaces})) input highlights
-        else never
+        else
+          work (snoc sections ("<NoInfo>", IAdded {ensureSurroundedBySpaces = true})) input highlights
       else (sections, input)
     in
     match work sections input highlights with (sections, input) in
