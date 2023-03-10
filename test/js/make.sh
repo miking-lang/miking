@@ -48,6 +48,14 @@ run_test() {
 	fi
 }
 
+clean_tests() {
+	rm -rf test/js/*.js
+}
+
+clean_out() {
+	rm -rf test/js/*.out
+}
+
 case $1 in
 	compile-test)
 		compile_test "$2" true
