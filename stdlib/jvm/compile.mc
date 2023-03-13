@@ -5,6 +5,8 @@ include "javascript/util.mc"
 include "seq.mc"
 include "pmexpr/utils.mc"
 include "jvm/constants.mc"
+include "stdlib.mc"
+include "sys.mc"
 
 lang MExprJVMCompile = MExprAst + JVMAst
 
@@ -70,6 +72,8 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithF_ "Divf" env arg.bytecode
             else match lhs with TmConst { val = CEqi _ } then
                 applyArithI_ "Eqi" env arg.bytecode
+            else match lhs with TmConst { val = CLti _ } then
+                applyArithI_ "Lti" env arg.bytecode
             else match lhs with TmConst { val = CNegf _ } then
                 { env with 
                     bytecode = foldl concat env.bytecode 
@@ -154,17 +158,103 @@ lang MExprJVMCompile = MExprAst + JVMAst
 
 end
 
-let compileMCoreToJVM = lam ast. 
+let compileJVMEnv = lam ast.
     use MExprJVMCompile in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
     let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [], fieldVars = mapEmpty nameCmp, name = "Main", nextClass = createName_ "Func" } in
     let compiledEnv = (toJSONExpr env ast) in
-    --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
-    -- see result
-    let bytecode = concat compiledEnv.bytecode [astore_ env.localVars, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ env.localVars, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in -- should not print out result!
+    let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
     let constClasses = constClassList_ in
-    let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Hello" "" [] defaultConstructor [mainFunc])) [objToObj] in
+    let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) [objToObj] in
+    prog
 
-    (print (toStringProg prog));
+
+let compileMCoreToJVM = lam ast. 
+    use MExprJVMCompile in
+    let jvmProgram = compileJVMEnv ast in
+    (print (toStringProg jvmProgram));
     "aaa"
+
+let getJarFiles = lam tempDir.
+    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar"] "" ".");
+    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.14.2/jackson-databind-2.14.2.jar"] "" ".");
+    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.14.2/jackson-annotations-2.14.2.jar"] "" ".");
+    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/org/ow2/asm/asm/9.4/asm-9.4.jar"] "" ".");
+    ()
+
+let compileJava = lam outDir. lam jarPath.
+    let cfmClass = (concat stdlibLoc "/jvm/codegen/ClassfileMaker.java") in
+    let jsonParserClass = (concat stdlibLoc "/jvm/codegen/Parser.java") in
+    let classpath = (join [jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
+    (sysRunCommand ["javac", "-cp", classpath, cfmClass, jsonParserClass, "-d", outDir] "" ".");
+    ()
+
+let modifyMainClassForTest = lam prog.
+    use MExprJVMCompile in
+    match prog with JVMProgram p in
+    let mainClass = get p.classes (subi (length p.classes) 1) in
+    match mainClass with Class m in
+    let mainFunc = get m.functions 0 in
+    match mainFunc with Function f in
+    let bytecodes = subsequence f.bytecode 0 (subi (length f.bytecode) 2) in
+    let modifiedMainFunc = createFunction f.name f.descriptor (concat bytecodes [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_]) in
+    let modifiedMainClass = createClass m.name m.implements m.fields m.constructor [modifiedMainFunc] in
+    createProg p.package (snoc (subsequence p.classes 0 (subi (length p.classes) 1)) modifiedMainClass) p.interfaces
+    
+
+let prepareForTests = lam path.
+    match sysCommandExists "java" with false then 
+        -- error!
+        ()
+    else
+        (match sysFileExists path with true then
+            (sysDeleteDir path);
+            (sysRunCommand ["mkdir", path] "" ".");
+            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
+            ()
+        else 
+            (sysRunCommand ["mkdir", path] "" ".");
+            ());
+        (getJarFiles (concat path "jar/"));
+        (compileJava (concat path "out/") (concat path "jar/"));
+        ()
+
+let jvmTmpPath = "/tmp/miking-jvm-backend/"
+
+let testJVM = lam ast.
+    use MExprJVMCompile in
+    let jvmProgram = compileJVMEnv ast in
+    let testJVMProgram = modifyMainClassForTest jvmProgram in
+    let json = sysTempFileMake () in
+    writeFile json (toStringProg testJVMProgram);
+    let jarPath = (concat jvmTmpPath "jar/") in
+    let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
+    (sysRunCommand ["java", "-cp", (join [jvmTmpPath, "out/", classpath]), "codegen/Parser", json] "" jvmTmpPath);
+    let results = sysRunCommand ["java", "pkg.Main"] "" jvmTmpPath in
+    sysDeleteDir json;
+    results.stdout
+
+-- tests
+
+mexpr
+prepareForTests jvmTmpPath;
+
+-- integer operations
+utest testJVM (addi_ (int_ 1) (int_ 1)) with "2" in
+utest testJVM (subi_ (int_ 0) (int_ 1)) with "-1" in
+utest testJVM (divi_ (int_ 10) (int_ 5)) with "2" in
+utest testJVM (muli_ (int_ 2) (int_ (negi 1))) with "-2" in
+utest testJVM (modi_ (int_ 10) (int_ 2)) with "0" in
+utest testJVM (negi_ (int_ 1)) with "-1" in
+
+-- float operations
+utest testJVM (addf_ (float_ 1.5) (float_ 1.0)) with "2.5" in
+utest testJVM (subf_ (float_ 0.5) (float_ 1.0)) with "-0.5" in
+utest testJVM (divf_ (float_ 5.0) (float_ 10.0)) with "0.5" in
+utest testJVM (mulf_ (float_ 2.2) (float_ (negf 1.0))) with "-2.2" in
+utest testJVM (negf_ (float_ 1.5)) with "-1.5" in
+
+sysDeleteDir jvmTmpPath
+

@@ -126,7 +126,7 @@ class ClassfileMaker {
                 case "arg_float":
                     switch (bytecode.get("instr").asText()) { 
                         case "LDC":
-                            mv.visitLdcInsn((float) bytecode.get("nr").asDouble());
+                            mv.visitLdcInsn(bytecode.get("nr").asDouble());
                             break;
                     }
                     break;
@@ -254,6 +254,10 @@ class ClassfileMaker {
                         case "IFEQ":
                             createLabel(constant);
                             mv.visitJumpInsn(IFEQ, labels.get(constant));
+                            break;
+                        case "IFLT":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFLT, labels.get(constant));
                             break;
                         case "IF_ICMPEQ":
                             createLabel(constant);

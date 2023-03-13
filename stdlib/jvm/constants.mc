@@ -105,6 +105,12 @@ let checkcast_ = use JVMAst in
 let ifeq_ = use JVMAst in 
     lam label. createBString "IFEQ" label
 
+let ifneq_ = use JVMAst in 
+    lam label. createBString "IFNEQ" label
+
+let iflt_ = use JVMAst in 
+    lam label. createBString "IFLT" label   
+
 let ificmpeq_ = use JVMAst in 
     lam label. createBString "IF_ICMPEQ" label
 
@@ -161,10 +167,10 @@ let unwrapInteger_ =
     [checkcast_ integer_T, invokevirtual_ integer_T "longValue" "()J"]
 
 let wrapFloat_ = 
-    [invokestatic_ float_T "valueOf" (methodtype_T "F" float_LT)]
+    [invokestatic_ float_T "valueOf" (methodtype_T "D" float_LT)]
 
 let unwrapFloat_ = 
-    [checkcast_ float_T, invokevirtual_ float_T "floatValue" "()F"]
+    [checkcast_ float_T, invokevirtual_ float_T "doubleValue" "()D"]
 
 let wrapBoolean_ = 
     [invokestatic_ boolean_T "valueOf" (methodtype_T "Z" boolean_LT)]
@@ -273,6 +279,8 @@ let modiClass_ = arithClassI_ "Modi" [lrem_]
 
 let eqiClass_ = arithClassIB_ "Eqi" [lcmp_, ifeq_ "end"] "end"
 
+let ltiClass_ = arithClassIB_ "Lti" [lcmp_, iflt_ "end"] "end"
+
 let constClassList_ = 
     [addiClass_, 
     subiClass_, 
@@ -283,7 +291,8 @@ let constClassList_ =
     subfClass_, 
     mulfClass_, 
     divfClass_,
-    eqiClass_]
+    eqiClass_,
+    ltiClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam argBytecode. 
