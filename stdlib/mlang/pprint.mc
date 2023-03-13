@@ -20,6 +20,18 @@ lang MLangIdentifierPrettyPrint = IdentifierPrettyPrint
     (env, s)
 end
 
+lang IncludePrettyPrint = PrettyPrint + IncludeAst
+  sem isAtomic =
+  | TmInclude _ -> false
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmInclude t ->
+    match pprintCode indent env t.inexpr with (env,inexpr) in
+    (env, join ["include \"", escapeString t.path, "\"", pprintNewline indent,
+                "in", pprintNewline indent,
+                inexpr])
+end
+
 
 lang UsePrettyPrint = PrettyPrint + UseAst + MLangIdentifierPrettyPrint
   sem isAtomic =
@@ -207,7 +219,7 @@ end
 lang MLangPrettyPrint = MExprPrettyPrint +
 
   -- Extended expressions
-  UsePrettyPrint +
+  UsePrettyPrint + IncludePrettyPrint +
 
   -- Declarations
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
@@ -244,6 +256,7 @@ let prog: MLangProgram = {
         (pcon_ "Pear" (pvar_ "fs"),
          bindall_ [
            ulet_ "strJoin" (unit_),
+           include_ "string.mc",
            appf2_ (var_ "strJoin")
                   (var_ "x")
                   (appf2_ (var_ "map") (var_ "float2string") (var_ "fs"))
