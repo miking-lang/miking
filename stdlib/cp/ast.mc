@@ -1,8 +1,6 @@
 -- AST representation of a constraint optimization or satisfaction problem
 -- (COP/CSP).
 
--- NOTE(Linnea, 2023-02-08): Arrays are indexed from 1.
-
 include "name.mc"
 
 ----------------------------
