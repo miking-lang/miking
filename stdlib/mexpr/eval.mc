@@ -84,10 +84,16 @@ lang ClosAst = Ast + Eval + PrettyPrint
   type Lazy a = () -> a
 
   syn Expr =
-  | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv}
+  | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info}
 
   sem isAtomic =
   | TmClos _ -> true
+
+  sem infoTm =
+  | TmClos r -> r.info
+
+  sem withInfo info =
+  | TmClos r -> TmClos { r with info = info }
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmClos r ->
@@ -107,7 +113,8 @@ lang LamEval = Eval + LamAst + ClosAst + AppEval
     eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
 
   sem eval ctx =
-  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = lam. ctx.env}
+  | TmLam t ->
+    TmClos {ident = t.ident, body = t.body, env = lam. ctx.env, info = t.info}
   | TmClos t -> TmClos t
 end
 
@@ -141,7 +148,7 @@ lang RecLetsEval =
     recursive let envPrime : Lazy EvalEnv = lam.
       let wraplambda = lam v.
         match v with TmLam t then
-          TmClos {ident = t.ident, body = t.body, env = envPrime}
+          TmClos {ident = t.ident, body = t.body, env = envPrime, info = t.info}
         else
           errorSingle [infoTm v]
             "Right-hand side of recursive let must be a lambda"
@@ -158,8 +165,15 @@ lang ConstAppAst = ConstAst
   syn Expr =
   | TmConstApp {
     const : Const,
-    args : [Expr]
+    args : [Expr],
+    info : Info
   }
+
+  sem infoTm =
+  | TmConstApp r -> r.info
+
+  sem withInfo info =
+  | TmConstApp r -> TmConstApp { r with info = info }
 
   sem isAtomic =
   | TmConstApp _ -> true
@@ -177,11 +191,11 @@ lang ConstEval =
   sem delta info =
   | (const, args) ->
     if lti (length args) (constArity const) then
-      TmConstApp {const = const, args = args}
+      TmConstApp {const = const, args = args, info = info}
     else errorSingle [info]
            (join [
              "Invalid application\n",
-             expr2str (TmConstApp {const = const, args = args})
+             expr2str (TmConstApp {const = const, args = args, info = info})
            ])
 
   sem apply ctx info =

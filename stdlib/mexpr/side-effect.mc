@@ -44,6 +44,16 @@ lang SideEffect
     optionGetOrElse
       (lam. 0)
       (mapLookup id env.arityId)
+
+  sem exprHasSideEffectH : SideEffectEnv -> Bool -> Bool -> Expr -> Bool
+
+  sem exprHasSideEffect : SideEffectEnv -> Expr -> Bool
+  sem exprHasSideEffect env =
+  | t -> exprHasSideEffectH env true false t
+
+  sem hasSideEffect : Expr -> Bool
+  sem hasSideEffect =
+  | t -> exprHasSideEffect (sideEffectEnvEmpty ()) t
 end
 
 lang ConstSideEffect = MExprAst
@@ -89,13 +99,7 @@ end
 lang MExprSideEffect =
   SideEffect + ConstSideEffect + MExprAst + MExprArity + MExprCallGraph
 
-  sem hasSideEffect =
-  | t -> exprHasSideEffect (sideEffectEnvEmpty ()) t
-
-  sem exprHasSideEffect (env : SideEffectEnv) =
-  | t -> exprHasSideEffectH env true false t
-
-  sem exprHasSideEffectH (env : SideEffectEnv) (lambdaCounting : Bool) (acc : Bool) =
+  sem exprHasSideEffectH env lambdaCounting acc =
   | TmVar t ->
     if acc then true
     else if and lambdaCounting (geqi (identArity env t.ident) 1) then false
