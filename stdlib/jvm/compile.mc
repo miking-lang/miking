@@ -8,6 +8,26 @@ include "jvm/constants.mc"
 include "stdlib.mc"
 include "sys.mc"
 
+let oneArgOpI_ = 
+    lam op. lam env. lam arg.
+    { env with 
+        bytecode = foldl concat env.bytecode 
+            [arg.bytecode,
+            unwrapInteger_,
+            [op],
+            wrapInteger_], 
+        classes = concat env.classes arg.classes }
+
+let oneArgOpF_ = 
+    lam op. lam env. lam arg.
+    { env with 
+        bytecode = foldl concat env.bytecode 
+            [arg.bytecode,
+            unwrapFloat_,
+            [op],
+            wrapFloat_], 
+        classes = concat env.classes arg.classes }
+
 lang MExprJVMCompile = MExprAst + JVMAst
 
     type JVMEnv = {
@@ -19,8 +39,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
         name : String,
         nextClass : String
     }
-
-    -- callConstructor var?
 
     -- go through AST and translate to JVM bytecode
 
@@ -53,43 +71,37 @@ lang MExprJVMCompile = MExprAst + JVMAst
                         wrapInteger_], -- change this to () later 
                     classes = concat env.classes arg.classes }
             else match lhs with TmConst { val = CAddi _ } then 
-                applyArithI_ "Addi" env arg.bytecode 
+                applyArithI_ "Addi" env arg 
             else match lhs with TmConst { val = CSubi _ } then 
-                applyArithI_ "Subi" env arg.bytecode
+                applyArithI_ "Subi" env arg
             else match lhs with TmConst { val = CMuli _ } then 
-                applyArithI_ "Muli" env arg.bytecode
+                applyArithI_ "Muli" env arg
             else match lhs with TmConst { val = CDivi _ } then 
-                applyArithI_ "Divi" env arg.bytecode
+                applyArithI_ "Divi" env arg
             else match lhs with TmConst { val = CModi _ } then 
-                applyArithI_ "Modi" env arg.bytecode
+                applyArithI_ "Modi" env arg
             else match lhs with TmConst { val = CAddf _ } then 
-                applyArithF_ "Addf" env arg.bytecode 
+                applyArithF_ "Addf" env arg 
             else match lhs with TmConst { val = CSubf _ } then 
-                applyArithF_ "Subf" env arg.bytecode
+                applyArithF_ "Subf" env arg
             else match lhs with TmConst { val = CMulf _ } then 
-                applyArithF_ "Mulf" env arg.bytecode
+                applyArithF_ "Mulf" env arg
             else match lhs with TmConst { val = CDivf _ } then 
-                applyArithF_ "Divf" env arg.bytecode
+                applyArithF_ "Divf" env arg
             else match lhs with TmConst { val = CEqi _ } then
-                applyArithI_ "Eqi" env arg.bytecode
+                applyArithI_ "Eqi" env arg
             else match lhs with TmConst { val = CLti _ } then
-                applyArithI_ "Lti" env arg.bytecode
+                applyArithI_ "Lti" env arg
+            else match lhs with TmConst { val = CSlli _ } then
+                applyArithI_ "Slli" env arg
+            else match lhs with TmConst { val = CSrli _ } then
+                applyArithI_ "Srli" env arg
+            else match lhs with TmConst { val = CSrai _ } then
+                applyArithI_ "Srai" env arg
             else match lhs with TmConst { val = CNegf _ } then
-                { env with 
-                    bytecode = foldl concat env.bytecode 
-                        [arg.bytecode,
-                        unwrapFloat_,
-                        [dneg_],
-                        wrapFloat_], 
-                    classes = concat env.classes arg.classes }
+                oneArgOpF_ dneg_ env arg
             else match lhs with TmConst { val = CNegi _ } then
-                { env with 
-                    bytecode = foldl concat env.bytecode 
-                        [arg.bytecode,
-                        unwrapInteger_,
-                        [lneg_],
-                        wrapInteger_], 
-                    classes = concat env.classes arg.classes }
+                oneArgOpI_ lneg_ env arg
             else 
                 (print "Unknown Const!\n");
                 env
@@ -163,7 +175,8 @@ let compileJVMEnv = lam ast.
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
     let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [], fieldVars = mapEmpty nameCmp, name = "Main", nextClass = createName_ "Func" } in
     let compiledEnv = (toJSONExpr env ast) in
-    let bytecode = concat compiledEnv.bytecode [pop_, return_] in
+    --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
+    let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
     let constClasses = constClassList_ in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) [objToObj] in
@@ -249,7 +262,14 @@ utest testJVM (subi_ (int_ 0) (int_ 1)) with "-1" in
 utest testJVM (divi_ (int_ 10) (int_ 5)) with "2" in
 utest testJVM (muli_ (int_ 2) (int_ (negi 1))) with "-2" in
 utest testJVM (modi_ (int_ 10) (int_ 2)) with "0" in
-utest testJVM (negi_ (int_ 1)) with "-1" in
+utest testJVM (negi_ (int_ 1)) with "-1" in 
+utest testJVM (slli_ (int_ 3) (int_ 2)) with "12" in 
+utest testJVM (srli_ (int_ 24) (int_ 3)) with "3" in 
+utest testJVM (srai_ (negi_ (int_ 24)) (int_ 3)) with "-3" in 
+
+-- integer boolean operations
+utest testJVM (lti_ (int_ 20) (int_ 10)) with "false" in
+utest testJVM (eqi_ (int_ 10) (int_ 10)) with "true" in
 
 -- float operations
 utest testJVM (addf_ (float_ 1.5) (float_ 1.0)) with "2.5" in
@@ -259,4 +279,3 @@ utest testJVM (mulf_ (float_ 2.2) (float_ (negf 1.0))) with "-2.2" in
 utest testJVM (negf_ (float_ 1.5)) with "-1.5" in
 
 sysDeleteDir jvmTmpPath
-

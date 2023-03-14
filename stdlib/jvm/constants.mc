@@ -33,6 +33,15 @@ let return_ = use JVMAst in
 let pop_ = use JVMAst in
     createBEmpty "POP"
 
+let lshl_ = use JVMAst in
+    createBEmpty "LSHL"
+
+let lshr_ = use JVMAst in
+    createBEmpty "LSHR"
+
+let lushr_ = use JVMAst in
+    createBEmpty "LUSHR"
+
 let ladd_ = use JVMAst in
     createBEmpty "LADD"
 
@@ -259,6 +268,29 @@ let arithClassIB_ = use JVMAst in
                 wrapBoolean_,
                 [areturn_]])]
 
+let arithClassIjavaI_ = use JVMAst in
+    lam name. lam op.
+    let freeVar = "var" in
+    let varTy = integer_LT in
+    createClass
+        name
+        (concat pkg_ "Function")
+        [createField freeVar varTy]
+        defaultConstructor
+        [createFunction
+            "apply"
+            (methodtype_T object_LT object_LT)
+            (foldl concat
+                [aload_ 0, 
+                getfield_ (concat pkg_ name) freeVar varTy] 
+                [unwrapInteger_, 
+                [aload_ 1,
+                checkcast_ "java/lang/Long"], 
+                [invokevirtual_ "java/lang/Long" "intValue" "()I"], 
+                op, 
+                wrapInteger_, 
+                [areturn_]])]
+
 let subiClass_ = arithClassI_ "Subi" [lsub_]
 
 let subfClass_ = arithClassF_ "Subf" [dsub_]
@@ -277,6 +309,12 @@ let divfClass_ = arithClassF_ "Divf" [ddiv_]
 
 let modiClass_ = arithClassI_ "Modi" [lrem_] 
 
+let slliClass_ = arithClassIjavaI_ "Slli" [lshl_] 
+
+let srliClass_ = arithClassIjavaI_ "Srli" [lushr_] 
+
+let sraiClass_ = arithClassIjavaI_ "Srai" [lshr_] 
+
 let eqiClass_ = arithClassIB_ "Eqi" [lcmp_, ifeq_ "end"] "end"
 
 let ltiClass_ = arithClassIB_ "Lti" [lcmp_, iflt_ "end"] "end"
@@ -291,25 +329,30 @@ let constClassList_ =
     subfClass_, 
     mulfClass_, 
     divfClass_,
+    slliClass_,
+    srliClass_,
+    sraiClass_,
     eqiClass_,
     ltiClass_]
 
 let applyArithF_ = use JVMAst in
-    lam name. lam env. lam argBytecode. 
+    lam name. lam env. lam arg. 
     { env with 
         bytecode = foldl concat env.bytecode 
             [initClass_ name, 
             [dup_], 
-            argBytecode,
+            arg.bytecode,
             [checkcast_ float_T, 
-            putfield_ (concat pkg_ name) "var" float_LT]] } 
+            putfield_ (concat pkg_ name) "var" float_LT]],
+        classes = concat env.classes arg.classes } 
 
 let applyArithI_ = use JVMAst in
-    lam name. lam env. lam argBytecode. 
+    lam name. lam env. lam arg. 
     { env with 
         bytecode = foldl concat env.bytecode 
             [initClass_ name, 
             [dup_], 
-            argBytecode,
+            arg.bytecode,
             [checkcast_ integer_T, 
-            putfield_ (concat pkg_ name) "var" integer_LT]] } 
+            putfield_ (concat pkg_ name) "var" integer_LT]],
+        classes = concat env.classes arg.classes } 

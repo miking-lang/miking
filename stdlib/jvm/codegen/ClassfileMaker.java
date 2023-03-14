@@ -118,6 +118,7 @@ class ClassfileMaker {
         labels.putIfAbsent(name, new Label());
     }
 
+    // make a map for faster lookup
     private void emitBytecode(MethodVisitor mv, JsonNode bytecodes) {
         mv.visitCode();
         for (int i = 0; i < bytecodes.size(); i++) {
@@ -198,6 +199,15 @@ class ClassfileMaker {
                             break;
                         case "POP":
                             mv.visitInsn(POP);
+                            break;
+                        case "LSHL":
+                            mv.visitInsn(LSHL);
+                            break;
+                        case "LUSHR":
+                            mv.visitInsn(LUSHR);
+                            break;
+                        case "LSHR":
+                            mv.visitInsn(LSHR);
                             break;
                         case "LCMP":
                             mv.visitInsn(LCMP);
