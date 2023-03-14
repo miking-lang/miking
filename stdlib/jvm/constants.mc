@@ -114,11 +114,20 @@ let checkcast_ = use JVMAst in
 let ifeq_ = use JVMAst in 
     lam label. createBString "IFEQ" label
 
-let ifneq_ = use JVMAst in 
-    lam label. createBString "IFNEQ" label
+let ifne_ = use JVMAst in 
+    lam label. createBString "IFNE" label
 
 let iflt_ = use JVMAst in 
     lam label. createBString "IFLT" label   
+
+let ifgt_ = use JVMAst in 
+    lam label. createBString "IFGT" label   
+
+let ifle_ = use JVMAst in 
+    lam label. createBString "IFLE" label   
+
+let ifge_ = use JVMAst in 
+    lam label. createBString "IFGE" label  
 
 let ificmpeq_ = use JVMAst in 
     lam label. createBString "IF_ICMPEQ" label
@@ -317,7 +326,15 @@ let sraiClass_ = arithClassIjavaI_ "Srai" [lshr_]
 
 let eqiClass_ = arithClassIB_ "Eqi" [lcmp_, ifeq_ "end"] "end"
 
+let neqiClass_ = arithClassIB_ "Neqi" [lcmp_, ifne_ "end"] "end"
+
 let ltiClass_ = arithClassIB_ "Lti" [lcmp_, iflt_ "end"] "end"
+
+let gtiClass_ = arithClassIB_ "Gti" [lcmp_, ifgt_ "end"] "end"
+
+let leqiClass_ = arithClassIB_ "Leqi" [lcmp_, ifle_ "end"] "end"
+
+let geqiClass_ = arithClassIB_ "Geqi" [lcmp_, ifge_ "end"] "end"
 
 let constClassList_ = 
     [addiClass_, 
@@ -333,7 +350,11 @@ let constClassList_ =
     srliClass_,
     sraiClass_,
     eqiClass_,
-    ltiClass_]
+    neqiClass_,
+    ltiClass_,
+    gtiClass_,
+    leqiClass_,
+    geqiClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 

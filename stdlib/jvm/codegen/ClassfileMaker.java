@@ -265,9 +265,25 @@ class ClassfileMaker {
                             createLabel(constant);
                             mv.visitJumpInsn(IFEQ, labels.get(constant));
                             break;
+                        case "IFNE":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFNE, labels.get(constant));
+                            break;
                         case "IFLT":
                             createLabel(constant);
                             mv.visitJumpInsn(IFLT, labels.get(constant));
+                            break;
+                        case "IFGT":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFGT, labels.get(constant));
+                            break;
+                        case "IFLE":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFLE, labels.get(constant));
+                            break;
+                        case "IFGE":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IFGE, labels.get(constant));
                             break;
                         case "IF_ICMPEQ":
                             createLabel(constant);

@@ -90,8 +90,16 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithF_ "Divf" env arg
             else match lhs with TmConst { val = CEqi _ } then
                 applyArithI_ "Eqi" env arg
+            else match lhs with TmConst { val = CNeqi _ } then
+                applyArithI_ "Neqi" env arg
             else match lhs with TmConst { val = CLti _ } then
                 applyArithI_ "Lti" env arg
+            else match lhs with TmConst { val = CGti _ } then
+                applyArithI_ "Gti" env arg
+            else match lhs with TmConst { val = CLeqi _ } then
+                applyArithI_ "Leqi" env arg
+            else match lhs with TmConst { val = CGeqi _ } then
+                applyArithI_ "Geqi" env arg
             else match lhs with TmConst { val = CSlli _ } then
                 applyArithI_ "Slli" env arg
             else match lhs with TmConst { val = CSrli _ } then
@@ -269,7 +277,11 @@ utest testJVM (srai_ (negi_ (int_ 24)) (int_ 3)) with "-3" in
 
 -- integer boolean operations
 utest testJVM (lti_ (int_ 20) (int_ 10)) with "false" in
+utest testJVM (gti_ (int_ 20) (int_ 10)) with "true" in
 utest testJVM (eqi_ (int_ 10) (int_ 10)) with "true" in
+utest testJVM (neqi_ (int_ 10) (int_ 10)) with "false" in
+utest testJVM (leqi_ (int_ 20) (int_ 20)) with "true" in
+utest testJVM (geqi_ (int_ 1) (int_ 9)) with "false" in
 
 -- float operations
 utest testJVM (addf_ (float_ 1.5) (float_ 1.0)) with "2.5" in
