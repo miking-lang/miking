@@ -178,8 +178,10 @@ let eqCOPSolverResult = lam s1. lam s2.
 in
 
 let eqTest = lam lhs: COPModel. lam rhs: COPSolverResult.
-  let lhs = solve lhs in
-  eqCOPSolverResult lhs rhs
+  if sysCommandExists "minizinc" then
+    let lhs = solve lhs in
+    eqCOPSolverResult lhs rhs
+  else true
 in
 
 let x = nameSym "x" in
