@@ -135,8 +135,8 @@ let ificmpeq_ = use JVMAst in
 let label_ = use JVMAst in 
     lam name. createBString "LABEL" name
 
-let dcmpeq_= use JVMAst in
-    lam label. createBString "DCMPEQ" label
+let dcmp_= use JVMAst in
+    createBEmpty "DCMP"
 
 let lcmp_ = use JVMAst in 
     createBEmpty "LCMP"
@@ -277,6 +277,32 @@ let arithClassIB_ = use JVMAst in
                 wrapBoolean_,
                 [areturn_]])]
 
+let arithClassFB_ = use JVMAst in 
+    lam name. lam op. lam label.
+    let freeVar = "var" in
+    let varTy = float_LT in
+    createClass 
+        name 
+        (concat pkg_"Function") 
+        [createField freeVar varTy] 
+        defaultConstructor 
+        [createFunction 
+            "apply" 
+            "(Ljava/lang/Object;)Ljava/lang/Object;" 
+            (foldl concat 
+                [ldcInt_ 1,
+                aload_ 0, 
+                getfield_ (concat pkg_ name) freeVar varTy] 
+                [unwrapFloat_, 
+                [aload_ 1], 
+                unwrapFloat_, 
+                op,
+                [pop_, 
+                ldcInt_ 0,
+                label_ label],
+                wrapBoolean_,
+                [areturn_]])]
+
 let arithClassIjavaI_ = use JVMAst in
     lam name. lam op.
     let freeVar = "var" in
@@ -336,6 +362,18 @@ let leqiClass_ = arithClassIB_ "Leqi" [lcmp_, ifle_ "end"] "end"
 
 let geqiClass_ = arithClassIB_ "Geqi" [lcmp_, ifge_ "end"] "end"
 
+let eqfClass_ = arithClassFB_ "Eqf" [dcmp_, ifeq_ "end"] "end"
+
+let neqfClass_ = arithClassFB_ "Neqf" [dcmp_, ifne_ "end"] "end"
+
+let ltfClass_ = arithClassFB_ "Ltf" [dcmp_, iflt_ "end"] "end"
+
+let gtfClass_ = arithClassFB_ "Gtf" [dcmp_, ifgt_ "end"] "end"
+
+let leqfClass_ = arithClassFB_ "Leqf" [dcmp_, ifle_ "end"] "end"
+
+let geqfClass_ = arithClassFB_ "Geqf" [dcmp_, ifge_ "end"] "end"
+
 let constClassList_ = 
     [addiClass_, 
     subiClass_, 
@@ -354,7 +392,13 @@ let constClassList_ =
     ltiClass_,
     gtiClass_,
     leqiClass_,
-    geqiClass_]
+    geqiClass_,
+    eqfClass_,
+    neqfClass_,
+    ltfClass_,
+    gtfClass_,
+    leqfClass_,
+    geqfClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 

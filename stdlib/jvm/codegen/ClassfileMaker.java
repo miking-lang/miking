@@ -212,6 +212,9 @@ class ClassfileMaker {
                         case "LCMP":
                             mv.visitInsn(LCMP);
                             break;
+                        case "DCMP":
+                            mv.visitInsn(DCMPL);
+                            break;
                         default:
                             System.out.println("Unknown empty: " + bytecode.get("instr").asText());
                     }

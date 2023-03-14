@@ -100,6 +100,20 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithI_ "Leqi" env arg
             else match lhs with TmConst { val = CGeqi _ } then
                 applyArithI_ "Geqi" env arg
+            
+            else match lhs with TmConst { val = CEqf _ } then
+                applyArithF_ "Eqf" env arg
+            else match lhs with TmConst { val = CNeqf _ } then
+                applyArithF_ "Neqf" env arg
+            else match lhs with TmConst { val = CLtf _ } then
+                applyArithF_ "Ltf" env arg
+            else match lhs with TmConst { val = CGtf _ } then
+                applyArithF_ "Gtf" env arg
+            else match lhs with TmConst { val = CLeqf _ } then
+                applyArithF_ "Leqf" env arg
+            else match lhs with TmConst { val = CGeqf _ } then
+                applyArithF_ "Geqf" env arg
+                
             else match lhs with TmConst { val = CSlli _ } then
                 applyArithI_ "Slli" env arg
             else match lhs with TmConst { val = CSrli _ } then
@@ -282,6 +296,14 @@ utest testJVM (eqi_ (int_ 10) (int_ 10)) with "true" in
 utest testJVM (neqi_ (int_ 10) (int_ 10)) with "false" in
 utest testJVM (leqi_ (int_ 20) (int_ 20)) with "true" in
 utest testJVM (geqi_ (int_ 1) (int_ 9)) with "false" in
+
+-- float boolean operations
+utest testJVM (ltf_ (float_ 10.0) (float_ 10.5)) with "true" in
+utest testJVM (gtf_ (float_ 20.0) (float_ 10.0)) with "true" in
+utest testJVM (eqf_ (float_ 10.0) (float_ 10.0)) with "true" in
+utest testJVM (neqf_ (float_ 10.0) (float_ 10.0)) with "false" in
+utest testJVM (leqf_ (float_ 0.505) (float_ 0.505)) with "true" in
+utest testJVM (geqf_ (float_ 1.5) (float_ 1.0)) with "true" in
 
 -- float operations
 utest testJVM (addf_ (float_ 1.5) (float_ 1.0)) with "2.5" in
