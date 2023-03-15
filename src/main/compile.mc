@@ -15,6 +15,7 @@ include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utest-generate.mc"
+include "mexpr/visualize-ast.mc"
 include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
@@ -36,6 +37,9 @@ lang MCoreCompile =
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
+end
+
+lang AstAnnotFull = MExprPrettyPrint + AstAnnot + HtmlAnnotator
 end
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
@@ -84,7 +88,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = lowerAll ast in
     endPhaseStats log "pattern-lowering" ast;
     (if options.debugShallow then
-      printLn (expr2str ast) else ());
+      printLn (use AstAnnotFull in annotateMExpr ast) else ());
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else
