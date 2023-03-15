@@ -86,3 +86,11 @@ let message2str (id, sev, info, _) =
 let raise_error fi msg = raise (Error (ERROR msg, ERROR, fi, []))
 
 let error fi msg = raise_error fi (msg |> Ustring.to_utf8)
+
+(** Create a new info, taking left and right part *)
+let mkinfo fi1 fi2 =
+  match (fi1,fi2) with
+    | (Info(fn,r1,c1,_,_), Info(_,_,_,r2,c2)) -> Info(fn,r1,c1,r2,c2)
+    | (Info(fn,r1,c1,r2,c2), NoInfo) -> Info(fn,r1,c1,r2,c2)
+    | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
+    | (_,_) -> NoInfo

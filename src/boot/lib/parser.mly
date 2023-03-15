@@ -14,19 +14,15 @@
   open Ast
   open Intrinsics
 
-  (** Create a new info, taking left and right part *)
-  let mkinfo fi1 fi2 =
-    match (fi1,fi2) with
-      | (Info(fn,r1,c1,_,_), Info(_,_,_,r2,c2)) -> Info(fn,r1,c1,r2,c2)
-      | (Info(fn,r1,c1,r2,c2), NoInfo) -> Info(fn,r1,c1,r2,c2)
-      | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
-      | (_,_) -> NoInfo
-
   let unique_ident = us"X"
 
   let set_con_params params = function
     | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
+  let rec last_via_or def f = function
+    | [] -> def
+    | [x] -> f x
+    | _::xs -> last_via_or def f xs
 
 %}
 
@@ -177,12 +173,12 @@ top:
 
 toplet:
   | LET var_ident ty_op EQ mexpr
-    { let fi = mkinfo $1.i $4.i in
+    { let fi = mkinfo $1.i (tm_info $5) in
       Let (fi, $2.v, $3 $1.i, $5) }
 
 toptype:
   | TYPE type_ident type_params
-     { let fi = mkinfo $1.i $2.i in
+     { let fi = mkinfo $1.i $2.i in (* TODO(vipa, 2023-03-15): info *)
        Type (fi, $2.v, $3, TyVariant (fi, [])) }
   | TYPE type_ident type_params EQ ty
      { let fi = mkinfo $1.i (ty_info $5) in
@@ -195,8 +191,9 @@ topRecLet:
 
 topcon:
   | CON con_ident ty_op
-    { let fi = mkinfo $1.i $2.i in
-      Con (fi, $2.v, $3 $1.i) }
+    { let ty = $3 $1.i in
+      let fi = mkinfo $1.i (ty_info ty) in
+      Con (fi, $2.v, ty) }
 
 toputest:
   | UTEST mexpr WITH mexpr
@@ -208,11 +205,7 @@ toputest:
 
 mlang:
   | LANG ident lang_includes decls END
-    { let fi = if List.length $3 > 0 then
-                 mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
-               else
-                 mkinfo $1.i $2.i
-      in
+    { let fi = mkinfo $1.i $5.i in
       Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
 
 topext:
@@ -241,16 +234,17 @@ decls:
     { [] }
 decl:
   | SYN type_ident type_params EQ constrs
-    { let fi = mkinfo $1.i $4.i in
+    { let endfi = last_via_or $4.i (function | CDecl(fi, _, _, _) -> fi) $5 in
+      let fi = mkinfo $1.i endfi in
       Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5) }
   | SEM var_ident params EQ cases
-    { let fi = mkinfo $1.i $4.i in
+    { let fi = mkinfo $1.i (last_via_or $4.i (fun (_, tm) -> tm_info tm) $5) in
       Inter (fi, $2.v, TyUnknown fi, Some $3, $5) }
   | SEM var_ident COLON ty
     { let fi = mkinfo $1.i (ty_info $4) in
       Inter (fi, $2.v, $4, None, []) }
   | TYPE type_ident type_params EQ ty
-    { let fi = mkinfo $1.i $4.i in
+    { let fi = mkinfo $1.i (ty_info $5) in
       Alias (fi, $2.v, $3, $5) }
 
 constrs:
@@ -260,8 +254,9 @@ constrs:
     { [] }
 constr:
   | BAR con_ident constr_params
-    { let fi = mkinfo $1.i $2.i in
-      CDecl(fi, [], $2.v, $3 $1.i) }
+    { let param = $3 $2.i in
+      let fi = mkinfo $1.i (ty_info param) in
+      CDecl(fi, [], $2.v, param) }
 
 constr_params:
   | ty
@@ -271,10 +266,12 @@ constr_params:
 
 params:
   | LPAREN var_ident COLON ty RPAREN params
-    { let fi = mkinfo $1.i $5.i in
+    { let endfi = last_via_or $5.i (function | Param (fi, _, _) -> fi) $6 in
+      let fi = mkinfo $1.i endfi in
       Param (fi, $2.v, $4) :: $6 }
   | var_ident params
-    { let fi = mkinfo $1.i $1.i in
+    { let endfi = last_via_or $1.i (function | Param (fi, _, _) -> fi) $2 in
+      let fi = mkinfo $1.i endfi in
       Param (fi, $1.v, TyUnknown fi) :: $2 }
   |
     { [] }
@@ -296,17 +293,17 @@ mexpr:
   | sequence
       { $1 }
   | TYPE type_ident type_params IN mexpr
-      { let fi = mkinfo $1.i $4.i in
+      { let fi = mkinfo $1.i (tm_info $5) in
         TmType(fi, $2.v, $3, TyVariant (fi, []), $5) }
   | TYPE type_ident type_params EQ ty IN mexpr
       { let fi = mkinfo $1.i (tm_info $7) in
         TmType(fi, $2.v, $3, $5, $7) }
   | REC lets IN mexpr
-      { let fi = mkinfo $1.i $3.i in
+      { let fi = mkinfo $1.i (tm_info $4) in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
          TmRecLets(fi,lst,$4) }
   | LET var_ident ty_op EQ mexpr IN mexpr
-      { let fi = mkinfo $1.i $6.i in
+      { let fi = mkinfo $1.i (tm_info $7) in
         TmLet(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5,$7) }
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
@@ -318,7 +315,7 @@ mexpr:
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(fi,true),$4,$6) }
   | CON con_ident ty_op IN mexpr
-      { let fi = mkinfo $1.i $4.i in
+      { let fi = mkinfo $1.i (tm_info $5) in
         TmConDef(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
@@ -332,13 +329,13 @@ mexpr:
         TmLet(fi,unique_ident,Symb.Helpers.nosym,TyUnknown(fi),$2,$3)
       }
   | USE ident IN mexpr
-      { let fi = mkinfo $1.i $3.i in
+      { let fi = mkinfo $1.i (tm_info $4) in
         TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
-      { let fi = mkinfo $1.i $5.i in
+      { let fi = mkinfo $1.i (tm_info $6) in
         TmUtest(fi,$2,$4,None,$6) }
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
-      { let fi = mkinfo $1.i (tm_info $6) in
+      { let fi = mkinfo $1.i (tm_info $8) in
         TmUtest(fi,$2,$4,Some $6,$8) }
   | EXTERNAL ident COLON ty IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
@@ -352,14 +349,15 @@ lets:
       { let fi = mkinfo $1.i (tm_info $5) in
         [(fi, $2.v, $3 $1.i, $5)] }
   | LET var_ident ty_op EQ mexpr lets
-      { let fi = mkinfo $1.i (tm_info $5) in
+      { let endfi = last_via_or (tm_info $5) (function | (fi, _, _, _) -> fi) $6 in
+        let fi = mkinfo $1.i endfi in
         (fi, $2.v, $3 $1.i, $5)::$6 }
 
 sequence:
   | left
      { $1 }
   | left SEMI mexpr
-     { let fi = tm_info $1 in
+     { let fi = mkinfo (tm_info $1) (tm_info $3) in
        TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(fi), $1, $3) }
 
 left:

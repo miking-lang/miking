@@ -385,7 +385,7 @@ open AstHelpers
 
 let translate_cases fi f target cases =
   let translate_case (pat, handler) inner =
-    TmMatch (pat_info pat, target, pat, handler, inner)
+    TmMatch (mkinfo (pat_info pat) (tm_info handler), target, pat, handler, inner)
   in
   let msg =
     Mseq.map
@@ -875,7 +875,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       (* translate "Inter"s into (info * ustring * tm) *)
       let inter_to_tm fname fi params cases =
         let target = us "__sem_target" in
-        let wrap_param (Param (fi, name, ty)) tm =
+        let wrap_param (Param (_, name, ty)) tm =
           TmLam (fi, name, Symb.Helpers.nosym, desugar_ty ns ty, tm)
         in
         TmLam
