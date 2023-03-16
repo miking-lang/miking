@@ -10,4 +10,6 @@ let accelerateKeywords = [
   "accelerate", "parallelMap", "flatten", "map2", "reduce", "seqLoop",
   "seqLoopAcc", "loop", "printFloat"]
 
-let mexprExtendedKeywords = concat holeKeywords accelerateKeywords
+let pevalKeywords = ["peval"]
+
+let mexprExtendedKeywords = concat pevalKeywords (concat holeKeywords accelerateKeywords)
