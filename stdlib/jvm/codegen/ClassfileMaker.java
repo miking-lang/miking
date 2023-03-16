@@ -292,6 +292,13 @@ class ClassfileMaker {
                             createLabel(constant);
                             mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
                             break;
+                        case "GOTO":
+                            createLabel(constant);
+                            mv.visitJumpInsn(GOTO, labels.get(constant));
+                            break;
+                        case "ANEWARRAY":
+                            mv.visitTypeInsn(ANEWARRAY, constant);
+                            break;
                         default:
                             System.out.println("Unknown arg_constant: " + bytecode.get("instr").asText());
                     }

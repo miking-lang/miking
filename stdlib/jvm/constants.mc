@@ -1,5 +1,8 @@
 include "jvm/ast.mc"
 
+
+let pkg_ = "pkg/"
+
 -- Instructions --
 
 let aload_ = use JVMAst in 
@@ -141,6 +144,14 @@ let dcmp_= use JVMAst in
 let lcmp_ = use JVMAst in 
     createBEmpty "LCMP"
 
+let goto_ = use JVMAst in 
+    lam label. createBString "GOTO" label
+
+let anewarray_ = use JVMAst in 
+    lam t. createBString "ANEWARRAY" t 
+
+let aastore_ = use JVMAst in 
+    createBEmpty "AASTORE"
 ---
 
 let jvmTrue = 1
@@ -169,10 +180,13 @@ let boolean_T = "java/lang/Boolean"
 
 let boolean_LT = type_LT boolean_T
 
+let arraytype_ = lam at. concat "[" at
 
 ----
 
-let pkg_ = "pkg/"
+let initClass_ = 
+    lam name. 
+        [new_ (concat pkg_ name), dup_, invokespecial_ (concat pkg_ name) "<init>" "()V"]
 
 let apply_ = use JVMAst in 
     lam bytecode.
@@ -196,15 +210,18 @@ let wrapBoolean_ =
 let unwrapBoolean_ = 
     [checkcast_ boolean_T, invokevirtual_ boolean_T "booleanValue" "()Z"]
 
+let wrapRecord_ =
+    lam recordArray.
+    foldl concat [new_ (concat pkg_ "Record")] [[dup_], recordArray, [invokespecial_ (concat pkg_ "Record") "<init>" (methodtype_T (arraytype_ object_LT) "V")]]
+
+let unwrapRecord_ = 
+    [getfield_ (concat pkg_ "Record") "array" (arraytype_ object_LT)]
+
 let defaultConstructor = use JVMAst in
     createFunction "constructor" "()V" [aload_ 0, invokespecial_ "java/lang/Object" "<init>" "()V", return_]
 
 let createName_ = 
     lam prefix. concat prefix (create 3 (lam. randAlphanum ()))
-
-let initClass_ = 
-    lam name. 
-        [new_ (concat pkg_ name), dup_, invokespecial_ (concat pkg_ name) "<init>" "()V"]
 
 
 let arithClassI_ = use JVMAst in
@@ -374,6 +391,27 @@ let leqfClass_ = arithClassFB_ "Leqf" [dcmp_, ifle_ "end"] "end"
 
 let geqfClass_ = arithClassFB_ "Geqf" [dcmp_, ifge_ "end"] "end"
 
+let recordConstructor = use JVMAst in
+    createFunction 
+        "constructor" 
+        (methodtype_T (arraytype_ object_LT) "V") 
+            [aload_ 0, 
+            invokespecial_ object_T "<init>" "()V", 
+            aload_ 0, 
+            aload_ 1, 
+            putfield_ (concat pkg_ "Record") "array" (arraytype_ object_LT),
+            return_]
+
+let recordClass_ = use JVMAst in 
+    createClass 
+        "Record" 
+        "" 
+        [createField "array" (arraytype_ object_LT)]
+        recordConstructor
+        [] 
+
+
+
 let constClassList_ = 
     [addiClass_, 
     subiClass_, 
@@ -398,7 +436,8 @@ let constClassList_ =
     ltfClass_,
     gtfClass_,
     leqfClass_,
-    geqfClass_]
+    geqfClass_,
+    recordClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 
@@ -421,3 +460,17 @@ let applyArithI_ = use JVMAst in
             [checkcast_ integer_T, 
             putfield_ (concat pkg_ name) "var" integer_LT]],
         classes = concat env.classes arg.classes } 
+
+let matchCode_ = use JVMAst in
+    lam target. lam patInstr. lam thn. lam els.
+    let elsLabel = createName_ "els" in
+    let endLabel = createName_ "end" in
+    foldl concat 
+        target 
+        [patInstr,
+        [ifne_ elsLabel], -- if zero, we do thn
+        thn,
+        [goto_ endLabel],
+        [label_ elsLabel],
+        els,
+        [label_ endLabel]]

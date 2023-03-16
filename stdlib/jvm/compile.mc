@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "mexpr/pprint.mc"
 include "string.mc"
 include "jvm/ast.mc"
 include "javascript/util.mc"
@@ -7,6 +8,8 @@ include "pmexpr/utils.mc"
 include "jvm/constants.mc"
 include "stdlib.mc"
 include "sys.mc"
+include "map.mc"
+include "mexpr/cmp.mc"
 
 let oneArgOpI_ = 
     lam op. lam env. lam arg.
@@ -28,7 +31,7 @@ let oneArgOpF_ =
             wrapFloat_], 
         classes = concat env.classes arg.classes }
 
-lang MExprJVMCompile = MExprAst + JVMAst
+lang MExprJVMCompile = MExprAst + JVMAst + PrettyPrint + Cmp
 
     type JVMEnv = {
         bytecode : [Bytecode],
@@ -37,7 +40,8 @@ lang MExprJVMCompile = MExprAst + JVMAst
         localVars : Int, -- number of local vars on the JVM
         classes : [Class],
         name : String,
-        nextClass : String
+        nextClass : String,
+        recordMap : Map Type (Map SID Int)
     }
 
     -- go through AST and translate to JVM bytecode
@@ -70,6 +74,7 @@ lang MExprJVMCompile = MExprAst + JVMAst
                         [ldcInt_ 1],
                         wrapInteger_], -- change this to () later 
                     classes = concat env.classes arg.classes }
+            -- this could be a Map?
             else match lhs with TmConst { val = CAddi _ } then 
                 applyArithI_ "Addi" env arg 
             else match lhs with TmConst { val = CSubi _ } then 
@@ -100,7 +105,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithI_ "Leqi" env arg
             else match lhs with TmConst { val = CGeqi _ } then
                 applyArithI_ "Geqi" env arg
-            
             else match lhs with TmConst { val = CEqf _ } then
                 applyArithF_ "Eqf" env arg
             else match lhs with TmConst { val = CNeqf _ } then
@@ -113,7 +117,6 @@ lang MExprJVMCompile = MExprAst + JVMAst
                 applyArithF_ "Leqf" env arg
             else match lhs with TmConst { val = CGeqf _ } then
                 applyArithF_ "Geqf" env arg
-                
             else match lhs with TmConst { val = CSlli _ } then
                 applyArithI_ "Slli" env arg
             else match lhs with TmConst { val = CSrli _ } then
@@ -127,6 +130,7 @@ lang MExprJVMCompile = MExprAst + JVMAst
             else 
                 (print "Unknown Const!\n");
                 env
+        -- if type of arg is Record -> Array
         else
             let fun = toJSONExpr env lhs in 
             { fun with 
@@ -142,11 +146,11 @@ lang MExprJVMCompile = MExprAst + JVMAst
                         fieldVars = mapEmpty nameCmp, 
                         localVars = addi 1 env.localVars, 
                         vars = mapInsert ident env.localVars env.vars } inexpr
-    | TmLam { ident = ident, body = body } ->
+    | TmLam { ident = ident, body = body } -> 
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) object_LT) in
         let nextClass = createName_ "Func" in
-        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, localVars = 2, vars = mapInsert ident 1 (mapEmpty nameCmp), fieldVars = mapInsert ident newField env.fieldVars } body in 
+        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, fieldVars = mapInsert ident newField env.fieldVars } body in 
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
             let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) object_LT, putfield_ (concat pkg_ nextClass) (getNameField x) object_LT]) fields) in
@@ -174,7 +178,43 @@ lang MExprJVMCompile = MExprAst + JVMAst
             (print (join ["No identifier! ", nameGetStr ident, "\n"]));
             []) in
         { env with bytecode = concat env.bytecode store }
+    | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
+        let targetEnv = toJSONExpr env target in 
+        let thnEnv = toJSONExpr { env with bytecode = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [] } els in
+        match pat with PatInt { val = val } then
+            { env with 
+                bytecode = matchCode_ targetEnv.bytecode (concat unwrapInteger_ [ldcLong_ val, lcmp_]) thnEnv.bytecode elsEnv.bytecode,
+                classes = foldl concat env.classes [targetEnv.classes, thnEnv.classes, elsEnv.classes] }
+        else never
+    | TmRecord { bindings = bindings, ty = ty } ->
+        let mapSeq = mapToSeq bindings in
+        let len = length mapSeq in
+        match mapLookup ty env.recordMap with Some translation then
+            let insertBytecode = foldl (
+                lam e. lam tup.
+                    let expr = (match mapLookup tup.0 bindings with Some e then e else never) in
+                    let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ tup.1] } expr in 
+                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes }
+            ) { env with bytecode = [] } (mapToSeq translation) in
+            let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
+            { env with bytecode = concat env.bytecode (wrapRecord_ recordBytecode), classes = insertBytecode.classes }
+        else
+            let sidInt = mapi (lam i. lam tup. (tup.0, i)) mapSeq in
+            let sidIntMap = mapFromSeq cmpSID sidInt in
+            let insertBytecode = foldl (
+                lam e. lam tup.
+                    let expr = (match mapLookup tup.0 bindings with Some e then e else never) in
+                    let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ tup.1] } expr in 
+                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes }
+            ) { env with bytecode = [] } sidInt in
+            let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
+            { env with 
+                bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
+                classes = insertBytecode.classes, 
+                recordMap = mapInsert ty sidIntMap env.recordMap }
     | a -> 
+        (printLn (expr2str a));
         (print "unknown expr\n");
         env
 
@@ -195,7 +235,7 @@ end
 let compileJVMEnv = lam ast.
     use MExprJVMCompile in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
-    let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [], fieldVars = mapEmpty nameCmp, name = "Main", nextClass = createName_ "Func" } in
+    let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [], fieldVars = mapEmpty nameCmp, name = "Main", nextClass = createName_ "Func", recordMap = mapEmpty cmpType } in
     let compiledEnv = (toJSONExpr env ast) in
     --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
@@ -313,3 +353,5 @@ utest testJVM (mulf_ (float_ 2.2) (float_ (negf 1.0))) with "-2.2" in
 utest testJVM (negf_ (float_ 1.5)) with "-1.5" in
 
 sysDeleteDir jvmTmpPath
+
+-- write tests for lambdas and let ins
