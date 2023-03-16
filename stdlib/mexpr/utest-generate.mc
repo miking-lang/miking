@@ -31,6 +31,9 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
 
+let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
+
+
 let _utestRuntimeExpected = [
   "utestRunner", "utestExitOnFailure", "defaultPprint", "ppBool", "ppInt",
   "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt", "eqFloat", "eqChar",
@@ -38,6 +41,10 @@ let _utestRuntimeExpected = [
 ]
 let _utestRuntimeCode = ref (None ())
 let _utestRuntimeIds = ref (None ())
+
+let resetStore = lam. modref _utestRuntimeCode (None ());
+                 modref _utestRuntimeIds (None ());
+                 ()
 
 let _pprintId = ref 0
 let _eqId = ref 0
@@ -370,84 +377,93 @@ end
 -- function that produces a typed AST for the runtime file (utest-runtime.mc),
 -- as well as functions for accessing identifiers defined in the runtime file.
 lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
-  sem loadRuntime : () -> Expr
+
+  sem loadRuntime : String -> Expr
   sem loadRuntime =
-  | _ ->
+  | file ->
     match deref _utestRuntimeCode with Some ast then ast
     else
       let args = defaultBootParserParseMCoreFileArg in
-      let utestRuntimeFile = concat stdlibLoc "/mexpr/utest-runtime.mc" in
+      let utestRuntimeFile = concat stdlibLoc file in
       let ast = typeCheck (symbolize (parseMCoreFile args utestRuntimeFile)) in
       modref _utestRuntimeCode (Some ast);
       ast
 
-  sem findRuntimeIds : () -> [Name]
-  sem findRuntimeIds =
-  | _ ->
+  sem loadUtestRuntime : () -> Expr
+  sem loadUtestRuntime =
+  | _ -> loadRuntime _utestRuntimeLoc
+
+  sem findRuntimeIds : [String] -> String -> [Name]
+  sem findRuntimeIds expected =
+  | file ->
     match deref _utestRuntimeIds with Some ids then ids
     else
-      let rt = loadRuntime () in
-      match optionMapM identity (findNamesOfStrings _utestRuntimeExpected rt)
+      let rt = loadRuntime file in
+      match optionMapM identity (findNamesOfStrings expected rt)
       with Some ids then
         modref _utestRuntimeIds (Some ids);
         ids
       else error "Missing required identifiers in utest runtime file"
 
+  sem findUtestRuntimeIds : () -> [Name]
+  sem findUtestRuntimeIds =
+  | _ -> findRuntimeIds _utestRuntimeExpected _utestRuntimeLoc
+
   sem utestRunnerName : () -> Name
   sem utestRunnerName =
-  | _ -> get (findRuntimeIds ()) 0
+  | _ -> get (findUtestRuntimeIds ()) 0
 
   sem utestExitOnFailureName : () -> Name
   sem utestExitOnFailureName =
-  | _ -> get (findRuntimeIds ()) 1
+  | _ -> get (findUtestRuntimeIds ()) 1
 
   sem defaultPrettyPrintName : () -> Name
   sem defaultPrettyPrintName =
-  | _ -> get (findRuntimeIds ()) 2
+  | _ -> get (findUtestRuntimeIds ()) 2
 
   sem ppBoolName : () -> Name
   sem ppBoolName =
-  | _ -> get (findRuntimeIds ()) 3
+  | _ -> get (findUtestRuntimeIds ()) 3
 
   sem ppIntName : () -> Name
   sem ppIntName =
-  | _ -> get (findRuntimeIds ()) 4
+  | _ -> get (findUtestRuntimeIds ()) 4
 
   sem ppFloatName : () -> Name
   sem ppFloatName =
-  | _ -> get (findRuntimeIds ()) 5
+  | _ -> get (findUtestRuntimeIds ()) 5
 
   sem ppCharName : () -> Name
   sem ppCharName =
-  | _ -> get (findRuntimeIds ()) 6
+  | _ -> get (findUtestRuntimeIds ()) 6
 
   sem ppSeqName : () -> Name
   sem ppSeqName =
-  | _ -> get (findRuntimeIds ()) 7
+  | _ -> get (findUtestRuntimeIds ()) 7
 
   sem eqBoolName : () -> Name
   sem eqBoolName =
-  | _ -> get (findRuntimeIds ()) 8
+  | _ -> get (findUtestRuntimeIds ()) 8
 
   sem eqIntName : () -> Name
   sem eqIntName =
-  | _ -> get (findRuntimeIds ()) 9
+  | _ -> get (findUtestRuntimeIds ()) 9
 
   sem eqFloatName : () -> Name
   sem eqFloatName =
-  | _ -> get (findRuntimeIds ()) 10
+  | _ -> get (findUtestRuntimeIds ()) 10
 
   sem eqCharName : () -> Name
   sem eqCharName =
-  | _ -> get (findRuntimeIds ()) 11
+  | _ -> get (findUtestRuntimeIds ()) 11
 
   sem eqSeqName : () -> Name
   sem eqSeqName =
-  | _ -> get (findRuntimeIds ()) 12
+  | _ -> get (findUtestRuntimeIds ()) 12
 
   sem joinName : () -> Name
   sem joinName =
-  | _ -> get (findRuntimeIds ()) 13
+  | _ -> get (findUtestRuntimeIds ()) 13
 end
 
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
@@ -1040,7 +1056,7 @@ lang MExprUtestGenerate =
   -- definitions from 'utest-runtime.mc'.
   sem mergeWithUtestHeader : UtestEnv -> Expr -> Expr
   sem mergeWithUtestHeader env =
-  | ast -> mergeWithUtestHeaderH env ast (loadRuntime ())
+  | ast -> mergeWithUtestHeaderH env ast (loadUtestRuntime ())
 
   sem mergeWithUtestHeaderH : UtestEnv -> Expr -> Expr -> Expr
   sem mergeWithUtestHeaderH env ast =
