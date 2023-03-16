@@ -42,7 +42,8 @@
   test-tune\
   test-sundials\
   test-ipopt\
-  test-accelerate
+  test-accelerate\
+  test-jvm
 
 all: build
 
@@ -87,7 +88,8 @@ test-all:\
   test-compile\
   test-run\
   test-js\
-	test-tune
+  test-tune\
+  test-jvm
 	@./make.sh lint
 
 # The same as test-all but prunes utests whose external dependencies are not met
@@ -158,6 +160,9 @@ test-ipopt: build
 
 test-accelerate: build
 	@$(MAKE) -s -f test-accelerate.mk
+
+test-jvm: build
+	@$(MAKE) -s -f test-jvm.mk
 
 test-js: install-boot
 	@$(MAKE) -s -f test-js.mk
