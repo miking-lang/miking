@@ -236,7 +236,7 @@ lang AVLTreeImpl
 
   sem avlFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> AVL k v
   sem avlFromSeq cmp =
-  | [] -> 
+  | [] ->
     Leaf ()
   | [(k, v)] ->
     Node {key = k, value = v, l = Leaf (), r = Leaf (), h = 1}
@@ -245,7 +245,7 @@ lang AVLTreeImpl
     match splitAt s mid with (lhs, rhs) in
     let l = avlFromSeq cmp lhs in
     let r = avlFromSeq cmp rhs in
-    avlUnionWith cmp (lam lv. lam. lv) l r
+    avlUnionWith cmp (lam. lam rv. rv) l r
 
   -- NOTE(larshum, 2023-03-05): We can represent equivalent AVL trees in
   -- multiple ways. Therefore, we do not want to compare the structure of the
@@ -596,6 +596,10 @@ utest avlToSeq [] (avlUnionWith subi chooseRight t1 t2)
 with [(0, 1), (1, 2), (2, 3), (3, 2), (4, 3), (5, 4)] in
 utest avlUnionWith subi chooseLeft t2 t3 with avlUnionWith subi chooseRight t2 t3
 using avlEq subi eqi in
+
+-- NOTE(larshum, 2023-03-14): Test that avlFromSeq chooses the rightmost value,
+-- to make 'mapFromSeq' consistent with 'mapUnion'.
+utest avlLookup subi 0 (avlFromSeq subi [(0, 0), (0, 1)]) with Some 1 in
 
 utest avlIntersectWith subi chooseLeft t1 t2 with [(3, 4), (4, 5)] using eqAvlSeq subi eqi in
 utest avlIntersectWith subi chooseRight t1 t2 with [(3, 2), (4, 3)] using eqAvlSeq subi eqi in
