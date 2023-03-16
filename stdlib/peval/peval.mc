@@ -2,12 +2,12 @@ include "map.mc"
 include "set.mc"
 include "log.mc"
 
-include "ast.mc"
-include "ast-builder.mc"
-include "eval.mc"
-include "pprint.mc"
-include "boot-parser.mc"
-include "side-effect.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/eval.mc"
+include "mexpr/pprint.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/side-effect.mc"
 
 let astBuilder = lam info.
   use MExprAst in
