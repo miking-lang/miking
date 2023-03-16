@@ -11,6 +11,8 @@ lang COPSolve = COP + COPPrettyPrint
   | COPBool {val: Bool}
   | COPArray {vals: [COPVarValue]}
 
+  -- TODO(Linnea, 2023-03-16): Include other possible results (unsatisfiable,
+  -- unknown, unbounded, optimal, all solutions).
   syn COPSolverResult =
   | COPSolution {
       solution: Map Name COPVarValue,
@@ -216,4 +218,3 @@ with COPError {msg = ""}
 using eqTest in
 
 ()
-

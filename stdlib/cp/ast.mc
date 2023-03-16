@@ -62,10 +62,22 @@ lang COPConstraintTableAst = COPConstraintDeclAst
   | COPConstraintTable { vars: COPExpr, tuples: COPExpr }
 end
 
+-- Reified table constraint: table('vars', 'tuples') <=> 'b'
+lang COPConstraintTableReifAst = COPConstraintDeclAst
+  syn COPConstraint =
+  | COPConstraintTableReif { vars: COPExpr, tuples: COPExpr, b: COPExpr }
+end
+
 -- Constrain 'lhs' to be smaller or equal to 'rhs'
 lang COPConstraintLEAst = COPConstraintDeclAst
   syn COPConstraint =
   | COPConstraintLE { lhs: COPExpr, rhs: COPExpr }
+end
+
+-- Constrain 'lhs' to be smaller than 'rhs'
+lang COPConstraintLTAst = COPConstraintDeclAst
+  syn COPConstraint =
+  | COPConstraintLT { lhs: COPExpr, rhs: COPExpr }
 end
 
 ----------------
@@ -127,7 +139,8 @@ lang COP =
   -- Variables --
   COPVarDeclAst + COPVarArrayDeclAst +
   -- Constraints --
-  COPConstraintDeclAst + COPConstraintTableAst + COPConstraintLEAst +
+  COPConstraintDeclAst + COPConstraintTableAst + COPConstraintTableReifAst +
+  COPConstraintLEAst + COPConstraintLTAst +
   -- Objectives --
   COPObjectiveDeclAst + COPObjectiveMinimizeAst +
   -- Expressions --

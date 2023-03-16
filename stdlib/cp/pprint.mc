@@ -84,12 +84,29 @@ lang COPConstraintTablePrettyPrint = COPConstraintDeclPrettyPrint + COPConstrain
     ( env, Some "table.mzn", join ["table(", vars, ",", tuples, ")"] )
 end
 
+lang COPConstraintTableReifPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintTableReifAst
+  sem pprintCOPConstraint env =
+  | COPConstraintTableReif { vars = vars, tuples = tuples, b = b } ->
+    match pprintCOPExpr env vars with (env, vars) in
+    match pprintCOPExpr env tuples with (env, tuples) in
+    match pprintCOPExpr env b with (env, b) in
+    ( env, Some "table.mzn", join ["table(", vars, ",", tuples, ") <-> ", b] )
+end
+
 lang COPConstraintLEPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintLEAst
   sem pprintCOPConstraint env =
   | COPConstraintLE { lhs = lhs, rhs = rhs } ->
     match pprintCOPExpr env lhs with (env, lhs) in
     match pprintCOPExpr env rhs with (env, rhs) in
     ( env, None (), join [lhs, " <= ", rhs] )
+end
+
+lang COPConstraintLTPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintLTAst
+  sem pprintCOPConstraint env =
+  | COPConstraintLT { lhs = lhs, rhs = rhs } ->
+    match pprintCOPExpr env lhs with (env, lhs) in
+    match pprintCOPExpr env rhs with (env, rhs) in
+    ( env, None (), join [lhs, " < ", rhs] )
 end
 
 ----------------
@@ -172,7 +189,8 @@ lang COPPrettyPrint =
   COPVarDeclPrettyPrint + COPVarArrayDeclPrettyPrint +
   -- Constraints --
   COPConstraintDeclPrettyPrint + COPConstraintTablePrettyPrint +
-  COPConstraintLEPrettyPrint +
+  COPConstraintTableReifPrettyPrint + COPConstraintLEPrettyPrint +
+  COPConstraintLTPrettyPrint +
   -- Objectives --
   COPObjectiveDeclPrettyPrint + COPObjectiveMinimizePrettyPrint +
   -- Expressions --
@@ -234,15 +252,22 @@ using eqTest in
 
 utest
   let x = nameSym "x" in
+  let y = nameSym "y" in
   let zero = cpInt_ 0 in
   let one = cpInt_ 1 in
   [COPVarArrayDecl {
      id = x,
      domain = COPDomainIntRange {min = cpInt_ 0, max = cpInt_ 1},
      length = cpInt_ 3},
+   COPVarDecl {id = y, domain = COPDomainBoolean {}},
    COPConstraintDecl {constraint = COPConstraintTable {
      vars = COPExprVar {id = x},
      tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one],[zero,zero,zero]]}
+   }},
+   COPConstraintDecl {constraint = COPConstraintTableReif {
+     vars = COPExprVar {id = x},
+     tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one]]},
+     b = COPExprVar {id = y}
    }},
    COPObjectiveDecl {
      objective = COPObjectiveMinimize {
@@ -253,8 +278,11 @@ utest
 with
 "
 array [1..3] of var 0..1: x;
+var bool: y;
 include \"table.mzn\";
 constraint table(x,[|0,0,1|1,0,1|0,0,0|]);
+include \"table.mzn\";
+constraint table(x,[|0,0,1|1,0,1|]) <-> y;
 solve minimize sum(x);
 "
 using eqTest in
