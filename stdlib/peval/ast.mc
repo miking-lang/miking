@@ -99,8 +99,6 @@ utest makeKeywords expr with peval_ (addfn_) using eqExpr in
 let expr = app_ (var_ "peval") (app_ addfn_ (int_ 3)) in
 utest makeKeywords expr with peval_ (app_ addfn_ (int_ 3)) using eqExpr in
 
-let x = eval (evalCtxEmpty ()) (makeKeywords expr) in
-
 let arg = (appf2_ addfn_ (int_ 3) (int_ 4)) in
 let expr = app_ (var_ "peval") arg  in
 utest makeKeywords expr with peval_ arg using eqExpr in
