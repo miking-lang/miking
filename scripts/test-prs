@@ -2,8 +2,8 @@
 
 # Try merging a sequence of PRs locally and see that tests pass
 
-# Usage: test-prs <pr-nr>*
-# Example: test-prs 12 163 47
+# Usage: test-prs <make-flags>* <pr-nr>*
+# Example: test-prs -j4 12 163 47
 # This would merge prs #12, #163, #47, in that order, using the git
 # repo in the current working directory, on top of the currently
 # checked out commit
@@ -19,13 +19,22 @@
 # trying to find the first PR in the sequence that makes the tests
 # fail.
 
+# Note that everything that does not look like a PR (i.e., just
+# digits) is passed through directly to `make`
+
 
 set branch tmp-testing-branch
 
-set prs $argv
-set picked
+set makeFlags (string match --regex '^\\d+$' --invert -- $argv)
+set allPrs (string match --regex '^\\d+$' -- $argv)
+
 set commit (git symbolic-ref --short HEAD)
+set prs $allPrs
+set picked
+set test_fail
+set merge_fail
 set statuses
+set current
 
 function cleanup
     git reset --merge >/dev/null 2>&1
@@ -34,51 +43,94 @@ function cleanup
     git branch -D $branch >/dev/null 2>&1
 end
 
+function init
+    set prs $argv
+    set picked
+    set test_fail
+    set merge_fail
+    set statuses
+    set current
+    git checkout -b $branch >/dev/null 2>&1
+end
+
 function catch --on-signal SIGINT
+    echo "Caught SIGINT, cleaning up the repository"
     cleanup
     exit 1
 end
 
 function printMergeStatus
-    echo -ne "\33[2K\r" $statuses "?"$prs
+    echo -ne "\33[2K\r" $statuses $current "??"$prs
 end
 
-git checkout -b $branch
-echo "Attempting to squash merge PRs:"
-printMergeStatus
-
-for pr in $prs
-    set --erase prs[1]
-    if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
-        set picked $picked $pr
-        set statuses $statuses "✓"$pr
-    else
-        set statuses $statuses "✗"$pr
-        git reset --merge >/dev/null 2>&1
+function printFinalStatus
+    echo -e "\n\nTests complete"
+    echo "Successful: " $picked
+    if test (count $merge_fail) -gt 0
+        echo "Merge fail: " $merge_fail
     end
-    printMergeStatus
+    if test (count $test_fail) -gt 0
+        echo "Test fail:  " $test_fail
+    end
+end
+
+echo "Legend:            Example:"
+echo " ? Todo             ╭ Merge status"
+echo " * Running          │╭ Test status "
+echo " ✓ Success          ││"
+echo " ✗ Failure          ✓?123"
+
+function doMerge -a runTest
+    init $argv[2..-1]
+    for pr in $prs
+        set --erase prs[1]
+        set current "*?"$pr
+        printMergeStatus
+        if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
+            if test -n "$runTest"
+                set current "✓*"$pr
+                printMergeStatus
+                if make test-all $makeFlags >/dev/null 2>&1
+                    set current
+                    set statuses $statuses "✓✓"$pr
+                    set picked $picked $pr
+                else
+                    set current
+                    set statuses $statuses "✓✗"$pr
+                    set test_fail $test_fail $pr
+                    git reset --hard $branch~1 >/dev/null 2>&1 # Drop the commit that fails
+                end
+            else
+                set current
+                set statuses $statuses "✓?"$pr
+                set picked $picked $pr
+            end
+        else
+            set current
+            set statuses $statuses "✗-"$pr
+            set merge_fail $merge_fail $pr
+            git reset --merge >/dev/null 2>&1
+        end
+        printMergeStatus
+    end
 end
 
 echo
+if test (count $makeFlags) -gt 0
+    echo "Make flags:" $makeFlags
+end
+echo "Merging PRs:"
+doMerge "" $allPrs
+echo -e "\nTesting all merged PRs together (happy path)"
 
-if make test-all
-    echo "make test-all succeeded with this sequence of PRs merged:"
-    echo $picked
+if make test-all $makeFlags >/dev/null 2>&1
+    printFinalStatus
     cleanup
     exit 0
 end
 
-# Testing failed, now we'd like to bisect to find the PR that
-# introduced the failure
-
-echo "make test-all failed with this sequence of PRs merged:"
-echo $picked
-
-echo "Using git bisect to find the PR that introduced the issue."
-echo "Hiding output from make test-all to make it easier to see where we're at."
-
-git bisect start $branch develop
-git bisect run sh -c "make test-all >/dev/null 2>&1"
-
+echo -e "\nHappy path failed, falling back to testing each PR in sequence:"
 cleanup
-exit 1
+doMerge "test" $allPrs
+printFinalStatus
+cleanup
