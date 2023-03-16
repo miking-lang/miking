@@ -115,7 +115,8 @@ lang VarSym = Sym + VarAst
         let ident =
           match mapLookup str varEnv with Some ident then ident
           else if env.allowFree then t.ident
-          else errorSingle [t.info] (concat "Unknown variable in symbolizeExpr: " str)
+          else
+            errorSingle [t.info] (concat "Unknown variable in symbolizeExpr: " str)
         in
         TmVar {{t with ident = ident}
                   with ty = symbolizeType env t.ty}

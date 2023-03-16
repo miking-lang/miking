@@ -685,7 +685,9 @@ end
 
 lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CFloat t -> float2string t.val
+  | CFloat t ->
+    if ltf t.val 0. then join ["(negf ", float2string (negf t.val), ")"]
+    else float2string t.val
 end
 
 lang ArithFloatPrettyPrint = ArithFloatAst + ConstPrettyPrint

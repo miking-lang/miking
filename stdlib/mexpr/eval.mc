@@ -62,7 +62,7 @@ end
 -- TERMS --
 -----------
 
-lang VarEval = Eval + VarAst + AppAst
+lang VarEval = Eval + VarAst
   sem eval ctx =
   | TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then t
@@ -80,22 +80,45 @@ lang AppEval = Eval + AppAst
   | TmApp r -> apply ctx r.info (eval ctx r.lhs, eval ctx r.rhs)
 end
 
-lang LamEval = Eval + LamAst + VarEval + AppEval
+lang ClosAst = Ast + Eval + PrettyPrint
   type Lazy a = () -> a
 
   syn Expr =
-  | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv}
+  | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info}
 
+  sem isAtomic =
+  | TmClos _ -> true
+
+  sem infoTm =
+  | TmClos r -> r.info
+
+  sem withInfo info =
+  | TmClos r -> TmClos { r with info = info }
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmClos r ->
+    match pprintVarName env r.ident with (env,ident) in
+    match pprintCode (pprintIncr indent) env r.body with (env,body) in
+   (env,
+    join [
+      "Clos{lam ", ident, ".",
+      pprintNewline (pprintIncr indent), body,
+      "}"
+    ])
+end
+
+lang LamEval = Eval + LamAst + ClosAst + AppEval
   sem apply ctx info =
   | (TmClos t, arg) ->
     eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
 
   sem eval ctx =
-  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = lam. ctx.env}
+  | TmLam t ->
+    TmClos {ident = t.ident, body = t.body, env = lam. ctx.env, info = t.info}
   | TmClos t -> TmClos t
 end
 
-lang LetEval = Eval + LetAst + VarEval
+lang LetEval = Eval + LetAst
   sem eval ctx =
   | TmLet t ->
     eval {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
@@ -125,7 +148,7 @@ lang RecLetsEval =
     recursive let envPrime : Lazy EvalEnv = lam.
       let wraplambda = lam v.
         match v with TmLam t then
-          TmClos {ident = t.ident, body = t.body, env = envPrime}
+          TmClos {ident = t.ident, body = t.body, env = envPrime, info = t.info}
         else
           errorSingle [infoTm v]
             "Right-hand side of recursive let must be a lambda"
@@ -142,19 +165,38 @@ lang ConstAppAst = ConstAst
   syn Expr =
   | TmConstApp {
     const : Const,
-    args : [Expr]
+    args : [Expr],
+    info : Info
   }
+
+  sem infoTm =
+  | TmConstApp r -> r.info
+
+  sem withInfo info =
+  | TmConstApp r -> TmConstApp { r with info = info }
+
+  sem isAtomic =
+  | TmConstApp _ -> true
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmConstApp r ->
+    pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
 
 lang ConstEval =
-  Eval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst + ConstArity
+  Eval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst + ConstArity +
+  PrettyPrint
 
   sem delta : Info -> (Const, [Expr]) -> Expr
   sem delta info =
   | (const, args) ->
     if lti (length args) (constArity const) then
-      TmConstApp {const = const, args = args}
-    else errorSingle [info] "Invalid application"
+      TmConstApp {const = const, args = args, info = info}
+    else errorSingle [info]
+           (join [
+             "Invalid application\n",
+             expr2str (TmConstApp {const = const, args = args, info = info})
+           ])
 
   sem apply ctx info =
   | (TmConst r, arg) -> delta info (r.val, [arg])
