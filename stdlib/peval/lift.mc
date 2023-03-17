@@ -39,10 +39,13 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils --+  MExprAst + ClosAst + 
 
   sem liftType : SpecializeNames -> Type -> Type
   sem liftType names =
-  | TyUnknown {info = info} ->
-    TyCon {info = info, ident = (tyUnknownName names)}
-  | t -> printLn "Don't know how to lift this TYPE yet: ";
-         printLn (typeToString pprintEnvEmpty t); t
+  | t -> match tyConInfo names t with (info, name) in
+    TyCon {info = info, ident = name}
+
+  sem tyConInfo : SpecializeNames -> Type -> (Info, Name)
+  sem tyConInfo names =
+  | TyUnknown {info = info} -> (info, (tyUnknownName names))
+  | t -> printLn "Don't know how to lift this type"; (NoInfo(), (tyUnknownName names))
 
   sem liftName : (String, Symbol) -> Expr
   sem liftName = | tup -> 
@@ -65,6 +68,9 @@ lang SpecializeLiftApp = SpecializeLift + AppAst
     let rhs = liftExpr names lib rhs in
     let bindings = [("lhs", lhs), ("rhs", rhs)] in
     createConApp names tmAppName bindings typ info
+
+  sem tyConInfo names =
+  | TyApp {info = info, lhs = lhs, rhs=rhs} -> (info, (tyAppName names))
 end
 
 lang SpecializeLiftVar = SpecializeLift + VarAst
@@ -76,11 +82,13 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
 --    createConApp names (getBuiltinName "int") bindings tyunknown_ info
 --  | typ -> let bindings = [("ident", liftName varName)] in
 --    createConApp names tmVarName bindings typ inf
-
   sem liftExpr names lib =
   | TmVar {ident = id, ty = typ, info = info} ->
     let bindings = [("ident", liftName id)] in
     createConApp names tmVarName bindings typ info
+
+  sem tyConInfo names =
+  | TyVar {info = info, ident = id, level = lv} -> (info, (tyVarName names))
 end
 
 lang SpecializeLiftRecord = SpecializeLift + RecordAst
@@ -98,6 +106,7 @@ lang SpecializeLiftSeq = SpecializeLift
     let exprs = map (liftExpr names lib) exprs in
     let bindings = [("tms", seq_ exprs)] in
     createConApp names tmSeqName bindings typ info
+
 end
 
 lang SpecializeLiftConst = SpecializeLift + ConstAst
@@ -118,6 +127,13 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
     let const = createConApp names (getBuiltinNameFromConst const) bindings typ info in
     let bindings = [("val", const)] in
     createConApp names tmConstName bindings typ info
+
+  sem tyConInfo names =
+  | TyInt {info = info} -> (info, tyIntName names)
+  | TyBool {info = info} -> (info, tyBoolName names)
+  | TyFloat {info = info} -> (info, tyFloatName names)
+  | TyChar {info = info} -> (info, tyCharName names)
+
 end
 
 
@@ -142,9 +158,7 @@ lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
       let lhs = nvar_ (pevalName names) in
       tmApp info tyunknown_ lhs clos
 
-  sem liftType names =
-  | TyVar {info = info, ident = ident, level = lv} ->
-    TyCon {info = info, ident = (tyVarName names)}
+
 end 
 
 

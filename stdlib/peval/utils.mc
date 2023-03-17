@@ -1,5 +1,7 @@
 include "peval/include.mc"
+include "peval/ast.mc"
 include "mexpr/utils.mc"
+
 
 
 lang SpecializeUtils = SpecializeAst + SpecializeInclude
@@ -74,6 +76,17 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem tyIntName : SpecializeNames -> Name
   sem tyIntName = | names -> match getName (names.tyConsNames) "IntTypeAst_TyInt" with
                              Some t then t else error "TyInt not found"
+  sem tyBoolName : SpecializeNames -> Name
+  sem tyBoolName = | names -> match getName (names.tyConsNames) "BoolTypeAst_TyBool" with
+                             Some t then t else error "TyBool not found"
+
+  sem tyFloatName : SpecializeNames -> Name
+  sem tyFloatName = | names -> match getName (names.tyConsNames) "FloatTypeAst_TyFloat" with
+                             Some t then t else error "TyFloat not found"
+
+  sem tyCharName : SpecializeNames -> Name
+  sem tyCharName = | names -> match getName (names.tyConsNames) "CharTypeAst_TyChar" with
+                             Some t then t else error "TyChar not found"
 
   sem tyUnknownName : SpecializeNames -> Name
   sem tyUnknownName = | names -> match getName (names.tyConsNames) "UnknownTypeAst_TyUnknown"
