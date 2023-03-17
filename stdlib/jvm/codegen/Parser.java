@@ -33,7 +33,7 @@ class Parser {
         } catch (Exception e) {
             System.out.println("Cannot read JSON");
         }
-
+        
         ClassfileMaker cfm = new ClassfileMaker(jsonNode);
     }
 }

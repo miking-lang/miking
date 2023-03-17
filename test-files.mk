@@ -1,11 +1,16 @@
-# All relevant source files to include in the tests
-src_files_all =\
+# All relevant source files to include in the tests (plus Java tests)
+src_files_all_tmp =\
 	$(wildcard stdlib/*.mc)\
 	$(wildcard stdlib/**/*.mc)\
 	$(wildcard test/mexpr/*.mc)\
 	$(wildcard test/mlang/*.mc)\
 	$(wildcard test/py/*.mc)
 
+# Exclude the tests in the JVM directory, as they depend on Java being
+# installed.
+jvm_files = $(wildcard stdlib/jvm/*.mc)
+src_files_all =\
+	$(filter-out $(jvm_files), $(src_files_all_tmp))
 
 # These programs has special external dependencies which might be tedious to
 # install or are mutually exclusive with other dependencies.

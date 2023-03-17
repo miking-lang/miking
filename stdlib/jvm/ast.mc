@@ -28,6 +28,8 @@ lang JVMAst
     | BApply {instr: String, owner: String, name: String, descriptor: String}
     | BEmpty {instr: String}
     | BInt {instr: String, nr: Int}
+    | BFloat {instr: String, nr: Float}
+    | BLong {instr: String, nr: Int}
 
     syn Field =
     | Field {name: String, t: String}
@@ -36,13 +38,18 @@ lang JVMAst
     | Function {name: String, descriptor: String, bytecode: [Bytecode]}
 
     syn Class =
-    | Class {name: String, fields: [Field], constructor: Function, functions: [Function]}
+    | Class {implements: String, name: String, fields: [Field], constructor: Function, functions: [Function]}
 
-    syn Prog = 
-    | Prog {classes: [Class]}
+    syn Interface =
+    | Interface {name: String, fields: [Field], functions: [Function]}
 
-    type JVMEnv = {
-        bytecode : [Bytecode]}
+    syn JVMProgram = 
+    | JVMProgram {package: String, classes: [Class], interfaces: [Interface]}
+
+    ----
+    sem getNameField : Field -> String
+    sem getNameField =
+    | Field {name = name} -> name
 
     -- create constructs
 
@@ -62,17 +69,29 @@ lang JVMAst
     sem createBInt instr =
     | nr -> BInt {instr = instr, nr = nr}
 
+    sem createBFloat : String -> Float -> Bytecode
+    sem createBFloat instr =
+    | nr -> BFloat {instr = instr, nr = nr}
+
+    sem createBLong : String -> Int -> Bytecode
+    sem createBLong instr =
+    | nr -> BLong {instr = instr, nr = nr}
+
     sem createFunction : String -> String -> [Bytecode] -> Function
     sem createFunction name descriptor =
     | bytecode -> Function {name = name, descriptor = descriptor, bytecode = bytecode}
 
-    sem createProg : [Class] -> Prog
-    sem createProg =
-    | classes -> Prog {classes = classes}
+    sem createProg : String -> [Class] -> [Interface] -> JVMProgram
+    sem createProg package classes =
+    | interfaces -> JVMProgram {package = package, classes = classes, interfaces = interfaces}
 
-    sem createClass : String -> [Field] -> Function -> [Function] -> Class
-    sem createClass name fields constructor =
-    | functions -> Class {name = name, fields = fields, constructor = constructor, functions = functions}
+    sem createClass : String -> String -> [Field] -> Function -> [Function] -> Class
+    sem createClass name implements fields constructor =
+    | functions -> Class {name = name, implements = implements, fields = fields, constructor = constructor, functions = functions}
+
+    sem createInterface : String -> [Field] -> [Function] -> Interface
+    sem createInterface name fields =
+    | functions -> Interface {name = name, fields = fields, functions = functions}
 
     sem createField : String -> String -> Field
     sem createField name =
@@ -80,19 +99,25 @@ lang JVMAst
 
     -- toString JSON
 
-    sem toStringProg : Prog -> String 
+    sem toStringProg : JVMProgram -> String 
     sem toStringProg = 
-    | Prog {classes = classes} -> (join ["{\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
+    | JVMProgram {package = package, classes = classes, interfaces = interfaces} -> 
+        (join["{", "\"package\":", (stringify package), ",\"interfaces\":[", (commaSeparate (map toStringInterface interfaces)), "],\"classes\":[", (commaSeparate (map toStringClass classes)), "]}"])
 
     sem toStringClass : Class -> String
     sem toStringClass =
-    | Class {name = n, fields = f, constructor = c, functions = fun} ->
-        (join ["{", "\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"constructor\":", (toStringFunction c), ",\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
+    | Class {name = n, implements = implements, fields = f, constructor = c, functions = fun} ->
+        (join ["{", "\"implements\":", (stringify implements), ",\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"constructor\":", (toStringFunction c), ",\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
+
+    sem toStringInterface : Interface -> String
+    sem toStringInterface =
+    | Interface {name = n, fields = f, functions = fun} ->
+        (join ["{", "\"name\":", (stringify n), ",\"fields\":[", (commaSeparate (map toStringField f)), "],\"functions\":[", (commaSeparate (map toStringFunction fun)), "]}"])
 
     sem toStringField : Field -> String
     sem toStringField =
     | Field {name = name,  t = t} ->
-        (join ["{", "\"name\":", (stringify name), ",\"type\":", t, "}"])
+        (join ["{", "\"name\":", (stringify name), ",\"type\":", (stringify t), "}"])
 
     sem toStringFunction : Function -> String
     sem toStringFunction =
@@ -102,12 +127,16 @@ lang JVMAst
     sem toStringBytecode : Bytecode -> String
     sem toStringBytecode =
     | BApply {instr = i, owner = o, name = n, descriptor = d} ->
-        (join ["{\"instr\":", (stringify i), ",\"owner\":", (stringify o), ",\"name\":", (stringify n), ",\"descriptor\":", (stringify d), "}"])
+        (join ["{", "\"type\":", "\"apply\"", ",\"instr\":", (stringify i), ",\"owner\":", (stringify o), ",\"name\":", (stringify n), ",\"descriptor\":", (stringify d), "}"])
     | BString {instr = i, constant = c} ->
-        (join ["{\"instr\":", (stringify i), ",\"constant\":", (stringify c), "}"])
+        (join ["{", "\"type\":", "\"arg_constant\"", ",\"instr\":", (stringify i), ",\"constant\":", (stringify c), "}"])
     | BInt {instr = i, nr = nr } ->
-        (join ["{", "\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
+        (join ["{", "\"type\":", "\"arg_int\"", ",\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
+    | BFloat {instr = i, nr = nr } ->
+        (join ["{", "\"type\":", "\"arg_float\"", ",\"instr\":", (stringify i), ",\"nr\":", (concat (float2string nr) "0"), "}"])
+    | BLong {instr = i, nr = nr } ->
+        (join ["{", "\"type\":", "\"arg_long\"", ",\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
     | BEmpty {instr = i} ->
-        (join ["{\"instr\":", (stringify i), "}"])
+        (join ["{", "\"type\":", "\"empty\"", ",\"instr\":", (stringify i), "}"])
 
 end
