@@ -145,6 +145,12 @@ let includeBuiltins = map (lam x. x.1) builtinsMapping
 let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
                         "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst"] 
 
+let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
+"FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow", "SeqTypeAst_TySeq",
+"TensorTypeAst_TyTensor", "RecordTypeAst_TyRecord", "VariantTypeAst_TyVariant", "ConTypeAst_TyCon",
+"VarTypeAst_TyVar","VarSortAst_PolyVar","VarSortAst_MonoVar","VarSortAst_RecordVar","AllTypeAst_TyAll",
+"AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
+
 
 lang SpecializeInclude = MExprUtestGenerate 
 

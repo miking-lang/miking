@@ -12,6 +12,9 @@ include "peval/ast.mc"
 include "peval/utils.mc"
 
 include "mexpr/ast-builder.mc"
+include "ocaml/generate.mc"
+include "ocaml/generate-env.mc"
+
 
 include "list.mc"
 include "string.mc"
@@ -30,8 +33,16 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils --+  MExprAst + ClosAst + 
                     -> [(String, Expr)] -> Type -> Info 
                     -> Expr -- TmConApp
   sem createConApp names getName bindings typ =
-  | info -> let rec = tmRecord info typ bindings in
+  | info -> let ltype = liftType names typ in
+            let rec = tmRecord info ltype bindings in
             nconapp_ (getName names) rec
+
+  sem liftType : SpecializeNames -> Type -> Type
+  sem liftType names =
+  | TyUnknown {info = info} ->
+    TyCon {info = info, ident = (tyUnknownName names)}
+  | t -> printLn "Don't know how to lift this TYPE yet: ";
+         printLn (typeToString pprintEnvEmpty t); t
 
   sem liftName : (String, Symbol) -> Expr
   sem liftName = | tup -> 
@@ -58,19 +69,16 @@ end
 
 lang SpecializeLiftVar = SpecializeLift + VarAst
 
-  sem liftViaType : SpecializeNames -> Expr -> Type -> Expr
-  sem liftViaType names expr = 
-  | TyInt _ -> match expr with TmConst {val = CInt {val = v}} then
-               int_ v else never
-  | TyFloat _ -> match expr with TmConst {val = CFloat {val = v}} then
-               float_ v else never
-  | t -> expr
-
+--  sem liftViaType : SpecializeNames -> Name -> Info -> Type  -> Expr
+--  sem liftViaType names varName info =
+--  | TyInt {info = info} & typ ->
+--    let bindings = [("val", liftName varName)] in
+--    createConApp names (getBuiltinName "int") bindings tyunknown_ info
+--  | typ -> let bindings = [("ident", liftName varName)] in
+--    createConApp names tmVarName bindings typ inf
 
   sem liftExpr names lib =
-  | TmVar {ident = id, ty = typ, info = info} -> -- etc
-    -- If we don't have the definition of the variable we can lift it via its type.
-    -- At least for the cases where the variable is not a function
+  | TmVar {ident = id, ty = typ, info = info} ->
     let bindings = [("ident", liftName id)] in
     createConApp names tmVarName bindings typ info
 end
@@ -107,7 +115,7 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
   | TmConst {val = const, ty = typ, info = info} & t ->
     let bindings = buildConstBindings const in
     -- Build "Const"
-    let const = createConApp names (getBuiltinName const) bindings typ info in 
+    let const = createConApp names (getBuiltinNameFromConst const) bindings typ info in
     let bindings = [("val", const)] in
     createConApp names tmConstName bindings typ info
 end
@@ -133,6 +141,10 @@ lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
       let clos = createConApp names tmClosName bindings tyunknown_ info in
       let lhs = nvar_ (pevalName names) in
       tmApp info tyunknown_ lhs clos
+
+  sem liftType names =
+  | TyVar {info = info, ident = ident, level = lv} ->
+    TyCon {info = info, ident = (tyVarName names)}
 end 
 
 
@@ -150,3 +162,55 @@ lang SpecializeLiftMExpr =
 end
 
 
+lang TestLang = SpecializeLiftMExpr + MExprPrettyPrint + MExprEval + MExprTypeCheck + MExprSym
+                + MExprEq + OCamlGenerate
+end
+
+lang SetupLang = SpecializeInclude + SpecializeUtils end
+
+let _setup =
+  use SetupLang in
+  let ast = ulet_ "t" (int_ 3) in
+  match includeSpecialize ast with (ast, pevalNames) in
+  match includeConstructors ast with ast in
+  -- Find the names of the functions and constructors needed later
+  let names = createNames ast pevalNames in
+  names
+
+mexpr
+
+use TestLang in
+
+
+-- Dummy AST s.t. constructors and funcs can be included and used in lifting
+let names = _setup in
+
+let lib : Map Name Expr = (mapEmpty nameCmp) in
+
+---------- TmApp -----------------
+
+--let expr =  (var_ "f") in
+--printLn (mexprToString expr);
+--let n = liftExpr names lib expr in
+--printLn (mexprToString n);
+--
+--let e = generate (emptyGenerateEnv) n in
+--
+--printLn (mexprToString e);
+--
+
+
+
+---------- TmVar -----------------
+
+
+---------- TmRecord -----------------
+
+
+---------- TmSeq -----------------
+
+---------- TmConst -----------------
+
+---------- TmLam -----------------
+
+()
