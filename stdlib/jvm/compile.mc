@@ -177,10 +177,10 @@ let compileMCoreToJVM = lam ast.
     "aaa"
 
 let getJarFiles = lam tempDir.
-    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar"] "" ".");
-    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.14.2/jackson-databind-2.14.2.jar"] "" ".");
-    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.14.2/jackson-annotations-2.14.2.jar"] "" ".");
-    (sysRunCommand ["wget", "-P", tempDir, "https://repo1.maven.org/maven2/org/ow2/asm/asm/9.4/asm-9.4.jar"] "" ".");
+    (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar", "--output", (concat tempDir "jackson-core-2.14.2.jar")] "" ".");
+    (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.14.2/jackson-databind-2.14.2.jar", "--output", (concat tempDir "jackson-databind-2.14.2.jar")] "" ".");
+    (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.14.2/jackson-annotations-2.14.2.jar", "--output", (concat tempDir "jackson-annotations-2.14.2.jar")] "" ".");
+    (sysRunCommand ["curl", "https://repo1.maven.org/maven2/org/ow2/asm/asm/9.4/asm-9.4.jar", "--output", (concat tempDir "asm-9.4.jar")] "" ".");
     ()
 
 let compileJava = lam outDir. lam jarPath.
@@ -205,7 +205,7 @@ let modifyMainClassForTest = lam prog.
 
 let prepareForTests = lam path.
     match sysCommandExists "java" with false then 
-        -- error!
+        error "java needs to be installed\n"
         ()
     else
         (match sysFileExists path with true then
@@ -216,6 +216,8 @@ let prepareForTests = lam path.
             ()
         else 
             (sysRunCommand ["mkdir", path] "" ".");
+            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
             ());
         (getJarFiles (concat path "jar/"));
         (compileJava (concat path "out/") (concat path "jar/"));
