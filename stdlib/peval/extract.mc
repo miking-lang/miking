@@ -12,6 +12,8 @@ include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 
+include "stringid.mc"
+
 
 lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst 
 
@@ -160,6 +162,25 @@ let extracted = preprocess (bindall_ [
 ]) in
 match extractPeval distinctCalls with (m, ast) in
 utest ast with extracted using eqExpr in
+
+let pevalVar = preprocess (bindall_ [
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
+  -- Extraction does not work in this case
+  ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
+  specialize_ (var_ "bar")
+]) in 
+
+let expected = preprocess (bindall_ [
+  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
+  ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
+  ulet_ "t" (ulam_ "t" (app_ (var_ "bar") (int_ 3))),
+  int_ 0
+]) in
+
+
+match extractPeval pevalVar with (m, ast) in
+-- utest ast with extracted using eqExpr in
+
 
 let inRecursiveBinding = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
