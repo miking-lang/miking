@@ -215,6 +215,12 @@ class ClassfileMaker {
                         case "DCMP":
                             mv.visitInsn(DCMPL);
                             break;
+                        case "AASTORE":
+                            mv.visitInsn(AASTORE);
+                            break;
+                        case "AALOAD":
+                            mv.visitInsn(AALOAD);
+                            break;
                         default:
                             System.out.println("Unknown empty: " + bytecode.get("instr").asText());
                     }

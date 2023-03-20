@@ -10,6 +10,8 @@ include "stdlib.mc"
 include "sys.mc"
 include "map.mc"
 include "mexpr/cmp.mc"
+include "mexpr/lamlift.mc"
+include "mexpr/type-annot.mc"
 
 let oneArgOpI_ = 
     lam op. lam env. lam arg.
@@ -31,7 +33,7 @@ let oneArgOpF_ =
             wrapFloat_], 
         classes = concat env.classes arg.classes }
 
-lang MExprJVMCompile = MExprAst + JVMAst + PrettyPrint + Cmp
+lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
     type JVMEnv = {
         bytecode : [Bytecode],
@@ -178,15 +180,9 @@ lang MExprJVMCompile = MExprAst + JVMAst + PrettyPrint + Cmp
             (print (join ["No identifier! ", nameGetStr ident, "\n"]));
             []) in
         { env with bytecode = concat env.bytecode store }
-    | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
-        let targetEnv = toJSONExpr env target in 
-        let thnEnv = toJSONExpr { env with bytecode = [] } thn in
-        let elsEnv = toJSONExpr { env with bytecode = [] } els in
-        match pat with PatInt { val = val } then
-            { env with 
-                bytecode = matchCode_ targetEnv.bytecode (concat unwrapInteger_ [ldcLong_ val, lcmp_]) thnEnv.bytecode elsEnv.bytecode,
-                classes = foldl concat env.classes [targetEnv.classes, thnEnv.classes, elsEnv.classes] }
-        else never
+    | TmMatch { target = target, pat = pat, thn = thn, els = els } -> -- do pattern first to bind vars!!
+        let targetEnv = toJSONExpr env target in
+        jvmPat targetEnv (tyTm target) thn els pat
     | TmRecord { bindings = bindings, ty = ty } ->
         let mapSeq = mapToSeq bindings in
         let len = length mapSeq in
@@ -213,11 +209,65 @@ lang MExprJVMCompile = MExprAst + JVMAst + PrettyPrint + Cmp
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
                 classes = insertBytecode.classes, 
                 recordMap = mapInsert ty sidIntMap env.recordMap }
+    | TmRecLets _ -> (printLn "TmRecLets"); env
+    | TmSeq _ -> (printLn "TmSeq"); env
+    | TmRecordUpdate _ -> (printLn "TmRecordUpdate"); env
+    | TmType _ -> (printLn "TmType"); env
+    | TmConDef _ -> (printLn "TmConDef"); env
+    | TmConApp _ -> (printLn "TmConApp"); env
+    | TmUtest _ -> (printLn "TmUtest"); env
+    | TmNever _ -> { env with bytecode = concat env.bytecode [new_ "java/lang/Exception", dup_, ldcString_ "Never Reached!", invokespecial_ "java/lang/Exception" "<init>" "(Ljava/lang/String;)V"] }
+    | TmExt _ -> (printLn "TmExt"); env
     | a -> 
-        (printLn (expr2str a));
         (print "unknown expr\n");
         env
 
+    sem jvmPat : JVMEnv -> Type -> Expr -> Expr ->Pat -> JVMEnv
+    sem jvmPat env targetty thn els =
+    | PatInt { val = val } ->
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let elsLabel = createName_ "els" in
+        let endLabel = createName_ "end" in
+        { env with 
+            bytecode = foldl concat 
+                    env.bytecode 
+                    [unwrapInteger_,
+                    [ldcLong_ val, 
+                    lcmp_, 
+                    ifne_ elsLabel], 
+                    thnEnv.bytecode, 
+                    [goto_ endLabel,
+                    label_ elsLabel], 
+                    elsEnv.bytecode, 
+                    [label_ endLabel]],
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
+    | PatRecord { bindings = bindings, ty = ty } ->
+        match eqi (cmpType targetty ty) 0 with true then
+            match mapLookup ty env.recordMap with Some r then 
+                let patEnv = foldl 
+                        (lam e. lam tup.
+                            let sid = tup.0 in
+                            let pat = tup.1 in 
+                            match pat with PatNamed { ident = ident } then
+                                match ident with PName name then 
+                                    match mapLookup sid r with Some i then 
+                                        { e with 
+                                            bytecode = foldl concat e.bytecode [[dup_], unwrapRecord_, [ldcInt_ i, aaload_, astore_ e.localVars]],
+                                            localVars = addi 1 e.localVars,
+                                            vars = mapInsert name e.localVars e.vars } 
+                                    else never
+                                else never -- Wildcard!
+                            else never) 
+                        env
+                        (mapToSeq bindings) in
+                toJSONExpr patEnv thn
+            else never
+        else 
+            toJSONExpr env els
+    | a -> 
+        (printLn "Unknown Pat"); 
+        env 
 
     sem getJavaType : Type -> String
     sem getJavaType =
@@ -247,7 +297,12 @@ let compileJVMEnv = lam ast.
 
 let compileMCoreToJVM = lam ast. 
     use MExprJVMCompile in
-    let jvmProgram = compileJVMEnv ast in
+    use MExprLambdaLift in
+    use MExprTypeAnnot in
+    use MExprTypeCheck in
+    let typeFix = typeCheck ast in -- types dissapear in patern lowering
+    let liftedAst = liftLambdas typeFix in
+    let jvmProgram = compileJVMEnv typeFix in
     (print (toStringProg jvmProgram));
     "aaa"
 
@@ -302,6 +357,8 @@ let jvmTmpPath = "/tmp/miking-jvm-backend/"
 
 let testJVM = lam ast.
     use MExprJVMCompile in
+    use MExprLambdaLift in
+    --let liftedAst = liftLambdas ast in
     let jvmProgram = compileJVMEnv ast in
     let testJVMProgram = modifyMainClassForTest jvmProgram in
     let json = sysTempFileMake () in

@@ -152,6 +152,9 @@ let anewarray_ = use JVMAst in
 
 let aastore_ = use JVMAst in 
     createBEmpty "AASTORE"
+
+let aaload_ = use JVMAst in
+    createBEmpty "AALOAD"
 ---
 
 let jvmTrue = 1
@@ -460,17 +463,3 @@ let applyArithI_ = use JVMAst in
             [checkcast_ integer_T, 
             putfield_ (concat pkg_ name) "var" integer_LT]],
         classes = concat env.classes arg.classes } 
-
-let matchCode_ = use JVMAst in
-    lam target. lam patInstr. lam thn. lam els.
-    let elsLabel = createName_ "els" in
-    let endLabel = createName_ "end" in
-    foldl concat 
-        target 
-        [patInstr,
-        [ifne_ elsLabel], -- if zero, we do thn
-        thn,
-        [goto_ endLabel],
-        [label_ elsLabel],
-        els,
-        [label_ endLabel]]
