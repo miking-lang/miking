@@ -188,6 +188,10 @@ let boolean_LT = type_LT boolean_T
 
 let arraytype_ = lam at. concat "[" at
 
+let char_T = concat pkg_ "CharWrap"
+
+let char_LT = type_LT char_T
+
 ----
 
 let initClass_ = 
@@ -223,11 +227,18 @@ let wrapRecord_ =
 let unwrapRecord_ = 
     [getfield_ (concat pkg_ "Record") "array" (arraytype_ object_LT)]
 
+let wrapChar_ = 
+    lam char.
+    foldl concat (initClass_ "CharWrap") [[dup_], char, [putfield_ char_T "charInt" "I"]]
+
+let unwrapChar_ = 
+    [checkcast_ char_T, getfield_ char_T "charInt" "I"]
+
 let defaultConstructor = use JVMAst in
     createFunction "constructor" "()V" [aload_ 0, invokespecial_ "java/lang/Object" "<init>" "()V", return_]
 
 let createName_ = 
-    lam prefix. concat prefix (create 3 (lam. randAlphanum ()))
+    lam prefix. concat prefix (create 3 (lam. randAlphanum ())) -- maybe longer?
 
 
 let arithClassI_ = use JVMAst in
@@ -349,6 +360,32 @@ let arithClassIjavaI_ = use JVMAst in
                 wrapInteger_, 
                 [areturn_]])]
 
+let arithClassCB_ = use JVMAst in
+    lam name. lam op. lam label.
+    let freeVar = "var" in
+    let varTy = char_LT in
+    createClass
+        name
+        (concat pkg_ "Function")
+        [createField freeVar varTy]
+        defaultConstructor
+        [createFunction
+            "apply"
+            (methodtype_T object_LT object_LT)
+            (foldl concat 
+                [ldcInt_ 1,
+                aload_ 0, 
+                getfield_ (concat pkg_ name) freeVar varTy] 
+                [unwrapChar_, 
+                [aload_ 1], 
+                unwrapChar_, 
+                op,
+                [pop_, 
+                ldcInt_ 0,
+                label_ label],
+                wrapBoolean_,
+                [areturn_]])]
+
 let subiClass_ = arithClassI_ "Subi" [lsub_]
 
 let subfClass_ = arithClassF_ "Subf" [dsub_]
@@ -397,6 +434,9 @@ let leqfClass_ = arithClassFB_ "Leqf" [dcmp_, ifle_ "end"] "end"
 
 let geqfClass_ = arithClassFB_ "Geqf" [dcmp_, ifge_ "end"] "end"
 
+let endL = createName_ "end" 
+let eqcClass_ = arithClassCB_ "Eqc" [ificmpeq_ endL] endL
+
 let recordConstructor = use JVMAst in
     createFunction 
         "constructor" 
@@ -416,7 +456,13 @@ let recordClass_ = use JVMAst in
         recordConstructor
         [] 
 
-
+let charClass_ = use JVMAst in 
+    createClass     
+        "CharWrap"
+        ""
+        [createField "charInt" "I"]
+        defaultConstructor
+        []
 
 let constClassList_ = 
     [addiClass_, 
@@ -443,7 +489,9 @@ let constClassList_ =
     gtfClass_,
     leqfClass_,
     geqfClass_,
-    recordClass_]
+    eqcClass_,
+    recordClass_,
+    charClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 
@@ -466,3 +514,36 @@ let applyArithI_ = use JVMAst in
             [checkcast_ integer_T, 
             putfield_ (concat pkg_ name) "var" integer_LT]],
         classes = concat env.classes arg.classes } 
+
+let applyArithC_ = use JVMAst in
+    lam name. lam env. lam arg. 
+    { env with 
+        bytecode = foldl concat env.bytecode 
+            [initClass_ name, 
+            [dup_], 
+            arg.bytecode,
+            [checkcast_ char_T, 
+            putfield_ (concat pkg_ name) "var" char_LT]],
+        classes = concat env.classes arg.classes } 
+
+let oneArgOpI_ = 
+    lam op. lam env. lam arg.
+    { env with 
+        bytecode = foldl concat env.bytecode 
+            [arg.bytecode,
+            unwrapInteger_,
+            [op],
+            wrapInteger_], 
+        classes = concat env.classes arg.classes }
+
+let oneArgOpF_ = 
+    lam op. lam env. lam arg.
+    { env with 
+        bytecode = foldl concat env.bytecode 
+            [arg.bytecode,
+            unwrapFloat_,
+            [op],
+            wrapFloat_], 
+        classes = concat env.classes arg.classes }
+
+-- change charwrap to either CharWrap with an integer or Integer class

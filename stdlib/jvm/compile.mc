@@ -13,26 +13,6 @@ include "mexpr/cmp.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/type-annot.mc"
 
-let oneArgOpI_ = 
-    lam op. lam env. lam arg.
-    { env with 
-        bytecode = foldl concat env.bytecode 
-            [arg.bytecode,
-            unwrapInteger_,
-            [op],
-            wrapInteger_], 
-        classes = concat env.classes arg.classes }
-
-let oneArgOpF_ = 
-    lam op. lam env. lam arg.
-    { env with 
-        bytecode = foldl concat env.bytecode 
-            [arg.bytecode,
-            unwrapFloat_,
-            [op],
-            wrapFloat_], 
-        classes = concat env.classes arg.classes }
-
 lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
     type JVMEnv = {
@@ -61,6 +41,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 concat [ldcInt_ 1] wrapBoolean_
             else 
                 concat [ldcInt_ 0] wrapBoolean_
+        else match val with CChar { val = val } then
+            wrapChar_ [ldcInt_ (char2int val)]
         else never)
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
@@ -129,6 +111,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 oneArgOpF_ dneg_ env arg
             else match lhs with TmConst { val = CNegi _ } then
                 oneArgOpI_ lneg_ env arg
+            else match lhs with TmConst { val = CEqc _ } then
+                applyArithC_ "Eqc" env arg
             else 
                 (print "Unknown Const!\n");
                 env
@@ -283,6 +267,24 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                     elsEnv.bytecode, 
                     [label_ endLabel]],
             classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
+    | PatChar { val = val } ->
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let elsLabel = createName_ "els" in
+        let endLabel = createName_ "end" in
+        let charVal = char2int val in
+        { env with 
+            bytecode = foldl concat 
+                    env.bytecode 
+                    [unwrapChar_,
+                    [ldcInt_ charVal,
+                    ificmpne_ elsLabel], 
+                    thnEnv.bytecode, 
+                    [goto_ endLabel,
+                    label_ elsLabel], 
+                    elsEnv.bytecode, 
+                    [label_ endLabel]],
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
     | a -> 
         (printLn "Unknown Pat"); 
         env 
@@ -430,6 +432,9 @@ utest testJVM (divf_ (float_ 5.0) (float_ 10.0)) with "0.5" in
 utest testJVM (mulf_ (float_ 2.2) (float_ (negf 1.0))) with "-2.2" in
 utest testJVM (negf_ (float_ 1.5)) with "-1.5" in
 
+-- char operations
+utest testJVM (eqc_ (char_ 'a') (char_ 'a')) with "true" in
+
 -- lambdas and let ins
 utest testJVM (bindall_ [ulet_ "g" (ulam_ "f" (ulam_ "x" (ulam_ "y" (appf2_ (var_ "f") (var_ "x") (var_ "y"))))), subi_ (int_ 3) (int_ 2)]) with "1" in
 utest testJVM (bindall_ [ulet_ "a" (int_ 1), ulet_ "b" (int_ 1), addi_ (var_ "a") (var_ "b")]) with "2" in
@@ -439,6 +444,8 @@ utest testJVM (match_ (int_ 1) (pint_ 1) (int_ 10) (negi_ (int_ 10))) with "10" 
 utest testJVM (match_ (int_ 1) (pint_ 5) (int_ 10) (negi_ (int_ 10))) with "-10" in
 utest testJVM (match_ (bool_ true) (pbool_ true) (bool_ true) (bool_ false)) with "true" in
 utest testJVM (match_ (bool_ false) (pbool_ true) (bool_ true) (bool_ false)) with "false" in
+utest testJVM (match_ (char_ 'a') (pchar_ 'a') (bool_ true) (bool_ false)) with "true" in
+utest testJVM (match_ (char_ 'a') (pchar_ 'b') (bool_ true) (bool_ false)) with "false" in
 utest (
     use MExprAst in
     let target = record_add "a" (int_ 10) (record_ (tyrecord_ [("a", tyint_)]) [("a", int_ 10)]) in
