@@ -302,7 +302,7 @@ let compileMCoreToJVM = lam ast.
     use MExprTypeCheck in
     let typeFix = typeCheck ast in -- types dissapear in patern lowering
     let liftedAst = liftLambdas typeFix in
-    let jvmProgram = compileJVMEnv typeFix in
+    let jvmProgram = compileJVMEnv liftedAst in
     (print (toStringProg jvmProgram));
     "aaa"
 
@@ -358,8 +358,11 @@ let jvmTmpPath = "/tmp/miking-jvm-backend/"
 let testJVM = lam ast.
     use MExprJVMCompile in
     use MExprLambdaLift in
-    --let liftedAst = liftLambdas ast in
-    let jvmProgram = compileJVMEnv ast in
+    use MExprTypeAnnot in
+    use MExprTypeCheck in
+    let typeFix = typeCheck ast in
+    let liftedAst = liftLambdas typeFix in
+    let jvmProgram = compileJVMEnv liftedAst in
     let testJVMProgram = modifyMainClassForTest jvmProgram in
     let json = sysTempFileMake () in
     writeFile json (toStringProg testJVMProgram);
@@ -409,6 +412,24 @@ utest testJVM (divf_ (float_ 5.0) (float_ 10.0)) with "0.5" in
 utest testJVM (mulf_ (float_ 2.2) (float_ (negf 1.0))) with "-2.2" in
 utest testJVM (negf_ (float_ 1.5)) with "-1.5" in
 
-sysDeleteDir jvmTmpPath
+-- lambdas and let ins
+utest testJVM (bindall_ [ulet_ "g" (ulam_ "f" (ulam_ "x" (ulam_ "y" (appf2_ (var_ "f") (var_ "x") (var_ "y"))))), subi_ (int_ 3) (int_ 2)]) with "1" in
+utest testJVM (bindall_ [ulet_ "a" (int_ 1), ulet_ "b" (int_ 1), addi_ (var_ "a") (var_ "b")]) with "2" in
 
--- write tests for lambdas and let ins
+-- pattern matching
+utest testJVM (match_ (int_ 1) (pint_ 1) (int_ 10) (negi_ (int_ 10))) with "10" in
+utest testJVM (match_ (int_ 1) (pint_ 5) (int_ 10) (negi_ (int_ 10))) with "-10" in
+utest (
+    use MExprAst in
+    let target = record_add "a" (int_ 10) (record_ (tyrecord_ [("a", tyint_)]) [("a", int_ 10)]) in
+    let bindings = mapInsert (stringToSid "a") (pvar_ "a") (mapEmpty cmpSID) in
+    let pat = PatRecord { bindings = bindings, info = NoInfo (), ty = tyrecord_ [("a", tyint_)] } in
+    let thn = var_ "a" in
+    let els = never_ in
+    testJVM (match_ target pat thn els)) with "10" in
+
+-- never
+utest testJVM never_ with "java.lang.Exception: Never Reached!" in
+
+sysDeleteDir jvmTmpPath 
+
