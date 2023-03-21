@@ -298,6 +298,10 @@ class ClassfileMaker {
                             createLabel(constant);
                             mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
                             break;
+                        case "IF_ICMPNE":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IF_ICMPNE, labels.get(constant));
+                            break;
                         case "GOTO":
                             createLabel(constant);
                             mv.visitJumpInsn(GOTO, labels.get(constant));

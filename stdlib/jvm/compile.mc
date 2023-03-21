@@ -265,6 +265,24 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             else never
         else 
             toJSONExpr env els
+    | PatBool { val = val } ->
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let elsLabel = createName_ "els" in
+        let endLabel = createName_ "end" in
+        let boolVal = (match val with true then 1 else 0) in
+        { env with 
+            bytecode = foldl concat 
+                    env.bytecode 
+                    [unwrapBoolean_,
+                    [ldcInt_ boolVal,
+                    ificmpne_ elsLabel], 
+                    thnEnv.bytecode, 
+                    [goto_ endLabel,
+                    label_ elsLabel], 
+                    elsEnv.bytecode, 
+                    [label_ endLabel]],
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
     | a -> 
         (printLn "Unknown Pat"); 
         env 
@@ -419,6 +437,8 @@ utest testJVM (bindall_ [ulet_ "a" (int_ 1), ulet_ "b" (int_ 1), addi_ (var_ "a"
 -- pattern matching
 utest testJVM (match_ (int_ 1) (pint_ 1) (int_ 10) (negi_ (int_ 10))) with "10" in
 utest testJVM (match_ (int_ 1) (pint_ 5) (int_ 10) (negi_ (int_ 10))) with "-10" in
+utest testJVM (match_ (bool_ true) (pbool_ true) (bool_ true) (bool_ false)) with "true" in
+utest testJVM (match_ (bool_ false) (pbool_ true) (bool_ true) (bool_ false)) with "false" in
 utest (
     use MExprAst in
     let target = record_add "a" (int_ 10) (record_ (tyrecord_ [("a", tyint_)]) [("a", int_ 10)]) in

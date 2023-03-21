@@ -135,6 +135,9 @@ let ifge_ = use JVMAst in
 let ificmpeq_ = use JVMAst in 
     lam label. createBString "IF_ICMPEQ" label
 
+let ificmpne_ = use JVMAst in 
+    lam label. createBString "IF_ICMPNE" label
+
 let label_ = use JVMAst in 
     lam name. createBString "LABEL" name
 
