@@ -61,11 +61,10 @@ lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
   | TmPEval e -> 
   switch eval ctx e.e 
     case clos & TmClos {ident=i, body=b, env=envi} then
-        match peval clos with res then
+        match peval clos with res in
             match res with TmLam t then
                 eval ctx res -- TmClos ...
             else res
-        else never
     case x then x
   end 
 
