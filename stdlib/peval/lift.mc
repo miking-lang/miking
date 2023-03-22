@@ -12,9 +12,7 @@ include "peval/ast.mc"
 include "peval/utils.mc"
 
 include "mexpr/ast-builder.mc"
-include "ocaml/generate.mc"
-include "ocaml/generate-env.mc"
-
+include "mexpr/eval.mc"
 
 include "list.mc"
 include "string.mc"
@@ -22,43 +20,63 @@ include "stringid.mc"
 include "error.mc"
 
 
-lang SpecializeLift = SpecializeAst + SpecializeUtils --+  MExprAst + ClosAst + SpecializeInclude + SpecializeExtract
+lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
 
   -- liftExpr should produce an Expr s.t. when evaluated produces its original input argument
   -- In that sense liftExpr can be considered an inverse of 'eval'
   sem liftExpr : SpecializeNames -> Map Name Expr -> Expr -> Expr
   sem liftExpr names lib = | t -> printLn "Don't know how to lift this yet!"; t
 
-  sem createConApp : SpecializeNames ->  (SpecializeNames -> Name) 
-                    -> [(String, Expr)] -> Type -> Info 
+  sem createConApp : SpecializeNames ->  (SpecializeNames -> Name)
+                    -> [(String, Expr)] -> Type
                     -> Expr -- TmConApp
-  sem createConApp names getName bindings typ =
-  | info -> let ltype = liftType names typ in
-            let rec = tmRecord info ltype bindings in
-            nconapp_ (getName names) rec
+  sem createConApp names getName bindings =
+  | typ -> --let ltype = liftType names typ in
+           let rec = urecord_ bindings in
+           nconapp_ (getName names) rec
 
-  sem liftType : SpecializeNames -> Type -> Type
+  sem createConAppInfo names getName bindings typ =
+  | info -> let bindings = cons ("info", liftInfo names info) bindings in
+            createConApp names getName bindings typ
+
+
+  sem createConAppExpr names getName bindings typ =
+  | info -> let bindings = cons ("ty", liftType names typ) bindings in
+            createConAppInfo names getName bindings typ info
+
+  sem liftType : SpecializeNames -> Type -> Expr
   sem liftType names =
-  | t -> match tyConInfo names t with (info, name) in
-    TyCon {info = info, ident = name}
+  | t -> match tyConInfo t with (info, getName) in
+    createConAppInfo names getName [] tyunknown_ info
 
-  sem tyConInfo : SpecializeNames -> Type -> (Info, Name)
-  sem tyConInfo names =
-  | TyUnknown {info = info} -> (info, (tyUnknownName names))
-  | t -> printLn "Don't know how to lift this type"; (NoInfo(), (tyUnknownName names))
+  sem tyConInfo : Type -> (Info, (SpecializeNames -> Name))
+  sem tyConInfo =
+  | TyUnknown {info = info} -> (info, tyUnknownName) 
+  -- | TyArrow {info = info, from = from, to = to} -> (info, tyArrowName)
+  | t -> printLn "Don't know how to lift this type"; (NoInfo(), tyUnknownName)
 
   sem liftName : (String, Symbol) -> Expr
-  sem liftName = | tup -> 
+  sem liftName = | tup ->
     utuple_ [str_ tup.0, symb_ tup.1]
+
+  sem liftInfo : SpecializeNames -> Info -> Expr
+  sem liftInfo names =
+--  | Info _ -> {col1=c1, col2=c2, row1=r1, row2=r2, filename=fn} 
+--    ->
+--    let bindings = [("col1", int_ c1), ("col2", int_ c2), ("row1", int_ r1),
+--                    ("row2", int_ r2), ("filename", str_ fn)] in
+--    createConApp names infoName bindings tyunknown_
+  | _ -> createConApp names noInfoName [] tyunknown_
     
+
   -- Parse tuple to expr
   sem envItemToTuple : SpecializeNames -> Map Name Expr -> (Name, Expr) -> Expr
-  sem envItemToTuple names lib = | tup -> 
+  sem envItemToTuple names lib = | tup ->
     let name = liftName tup.0 in
     let expr = liftExpr names lib tup.1 in
-    utuple_ [name, expr] 
+    utuple_ [name, expr]
 
-end     
+end
 
 lang SpecializeLiftApp = SpecializeLift + AppAst
 
@@ -67,10 +85,10 @@ lang SpecializeLiftApp = SpecializeLift + AppAst
     let lhs = liftExpr names lib lhs in -- Should be either TmVar or TmConst
     let rhs = liftExpr names lib rhs in
     let bindings = [("lhs", lhs), ("rhs", rhs)] in
-    createConApp names tmAppName bindings typ info
+    createConAppExpr names tmAppName bindings typ info
 
-  sem tyConInfo names =
-  | TyApp {info = info, lhs = lhs, rhs=rhs} -> (info, (tyAppName names))
+  sem tyConInfo =
+  | TyApp {info = info, lhs = lhs, rhs=rhs} -> (info, tyAppName)
 end
 
 lang SpecializeLiftVar = SpecializeLift + VarAst
@@ -82,102 +100,121 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
 --    createConApp names (getBuiltinName "int") bindings tyunknown_ info
 --  | typ -> let bindings = [("ident", liftName varName)] in
 --    createConApp names tmVarName bindings typ inf
+
+-- Var x 
+-- int_ x. createConApp TmConst "val", "val, var x"
+--
+-- TmConst {val=CInt{val=x}}
+-- Int => Rec => Seq
+
   sem liftExpr names lib =
   | TmVar {ident = id, ty = typ, info = info} ->
     let bindings = [("ident", liftName id)] in
-    createConApp names tmVarName bindings typ info
+    createConAppExpr names tmVarName bindings typ info
 
-  sem tyConInfo names =
-  | TyVar {info = info, ident = id, level = lv} -> (info, (tyVarName names))
+  sem tyConInfo =
+  | TyVar {info = info, ident = id, level = lv} -> (info, tyVarName)
+
 end
 
 lang SpecializeLiftRecord = SpecializeLift + RecordAst
 
   sem liftExpr names lib =
-  | TmRecord {bindings = binds, info=info, ty = typ} -> 
+  | TmRecord {bindings = binds, info=info, ty = typ} ->
     let binSeq = mapToSeq binds in
     let bindings = map (lam x.  (sidToString x.0, liftExpr names lib x.1)) binSeq in
-    createConApp names tmRecName bindings typ info
+    createConAppExpr names tmRecName bindings typ info
 end
 
 lang SpecializeLiftSeq = SpecializeLift
   sem liftExpr names lib =
-  | TmSeq {tms = exprs, ty = typ, info = info} -> 
+  | TmSeq {tms = exprs, ty = typ, info = info} ->
     let exprs = map (liftExpr names lib) exprs in
     let bindings = [("tms", seq_ exprs)] in
-    createConApp names tmSeqName bindings typ info
+    createConAppExpr names tmSeqName bindings typ info
 
 end
 
 lang SpecializeLiftConst = SpecializeLift + ConstAst
 
   sem buildConstBindings : Const -> [(String, Expr)]
-  sem buildConstBindings = 
+  sem buildConstBindings =
   | CInt {val = v} -> [("val", int_ v)]
   | CFloat {val = v} -> [("val", float_ v)]
   | CBool {val = v} -> [("val", bool_ v)]
   | CChar {val = v} -> [("val", char_ v)]
   | CSymb {val = v} -> [("val", symb_ v)]
-  | t -> []  
+  | t -> []
 
   sem liftExpr names lib =
   | TmConst {val = const, ty = typ, info = info} & t ->
     let bindings = buildConstBindings const in
     -- Build "Const"
-    let const = createConApp names (getBuiltinNameFromConst const) bindings typ info in
+    let const = createConApp names (getBuiltinNameFromConst const) bindings typ in
     let bindings = [("val", const)] in
-    createConApp names tmConstName bindings typ info
+    createConAppExpr names tmConstName bindings typ info
 
-  sem tyConInfo names =
-  | TyInt {info = info} -> (info, tyIntName names)
-  | TyBool {info = info} -> (info, tyBoolName names)
-  | TyFloat {info = info} -> (info, tyFloatName names)
-  | TyChar {info = info} -> (info, tyCharName names)
+  sem tyConInfo =
+  | TyInt {info = info} -> (info, tyIntName)
+  | TyBool {info = info} -> (info, tyBoolName)
+  | TyFloat {info = info} -> (info, tyFloatName)
+  | TyChar {info = info} -> (info, tyCharName)
 
 end
 
 
 lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
+
   sem buildClosureEnv (lib : Map Name Expr) (env : EvalEnv) =
-  | TmVar t -> match mapLookup t.ident lib with Some b then 
+  | TmVar t -> match mapLookup t.ident lib with Some b then
              evalEnvInsert t.ident b env else env
   | t -> sfold_Expr_Expr (buildClosureEnv lib) env t
-    
+
   sem expandSpecialize (names : SpecializeNames) (lib : Map Name Expr) =
-  | TmSpecialize e & pe -> 
+  | TmSpecialize e & pe ->
     liftExpr names lib pe
   | t -> smap_Expr_Expr (expandSpecialize names lib) t
 
+  sem liftConsList : SpecializeNames -> List Expr -> Expr
+  sem liftConsList names =
+  | Cons (a, b) -> let bindings = [("0", a), ("1", liftConsList names b)] in
+        createConApp names listConsName bindings tyunknown_
+  | Nil _ -> createConApp names listNilName [] tyunknown_
+
   sem liftExpr names lib =
-  | TmSpecialize {e = expr, info = info} -> 
+  | TmSpecialize {e = expr, info = info} ->
       let env = buildClosureEnv lib (evalEnvEmpty ()) expr in -- List (Name, Expr)
-      let liftedEnv = seq_ (map (envItemToTuple names lib) (listToSeq env)) in
-      let body = liftExpr names lib expr in 
-      let bindings = [("body", body), ("env", liftedEnv)] in
-      let clos = createConApp names tmClosName bindings tyunknown_ info in
+      let liftedEnv = listMap (envItemToTuple names lib) env in -- List Expr
+      let liftedList = liftConsList names liftedEnv in -- Expr
+
+      -- Probably wrong. Type checks but break when r.env () is called in peval.mc
+      let reallyLiftedEnv = lam_ "t" tyunit_ liftedList in
+
+      let body = liftExpr names lib expr in
+      let bindings = [("body", body), ("env", reallyLiftedEnv),
+                      ("ident", liftName (nameNoSym "t"))] in
+      let clos = createConAppInfo names tmClosName bindings tyunknown_ info in
       let lhs = nvar_ (pevalName names) in
       tmApp info tyunknown_ lhs clos
-
-
-end 
+end
 
 
 lang SpecializeLiftLam = SpecializeLift + LamAst
   sem liftExpr names lib =
-  | TmLam {body = body, ty = typ, info = info} -> 
+  | TmLam {ident=id, body = body, ty = typ, info = info} ->
         let body = liftExpr names lib body in
-        let bindings = [("body", body)] in
-        createConApp names tmLamName bindings typ info
+        let bindings = [("ident", liftName id), ("body", body)] in
+        createConAppExpr names tmLamName bindings typ info
 end
 
-lang SpecializeLiftMExpr = 
+lang SpecializeLiftMExpr =
     SpecializeLiftApp + SpecializeLiftVar + SpecializeLiftRecord +
     SpecializeLiftSeq + SpecializeLiftConst + SpecializeLiftLam + SpecializeLiftSpecialize
 end
 
 
 lang TestLang = SpecializeLiftMExpr + MExprPrettyPrint + MExprEval + MExprTypeCheck + MExprSym
-                + MExprEq + OCamlGenerate
+                + MExprEq + MExprEval
 end
 
 lang SetupLang = SpecializeInclude + SpecializeUtils end
@@ -192,39 +229,33 @@ let _setup =
   names
 
 mexpr
-
-use TestLang in
-
-
--- Dummy AST s.t. constructors and funcs can be included and used in lifting
-let names = _setup in
-
-let lib : Map Name Expr = (mapEmpty nameCmp) in
-
----------- TmApp -----------------
-
---let expr =  (var_ "f") in
---printLn (mexprToString expr);
---let n = liftExpr names lib expr in
---printLn (mexprToString n);
---
---let e = generate (emptyGenerateEnv) n in
---
---printLn (mexprToString e);
---
-
-
-
----------- TmVar -----------------
-
-
----------- TmRecord -----------------
-
-
----------- TmSeq -----------------
-
----------- TmConst -----------------
-
----------- TmLam -----------------
-
 ()
+-- Possible idea:
+--  Define expr:
+--      1. Lift expr
+--      2. Pprint lifted expr, and then interpret it. Is this = to interpreting expr directly?
+--use TestLang in
+--
+---- Dummy AST s.t. constructors and funcs can be included and used in lifting
+--let names = _setup in
+--
+--let lib : Map Name Expr = (mapEmpty nameCmp) in
+--
+------------ TmApp -----------------
+--
+------------ TmVar -----------------
+--
+--let expr = var_ "f" in
+--let lift = liftExpr names lib expr in
+--
+--
+------------ TmRecord -----------------
+--
+--
+------------ TmSeq -----------------
+--
+------------ TmConst -----------------
+--
+------------ TmLam -----------------
+--
+--()

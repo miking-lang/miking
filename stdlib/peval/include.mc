@@ -72,6 +72,8 @@ let builtinsMapping = [
     ("head", "SeqOpAst_CHead"),
     ("tail", "SeqOpAst_CTail"),
     ("null", "SeqOpAst_CNull"),
+    ("map", "SeqOpAst_CMap"),
+    ("mapi", "SeqOpAst_CMapi"),
     ("iter", "SeqOpAst_CIter"),
     ("iteri", "SeqOpAst_CIteri"),
     ("foldl", "SeqOpAst_CFoldl"),
@@ -133,7 +135,7 @@ let builtinsMapping = [
     ("bootParserGetListLength", "BootParserAst_CBootParserGetListLength"),
     ("bootParserGetConst", "BootParserAst_CBootParserGetConst"),
     ("bootParserGetPat", "BootParserAst_CBootParserGetPat"),
-    ("bootParserGetInfo", "BootParserAst_CBootParserGetInfo") 
+    ("bootParserGetInfo", "BootParserAst_CBootParserGetInfo")
 ]
 
 let includeBuiltins = map (lam x. x.1) builtinsMapping
@@ -143,7 +145,11 @@ let includeBuiltins = map (lam x. x.1) builtinsMapping
 -- At least the inclusion of 'tmApp' from cons-runtime ensures that the actual constructor
 -- is in fact in the AST, but it may be subject to change (even if unlikely)
 let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
-                        "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst"] 
+                        "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
+                        "Cons", "Nil", "NoInfo", "Info"
+                        ]
+
+
 
 let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
 "FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow", "SeqTypeAst_TySeq",
@@ -152,10 +158,10 @@ let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntT
 "VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
 
-lang SpecializeInclude = MExprUtestGenerate 
+lang SpecializeInclude = MExprUtestGenerate
 
   sem includeSpecialize : Expr -> (Expr, [Name])
-  sem includeSpecialize = 
+  sem includeSpecialize =
   | ast -> let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime pevalLoc)
            -- NOTE: "peval" is the only expected name. findRunTimeIds throws error if 404
            in let names = findRuntimeIds _pevalRuntimeExpected pevalLoc in
@@ -165,6 +171,6 @@ lang SpecializeInclude = MExprUtestGenerate
   sem includeConstructors : Expr -> Expr
   sem includeConstructors =
   | ast -> let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime consLoc) in
-           resetStore (); 
+           resetStore ();
            eliminateDuplicateCode ast
-end 
+end

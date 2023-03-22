@@ -1,5 +1,6 @@
 include "mexpr/ast.mc"
 include "mexpr/eval.mc" -- tmClos
+include "mexpr/info.mc"
 
 let tmApp = use AppAst in
     lam x. TmApp x
