@@ -1,11 +1,13 @@
 include "peval/include.mc"
 include "peval/ast.mc"
 include "mexpr/utils.mc"
+include "mexpr/pprint.mc"
+include "mexpr/extract.mc"
+
+include "set.mc"
 
 
-
-lang SpecializeUtils = SpecializeAst + SpecializeInclude
-
+lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + MExprExtract
   type SpecializeNames = {
     pevalNames : [Name],
     consNames : [Name],
@@ -16,9 +18,11 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem findNames : Expr -> [String] -> [Name]
   sem findNames ast = | includes ->
   let names = filterOption (findNamesOfStrings includes ast) in
+  -- "findNamesOfStrings ["Info"] => Type Info; Con Info; con Noinfo
   if eqi (length includes) (length names) then
-    names
-  else error "A necessary include could not be found in the AST"
+      names
+  else 
+    error "A necessary include could not be found in the AST"
 
   sem createNames : Expr -> [Name] -> SpecializeNames
   sem createNames ast =
@@ -65,6 +69,22 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem tmConstName = | names -> match getName (names.consNames) "ConstAst_TmConst" with
                              Some t then t else error "TmConst not found"
 
+  sem listConsName : SpecializeNames -> Name
+  sem listConsName = | names -> match getName (names.consNames) "Cons" with
+                             Some t then t else error "List Cons not found"
+
+  sem listNilName : SpecializeNames -> Name
+  sem listNilName = | names -> match getName (names.consNames) "Nil" with
+                             Some t then t else error "List Nil not found"
+
+  sem infoName : SpecializeNames -> Name
+  sem infoName = | names -> match getName (names.consNames) "Info" with
+                             Some t then t else error "Info constructor not found"
+
+  sem noInfoName : SpecializeNames -> Name
+  sem noInfoName = | names -> match getName (names.consNames) "NoInfo" with
+                             Some t then t else error "NoInfo constructor not found"
+
   sem tyAppName : SpecializeNames -> Name
   sem tyAppName = | names -> match getName (names.tyConsNames) "AppTypeAst_TyApp" with
                              Some t then t else error "TyApp not found"
@@ -91,6 +111,10 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem tyUnknownName : SpecializeNames -> Name
   sem tyUnknownName = | names -> match getName (names.tyConsNames) "UnknownTypeAst_TyUnknown"
                                  with Some t then t else error "TyUnknown not found"
+
+  sem tyArrowName : SpecializeNames -> Name
+  sem tyArrowName = | names -> match getName (names.tyConsNames) "FunTypeAst_TyArrow"
+                                 with Some t then t else error "TyArrow not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
