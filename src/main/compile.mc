@@ -23,6 +23,8 @@ include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
+include "peval/compile.mc"
+
 
 lang MCoreCompile =
   BootParser +
@@ -32,7 +34,8 @@ lang MCoreCompile =
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
-  OCamlTryWithWrap + MCoreCompileLang + PhaseStats
+  OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
+  SpecializeCompile
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
@@ -72,6 +75,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
        printLn (use TyAnnotFull in annotateMExpr ast) else ());
     endPhaseStats log "typecheck" ast;
 
+    let ast = compileSpecialize ast in
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
     -- operations.

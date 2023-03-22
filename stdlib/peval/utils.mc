@@ -12,7 +12,8 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
     pevalNames : [Name],
     consNames : [Name],
     builtinsNames : [Name],
-    tyConsNames : [Name]
+    tyConsNames : [Name],
+    otherFuncs : [Name]
   }
 
   sem findNames : Expr -> [String] -> [Name]
@@ -30,15 +31,17 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   let consNames = findNames ast includeConsNames in
   let builtinsNames = findNames ast includeBuiltins in
   let tyConsNames = findNames ast includeTyConsNames in
+  let otherFuncs = findNames ast otherFuncs in
   {pevalNames = pevalNames, consNames = consNames,
-   builtinsNames = builtinsNames, tyConsNames = tyConsNames}
+   builtinsNames = builtinsNames, tyConsNames = tyConsNames,
+   otherFuncs=otherFuncs}
 
   sem getName : [Name] -> String -> Option Name
   sem getName names =
   | str -> find (lam x. eqString str x.0) names
 
   sem pevalName : SpecializeNames -> Name
-  sem pevalName = | names -> match getName (names.pevalNames) "peval" with Some t then t
+  sem pevalName = | names -> match getName (names.pevalNames) "pevalWithEnv" with Some t then t
                              else error "semantic function peval not found"
 
   sem tmClosName : SpecializeNames -> Name
@@ -114,7 +117,16 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
 
   sem tyArrowName : SpecializeNames -> Name
   sem tyArrowName = | names -> match getName (names.tyConsNames) "FunTypeAst_TyArrow"
-                                 with Some t then t else error "TyArrow not found"
+                               with Some t then t else error "TyArrow not found"
+
+
+  sem mapFromSeqName : SpecializeNames -> Name
+  sem mapFromSeqName = | names -> match getName (names.otherFuncs) "mapFromSeq"
+                                  with Some t then t else error "MapFromSeq not found"
+
+  sem noSymbolName : SpecializeNames -> Name
+  sem noSymbolName = | names -> match getName (names.consNames) "_noSymbol"
+                                with Some t then t else error "_noSymbol not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed

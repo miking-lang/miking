@@ -11,11 +11,12 @@ include "error.mc"
 include "set.mc"
 
 include "mexpr/ast.mc"
-include "mexpr/lamlift.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/cfa.mc" -- only for freevariables
+include "mexpr/boot-parser.mc"
 
 
-lang SpecializeCompile = SpecializeAst + MExprPEval + SpecializeExtract + MExprLambdaLift +
+lang SpecializeCompile = SpecializeAst + MExprPEval + MExprFreeVars +
                     ClosAst + MExprAst + SpecializeInclude + SpecializeLiftMExpr
 
   -- Creates a library of the expressions that the element of specialization depends on
@@ -28,58 +29,114 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + SpecializeExtract + MExprL
     foldl (lam lib. lam rl. mapInsert rl.ident rl.body lib) lib (t.bindings)
   | t -> lib
 
+  sem insertToLib : Map Name Expr -> Name -> Expr -> Map Name Expr
+  sem insertToLib lib name =
+  | TmLam t & lm -> mapInsert name lm lib
+  | _ -> lib
+
+  sem getTypesOfVars : Set Name -> Map Name Type -> Expr -> Map Name Type
+  sem getTypesOfVars freeVars varMapping =
+  | TmVar {ident=id, ty=ty} ->
+    if setMem id freeVars then mapInsert id ty varMapping
+    else varMapping
+  | ast -> sfold_Expr_Expr (getTypesOfVars freeVars) varMapping ast
+
+  sem gg : SpecializeNames -> Map Name Expr ->
+           List Expr -> Name -> Type -> List Expr
+  sem gg names lib ls id =
+  | typ ->
+    match liftViaType names lib id typ with Some expr then
+    listCons (utuple_ [liftName names id, expr]) ls
+    else ls
+
+  sem buildEnv : SpecializeNames -> Map Name Expr
+                -> Map Name Type -> List Expr
+  sem buildEnv names lib =
+  | fvs -> mapFoldWithKey (gg names lib) listEmpty fvs
+
+  sem pevalPass : SpecializeNames -> Map Name Expr -> Expr -> Expr
+  sem pevalPass pnames lib =
+  | TmLet ({ident=id, body=body, inexpr=inexpr, ty=ty, info=info} & t) ->
+    let b = pevalPass pnames lib body in
+    let lib = insertToLib lib id b in
+    let inx = pevalPass pnames lib inexpr in
+    TmLet {t with body=b,
+                  inexpr=inx}
+  | TmSpecialize {e=e, info=info} & pe ->
+    let arg = liftExpr pnames e in
+    -- From /mexpr/cfa.mc
+    let fv = freeVars e in
+    let mp = getTypesOfVars fv (mapEmpty nameCmp) e in
+    let env = buildEnv pnames lib mp in
+    let liftedEnv = liftConsList pnames env in
+    let lhs = nvar_ (pevalName pnames) in
+    appf2_ lhs liftedEnv arg
+    -- semi_ peval never_
+  | t -> smap_Expr_Expr (pevalPass pnames lib) t
+
   sem compileSpecialize =
   | origAst ->
-    match addIdentifierToSpecializeTerms origAst with (pevalData, ast) in
-    match liftLambdasWithSolutions ast with (solutions, ast) in
-    let pevalIds = mapMap (lam. ()) pevalData in
-
-    -- If no peval nodes, just return
-    if eqi (setSize pevalIds) 0 then origAst
-    else
-
-    let pevalAst = extractAccelerateTerms pevalIds ast in
-
-    match eliminateDummyParameter solutions pevalData pevalAst
-    with (pevalData, pevalAst) in
-
-    let lib = createLib (mapEmpty nameCmp) pevalData pevalAst in
-
+    -- TODO(adamssonj, 2023-03-22): For now just always include
     match includeSpecialize origAst with (ast, pevalNames) in
     match includeConstructors ast with ast in
-
     -- Find the names of the functions and constructors needed later
     let names = createNames ast pevalNames in
-
-    let ast = expandSpecialize names lib ast in
-
---    printLn (mexprToString ast);
-
+    let ast = pevalPass names (mapEmpty nameCmp) ast in
+    let ast = typeCheck ast in
+    printLn (mexprToString ast);
     ast
-
 end
 
 
-lang TestLang = SpecializeCompile + MExprEq + MExprSym + MExprTypeCheck + MExprPrettyPrint
-                + MExprTypeAnnot
+lang TestLang = SpecializeCompile + MExprEq + MExprSym + MExprTypeCheck
+                + MExprPrettyPrint + MExprTypeAnnot
 end
-
 
 mexpr
 use TestLang in
-
 
 let preprocess = lam t.
   typeCheck (symbolize t)
 in
 
+
+--let distinctCalls = preprocess (bindall_ [
+--  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
+--  specialize_ (app_ (var_ "f") (int_ 1))
+--]) in
+--
+--let distinctCalls = preprocess (bindall_ [
+--  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
+--  ulam_ "x" (bindall_ [
+--    ulet_ "k" (addi_ (var_ "x") (var_ "x")),
+--    ulet_ "q" (specialize_ (var_ "k")),
+--    var_ "k"
+--    ])
+--]) in
+--
+--let distinctCalls = preprocess (bindall_ [
+--    ulet_ "f" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
+--    ulet_ "p" (ulam_ "x" (specialize_ (app_ (var_ "f") (var_ "x")))),
+--    app_ (var_ "p") (int_ 4)
+--]) in
+
+
 let distinctCalls = preprocess (bindall_ [
-  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
-  specialize_ (app_ (var_ "f") (int_ 1))
+    ulet_ "p" (lam_ "x" tyint_ (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (int_ 4)),
+    unit_
+]) in
+
+let intseq = tyseq_ tyint_ in
+
+let distinctCalls = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" intseq (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (seq_ [int_ 1, int_ 2])),
+    unit_
 ]) in
 
 match compileSpecialize distinctCalls with ast in
 
--- let ast = typeAnnot ast in
+let ast = typeAnnot ast in
 
 ()
