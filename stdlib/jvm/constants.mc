@@ -33,6 +33,9 @@ let ldcLong_ = use JVMAst in
 let return_ = use JVMAst in
     createBEmpty "RETURN"
 
+let ireturn_ = use JVMAst in
+    createBEmpty "IRETURN"
+
 let pop_ = use JVMAst in
     createBEmpty "POP"
 

@@ -62,7 +62,15 @@ class ClassfileMaker {
             JsonNode fields = c.get("fields");
             for (int j = 0; j < fields.size(); j++) {
                 JsonNode field = fields.get(j);
-                cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
+                String type = field.get("kind").asText();
+                switch (type) {
+                    case "none": 
+                        cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
+                        break;
+                    case "int":
+                        cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, field.get("name").asText(), field.get("type").asText(), null, Integer.valueOf(field.get("constant").asInt())).visitEnd();
+                        break;
+                }
             }
 
             createConstructor(i);
@@ -157,6 +165,9 @@ class ClassfileMaker {
                     switch (bytecode.get("instr").asText()) {
                         case "RETURN":
                             mv.visitInsn(RETURN);
+                            break;
+                        case "IRETURN":
+                            mv.visitInsn(IRETURN);
                             break;
                         case "LADD":
                             mv.visitInsn(LADD);

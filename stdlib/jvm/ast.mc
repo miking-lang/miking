@@ -33,6 +33,7 @@ lang JVMAst
 
     syn Field =
     | Field {name: String, t: String}
+    | ConstantFieldInt {name: String, t: String, constant: Int}
 
     syn Function = 
     | Function {name: String, descriptor: String, bytecode: [Bytecode]}
@@ -97,6 +98,10 @@ lang JVMAst
     sem createField name =
     | t -> Field {name = name, t = t} 
 
+    sem createConstantFieldInt : String -> String -> Int -> Field
+    sem createConstantFieldInt name t = 
+    | const -> ConstantFieldInt {name = name, t = t, constant = const}
+
     -- toString JSON
 
     sem toStringProg : JVMProgram -> String 
@@ -117,7 +122,9 @@ lang JVMAst
     sem toStringField : Field -> String
     sem toStringField =
     | Field {name = name,  t = t} ->
-        (join ["{", "\"name\":", (stringify name), ",\"type\":", (stringify t), "}"])
+        (join ["{", "\"kind\":\"none\"", ",\"name\":", (stringify name), ",\"type\":", (stringify t), "}"])
+    | ConstantFieldInt {name = name, t = t, constant = constant} ->
+        (join ["{", "\"kind\":\"int\"", ",\"name\":", (stringify name), ",\"type\":", (stringify t), ",\"constant\":", int2string constant, "}"])
 
     sem toStringFunction : Function -> String
     sem toStringFunction =
