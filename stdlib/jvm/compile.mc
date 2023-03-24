@@ -182,7 +182,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
             { env with 
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
-                classes = insertBytecode.classes }
+                classes = concat env.classes insertBytecode.classes }
         else
             let sidInt = mapi (lam i. lam tup. (tup.0, i)) mapSeq in
             let sidIntMap = mapFromSeq cmpSID sidInt in
@@ -195,7 +195,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
             { env with 
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
-                classes = insertBytecode.classes, 
+                classes = concat env.classes insertBytecode.classes, 
                 recordMap = mapInsert ty sidIntMap env.recordMap }
     | TmRecLets _ -> (printLn "TmRecLets"); env
     | TmSeq _ -> (printLn "TmSeq"); env
