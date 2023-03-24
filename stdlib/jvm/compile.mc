@@ -138,7 +138,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) object_LT) in
         let nextClass = createName_ "Func" in
-        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, fieldVars = mapInsert ident newField env.fieldVars } body in 
+        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, fieldVars = mapInsert ident newField env.fieldVars, vars = mapInsert ident 1 (mapEmpty nameCmp) } body in 
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
             let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) object_LT, putfield_ (concat pkg_ nextClass) (getNameField x) object_LT]) fields) in
