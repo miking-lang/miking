@@ -241,7 +241,7 @@ let defaultConstructor = use JVMAst in
     createFunction "constructor" "()V" [aload_ 0, invokespecial_ "java/lang/Object" "<init>" "()V", return_]
 
 let createName_ = 
-    lam prefix. concat prefix (create 3 (lam. randAlphanum ())) -- maybe longer?
+    lam prefix. concat prefix (create 6 (lam. randAlphanum ())) -- maybe longer?
 
 
 let arithClassI_ = use JVMAst in
