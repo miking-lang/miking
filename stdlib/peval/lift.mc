@@ -57,7 +57,8 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
 
   sem liftName : SpecializeNames -> (String, Symbol) -> Expr
   sem liftName names = | tup ->
-    utuple_ [str_ tup.0, lsymb_ tup.1]
+    let nosym = nvar_ (noSymbolName names) in
+    utuple_ [str_ tup.0, nosym]
 
   sem liftInfo : SpecializeNames -> Info -> Expr
   sem liftInfo names =
