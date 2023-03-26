@@ -156,7 +156,7 @@ let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntT
 "VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
 
-let otherFuncs = ["mapFromSeq"]
+let otherFuncs = ["mapFromSeq", "stringToSid"]
 
 lang SpecializeInclude = MExprUtestGenerate
 

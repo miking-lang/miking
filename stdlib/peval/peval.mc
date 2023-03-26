@@ -61,12 +61,18 @@ lang PEvalCtx = Eval + SideEffect
   }
 end
 
-lang PEval = PEvalCtx + Eval + PrettyPrint
+lang PEval = PEvalCtx + Eval + PrettyPrint + MExprPrettyPrint
   sem peval : Expr -> Expr
   sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
 
   sem pevalExpr : PEvalCtx -> Expr -> Expr
   sem pevalExpr ctx =| t -> pevalReadback (pevalBind ctx (lam x. x) t)
+
+  sem pevalWithEnv : EvalEnv -> Expr -> Expr
+  sem pevalWithEnv env =
+  | t -> let ctx = match pevalCtxEmpty () with t in
+            {t with env = env} in
+        pevalReadback (pevalBind ctx (lam x. x) t)
 
   sem pevalIsValue : Expr -> Bool
   sem pevalIsValue =

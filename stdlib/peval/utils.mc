@@ -1,5 +1,4 @@
-include "peval/include.mc"
-include "peval/ast.mc"
+include "peval/include.mc" include "peval/ast.mc"
 include "mexpr/utils.mc"
 include "mexpr/pprint.mc"
 include "mexpr/extract.mc"
@@ -124,9 +123,17 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem mapFromSeqName = | names -> match getName (names.otherFuncs) "mapFromSeq"
                                   with Some t then t else error "MapFromSeq not found"
 
+  sem mapToSeqName : SpecializeNames -> Name
+  sem mapToSeqName = | names -> match getName (names.otherFuncs) "mapToSeq"
+                                with Some t then t else error "mapToSeq not found"
+
   sem noSymbolName : SpecializeNames -> Name
   sem noSymbolName = | names -> match getName (names.consNames) "_noSymbol"
                                 with Some t then t else error "_noSymbol not found"
+
+  sem stringToSidName : SpecializeNames -> Name
+  sem stringToSidName = | names -> match getName (names.otherFuncs) "stringToSid"
+                          with Some t then t else error "stringToSid not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed

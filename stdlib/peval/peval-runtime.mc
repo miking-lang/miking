@@ -2,10 +2,10 @@ include "peval/peval.mc"
 
 
 -- Let bind the semantic 'peval' function such that we can include it 
-let peval : Expr -> Expr = lam ast. 
+let pevalWithEnv = lam env. lam ast. 
     use MExprPEval in
-    peval ast
+    pevalWithEnv env ast
 
 mexpr
 
-unsafeCoerce (peval)
+unsafeCoerce (pevalWithEnv)

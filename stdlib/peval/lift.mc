@@ -15,6 +15,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eval.mc"
 
 include "list.mc"
+include "set.mc"
 include "string.mc"
 include "stringid.mc"
 include "error.mc"
@@ -95,8 +96,8 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     let const = createConApp names (getBuiltinName "int") bindings typ in
     let bindings = [("val", const)] in
     Some (createConAppExpr names tmConstName bindings typ info)
-  | TySeq {info = info, ty = ty} ->
-    let sq = TmVar {ident = varName, ty=ty, info = NoInfo (),
+  | TySeq {info = info, ty = ty} & typ->
+    let sq = TmVar {ident = varName, ty=typ, info = NoInfo (),
                     frozen = false} in
     match liftViaType names lib (nameNoSym "x") ty with Some t then
         let convert = (lam_ "x" ty t) in
@@ -104,8 +105,41 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
         let bindings = [("tms", tms)] in
         Some (createConAppExpr names tmSeqName bindings ty info)
     else None () -- We don't know how to lift element types
+  | TyRecord {info=info, fields=fields} & typ->
+    -- fields : Map SID Type
+    let rec = TmVar {ident = varName, ty=typ, info = NoInfo (),
+                    frozen = false} in
+    -- TmRec {
+    --      bindings = Map SID Expr
+    --      mapFromSeq [(SID, TmConst {CInt 1})]
+    --      } 
 
-  -- | TyRec t ->
+    --zipWith (lam x. f. (x.0, f x.1)) (mapToSeq x) (convs)
+
+    let seq = mapToSeq fields in -- [(sid, type)]
+    None ()
+    
+--    let types = setToSeq (foldr (lam x. lam acc. setInsert (x.1) acc) 
+--                (setEmpty cmpType) seq) in
+--    let liftType = map (lam x. (x, liftViaType names lib (nameNoSym "x") x)) types in
+
+    -- [(SID, convFunc)]
+    
+--    let liftSeq = map (lam x. (x.0,
+--                 liftViaType names lib (nameNoSym "x") x.1)) seq in
+--    -- Maybe we can do it for some only? Not 
+--    if any (lam x. optionIsNone x.1) liftSeq then None ()
+--    else 
+--    let convMap = mapFromSeq liftSeq in
+--    -- 1. Create TmRecord of convMap
+--    -- 2. Do mapIntersectWith
+--    let mapintersect = nvar_ (mapIntersectWithName names) in
+--
+--    let inter = ulam_ "val" (ulam_ "convf" (app_ (var_ "convf") (var_ "val"))) in
+--
+--    let combine = appf3_ mapintersect inter rec convMap in
+    
+
   | ty ->
     match mapLookup varName lib with Some t then
         Some (liftExpr names t)
@@ -128,7 +162,9 @@ lang SpecializeLiftRecord = SpecializeLift + RecordAst
   sem liftExpr names =
   | TmRecord {bindings = binds, info=info, ty = typ} ->
     let binSeq = mapToSeq binds in
-    let exprs =  seq_ (map (lam x. utuple_ [int_ x.0, liftExpr names x.1])
+    let f = lam x:String. app_ (nvar_ (stringToSidName names)) (str_ x) in
+    let tostring = sidToString in
+    let exprs =  seq_ (map (lam x. utuple_ [f (tostring x.0), liftExpr names x.1])
                     binSeq) in
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
