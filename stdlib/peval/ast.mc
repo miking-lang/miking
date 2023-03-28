@@ -53,20 +53,20 @@ lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
   -- Equality of the new terms
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmPEval r ->
-      match lhs with TmPEval l then
-        eqExprH env free l.e r.e
-      else None ()
+    match lhs with TmPEval l then
+      eqExprH env free l.e r.e
+    else None ()
 
   sem eval (ctx : EvalCtx) = 
   | TmPEval e -> 
-  switch eval ctx e.e 
-    case clos & TmClos {ident=i, body=b, env=envi} then
-        match peval clos with res in
-            match res with TmLam t then
-                eval ctx res -- TmClos ...
-            else res
+    switch eval ctx e.e
+    case clos & TmClos _ then
+      let res = peval clos in
+        match res with TmLam _ then
+          eval (evalCtxEmpty ()) res -- TmClos ...
+        else res
     case x then x
-  end 
+    end
 
   sem isAtomic = 
   | TmPEval _ -> false
@@ -74,7 +74,7 @@ lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmPEval t ->
     match printParen indent env t.e with (env, e) in
-     (env, join ["peval", pprintNewline indent , e])
+    (env, join ["peval", pprintNewline indent , e])
 
 end
 
