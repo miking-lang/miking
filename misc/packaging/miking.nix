@@ -1,35 +1,32 @@
 { lib, stdenv,
   coreutils,
   makeWrapper,
-  ocamlPackages
+  ocamlPackages,
+  writeText
 }:
 
 with ocamlPackages;
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: rec {
   pname = "miking";
   version = "0.0.0+git";
 
-  # Unlike Guix, Nix does not seem to expose the filter used by the git fetcher.
-  # Each new commit will result in a different derivation.
-  src = fetchGit {
-    url = ../..;
-    ref = "HEAD";
-  };
+  withLwt = true;   # For async-ext.mc
+  withToml = true;  # For dist-ext.mc
+  withOwl = true;   # For toml-ext.mc
 
-  nativeBuildInputs = [
+  src = ../..;
+
+  nativeBuildInputs = [ makeWrapper menhir ]
+    ++ lib.lists.optional finalAttrs.withLwt lwt
+    ++ lib.lists.optional finalAttrs.withOwl owl
+    ++ lib.lists.optional finalAttrs.withToml toml;
+
+  propagatedBuildInputs = [
+    coreutils  # Miking currently requires mkdir to be able to run
     ocaml
     findlib
     dune_3
-    makeWrapper
-
-    lwt        # For async-ext.mc
-    owl        # For dist-ext.mc
-    toml       # For toml-ext.mc
-  ];
-
-  buildInputs = [
-    coreutils  # Miking currently requires mkdir to be able to run
     linenoise
   ];
 
@@ -38,11 +35,20 @@ stdenv.mkDerivation rec {
   postInstall = ''
     wrapProgram $out/bin/mi \
       --suffix PATH : ${coreutils}/bin \
-      --suffix OCAMLPATH : ${linenoise}/lib/ocaml/${ocaml.version}/site-lib
   '';
 
   doCheck = true;
   checkTarget = "test-compile";
+
+  setupHook = writeText "setupHook.sh" ''
+    addMCorePath() {
+      echo test $1
+      for dir in "''$1"/lib/mcore/*; do
+        export MCORE_LIBS="''${MCORE_LIBS-}''${MCORE_LIBS:+:}''$(basename ''$dir)=''$dir"
+      done
+    }
+    addEnvHooks "$targetOffset" addMCorePath
+  '';
 
   meta = with lib; {
     description     = "Meta language system for creating embedded DSLs";
@@ -61,4 +67,4 @@ stdenv.mkDerivation rec {
       when targeting the JVM.
     '';
   };
-}
+})

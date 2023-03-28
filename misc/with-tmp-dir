@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+dir=$(mktemp -d)
+eval "${@//\{\}/$dir}"
+res=$?
+rm -rf "$dir"
+exit $res
