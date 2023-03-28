@@ -18,7 +18,6 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem findNames : Expr -> [String] -> [Name]
   sem findNames ast = | includes ->
   let names = filterOption (findNamesOfStrings includes ast) in
-  -- "findNamesOfStrings ["Info"] => Type Info; Con Info; con Noinfo
   if eqi (length includes) (length names) then
       names
   else 
@@ -134,6 +133,10 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem stringToSidName : SpecializeNames -> Name
   sem stringToSidName = | names -> match getName (names.otherFuncs) "stringToSid"
                           with Some t then t else error "stringToSid not found"
+
+  sem mexprStringName : SpecializeNames -> Name
+  sem mexprStringName = | names -> match getName (names.otherFuncs) "toString" 
+                          with Some t then t else error "mexprToString not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
