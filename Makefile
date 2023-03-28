@@ -1,168 +1,87 @@
-###################################################
-#  Miking is licensed under the MIT license.
-#  Copyright (C) David Broman. See file LICENSE.txt
-#
-#  To make the build system platform independent,
-#  all scripts are done in OCaml instead of being
-#  dependent on make. If make is installed on
-#  the system, we just run the batch make.sh file.
-###################################################
+BOOT_NAME=boot
+MI_LITE_NAME=mi-lite
+MI_MID_NAME=mi-mid
 
-.PHONY :\
-  all\
-  boot\
-  install-boot\
-  build\
-  build-mi\
-  install\
-  lite\
-  lint\
-  fix\
-  clean\
-  uninstall\
-  test\
-  test-all\
-  test-boot-compile\
-  test-boot-compile-all\
-  test-compile\
-  test-compile-all\
-  test-all-prune-utests\
-  test-boot-compile-prune-utests\
-  test-boot-compile-prune-utests-all\
-  test-compile-prune-utests\
-  test-compile-prune-utests-all\
-  test-run\
-  test-run-all\
-  test-run-boot\
-  test-run-boot-all\
-  test-boot\
-  test-boot-all\
-  test-boot-py\
-  test-par\
-  test-tune\
-  test-sundials\
-  test-ipopt\
-  test-accelerate\
-  test-jvm
+BIN_PATH=$(HOME)/.local/bin
+LIB_PATH=$(HOME)/.local/lib/mcore
 
-all: build
+.PHONY: default
+default: bootstrap
 
-boot:
-	@./make.sh boot
+# Misc and cleanup
 
-install-boot: boot
-	@./make.sh install-boot
+build:
+	mkdir -p build
 
-lite: boot
-	@./make.sh lite
-
-test: test-boot
-
-build: boot
-# Run the complete bootstrapping process to compile `mi`.
-	@./make.sh
-
-build-mi:
-# Build `mi` using the current version in `build`, skipping bootstrapping.
-# The result is named `build/mi-tmp`.
-	@./make.sh build-mi
-
-install: build install-boot
-	@./make.sh install
-
-lint:
-	@./make.sh lint
-
-fix:
-	@./make.sh fix
-
+# NOTE(vipa, 2023-03-29): This removes all ignored files, which
+# should coincide with generated files
+.PHONY: clean
 clean:
-	@./make.sh clean
+	rm -rf $$(misc/repo-ignored-files)
 
+# The OCaml library and executables (`boot`)
+
+.PHONY: boot
+boot: build/$(BOOT_NAME)
+build/$(BOOT_NAME): build
+	cd src/boot/ && dune build
+	cd src/boot/ && dune install --prefix=../../build --bindir=`pwd`/../../build > /dev/null 2>&1
+
+.PHONY: install-boot
+install-boot:
+	cd src/boot/ && dune install >/dev/null 2>&1
+
+## Formatting, checking and autoformatting respectively
+
+.PHONY: lint
+lint:
+	cd src/boot && dune build @fmt
+
+.PHONY: fix
+fix:
+	cd src/boot && dune build @fmt --auto-promote
+
+# Bootstrapping the `mi` executable
+
+.PHONY: bootstrap
+bootstrap: build/$(MI_NAME)
+
+build/$(MI_LITE_NAME): build/$(BOOT_NAME)
+	time build/$(BOOT_NAME) eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc build/$(MI_LITE_NAME)
+
+build/$(MI_MID_NAME): build/$(MI_LITE_NAME)
+	time build/$(MI_LITE_NAME) 1 src/main/mi.mc build/$(MI_MID_NAME)
+
+build/$(MI_NAME): build/$(MI_MID_NAME)
+	time build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
+
+# Installing and uninstalling `mi` and the standard library
+
+.PHONY: install
+install: build/$(MI_NAME) install-boot
+	rm -rf $(LIB_PATH)/stdlib || true
+	mkdir -p $(BIN_PATH) $(LIB_PATH)
+	cp -rf src/stdlib $(LIB_PATH)
+	cp -f build/$(MI_NAME) $(BIN_PATH)
+
+.PHONY: uninstall
 uninstall:
-	@./make.sh uninstall
+	cd src/boot && dune uninstall
+	rm -f $(BIN_PATH)/$(MI_NAME)
+	rm -rf $(LIB_PATH)/stdlib
 
-# Tests everything except some files with very special external dependencies
-test-all:\
-  test-boot-all\
-  test-compile\
-  test-run\
-  test-js\
-  test-tune\
-  test-jvm
-	@./make.sh lint
+# Basic testing (for more granular control, use `misc/test` directly)
 
-# The same as test-all but prunes utests whose external dependencies are not met
-# on this system
-test-all-prune-utests:\
-  test-boot-all\
-  test-compile-prune-utests\
-  test-run\
-	test-tune
-	@./make.sh lint
+.PHONY: test test-all test-quick
+test:
+	misc/test smart
 
-test-boot-compile: boot
-	@$(MAKE) -s -f test-boot-compile.mk selected
+test-all:
+	misc/test all
 
-test-boot-compile-all: boot
-	@$(MAKE) -s -f test-boot-compile.mk all
+test-quick:
+	misc/test
 
-test-compile: build
-	@$(MAKE) -s -f test-compile.mk selected
-
-test-compile-all: build
-	@$(MAKE) -s -f test-compile.mk all
-
-test-boot-compile-prune-utests: boot
-	@$(MAKE) -s -f test-boot-compile-prune-utests.mk selected
-
-test-boot-compile-prune-utests-all: boot
-	@$(MAKE) -s -f test-boot-compile-prune-utests.mk all
-
-test-compile-prune-utests: build
-	@$(MAKE) -s -f test-compile-prune-utests.mk selected
-
-test-compile-prune-utests-all: build
-	@$(MAKE) -s -f test-compile-prune-utests.mk all
-
-test-run: build
-	@$(MAKE) -s -f test-run.mk selected
-
-test-run-all: build
-	@$(MAKE) -s -f test-run.mk all
-
-test-boot-run: boot
-	@$(MAKE) -s -f test-boot-run.mk selected
-
-test-boot-run-all: boot
-	@$(MAKE) -s -f test-boot-run.mk all
-
-test-boot: boot
-	@$(MAKE) -s -f test-boot.mk selected
-
-test-boot-py: boot
-	@$(MAKE) -s -f test-boot.mk py
-
-test-boot-all: boot
-	@$(MAKE) -s -f test-boot.mk all
-
-test-par: build
-	@$(MAKE) -s -f test-par.mk
-
-test-tune: build
-	@$(MAKE) -s -f test-tune.mk
-
-test-sundials: build
-	@$(MAKE) -s -f test-sundials.mk
-
-test-ipopt: build
-	@$(MAKE) -s -f test-ipopt.mk
-
-test-accelerate: build
-	@$(MAKE) -s -f test-accelerate.mk
-
-test-jvm: build
-	@$(MAKE) -s -f test-jvm.mk
-
-test-js: build
-	@$(MAKE) -s -f test-js.mk
+# TODO(vipa, 2023-03-28): write two things:
+# - .mc program that outputs commands on how to build/run all tests, and does dependency checking
+# - A shell script `misc/test` that evals the .mc program appropriately

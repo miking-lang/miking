@@ -1,0 +1,11 @@
+STDLIB := MCORE_LIBS=stdlib=`pwd`/src/stdlib
+
+: |> ^ cd src/boot; dune build^ tmp=`mktemp -d` && cd src/boot && if dune build --build-dir $tmp; then cd ../../; cp $tmp/install/default/bin/boot %o; rm -rf $tmp; else rm -rf $tmp; false; fi |> build/tup/boot
+
+: src/main/mi-lite.mc | build/tup/boot |> ^ build/tup/boot eval %f -- 0 %f %o^ $(STDLIB) build/tup/boot eval %f -- 0 %f %o |> build/tup/mi-lite
+: src/main/mi.mc | build/tup/mi-lite |> ^ build/tup/mi-lite 1 %f %o^ $(STDLIB) build/tup/mi-lite 1 %f %o |> build/tup/mi1
+: src/main/mi.mc | build/tup/mi1 |> ^ build/tup/mi1 compile %f --output %o^ $(STDLIB) build/tup/mi1 compile %f --output %o |> build/tup/mi
+
+: src/main/mi.mc |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> build/tup/mi-cheat
+
+include misc/tup-gen
