@@ -25,7 +25,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         name : String,
         nextClass : String,
         recordMap : Map Type (Map SID Int),
-        adtTags : Map Name Int
+        adtTags : Map Name (String, Int)
     }
 
     -- go through AST and translate to JVM bytecode
@@ -177,12 +177,13 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 lam e. lam tup.
                     let expr = (match mapLookup tup.0 bindings with Some e then e else never) in
                     let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ tup.1] } expr in 
-                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes }
+                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes, recordMap = mapUnion e.recordMap exprEnv.recordMap }
             ) { env with bytecode = [], classes = [] } (mapToSeq translation) in
             let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
             { env with 
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
-                classes = concat env.classes insertBytecode.classes }
+                classes = concat env.classes insertBytecode.classes,
+                recordMap = mapUnion env.recordMap insertBytecode.recordMap }
         else
             let sidInt = mapi (lam i. lam tup. (tup.0, i)) mapSeq in
             let sidIntMap = mapFromSeq cmpSID sidInt in
@@ -190,13 +191,14 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 lam e. lam tup.
                     let expr = (match mapLookup tup.0 bindings with Some e then e else never) in
                     let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ tup.1] } expr in 
-                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes }
+                    { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes, recordMap = mapUnion e.recordMap exprEnv.recordMap }
             ) { env with bytecode = [], classes = [] } sidInt in
             let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
+            let rm = mapInsert ty sidIntMap env.recordMap in 
             { env with 
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
                 classes = concat env.classes insertBytecode.classes, 
-                recordMap = mapInsert ty sidIntMap env.recordMap }
+                recordMap = mapUnion insertBytecode.recordMap rm }
     | TmRecLets _ -> (printLn "TmRecLets"); env
     | TmSeq _ -> (printLn "TmSeq"); env
     | TmRecordUpdate _ -> (printLn "TmRecordUpdate"); env
@@ -211,9 +213,9 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 [initClass_ constructor,
                 [dup_],
                 bodyEnv.bytecode,
-                [putfield_ (concat pkg_ constructor) "value" object_LT]],
+                [checkcast_ object_T, putfield_ (concat pkg_ constructor) "value" object_LT]],
             classes = concat bodyEnv.classes env.classes,
-            recordMap = foldl (lam acc. lam tup. mapInsert tup.0 tup.1 acc ) env.recordMap (mapToSeq bodyEnv.recordMap) }
+            recordMap = mapUnion env.recordMap bodyEnv.recordMap }
     | TmUtest _ -> (printLn "TmUtest"); env
     | TmNever _ -> { env with bytecode = concat env.bytecode [new_ "java/lang/Exception", dup_, ldcString_ "Never Reached!", invokespecial_ "java/lang/Exception" "<init>" "(Ljava/lang/String;)V"] }
     | TmExt _ -> (printLn "TmExt"); env
@@ -261,7 +263,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                         env
                         (mapToSeq bindings) in
                 toJSONExpr { patEnv with bytecode = snoc patEnv.bytecode pop_ } thn 
-            else never
+            else never -- this records has not been encountered before?
         else 
             toJSONExpr env els
     | PatBool { val = val } ->
@@ -301,19 +303,27 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                     [label_ endLabel]],
             classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
     | PatCon { ident = ident, subpat = subpat } ->
-        let tag = (match mapLookup ident env.adtTags with Some t then t else never) in
+        let typeTag = (match mapLookup ident env.adtTags with Some tup then tup else never) in
+        let t = typeTag.0 in
+        let tag = typeTag.1 in
         let elsLabel = createName_ "els" in
         let endLabel = createName_ "end" in
+        let adtClassName = (concat pkg_ (nameGetStr ident)) in
         match subpat with PatNamed { ident = id } then 
             match id with PName name then 
                 let patEnv = { env with 
                                 bytecode = foldl concat 
                                     env.bytecode 
                                     [[dup_,
-                                    invokevirtual_ (concat pkg_ (nameGetStr ident)) "getTag" "()I",
+                                    instanceof_ (concat pkg_ t),
+                                    ifeq_ elsLabel, -- jump if 0
+                                    dup_, 
+                                    checkcast_ (concat pkg_ t),
+                                    invokeinterface_ (concat pkg_ t) "getTag" "()I",
                                     ldcInt_ tag,
-                                    ificmpne_ elsLabel, 
-                                    getfield_ (concat pkg_ (nameGetStr ident)) "value" object_LT,
+                                    ificmpne_ elsLabel,
+                                    checkcast_ adtClassName, 
+                                    getfield_ adtClassName "value" object_LT,
                                     astore_ env.localVars]],
                                 localVars = addi 1 env.localVars,
                                 vars = mapInsert name env.localVars env.vars } in
@@ -328,7 +338,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                         elsEnv.bytecode,
                         [label_ endLabel]],
                     classes = concat thnEnv.classes elsEnv.classes }
-            else never
+            else -- wildcard
+                toJSONExpr { env with bytecode = snoc env.bytecode pop_ } els
         else never 
     | a -> 
         (printLn "Unknown Pat"); 
@@ -357,8 +368,8 @@ let collectADTTypes = lam tlMapping.
                 let name = nameGetStr tup.0 in
                 let interf = createInterface name [] [createFunction "getTag" "()I" []] in
                 let constrClasses = foldli (lam acc. lam i. lam tup.
-                                        let tagLookup = mapInsert tup.0 i acc.2 in
                                         let interfName = acc.0 in 
+                                        let tagLookup = mapInsert tup.0 (interfName, i) acc.2 in
                                         let classes = acc.1 in
                                         let constrName = nameGetStr tup.0 in
                                         let class = createClass

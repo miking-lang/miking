@@ -161,6 +161,9 @@ let aastore_ = use JVMAst in
 
 let aaload_ = use JVMAst in
     createBEmpty "AALOAD"
+
+let instanceof_ = use JVMAst in
+    lam t. createBString "INSTANCEOF" t
 ---
 
 let jvmTrue = 1
@@ -228,7 +231,7 @@ let wrapRecord_ =
     foldl concat [new_ (concat pkg_ "Record")] [[dup_], recordArray, [invokespecial_ (concat pkg_ "Record") "<init>" (methodtype_T (arraytype_ object_LT) "V")]]
 
 let unwrapRecord_ = 
-    [getfield_ (concat pkg_ "Record") "array" (arraytype_ object_LT)]
+    [checkcast_ (concat pkg_ "Record"), getfield_ (concat pkg_ "Record") "array" (arraytype_ object_LT)]
 
 let wrapChar_ = 
     lam char.

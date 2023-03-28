@@ -320,6 +320,9 @@ class ClassfileMaker {
                         case "ANEWARRAY":
                             mv.visitTypeInsn(ANEWARRAY, constant);
                             break;
+                        case "INSTANCEOF":
+                            mv.visitTypeInsn(INSTANCEOF, constant);
+                            break;
                         default:
                             System.out.println("Unknown arg_constant: " + bytecode.get("instr").asText());
                     }
