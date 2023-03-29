@@ -129,6 +129,12 @@ let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v 
       mapInsert k (f prev v) m
     else mapInsert k v m
 
+let mapFilter : all k. all a.
+  (k -> a -> Bool) -> Map k a -> Map k a =
+  lam f. lam m.
+  use AVLTreeImpl in
+  {cmp = m.cmp, root = avlFilter f m.root}
+
 let mapMerge : all k. all a. all b. all c.
   (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
   lam f. lam l. lam r.
