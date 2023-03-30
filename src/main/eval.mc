@@ -18,13 +18,13 @@ include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utest-generate.mc"
-
+include "peval/ast.mc"
 
 
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
-  MExprProfileInstrument + MExprEval
+  MExprProfileInstrument + MExprEval + PEvalAst
 
   sem updateArgv : [String] -> Expr -> Expr
   sem updateArgv args =
@@ -45,7 +45,7 @@ let eval = lam files. lam options : Options. lam args.
   let evalFile = lam file.
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
-      keywords = [],
+      keywords = pevalKeywords,
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = false, -- the interpreter does not support externals
@@ -54,6 +54,8 @@ let eval = lam files. lam options : Options. lam args.
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (mexprToString ast) else ());
+
+    let ast = makeKeywords ast in
 
     let ast = symbolize ast in
 
