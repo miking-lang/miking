@@ -243,6 +243,9 @@ let unwrapChar_ =
 let defaultConstructor = use JVMAst in
     createFunction "constructor" "()V" [aload_ 0, invokespecial_ "java/lang/Object" "<init>" "()V", return_]
 
+let nothing_ = use JVMAst in
+    wrapRecord_ [ldcInt_ 0, anewarray_ object_T]
+
 let createName_ = 
     lam prefix. concat prefix (create 6 (lam. randAlphanum ())) -- maybe longer?
 
@@ -392,6 +395,31 @@ let arithClassCB_ = use JVMAst in
                 wrapBoolean_,
                 [areturn_]])]
 
+let randClass_ = use JVMAst in
+    createClass -- Random(max - min) + min
+            "Rand" 
+            (concat pkg_ "Function") 
+            [createField "var" integer_LT] 
+            defaultConstructor 
+            [createFunction
+                "apply"
+                (methodtype_T object_LT object_LT)
+                (foldl concat
+                    [getstatic_ (concat pkg_ "Main") "random" "Ljava/util/Random;",
+                    aload_ 1]
+                    [unwrapInteger_,
+                    [aload_ 0,
+                    getfield_ (concat pkg_ "Rand") "var" integer_LT],
+                    unwrapInteger_,
+                    [lsub_,
+                    invokevirtual_ "java/util/Random" "nextLong" "(J)J",
+                    aload_ 0,
+                    getfield_ (concat pkg_ "Rand") "var" integer_LT],
+                    unwrapInteger_,
+                    [ladd_],
+                    wrapInteger_,
+                    [areturn_]])]
+
 let subiClass_ = arithClassI_ "Subi" [lsub_]
 
 let subfClass_ = arithClassF_ "Subf" [dsub_]
@@ -497,7 +525,8 @@ let constClassList_ =
     geqfClass_,
     eqcClass_,
     recordClass_,
-    charClass_]
+    charClass_,
+    randClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 

@@ -13,6 +13,7 @@ include "mexpr/cmp.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/shallow-patterns.mc"
 
 lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
@@ -115,6 +116,17 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 oneArgOpI_ lneg_ env arg
             else match lhs with TmConst { val = CEqc _ } then
                 applyArithC_ "Eqc" env arg
+            else match lhs with TmConst { val = CRandSetSeed _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [[getstatic_ (concat pkg_ "Main") "random" "Ljava/util/Random;"],
+                                arg.bytecode,
+                                unwrapInteger_,
+                                [invokevirtual_ "java/util/Random" "setSeed" "(J)V"],
+                                nothing_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CRandIntU _ } then
+                applyArithI_ "Rand" env arg
             else 
                 (print "Unknown Const!\n");
                 env
@@ -358,6 +370,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
 end
 
+lang CombinedLang = MExprLowerNestedPatterns + MExprPrettyPrint + MExprJVMCompile + MExprLambdaLift + MExprTypeCheck end
+
 let collectADTTypes = lam tlMapping. 
     use MExprJVMCompile in
     foldl (lam acc. lam tup. 
@@ -410,7 +424,7 @@ let compileMCoreToJVM = lam ast.
     use MExprLambdaLift in
     use MExprTypeAnnot in
     use MExprTypeCheck in
-    let typeFix = typeCheck ast in -- types dissapear in patern lowering
+    let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
     let jvmProgram = compileJVMEnv liftedAst in
     (print (toStringProg jvmProgram));
@@ -466,11 +480,10 @@ let prepareForTests = lam path.
 let jvmTmpPath = "/tmp/miking-jvm-backend/"
 
 let testJVM = lam ast.
-    use MExprJVMCompile in
-    use MExprLambdaLift in
-    use MExprTypeAnnot in
-    use MExprTypeCheck in
-    let typeFix = typeCheck ast in
+    use CombinedLang in
+    let tc = typeCheck ast in
+    let patternLowedAst = lowerAll tc in
+    let typeFix = typeCheck patternLowedAst in
     let liftedAst = liftLambdas typeFix in
     let jvmProgram = compileJVMEnv liftedAst in
     let testJVMProgram = modifyMainClassForTest jvmProgram in
@@ -543,10 +556,25 @@ utest (
     let pat = PatRecord { bindings = bindings, info = NoInfo (), ty = tyrecord_ [("a", tyint_)] } in
     let thn = var_ "a" in
     let els = never_ in
-    testJVM (match_ target pat thn els)) with "10" in
+    testJVM (match_ target pat thn els)) 
+with "10" in
+
+-- ADTs
+utest (
+    use MExprSym in
+    testJVM (symbolize (bindall_ [type_ "Tree" [] (tyvariant_ []),
+                        condef_ "Node" (tyarrow_ (tytuple_ [tycon_ "Tree", tycon_ "Tree"]) (tycon_ "Tree")),
+                        condef_ "Leaf" (tyarrow_ (tyint_) (tycon_ "Tree")),
+                        ulet_ "tree" (conapp_ "Node" (utuple_ [conapp_ "Leaf" (int_ 1), conapp_ "Leaf" (int_ 2)])),
+                        match_ (var_ "tree") (pcon_ "Node" (ptuple_ [pcon_ "Leaf" (pvar_ "l"), pcon_ "Leaf" (pvar_ "r")])) (addi_ (var_ "l") (var_ "r")) (never_)]))
+    )
+with "3" in
 
 -- never
 utest testJVM never_ with "java.lang.Exception: Never Reached!" in
+
+-- random
+utest testJVM (bindall_ [ulet_ "a" (randSetSeed_ (int_ 1000)), randIntU_ (int_ 1) (int_ 10)]) with "5" in
 
 sysDeleteDir jvmTmpPath 
 

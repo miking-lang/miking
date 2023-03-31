@@ -57,6 +57,18 @@ class ClassfileMaker {
             // version, access, name, signature, superName, String[] interfaces
             cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, pkg + c.get("name").asText(), null, "java/lang/Object", interf);
 
+            if (c.get("name").asText().equals("Main")) {
+                cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, "random", "Ljava/util/Random;", null, null).visitEnd();
+                MethodVisitor mv = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
+                mv.visitCode();
+                mv.visitTypeInsn(NEW, "java/util/Random");
+                mv.visitInsn(DUP);
+                mv.visitMethodInsn(INVOKESPECIAL, "java/util/Random", "<init>", "()V", false);
+                mv.visitFieldInsn(PUTSTATIC, "pkg/Main", "random", "Ljava/util/Random;");
+                mv.visitInsn(RETURN);
+                mv.visitMaxs(0, 0);
+                mv.visitEnd();
+            }
 
             // create fields
             JsonNode fields = c.get("fields");
