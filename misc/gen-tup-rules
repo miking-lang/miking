@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ misc/test-spec -ot misc/test-spec.mc ]; then
+  if which mi >/dev/null 2>&1; then
+    MCORE_STDLIB=$(pwd)/src/stdlib mi compile misc/test-spec.mc --output misc/test-spec
+  else
+    MCORE_STDLIB=$(pwd)/src/stdlib build/mi compile misc/test-spec.mc --output misc/test-spec
+  fi
+fi
+
+misc/test-spec --tup-rules > misc/tup-gen

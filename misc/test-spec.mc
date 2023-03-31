@@ -211,7 +211,7 @@ let testMain : [TestCollection] -> () = lam colls.
   type Mode in
   con BuildPerLine : () -> Mode in
   con TupRules : () -> Mode in
-  con Filter : () -> Mode in
+  con TupFilter : () -> Mode in
   type Options =
     { bootstrapped : Bool, installed : Bool, cheated : Bool, mode : Mode } in
   let options : Options =
@@ -234,9 +234,9 @@ let testMain : [TestCollection] -> () = lam colls.
       , "Print rules in a format tup expects"
       , lam p. {p.options with mode = TupRules ()}
       )
-    , ( [("--filter", "", "")]
+    , ( [("--tup-filter", "", "")]
       , "Print targets that have an explicit connection to the mentioned files, for use with tup"
-      , lam p. {p.options with mode = Filter ()}
+      , lam p. {p.options with mode = TupFilter ()}
       )
     , ( [("--build-per-line", "", "")]
       , "Collect (filtered) targets and print their commands such that dependent targets are on the same line and in an appropriate order (default)"
@@ -305,12 +305,14 @@ let testMain : [TestCollection] -> () = lam colls.
     iter (lam p. modref normals (mapInsertWith _intersectTasks p t (deref normals))) paths in
   let unionAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
     iter (lam p. modref normals (mapInsertWith _unionTasks p t (deref normals))) paths in
+  let exactAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
+    iter (lam p. modref normals (mapInsert p t (deref normals))) paths in
   let excludeAdd : NormalTasks -> [Path] -> () = lam. lam paths.
     iter (lam p. modref normals (mapInsert p noTasks (deref normals))) paths in
 
   mapMap (lam. lam c. c.exclusions intersectAdd) colls;
   mapMap (lam. lam c. c.conditionalInclusions excludeAdd) unchosenColls;
-  mapMap (lam. lam c. c.conditionalInclusions unionAdd) chosenColls;
+  mapMap (lam. lam c. c.conditionalInclusions exactAdd) chosenColls;
   _phase "coll normals";
 
   -- NOTE(vipa, 2023-03-30): API for adding build tasks
@@ -324,6 +326,7 @@ let testMain : [TestCollection] -> () = lam colls.
     , extraDep : Option Path
     } in
   let targets : Ref (Map Path TargetData) = ref (mapEmpty cmpSID) in
+  let orderedTargets : Ref [(Path, TargetData)] = ref [] in
   let addRaw
     : String
     -> Bool
@@ -346,7 +349,7 @@ let testMain : [TestCollection] -> () = lam colls.
       with (friendlyCommand, cmd, target) in
       let cmd = join
         [ "{ ", cmd, "; } >'", stdout, "' 2>'", stderr
-        , " || { misc/elide-cat stdout '", stdout, "'; misc/elide-cat stderr '", stderr, "'; false; }"
+        , "' || { misc/elide-cat stdout '", stdout, "'; misc/elide-cat stderr '", stderr, "'; false; }"
         ] in
       let origin = optionMapOr data.input (lam td. td.origin)
         (mapLookup data.input currTargets) in
@@ -362,6 +365,7 @@ let testMain : [TestCollection] -> () = lam colls.
       -- TODO(vipa, 2023-03-31): Error on duplicate target definition
       let target = stringToSid target in
       modref targets (mapInsert target td currTargets);
+      modref orderedTargets (snoc (deref orderedTargets) (target, td));
       target
   in
   let negateCmd = lam data.
@@ -382,12 +386,12 @@ let testMain : [TestCollection] -> () = lam colls.
     , f = lam data. addRaw namespace false (negateCmd (fixData data)); ()
     } in
   let mkMi
-    : {pre : String, tag : String, extraDep : Option Path}
+    : {pre : String, tag : String, extraDep : Option Path, kind : String}
     -> String
     -> { m : MidCmd, e : EndCmd, f : EndCmd }
     = lam config. lam namespace.
       let fixData = lam data.
-        { friendlyCommand = concat "MI " data.cmd
+        { friendlyCommand = join [config.kind, " MI ", data.cmd]
         , extraDep = config.extraDep
         , cmd = join [config.pre, " ", data.cmd]
         , tag = data.tag
@@ -432,40 +436,53 @@ let testMain : [TestCollection] -> () = lam colls.
     ()
   in
   _phase "target api";
+  let buildDir = match options.mode with TupRules _ | TupFilter _ then "build/tup/" else "build/" in
   (if options.bootstrapped then
+    let tag = concat buildDir "bootstrapped" in
     let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", _dir, "/src/stdlib build/tup/mi"]
-      , tag = "bootstrapped"
-      , extraDep = Some (stringToSid "build/tup/mi")
+      { pre = join ["MCORE_LIBS=stdlib=", _dir, "/src/stdlib ", buildDir, "mi"]
+      , tag = tag
+      , extraDep = Some (stringToSid (concat buildDir "mi"))
+      , kind = "BOOTSTRAPPED"
       } in
-    let mkSh = mkSh "bootstrapped" in
+    let mkSh = mkSh tag in
     addTargets mkMi mkSh
   else ());
   _phase "bootstrapped";
   (if options.installed then
+    let tag = concat buildDir "installed" in
     let mkMi = mkMi
       { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib mi"]
-      , tag = "installed"
+      , tag = tag
       , extraDep = None ()
+      , kind = "INSTALLED"
       } in
-    let mkSh = mkSh "installed" in
+    let mkSh = mkSh tag in
     addTargets mkMi mkSh
   else ());
   _phase "installed";
   (if options.cheated then
+    let tag = concat buildDir "cheated" in
     let mkMi = mkMi
-      { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib build/tup/mi-cheat"]
-      , tag = "cheated"
-      , extraDep = Some (stringToSid "build/tup/mi-cheat")
+      { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib ", buildDir, "mi-cheat"]
+      , tag = tag
+      , extraDep = Some (stringToSid (concat buildDir "mi-cheat"))
+      , kind = "CHEATED"
       } in
-    let mkSh = mkSh "cheated" in
+    let mkSh = mkSh tag in
     addTargets mkMi mkSh
   else ());
   _phase "cheated";
 
   switch options.mode
   case TupRules _ then
-    let printRule = lam target. lam td.
+    let cpDirStructure : all a. String -> a -> () = lam coll. lam.
+      command (join ["find src -type d -exec mkdir -p ", buildDir, "{installed,bootstrapped,cheated}/", coll, "/{} \\;"]);
+      ()
+    in
+    mapMapWithKey cpDirStructure colls;
+    cpDirStructure "normal" ();
+    let printRule = lam pair. match pair with (target, td) in
       let extra = match td.extraDep
         with Some dep then concat " | " (sidToString dep)
         else "" in
@@ -476,7 +493,7 @@ let testMain : [TestCollection] -> () = lam colls.
         , if eqSID target td.stdout then "" else concat " " (sidToString target)
         ] in
       printLn cmd in
-    mapMapWithKey printRule (deref targets);
+    iter printRule (deref orderedTargets);
     _phase "tup-rules"
   end
 
