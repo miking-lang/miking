@@ -146,8 +146,15 @@ let includeBuiltins = map (lam x. x.1) builtinsMapping
 -- is in fact in the AST, but it may be subject to change (even if unlikely)
 let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
                         "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
-                        "Cons", "Nil", "NoInfo", "Info", "_noSymbol"
+                        "MatchAst_TmMatch", "Cons", "Nil", "NoInfo", "Info", "_noSymbol",
+                        "LetAst_TmLet",
+
+                        --- Patterns
+                        "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed"
                         ]
+
+
+
 
 let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
 "FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow", "SeqTypeAst_TySeq",

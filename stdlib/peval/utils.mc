@@ -1,12 +1,16 @@
-include "peval/include.mc" include "peval/ast.mc"
+include "peval/include.mc" 
+include "peval/ast.mc"
+
 include "mexpr/utils.mc"
 include "mexpr/pprint.mc"
 include "mexpr/extract.mc"
+include "mexpr/ast.mc"
 
 include "set.mc"
 
 
-lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + MExprExtract
+lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + MExprExtract + LamAst 
+
   type SpecializeNames = {
     pevalNames : [Name],
     consNames : [Name],
@@ -14,6 +18,35 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
     tyConsNames : [Name],
     otherFuncs : [Name]
   }
+
+  type SpecializeArgs = {
+    lib : Map Name Expr,
+    -- For each binding in the reclet, store the name of the other bindings
+    -- and the binding itself
+    rlMapping: Map Name ([Name], RecLetBinding),
+    idMapping : Map Name Name,
+    closing : Bool
+  }
+  sem initArgs : () -> SpecializeArgs
+  sem initArgs = | _ -> {lib = (mapEmpty nameCmp), 
+                   rlMapping = (mapEmpty nameCmp),
+                   closing=false, idMapping= (mapEmpty nameCmp)}
+
+  sem updateLib : SpecializeArgs -> Map Name Expr -> SpecializeArgs
+  sem updateLib args = | lib -> {args with lib = lib}
+
+  sem updateRlMapping : SpecializeArgs -> Map Name ([Name], RecLetBinding)
+                        -> SpecializeArgs
+  sem updateRlMapping args = | lib -> {args with rlMapping = lib}
+
+  sem updateIds : SpecializeArgs -> Map Name Name -> SpecializeArgs
+  sem updateIds args = | idm -> {args with idMapping =idm}
+
+  sem updateClosing : SpecializeArgs -> Bool -> SpecializeArgs
+  sem updateClosing args = | b -> {args with closing = b}
+
+  sem isClosing : SpecializeArgs -> Bool
+  sem isClosing = | args -> args.closing
 
   sem findNames : Expr -> [String] -> [Name]
   sem findNames ast = | includes ->
@@ -69,6 +102,14 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem tmConstName : SpecializeNames -> Name
   sem tmConstName = | names -> match getName (names.consNames) "ConstAst_TmConst" with
                              Some t then t else error "TmConst not found"
+
+  sem tmMatchName : SpecializeNames -> Name
+  sem tmMatchName = | names -> match getName (names.consNames) "MatchAst_TmMatch" with
+                             Some t then t else error "TmMatch not found"
+
+  sem tmLetName : SpecializeNames -> Name
+  sem tmLetName = | names -> match getName (names.consNames) "LetAst_TmLet" with
+                             Some t then t else error "TmLet not found"
 
   sem listConsName : SpecializeNames -> Name
   sem listConsName = | names -> match getName (names.consNames) "Cons" with
@@ -137,6 +178,22 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem mexprStringName : SpecializeNames -> Name
   sem mexprStringName = | names -> match getName (names.otherFuncs) "toString" 
                           with Some t then t else error "mexprToString not found"
+
+  sem patIntName : SpecializeNames -> Name
+  sem patIntName = | names -> match getName (names.consNames) "IntPat_PatInt" 
+                          with Some t then t else error "IntPat not found"
+
+  sem patNamedName : SpecializeNames -> Name
+  sem patNamedName = | names -> match getName (names.consNames) "NamedPat_PatNamed"
+                          with Some t then t else error "PatNamed not found"
+
+  sem pNameName: SpecializeNames -> Name
+  sem pNameName = | names -> match getName (names.consNames) "PName"
+                          with Some t then t else error "PName not found"
+
+  sem pWildcardName: SpecializeNames -> Name
+  sem pWildcardName = | names -> match getName (names.consNames) "PWildcard"
+                          with Some t then t else error "PWildcard not found"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
