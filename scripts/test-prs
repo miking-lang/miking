@@ -88,9 +88,11 @@ function doMerge -a runTest
         printMergeStatus
         if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
             if test -n "$runTest"
+                test (count $prs) -eq 0 -a (count $test_fail) -eq 0
+                set -l fail_already_known $status
                 set current "✓*"$pr
                 printMergeStatus
-                if make test-all $makeFlags >/dev/null 2>&1
+                if test "$fail_already_known" -ne 0 && make test-all $makeFlags >/dev/null 2>&1
                     set current
                     set statuses $statuses "✓✓"$pr
                     set picked $picked $pr
