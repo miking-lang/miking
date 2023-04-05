@@ -35,12 +35,16 @@ set test_fail
 set merge_fail
 set statuses
 set current
+set tmpdir (mktemp -d)
 
-function cleanup
+function cleanup -a dir
     git reset --merge >/dev/null 2>&1
     git bisect reset >/dev/null 2>&1
     git checkout $commit >/dev/null 2>&1
     git branch -D $branch >/dev/null 2>&1
+    if test -n "$dir"
+        rm -rf $tmpdir >/dev/null 2>&1
+    end
 end
 
 function init
@@ -55,8 +59,24 @@ end
 
 function catch --on-signal SIGINT
     echo "Caught SIGINT, cleaning up the repository"
-    cleanup
+    cleanup dir
     exit 1
+end
+
+function read_confirm -a msg default
+    while true
+        read -l -P "$msg " confirm
+
+        if test -z "$confirm"
+            set confirm $default
+        end
+        switch $confirm
+            case Y y
+                return 0
+            case N n
+                return 1
+        end
+    end
 end
 
 function printMergeStatus
@@ -71,6 +91,14 @@ function printFinalStatus
     end
     if test (count $test_fail) -gt 0
         echo "Test fail:  " $test_fail
+        echo
+        if read_confirm "Would you like to see the logs from failing tests? [Yn]:" y
+            if test -n "$PAGER"
+                $PAGER $tmpdir/$test_fail
+            else
+                less $tmpdir/$test_fail
+            end
+        end
     end
 end
 
@@ -88,9 +116,11 @@ function doMerge -a runTest
         printMergeStatus
         if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
             if test -n "$runTest"
+                test (count $prs) -eq 0 -a (count $test_fail) -eq 0
+                set -l fail_already_known $status
                 set current "✓*"$pr
                 printMergeStatus
-                if make test-all $makeFlags >/dev/null 2>&1
+                if test "$fail_already_known" -ne 0 && make test-all $makeFlags >$tmpdir/$pr 2>&1
                     set current
                     set statuses $statuses "✓✓"$pr
                     set picked $picked $pr
@@ -123,9 +153,9 @@ echo "Merging PRs:"
 doMerge "" $allPrs
 echo -e "\nTesting all merged PRs together (happy path)"
 
-if make test-all $makeFlags >/dev/null 2>&1
+if make test-all $makeFlags >$tmpdir/$allPrs[-1] 2>&1
     printFinalStatus
-    cleanup
+    cleanup dir
     exit 0
 end
 
@@ -133,4 +163,4 @@ echo -e "\nHappy path failed, falling back to testing each PR in sequence:"
 cleanup
 doMerge "test" $allPrs
 printFinalStatus
-cleanup
+cleanup dir
