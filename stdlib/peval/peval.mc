@@ -173,7 +173,7 @@ lang LetPEval = PEval + LetAst
   sem pevalReadbackH ctx =
   | TmLet r ->
     match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
-    match pevalReadbackH ctx r.body with (ctx, body) in
+    match pevalReadbackH inexprCtx r.body with (ctx, body) in
     if setMem r.ident inexprCtx.freeVar then
       (ctx, TmLet { r with body = body, inexpr = inexpr })
     else
@@ -829,8 +829,6 @@ utest _test prog with _parse "lam y. 0."
   using eqExpr
 in
 
--- logSetLogLevel logLevel.debug;
-
 let prog = _parse "
 lam y. (lam x. mulf x 0.) (addf (print \"hello\"; y) y)
   " in
@@ -838,6 +836,36 @@ utest _test prog with _parse "
 lam t.
   let t = print \"hello\" in
   0.
+  "
+  using eqExpr
+in
+
+-- logSetLogLevel logLevel.debug;
+
+let prog = _parse "
+lam x.
+    (lam x1. lam x2. addf x1 x2)
+      ((lam y. addf y y) x)
+      ((lam z. addf z z) x)
+  " in
+utest _test prog with _parse "
+lam x.
+  let t =
+    mulf
+      2.
+      x
+  in
+  let t1 =
+    mulf
+      2.
+      x
+  in
+  let t2 =
+    addf
+      t
+      t1
+  in
+  t2
   "
   using eqExpr
 in
