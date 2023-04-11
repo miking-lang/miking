@@ -109,17 +109,16 @@ let nfaNextStates : all v. all l. v -> Digraph v l -> l -> [v] =
   error "No transition was found"
   else neighboringStates
 
--- takes a path and returns whether it's accepted or not.
-let pathIsAccepted = lam path.
-  if null path then false
-  else (eqsetEqual eqChar (last path).status "accepted")
-
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
 recursive
 let nfaMakeInputPath : all v. all l.
   Int -> v -> [l] -> NFA v l -> [{state : v, index : Int, status : String}] =
   lam i. lam currentState. lam input. lam nfa.
+  let pathIsAccepted = lam path.
+    if null path then false
+    else (eqsetEqual eqChar (last path).status "accepted")
+  in
   if (eqi (length input) 0) then
     if (nfaIsAcceptedState currentState nfa) then [{state = currentState,index = i, status = "accepted"}]
     else [{state = currentState, index = i, status = "not accepted"}]
