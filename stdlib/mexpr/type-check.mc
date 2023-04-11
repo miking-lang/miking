@@ -141,7 +141,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst + FlexTypeAst + PrettyPrint
+lang Unify = FlexTypeAst + PrettyPrint
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -246,7 +246,7 @@ lang VarTypeUnify = Unify + VarTypeAst
     else ()
 end
 
-lang FlexTypeUnify = UnifyFields + FlexTypeAst
+lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
   sem addSorts (env : UnifyEnv) =
   | (RecordVar r1, RecordVar r2) ->
     let f = lam ty1. lam ty2. unifyTypes env (ty1, ty2); ty1 in
@@ -618,7 +618,8 @@ lang FlexDisableGeneralize = Unify
     sfold_Type_Type (lam. lam ty. disableRecordGeneralize info lvl ty) () ty
 end
 
-lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown + FlexDisableGeneralize
+lang LetTypeCheck =
+  TypeCheck + LetAst + LamAst + FunTypeAst + SubstituteUnknown + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let lvl = env.currentLvl in
@@ -740,7 +741,7 @@ lang TypeTypeCheck = TypeCheck + TypeAst + SubstituteUnknown
     TmType {t with inexpr = inexpr, ty = tyTm inexpr}
 end
 
-lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
+lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + SubstituteUnknown
   sem typeCheckExpr env =
   | TmConDef t ->
     checkUnknown t.info t.tyIdent;
@@ -847,7 +848,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
-lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
+lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
   sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
@@ -864,17 +865,17 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
       errorSingle [t.info] msg
 end
 
-lang IntPatTypeCheck = PatTypeCheck + IntPat
+lang IntPatTypeCheck = PatTypeCheck + IntPat + IntTypeAst
   sem typeCheckPat env patEnv =
   | PatInt t -> (patEnv, PatInt {t with ty = TyInt {info = t.info}})
 end
 
-lang CharPatTypeCheck = PatTypeCheck + CharPat
+lang CharPatTypeCheck = PatTypeCheck + CharPat + CharTypeAst
   sem typeCheckPat env patEnv =
   | PatChar t -> (patEnv, PatChar {t with ty = TyChar {info = t.info}})
 end
 
-lang BoolPatTypeCheck = PatTypeCheck + BoolPat
+lang BoolPatTypeCheck = PatTypeCheck + BoolPat + BoolTypeAst
   sem typeCheckPat env patEnv =
   | PatBool t -> (patEnv, PatBool {t with ty = TyBool {info = t.info}})
 end
