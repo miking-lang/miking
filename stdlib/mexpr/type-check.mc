@@ -25,6 +25,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
+include "mexpr/cmp.mc"
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -150,7 +151,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = FlexTypeAst + PrettyPrint
+lang Unify = MExprAst + FlexTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -197,11 +198,33 @@ lang Unify = FlexTypeAst + PrettyPrint
   sem unificationError : UnifyEnv -> ()
   sem unificationError =
   | env ->
+    let pprintEnv = pprintEnvEmpty in
+    match getTypeStringCode 0 pprintEnv env.expectedType with (pprintEnv, expected) in
+    match getTypeStringCode 0 pprintEnv env.foundType with (pprintEnv, found) in
+    recursive let collectAliases : Map Type Type -> Type -> Map Type Type
+      = lam acc. lam ty.
+        match ty with TyAlias x then
+          let acc = mapInsert x.display x.content acc in
+          collectAliases (collectAliases acc x.display) x.content
+        else sfold_Type_Type collectAliases acc ty
+    in
+    let aliases = collectAliases (mapEmpty cmpType) env.expectedType in
+    let aliases = collectAliases aliases env.foundType in
+    match
+      if mapIsEmpty aliases then (pprintEnv, "") else
+        let f = lam env. lam pair.
+          match getTypeStringCode 0 env pair.0 with (env, l) in
+          match getTypeStringCode 0 env pair.1 with (env, r) in
+          (env, join ["\n*   ", l, " = ", r]) in
+        match mapAccumL f pprintEnv (mapBindings aliases) with (pprintEnv, aliases) in
+        (pprintEnv, join ["* where", join aliases, "\n"])
+    with (pprintEnv, aliases) in
     let msg = join [
       "* Expected an expression of type: ",
-      type2str env.expectedType, "\n",
+      expected, "\n",
       "* Found an expression of type: ",
-      type2str env.foundType, "\n",
+      found, "\n",
+      aliases,
       "* When type checking the expression\n"
     ] in
     errorSingle env.info msg
