@@ -6,8 +6,24 @@ include "set.mc"
 include "common.mc"
 
 -- NOTE(vipa, 2023-03-30): `Path` should be considered to be opaque,
--- don't use it as a SID
-type Path = SID
+-- don't depend on the underlying type
+
+-- type Path = SID
+-- let stringToPath = stringToSid
+-- let pathToString = sidToString
+-- let cmpPath = cmpSID
+-- let eqPath = eqSID
+
+-- OPT(vipa, 2023-04-16): It ends up being significantly faster to
+-- work with paths directly as strings rather than as SIDs, the
+-- overhead of the translation costs more than we gain. That said, the
+-- paths are typically quite long, so finding something smarter here
+-- is probably still a very good avenue for optimization.
+type Path = String
+let stringToPath = lam x. x
+let pathToString = lam x. x
+let cmpPath = cmpString
+let eqPath = eqString
 
 -- This represents whether we should run a task, and if so, what the
 -- expected outcome is. This types is ordered, where Dont < Fail <
@@ -147,7 +163,7 @@ let _dir = sysGetCwd ()
 let glob : String -> [Path] = lam glob.
   let bashCmd = join ["\"for f in src/", glob, "; do echo \\$f; done\""] in
   let res = sysRunCommand ["bash", "-O", "globstar", "-O", "nullglob", "-c", bashCmd] "" _dir in
-  map stringToSid (init (strSplit "\n" res.stdout))
+  map stringToPath (init (strSplit "\n" res.stdout))
 
 -------------------------------------------------------------------
 -- The public API ends here, with one exception: `testMain` is also
@@ -190,12 +206,12 @@ let _expandFormat : String -> {i : String, o : String} -> String = lam format. l
     end
   in work "" format
 
--- let _phaseTime = ref (wallTimeMs ())
--- let _phase : String -> () = lam phase.
---   let now = wallTimeMs () in
---   printLn (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
---   modref _phaseTime now
-let _phase = lam. ()
+let _phaseTime = ref (wallTimeMs ())
+let _phase : String -> () = lam phase.
+  let now = wallTimeMs () in
+  printLn (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
+  modref _phaseTime now
+-- let _phase = lam. ()
 
 let testMain : [TestCollection] -> () = lam colls.
   _phase "start";
@@ -298,7 +314,7 @@ let testMain : [TestCollection] -> () = lam colls.
   let normals : Ref (Map Path NormalTasks) =
     let x = glob "**/*.mc" in
     let x = map (lam p. (p, defaultTasks)) x in
-    ref (mapFromSeq cmpSID x) in
+    ref (mapFromSeq cmpPath x) in
   _phase "basicNormals";
 
   let intersectAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
@@ -325,7 +341,7 @@ let testMain : [TestCollection] -> () = lam colls.
     , friendlyCommand : String
     , extraDep : Option Path
     } in
-  let targets : Ref (Map Path TargetData) = ref (mapEmpty cmpSID) in
+  let targets : Ref (Map Path TargetData) = ref (mapEmpty cmpPath) in
   let orderedTargets : Ref [(Path, TargetData)] = ref [] in
   let addRaw
     : String
@@ -334,7 +350,7 @@ let testMain : [TestCollection] -> () = lam colls.
     -> Path
     = lam namespace. lam addOutput. lam data.
       let currTargets = deref targets in
-      let origPath = sidToString data.input in
+      let origPath = pathToString data.input in
       let path = if isPrefix eqc namespace origPath then origPath else concat namespace origPath in
       let stdout = join [path, ".", data.tag, ".log"] in
       let stderr = join [path, ".", data.tag, ".err"] in
@@ -351,19 +367,22 @@ let testMain : [TestCollection] -> () = lam colls.
         [ "{ ", cmd, "; } >'", stdout, "' 2>'", stderr
         , "' || { misc/elide-cat stdout '", stdout, "'; misc/elide-cat stderr '", stderr, "'; false; }"
         ] in
+      -- OPT(vipa, 2023-04-16): It seems that map operations are the
+      -- most costly presently. It doesn't *seem* to be the direct
+      -- operations below, so I'm guessing it's via stringToSid.
       let origin = optionMapOr data.input (lam td. td.origin)
         (mapLookup data.input currTargets) in
       let td =
         { origin = origin
         , input = data.input
         , command = cmd
-        , stdout = stringToSid stdout
-        , stderr = stringToSid stderr
+        , stdout = stringToPath stdout
+        , stderr = stringToPath stderr
         , extraDep = data.extraDep
         , friendlyCommand = friendlyCommand
         } in
       -- TODO(vipa, 2023-03-31): Error on duplicate target definition
-      let target = stringToSid target in
+      let target = stringToPath target in
       modref targets (mapInsert target td currTargets);
       modref orderedTargets (snoc (deref orderedTargets) (target, td));
       target
@@ -442,7 +461,7 @@ let testMain : [TestCollection] -> () = lam colls.
     let mkMi = mkMi
       { pre = join ["MCORE_LIBS=stdlib=", _dir, "/src/stdlib ", buildDir, "mi"]
       , tag = tag
-      , extraDep = Some (stringToSid (concat buildDir "mi"))
+      , extraDep = Some (stringToPath (concat buildDir "mi"))
       , kind = "BOOTSTRAPPED"
       } in
     let mkSh = mkSh tag in
@@ -466,7 +485,7 @@ let testMain : [TestCollection] -> () = lam colls.
     let mkMi = mkMi
       { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib ", buildDir, "mi-cheat"]
       , tag = tag
-      , extraDep = Some (stringToSid (concat buildDir "mi-cheat"))
+      , extraDep = Some (stringToPath (concat buildDir "mi-cheat"))
       , kind = "CHEATED"
       } in
     let mkSh = mkSh tag in
@@ -484,13 +503,13 @@ let testMain : [TestCollection] -> () = lam colls.
     cpDirStructure "normal" ();
     let printRule = lam pair. match pair with (target, td) in
       let extra = match td.extraDep
-        with Some dep then concat " | " (sidToString dep)
+        with Some dep then concat " | " (pathToString dep)
         else "" in
       let cmd = join
-        [ ": ", sidToString td.input, extra
+        [ ": ", pathToString td.input, extra
         , " |> ^ ", td.friendlyCommand, "^ "
-        , td.command, " |> ", sidToString td.stdout, " ", sidToString td.stderr
-        , if eqSID target td.stdout then "" else concat " " (sidToString target)
+        , td.command, " |> ", pathToString td.stdout, " ", pathToString td.stderr
+        , if eqPath target td.stdout then "" else concat " " (pathToString target)
         ] in
       printLn cmd in
     iter printRule (deref orderedTargets);
