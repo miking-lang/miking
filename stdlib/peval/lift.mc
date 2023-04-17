@@ -138,7 +138,6 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     -- If we cannot lift any of the present types
     if any (lam x. optionIsNone x.2) seqFieldsWithLift then None ()
     else
-
     let s = seq_ (map (lam x.
       let s = sidToString x.0 in
       match x.2 with Some t in
@@ -199,11 +198,11 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
   | CFloat {val = v} -> [("val", float_ v)]
   | CBool {val = v} -> [("val", bool_ v)]
   | CChar {val = v} -> [("val", char_ v)]
-  | CSymb {val = v} -> [("val", symb_ v)]
+  | CSymb {val = v} -> error "Cannot lift symbols as consts"
   | t -> []
 
   sem liftExpr names args =
-  | TmConst {val = const, ty = typ, info = info} & t ->
+  | TmConst {val = const, ty = typ, info = info} ->
     let bindings = buildConstBindings const in
     -- Build "Const"
     let const = createConApp names (getBuiltinNameFromConst const) bindings in
