@@ -106,6 +106,15 @@ lang FlexTypeAst = VarSortAst + Ast
     else (acc, ty)
 end
 
+lang FlexTypeCmp = Cmp + FlexTypeAst
+  sem cmpTypeH =
+  | (TyFlex l, TyFlex r) ->
+    -- NOTE(vipa, 2023-04-19): Any non-link TyFlex should have been
+    -- unwrapped already, thus we can assume `Unbound` here.
+    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
+    nameCmp l.ident r.ident
+end
+
 lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyFlex t ->

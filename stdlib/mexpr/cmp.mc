@@ -42,7 +42,7 @@ lang Cmp = Ast
     else res
 
   sem cmpType (lhs: Type) =
-  | rhs /- : Type -/ -> cmpTypeH (lhs, rhs)
+  | rhs /- : Type -/ -> cmpTypeH (unwrapType lhs, unwrapType rhs)
 
   sem cmpTypeH =
   -- Default case when types are not the same
