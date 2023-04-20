@@ -23,7 +23,7 @@ let escapeConString = lam s.
   concat "C" (map _escapeChar s)
 
 let escapeLabelString = lam s.
-  concat "l" (map _escapeChar s)
+  concat "l_" (map _escapeChar s)
 
 utest escapeVarString "abcABC/:@_'" with "v_abcABC____'"
 utest escapeVarString "" with "v_"
