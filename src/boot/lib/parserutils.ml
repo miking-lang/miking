@@ -154,7 +154,7 @@ let rec remove_all_utests = function
       smap_tm_tm remove_all_utests t
 
 (* Current working directory standard library path *)
-let stdlib_cwd = Sys.getcwd () ^ Filename.dir_sep ^ "stdlib"
+let stdlib_cwd = Filename.concat (Sys.getcwd ()) "stdlib"
 
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =
@@ -167,25 +167,29 @@ let stdlib_loc_unix =
 module NamespaceMap = Map.Make (String)
 
 let namespaces : string NamespaceMap.t =
+  let process_binding str =
+    if Str.string_match (Str.regexp {|\([^=]+\)=\(.+\)|}) str 0 then
+      Some (Str.matched_group 1 str, Str.matched_group 2 str)
+    else
+      let msg =
+        error_message NoInfo WARNING
+          ( "Invalid element of MCORE_LIBS: \"" ^ str
+          ^ "\", expected a key=value pair" )
+      in
+      eprintf "%s\n" (message2str msg |> Ustring.to_utf8) ;
+      None
+  in
   let env_bindings =
     match Sys.getenv_opt "MCORE_LIBS" with
     | Some path ->
-        let process_binding str =
-          if Str.string_match (Str.regexp {|\(.+\)=\(.+\)|}) str 0 then
-            (Str.matched_group 1 str, Str.matched_group 2 str)
-          else
-            raise_error NoInfo
-              ( "Invalid value of MCORE_LIBS: \"" ^ path
-              ^ "\"\nMust be a list of key=value pairs" )
-        in
-        path |> String.split_on_char ':' |> List.map process_binding
-        |> List.to_seq
+        path |> String.split_on_char ':' |> List.to_seq
+        |> Seq.filter_map process_binding
     | None ->
         Seq.empty
   in
   NamespaceMap.add_seq env_bindings NamespaceMap.empty
 
-let stdlib_loc, library_locs =
+let (stdlib_loc : string), (library_locs : string NamespaceMap.t) =
   match NamespaceMap.find_opt "stdlib" namespaces with
   | Some stdlib ->
       (stdlib, namespaces)
@@ -196,6 +200,45 @@ let stdlib_loc, library_locs =
         else stdlib_cwd
       in
       (stdlib, NamespaceMap.add "stdlib" stdlib namespaces)
+
+let process_include_path : info -> string -> string -> string =
+ fun info root path ->
+  let check_exists file =
+    if Sys.file_exists file then file
+    else raise_error info ("No such file: \"" ^ file ^ "\"")
+  in
+  let path_from_namespace namespace filename =
+    match NamespaceMap.find_opt namespace library_locs with
+    | Some root' ->
+        let namespace_path =
+          Filename.concat root' filename |> Utils.normalize_path
+        in
+        check_exists namespace_path
+    | None ->
+        raise_error info ("Unknown file namespace: \"" ^ namespace ^ "\"")
+  in
+  let path_from_implicit local_path stdlib_path =
+    if local_path = stdlib_path then check_exists local_path
+    else
+      match (Sys.file_exists local_path, Sys.file_exists stdlib_path) with
+      | true, false ->
+          local_path
+      | false, true ->
+          stdlib_path
+      | true, true ->
+          raise_error info
+            ("File exists both locally and in standard library: " ^ path)
+      | false, false ->
+          raise_error info ("No such file: \"" ^ path ^ "\"")
+  in
+  if Str.string_match (Str.regexp {|\(.+\)::\(.+\)|}) path 0 then
+    path_from_namespace (Str.matched_group 1 path) (Str.matched_group 2 path)
+  else
+    let local_path = Filename.concat root path |> Utils.normalize_path in
+    if not (Filename.is_implicit path) then check_exists local_path
+    else
+      path_from_implicit local_path
+        (Filename.concat stdlib_loc path |> Utils.normalize_path)
 
 let prog_argv : string list ref = ref []
 
@@ -262,46 +305,19 @@ let local_parse_mcore_file filename =
    detected. *)
 let rec merge_includes root visited = function
   | Program (includes, tops, tm) ->
-      let rec parse_include root = function
-        | Include (info, path) as inc ->
+      let parse_include root = function
+        | Include (info, path) ->
             let path = Ustring.to_utf8 path in
-            let filename = Filename.concat root path |> Utils.normalize_path in
-            let file_stdloc =
-              if Filename.is_implicit path then
-                Some (Filename.concat stdlib_loc path |> Utils.normalize_path)
-              else None
-            in
+            let filename = process_include_path info root path in
             if List.mem filename visited then
               raise_error info ("Cycle detected in included files: " ^ filename)
             else if List.mem filename !parsed_files then None
-            else if
-              Sys.file_exists filename
-              &&
-              match file_stdloc with
-              | Some file_stdloc ->
-                  Sys.file_exists file_stdloc && file_stdloc <> filename
-              | _ ->
-                  false
-            then
-              raise_error info
-                ( "File exists both locally and in standard library: "
-                ^ filename ) (* File already included *)
-            else if Sys.file_exists filename then
+            else
               local_parse_mcore_file filename
               |> merge_includes
                    (Filename.dirname filename)
                    (filename :: visited)
               |> Option.some
-            else if
-              root != stdlib_loc
-              &&
-              match file_stdloc with
-              | Some file_stdloc ->
-                  Sys.file_exists file_stdloc
-              | _ ->
-                  false
-            then parse_include stdlib_loc inc
-            else raise_error info ("No such file: \"" ^ filename ^ "\"")
       in
       let included = includes |> List.filter_map (parse_include root) in
       let not_test = function TopUtest _ -> false | _ -> true in
