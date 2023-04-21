@@ -164,14 +164,38 @@ let stdlib_loc_unix =
   | None ->
       stdlib_cwd
 
-let stdlib_loc =
-  match Sys.getenv_opt "MCORE_STDLIB" with
-  | Some path ->
-      path
+module NamespaceMap = Map.Make (String)
+
+let namespaces : string NamespaceMap.t =
+  let env_bindings =
+    match Sys.getenv_opt "MCORE_LIBS" with
+    | Some path ->
+        let process_binding str =
+          if Str.string_match (Str.regexp {|\(.+\)=\(.+\)|}) str 0 then
+            (Str.matched_group 1 str, Str.matched_group 2 str)
+          else
+            raise_error NoInfo
+              ( "Invalid value of MCORE_LIBS: \"" ^ path
+              ^ "\"\nMust be a list of key=value pairs" )
+        in
+        path |> String.split_on_char ':' |> List.map process_binding
+        |> List.to_seq
+    | None ->
+        Seq.empty
+  in
+  NamespaceMap.add_seq env_bindings NamespaceMap.empty
+
+let stdlib_loc, library_locs =
+  match NamespaceMap.find_opt "stdlib" namespaces with
+  | Some stdlib ->
+      (stdlib, namespaces)
   | None ->
-      if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then
-        stdlib_loc_unix
-      else stdlib_cwd
+      let stdlib =
+        if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then
+          stdlib_loc_unix
+        else stdlib_cwd
+      in
+      (stdlib, NamespaceMap.add "stdlib" stdlib namespaces)
 
 let prog_argv : string list ref = ref []
 
