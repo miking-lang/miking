@@ -4,7 +4,7 @@ const fs = require("fs");
 const ROOT = process.cwd().substring(0, process.cwd().indexOf("miking")) + "miking";
 const BUILD = `${ROOT}/build`;
 const BENCH = `${ROOT}/test/js/benchmarks`;
-const STDLIB = `cd ${ROOT}/stdlib; export MCORE_STDLIB=\`pwd\`; cd ${ROOT}`;
+const STDLIB = `export MCORE_LIBS=stdlib=${ROOT}/stdlib`;
 
 function menu() {
   console.log(`Usage: run (options) [benchmark-name-no-extension] [iterations]

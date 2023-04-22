@@ -12,7 +12,7 @@ presently only be interpreted. Assuming we're currently at the root of
 the `miking` repository:
 
 ```bash
-MCORE_STDLIB=`pwd`/stdlib mi eval stdlib/parser/tool.mc -- test/examples/expr.syn
+MCORE_LIBS=stdlib=`pwd`/stdlib mi eval stdlib/parser/tool.mc -- test/examples/expr.syn
 ```
 
 The tool presently only supports a subset of what's described in this

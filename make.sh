@@ -21,7 +21,7 @@ BIN_PATH=$HOME/.local/bin
 LIB_PATH=$HOME/.local/lib/mcore
 
 # Setup environment variable to find standard library
-export MCORE_STDLIB=`pwd`/stdlib
+export MCORE_LIBS=stdlib=`pwd`/stdlib
 
 # Compile and build the boot interpreter
 build_boot(){

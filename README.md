@@ -65,11 +65,9 @@ and then run it using the command:
 build/mi hello.mc
 ```
 
-To help Miking find its standard library, you should define the
-environment variable `MCORE_STDLIB` to be the path to `stdlib`,
-for example by running the following:
+To help Miking find its standard library, you should define the environment variable `MCORE_LIBS` with an entry for `stdlib` pointing to the appropriate path, for example by running the following:
 
-    cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
+    export MCORE_LIBS=stdlib=`pwd`/stdlib
 
 To install the compiler along with the standard library for the current
 user, issue:
@@ -78,7 +76,7 @@ user, issue:
 make install
 ```
 
-This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location. NOTE: on some systems (e.g., macOS), you need to _manually_ add `$HOME/.local/bin` to your `PATH` environment variable to access the `mi` command from your shell.
+This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_LIBS` is unset, Miking will look in this installation folder as its default library location. NOTE: on some systems (e.g., macOS), you need to _manually_ add `$HOME/.local/bin` to your `PATH` environment variable to access the `mi` command from your shell.
 
 Conversely, to uninstall, issue:
 
@@ -745,14 +743,19 @@ adding included files. A file can be included using the syntax
 include "path/to/prog.mc"
 ```
 
-before any top-level definitions in a
-file. The string is a file path relative to the file that contains
-the `include`. If the environment variable `MCORE_STDLIB` is
-defined, its value is used as a fallback path to search from if
-the file is not found relative to the original file. Files are
-included transitively in a depth-first fashion, and files that are
-included from several files are only included once. File
-inclusions that form a loop are not allowed.
+before any top-level definitions in a file.
+The string is a file path relative to the file that contains the `include`.
+To refer to files from other libraries, the path can be prefixed with a _namespace_ using the syntax
+
+```
+include "mylib::prog.mc"
+```
+
+The environment variable `MCORE_LIBS` specifies the location associated with each namespace as a colon-separated list of `name=path` pairs.
+For instance, with `MCORE_LIBS=mylib=/path/to/mylib`, the snippet above would include the file `/path/to/mylib/prog.mc`.
+The standard library namespace `stdlib` is used as a fallback path to search from if no namespace is given and the file is not found relative to the original file.
+Files are included transitively in a depth-first fashion, and files that are included from several files are only included once.
+File inclusions that form a loop are not allowed.
 
 Including a file is equivalent to inserting all the top-level
 definitions of that file. There are no namespaces and no
