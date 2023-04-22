@@ -14,14 +14,9 @@ open Boot.Builtin
 open Boot.Eval
 open Boot.Repl
 
-(* Define the file slash, to make it platform independent *)
-let sl = if Sys.win32 then "\\" else "/"
-
 (* Add a slash at the end "\\" or "/" if not already available *)
 let add_slash s =
-  if String.length s = 0 || String.sub s (String.length s - 1) 1 <> sl then
-    s ^ sl
-  else s
+  if String.length s = 0 then Filename.dir_sep else Filename.concat s ""
 
 (* Expand a list of files and folders into a list of file names *)
 let files_of_folders lst =
