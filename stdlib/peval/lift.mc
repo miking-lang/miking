@@ -6,6 +6,7 @@ include "peval/utils.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eval.mc"
 include "mexpr/cfa.mc" -- only for freevariables
+include "mexpr/symbolize.mc"
 
 include "mexpr/mexpr.mc"
 
@@ -54,8 +55,9 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
 
   sem tyConInfo : Type -> (Info, (SpecializeNames -> Name))
   sem tyConInfo =
-  | TyUnknown {info = info} -> (info, tyUnknownName) 
-  | t -> printLn "Don't know how to lift this type"; (NoInfo(), tyUnknownName)
+  -- Right now, the partial evaluator is not able to propagate types,
+  -- so we need to type check the AST later anyhow. Hence, use unknown type.
+  | t -> (NoInfo(), tyUnknownName)
 
   sem liftName : SpecializeArgs -> Name -> LiftResult
   sem liftName args = | name ->
@@ -69,7 +71,6 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
   sem liftInfo names =
   | _ -> createConApp names noInfoName []
     
-
   sem liftStringToSID : SpecializeNames -> String -> Expr
   sem liftStringToSID names = | x ->
    app_ (nvar_ (stringToSidName names)) (str_ x)
@@ -92,24 +93,36 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
 
   sem liftViaType : SpecializeNames -> SpecializeArgs -> Name -> Type -> Option LiftResult
   sem liftViaType names args varName =
-  | t & (TyInt _ | TySeq _ | TyRecord _) ->
-    match liftViaTypeH names varName t with Some t then Some (args, t)
-    else None ()
-  | ty ->
+  | TyUnknown _ | TyArrow _ ->
     match mapLookup varName args.lib with Some t then
       let args = updateClosing args false in
       Some (liftExpr names args t)
     else None ()
+  | t ->
+    match liftViaTypeH names varName t with Some t then Some (args, t)
+    else None ()
+
+  sem _liftBasicType : SpecializeNames -> Name -> Type -> Option Expr
+  sem _liftBasicType names varName =
+  | typ -> let biStr =
+  switch typ
+    case TyInt _ then "int"
+    case TyFloat _ then "float"
+    case TyBool _ then "bool"
+    case TyChar _ then "char"
+    case _ then error "Cannot lift via this type"
+  end in
+  let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
+  let bindings = [("val", lv)] in
+  let const = createConApp names (getBuiltinName biStr) bindings in
+  let bindings = [("val", const)] in
+  Some (createConAppExpr names tmConstName bindings typ (NoInfo ()))
 
   -- NOTE(adamssonj, 2023-03-31): Can't do anything with e.g. [(a->b)] aon
   sem liftViaTypeH : SpecializeNames -> Name -> Type -> Option Expr
   sem liftViaTypeH names varName =
-  | TyInt {info = info} & typ ->
-    let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
-    let bindings = [("val", lv)] in
-    let const = createConApp names (getBuiltinName "int") bindings in
-    let bindings = [("val", const)] in
-    Some (createConAppExpr names tmConstName bindings typ info)
+  | t & (TyInt _ | TyFloat _ | TyChar _ | TyBool _) ->
+    _liftBasicType names varName t
   | TySeq {info = info, ty = ty} & typ->
     let sq = TmVar {ident = varName, ty=typ, info = NoInfo (),
                     frozen = false} in
@@ -342,7 +355,6 @@ end
 
 lang SpecializeLiftLet = SpecializeLift + LetAst
 
-
   sem liftExpr names args =
   | TmLet {ident=ident, body=body, inexpr=inexpr, ty=ty, info=info} ->
     match liftExprAccum names args [body, inexpr] with (args, [lBody, lInex]) in
@@ -375,7 +387,7 @@ let _setup =
   match includeConstructors ast with ast in
   -- Find the names of the functions and constructors needed later
   let names = createNames ast pevalNames in
-  names
+  (ast, names)
 
 mexpr
 -- Possible idea:
@@ -385,38 +397,56 @@ mexpr
 use TestLang in
 --
 ---- Dummy AST s.t. constructors and funcs can be included and used in lifting
-let names = _setup in
+match _setup with (startAst, names) in
+
 let args = initArgs () in
 
 
 let _parse =
   parseMExprString
-    { _defaultBootParserParseMExprStringArg () with allowFree = true }
+    (_defaultBootParserParseMExprStringArg ())
 in
 
 let _eval = lam x.
+  let x = symbolize x in
   eval (evalCtxEmpty ()) x in
 
 let _parseEval = lam x:String. 
   let x = _parse x in 
   _eval x in
 
+let _liftExpr = lam names. lam args. lam e.
+  match liftExpr names args e with (_, k) in k
+in
 --
 ------------ TmApp -----------------
 --
-let e = addi_ (int_ 1) (int_ 3) in
 
-let k = liftExpr names args e in
+let e = addi_ (int_ 1) (int_ 3) in -- 1 + 3
+let k = _liftExpr names args e in
 
---utest _eval e with evalStr st using eqExpr in
+let expected = nconapp_ (tmAppName names) (urecord_
+    [("lhs", _liftExpr names args (app_ (uconst_ (CAddi ())) (int_ 1))),
+     ("rhs", _liftExpr names args (int_ 3)),
+     ("ty", liftType names tyunknown_),
+     ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 --
 ------------ TmVar -----------------
 --
 
 let e = var_ "t" in
-let k = liftExpr names args e in
+let k = _liftExpr names args e in
 
+let expected = nconapp_ (tmVarName names) (urecord_
+    [("ident", utuple_ [str_ "t", nvar_ (noSymbolName names)]),
+     ("frozen", bool_ false),
+     ("ty", liftType names tyunknown_),
+     ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 --
 ------------ TmRecord -----------------
@@ -453,7 +483,6 @@ let k = liftExpr names args e in
 
 let e = bind_ (ulet_ "x" (int_ 3)) (addi_ (int_ 4) (var_ "x")) in
 let k = liftExpr names args e in
-printLn (mexprToString k.1);
 
 
 ()

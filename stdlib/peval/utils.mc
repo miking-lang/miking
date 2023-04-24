@@ -12,11 +12,11 @@ include "set.mc"
 lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + MExprExtract + LamAst 
 
   type SpecializeNames = {
-    pevalNames : [Name],
-    consNames : [Name],
-    builtinsNames : [Name],
-    tyConsNames : [Name],
-    otherFuncs : [Name]
+    pevalNames : Map String Name,
+    consNames : Map String Name,
+    builtinsNames : Map String Name,
+    tyConsNames : Map String Name,
+    otherFuncs : Map String Name
   }
 
   type SpecializeArgs = {
@@ -48,152 +48,129 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem isClosing : SpecializeArgs -> Bool
   sem isClosing = | args -> args.closing
 
-  sem findNames : Expr -> [String] -> [Name]
+  sem _nameSeqToMap : [Name] -> Map String Name
+  sem _nameSeqToMap = | names ->
+  mapFromSeq cmpString (map (lam name. (name.0, name)) names)
+
+  sem findNames : Expr -> [String] -> Map String Name 
   sem findNames ast = | includes ->
   let names = filterOption (findNamesOfStrings includes ast) in
   if eqi (length includes) (length names) then
-      names
+    _nameSeqToMap names 
   else 
     error "A necessary include could not be found in the AST"
 
   sem createNames : Expr -> [Name] -> SpecializeNames
   sem createNames ast =
   | pevalNames ->
+  let pevalNames = _nameSeqToMap pevalNames in
   let consNames = findNames ast includeConsNames in
   let builtinsNames = findNames ast includeBuiltins in
   let tyConsNames = findNames ast includeTyConsNames in
   let otherFuncs = findNames ast otherFuncs in
-  {pevalNames = pevalNames, consNames = consNames,
-   builtinsNames = builtinsNames, tyConsNames = tyConsNames,
+  {pevalNames = pevalNames, 
+   consNames = consNames,
+   builtinsNames = builtinsNames, 
+   tyConsNames = tyConsNames,
    otherFuncs=otherFuncs}
 
-  sem getName : [Name] -> String -> Option Name
+  sem getName : Map String Name -> String -> Name
   sem getName names =
-  | str -> find (lam x. eqString str x.0) names
+  | str -> match mapLookup str names with Some n then n
+           else error (concat "Could not find: " str) 
 
   sem pevalName : SpecializeNames -> Name
-  sem pevalName = | names -> match getName (names.pevalNames) "pevalWithEnv" with Some t then t
-                             else error "semantic function peval not found"
+  sem pevalName = | names -> getName (names.pevalNames) "pevalWithEnv"
 
   sem tmClosName : SpecializeNames -> Name
-  sem tmClosName = | names -> match getName (names.consNames) "ClosAst_TmClos"
-                              with Some t then t else error "TmClos not found"
+  sem tmClosName = | names -> getName (names.consNames) "ClosAst_TmClos"
 
   sem tmAppName : SpecializeNames -> Name
-  sem tmAppName = | names -> match getName (names.consNames) "AppAst_TmApp" with Some t then t
-                             else error "TmApp not found"
+  sem tmAppName = | names -> getName (names.consNames) "AppAst_TmApp"
 
   sem tmLamName : SpecializeNames -> Name
-  sem tmLamName = | names -> match getName (names.consNames) "LamAst_TmLam" with Some t then t
-                             else error "TmLam not found"
+  sem tmLamName = | names -> getName (names.consNames) "LamAst_TmLam"
 
   sem tmVarName : SpecializeNames -> Name
-  sem tmVarName = | names -> match getName (names.consNames) "VarAst_TmVar" with Some t then t
-                             else error "TmVar not found"
+  sem tmVarName = | names -> getName (names.consNames) "VarAst_TmVar"
 
   sem tmRecName : SpecializeNames -> Name
-  sem tmRecName = | names -> match getName (names.consNames) "RecordAst_TmRecord" with
-                             Some t then t else error "TmRecord not found"
+  sem tmRecName = | names -> getName (names.consNames) "RecordAst_TmRecord"
 
   sem tmSeqName : SpecializeNames -> Name
-  sem tmSeqName = | names -> match getName (names.consNames) "SeqAst_TmSeq" with
-                             Some t then t else error "TmSeq not found"
+  sem tmSeqName = | names -> getName (names.consNames) "SeqAst_TmSeq"
 
   sem tmConstName : SpecializeNames -> Name
-  sem tmConstName = | names -> match getName (names.consNames) "ConstAst_TmConst" with
-                             Some t then t else error "TmConst not found"
+  sem tmConstName = | names -> getName (names.consNames) "ConstAst_TmConst"
 
   sem tmMatchName : SpecializeNames -> Name
-  sem tmMatchName = | names -> match getName (names.consNames) "MatchAst_TmMatch" with
-                             Some t then t else error "TmMatch not found"
+  sem tmMatchName = | names -> getName (names.consNames) "MatchAst_TmMatch"
 
   sem tmLetName : SpecializeNames -> Name
-  sem tmLetName = | names -> match getName (names.consNames) "LetAst_TmLet" with
-                             Some t then t else error "TmLet not found"
+  sem tmLetName = | names -> getName (names.consNames) "LetAst_TmLet"
 
   sem listConsName : SpecializeNames -> Name
-  sem listConsName = | names -> match getName (names.consNames) "Cons" with
-                             Some t then t else error "List Cons not found"
+  sem listConsName = | names -> getName (names.consNames) "Cons"
 
   sem listNilName : SpecializeNames -> Name
-  sem listNilName = | names -> match getName (names.consNames) "Nil" with
-                             Some t then t else error "List Nil not found"
+  sem listNilName = | names -> getName (names.consNames) "Nil"
 
   sem infoName : SpecializeNames -> Name
-  sem infoName = | names -> match getName (names.consNames) "Info" with
-                             Some t then t else error "Info constructor not found"
+  sem infoName = | names -> getName (names.consNames) "Info"
 
   sem noInfoName : SpecializeNames -> Name
-  sem noInfoName = | names -> match getName (names.consNames) "NoInfo" with
-                             Some t then t else error "NoInfo constructor not found"
+  sem noInfoName = | names -> getName (names.consNames) "NoInfo"
 
   sem tyAppName : SpecializeNames -> Name
-  sem tyAppName = | names -> match getName (names.tyConsNames) "AppTypeAst_TyApp" with
-                             Some t then t else error "TyApp not found"
+  sem tyAppName = | names -> getName (names.tyConsNames) "AppTypeAst_TyApp"
 
   sem tyVarName : SpecializeNames -> Name
-  sem tyVarName = | names -> match getName (names.tyConsNames) "VarTypeAst_TyVar" with
-                             Some t then t else error "TyVar not found"
+  sem tyVarName = | names -> getName (names.tyConsNames) "VarTypeAst_TyVar"
 
   sem tyIntName : SpecializeNames -> Name
-  sem tyIntName = | names -> match getName (names.tyConsNames) "IntTypeAst_TyInt" with
-                             Some t then t else error "TyInt not found"
+  sem tyIntName = | names -> getName (names.tyConsNames) "IntTypeAst_TyInt"
+
   sem tyBoolName : SpecializeNames -> Name
-  sem tyBoolName = | names -> match getName (names.tyConsNames) "BoolTypeAst_TyBool" with
-                             Some t then t else error "TyBool not found"
+  sem tyBoolName = | names -> getName (names.tyConsNames) "BoolTypeAst_TyBool"
 
   sem tyFloatName : SpecializeNames -> Name
-  sem tyFloatName = | names -> match getName (names.tyConsNames) "FloatTypeAst_TyFloat" with
-                             Some t then t else error "TyFloat not found"
+  sem tyFloatName = | names -> getName (names.tyConsNames) "FloatTypeAst_TyFloat"
 
   sem tyCharName : SpecializeNames -> Name
-  sem tyCharName = | names -> match getName (names.tyConsNames) "CharTypeAst_TyChar" with
-                             Some t then t else error "TyChar not found"
+  sem tyCharName = | names -> getName (names.tyConsNames) "CharTypeAst_TyChar"
 
   sem tyUnknownName : SpecializeNames -> Name
-  sem tyUnknownName = | names -> match getName (names.tyConsNames) "UnknownTypeAst_TyUnknown"
-                                 with Some t then t else error "TyUnknown not found"
+  sem tyUnknownName = | names -> getName (names.tyConsNames) "UnknownTypeAst_TyUnknown"
 
   sem tyArrowName : SpecializeNames -> Name
-  sem tyArrowName = | names -> match getName (names.tyConsNames) "FunTypeAst_TyArrow"
-                               with Some t then t else error "TyArrow not found"
-
+  sem tyArrowName = | names -> getName (names.tyConsNames) "FunTypeAst_TyArrow"
 
   sem mapFromSeqName : SpecializeNames -> Name
-  sem mapFromSeqName = | names -> match getName (names.otherFuncs) "mapFromSeq"
-                                  with Some t then t else error "MapFromSeq not found"
+  sem mapFromSeqName = | names -> getName (names.otherFuncs) "mapFromSeq"
 
   sem mapToSeqName : SpecializeNames -> Name
-  sem mapToSeqName = | names -> match getName (names.otherFuncs) "mapToSeq"
-                                with Some t then t else error "mapToSeq not found"
+  sem mapToSeqName = | names -> getName (names.otherFuncs) "mapToSeq"
 
   sem noSymbolName : SpecializeNames -> Name
-  sem noSymbolName = | names -> match getName (names.consNames) "_noSymbol"
-                                with Some t then t else error "_noSymbol not found"
+  sem noSymbolName = | names -> getName (names.consNames) "_noSymbol"
 
   sem stringToSidName : SpecializeNames -> Name
-  sem stringToSidName = | names -> match getName (names.otherFuncs) "stringToSid"
-                          with Some t then t else error "stringToSid not found"
+  sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"
 
   sem mexprStringName : SpecializeNames -> Name
-  sem mexprStringName = | names -> match getName (names.otherFuncs) "toString" 
-                          with Some t then t else error "mexprToString not found"
+  sem mexprStringName = | names -> getName (names.otherFuncs) "toString" 
 
   sem patIntName : SpecializeNames -> Name
-  sem patIntName = | names -> match getName (names.consNames) "IntPat_PatInt" 
-                          with Some t then t else error "IntPat not found"
+  sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt" 
 
   sem patNamedName : SpecializeNames -> Name
-  sem patNamedName = | names -> match getName (names.consNames) "NamedPat_PatNamed"
-                          with Some t then t else error "PatNamed not found"
+  sem patNamedName = | names -> getName (names.consNames) "NamedPat_PatNamed"
 
   sem pNameName: SpecializeNames -> Name
-  sem pNameName = | names -> match getName (names.consNames) "PName"
-                          with Some t then t else error "PName not found"
+  sem pNameName = | names -> getName (names.consNames) "PName"
 
   sem pWildcardName: SpecializeNames -> Name
-  sem pWildcardName = | names -> match getName (names.consNames) "PWildcard"
-                          with Some t then t else error "PWildcard not found"
+  sem pWildcardName = | names -> getName (names.consNames) "PWildcard"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
@@ -208,10 +185,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
 
   sem getBuiltinName : String -> SpecializeNames -> Name
   sem getBuiltinName str = | names ->
-    match find (lam x. eqString str x.0) builtinsMapping with Some astStr then
-        match getName (names.builtinsNames) astStr.1 with Some t in
-        t
-    else error "Could not find a builtin name"
+  match mapLookup str builtinsMapping with Some astStr then
+    getName (names.builtinsNames) astStr
+  else error (join ["Could not find ", str, " in builtin-mapping"])
 
   sem getBuiltinNameFromConst : Const -> SpecializeNames -> Name
   sem getBuiltinNameFromConst val = | names ->

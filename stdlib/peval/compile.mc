@@ -86,7 +86,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + ClosAst + MExprAst
     let ast = bindall_ [
         symDefs,
         ast] in
-    printLn (mexprToString ast);
+--    printLn (mexprToString ast);
     ast
 end
 
@@ -124,51 +124,44 @@ in
 --]) in
 
 
-let distinctCalls = preprocess (bindall_ [
+-- TyInt
+let unknownTyInt = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" tyint_ (specialize_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (int_ 4)),
     unit_
 ]) in
 
-let intseq = tyseq_ tyint_ in
+-- TyFloat
+let unknownTyFloat = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" tyfloat_ (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (float_ 4.0)),
+    unit_
+]) in
 
+-- TyBool
+let unknownTyBool = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" tybool_ (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (bool_ false)),
+    unit_
+]) in
+
+-- TyChar
+let unknownTyChar = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" tychar_ (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (char_ 'x')),
+    unit_
+]) in
+
+-- TySeq
+let intseq = tyseq_ tyint_ in
 let distinctCalls = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" intseq (specialize_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (seq_ [int_ 1, int_ 2])),
     unit_
 ]) in
 
-let t = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
-
-let distinctCalls = preprocess (bindall_ [
-    ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", float_ 1.0)]))
-]) in
-
-let distinctCalls = preprocess (bindall_ [
-  ulet_ "bar" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
---  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "bar") (var_ "x") (var_ "y")) 
---    (var_ "y")))),
-  specialize_ (app_ (var_ "bar") (int_ 1))
-]) in
-
-
-let distinctCalls = preprocess (bindall_ [
-  ulet_ "bar" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
---  ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (appf2_ (var_ "bar") (var_ "x") (var_ "y"))
---    (var_ "y")))),
-  specialize_ (app_ (var_ "bar") (int_ 1))
-]) in
-
-
-let distinctCalls = preprocess (bindall_ [
-  ulet_ "foo" (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y")))),
-  ulet_ "bar" (app_ (var_ "foo") (int_ 3)),
-  ulet_ "bars" (specialize_ (var_ "bar"))
-]) in
-
+-- TyRec
 let t = tyrecord_ [("a", tyint_), ("b", tyint_)] in
-
 let distinctCalls = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 1)]))
@@ -199,7 +192,7 @@ let distinctCalls = preprocess (bindall_ [
     ulet_ "k" (specialize_ (e))
 ]) in
 
-match compileSpecialize distinctCalls with ast in
+match compileSpecialize unknownTyChar with ast in
 
 let ast = typeAnnot ast in
 

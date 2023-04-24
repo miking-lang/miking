@@ -10,7 +10,7 @@ let consLoc = "/peval/cons-runtime.mc"
 
 -- Mapping from pretty printed built-in const to its AST equivalent
 -- TODO(adamssonj, 2023-03-17): True assumption? Built-ins are assumed always in AST
-let builtinsMapping = [
+let builtinsMapping = mapFromSeq cmpString [
     -- These 5 are not builtin functions, but used to get name of AST node of constants
     -- Differs in that these take an argument when constructed
     ("float", "FloatAst_CFloat"),
@@ -138,7 +138,7 @@ let builtinsMapping = [
     ("bootParserGetInfo", "BootParserAst_CBootParserGetInfo")
 ]
 
-let includeBuiltins = map (lam x. x.1) builtinsMapping
+let includeBuiltins = mapValues builtinsMapping
 
 -- These use the constructors, as they are named, in the AST directly
 -- Potentially could use e.g. "tmApp" here, but then tmApp just wraps "AppAst_TmApp"
