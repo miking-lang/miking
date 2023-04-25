@@ -151,7 +151,7 @@ let testColl : String -> TestCollection = lam name.
   { name = name
   , exclusions = lam. ()
   , conditionalInclusions = lam. ()
-  , checkCondition = lam. ()
+  , checkCondition = lam. ConditionsMet ()
   , newTests = lam. ()
   }
 
@@ -163,7 +163,9 @@ let _dir = sysGetCwd ()
 let glob : String -> [Path] = lam glob.
   let bashCmd = join ["\"for f in src/", glob, "; do echo \\$f; done\""] in
   let res = sysRunCommand ["bash", "-O", "globstar", "-O", "nullglob", "-c", bashCmd] "" _dir in
-  map stringToPath (init (strSplit "\n" res.stdout))
+  let paths = map stringToPath (init (strSplit "\n" res.stdout)) in
+  (if null paths then printLn (concat "Warning, empty glob: " glob) else ());
+  paths
 
 -------------------------------------------------------------------
 -- The public API ends here, with one exception: `testMain` is also
@@ -209,7 +211,9 @@ let _expandFormat : String -> {i : String, o : String} -> String = lam format. l
 let _phaseTime = ref (wallTimeMs ())
 let _phase : String -> () = lam phase.
   let now = wallTimeMs () in
-  printLn (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
+  printError (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
+  printError "\n";
+  flushStderr ();
   modref _phaseTime now
 -- let _phase = lam. ()
 
@@ -326,9 +330,9 @@ let testMain : [TestCollection] -> () = lam colls.
   let excludeAdd : NormalTasks -> [Path] -> () = lam. lam paths.
     iter (lam p. modref normals (mapInsert p noTasks (deref normals))) paths in
 
-  mapMap (lam. lam c. c.exclusions intersectAdd) colls;
-  mapMap (lam. lam c. c.conditionalInclusions excludeAdd) unchosenColls;
-  mapMap (lam. lam c. c.conditionalInclusions exactAdd) chosenColls;
+  mapMap (lam c. c.exclusions intersectAdd) colls;
+  mapMap (lam c. c.conditionalInclusions excludeAdd) unchosenColls;
+  mapMap (lam c. c.conditionalInclusions exactAdd) chosenColls;
   _phase "coll normals";
 
   -- NOTE(vipa, 2023-03-30): API for adding build tasks
@@ -451,7 +455,10 @@ let testMain : [TestCollection] -> () = lam colls.
            end)
         end
     in
+    let addNews = lam testColl. lam config.
+      config.newTests {mi = mkMi testColl, sh = mkSh testColl} in
     mapMapWithKey addNormals (deref normals);
+    mapMapWithKey addNews chosenColls;
     ()
   in
   _phase "target api";
@@ -501,6 +508,7 @@ let testMain : [TestCollection] -> () = lam colls.
     in
     mapMapWithKey cpDirStructure colls;
     cpDirStructure "normal" ();
+    _phase "tup-mk-dirs";
     let printRule = lam pair. match pair with (target, td) in
       let extra = match td.extraDep
         with Some dep then concat " | " (pathToString dep)
@@ -518,4 +526,23 @@ let testMain : [TestCollection] -> () = lam colls.
 
 mexpr
 
-testMain []
+testMain
+  [ { testColl "accelerate"
+    with checkCondition = lam.
+      if and (sysCommandExists "nvcc") (sysCommandExists "futhark")
+      then ConditionsMet ()
+      -- else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
+      else ConditionsUnmet () -- TODO(vipa, 2023-04-25): temporarily pretend they're not impossible, to test `newTests`
+    , exclusions = lam modPaths.
+      -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
+      -- interpreted mode, and compiled mode is already tested via the
+      -- new tests below.
+      modPaths noTasks (glob "test/examples/accelerate/**/*.mc")
+    , newTests = lam do.
+      for_ (glob "test/examples/accelerate/**/*.mc") (lam mc.
+        let exe = do.mi.m {input = mc, cmd = "compile --accelerate %i --output %o", tag = "accelerate"} in
+        do.sh.e {input = exe, cmd = "%i", tag = "run-accelerate"};
+        let exe = do.mi.m {input = mc, cmd = "compile --debug-accelerate %i --output %o", tag = "debug-accelerate"} in
+        do.sh.e {input = exe, cmd = "%i", tag = "run-debug-accelerate"})
+    }
+  ]
