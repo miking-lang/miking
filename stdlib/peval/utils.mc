@@ -1,16 +1,15 @@
-include "peval/include.mc" 
+include "peval/include.mc"
 include "peval/ast.mc"
 
 include "mexpr/utils.mc"
-include "mexpr/pprint.mc"
-include "mexpr/extract.mc"
 include "mexpr/ast.mc"
 
 include "set.mc"
 
+lang SpecializeUtils = SpecializeAst + SpecializeInclude
 
-lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + MExprExtract + LamAst 
-
+  -- Holds the names of constructors/functions/types that could be needed
+  -- in peval transformation.
   type SpecializeNames = {
     pevalNames : Map String Name,
     consNames : Map String Name,
@@ -20,64 +19,51 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   }
 
   type SpecializeArgs = {
-    lib : Map Name Expr,
-    -- For each binding in the reclet, store the name of the other bindings
-    -- and the binding itself
-    rlMapping: Map Name ([Name], RecLetBinding),
     idMapping : Map Name Name,
-    closing : Bool
+    extractMap : Map Name Expr
   }
-  sem initArgs : () -> SpecializeArgs
-  sem initArgs = | _ -> {lib = (mapEmpty nameCmp), 
-                   rlMapping = (mapEmpty nameCmp),
-                   closing=false, idMapping= (mapEmpty nameCmp)}
 
-  sem updateLib : SpecializeArgs -> Map Name Expr -> SpecializeArgs
-  sem updateLib args = | lib -> {args with lib = lib}
-
-  sem updateRlMapping : SpecializeArgs -> Map Name ([Name], RecLetBinding)
-                        -> SpecializeArgs
-  sem updateRlMapping args = | lib -> {args with rlMapping = lib}
+  sem initArgs : Map Name Expr -> SpecializeArgs
+  sem initArgs = | emap -> {extractMap = emap,
+                            idMapping = (mapEmpty nameCmp)
+                            }
 
   sem updateIds : SpecializeArgs -> Map Name Name -> SpecializeArgs
   sem updateIds args = | idm -> {args with idMapping =idm}
 
-  sem updateClosing : SpecializeArgs -> Bool -> SpecializeArgs
-  sem updateClosing args = | b -> {args with closing = b}
-
-  sem isClosing : SpecializeArgs -> Bool
-  sem isClosing = | args -> args.closing
-
   sem _nameSeqToMap : [Name] -> Map String Name
-  sem _nameSeqToMap = | names ->
-  mapFromSeq cmpString (map (lam name. (name.0, name)) names)
+  sem _nameSeqToMap =
+  | names -> mapFromSeq cmpString (map (lam name. (name.0, name)) names)
 
-  sem findNames : Expr -> [String] -> Map String Name 
+  sem findNames : Expr -> [String] -> Map String Name
   sem findNames ast = | includes ->
-  let names = filterOption (findNamesOfStrings includes ast) in
-  if eqi (length includes) (length names) then
-    _nameSeqToMap names 
-  else 
-    error "A necessary include could not be found in the AST"
+    let names = filterOption (findNamesOfStrings includes ast) in
+    let nameMap = _nameSeqToMap names in
+    if eqi (length includes) (length names) then
+      nameMap
+    else
+      let notIn = filter (lam str. not (mapMem str nameMap)) includes in
+      let notIn = strJoin "\n" notIn in
+      error (concat "A necessary include could not be found in the AST\n" notIn)
 
-  sem createNames : Expr -> [Name] -> SpecializeNames
-  sem createNames ast =
-  | pevalNames ->
-  let pevalNames = _nameSeqToMap pevalNames in
-  let consNames = findNames ast includeConsNames in
-  let builtinsNames = findNames ast includeBuiltins in
-  let tyConsNames = findNames ast includeTyConsNames in
-  let otherFuncs = findNames ast otherFuncs in
-  {pevalNames = pevalNames, 
-   consNames = consNames,
-   builtinsNames = builtinsNames, 
-   tyConsNames = tyConsNames,
-   otherFuncs=otherFuncs}
+  sem createNames : Expr -> SpecializeNames
+  sem createNames =
+  | ast ->
+    let pevalNames = findNames ast includeSpecializeNames in
+    let consNames = findNames ast includeConsNames in
+    let builtinsNames = findNames ast includeBuiltins in
+    let tyConsNames = findNames ast includeTyConsNames in
+    let otherFuncs = findNames ast includeOtherFuncs in
+    {pevalNames = pevalNames,
+     consNames = consNames,
+     builtinsNames = builtinsNames,
+     tyConsNames = tyConsNames,
+     otherFuncs=otherFuncs}
 
   sem getName : Map String Name -> String -> Name
   sem getName names =
   | str -> match mapLookup str names with Some n then n
-           else error (concat "Could not find: " str) 
+           else error (concat "Could not find: " str)
 
   sem pevalName : SpecializeNames -> Name
   sem pevalName = | names -> getName (names.pevalNames) "pevalWithEnv"
@@ -108,6 +94,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
 
   sem tmLetName : SpecializeNames -> Name
   sem tmLetName = | names -> getName (names.consNames) "LetAst_TmLet"
+
+  sem tmRecLetsName : SpecializeNames -> Name
+  sem tmRecLetsName = | names -> getName (names.consNames) "RecLetsAst_TmRecLets"
 
   sem listConsName : SpecializeNames -> Name
   sem listConsName = | names -> getName (names.consNames) "Cons"
@@ -158,10 +147,13 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
   sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"
 
   sem mexprStringName : SpecializeNames -> Name
-  sem mexprStringName = | names -> getName (names.otherFuncs) "toString" 
+  sem mexprStringName = | names -> getName (names.otherFuncs) "toString"
 
   sem patIntName : SpecializeNames -> Name
-  sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt" 
+  sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt"
+
+  sem patBoolName : SpecializeNames -> Name
+  sem patBoolName = | names -> getName (names.consNames) "BoolPat_PatBool"
 
   sem patNamedName : SpecializeNames -> Name
   sem patNamedName = | names -> getName (names.consNames) "NamedPat_PatNamed"
@@ -185,9 +177,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprPrettyPrint + ME
 
   sem getBuiltinName : String -> SpecializeNames -> Name
   sem getBuiltinName str = | names ->
-  match mapLookup str builtinsMapping with Some astStr then
-    getName (names.builtinsNames) astStr
-  else error (join ["Could not find ", str, " in builtin-mapping"])
+    match mapLookup str builtinsMapping with Some astStr then
+      getName (names.builtinsNames) astStr
+    else error (join ["Could not find ", str, " in builtin-mapping"])
 
   sem getBuiltinNameFromConst : Const -> SpecializeNames -> Name
   sem getBuiltinNameFromConst val = | names ->

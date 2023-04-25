@@ -1,11 +1,19 @@
+include "map.mc"
+include "stringid.mc"
+include "mexpr/pprint.mc"
 include "peval/peval.mc"
 
+let toString = use MExprPrettyPrint in
+  lam x. mexprToString x
 
--- Let bind the semantic 'peval' function such that we can include it 
-let pevalWithEnv = lam env. lam ast. 
-    use MExprPEval in
-    pevalWithEnv env ast
+let pevalWithEnv = lam env. lam ast.
+  use MExprPEval in pevalWithEnv env ast
 
 mexpr
 
-unsafeCoerce (pevalWithEnv)
+unsafeCoerce (pevalWithEnv, mapFromSeq, stringToSid, mapMapWithKey, toString)
+
+-- Want to make sure that:
+--  * All constructors for Expr, Type and Pat are included
+--  * Builtins
+--  * Some additional functions as well as semantic peval function

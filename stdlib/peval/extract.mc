@@ -1,6 +1,6 @@
 
 -- Try to reuse accelerate/extract.mc as much as possible
--- Difference here is that the 'extracted' nodes must be put together 
+-- Difference here is that the 'extracted' nodes must be put together
 
 
 include "pmexpr/extract.mc"
@@ -15,18 +15,18 @@ include "mexpr/type-check.mc"
 include "stringid.mc"
 
 
-lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst 
+lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
 
-  -- pmexpr/extract.mc 
+  -- pmexpr/extract.mc
   -- Very similar funcitons to pmexpr's extract.
 
 
-  type SpecializeData = AccelerateData 
+  type SpecializeData = AccelerateData
 
   type AddIdentifierSpecializeEnv = AddIdentifierAccelerateEnv
 
   sem addIdentifierToSpecializeTerms =
-  | t -> 
+  | t ->
     let env = {
       functions = mapEmpty nameCmp,
       programIdentifiers = setEmpty cmpSID
@@ -168,7 +168,7 @@ let pevalVar = preprocess (bindall_ [
   -- Extraction does not work in this case
   ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
   specialize_ (var_ "bar")
-]) in 
+]) in
 
 let expected = preprocess (bindall_ [
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),

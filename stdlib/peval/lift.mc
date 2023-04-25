@@ -1,4 +1,3 @@
-
 include "peval/extract.mc"
 include "peval/ast.mc"
 include "peval/utils.mc"
@@ -25,10 +24,10 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
   -- liftExpr should produce an Expr s.t. when evaluated produces its original input argument
   -- In that sense liftExpr can be considered an inverse of 'eval'
   sem liftExpr : SpecializeNames -> SpecializeArgs -> Expr -> LiftResult
-  sem liftExpr names args = | t -> printLn "Don't know how to lift this yet!"; (args, t)
+  sem liftExpr names args = | t ->
+    error (join ["Don't know how to lift this yet: ", (expr2str t)])
 
-  sem liftExprAccum : SpecializeNames -> SpecializeArgs -> [Expr] ->
-                      (SpecializeArgs, [Expr])
+  sem liftExprAccum : SpecializeNames -> SpecializeArgs -> [Expr] -> (SpecializeArgs, [Expr])
   sem liftExprAccum names args =
   | xs -> mapAccumL (lam args. lam e. liftExpr names args e) args xs
 
@@ -41,8 +40,9 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
     nconapp_ (getName names) rec
 
   sem createConAppInfo names getName bindings =
-  | info -> let bindings = cons ("info", liftInfo names info) bindings in
-            createConApp names getName bindings
+  | info ->
+    let bindings = cons ("info", liftInfo names info) bindings in
+    createConApp names getName bindings
 
   sem createConAppExpr names getName bindings typ =
   | info -> let bindings = cons ("ty", liftType names typ) bindings in
@@ -70,7 +70,7 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
   sem liftInfo : SpecializeNames -> Info -> Expr
   sem liftInfo names =
   | _ -> createConApp names noInfoName []
-    
+
   sem liftStringToSID : SpecializeNames -> String -> Expr
   sem liftStringToSID names = | x ->
    app_ (nvar_ (stringToSidName names)) (str_ x)
@@ -86,7 +86,7 @@ lang SpecializeLiftApp = SpecializeLift + AppAst
     (args, createConAppExpr names tmAppName bindings typ info)
 
   sem tyConInfo =
-  | TyApp {info = info, lhs = lhs, rhs=rhs} -> (info, tyAppName)
+  | TyApp {info = info} -> (info, tyAppName)
 end
 
 lang SpecializeLiftVar = SpecializeLift + VarAst
@@ -94,10 +94,7 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   sem liftViaType : SpecializeNames -> SpecializeArgs -> Name -> Type -> Option LiftResult
   sem liftViaType names args varName =
   | TyUnknown _ | TyArrow _ ->
-    match mapLookup varName args.lib with Some t then
-      let args = updateClosing args false in
-      Some (liftExpr names args t)
-    else None ()
+    None ()
   | t ->
     match liftViaTypeH names varName t with Some t then Some (args, t)
     else None ()
@@ -105,18 +102,18 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   sem _liftBasicType : SpecializeNames -> Name -> Type -> Option Expr
   sem _liftBasicType names varName =
   | typ -> let biStr =
-  switch typ
-    case TyInt _ then "int"
-    case TyFloat _ then "float"
-    case TyBool _ then "bool"
-    case TyChar _ then "char"
-    case _ then error "Cannot lift via this type"
-  end in
-  let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
-  let bindings = [("val", lv)] in
-  let const = createConApp names (getBuiltinName biStr) bindings in
-  let bindings = [("val", const)] in
-  Some (createConAppExpr names tmConstName bindings typ (NoInfo ()))
+    switch typ
+      case TyInt _ then "int"
+      case TyFloat _ then "float"
+      case TyBool _ then "bool"
+      case TyChar _ then "char"
+      case _ then error "Cannot lift via this type"
+    end in
+    let lv = TmVar {ident = varName, ty=typ, info = NoInfo (), frozen = false} in
+    let bindings = [("val", lv)] in
+    let const = createConApp names (getBuiltinName biStr) bindings in
+    let bindings = [("val", const)] in
+    Some (createConAppExpr names tmConstName bindings typ (NoInfo ()))
 
   -- NOTE(adamssonj, 2023-03-31): Can't do anything with e.g. [(a->b)] aon
   sem liftViaTypeH : SpecializeNames -> Name -> Type -> Option Expr
@@ -126,9 +123,9 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   | TySeq {info = info, ty = ty} & typ->
     let sq = TmVar {ident = varName, ty=typ, info = NoInfo (),
                     frozen = false} in
-    -- TODO: Should not be unsymbolized "x"
-    match liftViaTypeH names (nameNoSym "x") ty with Some t then
-        let convert = (lam_ "x" ty t) in
+    let mapArg = nameSym "x" in
+    match liftViaTypeH names mapArg ty with Some t then
+        let convert = (nlam_ mapArg ty t) in
         let tms = map_ convert sq in
         let bindings = [("tms", tms)] in
         Some (createConAppExpr names tmSeqName bindings ty info)
@@ -138,43 +135,41 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     let rec = TmVar {ident = varName, ty = typ, info = NoInfo (),
                     frozen = false} in
 
-    let seqFields = mapToSeq fields in
-    let patternList = map (lam x. let s = sidToString x.0 in
-                        (s, pvar_ s)) seqFields in
+    let seqFields = map (lam x: (SID, Type).
+      let str = sidToString x.0 in {str = str, ty = x.1, name = nameSym str}
+      ) (mapToSeq fields) in
 
+    let patternList = map (lam x. (x.str, npvar_ x.name)) seqFields in
     let pat = prec_ patternList in
+
     -- Create one lifted type per record entry
     -- Should probably do it only once per type, and map id -> typelift
-    let seqFieldsWithLift = map (lam x. (x.0, x.1,
-                 liftViaTypeH names (nameNoSym "x") x.1)) seqFields in
+    let newBindings = map (lam x.
+      {str = x.str, lift = liftViaTypeH names x.name x.ty}) seqFields in
 
     -- If we cannot lift any of the present types
-    if any (lam x. optionIsNone x.2) seqFieldsWithLift then None ()
+    if any (lam x. optionIsNone x.lift) newBindings then None ()
     else
     let s = seq_ (map (lam x.
-      let s = sidToString x.0 in
-      match x.2 with Some t in
-        let convert = (lam_ "x" x.1 t) in
-        let liftedType = app_ convert (var_ s) in
-        utuple_ [liftStringToSID names s, liftedType]) seqFieldsWithLift)
-      in
+      match x.lift with Some t in
+        utuple_ [liftStringToSID names x.str, t]) newBindings)
+    in
+    -- "subi" = cmpSID
     let thn = appf2_ (nvar_ (mapFromSeqName names)) (uconst_ (CSubi ())) s in
-    let mbind = matchex_ rec pat thn in
-
-    let bindings = [("bindings", mbind)] in
+    let matchbind = matchex_ rec pat thn in
+    let bindings = [("bindings", matchbind)] in
     Some (createConAppExpr names tmRecName bindings typ info)
   | t -> None ()
 
-
   sem liftExpr names args =
-  | TmVar {ident = id, ty = typ, info = info, frozen = frozen} ->
+  | TmVar {ident = id, ty = typ, info=info, frozen=frozen} & t->
     match liftName args id with (args, lIdent) in
     let bindings = [("ident", lIdent),
                     ("frozen", bool_ frozen)] in
     (args, createConAppExpr names tmVarName bindings typ info)
 
   sem tyConInfo =
-  | TyVar {info = info, ident = id, level = lv} -> (info, tyVarName)
+  | TyVar {info = info} -> (info, tyVarName)
 
 end
 
@@ -186,7 +181,7 @@ lang SpecializeLiftRecord = SpecializeLift + RecordAst
     match liftExprAccum names args exprs with (args, lExprs) in
     let binSeq = zip ids lExprs in
     let exprs =  seq_ (map (lam x. utuple_
-      [liftStringToSID names (sidToString x.0) ,x.1]) binSeq) in
+      [liftStringToSID names (sidToString x.0), x.1]) binSeq) in
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
     let rhs = (uconst_ (CSubi ())) in
@@ -234,7 +229,7 @@ end
 lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
 
   sem liftExpr names args =
-  | TmSpecialize {e = expr, info = info} ->
+  | TmSpecialize _ ->
     error "Nested peval"
 end
 
@@ -252,31 +247,10 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
   | fvs ->
     let fvs = mapToSeq fvs in -- [(Name, Type])
     match liftAllViaType names args fvs with (args, liftedEnvItems) in
+    -- "fvs" holds the free variables that we were unable to lift
     match eitherPartition liftedEnvItems with (fvs, liftedExprs) in
-    -- For the fvs that we couldn't lift, there's a chance they're reclet binds
-    match handleRecLet names args fvs with (args, liftedEnvItems) in
-    let liftedExprs = concat liftedExprs (filterOption liftedEnvItems) in
     let lenv = liftConsList names (listFromSeq liftedExprs) in
     (args, lenv)
-
-
-  sem handleRecLet : SpecializeNames -> SpecializeArgs -> [Name] ->
-                     (SpecializeArgs, [Option Expr])
-  sem handleRecLet names args =
-  | ns ->
-    -- [([Name], RecLetBinding)]
-    let binds = filterOption (map (lam name. mapLookup name args.rlMapping) ns) in
-    let ns = join (map (lam bs:([Name], RecLetBinding). bs.0) binds) in
-    let ns = setToSeq (setOfSeq nameCmp ns) in -- [Name] unique
-    mapAccumL (lam acc. lam name.
-        match mapLookup name args.rlMapping with Some t then
-          -- Reclet bindings should have a rhs that is a TmLam
-          -- I.e. liftViaType <=> liftExpr
-          match t with (_, rlb) in
-          match liftExpr names args rlb.body with (acc, liftedExpr) in
-          match liftName acc name with (acc, liftedName) in
-           (acc, Some (utuple_ [liftedName, liftedExpr]))
-        else (acc, None ())) args ns
 
   sem liftAllViaType : SpecializeNames -> SpecializeArgs -> [(Name, Type)] ->
                       (SpecializeArgs, [Either Name Expr])
@@ -294,33 +268,21 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
     else varMapping
   | ast -> sfold_Expr_Expr (getTypesOfVars freeVars) varMapping ast
 
-  sem getLiftedEnv : SpecializeNames -> SpecializeArgs -> [Name] -> Expr -> LiftResult
-  sem getLiftedEnv names args exclude =
+  sem getLiftedEnv : SpecializeNames -> SpecializeArgs -> Expr -> LiftResult
+  sem getLiftedEnv names args =
   | expr ->
-    -- From /mexpr/cfa.mc
     let fvs = freeVars expr in
-    let fvs = setSubtract fvs (setOfSeq nameCmp exclude) in
     let typedFvs = getTypesOfVars fvs (mapEmpty nameCmp) expr in
     buildEnv names args typedFvs
 
   sem liftExpr names args =
   | TmLam {ident=id, body = body, ty = typ, info = info} ->
-    if isClosing args then -- TmLam
-      match liftExpr names args body with (args, lExpr) in
-      match liftName args id with (args, lName) in
-      let dummyType = liftType names tyunknown_ in
-      let bindings = [("ident", liftName names id), ("body", lBody),
-                      ("tyAnnot", dummyType), ("tyParam", dummyType)] in
-      createConAppExpr names tmLamName bindings typ info
-    else -- Create closure
-      let args = updateClosing args true in
-      match liftExpr names args body with (args, lBody) in
-      match getLiftedEnv names args [id] body with (args, liftedEnv) in
-      match liftName args id with (args, liftedName) in
-      let lazyLEnv = lam_ "t" tyunit_ liftedEnv in
-      let bindings = [("ident", liftedName), ("body", lBody),
-                      ("env", lazyLEnv)] in
-      (args, createConAppInfo names tmClosName bindings info)
+    match liftExpr names args body with (args, lExpr) in
+    match liftName args id with (args, lName) in
+    let dummyType = liftType names tyunknown_ in
+    let bindings = [("ident", lName), ("body", lExpr),
+                    ("tyAnnot", dummyType), ("tyParam", dummyType)] in
+    (args, createConAppExpr names tmLamName bindings typ info)
 end
 
 
@@ -341,6 +303,9 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
     match liftPatName names args ident with (args, lPatName) in
     let bindings = [("ident", lPatName)] in
     (args, createConAppExpr names patNamedName bindings ty info)
+  | PatBool {val=v, ty=ty, info=info} ->
+    let bindings = [("val", bool_ v)] in
+    (args, createConAppExpr names patBoolName bindings ty info)
 
   sem liftExpr names args =
   | TmMatch {target=target, pat=pat, thn=thn, els=els, ty=ty, info=info} ->
@@ -366,11 +331,34 @@ lang SpecializeLiftLet = SpecializeLift + LetAst
 
 end
 
+lang SpecializeLiftRecLets = SpecializeLift + RecLetsAst
+
+  sem liftRecLetsBindings names args =
+  | binds ->
+    let dummyInfo = liftInfo names (NoInfo ()) in
+    let dummyType = liftType names tyunknown_ in
+    let res = mapAccumL (lam acc. lam bind.
+      match liftName acc bind.ident with (acc, lName) in
+      match liftExpr names acc bind.body with (acc, lBody) in
+      (acc, urecord_ [("ident", lName), ("body", lBody),
+                      ("tyBody", dummyType), ("tyAnnot", dummyType),
+                      ("info", dummyInfo)])) args binds in
+    match res with (args, lBinds) in
+    let lBinds = seq_ lBinds in
+    (args, lBinds)
+
+  sem liftExpr names args =
+  | TmRecLets {bindings = binds, inexpr = inexpr, ty=ty, info=info} ->
+    match liftExpr names args inexpr with (args, lInexpr) in
+    match liftRecLetsBindings names args binds with (args, lBinds) in
+    let bindings = [("bindings", lBinds), ("inexpr", lInexpr)] in
+    (args, createConAppExpr names tmRecLetsName bindings ty info)
+end
+
 lang SpecializeLiftMExpr =
     SpecializeLiftApp + SpecializeLiftVar + SpecializeLiftRecord +
     SpecializeLiftSeq + SpecializeLiftConst + SpecializeLiftLam + SpecializeLiftSpecialize +
-    SpecializeLiftMatch + SpecializeLiftLet
-
+    SpecializeLiftMatch + SpecializeLiftLet + SpecializeLiftRecLets
 end
 
 
@@ -383,10 +371,10 @@ lang SetupLang = SpecializeInclude + SpecializeUtils end
 let _setup =
   use SetupLang in
   let ast = ulet_ "t" (int_ 3) in
-  match includeSpecialize ast with (ast, pevalNames) in
-  match includeConstructors ast with ast in
+--  match includeSpecialize ast with (ast, pevalNames) in
+  match includeSpecializeDeps ast with ast in
   -- Find the names of the functions and constructors needed later
-  let names = createNames ast pevalNames in
+  let names = createNames ast in
   (ast, names)
 
 mexpr
@@ -397,23 +385,9 @@ mexpr
 use TestLang in
 --
 ---- Dummy AST s.t. constructors and funcs can be included and used in lifting
-match _setup with (startAst, names) in
+match _setup with (_, names) in
 
-let args = initArgs () in
-
-
-let _parse =
-  parseMExprString
-    (_defaultBootParserParseMExprStringArg ())
-in
-
-let _eval = lam x.
-  let x = symbolize x in
-  eval (evalCtxEmpty ()) x in
-
-let _parseEval = lam x:String. 
-  let x = _parse x in 
-  _eval x in
+let args = initArgs (mapEmpty nameCmp) in
 
 let _liftExpr = lam names. lam args. lam e.
   match liftExpr names args e with (_, k) in k
@@ -437,52 +411,185 @@ utest expected with k using eqExpr in
 ------------ TmVar -----------------
 --
 
-let e = var_ "t" in
-let k = _liftExpr names args e in
+
+let someSym = nameSym "t" in
+let e = nvar_ someSym in
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someSym args.idMapping with Some t
+  then t else someSym in
 
 let expected = nconapp_ (tmVarName names) (urecord_
-    [("ident", utuple_ [str_ "t", nvar_ (noSymbolName names)]),
-     ("frozen", bool_ false),
-     ("ty", liftType names tyunknown_),
-     ("info", liftInfo names (NoInfo ()))]) in
+  [("ident", utuple_ [str_ "t", nvar_ newSymbol]),
+   ("frozen", bool_ false),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
 
 utest expected with k using eqExpr in
 
 --
 ------------ TmRecord -----------------
 let e = urecord_ [("a", int_ 3), ("b", int_ 4)] in
-let k = liftExpr names args e in
+let k = _liftExpr names args e in
+
+-- Lift bindings map of record term ----
+let bindings = seq_ [
+  utuple_ [liftStringToSID names "a", _liftExpr names args (int_ 3)],
+  utuple_ [liftStringToSID names "b", _liftExpr names args (int_ 4)]
+] in
+
+let liftedMap = appf2_ (nvar_ (mapFromSeqName names))
+                       (uconst_ (CSubi ())) bindings in
+
+let expected = nconapp_ (tmRecName names) (urecord_
+  [("bindings", liftedMap),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 ------------ TmSeq -------------------
 
 let e = seq_ (map int_ [1,2,3]) in
-let k = liftExpr names args e in
+let k = _liftExpr names args e in
+
+match e with TmSeq {tms = tms} in
+let liftedSeq = seq_ (map (_liftExpr names args) tms) in
+
+let expected = nconapp_ (tmSeqName names) (urecord_
+  [("tms", liftedSeq),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 ------------ TmConst -----------------
 
 let e = int_ 3 in
-let k = liftExpr names args e in
+let k = _liftExpr names args e in
+
+match e with TmConst {val = const} in
+
+let lConst = nconapp_ (getBuiltinNameFromConst const names) (urecord_
+  [("val", int_ 3)]) in
+
+let expected = nconapp_ (tmConstName names) (urecord_
+  [("val", lConst),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 --
 ------------ TmLam -----------------
 ----
 
-let e = ulam_ "x" (addi_ (var_ "x") (int_ 3)) in
-let k = liftExpr names args e in
+let someSym = nameSym "t" in
+
+let e = nulam_ someSym (nvar_ someSym) in
+
+match liftExpr names args e with (args, k) in
+let newSymbol = match mapLookup someSym args.idMapping with Some t
+  then t else someSym in
+
+let ltype = liftType names tyunknown_ in
+
+let expected = nconapp_ (tmLamName names) (urecord_
+  [("ident",  utuple_ [str_ "t", nvar_ newSymbol]),
+   ("tyAnnot", ltype),
+   ("tyParam", ltype),
+   ("body", _liftExpr names args (nvar_ someSym)),
+   ("ty", ltype),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 --
 ------------ TmMatch -----------------
 --
 
-let e = match_ (int_ 3) (pvar_ "wo") (int_ 5) (int_ 6) in
-let k = liftExpr names args e in
+let someSym = nameSym "t" in
+let e = match_ (int_ 3) (npvar_ someSym) (int_ 5) (nvar_ someSym) in
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someSym args.idMapping with Some t
+  then t else someSym in
+
+let pat = nconapp_ (patNamedName names) (urecord_
+  [("ident", nconapp_ (pNameName names) (utuple_ [str_ "t", nvar_ newSymbol])),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+let expected = nconapp_ (tmMatchName names) (urecord_
+  [("target", _liftExpr names args (int_ 3)),
+   ("pat", pat),
+   ("thn", _liftExpr names args (int_ 5)),
+   ("els", _liftExpr names args (nvar_ someSym)),
+   ("ty", liftType names tyunknown_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 --
 ------------ TmLet -----------------
 --
 
-let e = bind_ (ulet_ "x" (int_ 3)) (addi_ (int_ 4) (var_ "x")) in
-let k = liftExpr names args e in
+let someSym = nameSym "t" in
 
+let e = bind_ (nulet_ someSym (int_ 3)) (addi_ (int_ 4) (nvar_ someSym)) in
+
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someSym args.idMapping with Some t
+  then t else someSym in
+
+let ltype = liftType names tyunknown_ in
+
+let expected = nconapp_ (tmLetName names) (urecord_
+  [("ident", utuple_ [str_ "t", nvar_ newSymbol]),
+   ("body", _liftExpr names args (int_ 3)),
+   ("inexpr", _liftExpr names args (addi_ (int_ 4) (nvar_ someSym))),
+   ("tyAnnot", ltype),
+   ("tyBody", ltype),
+   ("ty", ltype),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
+
+--
+------------ TmRecLets -----------------
+--
+
+let someSymbol = nameSym "n" in
+let facSym = nameSym "factorial" in
+
+let facBody = nulam_ someSymbol (
+    if_ (eqi_ (nvar_ someSymbol) (int_ 0))
+      (int_ 1)
+      (muli_ (nvar_ someSymbol)
+        (app_ (nvar_ facSym) (subi_ (nvar_ someSymbol) (int_ 1))))) in
+
+let factorial = nureclets_ [
+  (facSym, facBody)
+] in
+
+match liftExpr names args factorial with (args, k) in
+
+let newSymbol = match mapLookup facSym args.idMapping with Some t
+  then t else someSym in
+
+let ltype = liftType names tyunknown_ in
+
+let lrl = [urecord_ [("ident", utuple_ [str_ "factorial", nvar_ newSymbol]),
+  ("tyAnnot", ltype), ("tyBody", ltype), ("info", liftInfo names (NoInfo ())),
+  ("body", _liftExpr names args facBody)]] in
+
+let expected = nconapp_ (tmRecLetsName names) (urecord_
+  [("bindings", seq_ lrl),
+   ("inexpr", _liftExpr names args (unit_)),
+   ("ty", ltype),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
 
 ()

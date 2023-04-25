@@ -2,11 +2,8 @@ include "stdlib.mc"
 include "mexpr/utest-generate.mc"
 include "mexpr/duplicate-code-elimination.mc"
 
-let _pevalRuntimeExpected = ["pevalWithEnv"]
 
-let pevalLoc = "/peval/peval-runtime.mc"
-
-let consLoc = "/peval/cons-runtime.mc"
+let includesLoc = "/peval/peval-runtime.mc"
 
 -- Mapping from pretty printed built-in const to its AST equivalent
 -- TODO(adamssonj, 2023-03-17): True assumption? Built-ins are assumed always in AST
@@ -147,13 +144,12 @@ let includeBuiltins = mapValues builtinsMapping
 let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
                         "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
                         "MatchAst_TmMatch", "Cons", "Nil", "NoInfo", "Info", "_noSymbol",
-                        "LetAst_TmLet",
+                        "LetAst_TmLet", "RecLetsAst_TmRecLets",
 
                         --- Patterns
-                        "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed"
+                        "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",
+                        "BoolPat_PatBool"
                         ]
-
-
 
 
 let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
@@ -162,21 +158,18 @@ let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntT
 "ConTypeAst_TyCon", "VarTypeAst_TyVar","VarSortAst_PolyVar","VarSortAst_MonoVar",
 "VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
-let otherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString"]
+let includeOtherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString"]
+
+let includeSpecializeNames = ["pevalWithEnv"]
 
 lang SpecializeInclude = MExprUtestGenerate
 
-  sem includeSpecialize : Expr -> (Expr, [Name])
-  sem includeSpecialize =
-  | ast -> let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime pevalLoc)
-           -- NOTE: "peval" is the only expected name. findRunTimeIds throws error if 404
-           in let names = findRuntimeIds _pevalRuntimeExpected pevalLoc in
-           resetStore (); -- clear stored references as to not interfere with utest-gen later
-           (eliminateDuplicateCode ast, names)
-
-  sem includeConstructors : Expr -> Expr
-  sem includeConstructors =
-  | ast -> let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast (loadRuntime consLoc) in
-           resetStore ();
-           eliminateDuplicateCode ast
+  sem includeSpecializeDeps : Expr -> Expr
+  sem includeSpecializeDeps =
+  | ast ->
+    let ff = loadRuntime includesLoc in
+    let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast
+              (ff) in
+    resetStore ();
+    eliminateDuplicateCode ast
 end
