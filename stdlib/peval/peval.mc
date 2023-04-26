@@ -58,7 +58,10 @@ end
 
 lang PEval = PEvalCtx + Eval + PrettyPrint
   sem peval : Expr -> Expr
-  sem peval =| t -> pevalReadback (pevalBind (pevalCtxEmpty ()) (lam x. x) t)
+  sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
+
+  sem pevalExpr : PEvalCtx -> Expr -> Expr
+  sem pevalExpr ctx =| t -> pevalReadback (pevalBind ctx (lam x. x) t)
 
   sem pevalIsValue : Expr -> Bool
   sem pevalIsValue =
