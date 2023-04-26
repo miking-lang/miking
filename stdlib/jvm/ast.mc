@@ -30,6 +30,7 @@ lang JVMAst
     | BInt {instr: String, nr: Int}
     | BFloat {instr: String, nr: Float}
     | BLong {instr: String, nr: Int}
+    | TryCatch {instr: String, try: [Bytecode], catch: [Bytecode]}
 
     syn Field =
     | Field {name: String, t: String}
@@ -102,6 +103,10 @@ lang JVMAst
     sem createConstantFieldInt name t = 
     | const -> ConstantFieldInt {name = name, t = t, constant = const}
 
+    sem createTryCatch : [Bytecode] -> [Bytecode] -> Bytecode
+    sem createTryCatch try = 
+    | catch -> TryCatch {instr = "trycatch", try = try, catch = catch}
+
     -- toString JSON
 
     sem toStringProg : JVMProgram -> String 
@@ -145,5 +150,7 @@ lang JVMAst
         (join ["{", "\"type\":", "\"arg_long\"", ",\"instr\":", (stringify i), ",\"nr\":", (int2string nr), "}"])
     | BEmpty {instr = i} ->
         (join ["{", "\"type\":", "\"empty\"", ",\"instr\":", (stringify i), "}"])
+    | TryCatch {instr = i, try = t, catch = c} ->
+        (join ["{", "\"type\":", "\"trycatch\"", ",\"instr\":", (stringify i), ",\"try\":[", (commaSeparate (map toStringBytecode t)), "],\"catch\":[", (commaSeparate (map toStringBytecode c)), "]}"])
 
 end

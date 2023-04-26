@@ -54,6 +54,9 @@ let ladd_ = use JVMAst in
 let dadd_ = use JVMAst in
     createBEmpty "DADD"
 
+let iadd_ = use JVMAst in
+    createBEmpty "IADD"
+
 let lsub_ = use JVMAst in 
     createBEmpty "LSUB"
 
@@ -164,6 +167,25 @@ let aaload_ = use JVMAst in
 
 let instanceof_ = use JVMAst in
     lam t. createBString "INSTANCEOF" t
+
+let d2l_ = use JVMAst in
+    createBEmpty "D2L"
+
+let l2d_ = use JVMAst in 
+    createBEmpty "L2D"
+
+let pop2_ = use JVMAst in
+    createBEmpty "POP2"
+
+let istore_ = use JVMAst in
+    lam i. createBInt "ISTORE" i
+
+let iload_ = use JVMAst in
+    lam i. createBInt "ILOAD" i
+
+let i2l_ = use JVMAst in
+    createBEmpty "I2L"
+
 ---
 
 let jvmTrue = 1
@@ -197,6 +219,10 @@ let arraytype_ = lam at. concat "[" at
 let char_T = concat pkg_ "CharWrap"
 
 let char_LT = type_LT char_T
+
+let seq_T = "scala/collection/immutable/Vector"
+
+let seq_LT = type_LT seq_T
 
 ----
 
@@ -248,6 +274,9 @@ let nothing_ = use JVMAst in
 
 let createName_ = 
     lam prefix. concat prefix (create 6 (lam. randAlphanum ())) -- maybe longer?
+
+let charseq2Str_ = use JVMAst in 
+    [invokevirtual_ "scala/collection/immutable/Vector" "mkString" "()Ljava/lang/String;"]
 
 
 let arithClassI_ = use JVMAst in
@@ -496,7 +525,49 @@ let charClass_ = use JVMAst in
         ""
         [createField "charInt" "I"]
         defaultConstructor
+        [(createFunction
+            "toString"
+            "()Ljava/lang/String;"
+                [new_ "java/lang/String",
+                dup_,
+                aload_ 0,
+                getfield_ (concat pkg_ "CharWrap") "charInt" "I",
+                invokestatic_ "java/lang/Character" "toChars" "(I)[C",
+                invokespecial_ "java/lang/String" "<init>" "([C)V", 
+                areturn_])]
+
+let symbolClass_ = use JVMAst in 
+    createClass
+        "Symbol"
+        ""
+        [createField "symbolInt" "I"]
+        defaultConstructor
         []
+
+let genSymbolClass_ = use JVMAst in 
+    createClass
+        "GenSym"
+        ""
+        [createField "symbolInt" "I"]
+        defaultConstructor
+        [(createFunction
+            "newSymbol"
+            (methodtype_T "" (type_LT (concat pkg_ "Symbol")))
+                [aload_ 0, 
+                ldcInt_ 1,
+                aload_ 0, 
+                getfield_ (concat pkg_ "GenSym") "symbolInt" "I",
+                iadd_,
+                dup_, 
+                istore_ 1,
+                putfield_ (concat pkg_ "GenSym") "symbolInt" "I",
+                new_ (concat pkg_ "Symbol"),
+                dup_,
+                invokespecial_ (concat pkg_ "Symbol") "<init>" "()V",
+                dup_,
+                iload_ 1, 
+                putfield_ (concat pkg_ "Symbol") "symbolInt" "I",
+                areturn_])]
 
 let constClassList_ = 
     [addiClass_, 
@@ -526,7 +597,9 @@ let constClassList_ =
     eqcClass_,
     recordClass_,
     charClass_,
-    randClass_]
+    randClass_,
+    symbolClass_,
+    genSymbolClass_]
 
 let applyArithF_ = use JVMAst in
     lam name. lam env. lam arg. 

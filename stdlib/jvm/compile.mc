@@ -33,7 +33,14 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
     sem toJSONExpr : JVMEnv -> Expr -> JVMEnv
     sem toJSONExpr env =
-    | TmSeq { tms = tms } -> { env with bytecode = concat env.bytecode [ldcString_ (_charSeq2String tms)]} -- only for strings now
+    | TmSeq { tms = tms } -> 
+        let vb = "scala/collection/immutable/VectorBuilder" in 
+        let e = foldl 
+                (lam acc. lam expr. 
+                    let exprEnv = toJSONExpr { acc with bytecode = snoc acc.bytecode dup_ } expr in
+                    { exprEnv with bytecode = concat exprEnv.bytecode [checkcast_ object_T, invokevirtual_ vb "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;", pop_] })
+                { env with bytecode = concat env.bytecode [new_ vb, dup_, invokespecial_ vb "<init>" "()V"] }  tms in
+        { e with bytecode = snoc e.bytecode (invokevirtual_ vb "result" "()Lscala/collection/immutable/Vector;") }
     | TmConst { val = val } -> 
         let bc = (match val with CInt { val = val } then 
             concat [ldcLong_ val] wrapInteger_
@@ -127,6 +134,118 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                             classes = concat env.classes arg.classes }
             else match lhs with TmConst { val = CRandIntU _ } then
                 applyArithI_ "Rand" env arg
+            else match lhs with TmConst { val = CFloorfi _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode, 
+                                unwrapFloat_,
+                                [invokestatic_ "java/lang/Math" "floor" "(D)D",
+                                d2l_],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CCeilfi _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                unwrapFloat_,
+                                [invokestatic_ "java/lang/Math" "ciel" "(D)D",
+                                d2l_],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CRoundfi _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                unwrapFloat_,
+                                [invokestatic_ "java/lang/Math" "round" "(D)J"],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CInt2float _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                unwrapFloat_,
+                                [l2d_],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CChar2Int _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                unwrapChar_,
+                                [invokestatic_ integer_T "valueOf" (methodtype_T "I" integer_LT)],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CInt2Char _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [wrapChar_ (concat arg.bytecode unwrapInteger_)],
+                            classes = concat env.classes arg.classes }  
+            else match lhs with TmConst { val = CStringIsFloat _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                charseq2Str_,
+                                [astore_ env.localVars],
+                                [createTryCatch 
+                                    (foldl concat 
+                                        [aload_ env.localVars,
+                                        invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D",
+                                        pop2_,
+                                        ldcInt_ 1]
+                                        [wrapBoolean_,
+                                        [astore_ env.localVars]])
+                                    (foldl concat 
+                                        [ldcInt_ 0] 
+                                        [wrapBoolean_, 
+                                        [astore_ env.localVars]]),
+                                aload_ env.localVars]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CString2float _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [charseq2Str_,
+                                [invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;)Double"]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CGensym _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [getstatic_ (concat pkg_ "Main") "symbol" (type_LT (concat pkg_ "GenSym"))],
+                                [invokevirtual_ (concat pkg_ "GenSym") "newSymbol" (methodtype_T "" (type_LT (concat pkg_ "Symbol")))]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CSym2hash _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [getfield_ (concat pkg_ "Symbol") "symbolInt" "I"]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CReverse _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [invokevirtual_ seq_T "reverse" (methodtype_T "" seq_LT)]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CHead _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [invokevirtual_ seq_T "head" (methodtype_T "" object_LT)]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CTail _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [invokevirtual_ seq_T "tail" (methodtype_T "" seq_LT)]],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CLength _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                [invokevirtual_ seq_T "length" (methodtype_T "" seq_LT),
+                                i2l_],
+                                wrapInteger_],
+                            classes = concat env.classes arg.classes }
             else 
                 (print "Unknown Const!\n");
                 env
