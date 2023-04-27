@@ -12,4 +12,4 @@ py: $(python_files)
 
 # File rule
 $(src_files_all):
-	@MCORE_LIBS=stdlib=`pwd`/stdlib build/${BOOT_NAME} eval --test --disable-prune-warning $@
+	@MCORE_LIBS=stdlib=`pwd`/stdlib:test=`pwd`/test build/${BOOT_NAME} eval --test --disable-prune-warning $@
