@@ -351,8 +351,8 @@ lang AVLTreeImpl
         avlJoin rt.key value lhs rhs
       else error "avlUnionWith: empty right tree"
 
-  sem avlIntersectWith : all k. all v.
-    (k -> k -> Int) -> (v -> v -> v) -> AVL k v -> AVL k v -> AVL k v
+  sem avlIntersectWith : all k. all a. all b. all c.
+    (k -> k -> Int) -> (a -> b -> c) -> AVL k a -> AVL k b -> AVL k c
   sem avlIntersectWith cmp f l =
   | r ->
     match l with Leaf _ then Leaf ()
@@ -378,7 +378,7 @@ lang AVLTreeImpl
           avlJoin2 lhs rhs
       else error "avlIntersectWith: empty right tree"
 
-  sem avlDifference : all k. all v. (k -> k -> Int) -> AVL k v -> AVL k v -> AVL k v
+  sem avlDifference : all k. all a. all b. (k -> k -> Int) -> AVL k a -> AVL k b -> AVL k a
   sem avlDifference cmp l =
   | r ->
     match l with Leaf _ then Leaf ()

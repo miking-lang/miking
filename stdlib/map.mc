@@ -139,12 +139,12 @@ let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v 
   use AVLTreeImpl in
   {l with root = avlUnionWith l.cmp f l.root r.root}
 
-let mapIntersectWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v =
+let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> Map k b -> Map k c =
   lam f. lam l. lam r.
   use AVLTreeImpl in
-  {l with root = avlIntersectWith l.cmp f l.root r.root}
+  {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
 
-let mapDifference : all k. all v. Map k v -> Map k v -> Map k v =
+let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
   lam l. lam r.
   use AVLTreeImpl in
   {l with root = avlDifference l.cmp l.root r.root}
