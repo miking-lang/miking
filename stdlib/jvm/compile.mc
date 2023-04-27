@@ -61,14 +61,13 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         match lhs with TmConst _ then 
             match lhs with TmConst { val = CPrint _ } then
                 { env with 
-                    bytecode = foldl concat env.bytecode 
+                    bytecode = foldl concat 
+                        env.bytecode 
                         [[getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;"], 
                         arg.bytecode, 
                         [invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V"],
-                        [ldcInt_ 1],
-                        wrapInteger_], -- change this to () later 
+                        nothing_], 
                     classes = concat env.classes arg.classes }
-            -- this could be a Map?
             else match lhs with TmConst { val = CAddi _ } then 
                 applyArithI_ "Addi" env arg 
             else match lhs with TmConst { val = CSubi _ } then 
@@ -205,7 +204,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 { env with bytecode = foldl concat 
                                 env.bytecode 
                                 [charseq2Str_,
-                                [invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;)Double"]],
+                                [invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;D"]],
                             classes = concat env.classes arg.classes }
             else match lhs with TmConst { val = CGensym _ } then
                 { env with bytecode = foldl concat 
@@ -245,6 +244,67 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                                 [invokevirtual_ seq_T "length" (methodtype_T "" seq_LT),
                                 i2l_],
                                 wrapInteger_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CFileExists _ } then
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [[new_ "java/io/File",
+                                dup_],
+                                arg.bytecode,
+                                charseq2Str_,
+                                [invokespecial_ "java/io/File" "<init>" "(Ljava/lang/String;)V",
+                                invokevirtual_ "java/io/File" "exists" "()Z"],
+                                wrapBoolean_],
+                            classes = concat env.classes arg.classes }
+            else match lhs with TmConst { val = CFileRead _ } then
+                let fileRead = env.localVars in 
+                let str = addi env.localVars 1 in
+                let i = addi env.localVars 2 in
+                let len = addi env.localVars 3 in
+                let startLabel = createName_ "start" in
+                let endLabel = createName_ "end" in
+                { env with bytecode = foldl concat 
+                                env.bytecode 
+                                [arg.bytecode,
+                                charseq2Str_,
+                                [ldcInt_ 0,
+                                anewarray_ "java/lang/String",
+                                invokestatic_ "java/nio/file/Paths" "get" "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;",
+                                invokestatic_ "java/nio/file/Files" "readAllLines" "(Ljava/nio/file/Path;)Ljava/util/List;",
+                                astore_ fileRead,
+                                new_ "java/lang/StringBuilder",
+                                dup_,
+                                invokespecial_ "java/lang/StringBuilder" "<init>" "()V",
+                                astore_ str,
+                                ldcInt_ 0,
+                                istore_ i,
+                                aload_ fileRead,
+                                invokeinterface_ "java/util/List" "size" "()I",
+                                istore_ len,
+                                label_ startLabel,
+                                iload_ i,
+                                iload_ len,
+                                ificmpge_ endLabel,
+                                aload_ str,
+                                aload_ fileRead,
+                                iload_ i,
+                                invokeinterface_ "java/util/List" "get" "(I)Ljava/lang/Object;",
+                                checkcast_ "java/lang/String",
+                                invokevirtual_ "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
+                                pop_,
+                                aload_ str,
+                                ldcString_ "\\n",
+                                invokevirtual_ "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
+                                pop_,
+                                iload_ i,
+                                ldcInt_ 1,
+                                iadd_,
+                                istore_ i,
+                                goto_ startLabel,
+                                label_ endLabel,
+                                aload_ str,
+                                invokevirtual_ "java/lang/StringBuilder" "toString" "()Ljava/lang/String;"],
+                                string2charseq_ (addi env.localVars 4)],
                             classes = concat env.classes arg.classes }
             else 
                 (print "Unknown Const!\n");

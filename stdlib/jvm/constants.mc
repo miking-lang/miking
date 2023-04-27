@@ -144,6 +144,9 @@ let ificmpeq_ = use JVMAst in
 let ificmpne_ = use JVMAst in 
     lam label. createBString "IF_ICMPNE" label
 
+let ificmpge_ = use JVMAst in 
+    lam label. createBString "IF_ICMPGE" label
+
 let label_ = use JVMAst in 
     lam name. createBString "LABEL" name
 
@@ -278,6 +281,47 @@ let createName_ =
 let charseq2Str_ = use JVMAst in 
     [invokevirtual_ "scala/collection/immutable/Vector" "mkString" "()Ljava/lang/String;"]
 
+let string2charseq_ = use JVMAst in
+    lam localVar.
+    let str = localVar in
+    let arr = addi localVar 1 in
+    let len = addi localVar 2 in
+    let i = addi localVar 3 in
+    let charInt = addi localVar 4 in
+    let endLabel = createName_ "end" in
+    let startLabel = createName_ "start" in 
+    foldl concat 
+        [astore_ str]
+        [[new_ "scala/collection/immutable/VectorBuilder",
+        dup_,
+        invokespecial_ "scala/collection/immutable/VectorBuilder" "<init>" "()V",
+        astore_ arr,
+        aload_ str,
+        invokevirtual_ "java/lang/String" "length" "()I",
+        istore_ len,
+        ldcInt_ 0,
+        istore_ i,
+        label_ startLabel,
+        iload_ i,
+        iload_ len,
+        ificmpge_ endLabel,
+        aload_ arr,
+        aload_ str,
+        iload_ i,
+        invokevirtual_ "java/lang/String" "codePointAt" "(I)I",
+        istore_ charInt],
+        wrapChar_ [iload_ charInt],
+        [invokevirtual_ "scala/collection/immutable/VectorBuilder" "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;",
+        pop_,
+        iload_ i,
+        iload_ charInt,
+        invokestatic_ "java/lang/Character" "charCount" "(I)I",
+        iadd_,
+        istore_ i,
+        goto_ startLabel,
+        label_ endLabel,
+        aload_ arr,
+        invokevirtual_ "scala/collection/immutable/VectorBuilder" "result" "()Lscala/collection/immutable/Vector;"]]
 
 let arithClassI_ = use JVMAst in
     lam name. lam op. 
