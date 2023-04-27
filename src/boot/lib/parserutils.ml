@@ -182,7 +182,9 @@ let namespaces : string NamespaceMap.t =
   let env_bindings =
     match Sys.getenv_opt "MCORE_LIBS" with
     | Some path ->
-        path |> String.split_on_char ':' |> List.to_seq
+        path
+        |> Str.split (Str.regexp ":")
+        |> List.to_seq
         |> Seq.filter_map process_binding
     | None ->
         Seq.empty
