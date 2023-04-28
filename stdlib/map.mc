@@ -208,6 +208,19 @@ let mapMapK
     (v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
   = lam f. mapMapWithKeyK (lam. f)
 
+-- `mapUpdate k f m` looks up `k` in `m` and applies `f` to the result of this
+-- lookup. If the result of this application is `Some v`, the binding `k` in `m`
+-- is updated to bind to `v`. Otherwise, if the result is `None _`, the binding
+-- `k` is removed from `m`.
+-- OPT(oerikss, 2023-04-27): We might be able to reduce this to one map access
+-- if we operate directly on the AVLTree.
+let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
+  = lam k. lam f. lam m.
+    switch f (mapLookup k m)
+    case Some v then mapInsert k v m
+    case None _ then mapRemove k m
+    end
+
 mexpr
 
 let m = mapEmpty subi in
@@ -314,6 +327,31 @@ in
 utest
   (mapMapK (lam val. lam k. k (join [val, val])) m (lam m. mapBindings m))
   with [(1, "11"), (2, "22"), (3, "33")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest mapBindings (mapUpdate 1 (lam. Some "2") m)
+  with [(1, "2"), (2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. Some "4") m)
+  with [(1, "1"), (2, "2"), (3, "3"), (4, "4")]
+in
+utest mapBindings (mapUpdate 1 (lam. None ()) m)
+  with [(2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. None ()) m)
+  with [(1, "1"), (2, "2"), (3, "3")]
+in
+utest
+  mapBindings
+    (mapUpdate 2
+       (lam v. match v with Some v then Some (join [v,v]) else None ())
+       m)
+  with [(1, "1"), (2, "22"), (3, "3")]
 in
 
 ()
