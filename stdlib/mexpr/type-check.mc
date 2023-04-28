@@ -141,7 +141,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst + FlexTypeAst + PrettyPrint
+lang Unify = FlexTypeAst + PrettyPrint
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -246,19 +246,11 @@ lang VarTypeUnify = Unify + VarTypeAst
     else ()
 end
 
-lang FlexTypeUnify = UnifyFields + FlexTypeAst
+lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
   sem addSorts (env : UnifyEnv) =
   | (RecordVar r1, RecordVar r2) ->
-    let f = lam acc. lam b : (SID, Type).
-      match b with (k, ty2) in
-      match mapLookup k r1.fields with Some ty1 then
-        unifyTypes env (ty1, ty2);
-        acc
-      else
-        mapInsert k ty2 acc
-    in
-    let fields = foldl f r1.fields (mapBindings r2.fields) in
-    RecordVar {r1 with fields = fields}
+    let f = lam ty1. lam ty2. unifyTypes env (ty1, ty2); ty1 in
+    RecordVar {r1 with fields = mapUnionWith f r1.fields r2.fields}
   | (RecordVar _ & rv, ! RecordVar _ & tv)
   | (! RecordVar _ & tv, RecordVar _ & rv) ->
     rv
@@ -270,6 +262,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
     if not (nameEq r1.ident r2.ident) then
       unifyCheck env.info r1 ty2;
+      unifyCheck env.info r2 ty1;
       let updated =
         Unbound {r1 with level = mini r1.level r2.level
                 , sort = addSorts env (r1.sort, r2.sort)
@@ -606,7 +599,27 @@ lang AppTypeCheck = TypeCheck + AppAst
     TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
 end
 
-lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
+lang FlexDisableGeneralize = Unify
+  sem disableRecordGeneralize (info : [Info]) (lvl : Level) =
+  | TyFlex t & ty ->
+    switch deref t.contents
+    case Unbound {sort = RecordVar _} then
+      let tv = {ident = nameSym "a",
+                level = lvl,
+                sort = PolyVar (),
+                isWeak = true}
+      in
+      unifyCheck info tv ty
+    case Unbound _ then ()
+    case Link tyL then
+      disableRecordGeneralize info lvl tyL
+    end
+  | ty ->
+    sfold_Type_Type (lam. lam ty. disableRecordGeneralize info lvl ty) () ty
+end
+
+lang LetTypeCheck =
+  TypeCheck + LetAst + LamAst + FunTypeAst + SubstituteUnknown + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let lvl = env.currentLvl in
@@ -617,6 +630,8 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
     -- Unify the annotated type with the inferred one and generalize
     match stripTyAll tyBody with (_, stripped) in
     unify [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
+    (if env.disableRecordPolymorphism then
+      disableRecordGeneralize [infoTm body] lvl tyBody else ());
     let tyBody = gen lvl tyBody in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
@@ -633,7 +648,7 @@ lang LetTypeCheck = TypeCheck + LetAst + SubstituteUnknown
   | (tm, ty) -> tm
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmRecLets t ->
     let lvl = env.currentLvl in
@@ -659,6 +674,8 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck
 
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : RecLetBinding.
+      (if env.disableRecordPolymorphism then
+        disableRecordGeneralize [infoTm b.body] lvl b.tyBody else ());
       let tyBody = gen lvl b.tyBody in
       (_insertVar b.ident tyBody acc, {b with tyBody = tyBody})
     in
@@ -701,20 +718,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
     TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
 end
 
-lang FlexDisableGeneralize = FlexTypeAst
-  sem disableGeneralize =
-  | TyFlex t ->
-    switch deref t.contents
-    case Unbound r then
-      modref t.contents (Unbound {r with isWeak = true});
-      sfold_VarSort_Type (lam. lam ty. disableGeneralize ty) () r.sort
-    case Link ty then
-      disableGeneralize ty
-    end
-  | ty -> ()
-end
-
-lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGeneralize
+lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
   sem typeCheckExpr env =
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
@@ -726,7 +730,6 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst + FlexDisableGenera
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
     unify [infoTm rec] (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
-    (if env.disableRecordPolymorphism then disableGeneralize (tyTm rec) else ());
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
@@ -738,7 +741,7 @@ lang TypeTypeCheck = TypeCheck + TypeAst + SubstituteUnknown
     TmType {t with inexpr = inexpr, ty = tyTm inexpr}
 end
 
-lang DataTypeCheck = TypeCheck + DataAst + SubstituteUnknown
+lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + SubstituteUnknown
   sem typeCheckExpr env =
   | TmConDef t ->
     checkUnknown t.info t.tyIdent;
@@ -836,17 +839,16 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
-lang RecordPatTypeCheck = PatTypeCheck + RecordPat + FlexDisableGeneralize
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat
   sem typeCheckPat env patEnv =
   | PatRecord t ->
     let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
     match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
-    (if env.disableRecordPolymorphism then disableGeneralize ty else ());
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
-lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
+lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
   sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some ty then
@@ -863,17 +865,17 @@ lang DataPatTypeCheck = TypeCheck + PatTypeCheck + DataPat
       errorSingle [t.info] msg
 end
 
-lang IntPatTypeCheck = PatTypeCheck + IntPat
+lang IntPatTypeCheck = PatTypeCheck + IntPat + IntTypeAst
   sem typeCheckPat env patEnv =
   | PatInt t -> (patEnv, PatInt {t with ty = TyInt {info = t.info}})
 end
 
-lang CharPatTypeCheck = PatTypeCheck + CharPat
+lang CharPatTypeCheck = PatTypeCheck + CharPat + CharTypeAst
   sem typeCheckPat env patEnv =
   | PatChar t -> (patEnv, PatChar {t with ty = TyChar {info = t.info}})
 end
 
-lang BoolPatTypeCheck = PatTypeCheck + BoolPat
+lang BoolPatTypeCheck = PatTypeCheck + BoolPat + BoolTypeAst
   sem typeCheckPat env patEnv =
   | PatBool t -> (patEnv, PatBool {t with ty = TyBool {info = t.info}})
 end
