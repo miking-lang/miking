@@ -2,6 +2,8 @@
 
 include "map.mc"
 include "string.mc"
+include "math.mc"
+include "either.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
@@ -148,8 +150,76 @@ lang MExprFindSym = MExprAst
     else acc
 end
 
+lang MExprVarCount = MExprAst
+  -- Maps variable identifiers to number of occurances. `Left n` means that an
+  -- identifier is free and occurs `n` times. `Right n` means that an identfier
+  -- is bound and occurs `n` times.
+  type VarCountMap = Map Name (Either Int Int)
+
+  -- `countVars t` counts free and bounded variables in `t`. It assumes that `t`
+  -- is symbolized.
+  sem countVars : Expr -> VarCountMap
+  sem countVars =| t -> countVarsExpr (mapEmpty nameCmp) t
+
+  -- `countVars t` counts free variables in `t`. It assumes that `t` is
+  -- symbolized.
+  sem countFreeVars : Expr -> Map Name Int
+  sem countFreeVars =| t ->
+    mapFoldWithKey
+      (lam fv. lam id. lam count.
+        match count with Left n then mapInsert id n fv else fv)
+      (mapEmpty nameCmp)
+      (countVars t)
+
+  sem _bindIdent : VarCountMap -> Name -> VarCountMap
+  sem _bindIdent count =| id ->
+    mapUpdate id
+      (lam n. match n with Some (Left n) then Some (Right n) else n)
+      count
+
+  sem countVarsExpr : VarCountMap -> Expr -> VarCountMap
+  sem countVarsExpr count =
+  | TmVar r ->
+    mapUpdate
+      r.ident
+      (lam n.
+        switch n
+        case Some n then Some (eitherBiMap succ succ n)
+        case None _ then Some (Left 1)
+        end)
+      count
+  | TmLam r -> _bindIdent (countVarsExpr count r.body) r.ident
+  | TmLet r ->
+    countVarsExpr
+      (_bindIdent (countVarsExpr count r.inexpr) r.ident)
+      r.body
+  | TmRecLets r ->
+    let count =
+      foldl
+        (lam count. lam b. countVarsExpr count b.body)
+        (countVarsExpr count r.inexpr)
+        r.bindings
+    in
+    foldl (lam count. lam b. _bindIdent count b.ident) count r.bindings
+  | TmMatch r ->
+    countVarsExpr
+      (countVarsExpr
+         (bindVarsPat
+            (countVarsExpr count r.thn)
+            r.pat)
+         r.els)
+      r.target
+  | t -> sfold_Expr_Expr countVarsExpr count t
+
+  sem bindVarsPat : VarCountMap -> Pat -> VarCountMap
+  sem bindVarsPat count =
+  | PatNamed {ident = PName id} -> _bindIdent count id
+  | pat -> sfold_Pat_Pat bindVarsPat count pat
+end
+
 lang TestLang =
-  MExprFindSym + MExprSubstitute + BootParser + MExprSym + MExprPrettyPrint
+  MExprFindSym + MExprSubstitute + MExprVarCount +
+  BootParser + MExprSym + MExprPrettyPrint
 end
 
 mexpr
@@ -157,6 +227,17 @@ mexpr
 use TestLang in
 
 let pp = lam e. mexprToString e in
+
+let parseProgram : String -> Expr =
+  lam str.
+  let parseArgs = {defaultBootParserParseMExprStringArg with allowFree = true} in
+  let ast = parseMExprString parseArgs str in
+  symbolizeExpr {symEnvEmpty with allowFree = true} ast
+in
+
+--------------------------------
+-- Test substituteIdentifiers --
+--------------------------------
 
 let expr = lam id. bindall_ [
   ulet_ id (ulam_ id (var_ id)),
@@ -169,12 +250,9 @@ let expr = lam id. bindall_ [
 let replace = mapFromSeq nameCmp [(nameNoSym "x", nameNoSym "y")] in
 utest pp (substituteIdentifiers replace (expr "x")) with pp (expr "y") using eqString in
 
-let parseProgram : String -> Expr = 
-  lam str.
-  let parseArgs = {defaultBootParserParseMExprStringArg with allowFree = true} in
-  let ast = parseMExprString parseArgs str in
-  symbolizeExpr {symEnvEmpty with allowFree = true} ast
-in
+-----------------------------
+-- Test findNamesOfStrings --
+-----------------------------
 
 let matchOpt : all a. all b. Option a -> Option b -> Bool =
   lam o1. lam o2.
@@ -247,5 +325,81 @@ let prog = parseProgram s in
 let strs = ["Option", "Error", "Some", "in", "utestRunner", "numFailed", "eqExpr"] in
 let expected = [Some (), None (), Some (), None (), Some (), Some (), None ()] in
 utest findNamesOfStrings strs prog with expected using matchOpts in
+
+--------------------
+-- Test countVars --
+--------------------
+
+let testCountVars = lam prog.
+  let count = countVars prog in
+  sort
+    (lam x. lam y. cmpString x.0 y.0)
+    (map (lam b. (nameGetStr b.0, b.1)) (mapBindings count))
+in
+
+let testCountFreeVars = lam prog.
+  let count = countFreeVars prog in
+  sort
+    (lam x. lam y. cmpString x.0 y.0)
+    (map (lam b. (nameGetStr b.0, b.1)) (mapBindings count))
+in
+
+let prog = parseProgram "
+  lam x. x x y y y
+  "
+in
+
+utest testCountVars prog with [("x", Right 2), ("y", Left 3)] in
+utest testCountFreeVars prog with [("y", 3)] in
+
+let prog = parseProgram "
+  let x = z in x x y y y
+  "
+in
+
+utest testCountVars prog with [("x", Right 2), ("y", Left 3), ("z", Left 1)] in
+utest testCountFreeVars prog with [("y", 3), ("z", 1)] in
+
+let prog = parseProgram "
+  recursive let f = lam x. w f (f x) in
+  recursive let g = lam y. z f (g y) in
+  w z (f (g u))
+  "
+in
+
+utest testCountVars prog with [
+  ("f", Right 4),
+  ("g", Right 2),
+  ("u", Left 1),
+  ("w", Left 2),
+  ("x", Right 1),
+  ("y", Right 1),
+  ("z", Left 2)
+] in
+
+utest testCountFreeVars prog with [
+  ("u", 1),
+  ("w", 2),
+  ("z", 2)
+] in
+
+let prog = parseProgram "
+  match u with (x, (y, z)) in
+  x y y z z z u w w
+  "
+in
+
+utest testCountVars prog with [
+  ("u", Left 2),
+  ("w", Left 2),
+  ("x", Right 1),
+  ("y", Right 2),
+  ("z", Right 3)
+] in
+
+utest testCountFreeVars prog with [
+  ("u", 2),
+  ("w", 2)
+] in
 
 ()

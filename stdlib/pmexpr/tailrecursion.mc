@@ -24,9 +24,9 @@ type TailRecursiveEnv = {
 }
 
 type Side
-con Left : () -> Side
-con Right : () -> Side
-con Both : () -> Side
+con LeftSide : () -> Side
+con RightSide : () -> Side
+con BothSides : () -> Side
 
 -- Combines two options by choosing Some over None. Should both options be
 -- Some, they are combined according to the given function.
@@ -39,16 +39,16 @@ let combineOptions : all a. (a -> a -> Option a) -> Option a -> Option a -> Opti
   else never
 
 -- Finds a compatible side which agrees with both given side values. The value
--- None represents neither side (the minimal element), while Some (Both ())
+-- None represents neither side (the minimal element), while Some (BothSides ())
 -- represents either side (the maximal element).
 let compatibleSide : Option Side -> Option Side -> Option Side =
   combineOptions
     (lam l. lam r.
       let o = (l, r) in
-      match o with (Both (), rhs) then Some rhs
-      else match o with (lhs, Both ()) then Some lhs
-      else match o with (Left (), Left ()) then Some (Left ())
-      else match o with (Right (), Right ()) then Some (Right ())
+      match o with (BothSides (), rhs) then Some rhs
+      else match o with (lhs, BothSides ()) then Some lhs
+      else match o with (LeftSide (), LeftSide ()) then Some (LeftSide ())
+      else match o with (RightSide (), RightSide ()) then Some (RightSide ())
       else None ())
 
 -- Determines whether a given expression is a recursive call to a function with
@@ -73,8 +73,8 @@ let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
     let lrec = isRecursiveCall arg1 ident in
     let rrec = isRecursiveCall arg2 ident in
     let side =
-      if lrec then if rrec then Some (Both ()) else Some (Left ())
-      else if rrec then Some (Right ())
+      if lrec then if rrec then Some (BothSides ()) else Some (LeftSide ())
+      else if rrec then Some (RightSide ())
       else None () in
     optionBind
       side
@@ -121,9 +121,11 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
         if isAssociative binop then
           match getNeutralElement binop with Some ne then
             let ne = withType elemTy (withInfo binding.info ne) in
-            match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
+            match foldl compatibleArgumentSide (None ()) tailPosInfo
+              with Some side
+            then
               let leftArgRecursion =
-                match side with Left () | Both () then true else false
+                match side with LeftSide () | BothSides () then true else false
               in
               Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
             else None ()
