@@ -2,6 +2,7 @@
 -- src/boot/lib/parserutils.ml
 
 include "sys.mc"
+include "option.mc"
 
 let stdlibCwd = join [sysGetCwd (), "/stdlib"]
 
@@ -11,8 +12,17 @@ let stdlibLocUnix =
   else stdlibCwd
 
 let stdlibLoc =
-  match sysGetEnv "MCORE_STDLIB" with Some path then path
-  else
-    -- NOTE(dlunde,2022-05-04) The boot parser also checks if the OS type is
-    -- "Unix" here
-    if sysFileExists stdlibLocUnix then stdlibLocUnix else stdlibCwd
+  optionGetOrElse
+    (lam.
+      -- NOTE(dlunde,2022-05-04) The boot parser also checks if the OS type is
+      -- "Unix" here
+      if sysFileExists stdlibLocUnix then stdlibLocUnix else stdlibCwd)
+    (optionBind
+       (sysGetEnv "MCORE_LIBS")
+       (lam path.
+         let libs = strSplit ":" path in
+         findMap
+           (lam str.
+             match splitAt str 7 with ("stdlib=", loc)
+             then Some loc else None ())
+           libs))

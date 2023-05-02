@@ -83,6 +83,8 @@ let message2str (id, sev, info, _) =
   severity2str sev ^. us " " ^. info2str info ^. us ": " ^. id2str id
   ^. us "\n"
 
-let raise_error fi msg = raise (Error (ERROR msg, ERROR, fi, []))
+let error_message fi sev msg : message = (ERROR msg, sev, fi, [])
+
+let raise_error fi msg = raise (Error (error_message fi ERROR msg))
 
 let error fi msg = raise_error fi (msg |> Ustring.to_utf8)

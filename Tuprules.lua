@@ -23,7 +23,7 @@ root = tup.getcwd()
 miGroup = root..'/<mi>'
 miCheatGroup = root..'/<mi-cheat>'
 local cwd = tup.getrelativedir(root)
-setStdlib = 'MCORE_STDLIB='..root..'/stdlib '
+setStdlib = 'MCORE_LIBS=stdlib='..root..'/stdlib '
 
 local builtKind = 'built'
 local builtMi = root..'/build/mi '
