@@ -71,9 +71,9 @@ lite() {
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_LITE_NAME 1 src/main/mi.mc
+        time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
         mv -f $MI_NAME build/$MI_NAME
         rm -f $MI_LITE_NAME
     fi
