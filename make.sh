@@ -24,11 +24,13 @@ LIB_PATH=$HOME/.local/lib/mcore
 # (and set test namespace for testing)
 export MCORE_LIBS=stdlib=`pwd`/stdlib:test=`pwd`/test
 
+# Setup dune/ocamlfind to use local boot library when available
+export OCAMLPATH=`pwd`/build/lib
+
 # Compile and build the boot interpreter
 build_boot(){
     dune build
-    mkdir -p build
-    cp -f _build/install/default/bin/boot build/$BOOT_NAME
+    dune install --prefix=build --bindir=`pwd`/build > /dev/null 2>&1
 }
 
 install_boot(){
@@ -83,7 +85,7 @@ lite() {
 # Install the Miking compiler
 install() {
     if [ -e build/$MI_NAME ]; then
-        set +e; rm -rf $LIB_PATH/stdlib; set -e
+        rm -rf $LIB_PATH/stdlib
         mkdir -p $BIN_PATH $LIB_PATH
         cp -rf stdlib $LIB_PATH
         cp -f build/$MI_NAME $BIN_PATH
