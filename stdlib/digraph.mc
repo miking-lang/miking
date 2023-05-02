@@ -155,6 +155,11 @@ let digraphIsSuccessor : all v. all l. v -> v -> Digraph v l -> Bool =
   let res = setMem v1 successors in
   res
 
+-- Get the successor vertex of 'v' with edge label 'lbl', if it exists.
+let digraphSuccessorLabel: all v. all l. v -> l -> Digraph v l -> Option v =
+  lam v. lam lbl. lam g.
+    optionMap (lam e. e.1) (find (lam e. g.eql e.2 lbl) (digraphEdgesFrom v g))
+
 -- Add vertex v to graph g if it doesn't already exist in g.
 -- If v exists in g and check is true, an error is thrown.
 -- If v exist in g and check is false, g stays unchanged.
@@ -429,6 +434,9 @@ utest
   match digraphLabels 1 2 g with [l1,l2] | [l2,l1]
   then true else false with true
 in
+
+utest digraphSuccessorLabel 1 l2 g with Some 2 in
+utest digraphSuccessorLabel 1 l3 g with None () in
 
 let g : Digraph Int Symbol =
   digraphAddEdges [(2,3,l4),(1,3,l3),(1,2,l2),(1,2,l1)] (digraphAddVertices [1,2,3] empty)
