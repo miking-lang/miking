@@ -164,5 +164,5 @@ test-accelerate: build
 test-jvm: build
 	@$(MAKE) -s -f test-jvm.mk
 
-test-js: boot
+test-js: build
 	@$(MAKE) -s -f test-js.mk
