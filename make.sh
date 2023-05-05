@@ -24,11 +24,13 @@ LIB_PATH=$HOME/.local/lib/mcore
 # (and set test namespace for testing)
 export MCORE_LIBS=stdlib=`pwd`/stdlib:test=`pwd`/test
 
+# Setup dune/ocamlfind to use local boot library when available
+export OCAMLPATH=`pwd`/build/lib
+
 # Compile and build the boot interpreter
 build_boot(){
     dune build
-    mkdir -p build
-    cp -f _build/install/default/bin/boot build/$BOOT_NAME
+    dune install --prefix=build --bindir=`pwd`/build > /dev/null 2>&1
 }
 
 install_boot(){
@@ -71,9 +73,9 @@ lite() {
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_LITE_NAME 1 src/main/mi.mc
+        time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
         mv -f $MI_NAME build/$MI_NAME
         rm -f $MI_LITE_NAME
     fi
@@ -83,7 +85,7 @@ lite() {
 # Install the Miking compiler
 install() {
     if [ -e build/$MI_NAME ]; then
-        set +e; rm -rf $LIB_PATH/stdlib; set -e
+        rm -rf $LIB_PATH/stdlib
         mkdir -p $BIN_PATH $LIB_PATH
         cp -rf stdlib $LIB_PATH
         cp -f build/$MI_NAME $BIN_PATH

@@ -120,7 +120,7 @@ function doMerge -a runTest
                 set -l fail_already_known $status
                 set current "✓*"$pr
                 printMergeStatus
-                if test "$fail_already_known" -ne 0 && make test-all $makeFlags >$tmpdir/$pr 2>&1
+                if test "$fail_already_known" -ne 0 && make clean && make test-all $makeFlags >$tmpdir/$pr 2>&1
                     set current
                     set statuses $statuses "✓✓"$pr
                     set picked $picked $pr
@@ -153,7 +153,7 @@ echo "Merging PRs:"
 doMerge "" $allPrs
 echo -e "\nTesting all merged PRs together (happy path)"
 
-if make test-all $makeFlags >$tmpdir/$allPrs[-1] 2>&1
+if make clean && make test-all $makeFlags >$tmpdir/$allPrs[-1] 2>&1
     printFinalStatus
     cleanup dir
     exit 0

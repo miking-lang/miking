@@ -69,6 +69,11 @@ To help Miking find its standard library, you should define the environment vari
 
     export MCORE_LIBS=stdlib=`pwd`/stdlib
 
+To run the Miking compiler, you must also extend the `OCAMLPATH` variable to point to the build directory containing the `boot` library:
+
+    export OCAMLPATH=`pwd`/build/lib:$OCAMLPATH
+
+If you install Miking on your system, neither of these settings is necessary.
 To install the compiler along with the standard library for the current
 user, issue:
 
@@ -76,7 +81,7 @@ user, issue:
 make install
 ```
 
-This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_LIBS` is unset, Miking will look in this installation folder as its default library location. NOTE: on some systems (e.g., macOS), you need to _manually_ add `$HOME/.local/bin` to your `PATH` environment variable to access the `mi` command from your shell.
+This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_LIBS` is unset, Miking will look in this installation folder as its default library location. The `boot` OCaml library will also be installed to your OPAM prefix. NOTE: on some systems (e.g., macOS), you need to _manually_ add `$HOME/.local/bin` to your `PATH` environment variable to access the `mi` command from your shell.
 
 Conversely, to uninstall, issue:
 

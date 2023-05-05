@@ -53,12 +53,12 @@ boot:
 install-boot: boot
 	@./make.sh install-boot
 
-lite: install-boot
+lite: boot
 	@./make.sh lite
 
 test: test-boot
 
-build: install-boot
+build: boot
 # Run the complete bootstrapping process to compile `mi`.
 	@./make.sh
 
@@ -67,7 +67,7 @@ build-mi:
 # The result is named `build/mi-tmp`.
 	@./make.sh build-mi
 
-install: build
+install: build install-boot
 	@./make.sh install
 
 lint:
@@ -131,19 +131,19 @@ test-run: build
 test-run-all: build
 	@$(MAKE) -s -f test-run.mk all
 
-test-boot-run: install-boot
+test-boot-run: boot
 	@$(MAKE) -s -f test-boot-run.mk selected
 
-test-boot-run-all: install-boot
+test-boot-run-all: boot
 	@$(MAKE) -s -f test-boot-run.mk all
 
-test-boot: install-boot
+test-boot: boot
 	@$(MAKE) -s -f test-boot.mk selected
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-all: install-boot
+test-boot-all: boot
 	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build
@@ -164,5 +164,5 @@ test-accelerate: build
 test-jvm: build
 	@$(MAKE) -s -f test-jvm.mk
 
-test-js: install-boot
+test-js: build
 	@$(MAKE) -s -f test-js.mk
