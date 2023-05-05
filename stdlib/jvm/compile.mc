@@ -26,7 +26,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         name : String,
         nextClass : String,
         recordMap : Map Type (Map SID Int),
-        adtTags : Map Name (String, Int)
+        adtTags : Map Name (String, Int),
+        globalFuncMap : Map Name String
     }
 
     -- go through AST and translate to JVM bytecode
@@ -53,278 +54,186 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 concat [ldcInt_ 0] wrapBoolean_
         else match val with CChar { val = val } then
             wrapChar_ [ldcInt_ (char2int val)]
+        else match val with CArgv _ then
+            [getstatic_ (concat pkg_ "Main") "argv" "Lscala/collection/immutable/Vector;"]
+        else match val with CAddi _ then
+            initClass_ "Addi$"
+        else match val with CSubi _ then
+            initClass_ "Subi$"
+        else match val with CMuli _ then
+            initClass_ "Muli$"
+        else match val with CModi _ then
+            initClass_ "Modi$"
+        else match val with CDivi _ then
+            initClass_ "Divi$"
+        else match val with CAddf _ then
+            initClass_ "Addf$"
+        else match val with CSubf _ then
+            initClass_ "Subf$"
+        else match val with CMulf _ then
+            initClass_ "Mulf$"
+        else match val with CDivf _ then
+            initClass_ "Divf$"
+        else match val with CEqi _ then
+            initClass_ "Eqi$"
+        else match val with CNegi _ then
+            initClass_ "Negi"
+        else match val with CLti _ then
+            initClass_ "Lti$"
+        else match val with CGti _ then
+            initClass_ "Gti$"
+        else match val with CLeqi _ then
+            initClass_ "Leqi$"
+        else match val with CGeqi _ then
+            initClass_ "Geqi$"
+        else match val with CEqf _ then
+            initClass_ "Eqf$"
+        else match val with CNegf _ then
+            initClass_ "Negf"
+        else match val with CLtf _ then
+            initClass_ "Ltf$"
+        else match val with CGtf _ then
+            initClass_ "Gtf$"
+        else match val with CLeqf _ then
+            initClass_ "Leqf$"
+        else match val with CGeqf _ then
+            initClass_ "Geqf$"
+        else match val with CSlli _ then
+            initClass_ "Slli$"
+        else match val with CSrli _ then
+            initClass_ "Srli$"
+        else match val with CSrai _ then
+            initClass_ "Srai$"
+        else match val with CNeqi _ then
+            initClass_ "Neqi$"
+        else match val with CNeqf _ then
+            initClass_ "Neqf$"
+        else match val with CEqc _ then
+            initClass_ "Eqc$"
+        else match val with CPrint _ then
+            initClass_ "Print"
+        else match val with CRandIntU _ then
+            initClass_ "Rand$"
+        else match val with CRandSetSeed _ then
+            initClass_ "RandSetSeed"
+        else match val with CFloorfi _ then
+            initClass_ "Floorfi"
+        else match val with CCeilfi _ then
+            initClass_ "Cielfi"
+        else match val with CRoundfi _ then
+            initClass_ "Roundfi"
+        else match val with CInt2float _ then
+            initClass_ "Int2float"
+        else match val with CChar2Int _ then
+            initClass_ "Char2Int"
+        else match val with CInt2Char _ then
+            initClass_ "Int2Char"
+        else match val with CStringIsFloat _ then
+            initClass_ "StringIsFloat"
+        else match val with CString2float _ then
+            initClass_ "String2Float"
+        else match val with CGensym _ then
+            initClass_ "GenSymIntrinsic"
+        else match val with CSym2hash _ then
+            initClass_ "Sym2Hash"
+        else match val with CReverse _ then
+            initClass_ "Reverse"
+        else match val with CHead _ then
+            initClass_ "Head"
+        else match val with CTail _ then
+            initClass_ "Tail"
+        else match val with CLength _ then
+            initClass_ "Length"
+        else match val with CFileExists _ then
+            initClass_ "FileExists"
+        else match val with CFileRead _ then
+            initClass_ "FileRead"
+        else match val with CFloat2string _ then
+            initClass_ "Float2String"
+        else match val with CExit _ then
+            initClass_ "Exit"
+        else match val with CPrintError _ then
+            initClass_ "PrintError"
+        else match val with CFileDelete _ then
+            initClass_ "FileDelete"
+        else match val with CError _ then
+            initClass_ "Error"
+        else match val with CFlushStderr _ then
+            initClass_ "FlushStderr"
+        else match val with CFlushStdout _ then
+            initClass_ "FlushStdout"
+        else match val with CCommand _ then
+            initClass_ "Command"
+        else match val with CSleepMs _ then
+            initClass_ "SleepMs"
+        else match val with CWallTimeMs _ then
+            initClass_ "WallTimeMs"
+        else match val with CRef _ then
+            initClass_ "RefIntrinsic"
+        else match val with CDeRef _ then
+            initClass_ "DeRef"
+        else match val with CEqsym _ then
+            initClass_ "Eqsym$"
+        else match val with CCons _ then
+            initClass_ "Cons$"
+        else match val with CGet _ then
+            initClass_ "Get$"
+        else match val with CSnoc _ then
+            initClass_ "Snoc$"
+        else match val with CConcat _ then
+            initClass_ "Concat$"
+        else match val with CMap _ then
+            initClass_ "Map$"
+        else match val with CMapi _ then
+            initClass_ "Mapi$"
+        else match val with CIter _ then
+            initClass_ "Iter$"
+        else match val with CIteri _ then
+            initClass_ "Iteri$"
+        else match val with CReadLine _ then
+            initClass_ "ReadLine"
+        else match val with CIsList _ then
+            initClass_ "IsList"
+        else match val with CIsRope _ then
+            initClass_ "IsRope"
+        else match val with CSplitAt _ then
+            initClass_ "SplitAt$"
+        else match val with CCreate _ then
+            initClass_ "Create$"
+        else match val with CCreateList _ then
+            initClass_ "CreateList$"
+        else match val with CCreateRope _ then
+            initClass_ "CreateRope$"
+        else match val with CFoldl _ then
+            initClass_ "Foldl$"
+        else match val with CFoldr _ then
+            initClass_ "Foldr$"
+        else match val with CSubsequence _ then
+            initClass_ "SubSequence$"
         else never)
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
         let to = ty in 
         let arg = toJSONExpr { env with bytecode = [], classes = [] } rhs in
-        match lhs with TmConst _ then 
-            match lhs with TmConst { val = CPrint _ } then
-                { env with 
-                    bytecode = foldl concat 
-                        env.bytecode 
-                        [[getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;"], 
-                        arg.bytecode, 
-                        [invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V"],
-                        nothing_], 
-                    classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CAddi _ } then 
-                applyArithI_ "Addi" env arg 
-            else match lhs with TmConst { val = CSubi _ } then 
-                applyArithI_ "Subi" env arg
-            else match lhs with TmConst { val = CMuli _ } then 
-                applyArithI_ "Muli" env arg
-            else match lhs with TmConst { val = CDivi _ } then 
-                applyArithI_ "Divi" env arg
-            else match lhs with TmConst { val = CModi _ } then 
-                applyArithI_ "Modi" env arg
-            else match lhs with TmConst { val = CAddf _ } then 
-                applyArithF_ "Addf" env arg 
-            else match lhs with TmConst { val = CSubf _ } then 
-                applyArithF_ "Subf" env arg
-            else match lhs with TmConst { val = CMulf _ } then 
-                applyArithF_ "Mulf" env arg
-            else match lhs with TmConst { val = CDivf _ } then 
-                applyArithF_ "Divf" env arg
-            else match lhs with TmConst { val = CEqi _ } then
-                applyArithI_ "Eqi" env arg
-            else match lhs with TmConst { val = CNeqi _ } then
-                applyArithI_ "Neqi" env arg
-            else match lhs with TmConst { val = CLti _ } then
-                applyArithI_ "Lti" env arg
-            else match lhs with TmConst { val = CGti _ } then
-                applyArithI_ "Gti" env arg
-            else match lhs with TmConst { val = CLeqi _ } then
-                applyArithI_ "Leqi" env arg
-            else match lhs with TmConst { val = CGeqi _ } then
-                applyArithI_ "Geqi" env arg
-            else match lhs with TmConst { val = CEqf _ } then
-                applyArithF_ "Eqf" env arg
-            else match lhs with TmConst { val = CNeqf _ } then
-                applyArithF_ "Neqf" env arg
-            else match lhs with TmConst { val = CLtf _ } then
-                applyArithF_ "Ltf" env arg
-            else match lhs with TmConst { val = CGtf _ } then
-                applyArithF_ "Gtf" env arg
-            else match lhs with TmConst { val = CLeqf _ } then
-                applyArithF_ "Leqf" env arg
-            else match lhs with TmConst { val = CGeqf _ } then
-                applyArithF_ "Geqf" env arg
-            else match lhs with TmConst { val = CSlli _ } then
-                applyArithI_ "Slli" env arg
-            else match lhs with TmConst { val = CSrli _ } then
-                applyArithI_ "Srli" env arg
-            else match lhs with TmConst { val = CSrai _ } then
-                applyArithI_ "Srai" env arg
-            else match lhs with TmConst { val = CNegf _ } then
-                oneArgOpF_ dneg_ env arg
-            else match lhs with TmConst { val = CNegi _ } then
-                oneArgOpI_ lneg_ env arg
-            else match lhs with TmConst { val = CEqc _ } then
-                applyArithC_ "Eqc" env arg
-            else match lhs with TmConst { val = CRandSetSeed _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [[getstatic_ (concat pkg_ "Main") "random" "Ljava/util/Random;"],
-                                arg.bytecode,
-                                unwrapInteger_,
-                                [invokevirtual_ "java/util/Random" "setSeed" "(J)V"],
-                                nothing_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CRandIntU _ } then
-                applyArithI_ "Rand" env arg
-            else match lhs with TmConst { val = CFloorfi _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode, 
-                                unwrapFloat_,
-                                [invokestatic_ "java/lang/Math" "floor" "(D)D",
-                                d2l_],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CCeilfi _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                unwrapFloat_,
-                                [invokestatic_ "java/lang/Math" "ciel" "(D)D",
-                                d2l_],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CRoundfi _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                unwrapFloat_,
-                                [invokestatic_ "java/lang/Math" "round" "(D)J"],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CInt2float _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                unwrapFloat_,
-                                [l2d_],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CChar2Int _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                unwrapChar_,
-                                [invokestatic_ integer_T "valueOf" (methodtype_T "I" integer_LT)],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CInt2Char _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [wrapChar_ (concat arg.bytecode unwrapInteger_)],
-                            classes = concat env.classes arg.classes }  
-            else match lhs with TmConst { val = CStringIsFloat _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                charseq2Str_,
-                                [astore_ env.localVars],
-                                [createTryCatch 
-                                    (foldl concat 
-                                        [aload_ env.localVars,
-                                        invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;)D",
-                                        pop2_,
-                                        ldcInt_ 1]
-                                        [wrapBoolean_,
-                                        [astore_ env.localVars]])
-                                    (foldl concat 
-                                        [ldcInt_ 0] 
-                                        [wrapBoolean_, 
-                                        [astore_ env.localVars]]),
-                                aload_ env.localVars]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CString2float _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [charseq2Str_,
-                                [invokestatic_ "java/lang/Double" "parseDouble" "(Ljava/lang/String;D"]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CGensym _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [getstatic_ (concat pkg_ "Main") "symbol" (type_LT (concat pkg_ "GenSym"))],
-                                [invokevirtual_ (concat pkg_ "GenSym") "newSymbol" (methodtype_T "" (type_LT (concat pkg_ "Symbol")))]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CSym2hash _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [getfield_ (concat pkg_ "Symbol") "symbolInt" "I"]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CReverse _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [invokevirtual_ seq_T "reverse" (methodtype_T "" seq_LT)]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CHead _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [invokevirtual_ seq_T "head" (methodtype_T "" object_LT)]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CTail _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [invokevirtual_ seq_T "tail" (methodtype_T "" seq_LT)]],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CLength _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                [invokevirtual_ seq_T "length" (methodtype_T "" seq_LT),
-                                i2l_],
-                                wrapInteger_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CFileExists _ } then
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [[new_ "java/io/File",
-                                dup_],
-                                arg.bytecode,
-                                charseq2Str_,
-                                [invokespecial_ "java/io/File" "<init>" "(Ljava/lang/String;)V",
-                                invokevirtual_ "java/io/File" "exists" "()Z"],
-                                wrapBoolean_],
-                            classes = concat env.classes arg.classes }
-            else match lhs with TmConst { val = CFileRead _ } then
-                let fileRead = env.localVars in 
-                let str = addi env.localVars 1 in
-                let i = addi env.localVars 2 in
-                let len = addi env.localVars 3 in
-                let startLabel = createName_ "start" in
-                let endLabel = createName_ "end" in
-                { env with bytecode = foldl concat 
-                                env.bytecode 
-                                [arg.bytecode,
-                                charseq2Str_,
-                                [ldcInt_ 0,
-                                anewarray_ "java/lang/String",
-                                invokestatic_ "java/nio/file/Paths" "get" "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;",
-                                invokestatic_ "java/nio/file/Files" "readAllLines" "(Ljava/nio/file/Path;)Ljava/util/List;",
-                                astore_ fileRead,
-                                new_ "java/lang/StringBuilder",
-                                dup_,
-                                invokespecial_ "java/lang/StringBuilder" "<init>" "()V",
-                                astore_ str,
-                                ldcInt_ 0,
-                                istore_ i,
-                                aload_ fileRead,
-                                invokeinterface_ "java/util/List" "size" "()I",
-                                istore_ len,
-                                label_ startLabel,
-                                iload_ i,
-                                iload_ len,
-                                ificmpge_ endLabel,
-                                aload_ str,
-                                aload_ fileRead,
-                                iload_ i,
-                                invokeinterface_ "java/util/List" "get" "(I)Ljava/lang/Object;",
-                                checkcast_ "java/lang/String",
-                                invokevirtual_ "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
-                                pop_,
-                                aload_ str,
-                                ldcString_ "\\n",
-                                invokevirtual_ "java/lang/StringBuilder" "append" "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
-                                pop_,
-                                iload_ i,
-                                ldcInt_ 1,
-                                iadd_,
-                                istore_ i,
-                                goto_ startLabel,
-                                label_ endLabel,
-                                aload_ str,
-                                invokevirtual_ "java/lang/StringBuilder" "toString" "()Ljava/lang/String;"],
-                                string2charseq_ (addi env.localVars 4)],
-                            classes = concat env.classes arg.classes }
-            else 
-                (print "Unknown Const!\n");
-                env
-        -- if type of arg is Record -> Array
-        else
-            let fun = toJSONExpr env lhs in 
-            { fun with 
-                bytecode = foldl concat fun.bytecode 
-                    [arg.bytecode, 
-                    [checkcast_ object_T],
-                    [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], 
-                    classes = concat fun.classes arg.classes }
-    | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } -> 
+        let fun = toJSONExpr env lhs in 
+        { fun with 
+            bytecode = foldl concat fun.bytecode 
+                [arg.bytecode, 
+                [checkcast_ object_T],
+                [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], 
+                classes = concat fun.classes arg.classes }
+    | TmLet { ident = ident, body = body, inexpr = inexpr } -> 
+        let funcmap = (match body with TmLam _ then 
+                            mapInsert ident env.nextClass env.globalFuncMap
+                        else
+                            env.globalFuncMap) in
         let b = toJSONExpr { env with fieldVars = mapEmpty nameCmp } body in
         toJSONExpr { b with 
                         bytecode = snoc b.bytecode (astore_ env.localVars), 
                         fieldVars = mapEmpty nameCmp, 
                         localVars = addi 1 env.localVars, 
-                        vars = mapInsert ident env.localVars env.vars } inexpr
+                        vars = mapInsert ident env.localVars env.vars,
+                        globalFuncMap = funcmap } inexpr
     | TmLam { ident = ident, body = body } -> 
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) object_LT) in
@@ -353,6 +262,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else match mapLookup ident env.fieldVars with Some field then 
             -- do fieldlookup
             [aload_ 0, getfield_ (concat pkg_ env.name) (getNameField field) "Ljava/lang/Object;"]
+        else match mapLookup ident env.globalFuncMap with Some global then 
+            (initClass_ global)
         else
             (print (join ["No identifier! ", nameGetStr ident, "\n"]));
             []) in
@@ -390,7 +301,21 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
                 classes = concat env.classes insertBytecode.classes, 
                 recordMap = mapUnion insertBytecode.recordMap rm }
-    | TmRecLets _ -> (printLn "TmRecLets"); env
+    | TmRecLets { bindings = bindings, inexpr = inexpr } -> 
+        let b = foldl 
+                    (lam acc. lam el. 
+                        match el with { ident = ident, body = body } then 
+                            let bodyEnv = toJSONExpr acc body in
+                            { bodyEnv with 
+                                    bytecode = concat acc.bytecode [astore_ acc.localVars],
+                                    localVars = addi acc.localVars 1,
+                                    vars = mapInsert ident acc.localVars acc.vars,
+                                    classes = concat acc.classes bodyEnv.classes }
+                        else 
+                            never)
+                    env
+                    bindings in
+        toJSONExpr b inexpr
     | TmSeq _ -> (printLn "TmSeq"); env
     | TmRecordUpdate _ -> (printLn "TmRecordUpdate"); env
     | TmType _ -> (printLn "TmType: Should be gone"); env
@@ -408,7 +333,14 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             classes = concat bodyEnv.classes env.classes,
             recordMap = mapUnion env.recordMap bodyEnv.recordMap }
     | TmUtest _ -> (printLn "TmUtest"); env
-    | TmNever _ -> { env with bytecode = concat env.bytecode [new_ "java/lang/Exception", dup_, ldcString_ "Never Reached!", invokespecial_ "java/lang/Exception" "<init>" "(Ljava/lang/String;)V"] }
+    | TmNever _ -> { env with bytecode = foldl concat 
+                            env.bytecode 
+                            [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
+                            ldcString_ "Never Reached!",
+                            invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
+                            ldcInt_ 1,
+                            invokestatic_ "java/lang/System" "exit" "(I)V"],
+                            nothing_] }
     | TmExt _ -> (printLn "TmExt"); env
     | a -> 
         (print "unknown expr\n");
@@ -530,7 +462,29 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                         [label_ endLabel]],
                     classes = concat thnEnv.classes elsEnv.classes }
             else -- wildcard
-                toJSONExpr { env with bytecode = snoc env.bytecode pop_ } els
+                let patEnv = { env with 
+                                bytecode = foldl concat 
+                                    env.bytecode 
+                                    [[dup_,
+                                    instanceof_ (concat pkg_ t),
+                                    ifeq_ elsLabel, -- jump if 0
+                                    dup_,
+                                    checkcast_ (concat pkg_ t),
+                                    invokeinterface_ (concat pkg_ t) "getTag" "()I",
+                                    ldcInt_ tag,
+                                    ificmpne_ elsLabel,
+                                    pop_]] } in
+                let thnEnv = toJSONExpr patEnv thn in
+                let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [] } els in
+                { thnEnv with 
+                    bytecode = foldl concat 
+                        thnEnv.bytecode
+                        [[goto_ endLabel,
+                        label_ elsLabel,
+                        pop_], 
+                        elsEnv.bytecode,
+                        [label_ endLabel]],
+                    classes = concat thnEnv.classes elsEnv.classes }
         else never 
     | a -> 
         (printLn "Unknown Pat"); 
@@ -589,7 +543,17 @@ let compileJVMEnv = lam ast.
     let adt = collectADTTypes tl.0 in
     let tlAst = tl.1 in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
-    let env = { bytecode = [], vars = mapEmpty nameCmp, localVars = 1, classes = [], fieldVars = mapEmpty nameCmp, name = "Main", nextClass = createName_ "Func", recordMap = mapEmpty cmpType, adtTags = adt.2 } in
+    let env = { 
+            bytecode = argvBC_, 
+            vars = mapEmpty nameCmp, 
+            localVars = 1, 
+            classes = [], 
+            fieldVars = mapEmpty nameCmp, 
+            name = "Main", 
+            nextClass = createName_ "Func", 
+            recordMap = mapEmpty cmpType, 
+            adtTags = adt.2,
+            globalFuncMap = mapEmpty nameCmp } in
     let compiledEnv = (toJSONExpr env tlAst) in
     --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
@@ -603,6 +567,7 @@ let compileMCoreToJVM = lam ast.
     use MExprLambdaLift in
     use MExprTypeAnnot in
     use MExprTypeCheck in
+    use MExprPrettyPrint in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
     let jvmProgram = compileJVMEnv liftedAst in
@@ -614,13 +579,15 @@ let getJarFiles = lam tempDir.
     (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.14.2/jackson-databind-2.14.2.jar", "--output", (concat tempDir "jackson-databind-2.14.2.jar")] "" ".");
     (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.14.2/jackson-annotations-2.14.2.jar", "--output", (concat tempDir "jackson-annotations-2.14.2.jar")] "" ".");
     (sysRunCommand ["curl", "https://repo1.maven.org/maven2/org/ow2/asm/asm/9.4/asm-9.4.jar", "--output", (concat tempDir "asm-9.4.jar")] "" ".");
+    (sysRunCommand ["curl", "https://repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.10/scala-library-2.13.10.jar", "--output", (concat tempDir "scala-library-2.13.10.jar")] "" ".");
     ()
 
 let compileJava = lam outDir. lam jarPath.
     let cfmClass = (concat stdlibLoc "/jvm/codegen/ClassfileMaker.java") in
     let jsonParserClass = (concat stdlibLoc "/jvm/codegen/Parser.java") in
+    let cwfClass = (concat stdlibLoc "/jvm/codegen/ClassWriterF.java") in
     let classpath = (join [jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
-    (sysRunCommand ["javac", "-cp", classpath, cfmClass, jsonParserClass, "-d", outDir] "" ".");
+    (sysRunCommand ["javac", "-cp", classpath, cfmClass, jsonParserClass, cwfClass, "-d", outDir] "" ".");
     ()
 
 let modifyMainClassForTest = lam prog.
@@ -671,7 +638,7 @@ let testJVM = lam ast.
     let jarPath = (concat jvmTmpPath "jar/") in
     let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
     (sysRunCommand ["java", "-cp", (join [jvmTmpPath, "out/", classpath]), "codegen/Parser", json] "" jvmTmpPath);
-    let results = sysRunCommand ["java", "pkg.Main"] "" jvmTmpPath in
+    let results = sysRunCommand ["java", "-classpath", ":jar/scala-library-2.13.10.jar", "pkg.Main"] "" jvmTmpPath in
     sysDeleteDir json;
     results.stdout
 
@@ -748,9 +715,6 @@ utest (
                         match_ (var_ "tree") (pcon_ "Node" (ptuple_ [pcon_ "Leaf" (pvar_ "l"), pcon_ "Leaf" (pvar_ "r")])) (addi_ (var_ "l") (var_ "r")) (never_)]))
     )
 with "3" in
-
--- never
-utest testJVM never_ with "java.lang.Exception: Never Reached!" in
 
 -- random
 utest testJVM (bindall_ [ulet_ "a" (randSetSeed_ (int_ 1000)), randIntU_ (int_ 1) (int_ 10)]) with "5" in

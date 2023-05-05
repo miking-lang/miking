@@ -1,6 +1,7 @@
 package codegen;
 
-import org.objectweb.asm.ClassWriter;
+import codegen.ClassWriterF;
+
 import org.objectweb.asm.MethodVisitor;
 import static org.objectweb.asm.Opcodes.*;
 import org.objectweb.asm.Label;
@@ -12,13 +13,16 @@ import java.util.*;
 import javax.swing.event.CaretEvent;
 import javax.swing.text.FieldView;
 
+//import org.objectweb.asm.util.CheckClassAdapter;
+
 import com.fasterxml.jackson.databind.*;
 
 class ClassfileMaker {
-    ClassWriter cw;
+    //CheckClassAdapter cw;
+    ClassWriterF cw;
     JsonNode classes;
     JsonNode interfaces;
-    ClassWriter iw;
+    ClassWriterF iw;
     String pkg;
     Map<String, Label> labels;
 
@@ -29,7 +33,7 @@ class ClassfileMaker {
         interfaces = json.get("interfaces");
         
         for (int i = 0; i < interfaces.size(); i++) {
-            iw = new ClassWriter(ClassWriter.COMPUTE_MAXS+ClassWriter.COMPUTE_FRAMES);
+            iw = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
             JsonNode interf = interfaces.get(i);
 
             iw.visit(V1_5, ACC_PUBLIC + ACC_ABSTRACT + ACC_INTERFACE, pkg + interf.get("name").asText(), null, "java/lang/Object", null);
@@ -53,18 +57,29 @@ class ClassfileMaker {
             if (!c.get("implements").asText().equals("")) {
                 interf = new String[] {c.get("implements").asText()};
             }
-            cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+            
+            cw = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
+            //cw = new CheckClassAdapter(cv);
             // version, access, name, signature, superName, String[] interfaces
             cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, pkg + c.get("name").asText(), null, "java/lang/Object", interf);
 
             if (c.get("name").asText().equals("Main")) {
                 cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, "random", "Ljava/util/Random;", null, null).visitEnd();
+                cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, "symbol", "L"+pkg+"GenSym;", null, null).visitEnd();
+                cw.visitField(ACC_PUBLIC+ACC_STATIC, "argv", "Lscala/collection/immutable/Vector;", null, null).visitEnd();
                 MethodVisitor mv = cw.visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
                 mv.visitCode();
                 mv.visitTypeInsn(NEW, "java/util/Random");
                 mv.visitInsn(DUP);
                 mv.visitMethodInsn(INVOKESPECIAL, "java/util/Random", "<init>", "()V", false);
-                mv.visitFieldInsn(PUTSTATIC, "pkg/Main", "random", "Ljava/util/Random;");
+                mv.visitFieldInsn(PUTSTATIC, pkg+"Main", "random", "Ljava/util/Random;");
+                mv.visitTypeInsn(NEW, pkg+"GenSym");
+                mv.visitInsn(DUP);
+                mv.visitMethodInsn(INVOKESPECIAL, pkg+"GenSym", "<init>", "()V", false);
+                mv.visitInsn(DUP);
+                mv.visitLdcInsn(0);
+                mv.visitFieldInsn(PUTFIELD, pkg+"GenSym", "symbolInt", "I");
+                mv.visitFieldInsn(PUTSTATIC, pkg+"Main", "symbol", "L"+pkg+"GenSym;");
                 mv.visitInsn(RETURN);
                 mv.visitMaxs(0, 0);
                 mv.visitEnd();
@@ -99,7 +114,7 @@ class ClassfileMaker {
     }
 
     // write to package file
-    private void outputClassfile(String className, ClassWriter cw) {
+    private void outputClassfile(String className, ClassWriterF cw) {
         try {
             File dir = new File(pkg);
             File file = new File(dir, className + ".class");
@@ -118,19 +133,27 @@ class ClassfileMaker {
         JsonNode constructor = classes.get(i).get("constructor");
         MethodVisitor mv = cw.visitMethod(ACC_PUBLIC, "<init>", constructor.get("descriptor").asText(), null, null);
         JsonNode bytecodes = constructor.get("bytecode");
+        mv.visitCode();
         emitBytecode(mv, bytecodes);
+        mv.visitMaxs(0, 0);
         mv.visitEnd();
     }
 
     private void createMethod(JsonNode function) {
         int access = ACC_PUBLIC;
         if (function.get("name").asText().equals("main")) {
-            access = access + ACC_STATIC;
+              access = access + ACC_STATIC;
         }
+            
         // do something about accessors!
         // access, name, descriptor, signature, isInterface
         MethodVisitor mv = cw.visitMethod(access, function.get("name").asText(), function.get("descriptor").asText(), null, null);
+        if (function.get("name").asText() == "toString") { 
+            mv.visitAnnotation("descriptor", true);
+        }
+        mv.visitCode();
         emitBytecode(mv, function.get("bytecode"));
+        mv.visitMaxs(0, 0);
         mv.visitEnd();
     }
 
@@ -140,10 +163,23 @@ class ClassfileMaker {
 
     // make a map for faster lookup
     private void emitBytecode(MethodVisitor mv, JsonNode bytecodes) {
-        mv.visitCode();
         for (int i = 0; i < bytecodes.size(); i++) {
             JsonNode bytecode = bytecodes.get(i);
             switch (bytecode.get("type").asText()) {
+                case "trycatch":
+                    Label start = new Label();
+                    Label end = new Label();
+                    Label handler = new Label();
+                    Label endend = new Label();
+                    mv.visitTryCatchBlock(start, end, handler, null);
+                    mv.visitLabel(start);
+                    emitBytecode(mv, bytecode.get("try"));
+                    mv.visitLabel(end);
+                    mv.visitJumpInsn(GOTO, endend);
+                    mv.visitLabel(handler);
+                    mv.visitInsn(POP);
+                    emitBytecode(mv, bytecode.get("catch"));
+                    mv.visitLabel(endend);
                 case "arg_float":
                     switch (bytecode.get("instr").asText()) { 
                         case "LDC":
@@ -163,6 +199,12 @@ class ClassfileMaker {
                         case "ALOAD":
                             mv.visitVarInsn(ALOAD, bytecode.get("nr").asInt());
                             break;
+                        case "ILOAD":
+                            mv.visitVarInsn(ILOAD, bytecode.get("nr").asInt());
+                            break;
+                        case "ISTORE":
+                            mv.visitVarInsn(ISTORE, bytecode.get("nr").asInt());
+                            break;
                         case "ASTORE":
                             mv.visitVarInsn(ASTORE, bytecode.get("nr").asInt());
                             break;
@@ -175,6 +217,21 @@ class ClassfileMaker {
                     break;
                 case "empty":
                     switch (bytecode.get("instr").asText()) {
+                        case "L2D":
+                            mv.visitInsn(L2D);
+                            break;
+                        case "L2I":
+                            mv.visitInsn(L2I);
+                            break;
+                        case "I2L":
+                            mv.visitInsn(I2L);
+                            break;
+                        case "D2L":
+                            mv.visitInsn(D2L);
+                            break;
+                        case "IADD":
+                            mv.visitInsn(IADD);
+                            break;
                         case "RETURN":
                             mv.visitInsn(RETURN);
                             break;
@@ -204,6 +261,12 @@ class ClassfileMaker {
                             break;
                         case "DMUL":
                             mv.visitInsn(DMUL);
+                            break;
+                        case "POP2":
+                            mv.visitInsn(POP2);
+                            break;
+                        case "ARRAYLENGTH":
+                            mv.visitInsn(ARRAYLENGTH);
                             break;
                         case "DDIV":
                             mv.visitInsn(DDIV);
@@ -264,6 +327,9 @@ class ClassfileMaker {
                         case "PUTFIELD":
                             mv.visitFieldInsn(PUTFIELD, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
                             break;
+                        case "PUTSTATIC":
+                            mv.visitFieldInsn(PUTSTATIC, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
+                            break;
                         case "INVOKEVIRTUAL":
                             mv.visitMethodInsn(INVOKEVIRTUAL, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText(), false);
                             break;
@@ -317,9 +383,13 @@ class ClassfileMaker {
                             createLabel(constant);
                             mv.visitJumpInsn(IFGE, labels.get(constant));
                             break;
-                        case "IF_ICMPEQ":
+                        case "IF_ICMPGE":
                             createLabel(constant);
                             mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
+                            break;
+                        case "IF_ICMPEQ":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IF_ICMPGE, labels.get(constant));
                             break;
                         case "IF_ICMPNE":
                             createLabel(constant);
@@ -343,6 +413,5 @@ class ClassfileMaker {
                     System.out.println("Unknown type: " + bytecode.get("type").asText());
             }
         }
-        mv.visitMaxs(0, 0);
     }
 }
