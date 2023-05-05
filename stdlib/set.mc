@@ -79,6 +79,9 @@ lam s.
 let setAny: all a. (a -> Bool) -> Set a -> Bool = lam p. lam s.
   mapFoldWithKey (lam acc. lam v. lam. if acc then acc else p v) false s
 
+-- `setOfKeys m` returns the keys of `m` as a set.
+let setOfKeys : all k. all v. Map k v -> Set k = lam m. mapMap (lam. ()) m
+
 mexpr
 
 let s = setEmpty subi in
@@ -146,5 +149,10 @@ utest setAny (eqi 0) s5 with false in
 
 let sFold = setOfSeq subi [1,2,3,4,5] in
 utest setFold (lam acc. lam v. addi v acc) 0 sFold with 15 in
+
+let m = mapFromSeq subi [(1, "1"), (2, "2"), (3, "3")] in
+let s = setOfSeq subi [1, 2, 3] in
+
+utest setEq (setOfKeys m) s with true in
 
 ()
