@@ -679,7 +679,10 @@ lang LetTypeCheck =
     let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
     let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, t.tyAnnot)) in
     -- Unify the annotated type with the inferred one and generalize
-    unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
+    (match tyTm body with TyAll _ then
+      unify newEnv [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body)
+     else
+      unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body));
     (if env.disableRecordPolymorphism then
       disableRecordGeneralize env.currentLvl tyBody else ());
     match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
@@ -721,8 +724,11 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     let typeCheckBinding = lam b: RecLetBinding.
       let body = typeCheckExpr recLetEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
       -- Unify the inferred type of the body with the annotated one
-      match stripTyAll b.tyBody with (_, stripped) in
-      unify recLetEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+      (match tyTm body with TyAll _ then
+        unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body)
+       else
+        match stripTyAll b.tyBody with (_, stripped) in
+        unify recLetEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body));
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
