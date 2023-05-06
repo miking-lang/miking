@@ -127,9 +127,9 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexType
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
       match getVarSortStringCode indent env idstr t.sort with (env, str) in
-      let flexPrefix =
-        match t.sort with !RecordVar _ then "_" else "" in
-      (env, concat flexPrefix str)
+      let monoPrefix =
+        match t.sort with MonoVar _ then "_" else "" in
+      (env, concat monoPrefix str)
     case Link ty then
       getTypeStringCode indent env ty
     end
@@ -483,7 +483,7 @@ lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
   | TyFlex t ->
     switch deref t.contents
     case Unbound {ident = n, level = k, sort = s} then
-      if gti k lvl then
+      if lti lvl k then
         -- Var is free, generalize
         let f = lam vars. lam ty.
           concat vars (genBase lvl vs bound ty) in
@@ -648,7 +648,8 @@ lang FlexDisableGeneralize = Unify
     switch deref t.contents
     case Unbound r then
       sfold_VarSort_Type (lam. lam ty. weakenTyFlex lvl ty) () r.sort;
-      modref t.contents (Unbound {r with level = lvl})
+      let sort = match r.sort with PolyVar _ then MonoVar () else r.sort in
+      modref t.contents (Unbound {r with level = mini lvl r.level, sort = sort})
     case Link tyL then
       weakenTyFlex lvl tyL
     end
