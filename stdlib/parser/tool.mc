@@ -201,7 +201,6 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         result.ok (TyVar
           { ident = x.name.v
           , info = x.info
-          , level = 0
           })
       case RecordExpr (x & {fields = []}) then
         result.ok (tyWithInfo x.info tyunit_)

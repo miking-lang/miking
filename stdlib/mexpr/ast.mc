@@ -1409,22 +1409,17 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
--- A Level denotes the nesting level of the let that a type variable is introduced by
-type Level = Int
-
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
   | TyVar  {info     : Info,
-            ident    : Name,
-            level    : Level}
+            ident    : Name}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
 
   sem infoTy =
   | TyVar t -> t.info
-
 end
 
 lang VarSortAst

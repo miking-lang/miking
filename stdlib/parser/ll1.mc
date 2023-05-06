@@ -130,6 +130,7 @@ lang ParserConcrete = ParserBase
   | TokParsed t -> TokSpec (tokToRepr t)
   | LitParsed x -> LitSpec {lit = x.lit}
 
+  sem parsedMatchesSpec : all state. all prodLabel. SpecSymbol Token TokenRepr state prodLabel -> ParsedSymbol Token -> Bool
   sem parsedMatchesSpec spec =
   | TokParsed t -> match spec with TokSpec repr then tokKindEq repr t else false
   | LitParsed x -> match spec with LitSpec s then eqString x.lit s.lit else false

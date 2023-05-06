@@ -510,7 +510,7 @@ lang LambdaLiftTyAlls = MExprAst
   sem eraseUnboundTypesType bound =
   | TyVar t ->
     match mapLookup t.ident bound with Some (_, info) then
-      TyVar {t with info = info, level = 1}
+      TyVar {t with info = info}
     else TyUnknown {info = t.info}
   | ty -> smap_Type_Type (eraseUnboundTypesType bound) ty
 
