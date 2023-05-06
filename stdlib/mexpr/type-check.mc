@@ -460,45 +460,56 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
     end
 
   -- Generalize the unification variables in `ty' introduced at least at level `lvl`.
-  sem gen (lvl : Level) =
+  -- Return the generalized type and the sequence of variables quantified.
+  -- Any rigid variable in the map `vs' encountered will also be quantified over.
+  sem gen (lvl : Level) (vs : Map Name VarSort) =
   | ty ->
-    match genBase lvl ty with (vars, genTy) in
-    -- OPT(aathn, 2022-06-29): It might be better to use a set for `vars`
-    -- to avoid having to check for duplicates here.
-    let vars = distinct (lam x. lam y. nameEq x.0 y.0) vars in
-    let iteratee = lam v : (Name, VarSort). lam ty.
+    let vars = distinct (lam x. lam y. nameEq x.0 y.0)
+                 (genBase lvl vs (setEmpty nameCmp) ty) in
+    let iteratee = lam v. lam ty1.
       let sort = match v.1 with MonoVar _ then PolyVar () else v.1 in
-      TyAll {info = infoTy genTy, ident = v.0, ty = ty, sort = sort}
+      TyAll {info = infoTy ty, ident = v.0, ty = ty1, sort = sort}
     in
-    foldr iteratee genTy vars
+    (foldr iteratee ty vars, vars)
 
-  sem genBase (lvl : Level) =
+  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
   | ty ->
-    smapAccumL_Type_Type (lam vars1. lam ty.
-      match genBase lvl ty with (vars2, ty) in
-      (concat vars1 vars2, ty)
-    ) [] ty
+    sfold_Type_Type (lam vars. lam ty.
+      concat vars (genBase lvl vs bound ty)) [] ty
 end
 
 lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
-  sem genBase (lvl : Level) =
-  | TyFlex t & ty ->
+  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  | TyFlex t ->
     switch deref t.contents
     case Unbound {ident = n, level = k, sort = s} then
       if gti k lvl then
         -- Var is free, generalize
-        let f = lam vars1. lam ty.
-          match genBase lvl ty with (vars2, ty) in
-          (concat vars1 vars2, ty)
-        in
-        match smapAccumL_VarSort_Type f [] s with (vars, sort) in
-        (snoc vars (n, sort), TyVar {info = t.info, ident = n})
+        let f = lam vars. lam ty.
+          concat vars (genBase lvl vs bound ty) in
+        let vars = sfold_VarSort_Type f [] s in
+        modref t.contents (Link (TyVar {info = t.info, ident = n}));
+        snoc vars (n, s)
       else
         -- Var is bound in previous let, don't generalize
-        ([], ty)
+        []
     case Link ty then
-      genBase lvl ty
+      genBase lvl vs bound ty
     end
+end
+
+lang VarTypeGeneralize = Generalize + VarTypeAst
+  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  | TyVar t ->
+    match mapLookup t.ident vs with Some sort then
+      if not (setMem t.ident bound) then [(t.ident, sort)]
+      else []
+    else []
+end
+
+lang AllTypeGeneralize = Generalize + AllTypeAst
+  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  | TyAll t -> genBase lvl vs (setInsert t.ident bound) t.ty
 end
 
 -- The default cases handle all other constructors!
@@ -671,7 +682,7 @@ lang LetTypeCheck =
     unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
     (if env.disableRecordPolymorphism then
       disableRecordGeneralize env.currentLvl tyBody else ());
-    let tyBody = gen env.currentLvl tyBody in
+    match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
                 , tyBody = tyBody
@@ -695,18 +706,23 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyBody = substituteUnknown (PolyVar ()) newLvl t.info b.tyAnnot in
-      (_insertVar b.ident tyBody acc, {b with tyBody = tyBody})
+      match stripTyAll tyBody with (vars, _) in
+      let newEnv = _insertVar b.ident tyBody acc.0 in
+      let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+      ((newEnv, newTyVars), {b with tyBody = tyBody})
     in
-    match mapAccumL recLetEnvIteratee env t.bindings with (recLetEnv, bindings) in
+    match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
+      with ((newEnv, tyVars), bindings) in
+    let newTyVarEnv =
+      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) newEnv.tyVarEnv tyVars in
+    let recLetEnv = {newEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
-      match stripTyAll b.tyBody with (vars, stripped) in
-      let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
-      let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVars} in
-      let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
+      let body = typeCheckExpr recLetEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
       -- Unify the inferred type of the body with the annotated one
-      unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+      match stripTyAll b.tyBody with (_, stripped) in
+      unify recLetEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
@@ -715,10 +731,12 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     let envIteratee = lam acc. lam b : RecLetBinding.
       (if env.disableRecordPolymorphism then
         disableRecordGeneralize env.currentLvl b.tyBody else ());
-      let tyBody = gen env.currentLvl b.tyBody in
-      (_insertVar b.ident tyBody acc, {b with tyBody = tyBody})
+      match gen env.currentLvl acc.1 b.tyBody with (tyBody, vars) in
+      let newEnv = _insertVar b.ident tyBody acc.0 in
+      let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+      ((newEnv, newTyVars), {b with tyBody = tyBody})
     in
-    match mapAccumL envIteratee env bindings with (env, bindings) in
+    match mapAccumL envIteratee (env, tyVars) bindings with ((env, _), bindings) in
     let inexpr = typeCheckExpr env t.inexpr in
     TmRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}
 end
@@ -943,7 +961,7 @@ lang MExprTypeCheck =
   CharTypeUnify + TensorTypeUnify + RecordTypeUnify +
 
   -- Type generalization
-  FlexTypeGeneralize +
+  FlexTypeGeneralize + VarTypeGeneralize + AllTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
