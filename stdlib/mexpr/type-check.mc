@@ -19,13 +19,14 @@ include "mexpr/annotate.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/builtin.mc"
+include "mexpr/cmp.mc"
 include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
-include "mexpr/cmp.mc"
+include "mexpr/value.mc"
 
 -- A level denotes the nesting level of the let that a type variable is introduced by
 type Level = Int
@@ -155,7 +156,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = MExprAst + FlexTypeAst + PrettyPrint + Cmp + FlexTypeCmp
+lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -670,23 +671,31 @@ lang FlexDisableGeneralize = Unify
 end
 
 lang LetTypeCheck =
-  TypeCheck + LetAst + LamAst + FunTypeAst + SubstituteUnknown + FlexDisableGeneralize
+  TypeCheck + LetAst + LamAst + FunTypeAst + SubstituteUnknown +
+  IsValue + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let tyBody = substituteUnknown (PolyVar ()) newLvl t.info t.tyAnnot in
-    match stripTyAll tyBody with (vars, stripped) in
-    let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
-    let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
-    let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, t.tyAnnot)) in
-    -- Unify the annotated type with the inferred one and generalize
-    (match tyTm body with TyAll _ then
-      unify newEnv [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body)
-     else
-      unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body));
-    (if env.disableRecordPolymorphism then
-      disableRecordGeneralize env.currentLvl tyBody else ());
-    match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
+    match
+      if isValue (GVal ()) t.body then
+        match stripTyAll tyBody with (vars, stripped) in
+        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
+        let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, stripped)) in
+        -- Unify the annotated type with the inferred one and generalize
+        unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
+        (if env.disableRecordPolymorphism then
+          disableRecordGeneralize env.currentLvl tyBody else ());
+        match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
+        (body, tyBody)
+      else
+        let body = typeCheckExpr {env with currentLvl = newLvl} t.body in
+        unify env [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body);
+        -- TODO(aathn, 2023-05-07): Relax value restriction
+        weakenTyFlex env.currentLvl tyBody;
+        (body, tyBody)
+      with (body, tyBody) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body
                 , tyBody = tyBody
@@ -694,7 +703,6 @@ lang LetTypeCheck =
                 , ty = tyTm inexpr}
 
   sem propagateTyAnnot =
-  | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
   | (TmLam l, TyArrow a) ->
     let body = propagateTyAnnot (l.body, a.to) in
     let ty = optionGetOr a.from (sremoveUnknown l.tyAnnot) in
@@ -710,35 +718,46 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyBody = substituteUnknown (PolyVar ()) newLvl t.info b.tyAnnot in
-      match stripTyAll tyBody with (vars, _) in
+      let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
       ((newEnv, newTyVars), {b with tyBody = tyBody})
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
-      with ((newEnv, tyVars), bindings) in
+      with ((recLetEnv, tyVars), bindings) in
     let newTyVarEnv =
-      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) newEnv.tyVarEnv tyVars in
-    let recLetEnv = {newEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyVarEnv tyVars in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
-      let body = typeCheckExpr recLetEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
-      -- Unify the inferred type of the body with the annotated one
-      (match tyTm body with TyAll _ then
-        unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body)
-       else
-        match stripTyAll b.tyBody with (_, stripped) in
-        unify recLetEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body));
+      let body =
+        if isValue (GVal ()) b.body then
+          let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+          match stripTyAll b.tyBody with (_, stripped) in
+          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, stripped)) in
+          -- Unify the inferred type of the body with the annotated one
+          unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+          body
+        else
+          let body = typeCheckExpr {recLetEnv with currentLvl = newLvl} b.body in
+          unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body);
+          body
+      in
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
 
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : RecLetBinding.
-      (if env.disableRecordPolymorphism then
-        disableRecordGeneralize env.currentLvl b.tyBody else ());
-      match gen env.currentLvl acc.1 b.tyBody with (tyBody, vars) in
+      match
+        if isValue (GVal ()) b.body then
+          (if env.disableRecordPolymorphism then
+            disableRecordGeneralize env.currentLvl b.tyBody else ());
+          gen env.currentLvl acc.1 b.tyBody
+        else
+          weakenTyFlex env.currentLvl b.tyBody;
+          (b.tyBody, [])
+        with (tyBody, vars) in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
       ((newEnv, newTyVars), {b with tyBody = tyBody})
@@ -979,6 +998,9 @@ lang MExprTypeCheck =
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
   BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck +
+
+  -- Value restriction
+  MExprIsValue +
 
   -- Pretty Printing
   FlexTypePrettyPrint
