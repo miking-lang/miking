@@ -234,7 +234,9 @@ utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
 utest mapIsEmpty m with true in
 
-utest mapLookup 1 m with None () using optionEq eqString in
+utest mapLookup 1 m with None () using optionEq eqi in
+
+let m = mapEmpty subi in
 
 let m = mapInsert 1 "1" m in
 let m = mapInsert 2 "2" m in

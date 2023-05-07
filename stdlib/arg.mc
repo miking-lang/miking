@@ -99,7 +99,8 @@ let argHelpOptions_general : all a.
 
 
 
-let argHelpOptions = argHelpOptions_general argHelpOptions_defaults
+let argHelpOptions = lam opConfig.
+  argHelpOptions_general argHelpOptions_defaults opConfig
 
 
 -- argument value conversion --

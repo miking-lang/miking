@@ -192,8 +192,8 @@ lam f. lam tcreate. lam shape. lam seq.
 
 let tensorOfSeqExn
   : all a. ([Int] -> ([Int] -> a) -> Tensor[a]) -> [Int] -> [a] -> Tensor[a] =
-  tensorOfSeqOrElse
-    (lam. error "Empty seq in tensorOfSeqExn")
+  lam x.
+  tensorOfSeqOrElse (lam. error "Empty seq in tensorOfSeqExn") x
 
 -- Construct a sequence from a rank 1 tensor `t`.
 let tensorToSeqOrElse : all a. (() -> [a]) -> Tensor[a] -> [a] =
@@ -205,8 +205,8 @@ lam f. lam t.
                then Some (tensorGetExn t [i], addi i 1) else None ())
             0
 
-let tensorToSeqExn : all a. Tensor[a] -> [a] =
-  tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
+let tensorToSeqExn : all a. Tensor[a] -> [a] = lam x.
+  tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn") x
 
 utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [0] [])
 with []
@@ -257,8 +257,8 @@ lam f. lam g. lam t1. lam t2.
       v1
   else f ()
 
-let tensorMapExn =
-  tensorMapOrElse (lam. error "Tensor shape mismatch in tensorMap")
+let tensorMapExn = lam x.
+  tensorMapOrElse (lam. error "Tensor shape mismatch in tensorMap") x
 
 utest
   let t1 = tensorCreateDense [0] (lam. []) in
@@ -337,8 +337,8 @@ lam f. lam g. lam t1. lam t2.
       v1
   else f ()
 
-let tensorMapiExn =
-  tensorMapiOrElse (lam. error "Tensor shape mismatch in tensorMap")
+let tensorMapiExn = lam x.
+  tensorMapiOrElse (lam. error "Tensor shape mismatch in tensorMap") x
 
 utest
   let t1 = tensorOfSeqExn tensorCreateDense [2, 2]

@@ -34,7 +34,8 @@ let _hashmapBucketIdx : all k. all v. Int -> HashMap k v -> Int =
   modi (absi hash) (length hm.buckets)
 
 -- 'hashmapEmpty' is an empty hashmap with a default number of buckets.
-let hashmapEmpty : all k. all v. HashMap k v =
+-- TODO(aathn, 2023-05-07): Relax value restriction
+let hashmapEmpty : all k. all v. () -> HashMap k v = lam.
   {buckets = make _hashmapDefaultBucketCount [],
    nelems = 0}
 
@@ -227,24 +228,24 @@ mexpr
 
 let empty = hashmapEmpty in
 let traits = hashmapStrTraits in
-let mem = hashmapMem traits in
-let any = hashmapAny traits in
-let forAll = hashmapAll traits in
-let map = hashmapMap traits in
-let filter = hashmapFilter traits in
-let filterKeys = hashmapFilterKeys traits in
-let filterValues = hashmapFilterValues traits in
-let lookupOrElse = hashmapLookupOrElse traits in
-let lookupOr = hashmapLookupOr traits in
-let lookup = hashmapLookup traits in
-let lookupPred = hashmapLookupPred traits in
-let count = hashmapCount traits in
-let insert = hashmapInsert traits in
-let remove = hashmapRemove traits in
-let keys = hashmapKeys traits in
-let values = hashmapValues traits in
+let mem = lam x. hashmapMem traits x in
+let any = lam x. hashmapAny traits x in
+let forAll = lam x. hashmapAll traits x in
+let map = lam x. hashmapMap traits x in
+let filter = lam x. hashmapFilter traits x in
+let filterKeys = lam x. hashmapFilterKeys traits x in
+let filterValues = lam x. hashmapFilterValues traits x in
+let lookupOrElse = lam x. hashmapLookupOrElse traits x in
+let lookupOr = lam x. hashmapLookupOr traits x in
+let lookup = lam x. hashmapLookup traits x in
+let lookupPred = lam x. hashmapLookupPred traits x in
+let count = lam x. hashmapCount traits x in
+let insert = lam x. hashmapInsert traits x in
+let remove = lam x. hashmapRemove traits x in
+let keys = lam x. hashmapKeys traits x in
+let values = lam x. hashmapValues traits x in
 
-let m = empty in
+let m = empty () in
 
 utest count m with 0 in
 utest mem "foo" m with false in
@@ -343,7 +344,7 @@ recursive let populate = lam hm. lam i.
     populate (insert key i hm)
              (addi i 1)
 in
-let m = populate (empty) 0 in
+let m = populate (empty ()) 0 in
 
 utest count m with n in
 

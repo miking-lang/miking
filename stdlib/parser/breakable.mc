@@ -638,7 +638,8 @@ let _popFromQueue
         modref queue.lowestIndex (length (deref queue.values));
         None ()
     in work values
-let _cachedQueue = _newQueue ()
+-- TODO(aathn, 2023-05-09): Change the queue implementation and remove this unsafeCoerce
+let _cachedQueue : all self. BreakableQueue self = unsafeCoerce (_newQueue ())
 
 let _addLOpen
   : all self. all rstyle. Config self
@@ -965,7 +966,7 @@ let breakableReportAmbiguities
           let r = match _rightChildrenP p with Some children
             then resolveTopMany rIdxs (_includesRight parAllowed) children
             else [[]] in
-          let f = info.toTok selfImportant in
+          let f = lam x. info.toTok selfImportant x in
           let here = _callWithSelfP #frozen"f" p in
           seqLiftA2 (lam l. lam r. join [l, here, r]) l r
       let resolveTopMany : [Int] -> Bool -> [PermanentNode self] -> [[tokish]] =

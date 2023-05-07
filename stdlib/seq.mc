@@ -192,7 +192,8 @@ let zipWithIndex : all a. all b. all c. (Int -> a -> b -> c) -> [a] -> [b] -> [c
 utest zipWithIndex (lam i. lam a. lam b. addi i (addi a b)) [100, 200, 300] [4000, 5000, 6000]
       with [4100, 5201, 6302] using eqSeq eqi
 
-let zip : all a. all b. [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
+let zip : all a. all b. [a] -> [b] -> [(a, b)] =
+  lam l1. lam l2. zipWith (lam x. lam y. (x, y)) l1 l2
 
 -- Accumulating maps
 let mapAccumL : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
@@ -219,7 +220,7 @@ utest mapAccumR (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
 with ([1,2,3], [1,2,3])
 
 let unzip : all a. all b. [(a, b)] -> ([a], [b]) =
-  mapAccumL (lam l. lam p : (a, b). (snoc l p.0, p.1)) []
+  lam l. mapAccumL (lam l. lam p : (a, b). (snoc l p.0, p.1)) [] l
 
 -- `iter2 f seq1 seq1` iterativly applies `f` to the first
 -- min(`length seq1`, `length seq2`) elements in `seq1` and `seq2`.

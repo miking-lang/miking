@@ -62,11 +62,12 @@ con ResultErr : all w. all e. all a.
   { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
 
 let _emptyMap
-  : all x. Map Symbol x
+  : all x. () -> Map Symbol x
+  -- TODO(aathn, 2022-01-21): Relax value restriction
   -- TODO(vipa, 2022-01-21): This assumes that sym2hash is a perfect
   -- hash, i.e., that there are no collisions, which is presently true
   -- but might not be in the future.
-  = mapEmpty (lam l. lam r. subi (sym2hash l) (sym2hash r))
+  = lam. mapEmpty (lam l. lam r. subi (sym2hash l) (sym2hash r))
 
 -- Produce a value to pattern match on from a result, for when we want
 -- to report errors and warnings instead of perform additional
@@ -92,7 +93,7 @@ let _prepTest
 -- as `pure` or `return`.
 let _ok
   : all w. all e. all a. a -> Result w e a
-  = lam value. ResultOk { warnings = _emptyMap, value = value }
+  = lam value. ResultOk { warnings = _emptyMap (), value = value }
 
 utest _prepTest (_ok 1) with ([], Right 1)
 
@@ -103,7 +104,7 @@ let _err
   : all w. all e. all a. e -> Result w e a
   = lam err.
     let id = gensym () in
-    ResultErr { warnings = _emptyMap, errors = mapInsert id err _emptyMap }
+    ResultErr { warnings = _emptyMap (), errors = mapInsert id err (_emptyMap ()) }
 
 utest match _prepTest (_err 1) with ([], Left [1]) then true else false
 with true
@@ -115,7 +116,7 @@ let _warn
   : all w. all e. w -> Result w e ()
   = lam warn.
     let id = gensym () in
-    ResultOk { warnings = mapInsert id warn _emptyMap, value = () }
+    ResultOk { warnings = mapInsert id warn (_emptyMap ()), value = () }
 
 utest _prepTest (_warn 'a') with (['a'], Right ())
 
@@ -135,7 +136,7 @@ let _asError
   : all w. all e. all a. Result w e a -> { warnings : Map Symbol w, errors : Map Symbol e }
   = lam start.
     switch start
-    case ResultOk r then { warnings = r.warnings, errors = _emptyMap }
+    case ResultOk r then { warnings = r.warnings, errors = (_emptyMap ()) }
     case ResultErr r then r
     end
 
@@ -216,7 +217,7 @@ with ()
 -- in the second input (if neither input has an error).
 let _withAnnotations
   : all w. all e. all a. all b. Result w e a -> Result w e b -> Result w e b
-  = _map2 (lam. lam b. b)
+  = lam r1. lam r2. _map2 (lam. lam b. b) r1 r2
 
 -- Perform a computation on the values present in three `Results` if
 -- none is an error. Preserves the errors and warnings of all inputs.
@@ -332,7 +333,7 @@ let _mapM
             workErr (_mergeErrors acc (_asError (f a))) list
           else
             ResultErr acc
-    in workOk _emptyMap []
+    in workOk (_emptyMap ()) []
 
 utest
   -- Multiply by 10, error 0 on negative, warn 'a' on 0.
@@ -378,7 +379,7 @@ let _mapAccumLM : all w. all e. all a. all b. all c.
             workErr (_mergeErrors accErr (_asError c)) a seq
           else
             (a, ResultErr accErr)
-    in workOK _emptyMap (acc, [])
+    in workOK (_emptyMap ()) (acc, [])
 
 utest
   -- Multiply by 10 and reverse the sequence. Produces error 0 on negative and

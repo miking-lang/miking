@@ -196,28 +196,28 @@ with [(0, 0), (1, 1), (2, 2)] in
 -- The rest of the file contains various test computions with sequences
 
 -- map
-let map = fix (lam map. lam f. lam seq.
+let map = lam l. fix (lam map. lam f. lam seq.
   if eqi (length seq) 0 then []
   else cons (f (head seq)) (map f (tail seq))
-) in
+) l in
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
 utest map (lam x. addi x 1) [] with [] using eqSeq eqi in
 
 -- foldl
-let foldl = fix (lam foldl. lam f. lam acc. lam seq.
+let foldl = lam l. fix (lam foldl. lam f. lam acc. lam seq.
     if eqi (length seq) 0 then acc
     else foldl f (f acc (head seq)) (tail seq)
-) in
+) l in
 utest foldl addi 0 [1,2,3,4,5] with 15 in
 utest foldl addi 0 [] with 0 in
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16] in
 
 -- zipwith
-let zipwith = fix (lam zipwith. lam f. lam seq1. lam seq2.
+let zipwith = lam l. fix (lam zipwith. lam f. lam seq1. lam seq2.
     if eqi (length seq1) 0 then []
     else if eqi (length seq2) 0 then []
     else cons (f (head seq1) (head seq2)) (zipwith f (tail seq1) (tail seq2))
-) in
+) l in
 utest zipwith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6] in
 utest zipwith (zipwith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] in
