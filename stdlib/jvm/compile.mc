@@ -518,6 +518,75 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                         [label_ endLabel]],
                     classes = concat thnEnv.classes elsEnv.classes }
         else never 
+    | PatSeqTot { pats = pats } ->
+    -- fråga Lars om man kan anta att alla pats i PatSeqTot är PatNamed
+        let endLabel = createName_ "end" in 
+        let elsLabel = createName_ "els" in
+        let len = length pats in
+        let patEnv = foldli 
+            (lam acc. lam i. lam pat. 
+                match pat with PatNamed { ident = ident } then 
+                    match ident with PName name then 
+                        { acc with 
+                            bytecode = concat 
+                                acc.bytecode 
+                                [dup_,
+                                ldcInt_ i,
+                                invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                                astore_ acc.localVars],
+                            localVars = addi 1 acc.localVars,
+                            vars = mapInsert name acc.localVars acc.vars }
+                    else never
+                else never) 
+            { env with 
+                bytecode = concat 
+                    env.bytecode 
+                    [dup_,
+                    invokevirtual_ seq_T "length" "()I", 
+                    ldcInt_ len,
+                    ificmpne_ elsLabel] }
+            pats in
+        let thnEnv = toJSONExpr { patEnv with bytecode = snoc patEnv.bytecode pop_ } thn in
+        let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [] } els in
+        { thnEnv with 
+            bytecode = foldl concat 
+                thnEnv.bytecode 
+                [[goto_ endLabel,
+                label_ elsLabel,
+                pop_],
+                elsEnv.bytecode,
+                [label_ endLabel]],
+            classes = concat thnEnv.classes elsEnv.classes }
+    | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix } ->
+        -- fråga Lars om man kan anta att detta är en längdcheck
+        let endLabel = createName_ "end" in
+        let elsLabel = createName_ "els" in
+        let len = addi (length prefix) (length postfix) in
+        let prefixEnv = foldli 
+            (lam acc. lam i. lam pat. 
+                match pat with PatNamed { ident = ident } then 
+                    match ident with PWildcard _ then 
+                        acc
+                    else never
+                else never) 
+            { env with 
+                bytecode = concat 
+                    env.bytecode 
+                    [dup_,
+                    invokevirtual_ seq_T "length" "()I", 
+                    ldcInt_ len,
+                    ificmplt_ elsLabel] }
+            prefix in
+        let thnEnv = toJSONExpr { prefixEnv with bytecode = snoc prefixEnv.bytecode pop_ } thn in
+        let elsEnv = toJSONExpr { prefixEnv with bytecode = [], classes = [] } els in
+        { thnEnv with 
+            bytecode = foldl concat 
+                thnEnv.bytecode
+                [[goto_ endLabel,
+                label_ elsLabel,
+                pop_],
+                elsEnv.bytecode,
+                [label_ endLabel]] }
     | a -> 
         (printLn "Unknown Pat"); 
         env 
