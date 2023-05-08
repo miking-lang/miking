@@ -789,13 +789,16 @@ utest liftLambdas liftMatchEls with expected using eqExpr in
 let conAppLift = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
-  conapp_ "Leaf" fapp
+  ulet_ "x" (conapp_ "Leaf" fapp),
+  unit_
 ]) in
 let expected = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   fdef,
-  conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in
+  ulet_ "x" (conapp_ "Leaf" (app_ (var_ "f") (int_ 1))),
+  unit_
+]) in
 
 -- NOTE(larshum, 2022-09-15): Compare using eqString as equality of TmType has
 -- not been implemented.

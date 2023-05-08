@@ -28,13 +28,13 @@ include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/value.mc"
 
--- A level denotes the nesting level of the let that a type variable is introduced by
+-- A level denotes the level in the AST that a type was introduced at
 type Level = Int
 
 type TCEnv = {
   varEnv: Map Name Type,
   conEnv: Map Name Type,
-  tyVarEnv: Map Name Level,
+  tyScopes: Map Name Level,
   currentLvl: Level,
   disableRecordPolymorphism: Bool
 }
@@ -42,7 +42,9 @@ type TCEnv = {
 let _tcEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyVarEnv = mapEmpty nameCmp,
+  tyScopes =
+  mapFromSeq nameCmp
+    (map (lam t: (String, [String]). (nameNoSym t.0, 0)) builtinTypes),
 
   currentLvl = 0,
   disableRecordPolymorphism = true
@@ -60,7 +62,7 @@ type UnifyEnv = {
   foundType: Type,  -- The inferred type of the expression
   lhsName: Type,  -- The currently examined left-hand subtype, before resolving aliases
   rhsName: Type,  -- The currently examined right-hand subtype, before resolving aliases
-  tyVarEnv: Map Name Level,  -- The free type variables in scope and their levels
+  tyScopes: Map Name Level,  -- The free types in scope and their levels
   names: BiNameMap  -- The bijective correspondence between bound variables in scope
 }
 
@@ -170,7 +172,7 @@ lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
       foundType = ty2,
       lhsName = ty1,
       rhsName = ty2,
-      tyVarEnv = tcEnv.tyVarEnv
+      tyScopes = tcEnv.tyScopes
     } in
     unifyTypes env (ty1, ty2)
 
@@ -194,12 +196,16 @@ lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   -- - If `tv' is unified with a free type variable, ensure no capture occurs
   sem unifyCheck : UnifyEnv -> FlexVarRec -> Type -> ()
   sem unifyCheck env tv =
-  | ty -> unifyCheckBase env (setEmpty nameCmp) tv ty
+  | ty -> unifyCheckType env (setEmpty nameCmp) tv ty
+
+  sem unifyCheckType : UnifyEnv -> Set Name -> FlexVarRec -> Type -> ()
+  sem unifyCheckType env boundVars tv =
+  | ty -> unifyCheckBase env boundVars tv (unwrapType ty)
 
   sem unifyCheckBase : UnifyEnv -> Set Name -> FlexVarRec -> Type -> ()
   sem unifyCheckBase env boundVars tv =
   | ty ->
-    sfold_Type_Type (lam. lam ty. unifyCheckBase env boundVars tv ty) () ty
+    sfold_Type_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () ty
 
   sem unificationError : UnifyEnv -> ()
   sem unificationError =
@@ -269,7 +275,7 @@ lang VarTypeUnify = Unify + VarTypeAst
   sem unifyCheckBase env boundVars tv =
   | TyVar t ->
     if not (setMem t.ident boundVars) then
-      match optionMap (lti tv.level) (mapLookup t.ident env.tyVarEnv) with
+      match optionMap (lti tv.level) (mapLookup t.ident env.tyScopes) with
         !Some false then
         let msg = join [
           "* Encountered a type variable escaping its scope: ",
@@ -300,8 +306,8 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
       unifyCheck env r1 ty2;
       unifyCheck env r2 ty1;
       let updated =
-        Unbound {r1 with level = mini r1.level r2.level
-                , sort = addSorts env (r1.sort, r2.sort)} in
+        Unbound {r1 with level = mini r1.level r2.level,
+                         sort = addSorts env (r1.sort, r2.sort)} in
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
@@ -319,29 +325,25 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
 
   sem unifyCheckBase env boundVars tv =
   | TyFlex t ->
-    switch deref t.contents
-    case Unbound r then
-      if nameEq r.ident tv.ident then
-        let msg = join [
-          "* Encountered a type occurring within itself.\n",
-          "* Recursive types are only permitted using data constructors.\n",
-          "* When type checking the expression\n"
-        ] in
-        errorSingle env.info msg
-      else
-        let sort =
-          match (tv.sort, r.sort) with (MonoVar _, PolyVar _) then MonoVar ()
-          else
-            sfold_VarSort_Type
-              (lam. lam ty. unifyCheckBase env boundVars tv ty) () r.sort;
-            r.sort
-        in
-        let updated = Unbound {r with level = mini r.level tv.level,
-                                      sort  = sort} in
-        modref t.contents updated
-    case Link ty then
-      unifyCheckBase env boundVars tv ty
-    end
+    match deref t.contents with Unbound r in
+    if nameEq r.ident tv.ident then
+      let msg = join [
+        "* Encountered a type occurring within itself.\n",
+        "* Recursive types are only permitted using data constructors.\n",
+        "* When type checking the expression\n"
+      ] in
+      errorSingle env.info msg
+    else
+      let sort =
+        match (tv.sort, r.sort) with (MonoVar _, PolyVar _) then MonoVar ()
+        else
+          sfold_VarSort_Type
+            (lam. lam ty. unifyCheckType env boundVars tv ty) () r.sort;
+          r.sort
+      in
+      let updated = Unbound {r with level = mini r.level tv.level,
+                                    sort  = sort} in
+      modref t.contents updated
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
@@ -372,14 +374,14 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
   | TyAll t ->
     match tv.sort with MonoVar _ then
       let msg = join [
-        "* Encountered a function parameter used in a polymorphic position.\n",
-        "* Perhaps you need a type annotation for the parameter?\n",
+        "* Encountered a monomorphic type used in a polymorphic position.\n",
+        "* Perhaps you encountered the value restriction, or need a type annotation?\n",
         "* When type checking the expression\n"
       ] in
       errorSingle env.info msg
     else
-      sfold_VarSort_Type (lam. lam ty. unifyCheckBase env boundVars tv ty) () t.sort;
-      unifyCheckBase env (setInsert t.ident boundVars) tv t.ty
+      sfold_VarSort_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () t.sort;
+      unifyCheckType env (setInsert t.ident boundVars) tv t.ty
 end
 
 lang ConTypeUnify = Unify + ConTypeAst
@@ -387,6 +389,18 @@ lang ConTypeUnify = Unify + ConTypeAst
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then ()
     else unificationError env
+
+  sem unifyCheckBase env boundVars tv =
+  | TyCon t ->
+    match optionMap (lti tv.level) (mapLookup t.ident env.tyScopes) with
+      !Some false then
+      let msg = join [
+        "* Encountered a type constructor escaping its scope: ",
+        nameGetStr t.ident, "\n",
+        "* When type checking the expression\n"
+      ] in
+      errorSingle env.info msg
+    else ()
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -680,8 +694,8 @@ lang LetTypeCheck =
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
-        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
-        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
+        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyScopes vars in
+        let newEnv = {env with currentLvl = newLvl, tyScopes = newTyVars} in
         let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, stripped)) in
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
@@ -725,14 +739,14 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
       with ((recLetEnv, tyVars), bindings) in
-    let newTyVarEnv =
-      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyVarEnv tyVars in
+    let newScopes =
+      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyScopes tyVars in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
       let body =
         if isValue (GVal ()) b.body then
-          let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+          let newEnv = {recLetEnv with currentLvl = newLvl, tyScopes = newScopes} in
           match stripTyAll b.tyBody with (_, stripped) in
           let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, stripped)) in
           -- Unify the inferred type of the body with the annotated one
@@ -816,11 +830,25 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
-lang TypeTypeCheck = TypeCheck + TypeAst + SubstituteUnknown
+lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + SubstituteUnknown
   sem typeCheckExpr env =
   | TmType t ->
     checkUnknown t.info t.tyIdent;
-    let inexpr = typeCheckExpr env t.inexpr in
+    let isAlias =
+      match t.tyIdent with TyVariant r then not (mapIsEmpty r.constrs) else true in
+    let inexpr =
+      if isAlias then
+        -- NOTE(aathn, 2023-05-08): Aliases are treated as the
+        -- underlying type and do not need to be scope checked.
+        typeCheckExpr env t.inexpr
+      else
+        let newLvl = addi 1 env.currentLvl in
+        let newScopes = mapInsert t.ident newLvl env.tyScopes in
+        let inexpr =
+          typeCheckExpr {env with currentLvl = newLvl, tyScopes = newScopes} t.inexpr in
+        unify env [t.info, infoTm inexpr] (newvar env.currentLvl t.info) (tyTm inexpr);
+        inexpr
+    in
     TmType {t with inexpr = inexpr, ty = tyTm inexpr}
 end
 
