@@ -221,7 +221,6 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else never)
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
-        let to = ty in 
         let arg = toJSONExpr { env with bytecode = [], classes = [] } rhs in
         let fun = toJSONExpr env lhs in 
         { fun with 
@@ -246,7 +245,14 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) object_LT) in
         let nextClass = createName_ "Func" in
-        let bodyEnv = toJSONExpr { env with bytecode = [], name = className, nextClass = nextClass, fieldVars = mapInsert ident newField env.fieldVars, vars = mapInsert ident 1 (mapEmpty nameCmp) } body in 
+        let bodyEnv = toJSONExpr 
+            { env with 
+                bytecode = [], 
+                name = className, 
+                nextClass = nextClass, 
+                fieldVars = mapInsert ident newField env.fieldVars, 
+                vars = mapInsert ident 1 (mapEmpty nameCmp),
+                localVars = 2 } body in 
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
             let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) object_LT, putfield_ (concat pkg_ nextClass) (getNameField x) object_LT]) fields) in
@@ -310,21 +316,39 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 classes = concat env.classes insertBytecode.classes, 
                 recordMap = mapUnion insertBytecode.recordMap rm }
     | TmRecLets { bindings = bindings, inexpr = inexpr } -> 
+        let e = foldl 
+                        (lam acc. lam expr. 
+                            match expr with { ident = ident, body = body } then 
+                                match body with TmLam _ then 
+                                    (mapInsert ident acc.1 acc.0, createName_ "Func", mapInsert ident acc.1 acc.2)
+                                else 
+                                    acc
+                            else never)
+                        (env.globalFuncMap, env.nextClass, mapEmpty nameCmp) 
+                        bindings in
+        let nextClass = e.1 in
+        let funcMap = e.0 in
+        let funcBindings = e.2 in
         let b = foldl 
                     (lam acc. lam el. 
-                        match el with { ident = ident, body = body } then 
-                            let bodyEnv = toJSONExpr acc body in
-                            { bodyEnv with 
-                                    bytecode = concat acc.bytecode [astore_ acc.localVars],
-                                    localVars = addi acc.localVars 1,
-                                    vars = mapInsert ident acc.localVars acc.vars,
-                                    classes = concat acc.classes bodyEnv.classes }
+                        match el with { ident = ident, body = body } then
+                            match body with TmLam _ then 
+                                match mapLookup ident funcBindings with Some funcName then 
+                                    toJSONExpr { acc with nextClass = funcName } body
+                                else never
+                            else 
+                                let bodyEnv = toJSONExpr acc body in
+                                { bodyEnv with 
+                                        bytecode = concat acc.bytecode [astore_ acc.localVars],
+                                        localVars = addi acc.localVars 1,
+                                        vars = mapInsert ident acc.localVars acc.vars,
+                                        classes = concat acc.classes bodyEnv.classes }
                         else 
                             never)
-                    env
+                    { env with 
+                        globalFuncMap = funcMap }
                     bindings in
         toJSONExpr b inexpr
-    | TmSeq _ -> (printLn "TmSeq"); env
     | TmRecordUpdate _ -> (printLn "TmRecordUpdate"); env
     | TmType _ -> (printLn "TmType: Should be gone"); env
     | TmConDef _ -> (printLn "TmConDef: Should be gone"); env
