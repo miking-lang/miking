@@ -210,6 +210,14 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             initClass_ "Foldr$"
         else match val with CSubsequence _ then
             initClass_ "SubSequence$"
+        else match val with CNull _ then
+            initClass_ "Null"
+        else match val with CModRef _ then
+            initClass_ "ModRef$"
+        else match val with CFileWrite _ then
+            initClass_ "FileWrite$"
+        else match val with CDPrint _ then
+            initClass_ "DPrint"
         else never)
         in { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
