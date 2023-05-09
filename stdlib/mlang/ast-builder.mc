@@ -69,6 +69,7 @@ let decl_nsynn_ = use MLangAst in
   lam n. lam ndefs: [(Name, Type)].
   DeclSyn {ident = n,
            defs = map (lam t. {ident = t.0, tyIdent = t.1}) ndefs,
+           params = [],
            info = NoInfo {}}
 
 let decl_nsyn_ = use MLangAst in
