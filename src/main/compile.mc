@@ -75,7 +75,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
        printLn (use TyAnnotFull in annotateMExpr ast) else ());
     endPhaseStats log "typecheck" ast;
 
-    let ast = compileSpecialize ast in
+    match compileSpecialize ast with (hasPEval, nameMap, ast) in
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
     -- operations.
@@ -105,6 +105,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
         , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
         , compileOcaml = ocamlCompile options sourcePath
+        , compileOcamlPEval = if hasPEval then Some (ocamlCompilePEval options sourcePath)
+                              else None ()
+        , nameMap = if hasPEval then Some nameMap else None ()
         } in
     endPhaseStats log "backend" ast;
     res

@@ -62,6 +62,36 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
   p.cleanup ();
   destinationFile
 
+let ocamlCompilePEval : Options -> String -> [String] -> [String] -> String ->
+                        String -> String =
+  lam options. lam sourcePath. lam libs. lam clibs.
+  lam ocamlProg. lam entryPointId.
+  let compileOptions : CompileOptions =
+    let opts = {{
+        defaultCompileOptions
+        with libraries = libs }
+        with cLibraries = clibs }
+    in
+    if options.disableOptimizations then
+      { opts with optimize = false}
+    else opts
+  in
+
+  let p : CompileResult = ocamlCompilePEval compileOptions ocamlProg entryPointId in
+  let destinationFile =
+    switch options.output
+    case None () then filenameWithoutExtension (filename sourcePath)
+    case Some o then o
+    end
+  in
+  sysMoveFile p.binaryPath destinationFile;
+  sysChmodWriteAccessFile destinationFile;
+  -- Move cmi file next to binary, s.t. they can be referenced when
+  -- compiling the plugin during execution of binary
+  (map (lam x. sysMoveFile x (filename x); x) p.keepFiles);
+  p.cleanup ();
+  destinationFile
+
 let compile : Options -> String -> () = lam options. lam file.
   use MCoreLiteCompile in
   let ast = parseParseMCoreFile {
