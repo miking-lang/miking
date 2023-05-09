@@ -100,12 +100,17 @@ lang OCamlPrettyPrint =
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
 
+  -- Allow starting from some pp environment supplied by caller
+  sem pprintOcamlTopsAndEnv env =
+  | tops ->
+    let env = collectTopNames env tops in
+    match mapAccumL pprintTop env tops with (env, tops) then
+      (env, strJoin "\n" tops)
+    else never
+
   sem pprintOcamlTops =
   | tops ->
-    let env = collectTopNames tops in
-    match mapAccumL pprintTop env tops with (_, tops) then
-      strJoin "\n" tops
-    else never
+    match pprintOcamlTopsAndEnv (pprintEnvEmpty) tops with (_, tops) in tops
 
   sem _nameSymString (esc : Name -> Name) =
   | name ->
@@ -308,10 +313,15 @@ lang OCamlPrettyPrint =
   | CBootParserGetPat _ -> intrinsicOpBootparser "getPat"
   | CBootParserGetInfo _ -> intrinsicOpBootparser "getInfo"
 
-  sem collectTopNames =
+  sem collectTopNames env =
   | tops ->
     let maybeAdd = lam name. lam str. lam env: PprintEnv.
       match mapLookup str env.strings with Some _ then
+        env
+      else
+      -- If we have supplied some fixed strings for certain names
+      -- beforehand, we use those instead.
+      match mapLookup name env.nameMap with Some _ then
         env
       else
         {{env with nameMap = mapInsert name str env.nameMap}
@@ -329,7 +339,7 @@ lang OCamlPrettyPrint =
         env
       end
     in
-    foldr f pprintEnvEmpty tops
+    foldr f env tops
 
   sem pprintTop (env : PprintEnv) =
   | OTopTypeDecl t ->

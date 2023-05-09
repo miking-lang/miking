@@ -70,7 +70,16 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   sem generateTops (env : GenerateEnv) =
   | t ->
     match generateTopsAndExpr env t with (tops, expr) then
-      snoc tops (OTopExpr { expr = expr })
+      -- Last expr should be let bound
+      match last tops with OTopLet{ident = mainId, tyBody = ty} in
+      -- The last expression is let-bound, e.g. expr => let main = lam. expr
+      -- This is done such that other files may invoke the program,
+      -- though the default is set as below. i.e main (). 
+      let app = TmApp {lhs = nvar_ mainId, rhs=unit_, info = NoInfo (),
+                       ty = tyarrow_ (tyunit_) ty} in
+      let app = generate env app in
+      let tops = snoc tops (OTopExpr {expr= app}) in
+      (mainId, tops)
     else never
 
   sem generateTopsAndExpr (env : GenerateEnv) =
@@ -93,7 +102,10 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
     let later : ([Top], Expr) = generateTopsAndExpr env t.inexpr in
     (cons here later.0, later.1)
   | t ->
-    ([], generate env t)
+    let b = generate env t in
+    let wrap = ulam_ "" b in
+    let last = OTopLet {ident=nameSym "main", tyBody = tyTm t, body=wrap} in
+    ([last], b)
 
   sem convertExternalBody (env : GenerateEnv) (ident : Name) (tyIdent : Type) =
   | info ->

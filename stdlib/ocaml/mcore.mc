@@ -3,9 +3,12 @@
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/ast-builder.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "sys.mc"
+include "seq.mc"
+include "string.mc"
 
 type Hooks a =
   { debugTypeAnnot : Expr -> ()
@@ -13,6 +16,8 @@ type Hooks a =
   , exitBefore : () -> ()
   , postprocessOcamlTops : [Top] -> [Top]
   , compileOcaml : [String] -> [String] -> String -> a
+  , compileOcamlPEval : Option ([String] -> [String] -> String -> String -> a)
+  , nameMap : Option (Map Name String)
   }
 
 let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
@@ -22,6 +27,8 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
   , compileOcaml = compileOcaml
+  , compileOcamlPEval = None ()
+  , nameMap = None ()
   }
 
 lang MCoreCompileLang =
@@ -57,7 +64,12 @@ lang MCoreCompileLang =
     let env : GenerateEnv =
       chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
     in
-    let exprTops = generateTops env ast in
+    match generateTops env ast with (entryPointId, exprTops) in
+    -- If we are partially evaluating then we'll call into program.ml
+    -- from elsewhere
+    let exprTops = match hooks.compileOcamlPEval with Some _
+      then init exprTops else exprTops in
+
     let exprTops = hooks.postprocessOcamlTops exprTops in
 
     -- List OCaml packages availible on the system.
@@ -68,10 +80,15 @@ lang MCoreCompileLang =
 
     -- Collect external library dependencies
     match collectLibraries env.exts syslibs with (libs, clibs) in
-    let ocamlProg =
-      use OCamlPrettyPrint in
-      pprintOcamlTops (concat typeTops exprTops)
-    in
+
+    let ppEnv = pprintEnvEmpty in
+    let ppEnv = match hooks.nameMap with Some n
+      then {ppEnv with nameMap = n, strings = setOfSeq cmpString (mapValues n)}
+      else ppEnv in
+
+    match use OCamlPrettyPrint in
+        pprintOcamlTopsAndEnv ppEnv (concat typeTops exprTops)
+    with (pprintEnv, ocamlProg) in
 
     -- If option --debug-generate, print the AST
     hooks.debugGenerate ocamlProg;
@@ -80,7 +97,12 @@ lang MCoreCompileLang =
     hooks.exitBefore ();
 
     -- Compile OCaml AST
-    hooks.compileOcaml libs clibs ocamlProg
+    match hooks.compileOcamlPEval with Some comp then
+      use OCamlPrettyPrint in
+      match pprintVarName pprintEnv entryPointId with (_, entryPointName) in
+      comp libs clibs ocamlProg entryPointName
+    -- Normal compilation
+    else hooks.compileOcaml libs clibs ocamlProg
 
   -- Compiles and runs the given MCore AST, using the given standard in and
   -- program arguments. The return value is a record containing the return code,
@@ -100,4 +122,62 @@ lang MCoreCompileLang =
       res
     in
     compileMCore ast (mkEmptyHooks compileOcaml)
+
+  sem compileMCorePlugin : all a. String -> Map Name String -> Expr -> Hooks a -> a
+  sem compileMCorePlugin pluginId nameMap ast =
+  | hooks ->
+    let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
+
+    -- If option --debug-type-annot, then pretty-print the AST
+    hooks.debugTypeAnnot ast;
+
+    match typeLift ast with (env, ast) in
+    match generateTypeDecls env with (env, typeTops) in
+    let env : GenerateEnv =
+      chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+    in
+    match generateTops env ast with (entryPointId, exprTops) in
+    -- The main function will be called later separately
+    let exprTops = init exprTops in
+    let exprTops = hooks.postprocessOcamlTops exprTops in
+
+    -- List OCaml packages availible on the system.
+    let syslibs =
+      setOfSeq cmpString
+        (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
+    in
+
+    -- Collect external library dependencies
+    match collectLibraries env.exts syslibs with (libs, clibs) in
+    let ppEnv = pprintEnvEmpty in
+    let ppEnv = {ppEnv with nameMap = nameMap,
+                            strings = setOfSeq cmpString (mapValues nameMap)} in
+    match use OCamlPrettyPrint in
+        pprintOcamlTopsAndEnv (ppEnv) (concat typeTops exprTops)
+    with (pprintEnv, ocamlProg) in
+
+    match use OCamlPrettyPrint in
+      pprintVarName pprintEnv entryPointId with (_, entryPointName) in
+
+    let ocamlProg = join ["
+    open Boot.Inter
+    open Program
+
+    module M:Boot.Inter.PLUG =
+    struct ",
+    ocamlProg,
+    "
+    let residual () = Obj.magic (", entryPointName, " ())
+    end
+    let () = Boot.Inter.register \"", pluginId, "\" (module M:Boot.Inter.PLUG)"] in
+
+    -- If option --debug-generate, print the AST
+    hooks.debugGenerate ocamlProg;
+
+    -- If option --exit-before, exit the program
+    hooks.exitBefore ();
+
+    -- Compile OCaml AST
+    hooks.compileOcaml libs clibs ocamlProg
 end
