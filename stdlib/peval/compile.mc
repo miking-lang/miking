@@ -12,7 +12,6 @@ include "set.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/type-annot.mc"
-include "pmexpr/extract.mc"
 
 
 lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
@@ -89,13 +88,17 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       -- Would be better if extract had an option where this can be done,
       -- That is, instead of just storing one Expr, store one Expr per Name
       let idset = setOfSeq nameCmp [id] in
-      let extracted = extractAccelerateTerms idset ast in
+      let extracted = extractSpecializeTerms idset ast in
 --      match eliminateDummyParameter solutions pevalData extracted
 --      with (_, extracted) in
       mapInsert id extracted m) (mapEmpty nameCmp) pevalIds in
 
+    let t1 = wallTimeMs () in
     -- Bulk of the time taken
     match includeSpecializeDeps ast with ast in
+    let t2 = wallTimeMs () in
+    printLn "include";
+    printLn (float2string (subf t2 t1));
     -- Find the names of the functions and constructors needed later
     let names = createNames ast in
 
@@ -190,6 +193,14 @@ let unknownTyRec = preprocess (bindall_ [
     ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 3)]))
 ]) in
 
+-- TyRec with one unliftable field
+
+let t = tyrecord_ [("a", tyint_), ("b", tyunknown_)] in
+let unknownTyRecUnknown = preprocess (bindall_ [
+    ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
+    ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 3)]))
+]) in
+
 -- TyArrow
 
 let t = tyarrow_ (tyint_) (tyint_) in
@@ -236,7 +247,13 @@ let distinctCalls = preprocess (bindall_ [
     app_ (var_ "p") (int_ 4)
 ]) in
 
-match compileSpecialize unknownTySeq with ast in
+let t1 = wallTimeMs () in
+match compileSpecialize unknownTyRecUnknown with ast in
+let t2 = wallTimeMs () in
+printLn "tot";
+printLn (float2string (subf t2 t1));
+
+printLn (mexprToString ast);
 
 let ast = typeAnnot ast in
 

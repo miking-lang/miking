@@ -3,11 +3,7 @@ include "peval/ast.mc"
 include "peval/utils.mc"
 
 include "mexpr/ast-builder.mc"
-include "mexpr/eval.mc"
 include "mexpr/cfa.mc" -- only for freevariables
-include "mexpr/symbolize.mc"
-
-include "mexpr/mexpr.mc"
 
 include "list.mc"
 include "seq.mc"
@@ -97,7 +93,7 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   | TyUnknown _ | TyArrow _ ->
     None ()
   | t ->
-    match liftViaTypeH names varName t with Some t then Some (args, t)
+    match liftViaTypeH args names varName t with Some t then Some t
     else None ()
 
   sem _liftBasicType : SpecializeNames -> Name -> Type -> Option Expr
@@ -116,19 +112,20 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     let bindings = [("val", const)] in
     Some (createConAppExpr names tmConstName bindings typ (NoInfo ()))
 
-  sem liftViaTypeH : SpecializeNames -> Name -> Type -> Option Expr
-  sem liftViaTypeH names varName =
+  sem liftViaTypeH : SpecializeArgs -> SpecializeNames -> Name -> Type -> Option LiftResult
+  sem liftViaTypeH args names varName =
   | t & (TyInt _ | TyFloat _ | TyChar _ | TyBool _) ->
-    _liftBasicType names varName t
+    match _liftBasicType names varName t with Some res in
+    Some (args, res)
   | TySeq {info = info, ty = ty} & typ->
     let sq = TmVar {ident = varName, ty=typ, info = NoInfo (),
                     frozen = false} in
     let mapArg = nameSym "x" in
-    match liftViaTypeH names mapArg ty with Some t then
-        let convert = (nlam_ mapArg ty t) in
-        let tms = map_ convert sq in
-        let bindings = [("tms", tms)] in
-        Some (createConAppExpr names tmSeqName bindings ty info)
+    match liftViaTypeH args names mapArg ty with Some (args, t) then
+      let convert = (nlam_ mapArg ty t) in
+      let tms = map_ convert sq in
+      let bindings = [("tms", tms)] in
+      Some (args, createConAppExpr names tmSeqName bindings ty info)
     else None () -- We don't know how to lift element types
   | TyRecord {info=info, fields=fields} & typ ->
     -- fields : Map SID Type
@@ -144,28 +141,33 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
 
     -- Create one lifted type per record entry
     -- Should probably do it only once per type, and map id -> typelift
-    let newBindings = map (lam x.
-      {str = x.str, lift = liftViaTypeH names x.name x.ty}) seqFields in
+    match mapAccumL (lam args. lam x.
+      match
+        match liftViaTypeH args names x.name x.ty with Some t then t
+        else let v =
+          TmVar {ident = x.name, ty = x.ty, info = NoInfo (), frozen=false} in
+          liftExpr names args v
+      with (args, lift) in (args, {str = x.str, lift = lift})) args seqFields
+    with (args, newBindings) in
 
     -- If we cannot lift any of the present types
-    if any (lam x. optionIsNone x.lift) newBindings then None ()
-    else
+--    if any (lam x. optionIsNone x.lift) newBindings then None ()
+--    let toVar = lam x: {str : String, lift: Option a}.
+--    else
     let s = seq_ (map (lam x.
-      match x.lift with Some t in
-        utuple_ [liftStringToSID names x.str, t]) newBindings)
+      utuple_ [liftStringToSID names x.str, x.lift]) newBindings)
     in
     -- "subi" = cmpSID
     let thn = appf2_ (nvar_ (mapFromSeqName names)) (uconst_ (CSubi ())) s in
     let matchbind = matchex_ rec pat thn in
     let bindings = [("bindings", matchbind)] in
-    Some (createConAppExpr names tmRecName bindings typ info)
-  | t -> None ()
+    Some (args, createConAppExpr names tmRecName bindings typ info)
+  | _ -> None ()
 
   sem liftExpr names args =
   | TmVar {ident = id, ty = typ, info=info, frozen=frozen} & t->
     match liftName args id with (args, lIdent) in
-    let bindings = [("ident", lIdent),
-                    ("frozen", bool_ frozen)] in
+    let bindings = [("ident", lIdent), ("frozen", bool_ frozen)] in
     (args, createConAppExpr names tmVarName bindings typ info)
 
   sem tyConInfo =
@@ -179,13 +181,16 @@ lang SpecializeLiftRecord = SpecializeLift + RecordAst
   | TmRecord {bindings = binds, info=info, ty = typ} ->
     match unzip (mapToSeq binds) with (ids, exprs) in
     match liftExprAccum names args exprs with (args, lExprs) in
-    let binSeq = zip ids lExprs in
-    let exprs =  seq_ (map (lam x. utuple_
-      [liftStringToSID names (sidToString x.0), x.1]) binSeq) in
+
+    let liftedBindings = seq_
+      (zipWith (lam id. lam lExpr.
+        let lId = liftStringToSID names (sidToString id) in
+        utuple_ [lId, lExpr]) ids lExprs) in
+
     let lhs = nvar_ (mapFromSeqName names) in
     -- cmpSID = subi
     let rhs = (uconst_ (CSubi ())) in
-    let bin = appf2_ lhs rhs exprs in
+    let bin = appf2_ lhs rhs liftedBindings in
     let bindings = [("bindings", bin)] in
     (args, createConAppExpr names tmRecName bindings typ info)
 end
@@ -237,8 +242,9 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
 
   sem liftConsList : SpecializeNames -> List Expr -> Expr
   sem liftConsList names =
-  | Cons (a, b) -> let bindings = [("0", a), ("1", liftConsList names b)] in
-        createConApp names listConsName bindings
+  | Cons (a, b) ->
+    let bindings = [("0", a), ("1", liftConsList names b)] in
+    createConApp names listConsName bindings
   | Nil _ -> createConApp names listNilName []
 
   sem buildEnv : SpecializeNames -> SpecializeArgs -> Map Name Type -> LiftResult

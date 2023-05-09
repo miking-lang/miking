@@ -1,6 +1,5 @@
 include "peval/include.mc"
 include "peval/ast.mc"
-
 include "mexpr/utils.mc"
 include "mexpr/ast.mc"
 
@@ -24,9 +23,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   }
 
   sem initArgs : Map Name Expr -> SpecializeArgs
-  sem initArgs = | emap -> {extractMap = emap,
-                            idMapping = (mapEmpty nameCmp)
-                            }
+  sem initArgs = | emap ->
+    {extractMap = emap,
+     idMapping = (mapEmpty nameCmp)}
 
   sem updateIds : SpecializeArgs -> Map Name Name -> SpecializeArgs
   sem updateIds args = | idm -> {args with idMapping =idm}
@@ -62,8 +61,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
 
   sem getName : Map String Name -> String -> Name
   sem getName names =
-  | str -> match mapLookup str names with Some n then n
-           else error (concat "Could not find: " str)
+  | str ->
+    match mapLookup str names with Some n then n
+    else error (concat "Could not find: " str)
 
   sem pevalName : SpecializeNames -> Name
   sem pevalName = | names -> getName (names.pevalNames) "pevalWithEnv"

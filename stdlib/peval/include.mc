@@ -167,9 +167,12 @@ lang SpecializeInclude = MExprUtestGenerate
   sem includeSpecializeDeps : Expr -> Expr
   sem includeSpecializeDeps =
   | ast ->
+    let t1 = wallTimeMs () in
     let ff = loadRuntime includesLoc in
-    let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast
-              (ff) in
+    let t2 = wallTimeMs () in
+    printLn "Loadruntime";
+    printLn (float2string (subf t2 t1));
+    let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast ff in
     resetStore ();
     eliminateDuplicateCode ast
 end

@@ -2,24 +2,19 @@
 -- Try to reuse accelerate/extract.mc as much as possible
 -- Difference here is that the 'extracted' nodes must be put together
 
-
 include "pmexpr/extract.mc"
 include "peval/ast.mc"
-include "mexpr/cmp.mc"
+
+--include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
-
 include "stringid.mc"
 
 
 lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
-
-  -- pmexpr/extract.mc
-  -- Very similar funcitons to pmexpr's extract.
-
 
   type SpecializeData = AccelerateData
 
@@ -40,6 +35,10 @@ lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
   | TmSpecialize t -> replaceTermWithLet env {e=t.e, info = t.info, ty = tyTm t.e}
   | t -> smapAccumL_Expr_Expr addIdentifierToSpecializeTermsH env t
 
+  sem extractSpecializeTerms : Set Name -> Expr -> Expr
+  sem extractSpecializeTerms ids =
+  | ast -> extractAst ids ast
+
 end
 
 lang TestLang =
@@ -49,9 +48,8 @@ end
 
 mexpr
 
--- The below tests are very essentially identical to the ones in stdlid/pmexpr/extract.mc
+-- The below tests are essentially identical to the ones in stdlib/pmexpr/extract.mc
 -- But adapted to use 'peval' instead
-
 
 use TestLang in
 
@@ -180,7 +178,6 @@ let expected = preprocess (bindall_ [
 
 match extractPeval pevalVar with (m, ast) in
 -- utest ast with extracted using eqExpr in
-
 
 let inRecursiveBinding = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
