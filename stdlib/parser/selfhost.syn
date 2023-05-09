@@ -16,6 +16,7 @@ token String {
   repr = StringRepr {},
   constructor = StringTok,
   fragment = StringTokenParser,
+  ty = String,
 }
 token LIdent {
   repr = LIdentRepr {},
@@ -53,7 +54,7 @@ token {fragment = LineCommentParser,}
 token {fragment = MultilineCommentParser,}
 token {fragment = WhitespaceParser,}
 
-prod File: File =
+prod Lang: File =
   "language" name:UIdent
   decls:Decl+
 

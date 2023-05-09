@@ -108,7 +108,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   let filename = args.synFile in
   let destinationFile = args.outFile in
   let content = readFile filename in
-  match parseSelfhostExn filename content with File {decls = decls, name = {v = langName}} in
+  match parseSelfhostExn filename content with LangFile {decls = decls, name = {v = langName}} in
 
   let simpleHighlight
     : Info -> String
