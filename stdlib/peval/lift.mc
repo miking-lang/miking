@@ -100,8 +100,7 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   | TyUnknown _ | TyArrow _ ->
     None ()
   | t ->
-    match liftViaTypeH args names varName t with Some t then Some t
-    else None ()
+    liftViaTypeH args names varName t
 
   sem _liftBasicType : SpecializeNames -> Name -> Type -> Option Expr
   sem _liftBasicType names varName =
