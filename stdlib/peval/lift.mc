@@ -45,8 +45,9 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
     createConApp names getName bindings
 
   sem createConAppExpr names getName bindings typ =
-  | info -> let bindings = cons ("ty", liftType names typ) bindings in
-            createConAppInfo names getName bindings info
+  | info ->
+    let bindings = cons ("ty", liftType names typ) bindings in
+    createConAppInfo names getName bindings info
 
   sem liftType : SpecializeNames -> Type -> Expr
   sem liftType names =
@@ -56,7 +57,7 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
   sem tyConInfo : Type -> (Info, (SpecializeNames -> Name))
   sem tyConInfo =
   -- Right now, the partial evaluator is not able to propagate types,
-  -- so we need to type check the AST later anyhow. Hence, use unknown type.
+  -- so we need to type check the AST later anyhow.
   | t -> (NoInfo(), tyUnknownName)
 
   sem liftName : SpecializeArgs -> Name -> LiftResult
@@ -115,7 +116,6 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     let bindings = [("val", const)] in
     Some (createConAppExpr names tmConstName bindings typ (NoInfo ()))
 
-  -- NOTE(adamssonj, 2023-03-31): Can't do anything with e.g. [(a->b)] aon
   sem liftViaTypeH : SpecializeNames -> Name -> Type -> Option Expr
   sem liftViaTypeH names varName =
   | t & (TyInt _ | TyFloat _ | TyChar _ | TyBool _) ->
@@ -224,7 +224,6 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
   | TyChar {info = info} -> (info, tyCharName)
 
 end
-
 
 lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
 
@@ -390,13 +389,9 @@ let _setup =
   (ast, names)
 
 mexpr
--- Possible idea:
---  Define expr:
---      1. Lift expr
---      2. Pprint lifted expr, and then interpret it. Is this = to interpreting expr directly?
+
 use TestLang in
---
----- Dummy AST s.t. constructors and funcs can be included and used in lifting
+
 match _setup with (_, names) in
 
 let args = initArgs (mapEmpty nameCmp) in
