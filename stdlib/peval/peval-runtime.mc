@@ -4,6 +4,7 @@ include "map.mc"
 include "stringid.mc"
 include "mexpr/pprint.mc"
 include "peval/peval.mc"
+include "peval/jit.mc"
 include "name.mc"
 
 let toString = use MExprPrettyPrint in
@@ -14,7 +15,8 @@ let pevalWithEnv = lam env. lam ast.
 
 mexpr
 
-unsafeCoerce (pevalWithEnv, mapFromSeq, stringToSid, mapMapWithKey, toString, _noSymbol)
+unsafeCoerce (pevalWithEnv, mapFromSeq, stringToSid, mapMapWithKey, toString, _noSymbol,
+ jitCompile, nameCmp)
 
 -- Want to make sure that:
 --  * All constructors for Expr, Type and Pat are included

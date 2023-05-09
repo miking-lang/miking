@@ -175,14 +175,17 @@ let includeTyConsNames =
 let includeOtherFuncs =
   ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "_noSymbol"]
 
-let includeSpecializeNames = ["pevalWithEnv"]
+let includeSpecializeNames = ["pevalWithEnv", "jitCompile"]
 
 lang SpecializeInclude = MExprLoadRuntime + MExprEliminateDuplicateCode
 
-  sem includeSpecializeDeps : Expr -> Expr
-  sem includeSpecializeDeps =
+  sem includeSpecializeDeps : Expr -> (Expr, Name)
+  sem includeSpecializeDeps  =
   | ast ->
+    let nameMapName = nameSym "nameMapPlaceHolder" in
+    let placeholder = nulet_ nameMapName unit_ in
     let includes = loadRuntime includesLoc in
+    let ast = bind_ placeholder ast in
     let ast = mergeWithHeader ast includes in
-    eliminateDuplicateCode ast
+    (eliminateDuplicateCode ast, nameMapName)
 end
