@@ -201,6 +201,13 @@ lang RefOpTypeAst = RefOpAst
   | CDeRef _ -> tyall_ "a" (tyarrow_ (tyref_ (tyvar_ "a")) (tyvar_ "a"))
 end
 
+lang ExtSupportTypeAst = ExtSupportAst
+  sem tyConst =
+  | CAddExternal _ -> tyall_ "a" (tyarrows_ [tystr_, tyvar_ "a", tyunit_])
+  | CGetExternal _ -> tyall_ "a" (tyarrow_ tystr_ (tyvar_ "a"))
+  | CLoadLibraries _ -> tyarrow_ tystr_ tyunit_
+end
+
 lang ConTagTypeAst = ConTagAst
   sem tyConst =
   | CConstructorTag _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_)
@@ -261,5 +268,5 @@ lang MExprConstType =
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
-  TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst
+  TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst + ExtSupportTypeAst
 end

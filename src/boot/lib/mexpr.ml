@@ -626,6 +626,13 @@ let arity = function
       1
   | CdeRef ->
       1
+  (* MCore intrinsics: External support *)
+  | CaddExternal _ ->
+      2
+  | CgetExternal ->
+      1
+  | CloadLibraries ->
+      1
   (* MCore intrinsics: Tensor *)
   | CtensorCreateDense None ->
       2
@@ -1599,6 +1606,20 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
   | CdeRef, TmRef (_, r) ->
       !r
   | CdeRef, _ ->
+      fail_constapp fi
+  (* MCore intrinsics: External support *)
+  | CaddExternal _, _ ->
+      fail_constapp fi
+  | CgetExternal, TmSeq (fi, s) ->
+      let s = tm_seq2int_seq fi s in
+      Intrinsics.Ext.get_external s
+  | CgetExternal, _ ->
+      fail_constapp fi
+  | CloadLibraries, TmSeq (fi, s) ->
+      let s = tm_seq2int_seq fi s in
+      Intrinsics.Ext.load_libraries s;
+      tm_unit
+  | CloadLibraries, _ ->
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
   | CtensorCreateUninitInt, TmSeq (_, seq) ->

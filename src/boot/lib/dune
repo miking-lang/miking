@@ -9,6 +9,7 @@
   threads
   str
   linenoise
+  findlib.dynload
   ;; Optional dependencies are used if the relevant libraries are available.
   ;; Note that this will change the result of compiling `mi` depending on
   ;; which packages are available in the environment.

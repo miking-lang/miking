@@ -479,6 +479,13 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
+  (* MCore intrinsics: External support *)
+  | CaddExternal _ ->
+      fprintf fmt "addExternal"
+  | CgetExternal ->
+      fprintf fmt "getExternal"
+  | CloadLibraries ->
+      fprintf fmt "loadLibraries"
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense _ ->
       fprintf fmt "tensorCreateDense"
