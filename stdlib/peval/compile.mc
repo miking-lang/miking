@@ -55,15 +55,16 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       -- The environment holds the free variables of the expression to spec.
       match getLiftedEnv pnames args toSpec with (args, pevalEnv) in
       match liftExpr pnames args toSpec with (args, pevalArg) in
-      let lhs = nvar_ (pevalName pnames) in
-      -- temporary
-      let f = appf2_ lhs pevalEnv pevalArg in
-      let p = nvar_ (mexprStringName pnames) in
-      let ff = app_ p f in
-      let fff = print_ ff in
-      -- Update the specialize let-binding
-      let bodyn = updateBody (semi_ fff never_) t.body in
-      (args.idMapping, TmLet {t with body = bodyn})
+      match liftName args (nameSym "residualID") with (args, id) in
+
+      let jitCompile = nvar_ (jitName pnames) in
+      let placeHolderPprint = nvar_ (nameMapName pnames) in
+      let jitCompile = appf2_ jitCompile id placeHolderPprint in
+      let pevalFunc = nvar_ (pevalName pnames) in
+      let residual = appf2_ pevalFunc pevalEnv pevalArg in
+      let compiledResidual = app_ jitCompile residual in
+      let newBody = updateBody compiledResidual t.body in
+      (args.idMapping, TmLet {t with body = newBody})
     else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
   | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
@@ -72,9 +73,43 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
   | TmSpecialize _ -> true
   | t -> or acc (sfold_Expr_Expr hasSpecializeTerm acc t)
 
+  sem updatePprintPH : SpecializeNames -> Map Name Name -> Map Name String ->
+                       Expr -> (Map Name String, Expr)
+  sem updatePprintPH names idMap nameMap =
+  | TmLet t ->
+    if nameEq t.ident (nameMapName names) then
+      -- IdMap : ActualName -> GeneratedName
+      --       : NameInProgram.ml -> NameInPlugin.ml
+      -- ActualName and GeneratedName should be pprinted to same string
+      -- Here, we create the strings for those names explicitly
+      let stringName = lam acName.
+       join ["specialize_", nameGetStr acName
+       , "\'"
+       , (int2string (sym2hash (optionGetOrElse
+                                 (lam. error "Expected symbol")
+                                 (nameGetSym acName))))] in
+
+      -- Create Expr of nameMap (used in plugins)
+      let kvSeq = mapFoldWithKey (lam l. lam acName. lam genName.
+         let name = utuple_ [str_ acName.0, nvar_ genName] in
+         snoc l (utuple_ [name, str_ (stringName acName)])) [] idMap in
+      let mfs = nvar_ (mapFromSeqName names) in
+      let ncmp = nvar_ (nameCmpName names) in
+      let nameMapExpr = appf2_ mfs ncmp (seq_ kvSeq) in
+
+      -- Create actual nameMap (used in actual program)
+      let nameMap = mapFoldWithKey (lam m. lam acName. lam genName.
+        mapInsert acName (stringName acName) m) (mapEmpty nameCmp) idMap in
+
+      (nameMap, TmLet {t with body=nameMapExpr})
+    else
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap (TmLet t)
+  | t ->
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap t
+
   sem compileSpecialize =
   | ast ->
-    if not (hasSpecializeTerm false ast) then ast
+    if not (hasSpecializeTerm false ast) then (false, (mapEmpty nameCmp), ast)
     else
     match addIdentifierToSpecializeTerms ast with (specializeData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -84,10 +119,9 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     let extractMap : Map Name Expr = extractSeparate specializeIds ast in
 
     -- Bulk of the time taken
-    match includeSpecializeDeps ast with ast in
-
+    match includeSpecializeDeps ast with (ast, nameMapName) in
     -- Find the names of the functions and constructors needed later
-    let names = createNames ast in
+    let names = createNames ast nameMapName in
 
     let args = initArgs extractMap in
     match specializePass names args (mapEmpty nameCmp) ast
@@ -100,8 +134,9 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
           symDefs,
           ast]
     else ast in
-    ast
-
+    match updatePprintPH names idMapping (mapEmpty nameCmp) ast
+      with (nameMap, ast) in
+    (true, nameMap, ast)
 end
 
 
