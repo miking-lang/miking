@@ -11,7 +11,8 @@ type Program = String -> [String] -> ExecResult
 type CompileResult = {
   run : Program,
   cleanup : () -> (),
-  binaryPath : String
+  binaryPath : String,
+  keepFiles : [String] -- If any other files should be kept, specify so here
 }
 
 let defaultCompileOptions : CompileOptions = {
@@ -19,6 +20,49 @@ let defaultCompileOptions : CompileOptions = {
   libraries = [],
   cLibraries = []
 }
+
+let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
+  lam options. lam p. lam entryPointId.
+  let mainFile = join ["open Program let () = Program.", entryPointId, " ()"] in
+
+  let td = sysTempDirMake () in
+  let dir = sysTempDirName td in
+  let tempfile = lam f. sysJoinPath dir f in
+
+  writeFile (tempfile "program.ml") p;
+  writeFile (tempfile "main.ml") mainFile;
+
+  let programCmxPath = tempfile "program.cmx" in
+
+  let command = ["ocamlfind", "ocamlopt", "-c -package \"boot\"",
+                 "program.ml"] in
+  let r = sysRunCommand command "" dir in
+  if neqi r.returncode 0 then
+    printLn "Something went wrong when compiling program";
+    printLn r.stdout;
+    printLn r.stderr;
+    exit 1
+  else ();
+  let command = ["ocamlfind", "ocamlopt", "-thread -package \"boot\""
+                ,"-linkpkg -linkall", programCmxPath, "main.ml"] in
+  let r = sysRunCommand command "" dir in
+  if neqi r.returncode 0 then
+    printLn "Something went wrong when compiling main";
+    printLn r.stdout;
+    printLn r.stderr;
+    exit 1
+  else ();
+  {
+    run =
+      lam stdin. lam args.
+        let command =
+          concat ["dune", "exec", "--no-build", "./program.exe", "--"] args
+        in
+        sysRunCommand command stdin (tempfile ""),
+    cleanup = lam. sysTempDirDelete td (); (),
+    binaryPath = tempfile "a.out",
+    keepFiles = [tempfile "program.cmi"]
+ }
 
 let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   lam options : CompileOptions. lam p.
@@ -77,7 +121,8 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
         in
         sysRunCommand command stdin (tempfile ""),
     cleanup = lam. sysTempDirDelete td (); (),
-    binaryPath = tempfile "_build/default/program.exe"
+    binaryPath = tempfile "_build/default/program.exe",
+    keepFiles = []
   }
 
 let ocamlCompile : String -> CompileResult =
