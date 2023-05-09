@@ -368,13 +368,25 @@ end
 
 lang SetupLang = SpecializeInclude + SpecializeUtils end
 
+let _createFakeNames = lam.
+  use SetupLang in
+  let toNameMap = lam ls. mapFromSeq cmpString (
+    map (lam str. (str, nameSym str)) ls) in
+  let pevalNames = toNameMap includeSpecializeNames in
+  let consNames = toNameMap includeConsNames in
+  let builtinsNames = toNameMap includeBuiltins in
+  let tyConsNames = toNameMap includeTyConsNames in
+  let otherFuncs = toNameMap includeOtherFuncs in
+  {pevalNames = pevalNames,
+   consNames = consNames,
+   builtinsNames = builtinsNames,
+   tyConsNames = tyConsNames,
+   otherFuncs=otherFuncs}
+
 let _setup =
   use SetupLang in
   let ast = ulet_ "t" (int_ 3) in
---  match includeSpecialize ast with (ast, pevalNames) in
-  match includeSpecializeDeps ast with ast in
-  -- Find the names of the functions and constructors needed later
-  let names = createNames ast in
+  let names = _createFakeNames () in
   (ast, names)
 
 mexpr
