@@ -244,7 +244,7 @@ let compileAccelerated =
   let env : GenerateEnv =
     chooseExternalImpls (externalGetSupportedExternalImpls ()) generateEnv ast
   in
-  let exprTops = generateTops env ast in
+  match generateTops env ast with (_, exprTops) in
   let syslibs =
     setOfSeq cmpString
       (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
