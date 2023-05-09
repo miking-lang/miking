@@ -586,60 +586,27 @@ let _getAllowedGroupings
     end
 
 -- NOTE(vipa, 2021-02-15): This should be a private type, and/or replaced with some standard library type at a later point in time
-type BreakableQueue self = {values : Ref [Ref [TentativeNode self ROpen]], highestIndex : Ref Int, lowestIndex : Ref Int}
+type BreakableQueue self = Ref (Map Int [TentativeNode self ROpen])
 let _newQueue
-  : all self. all rstyle. () -> BreakableQueue self
-  = lam.
-    { highestIndex = ref 0
-    , lowestIndex = ref 10
-    , values = ref (create 10 (lam. ref []))
-    }
+  : all self. () -> BreakableQueue self
+  = lam. ref (mapEmpty (lam x. lam y. subi y x))
 let _addToQueue
   : all self. TentativeNode self ROpen
   -> BreakableQueue self
   -> ()
   = lam node. lam queue.
-    let dist = _maxDistanceFromRoot node in
-    (if leqi (length (deref queue.values)) dist then
-       let target = addi (addi dist 1) (divi dist 3) in
-       let len = length (deref queue.values) in
-       (if eqi (deref queue.lowestIndex) len then
-          modref queue.lowestIndex target
-        else ());
-       modref queue.values (concat (deref queue.values) (create (subi target len) (lam. ref [])))
-     else ());
-    let target = get (deref queue.values) dist in
-    (if lti (deref queue.highestIndex) dist
-     then modref queue.highestIndex dist
-     else ());
-    (if gti (deref queue.lowestIndex) dist
-     then modref queue.lowestIndex dist
-     else ());
-    modref target (snoc (deref target) node)
+    modref queue (mapInsertWith concat (_maxDistanceFromRoot node) [node] (deref queue))
 let _popFromQueue
   : all self. BreakableQueue self
   -> Option (TentativeNode self ROpen)
   = lam queue.
-    let lowest = deref queue.lowestIndex in
-    let highest = deref queue.highestIndex in
-    let values = if leqi (addi 1 (subi highest lowest)) 0
-      then []
-      else subsequence (deref queue.values) lowest (addi 1 (subi highest lowest)) in
-    recursive let work = lam values.
-      match values with values ++ [target] then
-        let nodes = deref target in
-        match nodes with [node] ++ nodes then
-          modref target nodes;
-          modref queue.highestIndex (addi lowest (length values));
-          Some node
-        else work values
-      else
-        modref queue.highestIndex 0;
-        modref queue.lowestIndex (length (deref queue.values));
-        None ()
-    in work values
--- TODO(aathn, 2023-05-09): Change the queue implementation and remove this unsafeCoerce
-let _cachedQueue : all self. BreakableQueue self = unsafeCoerce (_newQueue ())
+    match mapGetMin (deref queue) with Some (k, [v] ++ vs) then
+      let newQueue = match vs with []
+                     then mapRemove k (deref queue)
+                     else mapInsert k vs (deref queue)
+      in
+      modref queue newQueue; Some v
+    else None ()
 
 let _addLOpen
   : all self. all rstyle. Config self
@@ -647,6 +614,7 @@ let _addLOpen
   -> State self RClosed
   -> Option (State self rstyle)
   = lam config. lam lself. lam st.
+    let nodesToProcess = _newQueue () in
     let time = addi 1 (deref st.timestep) in
     modref st.timestep time;
 
@@ -743,8 +711,8 @@ let _addLOpen
     --   maxDistanceFromRoot (pop longest distance first). It's empty
     --   from the start (the frontier is only used to find the highest
     --   possible distance).
-    let newParents = mapOption (handleLeaf _cachedQueue) frontier in
-    let newParents = work _cachedQueue newParents in
+    let newParents = mapOption (handleLeaf nodesToProcess) frontier in
+    let newParents = work nodesToProcess newParents in
     match map makeNewParents newParents with frontier & ([_] ++ _) then
       -- NOTE(vipa, 2022-05-05): The typechecker currently requires
       -- that {x with foo = ...} does not change the type of `foo`,
@@ -830,6 +798,7 @@ let breakableFinalizeParse
   -> State self RClosed
   -> Option [PermanentNode self] -- NonEmpty
   = lam config. lam st.
+    let nodesToProcess = _newQueue () in
     let time = addi 1 (deref st.timestep) in
     modref st.timestep time;
     let rallowed : RightAllowedFunc self = config.rightAllowed in
@@ -869,8 +838,8 @@ let breakableFinalizeParse
     in
 
     let frontier = st.frontier in
-    iter (handleLeaf _cachedQueue) frontier;
-    match work _cachedQueue with res & [_] ++ _ then Some res else None ()
+    iter (handleLeaf nodesToProcess) frontier;
+    match work nodesToProcess with res & [_] ++ _ then Some res else None ()
 
 type Ambiguity pos tokish = {range: {first: pos, last: pos}, partialResolutions: [[tokish]]}
 
