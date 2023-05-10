@@ -152,7 +152,7 @@ lang OCamlDataConversionHelpers =
                     TmLam {
                       ident = ident,
                       tyAnnot = TyUnknown { info = info },
-                      tyIdent = TyUnknown { info = info },
+                      tyParam = TyUnknown { info = info },
                       body = body,
                       ty = TyUnknown { info = info },
                       info = info

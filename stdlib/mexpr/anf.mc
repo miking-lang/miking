@@ -307,7 +307,7 @@ lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
         (lam v. lam acc.
           match v with (id, ty) in
           TmLam {
-            ident = id, tyAnnot = TyUnknown {info = t.info}, tyIdent = ty,
+            ident = id, tyAnnot = TyUnknown {info = t.info}, tyParam = ty,
             body = acc, ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
             info = t.info})
         inner varNameTypes in

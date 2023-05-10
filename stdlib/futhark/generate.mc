@@ -452,7 +452,7 @@ let _collectParams = use FutharkTypeGenerate in
   recursive let work =
     lam params : [(Name, FutType)]. lam typeParams : [FutTypeParam]. lam body : Expr.
     match body with TmLam t then
-      let ty = generateType env t.tyIdent in
+      let ty = generateType env t.tyParam in
       let typeParams = _extractTypeParams typeParams ty in
       let params = snoc params (t.ident, ty) in
       work params typeParams t.body

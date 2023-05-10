@@ -403,7 +403,7 @@ lang FunParser =
     let r3 : StrPos = matchKeyword "." r2.pos r2.str in
     let e : ParseResult Expr = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, ty = tyunknown_,
-                  tyAnnot = tyunknown_, tyIdent = tyunknown_, body = e.val,
+                  tyAnnot = tyunknown_, tyParam = tyunknown_, body = e.val,
                   info = makeInfo p e.pos},
      pos = e.pos, str = e.str}
 end

@@ -121,7 +121,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
         tyAnnot = funcType,
         tyBody = funcType,
         body = TmLam {
-          ident = paramId, tyAnnot = paramTy, tyIdent = paramTy, body = t.e,
+          ident = paramId, tyAnnot = paramTy, tyParam = paramTy, body = t.e,
           ty = TyArrow {from = paramTy, to = retType, info = info},
           info = info},
         inexpr = TmApp {

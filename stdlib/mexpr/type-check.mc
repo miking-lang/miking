@@ -690,11 +690,11 @@ end
 lang LamTypeCheck = TypeCheck + LamAst + ResolveType
   sem typeCheckExpr env =
   | TmLam t ->
-    let tyIdent =
+    let tyParam =
       resolveType t.info (Some (MonoVar (), env.currentLvl)) env.tyConEnv t.tyAnnot in
-    let body = typeCheckExpr (_insertVar t.ident tyIdent env) t.body in
-    let tyLam = ityarrow_ t.info tyIdent (tyTm body) in
-    TmLam {t with body = body, tyIdent = tyIdent, ty = tyLam}
+    let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
+    let tyLam = ityarrow_ t.info tyParam (tyTm body) in
+    TmLam {t with body = body, tyParam = tyParam, ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst

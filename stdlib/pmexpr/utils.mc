@@ -22,7 +22,7 @@ recursive let replaceFunctionBody : Expr -> Expr -> Expr =
   lam funcExpr. lam newExpr.
   match funcExpr with TmLam t then
     let body = replaceFunctionBody t.body newExpr in
-    let ty = TyArrow {from = t.tyIdent, to = tyTm body, info = infoTy t.ty} in
+    let ty = TyArrow {from = t.tyParam, to = tyTm body, info = infoTy t.ty} in
     TmLam {{t with body = body} with ty = ty}
   else newExpr
 end
@@ -46,7 +46,7 @@ let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
   lam functionExpr.
   recursive let work = lam acc. lam e.
     match e with TmLam t then
-      work (snoc acc (t.ident, t.tyIdent, t.info)) t.body
+      work (snoc acc (t.ident, t.tyParam, t.info)) t.body
     else (acc, e)
   in work [] functionExpr
 

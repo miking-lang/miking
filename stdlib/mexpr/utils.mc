@@ -34,7 +34,7 @@ lang MExprSubstitute = MExprAst
   | TmLam t ->
     TmLam {t with ident = subIdent replacements t.ident,
                   tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
-                  tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                  tyParam = substituteIdentifiersType replacements t.tyParam,
                   body = substituteIdentifiersExpr replacements t.body,
                   ty = substituteIdentifiersType replacements t.ty}
   | TmType t ->

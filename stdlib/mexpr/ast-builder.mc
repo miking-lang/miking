@@ -496,7 +496,7 @@ let tmLam = use MExprAst in
   TmLam {
     ident = ident,
     tyAnnot = tyAnnot,
-    tyIdent = tyAnnot,
+    tyParam = tyAnnot,
     ty = ty,
     body = body,
     info = info
