@@ -21,9 +21,8 @@ let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
                  " -o plugin.cmxs ", t] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
-    printLn "Something went wrong when compiling plugin";
-    printLn r.stdout;
-    printLn r.stderr;
+    print (join ["Something went wrong when compiling the plugin\n",
+                 r.stdout, "\n", r.stderr, "\n"]);
     exit 1
   else ()); 
   {

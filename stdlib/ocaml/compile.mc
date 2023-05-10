@@ -38,18 +38,16 @@ let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
                  "program.ml"] in
   let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then
-    printLn "Something went wrong when compiling program";
-    printLn r.stdout;
-    printLn r.stderr;
+    print (join ["Something went wrong when compiling the program\n",
+                 r.stdout, "\n", r.stderr, "\n"]);
     exit 1
   else ();
   let command = ["ocamlfind", "ocamlopt", "-thread -package \"boot\""
                 ,"-linkpkg -linkall", programCmxPath, "main.ml"] in
   let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then
-    printLn "Something went wrong when compiling main";
-    printLn r.stdout;
-    printLn r.stderr;
+    print (join ["Something went wrong when compiling main\n",
+                 r.stdout, "\n", r.stderr, "\n"]);
     exit 1
   else ();
   {
