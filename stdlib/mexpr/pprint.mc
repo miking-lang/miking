@@ -120,32 +120,6 @@ let pprintConString = lam str.
 let pprintTypeString = lam str.
   _parserStr str "#type" (lam str. isUpperAlpha (head str))
 
-----------------------
--- HELPER FUNCTIONS --
-----------------------
-
--- Get an optional list of tuple expressions for a record. If the record does
--- not represent a tuple, None () is returned.
-let record2tuple
-  : all a. Map SID a
-  -> Option [a]
-  = lam bindings.
-    let keys = map sidToString (mapKeys bindings) in
-    match forAll stringIsInt keys with false then None () else
-    let intKeys = map string2int keys in
-    let sortedKeys = sort subi intKeys in
-    -- Check if keys are a sequence 0..(n-1)
-    match sortedKeys with [] then None ()
-    else match sortedKeys with [h] ++ _ in
-      if and (eqi 0 h)
-             (eqi (subi (length intKeys) 1) (last sortedKeys)) then
-        Some (map (lam key. mapLookupOrElse
-                              (lam. error "Key not found")
-                              (stringToSid (int2string key)) bindings)
-                   sortedKeys)
-      else None ()
-
-
 -----------
 -- TERMS --
 -----------
