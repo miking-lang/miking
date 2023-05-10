@@ -481,7 +481,8 @@ let _createFakeNames = lam.
    consNames = consNames,
    builtinsNames = builtinsNames,
    tyConsNames = tyConsNames,
-   otherFuncs=otherFuncs}
+   otherFuncs=otherFuncs,
+   nameMapPH = nameSym "nmapph"}
 
 let _setup =
   use SetupLang in
