@@ -1,5 +1,5 @@
 /-
-        This file constains utility functions that operate on tuples.
+        This file contains utility functions that operate on tuples.
  -/
 
 -- `tupleCmp2 cmpa cmpb` defines the product order for pairs (a, b), where:
@@ -12,6 +12,24 @@ let tupleCmp2
     match (x, y) with ((a1, b1), (a2, b2)) in
     let cmpa = cmpa a1 a2 in
     if eqi cmpa 0 then cmpb b1 b2 else cmpa
+
+utest
+  let testCmp2 = lam cmp. lam a. lam b. cmp (tupleCmp2 subi subi a b) 0 in
+  utest testCmp2 eqi (0, 0) (0, 0) with true in
+  utest testCmp2 lti (0, 0) (0, 1) with true in
+  utest testCmp2 lti (0, 0) (1, 1) with true in
+  utest testCmp2 lti (0, 1) (1, 1) with true in
+  utest testCmp2 eqi (0, 1) (0, 1) with true in
+  utest testCmp2 eqi (1, 0) (1, 0) with true in
+  utest testCmp2 gti (1, 1) (1, 0) with true in
+  utest testCmp2 gti (1, 1) (0, 1) with true in
+  utest testCmp2 gti (1, 1) (0, 0) with true in
+  utest testCmp2 gti (0, 1) (0, 0) with true in
+  utest testCmp2 gti (1, 0) (0, 0) with true in
+  utest testCmp2 eqi (1, 1) (1, 1) with true in
+  ()
+  with ()
+
 
 -- `tupleCmp3 cmpa cmpb cmpc` defines the product order for triples
 -- (a, b, c), see `tupleCmp2`.
@@ -29,36 +47,21 @@ let tupleCmp3
       if eqi cmpb 0 then cmpc c1 c2 else cmpb
     else cmpa
 
-mexpr
-
-let testCmp2 = lam cmp. lam a. lam b. cmp (tupleCmp2 subi subi a b) 0 in
-utest testCmp2 eqi (0, 0) (0, 0) with true in
-utest testCmp2 lti (0, 0) (0, 1) with true in
-utest testCmp2 lti (0, 0) (1, 1) with true in
-utest testCmp2 lti (0, 1) (1, 1) with true in
-utest testCmp2 eqi (0, 1) (0, 1) with true in
-utest testCmp2 eqi (1, 0) (1, 0) with true in
-utest testCmp2 gti (1, 1) (1, 0) with true in
-utest testCmp2 gti (1, 1) (0, 1) with true in
-utest testCmp2 gti (1, 1) (0, 0) with true in
-utest testCmp2 gti (0, 1) (0, 0) with true in
-utest testCmp2 gti (1, 0) (0, 0) with true in
-utest testCmp2 eqi (1, 1) (1, 1) with true in
-
-let testCmp3 = lam cmp. lam a. lam b. cmp (tupleCmp3 subi subi subi a b) 0 in
-utest testCmp3 eqi (0, 0, 0) (0, 0, 0) with true in
-utest testCmp3 lti (0, 0, 0) (0, 0, 1) with true in
-utest testCmp3 lti (0, 0, 0) (0, 1, 1) with true in
-utest testCmp3 lti (0, 0, 0) (1, 1, 1) with true in
-utest testCmp3 lti (0, 0, 1) (1, 1, 1) with true in
-utest testCmp3 lti (0, 1, 1) (1, 1, 1) with true in
-utest testCmp3 eqi (0, 1, 1) (0, 1, 1) with true in
-utest testCmp3 eqi (1, 0, 1) (1, 0, 1) with true in
-utest testCmp3 eqi (1, 1, 0) (1, 1, 0) with true in
-utest testCmp3 eqi (1, 0, 0) (1, 0, 0) with true in
-utest testCmp3 gti (1, 1, 1) (1, 1, 0) with true in
-utest testCmp3 gti (0, 1, 1) (0, 1, 0) with true in
-utest testCmp3 gti (1, 0, 1) (0, 1, 0) with true in
-utest testCmp3 eqi (1, 1, 1) (1, 1, 1) with true in
-
-()
+utest
+  let testCmp3 = lam cmp. lam a. lam b. cmp (tupleCmp3 subi subi subi a b) 0 in
+  utest testCmp3 eqi (0, 0, 0) (0, 0, 0) with true in
+  utest testCmp3 lti (0, 0, 0) (0, 0, 1) with true in
+  utest testCmp3 lti (0, 0, 0) (0, 1, 1) with true in
+  utest testCmp3 lti (0, 0, 0) (1, 1, 1) with true in
+  utest testCmp3 lti (0, 0, 1) (1, 1, 1) with true in
+  utest testCmp3 lti (0, 1, 1) (1, 1, 1) with true in
+  utest testCmp3 eqi (0, 1, 1) (0, 1, 1) with true in
+  utest testCmp3 eqi (1, 0, 1) (1, 0, 1) with true in
+  utest testCmp3 eqi (1, 1, 0) (1, 1, 0) with true in
+  utest testCmp3 eqi (1, 0, 0) (1, 0, 0) with true in
+  utest testCmp3 gti (1, 1, 1) (1, 1, 0) with true in
+  utest testCmp3 gti (0, 1, 1) (0, 1, 0) with true in
+  utest testCmp3 gti (1, 0, 1) (0, 1, 0) with true in
+  utest testCmp3 eqi (1, 1, 1) (1, 1, 1) with true in
+  ()
+  with ()
