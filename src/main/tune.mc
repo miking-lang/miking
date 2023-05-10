@@ -13,7 +13,7 @@ include "tuning/instrumentation.mc"
 include "tuning/tune.mc"
 
 lang MCoreTune =
-  BootParser + MExprTypeAnnot + MExprTypeCheck +
+  BootParser + MExprTypeCheck +
   MExprHoles + MExprHoleCFA + NestedMeasuringPoints + DependencyAnalysis +
   Instrumentation + MExprTune
 end

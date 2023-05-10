@@ -8,7 +8,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 include "pmexpr/utils.mc"
 
@@ -533,7 +533,7 @@ lang FutharkGenerate = FutharkToplevelGenerate + MExprCmp
 end
 
 lang TestLang =
-  FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeAnnot
+  FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeCheck
 end
 
 mexpr
@@ -542,7 +542,7 @@ use TestLang in
 
 let f = nameSym "f" in
 let c = nameSym "c" in
-let chars = typeAnnot (bindall_ [
+let chars = typeCheck (bindall_ [
   nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
     match_ (nvar_ c) (pchar_ 'a')
       true_
@@ -584,7 +584,7 @@ let map = nameSym "map" in
 let f3 = nameSym "f" in
 let s = nameSym "s" in
 
-let t = typeAnnot (bindall_ [
+let t = typeCheck (bindall_ [
   ntype_ intseq [] (tyseq_ tyint_),
   ntype_ floatseq [] (tyseq_ tyfloat_),
   nlet_ a (ntycon_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
@@ -658,7 +658,7 @@ let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let n = nameSym "n" in
-let foldlToFor = typeAnnot
+let foldlToFor = typeCheck
   (nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
     nlam_ s (tyseq_ tyint_) (
       foldl_
@@ -678,7 +678,7 @@ let entryPoints = setOfSeq nameCmp [f] in
 utest printFutProg (generateProgram entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
 
-let negation = typeAnnot
+let negation = typeCheck
   (nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]])
     (nlam_ a tyint_ (nlam_ b tyfloat_ (
       urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))])))) in
@@ -697,7 +697,7 @@ with printFutProg expected using eqSeq eqc in
 
 let recordTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
 let recordPat = prec_ [("a", npvar_ a), ("b", npvar_ b)] in
-let recordMatchNotProj = typeAnnot
+let recordMatchNotProj = typeCheck
   (nlet_ f (tyarrows_ [recordTy, tyint_])
     (nlam_ x recordTy
       (match_ (nvar_ x) recordPat

@@ -5,7 +5,8 @@
 include "math.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
+include "mexpr/pprint.mc"
 
 type PosIndex = Int
 type ProgramPos = [PosIndex]
@@ -278,12 +279,11 @@ lang MExprCSE =
   | t -> t
 end
 
-lang TestLang = MExprCSE + MExprEq + MExprSym + MExprTypeAnnot end
+lang TestLang = MExprCSE + MExprEq + MExprSym + MExprTypeCheck + MExprPrettyPrint end
 
 mexpr
 
 use TestLang in
-use MExprPrettyPrint in
 
 recursive let withoutTypes = lam e.
   match e with TmType t then
@@ -292,7 +292,7 @@ recursive let withoutTypes = lam e.
 in
 
 let preprocess = lam t.
-  withoutTypes (typeAnnot (symbolize t))
+  withoutTypes (typeCheck (symbolize t))
 in
 let commonExpr = addi_ (int_ 2) (int_ 2) in
 
@@ -392,7 +392,9 @@ let t = preprocess (bindall_ [
   ulet_ "x" (int_ 4),
   ulet_ "y" (conapp_ "CInt" (var_ "x")),
   ulet_ "z" (conapp_ "CInt" (var_ "x")),
-  var_ "y"]) in
+  var_ "y",
+  uunit_
+]) in
 let expected = preprocess (bindall_ [
   type_ "Num" [] (tyvariant_ []),
   condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
@@ -400,7 +402,9 @@ let expected = preprocess (bindall_ [
   ulet_ "t" (conapp_ "CInt" (var_ "x")),
   ulet_ "y" (var_ "t"),
   ulet_ "z" (var_ "t"),
-  var_ "y"]) in
+  var_ "y",
+  uunit_
+]) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (bindall_ [
@@ -459,18 +463,24 @@ utest cse t with expected using eqExpr in
 
 let t = preprocess (
   if_ true_
-    (if_ true_
-      unit_
-      unit_)
+    (bind_
+       (ulet_ "x"
+          (if_ true_
+             unit_
+             unit_))
+    (int_ 0))
     (if_ true_
       commonExpr
       commonExpr)) in
 let expected = preprocess (if_ true_
   (bindall_ [
     ulet_ "t" unit_,
-    (if_ true_
-      (var_ "t")
-      (var_ "t"))])
+    ulet_ "x"
+      (if_ true_
+         (var_ "t")
+         (var_ "t")),
+    int_ 0
+  ])
   (bindall_ [
     ulet_ "t" commonExpr,
     (if_ true_

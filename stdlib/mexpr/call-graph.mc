@@ -6,7 +6,7 @@ include "digraph.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "mexpr/type-check.mc"
 
 lang MExprCallGraph = MExprAst
   sem constructCallGraph =
@@ -78,7 +78,7 @@ lang MExprCallGraph = MExprAst
   | t -> sfold_Expr_Expr (_findCallEdges src g) edges t
 end
 
-lang TestLang = MExprCallGraph + MExprSym + MExprTypeAnnot
+lang TestLang = MExprCallGraph + MExprSym + MExprTypeCheck
 end
 
 mexpr
@@ -86,7 +86,7 @@ mexpr
 use TestLang in
 
 let preprocess = lam t.
-  typeAnnot (symbolize t)
+  typeCheck (symbolize t)
 in
 
 let a = nameSym "a" in
