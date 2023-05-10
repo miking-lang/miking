@@ -144,7 +144,8 @@ let includeBuiltins = mapValues builtinsMapping
 let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
                         "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
                         "MatchAst_TmMatch", "Cons", "Nil", "NoInfo", "Info", "_noSymbol",
-                        "LetAst_TmLet", "RecLetsAst_TmRecLets",
+                        "LetAst_TmLet", "RecLetsAst_TmRecLets", "DataAst_TmConDef",
+                        "DataAst_TmConApp", "TypeAst_TmType",
 
                         --- Patterns
                         "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",

@@ -98,6 +98,15 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem tmRecLetsName : SpecializeNames -> Name
   sem tmRecLetsName = | names -> getName (names.consNames) "RecLetsAst_TmRecLets"
 
+  sem tmConDefName : SpecializeNames -> Name
+  sem tmConDefName = | names -> getName (names.consNames) "DataAst_TmConDef"
+
+  sem tmConAppName : SpecializeNames -> Name
+  sem tmConAppName = | names -> getName (names.consNames) "DataAst_TmConApp"
+
+  sem tmTypeName : SpecializeNames -> Name
+  sem tmTypeName = | names -> getName (names.consNames) "TypeAst_TmType"
+
   sem listConsName : SpecializeNames -> Name
   sem listConsName = | names -> getName (names.consNames) "Cons"
 

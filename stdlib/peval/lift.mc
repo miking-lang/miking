@@ -414,10 +414,43 @@ lang SpecializeLiftRecLets = SpecializeLift + RecLetsAst
     (args, createConAppExpr names tmRecLetsName bindings ty info)
 end
 
+lang SpecializeLiftDataAst = SpecializeLift + DataAst
+
+  sem liftExpr names args =
+  | TmConDef {ident=ident, tyIdent=tyId, inexpr=inexpr, ty=ty, info=info} ->
+    match liftName args ident with (args, ident) in
+    match liftExpr names args inexpr with (args, inexpr) in
+    let tyId = liftType names tyId in
+    let bindings = [("ident", ident), ("tyIdent", tyId), ("inexpr", inexpr)] in
+    (args, createConAppExpr names tmConDefName bindings ty info)
+  | TmConApp {ident=ident, body=body, ty=ty, info=info} ->
+    match liftName args ident with (args, ident) in
+    match liftExpr names args body with (args, body) in
+    let bindings = [("ident", ident), ("body", body)] in
+    (args, createConAppExpr names tmConAppName bindings ty info)
+end
+
+lang SpecializeLiftTypeAst = SpecializeLift + TypeAst
+
+  sem liftExpr names args =
+  | TmType {ident=ident, params=params, tyIdent=tyId, inexpr=inexpr,
+            ty=ty, info=info} ->
+    match liftName args ident with (args, ident) in
+    match (mapAccumL (lam args. lam name.
+      liftName args name) args params) with (args, params) in
+    match liftExpr names args inexpr with (args, inexpr) in
+    let tyId = liftType names tyId in
+    let bindings = [("ident", ident), ("tyIdent", tyId),
+                    ("params", seq_ params), ("inexpr", inexpr)] in
+    (args, createConAppExpr names tmTypeName bindings ty info)
+end
+
+
 lang SpecializeLiftMExpr =
     SpecializeLiftApp + SpecializeLiftVar + SpecializeLiftRecord +
     SpecializeLiftSeq + SpecializeLiftConst + SpecializeLiftLam + SpecializeLiftSpecialize +
-    SpecializeLiftMatch + SpecializeLiftLet + SpecializeLiftRecLets
+    SpecializeLiftMatch + SpecializeLiftLet + SpecializeLiftRecLets + SpecializeLiftDataAst +
+    SpecializeLiftTypeAst
 end
 
 
@@ -655,6 +688,75 @@ let expected = nconapp_ (tmRecLetsName names) (urecord_
   [("bindings", seq_ lrl),
    ("inexpr", _liftExpr names args (unit_)),
    ("ty", ltype),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
+
+--
+------------ TmConDef -----------------
+--
+
+let someName = nameSym "test" in
+let e = ncondef_ someName tyunknown_ in
+
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someName args.idMapping with Some t
+  then t else someName in
+
+let dummyType = liftType names tyunknown_ in
+
+let expected = nconapp_ (tmConDefName names) (urecord_
+  [("ident", utuple_ [str_ "test", nvar_ newSymbol]),
+   ("tyIdent", dummyType),
+   ("ty", dummyType),
+   ("inexpr", _liftExpr names args uunit_),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
+
+--
+------------ TmConApp -----------------
+--
+
+let someName = nameSym "test" in
+let e = nconapp_ someName uunit_ in
+
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someName args.idMapping with Some t
+  then t else someName in
+
+let dummyType = liftType names tyunknown_ in
+
+let expected = nconapp_ (tmTypeName names) (urecord_
+  [("ident", utuple_ [str_ "test", nvar_ newSymbol]),
+   ("body", _liftExpr names args uunit_),
+   ("ty", dummyType),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
+
+--
+------------ TmType -----------------
+--
+
+let someName = nameSym "test" in
+let e = ntype_ someName [] tyunknown_ in
+
+match liftExpr names args e with (args, k) in
+
+let newSymbol = match mapLookup someName args.idMapping with Some t
+  then t else someName in
+
+let dummyType = liftType names tyunknown_ in
+
+let expected = nconapp_ (tmTypeName names) (urecord_
+  [("ident", utuple_ [str_ "test", nvar_ newSymbol]),
+   ("tyIdent", dummyType),
+   ("ty", dummyType),
+   ("inexpr", _liftExpr names args uunit_),
+   ("params", seq_ []),
    ("info", liftInfo names (NoInfo ()))]) in
 
 utest expected with k using eqExpr in
