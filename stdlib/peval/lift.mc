@@ -300,6 +300,11 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
   | PWildcard _ -> let v = createConApp names pWildcardName [] in
     (args, v)
 
+  sem _liftListOfPatterns names args =
+  | pats ->
+    mapAccumL (lam args. lam pat.
+      liftPattern names args pat) args pats
+
   sem liftPattern names args =
   | PatInt {val = v, info = info, ty=ty} ->
     let bindings = [("val", int_ v)] in
@@ -311,6 +316,55 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
   | PatBool {val=v, ty=ty, info=info} ->
     let bindings = [("val", bool_ v)] in
     (args, createConAppExpr names patBoolName bindings ty info)
+  | PatChar {val=v, ty=ty, info=info} ->
+    let bindings = [("val", char_ v)] in
+    (args, createConAppExpr names patCharName bindings ty info)
+  | PatSeqTot {pats=pats, info=info, ty=ty} ->
+    match _liftListOfPatterns names args pats with (args, pats) in
+    let bindings = [("pats", seq_ pats)] in
+    (args, createConAppExpr names patSeqTotName bindings ty info)
+  | PatSeqEdge {prefix=pres, middle=mid, postfix=posts, info=info, ty=ty} ->
+    match liftPatName names args mid with (args, mid) in
+    match _liftListOfPatterns names args pres with (args, pres) in
+    match _liftListOfPatterns names args posts with (args, posts) in
+    let bindings = [("prefix", seq_ pres), ("middle", mid),
+                    ("postfix", seq_ posts)] in
+    (args, createConAppExpr names patSeqEdgeName bindings ty info)
+  | PatRecord {bindings=bindings, info=info, ty=ty} ->
+    -- bindings : Map SID Pat
+    match unzip (mapToSeq bindings) with (ids, pats) in
+    match _liftListOfPatterns names args pats with (args, pats) in
+    let liftedBindings = seq_
+      (zipWith (lam id. lam lPat.
+        let lId = liftStringToSID names (sidToString id) in
+        utuple_ [lId, lPat]) ids pats) in
+    let lhs = nvar_ (mapFromSeqName names) in
+    -- cmpSID = subi
+    let rhs = (uconst_ (CSubi ())) in
+    let binds = appf2_ lhs rhs liftedBindings in
+    let lhs = nvar_ (mapFromSeqName names) in
+    let bindings = [("bindings", binds)] in
+    (args, createConAppExpr names patRecName bindings ty info)
+  | PatCon {ident=ident, subpat=subpat, info=info, ty=ty} ->
+    -- Should this name be lifted differeNtLy?
+    match liftName args ident with (args, ident) in
+    match liftPattern names args subpat with (args, subpat) in
+    let bindings = [("ident", ident), ("subpat", subpat)] in
+    (args, createConAppExpr names patConName bindings ty info)
+  | PatAnd {lpat=lpat, rpat=rpat, info=info, ty=ty} ->
+    match liftPattern names args lpat with (args, lpat) in
+    match liftPattern names args rpat with (args, rpat) in
+    let bindings = [("lpat", lpat), ("rpat", rpat)] in
+    (args, createConAppExpr names patAndName bindings ty info)
+  | PatOr {lpat=lpat, rpat=rpat, info=info, ty=ty} ->
+    match liftPattern names args lpat with (args, lpat) in
+    match liftPattern names args rpat with (args, rpat) in
+    let bindings = [("lpat", lpat), ("rpat", rpat)] in
+    (args, createConAppExpr names patOrName bindings ty info)
+  | PatNot {subpat=subpat, info=info, ty=ty} ->
+    match liftPattern names args subpat with (args, subpat) in
+    let bindings = [("subpat", subpat)] in
+    (args, createConAppExpr names patNotName bindings ty info)
 
   sem liftExpr names args =
   | TmMatch {target=target, pat=pat, thn=thn, els=els, ty=ty, info=info} ->

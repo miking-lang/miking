@@ -155,6 +155,30 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem patBoolName : SpecializeNames -> Name
   sem patBoolName = | names -> getName (names.consNames) "BoolPat_PatBool"
 
+  sem patCharName : SpecializeNames -> Name
+  sem patCharName = | names -> getName (names.consNames) "CharPat_PatChar"
+
+  sem patSeqTotName : SpecializeNames -> Name
+  sem patSeqTotName = | names -> getName (names.consNames) "SeqTotPat_PatSeqTot"
+
+  sem patSeqEdgeName : SpecializeNames -> Name
+  sem patSeqEdgeName = | names -> getName (names.consNames) "SeqEdgePat_PatSeqEdge"
+
+  sem patRecName : SpecializeNames -> Name
+  sem patRecName = | names -> getName (names.consNames) "RecordPat_PatRecord"
+
+  sem patConName : SpecializeNames -> Name
+  sem patConName = | names -> getName (names.consNames) "DataPat_PatCon"
+
+  sem patAndName : SpecializeNames -> Name
+  sem patAndName = | names -> getName (names.consNames) "AndPat_PatAnd"
+
+  sem patOrName : SpecializeNames -> Name
+  sem patOrName = | names -> getName (names.consNames) "OrPat_PatOr"
+
+  sem patNotName : SpecializeNames -> Name
+  sem patNotName = | names -> getName (names.consNames) "NotPat_PatNot"
+
   sem patNamedName : SpecializeNames -> Name
   sem patNamedName = | names -> getName (names.consNames) "NamedPat_PatNamed"
 

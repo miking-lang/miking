@@ -148,8 +148,11 @@ let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordA
 
                         --- Patterns
                         "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",
-                        "BoolPat_PatBool"
+                        "BoolPat_PatBool", "CharPat_PatChar", "SeqTotPat_PatSeqTot",
+                        "SeqEdgePat_PatSeqEdge", "RecordPat_PatRecord", "DataPat_PatCon",
+                        "AndPat_PatAnd", "OrPat_PatOr", "NotPat_PatNot"
                         ]
+
 
 
 let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
