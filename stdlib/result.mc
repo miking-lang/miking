@@ -308,9 +308,9 @@ utest
             (lam e. utest _map5 f a b c d e with semantics f a b c d e using eq in ())))))
 with ()
 
--- Perform a computation on the values of a list. Produces a non-error
--- only if all individual computations produce a non-error. Preserves
--- all errors and warnings.
+-- Perform a computation on the values of a sequence. Produces a non-error only
+-- if all individual computations produce a non-error. Preserves all errors and
+-- warnings.
 let _mapM
   : all w. all e. all a. all b. (a -> Result w e b) -> [a] -> Result w e [b]
   = lam f.
@@ -344,6 +344,106 @@ utest
   utest _prepTest (_mapM work [0, 1, 2, 0]) with (['a', 'a'], Right [0, 10, 20, 0]) in
   utest _prepTest (_mapM work [0, negi 1, 2]) with (['a'], Left [0]) in
   utest _prepTest (_mapM work [0, negi 1, negi 2]) with (['a'], Left [0, 0]) in
+  ()
+with ()
+
+-- Perform a computation on the values of a sequence while simultaneously
+-- folding an accumulator over the sequence from the left. Produces a non-error
+-- only if all individual computations produce a non-error. Returns immediately
+-- if the accumulator is an error. Otherwise, all errors and warnings are
+-- preserved.
+let _mapAccumLM : all w1. all e1. all w2. all e2. all a. all b. all c.
+  (a -> b -> (Result w1 e1 a, Result w2 e2 c))
+   -> a
+     -> [b]
+       -> (Result w1 e1 a, Result w2 e2 [c])
+  = lam f. lam acc.
+    recursive
+      let workOK
+        : Map Symbol w1
+          -> Map Symbol w2
+            -> (a, [c])
+              -> [b]
+                -> (Result w1 e1 a, Result w2 e2 [c])
+        = lam accWarnAcc. lam accWarnList. lam acc. lam list.
+          match acc with (a, cs) in
+          match list with [b] ++ list then
+            switch f a b
+            case (ResultOk a, ResultOk c) then
+              workOK
+                (mapUnion accWarnAcc a.warnings)
+                (mapUnion accWarnList c.warnings)
+                (a.value, snoc cs c.value)
+                list
+            case (ResultErr a, c) then
+              let a = { a with warnings = mapUnion accWarnAcc a.warnings } in
+              let cs = _asError c in
+              let cs =
+                { cs with warnings = mapUnion accWarnList cs.warnings }
+              in
+              (ResultErr a, ResultErr cs)
+            case (ResultOk a, ResultErr c) then
+              workListErr
+                (mapUnion accWarnAcc a.warnings)
+                { c with warnings = mapUnion accWarnList c.warnings }
+                a.value
+                list
+            end
+          else
+            let a = { warnings = accWarnAcc, value = a } in
+            let cs = { warnings = accWarnList, value = cs } in
+            (ResultOk a, ResultOk cs)
+      let workListErr
+        : Map Symbol w1
+          -> { warnings : Map Symbol w2, errors : Map Symbol e2 }
+            -> a
+              -> [b]
+                -> (Result w1 e1 a, Result w2 e2 [c])
+        = lam accWarnAcc. lam accErrList. lam a. lam list.
+          match list with [b] ++ list then
+            switch f a b
+            case (ResultErr a, c) then
+              let a = { a with warnings = mapUnion accWarnAcc a.warnings } in
+              let cs = _mergeErrors accErrList (_asError c) in
+              (ResultErr a, ResultErr cs)
+            case (ResultOk a, c) then
+              workListErr
+                (mapUnion accWarnAcc a.warnings)
+                (_mergeErrors accErrList (_asError c))
+                a.value
+                list
+            end
+          else
+            let a = { warnings = accWarnAcc, value = a } in
+            (ResultOk a, ResultErr accErrList)
+    in workOK _emptyMap _emptyMap (acc, [])
+
+utest
+  -- Multiply by 10 and reverse the sequence. For the accumulator, error 1 if
+  -- the accumulator length is greater than 2, warn 'b' if current element is
+  -- even. For sequence elements, error 0 on negative, warn 'a' on 0.
+  let work : [Int] -> Int -> (Result Char Int [Int], Result Char Int Int)
+    = lam acc. lam x.
+      let acc = if gti (length acc) 2 then _err 1 else
+        let res = _ok (cons x acc) in
+        if eqi (modi x 2) 0 then _withAnnotations (_warn 'b') res else res in
+      let x = if lti x 0 then _err 0 else
+        let res = _ok (muli x 10) in
+        if eqi x 0 then _withAnnotations (_warn 'a') res else res in
+      (acc, x) in
+  let _prepTest = lam x. (_prepTest x.0, _prepTest x.1) in
+  utest _prepTest (_mapAccumLM work [] [0, 1, 2]) with
+    ((['b', 'b'], Right [2, 1, 0]), (['a'], Right [0, 10, 20])) in
+  utest _prepTest (_mapAccumLM work [] [0, 1, 2, 3, 4]) with
+    ((['b', 'b'], Left [1]), (['a'], Left [])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, 2]) with
+    ((['b', 'b'], Right [2, negi 1 ,0]), (['a'], Left [0])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2]) with
+    ((['b', 'b'], Right [negi 2, negi 1 ,0]), (['a'], Left [0, 0])) in
+  utest _prepTest (_mapAccumLM work [] [0, 0, negi 2]) with
+    ((['b', 'b', 'b'], Right [negi 2, 0 ,0]), (['a', 'a'], Left [0])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2, negi 3, negi 4]) with
+    ((['b', 'b'], Left [1]), (['a'], Left [0, 0, 0])) in
   ()
 with ()
 
@@ -501,6 +601,64 @@ utest
             (lam e. utest _bind5 a b c d e f with semantics a b c d e f using eq in ())))))
 with ()
 
+-- Selects `r` if it is error free, otherwise selects `f` applied to `()`.
+let _orElse : all w. all e. all a. (() -> Result w e a) -> Result w e a -> Result w e a
+  = lam f. lam r.
+    match r with ResultOk _ then r else f ()
+
+utest
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['a'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['a'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['b'], Right 2) in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['b'], Left [2]) in
+  ()
+with ()
+
+-- Selects `r1` if it is error free, selects `r2` if it is error free and `r1`
+-- contains errors. If both `r1` and `r2` contains errors, these are merged. In
+-- all cases, warnings are propagated between `r1` and `r2`.
+-- NOTE(oerikss, 2023-05-10): We might not want to keep the semantics of the last
+-- sentence. On the other-hand, you can use orElse of you do not want share data
+-- between `r1` and `r2`.
+let _or : all w. all e. all a. Result w e a -> Result w e a -> Result w e a
+  = lam r1. lam r2.
+    switch (r1, r2)
+    case (ResultOk _, ResultOk r2) then _warns r2.warnings r1
+    case (ResultOk _, ResultErr r2) then _warns r2.warnings r1
+    case (ResultErr r1, ResultOk _) then _warns r1.warnings r2
+    case (ResultErr r1, ResultErr r2) then ResultErr (_mergeErrors r1 r2)
+    end
+
+utest
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 2) in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Left [1, 2]) in
+  ()
+with ()
+
 let result =
   -- Constructors
   { ok = _ok
@@ -524,4 +682,8 @@ let result =
   , bind4 = _bind4
   , bind5 = _bind5
   , mapM = _mapM
+  , mapAccumLM = _mapAccumLM
+  -- Conditionals
+  , orElse = _orElse
+  , or = _or
   }
