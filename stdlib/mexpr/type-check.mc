@@ -34,7 +34,8 @@ type Level = Int
 type TCEnv = {
   varEnv: Map Name Type,
   conEnv: Map Name Type,
-  tyScopes: Map Name Level,
+  tyVarEnv: Map Name Level,
+  tyConEnv: Map Name (Level, [Name], Type),
   currentLvl: Level,
   disableRecordPolymorphism: Bool
 }
@@ -42,9 +43,11 @@ type TCEnv = {
 let _tcEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyScopes =
+  tyVarEnv = mapEmpty nameCmp,
+  tyConEnv =
   mapFromSeq nameCmp
-    (map (lam t: (String, [String]). (nameNoSym t.0, 0)) builtinTypes),
+    (map (lam t: (String, [String]).
+      (nameNoSym t.0, (0, map nameSym t.1, tyvariant_ []))) builtinTypes),
 
   currentLvl = 0,
   disableRecordPolymorphism = true
@@ -62,7 +65,8 @@ type UnifyEnv = {
   foundType: Type,  -- The inferred type of the expression
   lhsName: Type,  -- The currently examined left-hand subtype, before resolving aliases
   rhsName: Type,  -- The currently examined right-hand subtype, before resolving aliases
-  tyScopes: Map Name Level,  -- The free types in scope and their levels
+  tyVarEnv: Map Name Level,  -- The free type variables in scope and their levels
+  tyConEnv: Map Name (Level, [Name], Type),  -- The free type constructors in scope
   names: BiNameMap  -- The bijective correspondence between bound variables in scope
 }
 
@@ -172,7 +176,8 @@ lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
       foundType = ty2,
       lhsName = ty1,
       rhsName = ty2,
-      tyScopes = tcEnv.tyScopes
+      tyVarEnv = tcEnv.tyVarEnv,
+      tyConEnv = tcEnv.tyConEnv
     } in
     unifyTypes env (ty1, ty2)
 
@@ -275,7 +280,7 @@ lang VarTypeUnify = Unify + VarTypeAst
   sem unifyCheckBase env boundVars tv =
   | TyVar t ->
     if not (setMem t.ident boundVars) then
-      match optionMap (lti tv.level) (mapLookup t.ident env.tyScopes) with
+      match optionMap (lti tv.level) (mapLookup t.ident env.tyVarEnv) with
         !Some false then
         let msg = join [
           "* Encountered a type variable escaping its scope: ",
@@ -392,7 +397,7 @@ lang ConTypeUnify = Unify + ConTypeAst
 
   sem unifyCheckBase env boundVars tv =
   | TyCon t ->
-    match optionMap (lti tv.level) (mapLookup t.ident env.tyScopes) with
+    match optionMap (lam r. lti tv.level r.0) (mapLookup t.ident env.tyConEnv) with
       !Some false then
       let msg = join [
         "* Encountered a type constructor escaping its scope: ",
@@ -529,9 +534,73 @@ end
 
 -- The default cases handle all other constructors!
 
--------------------
--- TYPE CHECKING --
--------------------
+-------------------------
+-- TYPE CHECKING UTILS --
+-------------------------
+
+-- resolveType resolves type aliases and substitutes Unknown types with type
+-- variables.
+-- NOTE(aathn, 2023-05-10): In the future, this should be replaced
+-- with something which also performs a proper kind check.
+lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
+  UnknownTypeAst + VarSortAst + VarTypeSubstitute + AppTypeGetArgs
+  sem resolveType
+    : Info -> Option (VarSort, Level)
+      -> Map Name (Level, [Name], Type) -> Type -> Type
+  sem resolveType info sort tycons =
+  | (TyCon _ | TyApp _) & ty ->
+    let mkAppTy =
+      foldl (lam ty1. lam ty2.
+        TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2}) in
+    match getTypeArgs ty with (constr, args) in
+    let args = map (resolveType info sort tycons) args in
+    match constr with (TyCon t) & conTy then
+      match mapLookup t.ident tycons with Some (_, params, def) then
+        let appTy = mkAppTy conTy args in
+        match def with !TyVariant _ then  -- It's an alias
+          match (length params, length args) with (paramLen, argLen) in
+          if eqi paramLen argLen then
+            let subst = foldl2 (lam s. lam v. lam t. mapInsert v t s)
+                          (mapEmpty nameCmp) params args
+            in
+            -- We assume def has already been resolved before being put into tycons
+            TyAlias {display = appTy, content = substituteVars subst def}
+          else
+            errorSingle [infoTy ty] (join [
+              "* Encountered a misformed type alias.\n",
+              "* Type ", nameGetStr t.ident, " is declared to have ",
+              int2string paramLen, " parameters.\n",
+              "* Found ", int2string argLen, " arguments.\n",
+              "* When checking the annotation"
+            ])
+        else
+          appTy
+      else
+        errorSingle [t.info] (join [
+          "* Encountered an unknown type constructor: ", nameGetStr t.ident, "\n",
+          "* When checking the annotation"
+        ])
+    else
+      mkAppTy (resolveType info sort tycons constr) args
+
+  | TyUnknown _ ->
+    match sort with Some (sort, lvl) then
+      newflexvar sort lvl info
+    else
+      let msg = join [
+        "* Encountered Unknown type in an illegal position.\n",
+        "* Unknown is only allowed in annotations, not in definitions or declarations.\n",
+        "* When type checking the expression\n"
+      ] in
+      errorSingle [info] msg
+
+  -- If we encounter a TyAlias, it means that the type was already processed by
+  -- a previous call to typeCheck.
+  | TyAlias t -> TyAlias t
+
+  | ty ->
+    smap_Type_Type (resolveType info sort tycons) ty
+end
 
 lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
   sem removeFlexType =
@@ -558,24 +627,9 @@ lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
     smap_Pat_Pat removeFlexPat pat
 end
 
-lang SubstituteUnknown = UnknownTypeAst + VarSortAst
-  sem substituteUnknown (sort : VarSort) (lvl : Level) (info : Info) =
-  | TyUnknown _ ->
-    newflexvar sort lvl info
-  | ty ->
-    smap_Type_Type (substituteUnknown sort lvl info) ty
-
-  sem checkUnknown (info : Info) =
-  | TyUnknown _ ->
-    let msg = join [
-      "* Encountered Unknown type in an illegal position.\n",
-      "* Unknown is only allowed in annotations, not in definitions or declarations.\n",
-      "* When type checking the expression\n"
-    ] in
-    errorSingle [info] msg
-  | ty ->
-    sfold_Type_Type (lam. lam ty. checkUnknown info ty) () ty
-end
+-------------------
+-- TYPE CHECKING --
+-------------------
 
 lang TypeCheck = Unify + Generalize + RemoveFlex
   -- Type check 'tm', with FreezeML-style type inference. Returns the
@@ -633,13 +687,11 @@ lang VarTypeCheck = TypeCheck + VarAst
       errorSingle [t.info] msg
 end
 
-lang LamTypeCheck = TypeCheck + LamAst + SubstituteUnknown
+lang LamTypeCheck = TypeCheck + LamAst + ResolveType
   sem typeCheckExpr env =
   | TmLam t ->
-    -- If there is a programmer annotation, use it; otherwise, use the tyIdent field,
-    -- in which there may be a propagated type from an earlier annotation.
-    let tyAnnot = optionGetOr t.tyIdent (sremoveUnknown t.tyAnnot) in
-    let tyIdent = substituteUnknown (MonoVar ()) env.currentLvl t.info tyAnnot in
+    let tyIdent =
+      resolveType t.info (Some (MonoVar (), env.currentLvl)) env.tyConEnv t.tyAnnot in
     let body = typeCheckExpr (_insertVar t.ident tyIdent env) t.body in
     let tyLam = ityarrow_ t.info tyIdent (tyTm body) in
     TmLam {t with body = body, tyIdent = tyIdent, ty = tyLam}
@@ -685,17 +737,18 @@ lang FlexDisableGeneralize = Unify
 end
 
 lang LetTypeCheck =
-  TypeCheck + LetAst + LamAst + FunTypeAst + SubstituteUnknown +
+  TypeCheck + LetAst + LamAst + FunTypeAst + ResolveType +
   IsValue + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
-    let tyBody = substituteUnknown (PolyVar ()) newLvl t.info t.tyAnnot in
+    let tyBody =
+      resolveType t.info (Some (PolyVar (), newLvl)) env.tyConEnv t.tyAnnot in
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
-        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyScopes vars in
-        let newEnv = {env with currentLvl = newLvl, tyScopes = newTyVars} in
+        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
         let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, stripped)) in
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
@@ -711,16 +764,19 @@ lang LetTypeCheck =
         (body, tyBody)
       with (body, tyBody) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-    TmLet {t with body = body
-                , tyBody = tyBody
-                , inexpr = inexpr
-                , ty = tyTm inexpr}
+    -- NOTE(aathn, 2023-05-10): tyBody is updated but not tyAnnot,
+    -- which means that aliases will not be resolved in tyAnnot.
+    -- Later stages should refer exclusively to tyBody.
+    TmLet {t with body = body,
+                  tyBody = tyBody,
+                  inexpr = inexpr,
+                  ty = tyTm inexpr}
 
   sem propagateTyAnnot =
   | (TmLam l, TyArrow a) ->
     let body = propagateTyAnnot (l.body, a.to) in
     let ty = optionGetOr a.from (sremoveUnknown l.tyAnnot) in
-    TmLam {l with body = body, tyIdent = ty}
+    TmLam {l with body = body, tyAnnot = ty}
   | (tm, ty) -> tm
 end
 
@@ -731,7 +787,8 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
-      let tyBody = substituteUnknown (PolyVar ()) newLvl t.info b.tyAnnot in
+      let tyBody =
+        resolveType t.info (Some (PolyVar (), newLvl)) env.tyConEnv b.tyAnnot in
       let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
@@ -739,14 +796,14 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
       with ((recLetEnv, tyVars), bindings) in
-    let newScopes =
-      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyScopes tyVars in
+    let newTyVarEnv =
+      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyVarEnv tyVars in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
       let body =
         if isValue (GVal ()) b.body then
-          let newEnv = {recLetEnv with currentLvl = newLvl, tyScopes = newScopes} in
+          let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
           match stripTyAll b.tyBody with (_, stripped) in
           let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, stripped)) in
           -- Unify the inferred type of the body with the annotated one
@@ -830,34 +887,28 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
-lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + SubstituteUnknown
+lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
   sem typeCheckExpr env =
   | TmType t ->
-    checkUnknown t.info t.tyIdent;
-    let isAlias =
-      match t.tyIdent with TyVariant r then not (mapIsEmpty r.constrs) else true in
+    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    -- NOTE(aathn, 2023-05-08): Aliases are treated as the underlying
+    -- type and do not need to be scope checked.
+    let newLvl =
+      match tyIdent with !TyVariant _ then addi 1 env.currentLvl else 0 in
+    let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyIdent) env.tyConEnv in
     let inexpr =
-      if isAlias then
-        -- NOTE(aathn, 2023-05-08): Aliases are treated as the
-        -- underlying type and do not need to be scope checked.
-        typeCheckExpr env t.inexpr
-      else
-        let newLvl = addi 1 env.currentLvl in
-        let newScopes = mapInsert t.ident newLvl env.tyScopes in
-        let inexpr =
-          typeCheckExpr {env with currentLvl = newLvl, tyScopes = newScopes} t.inexpr in
-        unify env [t.info, infoTm inexpr] (newvar env.currentLvl t.info) (tyTm inexpr);
-        inexpr
-    in
-    TmType {t with inexpr = inexpr, ty = tyTm inexpr}
+      typeCheckExpr {env with currentLvl = addi 1 env.currentLvl,
+                              tyConEnv = newTyConEnv} t.inexpr in
+    unify env [t.info, infoTm inexpr] (newvar env.currentLvl t.info) (tyTm inexpr);
+    TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
 
-lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + SubstituteUnknown
+lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
   sem typeCheckExpr env =
   | TmConDef t ->
-    checkUnknown t.info t.tyIdent;
-    let inexpr = typeCheckExpr (_insertCon t.ident t.tyIdent env) t.inexpr in
-    TmConDef {t with inexpr = inexpr, ty = tyTm inexpr}
+    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    let inexpr = typeCheckExpr (_insertCon t.ident tyIdent env) t.inexpr in
+    TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some lty then
@@ -896,13 +947,13 @@ lang NeverTypeCheck = TypeCheck + NeverAst
   | TmNever t -> TmNever {t with ty = newvar env.currentLvl t.info}
 end
 
-lang ExtTypeCheck = TypeCheck + ExtAst + SubstituteUnknown
+lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
   sem typeCheckExpr env =
   | TmExt t ->
-    checkUnknown t.info t.tyIdent;
-    let env = {env with varEnv = mapInsert t.ident t.tyIdent env.varEnv} in
+    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    let env = {env with varEnv = mapInsert t.ident tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
-    TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
+    TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
 
 ---------------------------

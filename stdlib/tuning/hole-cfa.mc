@@ -456,7 +456,7 @@ let debug = false in
 let parse = lam str.
   let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords ast in
-  symbolizeExpr {symEnvEmpty with strictTypeVars = false} ast
+  symbolize ast
 in
 let test
 : Bool -> Expr -> [String] -> [(String, [AbsVal], Map NameInfo (Map [NameInfo] Int), IndexMap)] =
@@ -771,7 +771,7 @@ using eqTestHole in
 let t = parse
 "
 type T in
-con C: Bool -> t in
+con C: Bool -> T in
 let h = hole (Boolean {default = true}) in
 let p = C h in
 let res = match h with a | true then 1 else 2 in

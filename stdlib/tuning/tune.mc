@@ -578,7 +578,7 @@ let timeSensitive = false in
 let parse = lam str.
   let ast = parseMExprStringKeywords holeKeywords str in
   let ast = makeKeywords ast in
-  symbolizeExpr {symEnvEmpty with strictTypeVars = false} ast
+  symbolize ast
 in
 
 let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchState) =
