@@ -35,7 +35,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck
   sem withType (ty : Type) =
   | TmHole t -> TmHole {t with ty = ty}
 
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
 
   sem default =

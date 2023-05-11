@@ -23,20 +23,16 @@ include "type.mc"
 -- The environment differs from boot in that we use strings directly (we do
 -- have SIDs available, however, if needed).
 
--- Poor man's row polymorphism: ext represents an arbitrary extension of the environment
-type SymEnvBase ext = {
+type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
   tyVarEnv: Map String Name,
   tyConEnv: Map String Name,
   allowFree: Bool,
-  ignoreExternals: Bool,
-  ext: ext
+  ignoreExternals: Bool
 }
 
-type SymEnv = SymEnvBase ()
-
-let mkSymEnvEmpty = lam ext. {
+let symEnvEmpty = {
   varEnv = mapEmpty cmpString,
   conEnv = mapEmpty cmpString,
   tyVarEnv = mapEmpty cmpString,
@@ -46,11 +42,8 @@ let mkSymEnvEmpty = lam ext. {
   mapFromSeq cmpString (map (lam t. (t.0, nameNoSym t.0)) builtinTypes),
 
   allowFree = false,
-  ignoreExternals = false,
-  ext = ext
+  ignoreExternals = false
 }
-
-let symEnvEmpty = mkSymEnvEmpty ()
 
 type LookupParams = {kind : String, info : [Info], allowFree : Bool}
 
@@ -61,15 +54,12 @@ let _handleUnbound : LookupParams -> Name -> () -> Name
       errorSingle lkup.info
         (join ["Unknown ", lkup.kind, " in symbolizeExpr: ", nameGetStr ident])
 
-let _lookupName : LookupParams -> Name -> Map String Name -> Name
-  = lam lkup. lam ident. lam env.
-    optionGetOrElse (_handleUnbound lkup ident)
-      (mapLookup (nameGetStr ident) env)
-
 let _getName : LookupParams -> Name -> Map String Name -> Name
   = lam lkup. lam ident. lam env.
     if nameHasSym ident then ident
-    else _lookupName lkup ident env
+    else
+      optionGetOrElse (_handleUnbound lkup ident)
+        (mapLookup (nameGetStr ident) env)
 
 let _setName : Map String Name -> Name -> (Map String Name, Name)
   = lam env. lam ident.
@@ -86,16 +76,9 @@ lang Sym = Ast
   -- Symbolize with an environment
   sem symbolizeExpr : SymEnv -> Expr -> Expr
   sem symbolizeExpr (env : SymEnv) =
-  | t -> symbolizeExprBase symbolizeExpr env t
+  | t -> smap_Expr_Expr (symbolizeExpr env) t
 
-  -- Extensible symbolization function: the argument function should be used in
-  -- place of all recursive calls.
-  sem symbolizeExprBase
-    : all ext. (SymEnvBase ext -> Expr -> Expr) -> SymEnvBase ext -> Expr -> Expr
-  sem symbolizeExprBase symbolize env =
-  | t -> smap_Expr_Expr (symbolize env) t
-
-  sem symbolizeType : all ext. SymEnvBase ext -> Type -> Type
+  sem symbolizeType : SymEnv -> Type -> Type
   sem symbolizeType env =
   | t -> smap_Type_Type (symbolizeType env) t
 
@@ -105,8 +88,7 @@ lang Sym = Ast
   -- nice to pass via state monad or something.  env is the
   -- environment from the outside, plus the names added thus far in
   -- the pattern patEnv is only the newly added names
-  sem symbolizePat
-    : all ext. SymEnvBase ext -> Map String Name -> Pat -> (Map String Name, Pat)
+  sem symbolizePat : all ext. SymEnv -> Map String Name -> Pat -> (Map String Name, Pat)
   sem symbolizePat env patEnv =
   | t -> smapAccumL_Pat_Pat (symbolizePat env) patEnv t
 
@@ -124,7 +106,7 @@ lang Sym = Ast
 end
 
 lang VarSym = Sym + VarAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmVar t ->
     let ident =
       _getName {kind = "variable",
@@ -136,25 +118,25 @@ lang VarSym = Sym + VarAst
 end
 
 lang LamSym = Sym + LamAst + VarSym
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmLam t ->
     match _setName env.varEnv t.ident with (varEnv, ident) in
     TmLam {t with ident = ident,
                   tyAnnot = symbolizeType env t.tyAnnot,
-                  body = symbolize {env with varEnv = varEnv} t.body}
+                  body = symbolizeExpr {env with varEnv = varEnv} t.body}
 end
 
 lang LetSym = Sym + LetAst + AllTypeAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmLet t ->
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match _setName env.varEnv t.ident with (varEnv, ident) in
     TmLet {t with ident = ident,
                   tyAnnot = tyAnnot,
-                  body = symbolize {env with tyVarEnv = tyVarEnv} t.body,
-                  inexpr = symbolize {env with varEnv = varEnv} t.inexpr}
+                  body = symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body,
+                  inexpr = symbolizeExpr {env with varEnv = varEnv} t.inexpr}
 
-  sem symbolizeTyAnnot : all ext. SymEnvBase ext -> Type -> (Map String Name, Type)
+  sem symbolizeTyAnnot : SymEnv -> Type -> (Map String Name, Type)
   sem symbolizeTyAnnot env =
   | tyAnnot ->
     let setNameFirst = lam env. lam vs.
@@ -170,7 +152,7 @@ lang LetSym = Sym + LetAst + AllTypeAst
 end
 
 lang RecLetsSym = Sym + RecLetsAst + LetSym
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmRecLets t ->
     -- Generate fresh symbols for all identifiers and add to the environment
     let setNameIdent = lam env. lam b.
@@ -183,42 +165,42 @@ lang RecLetsSym = Sym + RecLetsAst + LetSym
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam b. match symbolizeTyAnnot env b.tyAnnot with (tyVarEnv, tyAnnot) in
-                  {b with body = symbolize {newEnv with tyVarEnv = tyVarEnv} b.body,
+                  {b with body = symbolizeExpr {newEnv with tyVarEnv = tyVarEnv} b.body,
                           tyAnnot = tyAnnot})
         bindings in
 
     TmRecLets {t with bindings = bindings,
-                      inexpr = symbolize newEnv t.inexpr}
+                      inexpr = symbolizeExpr newEnv t.inexpr}
 end
 
 lang ExtSym = Sym + ExtAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmExt t ->
     let setName = if env.ignoreExternals then lam x. lam y. (x, y) else _setName in
     match setName env.varEnv t.ident with (varEnv, ident) in
     TmExt {t with ident = ident,
-                  inexpr = symbolize {env with varEnv = varEnv} t.inexpr,
+                  inexpr = symbolizeExpr {env with varEnv = varEnv} t.inexpr,
                   tyIdent = symbolizeType env t.tyIdent}
 end
 
 lang TypeSym = Sym + TypeAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmType t ->
     match _setName env.tyConEnv t.ident with (tyConEnv, ident) in
     match mapAccumL _setName env.tyVarEnv t.params with (tyVarEnv, params) in
     TmType {t with ident = ident,
                    params = params,
                    tyIdent = symbolizeType {env with tyVarEnv = tyVarEnv} t.tyIdent,
-                   inexpr = symbolize {env with tyConEnv = tyConEnv} t.inexpr}
+                   inexpr = symbolizeExpr {env with tyConEnv = tyConEnv} t.inexpr}
 end
 
 lang DataSym = Sym + DataAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmConDef t ->
     match _setName env.conEnv t.ident with (conEnv, ident) in
     TmConDef {t with ident = ident,
                      tyIdent = symbolizeType env t.tyIdent,
-                     inexpr = symbolize {env with conEnv = conEnv} t.inexpr}
+                     inexpr = symbolizeExpr {env with conEnv = conEnv} t.inexpr}
   | TmConApp t ->
     let ident =
       _getName {kind = "constructor",
@@ -227,18 +209,18 @@ lang DataSym = Sym + DataAst
         t.ident env.conEnv
     in
     TmConApp {t with ident = ident,
-                     body = symbolize env t.body}
+                     body = symbolizeExpr env t.body}
 end
 
 lang MatchSym = Sym + MatchAst
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | TmMatch t ->
     match symbolizePat env (mapEmpty cmpString) t.pat with (thnVarEnv, pat) in
     let thnPatEnv = {env with varEnv = mapUnion env.varEnv thnVarEnv} in
-    TmMatch {t with target = symbolize env t.target,
+    TmMatch {t with target = symbolizeExpr env t.target,
                     pat = pat,
-                    thn = symbolize thnPatEnv t.thn,
-                    els = symbolize env t.els}
+                    thn = symbolizeExpr thnPatEnv t.thn,
+                    els = symbolizeExpr env t.els}
 end
 
 -----------

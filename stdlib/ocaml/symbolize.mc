@@ -9,15 +9,15 @@ lang OCamlSym =
   + RecordTypeAst + ConTypeSym + OCamlExternal
   + OCamlString + OCamlRecord + OCamlLabel
 
-  sem symbolizeExprBase symbolize env =
+  sem symbolizeExpr (env : SymEnv) =
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm.
       match arm with (pat, expr) in
       match symbolizePat env (mapEmpty cmpString) pat with (patEnv, pat) in
       let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
-      (pat, symbolize thnEnv expr)
+      (pat, symbolizeExpr thnEnv expr)
     in
-    OTmMatch { target = symbolize env target, arms = map symbArm arms }
+    OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
   | OTmConApp t ->
     let ident =
       _getName {kind = "constructor",
@@ -25,7 +25,7 @@ lang OCamlSym =
                 allowFree = env.allowFree}
         t.ident env.conEnv
     in
-    let args = map (symbolize env) t.args in
+    let args = map (symbolizeExpr env) t.args in
     OTmConApp {t with ident = ident,
                       args = args}
 
