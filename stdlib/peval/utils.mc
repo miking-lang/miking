@@ -107,6 +107,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem tmTypeName : SpecializeNames -> Name
   sem tmTypeName = | names -> getName (names.consNames) "TypeAst_TmType"
 
+  sem tmNeverName : SpecializeNames -> Name
+  sem tmNeverName = | names -> getName (names.consNames) "NeverAst_TmNever"
+
   sem listConsName : SpecializeNames -> Name
   sem listConsName = | names -> getName (names.consNames) "Cons"
 

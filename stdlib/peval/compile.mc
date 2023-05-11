@@ -18,8 +18,6 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
                     + SpecializeInclude + SpecializeLiftMExpr
                     + MExprLambdaLift + SpecializeExtract
 
-  -- Traverse down to the expression that we wanted to specialize
-  -- Insert the extracted dependencies above it.
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
   | TmLam {body = b} -> createSpecExpr deps b
@@ -93,12 +91,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
 --      with (_, extracted) in
       mapInsert id extracted m) (mapEmpty nameCmp) pevalIds in
 
-    let t1 = wallTimeMs () in
     -- Bulk of the time taken
     match includeSpecializeDeps ast with ast in
-    let t2 = wallTimeMs () in
-    printLn "include";
-    printLn (float2string (subf t2 t1));
     -- Find the names of the functions and constructors needed later
     let names = createNames ast in
 
@@ -247,13 +241,7 @@ let distinctCalls = preprocess (bindall_ [
     app_ (var_ "p") (int_ 4)
 ]) in
 
-let t1 = wallTimeMs () in
 match compileSpecialize unknownTyRecUnknown with ast in
-let t2 = wallTimeMs () in
-printLn "tot";
-printLn (float2string (subf t2 t1));
-
-printLn (mexprToString ast);
 
 let ast = typeAnnot ast in
 

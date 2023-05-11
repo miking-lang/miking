@@ -145,7 +145,7 @@ let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordA
                         "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
                         "MatchAst_TmMatch", "Cons", "Nil", "NoInfo", "Info", "_noSymbol",
                         "LetAst_TmLet", "RecLetsAst_TmRecLets", "DataAst_TmConDef",
-                        "DataAst_TmConApp", "TypeAst_TmType",
+                        "DataAst_TmConApp", "TypeAst_TmType", "NeverAst_TmNever",
 
                         --- Patterns
                         "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",
@@ -171,11 +171,7 @@ lang SpecializeInclude = MExprUtestGenerate
   sem includeSpecializeDeps : Expr -> Expr
   sem includeSpecializeDeps =
   | ast ->
-    let t1 = wallTimeMs () in
     let ff = loadRuntime includesLoc in
-    let t2 = wallTimeMs () in
-    printLn "Loadruntime";
-    printLn (float2string (subf t2 t1));
     let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast ff in
     resetStore ();
     eliminateDuplicateCode ast

@@ -446,11 +446,18 @@ lang SpecializeLiftTypeAst = SpecializeLift + TypeAst
 end
 
 
+lang SpecializeLiftNever = SpecializeLift + NeverAst
+
+  sem liftExpr names args =
+  | TmNever {ty=ty, info=info} ->
+    (args, createConAppExpr names tmNeverName [] ty info)
+end
+
 lang SpecializeLiftMExpr =
     SpecializeLiftApp + SpecializeLiftVar + SpecializeLiftRecord +
     SpecializeLiftSeq + SpecializeLiftConst + SpecializeLiftLam + SpecializeLiftSpecialize +
     SpecializeLiftMatch + SpecializeLiftLet + SpecializeLiftRecLets + SpecializeLiftDataAst +
-    SpecializeLiftTypeAst
+    SpecializeLiftTypeAst + SpecializeLiftNever
 end
 
 
@@ -757,6 +764,20 @@ let expected = nconapp_ (tmTypeName names) (urecord_
    ("ty", dummyType),
    ("inexpr", _liftExpr names args uunit_),
    ("params", seq_ []),
+   ("info", liftInfo names (NoInfo ()))]) in
+
+utest expected with k using eqExpr in
+
+--
+------------ TmNever -----------------
+--
+
+let e = never_ in
+
+let k = _liftExpr names args e in
+
+let expected = nconapp_ (tmNeverName names) (urecord_
+  [("ty", liftType names tyunknown_),
    ("info", liftInfo names (NoInfo ()))]) in
 
 utest expected with k using eqExpr in
