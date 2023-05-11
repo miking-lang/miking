@@ -20,10 +20,10 @@ lang OCamlSym =
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
   | OTmConApp t ->
     let ident =
-      _getName {kind = "constructor",
-                info = [],
-                allowFree = env.allowFree}
-        t.ident env.conEnv
+      getSymbol {kind = "constructor",
+                 info = [],
+                 allowFree = env.allowFree}
+        env.conEnv t.ident
     in
     let args = map (symbolizeExpr env) t.args in
     OTmConApp {t with ident = ident,
@@ -32,10 +32,10 @@ lang OCamlSym =
   sem symbolizePat env patEnv =
   | OPatCon t ->
     let ident =
-      _getName {kind = "constructor",
-                info = [],
-                allowFree = env.allowFree}
-        t.ident env.conEnv
+      getSymbol {kind = "constructor",
+                 info = [],
+                 allowFree = env.allowFree}
+        env.conEnv t.ident
     in
     match mapAccumL (symbolizePat env) patEnv t.args with (patEnv, args) in
     (patEnv, OPatCon {t with ident = ident,
