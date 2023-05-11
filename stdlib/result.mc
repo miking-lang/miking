@@ -350,68 +350,69 @@ with ()
 -- Perform a computation on the values of a sequence while simultaneously
 -- folding an accumulator over the sequence from the left. Produces a non-error
 -- only if all individual computations produce a non-error. Returns immediately
--- if the accumulator is an error. Otherwise, all errors and warnings are
--- preserved.
-let _mapAccumLM : all w1. all e1. all w2. all e2. all a. all b. all c.
-  (a -> b -> (Result w1 e1 a, Result w2 e2 c))
+-- if the accumulator is an error and its errors and warnings are merged into
+-- the sequence result. Otherwise, all errors and warnings are preserved.
+let _mapAccumLM : all w. all e. all a. all b. all c.
+  (a -> b -> (Result w e a, Result w e c))
    -> a
      -> [b]
-       -> (Result w1 e1 a, Result w2 e2 [c])
+       -> (Result w e a, Result w e [c])
   = lam f. lam acc.
     recursive
       let workOK
-        : Map Symbol w1
-          -> Map Symbol w2
+        : Map Symbol w
+          -> Map Symbol w
             -> (a, [c])
               -> [b]
-                -> (Result w1 e1 a, Result w2 e2 [c])
-        = lam accWarnAcc. lam accWarnList. lam acc. lam list.
+                -> (Result w e a, Result w e [c])
+        = lam accWarnAcc. lam accWarnSeq. lam acc. lam seq.
           match acc with (a, cs) in
-          match list with [b] ++ list then
+          match seq with [b] ++ seq then
             switch f a b
             case (ResultOk a, ResultOk c) then
               workOK
                 (mapUnion accWarnAcc a.warnings)
-                (mapUnion accWarnList c.warnings)
+                (mapUnion accWarnSeq c.warnings)
                 (a.value, snoc cs c.value)
-                list
+                seq
             case (ResultErr a, c) then
-              let a = { a with warnings = mapUnion accWarnAcc a.warnings } in
-              let cs = _asError c in
-              let cs =
-                { cs with warnings = mapUnion accWarnList cs.warnings }
+              let a =
+                ResultErr { a with warnings = mapUnion accWarnAcc a.warnings }
               in
-              (ResultErr a, ResultErr cs)
+              let cs = ResultErr (_asError (_warns accWarnSeq c)) in
+              (a, _withAnnotations a cs)
             case (ResultOk a, ResultErr c) then
-              workListErr
+              workSeqErr
                 (mapUnion accWarnAcc a.warnings)
-                { c with warnings = mapUnion accWarnList c.warnings }
+                { c with warnings = mapUnion accWarnSeq c.warnings }
                 a.value
-                list
+                seq
             end
           else
             let a = { warnings = accWarnAcc, value = a } in
-            let cs = { warnings = accWarnList, value = cs } in
+            let cs = { warnings = accWarnSeq, value = cs } in
             (ResultOk a, ResultOk cs)
-      let workListErr
-        : Map Symbol w1
-          -> { warnings : Map Symbol w2, errors : Map Symbol e2 }
+      let workSeqErr
+        : Map Symbol w
+          -> { warnings : Map Symbol w, errors : Map Symbol e }
             -> a
               -> [b]
-                -> (Result w1 e1 a, Result w2 e2 [c])
-        = lam accWarnAcc. lam accErrList. lam a. lam list.
-          match list with [b] ++ list then
+                -> (Result w e a, Result w e [c])
+        = lam accWarnAcc. lam accErrList. lam a. lam seq.
+          match seq with [b] ++ seq then
             switch f a b
             case (ResultErr a, c) then
-              let a = { a with warnings = mapUnion accWarnAcc a.warnings } in
-              let cs = _mergeErrors accErrList (_asError c) in
-              (ResultErr a, ResultErr cs)
+              let a =
+                ResultErr { a with warnings = mapUnion accWarnAcc a.warnings }
+              in
+              let cs = ResultErr (_mergeErrors accErrList (_asError c)) in
+              (a, _withAnnotations a cs)
             case (ResultOk a, c) then
-              workListErr
+              workSeqErr
                 (mapUnion accWarnAcc a.warnings)
                 (_mergeErrors accErrList (_asError c))
                 a.value
-                list
+                seq
             end
           else
             let a = { warnings = accWarnAcc, value = a } in
@@ -435,7 +436,7 @@ utest
   utest _prepTest (_mapAccumLM work [] [0, 1, 2]) with
     ((['b', 'b'], Right [2, 1, 0]), (['a'], Right [0, 10, 20])) in
   utest _prepTest (_mapAccumLM work [] [0, 1, 2, 3, 4]) with
-    ((['b', 'b'], Left [1]), (['a'], Left [])) in
+    ((['b', 'b'], Left [1]), (['a', 'b', 'b'], Left [1])) in
   utest _prepTest (_mapAccumLM work [] [0, negi 1, 2]) with
     ((['b', 'b'], Right [2, negi 1 ,0]), (['a'], Left [0])) in
   utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2]) with
@@ -443,7 +444,7 @@ utest
   utest _prepTest (_mapAccumLM work [] [0, 0, negi 2]) with
     ((['b', 'b', 'b'], Right [negi 2, 0 ,0]), (['a', 'a'], Left [0])) in
   utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2, negi 3, negi 4]) with
-    ((['b', 'b'], Left [1]), (['a'], Left [0, 0, 0])) in
+    ((['b', 'b'], Left [1]), (['a', 'b', 'b'], Left [0, 0, 0, 1])) in
   ()
 with ()
 
