@@ -601,6 +601,55 @@ utest
             (lam e. utest _bind5 a b c d e f with semantics a b c d e f using eq in ())))))
 with ()
 
+
+-- Perform a computation only if both elements in the input are error
+-- free. Preserves warnings and errors, element-wise, but if the input have an
+-- error then the action won't run, thus any errors or warnings it would have
+-- been produced are not present in the result.
+let _bindParallel2
+  : all w1. all e1. all w2. all e2. all a1. all a2. all b1. all b2.
+    (Result w1 e1 a1, Result w2 e2 a2)
+      -> (a1 -> a2 -> (Result w1 e1 b1, Result w2 e2 b2))
+         -> (Result w1 e1 b1, Result w2 e2 b2)
+  = lam p. lam f.
+    switch p
+    case (ResultOk a1, ResultOk a2) then
+      match f a1.value a2.value with (b1, b2) in
+      (_warns a1.warnings b1, _warns a2.warnings b2)
+    case (a1, a2) then
+      (ResultErr (_asError a1), ResultErr (_asError a2))
+    end
+
+utest
+  let flip = lam x. lam y. (_ok y, _ok x) in
+  let _prepTest = lam p. (_prepTest p.0, _prepTest p.1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Right 2), (['b'], Right 1))
+  in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left []), (['b'], Left [2]))
+  in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left [1]), (['b'], Left []))
+  in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left [1]), (['b'], Left [2]))
+  in
+  ()
+  with ()
+
 -- Selects `r` if it is error free, otherwise selects `f` applied to `()`.
 let _orElse : all w. all e. all a. (() -> Result w e a) -> Result w e a -> Result w e a
   = lam f. lam r.
@@ -681,6 +730,7 @@ let result =
   , bind3 = _bind3
   , bind4 = _bind4
   , bind5 = _bind5
+  , bindParallel2 = _bindParallel2
   , mapM = _mapM
   , mapAccumLM = _mapAccumLM
   -- Conditionals
