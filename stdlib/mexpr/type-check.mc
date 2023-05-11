@@ -538,22 +538,46 @@ end
 -- TYPE CHECKING UTILS --
 -------------------------
 
--- resolveType resolves type aliases and substitutes Unknown types with type
--- variables.
+lang FlexDisableGeneralize = Unify
+  sem weakenTyFlex (lvl : Level) =
+  | TyFlex t & ty ->
+    switch deref t.contents
+    case Unbound r then
+      sfold_VarSort_Type (lam. lam ty. weakenTyFlex lvl ty) () r.sort;
+      let sort = match r.sort with PolyVar _ then MonoVar () else r.sort in
+      modref t.contents (Unbound {r with level = mini lvl r.level, sort = sort})
+    case Link tyL then
+      weakenTyFlex lvl tyL
+    end
+  | ty ->
+    sfold_Type_Type (lam. lam ty. weakenTyFlex lvl ty) () ty
+
+  sem disableRecordGeneralize (lvl : Level) =
+  | TyFlex t & ty ->
+    switch deref t.contents
+    case Unbound {sort = RecordVar _} then
+      weakenTyFlex lvl ty
+    case Unbound _ then ()
+    case Link tyL then
+      disableRecordGeneralize lvl tyL
+    end
+  | ty ->
+    sfold_Type_Type (lam. lam ty. disableRecordGeneralize lvl ty) () ty
+end
+
+-- resolveType resolves type aliases and checks that they are fully applied.
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + VarSortAst + VarTypeSubstitute + AppTypeGetArgs
-  sem resolveType
-    : Info -> Option (VarSort, Level)
-      -> Map Name (Level, [Name], Type) -> Type -> Type
-  sem resolveType info sort tycons =
+  UnknownTypeAst + VarTypeSubstitute + AppTypeGetArgs
+  sem resolveType : Info -> Bool -> Map Name (Level, [Name], Type) -> Type -> Type
+  sem resolveType info allowUnknown tycons =
   | (TyCon _ | TyApp _) & ty ->
     let mkAppTy =
       foldl (lam ty1. lam ty2.
         TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2}) in
     match getTypeArgs ty with (constr, args) in
-    let args = map (resolveType info sort tycons) args in
+    let args = map (resolveType info allowUnknown tycons) args in
     match constr with (TyCon t) & conTy then
       match mapLookup t.ident tycons with Some (_, params, def) then
         let appTy = mkAppTy conTy args in
@@ -581,11 +605,10 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
           "* When checking the annotation"
         ])
     else
-      mkAppTy (resolveType info sort tycons constr) args
+      mkAppTy (resolveType info allowUnknown tycons constr) args
 
-  | TyUnknown _ ->
-    match sort with Some (sort, lvl) then
-      newflexvar sort lvl info
+  | TyUnknown _ & ty ->
+    if allowUnknown then ty
     else
       let msg = join [
         "* Encountered Unknown type in an illegal position.\n",
@@ -599,7 +622,17 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   | TyAlias t -> TyAlias t
 
   | ty ->
-    smap_Type_Type (resolveType info sort tycons) ty
+    smap_Type_Type (resolveType info allowUnknown tycons) ty
+end
+
+lang SubstituteUnknown = UnknownTypeAst + VarSortAst + AliasTypeAst
+  sem substituteUnknown (sort : VarSort) (lvl : Level) (info : Info) =
+  | TyUnknown _ ->
+    newflexvar sort lvl info
+  | TyAlias t ->
+    TyAlias {t with content = substituteUnknown sort lvl info t.content}
+  | ty ->
+    smap_Type_Type (substituteUnknown sort lvl info) ty
 end
 
 lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
@@ -687,14 +720,14 @@ lang VarTypeCheck = TypeCheck + VarAst
       errorSingle [t.info] msg
 end
 
-lang LamTypeCheck = TypeCheck + LamAst + ResolveType
+lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown
   sem typeCheckExpr env =
   | TmLam t ->
-    let tyParam =
-      resolveType t.info (Some (MonoVar (), env.currentLvl)) env.tyConEnv t.tyAnnot in
+    let tyAnnot = resolveType t.info true env.tyConEnv t.tyAnnot in
+    let tyParam = substituteUnknown (MonoVar ()) env.currentLvl t.info tyAnnot in
     let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
     let tyLam = ityarrow_ t.info tyParam (tyTm body) in
-    TmLam {t with body = body, tyParam = tyParam, ty = tyLam}
+    TmLam {t with body = body, tyAnnot = tyAnnot, tyParam = tyParam, ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
@@ -709,41 +742,14 @@ lang AppTypeCheck = TypeCheck + AppAst
     TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
 end
 
-lang FlexDisableGeneralize = Unify
-  sem weakenTyFlex (lvl : Level) =
-  | TyFlex t & ty ->
-    switch deref t.contents
-    case Unbound r then
-      sfold_VarSort_Type (lam. lam ty. weakenTyFlex lvl ty) () r.sort;
-      let sort = match r.sort with PolyVar _ then MonoVar () else r.sort in
-      modref t.contents (Unbound {r with level = mini lvl r.level, sort = sort})
-    case Link tyL then
-      weakenTyFlex lvl tyL
-    end
-  | ty ->
-    sfold_Type_Type (lam. lam ty. weakenTyFlex lvl ty) () ty
-
-  sem disableRecordGeneralize (lvl : Level) =
-  | TyFlex t & ty ->
-    switch deref t.contents
-    case Unbound {sort = RecordVar _} then
-      weakenTyFlex lvl ty
-    case Unbound _ then ()
-    case Link tyL then
-      disableRecordGeneralize lvl tyL
-    end
-  | ty ->
-    sfold_Type_Type (lam. lam ty. disableRecordGeneralize lvl ty) () ty
-end
-
 lang LetTypeCheck =
-  TypeCheck + LetAst + LamAst + FunTypeAst + ResolveType +
+  TypeCheck + LetAst + LamAst + FunTypeAst + ResolveType + SubstituteUnknown +
   IsValue + FlexDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
-    let tyBody =
-      resolveType t.info (Some (PolyVar (), newLvl)) env.tyConEnv t.tyAnnot in
+    let tyAnnot = resolveType t.info true env.tyConEnv t.tyAnnot in
+    let tyBody = substituteUnknown (PolyVar ()) newLvl t.info tyAnnot in
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
@@ -764,10 +770,8 @@ lang LetTypeCheck =
         (body, tyBody)
       with (body, tyBody) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-    -- NOTE(aathn, 2023-05-10): tyBody is updated but not tyAnnot,
-    -- which means that aliases will not be resolved in tyAnnot.
-    -- Later stages should refer exclusively to tyBody.
     TmLet {t with body = body,
+                  tyAnnot = tyAnnot,
                   tyBody = tyBody,
                   inexpr = inexpr,
                   ty = tyTm inexpr}
@@ -787,12 +791,12 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
-      let tyBody =
-        resolveType t.info (Some (PolyVar (), newLvl)) env.tyConEnv b.tyAnnot in
+      let tyAnnot = resolveType t.info true env.tyConEnv b.tyAnnot in
+      let tyBody = substituteUnknown (PolyVar ()) newLvl t.info tyAnnot in
       let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
-      ((newEnv, newTyVars), {b with tyBody = tyBody})
+      ((newEnv, newTyVars), {b with tyAnnot = tyAnnot, tyBody = tyBody})
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
       with ((recLetEnv, tyVars), bindings) in
@@ -890,7 +894,7 @@ end
 lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
   sem typeCheckExpr env =
   | TmType t ->
-    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    let tyIdent = resolveType t.info false env.tyConEnv t.tyIdent in
     -- NOTE(aathn, 2023-05-08): Aliases are treated as the underlying
     -- type and do not need to be scope checked.
     let newLvl =
@@ -906,7 +910,7 @@ end
 lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
   sem typeCheckExpr env =
   | TmConDef t ->
-    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    let tyIdent = resolveType t.info false env.tyConEnv t.tyIdent in
     let inexpr = typeCheckExpr (_insertCon t.ident tyIdent env) t.inexpr in
     TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->
@@ -950,7 +954,7 @@ end
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
   sem typeCheckExpr env =
   | TmExt t ->
-    let tyIdent = resolveType t.info (None ()) env.tyConEnv t.tyIdent in
+    let tyIdent = resolveType t.info false env.tyConEnv t.tyIdent in
     let env = {env with varEnv = mapInsert t.ident tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
     TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
@@ -1509,5 +1513,3 @@ iter runTest tests;
 
 -- TODO(aathn, 2021-09-28): Proper error reporting and propagation
 -- Report a "stack trace" when encountering a unification failure
-
--- TODO(aathn, 2021-09-28): Value restriction

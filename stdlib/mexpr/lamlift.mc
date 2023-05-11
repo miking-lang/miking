@@ -215,7 +215,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                    ty = TyUnknown {info = info}})
           t.body
           fv in
-      let tyBody = updateBindingType fv t.tyBody in
+      let annot = optionGetOr t.tyAnnot (sremoveUnknown t.tyBody) in
+      let tyBody = updateBindingType fv annot in
       let tyAnnot = if null fv then t.tyAnnot else ityunknown_ t.info in
       let subExpr = lam info.
         foldr
@@ -259,7 +260,8 @@ lang LambdaLiftInsertFreeVariables = MExprAst
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
-        let tyBody = updateBindingType fv bind.tyBody in
+        let annot = optionGetOr bind.tyAnnot (sremoveUnknown bind.tyBody) in
+        let tyBody = updateBindingType fv annot in
         let tyAnnot = if null fv then bind.tyAnnot else ityunknown_ bind.info in
         let body = insertFreeVariablesH solutions subMap body in
         {bind with tyBody = tyBody, tyAnnot = tyAnnot, body = body}
