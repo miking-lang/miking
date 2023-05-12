@@ -4,29 +4,14 @@ include "arg.mc"
 include "map.mc"
 include "set.mc"
 include "common.mc"
+include "tuple.mc"
 
--- NOTE(vipa, 2023-03-30): `Path` should be considered to be opaque,
--- don't depend on the underlying type
-
--- type Path = SID
--- let stringToPath = stringToSid
--- let pathToString = sidToString
--- let cmpPath = cmpSID
--- let eqPath = eqSID
-
--- OPT(vipa, 2023-04-16): It ends up being significantly faster to
--- work with paths directly as strings rather than as SIDs, the
--- overhead of the translation costs more than we gain. That said, the
--- paths are typically quite long, so finding something smarter here
--- is probably still a very good avenue for optimization.
-type Path = String
-let stringToPath = lam x. x
-let pathToString = lam x. x
-let cmpPath = cmpString
-let eqPath = eqString
+-- A path representing some file in the repository, either source or
+-- generated through some command.
+type Path
 
 -- This represents whether we should run a task, and if so, what the
--- expected outcome is. This types is ordered, where Dont < Fail <
+-- expected outcome is. This type is ordered, where Dont < Fail <
 -- Success
 type ExpectedResult
 con Dont : () -> ExpectedResult
@@ -71,9 +56,23 @@ con ConditionsImpossible : () -> ConditionStatus
 type MidCmd = {input : Path, cmd : String, tag : String} -> Path
 type EndCmd = {input : Path, cmd : String, tag : String} -> ()
 
+
+type Subdirs
+con IncludeSubs : () -> Subdirs
+con OnlyHere : () -> Subdirs
+
+type File
+con ExactFile : String -> File
+con SuffixFile : String -> File
+
+type MarkApi =
+  { mark : NormalTasks -> [Path] -> ()
+  , glob : [String] -> Subdirs -> File -> [Path]
+  }
 type TestApi =
   { mi : { m : MidCmd, e : EndCmd, f : EndCmd }
   , sh : { m : MidCmd, e : EndCmd, f : EndCmd }
+  , glob : [String] -> Subdirs -> File -> [Path]
   }
 
 type TestCollection =
@@ -86,7 +85,7 @@ type TestCollection =
   -- This function should call its argument with all paths that is in
   -- some way exceptional, in the sense that there's some part of the
   -- normal testing flow that should not run.
-  , exclusions : (NormalTasks -> [Path] -> ()) -> ()
+  , exclusions : MarkApi -> ()
 
   -- This function should call its argument with all paths that should
   -- only be tested as normal if some dependencies are met. Note that:
@@ -99,7 +98,7 @@ type TestCollection =
   --
   -- This means that you don't need to specify the same path in both
   -- `exclusions` and `conditionalInclusions`, the latter is enough.
-  , conditionalInclusions : (NormalTasks -> [Path] -> ()) -> ()
+  , conditionalInclusions : MarkApi -> ()
 
   -- This function should check if all dependencies are met for this
   -- set of tests and/or if they theoretically *could* be met, i.e.,
@@ -155,22 +154,135 @@ let testColl : String -> TestCollection = lam name.
   , newTests = lam. ()
   }
 
-let _dir = sysGetCwd ()
-
--- Find all files that match a given glob. Uses bash-style globs,
--- including `**` for matching any number of nested directories. Only
--- matches files under `src/`.
-let glob : String -> [Path] = lam glob.
-  let bashCmd = join ["\"for f in src/", glob, "; do echo \\$f; done\""] in
-  let res = sysRunCommand ["bash", "-O", "globstar", "-O", "nullglob", "-c", bashCmd] "" _dir in
-  let paths = map stringToPath (init (strSplit "\n" res.stdout)) in
-  (if null paths then printLn (concat "Warning, empty glob: " glob) else ());
-  paths
+-- Example:
+-- glob ["stdlib", "parser"] (IncludeSubs ()) (SuffixFile ".mc")
+-- is equivalent with the following bash-style glob:
+-- stdlib/parser/**/*.mc
 
 -------------------------------------------------------------------
 -- The public API ends here, with one exception: `testMain` is also
 -- considered public
 -------------------------------------------------------------------
+
+type CollId = String
+
+type Glob =
+  { dirs : [String]
+  , subdirs : Subdirs
+  , file : File
+  }
+
+let _drop = lam n. lam s. subsequence s n (subi (length s) n)
+
+let _restrictToDir : [String] -> Glob -> Option Glob = lam dirs. lam glob.
+  let fixedGlob = {glob with dirs = tail dirs, subdirs = OnlyHere ()} in
+  if isPrefix eqString (cons "src" glob.dirs) dirs then
+    let remainingDirs = _drop (length glob.dirs) dirs in
+    switch (remainingDirs, glob.subdirs)
+    case ([], _) then Some fixedGlob
+    case (_, IncludeSubs _) then Some fixedGlob
+    case _ then None ()
+    end
+  else None ()
+
+let _matchesGlob : Glob -> ([String], String) -> Bool = lam glob. lam f.
+  match f with (dirs, file) in
+  if isPrefix eqString glob.dirs dirs then
+    let remainingDirs = _drop (length glob.dirs) dirs in
+    let dirsMatch = switch (remainingDirs, glob.subdirs)
+      case ([], _) then true
+      case (_, IncludeSubs _) then true
+      case _ then false
+      end in
+    if dirsMatch then
+      switch glob.file
+      case ExactFile f then eqString f file
+      case SuffixFile f then isSuffix eqc f file
+      end
+    else false
+  else false
+
+type MiMode
+con MiBoot : () -> MiMode
+con MiCheat : () -> MiMode
+con MiInstalled : () -> MiMode
+
+let _miModeToString : MiMode -> String = lam m. switch m
+  case MiBoot _ then "boot"
+  case MiCheat _ then "cheat"
+  case MiInstalled _ then "installed"
+  end
+
+type OrigRecord =
+  { path : ([String], String)
+  }
+con OrigPath : OrigRecord -> Path
+type DerivRecord =
+  { orig : OrigRecord
+  , mode : MiMode
+  , testColl : CollId
+  , tag : String
+  }
+con DerivPath : DerivRecord -> Path
+
+let _mkDeriv : Path -> MiMode -> CollId -> String -> Path
+  = lam path. lam mode. lam coll. lam tag.
+  let orig = switch path
+    case OrigPath x then x
+    case DerivPath x then x.orig
+    end in
+  DerivPath
+  { orig = orig
+  , mode = mode
+  , testColl = coll
+  , tag = tag
+  }
+
+let _cmpPath : Path -> Path -> Int = lam a. lam b.
+  switch (a, b)
+  case (OrigPath a, OrigPath b) then tupleCmp2 (seqCmp cmpString) cmpString a.path b.path
+  case (OrigPath _, DerivPath _) then 1
+  case (DerivPath _, OrigPath _) then negi 1
+  case (DerivPath a, DerivPath b) then
+    let res = subi (constructorTag a.mode) (constructorTag b.mode) in
+    if neqi res 0 then res else
+    let res = cmpString a.testColl b.testColl in
+    if neqi res 0 then res else
+    let res = cmpString a.tag b.tag in
+    if neqi res 0 then res else
+    tupleCmp2 (seqCmp cmpString) cmpString a.orig.path b.orig.path
+  end
+
+let _glob
+  : { root : String
+    , glob : Glob
+    , dir : Option [String]
+    , files : Option (Set String)
+    }
+  -> [Path]
+  = lam args.
+    let glob =
+      match args.dir with Some dir then
+        _restrictToDir dir args.glob
+      else Some args.glob in
+    match glob with Some glob then
+      let globStr = strJoin "/" (cons "src" glob.dirs) in
+      let globStr = match glob.subdirs with IncludeSubs _
+        then concat globStr "/**"
+        else globStr in
+      let globStr = switch glob.file
+        case ExactFile f then join [globStr, "/", f]
+        case SuffixFile f then join [globStr, "/*", f]
+        end in
+      let bashCmd = join ["\"for f in ", globStr, "; do echo \\$f; done\""] in
+      let res = sysRunCommand ["bash", "-O", "globstar", "-O", "nullglob", "-c", bashCmd] "" args.root in
+      let stringToPath = lam s. OrigPath { path = match strSplit "/" s with dirs ++ [file] in (dirs, file) } in
+      let paths = init (strSplit "\n" res.stdout) in
+      let paths = match args.files with Some files
+        then filter (lam p. setMem p files) paths
+        else paths in
+      map stringToPath paths
+    else printLn "empty glob"; []
 
 let _minER : ExpectedResult -> ExpectedResult -> ExpectedResult = lam a. lam b.
   switch (a, b)
@@ -202,20 +314,21 @@ let _expandFormat : String -> {i : String, o : String} -> String = lam format. l
   recursive let work : String -> String -> String = lam acc. lam str.
     switch str
     case "" then acc
+    case "%%" ++ str then work (snoc acc '%') str
     case "%i" ++ str then work (concat acc data.i) str
     case "%o" ++ str then work (concat acc data.o) str
     case [c] ++ str then work (snoc acc c) str
     end
   in work "" format
 
-let _phaseTime = ref (wallTimeMs ())
-let _phase : String -> () = lam phase.
-  let now = wallTimeMs () in
-  printError (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
-  printError "\n";
-  flushStderr ();
-  modref _phaseTime now
--- let _phase = lam. ()
+-- let _phaseTime = ref (wallTimeMs ())
+-- let _phase : String -> () = lam phase.
+--   let now = wallTimeMs () in
+--   printError (join [phase, ": ", float2string (subf now (deref _phaseTime))]);
+--   printError "\n";
+--   flushStderr ();
+--   modref _phaseTime now
+let _phase = lam. ()
 
 let testMain : [TestCollection] -> () = lam colls.
   _phase "start";
@@ -229,13 +342,13 @@ let testMain : [TestCollection] -> () = lam colls.
 
   -- NOTE(vipa, 2023-03-30): Set up options and apply defaults if needed
   type Mode in
-  con BuildPerLine : () -> Mode in
+  con Make : () -> Mode in
   con TupRules : () -> Mode in
   con TupFilter : () -> Mode in
   type Options =
     { bootstrapped : Bool, installed : Bool, cheated : Bool, mode : Mode } in
   let options : Options =
-    { bootstrapped = false, installed = false, cheated = false, mode = BuildPerLine () } in
+    { bootstrapped = false, installed = false, cheated = false, mode = Make () } in
 
   let optionsConfig : ParseConfig Options =
     [ ( [("--installed", "", "")]
@@ -258,15 +371,16 @@ let testMain : [TestCollection] -> () = lam colls.
       , "Print targets that have an explicit connection to the mentioned files, for use with tup"
       , lam p. {p.options with mode = TupFilter ()}
       )
-    , ( [("--build-per-line", "", "")]
-      , "Collect (filtered) targets and print their commands such that dependent targets are on the same line and in an appropriate order (default)"
-      , lam p. {p.options with mode = BuildPerLine ()}
+    , ( [("--make", "", "")]
+      , "Print (filtered) targets as make-rules (default)"
+      , lam p. {p.options with mode = Make ()}
       )
     ] in
   match
     let args = tail argv in
-    match index (eqString "--") args
-    with Some idx then splitAt args idx
+    match index (eqString "--") args with Some idx then
+      let x = splitAt args idx in
+      (x.0, tail x.1)
     else (args, [])
   with (args, files) in
   let res = argParse_general {args = args, optionsStartWith = ["--"]} options optionsConfig in
@@ -282,6 +396,50 @@ let testMain : [TestCollection] -> () = lam colls.
     then {options with bootstrapped = true, cheated = true, installed = true}
     else options in
   _phase "options";
+
+  -- TODO(vipa, 2023-05-12): For now assume we're always running in
+  -- the root dir
+  let root = "." in
+  let dir = match options.mode with TupRules _
+    then match files with [dir] ++ _
+      then Some (strSplit "/" dir)
+      else Some []
+    else None () in
+  match
+    let pathDirs = lam p. switch p
+      case OrigPath x then x.path.0
+      case DerivPath x then cons "build" x.orig.path.0
+      end in
+    let pathBasename = lam p. switch p
+      case OrigPath x then x.path.1
+      case DerivPath x then join [x.orig.path.1, ".", x.testColl, ".", _miModeToString x.mode, ".", x.tag]
+      end in
+    match dir with Some dirs then
+      let srcDir = match dirs with ["src"] ++ dirs
+        then strJoin "/" (map (lam. "..") dirs)
+        else strJoin "/" (snoc (map (lam. "..") dirs) "src") in
+      -- NOTE(vipa, 2023-05-15): When we're working in a single
+      -- directory we'll never have paths pointing to any other
+      -- directory, thus we can just print the filename without any
+      -- directories.
+      let pathToString = lam p.
+        utest pathDirs p with dirs in
+        pathBasename p in
+      (srcDir, pathToString)
+    else
+      (concat root "/src/", lam p. strJoin "/" (snoc (pathDirs p) (pathBasename p)))
+  with (srcDirStr, pathToString) in
+
+  let globBase =
+    { root = root
+    , glob = {dirs = [], subdirs = OnlyHere (), file = ExactFile ""}  -- NOTE(vipa, 2023-05-15): The 'glob' field is just a placeholder, it's always replaced
+    , dir = dir
+    , files = match (options.mode, files) with ((TupRules _, _) | (_, []))
+      then None ()
+      else Some (setOfSeq cmpString files)
+    } in
+  let glob = lam dirs. lam subs. lam file.
+    _glob {globBase with glob = {dirs = dirs, subdirs = subs, file = file}} in
 
   -- NOTE(vipa, 2023-03-30): Check the validity of the requested sets
   let argColls : Set String = setOfSeq cmpString argColls in
@@ -313,126 +471,130 @@ let testMain : [TestCollection] -> () = lam colls.
   let unchosenColls = mapDifference colls chosenColls in
   _phase "chosenColls";
 
-  -- NOTE(vipa, 2023-03-30): find all the files we'd normally expect
-  -- to test, if no collection makes changes.
-  let normals : Ref (Map Path NormalTasks) =
-    let x = glob "**/*.mc" in
-    let x = map (lam p. (p, defaultTasks)) x in
-    ref (mapFromSeq cmpPath x) in
-  _phase "basicNormals";
+  -- NOTE(vipa, 2023-03-30): These are all files that would normally
+  -- be tested but have some form of exception from a test collection
+  let normalExceptions : Ref (Map Path NormalTasks) = ref (mapEmpty _cmpPath) in
 
   let intersectAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
-    iter (lam p. modref normals (mapInsertWith _intersectTasks p t (deref normals))) paths in
+    iter (lam p. modref normalExceptions (mapInsertWith _intersectTasks p t (deref normalExceptions))) paths in
   let unionAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
-    iter (lam p. modref normals (mapInsertWith _unionTasks p t (deref normals))) paths in
+    iter (lam p. modref normalExceptions (mapInsertWith _unionTasks p t (deref normalExceptions))) paths in
   let exactAdd : NormalTasks -> [Path] -> () = lam t. lam paths.
-    iter (lam p. modref normals (mapInsert p t (deref normals))) paths in
+    iter (lam p. modref normalExceptions (mapInsert p t (deref normalExceptions))) paths in
   let excludeAdd : NormalTasks -> [Path] -> () = lam. lam paths.
-    iter (lam p. modref normals (mapInsert p noTasks (deref normals))) paths in
+    iter (lam p. modref normalExceptions (mapInsert p noTasks (deref normalExceptions))) paths in
 
-  mapMap (lam c. c.exclusions intersectAdd) colls;
-  mapMap (lam c. c.conditionalInclusions excludeAdd) unchosenColls;
-  mapMap (lam c. c.conditionalInclusions exactAdd) chosenColls;
+  mapFoldWithKey (lam. lam. lam c. c.exclusions {glob = glob, mark = intersectAdd}) () colls;
+  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = excludeAdd}) () unchosenColls;
+  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = exactAdd}) () chosenColls;
   _phase "coll normals";
 
-  -- NOTE(vipa, 2023-03-30): API for adding build tasks
-  type TargetData =
-    { origin : Path
-    , input : Path
-    , command : String
+  type Command =
+    { input : Path
+    , miMode : MiMode
+    , output : Option Path
     , stdout : Path
     , stderr : Path
+    , command : String
     , friendlyCommand : String
-    , extraDep : Option Path
     } in
-  let targets : Ref (Map Path TargetData) = ref (mapEmpty cmpPath) in
-  let orderedTargets : Ref [(Path, TargetData)] = ref [] in
-  let addRaw
-    : String
-    -> Bool
-    -> {input : Path, cmd : String, tag : String, friendlyCommand : String, extraDep : Option Path}
-    -> Path
-    = lam namespace. lam addOutput. lam data.
-      let currTargets = deref targets in
-      let origPath = pathToString data.input in
-      let path = if isPrefix eqc namespace origPath then origPath else concat namespace origPath in
-      let stdout = join [path, ".", data.tag, ".log"] in
-      let stderr = join [path, ".", data.tag, ".err"] in
-      -- TODO(vipa, 2023-03-31): Call _expandFormat earlier, maybe even peval it?
-      let cmd = _expandFormat data.cmd in
-      let friendlyCommand = _expandFormat data.friendlyCommand in
-      match
-        if addOutput then
-          let target = join [path, ".", data.tag] in
-          (friendlyCommand {i = origPath, o = target}, cmd {i = origPath, o = target}, target)
-        else (friendlyCommand {i = origPath, o = "%o"}, cmd {i = origPath, o = "%o"}, stdout)
-      with (friendlyCommand, cmd, target) in
-      let cmd = join
-        [ "{ ", cmd, "; } >'", stdout, "' 2>'", stderr
-        , "' || { misc/elide-cat stdout '", stdout, "'; misc/elide-cat stderr '", stderr, "'; false; }"
-        ] in
-      -- OPT(vipa, 2023-04-16): It seems that map operations are the
-      -- most costly presently. It doesn't *seem* to be the direct
-      -- operations below, so I'm guessing it's via stringToSid.
-      let origin = optionMapOr data.input (lam td. td.origin)
-        (mapLookup data.input currTargets) in
-      let td =
-        { origin = origin
-        , input = data.input
-        , command = cmd
-        , stdout = stringToPath stdout
-        , stderr = stringToPath stderr
-        , extraDep = data.extraDep
-        , friendlyCommand = friendlyCommand
-        } in
-      -- TODO(vipa, 2023-03-31): Error on duplicate target definition
-      let target = stringToPath target in
-      modref targets (mapInsert target td currTargets);
-      modref orderedTargets (snoc (deref orderedTargets) (target, td));
-      target
+  let commands : Ref [Command] = ref [] in
+  type CommandSpec =
+    { input : Path
+    , miMode : MiMode
+    , coll : CollId
+    , tag : String
+    , output : Bool
+    , command : String
+    , friendlyCommand : String
+    } in
+
+  let addCommand : CommandSpec -> Path = lam spec.
+    let stdout = _mkDeriv spec.input spec.miMode spec.coll (concat spec.tag ".out") in
+    let stderr = _mkDeriv spec.input spec.miMode spec.coll (concat spec.tag ".err") in
+    let output = if spec.output
+      then Some (_mkDeriv spec.input spec.miMode spec.coll spec.tag)
+      else None () in
+    match
+      switch options.mode
+      case Make _ then
+        ( _expandFormat spec.command {i="$<", o="$@"}
+        , _expandFormat spec.friendlyCommand {i="$<", o="$@"}
+        )
+      case TupRules _ then
+        ( _expandFormat spec.command {i="%f", o="%o"}
+        , _expandFormat spec.friendlyCommand {i="%f", o="%o"}
+        )
+      case _ then (spec.command, spec.friendlyCommand)
+      end
+    with (command, friendlyCommand) in
+    let command = join
+      [ "{ ", command, "; } >'", pathToString stdout, "' 2>'", pathToString stderr
+      , "' || { misc/elide-cat stdout '", pathToString stdout, "'; misc/elide-cat stderr '", pathToString stderr, "'; false; }"
+      ] in
+    let cmd =
+      { input = spec.input
+      , miMode = spec.miMode
+      , stdout = stdout
+      , stderr = stderr
+      , output = output
+      , friendlyCommand = friendlyCommand
+      , command = command
+      } in
+    modref commands (snoc (deref commands) cmd);
+    optionGetOr stdout output
   in
   let negateCmd = lam data.
-    { data with cmd = join ["! { ", data.cmd, "; }"]
+    { data with command = join ["! { ", data.command, "; }"]
     , friendlyCommand = concat "FAIL " data.friendlyCommand
     } in
-  let mkSh : String -> String -> { m : MidCmd, e : EndCmd, f : EndCmd } = lam miTag. lam namespace.
-    let fixData = lam data.
-      { friendlyCommand = data.cmd
-      , extraDep = None ()
-      , cmd = data.cmd
+  let mkSh : MiMode -> CollId -> { m : MidCmd, e : EndCmd, f : EndCmd } = lam mode. lam coll.
+    let fixData = lam output. lam data.
+      { input = data.input
+      , miMode = mode
+      , coll = coll
       , tag = data.tag
-      , input = data.input
+      , output = output
+      , command = data.cmd
+      , friendlyCommand = data.cmd
       } in
-    let namespace = join [miTag, "/", namespace, "/"] in
-    { m = lam data. addRaw namespace true (fixData data)
-    , e = lam data. addRaw namespace false (fixData data); ()
-    , f = lam data. addRaw namespace false (negateCmd (fixData data)); ()
+    { m = lam data. addCommand (fixData true data)
+    , e = lam data. addCommand (fixData false data); ()
+    , f = lam data. addCommand (negateCmd (fixData false data)); ()
     } in
   let mkMi
-    : {pre : String, tag : String, extraDep : Option Path, kind : String}
-    -> String
+    : {pre : String, mode : MiMode}
+    -> CollId
     -> { m : MidCmd, e : EndCmd, f : EndCmd }
-    = lam config. lam namespace.
-      let fixData = lam data.
-        { friendlyCommand = join [config.kind, " MI ", data.cmd]
-        , extraDep = config.extraDep
-        , cmd = join [config.pre, " ", data.cmd]
+    = lam config. lam coll.
+      let kind = switch config.mode
+        case MiBoot _ then "BOOT "
+        case MiCheat _ then "CHEAT "
+        case MiInstalled _ then "INSTALLED "
+        end in
+      let fixData = lam output. lam data.
+        { input = data.input
+        , miMode = config.mode
+        , coll = coll
         , tag = data.tag
-        , input = data.input
+        , output = output
+        , command = join [config.pre, " ", data.cmd]
+        , friendlyCommand = join [kind, "MI ", data.cmd]
         } in
-      let namespace = join [config.tag, "/", namespace, "/"] in
-      { m = lam data. addRaw namespace true (fixData data)
-      , e = lam data. addRaw namespace false (fixData data); ()
-      , f = lam data. addRaw namespace false (negateCmd (fixData data)); ()
+      { m = lam data. addCommand (fixData true data)
+      , e = lam data. addCommand (fixData false data); ()
+      , f = lam data. addCommand (negateCmd (fixData false data)); ()
       }
   in
 
   -- NOTE(vipa, 2023-03-31): Add targets for each mi version used
   let addTargets = lam mkMi. lam mkSh.
+    let normalExceptions = deref normalExceptions in
     let addNormals =
       let mi = mkMi "normal" in
       let sh = mkSh "normal" in
-      lam src. lam tasks.
+      lam src.
+        let tasks = optionGetOr defaultTasks (mapLookup src normalExceptions) in
         switch tasks.compile
         case Dont _ then ()
         case Fail _ then
@@ -442,9 +604,9 @@ let testMain : [TestCollection] -> () = lam colls.
           (switch tasks.run
            case Dont _ then ()
            case Fail _ then
-             sh.f {input = exe, cmd = "%i", tag = "run"}
+             sh.f {input = exe, cmd = "./%i", tag = "run"}
            case Success _ then
-             sh.e {input = exe, cmd = "%i", tag = "run"}
+             sh.e {input = exe, cmd = "./%i", tag = "run"}
            end);
           (switch _minER tasks.run tasks.interpret
            case Dont _ then ()
@@ -455,73 +617,91 @@ let testMain : [TestCollection] -> () = lam colls.
            end)
         end
     in
-    let addNews = lam testColl. lam config.
-      config.newTests {mi = mkMi testColl, sh = mkSh testColl} in
-    mapMapWithKey addNormals (deref normals);
-    mapMapWithKey addNews chosenColls;
-    ()
+    let addNews = lam. lam testColl. lam config.
+      config.newTests {glob = glob, mi = mkMi testColl, sh = mkSh testColl} in
+    mapFoldWithKey addNews () chosenColls;
+    iter addNormals (glob [] (IncludeSubs ()) (SuffixFile ".mc"))
   in
   _phase "target api";
-  let buildDir = match options.mode with TupRules _ | TupFilter _ then "build/tup/" else "build/" in
+  -- TODO(vipa, 2023-05-12): continue from here
   (if options.bootstrapped then
-    let tag = concat buildDir "bootstrapped" in
+    let mi = match options.mode with TupRules _
+      then "%<mi>"
+      else "build/mi" in
     let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", _dir, "/src/stdlib ", buildDir, "mi"]
-      , tag = tag
-      , extraDep = Some (stringToPath (concat buildDir "mi"))
-      , kind = "BOOTSTRAPPED"
+      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib ", mi]
+      , mode = MiBoot ()
       } in
-    let mkSh = mkSh tag in
+    let mkSh = mkSh (MiBoot ()) in
     addTargets mkMi mkSh
   else ());
   _phase "bootstrapped";
   (if options.installed then
-    let tag = concat buildDir "installed" in
     let mkMi = mkMi
-      { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib mi"]
-      , tag = tag
-      , extraDep = None ()
-      , kind = "INSTALLED"
+      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib mi"]
+      , mode = MiInstalled ()
       } in
-    let mkSh = mkSh tag in
+    let mkSh = mkSh (MiInstalled ()) in
     addTargets mkMi mkSh
   else ());
   _phase "installed";
   (if options.cheated then
-    let tag = concat buildDir "cheated" in
+    let mi = match options.mode with TupRules _
+      then "%<mi-cheat>"
+      else "build/mi-cheat" in
     let mkMi = mkMi
-      { pre = join ["MCORE_STDLIB=", _dir, "/src/stdlib ", buildDir, "mi-cheat"]
-      , tag = tag
-      , extraDep = Some (stringToPath (concat buildDir "mi-cheat"))
-      , kind = "CHEATED"
+      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib ", mi]
+      , mode = MiCheat ()
       } in
-    let mkSh = mkSh tag in
+    let mkSh = mkSh (MiCheat ()) in
     addTargets mkMi mkSh
   else ());
   _phase "cheated";
 
   switch options.mode
   case TupRules _ then
-    let cpDirStructure : all a. String -> a -> () = lam coll. lam.
-      command (join ["find src -type d -exec mkdir -p ", buildDir, "{installed,bootstrapped,cheated}/", coll, "/{} \\;"]);
-      ()
-    in
-    mapMapWithKey cpDirStructure colls;
-    cpDirStructure "normal" ();
-    _phase "tup-mk-dirs";
-    let printRule = lam pair. match pair with (target, td) in
-      let extra = match td.extraDep
-        with Some dep then concat " | " (pathToString dep)
-        else "" in
+    let printRule = lam c.
+      let extra = switch c.miMode
+        case MiBoot _ then join [" | ", srcDirStr, "/<mi>"]
+        case MiInstalled _ then ""
+        case MiCheat _ then join [" | ", srcDirStr, "/<mi-cheat>"]
+        end in
       let cmd = join
-        [ ": ", pathToString td.input, extra
-        , " |> ^ ", td.friendlyCommand, "^ "
-        , td.command, " |> ", pathToString td.stdout, " ", pathToString td.stderr
-        , if eqPath target td.stdout then "" else concat " " (pathToString target)
+        [ ": ", pathToString c.input, extra
+        , " |> ^ ", c.friendlyCommand, "^ "
+        , c.command, " |>"
+        , optionMapOr "" (lam p. cons ' ' (pathToString p)) c.output
+        , " | ", pathToString c.stdout, " ", pathToString c.stderr
         ] in
       printLn cmd in
-    iter printRule (deref orderedTargets);
+    iter printRule (deref commands);
     _phase "tup-rules"
+  case TupFilter _ then
+    let printRule = lam c. printLn (pathToString c.stdout) in
+    iter printRule (deref commands);
+    _phase "tup-filter"
+  case Make _ then
+    let printPrereq = lam c.
+      let o = optionGetOr c.stdout c.output in
+      print (join [" ", pathToString o]) in
+    let printRule = lam c.
+      let o = optionGetOr c.stdout c.output in
+      let extra = switch c.miMode
+        case MiBoot _ then " | build/mi"
+        case MiInstalled _ then ""
+        case MiCheat _ then "| build/mi-cheat"
+        end in
+      let cmd = join
+        [ pathToString o, " : ", pathToString c.input, "\n"
+        , "\t", c.command
+        ] in
+      printLn cmd
+    in
+    print "test:";
+    iter printPrereq (deref commands);
+    printLn "";
+    iter printRule (deref commands);
+    _phase "make"
   end
 
 mexpr
@@ -533,16 +713,16 @@ testMain
       then ConditionsMet ()
       -- else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
       else ConditionsUnmet () -- TODO(vipa, 2023-04-25): temporarily pretend they're not impossible, to test `newTests`
-    , exclusions = lam modPaths.
+    , exclusions = lam api.
       -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
       -- interpreted mode, and compiled mode is already tested via the
       -- new tests below.
-      modPaths noTasks (glob "test/examples/accelerate/**/*.mc")
-    , newTests = lam do.
-      for_ (glob "test/examples/accelerate/**/*.mc") (lam mc.
-        let exe = do.mi.m {input = mc, cmd = "compile --accelerate %i --output %o", tag = "accelerate"} in
-        do.sh.e {input = exe, cmd = "%i", tag = "run-accelerate"};
-        let exe = do.mi.m {input = mc, cmd = "compile --debug-accelerate %i --output %o", tag = "debug-accelerate"} in
-        do.sh.e {input = exe, cmd = "%i", tag = "run-debug-accelerate"})
+      api.mark noTasks (api.glob ["test", "examples", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc"))
+    , newTests = lam api.
+      for_ (api.glob ["test", "examples", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
+        let exe = api.mi.m {input = mc, cmd = "compile --accelerate %i --output %o", tag = "exe"} in
+        api.sh.e {input = exe, cmd = "%i", tag = "run"};
+        let exe = api.mi.m {input = mc, cmd = "compile --debug-accelerate %i --output %o", tag = "debug-exe"} in
+        api.sh.e {input = exe, cmd = "%i", tag = "debug-run"})
     }
   ]
