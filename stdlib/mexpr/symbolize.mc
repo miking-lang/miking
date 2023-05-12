@@ -122,6 +122,11 @@ lang Sym = Ast + SymLookup
   | expr ->
     let env = { symEnvEmpty with allowFree = true } in
     symbolizeExpr env expr
+
+  -- Add top-level identifiers (along the spine of the program) in `t`
+  -- to the given environment.
+  sem addTopNames (env : SymEnv) =
+  | t -> env
 end
 
 lang VarSym = Sym + VarAst
@@ -168,6 +173,11 @@ lang LetSym = Sym + LetAst + AllTypeAst
      foldr (lam vs. lam ty. TyAll {info = infoTy tyAnnot,
                                    ident = vs.0, sort = vs.1, ty = ty})
        (symbolizeType {env with tyVarEnv = tyVarEnv} stripped) vars)
+
+  sem addTopNames (env : SymEnv) =
+  | TmLet t ->
+    let varEnv = mapInsert (nameGetStr t.ident) t.ident env.varEnv in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang RecLetsSym = Sym + RecLetsAst + LetSym
@@ -190,6 +200,12 @@ lang RecLetsSym = Sym + RecLetsAst + LetSym
 
     TmRecLets {t with bindings = bindings,
                       inexpr = symbolizeExpr newEnv t.inexpr}
+
+  sem addTopNames (env : SymEnv) =
+  | TmRecLets t ->
+    let varEnv =
+      foldr (lam b. mapInsert (nameGetStr b.ident) b.ident) env.varEnv t.bindings in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang ExtSym = Sym + ExtAst
@@ -200,6 +216,11 @@ lang ExtSym = Sym + ExtAst
     TmExt {t with ident = ident,
                   inexpr = symbolizeExpr {env with varEnv = varEnv} t.inexpr,
                   tyIdent = symbolizeType env t.tyIdent}
+
+  sem addTopNames (env : SymEnv) =
+  | TmExt t ->
+    let varEnv = mapInsert (nameGetStr t.ident) t.ident env.varEnv in
+    addTopNames {env with varEnv = varEnv} t.inexpr
 end
 
 lang TypeSym = Sym + TypeAst
@@ -211,6 +232,11 @@ lang TypeSym = Sym + TypeAst
                    params = params,
                    tyIdent = symbolizeType {env with tyVarEnv = tyVarEnv} t.tyIdent,
                    inexpr = symbolizeExpr {env with tyConEnv = tyConEnv} t.inexpr}
+
+  sem addTopNames (env : SymEnv) =
+  | TmType t ->
+    let tyConEnv = mapInsert (nameGetStr t.ident) t.ident env.tyConEnv in
+    addTopNames {env with tyConEnv = tyConEnv} t.inexpr
 end
 
 lang DataSym = Sym + DataAst
@@ -229,6 +255,11 @@ lang DataSym = Sym + DataAst
     in
     TmConApp {t with ident = ident,
                      body = symbolizeExpr env t.body}
+
+  sem addTopNames (env : SymEnv) =
+  | TmConDef t ->
+    let conEnv = mapInsert (nameGetStr t.ident) t.ident env.conEnv in
+    addTopNames {env with conEnv = conEnv} t.inexpr
 end
 
 lang MatchSym = Sym + MatchAst
