@@ -349,102 +349,56 @@ with ()
 
 -- Perform a computation on the values of a sequence while simultaneously
 -- folding an accumulator over the sequence from the left. Produces a non-error
--- only if all individual computations produce a non-error. Returns immediately
--- if the accumulator is an error and its errors and warnings are merged into
--- the sequence result. Otherwise, all errors and warnings are preserved.
+-- only if all individual computations produce a non-error. All errors and
+-- warnings are preserved.
 let _mapAccumLM : all w. all e. all a. all b. all c.
-  (a -> b -> (Result w e a, Result w e c))
-   -> a
-     -> [b]
-       -> (Result w e a, Result w e [c])
+  (a -> b -> (a, Result w e c)) -> a -> [b] -> (a, Result w e [c])
   = lam f. lam acc.
     recursive
-      let workOK
-        : Map Symbol w
-          -> Map Symbol w
-            -> (a, [c])
-              -> [b]
-                -> (Result w e a, Result w e [c])
-        = lam accWarnAcc. lam accWarnSeq. lam acc. lam seq.
+      let workOK : Map Symbol w -> (a, [c]) -> [b] -> (a, Result w e [c])
+        = lam accWarn. lam acc. lam seq.
           match acc with (a, cs) in
           match seq with [b] ++ seq then
             switch f a b
-            case (ResultOk a, ResultOk c) then
-              workOK
-                (mapUnion accWarnAcc a.warnings)
-                (mapUnion accWarnSeq c.warnings)
-                (a.value, snoc cs c.value)
-                seq
-            case (ResultErr a, c) then
-              let a =
-                ResultErr { a with warnings = mapUnion accWarnAcc a.warnings }
-              in
-              let cs = ResultErr (_asError (_warns accWarnSeq c)) in
-              (a, _withAnnotations a cs)
-            case (ResultOk a, ResultErr c) then
-              workSeqErr
-                (mapUnion accWarnAcc a.warnings)
-                { c with warnings = mapUnion accWarnSeq c.warnings }
-                a.value
-                seq
+            case (a, ResultOk c) then
+              workOK (mapUnion accWarn c.warnings) (a, snoc cs c.value) seq
+            case (a, ResultErr c) then
+              workErr { c with warnings = mapUnion accWarn c.warnings } a seq
             end
           else
-            let a = { warnings = accWarnAcc, value = a } in
-            let cs = { warnings = accWarnSeq, value = cs } in
-            (ResultOk a, ResultOk cs)
-      let workSeqErr
-        : Map Symbol w
-          -> { warnings : Map Symbol w, errors : Map Symbol e }
-            -> a
-              -> [b]
-                -> (Result w e a, Result w e [c])
-        = lam accWarnAcc. lam accErrList. lam a. lam seq.
+            (a, ResultOk { warnings = accWarn, value = cs })
+      let workErr
+        : { warnings : Map Symbol w, errors : Map Symbol e }
+          -> a
+            -> [b]
+              -> (a, Result w e [c])
+        = lam accErr. lam a. lam seq.
           match seq with [b] ++ seq then
-            switch f a b
-            case (ResultErr a, c) then
-              let a =
-                ResultErr { a with warnings = mapUnion accWarnAcc a.warnings }
-              in
-              let cs = ResultErr (_mergeErrors accErrList (_asError c)) in
-              (a, _withAnnotations a cs)
-            case (ResultOk a, c) then
-              workSeqErr
-                (mapUnion accWarnAcc a.warnings)
-                (_mergeErrors accErrList (_asError c))
-                a.value
-                seq
-            end
+            match f a b with (a, c) in
+            workErr (_mergeErrors accErr (_asError c)) a seq
           else
-            let a = { warnings = accWarnAcc, value = a } in
-            (ResultOk a, ResultErr accErrList)
-    in workOK _emptyMap _emptyMap (acc, [])
+            (a, ResultErr accErr)
+    in workOK _emptyMap (acc, [])
 
 utest
-  -- Multiply by 10 and reverse the sequence. For the accumulator, error 1 if
-  -- the accumulator length is greater than 2, warn 'b' if current element is
-  -- even. For sequence elements, error 0 on negative, warn 'a' on 0.
-  let work : [Int] -> Int -> (Result Char Int [Int], Result Char Int Int)
+  -- Multiply by 10 and reverse the sequence. Produces error 0 on negative and
+  -- warn 'a' on 0.
+  let work : [Int] -> Int -> ([Int], Result Char Int Int)
     = lam acc. lam x.
-      let acc = if gti (length acc) 2 then _err 1 else
-        let res = _ok (cons x acc) in
-        if eqi (modi x 2) 0 then _withAnnotations (_warn 'b') res else res in
+      let acc = cons x acc in
       let x = if lti x 0 then _err 0 else
         let res = _ok (muli x 10) in
         if eqi x 0 then _withAnnotations (_warn 'a') res else res in
       (acc, x) in
-  let _prepTest = lam x. (_prepTest x.0, _prepTest x.1) in
+  let _prepTest = lam p. (p.0, _prepTest p.1) in
   utest _prepTest (_mapAccumLM work [] [0, 1, 2]) with
-    ((['b', 'b'], Right [2, 1, 0]), (['a'], Right [0, 10, 20])) in
-  utest _prepTest (_mapAccumLM work [] [0, 1, 2, 3, 4]) with
-    ((['b', 'b'], Left [1]), (['a', 'b', 'b'], Left [1])) in
-  utest _prepTest (_mapAccumLM work [] [0, negi 1, 2]) with
-    ((['b', 'b'], Right [2, negi 1 ,0]), (['a'], Left [0])) in
+    ([2, 1, 0], (['a'], Right [0, 10, 20])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, 2, 0]) with
+    ([0, 2, negi 1 ,0], (['a', 'a'], Left [0])) in
   utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2]) with
-    ((['b', 'b'], Right [negi 2, negi 1 ,0]), (['a'], Left [0, 0])) in
+    ([negi 2, negi 1 ,0], (['a'], Left [0, 0])) in
   utest _prepTest (_mapAccumLM work [] [0, 0, negi 2]) with
-    ((['b', 'b', 'b'], Right [negi 2, 0 ,0]), (['a', 'a'], Left [0])) in
-  utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2, negi 3, negi 4]) with
-    ((['b', 'b'], Left [1]), (['a', 'b', 'b'], Left [0, 0, 0, 1])) in
+    ([negi 2, 0 ,0], (['a', 'a'], Left [0])) in
   ()
 with ()
 
