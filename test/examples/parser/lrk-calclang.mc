@@ -59,7 +59,7 @@ let _Factor = nameSym "Factor" in
 let tokTy = tyrecord_ [("info", tycon_ "Info")] in
 let tokUIntTy = tyrecord_ [("info", tycon_ "Info"), ("val", tyint_)] in
 
-let tokenConTypes = mapFromSeq tokReprCompare [
+let tokenConTypes = mapFromSeq tokReprCmp [
   (EOFRepr {}, {conIdent = nameNoSym "EOFTok", conArg = tokTy}),
   (LParenRepr {}, {conIdent = nameNoSym "LParenTok", conArg = tokTy}),
   (RParenRepr {}, {conIdent = nameNoSym "RParenTok", conArg = tokTy}),
@@ -68,31 +68,31 @@ let tokenConTypes = mapFromSeq tokReprCompare [
   (IntRepr {}, {conIdent = nameNoSym "IntTok", conArg = tokUIntTy})
 ] in
 
-let syntaxdef: LRSyntaxDef = {
+let syntaxdef: SyntaxDef = {
   entrypoint = _Expr,
-  rules = [
-    {name = _Expr, terms = [LRNonTerminal _Expr, LRTerminal (PlusRepr {}), LRNonTerminal _Term],
+  productions = [
+    {nt = _Expr, terms = [NonTerminal _Expr, Terminal (PlusRepr {}), NonTerminal _Term],
      action = withType (tyarrows_ [tyunit_, tystr_, tokTy, tystr_, tystr_])
                        (ulams_ ["actionState", "lexpr", "plusTok", "rterm"]
                                (appf1_ (var_ "join") (seq_ [
                                   str_ "PLUS(", var_ "lexpr", str_ ", ", var_ "rterm", str_ ")"
                                 ])))},
-    {name = _Expr, terms = [LRNonTerminal _Term],
+    {nt = _Expr, terms = [NonTerminal _Term],
      action = withType (tyarrows_ [tyunit_, tystr_, tystr_])
                        (ulams_ ["actionState", "term"] (var_ "term"))},
-    {name = _Term, terms = [LRNonTerminal _Term, LRTerminal (TimesRepr {}), LRNonTerminal _Factor],
+    {nt = _Term, terms = [NonTerminal _Term, Terminal (TimesRepr {}), NonTerminal _Factor],
      action = withType (tyarrows_ [tyunit_, tystr_, tokTy, tystr_, tystr_])
                        (ulams_ ["actionState", "lterm", "plusTok", "rfactor"]
                                (appf1_ (var_ "join") (seq_ [
                                   str_ "TIMES(", var_ "lterm", str_ ", ", var_ "rfactor", str_ ")"
                                 ])))},
-    {name = _Term, terms = [LRNonTerminal _Factor],
+    {nt = _Term, terms = [NonTerminal _Factor],
      action = withType (tyarrows_ [tyunit_, tystr_, tystr_])
                        (ulams_ ["actionState", "factor"] (var_ "factor"))},
-    {name = _Factor, terms = [LRTerminal (LParenRepr {}), LRNonTerminal _Expr, LRTerminal (RParenRepr {})],
+    {nt = _Factor, terms = [Terminal (LParenRepr {}), NonTerminal _Expr, Terminal (RParenRepr {})],
      action = withType (tyarrows_ [tyunit_, tokTy, tystr_, tokTy, tystr_])
                        (ulams_ ["actionState", "lparen", "midexpr", "rparen"] (var_ "midexpr"))},
-    {name = _Factor, terms = [LRTerminal (IntRepr {})],
+    {nt = _Factor, terms = [Terminal (IntRepr {})],
      action = withType (tyarrows_ [tyunit_, tokUIntTy, tystr_])
                        (ulams_ ["actionState", "uint"]
                                (appf1_ (var_ "join") (seq_ [
@@ -108,7 +108,11 @@ case ResultErr {errors = errors} then
 case ResultOk {value = lrtable} then
   printLn (lrtable2string 2 lrtable);
   printLn "";
-  let parser = lrGenerateParser lrtable in
+  let bindings = {lrDefaultGeneratorBindings () with
+    v_stream = var_ "initLexerState",
+    v_nextToken = var_ "wrappedNextToken"
+  } in
+  let parser = lrGenerateParser bindings lrtable in
   let program: String = strJoin "\n" [
     "include \"map.mc\"",
     "include \"result.mc\"",
@@ -160,13 +164,10 @@ end
     "use PMLexer in",
     "let wrappedNextToken = lam s. result.ok (nextToken s) in",
     expr2str (bindall_ [
-      let_ "parse" (tyTm parser) parser,
-      let_ "lexerState" (tycon_ "Stream")
+      let_ "initLexerState" (tycon_ "Stream")
                         (urecord_ [("pos", appf1_ (var_ "initPos") (str_ "file")),
                                    ("str", get_ (var_ "argv") (int_ 1))]),
-      ulet_ "parse_result" (appf2_ (var_ "parse")
-                                   (var_ "lexerState")
-                                   (var_ "wrappedNextToken")),
+      let_ "parse_result" (tyTm parser) parser,
       matchall_ [
         matchex_ (var_ "parse_result") (pcon_ "ResultOk" (prec_ [("value", (pvar_ "result"))])) (
           appf1_ (var_ "printLn") (appf1_ (var_ "join") (seq_ [
