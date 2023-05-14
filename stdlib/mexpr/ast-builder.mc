@@ -583,6 +583,27 @@ let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
   foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
 
+-- Get an optional list of tuple expressions for a record. If the record does
+-- not represent a tuple, None () is returned.
+let record2tuple
+  : all a. Map SID a
+    -> Option [a]
+  = lam bindings.
+    let keys = map sidToString (mapKeys bindings) in
+    match forAll stringIsInt keys with false then None () else
+      let intKeys = map string2int keys in
+      let sortedKeys = sort subi intKeys in
+      -- Check if keys are a sequence 0..(n-1)
+      match sortedKeys with [] then None ()
+      else match sortedKeys with [h] ++ _ in
+           if and (eqi 0 h)
+                (eqi (subi (length intKeys) 1) (last sortedKeys)) then
+             Some (map (lam key. mapLookupOrElse
+                                 (lam. error "Key not found")
+                                 (stringToSid (int2string key)) bindings)
+                     sortedKeys)
+           else None ()
+
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
 
