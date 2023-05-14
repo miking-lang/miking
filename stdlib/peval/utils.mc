@@ -1,3 +1,9 @@
+-- The bulk of this file contains helper functions for handling names, incl.
+-- 1. Finding the names of the strings (defined in include.mc) in the AST
+-- 2. Getting a certain name from a given string
+-- Moreover, the different arguments types that are used by the lifting, and
+-- in the transformation are defined here.
+
 include "peval/include.mc"
 include "peval/ast.mc"
 include "mexpr/utils.mc"
@@ -153,7 +159,7 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude
   sem mapToSeqName = | names -> getName (names.otherFuncs) "mapToSeq"
 
   sem noSymbolName : SpecializeNames -> Name
-  sem noSymbolName = | names -> getName (names.consNames) "_noSymbol"
+  sem noSymbolName = | names -> getName (names.otherFuncs) "_noSymbol"
 
   sem stringToSidName : SpecializeNames -> Name
   sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"

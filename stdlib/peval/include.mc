@@ -1,3 +1,12 @@
+-- In this file, a language fragment is defined for including the contents of
+-- peval-runtime.mc in the given AST. The inclusion uses the same functionality as
+-- mexpr/utest-generate.mc. Moreover, the strings of names that are needed in
+-- the specialize transformation are defined. The actual names are then looked
+-- up and used in e.g. lift.mc.
+--
+-- The idea is that this is a temporary solution until the full bootstrapping of
+-- the compiler is in place.
+
 include "stdlib.mc"
 include "mexpr/utest-generate.mc"
 include "mexpr/duplicate-code-elimination.mc"
@@ -6,7 +15,6 @@ include "mexpr/duplicate-code-elimination.mc"
 let includesLoc = "/peval/peval-runtime.mc"
 
 -- Mapping from pretty printed built-in const to its AST equivalent
--- TODO(adamssonj, 2023-03-17): True assumption? Built-ins are assumed always in AST
 let builtinsMapping = mapFromSeq cmpString [
     -- These 5 are not builtin functions, but used to get name of AST node of constants
     -- Differs in that these take an argument when constructed
@@ -141,28 +149,31 @@ let includeBuiltins = mapValues builtinsMapping
 -- Potentially could use e.g. "tmApp" here, but then tmApp just wraps "AppAst_TmApp"
 -- At least the inclusion of 'tmApp' from cons-runtime ensures that the actual constructor
 -- is in fact in the AST, but it may be subject to change (even if unlikely)
-let includeConsNames = ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
-                        "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
-                        "MatchAst_TmMatch", "Cons", "Nil", "NoInfo", "Info", "_noSymbol",
-                        "LetAst_TmLet", "RecLetsAst_TmRecLets", "DataAst_TmConDef",
-                        "DataAst_TmConApp", "TypeAst_TmType", "NeverAst_TmNever",
+let includeConsNames =
+  ["AppAst_TmApp", "LamAst_TmLam", "VarAst_TmVar", "RecordAst_TmRecord",
+   "SeqAst_TmSeq", "ClosAst_TmClos", "ConstAst_TmConst", "ClosAst_Lazy",
+   "MatchAst_TmMatch", "LetAst_TmLet", "RecLetsAst_TmRecLets",
+   "DataAst_TmConDef", "DataAst_TmConApp", "TypeAst_TmType", "NeverAst_TmNever",
 
-                        --- Patterns
-                        "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",
-                        "BoolPat_PatBool", "CharPat_PatChar", "SeqTotPat_PatSeqTot",
-                        "SeqEdgePat_PatSeqEdge", "RecordPat_PatRecord", "DataPat_PatCon",
-                        "AndPat_PatAnd", "OrPat_PatOr", "NotPat_PatNot"
-                        ]
+   -- Others
+   "Cons", "Nil", "NoInfo", "Info",
 
+   -- Patterns
+   "IntPat_PatInt", "PName", "PWildcard", "NamedPat_PatNamed",
+   "BoolPat_PatBool", "CharPat_PatChar", "SeqTotPat_PatSeqTot",
+   "SeqEdgePat_PatSeqEdge", "RecordPat_PatRecord", "DataPat_PatCon",
+   "AndPat_PatAnd", "OrPat_PatOr", "NotPat_PatNot"]
 
+let includeTyConsNames =
+  ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
+   "FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow",
+   "SeqTypeAst_TySeq", "TensorTypeAst_TyTensor", "RecordTypeAst_TyRecord",
+   "VariantTypeAst_TyVariant", "ConTypeAst_TyCon", "VarTypeAst_TyVar",
+   "VarSortAst_PolyVar","VarSortAst_MonoVar", "VarSortAst_RecordVar",
+   "AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
-let includeTyConsNames = ["UnknownTypeAst_TyUnknown","BoolTypeAst_TyBool", "IntTypeAst_TyInt",
-"FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow", "SeqTypeAst_TySeq",
-"TensorTypeAst_TyTensor", "RecordTypeAst_TyRecord", "VariantTypeAst_TyVariant",
-"ConTypeAst_TyCon", "VarTypeAst_TyVar","VarSortAst_PolyVar","VarSortAst_MonoVar",
-"VarSortAst_RecordVar","AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
-
-let includeOtherFuncs = ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString"]
+let includeOtherFuncs =
+  ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "_noSymbol"]
 
 let includeSpecializeNames = ["pevalWithEnv"]
 

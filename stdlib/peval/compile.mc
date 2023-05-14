@@ -1,3 +1,5 @@
+-- Defines the transformation of specialize terms.
+
 include "peval/ast.mc"
 include "peval/lift.mc"
 include "peval/extract.mc"

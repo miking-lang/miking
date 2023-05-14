@@ -1,3 +1,7 @@
+-- Defines a set of language fragments for lifting MExpr constructs, including
+-- patterns and expressions. Semantically, liftExpr should satisfy
+-- lower (liftExpr x) = x. The implementation uses the TmConApp term 
+ 
 include "peval/extract.mc"
 include "peval/ast.mc"
 include "peval/utils.mc"
@@ -56,13 +60,16 @@ lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
   -- so we need to type check the AST later anyhow.
   | t -> (NoInfo(), tyUnknownName)
 
-  sem liftName : SpecializeArgs -> Name -> LiftResult
-  sem liftName args = | name ->
-    match mapLookup name args.idMapping with Some t then
-      (args, utuple_ [str_ name.0, nvar_ t])
-    else let idm = nameSym "idm" in
-      let args = {args with idMapping = mapInsert name idm args.idMapping} in
-      (args, utuple_ [str_ name.0, nvar_ idm])
+  sem liftName : SpecializeNames -> SpecializeArgs -> Name -> LiftResult
+  sem liftName names args = | name ->
+    if nameHasSym name then
+      match mapLookup name args.idMapping with Some t then
+        (args, utuple_ [str_ name.0, nvar_ t])
+      else let idm = nameSym "idm" in
+        let args = {args with idMapping = mapInsert name idm args.idMapping} in
+        (args, utuple_ [str_ name.0, nvar_ idm])
+    else (args, utuple_ [str_ name.0, nvar_ (noSymbolName names)])
+
 
   sem liftInfo : SpecializeNames -> Info -> Expr
   sem liftInfo names =
@@ -166,7 +173,7 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
 
   sem liftExpr names args =
   | TmVar {ident = id, ty = typ, info=info, frozen=frozen} & t->
-    match liftName args id with (args, lIdent) in
+    match liftName names args id with (args, lIdent) in
     let bindings = [("ident", lIdent), ("frozen", bool_ frozen)] in
     (args, createConAppExpr names tmVarName bindings typ info)
 
@@ -262,7 +269,7 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
   sem liftAllViaType names args =
   | ts -> mapAccumL (lam acc. lam t : (Name, Type).
     match liftViaType names acc t.0 t.1 with Some (acc, expr) then
-      match liftName acc t.0 with (acc, liftedName) in
+      match liftName names acc t.0 with (acc, liftedName) in
         (acc, Right (utuple_ [liftedName, expr]))
     else (acc, Left (t.0))) args ts
 
@@ -283,7 +290,7 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
   sem liftExpr names args =
   | TmLam {ident=id, body = body, ty = typ, info = info} ->
     match liftExpr names args body with (args, lExpr) in
-    match liftName args id with (args, lName) in
+    match liftName names args id with (args, lName) in
     let dummyType = liftType names tyunknown_ in
     let bindings = [("ident", lName), ("body", lExpr),
                     ("tyAnnot", dummyType), ("tyParam", dummyType)] in
@@ -294,7 +301,7 @@ end
 lang SpecializeLiftMatch = SpecializeLift + MatchAst
 
   sem liftPatName names args =
-  | PName id -> match liftName args id with (args, lName) in
+  | PName id -> match liftName names args id with (args, lName) in
     let v = nconapp_ (pNameName names) lName in
     (args, v)
   | PWildcard _ -> let v = createConApp names pWildcardName [] in
@@ -347,7 +354,7 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
     (args, createConAppExpr names patRecName bindings ty info)
   | PatCon {ident=ident, subpat=subpat, info=info, ty=ty} ->
     -- Should this name be lifted differeNtLy?
-    match liftName args ident with (args, ident) in
+    match liftName names args ident with (args, ident) in
     match liftPattern names args subpat with (args, subpat) in
     let bindings = [("ident", ident), ("subpat", subpat)] in
     (args, createConAppExpr names patConName bindings ty info)
@@ -382,7 +389,7 @@ lang SpecializeLiftLet = SpecializeLift + LetAst
   sem liftExpr names args =
   | TmLet {ident=ident, body=body, inexpr=inexpr, ty=ty, info=info} ->
     match liftExprAccum names args [body, inexpr] with (args, [lBody, lInex]) in
-    match liftName args ident with (args, lName) in
+    match liftName names args ident with (args, lName) in
     let dummyType = liftType names tyunknown_ in
     let bindings = [("ident", lName), ("body", lBody), ("inexpr", lInex),
                   ("tyAnnot", dummyType), ("tyBody", dummyType)] in
@@ -397,7 +404,7 @@ lang SpecializeLiftRecLets = SpecializeLift + RecLetsAst
     let dummyInfo = liftInfo names (NoInfo ()) in
     let dummyType = liftType names tyunknown_ in
     let res = mapAccumL (lam acc. lam bind.
-      match liftName acc bind.ident with (acc, lName) in
+      match liftName names acc bind.ident with (acc, lName) in
       match liftExpr names acc bind.body with (acc, lBody) in
       (acc, urecord_ [("ident", lName), ("body", lBody),
                       ("tyBody", dummyType), ("tyAnnot", dummyType),
@@ -418,13 +425,13 @@ lang SpecializeLiftDataAst = SpecializeLift + DataAst
 
   sem liftExpr names args =
   | TmConDef {ident=ident, tyIdent=tyId, inexpr=inexpr, ty=ty, info=info} ->
-    match liftName args ident with (args, ident) in
+    match liftName names args ident with (args, ident) in
     match liftExpr names args inexpr with (args, inexpr) in
     let tyId = liftType names tyId in
     let bindings = [("ident", ident), ("tyIdent", tyId), ("inexpr", inexpr)] in
     (args, createConAppExpr names tmConDefName bindings ty info)
   | TmConApp {ident=ident, body=body, ty=ty, info=info} ->
-    match liftName args ident with (args, ident) in
+    match liftName names args ident with (args, ident) in
     match liftExpr names args body with (args, body) in
     let bindings = [("ident", ident), ("body", body)] in
     (args, createConAppExpr names tmConAppName bindings ty info)
@@ -435,9 +442,9 @@ lang SpecializeLiftTypeAst = SpecializeLift + TypeAst
   sem liftExpr names args =
   | TmType {ident=ident, params=params, tyIdent=tyId, inexpr=inexpr,
             ty=ty, info=info} ->
-    match liftName args ident with (args, ident) in
+    match liftName names args ident with (args, ident) in
     match (mapAccumL (lam args. lam name.
-      liftName args name) args params) with (args, params) in
+      liftName names args name) args params) with (args, params) in
     match liftExpr names args inexpr with (args, inexpr) in
     let tyId = liftType names tyId in
     let bindings = [("ident", ident), ("tyIdent", tyId),

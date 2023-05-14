@@ -1,6 +1,5 @@
-
--- Try to reuse accelerate/extract.mc as much as possible
--- Difference here is that the 'extracted' nodes must be put together
+-- Defines a language fragment to extract all dependencies for the specialize
+-- terms. Uses the functions defined in pmexpr/extract.mc and mexpr/extract.mc
 
 include "pmexpr/extract.mc"
 include "peval/ast.mc"
