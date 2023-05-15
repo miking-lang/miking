@@ -7,6 +7,7 @@ include "string.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/cmp.mc"
 
 -- Base language for tokens
 lang TokenReprBase
@@ -36,9 +37,9 @@ lang TokenReprEOF = TokenReprBase
 end
 
 -- TODO(johnwikman, 2023-05-13): Ast inclusion is temporary until polymorphism
--- properly works in MLang. Remove this when polymorhpism works, and generalize
--- the Expr uses
-lang ContextFreeGrammar = TokenReprBase + MExprAst
+-- properly works in MLang. Remove this when polymorhpism works such that the
+-- type is available in the body, and generalize the Expr uses
+lang ContextFreeGrammar = TokenReprBase + MExprAst + MExprCmp
   syn Term =
   | Terminal TokenRepr
   | NonTerminal Name
@@ -81,6 +82,39 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst
   sem cfgTermEq : Term -> Term -> Bool
   sem cfgTermEq other =
   | t -> eqi (cfgTermCmp other t) 0
+
+  -- Comparison between two grammars. This ignores the order in which
+  -- productions are specified, but is strict in the naming equivalence.
+  sem cfgCmp2 : (SyntaxDef, SyntaxDef) -> Int
+  sem cfgCmp2 =
+  | (l, r) ->
+    -- OPT(johnwikman, 2023-05-15): We could try to set up a bijection between
+    -- names of non-terminals in both grammars, which would allow for semantic
+    -- equivalence between the grammars instead of just considering a more
+    -- structural one. But maybe this should be its own comparison function.
+    let cEntrypoint = nameCmp l.entrypoint r.entrypoint in
+    if neqi cEntrypoint 0 then cEntrypoint else --continue
+    let cInitActionState = cmpExpr l.initActionState r.initActionState in
+    if neqi cInitActionState 0 then cInitActionState else --continue
+
+    let prodCmp: Production -> Production -> Int = lam lp. lam rp.
+      let cNt = nameCmp lp.nt rp.nt in
+      if neqi cNt 0 then cNt else --continue
+      let cTerms = seqCmp cfgTermCmp lp.terms rp.terms in
+      if neqi cTerms 0 then cTerms else --continue
+      cmpExpr lp.action rp.action
+    in
+    let lprods = sort prodCmp l.productions in
+    let rprods = sort prodCmp r.productions in
+    seqCmp prodCmp lprods rprods
+
+  sem cfgCmp : SyntaxDef -> SyntaxDef -> Int
+  sem cfgCmp other =
+  | syntaxDef -> cfgCmp2 (other, syntaxDef)
+
+  sem cfgEq : SyntaxDef -> SyntaxDef -> Bool
+  sem cfgEq other =
+  | syntaxDef -> eqi (cfgCmp other syntaxDef) 0
 
 
   sem cfg2string : SyntaxDef -> String
@@ -264,10 +298,55 @@ utest cfgTermEq t_EOF t_EOF with true in
 utest cfgTermEq nt_Ex nt_Ex with true in
 utest cfgTermEq nt_Ex t_EOF with false in
 
+-- A == B, but C != A
+let gramA: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let gramB: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let gramC: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [nt_Ex], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_}
+  ],
+  initActionState = unit_
+} in
+
+utest cfgCmp gramA gramA with 0 using eqSign in
+utest cfgCmp gramA gramB with 0 using eqSign in
+utest cfgCmp gramB gramA with 0 using eqSign in
+utest cfgCmp gramA gramC with 0 using neqi in
+utest cfgCmp gramA gramC with cfgCmp gramC gramA using neqSign in
+utest cfgCmp gramB gramC with 0 using neqi in
+utest cfgCmp gramB gramC with cfgCmp gramC gramB using neqSign in
+
+utest cfgEq gramA gramA with true in
+utest cfgEq gramA gramB with true in
+utest cfgEq gramB gramA with true in
+utest cfgEq gramA gramC with false in
+utest cfgEq gramC gramA with false in
+utest cfgEq gramB gramC with false in
+utest cfgEq gramC gramB with false in
+
+
 let tokEmptyTy = tyrecord_ [("info", tycon_ "Info")] in
 let tokStrvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tystr_)] in
 let tokIntvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tyint_)] in
-
 
 let mkFirstEntry: Term -> [[Term]] -> (Term, Set [TokenRepr]) = lam term. lam firsts.
   (term, setOfSeq (seqCmp tokReprCmp) (map (map (lam t.
