@@ -1,0 +1,139 @@
+include_rules
+
+STDLIB := MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/src/lib
+
+# NOTE(vipa, 2023-05-16): This is ugly, but appears stable and does
+# seem to work
+BOOT_LIB_FILES += lib/boot/META
+BOOT_LIB_FILES += lib/boot/ast.ml
+BOOT_LIB_FILES += lib/boot/boot.a
+BOOT_LIB_FILES += lib/boot/boot.cma
+BOOT_LIB_FILES += lib/boot/boot.cmi
+BOOT_LIB_FILES += lib/boot/boot.cmt
+BOOT_LIB_FILES += lib/boot/boot.cmx
+BOOT_LIB_FILES += lib/boot/boot.cmxa
+BOOT_LIB_FILES += lib/boot/boot.ml
+BOOT_LIB_FILES += lib/boot/boot__Ast.cmi
+BOOT_LIB_FILES += lib/boot/boot__Ast.cmt
+BOOT_LIB_FILES += lib/boot/boot__Ast.cmx
+BOOT_LIB_FILES += lib/boot/boot__Bootparser.cmi
+BOOT_LIB_FILES += lib/boot/boot__Bootparser.cmt
+BOOT_LIB_FILES += lib/boot/boot__Bootparser.cmx
+BOOT_LIB_FILES += lib/boot/boot__Builtin.cmi
+BOOT_LIB_FILES += lib/boot/boot__Builtin.cmt
+BOOT_LIB_FILES += lib/boot/boot__Builtin.cmx
+BOOT_LIB_FILES += lib/boot/boot__Deadcode.cmi
+BOOT_LIB_FILES += lib/boot/boot__Deadcode.cmt
+BOOT_LIB_FILES += lib/boot/boot__Deadcode.cmx
+BOOT_LIB_FILES += lib/boot/boot__Eval.cmi
+BOOT_LIB_FILES += lib/boot/boot__Eval.cmt
+BOOT_LIB_FILES += lib/boot/boot__Eval.cmx
+BOOT_LIB_FILES += lib/boot/boot__Ext.cmi
+BOOT_LIB_FILES += lib/boot/boot__Ext.cmt
+BOOT_LIB_FILES += lib/boot/boot__Ext.cmx
+BOOT_LIB_FILES += lib/boot/boot__Exttest.cmi
+BOOT_LIB_FILES += lib/boot/boot__Exttest.cmt
+BOOT_LIB_FILES += lib/boot/boot__Exttest.cmx
+BOOT_LIB_FILES += lib/boot/boot__Intrinsics.cmi
+BOOT_LIB_FILES += lib/boot/boot__Intrinsics.cmt
+BOOT_LIB_FILES += lib/boot/boot__Intrinsics.cmti
+BOOT_LIB_FILES += lib/boot/boot__Intrinsics.cmx
+BOOT_LIB_FILES += lib/boot/boot__Lexer.cmi
+BOOT_LIB_FILES += lib/boot/boot__Lexer.cmt
+BOOT_LIB_FILES += lib/boot/boot__Lexer.cmx
+BOOT_LIB_FILES += lib/boot/boot__Mexpr.cmi
+BOOT_LIB_FILES += lib/boot/boot__Mexpr.cmt
+BOOT_LIB_FILES += lib/boot/boot__Mexpr.cmx
+BOOT_LIB_FILES += lib/boot/boot__Mlang.cmi
+BOOT_LIB_FILES += lib/boot/boot__Mlang.cmt
+BOOT_LIB_FILES += lib/boot/boot__Mlang.cmx
+BOOT_LIB_FILES += lib/boot/boot__Msg.cmi
+BOOT_LIB_FILES += lib/boot/boot__Msg.cmt
+BOOT_LIB_FILES += lib/boot/boot__Msg.cmx
+BOOT_LIB_FILES += lib/boot/boot__Parser.cmi
+BOOT_LIB_FILES += lib/boot/boot__Parser.cmt
+BOOT_LIB_FILES += lib/boot/boot__Parser.cmti
+BOOT_LIB_FILES += lib/boot/boot__Parser.cmx
+BOOT_LIB_FILES += lib/boot/boot__Parserutils.cmi
+BOOT_LIB_FILES += lib/boot/boot__Parserutils.cmt
+BOOT_LIB_FILES += lib/boot/boot__Parserutils.cmx
+BOOT_LIB_FILES += lib/boot/boot__Patterns.cmi
+BOOT_LIB_FILES += lib/boot/boot__Patterns.cmt
+BOOT_LIB_FILES += lib/boot/boot__Patterns.cmx
+BOOT_LIB_FILES += lib/boot/boot__Pprint.cmi
+BOOT_LIB_FILES += lib/boot/boot__Pprint.cmt
+BOOT_LIB_FILES += lib/boot/boot__Pprint.cmx
+BOOT_LIB_FILES += lib/boot/boot__Pyast.cmi
+BOOT_LIB_FILES += lib/boot/boot__Pyast.cmt
+BOOT_LIB_FILES += lib/boot/boot__Pyast.cmx
+BOOT_LIB_FILES += lib/boot/boot__Pyffi.cmi
+BOOT_LIB_FILES += lib/boot/boot__Pyffi.cmt
+BOOT_LIB_FILES += lib/boot/boot__Pyffi.cmx
+BOOT_LIB_FILES += lib/boot/boot__Pypprint.cmi
+BOOT_LIB_FILES += lib/boot/boot__Pypprint.cmt
+BOOT_LIB_FILES += lib/boot/boot__Pypprint.cmx
+BOOT_LIB_FILES += lib/boot/boot__Repl.cmi
+BOOT_LIB_FILES += lib/boot/boot__Repl.cmt
+BOOT_LIB_FILES += lib/boot/boot__Repl.cmx
+BOOT_LIB_FILES += lib/boot/boot__Rope.cmi
+BOOT_LIB_FILES += lib/boot/boot__Rope.cmt
+BOOT_LIB_FILES += lib/boot/boot__Rope.cmti
+BOOT_LIB_FILES += lib/boot/boot__Rope.cmx
+BOOT_LIB_FILES += lib/boot/boot__Symbolize.cmi
+BOOT_LIB_FILES += lib/boot/boot__Symbolize.cmt
+BOOT_LIB_FILES += lib/boot/boot__Symbolize.cmx
+BOOT_LIB_FILES += lib/boot/boot__Symbutils.cmi
+BOOT_LIB_FILES += lib/boot/boot__Symbutils.cmt
+BOOT_LIB_FILES += lib/boot/boot__Symbutils.cmx
+BOOT_LIB_FILES += lib/boot/boot__Tensor.cmi
+BOOT_LIB_FILES += lib/boot/boot__Tensor.cmt
+BOOT_LIB_FILES += lib/boot/boot__Tensor.cmti
+BOOT_LIB_FILES += lib/boot/boot__Tensor.cmx
+BOOT_LIB_FILES += lib/boot/boot__Ustring.cmi
+BOOT_LIB_FILES += lib/boot/boot__Ustring.cmt
+BOOT_LIB_FILES += lib/boot/boot__Ustring.cmti
+BOOT_LIB_FILES += lib/boot/boot__Ustring.cmx
+BOOT_LIB_FILES += lib/boot/boot__Utils.cmi
+BOOT_LIB_FILES += lib/boot/boot__Utils.cmt
+BOOT_LIB_FILES += lib/boot/boot__Utils.cmx
+BOOT_LIB_FILES += lib/boot/bootparser.ml
+BOOT_LIB_FILES += lib/boot/builtin.ml
+BOOT_LIB_FILES += lib/boot/deadcode.ml
+BOOT_LIB_FILES += lib/boot/dune-package
+BOOT_LIB_FILES += lib/boot/eval.ml
+BOOT_LIB_FILES += lib/boot/ext.ml
+BOOT_LIB_FILES += lib/boot/exttest.ml
+BOOT_LIB_FILES += lib/boot/intrinsics.ml
+BOOT_LIB_FILES += lib/boot/intrinsics.mli
+BOOT_LIB_FILES += lib/boot/lexer.ml
+BOOT_LIB_FILES += lib/boot/mexpr.ml
+BOOT_LIB_FILES += lib/boot/mlang.ml
+BOOT_LIB_FILES += lib/boot/msg.ml
+BOOT_LIB_FILES += lib/boot/opam
+BOOT_LIB_FILES += lib/boot/parser.ml
+BOOT_LIB_FILES += lib/boot/parser.mli
+BOOT_LIB_FILES += lib/boot/parserutils.ml
+BOOT_LIB_FILES += lib/boot/patterns.ml
+BOOT_LIB_FILES += lib/boot/pprint.ml
+BOOT_LIB_FILES += lib/boot/pyast.ml
+BOOT_LIB_FILES += lib/boot/pyffi.ml
+BOOT_LIB_FILES += lib/boot/pypprint.ml
+BOOT_LIB_FILES += lib/boot/repl.ml
+BOOT_LIB_FILES += lib/boot/rope.ml
+BOOT_LIB_FILES += lib/boot/rope.mli
+BOOT_LIB_FILES += lib/boot/symbolize.ml
+BOOT_LIB_FILES += lib/boot/symbutils.ml
+BOOT_LIB_FILES += lib/boot/tensor.ml
+BOOT_LIB_FILES += lib/boot/tensor.mli
+BOOT_LIB_FILES += lib/boot/ustring.ml
+BOOT_LIB_FILES += lib/boot/ustring.mli
+BOOT_LIB_FILES += lib/boot/utils.ml
+BOOT_LIB_FILES += lib/boot/boot.cmxs
+
+: |> ^b dune build^ ../misc/with-tmp-dir dune build --root=boot/ --build-dir="{}" "&&" cd . "&&" dune install --build-dir="{}" --prefix="{}/install-prefix" --root=boot/ --libdir=\$(realpath $(VARIANT_SRC)/lib) ">/dev/null" "2>&1" "&&" mv "{}/install-prefix/bin/boot" %1o |> mi-boot | $(BOOT_LIB_FILES) <boot-lib>
+
+: main/mi-lite.mc | mi-boot $(BOOT_LIB_FILES) |> ^ ./boot eval %f -- 0 %f %o^ $(STDLIB) ./%1i eval %f -- 0 %f %o |> mi-lite
+: main/mi.mc | mi-lite $(BOOT_LIB_FILES) |> ^ ./mi-lite 1 %f %o^ $(STDLIB) ./%1i 1 %f %o |> mi1
+: main/mi.mc | mi1 $(BOOT_LIB_FILES) |> ^ ./mi1 compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> mi <mi>
+
+: main/mi.mc | mi-boot $(BOOT_LIB_FILES) |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> mi-cheat <mi-cheat>

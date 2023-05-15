@@ -1,3 +1,15 @@
+/-
+
+This program is written to have single source of truth for all our
+tests, in a way that is easy to modify as we get more tests, and that
+also works with multiple test runners (presently `make` and `tup`).
+
+The file starts with a public API, then internals, then at the end
+(after `mexpr`) is the code using the API. New tests and exceptions
+are to be added there.
+
+-/
+
 include "sys.mc"
 include "stringid.mc"
 include "arg.mc"
@@ -53,9 +65,12 @@ con ConditionsUnmet : () -> ConditionStatus
 -- listed)
 con ConditionsImpossible : () -> ConditionStatus
 
+-- `MidCmd` and `EndCmd` are the types of functions that you can call
+-- to register a new command to run as part of our testing.
+-- A `MidCmd` registers a command with one input and one output.
 type MidCmd = {input : Path, cmd : String, tag : String} -> Path
+-- An `EndCmd` registers a command with one input and no outputs.
 type EndCmd = {input : Path, cmd : String, tag : String} -> ()
-
 
 type Subdirs
 con IncludeSubs : () -> Subdirs
@@ -74,6 +89,11 @@ type TestApi =
   , sh : { m : MidCmd, e : EndCmd, f : EndCmd }
   , glob : [String] -> Subdirs -> File -> [Path]
   }
+
+-- Example:
+-- glob ["stdlib", "parser"] (IncludeSubs ()) (SuffixFile ".mc")
+-- is equivalent with the following bash-style glob:
+-- stdlib/parser/**/*.mc
 
 type TestCollection =
   -- The name of this set of tests, i.e., how it is identified on the
@@ -154,11 +174,6 @@ let testColl : String -> TestCollection = lam name.
   , newTests = lam. ()
   }
 
--- Example:
--- glob ["stdlib", "parser"] (IncludeSubs ()) (SuffixFile ".mc")
--- is equivalent with the following bash-style glob:
--- stdlib/parser/**/*.mc
-
 -------------------------------------------------------------------
 -- The public API ends here, with one exception: `testMain` is also
 -- considered public
@@ -176,8 +191,9 @@ let _drop = lam n. lam s. subsequence s n (subi (length s) n)
 
 let _restrictToDir : [String] -> Glob -> Option Glob = lam dirs. lam glob.
   let fixedGlob = {glob with dirs = tail dirs, subdirs = OnlyHere ()} in
-  if isPrefix eqString (cons "src" glob.dirs) dirs then
-    let remainingDirs = _drop (length glob.dirs) dirs in
+  let actualGlobDirs = cons "src" glob.dirs in
+  if isPrefix eqString actualGlobDirs dirs then
+    let remainingDirs = _drop (length actualGlobDirs) dirs in
     switch (remainingDirs, glob.subdirs)
     case ([], _) then Some fixedGlob
     case (_, IncludeSubs _) then Some fixedGlob
@@ -282,7 +298,7 @@ let _glob
         then filter (lam p. setMem p files) paths
         else paths in
       map stringToPath paths
-    else printLn "empty glob"; []
+    else []
 
 let _minER : ExpectedResult -> ExpectedResult -> ExpectedResult = lam a. lam b.
   switch (a, b)
@@ -400,20 +416,21 @@ let testMain : [TestCollection] -> () = lam colls.
   -- TODO(vipa, 2023-05-12): For now assume we're always running in
   -- the root dir
   let root = "." in
+  let pathDirs = lam p. switch p
+    case OrigPath x then x.path.0
+    case DerivPath x then cons "build" x.orig.path.0
+    end in
+  let pathDir = lam p. strJoin "/" (pathDirs p) in
+  let pathBasename = lam p. switch p
+    case OrigPath x then x.path.1
+    case DerivPath x then join [x.orig.path.1, ".", x.testColl, ".", _miModeToString x.mode, ".", x.tag]
+    end in
   let dir = match options.mode with TupRules _
     then match files with [dir] ++ _
       then Some (strSplit "/" dir)
       else Some []
     else None () in
   match
-    let pathDirs = lam p. switch p
-      case OrigPath x then x.path.0
-      case DerivPath x then cons "build" x.orig.path.0
-      end in
-    let pathBasename = lam p. switch p
-      case OrigPath x then x.path.1
-      case DerivPath x then join [x.orig.path.1, ".", x.testColl, ".", _miModeToString x.mode, ".", x.tag]
-      end in
     match dir with Some dirs then
       let srcDir = match dirs with ["src"] ++ dirs
         then strJoin "/" (map (lam. "..") dirs)
@@ -425,10 +442,10 @@ let testMain : [TestCollection] -> () = lam colls.
       let pathToString = lam p.
         utest pathDirs p with dirs in
         pathBasename p in
-      (srcDir, pathToString)
+      ({src = srcDir, root = strJoin "/" (map (lam. "..") dirs)}, pathToString)
     else
-      (concat root "/src/", lam p. strJoin "/" (snoc (pathDirs p) (pathBasename p)))
-  with (srcDirStr, pathToString) in
+      ({src = concat root "/src/", root = root}, lam p. strJoin "/" (snoc (pathDirs p) (pathBasename p)))
+  with (commandPath, pathToString) in
 
   let globBase =
     { root = root
@@ -522,15 +539,25 @@ let testMain : [TestCollection] -> () = lam colls.
         , _expandFormat spec.friendlyCommand {i="$<", o="$@"}
         )
       case TupRules _ then
-        ( _expandFormat spec.command {i="%f", o="%o"}
-        , _expandFormat spec.friendlyCommand {i="%f", o="%o"}
+        ( _expandFormat spec.command {i="%f", o="%3o"}
+        , _expandFormat spec.friendlyCommand {i="%f", o="%3o"}
         )
       case _ then (spec.command, spec.friendlyCommand)
       end
     with (command, friendlyCommand) in
+    let firstLogIdx = if spec.output then 2 else 1 in
+    let stdoutStr = match options.mode with TupRules _
+      then "%1o"
+      else pathToString stdout in
+    let stderrStr = match options.mode with TupRules _
+      then "%2o"
+      else pathToString stderr in
+    let elideCat = match options.mode with TupRules _
+      then "$(ROOT)/misc/elide-cat"
+      else "misc/elide-cat" in
     let command = join
-      [ "{ ", command, "; } >'", pathToString stdout, "' 2>'", pathToString stderr
-      , "' || { misc/elide-cat stdout '", pathToString stdout, "'; misc/elide-cat stderr '", pathToString stderr, "'; false; }"
+      [ "{ ", command, "; } >'", stdoutStr, "' 2>'", stderrStr
+      , "' || { ", elideCat, " stdout '", stdoutStr, "'; ", elideCat, " stderr '", stderrStr, "'; false; }"
       ] in
     let cmd =
       { input = spec.input
@@ -589,12 +616,11 @@ let testMain : [TestCollection] -> () = lam colls.
 
   -- NOTE(vipa, 2023-03-31): Add targets for each mi version used
   let addTargets = lam mkMi. lam mkSh.
-    let normalExceptions = deref normalExceptions in
     let addNormals =
       let mi = mkMi "normal" in
       let sh = mkSh "normal" in
       lam src.
-        let tasks = optionGetOr defaultTasks (mapLookup src normalExceptions) in
+        let tasks = optionGetOr defaultTasks (mapLookup src (deref normalExceptions)) in
         switch tasks.compile
         case Dont _ then ()
         case Fail _ then
@@ -623,13 +649,15 @@ let testMain : [TestCollection] -> () = lam colls.
     iter addNormals (glob [] (IncludeSubs ()) (SuffixFile ".mc"))
   in
   _phase "target api";
-  -- TODO(vipa, 2023-05-12): continue from here
+  let ocamlPath = match options.mode with TupRules _
+    then " OCAMLPATH=$(VARIANT_SRC)/lib "
+    else " OCAMLPATH=\\$(pwd)/build/lib " in
   (if options.bootstrapped then
     let mi = match options.mode with TupRules _
       then "%<mi>"
       else "build/mi" in
     let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib ", mi]
+      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
       , mode = MiBoot ()
       } in
     let mkSh = mkSh (MiBoot ()) in
@@ -638,7 +666,7 @@ let testMain : [TestCollection] -> () = lam colls.
   _phase "bootstrapped";
   (if options.installed then
     let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib mi"]
+      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib mi"]
       , mode = MiInstalled ()
       } in
     let mkSh = mkSh (MiInstalled ()) in
@@ -650,7 +678,7 @@ let testMain : [TestCollection] -> () = lam colls.
       then "%<mi-cheat>"
       else "build/mi-cheat" in
     let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", srcDirStr, "/stdlib ", mi]
+      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
       , mode = MiCheat ()
       } in
     let mkSh = mkSh (MiCheat ()) in
@@ -658,20 +686,25 @@ let testMain : [TestCollection] -> () = lam colls.
   else ());
   _phase "cheated";
 
+  (if null (deref commands) then
+    printLn "Found no matching tests (maybe a deactivated test collection?)";
+    exit 1
+   else ());
+
   switch options.mode
   case TupRules _ then
     let printRule = lam c.
       let extra = switch c.miMode
-        case MiBoot _ then join [" | ", srcDirStr, "/<mi>"]
+        case MiBoot _ then join [" | ", commandPath.src, "/<mi> ", commandPath.src, "/<boot-lib>"]
         case MiInstalled _ then ""
-        case MiCheat _ then join [" | ", srcDirStr, "/<mi-cheat>"]
+        case MiCheat _ then join [" | ", commandPath.src, "/<mi-cheat> ", commandPath.src, "/<boot-lib>"]
         end in
       let cmd = join
         [ ": ", pathToString c.input, extra
         , " |> ^ ", c.friendlyCommand, "^ "
-        , c.command, " |>"
+        , c.command, " |> "
+        , pathToString c.stdout, " ", pathToString c.stderr
         , optionMapOr "" (lam p. cons ' ' (pathToString p)) c.output
-        , " | ", pathToString c.stdout, " ", pathToString c.stderr
         ] in
       printLn cmd in
     iter printRule (deref commands);
@@ -683,7 +716,13 @@ let testMain : [TestCollection] -> () = lam colls.
   case Make _ then
     let printPrereq = lam c.
       let o = optionGetOr c.stdout c.output in
-      print (join [" ", pathToString o]) in
+      print (cons ' ' (pathToString o)) in
+    let printPhony = lam c.
+      let o = optionGetOr c.stdout c.output in
+      match c.input with OrigPath _
+      then print (cons ' ' (pathToString o))
+      else ()
+    in
     let printRule = lam c.
       let o = optionGetOr c.stdout c.output in
       let extra = switch c.miMode
@@ -693,12 +732,17 @@ let testMain : [TestCollection] -> () = lam colls.
         end in
       let cmd = join
         [ pathToString o, " : ", pathToString c.input, "\n"
-        , "\t", c.command
+        , "\t@echo ", c.friendlyCommand, "\n"
+        , "\t@mkdir -p ", pathDir c.stdout, "\n"
+        , "\t@", c.command
         ] in
       printLn cmd
     in
     print "test:";
     iter printPrereq (deref commands);
+    printLn "";
+    print ".PHONY:";
+    iter printPhony (deref commands);
     printLn "";
     iter printRule (deref commands);
     _phase "make"
@@ -711,8 +755,7 @@ testMain
     with checkCondition = lam.
       if and (sysCommandExists "nvcc") (sysCommandExists "futhark")
       then ConditionsMet ()
-      -- else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
-      else ConditionsUnmet () -- TODO(vipa, 2023-04-25): temporarily pretend they're not impossible, to test `newTests`
+      else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
     , exclusions = lam api.
       -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
       -- interpreted mode, and compiled mode is already tested via the
@@ -724,5 +767,66 @@ testMain
         api.sh.e {input = exe, cmd = "%i", tag = "run"};
         let exe = api.mi.m {input = mc, cmd = "compile --debug-accelerate %i --output %o", tag = "debug-exe"} in
         api.sh.e {input = exe, cmd = "%i", tag = "debug-run"})
+    }
+
+  , { testColl "exceptions"
+    with exclusions = lam api.
+      let runFail = {defaultTasks with interpret = Fail (), run = Fail ()} in
+      let unsupported = {defaultTasks with interpret = Fail (), compile = Fail ()} in
+      let dontRun = {defaultTasks with run = Dont ()} in
+      let markExact = lam tasks. lam path.
+        print "";  -- TODO(vipa, 2023-05-16): Commenting out this line makes it so this entire function disappears (dead-code elim presumably)
+        match strSplit "/" path with dirs ++ [file] in
+        api.mark tasks (api.glob dirs (OnlyHere ()) (ExactFile file)) in
+
+      -- Files that are expected to fail
+      iter (markExact runFail)
+        [ "test/examples/utest.mc"
+        ];
+
+      -- Python is only supported in boot
+      iter (markExact unsupported)
+        [ "stdlib/python/python.mc"
+        , "test/py/python.mc"
+        ];
+
+      -- This doesn't seem to terminate in a reasonable amount of time
+      iter (markExact dontRun)
+        [ "test/examples/async/tick.mc"
+        ];
+
+      ()
+    }
+
+  , { testColl "microbenchmark"
+    with exclusions = lam api.
+      -- NOTE(vipa, 2023-05-16): These are tested via new tests instead
+      api.mark noTasks (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc"))
+    , newTests = lam api.
+      for_ (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
+        let exe = api.mi.m {input = mc, cmd = "compile %i --test --output %o", tag = "exe"} in
+        -- NOTE(vipa, 2023-05-16): We arbitrarily run with argument 1,
+        -- since we're just testing, not benchmarking
+        api.mi.e {input = mc, cmd = "eval --test %i -- 1", tag = "eval"};
+        api.sh.e {input = exe, cmd = "%i 1", tag = "run"})
+    }
+
+  , { testColl "constraint-programming"
+    with checkCondition = lam.
+      if sysCommandExists "minizinc"
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark defaultTasks (api.glob ["stdlib", "cp"] (IncludeSubs ()) (SuffixFile ".mc"))
+    }
+
+  , { testColl "tuning"
+    with exclusions = lam api.
+      -- NOTE(vipa, 2023-05-16):
+      api.mark noTasks (api.glob ["test", "examples", "tuning"] (IncludeSubs ()) (SuffixFile ".mc"))
+    , newTests = lam api.
+      for_ (api.glob ["test", "examples", "tuning"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
+        let exe = api.mi.m {input = mc, cmd = "tune %i --test --disable-optimizations --compile --disable-exit-early --enable-cleanup --output %o", tag = "exe"} in
+        api.sh.e {input = exe, cmd = "./%i", tag = "run"})
     }
   ]
