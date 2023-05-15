@@ -229,7 +229,7 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst + MExprCmp
     let visited = setInsert syntaxDef.entrypoint visited in
     let idxQueue = mapLookupOr [] syntaxDef.entrypoint ntToIdx in
     recursive let iterate = lam idxQueue. lam visited.
-      match idxQueue with [idx] ++ rest then
+      match idxQueue with [idx] ++ idxQueue then
         let prod: Production = get syntaxDef.productions idx in
         match foldl (lam acc. lam term.
           match acc with (visited, idxQueue) in
@@ -281,9 +281,13 @@ let t_Times = Terminal (TimesRepr {}) in
 let t_Int = Terminal (IntRepr {}) in
 
 let _Ex = nameSym "Example" in
-let nt_Ex = NonTerminal _Ex in
 let _Ex2 = nameSym "Example2" in
+let _Ex3 = nameSym "Example3" in
+let _Ex4 = nameSym "Example4" in
+let nt_Ex = NonTerminal _Ex in
 let nt_Ex2 = NonTerminal _Ex2 in
+let nt_Ex3 = NonTerminal _Ex3 in
+let nt_Ex4 = NonTerminal _Ex4 in
 
 utest cfgTermCmp t_EOF t_EOF with 0 using eqSign in
 utest cfgTermCmp nt_Ex nt_Ex with 0 using eqSign in
@@ -518,18 +522,49 @@ let firstKTestCases: [FirstKTestCase] = [
 ] in
 
 let suppressPrints = true in
-let print = lam s. if suppressPrints then () else print s in
-let printLn = lam s. if suppressPrints then () else printLn s in
+let tprint = lam s. if suppressPrints then () else print s in
+let tprintLn = lam s. if suppressPrints then () else printLn s in
 
--- Run tests
+-- Run FirstK tests
 foldl (lam. lam tc: FirstKTestCase.
-  printLn (join ["------------- ", tc.name, " -------------"]);
-  printLn (cfg2string tc.syntaxDef);
-  printLn (cons '\n' (first2string 1 (cfgFirstK 1 tc.syntaxDef)));
-  printLn (cons '\n' (first2string 2 (cfgFirstK 2 tc.syntaxDef)));
-  printLn (cons '\n' (first2string 3 (cfgFirstK 3 tc.syntaxDef)));
+  tprintLn (join ["------------- ", tc.name, " -------------"]);
+  tprintLn (cfg2string tc.syntaxDef);
+  tprintLn (cons '\n' (first2string 1 (cfgFirstK 1 tc.syntaxDef)));
+  tprintLn (cons '\n' (first2string 2 (cfgFirstK 2 tc.syntaxDef)));
+  tprintLn (cons '\n' (first2string 3 (cfgFirstK 3 tc.syntaxDef)));
   utest cfgFirstK 1 tc.syntaxDef with tc.first1 using mapEq setEq in
   utest cfgFirstK 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest cfgFirstK 3 tc.syntaxDef with tc.first3 using mapEq setEq in
-  printLn ""
-) () firstKTestCases
+  tprintLn ""
+) () firstKTestCases;
+
+
+
+-- Testing removing dead productions
+let gramA: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let gramB: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_},
+    {nt = _Ex3, terms = [t_Plus, nt_Ex, t_Plus], action = unit_},
+    {nt = _Ex3, terms = [nt_Ex4], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let strippedGramB = cfgRemoveUnreachableProductions gramB in
+
+utest cfgEq gramA gramB with false in
+utest cfgEq gramA strippedGramB with true in
+
+
+()
