@@ -167,8 +167,6 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
   sem lrCreateParseTable: Int -> Map TokenRepr {conIdent: Name, conArg: Type} -> SyntaxDef -> Result String String LRParseTable
   sem lrCreateParseTable k tokenConTypes =
   | syntaxDef ->
-    -- Dead rule elimination, remove all non-terminals that is not the entrypoint or points to later on.
-    -- Infer types for each non-terminal
     let nonTerminalTypesResult = foldl (lam acc: ([Name], Map Name Type). lam prod: Production.
       recursive let getFinalType = lam ty: Type.
         match ty with TyArrow r then getFinalType r.to else ty
@@ -208,7 +206,12 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
         case NonTerminal n then
           match mapLookup n nonTerminalTypes with Some ntType then
             if neqi 0 (cmpTypeH (ty, ntType))
-              then Some (join ["Type mismatch for non-terminal \"", nameGetStr n, "\""])
+              then
+                use MExprPrettyPrint in
+                let env = pprintEnvEmpty in
+                Some (join [
+                  "Type mismatch for non-terminal \"", nameGetStr n, "\", between ",
+                  (getTypeStringCode 0 env ty).1, " and ", (getTypeStringCode 0 env ntType).1, "."])
               else None ()
           else
             Some (join ["Unrecognized non-terminal \"", nameGetStr n, "\""])
@@ -216,7 +219,11 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
           -- NOTE(johnwikman, 2022-01-20): Maybe we want more than one type for tokens?
           match mapLookup t tokenConTypes with Some tokCon then
             if neqi 0 (cmpTypeH (ty, tokCon.conArg))
-              then Some (join ["Type mismatch for token ", tokReprToStr t])
+              then
+                use MExprPrettyPrint in
+                let env = pprintEnvEmpty in
+                Some (join ["Type mismatch for token ", tokReprToStr t, ", between ",
+                (getTypeStringCode 0 env ty).1, " and ", (getTypeStringCode 0 env tokCon.conArg).1, "."])
               else None ()
           else
             Some (join ["could not find a type for token ", tokReprToStr t])
@@ -1236,12 +1243,12 @@ let testcases: [LRTestCase] = [
 
 
 let suppressPrints = true in
-let print = lam s. if suppressPrints then () else print s in
-let printLn = lam s. if suppressPrints then () else printLn s in
+let tprint = lam s. if suppressPrints then () else print s in
+let tprintLn = lam s. if suppressPrints then () else printLn s in
 
 -- Run tests
 foldl (lam. lam tc: LRTestCase.
-  printLn (join ["Running testcase ", tc.name, " "]);
+  tprintLn (join ["Running testcase ", tc.name, " "]);
 
   let isLR1_table = match lrCreateParseTable 1 tc.tokenConTypes tc.syntaxDef with ResultOk _ then true else false in
   utest isLR1_table with tc.isLR1 in
@@ -1250,8 +1257,8 @@ foldl (lam. lam tc: LRTestCase.
 
   switch lrCreateParseTable k tc.tokenConTypes tc.syntaxDef
   case ResultOk {value = lrtable} then
-    printLn (lrtable2string 2 lrtable);
-    printLn "";
+    tprintLn (lrtable2string 2 lrtable);
+    tprintLn "";
     let parser = lrGenerateParser (lrDefaultGeneratorBindings ()) lrtable in
     let program: String = strJoin "\n" [
       "include \"error.mc\"",
@@ -1338,9 +1345,10 @@ foldl (lam. lam tc: LRTestCase.
 
     cunit.cleanup ();
     sysDeleteFile tmpFilePath;
-    printLn "";
+    tprintLn "";
     ()
   case ResultErr {errors = errors} then
+    tprintLn (strJoin "\n" (mapValues errors));
     utest tc.name with "I should not fail!" in ()
   end
 
