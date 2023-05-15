@@ -19,7 +19,7 @@ lang PreToken = TokenParser
   sem tokReprToStr =
   | PreRepr x -> join ["<", nameGetStr x.constructorName, ">"]
 
-  sem tokReprCompare2 =
+  sem tokReprCmp2 =
   | (PreRepr l, PreRepr r) -> nameCmp l.constructorName r.constructorName
 end
 
@@ -36,7 +36,7 @@ lang PreLitToken = TokenParser
   sem tokReprToStr =
   | PreLitRepr x -> snoc (cons '\'' x.lit) '\''
 
-  sem tokReprCompare2 =
+  sem tokReprCmp2 =
   | (PreLitRepr l, PreLitRepr r) -> cmpString l.lit r.lit
 end
 

@@ -1235,7 +1235,7 @@ let testcases: [LRTestCase] = [
 ] in
 
 
-let suppressPrints = false in
+let suppressPrints = true in
 let print = lam s. if suppressPrints then () else print s in
 let printLn = lam s. if suppressPrints then () else printLn s in
 

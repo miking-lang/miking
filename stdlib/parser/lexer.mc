@@ -664,7 +664,7 @@ lang HashStringTokenParser = TokenParser
   sem tokToStr =
   | HashStringTok tok -> join ["<Hash:", tok.hash, ">", tok.val]
 
-  sem tokReprCompare2 =
+  sem tokReprCmp2 =
   | (HashStringRepr l, HashStringRepr r) -> cmpString l.hash r.hash
 
   sem tokToRepr =

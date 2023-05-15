@@ -71,7 +71,7 @@ lang ParserBase = TokenParser + EOFTokenParser
   | r -> _compareSpecSymbol (l, r)
   sem _compareSpecSymbol : all state. all prodLabel. (SpecSymbol Token TokenRepr state prodLabel, SpecSymbol Token TokenRepr state prodLabel) -> Int
   sem _compareSpecSymbol =
-  | (TokSpec l, TokSpec r) -> tokReprCompare l r
+  | (TokSpec l, TokSpec r) -> tokReprCmp l r
   | (LitSpec l, LitSpec r) -> cmpString l.lit r.lit
   | (NtSpec l, NtSpec r) -> nameCmp l r
   | (l, r) -> subi (constructorTag l) (constructorTag r)

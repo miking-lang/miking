@@ -110,6 +110,10 @@ let mapLookupApplyOrElse : all k. all v1. all v2.
   lam f1. lam f2. lam k. lam m.
   mapFindApplyOrElse f1 f2 k m
 
+let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
+  lam dv. lam k. lam m.
+  mapLookupOrElse (lam. dv) k m
+
 let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
   use AVLTreeImpl in
   avlIsEmpty m.root

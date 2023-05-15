@@ -181,6 +181,37 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst
         iterate resultMap
     in
     iterate firstK
+
+
+  -- Removes all productions that are unreachable from the entrypoint
+  sem cfgRemoveUnreachableProductions : SyntaxDef -> SyntaxDef
+  sem cfgRemoveUnreachableProductions =
+  | syntaxDef ->
+    let ntToIdx : Map Name [Int] = foldli (lam m. lam i. lam prod: Production.
+      mapInsertWith concat prod.nt [i] m
+    ) (mapEmpty nameCmp) syntaxDef.productions in
+    let visited : Set Name = setEmpty nameCmp in
+    let visited = setInsert syntaxDef.entrypoint visited in
+    let idxQueue = mapLookupOr [] syntaxDef.entrypoint ntToIdx in
+    recursive let iterate = lam idxQueue. lam visited.
+      match idxQueue with [idx] ++ rest then
+        let prod: Production = get syntaxDef.productions idx in
+        match foldl (lam acc. lam term.
+          match acc with (visited, idxQueue) in
+          match term with NonTerminal nt then
+            if not (setMem nt visited) then
+              let visited = setInsert nt visited in
+              let idxQueue = concat idxQueue (mapLookupOr [] nt ntToIdx) in
+              (visited, idxQueue)
+            else acc
+          else acc
+        ) (visited, idxQueue) prod.terms with (visited, idxQueue) in
+        iterate idxQueue visited
+      else
+        visited
+    in
+    let visited = iterate idxQueue visited in
+    {syntaxDef with productions = filter (lam prod. setMem prod.nt visited) syntaxDef.productions}
 end
 
 
@@ -246,7 +277,7 @@ let first2string: Int -> Map Term (Set [TokenRepr]) -> String = lam k. lam first
 in
 
 
-type CFGTestCase = {
+type FirstKTestCase = {
   name: String,
   syntaxDef: SyntaxDef,
   first1: Map Term (Set [TokenRepr]),
@@ -255,7 +286,7 @@ type CFGTestCase = {
 } in
 
 
-let testcases: [CFGTestCase] = [
+let firstKTestCases: [FirstKTestCase] = [
   let _Expr = nameSym "Expr" in
   let _Term = nameSym "Term" in
   let _Factor = nameSym "Factor" in
@@ -388,12 +419,12 @@ let testcases: [CFGTestCase] = [
   }
 ] in
 
-let suppressPrints = false in
+let suppressPrints = true in
 let print = lam s. if suppressPrints then () else print s in
 let printLn = lam s. if suppressPrints then () else printLn s in
 
 -- Run tests
-foldl (lam. lam tc: CFGTestCase.
+foldl (lam. lam tc: FirstKTestCase.
   printLn (join ["------------- ", tc.name, " -------------"]);
   printLn (cfg2string tc.syntaxDef);
   printLn (cons '\n' (first2string 1 (cfgFirstK 1 tc.syntaxDef)));
@@ -403,4 +434,4 @@ foldl (lam. lam tc: CFGTestCase.
   utest cfgFirstK 2 tc.syntaxDef with tc.first2 using mapEq setEq in
   utest cfgFirstK 3 tc.syntaxDef with tc.first3 using mapEq setEq in
   printLn ""
-) () testcases
+) () firstKTestCases
