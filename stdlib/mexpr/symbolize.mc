@@ -85,6 +85,18 @@ lang SymLookup
     else
       optionMapOrElse cases.absent cases.present
         (mapLookup (nameGetStr ident) env)
+
+  -- The general case, where we may have a richer element type than simply name.
+  sem setSymbolWith
+    : all a. (Name -> a)
+    -> Map String a
+    -> Name
+    -> (Map String a, Name)
+  sem setSymbolWith newElem env =| ident ->
+    if nameHasSym ident then (env, ident)
+    else
+      let ident = nameSetNewSym ident in
+      (mapInsert (nameGetStr ident) (newElem ident) env, ident)
 end
 
 -----------
