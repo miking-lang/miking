@@ -2,12 +2,13 @@
 
 set -e
 
-if [ misc/test-spec -ot misc/test-spec.mc ]; then
-  if which mi >/dev/null 2>&1; then
-    MCORE_STDLIB=$(pwd)/src/stdlib mi compile misc/test-spec.mc --output misc/test-spec
-  else
-    MCORE_STDLIB=$(pwd)/src/stdlib build/mi compile misc/test-spec.mc --output misc/test-spec
-  fi
-fi
+DIR=$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")
+TARGETDIR=$(realpath --relative-to="$DIR" .)
+cd "$DIR"
 
-misc/test-spec --tup-rules > misc/tup-gen
+# NOTE(vipa, 2023-05-17): Tup doesn't like it if we write to files
+# here, since this script is only supposed to list build targets, thus
+# we don't check if test-spec is up to date here, even if it would
+# make some form of sense to do so.
+
+misc/test-spec --tup-rules -- "$TARGETDIR"
