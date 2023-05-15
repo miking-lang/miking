@@ -1,5 +1,6 @@
 include "common.mc"
 include "map.mc"
+include "math.mc"
 include "name.mc"
 include "set.mc"
 include "string.mc"
@@ -244,6 +245,24 @@ let t_RParen = Terminal (RParenRepr {}) in
 let t_Plus = Terminal (PlusRepr {}) in
 let t_Times = Terminal (TimesRepr {}) in
 let t_Int = Terminal (IntRepr {}) in
+
+let _Ex = nameSym "Example" in
+let nt_Ex = NonTerminal _Ex in
+let _Ex2 = nameSym "Example2" in
+let nt_Ex2 = NonTerminal _Ex2 in
+
+utest cfgTermCmp t_EOF t_EOF with 0 using eqSign in
+utest cfgTermCmp nt_Ex nt_Ex with 0 using eqSign in
+utest cfgTermCmp t_EOF t_RParen with 0 using neqi in
+utest cfgTermCmp t_RParen t_EOF with cfgTermCmp t_EOF t_RParen using neqSign in
+utest cfgTermCmp t_EOF nt_Ex with 0 using neqi in
+utest cfgTermCmp nt_Ex t_EOF with cfgTermCmp t_EOF nt_Ex using neqSign in
+utest cfgTermCmp nt_Ex2 nt_Ex with 0 using neqi in
+utest cfgTermCmp nt_Ex nt_Ex2 with cfgTermCmp nt_Ex2 nt_Ex using neqSign in
+
+utest cfgTermEq t_EOF t_EOF with true in
+utest cfgTermEq nt_Ex nt_Ex with true in
+utest cfgTermEq nt_Ex t_EOF with false in
 
 let tokEmptyTy = tyrecord_ [("info", tycon_ "Info")] in
 let tokStrvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tystr_)] in
