@@ -123,7 +123,9 @@ utest
       y        = v,
       yp       = vp
     } in
-    idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
+    utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp } with
+      IdaCalcICOK {}
+    in
 
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in
@@ -137,7 +139,9 @@ utest
     tset yp [0] 0.;
     tset yp [1] (negf 0.);
     idaReinit s { roots = idaNoRoots, t = t0, y = v, yp = vp };
-    idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
+    utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp } with
+      IdaCalcICOK {}
+    in
 
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in

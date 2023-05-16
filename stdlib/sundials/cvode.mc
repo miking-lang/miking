@@ -9,43 +9,44 @@ type CVODETolerance
 type CVODELinearMultistepMethod
 type CVODESession
 
-type CVODEError
+type CVODESolveError
 -- Missing or illegal solver inputs.
-con CVODEIllInput : {} -> CVODEError
+con CVODEIllInput : {} -> CVODESolveError
 -- The initial and final times are too close to each other and not initial step
 -- size was specified.
-con CVODETooClose : {} -> CVODEError
+con CVODETooClose : {} -> CVODESolveError
 -- The requested time could not be reached in mxstep internal steps.
-con CVODETooMuchWork : {} -> CVODEError
+con CVODETooMuchWork : {} -> CVODESolveError
 -- The requested accuracy could not be satisfied.
-con CVODETooMuchAccuracy : {} -> CVODEError
+con CVODETooMuchAccuracy : {} -> CVODESolveError
 -- Too many error test failures within a step or at the minimum step size.
-con CVODEErrFailure : {} -> CVODEError
+con CVODEErrFailure : {} -> CVODESolveError
 -- Too many convergence test failures within a step or at the minimum step size.
-con CVODEConvergenceFailure : {} -> CVODEError
+con CVODEConvergenceFailure : {} -> CVODESolveError
 -- Linear solver initialization failed.
-con CVODELinearInitFailure : {} -> CVODEError
+con CVODELinearInitFailure : {} -> CVODESolveError
 -- Linear solver setup failed unrecoverably.
-con CVODELinearSetupFailure : {} -> CVODEError
+con CVODELinearSetupFailure : {} -> CVODESolveError
 -- Linear solver solution failed unrecoverably.
-con CVODELinearSolveFailure : {} -> CVODEError
+con CVODELinearSolveFailure : {} -> CVODESolveError
 -- Unrecoverable failure in the RHS function f.
-con CVODERhsFuncFailure : {} -> CVODEError
+con CVODERhsFuncFailure : {} -> CVODESolveError
 -- Initial unrecoverable failure in the RHS function f.
-con CVODEFirstRhsFuncFailure : {} -> CVODEError
+con CVODEFirstRhsFuncFailure : {} -> CVODESolveError
 -- Too many convergence test failures, or unable to estimate the initial step
 -- size, due to repeated recoverable errors in the right-hand side function.
-con CVODERepeatedRhsFuncFailure : {} -> CVODEError
+con CVODERepeatedRhsFuncFailure : {} -> CVODESolveError
 -- The right-hand side function had a recoverable error, but no recovery was
 -- possible. This error can only occur after an error test failure at order one.
-con CVODEUnrecoverableRhsFuncFailure : {} -> CVODEError
+con CVODEUnrecoverableRhsFuncFailure : {} -> CVODESolveError
 -- Failure in the rootfinding function g.
-con CVODERootFuncFailure : {} -> CVODEError
+con CVODERootFuncFailure : {} -> CVODESolveError
 -- Unspecified solver failure.
-con CVODEErrUnspecified : {} -> CVODEError
+con CVODEErrUnspecified : {} -> CVODESolveError
 
-let _cvodeErrorCodeToError = lam errorCode : Int.
-  switch errorCode
+let _cvodeErrorCodeToError : Int -> CVODESolveError
+  = lam ec.
+  switch ec
     case 0 then CVODEIllInput {}
     case 1 then CVODETooClose {}
     case 2 then CVODETooMuchWork {}
@@ -60,7 +61,7 @@ let _cvodeErrorCodeToError = lam errorCode : Int.
     case 11 then CVODERepeatedRhsFuncFailure {}
     case 12 then CVODEUnrecoverableRhsFuncFailure {}
     case 13 then CVODERootFuncFailure {}
-    case 14 then CVODEErrUnspecified {}
+    case _ then CVODEErrUnspecified {}
   end
 
 type CVODESolverResult
@@ -71,14 +72,15 @@ con CVODERootsFound : {} -> CVODESolverResult
 -- The stop time was reached.
 con CVODEStopTimeReached : {} -> CVODESolverResult
 -- Solver error.
-con CVODEError : CVODEError -> CVODESolverResult
+con CVODESolveError : CVODESolveError -> CVODESolverResult
 
-let _cvodeSolverCodeToSolverResult = lam solverCode : (Int, Int).
-  switch solverCode
+let _cvodeSolverCodeToSolverResult : (Int, Int) -> CVODESolverResult
+  = lam rc.
+  switch rc
     case (0, _) then CVODESuccess {}
     case (1, _) then CVODERootsFound {}
     case (2, _) then CVODEStopTimeReached {}
-    case (3, ec) then CVODEError (_cvodeErrorCodeToError ec)
+    case (3, ec) then CVODESolveError (_cvodeErrorCodeToError ec)
   end
 
 -- Right-hand side functions for calculating ODE derivatives. They are passed
