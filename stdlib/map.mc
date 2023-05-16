@@ -235,6 +235,18 @@ let mapGetMin : all k. all v. Map k v -> Option (k, v) =
       match avlSplitFirst m.root with (k, v, _) in
       Some (k, v)
 
+-- `mapFilterWithKey p m` filters the map `m` with the predicate `p`.
+let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
+  = lam p. lam m.
+    mapFoldWithKey
+      (lam m. lam k. lam v. if p k v then mapInsert k v m else m)
+      (mapEmpty (mapGetCmpFun m))
+      m
+
+-- `mapFilter p m` filters the map `m` with the predicate `p`.
+let mapFilter : all k. all v. (v -> Bool) -> Map k v -> Map k v
+  = lam p. mapFilterWithKey (lam. p)
+
 mexpr
 
 let m = mapEmpty subi in
@@ -370,5 +382,25 @@ utest
 in
 
 utest mapGetMin m with Some (1, "1") in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapFilterWithKey (lam k. lam v. and (gti k 1) (eqString v "3")) m)
+  with [(3, "3")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapFilter (lam v. or (eqString v "1") (eqString v "3")) m)
+  with [(1, "1"), (3, "3")]
+in
 
 ()
