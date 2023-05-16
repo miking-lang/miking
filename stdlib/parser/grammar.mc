@@ -284,7 +284,7 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst + MExprCmp
           visited
       in
       let visited = iterate idxQueue queued visited in
-      -- Step 2, strip them from the grammar
+      -- Step 2, strip any production with references to unseen non-terminals
       let visitedTerm = lam t: Term. match t with NonTerminal nt then setMem nt visited else true in
       match foldl (lam acc. lam prod.
         match acc with (modified, newProductions) in
@@ -639,10 +639,21 @@ let gramB: SyntaxDef = {
   ],
   initActionState = unit_
 } in
+let gramC: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_LParen, nt_Ex3, t_RParen], action = unit_},
+    {nt = _Ex3, terms = [nt_Ex4], action = unit_}
+  ],
+  initActionState = unit_
+} in
 let strippedGramB = cfgRemoveUnparsable gramB in
+let strippedGramC = cfgRemoveUnparsable gramC in
 
 utest cfgEq gramA gramB with false in
 utest cfgEq gramA strippedGramB with true in
+utest cfgEq {gramA with productions = []} strippedGramC with true in
 
 
 ()
