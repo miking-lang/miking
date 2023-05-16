@@ -219,8 +219,8 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst + MExprCmp
 
 
   -- Removes all productions that are unreachable from the entrypoint
-  sem cfgRemoveUnreachableProductions : SyntaxDef -> SyntaxDef
-  sem cfgRemoveUnreachableProductions =
+  sem cfgRemoveUnreachable : SyntaxDef -> SyntaxDef
+  sem cfgRemoveUnreachable =
   | syntaxDef ->
     let ntToIdx : Map Name [Int] = foldli (lam m. lam i. lam prod: Production.
       mapInsertWith concat prod.nt [i] m
@@ -247,6 +247,58 @@ lang ContextFreeGrammar = TokenReprBase + MExprAst + MExprCmp
     in
     let visited = iterate idxQueue visited in
     {syntaxDef with productions = filter (lam prod. setMem prod.nt visited) syntaxDef.productions}
+
+
+  -- A stronger version of cfgRemoveUnreachable. Also removes any productions
+  -- that contain non-terminals without any production.
+  --
+  -- loop until convergence:
+  --   R <- reachable non-terminals in Grammar G
+  --   G <- remove productions in G that references a non-terminal not in R
+  sem cfgRemoveUnparsable : SyntaxDef -> SyntaxDef
+  sem cfgRemoveUnparsable =
+  | syntaxDef ->
+    recursive let convergenceLoop = lam syntaxDef: SyntaxDef.
+      let ntToIdx : Map Name [Int] = foldli (lam m. lam i. lam prod: Production.
+        mapInsertWith concat prod.nt [i] m
+      ) (mapEmpty nameCmp) syntaxDef.productions in
+      -- Step 1, identify all reachable productions
+      let visited : Set Name = setEmpty nameCmp in
+      let idxQueue = mapLookupOr [] syntaxDef.entrypoint ntToIdx in
+      let queued = setInsert syntaxDef.entrypoint visited in
+      recursive let iterate = lam idxQueue. lam queued. lam visited.
+        match idxQueue with [idx] ++ idxQueue then
+          let prod: Production = get syntaxDef.productions idx in
+          let visited = setInsert prod.nt visited in
+          match foldl (lam acc. lam term.
+            match acc with (queued, idxQueue) in
+            match term with NonTerminal nt then
+              if not (setMem nt queued) then
+                let idxQueue = concat idxQueue (mapLookupOr [] nt ntToIdx) in
+                (queued, idxQueue)
+              else acc
+            else acc
+          ) (queued, idxQueue) prod.terms with (queued, idxQueue) in
+          iterate idxQueue queued visited
+        else
+          visited
+      in
+      let visited = iterate idxQueue queued visited in
+      -- Step 2, strip them from the grammar
+      let visitedTerm = lam t: Term. match t with NonTerminal nt then setMem nt visited else true in
+      match foldl (lam acc. lam prod.
+        match acc with (modified, newProductions) in
+        if and (setMem prod.nt visited) (forAll visitedTerm prod.terms) then
+          (modified, snoc newProductions prod)
+        else
+          (true, newProductions) -- modified, removed production
+      ) (false, []) syntaxDef.productions with (modified, newProductions) in
+      if modified then
+        convergenceLoop {syntaxDef with productions = newProductions}
+      else
+        syntaxDef
+    in
+    convergenceLoop syntaxDef
 end
 
 
@@ -539,8 +591,7 @@ foldl (lam. lam tc: FirstKTestCase.
 ) () firstKTestCases;
 
 
-
--- Testing removing dead productions
+-- Testing removing unreachable productions
 let gramA: SyntaxDef = {
   entrypoint = _Ex,
   productions = [
@@ -561,7 +612,34 @@ let gramB: SyntaxDef = {
   ],
   initActionState = unit_
 } in
-let strippedGramB = cfgRemoveUnreachableProductions gramB in
+let strippedGramB = cfgRemoveUnreachable gramB in
+
+utest cfgEq gramA gramB with false in
+utest cfgEq gramA strippedGramB with true in
+
+
+-- Testing removing unparsable productions
+let gramA: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let gramB: SyntaxDef = {
+  entrypoint = _Ex,
+  productions = [
+    {nt = _Ex, terms = [t_LParen, nt_Ex2, t_RParen], action = unit_},
+    {nt = _Ex2, terms = [t_Plus], action = unit_},
+    {nt = _Ex2, terms = [t_Times], action = unit_},
+    {nt = _Ex2, terms = [t_LParen, nt_Ex3, t_RParen], action = unit_},
+    {nt = _Ex3, terms = [nt_Ex4], action = unit_}
+  ],
+  initActionState = unit_
+} in
+let strippedGramB = cfgRemoveUnparsable gramB in
 
 utest cfgEq gramA gramB with false in
 utest cfgEq gramA strippedGramB with true in
