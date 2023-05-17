@@ -45,20 +45,28 @@ let astBuilder = lam info.
   }
 
 lang PEvalCtx = Eval + SideEffect
-  type PEvalCtx =
-    { env : EvalEnv, freeVar : Set Name, effectEnv : SideEffectEnv }
+  type PEvalCtx = {
+    env : EvalEnv,
+    freeVar : Set Name,
+    effectEnv : SideEffectEnv,
+    maxRecDepth : Int
+  }
 
   sem pevalCtxEmpty : () -> PEvalCtx
   sem pevalCtxEmpty =| _ -> {
     env = evalEnvEmpty (),
     freeVar = setEmpty nameCmp,
-    effectEnv = sideEffectEnvEmpty ()
+    effectEnv = sideEffectEnvEmpty (),
+    maxRecDepth = 2
   }
 end
 
 lang PEval = PEvalCtx + Eval + PrettyPrint
   sem peval : Expr -> Expr
-  sem peval =| t -> pevalReadback (pevalBind (pevalCtxEmpty ()) (lam x. x) t)
+  sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
+
+  sem pevalExpr : PEvalCtx -> Expr -> Expr
+  sem pevalExpr ctx =| t -> pevalReadback (pevalBind ctx (lam x. x) t)
 
   sem pevalIsValue : Expr -> Bool
   sem pevalIsValue =
@@ -183,6 +191,69 @@ lang LetPEval = PEval + LetAst
         (inexprCtx, inexpr)
 end
 
+lang RecLetsPEval = PEval + RecLetsAst + ClosAst + LamAst
+  sem pevalIsValue =
+  | TmRecLets _ -> false
+
+  sem pevalEval ctx k =
+  | TmRecLets r ->
+    recursive let envPrime : Int -> Lazy EvalEnv = lam n. lam.
+      let wraplambda = lam n. lam bind.
+        if geqi n ctx.maxRecDepth then TmVar {
+          ident = bind.ident,
+          info = bind.info,
+          ty = bind.tyBody,
+          frozen = false
+        }
+        else
+          match bind.body with TmLam r then TmClos {
+            ident = r.ident,
+            body = r.body,
+            env = envPrime (succ n),
+            info = r.info
+          }
+          else
+            errorSingle [infoTm bind.body]
+              "Right-hand side of recursive let must be a lambda"
+      in
+      foldl
+        (lam env. lam bind.
+          evalEnvInsert bind.ident (wraplambda n bind) env)
+        ctx.env r.bindings
+    in
+    let bindings =
+      map
+        (lam bind. { bind with body = pevalBind ctx (lam x. x) bind.body })
+        r.bindings
+    in
+    TmRecLets {
+      r with
+      bindings = bindings,
+      inexpr = pevalBind { ctx with env = envPrime 0 () } k r.inexpr
+    }
+
+  sem pevalReadbackH ctx =
+  | TmRecLets r ->
+    let fv = setOfSeq nameCmp (map (lam bind. bind.ident) r.bindings) in
+    match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
+    if
+      forAll (lam bind. not (setMem bind.ident inexprCtx.freeVar)) r.bindings
+    then
+      (inexprCtx, inexpr)
+    else
+      let ctx = { inexprCtx with freeVar = setUnion inexprCtx.freeVar fv } in
+    match
+      mapAccumL
+        (lam ctx. lam bind.
+          match pevalReadbackH ctx bind.body with (bodyCtx, body) in
+          (bodyCtx, { bind with body = body }))
+        ctx
+        r.bindings
+      with (ctx, bindings)
+    in
+    (ctx, TmRecLets { r with bindings = bindings, inexpr = inexpr })
+end
+
 lang RecordPEval = PEval + RecordAst + VarAst
   sem pevalIsValue =
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the record as the
@@ -222,7 +293,10 @@ lang SeqPEval = PEval + SeqAst
 
   sem pevalEval ctx k =
   | TmSeq r ->
-    mapK (lam t. lam k. pevalBind ctx k t) r.tms (lam tms. k (TmSeq { r with tms = tms }))
+    mapK
+      (lam t. lam k. pevalBind ctx k t)
+      r.tms
+      (lam tms. k (TmSeq { r with tms = tms }))
 end
 
 lang ConstPEval = PEval + ConstEval
@@ -398,6 +472,14 @@ lang CmpFloatPEval = CmpFloatEval + VarAst
     b.appSeq (b.uconst c) args
 end
 
+lang CmpIntPEval = CmpIntEval + VarAst
+  sem delta info =
+  | (c & (CEqi _ | CLti _ | CLeqi _ | CGti _ | CGeqi _ | CNeqi _),
+     args & ([TmVar _, TmVar _] | [!TmVar _, TmVar _] | [TmVar _, !TmVar _])) ->
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
 lang IOPEval = IOAst + SeqAst + IOArity
   sem delta info =
   | (c & (CPrint _ | CPrintError _), args & [TmSeq s]) ->
@@ -412,10 +494,10 @@ end
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
-  MatchPEval + NeverPEval + SeqPEval +
+  RecLetsPEval + MatchPEval + NeverPEval + SeqPEval +
 
   -- Constants
-  ArithIntPEval + ArithFloatPEval + CmpFloatPEval + IOPEval +
+  ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -438,7 +520,7 @@ let _test = lam expr.
       expr2str expr
     ]);
   let expr = symbolizeAllowFree expr in
-  match peval expr with expr in
+  match pevalExpr { pevalCtxEmpty () with maxRecDepth = 2 } expr with expr in
   logMsg logLevel.debug (lam.
     strJoin "\n" [
       "After peval",
@@ -814,6 +896,133 @@ lam x.
         z
   in
   t
+  "
+  using eqExpr
+in
+
+-------------------------
+-- Test Recursive Lets --
+-------------------------
+
+let prog = _parse "
+recursive let pow = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (pow (subi n 1) x) x
+in lam x. pow 10 x
+  " in
+utest _test prog with _parse "
+recursive let pow = lam n. lam x.
+  let t4 = eqi n 0 in
+  let t5 = match t4 with true then 1.
+    else
+      let t6 = eqi n 1 in
+      let t7 =
+        match t6 with true then x
+        else
+          let t8 = subi n 1 in
+          let t9 = pow t8 in
+          let t10 = t9 x in
+          let t11 = mulf t10 x in
+          t11
+      in
+      t7
+  in
+  t5
+in
+lam x.
+  let t = pow 8 in
+  let t1 = t x in
+  let t2 = mulf t1 x in
+  let t3 = mulf t2 x in
+  t3
+  "
+  using eqExpr
+in
+
+let prog = _parse "
+recursive let pow = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (pow (subi n 1) x) x
+in lam x. pow 2 x
+  " in
+utest _test prog with _parse "
+lam x. let t = mulf x x in t
+  "
+  using eqExpr
+in
+
+let prog = _parse "
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+odd 2
+  " in
+utest _test prog with _parse "
+recursive
+  let odd = lam n.
+      let t1 = eqi n 1 in
+      let t2 =
+        match t1 with true then true
+        else
+          let t3 = lti n 1 in
+          let t4 =
+            match t3 with true then false
+            else
+              let t5 = subi n 1 in
+              let t6 = even t5 in t6
+          in
+          t4
+      in
+      t2
+  let even = lam n.
+      let t7 = eqi n 0 in
+      let t8 =
+        match t7 with true then true
+        else
+          let t9 = lti n 0 in
+          let t10 =
+            match t9 with true then false
+            else
+              let t11 = subi n 1 in
+              let t12 = odd t11 in
+              t12
+          in
+          t10
+      in
+      t8
+in
+let t = odd 0 in t
+  "
+  using eqExpr
+in
+
+
+let prog = _parse "
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+odd 1
+  " in
+utest _test prog with _parse "
+true
   "
   using eqExpr
 in
