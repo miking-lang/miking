@@ -163,25 +163,25 @@ mexpr
 let traits = {eq = eqi} in
 
 let length = assocLength in
-let lookup = assocLookup traits in
-let lookupOrElse = assocLookupOrElse traits in
+let lookup = lam x. assocLookup traits x in
+let lookupOrElse = lam x. assocLookupOrElse traits x in
 let lookupPred = assocLookupPred in
 let any = assocAny in
 let forAll = assocAll in
-let insert = assocInsert traits in
-let seq2assoc = seq2assoc traits in
-let assoc2seq = assoc2seq traits in
-let mem = assocMem traits in
-let remove = assocRemove traits in
-let keys = assocKeys traits in
-let values = assocValues traits in
-let map = assocMap traits in
-let mapWithKey = assocMapWithKey traits in
-let fold = assocFold traits in
-let foldOption = assocFoldlM traits in
-let mapAccum = assocMapAccum traits in
-let mergePreferLeft = assocMergePreferLeft traits in
-let mergePreferRight = assocMergePreferRight traits in
+let insert = lam x. assocInsert traits x in
+let seq2assoc = lam x. seq2assoc traits x in
+let assoc2seq = lam x. assoc2seq traits x in
+let mem = lam x. assocMem traits x in
+let remove = lam x. assocRemove traits x in
+let keys = lam x. assocKeys traits x in
+let values = lam x. assocValues traits x in
+let map = lam x. assocMap traits x in
+let mapWithKey = lam x. assocMapWithKey traits x in
+let fold = lam x. assocFold traits x in
+let foldOption = lam x. assocFoldlM traits x in
+let mapAccum = lam x. assocMapAccum traits x in
+let mergePreferLeft = lam x. assocMergePreferLeft traits x in
+let mergePreferRight = lam x. assocMergePreferRight traits x in
 
 let m = assocEmpty in
 let m = insert 1 '1' m in

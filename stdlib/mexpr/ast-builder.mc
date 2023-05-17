@@ -101,7 +101,7 @@ let tycon_ = lam s.
 
 let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n, level = 0, info = NoInfo ()}
+  TyVar {ident = n, info = NoInfo ()}
 
 let tyvar_ =
   lam s.

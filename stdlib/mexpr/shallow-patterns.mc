@@ -83,8 +83,10 @@ include "common.mc"
 include "seq.mc"
 include "set.mc"
 
-let _empty : all v. Map Name v = mapEmpty nameCmp
-let _singleton : all v. Name -> v -> Map Name v = lam n. lam p. mapInsert n p _empty
+-- TODO(aathn, 2023-05-07): Relax value restriction
+let _empty : all v. () -> Map Name v = lam. mapEmpty nameCmp
+let _singleton : all v. Name -> v -> Map Name v =
+  lam n. lam p. mapInsert n p (_empty ())
 
 lang ShallowBase = Ast + NamedPat
   syn SPat =
@@ -116,12 +118,12 @@ lang ShallowBase = Ast + NamedPat
   sem decompose : Name -> (SPat, Pat) -> (PatUpdate, Option Pat)
   sem decompose name =
   | (_, PatNamed {ident = PName patName}) ->
-    ([(_empty, _singleton patName name)], None ())
+    ([(_empty (), _singleton patName name)], None ())
   | (_, PatNamed {ident = PWildcard _}) ->
-    ([(_empty, _empty)], None ())
+    ([(_empty (), _empty ())], None ())
   | (shallow, pat) ->
     match shallow with SPatWild _
-    then ([(_singleton name pat, _empty)], None ())
+    then ([(_singleton name pat, _empty ())], None ())
     else defaultDecomposition pat
 
   sem shallowMinusIsEmpty : (SPat, SPat) -> Bool
@@ -183,7 +185,7 @@ lang ShallowBase = Ast + NamedPat
         seqMapM (lam dec. (decompose dec.0 (SPatWild (), dec.1)).0) decomposed in
       -- NOTE(vipa, 2022-05-23): Each inner list now contains the
       -- things that should be `and`ed together, thanks to mapM
-      map (foldl andBranchInfo (_empty, names)) decomposed
+      map (foldl andBranchInfo (_empty (), names)) decomposed
     in
     (join (map normalize update), neg)
 
@@ -194,7 +196,7 @@ lang ShallowBase = Ast + NamedPat
   | branches ->
     let for = lam xs. lam f. map f xs in
     let flatFor = lam xs. lam f. join (map f xs) in
-    let mergeMaps = foldl (mapUnionWith setUnion) _empty in
+    let mergeMaps = foldl (mapUnionWith setUnion) (_empty ()) in
     mergeMaps
       (flatFor branches
         (lam branch.
@@ -394,7 +396,7 @@ lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
 
     let negSubPatterns =
       match (shallow, optionMap (lam xshallow. shallowMinusIsEmpty (shallow, xshallow)) subShallow)
-        with (!SPatWild _, Some false) then [(_empty, _empty)]
+        with (!SPatWild _, Some false) then [(_empty (), _empty ())]
       else
 
       -- Helpers
@@ -413,7 +415,7 @@ lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
       let negSubPatterns : [[Map Name Pat]] = seqMapM notDecomposed subPass in
       -- Finally, and-ing the second level together (via `map`) gives us
       -- disjunctive normal form.
-      map (lam pats. (foldl andDecomposed _empty pats, _empty)) negSubPatterns
+      map (lam pats. (foldl andDecomposed (_empty ()) pats, _empty ())) negSubPatterns
     in
 
     let failPat =
@@ -434,7 +436,7 @@ lang ShallowInt = ShallowBase + IntPat
   | (SPatInt i, pat & PatInt x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if eqi i x.val
-    then ([(_empty, _empty)], None ())
+    then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
@@ -455,7 +457,7 @@ lang ShallowChar = ShallowBase + CharPat
   | (SPatChar i, pat & PatChar x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if eqc i x.val
-    then ([(_empty, _empty)], None ())
+    then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
@@ -476,7 +478,7 @@ lang ShallowBool = ShallowBase + BoolPat
   | (SPatBool i, pat & PatBool x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if not (xor i x.val)
-    then ([(_empty, _empty)], None ())
+    then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
@@ -502,7 +504,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
     -- missing name in SPatRecord, but we should have all the fields
     -- based on typechecking earlier
     let fields = map (lam pair. (mapFindExn pair.0 sx.bindings, pair.1)) (mapBindings x.bindings)
-    in ([(mapFromSeq nameCmp fields, _empty)], None ())
+    in ([(mapFromSeq nameCmp fields, _empty ())], None ())
 
   sem collectShallows =
   | PatRecord px ->
@@ -549,7 +551,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   sem decompose name =
   | (SPatSeqTot tot, pat & PatSeqTot x) ->
     if neqi (length tot.elements) (length x.pats) then defaultDecomposition pat else
-    ([(mapFromSeq nameCmp (zip tot.elements x.pats), _empty)], None ())
+    ([(mapFromSeq nameCmp (zip tot.elements x.pats), _empty ())], None ())
   | (SPatSeqTot tot, pat & PatSeqEdge x) ->
     if lti (length tot.elements) (addi (length x.prefix) (length x.postfix))
     then ([], None ())
@@ -559,8 +561,8 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
       let pres = zip tot.elements x.prefix in
       let posts = zip (reverse tot.elements) (reverse x.postfix) in
       let mid = match x.middle with PName name
-        then mapInsert name (_getSliceName (length x.prefix, length x.postfix) tot.slices) _empty
-        else _empty in
+        then mapInsert name (_getSliceName (length x.prefix, length x.postfix) tot.slices) (_empty ())
+        else _empty () in
       ([(mapFromSeq nameCmp (concat pres posts), mid)], Some pat)
   | (SPatSeqGE shallow, pat & PatSeqEdge x) ->
     let deepLength = addi (length x.prefix) (length x.postfix) in
@@ -580,8 +582,8 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
         let pres = zip (deref shallow.prefix) x.prefix in
         let posts = zip (reverse (deref shallow.postfix)) (reverse x.postfix) in
         let mid = match x.middle with PName name
-          then mapInsert name (_getSliceName (length x.prefix, length x.postfix) shallow.slices) _empty
-          else _empty in
+          then mapInsert name (_getSliceName (length x.prefix, length x.postfix) shallow.slices) (_empty ())
+          else _empty () in
         [(mapFromSeq nameCmp (concat pres posts), mid)]
       else []
     in
@@ -706,7 +708,7 @@ lang ShallowCon = ShallowBase + DataPat
   sem decompose name =
   | (SPatCon shallow, pat & PatCon x) ->
     if nameEq shallow.conName x.ident then
-      ([(_singleton shallow.subName x.subpat, _empty)], None ())
+      ([(_singleton shallow.subName x.subpat, _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =

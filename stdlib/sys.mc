@@ -114,13 +114,13 @@ let sysRunCommandWithTimingTimeout : Option Float -> [String] -> String -> Strin
 
 utest sysRunCommandWithTimingTimeout (None ()) ["echo -n \"\""] "" "."; () with ()
 
-let sysRunCommandWithTimingFileIO : [String] -> String -> String -> (Float, ExecResult) =
+let sysRunCommandWithTimingFileIO : [String] -> String -> String -> String -> String -> (Float, ReturnCode) =
   sysRunCommandWithTimingTimeoutFileIO (None ())
 
 let sysRunCommandWithTiming : [String] -> String -> String -> (Float, ExecResult) =
     sysRunCommandWithTimingTimeout (None ())
 
-let sysRunCommandFileIO : [String] -> String -> String -> ExecResult =
+let sysRunCommandFileIO : [String] -> String -> String -> String -> String -> ReturnCode =
   lam cmd. lam stdinFile. lam stdoutFile. lam stderrFile. lam cwd.
     match sysRunCommandWithTimingFileIO cmd stdinFile stdoutFile stderrFile cwd
     with (_, res) then res else never

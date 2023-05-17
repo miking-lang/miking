@@ -221,20 +221,31 @@ let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
     case None _ then mapRemove k m
     end
 
+-- `mapGetMin m` returns the smallest key-value pair of `m`, or None ()
+-- if the map is empty.
+let mapGetMin : all k. all v. Map k v -> Option (k, v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitFirst m.root with (k, v, _) in
+      Some (k, v)
+
 mexpr
 
 let m = mapEmpty subi in
 
-utest
-  match mapChoose m with None _ then true else false
-with true in
+utest mapChoose m with None () in
+utest mapGetMin m with None () in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
 utest mapIsEmpty m with true in
 
-utest mapLookup 1 m with None () using optionEq eqString in
+utest mapLookup 1 m with None () using optionEq eqi in
+
+let m = mapEmpty subi in
 
 let m = mapInsert 1 "1" m in
 let m = mapInsert 2 "2" m in
@@ -353,5 +364,7 @@ utest
        m)
   with [(1, "1"), (2, "22"), (3, "3")]
 in
+
+utest mapGetMin m with Some (1, "1") in
 
 ()

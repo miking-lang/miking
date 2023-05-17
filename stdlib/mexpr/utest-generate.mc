@@ -86,7 +86,7 @@ let _conTy = lam id.
   TyCon {ident = id, info = _utestInfo}
 let _varTy = lam id.
   use MExprAst in
-  TyVar {ident = id, level = 1, info = _utestInfo}
+  TyVar {ident = id, info = _utestInfo}
 let _recordTy = lam fields.
   use MExprAst in
   let fields = map (lam f. match f with (s, ty) in (stringToSid s, ty)) fields in

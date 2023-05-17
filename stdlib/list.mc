@@ -24,12 +24,13 @@ let listFind : all a. (a -> Bool) -> List a -> Option a = lam p. lam li.
     end
   in find li
 
-let listFromSeq : all a. [a] -> List a =
+let listFromSeq : all a. [a] -> List a = lam l.
   recursive let build = lam acc. lam s.
     match s with mid ++ [last] then
       build (listCons last acc) mid
     else acc
-  in build listEmpty
+  in
+  build listEmpty l
 
 let listFoldl : all a. all b. (b -> a -> b) -> b -> List a -> b = lam f.
   recursive let fold = lam acc. lam li.
@@ -39,8 +40,8 @@ let listFoldl : all a. all b. (b -> a -> b) -> b -> List a -> b = lam f.
     end
   in fold
 
-let listReverse : all a. List a -> List a =
-  listFoldl (lam acc. lam x. listCons x acc) listEmpty
+let listReverse : all a. List a -> List a = lam l.
+  listFoldl (lam acc. lam x. listCons x acc) listEmpty l
 
 let listMap : all a. all b. (a -> b) -> List a -> List b = lam f. lam li.
   recursive let map = lam acc. lam li.
@@ -51,7 +52,7 @@ let listMap : all a. all b. (a -> b) -> List a -> List b = lam f. lam li.
   in
   listReverse (map listEmpty li)
 
-let listToSeq : all a. List a -> [a] = listFoldl snoc []
+let listToSeq : all a. List a -> [a] = lam l. listFoldl snoc [] l
 
 let listEq : all a. all b. (a -> b -> Bool) -> List a -> List b -> Bool =
   lam eqElem.

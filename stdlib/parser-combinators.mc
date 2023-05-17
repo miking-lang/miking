@@ -66,7 +66,7 @@ let runParser : all a. Filename -> Parser a -> String -> ParseResult a =
   p (input, (initPos f))
 
 -- Run a parser without a current file.
-let testParser : all a. Parser a -> String -> ParseResult a = runParser ""
+let testParser : all a. Parser a -> String -> ParseResult a = lam p. runParser "" p
 
 -- Fail parsing with custom info
 let fail : all a. String -> String -> Parser a = lam found. lam expected. lam st.
@@ -143,7 +143,7 @@ let bind : all a. all b. Parser a -> (a -> Parser b) -> Parser b =
 -- Control combinators
 
 -- Run parser and ignore result
-let void : all a. Parser a -> Parser () = apl (pure ())
+let void : all a. Parser a -> Parser () = lam p. apl (pure ()) p
 
 -- Monadic conditional. `when b p` runs `p` (ignoring the
 -- result) if `b` is true.
@@ -534,7 +534,7 @@ let ws = void (many (alt lineComment spaces1)) in
 -- token : Parser a -> Parser a
 --
 -- `token p` parses `p` and any trailing whitespace or comments.
-let token = lexToken ws in
+let token = lam p. lexToken ws p in
 
 -- string : String -> Parser String
 --

@@ -26,9 +26,8 @@ include "type.mc"
 type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
-  tyVarEnv: Map String (Name, Level),
+  tyVarEnv: Map String Name,
   tyConEnv: Map String (Name, [Name], Type),
-  currentLvl : Level,
   strictTypeVars: Bool,
   allowFree: Bool,
   ignoreExternals: Bool
@@ -47,7 +46,6 @@ let symEnvEmpty = {
       builtinTypes
   ),
 
-  currentLvl = 1,
   strictTypeVars = true,
   allowFree = false,
   ignoreExternals = false
@@ -158,11 +156,8 @@ lang LetSym = Sym + LetAst + AllTypeAst
       let body =
         match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
-          foldr (lam v: (Name, VarSort).
-              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
-            env.tyVarEnv vars in
-        symbolizeExpr {{env with tyVarEnv = tyVarEnv}
-                            with currentLvl = addi 1 env.currentLvl} t.body
+          foldr (lam v. mapInsert (nameGetStr v.0) v.0) env.tyVarEnv vars in
+        symbolizeExpr {env with tyVarEnv = tyVarEnv} t.body
       in
       if nameHasSym t.ident then
         TmLet {t with tyAnnot = tyAnnot,
@@ -226,10 +221,8 @@ lang TypeSym = Sym + TypeAst
                   with ty = ty}
     else
       let params = map nameSetNewSym t.params in
-      let paramStrs = map nameGetStr params in
       let tyVarEnv =
-        foldl2 (lam e. lam s. lam i. mapInsert s (i, env.currentLvl) e) tyVarEnv paramStrs params
-      in
+        foldr (lam p. mapInsert (nameGetStr p) p) tyVarEnv params in
       let paramEnv = {env with tyVarEnv = tyVarEnv} in
       let tyIdent = symbolizeType paramEnv t.tyIdent in
       let ident = nameSetNewSym t.ident in
@@ -276,12 +269,8 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
         let tyBody = symbolizeType env bind.tyBody in
         match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
-          foldr (lam v: (Name, VarSort).
-              mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
-            env.tyVarEnv vars in
-        {bind with body = symbolizeExpr
-                            {{env with tyVarEnv = tyVarEnv}
-                                  with currentLvl = addi 1 env.currentLvl} bind.body,
+          foldr (lam v. mapInsert (nameGetStr v.0) v.0) env.tyVarEnv vars in
+        {bind with body = symbolizeExpr {env with tyVarEnv = tyVarEnv} bind.body,
                    tyAnnot = tyAnnot,
                    tyBody = tyBody})
         bindings in
@@ -429,9 +418,8 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
     if nameHasSym t.ident then ty
     else
       let str = nameGetStr t.ident in
-      match mapLookup str env.tyVarEnv with Some (ident, lvl) then
-        TyVar {{t with ident = ident}
-                  with level = lvl}
+      match mapLookup str env.tyVarEnv with Some ident then
+        TyVar {t with ident = ident}
       else if env.strictTypeVars then
         if env.allowFree then TyVar t
         else errorSingle [t.info] (concat "Unknown type variable in symbolizeExpr: " str)
@@ -449,7 +437,7 @@ lang AllTypeSym = AllTypeAst + VarSortAst
       else
         let str = nameGetStr t.ident in
         let ident = nameSetNewSym t.ident in
-        let env = {env with tyVarEnv = mapInsert str (ident, env.currentLvl) env.tyVarEnv} in
+        let env = {env with tyVarEnv = mapInsert str ident env.tyVarEnv} in
         TyAll {{{t with ident = ident}
                    with ty = symbolizeType env t.ty}
                    with sort = sort}
