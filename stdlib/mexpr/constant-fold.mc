@@ -187,11 +187,59 @@ lang ArithFloatConstantFold = ConstantFold + ArithFloatEval + AppAst
     case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
       Some (delta info (c, [a, b]))
     case
+      (TmApp (appr1 & {
+        lhs = TmApp (appr2 & {
+          lhs = TmConst {val = CMulf _},
+          rhs = TmConst (constr & {val = CFloat f1})
+        })
+      }),
+       TmConst {val = CFloat f2})
+    | (TmConst {val = CFloat f1},
+       TmApp (appr1 & {
+         lhs = TmApp (appr2 & {
+           lhs = TmConst {val = CMulf _},
+           rhs = TmConst (constr & {val = CFloat f2})
+         })
+       }))
+    then
+      Some
+        (TmApp {
+          appr1 with
+          lhs = TmApp {
+            appr2 with
+            rhs = TmConst {
+              constr with val = CFloat { val = mulf f1.val f2.val }
+            }
+          }})
+    case
+      (TmApp (appr & {
+        lhs = TmApp {
+          lhs = TmConst {val = CMulf _}
+        },
+        rhs = TmConst (constr & {val = CFloat f1})
+      }),
+       TmConst {val = CFloat f2})
+    | (TmConst {val = CFloat f1},
+       TmApp (appr & {
+         lhs = TmApp {
+           lhs = TmConst {val = CMulf _}
+         },
+         rhs = TmConst (constr & {val = CFloat f2})
+       }))
+    then
+      Some
+        (TmApp {
+          appr with
+          rhs = TmConst {
+            constr with val = CFloat { val = mulf f1.val f2.val }
+          }})
+    case
       (a & TmConst {val = CFloat f}, b) | (b, a & TmConst {val = CFloat f})
     then
       if eqf f.val 1. then Some b
-      else if and (eqf f.val 0.) (not (hasSideEffect b)) then Some a
-      else None ()
+      else
+        if and (eqf f.val 0.) (not (hasSideEffect b)) then Some a
+        else None ()
     case (_, _) then None ()
     end
   | TmApp {
@@ -457,13 +505,23 @@ utest _test prog with _parse "x" using eqExpr in
 let prog = _parse "mulf 1. x" in
 utest _test prog with _parse "x" using eqExpr in
 
+let prog = _parse "mulf (mulf 3. x) 2." in
+utest _test prog with _parse "mulf 6. x" using eqExpr in
+
+let prog = _parse "mulf 2. (mulf 3. x)" in
+utest _test prog with _parse "mulf 6. x" using eqExpr in
+
+let prog = _parse "mulf (mulf x 3.) 2." in
+utest _test prog with _parse "mulf x 6." using eqExpr in
+
+let prog = _parse "mulf 2. (mulf x 3.)" in
+utest _test prog with _parse "mulf x 6." using eqExpr in
+
 let prog = _parse "divf x 1." in
 utest _test prog with _parse "x" using eqExpr in
 
 let prog = _parse "divf 0. x" in
 utest _test prog with _parse "0." using eqExpr in
-
--- logSetLogLevel logLevel.debug;
 
 let prog = _parse "divf 0. (print \"hello\"; x)" in
 utest _test prog with _parse "
