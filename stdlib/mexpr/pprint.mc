@@ -541,25 +541,55 @@ end
 
 lang RecordProjectionSyntaxSugarPrettyPrint = MExprIdentifierPrettyPrint +
   MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
+
+  sem isTupleLabel : SID -> Bool
+  sem isTupleLabel =| label -> forAll isDigit (sidToString label)
+
+  sem matchIsProj : Map SID Pat -> Name -> Option SID
+  sem matchIsProj bindings =| exprName ->
+    let binds = mapBindings bindings in
+    match binds with [(fieldLabel, PatNamed {ident = PName patName})]
+    then
+      if nameEq patName exprName then Some fieldLabel else None ()
+    else None ()
+
+  sem isTupleProj : Expr -> Bool
+  sem isTupleProj =
+  | TmMatch
+    { pat = PatRecord {bindings = bindings}
+    , thn = TmVar {ident = exprName}
+    , els = TmNever _
+    }
+    ->
+    optionMapOr false isTupleLabel (matchIsProj bindings exprName)
+  | _ -> false
+
+  sem isAtomic =
+  | TmMatch
+    { pat = PatRecord {bindings = bindings}
+    , thn = TmVar {ident = exprName}
+    , els = TmNever _
+    }
+    -> optionIsSome (matchIsProj bindings exprName)
+
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmMatch (t & {els = TmNever _}) -> pprintTmMatchIn indent env t
   | TmMatch (t &
-    { pat = PatRecord
-      { bindings = bindings
-      }
+    { pat = PatRecord {bindings = bindings}
     , thn = TmVar {ident = exprName}
     , els = TmNever _
     , target = expr
     })
-  ->
-    let binds : [(SID, Pat)] = mapBindings bindings in
-    match binds with [(fieldLabel, PatNamed {ident = PName patName})]
-      then
-      if nameEq patName exprName
-      then
+    ->
+    match matchIsProj bindings exprName with Some fieldLabel then
+      -- NOTE(oerikss, 2023-05-29): nested tuple projections are parsed as
+      -- floats if we do not group them.
+      if and (isTupleLabel fieldLabel) (isTupleProj expr) then
+        match pprintCode indent env expr with (env, expr) in
+        (env, join ["(", expr, ").", pprintProjString fieldLabel])
+      else
         match printParen indent env expr with (env, expr) in
         (env, join [expr, ".", pprintProjString fieldLabel])
-      else pprintTmMatchIn indent env t
     else pprintTmMatchIn indent env t
 end
 
@@ -1461,5 +1491,15 @@ utest length (expr2str sample_ast) with 0 using geqi in
 -- Test keyword variable names
 utest eqString (mexprToString (var_ "lam")) "lam"
 with false in
+
+-- Test pretty printing of nested projections from tuples (these are not atomic)
+let e = tupleproj_ 0 (var_ "x") in
+utest (expr2str e) with "x.0" in
+
+let e = tupleproj_ 1 (tupleproj_ 0 (var_ "x")) in
+utest (expr2str e) with "(x.0).1" in
+
+let e = recordproj_ "y" (tupleproj_ 0 (var_ "x")) in
+utest (expr2str e) with "x.0.y" in
 
 ()
