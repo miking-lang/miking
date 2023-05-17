@@ -15,11 +15,25 @@ include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/shallow-patterns.mc"
 
+let isConstSeq_ = use MExprAst in
+    lam seq.
+        foldl
+            (lam acc. lam expr.
+                match acc with true then
+                    match expr with TmConst _ then
+                        true
+                    else
+                        false
+                else
+                    false)
+            true
+            seq
+
 lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
     type JVMEnv = {
         bytecode : [Bytecode],
-        vars : Map Name Int, 
+        vars : Map Name Int,
         fieldVars : Map Name Field,
         localVars : Int, -- number of local vars on the JVM
         classes : [Class],
@@ -27,30 +41,48 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         nextClass : String,
         recordMap : Map Name (Map SID Int),
         adtTags : Map Name (String, Int),
-        globalFuncMap : Map Name String
+        globalFuncMap : Map Name String,
+        constSeqBC : [Function]
     }
 
     -- go through AST and translate to JVM bytecode
 
     sem toJSONExpr : JVMEnv -> Expr -> JVMEnv
     sem toJSONExpr env =
-    | TmSeq { tms = tms } -> 
-        let vb = "scala/collection/immutable/VectorBuilder" in 
-        let e = foldl 
-                (lam acc. lam expr. 
-                    let exprEnv = toJSONExpr { acc with bytecode = snoc acc.bytecode dup_ } expr in
-                    { exprEnv with bytecode = concat exprEnv.bytecode [checkcast_ object_T, invokevirtual_ vb "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;", pop_] })
-                { env with bytecode = concat env.bytecode [new_ vb, dup_, invokespecial_ vb "<init>" "()V"] }  tms in
-        { e with bytecode = snoc e.bytecode (invokevirtual_ vb "result" "()Lscala/collection/immutable/Vector;") }
-    | TmConst { val = val, ty = ty } -> 
-        let bc = (match val with CInt { val = val } then 
+    | TmSeq { tms = tms } ->
+        let vb = "scala/collection/immutable/VectorBuilder" in
+        match isConstSeq_ tms with true then
+            let funcName = createName_ "mkConstSeq" in
+            let bc = foldl
+                    (lam acc. lam expr.
+                        let exprEnv = toJSONExpr { acc with bytecode = snoc acc.bytecode dup_ } expr in
+                        { exprEnv with bytecode = concat exprEnv.bytecode [checkcast_ object_T, invokevirtual_ vb "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;", pop_] })
+                    { env with bytecode = [new_ vb, dup_, invokespecial_ vb "<init>" "()V"] }
+                    tms in
+            let seqFunc = createFunction funcName "()Lscala/collection/immutable/Vector;" (concat bc.bytecode [invokevirtual_ vb "result" "()Lscala/collection/immutable/Vector;", areturn_]) in
+            { env with
+                    bytecode = foldl concat
+                                env.bytecode
+                                [initClass_ "SeqClass",
+                                [invokevirtual_ (concat pkg_ "SeqClass") funcName "()Lscala/collection/immutable/Vector;"]],
+                    constSeqBC = snoc env.constSeqBC seqFunc }
+        else
+            let e = foldl
+                    (lam acc. lam expr.
+                        let exprEnv = toJSONExpr { acc with bytecode = snoc acc.bytecode dup_ } expr in
+                        { exprEnv with bytecode = concat exprEnv.bytecode [checkcast_ object_T, invokevirtual_ vb "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;", pop_] })
+                    { env with bytecode = concat env.bytecode [new_ vb, dup_, invokespecial_ vb "<init>" "()V"] }
+                    tms in
+            { e with bytecode = snoc e.bytecode (invokevirtual_ vb "result" "()Lscala/collection/immutable/Vector;") }
+    | TmConst { val = val, ty = ty } ->
+        let bc = (match val with CInt { val = val } then
             concat [ldcLong_ val] wrapInteger_
         else match val with CFloat { val = val } then
-            concat [ldcFloat_ val] wrapFloat_ 
-        else match val with CBool { val = val } then 
+            concat [ldcFloat_ val] wrapFloat_
+        else match val with CBool { val = val } then
             match val with true then
                 concat [ldcInt_ 1] wrapBoolean_
-            else 
+            else
                 concat [ldcInt_ 0] wrapBoolean_
         else match val with CChar { val = val } then
             wrapChar_ [ldcInt_ (char2int val)]
@@ -119,7 +151,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else match val with CFloorfi _ then
             initClass_ "Floorfi"
         else match val with CCeilfi _ then
-            initClass_ "Cielfi"
+            initClass_ "Ceilfi"
         else match val with CRoundfi _ then
             initClass_ "Roundfi"
         else match val with CInt2float _ then
@@ -218,151 +250,174 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             initClass_ "FileWrite$"
         else match val with CDPrint _ then
             initClass_ "DPrint"
+        else match val with CSet _ then
+            initClass_ "Set$"
         else never) in
         { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
-        let arg = toJSONExpr { env with bytecode = [], classes = [] } rhs in
-        let fun = toJSONExpr env lhs in 
-        { fun with 
-            bytecode = foldl concat fun.bytecode 
-                [arg.bytecode, 
+        let arg = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } rhs in
+        let fun = toJSONExpr env lhs in
+        { fun with
+            bytecode = foldl concat fun.bytecode
+                [arg.bytecode,
                 [checkcast_ object_T],
-                [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], 
-                classes = concat fun.classes arg.classes }
-    | TmLet { ident = ident, body = body, inexpr = inexpr } -> 
-        let funcmap = (match body with TmLam _ then 
+                [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]],
+                classes = concat fun.classes arg.classes,
+                constSeqBC = concat fun.constSeqBC arg.constSeqBC }
+    | TmLet { ident = ident, body = body, inexpr = inexpr } ->
+        let funcmap = (match body with TmLam _ then
                             mapInsert ident env.nextClass env.globalFuncMap
                         else
                             env.globalFuncMap) in
         let b = toJSONExpr env body in
-        toJSONExpr { b with 
-                        bytecode = snoc b.bytecode (astore_ env.localVars), 
-                        --fieldVars = mapEmpty nameCmp, 
-                        localVars = addi 1 env.localVars, 
+        toJSONExpr { b with
+                        bytecode = snoc b.bytecode (astore_ env.localVars),
+                        localVars = addi 1 env.localVars,
                         vars = mapInsert ident env.localVars env.vars,
                         globalFuncMap = funcmap } inexpr
     | TmLam { ident = ident, body = body } ->
         let className = env.nextClass in
         let newField = (createField (nameGetStr ident) object_LT) in
         let nextClass = createName_ "Func" in
-        let bodyEnv = toJSONExpr 
-            { env with 
-                bytecode = [], 
-                name = className, 
-                nextClass = nextClass, 
-                fieldVars = mapInsert ident newField env.fieldVars, 
+        let bodyEnv = toJSONExpr
+            { env with
+                bytecode = [],
+                name = className,
+                nextClass = nextClass,
+                fieldVars = mapInsert ident newField env.fieldVars,
                 vars = mapInsert ident 1 (mapEmpty nameCmp),
-                localVars = 2 } body in 
+                localVars = 2 } body in
         let fields = map (lam x. x.1) (mapToSeq env.fieldVars) in
         match body with TmLam _ then
             let putfields = join (mapi (lam i. lam x. [aload_ 0, getfield_ (concat pkg_ className) (getNameField x) object_LT, putfield_ (concat pkg_ nextClass) (getNameField x) object_LT]) fields) in
             let dups = map (lam x. dup_) fields in
             let apply = apply_ (foldl concat bodyEnv.bytecode [dups, [dup_, aload_ 1, putfield_ (concat pkg_ nextClass) (nameGetStr ident) object_LT], putfields]) in
             let funcClass = createClass className (concat pkg_ "Function") (snoc fields newField) defaultConstructor [apply] in
-            { env with 
+            { env with
                 classes = snoc bodyEnv.classes funcClass,
+                constSeqBC = bodyEnv.constSeqBC,
                 bytecode = foldl concat env.bytecode [initClass_ className],
                 nextClass = bodyEnv.nextClass }
-        else 
+        else
             let apply = apply_ bodyEnv.bytecode in
             let funcClass = createClass className (concat pkg_ "Function") fields defaultConstructor [apply] in
-            { env with 
+            { env with
                 classes = snoc bodyEnv.classes funcClass,
+                constSeqBC = bodyEnv.constSeqBC,
                 bytecode = foldl concat env.bytecode [initClass_ className],
                 fieldVars = mapEmpty nameCmp,
                 nextClass = bodyEnv.nextClass }
-    | TmVar { ident = ident } -> 
+    | TmVar { ident = ident } ->
         let store = (match mapLookup ident env.vars with Some i then
             [aload_ i]
-        else match mapLookup ident env.fieldVars with Some field then 
+        else match mapLookup ident env.fieldVars with Some field then
             -- do fieldlookup
             [aload_ 0, getfield_ (concat pkg_ env.name) (getNameField field) "Ljava/lang/Object;"]
-        else match mapLookup ident env.globalFuncMap with Some global then 
+        else match mapLookup ident env.globalFuncMap with Some global then
             (initClass_ global)
         else
             (print (join ["No identifier! ", nameGetStr ident, "\n"]));
             []) in
         { env with bytecode = concat env.bytecode store }
-    | TmMatch { target = target, pat = pat, thn = thn, els = els } -> 
+    | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
         let targetEnv = toJSONExpr env target in
         jvmPat targetEnv (tyTm target) thn els pat
     | TmRecord { bindings = bindings, ty = ty } ->
-        match ty with TyCon { ident = name } then 
+        let realTy = unwrapType ty in
+        match realTy with TyCon { ident = name } then
             let len = length (mapToSeq bindings) in
             match mapLookup name env.recordMap with Some translation then
-                let insertBytecode = 
-                    foldl 
+                let insertBytecode =
+                    foldl
                     (lam e. lam tup.
                         let sid = tup.0 in
                         let i = tup.1 in
                         let expr = (match mapLookup sid bindings with Some e then e else never) in
-                        let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ i] } expr in 
-                        { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes }) 
-                    { env with bytecode = [], classes = [] } 
+                        let exprEnv = toJSONExpr { e with bytecode = concat e.bytecode [dup_, ldcInt_ i] } expr in
+                        { e with bytecode = snoc exprEnv.bytecode aastore_, classes = concat e.classes exprEnv.classes, constSeqBC = exprEnv.constSeqBC })
+                    { env with bytecode = [], classes = [], constSeqBC = [] }
                     (mapToSeq translation) in
                 let recordBytecode = concat [ldcInt_ len, anewarray_ object_T] insertBytecode.bytecode in
-                { env with 
-                    bytecode = concat env.bytecode (wrapRecord_ recordBytecode), 
+                { env with
+                    bytecode = concat env.bytecode (wrapRecord_ recordBytecode),
                     classes = concat env.classes insertBytecode.classes,
+                    constSeqBC = concat env.constSeqBC insertBytecode.constSeqBC,
                     recordMap = mapUnion env.recordMap insertBytecode.recordMap }
             else never
-        else 
-            { env with 
+        else
+            { env with
                 bytecode = concat env.bytecode nothing_ }
-        
-    | TmRecLets { bindings = bindings, inexpr = inexpr } -> 
-        let e = foldl 
-                (lam acc. lam expr. 
-                    match expr with { ident = ident, body = body } then 
-                        match body with TmLam _ then 
+    | TmRecLets { bindings = bindings, inexpr = inexpr } ->
+        let e = foldl
+                (lam acc. lam expr.
+                    match expr with { ident = ident, body = body } then
+                        match body with TmLam _ then
                             (mapInsert ident acc.1 acc.0, createName_ "Func", mapInsert ident acc.1 acc.2)
-                        else 
+                        else
                             acc
                     else never)
-                (env.globalFuncMap, env.nextClass, mapEmpty nameCmp) 
+                (env.globalFuncMap, env.nextClass, mapEmpty nameCmp)
                 bindings in
         let nextClass = e.1 in
         let funcMap = e.0 in
         let funcBindings = e.2 in
-        let b = foldl 
-                    (lam acc. lam el. 
+        let b = foldl
+                    (lam acc. lam el.
                         match el with { ident = ident, body = body } then
-                            match body with TmLam _ then 
-                                match mapLookup ident funcBindings with Some funcName then 
+                            match body with TmLam _ then
+                                match mapLookup ident funcBindings with Some funcName then
                                     toJSONExpr { acc with nextClass = funcName, fieldVars = mapEmpty nameCmp } body
                                 else never
-                            else 
+                            else
                                 let bodyEnv = toJSONExpr acc body in
-                                { bodyEnv with 
+                                { bodyEnv with
                                         bytecode = concat acc.bytecode [astore_ acc.localVars],
                                         localVars = addi acc.localVars 1,
                                         fieldVars = mapEmpty nameCmp,
-                                        vars = mapInsert ident acc.localVars acc.vars,
-                                        classes = concat acc.classes bodyEnv.classes }
-                        else 
+                                        vars = mapInsert ident acc.localVars acc.vars }
+                        else
                             never)
-                    { env with 
+                    { env with
                         globalFuncMap = funcMap }
                     bindings in
         toJSONExpr { b with fieldVars = mapEmpty nameCmp } inexpr
-    | TmRecordUpdate _ -> (printLn "TmRecordUpdate"); env
+    | TmRecordUpdate { rec = rec, key = key, value = value, ty = ty } ->
+        let realTy = unwrapType ty in
+        let name = (match realTy with TyCon { ident = ident } then ident else never) in
+        let mapping = (match mapLookup name env.recordMap with Some map then map else never) in
+        let i = (match mapLookup key mapping with Some i then i else never) in
+        let valueEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } value in
+        let recEnv = toJSONExpr env rec in
+        { recEnv with
+            bytecode = foldl concat
+                recEnv.bytecode
+                [unwrapRecord_,
+                [dup_,
+                ldcInt_ i],
+                valueEnv.bytecode,
+                [aastore_,
+                astore_ env.localVars],
+                wrapRecord_ [aload_ env.localVars]],
+            classes = concat recEnv.classes valueEnv.classes,
+            constSeqBC = concat recEnv.constSeqBC valueEnv.constSeqBC }
     | TmType _ -> (printLn "TmType: Should be gone"); env
     | TmConDef _ -> (printLn "TmConDef: Should be gone"); env
-    | TmConApp { ident = ident, body = body } -> 
+    | TmConApp { ident = ident, body = body } ->
         let constructor = nameGetStr ident in
-        let bodyEnv = toJSONExpr { env with bytecode = [], classes = [] } body in
-        { env with 
-            bytecode = foldl concat 
+        let bodyEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } body in
+        { env with
+            bytecode = foldl concat
                 env.bytecode
                 [initClass_ constructor,
                 [dup_],
                 bodyEnv.bytecode,
                 [checkcast_ object_T, putfield_ (concat pkg_ constructor) "value" object_LT]],
             classes = concat bodyEnv.classes env.classes,
+            constSeqBC = concat bodyEnv.constSeqBC env.constSeqBC,
             recordMap = mapUnion env.recordMap bodyEnv.recordMap }
     | TmUtest _ -> (printLn "TmUtest"); env
-    | TmNever _ -> { env with bytecode = foldl concat 
-                            env.bytecode 
+    | TmNever _ -> { env with bytecode = foldl concat
+                            env.bytecode
                             [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
                             ldcString_ "Never Reached!",
                             invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
@@ -370,90 +425,97 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                             invokestatic_ "java/lang/System" "exit" "(I)V"],
                             nothing_] }
     | TmExt _ -> (printLn "TmExt"); env
-    | a -> 
+    | a ->
         (print "unknown expr\n");
         env
 
     sem jvmPat : JVMEnv -> Type -> Expr -> Expr -> Pat -> JVMEnv
     sem jvmPat env targetty thn els =
     | PatInt { val = val } ->
-        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
-        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } els in
         let elsLabel = createName_ "els" in
         let endLabel = createName_ "end" in
-        { env with 
-            bytecode = foldl concat 
-                    env.bytecode 
+        { env with
+            bytecode = foldl concat
+                    env.bytecode
                     [unwrapInteger_,
-                    [ldcLong_ val, 
-                    lcmp_, 
-                    ifne_ elsLabel], 
-                    thnEnv.bytecode, 
+                    [ldcLong_ val,
+                    lcmp_,
+                    ifne_ elsLabel],
+                    thnEnv.bytecode,
                     [goto_ endLabel,
-                    label_ elsLabel], 
-                    elsEnv.bytecode, 
+                    label_ elsLabel],
+                    elsEnv.bytecode,
                     [label_ endLabel]],
-            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes],
+            constSeqBC = foldl concat env.constSeqBC [thnEnv.constSeqBC, elsEnv.constSeqBC] }
     | PatRecord { bindings = bindings, ty = ty } ->
-        let name = (match ty with TyCon { ident = ident } then ident else never) in
-        match eqi (cmpType targetty ty) 0 with true then
-            match mapLookup name env.recordMap with Some r then 
-                let patEnv = foldl 
-                        (lam e. lam tup.
-                            let sid = tup.0 in
-                            let pat = tup.1 in 
-                            match pat with PatNamed { ident = ident } then
-                                match ident with PName name then 
-                                    match mapLookup sid r with Some i then 
-                                        { e with 
-                                            bytecode = foldl concat e.bytecode [[dup_], unwrapRecord_, [ldcInt_ i, aaload_, astore_ e.localVars]],
-                                            localVars = addi 1 e.localVars,
-                                            vars = mapInsert name e.localVars e.vars } 
-                                    else never
-                                else never -- Wildcard!
-                            else never) 
-                        env
-                        (mapToSeq bindings) in
-                toJSONExpr { patEnv with bytecode = snoc patEnv.bytecode pop_ } thn 
-            else never
-        else 
-            toJSONExpr env els
+        let realTy = unwrapType ty in
+        match realTy with TyCon _ then
+            let name = (match realTy with TyCon { ident = ident } then ident else never) in
+            match eqi (cmpType targetty ty) 0 with true then
+                match mapLookup name env.recordMap with Some r then
+                    let patEnv = foldl
+                            (lam e. lam tup.
+                                let sid = tup.0 in
+                                let pat = tup.1 in
+                                match pat with PatNamed { ident = ident } then
+                                    match ident with PName name then
+                                        match mapLookup sid r with Some i then
+                                            { e with
+                                                bytecode = foldl concat e.bytecode [[dup_], unwrapRecord_, [ldcInt_ i, aaload_, astore_ e.localVars]],
+                                                localVars = addi 1 e.localVars,
+                                                vars = mapInsert name e.localVars e.vars }
+                                        else never
+                                    else never -- Wildcard!
+                                else never)
+                            env
+                            (mapToSeq bindings) in
+                    toJSONExpr { patEnv with bytecode = snoc patEnv.bytecode pop_ } thn
+                else never
+            else
+                toJSONExpr env els
+        else -- match () with ()
+            toJSONExpr env thn
     | PatBool { val = val } ->
-        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
-        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } els in
         let elsLabel = createName_ "els" in
         let endLabel = createName_ "end" in
         let boolVal = (match val with true then 1 else 0) in
-        { env with 
-            bytecode = foldl concat 
-                    env.bytecode 
+        { env with
+            bytecode = foldl concat
+                    env.bytecode
                     [unwrapBoolean_,
                     [ldcInt_ boolVal,
-                    ificmpne_ elsLabel], 
-                    thnEnv.bytecode, 
+                    ificmpne_ elsLabel],
+                    thnEnv.bytecode,
                     [goto_ endLabel,
-                    label_ elsLabel], 
-                    elsEnv.bytecode, 
+                    label_ elsLabel],
+                    elsEnv.bytecode,
                     [label_ endLabel]],
-            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes],
+            constSeqBC = foldl concat env.constSeqBC [thnEnv.constSeqBC, elsEnv.constSeqBC] }
     | PatChar { val = val } ->
-        let thnEnv = toJSONExpr { env with bytecode = [], classes = [] } thn in
-        let elsEnv = toJSONExpr { env with bytecode = [], classes = [] } els in
+        let thnEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } thn in
+        let elsEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } els in
         let elsLabel = createName_ "els" in
         let endLabel = createName_ "end" in
         let charVal = char2int val in
-        { env with 
-            bytecode = foldl concat 
-                    env.bytecode 
+        { env with
+            bytecode = foldl concat
+                    env.bytecode
                     [unwrapChar_,
                     [ldcInt_ charVal,
-                    ificmpne_ elsLabel], 
-                    thnEnv.bytecode, 
+                    ificmpne_ elsLabel],
+                    thnEnv.bytecode,
                     [goto_ endLabel,
-                    label_ elsLabel], 
-                    elsEnv.bytecode, 
+                    label_ elsLabel],
+                    elsEnv.bytecode,
                     [label_ endLabel]],
-            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes] }
+            classes = foldl concat env.classes [thnEnv.classes, elsEnv.classes],
+            constSeqBC = foldl concat env.constSeqBC [thnEnv.constSeqBC, elsEnv.constSeqBC] }
     | PatCon { ident = ident, subpat = subpat } ->
         let typeTag = (match mapLookup ident env.adtTags with Some tup then tup else never) in
         let t = typeTag.0 in
@@ -461,39 +523,40 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         let elsLabel = createName_ "els" in
         let endLabel = createName_ "end" in
         let adtClassName = (concat pkg_ (nameGetStr ident)) in
-        match subpat with PatNamed { ident = id } then 
-            match id with PName name then 
-                let patEnv = { env with 
-                                bytecode = foldl concat 
-                                    env.bytecode 
+        match subpat with PatNamed { ident = id } then
+            match id with PName name then
+                let patEnv = { env with
+                                bytecode = foldl concat
+                                    env.bytecode
                                     [[dup_,
                                     instanceof_ (concat pkg_ t),
                                     ifeq_ elsLabel, -- jump if 0
-                                    dup_, 
+                                    dup_,
                                     checkcast_ (concat pkg_ t),
                                     invokeinterface_ (concat pkg_ t) "getTag" "()I",
                                     ldcInt_ tag,
                                     ificmpne_ elsLabel,
-                                    checkcast_ adtClassName, 
+                                    checkcast_ adtClassName,
                                     getfield_ adtClassName "value" object_LT,
                                     astore_ env.localVars]],
                                 localVars = addi 1 env.localVars,
                                 vars = mapInsert name env.localVars env.vars } in
                 let thnEnv = toJSONExpr patEnv thn in
-                let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [] } els in
-                { thnEnv with 
-                    bytecode = foldl concat 
+                let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [], constSeqBC = [] } els in
+                { thnEnv with
+                    bytecode = foldl concat
                         thnEnv.bytecode
                         [[goto_ endLabel,
                         label_ elsLabel,
-                        pop_], 
+                        pop_],
                         elsEnv.bytecode,
                         [label_ endLabel]],
-                    classes = concat thnEnv.classes elsEnv.classes }
+                    classes = concat thnEnv.classes elsEnv.classes,
+                    constSeqBC = concat thnEnv.constSeqBC elsEnv.constSeqBC }
             else -- wildcard
-                let patEnv = { env with 
-                                bytecode = foldl concat 
-                                    env.bytecode 
+                let patEnv = { env with
+                                bytecode = foldl concat
+                                    env.bytecode
                                     [[dup_,
                                     instanceof_ (concat pkg_ t),
                                     ifeq_ elsLabel, -- jump if 0
@@ -504,28 +567,29 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                                     ificmpne_ elsLabel,
                                     pop_]] } in
                 let thnEnv = toJSONExpr patEnv thn in
-                let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [] } els in
-                { thnEnv with 
-                    bytecode = foldl concat 
+                let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [], constSeqBC = [] } els in
+                { thnEnv with
+                    bytecode = foldl concat
                         thnEnv.bytecode
                         [[goto_ endLabel,
                         label_ elsLabel,
-                        pop_], 
+                        pop_],
                         elsEnv.bytecode,
                         [label_ endLabel]],
-                    classes = concat thnEnv.classes elsEnv.classes }
-        else never 
+                    classes = concat thnEnv.classes elsEnv.classes,
+                    constSeqBC = concat thnEnv.constSeqBC elsEnv.constSeqBC }
+        else never
     | PatSeqTot { pats = pats } ->
-        let endLabel = createName_ "end" in 
+        let endLabel = createName_ "end" in
         let elsLabel = createName_ "els" in
         let len = length pats in
-        let patEnv = foldli 
-            (lam acc. lam i. lam pat. 
-                match pat with PatNamed { ident = ident } then 
-                    match ident with PName name then 
-                        { acc with 
-                            bytecode = concat 
-                                acc.bytecode 
+        let patEnv = foldli
+            (lam acc. lam i. lam pat.
+                match pat with PatNamed { ident = ident } then
+                    match ident with PName name then
+                        { acc with
+                            bytecode = concat
+                                acc.bytecode
                                 [dup_,
                                 ldcInt_ i,
                                 invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
@@ -533,58 +597,135 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                             localVars = addi 1 acc.localVars,
                             vars = mapInsert name acc.localVars acc.vars }
                     else never
-                else never) 
-            { env with 
-                bytecode = concat 
-                    env.bytecode 
+                else never)
+            { env with
+                bytecode = concat
+                    env.bytecode
                     [dup_,
-                    invokevirtual_ seq_T "length" "()I", 
+                    checkcast_ seq_T,
+                    invokevirtual_ seq_T "length" "()I",
                     ldcInt_ len,
                     ificmpne_ elsLabel] }
             pats in
         let thnEnv = toJSONExpr { patEnv with bytecode = snoc patEnv.bytecode pop_ } thn in
-        let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [] } els in
-        { thnEnv with 
-            bytecode = foldl concat 
-                thnEnv.bytecode 
-                [[goto_ endLabel,
-                label_ elsLabel,
-                pop_],
-                elsEnv.bytecode,
-                [label_ endLabel]],
-            classes = concat thnEnv.classes elsEnv.classes }
-    | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix } ->
-        let endLabel = createName_ "end" in
-        let elsLabel = createName_ "els" in
-        let len = addi (length prefix) (length postfix) in
-        let prefixEnv = foldli 
-            (lam acc. lam i. lam pat. 
-                match pat with PatNamed { ident = ident } then 
-                    match ident with PWildcard _ then 
-                        acc
-                    else never
-                else never) 
-            { env with 
-                bytecode = concat 
-                    env.bytecode 
-                    [dup_,
-                    invokevirtual_ seq_T "length" "()I", 
-                    ldcInt_ len,
-                    ificmplt_ elsLabel] }
-            prefix in
-        let thnEnv = toJSONExpr { prefixEnv with bytecode = snoc prefixEnv.bytecode pop_ } thn in
-        let elsEnv = toJSONExpr { prefixEnv with bytecode = [], classes = [] } els in
-        { thnEnv with 
-            bytecode = foldl concat 
+        let elsEnv = toJSONExpr { patEnv with bytecode = [], classes = [], constSeqBC = [] } els in
+        { thnEnv with
+            bytecode = foldl concat
                 thnEnv.bytecode
                 [[goto_ endLabel,
                 label_ elsLabel,
                 pop_],
                 elsEnv.bytecode,
-                [label_ endLabel]] }
-    | a -> 
-        (printLn "Unknown Pat"); 
-        env 
+                [label_ endLabel]],
+            classes = concat thnEnv.classes elsEnv.classes,
+            constSeqBC = concat thnEnv.constSeqBC elsEnv.constSeqBC }
+    | PatSeqEdge { prefix = prefix, middle = middle, postfix = postfix } ->
+        -- calculate length less
+        let endLabel = createName_ "end" in
+        let elsLabel = createName_ "els" in
+        let len = addi (length prefix) (length postfix) in
+        let prefixEnv = foldli
+            (lam acc. lam i. lam pat.
+                match pat with PatNamed { ident = ident } then
+                    match ident with PName name then
+                        { acc with
+                            bytecode = concat
+                                acc.bytecode
+                                [dup_,
+                                checkcast_ seq_T,
+                                ldcInt_ i,
+                                invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                                astore_ acc.localVars],
+                            localVars = addi 1 acc.localVars,
+                            vars = mapInsert name acc.localVars acc.vars }
+                    else -- wildcard
+                        acc
+                else never)
+            { env with
+                bytecode = concat
+                    env.bytecode
+                    [dup_,
+                    checkcast_ seq_T,
+                    invokevirtual_ seq_T "length" "()I",
+                    ldcInt_ len,
+                    ificmplt_ elsLabel] }
+            prefix in
+        let middleEnv =
+            (match middle with PName name then
+                { prefixEnv with
+                    bytecode = concat
+                        prefixEnv.bytecode
+                        [dup_,
+                        checkcast_ seq_T,
+                        dup_,
+                        astore_ prefixEnv.localVars,
+                        ldcInt_ (length prefix),
+                        aload_ prefixEnv.localVars,
+                        invokevirtual_ seq_T "length" "()I",
+                        ldcInt_ (length postfix),
+                        isub_,
+                        invokevirtual_ seq_T "slice" (methodtype_T "II" object_LT),
+                        astore_ prefixEnv.localVars],
+                    localVars = addi 1 prefixEnv.localVars,
+                    vars = mapInsert name prefixEnv.localVars prefixEnv.vars }
+            else -- wildcard
+                prefixEnv) in
+        let postfixEnv = foldli
+            (lam acc. lam i. lam pat.
+                match pat with PatNamed { ident = ident } then
+                    match ident with PName name then
+                        { acc with
+                            bytecode = concat
+                                acc.bytecode
+                                [dup_,
+                                checkcast_ seq_T,
+                                dup_,
+                                invokevirtual_ seq_T "length" "()I",
+                                ldcInt_ (subi (length postfix) i),
+                                isub_,
+                                invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                                astore_ acc.localVars],
+                            localVars = addi 1 acc.localVars,
+                            vars = mapInsert name acc.localVars acc.vars }
+                    else -- wildcard
+                        acc
+                else never)
+            middleEnv
+            postfix in
+        let thnEnv = toJSONExpr { postfixEnv with bytecode = snoc postfixEnv.bytecode pop_ } thn in
+        let elsEnv = toJSONExpr { postfixEnv with bytecode = [], classes = [], constSeqBC = [] } els in
+        { thnEnv with
+            bytecode = foldl concat
+                thnEnv.bytecode
+                [[goto_ endLabel,
+                label_ elsLabel,
+                pop_],
+                elsEnv.bytecode,
+                [label_ endLabel]],
+            classes = concat thnEnv.classes elsEnv.classes,
+            constSeqBC = concat thnEnv.constSeqBC elsEnv.constSeqBC }
+    | PatNamed { ident = ident } ->
+        match ident with PName name then
+            toJSONExpr
+                { env with
+                    bytecode = snoc env.bytecode (astore_ env.localVars),
+                    vars = mapInsert name env.localVars env.vars,
+                    localVars = addi 1 env.localVars }
+                thn
+        else
+            toJSONExpr { env with bytecode = snoc env.bytecode pop_ } thn
+    | PatAnd _ ->
+        (printLn "Unknown PatAnd");
+        env
+    | PatOr _ ->
+        (printLn "Unknown PatOr");
+        env
+    | PatNot _ ->
+        (printLn "Unknown PatNot");
+        env
+    | a ->
+        (printLn "Unknown Pat");
+        env
 
     sem getJavaType : Type -> String
     sem getJavaType =
@@ -593,7 +734,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
 
     sem toJSONConst : JVMEnv -> Const -> JVMEnv
     sem toJSONConst env =
-    | a -> 
+    | a ->
         (print "unknown const\n");
         env
 
@@ -601,17 +742,17 @@ end
 
 lang CombinedLang = MExprLowerNestedPatterns + MExprPrettyPrint + MExprJVMCompile + MExprLambdaLift + MExprTypeCheck end
 
-let collectADTTypes = lam tlMapping. 
+let collectADTTypes = lam tlMapping.
     use MExprJVMCompile in
-    foldl (lam acc. lam tup. 
-            let t = tup.1 in 
+    foldl (lam acc. lam tup.
+            let t = tup.1 in
             match t with TyVariant { constrs = constrs } then -- ADT
                 let classes = acc.1 in
                 let interfaces = acc.0 in
                 let name = nameGetStr tup.0 in
                 let interf = createInterface name [] [createFunction "getTag" "()I" []] in
                 let constrClasses = foldli (lam acc. lam i. lam tup.
-                                        let interfName = acc.0 in 
+                                        let interfName = acc.0 in
                                         let tagLookup = mapInsert tup.0 (interfName, i) acc.2 in
                                         let classes = acc.1 in
                                         let constrName = nameGetStr tup.0 in
@@ -620,7 +761,7 @@ let collectADTTypes = lam tlMapping.
                                                         (concat pkg_ interfName)
                                                         [createField "value" object_LT]
                                                         defaultConstructor
-                                                        [createFunction 
+                                                        [createFunction
                                                             "getTag"
                                                             "()I"
                                                             [ldcInt_ i,
@@ -634,12 +775,12 @@ let collectADTTypes = lam tlMapping.
 
 
 let collectRecords = lam records.
-        foldl 
+        foldl
             (lam recordMap. lam tup.
                 let name = tup.1 in
                 let sidTypeMap = tup.0 in
-                let mapping = 
-                    (foldli 
+                let mapping =
+                    (foldli
                         (lam map. lam i. lam tup.
                             let sid = tup.0 in
                             mapInsert sid i map)
@@ -666,35 +807,34 @@ let compileJVMEnv = lam ast.
                 let typeEnv = _replaceVariantNamesInTypeEnv tlEnv in
                 (typeEnv, t, tlEnv.records)
             else never) in
-    let recordMap = collectRecords tl.2 in 
-    let adt = collectADTTypes tl.0 in 
+    let recordMap = collectRecords tl.2 in
+    let adt = collectADTTypes tl.0 in
     let tlAst = tl.1 in
-    let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in 
-    let env = { 
-            bytecode = argvBC_, 
-            vars = mapEmpty nameCmp, 
-            localVars = 1, 
-            classes = [], 
-            fieldVars = mapEmpty nameCmp, 
-            name = "Main", 
-            nextClass = createName_ "Func", 
+    let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in
+    let env = {
+            bytecode = argvBC_,
+            vars = mapEmpty nameCmp,
+            localVars = 1,
+            classes = [],
+            fieldVars = mapEmpty nameCmp,
+            name = "Main",
+            nextClass = createName_ "Func",
             recordMap = recordMap,
             adtTags = adt.2,
-            globalFuncMap = mapEmpty nameCmp } in
+            globalFuncMap = mapEmpty nameCmp,
+            constSeqBC = [] } in
     let compiledEnv = (toJSONExpr env tlAst) in
-    let bytecode = concat compiledEnv.bytecode [pop_, return_] in
-    --let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
-    let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in 
-    let constClasses = concat constClassList_ adt.1 in
+    --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
+    let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
+    let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in
+    let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC]] in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) (snoc adt.0 objToObj) in
-    prog 
+    prog
 
-let compileMCoreToJVM = lam ast. 
-    use MExprJVMCompile in
-    use MExprLambdaLift in
-    use MExprTypeAnnot in
-    use MExprTypeCheck in
-    use MExprPrettyPrint in
+lang MExprJVMCompileLang = MExprJVMCompile + MExprLambdaLift + MExprTypeCheck + MExprPrettyPrint end
+
+let compileMCoreToJVM = lam ast.
+    use MExprJVMCompileLang in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
     let jvmProgram = compileJVMEnv liftedAst in
@@ -728,7 +868,7 @@ let modifyMainClassForTest = lam prog.
     let modifiedMainFunc = createFunction f.name f.descriptor (concat bytecodes [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_]) in
     let modifiedMainClass = createClass m.name m.implements m.fields m.constructor [modifiedMainFunc] in
     createProg p.package (snoc (subsequence p.classes 0 (subi (length p.classes) 1)) modifiedMainClass) p.interfaces
-    
+
 
 let prepareForTests = lam path.
     match sysCommandExists "java" with false then 
@@ -741,7 +881,7 @@ let prepareForTests = lam path.
             (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
             (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
             ()
-        else 
+        else
             (sysRunCommand ["mkdir", path] "" ".");
             (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
             (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
@@ -780,10 +920,10 @@ utest testJVM (subi_ (int_ 0) (int_ 1)) with "-1" in
 utest testJVM (divi_ (int_ 10) (int_ 5)) with "2" in
 utest testJVM (muli_ (int_ 2) (int_ (negi 1))) with "-2" in
 utest testJVM (modi_ (int_ 10) (int_ 2)) with "0" in
-utest testJVM (negi_ (int_ 1)) with "-1" in 
-utest testJVM (slli_ (int_ 3) (int_ 2)) with "12" in 
-utest testJVM (srli_ (int_ 24) (int_ 3)) with "3" in 
-utest testJVM (srai_ (negi_ (int_ 24)) (int_ 3)) with "-3" in 
+utest testJVM (negi_ (int_ 1)) with "-1" in
+utest testJVM (slli_ (int_ 3) (int_ 2)) with "12" in
+utest testJVM (srli_ (int_ 24) (int_ 3)) with "3" in
+utest testJVM (srai_ (negi_ (int_ 24)) (int_ 3)) with "-3" in
 
 -- integer boolean operations
 utest testJVM (lti_ (int_ 20) (int_ 10)) with "false" in
@@ -829,7 +969,7 @@ utest (
     let pat = PatRecord { bindings = bindings, info = NoInfo (), ty = tyrecord_ [("a", tyint_)] } in
     let thn = var_ "a" in
     let els = never_ in
-    testJVM (match_ target pat thn els)) 
+    testJVM (match_ target pat thn els))
 with "10" in
 
 -- ADTs
@@ -846,5 +986,5 @@ with "3" in
 -- random
 utest testJVM (bindall_ [ulet_ "a" (randSetSeed_ (int_ 1000)), randIntU_ (int_ 1) (int_ 10)]) with "5" in
 
-sysDeleteDir jvmTmpPath 
+sysDeleteDir jvmTmpPath
 

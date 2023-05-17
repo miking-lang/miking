@@ -57,6 +57,9 @@ let dadd_ = use JVMAst in
 let iadd_ = use JVMAst in
     createBEmpty "IADD"
 
+let isub_ = use JVMAst in
+    createBEmpty "ISUB"
+
 let lsub_ = use JVMAst in 
     createBEmpty "LSUB"
 
@@ -982,10 +985,12 @@ let splitAtClass_ = use JVMAst in
                 ldcInt_ 0,
                 aload_ 1,
                 getfield_ "scala/Tuple2" "_1" object_LT,
+                checkcast_ seq_T,
                 aastore_,
                 ldcInt_ 1,
                 aload_ 1,
                 getfield_ "scala/Tuple2" "_2" object_LT,
+                checkcast_ seq_T,
                 aastore_,
                 invokespecial_ (concat pkg_ "Record") "<init>" "([Ljava/lang/Object;)V",
                 areturn_]])]
@@ -1217,9 +1222,9 @@ let floorfiClass_ = use JVMAst in
                 wrapInteger_,
                 [areturn_]])]
 
-let cielfiClass_ = use JVMAst in
+let ceilfiClass_ = use JVMAst in
     createClass
-        "Cielfi"
+        "Ceilfi"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1229,7 +1234,7 @@ let cielfiClass_ = use JVMAst in
             (foldl concat 
                 [aload_ 1] 
                 [unwrapFloat_,
-                [invokestatic_ "java/lang/Math" "ciel" "(D)D",
+                [invokestatic_ "java/lang/Math" "ceil" "(D)D",
                 d2l_],
                 wrapInteger_,
                 [areturn_]])]
@@ -1278,7 +1283,8 @@ let char2IntClass_ = use JVMAst in
             (foldl concat 
                 [aload_ 1]
                 [unwrapChar_,
-                [invokestatic_ integer_T "valueOf" (methodtype_T "I" integer_LT),
+                [i2l_,
+                invokestatic_ integer_T "valueOf" (methodtype_T "J" integer_LT),
                 areturn_]])]  
                 
 let int2charClass_ = use JVMAst in
@@ -1868,6 +1874,76 @@ let foldrClass_ = use JVMAst in
                 aload_ acc,
                 areturn_]])]
 
+let setClass_ = use JVMAst in
+    let vb = 2 in
+    let i = 3 in 
+    let seq = 4 in
+    let len = 5 in
+    let index = 6 in
+    let startLabel = createName_ "start" in
+    let endLabel = createName_ "end" in
+    let elsLabel = createName_ "els" in
+    let ifEndLabel = createName_ "ifend" in
+    createClass
+        "Set"
+        (concat pkg_ "Function")
+        [createField "var$" object_LT, 
+        createField "var" object_LT]
+        defaultConstructor
+        [createFunction
+            "apply"
+            (methodtype_T object_LT object_LT)
+                (foldl concat
+                    [new_ "scala/collection/immutable/VectorBuilder",
+                    dup_,
+                    invokespecial_ "scala/collection/immutable/VectorBuilder" "<init>" "()V",
+                    astore_ vb]
+                    [[ldcInt_ 0,
+                    istore_ i,
+                    aload_ 0,
+                    getfield_ (concat pkg_ "Set") "var" object_LT,
+                    checkcast_ seq_T,
+                    dup_,
+                    astore_ seq,
+                    invokevirtual_ seq_T "length" (methodtype_T "" "I"),
+                    istore_ len,
+                    aload_ 0,
+                    getfield_ (concat pkg_ "Set") "var$" object_LT],
+                    unwrapInteger_,
+                    [l2i_,
+                    istore_ index,
+                    label_ startLabel,
+                    iload_ i,
+                    iload_ len,
+                    ificmpge_ endLabel,
+                    iload_ index,
+                    iload_ i,
+                    ificmpne_ elsLabel,
+                    -- equal
+                    aload_ vb,
+                    aload_ 1,
+                    invokevirtual_ "scala/collection/immutable/VectorBuilder" "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;",
+                    pop_,
+                    goto_ ifEndLabel,
+                    label_ elsLabel,
+                    -- not equal
+                    aload_ vb,
+                    aload_ seq,
+                    iload_ i,
+                    invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                    invokevirtual_ "scala/collection/immutable/VectorBuilder" "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;",
+                    pop_,
+                    label_ ifEndLabel,
+                    iload_ i,
+                    ldcInt_ 1,
+                    iadd_,
+                    istore_ i,
+                    goto_ startLabel,
+                    label_ endLabel,
+                    aload_ vb,
+                    invokevirtual_ "scala/collection/immutable/VectorBuilder" "result" "()Lscala/collection/immutable/Vector;",
+                    areturn_]])] -- set seq index value (var var$ 0)
+
 let subsequenceClass_ = use JVMAst in
     createClass
         "SubSequence"
@@ -1886,9 +1962,11 @@ let subsequenceClass_ = use JVMAst in
                 getfield_ (concat pkg_ "SubSequence") "var$" object_LT],
                 unwrapInteger_,
                 [l2i_,
+                dup_,
                 aload_ 1],
                 unwrapInteger_,
                 [l2i_,
+                iadd_,
                 invokevirtual_ seq_T "slice" (methodtype_T "II" object_LT),
                 areturn_]])]
 
@@ -2038,6 +2116,15 @@ let threeArgApplyClass2_ = use JVMAst in
                 getfield_ (concat pkg_ thisClass) "var" object_LT,
                 putfield_ (concat pkg_ name) "var" object_LT,
                 areturn_]]
+
+let constSeqClass_ = use JVMAst in
+    lam funcs. 
+        createClass
+            "SeqClass"
+            (concat pkg_ "Function")
+            []
+            defaultConstructor
+            funcs
                     
 let constClassList_ = 
     [addiClass_,
@@ -2128,7 +2215,7 @@ let constClassList_ =
     negfClass_,
     randSetSeedClass_,
     floorfiClass_,
-    cielfiClass_,
+    ceilfiClass_,
     roundfiClass_,
     int2floatClass_,
     char2IntClass_,
@@ -2172,7 +2259,10 @@ let constClassList_ =
     twoArgApplyClass_ "ModRef",
     dprintClass_,
     fileWriteClass_,
-    twoArgApplyClass_ "FileWrite"]
+    twoArgApplyClass_ "FileWrite",
+    setClass_,
+    threeArgApplyClass1_ "Set",
+    threeArgApplyClass2_ "Set"]
 
 let argvBC_ = use JVMAst in -- puts argv in static field 
     let endLabel = createName_ "end" in 

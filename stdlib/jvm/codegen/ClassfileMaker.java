@@ -13,13 +13,13 @@ import java.util.*;
 import javax.swing.event.CaretEvent;
 import javax.swing.text.FieldView;
 
-//import org.objectweb.asm.util.CheckClassAdapter;
+import org.objectweb.asm.util.CheckClassAdapter;
 
 import com.fasterxml.jackson.databind.*;
 
 class ClassfileMaker {
-    //CheckClassAdapter cw;
-    ClassWriterF cw;
+    CheckClassAdapter cw;
+    //ClassWriterF cw;
     JsonNode classes;
     JsonNode interfaces;
     ClassWriterF iw;
@@ -31,13 +31,13 @@ class ClassfileMaker {
         labels = new HashMap<String, Label>();
 
         interfaces = json.get("interfaces");
-        
+
         for (int i = 0; i < interfaces.size(); i++) {
             iw = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
             JsonNode interf = interfaces.get(i);
 
             iw.visit(V1_5, ACC_PUBLIC + ACC_ABSTRACT + ACC_INTERFACE, pkg + interf.get("name").asText(), null, "java/lang/Object", null);
-            
+
             JsonNode functions = interf.get("functions");
             for (int j = 0; j < functions.size(); j++) {
                 JsonNode function = functions.get(j);
@@ -50,16 +50,16 @@ class ClassfileMaker {
 
         classes = json.get("classes");
 
-        
+
         for (int i = 0; i < classes.size(); i++) {
             JsonNode c = classes.get(i);
             String[] interf = null;
             if (!c.get("implements").asText().equals("")) {
                 interf = new String[] {c.get("implements").asText()};
             }
-            
-            cw = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
-            //cw = new CheckClassAdapter(cv);
+
+            ClassWriterF cv = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
+            cw = new CheckClassAdapter(cv);
             // version, access, name, signature, superName, String[] interfaces
             cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, pkg + c.get("name").asText(), null, "java/lang/Object", interf);
 
@@ -90,13 +90,17 @@ class ClassfileMaker {
             for (int j = 0; j < fields.size(); j++) {
                 JsonNode field = fields.get(j);
                 String type = field.get("kind").asText();
-                switch (type) {
-                    case "none": 
-                        cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
-                        break;
-                    case "int":
-                        cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, field.get("name").asText(), field.get("type").asText(), null, Integer.valueOf(field.get("constant").asInt())).visitEnd();
-                        break;
+                if (field.get("name").asText().equals("")) {
+                    cw.visitField(ACC_PUBLIC, "noName", field.get("type").asText(), null, null).visitEnd();
+                } else {
+                    switch (type) {
+                        case "none":
+                            cw.visitField(ACC_PUBLIC, field.get("name").asText(), field.get("type").asText(), null, null).visitEnd();
+                            break;
+                        case "int":
+                            cw.visitField(ACC_PUBLIC+ACC_FINAL+ACC_STATIC, field.get("name").asText(), field.get("type").asText(), null, Integer.valueOf(field.get("constant").asInt())).visitEnd();
+                            break;
+                    }
                 }
             }
 
@@ -108,9 +112,9 @@ class ClassfileMaker {
             }
             cw.visitEnd();
 
-            outputClassfile(c.get("name").asText(), cw);
+            outputClassfile(c.get("name").asText(), cv);
         }
-        
+
     }
 
     // write to package file
@@ -125,6 +129,7 @@ class ClassfileMaker {
             out.write(cw.toByteArray());
             out.close();
         } catch (Exception e) {
+            e.printStackTrace();
             return;
         }
     }
@@ -144,11 +149,11 @@ class ClassfileMaker {
         if (function.get("name").asText().equals("main")) {
               access = access + ACC_STATIC;
         }
-            
+
         // do something about accessors!
         // access, name, descriptor, signature, isInterface
         MethodVisitor mv = cw.visitMethod(access, function.get("name").asText(), function.get("descriptor").asText(), null, null);
-        if (function.get("name").asText() == "toString") { 
+        if (function.get("name").asText() == "toString") {
             mv.visitAnnotation("descriptor", true);
         }
         mv.visitCode();
@@ -181,14 +186,14 @@ class ClassfileMaker {
                     emitBytecode(mv, bytecode.get("catch"));
                     mv.visitLabel(endend);
                 case "arg_float":
-                    switch (bytecode.get("instr").asText()) { 
+                    switch (bytecode.get("instr").asText()) {
                         case "LDC":
                             mv.visitLdcInsn(bytecode.get("nr").asDouble());
                             break;
                     }
                     break;
                 case "arg_long":
-                    switch (bytecode.get("instr").asText()) { 
+                    switch (bytecode.get("instr").asText()) {
                         case "LDC":
                             mv.visitLdcInsn(bytecode.get("nr").asLong());
                             break;
@@ -313,7 +318,7 @@ class ClassfileMaker {
                     break;
                 case "apply":
                     switch (bytecode.get("instr").asText()) {
-                        case "INVOKESPECIAL": 
+                        case "INVOKESPECIAL":
                             mv.visitMethodInsn(INVOKESPECIAL, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText(), false);
                             break;
                         case "GETSTATIC":
@@ -321,11 +326,20 @@ class ClassfileMaker {
                             mv.visitFieldInsn(GETSTATIC, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
                             break;
                         case "GETFIELD":
+                            String name = bytecode.get("name").asText();
+                            if (name.equals("")) {
+                                name = "noName";
+                            }
                             //opcode, owner, name, descriptor
-                            mv.visitFieldInsn(GETFIELD, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
+                            mv.visitFieldInsn(GETFIELD, bytecode.get("owner").asText(), name, bytecode.get("descriptor").asText());
                             break;
                         case "PUTFIELD":
-                            mv.visitFieldInsn(PUTFIELD, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
+                            name = bytecode.get("name").asText();
+                            if (name.equals("")) {
+                                name = "noName";
+                            }
+                            //opcode, owner, name, descriptor
+                            mv.visitFieldInsn(PUTFIELD, bytecode.get("owner").asText(), name, bytecode.get("descriptor").asText());
                             break;
                         case "PUTSTATIC":
                             mv.visitFieldInsn(PUTSTATIC, bytecode.get("owner").asText(), bytecode.get("name").asText(), bytecode.get("descriptor").asText());
@@ -385,7 +399,7 @@ class ClassfileMaker {
                             break;
                         case "IF_ICMPGE":
                             createLabel(constant);
-                            mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
+                            mv.visitJumpInsn(IF_ICMPGE, labels.get(constant));
                             break;
                         case "IF_ICMPLT":
                             createLabel(constant);
@@ -393,7 +407,7 @@ class ClassfileMaker {
                             break;
                         case "IF_ICMPEQ":
                             createLabel(constant);
-                            mv.visitJumpInsn(IF_ICMPGE, labels.get(constant));
+                            mv.visitJumpInsn(IF_ICMPEQ, labels.get(constant));
                             break;
                         case "IF_ICMPNE":
                             createLabel(constant);
