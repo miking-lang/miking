@@ -24,192 +24,58 @@ include "mexpr/info.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/type-check.mc"
 include "ocaml/mcore.mc"
-include "parser/lexer.mc"
 
-lang LRParser = EOFTokenParser + MExprAst + MExprCmp
-  syn LRTerm =
-  | LRTerminal TokenRepr
-  | LRNonTerminal Name
+include "grammar.mc"
+include "lexer.mc"
 
-  -- A rule in the syntax definition of an LR parser
-  type LRRule = {
-    -- Name of the non-terminal associated with this rule
-    name: Name,
-    -- The terms associated with this rule
-    terms: [LRTerm],
-    -- The semantic action to take when reducing on this rule. This action
-    -- expression has to be fully typed, with a type on the form
-    --   tyState -> tyArg1 -> tyArg2 -> ... -> tyArgn -> tyRet
-    -- where tyState is an arbitrary state type that has to be the same type
-    -- for all actions in the syntax definition.
-    action: Expr
-  }
-
-  type LRSyntaxDef = {
-    entrypoint: Name,
-    rules: [LRRule],
-    -- thing that generates the initial action state, i.e. let state = <Expr> in
-    initActionState: Expr
-  }
-
+lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
   type LRStateItem = {
-    name: Name,
-    terms: [LRTerm],
+    nt: Name,
+    terms: [Term],
     stackPointer: Int,
     lookahead: [TokenRepr],
-    ruleIdx: Int -- index of the rule that this item originates from
+    prodIdx: Int -- index of the rule that this item originates from
   }
+
+  type LRState = Set LRStateItem
 
   type LRParseTable = {
     -- k_lookahead as in LR(k)
     k_lookahead: Int,
     -- Index of the initial LR state
     entrypointIdx: Int,
-    entrypointRuleIdx: Int,
+    entrypointProdIdx: Int,
     -- The original syntax definition
-    syntaxDef: LRSyntaxDef,
+    syntaxDef: SyntaxDef,
     -- Types for non-terminal symbols and tokens
     nonTerminalTypes: Map Name Type,
     tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
     -- The generated LR states, shifts, gotos, and reductions
     states: [Set LRStateItem],
     shifts: Map Int [{lookahead: [TokenRepr], toIdx: Int}],
-    gotos: Map Int [{name: Name, toIdx: Int}],
-    reductions: Map Int [{lookahead: [TokenRepr], ruleIdx: Int}]
+    gotos: Map Int [{nt: Name, toIdx: Int}],
+    reductions: Map Int [{lookahead: [TokenRepr], prodIdx: Int}]
   }
-
-
-  sem lrTerm2string : LRTerm -> String
-  sem lrTerm2string =
-  | LRTerminal t -> join (["Term(", tokReprToStr t, ")"])
-  | LRNonTerminal n -> join (["NonTerminal(", nameGetStr n, ")"])
-
-
-  sem lrTermCmp2 : (LRTerm, LRTerm) -> Int
-  sem lrTermCmp2 =
-  | (LRTerminal t1, LRTerminal t2) -> tokReprCompare t1 t2
-  | (LRNonTerminal n1, LRNonTerminal n2) -> nameCmp n1 n2
-  | (LRTerminal _, LRNonTerminal _) -> negi 1
-  | (LRNonTerminal _, LRTerminal _) -> 1
-
-
-  sem lrTermCmp : LRTerm -> LRTerm -> Int
-  sem lrTermCmp other =
-  | t -> lrTermCmp2 (other, t)
-
-
-  sem lrtermEq : LRTerm -> LRTerm -> Bool
-  sem lrtermEq other =
-  | t -> eqi (lrTermCmp other t) 0
 
 
   sem lrStateItemCmp2 : (LRStateItem, LRStateItem) -> Int
   sem lrStateItemCmp2 =
   | (lhs, rhs) ->
-    let cName = nameCmp lhs.name rhs.name in
+    let cName = nameCmp lhs.nt rhs.nt in
     if neqi cName 0 then cName else
-    let cTerms = seqCmp lrTermCmp lhs.terms rhs.terms in
+    let cTerms = seqCmp cfgTermCmp lhs.terms rhs.terms in
     if neqi cTerms 0 then cTerms else
     let cStackPointer = subi lhs.stackPointer rhs.stackPointer in
     if neqi cStackPointer 0 then cStackPointer else
-    let cLookahead = seqCmp tokReprCompare lhs.lookahead rhs.lookahead in
+    let cLookahead = seqCmp tokReprCmp lhs.lookahead rhs.lookahead in
     if neqi cLookahead 0 then cLookahead else
-    let cRuleIdx = subi lhs.ruleIdx rhs.ruleIdx in
+    let cRuleIdx = subi lhs.prodIdx rhs.prodIdx in
     cRuleIdx
 
 
   sem lrStateItemCmp : LRStateItem -> LRStateItem -> Int
   sem lrStateItemCmp lhs =
   | rhs -> lrStateItemCmp2 (lhs, rhs)
-
-
-  -- The ComposeFirst function
-  --   if seq = [Y_1]:
-  --     -- take the FIRST_n available
-  --     return {[t_1,...,t_n] | [t_1,t_2,t_3,t_4,...] in FIRST_k(Y_1)}
-  --   else if seq = [Y_1] ++ rest:
-  --     ret <- {}
-  --     for [t_1,..t_i] in FIRST_k(Y_1):
-  --       if i >= n:
-  --         ret <- ret U {[t_1,...,t_n]}
-  --       else:
-  --         for [t_{i+1},...t_j] in ComposeFirst(n - i, rest):
-  --           ret <- ret U {[t_1,..t_i,t_{i+1},...t_j]}
-  --     return ret
-  sem lrComposeFirst: Int -> Map LRTerm (Set [TokenRepr]) -> [LRTerm] -> Set [TokenRepr]
-  sem lrComposeFirst k firstMap =
-  | [y1] ->
-    -- Return first k from the firstMap
-    setFold (lam acc: Set [TokenRepr]. lam y1_tokens: [TokenRepr].
-      setInsert (subsequence y1_tokens 0 k) acc
-    ) (setEmpty (seqCmp tokReprCompare)) (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) y1 firstMap)
-  | [y1, y2] ++ rest ->
-    setFold (lam acc: Set [TokenRepr]. lam y1_tokens: [TokenRepr].
-      if geqi (length y1_tokens) k then
-        setInsert (subsequence y1_tokens 0 k) acc
-      else
-        setFold (lam acc: Set [TokenRepr]. lam rest_tokens: [TokenRepr].
-          setInsert (concat y1_tokens rest_tokens) acc
-        ) acc (lrComposeFirst (subi k (length y1_tokens)) firstMap (cons y2 rest))
-    ) (setEmpty (seqCmp tokReprCompare)) (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) y1 firstMap)
-  | [] ->
-    setInsert [] (setEmpty (seqCmp tokReprCompare))
-
-
-  -- FIRST_k(S) is the set of sequences of all terminals that can appear
-  -- for a term S, truncated to the first k symbols.
-  sem lrFirst : Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr])
-  sem lrFirst k =
-  | syntaxDef ->
-    -- Compile a set of all terms in the syntax definition
-    let allTerms: Set LRTerm = foldl (lam acc: Set LRTerm. lam rule: LRRule.
-      let acc = setInsert (LRNonTerminal rule.name) acc in
-      foldl (lam acc: Set LRTerm. lam term: LRTerm. setInsert term acc) acc rule.terms
-    ) (setEmpty lrTermCmp) syntaxDef.rules in
-
-    -- Initialize FIRST_k:
-    --   for all terminals t:
-    --     FIRSK_k(t) = {[t]}
-    --   for all non-terminals S:
-    --     FIRST_k(S) = {}
-    let firstK: Map LRTerm (Set [TokenRepr]) = setFold (lam acc: Map LRTerm (Set [TokenRepr]). lam term: LRTerm.
-      switch term
-      case LRTerminal t then mapInsert term (setInsert [t] (setEmpty (seqCmp tokReprCompare))) acc
-      case LRNonTerminal _ then mapInsert term (setEmpty (seqCmp tokReprCompare)) acc
-      end
-    ) (mapEmpty lrTermCmp) allTerms in
-
-    -- Convenience functions for insertions
-    let firstInsert: LRTerm -> Set [TokenRepr] -> Map LRTerm (Set [TokenRepr]) -> Map LRTerm (Set [TokenRepr]) = lam term. lam tokenSet. lam firstMap.
-      mapInsert term
-                (setUnion tokenSet
-                          (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare))
-                                           term
-                                           firstMap))
-                firstMap
-    in
-
-    -- loop until convergence:
-    --   for each production S -> Y_1 Y_2 ... Y_n do:
-    --     if n = 0:
-    --       FIRST_k(S) <- FIRST_k(S) U {[]}  -- empty production
-    --     else if for all Y_i, FIRST_k(Y_i) != ø:
-    --       FIRST_k(S) <- FIRST_k(S) U ComposeFirst(k, [Y_1,Y_2,...,Y_n])
-    recursive let iterate = lam firstMap: Map LRTerm (Set [TokenRepr]).
-      let resultMap = foldl (lam firstMap: Map LRTerm (Set [TokenRepr]). lam rule: LRRule.
-        if eqi (length rule.terms) 0 then
-          firstInsert (LRNonTerminal rule.name) (setInsert [] (setEmpty (seqCmp tokReprCompare))) firstMap
-        else if any (lam term: LRTerm. setIsEmpty (mapLookupOrElse (lam. setEmpty (seqCmp tokReprCompare)) term firstMap)) rule.terms then
-          firstMap -- one of symbols for these rules lack an instance of firskK, skip this for now
-        else
-          firstInsert (LRNonTerminal rule.name) (lrComposeFirst k firstMap rule.terms) firstMap
-      ) firstMap (syntaxDef.rules) in
-      if mapEq setEq resultMap firstMap then
-        resultMap
-      else
-        iterate resultMap
-    in
-    iterate firstK
 
 
   -- Computes the closure for the input set as
@@ -221,7 +87,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   --           I <- I U {(X -> .y, W)}
   --   until I does not change
   --   return I
-  sem lrClosure: Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr]) -> Set LRStateItem -> Set LRStateItem
+  sem lrClosure: Int -> SyntaxDef -> Map Term (Set [TokenRepr]) -> Set LRStateItem -> Set LRStateItem
   sem lrClosure k syntaxDef firstMap =
   | inSet ->
     -- OPT(johnwikman, 2023-01-14): This performs a bunch of unnecessary checks
@@ -231,25 +97,25 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     recursive let iterate = lam inSet: Set LRStateItem.
       let resultSet = setFold (lam accSet: Set LRStateItem. lam item: LRStateItem.
         match subsequence item.terms item.stackPointer (length item.terms)
-        with [LRNonTerminal x] ++ b then
-          let bL: [LRTerm] = concat b (map (lam t. LRTerminal t) item.lookahead) in
-          let firstK_bL: Set [TokenRepr] = lrComposeFirst k firstMap bL in
-          foldli (lam accSet: Set LRStateItem. lam ruleIdx: Int. lam rule: LRRule.
-            if nameEq x rule.name then
-              -- Process this rule
+        with [NonTerminal x] ++ b then
+          let bL: [Term] = concat b (map (lam t. Terminal t) item.lookahead) in
+          let firstK_bL: Set [TokenRepr] = cfgComposeFirst k firstMap bL in
+          foldli (lam accSet: Set LRStateItem. lam prodIdx: Int. lam prod: Production.
+            if nameEq x prod.nt then
+              -- Process this production
               setFold (lam accSet: Set LRStateItem. lam w: [TokenRepr].
                 let newItem: LRStateItem = {
-                  name = x,
-                  terms = rule.terms,
+                  nt = x,
+                  terms = prod.terms,
                   stackPointer = 0,
                   lookahead = w,
-                  ruleIdx = ruleIdx
+                  prodIdx = prodIdx
                 } in
                 setInsert newItem accSet
               ) accSet firstK_bL
             else
               accSet
-          ) accSet syntaxDef.rules
+          ) accSet syntaxDef.productions
         else
           accSet
       ) inSet inSet in
@@ -266,12 +132,12 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   --   for any item (A -> a.Xb, L) in I
   --     add (A -> aX.b, L) to J
   --   return Closure(J)
-  sem lrGoto: Int -> LRSyntaxDef -> Map LRTerm (Set [TokenRepr]) -> Set LRStateItem -> LRTerm -> Set LRStateItem
+  sem lrGoto: Int -> SyntaxDef -> Map Term (Set [TokenRepr]) -> Set LRStateItem -> Term -> Set LRStateItem
   sem lrGoto k syntaxDef firstMap inSet =
   | x ->
     let j = setFold (lam jAcc: Set LRStateItem. lam item: LRStateItem.
       if lti item.stackPointer (length item.terms) then
-        if lrtermEq x (get item.terms item.stackPointer) then
+        if cfgTermEq x (get item.terms item.stackPointer) then
           setInsert {item with stackPointer = addi item.stackPointer 1} jAcc
         else
           jAcc
@@ -290,79 +156,87 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   --  - tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type}
   --      A lookup for each token representation to its constructor name in the
   --      tokenType ADT as well as the type of its argument.
-  --  - syntaxDef: LRSyntaxDef
+  --  - syntaxDef: SyntaxDef
   --      The syntax definition for the grammar to be parsed. See documentation
-  --      for LRRule for how each rule must be specified.
+  --      for Production for how each rule must be specified.
   --
   -- Returns:
   --   A result type containing the generated parse table on success. Otherwise
   --   a list of errors.
   -/
-  sem lrCreateParseTable: Int -> Map TokenRepr {conIdent: Name, conArg: Type} -> LRSyntaxDef -> Result String String LRParseTable
+  sem lrCreateParseTable: Int -> Map TokenRepr {conIdent: Name, conArg: Type} -> SyntaxDef -> Result String String LRParseTable
   sem lrCreateParseTable k tokenConTypes =
   | syntaxDef ->
-    -- Infer types for each non-terminal
-    let nonTerminalTypesResult = foldl (lam acc: ([Name], Map Name Type). lam rule: LRRule.
+    let nonTerminalTypesResult = foldl (lam acc: ([Name], Map Name Type). lam prod: Production.
       recursive let getFinalType = lam ty: Type.
         match ty with TyArrow r then getFinalType r.to else ty
       in
       match acc with (errs, mapAcc) in
-      match mapLookup rule.name mapAcc with Some prevTy then
-        if neqi 0 (cmpTypeH (prevTy, getFinalType (tyTm rule.action))) then
-          (snoc errs rule.name, mapAcc)
+      match mapLookup prod.nt mapAcc with Some prevTy then
+        if neqi 0 (cmpTypeH (prevTy, getFinalType (tyTm prod.action))) then
+          (snoc errs prod.nt, mapAcc)
         else
           acc
       else
-        (errs, mapInsert rule.name (getFinalType (tyTm rule.action)) mapAcc)
-    ) ([], mapEmpty nameCmp) syntaxDef.rules in
+        (errs, mapInsert prod.nt (getFinalType (tyTm prod.action)) mapAcc)
+    ) ([], mapEmpty nameCmp) syntaxDef.productions in
     match nonTerminalTypesResult with (([_] ++ _) & errs, _) then
       result.err (join ["Conflicting types for the non-terminal(s): ", strJoin ", " (map nameGetStr (distinct nameEq errs))])
     else match nonTerminalTypesResult with (_, nonTerminalTypes) in
 
     -- Type-check the type signature, make sure the production function
     -- correspond to the types of the symbols that it consumes
-    let ruleArgTypesResult = foldli (lam errs: [String]. lam ruleIdx: Int. lam rule: LRRule.
+    let ruleArgTypesResult = foldli (lam errs: [String]. lam prodIdx: Int. lam prod: Production.
       recursive let getArgTypes = lam acc: [Type]. lam ty: Type.
         match ty with TyArrow r
           then getArgTypes (snoc acc r.from) r.to
           else acc -- skip the final return type
       in
-      let argtypes = getArgTypes [] (tyTm rule.action) in
-      if neqi (length argtypes) (addi 1 (length rule.terms)) then
+      let argtypes = getArgTypes [] (tyTm prod.action) in
+      if neqi (length argtypes) (addi 1 (length prod.terms)) then
         snoc errs (join [
-          "Argument type mismatch for rule ", int2string ruleIdx, ". Got ",
+          "Argument type mismatch for production ", int2string prodIdx, ". Got ",
           int2string (length argtypes), " argument in production function, expected ",
-          int2string (addi 1 (length rule.terms)), " arguments."
+          int2string (addi 1 (length prod.terms)), " arguments."
         ])
       else --continue
       let stackTypes = tail argtypes in -- these can be part of arguments on the stack
-      let maybeErrs = zipWith (lam term: LRTerm. lam ty: Type.
+      let maybeErrs = zipWith (lam term: Term. lam ty: Type.
         switch term
-        case LRNonTerminal n then
+        case NonTerminal n then
           match mapLookup n nonTerminalTypes with Some ntType then
             if neqi 0 (cmpTypeH (ty, ntType))
-              then Some (join ["Type mismatch for non-terminal \"", nameGetStr n, "\""])
+              then
+                use MExprPrettyPrint in
+                let env = pprintEnvEmpty in
+                Some (join [
+                  "Type mismatch for non-terminal \"", nameGetStr n, "\", between ",
+                  (getTypeStringCode 0 env ty).1, " and ", (getTypeStringCode 0 env ntType).1, "."])
               else None ()
           else
             Some (join ["Unrecognized non-terminal \"", nameGetStr n, "\""])
-        case LRTerminal t then
+        case Terminal t then
           -- NOTE(johnwikman, 2022-01-20): Maybe we want more than one type for tokens?
           match mapLookup t tokenConTypes with Some tokCon then
             if neqi 0 (cmpTypeH (ty, tokCon.conArg))
-              then Some (join ["Type mismatch for token ", tokReprToStr t])
+              then
+                use MExprPrettyPrint in
+                let env = pprintEnvEmpty in
+                Some (join ["Type mismatch for token ", tokReprToStr t, ", between ",
+                (getTypeStringCode 0 env ty).1, " and ", (getTypeStringCode 0 env tokCon.conArg).1, "."])
               else None ()
           else
             Some (join ["could not find a type for token ", tokReprToStr t])
         end
-      ) rule.terms stackTypes in
+      ) prod.terms stackTypes in
       match filterOption maybeErrs with ([_] ++ _) & actualErrs then
         snoc errs (strJoin "\n - " (
-          cons (join ["Argument type mismatch for rule ", int2string ruleIdx, ":"])
+          cons (join ["Argument type mismatch for rule ", int2string prodIdx, ":"])
                actualErrs
         ))
       else
         errs
-    ) [] syntaxDef.rules in
+    ) [] syntaxDef.productions in
     match ruleArgTypesResult with ([_] ++ _) & errs then
       result.err (strJoin "\n" errs)
     else -- Types are OK! Continue
@@ -375,10 +249,10 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
       result.err "No type provided for EOF tokens"
     else --continue
 
-    -- create the entrypoint rule
-    let initRule: LRRule = {
-      name = nameSym "_entrypoint_",
-      terms = [LRNonTerminal syntaxDef.entrypoint, LRTerminal (EOFRepr {})],
+    -- create the entrypoint production
+    let initProd: Production = {
+      nt = nameSym "_entrypoint_",
+      terms = [NonTerminal syntaxDef.entrypoint, Terminal (EOFRepr {})],
       action = let entryArgName = nameSym "entryArg" in
                withType (tyarrows_ [tyunknown_, entryType, eofCon.conArg, entryType])
                         (nlams_ [(nameNoSym "state", tyunknown_),
@@ -386,26 +260,26 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                                  (nameNoSym "eofToken", eofCon.conArg)]
                                 (nvar_ entryArgName))
     } in
-    let syntaxDef = {syntaxDef with rules = snoc syntaxDef.rules initRule} in
-    let nonTerminalTypes = mapInsert initRule.name entryType nonTerminalTypes in
-    let firstK: Map LRTerm (Set [TokenRepr]) = lrFirst k syntaxDef in
+    let syntaxDef = {syntaxDef with productions = snoc syntaxDef.productions initProd} in
+    let nonTerminalTypes = mapInsert initProd.nt entryType nonTerminalTypes in
+    let firstK: Map Term (Set [TokenRepr]) = cfgFirstK k syntaxDef in
 
     if not (mapAll (lam fst. not (setIsEmpty fst)) firstK) then
       result.err ("Invalid grammar. The FIRST set is not defined for one or more of its non-terminals.")
     else --continue
 
     let initState: Set LRStateItem = setInsert {
-      name = initRule.name,
-      terms = initRule.terms,
+      nt = initProd.nt,
+      terms = initProd.terms,
       stackPointer = 0,
       lookahead = make k (EOFRepr {}),
-      ruleIdx = subi (length syntaxDef.rules) 1 -- We inserted the initial rule at the back
+      prodIdx = subi (length syntaxDef.productions) 1 -- We inserted the initial rule at the back
     } (setEmpty lrStateItemCmp) in
     let initState: Set LRStateItem = lrClosure k syntaxDef firstK initState in
     let table: LRParseTable = {
       k_lookahead = k,
       entrypointIdx = 0,
-      entrypointRuleIdx = subi (length syntaxDef.rules) 1, -- We inserted the initial rule at the back
+      entrypointProdIdx = subi (length syntaxDef.productions) 1, -- We inserted the initial rule at the back
       syntaxDef = syntaxDef,
       nonTerminalTypes = nonTerminalTypes,
       tokenConTypes = tokenConTypes,
@@ -437,17 +311,17 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
       let state = get table.states nextStateIdx in
 
       let cmpShift = lam lhs. lam rhs.
-        let cLookahead = seqCmp tokReprCompare lhs.lookahead rhs.lookahead in
+        let cLookahead = seqCmp tokReprCmp lhs.lookahead rhs.lookahead in
         if neqi cLookahead 0 then cLookahead
         else subi lhs.toIdx rhs.toIdx
       in
       let cmpGoto = lam lhs. lam rhs.
-        let cName = nameCmp lhs.name rhs.name in
+        let cName = nameCmp lhs.nt rhs.nt in
         if neqi cName 0 then cName
         else subi lhs.toIdx rhs.toIdx
       in
 
-      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [TokenRepr], toIdx: Int}, Set {name: Name, toIdx: Int}). lam item: LRStateItem.
+      let result = setFold (lam acc: (LRParseTable, Map (Set LRStateItem) Int, Set {lookahead: [TokenRepr], toIdx: Int}, Set {nt: Name, toIdx: Int}). lam item: LRStateItem.
         match acc with (table, stateIdxLookup, stateShifts, stateGotos) in
         match subsequence item.terms item.stackPointer (length item.terms)
         with ([x] ++ b) & postStackTerms then
@@ -466,14 +340,14 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
           match jInsertResult with (table, stateIdxLookup, jIdx) in
 
           switch x
-          case LRTerminal t then
+          case Terminal t then
             -- This is a shift action
-            let possibleLookaheads = lrComposeFirst k firstK (concat postStackTerms (map (lam t2. LRTerminal t2) item.lookahead)) in
+            let possibleLookaheads = cfgComposeFirst k firstK (concat postStackTerms (map (lam t2. Terminal t2) item.lookahead)) in
             let stateShifts = setFold (lam acc. lam lh. setInsert {lookahead = lh, toIdx = jIdx} acc) stateShifts possibleLookaheads in
             (table, stateIdxLookup, stateShifts, stateGotos)
-          case LRNonTerminal n then
+          case NonTerminal n then
             -- This is a Goto action
-            let stateGotos = setInsert {name = n, toIdx = jIdx} stateGotos in
+            let stateGotos = setInsert {nt = n, toIdx = jIdx} stateGotos in
             (table, stateIdxLookup, stateShifts, stateGotos)
           end
         else
@@ -492,9 +366,9 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
 
     -- Construct the reductions
     let table = foldli (lam tableAcc: LRParseTable. lam stateIdx: Int. lam state: Set LRStateItem.
-      let stateReductions = setFold (lam redAcc: [{lookahead: [TokenRepr], ruleIdx: Int}]. lam item: LRStateItem.
+      let stateReductions = setFold (lam redAcc: [{lookahead: [TokenRepr], prodIdx: Int}]. lam item: LRStateItem.
         if eqi item.stackPointer (length item.terms) then
-          snoc redAcc {lookahead = item.lookahead, ruleIdx = item.ruleIdx}
+          snoc redAcc {lookahead = item.lookahead, prodIdx = item.prodIdx}
         else
           redAcc
       ) [] state in
@@ -504,14 +378,14 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     -- Check for conflicts
     let conflicts = foldli (lam acc. lam stateIdx. lam.
       match (mapLookup stateIdx table.shifts, mapLookup stateIdx table.reductions) with (Some shifts, Some reductions) then
-        foldli (lam acc. lam reduceIdx. lam r1: {lookahead: [TokenRepr], ruleIdx: Int}.
+        foldli (lam acc. lam reduceIdx. lam r1: {lookahead: [TokenRepr], prodIdx: Int}.
           -- reduce-reduce check
-          let acc = foldl (lam acc. lam r2: {lookahead: [TokenRepr], ruleIdx: Int}.
-            if and (eqSeq tokReprEq r1.lookahead r2.lookahead) (neqi r1.ruleIdx r2.ruleIdx) then
+          let acc = foldl (lam acc. lam r2: {lookahead: [TokenRepr], prodIdx: Int}.
+            if and (eqSeq tokReprEq r1.lookahead r2.lookahead) (neqi r1.prodIdx r2.prodIdx) then
               snoc acc (join [
                 "reduce-reduce conflict in state ", int2string stateIdx, " on lookahead ",
                 "[", strJoin ", " (map tokReprToStr r1.lookahead), "] (reduce by rule ",
-                int2string r1.ruleIdx, " and ", int2string r2.ruleIdx, ")"
+                int2string r1.prodIdx, " and ", int2string r2.prodIdx, ")"
               ])
             else
               acc
@@ -522,7 +396,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
               snoc acc (join [
                 "shift-reduce conflict in state ", int2string stateIdx, " on lookahead ",
                 "[", strJoin ", " (map tokReprToStr r1.lookahead), "] (reduce by rule ",
-                int2string r1.ruleIdx, " and shift into state ", int2string sh.toIdx, ")"
+                int2string r1.prodIdx, " and shift into state ", int2string sh.toIdx, ")"
               ])
             else
               acc
@@ -546,31 +420,31 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   | lrtable ->
     let lines = [] in
 
-    let lines = snoc lines (concat (make indent ' ') "Rules:") in
-    let ruleIndent = addi (addi indent 2) (length (int2string (length lrtable.syntaxDef.rules))) in
-    let lines = foldli (lam lines. lam ruleIdx. lam rule: LRRule.
-      let rulenum = int2string ruleIdx in
+    let lines = snoc lines (concat (make indent ' ') "Productions:") in
+    let ruleIndent = addi (addi indent 2) (length (int2string (length lrtable.syntaxDef.productions))) in
+    let lines = foldli (lam lines. lam prodIdx. lam prod: Production.
+      let rulenum = int2string prodIdx in
       snoc lines (join [
         make (subi ruleIndent (length rulenum)) ' ', rulenum, ": ",
-        nameGetStr rule.name, " -> ",
-        strJoin " " (map lrTerm2string rule.terms)
+        nameGetStr prod.nt, " -> ",
+        strJoin " " (map cfgTerm2string prod.terms)
       ])
-    ) lines lrtable.syntaxDef.rules in
+    ) lines lrtable.syntaxDef.productions in
 
     let lines = snoc lines (concat (make indent ' ') "States:") in
     let lines = foldli (lam lines. lam stateIdx. lam state: Set LRStateItem.
       let lines = snoc lines (join [make (addi indent 2) ' ', "State ", int2string stateIdx, ":"]) in
       let stateStrs = setFold (lam acc: [(String, String)]. lam item: LRStateItem.
-        let prefix = [make (addi indent 4) ' ', nameGetStr item.name, " ->"] in
-        let prefix = foldli (lam pfxacc. lam termIdx: Int. lam term: LRTerm.
+        let prefix = [make (addi indent 4) ' ', nameGetStr item.nt, " ->"] in
+        let prefix = foldli (lam pfxacc. lam termIdx: Int. lam term: Term.
           if eqi item.stackPointer termIdx then
-            concat pfxacc [" [STACK]", " ", lrTerm2string term]
+            concat pfxacc [" [STACK]", " ", cfgTerm2string term]
           else
-            concat pfxacc [" ", lrTerm2string term]
+            concat pfxacc [" ", cfgTerm2string term]
         ) prefix item.terms in
         let prefix = if eqi item.stackPointer (length item.terms) then snoc prefix " [STACK]" else prefix in
         let suffix = join [
-          " | (rule ", int2string item.ruleIdx, ")",
+          " | (production ", int2string item.prodIdx, ")",
           " | (lookahead [", strJoin ", " (map tokReprToStr item.lookahead), "])"
         ] in
         snoc acc (join prefix, suffix)
@@ -590,19 +464,19 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     ) lines lrtable.shifts in
 
     let lines = snoc lines (concat (make indent ' ') "Gotos:") in
-    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateGotos: [{name: Name, toIdx: Int}].
-      foldl (lam lines. lam goto: {name: Name, toIdx: Int}.
-        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --(", nameGetStr goto.name, ")--> ", int2string goto.toIdx])
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateGotos: [{nt: Name, toIdx: Int}].
+      foldl (lam lines. lam goto: {nt: Name, toIdx: Int}.
+        snoc lines (join [make (addi indent 2) ' ', int2string stateIdx, " --(", nameGetStr goto.nt, ")--> ", int2string goto.toIdx])
       ) lines stateGotos
     ) lines lrtable.gotos in
 
     let lines = snoc lines (concat (make indent ' ') "Reductions:") in
-    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateReductions: [{lookahead: [TokenRepr], ruleIdx: Int}].
-      foldl (lam lines. lam red: {lookahead: [TokenRepr], ruleIdx: Int}.
+    let lines = mapFoldWithKey (lam lines. lam stateIdx: Int. lam stateReductions: [{lookahead: [TokenRepr], prodIdx: Int}].
+      foldl (lam lines. lam red: {lookahead: [TokenRepr], prodIdx: Int}.
         snoc lines (join [
           make (addi indent 2) ' ',
           "in state ", int2string stateIdx,
-          ", reduce by rule ", int2string red.ruleIdx,
+          ", reduce by production ", int2string red.prodIdx,
           " on lookahead [", strJoin ", " (map tokReprToStr red.lookahead), "]"
         ])
       ) lines stateReductions
@@ -672,50 +546,82 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
   --     ...
   --     end
   --   in
-  sem lrGenerateParser: LRParseTable -> Expr
-  sem lrGenerateParser =
+
+  type LRGeneratorBindings = {
+    -- t_ := type names
+    t_Result : Name,
+    t_Info : Name,
+    t_Token : Name,
+    t_Stream : Name,
+    t_NextTokenResult : Name,
+    -- c_ := constructor names
+    c_NoInfo : Name,
+    c_ResultOk : Name,
+    c_ResultErr : Name,
+    -- v_ := values and functions (see expected type signature in comments)
+    v_result_ok : Expr,  -- all e,w,c. c -> Result e w c
+    v_result_err : Expr, -- all e,w,c. e -> Result e w c
+    v_nextToken : Expr,  -- Stream -> Result (Info, String) (Info, String) NextTokenResult
+    v_stream : Expr,     -- Stream
+    v_mergeInfo : Expr,  -- Info -> Info -> Info
+    v_tokInfo : Expr,    -- Token -> Info
+    v_strJoin : Expr,    -- String -> [String] -> String
+    v_tokToStr : Expr,   -- Token -> String
+    v_join : Expr,       -- all a. [[a]] -> [a]
+    v_int2string : Expr  -- Int -> String
+  }
+  sem lrDefaultGeneratorBindings : () -> LRGeneratorBindings
+  sem lrDefaultGeneratorBindings = | _ -> {
+    t_Result = nameNoSym "Result",
+    t_Info = nameNoSym "Info",
+    t_Token = nameNoSym "Token",
+    t_Stream = nameNoSym "Stream",
+    t_NextTokenResult = nameNoSym "NextTokenResult",
+    c_NoInfo = nameNoSym "NoInfo",
+    c_ResultOk = nameNoSym "ResultOk",
+    c_ResultErr = nameNoSym "ResultErr",
+    v_result_ok = recordproj_ "ok" (var_ "result"),
+    v_result_err = recordproj_ "err" (var_ "result"),
+    v_nextToken = var_ "nextToken",
+    v_stream = var_ "stream",
+    v_mergeInfo = var_ "mergeInfo",
+    v_tokInfo = var_ "tokInfo",
+    v_strJoin = var_ "strJoin",
+    v_tokToStr = var_ "tokToStr",
+    v_join = var_ "join",
+    v_int2string = var_ "int2string"
+  }
+  sem lrGenerateParser: LRGeneratorBindings -> LRParseTable -> Expr
+  sem lrGenerateParser binds =
   | table ->
     /---- Assumed to exist "public" identifiers ----/
-    let #var"global: result.err" = lam v. appf1_ (recordproj_ "err" (var_ "result")) v in
-    let #var"global: result.ok" = lam v. appf1_ (recordproj_ "ok" (var_ "result")) v in
+    let #var"global: result.err" = lam v. appf1_ binds.v_result_err v in
+    let #var"global: result.ok" = lam v. appf1_ binds.v_result_ok v in
     let resExprErr = lam i: Expr. lam e: Expr.  #var"global: result.err" (utuple_ [i, e]) in
     let resErr = lam i. lam s. resExprErr (str_ s) i in
-    let resExprErrNoInfo = lam e: Expr. resExprErr (conapp_ "NoInfo" unit_) e in
+    let resExprErrNoInfo = lam e: Expr. resExprErr (nconapp_ binds.c_NoInfo unit_) e in
     let resErrNoInfo = lam s: String. resExprErrNoInfo (str_ s) in
 
     /---- Set up the types ----/
     -- TODO(johnwikman, 2023-02-22): Tried to do this with polymorphic types,
     -- but couldn't get it to work. Clean this mess up or fix it.
-    let errorType = tytuple_ [tycon_ "Info", tystr_] in
+    let errorType = tytuple_ [ntycon_ binds.t_Info, tystr_] in
     let warningType = errorType in
     --let tokenTypeName = nameSym "tokenType" in
     --let tokenType = ntyvar_ tokenTypeName in
-    let tokenType = tycon_ "Token" in
+    let tokenType = ntycon_ binds.t_Token in
     --let lexerStreamTypeName = nameSym "lexerStreamType" in
     --let lexerStreamType = ntyvar_ lexerStreamTypeName in
-    let lexerStreamType = tycon_ "Stream" in
+    let lexerStreamType = ntycon_ binds.t_Stream in
     -- assuming that this type is a record {... with token: tokenType, stream: lexerStreamType}
     --let lexerNextTokenResultTypeName = nameSym "lexerNextTokenResult" in
     --let lexerNextTokenResultType = ntyvar_ lexerNextTokenResultTypeName in
     --let lexerNextTokenResultType = tyrecord_ [("token", tokenType), ("stream", lexerStreamType)] in
-    let lexerNextTokenResultType = tycon_ "NextTokenResult" in
+    let lexerNextTokenResultType = ntycon_ binds.t_NextTokenResult in
 
     let entrypointType = mapLookupOrElse (lam. tyunknown_) table.syntaxDef.entrypoint table.nonTerminalTypes in
-    let resultType = tyapps_ (tycon_ "Result") [warningType, errorType, entrypointType] in
+    let resultType = tyapps_ (ntycon_ binds.t_Result) [warningType, errorType, entrypointType] in
 
-    let parserExpressionType = tyarrows_ [
-      -- Initial lexer state
-      lexerStreamType,
-      -- Result (Info, String) (Info, String) NextTokenResult
-      -- Lexer argument (state -> Result w e (state, token))
-      tyarrow_ lexerStreamType (tyapps_ (tycon_ "Result") [warningType, errorType, lexerNextTokenResultType]),
-      -- Resulting type
-      resultType
-    ] in
-
-    /---- Set up the lambdas ----/
-    let lamInitialLexerState = nameSym "initialLexerState" in
-    let lamNextToken = nameSym "nextToken" in
     /---- Set up names for initialized values ----/
     let varActionState = nameSym "actionState" in
     let varInitialStacks = nameSym "initialStacks" in
@@ -759,12 +665,12 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     let gotoLookup: Map Name (Map Int Int) = mapFoldWithKey (lam acc. lam nt. lam.
       mapInsert nt (mapEmpty subi) acc
     ) (mapEmpty nameCmp) table.nonTerminalTypes in
-    let gotoLookup = mapFoldWithKey (lam acc. lam fromIdx. lam stateGotos: [{name: Name, toIdx: Int}].
-      foldl (lam acc. lam stateGoto: {name: Name, toIdx: Int}.
-        mapInsert stateGoto.name
+    let gotoLookup = mapFoldWithKey (lam acc. lam fromIdx. lam stateGotos: [{nt: Name, toIdx: Int}].
+      foldl (lam acc. lam stateGoto: {nt: Name, toIdx: Int}.
+        mapInsert stateGoto.nt
                   (mapInsert fromIdx stateGoto.toIdx
                              (mapLookupOrElse (lam. error "PANIC. Internal parser generator logic error")
-                                              stateGoto.name acc))
+                                              stateGoto.nt acc))
                   acc
       ) acc stateGotos
     ) gotoLookup table.gotos in
@@ -802,7 +708,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
               -- case <i> then
               matchex_ (nvar_ varCurrentState) (pint_ i) (
                 let stateShifts: [{lookahead: [TokenRepr], toIdx: Int}] = mapLookupOrElse (lam. []) i table.shifts in
-                let stateReductions: [{lookahead: [TokenRepr], ruleIdx: Int}] = mapLookupOrElse (lam. []) i table.reductions in
+                let stateReductions: [{lookahead: [TokenRepr], prodIdx: Int}] = mapLookupOrElse (lam. []) i table.reductions in
 
                 let shiftMatches = map (lam shift: {lookahead: [TokenRepr], toIdx: Int}.
                   let lhCons: [{conIdent: Name, conArg: Type}] = map (lam repr. mapLookupOrElse (lam. error "malformed parse table! (1)") repr table.tokenConTypes) shift.lookahead in
@@ -830,9 +736,9 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                       ulet_ "shiftStack" (recordproj_ stackLabel (nvar_ lamStacks)),
                       ulet_ "newTypeStack" (cons_ (nvar_ v) (var_ "shiftStack")),
                       ulet_ "newStacks" (recordupdate_ (nvar_ lamStacks) stackLabel (var_ "newTypeStack")),
-                      ulet_ "nextTokenResult" (appf1_ (nvar_ lamNextToken) (nvar_ lamLexerState)),
+                      ulet_ "nextTokenResult" (appf1_ (binds.v_nextToken) (nvar_ lamLexerState)),
                       matchall_ [
-                        matchex_ (var_ "nextTokenResult") (pcon_ "ResultOk" (prec_ [("value", pvar_ "lexres")])) (
+                        matchex_ (var_ "nextTokenResult") (npcon_ (binds.c_ResultOk) (prec_ [("value", pvar_ "lexres")])) (
                           bindall_ [
                             ulet_ "newLookahead" (snoc_ (nvar_ varRest) (recordproj_ "token" (var_ "lexres"))),
                             ulet_ "newLexerState" (recordproj_ "stream" (var_ "lexres")),
@@ -844,23 +750,23 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                                    (var_ "newLookahead")
                           ]
                         ),
-                        matchex_ (var_ "nextTokenResult") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
-                          conapp_ "ResultErr" (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
+                        matchex_ (var_ "nextTokenResult") (npcon_ (binds.c_ResultErr) (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
+                          nconapp_ (binds.c_ResultErr) (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
                         )
                       ]
                     ]
                   )
                 ) stateShifts in
 
-                let reductionMatches = map (lam reduction: {lookahead: [TokenRepr], ruleIdx: Int}.
+                let reductionMatches = map (lam reduction: {lookahead: [TokenRepr], prodIdx: Int}.
                   let lhCons: [{conIdent: Name, conArg: Type}] = map (lam repr. mapLookupOrElse (lam. error "malformed parse table! (2)") repr table.tokenConTypes) reduction.lookahead in
-                  let rule = get table.syntaxDef.rules reduction.ruleIdx in
-                  let termTypes = map (lam term: LRTerm.
+                  let rule = get table.syntaxDef.productions reduction.prodIdx in
+                  let termTypes = map (lam term: Term.
                     switch term
-                    case LRTerminal repr then
+                    case Terminal repr then
                       let contype = mapLookupOrElse (lam. error "malformed parse table! (3)") repr table.tokenConTypes in
                       contype.conArg
-                    case LRNonTerminal name then
+                    case NonTerminal name then
                       mapLookupOrElse (lam. error "malformed parse table! (4)") name table.nonTerminalTypes
                     end
                   ) rule.terms in
@@ -918,7 +824,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                       ),
 
                       -- If we reduce on the entrypoint rule, then we return. Otherwise push to the stack and run the GOTO action
-                      if eqi reduction.ruleIdx table.entrypointRuleIdx then (
+                      if eqi reduction.prodIdx table.entrypointProdIdx then (
                         #var"global: result.ok" (var_ "newProduce")
                       ) else (bindall_ [
                         ulet_ (concat "var" returnLabel) (cons_ (var_ "newProduce") (var_ (concat "var" returnLabel))),
@@ -929,7 +835,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                         ulet_ "newStateTrace" (subsequence_ (nvar_ lamStateTrace) (int_ (length stackLabels)) (length_ (nvar_ lamStateTrace))),
                         ulet_ "currentState" (head_ (var_ "newStateTrace")),
 
-                        let varLookupName = mapLookupOrElse (lam. error "malformed parse table! (5)") rule.name gotoLookupVarNames in
+                        let varLookupName = mapLookupOrElse (lam. error "malformed parse table! (5)") rule.nt gotoLookupVarNames in
                         ulet_ "nextState" (get_ (nvar_ varLookupName) (var_ "currentState")),
                         ulet_ "newStateTrace" (cons_ (var_ "nextState") (var_ "newStateTrace")),
 
@@ -956,17 +862,17 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                     join [head t, " followed by ", strJoin ", " (tail t)]
                 ) allLookaheads in
                 let lookaheadFailCase =
-                  resExprErr (appf2_ (var_ "mergeInfo")
-                                     (appf1_ (var_ "tokInfo") (head_ (nvar_ lamLookahead)))
-                                     (appf1_ (var_ "tokInfo") (head_ (reverse_ (nvar_ lamLookahead)))))
-                             (appf1_ (var_ "join") (seq_ [
+                  resExprErr (appf2_ (binds.v_mergeInfo)
+                                     (appf1_ (binds.v_tokInfo) (head_ (nvar_ lamLookahead)))
+                                     (appf1_ (binds.v_tokInfo) (head_ (reverse_ (nvar_ lamLookahead)))))
+                             (appf1_ (binds.v_join) (seq_ [
                     str_ (join [
                       "Unexpected ",
                       if eqi 1 table.k_lookahead then "token" else "tokens"
                     ]),
                     str_ " ",
-                    appf2_ (var_ "strJoin") (str_ ", ")
-                           (map_ (var_ "tokToStr") (nvar_ lamLookahead)),
+                    appf2_ (binds.v_strJoin) (str_ ", ")
+                           (map_ (binds.v_tokToStr) (nvar_ lamLookahead)),
                     str_ ". Expected ",
                     str_ (
                       if eqi 1 (length allLookaheads) then
@@ -981,9 +887,9 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
               )
             ) table.states in
 
-            let stateShiftFailCase = resExprErrNoInfo (appf1_ (var_ "join") (seq_ [
+            let stateShiftFailCase = resExprErrNoInfo (appf1_ (binds.v_join) (seq_ [
               str_ "Internal error: Unrecognized state: ",
-              appf1_ (var_ "int2string") (nvar_ varCurrentState)
+              appf1_ (binds.v_int2string) (nvar_ varCurrentState)
             ])) in
 
             /- Uncomment this to print state and lookahead
@@ -1010,8 +916,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
     in
 
     /---- Set up the expression ----/
-    let expr = nlams_ [(lamInitialLexerState, tyunknown_),
-            (lamNextToken, tyunknown_)] (bindall_ [
+    let expr = bindall_ [
       -- Set up the goto lookups and the initial action state
       bindall_ (snoc (map (lam nt: Name.
           let expr = mapLookupOrElse (lam. error "lrk PANIC") nt gotoLookupVarExpressions in
@@ -1048,9 +953,9 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
             if_ (eqi_ (var_ "i") (int_ 0)) (
               #var"global: result.ok" (utuple_ [var_ "lhLexerState", var_ "lhAcc"])
             ) (bindall_ [
-              ulet_ "r" (appf1_ (nvar_ lamNextToken) (var_ "lhLexerState")),
+              ulet_ "r" (appf1_ binds.v_nextToken (var_ "lhLexerState")),
               matchall_ [
-                matchex_ (var_ "r") (pcon_ "ResultOk" (prec_ [("value", pvar_ "lexres")])) (
+                matchex_ (var_ "r") (npcon_ binds.c_ResultOk (prec_ [("value", pvar_ "lexres")])) (
                   bindall_ [
                     ulet_ "newLhAcc" (snoc_ (var_ "lhAcc") (recordproj_ "token" (var_ "lexres"))),
                     ulet_ "newLhLexerState" (recordproj_ "stream" (var_ "lexres")),
@@ -1060,14 +965,14 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                            (subi_ (var_ "i") (int_ 1))
                   ]
                 ),
-                matchex_ (var_ "r") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
-                  conapp_ "ResultErr" (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
+                matchex_ (var_ "r") (npcon_ binds.c_ResultErr (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
+                  nconapp_ binds.c_ResultErr (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
                 )
               ]
             ])
           )),
           appf3_ (var_ "work")
-                 (nvar_ lamInitialLexerState)
+                 (binds.v_stream)
                  (seq_ [])
                  (int_ table.k_lookahead)
         ]
@@ -1081,7 +986,7 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
         result.err errors
       -/
       matchall_ [
-        matchex_ (var_ "lookahead_check") (pcon_ "ResultOk" (prec_ [("value", (ptuple_ [pvar_ "lhLexerState", pvar_ "lhLookahead"]))])) (
+        matchex_ (var_ "lookahead_check") (npcon_ binds.c_ResultOk (prec_ [("value", (ptuple_ [pvar_ "lhLexerState", pvar_ "lhLookahead"]))])) (
           bindall_ [
             parseFunctionBody,
             appf4_ (nvar_ parseFunctionIdent) (nvar_ varInitialStacks)
@@ -1090,12 +995,12 @@ lang LRParser = EOFTokenParser + MExprAst + MExprCmp
                                               (var_ "lhLookahead")
           ]
         ),
-        matchex_ (var_ "lookahead_check") (pcon_ "ResultErr" (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
-          conapp_ "ResultErr" (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
+        matchex_ (var_ "lookahead_check") (npcon_ binds.c_ResultErr (prec_ [("errors", pvar_ "errors"), ("warnings", pvar_ "warnings")])) (
+          nconapp_ binds.c_ResultErr (urecord_ [("errors", var_ "errors"), ("warnings", var_ "warnings")])
         )
       ]
-    ]) in
-    withType parserExpressionType expr
+    ] in
+    withType resultType expr
 end
 
 
@@ -1121,19 +1026,19 @@ end
 mexpr
 use LRParserTest in
 
-let t_EOF = LRTerminal (EOFRepr {}) in
-let t_LIdent = LRTerminal (LIdentRepr {}) in
-let t_Int = LRTerminal (IntRepr {}) in
-let t_LParen = LRTerminal (LParenRepr {}) in
-let t_RParen = LRTerminal (RParenRepr {}) in
-let t_Comma = LRTerminal (CommaRepr {}) in
-let t_Semi = LRTerminal (SemiRepr {}) in
+let t_EOF = Terminal (EOFRepr {}) in
+let t_LIdent = Terminal (LIdentRepr {}) in
+let t_Int = Terminal (IntRepr {}) in
+let t_LParen = Terminal (LParenRepr {}) in
+let t_RParen = Terminal (RParenRepr {}) in
+let t_Comma = Terminal (CommaRepr {}) in
+let t_Semi = Terminal (SemiRepr {}) in
 
 let tokEmptyTy = tyrecord_ [("info", tycon_ "Info")] in
 let tokStrvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tystr_)] in
 let tokIntvalTy = tyrecord_ [("info", tycon_ "Info"), ("val", tyint_)] in
 
-let allTokenConTypes = mapFromSeq tokReprCompare [
+let allTokenConTypes = mapFromSeq tokReprCmp [
   (EOFRepr {}, {conIdent = nameNoSym "EOFTok", conArg = tokEmptyTy}),
   (LIdentRepr {}, {conIdent = nameNoSym "LIdentTok", conArg = tokStrvalTy}),
   (IntRepr {}, {conIdent = nameNoSym "IntTok", conArg = tokIntvalTy}),
@@ -1142,19 +1047,6 @@ let allTokenConTypes = mapFromSeq tokReprCompare [
   (CommaRepr {}, {conIdent = nameNoSym "CommaTok", conArg = tokEmptyTy}),
   (SemiRepr {}, {conIdent = nameNoSym "SemiTok", conArg = tokEmptyTy})
 ] in
-
-let mkFirstEntry: LRTerm -> [[LRTerm]] -> (LRTerm, Set [TokenRepr]) = lam term. lam firsts.
-  (term, setOfSeq (seqCmp tokReprCompare) (map (map (lam t.
-           match t with LRTerminal x then x else error "expected terminals only in firsts")
-         ) firsts))
-in
-
-let mkFirsts: [(LRTerm, [[LRTerm]])] -> Map LRTerm (Set [TokenRepr]) = lam firstlist.
-  mapFromSeq lrTermCmp (map (lam t.
-    match t with (term, fsts) in
-    mkFirstEntry term fsts
-  ) firstlist)
-in
 
 type LRParseTest in
 con LRPTSucceed: {input: String, expectedOutput: String} -> LRParseTest in
@@ -1168,11 +1060,8 @@ end in
 type LRTestCase = {
   tokenConTypes: Map TokenRepr {conIdent: Name, conArg: Type},
   name: String,
-  syntaxDef: LRSyntaxDef,
+  syntaxDef: SyntaxDef,
   isLR1: Bool,
-  first1: Map LRTerm (Set [TokenRepr]),
-  first2: Map LRTerm (Set [TokenRepr]),
-  first3: Map LRTerm (Set [TokenRepr]),
   parseTests: [LRParseTest]
 } in
 
@@ -1182,33 +1071,33 @@ let testcases: [LRTestCase] = [
   let _S = nameSym "S" in
   let _E = nameSym "E" in
   let _V = nameSym "V" in
-  let nt_S = LRNonTerminal _S in
-  let nt_E = LRNonTerminal _E in
-  let nt_V = LRNonTerminal _V in
+  let nt_S = NonTerminal _S in
+  let nt_E = NonTerminal _E in
+  let nt_V = NonTerminal _V in
   {
     tokenConTypes = allTokenConTypes,
     name = "LR1 Example (from Tiger Book)",
     syntaxDef = {
       entrypoint = _S,
-      rules = [
-        {name = _S, terms = [nt_V, t_Semi, nt_E],
+      productions = [
+        {nt = _S, terms = [nt_V, t_Semi, nt_E],
          action = withType (tyarrows_ [tyunknown_, tystr_, tokEmptyTy, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_V", "a2_Semi", "a3_S"]
                                    (appf1_ (var_ "join")
                                            (seq_ [var_ "a1_V", str_ " = ", var_ "a3_S"])))},
-        {name = _S, terms = [nt_E],
+        {nt = _S, terms = [nt_E],
          action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_E"]
                                    (var_ "a1_E"))},
-        {name = _E, terms = [nt_V],
+        {nt = _E, terms = [nt_V],
          action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_V"]
                                    (var_ "a1_V"))},
-        {name = _V, terms = [t_LIdent],
+        {nt = _V, terms = [t_LIdent],
          action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tystr_])
                            (ulams_ ["actionState", "a1_LIdent"]
                                    (recordproj_ "val" (var_ "a1_LIdent")))},
-        {name = _V, terms = [t_Comma, nt_E],
+        {nt = _V, terms = [t_Comma, nt_E],
          action = withType (tyarrows_ [tyunknown_, tokEmptyTy, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_Comma", "a2_E"]
                                    (cons_ (char_ '*') (var_ "a2_E")))}
@@ -1216,42 +1105,6 @@ let testcases: [LRTestCase] = [
       initActionState = unit_
     },
     isLR1 = true,
-    first1 = mkFirsts [
-      (t_Comma,  [[t_Comma]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent], [t_Comma]]),
-      (nt_E, [[t_LIdent], [t_Comma]]),
-      (nt_V, [[t_LIdent], [t_Comma]])
-    ],
-    first2 = mkFirsts [
-      (t_Comma,  [[t_Comma]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent], [t_LIdent, t_Semi], [t_Comma, t_LIdent], [t_Comma, t_Comma]]),
-      (nt_E, [[t_LIdent], [t_Comma, t_LIdent], [t_Comma, t_Comma]]),
-      (nt_V, [[t_LIdent], [t_Comma, t_LIdent], [t_Comma, t_Comma]])
-    ],
-    first3 = mkFirsts [
-      (t_Comma,  [[t_Comma]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent],
-              [t_LIdent, t_Semi, t_Comma],
-              [t_LIdent, t_Semi, t_LIdent],
-              [t_Comma, t_LIdent],
-              [t_Comma, t_LIdent, t_Semi],
-              [t_Comma, t_Comma, t_LIdent],
-              [t_Comma, t_Comma, t_Comma]]),
-      (nt_E, [[t_LIdent],
-              [t_Comma, t_LIdent],
-              [t_Comma, t_Comma, t_LIdent],
-              [t_Comma, t_Comma, t_Comma]]),
-      (nt_V, [[t_LIdent],
-              [t_Comma, t_LIdent],
-              [t_Comma, t_Comma, t_LIdent],
-              [t_Comma, t_Comma, t_Comma]])
-    ],
     parseTests = [
       LRPTSucceed {
         input = ",x;z",
@@ -1274,16 +1127,16 @@ let testcases: [LRTestCase] = [
   let _S = nameSym "S" in
   let _R = nameSym "R" in
   let _T = nameSym "T" in
-  let nt_S = LRNonTerminal _S in
-  let nt_R = LRNonTerminal _R in
-  let nt_T = LRNonTerminal _T in
+  let nt_S = NonTerminal _S in
+  let nt_R = NonTerminal _R in
+  let nt_T = NonTerminal _T in
   {
     tokenConTypes = allTokenConTypes,
     name = "LR2 Example",
     syntaxDef = {
       entrypoint = _S,
-      rules = [
-        {name = _S, terms = [nt_R, nt_S],
+      productions = [
+        {nt = _S, terms = [nt_R, nt_S],
          action = withType (tyarrows_ [tyunknown_, tystr_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_R", "a2_S"]
                                    (appf1_ (var_ "join") (seq_ [
@@ -1291,11 +1144,11 @@ let testcases: [LRTestCase] = [
                                       str_ " | ",
                                       var_ "a2_S"
                                     ])))},
-        {name = _S, terms = [nt_R],
+        {nt = _S, terms = [nt_R],
          action = withType (tyarrows_ [tyunknown_, tystr_, tystr_])
                            (ulams_ ["actionState", "a1_R"]
                                    (var_ "a1_R"))},
-        {name = _R, terms = [t_LIdent, t_Semi, nt_T],
+        {nt = _R, terms = [t_LIdent, t_Semi, nt_T],
          action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tokEmptyTy, tyseq_ tystr_, tystr_])
                            (ulams_ ["actionState", "a1_LIdent", "a2_Semi", "a3_T"]
                                    (appf1_ (var_ "join") (seq_ [
@@ -1304,16 +1157,16 @@ let testcases: [LRTestCase] = [
                                       appf2_ (var_ "strJoin") (str_ ", ") (var_ "a3_T"),
                                       str_ "]"
                                     ])))},
-        {name = _T, terms = [t_LIdent, nt_T],
+        {nt = _T, terms = [t_LIdent, nt_T],
          action = withType (tyarrows_ [tyunknown_, tokStrvalTy, tyseq_ tystr_, tyseq_ tystr_])
                            (ulams_ ["actionState", "a1_LIdent", "a2_T"]
                                    (cons_ (recordproj_ "val" (var_ "a1_LIdent")) (var_ "a2_T")))},
-        {name = _T, terms = [t_Int],
+        {nt = _T, terms = [t_Int],
          action = withType (tyarrows_ [tyunknown_, tokIntvalTy, tyseq_ tystr_])
                            (ulams_ ["actionState", "a1_Int"]
                                    (seq_ [appf1_ (var_ "int2string")
                                                  (recordproj_ "val" (var_ "a1_Int"))]))},
-        {name = _T, terms = [],
+        {nt = _T, terms = [],
          action = withType (tyarrows_ [tyunknown_, tyseq_ tystr_])
                            (ulams_ ["actionState"]
                                    (seq_ []))}
@@ -1321,33 +1174,6 @@ let testcases: [LRTestCase] = [
       initActionState = unit_
     },
     isLR1 = false,
-    first1 = mkFirsts [
-      (t_Int,    [[t_Int]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent]]),
-      (nt_R, [[t_LIdent]]),
-      (nt_T, [[t_LIdent], [t_Int], []])
-    ],
-    first2 = mkFirsts [
-      (t_Int,    [[t_Int]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent, t_Semi]]),
-      (nt_R, [[t_LIdent, t_Semi]]),
-      (nt_T, [[t_LIdent], [t_LIdent, t_LIdent], [t_LIdent, t_Int],
-              [t_Int], []])
-    ],
-    first3 = mkFirsts [
-      (t_Int,    [[t_Int]]),
-      (t_LIdent, [[t_LIdent]]),
-      (t_Semi,   [[t_Semi]]),
-      (nt_S, [[t_LIdent, t_Semi], [t_LIdent, t_Semi, t_LIdent], [t_LIdent, t_Semi, t_Int]]),
-      (nt_R, [[t_LIdent, t_Semi], [t_LIdent, t_Semi, t_LIdent], [t_LIdent, t_Semi, t_Int]]),
-      (nt_T, [[t_LIdent], [t_LIdent, t_LIdent], [t_LIdent, t_Int],
-              [t_LIdent, t_LIdent, t_LIdent], [t_LIdent, t_LIdent, t_Int],
-              [t_Int], []])
-    ],
     parseTests = [
       LRPTSucceed {
         input = "foo;",
@@ -1365,27 +1191,27 @@ let testcases: [LRTestCase] = [
   -- non-LL language (more left parentheses than right parentheses)
   let _LeftOnly = nameSym "LeftOnly" in
   let _LeftRight = nameSym "LeftRight" in
-  let nt_LeftOnly = LRNonTerminal _LeftOnly in
-  let nt_LeftRight = LRNonTerminal _LeftRight in
+  let nt_LeftOnly = NonTerminal _LeftOnly in
+  let nt_LeftRight = NonTerminal _LeftRight in
   {
     tokenConTypes = allTokenConTypes,
-    name = "non-LL Example",
+    name = "non-LL Example (more left parentheses than right parentheses)",
     syntaxDef = {
       entrypoint = _LeftOnly,
-      rules = [
-        {name = _LeftOnly, terms = [t_LParen, nt_LeftOnly],
+      productions = [
+        {nt = _LeftOnly, terms = [t_LParen, nt_LeftOnly],
          action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tystr_])
                            (ulams_ ["actionState", "lparen", "lprod"]
                                    (cons_ (char_ '(') (var_ "lprod")))},
-        {name = _LeftOnly, terms = [nt_LeftRight],
+        {nt = _LeftOnly, terms = [nt_LeftRight],
          action = withType (tyarrows_ [tyunit_, tystr_, tystr_])
                            (ulams_ ["actionState", "lrprod"]
                                    (cons_ (char_ '|') (var_ "lrprod")))},
-        {name = _LeftRight, terms = [t_LParen, nt_LeftRight, t_RParen],
+        {nt = _LeftRight, terms = [t_LParen, nt_LeftRight, t_RParen],
          action = withType (tyarrows_ [tyunit_, tokEmptyTy, tystr_, tokEmptyTy, tystr_])
                            (ulams_ ["actionState", "lparen", "middle", "rparen"]
                                    (cons_ (char_ '(') (snoc_ (var_ "middle") (char_ ')'))))},
-        {name = _LeftRight, terms = [],
+        {nt = _LeftRight, terms = [],
          action = withType (tyarrows_ [tyunit_, tystr_])
                            (ulams_ ["actionState"]
                                    (str_ "e"))}
@@ -1393,30 +1219,6 @@ let testcases: [LRTestCase] = [
       initActionState = unit_
     },
     isLR1 = true,
-    first1 = mkFirsts [
-      (t_LParen, [[t_LParen]]),
-      (t_RParen, [[t_RParen]]),
-      (nt_LeftOnly, [[t_LParen], []]),
-      (nt_LeftRight, [[t_LParen], []])
-    ],
-    first2 = mkFirsts [
-      (t_LParen, [[t_LParen]]),
-      (t_RParen, [[t_RParen]]),
-      (nt_LeftOnly, [[t_LParen, t_LParen], [t_LParen, t_RParen],
-                     [t_LParen], []]),
-      (nt_LeftRight, [[t_LParen, t_LParen], [t_LParen, t_RParen],
-                      []])
-    ],
-    first3 = mkFirsts [
-      (t_LParen, [[t_LParen]]),
-      (t_RParen, [[t_RParen]]),
-      (nt_LeftOnly, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
-                     [t_LParen, t_LParen, t_RParen],
-                     [t_LParen, t_LParen], [t_LParen, t_RParen],
-                     [t_LParen], []]),
-      (nt_LeftRight, [[t_LParen, t_LParen, t_LParen], [t_LParen, t_RParen],
-                      [t_LParen, t_LParen, t_RParen], []])
-    ],
     parseTests = [
       LRPTSucceed {
         input = "()",
@@ -1440,29 +1242,13 @@ let testcases: [LRTestCase] = [
 ] in
 
 
-let printFirst: Int -> Map LRTerm (Set [TokenRepr]) -> () = lam k. lam firstMap.
-  mapFoldWithKey (lam. lam term: LRTerm. lam first1: Set [TokenRepr].
-    match term with LRNonTerminal _ then
-      printLn (join ["First_", int2string k, "(", lrTerm2string term, "):"]);
-      setFold (lam. lam tokens: [TokenRepr].
-        printLn (join ["  [", strJoin ", " (map tokReprToStr tokens), "]"])
-      ) () first1
-    else
-      ()
-  ) () firstMap
-in
-
-
-let printLRInfo = false in
+let suppressPrints = true in
+let tprint = lam s. if suppressPrints then () else print s in
+let tprintLn = lam s. if suppressPrints then () else printLn s in
 
 -- Run tests
 foldl (lam. lam tc: LRTestCase.
-  (if printLRInfo then (
-    printLn (join ["Running testcase ", tc.name, " "])
-  ) else ());
-  utest lrFirst 1 tc.syntaxDef with tc.first1 using mapEq setEq in
-  utest lrFirst 2 tc.syntaxDef with tc.first2 using mapEq setEq in
-  utest lrFirst 3 tc.syntaxDef with tc.first3 using mapEq setEq in
+  tprintLn (join ["Running testcase ", tc.name, " "]);
 
   let isLR1_table = match lrCreateParseTable 1 tc.tokenConTypes tc.syntaxDef with ResultOk _ then true else false in
   utest isLR1_table with tc.isLR1 in
@@ -1471,11 +1257,9 @@ foldl (lam. lam tc: LRTestCase.
 
   switch lrCreateParseTable k tc.tokenConTypes tc.syntaxDef
   case ResultOk {value = lrtable} then
-    (if printLRInfo then (
-      printLn (lrtable2string 2 lrtable);
-      printLn "\n\n"
-    ) else ());
-    let parser = lrGenerateParser lrtable in
+    tprintLn (lrtable2string 2 lrtable);
+    tprintLn "";
+    let parser = lrGenerateParser (lrDefaultGeneratorBindings ()) lrtable in
     let program: String = strJoin "\n" [
       "include \"error.mc\"",
       "include \"map.mc\"",
@@ -1488,7 +1272,17 @@ foldl (lam. lam tc: LRTestCase.
       "use Lexer in",
       "let wrappedNextToken = lam s. result.ok (nextToken s) in",
       expr2str (bindall_ [
-        let_ "parse" (tyTm parser) parser,
+        -- Wrap the generated expression in lambdas
+        let n_stream = nameSym "stream" in
+        let n_nextToken = nameSym "nextToken" in
+        let bindings = {lrDefaultGeneratorBindings () with
+          v_stream = nvar_ n_stream,
+          v_nextToken = nvar_ n_nextToken
+        } in
+        ulet_ "parse" (nlams_ [(n_stream, tycon_ "Stream"), (n_nextToken, tyunknown_)] (
+          lrGenerateParser bindings lrtable
+        )),
+
         let_ "lexerState" (tycon_ "Stream")
                           (urecord_ [("pos", appf1_ (var_ "initPos") (str_ "file")),
                                      ("str", get_ (var_ "argv") (int_ 1))]),
@@ -1551,8 +1345,10 @@ foldl (lam. lam tc: LRTestCase.
 
     cunit.cleanup ();
     sysDeleteFile tmpFilePath;
+    tprintLn "";
     ()
   case ResultErr {errors = errors} then
+    tprintLn (strJoin "\n" (mapValues errors));
     utest tc.name with "I should not fail!" in ()
   end
 

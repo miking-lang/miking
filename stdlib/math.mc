@@ -72,6 +72,35 @@ utest isEven 2 with true
 utest isEven 3 with false
 utest isEven 4 with true
 
+-- `eqSign a b` returns true iff the sign of both `a` and `b` are equal
+let eqSign : Int -> Int -> Bool = lam a. lam b.
+  if lti a 0 then lti b 0
+  else if gti a 0 then gti b 0
+  else eqi b 0
+
+utest eqSign 0 0 with true
+utest eqSign 0 2 with false
+utest eqSign 3 0 with false
+utest eqSign 1 4 with true
+utest eqSign 0 (negi 2) with false
+utest eqSign (negi 3) 0 with false
+utest eqSign (negi 1) (negi 4) with true
+utest eqSign 1 (negi 2) with false
+utest eqSign (negi 3) 4 with false
+
+-- `neqSign a b` returns true iff the sign of both `a` and `b` are different
+let neqSign : Int -> Int -> Bool = lam a. lam b. not (eqSign a b)
+
+utest neqSign 0 0 with false
+utest neqSign 0 2 with true
+utest neqSign 3 0 with true
+utest neqSign 1 4 with false
+utest neqSign 0 (negi 2) with true
+utest neqSign (negi 3) 0 with true
+utest neqSign (negi 1) (negi 4) with false
+utest neqSign 1 (negi 2) with true
+utest neqSign (negi 3) 4 with true
+
 -- `fact n` returns the factorial !n. Gives an error on negative `n`.
 let fact : Int -> Int = lam n.
   if lti n 0 then error "fact: undefined"
