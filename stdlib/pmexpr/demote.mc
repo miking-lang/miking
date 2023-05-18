@@ -82,7 +82,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
           ty = tyuk, info = t.info},
         rhs = TmLam {
           ident = iid,
-          tyAnnot = TyInt {info = t.info}, tyIdent = TyInt {info = t.info},
+          tyAnnot = TyInt {info = t.info}, tyParam = TyInt {info = t.info},
           body = TmRecord {
             bindings = mapFromSeq cmpSID [
               (stringToSid "0", access aid (tyTm t.as) lty),
@@ -107,7 +107,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
       lhs = TmApp {
         lhs = TmConst {val = CMap (), ty = tyuk, info = t.info},
         rhs = TmLam {
-          ident = xid, tyAnnot = tytuple, tyIdent = tytuple,
+          ident = xid, tyAnnot = tytuple, tyParam = tytuple,
           body = TmApp {
             lhs = TmApp {
               lhs = demoteParallel t.f,
@@ -143,7 +143,7 @@ lang PMExprDemoteLoop = PMExprAst
     let unitTy = TyRecord {fields = mapEmpty cmpSID, info = t.info} in
     let acc = TmRecord {bindings = mapEmpty cmpSID, ty = unitTy, info = t.info} in
     let f = TmLam {
-      ident = nameNoSym "", tyAnnot = unitTy, tyIdent = unitTy, body = t.f,
+      ident = nameNoSym "", tyAnnot = unitTy, tyParam = unitTy, body = t.f,
       ty = TyArrow {from = unitTy, to = tyTm t.f, info = t.info},
       info = t.info} in
     let accLoop = TmLoopAcc {
@@ -206,10 +206,10 @@ lang PMExprDemoteLoop = PMExprAst
     let loopBindingDef = {
       ident = loopId, tyAnnot = loopTy, tyBody = loopTy, info = t.info,
       body = TmLam {
-        ident = accIdent, tyAnnot = accTy, tyIdent = accTy,
+        ident = accIdent, tyAnnot = accTy, tyParam = accTy,
         body = TmLam {
           ident = iIdent,
-          tyAnnot = TyInt {info = t.info}, tyIdent = TyInt {info = t.info},
+          tyAnnot = TyInt {info = t.info}, tyParam = TyInt {info = t.info},
           body = TmMatch {
             target = loopCompareExpr,
             pat = PatBool {val = true, ty = TyBool {info = t.info}, info = t.info},

@@ -205,7 +205,7 @@ let inRecursiveBinding = preprocess (bindall_ [
     (h, ulam_ "x" (app_ (nvar_ t1) (var_ "x"))),
     (t1, ulam_ "x" (app_ (nvar_ g) (var_ "x")))
   ],
-  app_ (var_ "h") (int_ 3)
+  app_ (nvar_ h) (int_ 3)
 ]) in
 let extracted = preprocess (bindall_ [
   nulet_ f (ulam_ "x" (muli_ (var_ "x") (int_ 2))),

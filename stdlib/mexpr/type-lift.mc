@@ -15,7 +15,7 @@ include "ast.mc"
 include "ast-builder.mc"
 include "pprint.mc"
 include "symbolize.mc"
-include "type-annot.mc"
+include "type-check.mc"
 include "cmp.mc"
 
 ------------------------------
@@ -327,8 +327,8 @@ lang MExprTypeLift =
 end
 
 lang TestLang =
-  MExprTypeLift + SeqTypeTypeLift + MExprSym +
-  MExprTypeAnnot + MExprPrettyPrint
+  MExprTypeLift + SeqTypeTypeLift + MExprSym + MExprEq +
+  MExprTypeCheck + MExprPrettyPrint
 end
 
 -- TODO(dlunde,2021-10-06): No tests for ordered records?
@@ -350,7 +350,7 @@ let eqEnv = lam lenv. lam renv.
   else false
 in
 
-let unitNotLifted = typeAnnot (symbolize (bindall_ [
+let unitNotLifted = typeCheck (symbolize (bindall_ [
   ulet_ "x" (int_ 2),
   uunit_
 ])) in
@@ -358,7 +358,7 @@ match typeLift unitNotLifted with (env, t) in
 utest env with [] using eqEnv in
 utest t with unitNotLifted using eqExpr in
 
-let noVariantsOrRecords = typeAnnot (symbolize (bindall_ [
+let noVariantsOrRecords = typeCheck (symbolize (bindall_ [
   ulet_ "x" (int_ 3),
   ulet_ "y" (int_ 2),
   ulet_ "z" (addi_ (var_ "x") (var_ "y")),
@@ -371,7 +371,7 @@ utest t with noVariantsOrRecords using eqExpr in
 let treeName = nameSym "Tree" in
 let branchName = nameSym "Branch" in
 let leafName = nameSym "Leaf" in
-let variant = typeAnnot (symbolize (bindall_ [
+let variant = typeCheck (symbolize (bindall_ [
   ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tytuple_ [
     ntycon_ treeName,
@@ -382,11 +382,14 @@ let variant = typeAnnot (symbolize (bindall_ [
 match typeLift variant with (_, t) in
 utest t with uunit_ using eqExpr in
 
-let lastTerm = nconapp_ branchName (urecord_ [
-  ("lhs", nconapp_ leafName (int_ 1)),
-  ("rhs", nconapp_ leafName (int_ 2))
-]) in
-let variantWithRecords = typeAnnot (symbolize (bindall_ [
+let lastTerm =
+  bind_
+    (ulet_ "x" (nconapp_ branchName (urecord_ [
+      ("lhs", nconapp_ leafName (int_ 1)),
+      ("rhs", nconapp_ leafName (int_ 2))
+    ]))) uunit_
+in
+let variantWithRecords = typeCheck (symbolize (bindall_ [
   ntype_ treeName [] (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tyrecord_ [
     ("lhs", ntycon_ treeName),
@@ -408,7 +411,7 @@ let expectedEnv = [
 utest env with expectedEnv using eqEnv in
 utest t with lastTerm using eqExpr in
 
-let nestedRecord = typeAnnot (symbolize (bindall_ [
+let nestedRecord = typeCheck (symbolize (bindall_ [
   ulet_ "r" (urecord_ [
     ("a", urecord_ [
       ("x", int_ 2),
@@ -436,7 +439,7 @@ let expectedEnv = [
 utest env with expectedEnv using eqEnv in
 utest t with nestedRecord using eqExpr in
 
-let nestedSeq = typeAnnot (symbolize (bindall_ [
+let nestedSeq = typeCheck (symbolize (bindall_ [
   ulet_ "s" (seq_ [seq_ [seq_ [int_ 2]], seq_ [seq_ [int_ 3]]]),
   uunit_
 ])) in
@@ -452,7 +455,7 @@ let expectedEnv = [
 utest env with expectedEnv using eqEnv in
 utest t with nestedSeq using eqExpr in
 
-let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
+let recordsSameFieldsDifferentTypes = typeCheck (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
   uunit_
@@ -467,7 +470,7 @@ let expectedEnv = [
 utest env with expectedEnv using eqEnv in
 utest t with recordsSameFieldsDifferentTypes using eqExpr in
 
-let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
+let recordsSameFieldsSameTypes = typeCheck (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)]),
   uunit_
@@ -480,7 +483,7 @@ let expectedEnv = [
 utest env with expectedEnv using eqEnv in
 utest t with recordsSameFieldsSameTypes using eqExpr in
 
-let record = typeAnnot (symbolize (urecord_ [
+let record = typeCheck (symbolize (urecord_ [
   ("a", int_ 2),
   ("b", float_ 1.5)
 ])) in
@@ -489,7 +492,7 @@ match tyTm t with TyCon {ident = ident} in
 match assocSeqLookup {eq=nameEq} ident env with Some recordTy in
 utest recordTy with tyTm record using eqType in
 
-let recordUpdate = typeAnnot (symbolize (bindall_ [
+let recordUpdate = typeCheck (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   recordupdate_ (var_ "x") "a" (int_ 2)
 ])) in
@@ -499,7 +502,7 @@ match t with TmLet {tyBody = TyCon {ident = ident}} in
 match assocSeqLookup {eq=nameEq} ident env with Some ty in
 utest ty with recordType using eqType in
 
-let typeAliases = typeAnnot (symbolize (bindall_ [
+let typeAliases = typeCheck (symbolize (bindall_ [
   type_ "GlobalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
   type_ "LocalEnv" [] (tyseq_ (tytuple_ [tystr_, tyint_])),
   type_ "Env" [] (tyrecord_ [

@@ -194,9 +194,9 @@ lang PMExprCudaWellFormed =
   sem instrumentCudaWellFormedChecks : Int -> Expr -> Expr
   sem instrumentCudaWellFormedChecks tensorMaxRank =
   | TmLam t ->
-    checkCudaParameterTypeWellFormedness t.info () t.tyIdent;
+    checkCudaParameterTypeWellFormedness t.info () t.tyParam;
     let body = instrumentCudaWellFormedChecks tensorMaxRank t.body in
-    TmLam {t with body = cudaCheckTensorRank tensorMaxRank t.ident body t.tyIdent}
+    TmLam {t with body = cudaCheckTensorRank tensorMaxRank t.ident body t.tyParam}
   | body -> body
 
   sem checkCudaParameterTypeWellFormedness : Info -> () -> Type -> ()
@@ -262,9 +262,9 @@ lang PMExprFutharkWellFormed =
   sem instrumentFutharkWellFormedChecks : Expr -> Expr
   sem instrumentFutharkWellFormedChecks =
   | TmLam t ->
-    checkFutharkParameterTypeWellFormedness t.info () t.tyIdent;
+    checkFutharkParameterTypeWellFormedness t.info () t.tyParam;
     let body = instrumentFutharkWellFormedChecks t.body in
-    TmLam {t with body = futharkCheckSequenceRegularity t.ident body t.tyIdent}
+    TmLam {t with body = futharkCheckSequenceRegularity t.ident body t.tyParam}
   | body -> body
 
   sem checkFutharkParameterTypeWellFormedness : Info -> () -> Type -> ()

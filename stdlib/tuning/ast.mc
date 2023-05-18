@@ -2,7 +2,6 @@ include "mexpr/ast.mc"
 include "mexpr/anf.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/boot-parser.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 
 -- Defines AST nodes for holes.
@@ -17,7 +16,7 @@ let _expectConstInt : Info -> String -> Expr -> Int =
     match i with TmConst {val = CInt {val = i}} then i
     else errorSingle [info] (concat "Expected a constant integer: " s)
 
-lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
+lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck
   syn Hole =
 
   syn Expr =
@@ -118,13 +117,6 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeAnnot + TypeCheck
                 , ty = hty
                 , inner = holeMap bindings})
     else error "impossible"
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | TmHole t ->
-    let default = typeAnnotExpr env t.default in
-    let ty = hty t.info t.inner in
-    TmHole {{t with default = default}
-               with ty = ty}
 
   sem hty : Info -> Hole -> Type
 
@@ -289,7 +281,7 @@ lang HoleAnnotation = Ast
 end
 
 -- Independency annotation
-lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint + TypeAnnot
+lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
   syn Expr =
   | TmIndependent {lhs : Expr,
                    rhs : Expr,
@@ -341,11 +333,6 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint + TypeAn
     let aindent = pprintIncr indent in
     match printParen aindent env t.rhs with (env, rhs) in
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | TmIndependent t ->
-    let lhs = typeAnnotExpr env t.lhs in
-    TmIndependent {t with lhs = lhs}
 end
 
 let holeBool_ : Bool -> Int -> Expr =

@@ -147,7 +147,7 @@ let _var = lam id. lam ty.
   TmVar {ident = id, ty = ty, info = _utestInfo, frozen = false}
 let _lam = lam id. lam ty. lam body.
   use MExprAst in
-  TmLam {ident = id, tyAnnot = ty, tyIdent = ty, body = body,
+  TmLam {ident = id, tyAnnot = ty, tyParam = ty, body = body,
          ty = _tyarrows [ty, tyTm body], info = _utestInfo}
 let _seq = lam tms. lam ty.
   use MExprAst in

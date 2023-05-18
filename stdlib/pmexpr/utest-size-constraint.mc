@@ -66,7 +66,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
   | TmLam t ->
     recursive let extractLambdas = lam acc : Map Name Type. lam e : Expr.
       match e with TmLam t then
-        let acc = mapInsert t.ident t.tyIdent acc in
+        let acc = mapInsert t.ident t.tyParam acc in
         extractLambdas acc t.body
       else (acc, e) in
     recursive let replaceFunctionBody = lam body : Expr. lam e : Expr.

@@ -130,7 +130,7 @@ lang ContextExpand = HoleAst
   | tm ->
     use BootParser in
     let impl = parseMExprStringKeywords [] "
-    let eqSeq = lam eq : (a -> b -> Bool). lam s1 : [a]. lam s2 : [b].
+    let eqSeq = lam eq. lam s1. lam s2.
       recursive let work = lam s1. lam s2.
         match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
           if eq h1 h2 then work t1 t2
@@ -221,7 +221,7 @@ lang ContextExpand = HoleAst
     " in
 
     use MExprSym in
-    let impl = symbolizeExpr {symEnvEmpty with strictTypeVars = false} impl in
+    let impl = symbolize impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
       use MExprFindSym in

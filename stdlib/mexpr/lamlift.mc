@@ -210,12 +210,12 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
           fv in
-      let annot = optionGetOr t.tyBody (sremoveUnknown t.tyAnnot) in
+      let annot = optionGetOr t.tyAnnot (sremoveUnknown t.tyBody) in
       let tyBody = updateBindingType fv annot in
       let tyAnnot = if null fv then t.tyAnnot else ityunknown_ t.info in
       let subExpr = lam info.
@@ -256,11 +256,11 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
-        let annot = optionGetOr bind.tyBody (sremoveUnknown bind.tyAnnot) in
+        let annot = optionGetOr bind.tyAnnot (sremoveUnknown bind.tyBody) in
         let tyBody = updateBindingType fv annot in
         let tyAnnot = if null fv then bind.tyAnnot else ityunknown_ bind.info in
         let body = insertFreeVariablesH solutions subMap body in

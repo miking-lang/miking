@@ -34,7 +34,7 @@ lang MExprSubstitute = MExprAst
   | TmLam t ->
     TmLam {t with ident = subIdent replacements t.ident,
                   tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
-                  tyIdent = substituteIdentifiersType replacements t.tyIdent,
+                  tyParam = substituteIdentifiersType replacements t.tyParam,
                   body = substituteIdentifiersExpr replacements t.body,
                   ty = substituteIdentifiersType replacements t.ty}
   | TmType t ->
@@ -169,11 +169,11 @@ let expr = lam id. bindall_ [
 let replace = mapFromSeq nameCmp [(nameNoSym "x", nameNoSym "y")] in
 utest pp (substituteIdentifiers replace (expr "x")) with pp (expr "y") using eqString in
 
-let parseProgram : String -> Expr = 
+let parseProgram : String -> Expr =
   lam str.
   let parseArgs = {defaultBootParserParseMExprStringArg with allowFree = true} in
   let ast = parseMExprString parseArgs str in
-  symbolizeExpr {symEnvEmpty with allowFree = true} ast
+  symbolizeAllowFree ast
 in
 
 let matchOpt : all a. all b. Option a -> Option b -> Bool =

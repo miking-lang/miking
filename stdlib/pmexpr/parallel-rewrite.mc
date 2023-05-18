@@ -94,7 +94,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
                   TmLam {
                     ident = name,
                     tyAnnot = TyUnknown {info = info},
-                    tyIdent = TyUnknown {info = info},
+                    tyParam = TyUnknown {info = info},
                     body = e,
                     ty = tyTm e,
                     info = info})

@@ -2,7 +2,6 @@ include "mexpr/keyword-maker.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/type-check.mc"
-include "mexpr/type-annot.mc"
 include "mexpr/eval.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
@@ -13,7 +12,7 @@ include "list.mc"
 
 
 lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
-                + MExprTypeCheck + LamEval + TypeAnnot + MExprPEval
+                + MExprTypeCheck + LamEval + MExprPEval
 
   syn Expr =
   | TmPEval {e: Expr, info: Info}
@@ -38,11 +37,6 @@ lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
   sem typeCheckExpr (env : TCEnv) = 
   | TmPEval t -> 
     let e = typeCheckExpr env t.e in
-    TmPEval {t with e = e}
-
-  sem typeAnnotExpr (env : TypeEnv) = 
-  | TmPEval t -> 
-    let e = typeAnnotExpr env t.e in
     TmPEval {t with e = e}
 
   sem smapAccumL_Expr_Expr f acc =

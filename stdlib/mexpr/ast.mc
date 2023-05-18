@@ -299,7 +299,7 @@ lang LamAst = Ast
   syn Expr =
   | TmLam {ident : Name,
            tyAnnot : Type,
-           tyIdent : Type,
+           tyParam : Type,
            body : Expr,
            ty : Type,
            info : Info}
@@ -323,9 +323,9 @@ lang LamAst = Ast
 
   sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLam t ->
-    match f acc t.tyIdent with (acc, tyIdent) in
+    match f acc t.tyParam with (acc, tyParam) in
     match f acc t.ty with (acc, ty) in
-    (acc, TmLam {t with tyIdent = tyIdent, ty = ty})
+    (acc, TmLam {t with tyParam = tyParam, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLam t ->
