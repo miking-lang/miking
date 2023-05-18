@@ -10,10 +10,93 @@ type IdaTolerance
 type IdaSession
 type IdaSolverResultInternal
 
+type IdaCalcICResult
+-- Initial values calculations returned without error.
+con IdaCalcICOK : {} -> IdaCalcICResult
+-- Variable ids are required but not set.
+con IdaVarIdNotSet : {} -> IdaCalcICResult
+-- Initial values calculations returned with error.
+con IdaCalcICError : {} -> IdaCalcICResult
+
+let _idaCalcICRetCodeToResult = lam rc.
+  switch rc
+  case 0 then IdaCalcICOK {}
+  case 1 then IdaVarIdNotSet {}
+  case _ then IdaCalcICError {}
+  end
+
+type IdaSolveError
+-- Raised on missing or illegal solver inputs. Also raised if an element of the
+-- error weight vector becomes zero during time stepping, or the linear solver
+-- initialization function failed, or a root was found both at t and very near
+-- t.
+con IdaIllInput : {} -> IdaSolveError
+-- The requested time could not be reached in mxstep internal steps.
+con IdaTooMuchWork : {} -> IdaSolveError
+-- The requested accuracy could not be satisfied.
+con IdaTooMuchAccuracy : {} -> IdaSolveError
+-- Too many error test failures within a step.
+con IdaErrFailure : {} -> IdaSolveError
+-- Too many convergence test failures within a step, or Newton convergence
+-- failed.
+con IdaConvergenceFailure : {} -> IdaSolveError
+-- Linear solver initialization failed.
+con IdaLinearInitFailure : {} -> IdaSolveError
+-- Linear solver setup failed in an unrecoverable manner.
+con IdaLinearSetupFailure : {} -> IdaSolveError
+-- Linear solver solution failed in an unrecoverable manner.
+con IdaLinearSolveFailure : {} -> IdaSolveError
+-- No solution satisfying the inequality constraints could be found.
+con IdaConstraintFailure : {} -> IdaSolveError
+-- The residual function had a recoverable error when first called.
+con IdaFirstResFuncFailure : {} -> IdaSolveError
+-- Too many convergence test failures, or unable to estimate the initial step
+-- size, due to repeated recoverable errors in the residual function.
+con IdaRepeatedResFuncFailure : {} -> IdaSolveError
+-- The residual function failed in an unrecoverable manner.
+con IdaResFuncFailure : {} -> IdaSolveError
+-- The rootfinding function failed.
+con IdaRootFuncFailure : {} -> IdaSolveError
+-- Unspecified solver failure.
+con IdaErrUnspecified : {} -> IdaSolveError
+
+let _idaErrorCodeToError : Int -> IdaSolveError
+  = lam ec.
+    switch ec
+    case 0 then IdaIllInput {}
+    case 1 then IdaTooMuchWork {}
+    case 2 then IdaTooMuchAccuracy {}
+    case 3 then IdaErrFailure {}
+    case 4 then IdaConvergenceFailure {}
+    case 5 then IdaLinearInitFailure {}
+    case 6 then IdaLinearSetupFailure {}
+    case 7 then IdaLinearSolveFailure {}
+    case 8 then IdaConstraintFailure {}
+    case 9 then IdaFirstResFuncFailure {}
+    case 10 then IdaRepeatedResFuncFailure {}
+    case 11 then IdaResFuncFailure {}
+    case 12 then IdaRootFuncFailure {}
+    case _ then IdaErrUnspecified {}
+    end
+
 type IdaSolverResult
+-- The solution was advanced.
 con IdaSuccess : {} -> IdaSolverResult
+-- The stop time was reached.
 con IdaStopTimeReached : {} -> IdaSolverResult
+-- A root was found.
 con IdaRootsFound : {} -> IdaSolverResult
+-- Solver error.
+con IdaSolveError : IdaSolveError -> IdaSolverResult
+
+let _idaSolverCodeToSolverResult : (Int, Int) -> IdaSolverResult
+  = lam rc.
+    switch rc
+    case (0, _) then IdaSuccess {}
+    case (1, _) then IdaRootsFound {}
+    case (2, _) then IdaStopTimeReached {}
+    case (3, ec) then IdaSolveError (_idaErrorCodeToError ec)
+    end
 
 type IdaJacArgs = {
   -- The current time.
@@ -70,20 +153,6 @@ external idaSSTolerances : Float -> Float -> IdaTolerance
 -- `idaSSTolerances rtol atol` constructs scalar error tolerances where `rtol`
 -- is the relative tolerance and `atol` the absolute tolerance.
 let idaSSTolerances = lam rtol. lam atol. idaSSTolerances rtol atol
-
-external idaRetcode : IdaSolverResultInternal -> Int
-
--- `idaRetcode r` converts internal solver result `r` to a return code.
-let idaRetcode = lam r. idaRetcode r
-
--- `idaSolverResult rc` convert the return code `rc` to a solver result.
-let idaSolverResult : IdaSolverResultInternal -> IdaSolverResult =
-  lam rc.
-    switch idaRetcode rc
-    case 0 then IdaSuccess {}
-    case 1 then IdaStopTimeReached {}
-    case 2 then IdaRootsFound {}
-    end
 
 external idaInit !
   : IdaTolerance ->
@@ -145,7 +214,7 @@ let idaInit = lam arg : IdaInitArg.
   idaInit tol nlsolver lsolver resf varid roots t y yp
 
 external idaCalcICYaYd !
-  : IdaSession -> Float -> NvectorSerial -> NvectorSerial -> ()
+  : IdaSession -> Float -> NvectorSerial -> NvectorSerial -> Int
 
 type IdaCalcICYaYdArg = {
   -- The time where to end the consistent initial value search.
@@ -160,8 +229,9 @@ type IdaCalcICYaYdArg = {
 
 -- `idaCalcICYaYd s arg` tries to find consistent initial values of session `s`
 -- with the argument `arg`. Will produce an error if the search fails.
-let idaCalcICYaYd = lam s. lam arg : IdaCalcICYaYdArg.
-  match arg with { tend = tend, y = y, yp = yp } in idaCalcICYaYd s tend y yp
+let idaCalcICYaYd : IdaSession -> IdaCalcICYaYdArg -> IdaCalcICResult
+  = lam s. lam arg : IdaCalcICYaYdArg.
+    _idaCalcICRetCodeToResult (idaCalcICYaYd s arg.tend arg.y arg.yp)
 
 
 external idaSolveNormal
@@ -169,7 +239,7 @@ external idaSolveNormal
    Float ->
    NvectorSerial ->
    NvectorSerial ->
-   (Float, IdaSolverResultInternal)
+   (Float, (Int, Int))
 
 
 type IdaSolveNormalArg = {
@@ -179,11 +249,10 @@ type IdaSolveNormalArg = {
 }
 
 -- `idaSolveNormal s arg` solves problem in session `s` given `arg`.
-let idaSolveNormal =
-  lam s. lam arg : IdaSolveNormalArg.
-  match arg with { tend = tend, y = y, yp = yp } in
-  match (idaSolveNormal s tend y yp) with (tend, r) in
-  (tend, idaSolverResult r)
+let idaSolveNormal : IdaSession -> IdaSolveNormalArg -> (Float, IdaSolverResult)
+  = lam s. lam arg.
+  match (idaSolveNormal s arg.tend arg.y arg.yp) with (tend, rc) in
+  (tend, _idaSolverCodeToSolverResult rc)
 
 external idaReinit
   : IdaSession ->
@@ -268,7 +337,9 @@ utest
       y        = v,
       yp       = vp
     } in
-    idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
+    utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp }
+      with IdaCalcICOK {}
+    in
 
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in
@@ -282,7 +353,10 @@ utest
     tset yp [0] 0.;
     tset yp [1] (negf 0.);
     idaReinit s { roots = idaNoRoots, t = t0, y = v, yp = vp };
-    idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp };
+
+    utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp }
+      with IdaCalcICOK {}
+    in
 
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in

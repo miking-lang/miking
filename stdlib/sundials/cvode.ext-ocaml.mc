@@ -70,7 +70,7 @@ let cvodeExtMap =
       impl {
         expr = "
 begin
-  let solve s tend y =
+  let solve_normal s tend y =
     try
       match Cvode.solve_normal s tend y with
       | (tend, Cvode.Success) -> (tend, (0, -1))
@@ -91,8 +91,8 @@ begin
     | Cvode.RepeatedRhsFuncFailure -> (tend, (3, 11))
     | Cvode.UnrecoverableRhsFuncFailure -> (tend, (3, 12))
     | Cvode.RootFuncFailure -> (tend, (3, 13))
-    | _ -> (tend, (3, 14))
-  in solve
+    | _ -> (tend, (3, -1))
+  in solve_normal
 end
 ",
         ty = tyarrows_ [
