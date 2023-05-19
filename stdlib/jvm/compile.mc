@@ -264,8 +264,10 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]],
                 classes = concat fun.classes arg.classes,
                 constSeqBC = concat fun.constSeqBC arg.constSeqBC }
-    | TmLet { ident = ident, body = body, inexpr = inexpr } ->
+    | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } ->
         let funcmap = (match body with TmLam _ then
+                            mapInsert ident env.nextClass env.globalFuncMap
+                        else match tyBody with TyArrow _ then 
                             mapInsert ident env.nextClass env.globalFuncMap
                         else
                             env.globalFuncMap) in
@@ -304,7 +306,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             { env with
                 classes = snoc bodyEnv.classes funcClass,
                 constSeqBC = bodyEnv.constSeqBC,
-                bytecode = foldl concat env.bytecode [initClass_ className],
+               bytecode = foldl concat env.bytecode [initClass_ className],
                 fieldVars = mapEmpty nameCmp,
                 nextClass = bodyEnv.nextClass }
     | TmVar { ident = ident } ->
@@ -366,7 +368,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                         match el with { ident = ident, body = body } then
                             match body with TmLam _ then
                                 match mapLookup ident funcBindings with Some funcName then
-                                    toJSONExpr { acc with nextClass = funcName, fieldVars = mapEmpty nameCmp } body
+                                    let bodyEnv = toJSONExpr { acc with nextClass = funcName, fieldVars = mapEmpty nameCmp } body in
+                                    { bodyEnv with bytecode = subsequence bodyEnv.bytecode 0 (subi (length bodyEnv.bytecode) 3) } 
                                 else never
                             else
                                 let bodyEnv = toJSONExpr acc body in
@@ -468,7 +471,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                                                 localVars = addi 1 e.localVars,
                                                 vars = mapInsert name e.localVars e.vars }
                                         else never
-                                    else never -- Wildcard!
+                                    else -- Wildcard!
+                                        e
                                 else never)
                             env
                             (mapToSeq bindings) in
@@ -477,7 +481,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             else
                 toJSONExpr env els
         else -- match () with ()
-            toJSONExpr env thn
+            toJSONExpr { env with bytecode = snoc env.bytecode pop_ } thn
     | PatBool { val = val } ->
         let thnEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } thn in
         let elsEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } els in
@@ -812,7 +816,7 @@ let compileJVMEnv = lam ast.
     let tlAst = tl.1 in
     let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in
     let env = {
-            bytecode = argvBC_,
+            bytecode = setArgvBC_,
             vars = mapEmpty nameCmp,
             localVars = 1,
             classes = [],
@@ -823,6 +827,7 @@ let compileJVMEnv = lam ast.
             adtTags = adt.2,
             globalFuncMap = mapEmpty nameCmp,
             constSeqBC = [] } in
+    --(printLn (expr2str tlAst));
     let compiledEnv = (toJSONExpr env tlAst) in
     --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in

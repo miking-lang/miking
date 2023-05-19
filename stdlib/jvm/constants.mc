@@ -2125,6 +2125,58 @@ let constSeqClass_ = use JVMAst in
             []
             defaultConstructor
             funcs
+
+let argvBC_ = use JVMAst in -- puts argv in static field 
+    let endLabel = createName_ "end" in 
+    let startLabel = createName_ "start" in
+    (foldl concat 
+        [aload_ 1,
+        arraylength_, 
+        istore_ 2,
+        ldcInt_ 0,
+        istore_ 3,
+        new_ "scala/collection/immutable/VectorBuilder",
+        dup_,
+        invokespecial_ "scala/collection/immutable/VectorBuilder" "<init>" "()V",
+        astore_ 4,
+        label_ startLabel,
+        iload_ 3,
+        iload_ 2,
+        ificmpge_ endLabel,
+        aload_ 4,
+        aload_ 1,
+        iload_ 3,
+        aaload_]
+        [string2charseq_ 5,
+        [invokevirtual_ "scala/collection/immutable/VectorBuilder" "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;",
+        pop_,
+        iload_ 3,
+        ldcInt_ 1,
+        iadd_,
+        istore_ 3,
+        goto_ startLabel,
+        label_ endLabel,
+        aload_ 4,
+        invokevirtual_ "scala/collection/immutable/VectorBuilder" "result" "()Lscala/collection/immutable/Vector;",
+        putstatic_ (concat pkg_ "Main") "argv" "Lscala/collection/immutable/Vector;",
+        return_]])
+
+let argvClass_ = use JVMAst in 
+    createClass
+        "SetArgv"
+        ""
+        []
+        defaultConstructor
+        [createFunction
+            "setArgv"
+            (methodtype_T "[Ljava/lang/String;" "V")
+            argvBC_]
+
+let setArgvBC_ = use JVMAst in
+    concat 
+        (initClass_ "SetArgv") 
+        [aload_ 0,
+        invokevirtual_ (concat pkg_ "SetArgv") "setArgv" (methodtype_T "[Ljava/lang/String;" "V")]
                     
 let constClassList_ = 
     [addiClass_,
@@ -2262,39 +2314,5 @@ let constClassList_ =
     twoArgApplyClass_ "FileWrite",
     setClass_,
     threeArgApplyClass1_ "Set",
-    threeArgApplyClass2_ "Set"]
-
-let argvBC_ = use JVMAst in -- puts argv in static field 
-    let endLabel = createName_ "end" in 
-    let startLabel = createName_ "start" in
-    (foldl concat 
-        [aload_ 0,
-        arraylength_, 
-        istore_ 1,
-        ldcInt_ 0,
-        istore_ 2,
-        iload_ 1,
-        new_ "scala/collection/immutable/VectorBuilder",
-        dup_,
-        invokespecial_ "scala/collection/immutable/VectorBuilder" "<init>" "()V",
-        astore_ 3,
-        label_ startLabel,
-        iload_ 1,
-        iload_ 2,
-        ificmpge_ endLabel,
-        aload_ 3,
-        aload_ 0,
-        iload_ 2,
-        aaload_]
-        [string2charseq_ 4,
-        [invokevirtual_ "scala/collection/immutable/VectorBuilder" "$plus$eq" "(Ljava/lang/Object;)Lscala/collection/mutable/Growable;",
-        pop_,
-        iload_ 2,
-        ldcInt_ 1,
-        iadd_,
-        istore_ 2,
-        goto_ startLabel,
-        label_ endLabel,
-        aload_ 3,
-        invokevirtual_ "scala/collection/immutable/VectorBuilder" "result" "()Lscala/collection/immutable/Vector;",
-        putstatic_ (concat pkg_ "Main") "argv" "Lscala/collection/immutable/Vector;"]])
+    threeArgApplyClass2_ "Set",
+    argvClass_]
