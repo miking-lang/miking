@@ -276,6 +276,11 @@ let idaReinit = lam s. lam arg : IdaReinitArg.
   match arg with { roots = roots, t = t, y = y, yp = yp } in
   idaReinit s roots t y yp
 
+external idaSetStopTime : IdaSession -> Float -> ()
+
+-- `idaSetStopTime s tend` sets the stoptime `tend` for the solver session `s`.
+let idaSetStopTime = lam s. lam tend. idaSetStopTime s tend
+
 mexpr
 
 utest
@@ -337,6 +342,7 @@ utest
       y        = v,
       yp       = vp
     } in
+    idaSetStopTime s 10.;
     utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp }
       with IdaCalcICOK {}
     in
@@ -344,6 +350,10 @@ utest
     match idaSolveNormal s { tend = 2., y = v, yp = vp } with (tend, r) in
     utest r with IdaSuccess {} in
     utest tend with 2. using eqf in
+
+    match idaSolveNormal s { tend = 100., y = v, yp = vp } with (tend, r) in
+    utest r with IdaStopTimeReached {} in
+    utest tend with 10. using eqf in
 
     let y = nvectorSerialUnwrap v in
     let yp = nvectorSerialUnwrap vp in
