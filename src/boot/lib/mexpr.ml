@@ -1684,6 +1684,7 @@ let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
 
 and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
+  printf "*";
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s, _) -> (
