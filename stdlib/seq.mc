@@ -1,14 +1,14 @@
 include "option.mc"
 include "bool.mc"
 
-let make = lam n. lam v. create n (lam. v)
+let make : all a. Int -> a -> [a] = lam n. lam v. create n (lam. v)
 
 utest make 3 5 with [5,5,5]
 utest make 4 'a' with ['a', 'a', 'a', 'a']
 utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 
-let last = lam seq. get seq (subi (length seq) 1)
-let init = lam seq. subsequence seq 0 (subi (length seq) 1)
+let last : all a. [a] -> a = lam seq. get seq (subi (length seq) 1)
+let init : all a. [a] -> [a] = lam seq. subsequence seq 0 (subi (length seq) 1)
 
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
@@ -75,7 +75,7 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- In contrast to map, mapReverse is tail recursive.
-let mapReverse = lam f. lam lst.
+let mapReverse : all a. all b. (a -> b) -> [a] -> [b] = lam f. lam lst.
   foldl (lam acc. lam x. cons (f x) acc) (toList []) lst
 
 utest toRope (mapReverse (lam x. addi x 1) [10,20,30]) with [31,21,11]
@@ -91,13 +91,13 @@ utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. reverse seq) with [4,3
 utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. foldl addi 0 seq) with 9
 
 -- Folds
-let foldl1 = lam f. lam l. foldl f (head l) (tail l)
+let foldl1 : all a. (a -> a -> a) -> [a] -> a = lam f. lam l. foldl f (head l) (tail l)
 
 utest foldl addi 0 [1,2,3,4,5] with 15
 utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
 
-let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
+let foldr1 : all a. (a -> a -> a) -> [a] -> a = lam f. lam seq. foldr f (last seq) (init seq)
 
 utest foldr (lam x. lam acc. x) 0 [1,2] with 1
 utest foldr (lam acc. lam x. x) 0 [] with 0
@@ -116,7 +116,7 @@ end
 utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
 with [0,1,2,3,4,5,6,7,8,9]
 
-let range = lam s. lam e. lam by.
+let range : Int -> Int -> Int -> [Int] = lam s. lam e. lam by.
   unfoldr (lam b. if leqi e b then None () else Some (b, addi b by)) s
 
 utest range 3 5 1 with [3,4] using eqSeq eqi
@@ -249,7 +249,7 @@ with [1, 1, 1, 1]
 
 -- Predicates
 recursive
-  let any = lam p. lam seq.
+  let any : all a. (a -> Bool) -> [a] -> Bool = lam p. lam seq.
     if null seq
     then false
     else if p (head seq) then true else any p (tail seq)
@@ -260,7 +260,7 @@ utest any (lam x. eqi x 5) [0, 4, 1, 2] with false
 utest any (lam x. true) [] with false
 
 recursive
-  let forAll = lam p. lam seq.
+  let forAll : all a. (a -> Bool) -> [a] -> Bool = lam p. lam seq.
     if null seq
     then true
     else if p (head seq) then forAll p (tail seq)
@@ -272,7 +272,7 @@ utest forAll (lam x. eqi x 0) [0, 0, 0] with true
 utest forAll (lam x. eqi x 1) [] with true
 
 -- Join
-let join = lam seqs. foldl concat [] seqs
+let join : all a. [[a]] -> [a] = lam seqs. foldl concat [] seqs
 
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
@@ -294,7 +294,7 @@ let seqMapM
 
 -- Searching
 recursive
-  let filter = lam p. lam seq.
+  let filter : all a. (a -> Bool) -> [a] -> [a] = lam p. lam seq.
     if null seq then []
     else if p (head seq) then cons (head seq) (filter p (tail seq))
     else (filter p (tail seq))
@@ -316,7 +316,7 @@ utest filterOption [None (), None ()] with [] using eqSeq eqi
 utest filterOption [None (), Some 1, None (), Some 1] with [1, 1] using eqSeq eqi
 
 recursive
-  let find = lam p. lam seq.
+  let find : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
     if null seq then None ()
     else if p (head seq) then Some (head seq)
     else find p (tail seq)
@@ -337,7 +337,7 @@ with Some 6 using optionEq eqi
 utest findMap (lam x. if eqi x 0 then Some x else None ()) [1,2,3]
 with None () using optionEq eqi
 
-let partition = lam p. lam seq.
+let partition : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam p. lam seq.
   recursive let work = lam l. lam r. lam seq.
     match seq with [] then (l, r)
     else match seq with [s] ++ seq then
@@ -352,7 +352,7 @@ using lam a : ([Int], [Int]). lam b : ([Int], [Int]).
   if eqSeq eqi a.0 b.0 then eqSeq eqi a.1 b.1 else false
 
 -- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
-let distinct = lam eq. lam seq.
+let distinct : all a. (a -> a -> Bool) -> [a] -> [a] = lam eq. lam seq.
   recursive let work = lam seq1. lam seq2.
     match seq1 with [h] ++ t
       then match find (eq h) seq2 with Some _
@@ -368,7 +368,7 @@ utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0]
 
 -- Removes duplicated elements in a sorted sequence. More efficient than the
 -- 'distinct' function.
-let distinctSorted = lam eq. lam s.
+let distinctSorted : all a. (a -> a -> Bool) -> [a] -> [a]  = lam eq. lam s.
   recursive let work = lam acc. lam s.
     match s with [h1] ++ t then
       match acc with [h2] ++ _ then
@@ -394,7 +394,7 @@ let quickSort : all a. (a -> a -> Int) -> ([a] -> [a]) = lam cmp. lam seq.
     concat (quickSort cmp lr.0) (cons h (quickSort cmp lr.1))
 end
 
-recursive let merge = lam cmp. lam l. lam r.
+recursive let merge : all a. (a -> a -> Int) -> [a] -> [a] -> [a] = lam cmp. lam l. lam r.
   match l with [] then r
   else match r with [] then l
   else match (l, r) with ([x] ++ xs, [y] ++ ys) then
@@ -405,7 +405,7 @@ recursive let merge = lam cmp. lam l. lam r.
   else never
 end
 
-recursive let mergeSort = lam cmp. lam seq.
+recursive let mergeSort : all a. (a -> a -> Int) -> [a] -> [a] = lam cmp. lam seq.
   match seq with [] then []
   else match seq with [x] then [x]
   else
@@ -452,25 +452,25 @@ utest min subi [3,4,8,9,20] with Some 3
 utest min subi [9,8,4,20,3] with Some 3
 utest min subi [] with None ()
 
-let max = lam cmp. min (lam l. lam r. cmp r l)
+let max : all a. (a -> a -> Int) -> [a] -> Option a = lam cmp. min (lam l. lam r. cmp r l)
 
 utest max subi [3,4,8,9,20] with Some 20
 utest max subi [9,8,4,20,3] with Some 20
 utest max subi [] with None ()
 
-let minOrElse = lam d. lam cmp. lam seq.
+let minOrElse : all a. (() -> a) -> (a -> a -> Int) -> [a] -> a = lam d. lam cmp. lam seq.
   optionGetOrElse d (min cmp seq)
 
 utest minOrElse (lam. 0) subi [3,4,8,9,20] with 3
 utest minOrElse (lam. 0) subi [9,8,4,20,3] with 3
 
-let maxOrElse = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
+let maxOrElse : all a. (() -> a) -> (a -> a -> Int) -> [a] -> a = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
 
 utest maxOrElse (lam. 0) subi [3,4,8,9,20] with 20
 utest maxOrElse (lam. 0) subi [9,8,4,20,3] with 20
 
 -- First index in seq that satifies pred
-let index = lam pred. lam seq.
+let index : all a. (a -> Bool) -> [a] -> Option Int = lam pred. lam seq.
   recursive let index_rechelper = lam i. lam pred. lam seq.
     if null seq then
       None ()
@@ -487,7 +487,7 @@ utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
       with Some 4 using optionEq eqi
 
 -- Last index in seq that satisfies pred
-let lastIndex = lam pred. lam seq.
+let lastIndex : all a. (a -> Bool) -> [a] -> Option Int = lam pred. lam seq.
   recursive let lastIndex_rechelper = lam i. lam acc. lam pred. lam seq.
     if null seq then
       acc
@@ -504,10 +504,11 @@ utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
       with Some 4 using optionEq eqi
 
 -- Check if s1 is a prefix of s2
-recursive let isPrefix = lam eq. lam s1. lam s2.
-  if null s1 then true
-  else if null s2 then false
-  else and (eq (head s1) (head s2)) (isPrefix eq (tail s1) (tail s2))
+recursive let isPrefix : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool
+  = lam eq. lam s1. lam s2.
+    if null s1 then true
+    else if null s2 then false
+    else and (eq (head s1) (head s2)) (isPrefix eq (tail s1) (tail s2))
 end
 
 utest isPrefix eqi [] [1,2,3] with true
@@ -517,8 +518,9 @@ utest isPrefix eqi [1,2,3,4] [1,2,3] with false
 utest isPrefix eqi [2,3] [1,2,3] with false
 
 -- Check if s1 is a suffix of s2
-let isSuffix = lam eq. lam s1. lam s2.
-  isPrefix eq (reverse s1) (reverse s2)
+let isSuffix : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool
+  = lam eq. lam s1. lam s2.
+    isPrefix eq (reverse s1) (reverse s2)
 
 utest isSuffix eqi [] [1,2,3] with true
 utest isSuffix eqi [2,3] [1,2,3] with true
