@@ -36,7 +36,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     if nameEq t.ident rm then
       t.inexpr
     else smap_Expr_Expr (rmCopy rm) (TmLet t)
-  | t -> t
+  | t -> smap_Expr_Expr (rmCopy rm) t
 
   sem pevalPass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
                   Expr -> (Map Name Name, Expr)
