@@ -1158,7 +1158,7 @@ end
 
 lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
   sem typePrecedence =
-  | TyAlias _ -> 1
+  | TyAlias t -> typePrecedence t.display
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyAlias t -> getTypeStringCode indent env t.display
