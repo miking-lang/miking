@@ -12,10 +12,13 @@ include "error.mc"
 include "set.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/lamlift.mc"
+include "mexpr/shallow-patterns.mc"
 
-lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
-                    + SpecializeInclude + SpecializeLiftMExpr
-                    + MExprLambdaLift + SpecializeExtract
+
+lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclude +
+                    SpecializeLiftMExpr + MExprLambdaLift + SpecializeExtract +
+                    MExprLowerNestedPatterns 
 
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
@@ -47,6 +50,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       -- we will only look at addi x y
       let toSpec = createSpecExpr e t.body in
 
+      let toSpec = lowerAll toSpec in
+
       -- Update the map of names that have been bound already
       let args = updateIds args idMap in
 
@@ -55,7 +60,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       -- The environment holds the free variables of the expression to spec.
       match getLiftedEnv pnames args toSpec with (args, pevalEnv) in
       match liftExpr pnames args toSpec with (args, pevalArg) in
-      match liftName args (nameSym "residualID") with (args, id) in
+      match liftName pnames args (nameSym "residualID") with (args, id) in
 
       let jitCompile = nvar_ (jitName pnames) in
       let placeHolderPprint = nvar_ (nameMapName pnames) in

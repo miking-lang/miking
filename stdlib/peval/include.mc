@@ -173,7 +173,7 @@ let includeTyConsNames =
    "AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
 let includeOtherFuncs =
-  ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "_noSymbol"]
+  ["mapFromSeq", "stringToSid", "mapMapWithKey", "toString", "_noSymbol", "nameCmp"]
 
 let includeSpecializeNames = ["pevalWithEnv", "jitCompile"]
 
