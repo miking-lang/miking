@@ -1,17 +1,16 @@
 (define-module (miking)
   #:use-module (guix build-system dune)
-  #:use-module (guix build-system gnu)
   #:use-module (guix build-system ocaml)
   #:use-module (guix build-system trivial)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
   #:use-module (guix packages)
+  #:use-module (guix utils)
   #:use-module ((guix licenses) #:prefix license:)
   #:use-module (gnu packages compression)
   #:use-module (gnu packages maths)
   #:use-module (gnu packages autotools)
   #:use-module (gnu packages base)
-  #:use-module (gnu packages commencement)
   #:use-module (gnu packages python)
   #:use-module (gnu packages python-xyz)
   #:use-module (gnu packages ocaml))
@@ -225,7 +224,8 @@ the OCaml compiler.")
     (license license:expat)))
 
 
-(define-public miking
+;; A base Miking definition with only the dependencies needed to bootstrap the compiler.
+(define miking-base
   (package
     (name "miking")
     (version "0.0.1")
@@ -239,43 +239,33 @@ the OCaml compiler.")
        (sha256
         (base32
          "16ixfrrn9ns3ypr7c4krpham1lx32i801d12yv0f4y3fl8fn5vv2"))))
-    (build-system gnu-build-system)
+    (build-system dune-build-system)
+    (propagated-inputs (list ocaml-linenoise))
     (arguments
-     '(#:test-target "test-all-prune-utests" ;; Test everything but java and javascript
+     `(#:tests? #f
+       #:modules ((guix build dune-build-system)
+                  (guix build utils)
+                  ((guix build gnu-build-system) #:prefix gnu:))
+       #:imported-modules (,@%dune-build-system-modules
+                           (guix build gnu-build-system))
        #:phases
-       (modify-phases %standard-phases
+       (modify-phases gnu:%standard-phases
          (delete 'configure)
          (add-before 'build 'fixup-makescript
            (lambda _
-               (substitute* "make.sh"
-                 (("OCAMLPATH=") "OCAMLPATH=$OCAMLPATH:"))
-               (substitute* "test-boot.mk"
-                 (("MCORE_LIBS=") "OCAMLPATH=${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS="))))
+             (substitute* "make.sh"
+               (("OCAMLPATH=") "OCAMLPATH=$OCAMLPATH:"))
+             (substitute* "test-boot.mk"
+               (("MCORE_LIBS=") "OCAMLPATH=${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS="))))
          (replace 'install
-           (lambda* (#:key inputs outputs #:allow-other-keys)
+           (lambda* (#:key outputs #:allow-other-keys)
              (let* ((out (assoc-ref outputs "out"))
                     (bin (string-append out "/bin"))
                     (lib (string-append out "/lib")))
                (invoke "dune" "install" "--prefix" out "--libdir"
                        (string-append lib "/ocaml/site-lib"))
                (install-file "build/mi" bin)
-               (mkdir-p (string-append lib "/mcore"))
-               (install-file "stdlib" (string-append lib "/mcore"))))))))
-    (propagated-inputs
-     (list
-      coreutils ;; For sys.mc (mkdir, echo, rm, ...)
-      gcc-toolchain ;; Needed to assemble the result of compilation
-      ocaml5.0-dune
-      ocaml-5.0
-      ocaml-base-bytes ;; Needed for ocaml5.0-{lwt,owl}
-      (package-with-ocaml5.0 ocaml-linenoise)
-      (package-with-ocaml5.0 ocaml-lwt) ;; For async-ext.mc
-      (package-with-ocaml5.0 ocaml-owl) ;; For dist-ext.mc
-      (package-with-ocaml5.0 ocaml-toml) ;; For toml-ext.mc
-      (package-with-ocaml5.0 ocaml-pyml) ;; For boot python bindings
-      python ;; For boot python bindings
-      which ;; For sys.mc
-      ))
+               (copy-recursively "stdlib" (string-append lib "/mcore/stdlib"))))))))
     (synopsis "Meta language system for creating embedded DSLs.")
     (description "Miking (Meta vIKING) is a meta language system for creating
 embedded domain-specific and general-purpose languages.  The system features
@@ -283,3 +273,42 @@ a polymorphic core calculus and a DSL definition language where languages
 can be extended and composed from smaller fragments.")
     (home-page "https://miking.org")
     (license license:expat)))
+
+
+;; The full Miking compiler based on OCaml 5.0, with all dependencies
+;; needed for test-compile to pass.
+(define ocaml5.0-miking
+  (package-with-ocaml5.0
+   (package
+     (inherit miking-base)
+     (arguments
+      (ensure-keyword-arguments
+       (package-arguments miking-base)
+       '(#:tests? #t
+         #:test-target "test-compile")))
+     (propagated-inputs
+      (modify-inputs
+       (package-propagated-inputs miking-base)
+       (append
+        coreutils        ;; For sys.mc (mkdir, echo, rm, ...)
+        binutils         ;; Needed to assemble the result of compilation
+        ocaml-base-bytes ;; Needed for ocaml5.0-{lwt,owl}
+        ocaml-lwt        ;; For async-ext.mc
+        ocaml-owl        ;; For dist-ext.mc
+        ocaml-toml       ;; For toml-ext.mc
+        which            ;; For sys.mc
+
+        ;; Boot python bindings excluded to decrease dependencies
+        ;; ocaml-pyml    ;; For boot python bindings
+        ;; python        ;; For boot python bindings
+
+        ;; TODO(aathn, 2023-05-25): Add support / package variations for
+        ;; other dependencies like javascript, java, and sundials
+
+        ))))))
+
+
+(define-public miking
+  (package
+    (inherit ocaml5.0-miking)
+    (name "miking")))
