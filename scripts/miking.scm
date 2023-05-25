@@ -2,6 +2,7 @@
   #:use-module (guix build-system dune)
   #:use-module (guix build-system gnu)
   #:use-module (guix build-system ocaml)
+  #:use-module (guix build-system trivial)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
   #:use-module (guix packages)
@@ -185,12 +186,42 @@ OCaml primitive types are also supplied.")
     (home-page "https://github.com/owlbarn/owl")
     (synopsis "OCaml Scientific and Engineering Computing")
     (description
-     "Owl: OCaml Scientific and Engineering Computing Owl is an OCaml numerical
-library.  It supports N-dimensional arrays, both dense and sparse matrix
-operations, linear algebra, regressions, fast Fourier transforms, and many
-advanced mathematical and statistical functions (such as Markov chain Monte
-Carlo methods).  Recently, Owl has implemented algorithmic differentiation which
-simplifies developing machine learning and neural network algorithms.")
+     "Owl is an OCaml numerical library.  It supports N-dimensional
+arrays, both dense and sparse matrix operations, linear algebra,
+regressions, fast Fourier transforms, and many advanced mathematical
+and statistical functions (such as Markov chain Monte Carlo methods).
+Recently, Owl has implemented algorithmic differentiation which
+simplifies developing machine learning and neural network
+algorithms.")
+    (license license:expat)))
+
+(define-public ocaml-base-bytes
+  (package
+    (name "ocaml-base-bytes")
+    (version "base")
+    (source #f)
+    (build-system trivial-build-system)
+    (arguments
+     '(#:modules ((guix build utils))
+       #:builder
+       (begin
+         (use-modules (guix build utils))
+         (let ((bytes (string-append (assoc-ref %outputs "out")
+                                     "/lib/ocaml/bytes")))
+           (mkdir-p bytes)
+           (call-with-output-file (string-append bytes "/META")
+             (lambda (port)
+               (format port "
+name=\"bytes\"
+version=\"[distributed with OCaml 4.02 or above]\"
+description=\"dummy backward-compatibility package for mutable strings\"
+requires=\"\"
+")))))))
+    (home-page "https://opam-4.ocaml.org/packages/base-bytes/")
+    (synopsis "Dummy backward-compatibility package for mutable strings")
+    (description
+     "A dummy package for depending on the base Bytes module distributed with
+the OCaml compiler.")
     (license license:expat)))
 
 
@@ -236,6 +267,7 @@ simplifies developing machine learning and neural network algorithms.")
       gcc-toolchain ;; Needed to assemble the result of compilation
       ocaml5.0-dune
       ocaml-5.0
+      ocaml-base-bytes ;; Needed for ocaml5.0-{lwt,owl}
       (package-with-ocaml5.0 ocaml-linenoise)
       (package-with-ocaml5.0 ocaml-lwt) ;; For async-ext.mc
       (package-with-ocaml5.0 ocaml-owl) ;; For dist-ext.mc
