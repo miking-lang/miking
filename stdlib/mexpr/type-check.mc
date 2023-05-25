@@ -616,14 +616,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
       mkAppTy (resolveType info allowUnknown tycons constr) args
 
   | TyUnknown _ & ty ->
-    if allowUnknown then ty
-    else
-      let msg = join [
-        "* Encountered Unknown type in an illegal position.\n",
-        "* Unknown is only allowed in annotations, not in definitions or declarations.\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle [info] msg
+    ty
 
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.

@@ -415,7 +415,7 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst + VariantTypeAst
     match pprintTypeName env ident with (env,identStr) in
     match mapAccumL pprintEnvGetStr env params with (env, paramsStr) in
     let paramStr = strJoin " " (cons "" paramsStr) in
-    match tyIdent with TyUnknown _ | TyVariant _ then
+    match tyIdent with TyVariant _ then
       (env, join ["type ", identStr, paramStr])
     else
       match getTypeStringCode indent env tyIdent with (env, tyIdentStr) in
