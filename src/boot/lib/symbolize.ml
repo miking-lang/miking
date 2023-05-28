@@ -236,6 +236,10 @@ let rec symbolize (env : sym_env) (t : tm) =
       let s = Symb.gensym () in
       TmExt
         (fi, x, s, e, ty, symbolize (addsym (IdVar (sid_of_ustring x)) s env) t)
+  | TmDive (fi, l, t) ->
+      TmDive (fi, l, symbolize env t)
+  | TmPreRun (fi, l, t) ->
+      TmPreRun (fi, l, symbolize env t)
   | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
@@ -297,5 +301,7 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmClos _
     | TmFix _
     | TmRef _
+    | TmDive _
+    | TmPreRun _
     | TmTensor _ ) as t ->
       (env, symbolize env t)

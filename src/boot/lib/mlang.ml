@@ -814,6 +814,10 @@ let rec desugar_tm nss env subs =
         , desugar_tm nss env subs body )
   | TmNever fi ->
       TmNever fi
+  | TmDive (fi, l, a) ->
+      TmDive (fi, l, desugar_tm nss env subs a)
+  | TmPreRun (fi, l, a) ->
+      TmPreRun (fi, l, desugar_tm nss env subs a)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ | TmRef _ | TmTensor _ | TmExt _) as tm ->
       tm

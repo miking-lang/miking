@@ -44,7 +44,7 @@ let reserved_strings = [
   ("case",          fun(i) -> Parser.CASE{i=i;v=()});
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
-  ("run",           fun(i) -> Parser.RUN{i=i;v=()});
+  ("prerun",        fun(i) -> Parser.PRERUN{i=i;v=()});
 
 
   (* Types *)
