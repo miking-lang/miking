@@ -1684,7 +1684,6 @@ let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
 
 and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
-  printf "*";
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s, _) -> (
@@ -1767,6 +1766,12 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
         eval env t2
     | None ->
         eval env t3 )
+  (* Dive *)
+  | TmDive (_, _, t) ->
+      eval env t
+  (* PreRun *)
+  | TmPreRun (_, _, t) ->
+      eval env t
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
@@ -1847,5 +1852,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmNever _
     | TmRef _
     | TmTensor _
+    | TmDive _
+    | TmPreRun _
     | TmExt _ ) as t ->
       (env, eval env t)

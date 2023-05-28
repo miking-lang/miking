@@ -313,6 +313,10 @@ and tm =
   | TmRef of info * tm ref
   (* Tensor *)
   | TmTensor of info * tm T.t
+  (* Dive *)
+  | TmDive of info * int * tm
+  (* Run *)
+  | TmPreRun of info * int * tm
 
 (* Kind of pattern name *)
 and patName =
@@ -456,6 +460,10 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, t', env))
   | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
       (acc, t)
+  | TmDive (fi, l, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmDive (fi, l, t'))
+  | TmPreRun (fi, l, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmPreRun (fi, l, t'))
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) (t : tm) : tm =
@@ -492,6 +500,8 @@ let tm_info = function
   | TmFix fi
   | TmRef (fi, _)
   | TmTensor (fi, _)
+  | TmDive (fi, _, _)
+  | TmPreRun (fi, _, _)
   | TmExt (fi, _, _, _, _, _) ->
       fi
 

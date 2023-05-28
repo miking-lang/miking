@@ -76,7 +76,7 @@
 %token <unit Ast.tokendata> CASE
 %token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> DIVE
-%token <unit Ast.tokendata> RUN
+%token <unit Ast.tokendata> PRERUN
 
 
 /* Types */
@@ -334,9 +334,11 @@ mexpr:
         TmLet(fi,unique_ident,Symb.Helpers.nosym,TyUnknown(fi),$2,$3)
       }
   | DIVE mexpr
-    { $2 }
-  | RUN mexpr
-    { $2 }
+    { let fi = mkinfo $1.i (tm_info $2) in
+      TmDive(fi, 0, $2) }
+  | PRERUN mexpr
+    { let fi = mkinfo $1.i (tm_info $2) in
+      TmPreRun(fi, 0, $2) }
   | USE ident IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
