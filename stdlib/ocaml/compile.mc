@@ -42,7 +42,7 @@ let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
                  r.stdout, "\n", r.stderr, "\n"]);
     exit 1
   else ();
-  let command = ["ocamlfind", "ocamlopt", "-thread -package \"boot\""
+  let command = ["ocamlfind", "ocamlopt", "-O3 -thread -package \"boot\""
                 ,"-linkpkg -linkall", programCmxPath, "main.ml"] in
   let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then
@@ -53,10 +53,8 @@ let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
   {
     run =
       lam stdin. lam args.
-        let command =
-          concat ["dune", "exec", "--no-build", "./program.exe", "--"] args
-        in
-        sysRunCommand command stdin (tempfile ""),
+      -- TODO(adamssonj, 2023-05-29): Add proper run command
+        {stdout="todo", stderr="todo", returncode=0},
     cleanup = lam. sysTempDirDelete td (); (),
     binaryPath = tempfile "a.out",
     keepFiles = [tempfile "program.cmi"]

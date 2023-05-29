@@ -17,7 +17,7 @@ let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
   -- Assume that needed dependencies are present in the cwd
   let includePath = sysGetCwd () in
 
-  let command = ["ocamlfind", "ocamlopt -package boot -shared -I ", includePath,
+  let command = ["ocamlfind", "ocamlopt -O3 -package boot -shared -I ", includePath,
                  " -o plugin.cmxs ", t] in
   let r = sysRunCommand command "" dir in
   (if neqi r.returncode 0 then
