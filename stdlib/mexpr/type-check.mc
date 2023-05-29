@@ -128,6 +128,14 @@ lang FlexTypeCmp = Cmp + FlexTypeAst
 end
 
 lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
+  sem typePrecedence =
+  | TyFlex t ->
+    switch deref t.contents
+    case Unbound _ then
+      100000
+    case Link ty then
+      typePrecedence ty
+    end
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyFlex t ->
     switch deref t.contents
