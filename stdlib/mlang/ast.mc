@@ -53,6 +53,7 @@ end
 lang SynDeclAst = DeclAst
   syn Decl =
   | DeclSyn {ident : Name,
+             params : [Name],
              defs : [{ident : Name, tyIdent : Type}],
              info : Info}
 end

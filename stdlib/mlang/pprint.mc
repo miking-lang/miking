@@ -82,6 +82,8 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
   | DeclSyn t ->
     match pprintTypeName env t.ident with (env, typeNameStr) in
+    match mapAccumL pprintEnvGetStr env t.params with (env, params) in
+    let params = join (map (concat " ") params) in
     match
       mapAccumL (lam env. lam syndef.
         match pprintConName env syndef.ident with (env, str) in
@@ -91,7 +93,7 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
       ) env t.defs
     with (env, defStrings) in
     (env, strJoin (pprintNewline indent)
-                  (cons (join ["syn ", typeNameStr, " ="]) defStrings))
+                  (cons (join ["syn ", typeNameStr, params, " ="]) defStrings))
 end
 
 
@@ -99,34 +101,42 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
   | DeclSem t ->
     match pprintEnvGetStr env t.ident with (env, baseStr) in
-    if and (null t.args) (null t.cases) then
-      -- sem typedecl
-      match getTypeStringCode indent env t.tyAnnot with (env, tyStr) in
-      (env, join ["sem ", baseStr, " : ", tyStr])
-    else
-      -- sem impl
-      match
-        mapAccumL (lam env. lam arg.
-          match pprintEnvGetStr env arg.ident with (env, baseStr) in
-          match arg.tyAnnot with TyUnknown _ then
-            (env, baseStr)
-          else
-            match getTypeStringCode indent env arg.tyAnnot with (env, tyStr) in
-            (env, join ["(", baseStr, " : ", tyStr, ")"])
-        ) env t.args
-      with (env, argStrs) in
-      match
-        mapAccumL (lam env. lam semcase.
-          match getPatStringCode (pprintIncr indent) env semcase.pat
-          with (env, patStr) in
-          match pprintCode (pprintIncr indent) env semcase.thn
-          with (env, exprStr) in
-          (env, join ["| ", patStr, " ->", pprintNewline (pprintIncr indent), exprStr])
-        ) env t.cases
-      with (arg, caseStrs) in
-      (env, strJoin (pprintNewline indent) (
-              cons (join ["sem ", baseStr, strJoin " " (cons "" argStrs), " ="])
-                   caseStrs))
+    match
+      match t.tyAnnot with !TyUnknown _ then
+        -- sem typedecl
+        match getTypeStringCode indent env t.tyAnnot with (env, tyStr) in
+        (env, Some (join ["sem ", baseStr, " : ", tyStr]))
+      else (env, None ())
+    with (env, mDecl) in
+    match
+      match (t.args, t.cases) with !([], []) then
+        -- sem impl
+        match
+          mapAccumL (lam env. lam arg.
+            match pprintEnvGetStr env arg.ident with (env, baseStr) in
+            match arg.tyAnnot with TyUnknown _ then
+              (env, baseStr)
+            else
+              match getTypeStringCode indent env arg.tyAnnot with (env, tyStr) in
+              (env, join ["(", baseStr, " : ", tyStr, ")"])
+          ) env t.args
+        with (env, argStrs) in
+        match
+          mapAccumL (lam env. lam semcase.
+            match getPatStringCode (pprintIncr indent) env semcase.pat
+            with (env, patStr) in
+            match pprintCode (pprintIncr indent) env semcase.thn
+            with (env, exprStr) in
+            (env, join ["| ", patStr, " ->", pprintNewline (pprintIncr indent), exprStr])
+          ) env t.cases
+        with (arg, caseStrs) in
+        let final = strJoin (pprintNewline indent) (
+                cons (join ["sem ", baseStr, strJoin " " (cons "" argStrs), " ="])
+                     caseStrs) in
+        (env, Some final)
+      else (env, None ())
+    with (env, mImpl) in
+    (env, strJoin "\n" (mapOption identity [mDecl, mImpl]))
 end
 
 lang LetDeclPrettyPrint = DeclPrettyPrint + LetDeclAst + LetPrettyPrint
