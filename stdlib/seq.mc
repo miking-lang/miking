@@ -337,6 +337,36 @@ with Some 6 using optionEq eqi
 utest findMap (lam x. if eqi x 0 then Some x else None ()) [1,2,3]
 with None () using optionEq eqi
 
+-- NOTE(larshum, 2023-05-02): Finds the minimum index in the given sequence for
+-- which applying the provided function yields a non-negative value. If there
+-- is no such element in the sequence, None is returned instead.
+--
+-- This function assumes the sequence is sorted according to the provided
+-- sequence, in the sense that 'map f s' yields a sequence of integers in
+-- increasing order.
+let lowerBoundBinarySearch : all a. (a -> Int) -> [a] -> Option Int = lam f. lam s.
+  recursive let work = lam first. lam count.
+    if gti count 0 then
+      let step = divi count 2 in
+      let idx = addi first step in
+      if lti (f (get s idx)) 0 then
+        work (addi first (addi step 1)) (subi count (addi step 1))
+      else work first step
+    else first
+  in
+  let idx = work 0 (length s) in
+  if eqi idx (length s) then None ()
+  else Some idx
+
+let s = [0,1,2,3,4,5,6,7,8,9]
+utest lowerBoundBinarySearch (lam x. x) s with Some 0
+utest lowerBoundBinarySearch (lam x. subi x 9) s with Some 9
+utest lowerBoundBinarySearch (lam x. subi x 5) s with Some 5
+utest lowerBoundBinarySearch (lam x. subi x 12) s with None ()
+utest lowerBoundBinarySearch (lam x. subi x 1) [0,0,0,0,1,1,1,1,1,1] with Some 4
+utest lowerBoundBinarySearch (lam x. floorfi x) [negf 0.5,negf 0.3,negf 0.1,0.6,1.2]
+with Some 3
+
 let partition : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam p. lam seq.
   recursive let work = lam l. lam r. lam seq.
     match seq with [] then (l, r)
