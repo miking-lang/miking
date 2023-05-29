@@ -320,9 +320,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
   sem generateConstraintsConst info ident =
-  | CRef _ -> []
   | CModRef _ -> []
-  | CDeRef _ -> []
 
   sem generateHoleMatchConstraints (im: IndexMap) (id: Int) (target: Int) =
   | pat ->

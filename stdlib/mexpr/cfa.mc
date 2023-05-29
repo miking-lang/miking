@@ -1371,9 +1371,9 @@ end
 -- probably be added.
 lang RefOpCFA = CFA + ConstCFA + RefOpAst
   sem generateConstraintsConst info ident =
-  -- | CRef _ -> []
+  | CRef _ -> []
+  | CDeRef _ -> []
   -- | CModRef _ -> []
-  -- | CDeRef _ -> []
 end
 
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
