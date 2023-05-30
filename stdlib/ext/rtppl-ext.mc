@@ -31,9 +31,3 @@ external rtpplReadDistFloatRecord : Int -> Int -> [(Timespec, [(Float, Opaque)])
 external rtpplWriteDistFloatRecord : Int -> Int -> (Timespec, ([Opaque], [Float])) -> ()
 
 external rtpplBatchedInference : (() -> Opaque) -> Timespec -> [Opaque]
-
-mexpr
-
-utest setSigintHandler (lam. print "hello") with true using lam. lam. true in
-
-()
