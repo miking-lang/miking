@@ -30,6 +30,7 @@ let evalprog filename =
       |> prune_external_utests_boot |> debug_after_pruning_external_utests
       |> Deadcode.elimination builtin_sym2term builtin_name2sym []
       |> debug_after_dead_code_elimination
+      |> Mexpr.scan builtin_sym2term
       |> Mexpr.eval builtin_sym2term
       |> fun _ -> ()
     with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->

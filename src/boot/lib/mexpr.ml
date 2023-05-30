@@ -1682,6 +1682,16 @@ let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
         ( "Incorrect application. This is not a function: "
         ^ Ustring.to_utf8 (ustring_of_tm f) )
 
+and scan (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmLet (fi, x, s, ty, t1, t2) ->
+      let t1' = scan env t1 in
+      TmLet (fi, x, s, ty, t1', scan ((s, t1') :: env) t2)
+  | TmPreRun (_, _, t) ->
+      eval env t
+  | t ->
+      smap_tm_tm (scan env) t
+
 and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
