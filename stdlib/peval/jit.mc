@@ -34,7 +34,7 @@ let _jitCompiled = ref (mapEmpty nameCmp)
 
 let jitCompile : all a. Name -> Map Name String -> Expr -> a =
   lam id. lam pprintEnv.  lam e.
-  match mapLookup id (deref _jitCompiled) with Some f then f
+  match mapLookup id (deref _jitCompiled) with Some f then unsafeCoerce f
   else
     let nameToStr = lam id.
       let s = nameGetStr id in
