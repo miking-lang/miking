@@ -7,14 +7,11 @@ include "peval/include.mc"
 
 include "map.mc"
 include "name.mc"
-include "list.mc" -- listToSeq
 include "seq.mc"
 include "error.mc"
 include "set.mc"
 
 include "mexpr/ast.mc"
-include "mexpr/type-annot.mc"
-
 
 lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
                     + SpecializeInclude + SpecializeLiftMExpr
@@ -115,7 +112,7 @@ end
 
 
 lang TestLang = SpecializeCompile + MExprEq + MExprSym + MExprTypeCheck
-                + MExprPrettyPrint + MExprTypeAnnot
+                + MExprPrettyPrint
 end
 
 mexpr
@@ -124,6 +121,7 @@ use TestLang in
 let preprocess = lam t.
   typeCheck (symbolize t)
 in
+
 
 --let distinctCalls = preprocess (bindall_ [
 --  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
@@ -245,6 +243,6 @@ let distinctCalls = preprocess (bindall_ [
 
 match compileSpecialize unknownTyRecUnknown with ast in
 
-let ast = typeAnnot ast in
+printLn (mexprToString ast);
 
 ()
