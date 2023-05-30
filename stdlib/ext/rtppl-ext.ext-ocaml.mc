@@ -27,10 +27,10 @@ let rtpplExtMap =
     ( "clockNanosleep"
     , impl { expr = "Rtppl.clock_nanosleep"
            , ty = tyarrow_ timespec otyunit_ } ),
-    ( "setMaxPriority"
+    ( "rtpplSetMaxPriority"
     , impl { expr = "Rtppl.set_max_priority"
            , ty = tyarrow_ otyunit_ tyint_ } ),
-    ( "setPriority"
+    ( "rtpplSetPriority"
     , impl { expr = "Rtppl.set_priority"
            , ty = tyarrow_ tyint_ tyint_ } ),
     ( "rtpplOpenFileDescriptor"
