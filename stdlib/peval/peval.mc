@@ -70,8 +70,9 @@ lang PEval = PEvalCtx + Eval + PrettyPrint + MExprPrettyPrint
 
   sem pevalWithEnv : EvalEnv -> Expr -> Expr
   sem pevalWithEnv env =
-  | t -> let ctx = match pevalCtxEmpty () with t in {t with env = env} in
-        pevalReadback (pevalBind ctx (lam x. x) t)
+  | ast ->
+    let ctx = {pevalCtxEmpty () with env = env} in
+    pevalExpr ctx ast
 
   sem pevalIsValue : Expr -> Bool
   sem pevalIsValue =
