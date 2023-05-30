@@ -11,48 +11,48 @@ include "error.mc"
 include "list.mc"
 
 
-lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
+lang SpecializeAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
                 + MExprTypeCheck + LamEval + MExprPEval
 
   syn Expr =
-  | TmPEval {e: Expr, info: Info}
+  | TmSpecialize {e: Expr, info: Info}
 
   -- States that the new terms are indeed mapping from keywords
   sem isKeyword =
-  | TmPEval _ -> true
+  | TmSpecialize _ -> true
 
   -- Defines the new mapping from keyword to new terms
   sem matchKeywordString (info: Info) =
-  | "peval" -> Some (1, lam lst. TmPEval {e = get lst 0,
+  | "specialize" -> Some (1, lam lst. TmSpecialize {e = get lst 0,
                                           info = info})
-  sem tyTm = 
-  | TmPEval t -> tyTm t.e
+  sem tyTm =
+  | TmSpecialize t -> tyTm t.e
 
   sem infoTm =
-  | TmPEval t -> t.info
+  | TmSpecialize t -> t.info
 
   sem withType (ty : Type) =
-  | TmPEval t -> TmPEval {t with e = withType ty t.e}
+  | TmSpecialize t -> TmSpecialize {t with e = withType ty t.e}
 
-  sem typeCheckExpr (env : TCEnv) = 
-  | TmPEval t -> 
+  sem typeCheckExpr (env : TCEnv) =
+  | TmSpecialize t ->
     let e = typeCheckExpr env t.e in
-    TmPEval {t with e = e}
+    TmSpecialize {t with e = e}
 
   sem smapAccumL_Expr_Expr f acc =
-  | TmPEval t ->
+  | TmSpecialize t ->
     match f acc t.e with (acc, e) in
-    (acc, TmPEval {t with e = e})
+    (acc, TmSpecialize {t with e = e})
 
   -- Equality of the new terms
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmPEval r ->
-    match lhs with TmPEval l then
+  | TmSpecialize r ->
+    match lhs with TmSpecialize l then
       eqExprH env free l.e r.e
     else None ()
 
-  sem eval (ctx : EvalCtx) = 
-  | TmPEval e -> 
+  sem eval (ctx : EvalCtx) =
+  | TmSpecialize e ->
     switch eval ctx e.e
     case clos & TmClos _ then
       let res = peval clos in
@@ -62,42 +62,42 @@ lang PEvalAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
     case x then x
     end
 
-  sem isAtomic = 
-  | TmPEval _ -> false
+  sem isAtomic =
+  | TmSpecialize _ -> false
 
   sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmPEval t ->
+  | TmSpecialize t ->
     match printParen indent env t.e with (env, e) in
-    (env, join ["peval", pprintNewline indent , e])
+    (env, join ["specialize", pprintNewline indent , e])
 
 end
 
-let peval_ = lam e.
-  use PEvalAst in 
-  TmPEval {e = e, info = NoInfo ()}
+let specialize_ = lam e.
+  use SpecializeAst in
+  TmSpecialize {e = e, info = NoInfo ()}
 
 
-lang TestLang = PEvalAst + MExprEval
-end 
+lang TestLang = SpecializeAst + MExprEval
+end
 
-mexpr 
+mexpr
 
 use TestLang in
 
 let addfn_ = ulam_ "acc" (ulam_ "i" (addi_ (var_ "acc") (var_ "i"))) in
 
-let expr = app_ (var_ "peval") addfn_ in
-utest makeKeywords expr with peval_ (addfn_) using eqExpr in 
+let expr = app_ (var_ "specialize") addfn_ in
+utest makeKeywords expr with specialize_ (addfn_) using eqExpr in
 
-let expr = app_ (var_ "peval") (app_ addfn_ (int_ 3)) in
-utest makeKeywords expr with peval_ (app_ addfn_ (int_ 3)) using eqExpr in
+let expr = app_ (var_ "specialize") (app_ addfn_ (int_ 3)) in
+utest makeKeywords expr with specialize_ (app_ addfn_ (int_ 3)) using eqExpr in
 
 let arg = (appf2_ addfn_ (int_ 3) (int_ 4)) in
-let expr = app_ (var_ "peval") arg  in
-utest makeKeywords expr with peval_ arg using eqExpr in
+let expr = app_ (var_ "specialize") arg  in
+utest makeKeywords expr with specialize_ arg using eqExpr in
 
-let expr = app_ (var_ "peval") (int_ 3) in
-utest makeKeywords expr with peval_ (int_ 3) using eqExpr in
+let expr = app_ (var_ "specialize") (int_ 3) in
+utest makeKeywords expr with specialize_ (int_ 3) using eqExpr in
 
 
 ()

@@ -44,7 +44,7 @@ lang RecLetsFreeVars = FreeVars + RecLetsAst
     foldl (lam acc. lam b. setRemove b.ident acc) acc r.bindings
 end
 
-lang MatchFreeVars = FreeVars + MatchAst + NamedPat
+lang MatchFreeVars = FreeVars + MatchAst + NamedPat + SeqEdgePat
   sem freeVarsExpr acc =
   | TmMatch r ->
     freeVarsExpr
@@ -58,6 +58,9 @@ lang MatchFreeVars = FreeVars + MatchAst + NamedPat
   sem bindVarsPat : Set Name -> Pat -> Set Name
   sem bindVarsPat acc =
   | PatNamed {ident = PName ident} -> setRemove ident acc
+  | pat & (PatSeqEdge {middle = PName ident}) ->
+    let acc = setRemove ident acc in
+    sfold_Pat_Pat bindVarsPat acc pat
   | pat -> sfold_Pat_Pat bindVarsPat acc pat
 end
 
@@ -119,5 +122,21 @@ let prog = parseProgram "
 in
 
 utest testFreeVars prog with ["u", "w"] in
+
+let prog = parseProgram "
+  match t with [x] ++ xs in
+    x xs t r
+  "
+in
+
+utest testFreeVars prog with ["r", "t"] in
+
+let prog = parseProgram "
+  match t with [first] ++ mid ++ [last] in
+    first mid f r last t
+  "
+in
+
+utest testFreeVars prog with ["f", "r", "t"] in
 
 ()

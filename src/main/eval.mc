@@ -24,7 +24,7 @@ include "peval/ast.mc"
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
-  MExprProfileInstrument + MExprEval + PEvalAst
+  MExprProfileInstrument + MExprEval + SpecializeAst
 
   sem updateArgv : [String] -> Expr -> Expr
   sem updateArgv args =
@@ -45,7 +45,7 @@ let eval = lam files. lam options : Options. lam args.
   let evalFile = lam file.
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
-      keywords = pevalKeywords,
+      keywords = specializeKeywords,
       pruneExternalUtests = not options.disablePruneExternalUtests,
       pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
       findExternalsExclude = false, -- the interpreter does not support externals
