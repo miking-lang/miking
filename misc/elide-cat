@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+lines=$(wc -l < "$2")
+if test "$lines" -gt 0; then
+  echo "$1" output:
+  awk "FNR <= 6 || FNR >= $lines-5 {print FNR \":\t\" \$0; next} !el {print \"...elided...\"; el=1}" "$2"
+  echo
+  echo
+else
+  echo No output on "$1"
+  echo
+fi
