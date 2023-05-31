@@ -210,7 +210,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyParam = ityunknown_ info,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
@@ -256,7 +256,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyParam = ityunknown_ info,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
