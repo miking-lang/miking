@@ -14,6 +14,8 @@ include "mexpr/lamlift.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/shallow-patterns.mc"
+include "stringid.mc"
+include "mexpr/record.mc"
 
 let isConstSeq_ = use MExprAst in
     lam seq.
@@ -480,7 +482,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 else never
             else
                 toJSONExpr env els
-        else -- match () with ()
+        else -- match () with () 
             toJSONExpr { env with bytecode = snoc env.bytecode pop_ } thn
     | PatBool { val = val } ->
         let thnEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } thn in
@@ -595,6 +597,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                             bytecode = concat
                                 acc.bytecode
                                 [dup_,
+                                checkcast_ seq_T,
                                 ldcInt_ i,
                                 invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
                                 astore_ acc.localVars],
@@ -779,20 +782,22 @@ let collectADTTypes = lam tlMapping.
 
 
 let collectRecords = lam records.
-        foldl
-            (lam recordMap. lam tup.
-                let name = tup.1 in
-                let sidTypeMap = tup.0 in
-                let mapping =
-                    (foldli
-                        (lam map. lam i. lam tup.
-                            let sid = tup.0 in
-                            mapInsert sid i map)
-                        (mapEmpty cmpSID)
-                        (mapToSeq sidTypeMap)) in
-                mapInsert name mapping recordMap)
-            (mapEmpty nameCmp)
-            (mapToSeq records)
+    let recordMap = foldl
+        (lam recordMap. lam tup.
+            let name = tup.1 in
+            let sidTypeMap = tup.0 in
+            let sidList = map (lam tup. tup.0) (mapToSeq sidTypeMap) in
+            let orderedSidList = recordOrderedLabels sidList in
+            let mapping =
+                (foldli
+                    (lam map. lam i. lam sid.
+                        mapInsert sid i map)
+                    (mapEmpty cmpSID)
+                    orderedSidList) in
+            mapInsert name mapping recordMap)
+        (mapEmpty nameCmp)
+        (mapToSeq records) in
+    recordMap
 
 let compileJVMEnv = lam ast.
     use MExprJVMCompile in
@@ -827,7 +832,6 @@ let compileJVMEnv = lam ast.
             adtTags = adt.2,
             globalFuncMap = mapEmpty nameCmp,
             constSeqBC = [] } in
-    --(printLn (expr2str tlAst));
     let compiledEnv = (toJSONExpr env tlAst) in
     --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
@@ -837,14 +841,6 @@ let compileJVMEnv = lam ast.
     prog
 
 lang MExprJVMCompileLang = MExprJVMCompile + MExprLambdaLift + MExprTypeCheck + MExprPrettyPrint end
-
-let compileMCoreToJVM = lam ast.
-    use MExprJVMCompileLang in
-    let typeFix = typeCheck ast in -- types dissapear in pattern lowering
-    let liftedAst = liftLambdas typeFix in
-    let jvmProgram = compileJVMEnv liftedAst in
-    (print (toStringProg jvmProgram));
-    "aaa"
 
 let getJarFiles = lam tempDir.
     (sysRunCommand ["curl", "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.14.2/jackson-core-2.14.2.jar", "--output", (concat tempDir "jackson-core-2.14.2.jar")] "" ".");
@@ -861,6 +857,37 @@ let compileJava = lam outDir. lam jarPath.
     let classpath = (join [jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
     (sysRunCommand ["javac", "-cp", classpath, cfmClass, jsonParserClass, cwfClass, "-d", outDir] "" ".");
     ()
+
+let jvmTmpPath = "/tmp/miking-jvm-backend/"
+
+let compileMCoreToJVM = lam ast.
+    use MExprJVMCompileLang in
+    let typeFix = typeCheck ast in -- types dissapear in pattern lowering
+    let liftedAst = liftLambdas typeFix in
+    let jvmProgram = compileJVMEnv liftedAst in
+    (print (toStringProg jvmProgram));
+    --let json = sysTempFileMake () in
+    --writeFile json (toStringProg jvmProgram);
+    --let path = jvmTmpPath in 
+    --(match sysFileExists path with true then
+    --    (sysDeleteDir path);
+    --    (sysRunCommand ["mkdir", path] "" ".");
+    --    (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+    --    (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
+    --    ()
+    --else
+    --    (sysRunCommand ["mkdir", path] "" ".");
+    --    (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+    --    (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
+    --    ());
+    --(getJarFiles (concat path "jar/"));
+    --(compileJava (concat path "out/") (concat path "jar/"));
+    --let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar", jarPath, "scala-library-2.13.10.jar"]) in
+    --(sysRunCommand ["java", "-cp", (join [jvmTmpPath, "out/", classpath]), "codegen/Parser", json] "" jvmTmpPath);
+    --let results = sysRunCommand ["java", "-classpath", ":jar/scala-library-2.13.10.jar", "pkg.Main"] "" jvmTmpPath in
+    --sysDeleteDir json;
+    --results.stdout
+    "aaa"
 
 let modifyMainClassForTest = lam prog.
     use MExprJVMCompile in
@@ -894,8 +921,6 @@ let prepareForTests = lam path.
         (getJarFiles (concat path "jar/"));
         (compileJava (concat path "out/") (concat path "jar/"));
         ()
-
-let jvmTmpPath = "/tmp/miking-jvm-backend/"
 
 let testJVM = lam ast.
     use CombinedLang in

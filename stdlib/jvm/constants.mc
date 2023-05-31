@@ -652,7 +652,7 @@ let genSymbolClass_ = use JVMAst in
 let eqSymClass_ = use JVMAst in
     let endLabel = createName_ "end" in
     createClass 
-        "EqSym"
+        "Eqsym"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -662,7 +662,7 @@ let eqSymClass_ = use JVMAst in
             (foldl concat 
                 [ldcInt_ 0]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "EqSym") "var" object_LT,
+                getfield_ (concat pkg_ "Eqsym") "var" object_LT,
                 checkcast_ (concat pkg_ "Symbol"),
                 getfield_ (concat pkg_ "Symbol") "symbolInt" "I",
                 aload_ 1,
@@ -1858,11 +1858,11 @@ let foldrClass_ = use JVMAst in
                 iload_ len,
                 ificmpge_ endLabel,
                 aload_ func,
-                aload_ acc,
-                invokeinterface_ (concat pkg_ "Function") "apply" (methodtype_T object_LT object_LT),
                 aload_ seq,
                 iload_ i,
                 invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                invokeinterface_ (concat pkg_ "Function") "apply" (methodtype_T object_LT object_LT),
+                aload_ acc,
                 invokeinterface_ (concat pkg_ "Function") "apply" (methodtype_T object_LT object_LT),
                 astore_ acc,
                 iload_ i,
@@ -2237,7 +2237,7 @@ let constClassList_ =
     genSymbolClass_,
     refClass_,
     eqSymClass_,
-    twoArgApplyClass_ "EqSym",
+    twoArgApplyClass_ "Eqsym",
     consClass_,
     twoArgApplyClass_ "Cons",
     getClass_,

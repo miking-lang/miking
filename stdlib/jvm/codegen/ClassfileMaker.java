@@ -222,6 +222,9 @@ class ClassfileMaker {
                     break;
                 case "empty":
                     switch (bytecode.get("instr").asText()) {
+                        case "ISUB":
+                            mv.visitInsn(ISUB);
+                            break;
                         case "L2D":
                             mv.visitInsn(L2D);
                             break;
