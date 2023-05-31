@@ -19,6 +19,7 @@ con ParseTypeInt : String -> ParseType
 con ParseTypeIntMin : (String, Int) -> ParseType
 con ParseTypeFloat : String -> ParseType
 con ParseTypeFloatMin : (String, Float) -> ParseType
+con ParseTypeFloatInterval : (String, Float, Float) -> ParseType
 con ParseTypeGeneric : (String, String) -> ParseType
 
 type ArgPart a = {
@@ -136,6 +137,16 @@ let argToFloatMin : all a. ArgPart a -> Float -> Float = lam p. lam minVal.
   else
     v
 
+let argToFloatInterval : all a. ArgPart a -> Float -> Float -> Float
+  = lam p. lam minVal. lam maxVal.
+  let v = argToFloat p in
+  match deref p.fail with None () then
+    if or (ltf v minVal) (gtf v maxVal) then
+      modref p.fail (Some (ParseTypeFloatInterval (p.str, minVal, maxVal))); v
+    else
+      v
+  else
+    v
 
 -- argParse --
 
@@ -233,16 +244,25 @@ let argPrintErrorString = lam result.
   case ParseFailMissingOpArg s then
     join ["Option ", s, " is missing an argument value."]
   case ParseFailConversion (ptype, s) then
+    let receivedString = lam sval. join [", but received '", sval, "'."] in
     switch ptype
     case ParseTypeInt sval then
       join
-        ["Option ", s, " expects an integer value, but received '", sval, "'."]
+        ["Option ", s, " expects an integer value", receivedString sval]
     case ParseTypeFloat sval then
-      join ["Option ", s, " expects a float value, but received '", sval, "'."]
-    case ParseTypeIntMin (_, minVal) then
+      join ["Option ", s, " expects a float value", receivedString sval]
+    case ParseTypeFloatMin (sval, minVal) then
+      join ["Option ", s, " expects a float value of at least ",
+            float2string minVal, receivedString sval]
+    case ParseTypeFloatInterval (sval, minVal, maxVal) then
+      join
+        ["Option ", s, " expects a float value in the interval [",
+         float2string minVal, ", ", float2string maxVal,
+         "]", receivedString sval]
+    case ParseTypeIntMin (sval, minVal) then
       join
         ["Option ", s, " expects an integer value of at least ",
-         int2string minVal, "."]
+         int2string minVal, receivedString sval]
     case ParseTypeGeneric (msg, sval) then join [msg, " '", sval, "'."]
     end
   end
@@ -267,6 +287,8 @@ type Options = {
   len : Int,
   message : String,
   real : Float,
+  positiveReal : Float,
+  intervalReal : Float,
   complex : (Float, Float)
 } in
 
@@ -275,42 +297,49 @@ let default = {
   len = 7,
   message = "",
   real = 0.,
+  positiveReal = 1.,
+  intervalReal = 0.0,
   complex = (0., 0.)
 } in
 
 let config = [
   ([("--foo", "", "")],
-    "This is a boolean option. ",
-    lam p : ArgPart Options. let o : Options = p.options in {o with foo = true}),
+   "This is a boolean option. ",
+   lam p. { p.options with foo = true }),
   ([("--len", " ", "<value>")],
-    "A named argument followed by a space and then the integer value.",
-    lam p : ArgPart Options. let o : Options = p.options in {o with len = argToIntMin p 1}),
+   "A named argument followed by a space and then the integer value.",
+   lam p. { p.options with len = argToIntMin p 1 }),
   ([("-m", " ", "<msg>"),("--message", " ", "<msg>")],
-    "A string argument, with both short and long form arguments.",
-    lam p : ArgPart Options. let o : Options = p.options in {o with message = argToString p}),
+   "A string argument, with both short and long form arguments.",
+   lam p. { p.options with message = argToString p }),
   ([("--real", " ", "<value>")],
-    "A named argument followed by space and then the float value.",
-    lam p : ArgPart Options. let o : Options = p.options in {o with real = argToFloat p }),
+   "A named argument followed by space and then the float value.",
+   lam p. { p.options with real = argToFloat p }),
+  ([("--positiveReal", " ", "<value>")],
+   "A named argument followed by space and then the float value.",
+   lam p. { p.options with positiveReal = argToFloatMin p 0. }),
+  ([("--intervalReal", " ", "<value>")],
+   "A named argument followed by space and then the float value.",
+   lam p. { p.options with intervalReal = argToFloatInterval p 0. 1. }),
   ([("--complex", " ", "<value>")],
-    "A complex argument with a custom parser and error message.",
-    lam p : ArgPart Options.
-      let o : Options = p.options in
-      let strSplitTrim = lam delim. lam s. map strTrim (strSplit delim s) in
-      match strSplitTrim "+i" p.str with [re, im] then
-        if and (stringIsFloat re) (stringIsFloat im) then
-          { o with complex = (string2float re, string2float im) }
-        else
-          modref
-            p.fail
-            (Some (ParseTypeGeneric ("Re or Im part not real in", p.str)));
-          o
-      else
-        modref
-          p.fail
-          (Some
-            (ParseTypeGeneric
-              ("Could not identify Re and Im part in", p.str)));
-        o)
+   "A complex argument with a custom parser and error message.",
+   lam p.
+     let strSplitTrim = lam delim. lam s. map strTrim (strSplit delim s) in
+     match strSplitTrim "+i" p.str with [re, im] then
+       if and (stringIsFloat re) (stringIsFloat im) then
+         { p.options with complex = (string2float re, string2float im) }
+       else
+         modref
+           p.fail
+           (Some (ParseTypeGeneric ("Re or Im part not real in", p.str)));
+         p.options
+     else
+       modref
+         p.fail
+         (Some
+           (ParseTypeGeneric
+             ("Could not identify Re and Im part in", p.str)));
+       p.options)
 ] in
 
 let testOptions = {
@@ -321,6 +350,8 @@ let testOptions = {
     "--foo", "-m",
     "mymsg",
     "--real", "1.",
+    "--positiveReal", "1.",
+    "--intervalReal", "0.1",
     "--complex", "1+i2",
     "f2"
   ]
@@ -350,6 +381,52 @@ utest argPrintErrorString res with
   "Option --real expects a float value, but received 'noFloat'."
 in
 
+let testOptions =
+  {argParse_defaults with args = ["--positiveReal", "noFloat"]}
+in
+let res = argParse_general testOptions default config in
+utest res with
+  ParseFailConversion (ParseTypeFloat ("noFloat"), "--positiveReal")
+in
+utest argPrintErrorString res with
+  "Option --positiveReal expects a float value, but received 'noFloat'."
+in
+
+let testOptions =
+  {argParse_defaults with args = ["--positiveReal", "-1."]}
+in
+let res = argParse_general testOptions default config in
+utest res with
+  ParseFailConversion (ParseTypeFloatMin ("-1.", 0.), "--positiveReal")
+in
+utest argPrintErrorString res with
+  "Option --positiveReal expects a float value of at least 0., but received '-1.'."
+in
+
+
+let testOptions =
+  {argParse_defaults with args = ["--intervalReal", "noFloat"]}
+in
+let res = argParse_general testOptions default config in
+utest res with
+  ParseFailConversion (ParseTypeFloat ("noFloat"), "--intervalReal")
+in
+utest argPrintErrorString res with
+  "Option --intervalReal expects a float value, but received 'noFloat'."
+in
+
+let testOptions =
+  {argParse_defaults with args = ["--intervalReal", "-1."]}
+in
+let res = argParse_general testOptions default config in
+utest res with
+  ParseFailConversion (ParseTypeFloatInterval ("-1.", 0., 1.), "--intervalReal")
+in
+utest argPrintErrorString res with
+  "Option --intervalReal expects a float value in the interval [0., 1.], but received '-1.'."
+in
+
+
 let testOptions = {argParse_defaults with args = ["--complex", "noComplex"]} in
 let res = argParse_general testOptions default config in
 utest res with
@@ -365,7 +442,9 @@ let testOptions = {argParse_defaults with args = ["--len", "-2"]} in
 let res = argParse_general testOptions default config in
 utest res with ParseFailConversion (ParseTypeIntMin ("-2", 1), "--len") in
 utest argPrintErrorString res
-with "Option --len expects an integer value of at least 1." in
+  with
+  "Option --len expects an integer value of at least 1, but received '-2'."
+in
 
 let testOptions = {argParse_defaults with args = ["--messageNo", "msg"]} in
 let res = argParse_general testOptions default config in
@@ -392,6 +471,6 @@ utest res with ParseFailUnknownOption("--unknown") in
 
 let text = argHelpOptions config in
 --print "\n---\n"; print text; print "\n---\n";
-utest length text with 536 in
+utest length text with 776 in
 
 ()
