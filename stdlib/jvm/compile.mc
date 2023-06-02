@@ -390,19 +390,49 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         let realTy = unwrapType ty in
         let name = (match realTy with TyCon { ident = ident } then ident else never) in
         let mapping = (match mapLookup name env.recordMap with Some map then map else never) in
-        let i = (match mapLookup key mapping with Some i then i else never) in
+        let inew = (match mapLookup key mapping with Some i then i else never) in
         let valueEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } value in
         let recEnv = toJSONExpr env rec in
+        let arr = env.localVars in
+        let len = addi env.localVars 1 in 
+        let newarr = addi env.localVars 2 in 
+        let i = addi env.localVars 3 in 
+        let startLabel = createName_ "start" in
+        let endLabel = createName_ "end" in
         { recEnv with
             bytecode = foldl concat
                 recEnv.bytecode
                 [unwrapRecord_,
                 [dup_,
-                ldcInt_ i],
+                astore_ arr,
+                arraylength_, 
+                dup_,
+                istore_ len,
+                anewarray_ object_T,
+                astore_ newarr,
+                ldcInt_ 0,
+                istore_ i,
+                label_ startLabel,
+                ldcInt_ i,
+                ldcInt_ len,
+                ificmpge_ endLabel,
+                aload_ newarr,
+                ldcInt_ i,
+                aload_ arr,
+                ldcInt_ i,
+                aaload_,
+                aastore_,
+                iload_ i,
+                ldcInt_ 1,
+                iadd_,
+                istore_ i,
+                goto_ startLabel,
+                label_ endLabel,
+                aload_ newarr,
+                ldcInt_ inew],
                 valueEnv.bytecode,
-                [aastore_,
-                astore_ env.localVars],
-                wrapRecord_ [aload_ env.localVars]],
+                [aastore_],
+                wrapRecord_ [aload_ newarr]],
             classes = concat recEnv.classes valueEnv.classes,
             constSeqBC = concat recEnv.constSeqBC valueEnv.constSeqBC }
     | TmType _ -> (printLn "TmType: Should be gone"); env

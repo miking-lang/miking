@@ -1240,6 +1240,8 @@ let ceilfiClass_ = use JVMAst in
                 [areturn_]])]
     
 let roundfiClass_ = use JVMAst in
+    let endLabel = createName_ "end" in
+    let positive = createName_ "pos" in
     createClass
         "Roundfi"
         (concat pkg_ "Function")
@@ -1251,9 +1253,23 @@ let roundfiClass_ = use JVMAst in
             (foldl concat 
                 [aload_ 1]
                 [unwrapFloat_,
+                [ldcFloat_ 0.0,
+                dcmp_,
+                ifgt_ positive,
+                aload_ 1],
+                unwrapFloat_,
+                [dneg_,
+                invokestatic_ "java/lang/Math" "round" "(D)J",
+                lneg_],
+                wrapInteger_,
+                [goto_ endLabel,
+                label_ positive,
+                aload_ 1],
+                unwrapFloat_,
                 [invokestatic_ "java/lang/Math" "round" "(D)J"],
                 wrapInteger_,
-                [areturn_]])]
+                [label_ endLabel,
+                areturn_]])]
 
 let int2floatClass_ = use JVMAst in
     createClass
@@ -1683,8 +1699,9 @@ let wallTimeMsClass_ = use JVMAst in
                 (foldl concat
                     [aload_ 1]
                     [[pop_,
-                    invokestatic_ "java/lang/System" "currentTimeMillis" "()J"],
-                    wrapInteger_,
+                    invokestatic_ "java/lang/System" "currentTimeMillis" "()J",
+                    l2d_],
+                    wrapFloat_,
                     [areturn_]])]
 
 let refIntrinsicClass_ = use JVMAst in
