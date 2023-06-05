@@ -13,13 +13,13 @@ import java.util.*;
 import javax.swing.event.CaretEvent;
 import javax.swing.text.FieldView;
 
-import org.objectweb.asm.util.CheckClassAdapter;
+//import org.objectweb.asm.util.CheckClassAdapter;
 
 import com.fasterxml.jackson.databind.*;
 
 class ClassfileMaker {
-    CheckClassAdapter cw;
-    //ClassWriterF cw;
+    //CheckClassAdapter cw;
+    ClassWriterF cw;
     JsonNode classes;
     JsonNode interfaces;
     ClassWriterF iw;
@@ -58,8 +58,7 @@ class ClassfileMaker {
                 interf = new String[] {c.get("implements").asText()};
             }
 
-            ClassWriterF cv = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
-            cw = new CheckClassAdapter(cv);
+            cw = new ClassWriterF(ClassWriterF.COMPUTE_MAXS+ClassWriterF.COMPUTE_FRAMES);
             // version, access, name, signature, superName, String[] interfaces
             cw.visit(V1_5, ACC_PUBLIC + ACC_SUPER, pkg + c.get("name").asText(), null, "java/lang/Object", interf);
 
@@ -112,7 +111,7 @@ class ClassfileMaker {
             }
             cw.visitEnd();
 
-            outputClassfile(c.get("name").asText(), cv);
+            outputClassfile(c.get("name").asText(), cw);
         }
 
     }

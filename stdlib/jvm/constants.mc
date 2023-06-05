@@ -1,5 +1,6 @@
 include "jvm/ast.mc"
-
+include "stdlib.mc"
+include "sys.mc"
 
 let pkg_ = "pkg/"
 
@@ -2333,3 +2334,10 @@ let constClassList_ =
     threeArgApplyClass1_ "Set",
     threeArgApplyClass2_ "Set",
     argvClass_]
+
+let createRunScript_ = lam programName.
+    (sysRunCommand ["touch", programName] "" ".");
+    let script = join ["#!/bin/bash\n\n", "java -classpath :", stdlibLoc, "/jvm/jar/scala-library-2.13.10.jar ", "pkg.Main $*\n"] in
+    (writeFile programName script);
+    (sysRunCommand ["chmod", "+x", programName] "" ".");
+    ()

@@ -435,8 +435,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 wrapRecord_ [aload_ newarr]],
             classes = concat recEnv.classes valueEnv.classes,
             constSeqBC = concat recEnv.constSeqBC valueEnv.constSeqBC }
-    | TmType _ -> (printLn "TmType: Should be gone"); env
-    | TmConDef _ -> (printLn "TmConDef: Should be gone"); env
+    | TmType _ -> (error "TmType: Should be gone"); env
+    | TmConDef _ -> (error "TmConDef: Should be gone"); env
     | TmConApp { ident = ident, body = body } ->
         let constructor = nameGetStr ident in
         let bodyEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } body in
@@ -450,7 +450,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             classes = concat bodyEnv.classes env.classes,
             constSeqBC = concat bodyEnv.constSeqBC env.constSeqBC,
             recordMap = mapUnion env.recordMap bodyEnv.recordMap }
-    | TmUtest _ -> (printLn "TmUtest"); env
+    | TmUtest _ -> (error "TmUtest"); env
     | TmNever _ -> { env with bytecode = foldl concat
                             env.bytecode
                             [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
@@ -459,9 +459,9 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                             ldcInt_ 1,
                             invokestatic_ "java/lang/System" "exit" "(I)V"],
                             nothing_] }
-    | TmExt _ -> (printLn "TmExt"); env
+    | TmExt _ -> (error "TmExt"); env
     | a ->
-        (print "unknown expr\n");
+        (error "unknown expr\n");
         env
 
     sem jvmPat : JVMEnv -> Type -> Expr -> Expr -> Pat -> JVMEnv
@@ -752,16 +752,16 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else
             toJSONExpr { env with bytecode = snoc env.bytecode pop_ } thn
     | PatAnd _ ->
-        (printLn "Unknown PatAnd");
+        (error "Unknown PatAnd");
         env
     | PatOr _ ->
-        (printLn "Unknown PatOr");
+        (error "Unknown PatOr");
         env
     | PatNot _ ->
-        (printLn "Unknown PatNot");
+        (error "Unknown PatNot");
         env
     | a ->
-        (printLn "Unknown Pat");
+        (error "Unknown Pat");
         env
 
     sem getJavaType : Type -> String
@@ -863,8 +863,8 @@ let compileJVMEnv = lam ast.
             globalFuncMap = mapEmpty nameCmp,
             constSeqBC = [] } in
     let compiledEnv = (toJSONExpr env tlAst) in
-    --let bytecode = concat compiledEnv.bytecode [pop_, return_] in
-    let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
+    let bytecode = concat compiledEnv.bytecode [pop_, return_] in
+    --let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in
     let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC]] in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) (snoc adt.0 objToObj) in
@@ -888,35 +888,41 @@ let compileJava = lam outDir. lam jarPath.
     (sysRunCommand ["javac", "-cp", classpath, cfmClass, jsonParserClass, cwfClass, "-d", outDir] "" ".");
     ()
 
-let jvmTmpPath = "/tmp/miking-jvm-backend/"
+
+let prepare = lam path.
+    match sysCommandExists "java" with false then 
+        error "java needs to be installed\n"
+        ()
+    else
+        (match sysFileExists (concat path "jar/") with true then
+            ()
+        else
+            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+            (getJarFiles (concat path "jar/"));
+            ());
+        (match sysFileExists (concat path "/out") with true then 
+            ()
+        else 
+            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
+            (compileJava (concat path "out/") (concat path "jar/"));
+            ());
+        ()
 
 let compileMCoreToJVM = lam ast.
     use MExprJVMCompileLang in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
     let jvmProgram = compileJVMEnv liftedAst in
-    (print (toStringProg jvmProgram));
-    --let json = sysTempFileMake () in
-    --writeFile json (toStringProg jvmProgram);
-    --let path = jvmTmpPath in 
-    --(match sysFileExists path with true then
-    --    (sysDeleteDir path);
-    --    (sysRunCommand ["mkdir", path] "" ".");
-    --    (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-    --    (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-    --    ()
-    --else
-    --    (sysRunCommand ["mkdir", path] "" ".");
-    --    (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-    --    (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-    --    ());
-    --(getJarFiles (concat path "jar/"));
-    --(compileJava (concat path "out/") (concat path "jar/"));
-    --let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar", jarPath, "scala-library-2.13.10.jar"]) in
-    --(sysRunCommand ["java", "-cp", (join [jvmTmpPath, "out/", classpath]), "codegen/Parser", json] "" jvmTmpPath);
-    --let results = sysRunCommand ["java", "-classpath", ":jar/scala-library-2.13.10.jar", "pkg.Main"] "" jvmTmpPath in
-    --sysDeleteDir json;
-    --results.stdout
+    let path = concat stdlibLoc "/jvm/" in
+    let json = sysTempFileMake () in
+    writeFile json (toStringProg jvmProgram);
+    (prepare path);
+    let jarPath = concat path "jar/" in 
+    let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
+    (sysRunCommand ["java", "-cp", (join [path, "out/", classpath]), "codegen/Parser", json] "" ".");
+    sysDeleteDir json;
+    --create run script
+    (createRunScript_ "aaa");
     "aaa"
 
 let modifyMainClassForTest = lam prog.
@@ -931,27 +937,6 @@ let modifyMainClassForTest = lam prog.
     let modifiedMainClass = createClass m.name m.implements m.fields m.constructor [modifiedMainFunc] in
     createProg p.package (snoc (subsequence p.classes 0 (subi (length p.classes) 1)) modifiedMainClass) p.interfaces
 
-
-let prepareForTests = lam path.
-    match sysCommandExists "java" with false then 
-        error "java needs to be installed\n"
-        ()
-    else
-        (match sysFileExists path with true then
-            (sysDeleteDir path);
-            (sysRunCommand ["mkdir", path] "" ".");
-            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-            ()
-        else
-            (sysRunCommand ["mkdir", path] "" ".");
-            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-            ());
-        (getJarFiles (concat path "jar/"));
-        (compileJava (concat path "out/") (concat path "jar/"));
-        ()
-
 let testJVM = lam ast.
     use CombinedLang in
     let tc = typeCheck ast in
@@ -962,17 +947,18 @@ let testJVM = lam ast.
     let testJVMProgram = modifyMainClassForTest jvmProgram in
     let json = sysTempFileMake () in
     writeFile json (toStringProg testJVMProgram);
-    let jarPath = (concat jvmTmpPath "jar/") in
+    let path = concat stdlibLoc "/jvm/" in
+    let jarPath = "jar/" in
     let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
-    (sysRunCommand ["java", "-cp", (join [jvmTmpPath, "out/", classpath]), "codegen/Parser", json] "" jvmTmpPath);
-    let results = sysRunCommand ["java", "-classpath", ":jar/scala-library-2.13.10.jar", "pkg.Main"] "" jvmTmpPath in
+    (sysRunCommand ["java", "-cp", (join ["out/", classpath]), "codegen/Parser", json] "" path);
+    let results = sysRunCommand ["java", "-classpath", ":jar/scala-library-2.13.10.jar", "pkg.Main"] "" path in
     sysDeleteDir json;
     results.stdout
 
 -- tests
 
 mexpr
-prepareForTests jvmTmpPath;
+prepare (concat stdlibLoc "/jvm/");
 
 -- integer operations
 utest testJVM (addi_ (int_ 1) (int_ 1)) with "2" in
@@ -1045,6 +1031,5 @@ with "3" in
 
 -- random
 utest testJVM (bindall_ [ulet_ "a" (randSetSeed_ (int_ 1000)), randIntU_ (int_ 1) (int_ 10)]) with "5" in
-
-sysDeleteDir jvmTmpPath
+()
 
