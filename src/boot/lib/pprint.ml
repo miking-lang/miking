@@ -600,14 +600,14 @@ and print_tm' fmt t =
     if tystr = "Unknown" then "" else ":" ^ tystr
   in
   match t with
-  | TmVar (_, x, s, frozen) ->
+  | TmVar (_, x, s, _, frozen) ->
       let var_str =
         if frozen then string_of_ustring (ustring_of_frozen x s)
         else string_of_ustring (ustring_of_var x s)
       in
       (*  fprintf fmt "%s#%d" print s *)
       fprintf fmt "%s" var_str
-  | TmLam (_, x, s, ty, t1) ->
+  | TmLam (_, x, s, _, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov %d>lam %s%s.@ %a@]" !ref_indent x
@@ -705,7 +705,7 @@ and print_tm' fmt t =
         "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a using@ %a in@]@]@ %a@]"
         !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
         (Match, t3) print_tm (Match, t4)
-  | TmClos (_, x, _, t1, _) ->
+  | TmClos (_, x, _, _, t1, _) ->
       let x = string_of_ustring x in
       fprintf fmt "@[<hov %d>clos %s.@ %a@]" !ref_indent x print_tm (Lam, t1)
   | TmFix _ ->

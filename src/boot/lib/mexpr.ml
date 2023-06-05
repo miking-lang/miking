@@ -154,11 +154,11 @@ let reportErrorAndExit err =
 
 let getData = function
   (* Terms *)
-  | PTreeTm (TmVar (fi, x, _, frozen)) ->
+  | PTreeTm (TmVar (fi, x, _, _, frozen)) ->
       (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
-  | PTreeTm (TmLam (fi, x, _, ty, t)) ->
+  | PTreeTm (TmLam (fi, x, _, _, ty, t)) ->
       (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
       (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
@@ -2034,7 +2034,7 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
 and apply (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
   (* Closure application *)
-  | TmClos (ficlos, _, s, t3, env2), a -> (
+  | TmClos (ficlos, _, s, _, t3, env2), a -> (
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
@@ -2057,7 +2057,7 @@ and apply (fiapp : info) (f : tm) (a : tm) : tm =
   | TmConst (_, c), a ->
       delta apply fiapp c a
   (* Fix *)
-  | TmFix _, (TmClos (fi, _, s, t3, env2) as tt) ->
+  | TmFix _, (TmClos (fi, _, s, _, t3, env2) as tt) ->
       eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
   | TmFix _, _ ->
       raise_error (tm_info f) "Incorrect CFix"
@@ -2080,7 +2080,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (fi, _, s, _) -> (
+  | TmVar (fi, _, s, _, _) -> (
     match List.assoc_opt s env with
     | Some (TmApp (fi, (TmFix _ as f), a)) ->
         apply fi f a
@@ -2094,8 +2094,8 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       let a = eval env t2 in
       apply fiapp f a
   (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, _ty, t1) ->
-      TmClos (fi, x, s, t1, lazy env)
+  | TmLam (fi, x, s, pes, _ty, t1) ->
+      TmClos (fi, x, s, pes, t1, lazy env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env t1) :: env) t2
@@ -2104,8 +2104,8 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       let rec env' =
         lazy
           (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
+             | TmLam (fi, x, s, pes, _ty, t1) ->
+                 TmClos (fi, x, s, pes, t1, env')
              | tm ->
                  raise_error (tm_info tm)
                    "Right-hand side of recursive let must be a lambda"
@@ -2217,8 +2217,8 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
       let rec env' =
         lazy
           (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
+             | TmLam (fi, x, s, pes, _ty, t1) ->
+                 TmClos (fi, x, s, pes, t1, env')
              | tm ->
                  raise_error (tm_info tm)
                    "Right-hand side of recursive let must be a lambda"

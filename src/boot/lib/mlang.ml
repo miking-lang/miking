@@ -374,7 +374,7 @@ let flatten prg : program = snd (flatten_with_env Record.empty prg)
  ***************)
 
 module AstHelpers = struct
-  let var fi x = TmVar (fi, x, Symb.Helpers.nosym, false)
+  let var fi x = TmVar (fi, x, Symb.Helpers.nosym, None, false)
 
   let app fi l r = TmApp (fi, l, r)
 
@@ -666,14 +666,15 @@ let rec desugar_tm nss env subs =
   let map_right f (a, b) = (a, f b) in
   function
   (* Referencing things *)
-  | TmVar (fi, name, i, frozen) ->
-      TmVar (fi, resolve_id env name, i, frozen)
+  | TmVar (fi, name, i, pes, frozen) ->
+      TmVar (fi, resolve_id env name, i, pes, frozen)
   (* Introducing things *)
-  | TmLam (fi, name, s, ty, body) ->
+  | TmLam (fi, name, s, pes, ty, body) ->
       TmLam
         ( fi
         , empty_mangle name
         , s
+        , pes
         , desugar_ty env ty
         , desugar_tm nss (delete_id env name) subs body )
   | TmLet (fi, name, s, ty, e, body) ->
@@ -880,12 +881,13 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let inter_to_tm fname fi params cases =
         let target = us "__sem_target" in
         let wrap_param (Param (fi, name, ty)) tm =
-          TmLam (fi, name, Symb.Helpers.nosym, desugar_ty ns ty, tm)
+          TmLam (fi, name, Symb.Helpers.nosym, None, desugar_ty ns ty, tm)
         in
         TmLam
           ( fi
           , target
           , Symb.Helpers.nosym
+          , None
           , TyUnknown fi
           , translate_cases fi fname (var fi target) cases )
         |> List.fold_right wrap_param params

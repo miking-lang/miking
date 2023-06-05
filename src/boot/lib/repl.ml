@@ -148,6 +148,7 @@ let wrap_mexpr (Program (inc, tops, tm)) =
       ( NoInfo
       , us "_"
       , Symb.Helpers.nosym
+      , None
       , TyArrow (NoInfo, TyInt NoInfo, TyUnknown NoInfo)
       , tm )
   in
