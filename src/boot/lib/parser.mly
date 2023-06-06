@@ -312,10 +312,10 @@ mexpr:
         TmLet(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5,$7) }
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$2.v,Symb.Helpers.nosym,None,$3 $1.i,$5) }
+        TmLam(fi,$2.v,Symb.Helpers.nosym,false,$3 $1.i,$5) }
   | LAM DOT mexpr
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,us"",Symb.Helpers.nosym,None,TyUnknown(fi),$3) }
+        TmLam(fi,us"",Symb.Helpers.nosym,false,TyUnknown(fi),$3) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(fi,true),$4,$6) }
@@ -383,7 +383,7 @@ left:
 swcases:
   | CASE pat THEN mexpr swcases
       { let fi = mkinfo $1.i (tm_info $5) in
-        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym, None, false) in
+        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym, false, false) in
         TmMatch(fi,id,$2,$4,$5) }
   | END
       { TmNever($1.i) }
@@ -393,15 +393,15 @@ atom:
       { let fi = mkinfo (tm_info $1) (fst $3) in
         let id = unique_ident in
         TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,Symb.Helpers.nosym)))),
-                                TmVar(fi,id,Symb.Helpers.nosym,None,false), TmNever(fi)) }
+                                TmVar(fi,id,Symb.Helpers.nosym,false,false), TmNever(fi)) }
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, None, false) }
-  | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, None, true) }
+  | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, false) }
+  | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }

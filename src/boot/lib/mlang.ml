@@ -374,7 +374,7 @@ let flatten prg : program = snd (flatten_with_env Record.empty prg)
  ***************)
 
 module AstHelpers = struct
-  let var fi x = TmVar (fi, x, Symb.Helpers.nosym, None, false)
+  let var fi x = TmVar (fi, x, Symb.Helpers.nosym, false, false)
 
   let app fi l r = TmApp (fi, l, r)
 
@@ -881,13 +881,13 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let inter_to_tm fname fi params cases =
         let target = us "__sem_target" in
         let wrap_param (Param (fi, name, ty)) tm =
-          TmLam (fi, name, Symb.Helpers.nosym, None, desugar_ty ns ty, tm)
+          TmLam (fi, name, Symb.Helpers.nosym, false, desugar_ty ns ty, tm)
         in
         TmLam
           ( fi
           , target
           , Symb.Helpers.nosym
-          , None
+          , false
           , TyUnknown fi
           , translate_cases fi fname (var fi target) cases )
         |> List.fold_right wrap_param params

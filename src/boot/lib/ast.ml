@@ -55,7 +55,7 @@ type side_effect = bool
 
 type frozen = bool
 
-type pesym = Symb.t
+type pesym = bool
 
 (* Map type for record implementation *)
 module Record = struct
@@ -271,11 +271,11 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t * pesym option * frozen
+  | TmVar of info * ustring * Symb.t * pesym * frozen
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
-  | TmLam of info * ustring * Symb.t * pesym option * ty * tm
+  | TmLam of info * ustring * Symb.t * pesym * ty * tm
   (* Let *)
   | TmLet of info * ustring * Symb.t * ty * tm * tm
   (* Recursive lets *)
@@ -308,8 +308,7 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of
-      info * ustring * Symb.t * pesym option * tm * env Lazy.t (* Closure *)
+  | TmClos of info * ustring * Symb.t * pesym * tm * env Lazy.t (* Closure *)
   (* Fix point *)
   | TmFix of info
   (* Reference *)
