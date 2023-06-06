@@ -67,6 +67,7 @@ lang MExprExtract = MExprAst + MExprCallGraph
     else (used, inexpr)
   | TmUtest t -> extractAstH used t.next
   | TmExt t ->
+    let used = collectIdentifiersType used t.tyIdent in
     match extractAstH used t.inexpr with (used, inexpr) in
     if setMem t.ident used then (used, TmExt {t with inexpr = inexpr})
     else (used, inexpr)
@@ -124,7 +125,7 @@ lang MExprExtract = MExprAst + MExprCallGraph
 end
 
 lang TestLang =
-  MExprExtract + MExprEq + MExprSym + MExprTypeCheck 
+  MExprExtract + MExprEq + MExprSym + MExprTypeCheck + MExprPrettyPrint
 end
 
 mexpr
@@ -235,5 +236,17 @@ let extracted = preprocess (bindall_ [
   int_ 0
 ]) in
 utest extractAst (setOfSeq [t1, t2]) multipleDependOnSame with extracted using eqExpr in
+
+-- NOTE(larshum, 2023-05-30): This test checks that the type referred to only
+-- by an external is included, even if type-checking has not ran yet (meaning
+-- there are no other references to the type in the expression).
+let extTypeDependency = symbolize (bindall_ [
+  type_ "t" [] (tyvariant_ []),
+  ext_ "fun" false (tyarrow_ tyint_ (tycon_ "t")),
+  nulet_ f (ulam_ "x" (app_ (var_ "fun") (var_ "x"))),
+  int_ 0
+]) in
+utest expr2str (extractAst (setOfSeq [f]) extTypeDependency)
+with expr2str extTypeDependency using eqString in
 
 ()

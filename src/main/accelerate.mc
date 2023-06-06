@@ -21,6 +21,7 @@ include "futhark/well-formed.mc"
 include "futhark/wrapper.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/cse.mc"
+include "mexpr/demote-recursive.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/symbolize.mc"
@@ -42,7 +43,6 @@ include "pmexpr/extract.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-rewrite.mc"
 include "pmexpr/pprint.mc"
-include "pmexpr/recursion-elimination.mc"
 include "pmexpr/replace-accelerate.mc"
 include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
@@ -55,7 +55,7 @@ lang PMExprCompile =
   MExprSym + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprUtestGenerate + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
   PMExprTailRecursion + PMExprParallelPattern +
-  MExprLambdaLift + MExprCSE + PMExprRecursionElimination +
+  MExprLambdaLift + MExprCSE + MExprDemoteRecursive +
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +

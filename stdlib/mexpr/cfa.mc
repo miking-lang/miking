@@ -1367,13 +1367,65 @@ lang ConTagCFA = CFA + ConstCFA + ConTagAst
   | CConstructorTag _ -> []
 end
 
--- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
--- probably be added.
 lang RefOpCFA = CFA + ConstCFA + RefOpAst
+  syn AbsVal =
+  -- Abstract representation of references
+  | AVRef { contents: IName }
+
+  sem cmpAbsValH =
+  | (AVRef { contents = ilhs }, AVRef { contents = irhs }) -> subi ilhs irhs
+
+  sem absValToString im (env: PprintEnv) =
+  | AVRef { contents = contents } ->
+    match pprintVarIName im env contents with (env,contents) in
+    (env, join ["ref(", contents, ")"])
+
+  syn Constraint =
+  -- ref(name) ∈ lhs ⇒ {name} ⊆ rhs
+  | CstrRef {lhs : IName, rhs : IName}
+
+  sem cmpConstraintH =
+  | (CstrRef { lhs = lhs1, rhs = rhs1 },
+     CstrRef { lhs = lhs2, rhs = rhs2 }) ->
+     let d = subi lhs1 lhs2 in
+     if eqi d 0 then subi rhs1 rhs2
+     else d
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrRef r & cstr -> initConstraintName r.lhs graph cstr
+
+  sem constraintToString im (env: PprintEnv) =
+  | CstrRef { lhs = lhs, rhs = rhs } ->
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    (env, join [ "ref(name) ∈ ", lhs, " ⇒ {name} ⊆ ", rhs ])
+
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
+  | CstrRef { lhs = lhs, rhs = rhs } ->
+    match update.1 with AVRef { contents = contents } then
+      initConstraint graph (CstrDirect {lhs = contents, rhs = rhs})
+    else graph
+
   sem generateConstraintsConst info ident =
-  -- | CRef _ -> []
+  | (CRef _ | CDeRef _) & const -> [
+      CstrInit {
+        lhs = AVConst { id = ident, const = const, args = []}, rhs = ident
+      }
+  ]
+  -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+  -- probably be added.
   -- | CModRef _ -> []
-  -- | CDeRef _ -> []
+
+  sem propagateConstraintConst res args graph =
+  | CRef _ ->
+    utest length args with 1 in
+    initConstraint graph
+      (CstrInit {lhs = AVRef { contents = head args }, rhs = res})
+  | CDeRef _ ->
+    utest length args with 1 in
+    initConstraint graph
+      (CstrRef {lhs = head args, rhs = res})
+
 end
 
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
@@ -3704,6 +3756,29 @@ utest _test false t ["res", "res2", "p"] with [
   ("res", ["yy","z"]),
   ("res2", ["k","w"]),
   ("p", ["x"])
+] using eqTestLam in
+
+-- References
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+  let r1 = ref f in
+  let r2 = ref g in
+  let t1 = deref r1 in
+  let t2 = lam z.
+    let t3 = deref z in
+    t3
+  in
+  let t4 = t2 r1 in
+  let t5 = t2 r2 in
+  t5
+------------------------" in
+utest _test false t ["t1", "t2", "t3", "t4", "t5"] with [
+  ("t1", ["x"]),
+  ("t2", ["z"]),
+  ("t3", ["x","y"]),
+  ("t4", ["x","y"]),
+  ("t5", ["x","y"])
 ] using eqTestLam in
 
 -----------------

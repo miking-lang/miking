@@ -210,7 +210,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyParam = ityunknown_ info,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
@@ -256,7 +256,7 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = freeVar.1, tyParam = ityunknown_ info,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
@@ -467,16 +467,16 @@ lang LambdaLiftTyAlls = MExprAst
   sem insertTyAlls : Map Name TyAllData -> Expr -> Expr
   sem insertTyAlls tyAlls =
   | TmLet t ->
-    match insertTyAllsType tyAlls t.tyBody with (tyBody, bound) in
+    match insertTyAllsType tyAlls t.tyAnnot with (tyAnnot, bound) in
     let body = eraseUnboundTypesExpr bound t.body in
     let inexpr = insertTyAlls tyAlls t.inexpr in
-    TmLet {t with tyBody = tyBody, body = body,
+    TmLet {t with tyAnnot = tyAnnot, body = body,
                   ty = tyTm inexpr, inexpr = inexpr}
   | TmRecLets t ->
     let bindingFn = lam bind.
-      match insertTyAllsType tyAlls bind.tyBody with (tyBody, bound) in
+      match insertTyAllsType tyAlls bind.tyAnnot with (tyAnnot, bound) in
       let body = eraseUnboundTypesExpr bound bind.body in
-      {bind with tyBody = tyBody, body = body}
+      {bind with tyAnnot = tyAnnot, body = body}
     in
     let inexpr = insertTyAlls tyAlls t.inexpr in
     TmRecLets {t with bindings = map bindingFn t.bindings,
