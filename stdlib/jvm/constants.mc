@@ -2,7 +2,8 @@ include "jvm/ast.mc"
 include "stdlib.mc"
 include "sys.mc"
 
-let pkg_ = "pkg/"
+let pkgPrefix_ = "PKG/"
+let pkg_ = concat "aaa" pkgPrefix_
 
 -- Instructions --
 
@@ -2337,7 +2338,7 @@ let constClassList_ =
 
 let createRunScript_ = lam programName.
     (sysRunCommand ["touch", programName] "" ".");
-    let script = join ["#!/bin/bash\n\n", "java -classpath :", stdlibLoc, "/jvm/jar/scala-library-2.13.10.jar ", "pkg.Main $*\n"] in
+    let script = join ["#!/bin/bash\n\n", "java -classpath :", stdlibLoc, "/jvm/jar/scala-library-2.13.10.jar ", subsequence pkg_ 0 (subi (length pkg_) 1), ".Main $*\n"] in
     (writeFile programName script);
     (sysRunCommand ["chmod", "+x", programName] "" ".");
     ()
