@@ -241,7 +241,7 @@ lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
 
   sem liftExpr names args =
   | TmSpecialize _ ->
-    error "Nested peval"
+    error "Nested specialize"
 end
 
 
