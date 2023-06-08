@@ -243,6 +243,4 @@ let distinctCalls = preprocess (bindall_ [
 
 match compileSpecialize unknownTyRecUnknown with ast in
 
-printLn (mexprToString ast);
-
 ()
