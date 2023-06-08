@@ -42,8 +42,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     match mapLookup t.ident args.extractMap with Some e then
       -- Remove the copy of this let binding in the extracted bindings
       let e = rmCopy t.ident e in
-      -- Bind the dependencies to the thing we want to specialize
-      -- Goes under every lambda, i.e. if we do peval (lam x. addi x y)
+      -- Bind the dependencies to the thing we want to specialize, disregarding
+      -- any outer lambdas, i.e. with specialize (lam x. addi x y)
       -- we will only look at addi x y
       let toSpec = createSpecExpr e t.body in
 
@@ -61,7 +61,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       let p = nvar_ (mexprStringName pnames) in
       let ff = app_ p f in
       let fff = print_ ff in
-      -- Update the peval let-binding
+      -- Update the specialize let-binding
       let bodyn = updateBody (semi_ fff never_) t.body in
       (args.idMapping, TmLet {t with body = bodyn})
     else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
@@ -76,12 +76,12 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
   | ast ->
     if not (hasSpecializeTerm false ast) then ast
     else
-    match addIdentifierToSpecializeTerms ast with (pevalData, ast) in
+    match addIdentifierToSpecializeTerms ast with (specializeData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
 
-    let pevalIds : [Name] = mapKeys pevalData in
+    let specializeIds : [Name] = mapKeys specializeData in
 
-    let extractMap : Map Name Expr = extractSeparate pevalIds ast in
+    let extractMap : Map Name Expr = extractSeparate specializeIds ast in
 
     -- Bulk of the time taken
     match includeSpecializeDeps ast with ast in
