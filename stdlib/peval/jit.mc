@@ -49,6 +49,6 @@ let jitCompile : all a. Name -> Map Name String -> Expr -> a =
   in
   loadLibraries p.libPath;
   p.cleanup ();
-  let residual = unsafeCoerce (getExternal extId) in
+  let residual = getExternal extId in
   modref _jitCompiled (mapInsert id residual (deref _jitCompiled));
-  residual
+  unsafeCoerce residual
