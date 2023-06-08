@@ -107,12 +107,12 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let paramId = nameSym "x" in
     let paramTy = TyInt {info = info} in
     let functionData : AccelerateData = {
-    identifier = accelerateIdent,
-    bytecodeWrapperId = bytecodeIdent,
-    params = [(paramId, paramTy)],
-    paramCopyStatus = [CopyBoth ()],
-    returnType = retType,
-    info = info} in
+      identifier = accelerateIdent,
+      bytecodeWrapperId = bytecodeIdent,
+      params = [(paramId, paramTy)],
+      paramCopyStatus = [CopyBoth ()],
+      returnType = retType,
+      info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
     let funcType = TyArrow {from = paramTy, to = retType, info = info} in
     let accelerateLet =
