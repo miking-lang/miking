@@ -4,13 +4,15 @@
 include "pmexpr/extract.mc"
 include "peval/ast.mc"
 
---include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/extract.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+
 include "stringid.mc"
+include "name.mc"
+include "map.mc"
 
 
 lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
@@ -37,6 +39,15 @@ lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
   sem extractSpecializeTerms : Set Name -> Expr -> Expr
   sem extractSpecializeTerms ids =
   | ast -> extractAst ids ast
+
+  sem extractSeparate : [Name] -> Expr -> Map Name Expr
+  sem extractSeparate ids =| ast ->
+    foldl (lam m. lam id.
+      let idset = setOfSeq nameCmp [id] in
+      let extracted = extractSpecializeTerms idset ast in
+      mapInsert id extracted m
+    ) (mapEmpty nameCmp) ids
+
 
 end
 

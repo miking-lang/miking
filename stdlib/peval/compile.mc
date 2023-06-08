@@ -35,9 +35,9 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     else smap_Expr_Expr (rmCopy rm) (TmLet t)
   | t -> smap_Expr_Expr (rmCopy rm) t
 
-  sem pevalPass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
+  sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
                   Expr -> (Map Name Name, Expr)
-  sem pevalPass pnames args idMap =
+  sem specializePass pnames args idMap =
   | TmLet t ->
     match mapLookup t.ident args.extractMap with Some e then
       -- Remove the copy of this let binding in the extracted bindings
@@ -64,8 +64,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       -- Update the peval let-binding
       let bodyn = updateBody (semi_ fff never_) t.body in
       (args.idMapping, TmLet {t with body = bodyn})
-    else smapAccumL_Expr_Expr (pevalPass pnames args) idMap (TmLet t)
-  | t -> smapAccumL_Expr_Expr (pevalPass pnames args) idMap t
+    else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
+  | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
   sem hasSpecializeTerm : Bool -> Expr -> Bool
   sem hasSpecializeTerm acc =
@@ -78,25 +78,19 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     else
     match addIdentifierToSpecializeTerms ast with (pevalData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
-    -- [Name]
-    let pevalIds = mapKeys pevalData in
-    -- Map Name Expr
-    let eAsts = foldl (lam m. lam id.
-      -- Would be better if extract had an option where this can be done,
-      -- That is, instead of just storing one Expr, store one Expr per Name
-      let idset = setOfSeq nameCmp [id] in
-      let extracted = extractSpecializeTerms idset ast in
---      match eliminateDummyParameter solutions pevalData extracted
---      with (_, extracted) in
-      mapInsert id extracted m) (mapEmpty nameCmp) pevalIds in
+
+    let pevalIds : [Name] = mapKeys pevalData in
+
+    let extractMap : Map Name Expr = extractSeparate pevalIds ast in
 
     -- Bulk of the time taken
     match includeSpecializeDeps ast with ast in
+
     -- Find the names of the functions and constructors needed later
     let names = createNames ast in
 
-    let args = initArgs eAsts in
-    match pevalPass names args (mapEmpty nameCmp) ast
+    let args = initArgs extractMap in
+    match specializePass names args (mapEmpty nameCmp) ast
     with (idMapping, ast) in
 
     let ast = if gti (mapLength idMapping) 0 then
