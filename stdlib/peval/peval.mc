@@ -61,7 +61,7 @@ lang PEvalCtx = Eval + SideEffect
   }
 end
 
-lang PEval = PEvalCtx + Eval + PrettyPrint + MExprPrettyPrint
+lang PEval = PEvalCtx + Eval + PrettyPrint
   sem peval : Expr -> Expr
   sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
 
