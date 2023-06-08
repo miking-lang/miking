@@ -28,6 +28,21 @@ class ClassfileMaker {
 
     public ClassfileMaker(JsonNode json) {
         pkg = json.get("package").asText();
+
+        // delete old files
+        File pkgDir = new File(pkg);
+        if (pkgDir.exists()) {
+            if (pkgDir.exists()) {
+                File[] contents = pkgDir.listFiles();
+                if (contents != null) {
+                    for (File f : contents) {
+                        f.delete();
+                    }
+                }
+            }
+            pkgDir.delete();
+        }
+
         labels = new HashMap<String, Label>();
 
         interfaces = json.get("interfaces");

@@ -91,169 +91,169 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else match val with CArgv _ then
             [getstatic_ (concat pkg_ "Main") "argv" "Lscala/collection/immutable/Vector;"]
         else match val with CAddi _ then
-            initClass_ "Addi$"
+            initClass_ "Addi_INTRINSIC$"
         else match val with CSubi _ then
-            initClass_ "Subi$"
+            initClass_ "Subi_INTRINSIC$"
         else match val with CMuli _ then
-            initClass_ "Muli$"
+            initClass_ "Muli_INTRINSIC$"
         else match val with CModi _ then
-            initClass_ "Modi$"
+            initClass_ "Modi_INTRINSIC$"
         else match val with CDivi _ then
-            initClass_ "Divi$"
+            initClass_ "Divi_INTRINSIC$"
         else match val with CAddf _ then
-            initClass_ "Addf$"
+            initClass_ "Addf_INTRINSIC$"
         else match val with CSubf _ then
-            initClass_ "Subf$"
+            initClass_ "Subf_INTRINSIC$"
         else match val with CMulf _ then
-            initClass_ "Mulf$"
+            initClass_ "Mulf_INTRINSIC$"
         else match val with CDivf _ then
-            initClass_ "Divf$"
+            initClass_ "Divf_INTRINSIC$"
         else match val with CEqi _ then
-            initClass_ "Eqi$"
+            initClass_ "Eqi_INTRINSIC$"
         else match val with CNegi _ then
-            initClass_ "Negi"
+            initClass_ "Negi_INTRINSIC"
         else match val with CLti _ then
-            initClass_ "Lti$"
+            initClass_ "Lti_INTRINSIC$"
         else match val with CGti _ then
-            initClass_ "Gti$"
+            initClass_ "Gti_INTRINSIC$"
         else match val with CLeqi _ then
-            initClass_ "Leqi$"
+            initClass_ "Leqi_INTRINSIC$"
         else match val with CGeqi _ then
-            initClass_ "Geqi$"
+            initClass_ "Geqi_INTRINSIC$"
         else match val with CEqf _ then
-            initClass_ "Eqf$"
+            initClass_ "Eqf_INTRINSIC$"
         else match val with CNegf _ then
-            initClass_ "Negf"
+            initClass_ "Negf_INTRINSIC"
         else match val with CLtf _ then
-            initClass_ "Ltf$"
+            initClass_ "Ltf_INTRINSIC$"
         else match val with CGtf _ then
-            initClass_ "Gtf$"
+            initClass_ "Gtf_INTRINSIC$"
         else match val with CLeqf _ then
-            initClass_ "Leqf$"
+            initClass_ "Leqf_INTRINSIC$"
         else match val with CGeqf _ then
-            initClass_ "Geqf$"
+            initClass_ "Geqf_INTRINSIC$"
         else match val with CSlli _ then
-            initClass_ "Slli$"
+            initClass_ "Slli_INTRINSIC$"
         else match val with CSrli _ then
-            initClass_ "Srli$"
+            initClass_ "Srli_INTRINSIC$"
         else match val with CSrai _ then
-            initClass_ "Srai$"
+            initClass_ "Srai_INTRINSIC$"
         else match val with CNeqi _ then
-            initClass_ "Neqi$"
+            initClass_ "Neqi_INTRINSIC$"
         else match val with CNeqf _ then
-            initClass_ "Neqf$"
+            initClass_ "Neqf_INTRINSIC$"
         else match val with CEqc _ then
-            initClass_ "Eqc$"
+            initClass_ "Eqc_INTRINSIC$"
         else match val with CPrint _ then
-            initClass_ "Print"
+            initClass_ "Print_INTRINSIC"
         else match val with CRandIntU _ then
-            initClass_ "Rand$"
+            initClass_ "Rand_INTRINSIC$"
         else match val with CRandSetSeed _ then
-            initClass_ "RandSetSeed"
+            initClass_ "RandSetSeed_INTRINSIC"
         else match val with CFloorfi _ then
-            initClass_ "Floorfi"
+            initClass_ "Floorfi_INTRINSIC"
         else match val with CCeilfi _ then
-            initClass_ "Ceilfi"
+            initClass_ "Ceilfi_INTRINSIC"
         else match val with CRoundfi _ then
-            initClass_ "Roundfi"
+            initClass_ "Roundfi_INTRINSIC"
         else match val with CInt2float _ then
-            initClass_ "Int2float"
+            initClass_ "Int2float_INTRINSIC"
         else match val with CChar2Int _ then
-            initClass_ "Char2Int"
+            initClass_ "Char2Int_INTRINSIC"
         else match val with CInt2Char _ then
-            initClass_ "Int2Char"
+            initClass_ "Int2Char_INTRINSIC"
         else match val with CStringIsFloat _ then
-            initClass_ "StringIsFloat"
+            initClass_ "StringIsFloat_INTRINSIC"
         else match val with CString2float _ then
-            initClass_ "String2Float"
+            initClass_ "String2Float_INTRINSIC"
         else match val with CGensym _ then
-            initClass_ "GenSymIntrinsic"
+            initClass_ "GenSymIntrinsic_INTRINSIC"
         else match val with CSym2hash _ then
-            initClass_ "Sym2Hash"
+            initClass_ "Sym2Hash_INTRINSIC"
         else match val with CReverse _ then
-            initClass_ "Reverse"
+            initClass_ "Reverse_INTRINSIC"
         else match val with CHead _ then
-            initClass_ "Head"
+            initClass_ "Head_INTRINSIC"
         else match val with CTail _ then
-            initClass_ "Tail"
+            initClass_ "Tail_INTRINSIC"
         else match val with CLength _ then
-            initClass_ "Length"
+            initClass_ "Length_INTRINSIC"
         else match val with CFileExists _ then
-            initClass_ "FileExists"
+            initClass_ "FileExists_INTRINSIC"
         else match val with CFileRead _ then
-            initClass_ "FileRead"
+            initClass_ "FileRead_INTRINSIC"
         else match val with CFloat2string _ then
-            initClass_ "Float2String"
+            initClass_ "Float2String_INTRINSIC"
         else match val with CExit _ then
-            initClass_ "Exit"
+            initClass_ "Exit_INTRINSIC"
         else match val with CPrintError _ then
-            initClass_ "PrintError"
+            initClass_ "PrintError_INTRINSIC"
         else match val with CFileDelete _ then
-            initClass_ "FileDelete"
+            initClass_ "FileDelete_INTRINSIC"
         else match val with CError _ then
-            initClass_ "Error"
+            initClass_ "Error_INTRINSIC"
         else match val with CFlushStderr _ then
-            initClass_ "FlushStderr"
+            initClass_ "FlushStderr_INTRINSIC"
         else match val with CFlushStdout _ then
-            initClass_ "FlushStdout"
+            initClass_ "FlushStdout_INTRINSIC"
         else match val with CCommand _ then
-            initClass_ "Command"
+            initClass_ "Command_INTRINSIC"
         else match val with CSleepMs _ then
-            initClass_ "SleepMs"
+            initClass_ "SleepMs_INTRINSIC"
         else match val with CWallTimeMs _ then
-            initClass_ "WallTimeMs"
+            initClass_ "WallTimeMs_INTRINSIC"
         else match val with CRef _ then
-            initClass_ "RefIntrinsic"
+            initClass_ "RefIntrinsic_INTRINSIC"
         else match val with CDeRef _ then
-            initClass_ "DeRef"
+            initClass_ "DeRef_INTRINSIC"
         else match val with CEqsym _ then
-            initClass_ "Eqsym$"
+            initClass_ "Eqsym_INTRINSIC$"
         else match val with CCons _ then
-            initClass_ "Cons$"
+            initClass_ "Cons_INTRINSIC$"
         else match val with CGet _ then
-            initClass_ "Get$"
+            initClass_ "Get_INTRINSIC$"
         else match val with CSnoc _ then
-            initClass_ "Snoc$"
+            initClass_ "Snoc_INTRINSIC$"
         else match val with CConcat _ then
-            initClass_ "Concat$"
+            initClass_ "Concat_INTRINSIC$"
         else match val with CMap _ then
-            initClass_ "Map$"
+            initClass_ "Map_INTRINSIC$"
         else match val with CMapi _ then
-            initClass_ "Mapi$"
+            initClass_ "Mapi_INTRINSIC$"
         else match val with CIter _ then
-            initClass_ "Iter$"
+            initClass_ "Iter_INTRINSIC$"
         else match val with CIteri _ then
-            initClass_ "Iteri$"
+            initClass_ "Iteri_INTRINSIC$"
         else match val with CReadLine _ then
-            initClass_ "ReadLine"
+            initClass_ "ReadLine_INTRINSIC"
         else match val with CIsList _ then
-            initClass_ "IsList"
+            initClass_ "IsList_INTRINSIC"
         else match val with CIsRope _ then
-            initClass_ "IsRope"
+            initClass_ "IsRope_INTRINSIC"
         else match val with CSplitAt _ then
-            initClass_ "SplitAt$"
+            initClass_ "SplitAt_INTRINSIC$"
         else match val with CCreate _ then
-            initClass_ "Create$"
+            initClass_ "Create_INTRINSIC$"
         else match val with CCreateList _ then
-            initClass_ "CreateList$"
+            initClass_ "CreateList_INTRINSIC$"
         else match val with CCreateRope _ then
-            initClass_ "CreateRope$"
+            initClass_ "CreateRope_INTRINSIC$"
         else match val with CFoldl _ then
-            initClass_ "Foldl$"
+            initClass_ "Foldl_INTRINSIC$"
         else match val with CFoldr _ then
-            initClass_ "Foldr$"
+            initClass_ "Foldr_INTRINSIC$"
         else match val with CSubsequence _ then
-            initClass_ "SubSequence$"
+            initClass_ "SubSequence_INTRINSIC$"
         else match val with CNull _ then
-            initClass_ "Null"
+            initClass_ "Null_INTRINSIC"
         else match val with CModRef _ then
-            initClass_ "ModRef$"
+            initClass_ "ModRef_INTRINSIC$"
         else match val with CFileWrite _ then
-            initClass_ "FileWrite$"
+            initClass_ "FileWrite_INTRINSIC$"
         else match val with CDPrint _ then
-            initClass_ "DPrint"
+            initClass_ "DPrint_INTRINSIC"
         else match val with CSet _ then
-            initClass_ "Set$"
+            initClass_ "Set_INTRINSIC$"
         else never) in
         { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
@@ -908,7 +908,24 @@ let prepare = lam path.
             ());
         ()
 
-let compileMCoreToJVM = lam ast.
+let trimSourcePath = lam path.
+    let path = subsequence path 0 (subi (length path) 3) in 
+    match (foldl (lam acc. lam letter. match acc with true then true else eqc letter '/') false path) with true then
+        (foldli 
+            (lam acc. lam i. lam letter. 
+                match acc.1 with true then 
+                    acc 
+                else
+                    match eqc letter '/' with true then 
+                    (subsequence path (subi (length path) i) (subi (length path) 3), true) 
+                    else 
+                    acc) 
+            (path, false)
+            (reverse path)).0
+    else 
+        path
+
+let compileMCoreToJVM = lam ast. lam sourcePath. lam options.
     use MExprJVMCompileLang in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
@@ -922,6 +939,11 @@ let compileMCoreToJVM = lam ast.
     (sysRunCommand ["java", "-cp", (join [path, "out/", classpath]), "codegen/Parser", json] "" ".");
     sysDeleteDir json;
     --create run script
-    (createRunScript_ "aaa");
-    "aaa"
+    let outputPath = (match options.output with Some path then
+                            (sysRunCommand ["mkdir", path] "" ".");
+                            (sysRunCommand ["mv", pkg_, concat path pkg_] "" ".");
+                            path 
+                        else "") in
+    (createRunScript_ (concat outputPath (trimSourcePath sourcePath)));
+    "pkg/"
 

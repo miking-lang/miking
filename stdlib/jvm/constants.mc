@@ -2,8 +2,7 @@ include "jvm/ast.mc"
 include "stdlib.mc"
 include "sys.mc"
 
-let pkgPrefix_ = "PKG/"
-let pkg_ = concat "aaa" pkgPrefix_
+let pkg_ = "pkg/"
 
 -- Instructions --
 
@@ -497,7 +496,7 @@ let arithClassCB_ = use JVMAst in
 
 let randClass_ = use JVMAst in
     createClass -- Random(max - min) + min
-            "Rand" 
+            "Rand_INTRINSIC" 
             (concat pkg_ "Function") 
             [createField "var" object_LT] 
             defaultConstructor 
@@ -522,56 +521,56 @@ let randClass_ = use JVMAst in
                     wrapInteger_,
                     [areturn_]])]
 
-let subiClass_ = arithClassI_ "Subi" [lsub_]
+let subiClass_ = arithClassI_ "Subi_INTRINSIC" [lsub_]
 
-let subfClass_ = arithClassF_ "Subf" [dsub_]
+let subfClass_ = arithClassF_ "Subf_INTRINSIC" [dsub_]
 
-let addiClass_ = arithClassI_ "Addi" [ladd_]
+let addiClass_ = arithClassI_ "Addi_INTRINSIC" [ladd_]
 
-let addfClass_ = arithClassF_ "Addf" [dadd_]
+let addfClass_ = arithClassF_ "Addf_INTRINSIC" [dadd_]
 
-let muliClass_ = arithClassI_ "Muli" [lmul_]
+let muliClass_ = arithClassI_ "Muli_INTRINSIC" [lmul_]
 
-let mulfClass_ = arithClassF_ "Mulf" [dmul_]
+let mulfClass_ = arithClassF_ "Mulf_INTRINSIC" [dmul_]
 
-let diviClass_ = arithClassI_ "Divi" [ldiv_] 
+let diviClass_ = arithClassI_ "Divi_INTRINSIC" [ldiv_] 
 
-let divfClass_ = arithClassF_ "Divf" [ddiv_] 
+let divfClass_ = arithClassF_ "Divf_INTRINSIC" [ddiv_] 
 
-let modiClass_ = arithClassI_ "Modi" [lrem_] 
+let modiClass_ = arithClassI_ "Modi_INTRINSIC" [lrem_] 
 
-let slliClass_ = arithClassIjavaI_ "Slli" [lshl_] 
+let slliClass_ = arithClassIjavaI_ "Slli_INTRINSIC" [lshl_] 
 
-let srliClass_ = arithClassIjavaI_ "Srli" [lushr_] 
+let srliClass_ = arithClassIjavaI_ "Srli_INTRINSIC" [lushr_] 
 
-let sraiClass_ = arithClassIjavaI_ "Srai" [lshr_] 
+let sraiClass_ = arithClassIjavaI_ "Srai_INTRINSIC" [lshr_] 
 
-let eqiClass_ = arithClassIB_ "Eqi" [lcmp_, ifeq_ "end"] "end"
+let eqiClass_ = arithClassIB_ "Eqi_INTRINSIC" [lcmp_, ifeq_ "end"] "end"
 
-let neqiClass_ = arithClassIB_ "Neqi" [lcmp_, ifne_ "end"] "end"
+let neqiClass_ = arithClassIB_ "Neqi_INTRINSIC" [lcmp_, ifne_ "end"] "end"
 
-let ltiClass_ = arithClassIB_ "Lti" [lcmp_, iflt_ "end"] "end"
+let ltiClass_ = arithClassIB_ "Lti_INTRINSIC" [lcmp_, iflt_ "end"] "end"
 
-let gtiClass_ = arithClassIB_ "Gti" [lcmp_, ifgt_ "end"] "end"
+let gtiClass_ = arithClassIB_ "Gti_INTRINSIC" [lcmp_, ifgt_ "end"] "end"
 
-let leqiClass_ = arithClassIB_ "Leqi" [lcmp_, ifle_ "end"] "end"
+let leqiClass_ = arithClassIB_ "Leqi_INTRINSIC" [lcmp_, ifle_ "end"] "end"
 
-let geqiClass_ = arithClassIB_ "Geqi" [lcmp_, ifge_ "end"] "end"
+let geqiClass_ = arithClassIB_ "Geqi_INTRINSIC" [lcmp_, ifge_ "end"] "end"
 
-let eqfClass_ = arithClassFB_ "Eqf" [dcmp_, ifeq_ "end"] "end"
+let eqfClass_ = arithClassFB_ "Eqf_INTRINSIC" [dcmp_, ifeq_ "end"] "end"
 
-let neqfClass_ = arithClassFB_ "Neqf" [dcmp_, ifne_ "end"] "end"
+let neqfClass_ = arithClassFB_ "Neqf_INTRINSIC" [dcmp_, ifne_ "end"] "end"
 
-let ltfClass_ = arithClassFB_ "Ltf" [dcmp_, iflt_ "end"] "end"
+let ltfClass_ = arithClassFB_ "Ltf_INTRINSIC" [dcmp_, iflt_ "end"] "end"
 
-let gtfClass_ = arithClassFB_ "Gtf" [dcmp_, ifgt_ "end"] "end"
+let gtfClass_ = arithClassFB_ "Gtf_INTRINSIC" [dcmp_, ifgt_ "end"] "end"
 
-let leqfClass_ = arithClassFB_ "Leqf" [dcmp_, ifle_ "end"] "end"
+let leqfClass_ = arithClassFB_ "Leqf_INTRINSIC" [dcmp_, ifle_ "end"] "end"
 
-let geqfClass_ = arithClassFB_ "Geqf" [dcmp_, ifge_ "end"] "end"
+let geqfClass_ = arithClassFB_ "Geqf_INTRINSIC" [dcmp_, ifge_ "end"] "end"
 
 let endL = createName_ "end" 
-let eqcClass_ = arithClassCB_ "Eqc" [ificmpeq_ endL] endL
+let eqcClass_ = arithClassCB_ "Eqc_INTRINSIC" [ificmpeq_ endL] endL
 
 let recordConstructor = use JVMAst in
     createFunction 
@@ -654,7 +653,7 @@ let genSymbolClass_ = use JVMAst in
 let eqSymClass_ = use JVMAst in
     let endLabel = createName_ "end" in
     createClass 
-        "Eqsym"
+        "Eqsym_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -664,7 +663,7 @@ let eqSymClass_ = use JVMAst in
             (foldl concat 
                 [ldcInt_ 0]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "Eqsym") "var" object_LT,
+                getfield_ (concat pkg_ "Eqsym_INTRINSIC") "var" object_LT,
                 checkcast_ (concat pkg_ "Symbol"),
                 getfield_ (concat pkg_ "Symbol") "symbolInt" "I",
                 aload_ 1,
@@ -679,7 +678,7 @@ let eqSymClass_ = use JVMAst in
 
 let consClass_ = use JVMAst in
     createClass
-        "Cons"
+        "Cons_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -690,13 +689,13 @@ let consClass_ = use JVMAst in
                 [aload_ 1]
                 [[checkcast_ seq_T,
                 aload_ 0,
-                getfield_ (concat pkg_ "Cons") "var" object_LT,
+                getfield_ (concat pkg_ "Cons_INTRINSIC") "var" object_LT,
                 invokevirtual_ seq_T "$plus$colon" (methodtype_T object_LT object_LT),
                 areturn_]])]
 
 let snocClass_ = use JVMAst in
     createClass
-        "Snoc"
+        "Snoc_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -705,7 +704,7 @@ let snocClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat 
                 [aload_ 0,
-                getfield_ (concat pkg_ "Snoc") "var" object_LT]
+                getfield_ (concat pkg_ "Snoc_INTRINSIC") "var" object_LT]
                 [[checkcast_ seq_T,
                 aload_ 1,
                 invokevirtual_ seq_T "$colon$plus" (methodtype_T object_LT object_LT),
@@ -713,7 +712,7 @@ let snocClass_ = use JVMAst in
 
 let getClass_ = use JVMAst in 
     createClass
-        "Get"
+        "Get_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -722,7 +721,7 @@ let getClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat 
                 [aload_ 0,
-                getfield_ (concat pkg_ "Get") "var" object_LT]
+                getfield_ (concat pkg_ "Get_INTRINSIC") "var" object_LT]
                 [[checkcast_ seq_T,
                 aload_ 1],
                 unwrapInteger_,
@@ -732,7 +731,7 @@ let getClass_ = use JVMAst in
 
 let concatClass_ = use JVMAst in
     createClass
-        "Concat"
+        "Concat_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -741,7 +740,7 @@ let concatClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0,
-                getfield_ (concat pkg_ "Concat") "var" object_LT,
+                getfield_ (concat pkg_ "Concat_INTRINSIC") "var" object_LT,
                 checkcast_ seq_T]
                 [[aload_ 1,
                 checkcast_ seq_T,
@@ -757,7 +756,7 @@ let mapClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Map"
+        "Map_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -766,7 +765,7 @@ let mapClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0]
-                [[getfield_ (concat pkg_ "Map") "var" object_LT,
+                [[getfield_ (concat pkg_ "Map_INTRINSIC") "var" object_LT,
                 astore_ func,
                 ldcInt_ 0,
                 istore_ i,
@@ -811,7 +810,7 @@ let mapiClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Mapi"
+        "Mapi_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -820,7 +819,7 @@ let mapiClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0]
-                [[getfield_ (concat pkg_ "Mapi") "var" object_LT,
+                [[getfield_ (concat pkg_ "Mapi_INTRINSIC") "var" object_LT,
                 astore_ func,
                 ldcInt_ 0,
                 istore_ i,
@@ -869,7 +868,7 @@ let iterClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Iter"
+        "Iter_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -878,7 +877,7 @@ let iterClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0]
-                [[getfield_ (concat pkg_ "Iter") "var" object_LT,
+                [[getfield_ (concat pkg_ "Iter_INTRINSIC") "var" object_LT,
                 astore_ func,
                 ldcInt_ 0,
                 istore_ i,
@@ -916,7 +915,7 @@ let iteriClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Iteri"
+        "Iteri_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -925,7 +924,7 @@ let iteriClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0]
-                [[getfield_ (concat pkg_ "Iteri") "var" object_LT,
+                [[getfield_ (concat pkg_ "Iteri_INTRINSIC") "var" object_LT,
                 astore_ func,
                 ldcInt_ 0,
                 istore_ i,
@@ -961,7 +960,7 @@ let iteriClass_ = use JVMAst in
             
 let splitAtClass_ = use JVMAst in 
     createClass
-        "SplitAt"
+        "SplitAt_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -970,7 +969,7 @@ let splitAtClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0,
-                getfield_ (concat pkg_ "SplitAt") "var" object_LT,
+                getfield_ (concat pkg_ "SplitAt_INTRINSIC") "var" object_LT,
                 checkcast_ seq_T]
                 [[aload_ 1],
                 unwrapInteger_,
@@ -1004,7 +1003,7 @@ let createClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Create"
+        "Create_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -1015,7 +1014,7 @@ let createClass_ = use JVMAst in
                 [ldcInt_ 0,
                 istore_ i]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "Create") "var" object_LT],
+                getfield_ (concat pkg_ "Create_INTRINSIC") "var" object_LT],
                 unwrapInteger_,
                 [l2i_,
                 istore_ len,
@@ -1052,7 +1051,7 @@ let createListClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "CreateList"
+        "CreateList_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -1063,7 +1062,7 @@ let createListClass_ = use JVMAst in
                 [ldcInt_ 0,
                 istore_ i]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "CreateList") "var" object_LT],
+                getfield_ (concat pkg_ "CreateList_INTRINSIC") "var" object_LT],
                 unwrapInteger_,
                 [l2i_,
                 istore_ len,
@@ -1100,7 +1099,7 @@ let createRopeClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "CreateRope"
+        "CreateRope_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -1111,7 +1110,7 @@ let createRopeClass_ = use JVMAst in
                 [ldcInt_ 0,
                 istore_ i]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "CreateRope") "var" object_LT],
+                getfield_ (concat pkg_ "CreateRope_INTRINSIC") "var" object_LT],
                 unwrapInteger_,
                 [l2i_,
                 istore_ len,
@@ -1143,7 +1142,7 @@ let createRopeClass_ = use JVMAst in
 
 let printClass_ = use JVMAst in
     createClass
-        "Print"
+        "Print_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1160,7 +1159,7 @@ let printClass_ = use JVMAst in
 
 let negfClass_ = use JVMAst in
     createClass
-        "Negf"
+        "Negf_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1176,7 +1175,7 @@ let negfClass_ = use JVMAst in
 
 let negiClass_ = use JVMAst in
     createClass
-        "Negi"
+        "Negi_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1192,7 +1191,7 @@ let negiClass_ = use JVMAst in
 
 let randSetSeedClass_ = use JVMAst in
     createClass
-        "RandSetSeed"
+        "RandSetSeed_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1209,7 +1208,7 @@ let randSetSeedClass_ = use JVMAst in
 
 let floorfiClass_ = use JVMAst in
     createClass
-        "Floorfi"
+        "Floorfi_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1226,7 +1225,7 @@ let floorfiClass_ = use JVMAst in
 
 let ceilfiClass_ = use JVMAst in
     createClass
-        "Ceilfi"
+        "Ceilfi_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1245,7 +1244,7 @@ let roundfiClass_ = use JVMAst in
     let endLabel = createName_ "end" in
     let positive = createName_ "pos" in
     createClass
-        "Roundfi"
+        "Roundfi_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1275,7 +1274,7 @@ let roundfiClass_ = use JVMAst in
 
 let int2floatClass_ = use JVMAst in
     createClass
-        "Int2float"
+        "Int2float_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1291,7 +1290,7 @@ let int2floatClass_ = use JVMAst in
 
 let char2IntClass_ = use JVMAst in
     createClass
-        "Char2Int"
+        "Char2Int_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1307,7 +1306,7 @@ let char2IntClass_ = use JVMAst in
                 
 let int2charClass_ = use JVMAst in
     createClass
-        "Int2Char"
+        "Int2Char_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1321,7 +1320,7 @@ let int2charClass_ = use JVMAst in
  
 let stringIsFloatClass_ = use JVMAst in
     createClass
-        "StringIsFloat"
+        "StringIsFloat_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1349,7 +1348,7 @@ let stringIsFloatClass_ = use JVMAst in
                 
 let string2FloatClass_ = use JVMAst in
     createClass
-        "String2Float"
+        "String2Float_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1365,7 +1364,7 @@ let string2FloatClass_ = use JVMAst in
 
 let genSymClass_ = use JVMAst in
     createClass
-        "GenSymIntrinsic"
+        "GenSymIntrinsic_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1378,7 +1377,7 @@ let genSymClass_ = use JVMAst in
 
 let sym2HashClass_ = use JVMAst in
     createClass
-        "Sym2Hash"
+        "Sym2Hash_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1396,7 +1395,7 @@ let sym2HashClass_ = use JVMAst in
 
 let reverseClass_ = use JVMAst in
     createClass
-        "Reverse"
+        "Reverse_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1411,7 +1410,7 @@ let reverseClass_ = use JVMAst in
 
 let headClass_ = use JVMAst in
     createClass
-        "Head"
+        "Head_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1426,7 +1425,7 @@ let headClass_ = use JVMAst in
 
 let tailClass_ = use JVMAst in
     createClass
-        "Tail"
+        "Tail_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1441,7 +1440,7 @@ let tailClass_ = use JVMAst in
 
 let lengthClass_ = use JVMAst in
     createClass
-        "Length"
+        "Length_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1458,7 +1457,7 @@ let lengthClass_ = use JVMAst in
 
 let fileExistsClass_ = use JVMAst in
     createClass
-        "FileExists"
+        "FileExists_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1483,7 +1482,7 @@ let fileReadClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "FileRead"
+        "FileRead_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1535,7 +1534,7 @@ let fileReadClass_ = use JVMAst in
 
 let float2StringClass_ = use JVMAst in
     createClass
-        "Float2String"
+        "Float2String_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1551,7 +1550,7 @@ let float2StringClass_ = use JVMAst in
 
 let exitClass_ = use JVMAst in
     createClass
-        "Exit"
+        "Exit_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1568,7 +1567,7 @@ let exitClass_ = use JVMAst in
 
 let printErrorClass_ = use JVMAst in
     createClass
-        "PrintError"
+        "PrintError_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1585,7 +1584,7 @@ let printErrorClass_ = use JVMAst in
 
 let fileDeleteClass_ = use JVMAst in
     createClass
-        "FileDelete"
+        "FileDelete_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1604,7 +1603,7 @@ let fileDeleteClass_ = use JVMAst in
 
 let errorClass_ = use JVMAst in
     createClass
-        "Error"
+        "Error_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1623,7 +1622,7 @@ let errorClass_ = use JVMAst in
 
 let flushStderrClass_ = use JVMAst in
     createClass
-        "FlushStderr"
+        "FlushStderr_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1638,7 +1637,7 @@ let flushStderrClass_ = use JVMAst in
 
 let flushStdoutClass_ = use JVMAst in
     createClass
-        "FlushStdout"
+        "FlushStdout_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1653,7 +1652,7 @@ let flushStdoutClass_ = use JVMAst in
 
 let commandClass_ = use JVMAst in
     createClass
-        "Command"
+        "Command_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1675,7 +1674,7 @@ let commandClass_ = use JVMAst in
 
 let sleepMsClass_ = use JVMAst in
     createClass
-        "SleepMs"
+        "SleepMs_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1691,7 +1690,7 @@ let sleepMsClass_ = use JVMAst in
 
 let wallTimeMsClass_ = use JVMAst in
     createClass
-        "WallTimeMs"
+        "WallTimeMs_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1708,7 +1707,7 @@ let wallTimeMsClass_ = use JVMAst in
 
 let refIntrinsicClass_ = use JVMAst in
     createClass
-        "RefIntrinsic"
+        "RefIntrinsic_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1724,7 +1723,7 @@ let refIntrinsicClass_ = use JVMAst in
 
 let deRefClass_ = use JVMAst in
     createClass
-        "DeRef"
+        "DeRef_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1739,7 +1738,7 @@ let deRefClass_ = use JVMAst in
 
 let readLineClass_ = use JVMAst in
     createClass
-        "ReadLine"
+        "ReadLine_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1759,7 +1758,7 @@ let readLineClass_ = use JVMAst in
 
 let isListClass_ = use JVMAst in
     createClass
-        "IsList"
+        "IsList_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1773,7 +1772,7 @@ let isListClass_ = use JVMAst in
 
 let isRopeClass_ = use JVMAst in
     createClass
-        "IsRope"
+        "IsRope_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -1794,7 +1793,7 @@ let foldlClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Foldl"
+        "Foldl_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var$" object_LT, 
         createField "var" object_LT]
@@ -1812,10 +1811,10 @@ let foldlClass_ = use JVMAst in
                     ldcInt_ 0,
                     istore_ i,
                     aload_ 0,
-                    getfield_ (concat pkg_ "Foldl") "var" object_LT,
+                    getfield_ (concat pkg_ "Foldl_INTRINSIC") "var" object_LT,
                     astore_ func,   
                     aload_ 0,
-                    getfield_ (concat pkg_ "Foldl") "var$" object_LT,
+                    getfield_ (concat pkg_ "Foldl_INTRINSIC") "var$" object_LT,
                     astore_ acc, 
                     label_ startLabel,
                     iload_ i, 
@@ -1847,7 +1846,7 @@ let foldrClass_ = use JVMAst in
     let startLabel = createName_ "start" in
     let endLabel = createName_ "end" in
     createClass
-        "Foldr"
+        "Foldr_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var$" object_LT, 
         createField "var" object_LT]
@@ -1867,10 +1866,10 @@ let foldrClass_ = use JVMAst in
                 ldcInt_ 0,
                 istore_ i,
                 aload_ 0,
-                getfield_ (concat pkg_ "Foldr") "var" object_LT,
+                getfield_ (concat pkg_ "Foldr_INTRINSIC") "var" object_LT,
                 astore_ func,   
                 aload_ 0,
-                getfield_ (concat pkg_ "Foldr") "var$" object_LT,
+                getfield_ (concat pkg_ "Foldr_INTRINSIC") "var$" object_LT,
                 astore_ acc, 
                 label_ startLabel,
                 iload_ i, 
@@ -1904,7 +1903,7 @@ let setClass_ = use JVMAst in
     let elsLabel = createName_ "els" in
     let ifEndLabel = createName_ "ifend" in
     createClass
-        "Set"
+        "Set_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var$" object_LT, 
         createField "var" object_LT]
@@ -1920,14 +1919,14 @@ let setClass_ = use JVMAst in
                     [[ldcInt_ 0,
                     istore_ i,
                     aload_ 0,
-                    getfield_ (concat pkg_ "Set") "var" object_LT,
+                    getfield_ (concat pkg_ "Set_INTRINSIC") "var" object_LT,
                     checkcast_ seq_T,
                     dup_,
                     astore_ seq,
                     invokevirtual_ seq_T "length" (methodtype_T "" "I"),
                     istore_ len,
                     aload_ 0,
-                    getfield_ (concat pkg_ "Set") "var$" object_LT],
+                    getfield_ (concat pkg_ "Set_INTRINSIC") "var$" object_LT],
                     unwrapInteger_,
                     [l2i_,
                     istore_ index,
@@ -1965,7 +1964,7 @@ let setClass_ = use JVMAst in
 
 let subsequenceClass_ = use JVMAst in
     createClass
-        "SubSequence"
+        "SubSequence_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT,
         createField "var$" object_LT]
@@ -1975,10 +1974,10 @@ let subsequenceClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0, 
-                getfield_ (concat pkg_ "SubSequence") "var" object_LT,
+                getfield_ (concat pkg_ "SubSequence_INTRINSIC") "var" object_LT,
                 checkcast_ seq_T]
                 [[aload_ 0,
-                getfield_ (concat pkg_ "SubSequence") "var$" object_LT],
+                getfield_ (concat pkg_ "SubSequence_INTRINSIC") "var$" object_LT],
                 unwrapInteger_,
                 [l2i_,
                 dup_,
@@ -1992,7 +1991,7 @@ let subsequenceClass_ = use JVMAst in
 let nullClass_ = use JVMAst in
     let endLabel = createName_ "end" in
     createClass
-        "Null"
+        "Null_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -2013,7 +2012,7 @@ let nullClass_ = use JVMAst in
 
 let modRefClass_ = use JVMAst in
     createClass
-        "ModRef"
+        "ModRef_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -2022,7 +2021,7 @@ let modRefClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
             (foldl concat
                 [aload_ 0,
-                getfield_ (concat pkg_ "ModRef") "var" object_LT]
+                getfield_ (concat pkg_ "ModRef_INTRINSIC") "var" object_LT]
                 [[checkcast_ ref_T,
                 dup_,
                 aload_ 1,
@@ -2031,7 +2030,7 @@ let modRefClass_ = use JVMAst in
 
 let fileWriteClass_ = use JVMAst in
     createClass
-        "FileWrite"
+        "FileWrite_INTRINSIC"
         (concat pkg_ "Function")
         [createField "var" object_LT]
         defaultConstructor
@@ -2046,7 +2045,7 @@ let fileWriteClass_ = use JVMAst in
                     new_ "java/io/FileWriter"]
                     [[dup_,
                     aload_ 0,
-                    getfield_ (concat pkg_ "FileWrite") "var" object_LT],
+                    getfield_ (concat pkg_ "FileWrite_INTRINSIC") "var" object_LT],
                     charseq2Str_,
                     [invokespecial_ "java/io/FileWriter" "<init>" "(Ljava/lang/String;)V",
                     invokespecial_ "java/io/BufferedWriter" "<init>" "(Ljava/io/Writer;)V",
@@ -2064,7 +2063,7 @@ let fileWriteClass_ = use JVMAst in
 
 let dprintClass_ = use JVMAst in
     createClass
-        "DPrint"
+        "DPrint_INTRINSIC"
         (concat pkg_ "Function")
         []
         defaultConstructor
@@ -2199,88 +2198,88 @@ let setArgvBC_ = use JVMAst in
                     
 let constClassList_ = 
     [addiClass_,
-    twoArgApplyClass_ "Addi", 
+    twoArgApplyClass_ "Addi_INTRINSIC", 
     subiClass_, 
-    twoArgApplyClass_ "Subi", 
+    twoArgApplyClass_ "Subi_INTRINSIC", 
     muliClass_, 
-    twoArgApplyClass_ "Muli", 
+    twoArgApplyClass_ "Muli_INTRINSIC", 
     diviClass_, 
-    twoArgApplyClass_ "Divi", 
+    twoArgApplyClass_ "Divi_INTRINSIC", 
     modiClass_,
-    twoArgApplyClass_ "Modi", 
+    twoArgApplyClass_ "Modi_INTRINSIC", 
     addfClass_, 
-    twoArgApplyClass_ "Addf", 
+    twoArgApplyClass_ "Addf_INTRINSIC", 
     subfClass_, 
-    twoArgApplyClass_ "Subf", 
+    twoArgApplyClass_ "Subf_INTRINSIC", 
     mulfClass_, 
-    twoArgApplyClass_ "Mulf",
+    twoArgApplyClass_ "Mulf_INTRINSIC",
     divfClass_,
-    twoArgApplyClass_ "Divf",
+    twoArgApplyClass_ "Divf_INTRINSIC",
     slliClass_,
-    twoArgApplyClass_ "Slli",
+    twoArgApplyClass_ "Slli_INTRINSIC",
     srliClass_,
-    twoArgApplyClass_ "Srli",
+    twoArgApplyClass_ "Srli_INTRINSIC",
     sraiClass_,
-    twoArgApplyClass_ "Srai",
+    twoArgApplyClass_ "Srai_INTRINSIC",
     eqiClass_,
-    twoArgApplyClass_ "Eqi",
+    twoArgApplyClass_ "Eqi_INTRINSIC",
     neqiClass_,
-    twoArgApplyClass_ "Neqi",
+    twoArgApplyClass_ "Neqi_INTRINSIC",
     ltiClass_,
-    twoArgApplyClass_ "Lti",
+    twoArgApplyClass_ "Lti_INTRINSIC",
     gtiClass_,
-    twoArgApplyClass_ "Gti",
+    twoArgApplyClass_ "Gti_INTRINSIC",
     leqiClass_,
-    twoArgApplyClass_ "Leqi",
+    twoArgApplyClass_ "Leqi_INTRINSIC",
     geqiClass_,
-    twoArgApplyClass_ "Geqi",
+    twoArgApplyClass_ "Geqi_INTRINSIC",
     eqfClass_,
-    twoArgApplyClass_ "Eqf",
+    twoArgApplyClass_ "Eqf_INTRINSIC",
     neqfClass_,
-    twoArgApplyClass_ "Neqf",
+    twoArgApplyClass_ "Neqf_INTRINSIC",
     ltfClass_,
-    twoArgApplyClass_ "Ltf",
+    twoArgApplyClass_ "Ltf_INTRINSIC",
     gtfClass_,
-    twoArgApplyClass_ "Gtf",
+    twoArgApplyClass_ "Gtf_INTRINSIC",
     leqfClass_,
-    twoArgApplyClass_ "Leqf",
+    twoArgApplyClass_ "Leqf_INTRINSIC",
     geqfClass_,
-    twoArgApplyClass_ "Geqf",
+    twoArgApplyClass_ "Geqf_INTRINSIC",
     eqcClass_,
-    twoArgApplyClass_ "Eqc",
+    twoArgApplyClass_ "Eqc_INTRINSIC",
     recordClass_,
     charClass_,
     randClass_,
-    twoArgApplyClass_ "Rand",
+    twoArgApplyClass_ "Rand_INTRINSIC",
     symbolClass_,
     genSymbolClass_,
     refClass_,
     eqSymClass_,
-    twoArgApplyClass_ "Eqsym",
+    twoArgApplyClass_ "Eqsym_INTRINSIC",
     consClass_,
-    twoArgApplyClass_ "Cons",
+    twoArgApplyClass_ "Cons_INTRINSIC",
     getClass_,
-    twoArgApplyClass_ "Get",
+    twoArgApplyClass_ "Get_INTRINSIC",
     snocClass_,
-    twoArgApplyClass_ "Snoc",
+    twoArgApplyClass_ "Snoc_INTRINSIC",
     concatClass_,
-    twoArgApplyClass_ "Concat",
+    twoArgApplyClass_ "Concat_INTRINSIC",
     mapClass_,
-    twoArgApplyClass_ "Map",
+    twoArgApplyClass_ "Map_INTRINSIC",
     mapiClass_,
-    twoArgApplyClass_ "Mapi",
+    twoArgApplyClass_ "Mapi_INTRINSIC",
     iterClass_,
-    twoArgApplyClass_ "Iter",
+    twoArgApplyClass_ "Iter_INTRINSIC",
     iteriClass_,
-    twoArgApplyClass_ "Iteri",
+    twoArgApplyClass_ "Iteri_INTRINSIC",
     splitAtClass_,
-    twoArgApplyClass_ "SplitAt",
+    twoArgApplyClass_ "SplitAt_INTRINSIC",
     createClass_,
-    twoArgApplyClass_ "Create",
+    twoArgApplyClass_ "Create_INTRINSIC",
     createListClass_,
-    twoArgApplyClass_ "CreateList",
+    twoArgApplyClass_ "CreateList_INTRINSIC",
     createRopeClass_,
-    twoArgApplyClass_ "CreateRope",
+    twoArgApplyClass_ "CreateRope_INTRINSIC",
     printClass_,
     negiClass_,
     negfClass_,
@@ -2317,23 +2316,23 @@ let constClassList_ =
     isListClass_,
     isRopeClass_,
     foldlClass_,
-    threeArgApplyClass1_ "Foldl",
-    threeArgApplyClass2_ "Foldl",
+    threeArgApplyClass1_ "Foldl_INTRINSIC",
+    threeArgApplyClass2_ "Foldl_INTRINSIC",
     foldrClass_,
-    threeArgApplyClass1_ "Foldr",
-    threeArgApplyClass2_ "Foldr",
+    threeArgApplyClass1_ "Foldr_INTRINSIC",
+    threeArgApplyClass2_ "Foldr_INTRINSIC",
     subsequenceClass_,
-    threeArgApplyClass1_ "SubSequence",
-    threeArgApplyClass2_ "SubSequence",
+    threeArgApplyClass1_ "SubSequence_INTRINSIC",
+    threeArgApplyClass2_ "SubSequence_INTRINSIC",
     nullClass_,
     modRefClass_,
-    twoArgApplyClass_ "ModRef",
+    twoArgApplyClass_ "ModRef_INTRINSIC",
     dprintClass_,
     fileWriteClass_,
-    twoArgApplyClass_ "FileWrite",
+    twoArgApplyClass_ "FileWrite_INTRINSIC",
     setClass_,
-    threeArgApplyClass1_ "Set",
-    threeArgApplyClass2_ "Set",
+    threeArgApplyClass1_ "Set_INTRINSIC",
+    threeArgApplyClass2_ "Set_INTRINSIC",
     argvClass_]
 
 let createRunScript_ = lam programName.
