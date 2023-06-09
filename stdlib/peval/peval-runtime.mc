@@ -2,20 +2,16 @@
 -- the specialize transformation.
 include "map.mc"
 include "stringid.mc"
-include "mexpr/pprint.mc"
 include "peval/peval.mc"
 include "peval/jit.mc"
 include "name.mc"
-
-let toString = use MExprPrettyPrint in
-  lam x. mexprToString x
 
 let pevalWithEnv = lam env. lam ast.
   use MExprPEval in pevalWithEnv env ast
 
 mexpr
 
-unsafeCoerce (pevalWithEnv, mapFromSeq, stringToSid, mapMapWithKey, toString, _noSymbol,
+unsafeCoerce (pevalWithEnv, mapFromSeq, stringToSid, mapMapWithKey, _noSymbol,
  jitCompile, nameCmp)
 
 -- Want to make sure that:

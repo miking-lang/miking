@@ -169,9 +169,6 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
   sem stringToSidName : SpecializeNames -> Name
   sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"
 
-  sem mexprStringName : SpecializeNames -> Name
-  sem mexprStringName = | names -> getName (names.otherFuncs) "toString"
-
   sem patIntName : SpecializeNames -> Name
   sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt"
 
