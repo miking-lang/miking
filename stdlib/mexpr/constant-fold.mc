@@ -176,16 +176,20 @@ lang ArithFloatConstantFold = ConstantFold + ArithFloatEval + AppAst
       if eqf f.val 0. then Some b else None ()
     case (_, _) then None ()
     end
-  | TmApp {
-    lhs = TmApp {
+  | TmApp (appr1 & {
+    lhs = TmApp (appr2 & {
       lhs = TmConst {val = c & CMulf _},
-      rhs = a},
+      rhs = a}),
     rhs = b,
     info = info
-  } ->
+  }) ->
     switch (a, b)
     case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
       Some (delta info (c, [a, b]))
+    case (TmApp {lhs = TmConst {val = CNegf _}, rhs = a},
+          TmApp {lhs = TmConst {val = CNegf _}, rhs = b})
+    then
+      Some (TmApp { appr1 with lhs = TmApp { appr2 with rhs = a }, rhs = b })
     case
       (TmApp (appr1 & {
         lhs = TmApp (appr2 & {
@@ -516,6 +520,9 @@ utest _test prog with _parse "mulf x 6." using eqExpr in
 
 let prog = _parse "mulf 2. (mulf x 3.)" in
 utest _test prog with _parse "mulf x 6." using eqExpr in
+
+let prog = _parse "mulf (negf x) (negf y)" in
+utest _test prog with _parse "mulf x y" using eqExpr in
 
 let prog = _parse "divf x 1." in
 utest _test prog with _parse "x" using eqExpr in
