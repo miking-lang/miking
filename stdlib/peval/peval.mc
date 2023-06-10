@@ -480,6 +480,13 @@ lang CmpIntPEval = CmpIntEval + VarAst
     b.appSeq (b.uconst c) args
 end
 
+lang CmpCharPEval = CmpCharEval + VarAst
+  sem delta info =
+  | (c & CEqc _, args & ([TmVar _, _] | [_, TmVar _])) ->
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
 lang IOPEval = IOAst + SeqAst + IOArity
   sem delta info =
   | (c & (CPrint _ | CPrintError _), args & [TmSeq s]) ->
@@ -491,6 +498,14 @@ lang IOPEval = IOAst + SeqAst + IOArity
     b.appSeq (b.uconst c) args
 end
 
+lang SysPEval = SysAst + VarAst + PEval
+  sem delta info =
+  | (c & (CError _ | CCommand _ | CExit _), args) ->
+    -- Always delay such side effects until program is executed
+    let b = astBuilder info in
+    b.appSeq (b.uconst c) args
+end
+
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
@@ -498,6 +513,7 @@ lang MExprPEval =
 
   -- Constants
   ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
+  CmpCharPEval + SysPEval +
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1078,5 +1094,40 @@ lam x.
   "
   using eqExpr
 in
+
+--------------------------------
+-- Test System Calls --
+--------------------------------
+
+let prog = _parse "
+  error \"abc\";
+  exit 1;
+  command \"echo\"
+" in
+
+utest _test prog with _parse "
+  let t = error \"abc\" in
+  let t1 = exit 1 in
+  let t2 = command \"echo\" in
+  t2
+" using eqExpr in
+
+
+--------------------------------
+-- Test Char Comparison --
+--------------------------------
+
+let prog = _parse "
+  eqc 'v' x
+" in
+
+utest _test prog with _parse "
+  let t = eqc 'v' x in
+  t" using eqExpr in
+
+let prog = _parse "
+  eqc 'v' 'a'" in
+
+utest _test prog with _parse "false" using eqExpr in
 
 ()
