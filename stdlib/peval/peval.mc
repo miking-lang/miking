@@ -1130,10 +1130,12 @@ utest _test prog with _parse "
 --------------------------------
 
 let prog = _parse "
+lam x.
   eqc 'v' x
 " in
 
 utest _test prog with _parse "
+lam x.
   let t = eqc 'v' x in
   t" using eqExpr in
 
