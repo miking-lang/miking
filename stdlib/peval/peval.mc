@@ -399,9 +399,16 @@ lang ArithIntPEval = ArithIntEval + VarAst
     case 1 then x
     case _ then b.appSeq (b.uconst c) args
     end
-  | (c & (CModi _), args & [TmConst _, TmVar _]) ->
+  | (c & (CModi _), args & [TmConst {val = CInt x}, TmVar _]) ->
     let b = astBuilder info in
-    b.appSeq (b.uconst c) args
+    if eqi x.val 0 then b.int 0 else b.appSeq (b.uconst c) args
+  | (c & (CModi _), args & [TmVar _, TmConst {val = CInt y}]) ->
+    let b = astBuilder info in
+    switch y.val
+    case 0 then errorSingle [info] "Division by zero"
+    case 1 then b.int 0
+    case _ then b.appSeq (b.uconst c) args
+    end
   | (c & (CAddi _ | CMuli _ | CSubi _ | CDivi _ | CModi _),
      args & [TmVar _, TmVar _]) ->
     let b = astBuilder info in
@@ -689,6 +696,11 @@ utest _test prog with _parse "lam x. 0"
   using eqExpr
 in
 
+let prog = _parse "lam x. modi x 1" in
+utest _test prog with _parse "lam x. 0" using eqExpr in
+
+let prog = _parse "lam x. modi 0 x" in
+utest _test prog with _parse "lam x. 0" using eqExpr in
 
 ------------------------------------
 -- Test floating point arithmetic --
@@ -1129,5 +1141,6 @@ let prog = _parse "
   eqc 'v' 'a'" in
 
 utest _test prog with _parse "false" using eqExpr in
+
 
 ()
