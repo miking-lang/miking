@@ -15,6 +15,9 @@ let matrixMulFloat = lam f. lam m. externalMatrixMulFloat f m
 external externalMatrixMul : Tensor[Float] -> Tensor[Float] -> Tensor[Float]
 let matrixMul = lam m1. lam m2. externalMatrixMul m1 m2
 
+external externalMatrixElemMul : Tensor[Float] -> Tensor[Float] -> Tensor[Float]
+let matrixElemMul = lam m1. lam m2. externalMatrixElemMul m1 m2
+
 mexpr
 
 let _m = tensorOfSeqExn tensorCreateCArrayFloat in
@@ -87,6 +90,19 @@ with
    (_m31 [14.,
           32.,
           50.])
+using _eqm in
+
+utest matrixElemMul
+   (_m33 [1., 2., 3.,
+          4., 5., 6.,
+          7., 8., 9.])
+   (_m33 [1., 2., 3.,
+          4., 5., 6.,
+          7., 8., 9.])
+with
+   (_m33 [1.,  4.,  9.,
+          16., 25., 36.,
+          49., 64., 81.])
 using _eqm in
 
 ()
