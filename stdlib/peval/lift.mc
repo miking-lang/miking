@@ -7,7 +7,7 @@ include "peval/ast.mc"
 include "peval/utils.mc"
 
 include "mexpr/ast-builder.mc"
-include "mexpr/cfa.mc" -- only for freevariables
+include "mexpr/free-vars.mc"
 
 include "list.mc"
 include "seq.mc"
@@ -157,10 +157,6 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
       with (args, lift) in (args, {str = x.str, lift = lift})) args seqFields
     with (args, newBindings) in
 
-    -- If we cannot lift any of the present types
---    if any (lam x. optionIsNone x.lift) newBindings then None ()
---    let toVar = lam x: {str : String, lift: Option a}.
---    else
     let s = seq_ (map (lam x.
       utuple_ [liftStringToSID names x.str, x.lift]) newBindings)
     in
@@ -353,7 +349,6 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
     let bindings = [("bindings", binds)] in
     (args, createConAppExpr names patRecName bindings ty info)
   | PatCon {ident=ident, subpat=subpat, info=info, ty=ty} ->
-    -- Should this name be lifted differeNtLy?
     match liftName names args ident with (args, ident) in
     match liftPattern names args subpat with (args, subpat) in
     let bindings = [("ident", ident), ("subpat", subpat)] in
