@@ -8,6 +8,7 @@
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module ((guix licenses) #:prefix license:)
+  #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
   #:use-module (gnu packages maths)
   #:use-module (gnu packages autotools)
@@ -15,67 +16,6 @@
   #:use-module (gnu packages python)
   #:use-module (gnu packages python-xyz)
   #:use-module (gnu packages ocaml))
-
-(define-public ocaml-stdcompat
-  (package
-    (name "ocaml-stdcompat")
-    (version "19")
-    (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://github.com/thierry-martinez/stdcompat")
-             (commit (string-append "v" version))))
-       (sha256
-        (base32
-         "0r9qcfjkn8634lzxp5bkagzwsi3vmg0hb6vq4g1p1515rys00h1b"))))
-    (build-system ocaml-build-system)
-    (arguments
-     `(#:make-flags ,#~(list (string-append "libdir=" #$output
-                                            "/lib/ocaml/site-lib"))
-       #:modules ((guix build ocaml-build-system)
-                  (guix build utils)
-                  ((guix build gnu-build-system) #:prefix gnu:))
-       #:imported-modules (,@%ocaml-build-system-modules
-                           (guix build gnu-build-system))
-       #:phases
-       (modify-phases gnu:%standard-phases
-         (add-before 'install 'prepare-install
-           (lambda* (#:key outputs #:allow-other-keys)
-             (mkdir-p (string-append (assoc-ref outputs "out")
-                                     "/lib/ocaml/site-lib")))))))
-    (native-inputs (list automake autoconf))
-    (home-page "https://github.com/thierry-martinez/stdcompat")
-    (synopsis "Compatibility module for OCaml standard library")
-    (description
-     "Compatibility module for OCaml standard library allowing programs to use some
-recent additions to the OCaml standard library while preserving the ability to
-be compiled on former versions of OCaml.")
-    (license license:bsd-2)))
-
-(define-public ocaml-pyml
-  (package
-    (name "ocaml-pyml")
-    (version "20220905")
-    (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://github.com/thierry-martinez/pyml")
-             (commit version)))
-       (sha256
-        (base32
-         "0d18sdhajhd34mkx7cm47b86yqi27z77ylkz9aninbchh8a2vgiw"))))
-    (build-system dune-build-system)
-    (arguments '(#:tests? #f)) ;; "float conversion error" test fails, for some reason
-    (propagated-inputs (list ocaml-stdcompat ocaml-odoc))
-    (home-page "https://github.com/thierry-martinez/pyml")
-    (synopsis "OCaml bindings for Python")
-    (description
-     "py.ml provides OCaml bindings for Python 2 and Python 3.
-The Python library is linked at runtime and the same executable can be run in a
-Python 2 or a Python 3 environment.  py.ml does not require any Python library at compile time.")
-    (license license:bsd-2)))
 
 (define-public ocaml-ISO8601
   (package
@@ -202,17 +142,16 @@ algorithms.")
     (source #f)
     (build-system trivial-build-system)
     (arguments
-     '(#:modules ((guix build utils))
-       #:builder
-       (begin
-         (use-modules (guix build utils))
-         (let ((bytes (string-append (assoc-ref %outputs "out")
-                                     "/lib/ocaml/bytes")))
-           (mkdir-p bytes)
-           (call-with-output-file (string-append bytes "/META")
-             (lambda (port)
-               (format port "
-name=\"bytes\"
+     (list
+      #:modules '((guix build utils))
+      #:builder
+      #~(begin
+          (use-modules (guix build utils))
+          (let ((bytes (string-append #$output "/lib/ocaml/bytes")))
+            (mkdir-p bytes)
+            (call-with-output-file (string-append bytes "/META")
+              (lambda (port)
+                (format port "name=\"bytes\"
 version=\"[distributed with OCaml 4.02 or above]\"
 description=\"dummy backward-compatibility package for mutable strings\"
 requires=\"\"
@@ -244,9 +183,7 @@ the OCaml compiler.")
     (build-system gnu-build-system)
     (propagated-inputs
      (list
-      ;; NOTE(aathn, 2023-05-26): We do not bundle gcc-toolchain, as it seems to
-      ;; not work properly in the `guix pack` relocatable mode (and is
-      ;; probably available on the host system anyways)
+      gcc-toolchain
       ocaml-5.0
       ocaml5.0-dune
       (package-with-ocaml5.0 ocaml-linenoise)))
@@ -281,7 +218,6 @@ can be extended and composed from smaller fragments.")
     (home-page "https://miking.org")
     (license license:expat)))
 
-
 ;; The full Miking compiler, with all dependencies needed for test-compile to pass.
 (define-public miking
   (package
@@ -309,11 +245,4 @@ can be extended and composed from smaller fragments.")
        ;; TODO(aathn, 2023-05-25): Add support / package variations for
        ;; other dependencies like javascript, java, and sundials,
        ;; and for other OCaml versions.
-       )))
-    (native-search-paths
-     (list (search-path-specification
-            (variable "LIBRARY_PATH")
-            (files (list "lib")))
-           (search-path-specification
-            (variable "LD_LIBRARY_PATH")
-            (files (list "lib")))))))
+       )))))
