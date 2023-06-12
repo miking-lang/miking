@@ -2031,14 +2031,14 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       Pyffi.delta apply fi v t
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
-and apply (fiapp : info) (f : tm) (a : tm) : tm =
+and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
   (* Closure application *)
   | TmClos (ficlos, _, s, _, t3, env2), a -> (
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
-          try eval ((s, a) :: Lazy.force env2) t3
+          try eval ((s, a) :: Lazy.force env2) pe t3
           with e ->
             if !enable_debug_stack_trace then
               uprint_endline (us "TRACE: " ^. info2str fiapp) ;
@@ -2048,17 +2048,17 @@ and apply (fiapp : info) (f : tm) (a : tm) : tm =
         add_call ficlos (t2 -. t1) ;
         res )
       else
-        try eval ((s, a) :: Lazy.force env2) t3
+        try eval ((s, a) :: Lazy.force env2) pe t3
         with e ->
           if !enable_debug_stack_trace then
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
           raise e )
   (* Constant application using the delta function *)
   | TmConst (_, c), a ->
-      delta apply fiapp c a
+      delta (apply pe) fiapp c a
   (* Fix *)
   | TmFix _, (TmClos (fi, _, s, _, t3, env2) as tt) ->
-      eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
+      eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) pe t3
   | TmFix _, _ ->
       raise_error (tm_info f) "Incorrect CFix"
   | f, _ ->
@@ -2072,33 +2072,33 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
       let t1' = scan env t1 in
       TmLet (fi, x, s, ty, t1', scan ((s, t1') :: env) t2)
   | TmPreRun (_, _, t) ->
-      eval env t
+      eval env pe_init t
   | t ->
       smap_tm_tm (scan env) t
 
-and eval (env : (Symb.t * tm) list) (t : tm) =
+and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s, _, _) -> (
     match List.assoc_opt s env with
     | Some (TmApp (fi, (TmFix _ as f), a)) ->
-        apply fi f a
+        apply pe fi f a
     | Some t ->
         t
     | None ->
         raise_error fi "Undefined variable" )
   (* Application *)
   | TmApp (fiapp, t1, t2) ->
-      let f = eval env t1 in
-      let a = eval env t2 in
-      apply fiapp f a
+      let f = eval env pe t1 in
+      let a = eval env pe t2 in
+      apply pe fiapp f a
   (* Lambda and closure conversions *)
   | TmLam (fi, x, s, pes, _ty, t1) ->
       TmClos (fi, x, s, pes, t1, lazy env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
-      eval ((s, eval env t1) :: env) t2
+      eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
       let rec env' =
@@ -2114,21 +2114,21 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
              env lst )
       in
-      eval (Lazy.force env') t2
+      eval (Lazy.force env') pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
   (* Sequences *)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.map (eval env) tms)
+      TmSeq (fi, Mseq.map (eval env pe) tms)
   (* Records *)
   | TmRecord (fi, tms) ->
-      TmRecord (fi, Record.map (eval env) tms)
+      TmRecord (fi, Record.map (eval env pe) tms)
   (* Records update *)
   | TmRecordUpdate (fi, t1, l, t2) -> (
-    match eval env t1 with
+    match eval env pe t1 with
     | TmRecord (fi, r) ->
-        if Record.mem l r then TmRecord (fi, Record.add l (eval env t2) r)
+        if Record.mem l r then TmRecord (fi, Record.add l (eval env pe t2) r)
         else
           raise_error fi
             ( "No label '" ^ Ustring.to_utf8 l ^ "' in record "
@@ -2139,13 +2139,13 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           ^ Ustring.to_utf8 (ustring_of_tm v) ) )
   (* Type (ignore) *)
   | TmType (_, _, _, _, t1) ->
-      eval env t1
+      eval env pe t1
   (* Data constructors *)
   | TmConDef (_, _, _, _, t) ->
-      eval env t
+      eval env pe t
   (* Constructor application *)
   | TmConApp (fi, x, s, t) ->
-      let rhs = eval env t in
+      let rhs = eval env pe t in
       ( if !enable_debug_con_shape then
         let shape = shape_str rhs in
         let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
@@ -2155,25 +2155,25 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       TmConApp (fi, x, s, rhs)
   (* Match *)
   | TmMatch (_, t1, p, t2, t3) -> (
-    match try_match env (eval env t1) p with
+    match try_match env (eval env pe t1) p with
     | Some env ->
-        eval env t2
+        eval env pe t2
     | None ->
-        eval env t3 )
+        eval env pe t3 )
   (* Dive *)
   | TmDive (_, _, t) ->
-      eval env t
+      eval env pe t
   (* PreRun *)
   | TmPreRun (_, _, t) ->
-      eval env t
+      eval env pe t
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
-        let v1, v2 = (eval env t1, eval env t2) in
+        let v1, v2 = (eval env pe t1, eval env pe t2) in
         let equal =
           match tusing with
           | Some t -> (
-            match eval env (TmApp (fi, TmApp (fi, t, v1), v2)) with
+            match eval env pe (TmApp (fi, TmApp (fi, t, v1), v2)) with
             | TmConst (_, CBool b) ->
                 b
             | _ ->
@@ -2190,7 +2190,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           unittest_failed fi v1 v2 tusing ;
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
-      eval env tnext
+      eval env pe tnext
   (* Never term *)
   | TmNever fi ->
       raise_error fi
@@ -2201,18 +2201,18 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       raise_error fi "A 'use' of a language was not desugared"
   (* External *)
   | TmExt (_, _, _, _, _, t) ->
-      eval env t
+      eval env pe t
   (* Only at runtime *)
   | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
    with the evaluated result *)
-let rec eval_toplevel (env : (Symb.t * tm) list) = function
+let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
-      eval_toplevel ((s, eval env t1) :: env) t2
+      eval_toplevel ((s, eval env pe t1) :: env) pe t2
   | TmType (_, _, _, _, t1) ->
-      eval_toplevel env t1
+      eval_toplevel env pe t1
   | TmRecLets (_, lst, t2) ->
       let rec env' =
         lazy
@@ -2227,9 +2227,9 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
              env lst )
       in
-      eval_toplevel (Lazy.force env') t2
+      eval_toplevel (Lazy.force env') pe t2
   | TmConDef (_, _, _, _, t) ->
-      eval_toplevel env t
+      eval_toplevel env pe t
   | ( TmVar _
     | TmLam _
     | TmClos _
@@ -2249,4 +2249,4 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmDive _
     | TmPreRun _
     | TmExt _ ) as t ->
-      (env, eval env t)
+      (env, eval env pe t)

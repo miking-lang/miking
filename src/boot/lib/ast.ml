@@ -736,3 +736,7 @@ let record2tuple (r : tm Record.t) =
   List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst
 
 type 'a tokendata = {i: info; v: 'a}
+
+type peval = {inPeval: bool; inBranch: bool}
+
+let pe_init = {inPeval= false; inBranch= false}

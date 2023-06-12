@@ -31,7 +31,7 @@ let evalprog filename =
       |> Deadcode.elimination builtin_sym2term builtin_name2sym []
       |> debug_after_dead_code_elimination
       |> Mexpr.scan builtin_sym2term
-      |> Mexpr.eval builtin_sym2term
+      |> Mexpr.eval builtin_sym2term pe_init
       |> fun _ -> ()
     with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
       let error_string = Ustring.to_utf8 (error_to_ustring e) in
