@@ -156,6 +156,22 @@ lang Ast
     let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  sem smapAccumL_Type_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Type -> (acc, Type)
+  sem smapAccumL_Type_Expr f acc =
+  | p -> (acc, p)
+
+  sem smap_Type_Expr : (Expr -> Expr) -> Type -> Type
+  sem smap_Type_Expr f =
+  | p ->
+    match smapAccumL_Type_Expr (lam. lam a. ((), f a)) () p with (_, p) in
+    p
+
+  sem sfold_Type_Expr : all acc. (acc -> Expr -> acc) -> acc -> Type -> acc
+  sem sfold_Type_Expr f acc =
+  | p ->
+    match smapAccumL_Type_Expr (lam acc. lam a. (f acc a, a)) acc p
+    with (acc, _) in acc
+
   -- Resolving application -- apply an accumulating function through links and aliases
   sem rappAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem rappAccumL_Type_Type f acc = | ty -> (acc, ty)
@@ -225,7 +241,6 @@ lang Ast
     let count = addi count 1 in
     let count = sfold_Expr_Expr countExprNodes count t in
     let count = sfold_Expr_Type countTypeNodes count t in
-    let count = sfold_Expr_TypeLabel countTypeNodes count t in
     let count = sfold_Expr_Pat countPatNodes count t in
     count
   sem countTypeNodes count = | t ->

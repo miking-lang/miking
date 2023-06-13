@@ -183,6 +183,20 @@ lang RecordTypeUnify = UnifyRows + RecordTypeAst
     unifyRowsStrict u env t1.fields t2.fields
 end
 
+lang TyWildUnify = Unify + TyWildAst
+  sem unifyBase u env =
+  | (TyWild _, TyWild _) -> u.empty
+end
+
+lang CollTypeUnify = CollTypeAst + Unify
+  sem unifyBase u env =
+  | (ty1 & TyColl a, ty2 & TyColl b) ->
+    u.combine
+      (u.combine
+        (unifyTypes u env (a.filter, b.filter))
+        (unifyTypes u env (a.permutation, b.permutation)))
+      (unifyTypes u env (a.element, b.element))
+end
 
 lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
 
@@ -234,11 +248,10 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
     result.bind (unifyTypes u env (ty1, ty2)) (work (mapEmpty nameCmp))
 end
 
-
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
+  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify + TyWildUnify + CollTypeUnify
 end
 
 lang TestLang = UnifyPure + MExprUnify + MExprEq + MetaVarTypeEq end

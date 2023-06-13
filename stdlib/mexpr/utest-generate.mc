@@ -359,7 +359,7 @@ lang UtestBase =
 
   sem specializeConstructorArgumentH : Map Name Type -> ([Type], Type) -> Type
   sem specializeConstructorArgumentH subMap =
-  | ([], TyArrow {from = argTy}) -> substituteVars subMap argTy
+  | ([], TyArrow {from = argTy, info = info}) -> substituteVars info subMap argTy
   | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty}) ->
     specializeConstructorArgumentH
       (mapInsert ident tyArg subMap) (tyArgs, ty)

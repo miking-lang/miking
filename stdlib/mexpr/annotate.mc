@@ -46,7 +46,17 @@ lang AnnotateSources = Annotator
           match pair with (filename, src) in
           let doc =
             match mapLookup filename annots with Some annots then
-              let annots = sort annotCmp annots in
+              let annots =
+                if gti (length annots) 20000 then
+                  printError (join ["WARNING: too many annotations for file '", sidToString filename, "', skipping all of them\n"]);
+                  flushStderr ();
+                  []
+                else annots in
+              -- NOTE(vipa, 2023-06-19): annotations are frequently
+              -- already mostly sorted, in which case quickSort (which
+              -- is the default sort) is quadratic with the chosen
+              -- partitioning scheme
+              let annots = mergeSort annotCmp annots in
               let pos = initPos "" in
               let st =
                 { stack = [{endPos = (addi (length src) 1, 0), res = "", annot = ""}]
@@ -106,7 +116,7 @@ lang AnnotateSources = Annotator
       else
         -- We're not opening a new tag, shift a character
         match input with [c] ++ input in
-        let top = {top with res = snoc top.res c} in
+        let top = {top with res = concat top.res (escapeContent [c])} in
         let st = {st with pos = _advancePos st.pos c, stack = snoc stack top} in
         _annotateSource input st
 
@@ -158,6 +168,7 @@ lang AnnotateMExprBase = AnnotateSources + Ast
     let res = match typeAnnot ty with Some annot
       then [(infoTy ty, annot)]
       else [] in
+    let res = sfold_Type_Expr (lam acc. lam e. concat acc (_exprAnnots e)) res ty in
     let res = sfold_Type_Type (lam acc. lam t. concat acc (_typeAnnots t)) res ty in
     res
 end

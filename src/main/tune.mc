@@ -90,7 +90,7 @@ let tune = lam files. lam options : Options. lam args.
 
     -- Compile the program and write to temporary directory
     let binary = compileWithUtests
-      {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
+      emptyImplData {options with output = Some (sysJoinPath r.tempDir "tune")} file ast in
 
     -- Do the tuning
     let result = tuneEntry binary tuneOptions env dep instRes r ast in

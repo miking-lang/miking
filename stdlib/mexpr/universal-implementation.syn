@@ -1,0 +1,194 @@
+language UniversalImplementation
+
+include "parser/lexer.mc"
+
+start UFile
+
+type UFile
+type UTop
+type Merged {
+  grouping = "(" ")",
+}
+
+prod Tops: UFile = tops:UTop*
+
+-- Basic tokens
+token String {
+  repr = StringRepr {},
+  constructor = StringTok,
+  fragment = StringTokenParser,
+  ty = String,
+}
+token UInt {
+  repr = IntRepr {},
+  constructor = IntTok,
+  fragment = UIntTokenParser,
+  ty = Int,
+}
+token Char {
+  repr = CharRepr {},
+  constructor = CharTok,
+  fragment = CharTokenParser,
+}
+token Float {
+  repr = FloatRepr {},
+  constructor = FloatTok,
+  fragment = UFloatTokenParser,
+}
+token FrozenString {
+  repr = HashStringRepr {hash = "frozen"},
+  constructor = HashStringTok,
+  fragment = HashStringTokenParser,
+  ty = String,
+}
+token LIdent {
+  repr = LIdentRepr {},
+  constructor = LIdentTok,
+  fragment = LIdentTokenParser,
+  ty = String,
+}
+token UIdent {
+  repr = UIdentRepr {},
+  constructor = UIdentTok,
+  fragment = UIdentTokenParser,
+  ty = String,
+}
+
+-- Wrapping tokens that just change the type in the AST
+token UName {
+  base = UIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token LName {
+  base = LIdent,
+  wrap = nameNoSym,
+  ty = Name,
+}
+token FrozenName {
+  base = FrozenString,
+  wrap = nameNoSym,
+  ty = Name,
+}
+
+-- Token types only used through literals
+token {fragment = OperatorTokenParser,}
+token {fragment = CommaTokenParser,}
+token {fragment = SemiTokenParser,}
+token {fragment = BracketTokenParser,}
+
+-- Whitespace and comments
+token {fragment = LineCommentParser,}
+token {fragment = MultilineCommentParser,}
+token {fragment = WhitespaceParser,}
+
+
+-- Universal collection types stuff
+
+prod ReprDecl: UTop =
+  "repr" name:UName "{" pat:Merged "=" repr:Merged "}"
+
+prod ImplDecl: UTop =
+  "impl" "[" cost:Merged "]" name:LName
+  (":" tyAnnot:Merged)?
+  "=" body:Merged
+
+prod MetaVar: Merged = "?" var:LName
+prod Coll: Merged = "Coll"
+
+
+-- Expressions -----------------------------------------------------------------
+
+-- Expression operators that require precedence (nothing else is left-open)
+postfix Proj: Merged = "." (label:LIdent | idx:UInt)
+infix left App: Merged = empty
+infix left Semi: Merged = ";"
+
+-- Prefix expressions
+prefix Type: Merged = "type" v:UName (args:LName)* ("=" ty:Merged)? "in"
+prefix ConDef: Merged = "con" v:UName ":" ty:Merged "in"
+prefix RecLet: Merged =
+  "recursive"
+  bindings:{"let" v:LName (":" ty:Merged)? "=" e:Merged}
+  "in"
+prefix Let: Merged = "let" v:LName (":" ty:Merged)? "=" e:Merged "in"
+prefix Lam: Merged = "lam" (empty | v:LName | "(" v:LName ":" ty:Merged ")") "."
+prefix Use: Merged = "use" n:UName "in"
+prefix Utest: Merged = "utest" e:Merged "with" e2:Merged ("using" f:Merged)? "in"
+prefix External: Merged = "external" n:LName bang:"!"? ":" ty:Merged "in"
+-- prefix MatchIn: UExpr = "match" e:UExpr "with" p:UPat "in"
+prod Match: Merged = "match" e:Merged "with" p:Merged "then" t:Merged "else" e:Merged
+prod If: Merged = "if" c:Merged "then" t:Merged "else" e:Merged
+
+prod Switch: Merged = "switch" c:Merged cases:{"case" p:Merged "then" e:Merged}+ "end"
+
+-- Simple left/right-closed expressions
+prod Con: Merged = c:UName
+prod Var: Merged = v:LName
+prod FrozenVar: Merged = v:FrozenName
+prod Char: Merged = v:Char
+prod Int: Merged = v:UInt
+prod Float: Merged = v:Float
+prod True: Merged = "true"
+prod False: Merged = "false"
+prod Never: Merged = "never"
+prod OperatorAppBase: Merged = "@"
+
+-- Composite left/right-closed expressions
+prod Tuple: Merged =
+  "/" -- TODO(vipa, 2023-06-28): Remove this slash when we have LR(1)
+  "(" (e:Merged "," (e:Merged ("," e:Merged)* /- ","? -/)?)? ")"
+prod String: Merged = v:String
+prod Sequence: Merged = "[" (v:Merged ("," v:Merged)* /- ","? -/)? "]"
+prod Record: Merged =
+  "{"
+  (fields:{label:LName (":" ty:Merged)? ("=" e:Merged)?}
+   fields:{"," label:LName (":" ty:Merged)? ("=" e:Merged)?}*
+   /- ","? -/ )?
+  "}"
+prod RecordUpdate: Merged =
+  "//" -- TODO(vipa, 2023-06-28): Remove this slash when we have LR(1)
+  "{" e:Merged "with"
+      updates:{label:LName "=" e:Merged}
+      updates:{"," label:LName "=" e:Merged}*
+  /- ","? -/ "}"
+
+-- Precedence table
+precedence {
+  Proj;
+  App;
+  Semi;
+  Type ConDef RecLet Let Lam Use Utest External Match If;
+}
+
+
+-- Patterns --------------------------------------------------------------------
+
+prefix Not: Merged = "!"
+infix left Or: Merged = "|"
+infix left And: Merged = "&"
+infix left Concat: Merged = "++"
+
+prod Wild: Merged = "_"
+
+precedence {
+  Not;
+  ~And Or;
+}
+
+
+-- Types -----------------------------------------------------------------------
+
+infix right Arrow: Merged = "->"
+
+prod BoolCon: Merged = "Bool"
+prod IntCon: Merged = "Int"
+prod CharCon: Merged = "Char"
+prod FloatCon: Merged = "Float"
+prod UnknownCon: Merged = "Unknown"
+
+precedence {
+  Not;
+  App;
+  Arrow;
+}

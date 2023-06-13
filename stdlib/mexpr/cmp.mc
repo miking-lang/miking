@@ -17,8 +17,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Expr, Expr) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoTm lhs, infoTm rhs]
-                    "Missing case in cmpExprH for expressions with equal indices."
+      errorMulti [(infoTm lhs, ""), (infoTm rhs, "")]
+        "Missing case in cmpExprH for expressions with equal indices."
     else res
 
   sem cmpConst (lhs: Const) =
@@ -37,8 +37,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Pat, Pat) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoPat lhs, infoPat rhs]
-                    "Missing case in cmpPatH for patterns with equal indices."
+      errorMulti [(infoPat lhs, ""), (infoPat rhs, "")]
+        "Missing case in cmpPatH for patterns with equal indices."
     else res
 
   sem cmpType (lhs: Type) =
@@ -49,8 +49,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoTy lhs, infoTy rhs]
-                    "Missing case in cmpTypeH for types with equal indices."
+      errorMulti [(infoTy lhs, ""), (infoTy rhs, "")]
+        "Missing case in cmpTypeH for types with equal indices."
     else res
 end
 

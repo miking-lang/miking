@@ -599,7 +599,9 @@ ty_atom:
   | type_ident
     { TyCon($1.i,$1.v) }
   | var_ident
-    { TyVar($1.i,$1.v)}
+    { TyVar($1.i,$1.v) }
+  | UNDERSCORE
+    { TyVar($1.i, us"_") }
 
 ty_list:
   | ty COMMA ty_list

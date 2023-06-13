@@ -1,6 +1,15 @@
 -- AST representation of a constraint optimization or satisfaction problem
 -- (COP/CSP).
 
+-- TODO(vipa, 2023-04-21): int set domain
+-- TODO(vipa, 2023-04-21): functions and predicates (plus applications thereof)
+-- TODO(vipa, 2023-04-21): multiplication
+-- TODO(vipa, 2023-04-21): if-then-else
+-- TODO(vipa, 2023-04-21): equality and boolean operators
+-- TODO(vipa, 2023-04-21): table? might be present already
+
+-- TODO(vipa, 2023-04-21): "looping" constructs, forall & sum
+
 include "name.mc"
 
 ----------------------------
@@ -29,6 +38,11 @@ lang COPDomainBooleanAst = COPAst
   | COPDomainBoolean {}
 end
 
+lang COPDomainSetAst = COPAst
+  syn COPDomain =
+  | COPDomainSet { values : [COPExpr] }
+end
+
 ---------------
 -- VARIABLES --
 ---------------
@@ -54,6 +68,11 @@ lang COPConstraintDeclAst = COPAst
   syn COPConstraint =
   syn COPDecl =
   | COPConstraintDecl { constraint: COPConstraint }
+end
+
+lang COPConstraintDeclExprAst = COPAst
+  syn COPDecl =
+  | COPConstraintDeclExpr { constraint : COPExpr }
 end
 
 -- Table constraint
@@ -119,6 +138,16 @@ lang COPExprIntAst = COPAst
   | COPExprInt { value: Int }
 end
 
+lang COPExprFloatAst = COPAst
+  syn COPExpr =
+  | COPExprFloat { value: Float }
+end
+
+lang COPExprBoolAst = COPAst
+  syn COPExpr =
+  | COPExprBool { value: Bool }
+end
+
 lang COPExprArrayAst = COPAst
   syn COPExpr =
   | COPExprArray { array: [COPExpr] }
@@ -129,21 +158,95 @@ lang COPExprArray2dAst = COPAst
   | COPExprArray2d { array: [[COPExpr]] }
 end
 
+lang COPExprAddAst = COPAst
+  syn COPExpr =
+    | COPExprAdd { exprs: [COPExpr] }
+end
+
+lang COPExprSubAst = COPAst
+  syn COPExpr =
+  | COPExprSub { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprMulAst = COPAst
+  syn COPExpr =
+  | COPExprMul { exprs: [COPExpr] }
+end
+
+lang COPExprDivAst = COPAst
+  syn COPExpr =
+  | COPExprDiv { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprEqAst = COPAst
+  syn COPExpr =
+  | COPExprEq { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprNeAst = COPAst
+  syn COPExpr =
+  | COPExprNe { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprLeAst = COPAst
+  syn COPExpr =
+  | COPExprLe { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprGeAst = COPAst
+  syn COPExpr =
+  | COPExprGe { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprLtAst = COPAst
+  syn COPExpr =
+  | COPExprLt { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprGtAst = COPAst
+  syn COPExpr =
+  | COPExprGt { left: COPExpr, right: COPExpr }
+end
+
+lang COPExprAndAst = COPAst
+  syn COPExpr =
+  | COPExprAnd { exprs: [COPExpr] }
+end
+
+lang COPExprOrAst = COPAst
+  syn COPExpr =
+  | COPExprOr { exprs: [COPExpr] }
+end
+
+lang COPExprNotAst = COPAst
+  syn COPExpr =
+  | COPExprNot { expr: COPExpr }
+end
+
+lang COPExprIfThenElseAst = COPAst
+  syn COPExpr =
+  | COPExprIfThenElse { cond : COPExpr, ifTrue : COPExpr, ifFalse : COPExpr }
+end
+
 ----------------------
 -- COP AST FRAGMENT --
 ----------------------
 
 lang COP =
   -- Domains --
-  COPDomainIntRangeAst + COPDomainBooleanAst +
+  COPDomainIntRangeAst + COPDomainBooleanAst + COPDomainSetAst +
   -- Variables --
   COPVarDeclAst + COPVarArrayDeclAst +
   -- Constraints --
   COPConstraintDeclAst + COPConstraintTableAst + COPConstraintTableReifAst +
-  COPConstraintLEAst + COPConstraintLTAst +
+  COPConstraintLEAst + COPConstraintLTAst + COPConstraintDeclExprAst +
   -- Objectives --
   COPObjectiveDeclAst + COPObjectiveMinimizeAst +
   -- Expressions --
   COPExprSumAst + COPExprVarAst + COPExprVarAccessAst + COPExprIntAst +
-  COPExprArrayAst + COPExprArray2dAst
+  COPExprFloatAst + COPExprBoolAst +
+  COPExprArrayAst + COPExprArray2dAst +
+  COPExprAddAst + COPExprSubAst + COPExprMulAst + COPExprDivAst +
+  COPExprGtAst + COPExprLtAst + COPExprGeAst + COPExprLeAst + COPExprNeAst + COPExprEqAst +
+  COPExprAndAst + COPExprOrAst + COPExprNotAst + COPExprIfThenElseAst
 end

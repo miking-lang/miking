@@ -22,6 +22,7 @@ tup.export("OCAML_TOPLEVEL_PATH")
 root = tup.getcwd()
 miGroup = root..'/<mi>'
 miCheatGroup = root..'/<mi-cheat>'
+synGroup = root..'/<syns>'
 local cwd = tup.getrelativedir(root)
 setStdlib = 'MCORE_LIBS=stdlib='..root..'/stdlib '
 
@@ -296,6 +297,14 @@ function miEvalTest(source, expectSuccess)
   run = expectSuccess and formatFailOutput(run) or expectFail(run, msg)
   local inputs = mode.addMiDep{source}
   return tup.rule(inputs, display..run, {})
+end
+
+function miSyn(source, destination)
+  local m = modes.installed
+  local display = '^ SYN %f %o^ '
+  local run = setStdlib..formatFailOutput(m.mi..'syn %f %o')
+  local inputs = m.addMiDep{source}
+  return tup.rule(inputs, display..run, {destination, extra_outputs=synGroup})
 end
 
 function getBoolOpt(opt, default)

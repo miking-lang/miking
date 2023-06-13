@@ -24,6 +24,26 @@ let listFind : all a. (a -> Bool) -> List a -> Option a = lam p. lam li.
     end
   in find li
 
+let listFindMap : all a. (a -> Option b) -> List a -> Option b = lam p. lam li.
+  recursive let find = lam li.
+    switch li
+    case Cons (e, li) then
+      match p e with Some e2 then e2
+      else find li
+    case Nil _ then None ()
+    end
+  in find li
+
+let listFindMapWithIndex : all a. (Int -> a -> Option b) -> List a -> Option b = lam p. lam li.
+  recursive let find = lam idx. lam li.
+    switch li
+    case Cons (e, li) then
+      match p idx e with Some e2 then e2
+      else find (addi idx 1) li
+    case Nil _ then None ()
+    end
+  in find 0 li
+
 let listFromSeq : all a. [a] -> List a = lam l.
   recursive let build = lam acc. lam s.
     match s with mid ++ [last] then

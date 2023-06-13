@@ -1,0 +1,265 @@
+----------------------------------------------------------
+-- Core semantics, slow
+----------------------------------------------------------
+
+repr Core {Coll _ _ ?a = Rope ?a}
+
+impl[1] empty
+  : Coll _ _ _ {Core}
+  = rope_empty
+
+impl[1] insert
+  (?elem)
+  (?coll : Coll _ _ _ {Core})
+  : Coll _ _ _ {Core}
+  = rope_snoc coll elem
+
+-- NOTE(vipa, 2023-04-11): This assumes `pred` and `perm` run in
+-- constant time, which is often a bad assumption, so that might be a
+-- thing to change later. If so, change the first two terms to `n*n`.
+impl[addf (addf (mulf 3.0 n) (mulf 3.0 n)) (mulf n (log n))] fold
+  (?f)
+  (?acc)
+  (?coll : Coll ?pred ?perm _ {Core})
+  : _
+  = never  -- TODO(vipa, 2023-04-11): Give an implementation
+
+----------------------------------------------------------
+-- General (default) implementations using smaller ops
+----------------------------------------------------------
+
+impl[0] concat
+  (?coll1)
+  (?coll2)
+  : _
+  = @1 fold (lam acc. lam a. @n insert a acc) coll1 coll2
+
+
+----------------------------------------------------------
+-- ConsList
+----------------------------------------------------------
+
+-- ConsList stores *all* elements in insertion order
+repr ConsList {Coll _ _ ?a = List ?a}
+
+-- impl[n] insert
+--   (?elem)
+--   (?coll : Coll _ _ _ {ConsList})
+--   : Coll _ _ _ {ConsList}
+--   = consList_snoc coll elem
+
+impl[0] empty
+  : Coll _ _ _ {ConsList}
+  = listEmpty
+
+impl[1] insertFirst
+  (?elem)
+  (?coll : Coll _ _ _ {ConsList})
+  : Coll _ _ _ {ConsList}
+  = listCons elem coll
+
+impl[n] fold
+  (?f)
+  (?acc)
+  (?coll : Coll keepAll insertionOrder _ {ConsList})
+  : _
+  = listFoldl f acc coll
+
+-- impl[mulf n 1.1] reverseFold
+--   (?f)
+--   (?acc)
+--   (?coll : Coll keepAll insertionOrder _ {ConsList})
+--   : _
+--   = consList_foldRight f acc coll
+
+impl[n] reverse
+  (?coll : Coll _ _ _ {ConsList})
+  : Coll _ _ _ {ConsList}
+  = listReverse coll
+
+impl[n] findFirstIdx
+  (?f)
+  (?coll : Coll keepAll insertionOrder _ {ConsList})
+  : _
+  = listFindMapWithIndex (lam i. lam e. if f e then Some i else None {}) coll
+
+----------------------------------------------------------
+-- SnocList
+----------------------------------------------------------
+
+-- SnocList stores *all* elements in reverse insertion order
+repr SnocList {Coll _ _ ?a = List ?a}
+
+impl[1] insert
+  (?elem)
+  (?coll : Coll ?pred _ _ {SnocList})
+  : Coll ?pred _ _ {SnocList}
+  = consList_cons elem coll
+
+impl[n] insert_first
+  (?elem)
+  (?coll : Coll ?pred _ _ {SnocList})
+  : Coll ?pred _ _ {SnocList}
+  = consList_snoc coll elem
+
+impl[n] reverse
+  (?coll : Coll ?pred _ _ {SnocList})
+  : Coll ?pred _ _ {SnocList}
+  = reverse coll
+
+impl[0] reverse
+  (?coll : Coll _ _ _ {SnocList})
+  : Coll _ _ _ {ConsList}
+  = coll
+
+impl[0] reverse
+  (?coll : Coll _ _ _ {ConsList})
+  : Coll _ _ _ {SnocList}
+  = coll
+
+impl[0] empty
+  : Coll _ _ _ {SnocList}
+  = consList_empty
+
+impl[mulf n 1.1] fold
+  (?f)
+  (?acc)
+  (?coll : Coll _ _ _ {SnocList})
+  : _
+  = consList_foldRight f acc coll
+
+impl[n] reverseFold
+  (?f)
+  (?acc)
+  (?coll : Coll _ _ _ {SnocList})
+  : _
+  = consList_foldRight f acc coll
+
+----------------------------------------------------------
+-- AVL map
+----------------------------------------------------------
+
+-- repr Map {Coll _ _ (?k, ?v) = Map ?k ?v}
+
+-- impl[0] empty
+--   : Coll (uniqueKeepLastKey ?cmp) _ _ {Map}
+--   = mapEmpty cmp
+
+-- impl[logf n] insert
+--   (?pair)
+--   (?coll : Coll _ _ _ {Map})
+--   : Coll _ _ _ {Map}
+--   = mapInsert pair.0 pair.1 coll
+
+-- impl[logf n] lookup
+--   (?k)
+--   (?coll : Coll _ _ _ {Map})
+--   : _
+--   = mapLookup k coll
+
+-- ----------------------------------------------------------
+-- -- Reversing arbitrary collections
+-- ----------------------------------------------------------
+
+-- -- TODO(vipa, 2023-04-11): Because the expansion contains one `Coll`
+-- -- we essentially introduce one repr per other repr (e.g., Reverse
+-- -- ConsList, Reverse Core, ...). In this case it's not useful to have
+-- -- something of the form `Reverse (Reverse _)`, and continuing that
+-- -- pattern would lead to an infinite number of representations, so we
+-- -- want to constrain that somehow.
+
+-- -- Reverse stores elements in reverse insertion order according to the
+-- -- predicate.
+-- repr Reverse ?c {Coll ?pred insertionOrder ?a = Coll ?pred insertionOrder ?a {?c}}
+
+-- impl[0] insert
+--   (?elem)
+--   (?coll : Coll ?pred _ _ {Reverse ?c})
+--   : Coll ?pred _ _ {Reverse ?c}
+--   = @1 insert_first elem coll
+
+-- impl[0] insert_first
+--   (?elem)
+--   (?coll : Coll ?pred _ _ {Reverse ?c})
+--   : Coll ?pred _ _ {Reverse ?c}
+--   = @1 insert elem coll
+
+-- impl[0] reverse
+--   (?coll : Coll ?pred _ _ {Reverse ?c})
+--   : Coll ?pred _ _ {Reverse ?c}
+--   = @1 reverse coll
+
+-- -- TODO(vipa, 2023-04-11): We need to detect how reprs flow and unify
+-- -- over impls as well, when we have a recursive case, even if it's
+-- -- just recursive on the type level
+-- impl[0] reverse
+--   (?coll : Coll _ _ _ {Reverse ?c})
+--   : Coll _ _ _ {?c}
+--   = coll
+
+-- impl[0] reverse
+--   (?coll : Coll _ _ _ {?c})
+--   : Coll _ _ _ {Reverse ?c}
+--   = coll
+
+-- impl[0] empty
+--   : Coll _ _ _ {Reverse _}
+--   = @1 empty
+
+-- impl[0] fold
+--   (?f)
+--   (?acc)
+--   (?coll : Coll _ _ _ {Reverse _})
+--   : _
+--   = @1 reverseFold f acc coll
+
+-- impl[0] reverseFold
+--   (?f)
+--   (?acc)
+--   (?coll : Coll _ _ _ {Reverse _})
+--   : _
+--   = @1 fold f acc coll
+
+-- -- TODO(vipa, 2023-04-11): There's a total of 2^3-1 versions of concat
+-- -- with at least one `Reverse` in it that might potentially be useful.
+-- -- That seems annoying.
+-- impl[0] concat
+--   (?coll1 : Coll ?pred _ _ {Reverse _})
+--   (?coll2 : Coll ?pred _ _ {Reverse _})
+--   : Coll ?pred _ _ {Reverse}
+--   = @1 concat coll2 coll1
+
+
+-- /-
+
+-- Variables:
+-- - One for each *use* of an operation (simple program traversal, only static context)
+-- - One for each collection with potentially different representation (extracted from type inference and unification)
+
+-- Each op-use:
+-- - Conceptually has a scaling factor, in the simple case just 1
+-- - Has a valid set of impl choices. Each impl choice:
+--   - Has a cost (expr containing `n`, might be evaluated to just a (real) number)
+--   - Puts constraints on coll variables when chosen
+--   - Might have internal op-uses (recursive case/default implementations/program synthesis)
+
+-- Constraints on coll variables:
+-- - Equality between vars, more generally equality between exprs containing coll variables
+
+-- # In example debruijn:
+
+-- op-uses:
+-- - insert
+-- - findFirstIdx
+-- - reverse
+
+-- coll reprs:
+-- 1. io for insert and just i for reverse
+-- 2. o for reverse and i for findFirstIdx
+
+-- We'd like to arrive at insert=snocList_snoc,
+-- reverse=consList_fromSnoc, and findFirstIdx=consList_findFirstIdx.
+-- - Cost: 1 + 1 + n.
+-- - This implies that repr 1 is SnocList and 2 is ConsList.
+
+-- -/

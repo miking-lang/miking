@@ -15,6 +15,7 @@ include "builtin.mc"
 include "info.mc"
 include "error.mc"
 include "pprint.mc"
+include "uct-ast.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -28,10 +29,15 @@ type SymEnv = {
   tyVarEnv: Map String Name,
   tyConEnv: Map String Name,
   allowFree: Bool,
-  ignoreExternals: Bool
+  ignoreExternals: Bool,
+
+  -- NOTE(vipa, 2023-06-29): Semi-temporary fields for inserting op
+  -- impls, until we can write them directly in an mcore program
+  opImplsToInsert: ImplData,
+  reprEnv: Map String Name
 }
 
-let symEnvEmpty = {
+let symEnvEmpty : SymEnv = {
   varEnv = mapEmpty cmpString,
   conEnv = mapEmpty cmpString,
   tyVarEnv = mapEmpty cmpString,
@@ -41,7 +47,10 @@ let symEnvEmpty = {
   mapFromSeq cmpString (map (lam t. (t.0, nameNoSym t.0)) builtinTypes),
 
   allowFree = false,
-  ignoreExternals = false
+  ignoreExternals = false,
+
+  opImplsToInsert = emptyImplData,
+  reprEnv = mapEmpty cmpString
 }
 
 lang SymLookup
@@ -106,11 +115,21 @@ lang Sym = Ast + SymLookup
   -- Symbolize with an environment
   sem symbolizeExpr : SymEnv -> Expr -> Expr
   sem symbolizeExpr (env : SymEnv) =
-  | t -> smap_Expr_Expr (symbolizeExpr env) t
+  | t ->
+    let t = smap_Expr_Expr (symbolizeExpr env) t in
+    let t = smap_Expr_Type (symbolizeType env) t in
+    t
 
   sem symbolizeType : SymEnv -> Type -> Type
   sem symbolizeType env =
-  | t -> smap_Type_Type (symbolizeType env) t
+  | t -> smap_Type_Expr (symbolizeExpr env) (smap_Type_Type (symbolizeType env) t)
+
+  -- Same as symbolizeExpr, but also return an env with all names bound at the
+  -- top-level
+  sem symbolizeTopExpr (env : SymEnv) =
+  | t ->
+    let t = symbolizeExpr env t in
+    addTopNames env t
 
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader
@@ -126,6 +145,11 @@ lang Sym = Ast + SymLookup
   sem symbolize =
   | expr ->
     let env = symEnvEmpty in
+    symbolizeExpr env expr
+
+  sem symbolizeAndInsertOpImpls impls =
+  | expr ->
+    let env = {symEnvEmpty with opImplsToInsert = impls} in
     symbolizeExpr env expr
 
   -- Symbolize with builtin environment and ignore errors
@@ -284,6 +308,104 @@ lang MatchSym = Sym + MatchAst
                     els = symbolizeExpr env t.els}
 end
 
+lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst
+  sem symbolizeExpr env =
+  | TmOpDecl x ->
+    -- NOTE(vipa, 2023-07-03): Insert *all* reprs, then clear them
+    -- from the environment so they don't get inserted again
+    let reprs = mapBindings env.opImplsToInsert.reprs in
+    let env = {env with opImplsToInsert = {env.opImplsToInsert with reprs = emptyImplData.reprs}} in
+    let symbolizeReprDecl = lam reprEnv. lam binding.
+      match mapAccumL setSymbol env.tyVarEnv binding.1 .vars with (tyVarEnv, vars) in
+      let newEnv = {env with tyVarEnv = tyVarEnv} in
+      match setSymbol reprEnv binding.0 with (reprEnv, ident) in
+      let res =
+        { ident = ident
+        , vars = vars
+        , pat = symbolizeType newEnv binding.1 .pat
+        , repr = symbolizeType newEnv binding.1 .repr
+        }
+      in (reprEnv, res) in
+    match mapAccumL symbolizeReprDecl env.reprEnv reprs with (reprEnv, reprs) in
+    let env = {env with reprEnv = reprEnv} in
+    let wrapWithRepr = lam repr. lam tm. TmReprDecl
+      { ident = repr.ident
+      , vars = repr.vars
+      , pat = repr.pat
+      , repr = repr.repr
+      , ty = tyunknown_
+      , inexpr = tm
+      , info = infoTm tm
+      } in
+
+    -- NOTE(vipa, 2023-07-03): Insert implementations of *this*
+    -- operation, if any
+    match setSymbol env.varEnv x.ident with (varEnv, ident) in
+    let newEnv = {env with varEnv = varEnv} in
+    let inexpr =
+      let sid = stringToSid (nameGetStr x.ident) in
+      match mapLookup sid env.opImplsToInsert.impls with Some impls then
+        let mkAlt = lam alt.
+          { selfCost = alt.selfCost
+          , body = symbolizeExpr env alt.body
+          , specType = symbolizeType env alt.specType
+          , delayedReprUnifications = []
+          } in
+        TmOpImpl
+        { ident = ident
+        , alternatives = map mkAlt impls
+        , inexpr = symbolizeExpr newEnv x.inexpr
+        , ty = tyunknown_
+        , reprScope = negi 1
+        , info = x.info
+        }
+      else
+        symbolizeExpr newEnv x.inexpr in
+    let decl = TmOpDecl
+      { x
+      with ident = ident
+      , tyAnnot = symbolizeType env x.tyAnnot
+      , inexpr = inexpr
+      , ty = symbolizeType env x.ty
+      } in
+    foldr wrapWithRepr decl reprs
+end
+
+lang OpImplSym = OpImplAst + Sym + LetSym
+  sem symbolizeExpr env =
+  | TmOpImpl x ->
+    let ident = getSymbol
+      { kind = "variable"
+      , info = [x.info]
+      , allowFree = env.allowFree
+      }
+      env.varEnv
+      x.ident in
+    -- TODO(vipa, 2023-06-30): symbolize type variables
+    let alternatives =
+      let env = {env with varEnv = mapRemove (nameGetStr ident) env.varEnv} in
+      let symbAlt = lam alt.
+        match symbolizeTyAnnot env alt.specType with (tyVarEnv, specType) in
+        let body = symbolizeExpr {env with tyVarEnv = tyVarEnv} alt.body in
+        {alt with specType = specType, body = body} in
+      map symbAlt x.alternatives in
+    let inexpr = symbolizeExpr env x.inexpr in
+    TmOpImpl {x with ident = ident, alternatives = alternatives, inexpr = inexpr}
+end
+
+lang OpVarSym = OpVarAst + Sym
+  sem symbolizeExpr env =
+  | TmOpVar x ->
+    let ident = getSymbol
+      { kind = "variable"
+      , info = [x.info]
+      , allowFree = env.allowFree
+      }
+      env.varEnv
+      x.ident in
+    TmOpVar {x with ident = ident}
+end
+
 -----------
 -- TYPES --
 -----------
@@ -327,6 +449,24 @@ lang AllTypeSym = Sym + AllTypeAst + KindAst
     TyAll {t with ident = ident,
                   ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,
                   kind = kind}
+end
+
+lang CollTypeSym = Sym + CollTypeAst
+  sem symbolizeType env =
+  -- NOTE(vipa, 2023-07-03): The `None` case is covered by the default
+  -- case (`smap`)
+  | TyColl (x & {explicitSubst = Some subst}) ->
+    let filter = symbolizeType env x.filter in
+    let permutation = symbolizeType env x.permutation in
+    let element = symbolizeType env x.element in
+    let subst = getSymbol
+      { kind = "repr"
+      , info = [x.info]
+      , allowFree = env.allowFree
+      }
+      env.reprEnv
+      subst in
+    TyColl {x with filter = filter, permutation = permutation, element = element, explicitSubst = Some subst}
 end
 
 --------------
@@ -414,7 +554,10 @@ lang MExprSym =
   VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
 
   -- Non-default implementations (Patterns)
-  NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
+  NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym +
+
+  -- UCT stuff
+  OpDeclSym + OpImplSym + OpVarSym + CollTypeSym
 end
 
 -----------

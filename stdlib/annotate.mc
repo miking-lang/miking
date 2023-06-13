@@ -8,6 +8,8 @@ lang Annotator
   type Output = String
   type Title = String
 
+  sem escapeContent : String -> Output
+  sem escapeAnnot : String -> Annotation
   sem annotate : Annotation -> Output -> Output
   sem document : Title -> Output -> Output
   sem finalize : Output -> Output
@@ -85,8 +87,8 @@ let _templateAfter = strJoin "\n"
   , "let lock = null;"
   , ""
   , "Array.from(document.getElementsByClassName(\"tagged\")).forEach(function(e) {"
-  , "  e.addEventListener(\"mouseover\", showTag);"
-  , "  e.addEventListener(\"mouseout\", hideTag);"
+  -- , "  e.addEventListener(\"mouseover\", showTag);"
+  -- , "  e.addEventListener(\"mouseout\", hideTag);"
   , "  e.addEventListener(\"click\", clickTag);"
   , "})"
   , ""
@@ -168,7 +170,18 @@ let _templateAfter = strJoin "\n"
   , "</html>"
   ]
 
+let _escapeHtmlChar = lam c.
+  switch c
+  case '<' then "&lt"
+  case '>' then "&gt"
+  case '&' then "&amp"
+  case c then [c]
+  end
+
 lang HtmlAnnotator = Annotator
+  sem escapeContent = | str -> join (map _escapeHtmlChar str)
+  sem escapeAnnot = | str -> join (map _escapeHtmlChar str)
+
   sem annotate annot = | str -> join
     [ "<span class=\"tagged\"><div class=\"tag\">"
     , annot

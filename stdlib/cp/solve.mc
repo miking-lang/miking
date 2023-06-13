@@ -9,6 +9,7 @@ lang COPSolve = COP + COPPrettyPrint
   syn COPVarValue =
   | COPInt {val: Int}
   | COPBool {val: Bool}
+  | COPFloat {val: Float}
   | COPArray {vals: [COPVarValue]}
 
   -- TODO(Linnea, 2023-03-16): Include other possible results (unsatisfiable,
@@ -55,7 +56,7 @@ lang COPSolve = COP + COPPrettyPrint
         let m: Option (Map Name COPVarValue) =
           mapFoldWithKey (lam acc. lam n. lam s.
             match acc with Some m then
-              match mapLookup s resMap with Some v then
+              match mapLookup (cons 'z' s) resMap with Some v then
                 Some (mapInsert n v m)
               else None ()
             else None ()
@@ -80,6 +81,7 @@ lang COPSolve = COP + COPPrettyPrint
   | v ->
     switch v
     case JsonInt i then Some (COPInt {val = i})
+    case JsonFloat i then Some (COPFloat {val = i})
     case JsonBool b then Some (COPBool {val = b})
     case JsonArray a then
       let vals =
