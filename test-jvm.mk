@@ -1,8 +1,8 @@
 include test-files.mk
 
-.PHONY: all $(jvm_files)
+.PHONY: all $(src_files_all)
 
-all: $(jvm_files)
+all: $(src_files_all)
 
-$(jvm_files):
-	@./make.sh compile-test $@ "build/mi compile --test --disable-optimizations --disable-prune-utests"
+$(src_files_all):
+	@ ./make.sh compile-and-run-jvm-test $@ 

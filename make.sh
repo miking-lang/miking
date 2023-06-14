@@ -142,6 +142,34 @@ run_js_web_test() {
   ./test/js/web/make.sh run-test-quiet $1
 }
 
+compile_and_run_jvm_test() {
+  set +e
+  binary=$(mktemp -d)
+  compile="./build/mi compile --to-jvm --test --output $binary"
+  output="$($compile $1 2>&1)"
+  exit_code=$?
+  if [ $exit_code -ne 0 ]
+  then
+    echo "ERROR: Java backend could not compile $1 \n" 
+    rm -r $binary
+  else
+    runscript=$(basename $1 | cut -d . -f1)
+    output="$output\n$(cd $binary && ./$runscript)"
+    exit_code=$?
+    rm -r $binary
+    if [ $exit_code -ne 0 ]
+    then
+      echo "ERROR: Tests failed for $1!\n"
+      echo "-----------------------------------------\n"
+      echo $output
+      echo "-----------------------------------------\n"
+    else 
+      echo "Succesfully tested $1:$output"
+    fi 
+  fi
+  set -e
+}
+
 case $1 in
     boot)
         build_boot
@@ -166,6 +194,9 @@ case $1 in
         ;;
     run-js-web-test)
         run_js_web_test "$2"
+        ;;
+    compile-and-run-jvm-test)
+        compile_and_run_jvm_test "$2"
         ;;
     lint)
         lint

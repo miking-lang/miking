@@ -508,13 +508,13 @@ let randClass_ = use JVMAst in
                     aload_ 1]
                     [unwrapInteger_,
                     [aload_ 0,
-                    getfield_ (concat pkg_ "Rand") "var" object_LT,
+                    getfield_ (concat pkg_ "Rand_INTRINSIC") "var" object_LT,
                     checkcast_ integer_T],
                     unwrapInteger_,
                     [lsub_,
                     invokevirtual_ "java/util/Random" "nextLong" "(J)J",
                     aload_ 0,
-                    getfield_ (concat pkg_ "Rand") "var" object_LT,
+                    getfield_ (concat pkg_ "Rand_INTRINSIC") "var" object_LT,
                     checkcast_ integer_T],
                     unwrapInteger_,
                     [ladd_],
@@ -1424,6 +1424,7 @@ let headClass_ = use JVMAst in
                     areturn_]])]
 
 let tailClass_ = use JVMAst in
+    let endLabel = createName_ "end" in
     createClass
         "Tail_INTRINSIC"
         (concat pkg_ "Function")
@@ -1434,8 +1435,13 @@ let tailClass_ = use JVMAst in
             (methodtype_T object_LT object_LT)
                 (foldl concat
                     [aload_ 1]
-                    [[checkcast_ seq_T, 
+                    [[checkcast_ seq_T,
+                    dup_,
+                    invokevirtual_ seq_T "length" (methodtype_T "" "I"),
+                    ldcInt_ 0,
+                    ificmpeq_ endLabel,
                     invokevirtual_ seq_T "tail" (methodtype_T "" seq_LT),
+                    label_ endLabel,
                     areturn_]])]
 
 let lengthClass_ = use JVMAst in
@@ -1651,6 +1657,7 @@ let flushStdoutClass_ = use JVMAst in
                     [areturn_]])]
 
 let commandClass_ = use JVMAst in
+    -- do ["sh", "-c", command] Runtime.exec(String[])
     createClass
         "Command_INTRINSIC"
         (concat pkg_ "Function")
@@ -1663,9 +1670,22 @@ let commandClass_ = use JVMAst in
                     [createTryCatch
                         (foldl concat 
                             [invokestatic_ "java/lang/Runtime" "getRuntime" "()Ljava/lang/Runtime;"]
-                            [[aload_ 1],
+                            [[ldcInt_ 3,
+                            anewarray_ "java/lang/String",
+                            dup_,
+                            ldcInt_ 0,
+                            ldcString_ "sh",
+                            aastore_,
+                            dup_, 
+                            ldcInt_ 1,
+                            ldcString_ "-c",
+                            aastore_,
+                            dup_, 
+                            ldcInt_ 2,
+                            aload_ 1],
                             charseq2Str_,
-                            [invokevirtual_ "java/lang/Runtime" "exec" "(Ljava/lang/String;)Ljava/lang/Process;",
+                            [aastore_,
+                            invokevirtual_ "java/lang/Runtime" "exec" "([Ljava/lang/String;)Ljava/lang/Process;",
                             invokevirtual_ "java/lang/Process" "waitFor" "()I",
                             i2l_]])
                         [ldcLong_ 1]]

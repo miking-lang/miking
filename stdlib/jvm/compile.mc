@@ -786,7 +786,7 @@ let collectADTTypes = lam tlMapping.
             match t with TyVariant { constrs = constrs } then -- ADT
                 let classes = acc.1 in
                 let interfaces = acc.0 in
-                let name = nameGetStr tup.0 in
+                let name = concat (nameGetStr tup.0) "_TYPE_INTERFACE" in
                 let interf = createInterface name [] [createFunction "getTag" "()I" []] in
                 let constrClasses = foldli (lam acc. lam i. lam tup.
                                         let interfName = acc.0 in
@@ -941,8 +941,8 @@ let compileMCoreToJVM = lam ast. lam sourcePath. lam options.
     --create run script
     let outputPath = (match options.output with Some path then
                             (sysRunCommand ["mkdir", path] "" ".");
-                            (sysRunCommand ["mv", pkg_, concat path pkg_] "" ".");
-                            path 
+                            (sysRunCommand ["mv", pkg_, join [path, "/", pkg_]] "" ".");
+                            concat path "/"
                         else "") in
     (createRunScript_ (concat outputPath (trimSourcePath sourcePath)));
     "pkg/"
