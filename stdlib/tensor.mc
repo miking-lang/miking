@@ -9,6 +9,8 @@ include "string.mc"
 
 let _prod = foldl muli 1
 
+type TCreate a = [Int] -> (([Int] -> a) -> Tensor[a])
+
 ----------------------------
 -- TENSOR INDEX FUNCTIONS --
 ----------------------------
@@ -121,7 +123,6 @@ utest optionIndexFoldRMM
   []
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
-
 
 ---------------------------
 -- SHAPE AND RANK CHECKS --
@@ -711,6 +712,43 @@ utest
   in
   tensorFilteri (lam. lti 3) t
 with [[1, 0], [1, 1], [1, 2]]
+
+-- Given a tensor and sequence of index sequences, produce the corresponding
+-- sub-tensor (that has the same rank). More general but not as efficient as
+-- tensorSubExn (for Bigarrays) as it has to allocate a new tensor. See the
+-- tests for example usages.
+let tensorSubSeqExn : all a. TCreate a -> Tensor[a] -> [[Int]] -> Tensor[a] =
+  lam tcreate. lam t. lam sub.
+    let newShape = map length sub in
+    tcreate newShape (lam is: [Int].
+      let isPrev = mapi (lam i. lam x. get (get sub i) x) is in
+      tensorGetExn t isPrev
+    )
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3, 3]
+    [1, 2, 3
+    ,4, 5, 6
+    ,7, 8, 9]
+  in
+  tensorSubSeqExn tensorCreate t [[0,2],[1]]
+with
+  tensorOfSeqExn tensorCreateDense [2, 1]
+    [2,
+     8]
+using tensorEq eqi
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3, 3]
+    [1, 2, 3
+    ,4, 5, 6
+    ,7, 8, 9]
+  in
+  tensorSubSeqExn tensorCreateDense t [[0],[0,2,1]]
+with
+  tensorOfSeqExn tensorCreateDense [1, 3]
+    [1, 3, 2]
+using tensorEq eqi
+
 
 ------------------------------
 -- INTEGER TENSOR FUNCTIONS --
