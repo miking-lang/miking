@@ -124,6 +124,7 @@ utest optionIndexFoldRMM
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
 
+
 ---------------------------
 -- SHAPE AND RANK CHECKS --
 ---------------------------
