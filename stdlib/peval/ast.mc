@@ -13,7 +13,7 @@ include "list.mc"
 
 lang SpecializeAst =
   KeywordMaker + MExprAst + MExprParser + MExprPrettyPrint + MExprSym
-  + MExprEq + Eval + PrettyPrint + MExprTypeCheck + LamEval + MExprPEval
+  + MExprEq + Eval + PrettyPrint + MExprTypeCheck + LamEval
 
 
   syn Expr =
@@ -57,7 +57,7 @@ lang SpecializeAst =
   | TmSpecialize e ->
     switch eval ctx e.e
     case clos & TmClos _ then
-      let res = peval clos in
+      let res = use MExprPEval in peval clos in
         match res with TmLam _ then
           eval (evalCtxEmpty ()) res -- TmClos ...
         else res
