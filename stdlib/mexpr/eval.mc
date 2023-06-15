@@ -188,8 +188,6 @@ lang ConstEvalNoDefault =
   PrettyPrint
 
   sem delta : Info -> (Const, [Expr]) -> Expr
-  sem delta info =
-  -- Intentionally left blank
 
   sem apply ctx info =
   | (TmConst r, arg) -> delta info (r.val, [arg])

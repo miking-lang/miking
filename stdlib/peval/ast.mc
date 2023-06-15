@@ -11,8 +11,10 @@ include "error.mc"
 include "list.mc"
 
 
-lang SpecializeAst = KeywordMaker + MExpr + MExprEq + Eval + PrettyPrint
-                + MExprTypeCheck + LamEval + MExprPEval
+lang SpecializeAst =
+  KeywordMaker + MExprAst + MExprParser + MExprPrettyPrint + MExprSym
+  + MExprEq + Eval + PrettyPrint + MExprTypeCheck + LamEval + MExprPEval
+
 
   syn Expr =
   | TmSpecialize {e: Expr, info: Info}
@@ -77,7 +79,7 @@ let specialize_ = lam e.
   TmSpecialize {e = e, info = NoInfo ()}
 
 
-lang TestLang = SpecializeAst + MExprEval
+lang TestLang = SpecializeAst
 end
 
 mexpr
