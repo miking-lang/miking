@@ -505,14 +505,6 @@ lang IOPEval = IOAst + SeqAst + IOArity
     b.appSeq (b.uconst c) args
 end
 
-lang SysPEval = SysAst + VarAst + PEval
-  sem delta info =
-  | (c & (CError _ | CCommand _ | CExit _), args) ->
-    -- Always delay such side effects until program is executed
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-end
-
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
@@ -520,7 +512,7 @@ lang MExprPEval =
 
   -- Constants
   ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
-  CmpCharPEval + SysPEval +
+  CmpCharPEval +
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1106,24 +1098,6 @@ lam x.
   "
   using eqExpr
 in
-
---------------------------------
--- Test System Calls --
---------------------------------
-
-let prog = _parse "
-  error \"abc\";
-  exit 1;
-  command \"echo\"
-" in
-
-utest _test prog with _parse "
-  let t = error \"abc\" in
-  let t1 = exit 1 in
-  let t2 = command \"echo\" in
-  t2
-" using eqExpr in
-
 
 --------------------------------
 -- Test Char Comparison --
