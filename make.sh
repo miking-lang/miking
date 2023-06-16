@@ -25,7 +25,8 @@ LIB_PATH=$HOME/.local/lib/mcore
 export MCORE_LIBS=stdlib=`pwd`/stdlib:test=`pwd`/test
 
 # Setup dune/ocamlfind to use local boot library when available
-export OCAMLPATH=`pwd`/build/lib
+# Do preserve existing OCAML_PATH to find linenoise et al.
+export OCAMLPATH="$(pwd)/build/lib${OCAMLPATH:+:}$OCAMLPATH"
 
 # Compile and build the boot interpreter
 build_boot(){
