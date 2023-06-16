@@ -300,7 +300,7 @@ lang DataPEval = PEval + DataAst
 
   sem pevalEval ctx k =
   | TmConDef t -> TmConDef {t with inexpr = pevalBind ctx k t.inexpr}
-  | TmConApp t -> pevalBind ctx (lam body. TmConApp {t with body = body}) t.body
+  | TmConApp t -> pevalBind ctx (lam body. k (TmConApp {t with body = body})) t.body
 end
 
 lang SeqPEval = PEval + SeqAst
