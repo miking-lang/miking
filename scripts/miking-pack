@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+
+# Build a tarball with Miking and the necessary dependencies.
+# The script should be run from the root of the Miking repository:
+#
+#     /path/to/miking$ scripts/miking-pack
+#
+# This produces a tarball 'miking-pack.tar.gz' with structure
+#
+#     miking-pack/
+#       mi-env
+#       bin/
+#         mi
+#       lib/
+#         mcore/stdlib/
+#         ...
+#       miking-opam-switch/
+#         bin/
+#         lib/
+#         ...
+#
+# 'mi-env' provides a script setting the necessary environment
+# variables needed to run the Miking compiler and its compiled
+# binaries.  To use the tarball, simply run
+#
+#     tar xzf miking-pack.tar.gz
+#     . miking-pack/mi-env
+#
+# You will then be in an environment where 'mi' and its dependencies
+# are available.  The user machine is assumed to have coreutils
+# ('rm', 'mkdir', et.c.) and 'which' installed.
+#
+# To run this script, you need nix and a C compiler.
+
+OCAML_VERSION="5.0.0"
+TMP_DIR="/tmp/miking-pack"
+SWITCH_DIR="$TMP_DIR/miking-opam-switch"
+LIB_DIR="$TMP_DIR/lib"
+BIN_DIR="$TMP_DIR/bin"
+
+# BIN_DEPS are binary dependencies for the script which will be fetched
+# using nix.  This includes everything except for a C compiler, since
+# compiling with nix's compiler results in a non-relocatable binary.
+BIN_DEPS=('coreutils' 'gnutar' 'gzip' 'gnumake' 'opam')
+LIB_DEPS=('openblas' 'zlib' 'libev')
+MIKING_BASE_DEPS=('dune' 'linenoise')
+MIKING_EXT_DEPS=('owl' 'conf-libev' 'lwt' 'toml')
+
+# Force the script to exit on error
+set -e
+
+check_deps() {
+    if ! hash nix; then
+        echo "Missing 'nix' on the system; exiting."
+        exit 127
+    elif ! (hash gcc || hash clang); then
+        echo "Missing 'gcc' or 'clang' on the system; exiting."
+        exit 127
+    fi
+}
+
+setup_bin_deps() {
+    echo "Preparing binary dependencies for build..."
+    for dep in "${BIN_DEPS[@]}"; do
+        export PATH="$(nix-build '<nixpkgs>' -A "$dep" --no-out-link)/bin:$PATH"
+    done
+}
+
+init_temp_dir() {
+    echo "Making build directory at $TMP_DIR."
+    rm -rvf $TMP_DIR
+    mkdir -v $TMP_DIR
+}
+
+setup_lib_deps() {
+    echo "Preparing library dependencies for build..."
+    mkdir $LIB_DIR
+    export LIBRARY_PATH="$LIB_DIR:$LIBRARY_PATH"
+    for dep in "${LIB_DEPS[@]}"; do
+        dep_path="$(nix-build '<nixpkgs>' -A "$dep" --no-out-link)"
+        nix-store --query --requisites "$dep_path" | while read dep_path; do
+            cp -drnv $dep_path/lib/* $LIB_DIR
+        done
+    done
+    # Files copied from the nix store are unwritable, so update the permissions.
+    chmod +w -R $LIB_DIR
+}
+
+init_opam_switch() {
+    echo "Initializing OPAM switch at $SWITCH_DIR."
+    opam switch create $SWITCH_DIR $OCAML_VERSION
+    eval "$(opam env --switch="$SWITCH_DIR" --set-switch)"
+}
+
+install_opam_deps() {
+    echo "Installing OPAM dependencies."
+    opam install --yes ${MIKING_BASE_DEPS[@]} ${MIKING_EXT_DEPS[@]}
+}
+
+compile_miking() {
+    echo "Making the Miking compiler."
+    make clean
+    make
+}
+
+install_miking() {
+    echo "Installing the Miking compiler and standard library"
+    echo "to the build directory."
+    make install-boot
+    mkdir $LIB_DIR/mcore
+    mkdir $BIN_DIR
+    cp -rv stdlib $LIB_DIR/mcore
+    cp -v build/mi $BIN_DIR
+}
+
+prepare_env() {
+    echo "Preparing 'mi-env' script with the environment variables needed."
+    cat <<'EOS' > $TMP_DIR/mi-env
+export SOURCE="$(dirname "$(realpath -s "${BASH_SOURCE[0]}")")"
+export OPAM_SWITCH_PREFIX="$SOURCE/miking-opam-switch/_opam"
+export OCAMLLIB="$SOURCE/miking-opam-switch/_opam/lib/ocaml"
+export PATH="$SOURCE/bin:$SOURCE/miking-opam-switch/_opam/bin:$PATH"
+export LIBRARY_PATH="$SOURCE/lib:$LIBRARY_PATH"
+export LD_LIBRARY_PATH="$LIBRARY_PATH"
+export MCORE_LIBS="stdlib=$SOURCE/lib/mcore/stdlib"
+unset  OCAMLPATH
+EOS
+}
+
+make_tarball() {
+    check_deps
+    setup_bin_deps
+    init_temp_dir
+    setup_lib_deps
+    init_opam_switch
+    install_opam_deps
+    compile_miking
+    install_miking
+    prepare_env
+    tar -C /tmp -czvf miking-pack.tar.gz ./miking-pack
+}
+
+make_tarball
