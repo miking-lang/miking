@@ -1428,29 +1428,36 @@ lang RefOpCFA = CFA + ConstCFA + RefOpAst
 
 end
 
--- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
--- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
   sem generateConstraintsConst info ident =
-  -- | CTensorCreateUninitInt _ -> []
-  -- | CTensorCreateUninitFloat _ -> []
-  -- | CTensorCreateInt _ -> []
-  -- | CTensorCreateFloat _ -> []
-  -- | CTensorCreate _ -> []
-  -- | CTensorGetExn _ -> []
+  -- Contains simple values (int, float), that require no handling for the
+  -- basic analysis.
+  | CTensorCreateUninitInt _ -> []
+  | CTensorCreateUninitFloat _ -> []
+  | CTensorCreateInt _ -> []
+  | CTensorCreateFloat _ -> []
+
+  | CTensorCreate _ -> []
+  | CTensorGetExn _ -> []
+  | CTensorLinearGetExn _ -> []
+  | CTensorReshapeExn _ -> []
+  | CTensorCopy _ -> []
+  | CTensorTransposeExn _ -> []
+  | CTensorSliceExn _ -> []
+  | CTensorSubExn _ -> []
+
+  -- Returns simple values (unit, boolean, string) that require no handling for
+  -- the basic analysis.
+  | CTensorIterSlice _ -> []
+  | CTensorEq _ -> []
+  | CTensorToString _ -> []
+  | CTensorRank _ -> []
+  | CTensorShape _ -> []
+
+  -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+  -- probably be added.
   -- | CTensorSetExn _ -> []
-  -- | CTensorLinearGetExn _ -> []
   -- | CTensorLinearSetExn _ -> []
-  -- | CTensorRank _ -> []
-  -- | CTensorShape _ -> []
-  -- | CTensorReshapeExn _ -> []
-  -- | CTensorCopy _ -> []
-  -- | CTensorTransposeExn _ -> []
-  -- | CTensorSliceExn _ -> []
-  -- | CTensorSubExn _ -> []
-  -- | CTensorIterSlice _ -> []
-  -- | CTensorEq _ -> []
-  -- | CTensorToString _ -> []
 end
 
 lang BootParserCFA = CFA + ConstCFA + BootParserAst
