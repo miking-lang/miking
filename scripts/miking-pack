@@ -30,7 +30,7 @@
 # are available.  The user machine is assumed to have coreutils
 # ('rm', 'mkdir', et.c.) and 'which' installed.
 #
-# To run this script, you need nix and a C compiler.
+# To run this script, you need bash, nix and a C compiler.
 
 OCAML_VERSION="5.0.0"
 TMP_DIR="/tmp/miking-pack"
@@ -41,7 +41,8 @@ BIN_DIR="$TMP_DIR/bin"
 # BIN_DEPS are binary dependencies for the script which will be fetched
 # using nix.  This includes everything except for a C compiler, since
 # compiling with nix's compiler results in a non-relocatable binary.
-BIN_DEPS=('coreutils' 'gnutar' 'gzip' 'gnumake' 'opam')
+BIN_DEPS=('coreutils' 'gnutar' 'gzip' 'bzip2' 'gnumake' 'gnused'
+          'gnugrep' 'gawk' 'patch' 'pkg-config' 'opam')
 LIB_DEPS=('openblas' 'zlib' 'libev')
 MIKING_BASE_DEPS=('dune' 'linenoise')
 MIKING_EXT_DEPS=('owl' 'conf-libev' 'lwt' 'toml')
@@ -79,7 +80,9 @@ setup_lib_deps() {
     for dep in "${LIB_DEPS[@]}"; do
         dep_path="$(nix-build '<nixpkgs>' -A "$dep" --no-out-link)"
         nix-store --query --requisites "$dep_path" | while read dep_path; do
-            cp -drnv $dep_path/lib/* $LIB_DIR
+            if [[ "$dep_path" != *libc* ]]; then
+                cp -drnv $dep_path/lib/* $LIB_DIR
+            fi
         done
     done
     # Files copied from the nix store are unwritable, so update the permissions.

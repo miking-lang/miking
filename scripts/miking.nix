@@ -1,5 +1,7 @@
 { lib, stdenv, fetchFromGitHub,
+  coreutils,
   ocaml-ng,
+  which
 }:
 
 let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
@@ -15,34 +17,34 @@ stdenv.mkDerivation rec {
     sha256 = "16ixfrrn9ns3ypr7c4krpham1lx32i801d12yv0f4y3fl8fn5vv2";
   };
 
-  nativeBuildInputs = with ocamlPackages;
-    [ ocaml
-      findlib
-      dune_2
-      linenoise
-    ];
-
   propagatedBuildInputs = with ocamlPackages;
     [ ocaml
       findlib
-      dune_2
+      dune_3
       linenoise
+
+      coreutils  # For sys.mc (mkdir, echo, rm, ...)
+      which      # For sys.mc
+      lwt        # For async-ext.mc
+      owl        # For dist-ext.mc
+      toml       # For toml-ext.mc
     ];
 
-  # preBuild = ''
-  #   substituteInPlace make.sh --replace 'OCAMLPATH=' 'OCAMLPATH=$OCAMLPATH:'
-  #   substituteInPlace Makefile \
-  #     --replace 'MCORE_LIBS=' 'OCAMLPATH=\${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS='
-  # '';
+  preBuild = ''
+    substituteInPlace make.sh --replace 'OCAMLPATH=' 'OCAMLPATH=$OCAMLPATH:'
+    substituteInPlace test-boot.mk \
+      --replace 'MCORE_LIBS=' 'OCAMLPATH=''${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS='
+  '';
 
   installPhase = ''
-    dune install --prefix $out # --libdir $out/lib/ocaml/site-lib
+    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR
     cp build/mi $out/bin
     mkdir -p $out/lib/mcore
     cp -r stdlib $out/lib/mcore
   '';
 
-  dontTest = true;
+  doCheck = true;
+  checkTarget = "test-compile";
 
   meta = with lib; {
     description     = "Meta language system for creating embedded DSLs";
