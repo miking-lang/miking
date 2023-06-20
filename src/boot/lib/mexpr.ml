@@ -2038,7 +2038,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
-          try eval ((s, a) :: Lazy.force env2) pe t3
+          try eval ((s, a) :: !env2) pe t3
           with e ->
             if !enable_debug_stack_trace then
               uprint_endline (us "TRACE: " ^. info2str fiapp) ;
@@ -2048,7 +2048,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
         add_call ficlos (t2 -. t1) ;
         res )
       else
-        try eval ((s, a) :: Lazy.force env2) pe t3
+        try eval ((s, a) :: !env2) pe t3
         with e ->
           if !enable_debug_stack_trace then
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
@@ -2056,11 +2056,6 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   (* Constant application using the delta function *)
   | TmConst (_, c), a ->
       delta (apply pe) fiapp c a
-  (* Fix *)
-  | TmFix _, (TmClos (fi, _, s, _, t3, env2) as tt) ->
-      eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) pe t3
-  | TmFix _, _ ->
-      raise_error (tm_info f) "Incorrect CFix"
   | f, _ ->
       raise_error fiapp
         ( "Incorrect application. This is not a function: "
@@ -2082,8 +2077,6 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s, _, _) -> (
     match List.assoc_opt s env with
-    | Some (TmApp (fi, (TmFix _ as f), a)) ->
-        apply pe fi f a
     | Some t ->
         t
     | None ->
@@ -2095,26 +2088,20 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       apply pe fiapp f a
   (* Lambda and closure conversions *)
   | TmLam (fi, x, s, pes, _ty, t1) ->
-      TmClos (fi, x, s, pes, t1, lazy env)
+      TmClos (fi, x, s, pes, t1, ref env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, pes, _ty, t1) ->
-                 TmClos (fi, x, s, pes, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst )
-      in
-      eval (Lazy.force env') pe t2
+     let env_ref = ref env in
+     List.iter (fun (_,_,s1,_,t) ->
+         (match t with
+          | TmLam(fi,str,s2,pe,_,tm) ->
+             env_ref := (s1, TmClos(fi, str, s2, pe, tm, env_ref))::!env_ref
+          | _ -> failwith "Incorrect RecLets"
+         )) lst;
+     eval !env_ref pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
@@ -2203,7 +2190,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   | TmExt (_, _, _, _, _, t) ->
       eval env pe t
   (* Only at runtime *)
-  | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
+  | TmClos _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
@@ -2214,20 +2201,14 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
   | TmType (_, _, _, _, t1) ->
       eval_toplevel env pe t1
   | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, pes, _ty, t1) ->
-                 TmClos (fi, x, s, pes, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst )
-      in
-      eval_toplevel (Lazy.force env') pe t2
+     let env_ref = ref env in
+     List.iter (fun (_,_,s1,_,t) ->
+         (match t with
+          | TmLam(fi,str,s2,pe,_,tm) ->
+             env_ref := (s1, TmClos(fi, str, s2, pe, tm, env_ref))::!env_ref
+          | _ -> failwith "Incorrect RecLets"
+         )) lst;
+     eval_toplevel !env_ref pe t2
   | TmConDef (_, _, _, _, t) ->
       eval_toplevel env pe t
   | ( TmVar _
@@ -2235,7 +2216,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
     | TmClos _
     | TmApp _
     | TmConst _
-    | TmFix _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _

@@ -583,7 +583,6 @@ and print_tm fmt (prec, t) =
     | TmUse _
     | TmUtest _
     | TmClos _
-    | TmFix _
     | TmNever _
     | TmRef _
     | TmDive _
@@ -708,8 +707,6 @@ and print_tm' fmt t =
   | TmClos (_, x, _, _, t1, _) ->
       let x = string_of_ustring x in
       fprintf fmt "@[<hov %d>clos %s.@ %a@]" !ref_indent x print_tm (Lam, t1)
-  | TmFix _ ->
-      fprintf fmt "fix"
   | TmNever _ ->
       fprintf fmt "never"
   | TmRef (_, _) ->

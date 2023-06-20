@@ -245,7 +245,7 @@ let rec symbolize (env : sym_env) (t : tm) =
       TmDive (fi, l, symbolize env t)
   | TmPreRun (fi, l, t) ->
       TmPreRun (fi, l, symbolize env t)
-  | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
+  | TmConst _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -304,7 +304,6 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmUtest _
     | TmNever _
     | TmClos _
-    | TmFix _
     | TmRef _
     | TmDive _
     | TmPreRun _

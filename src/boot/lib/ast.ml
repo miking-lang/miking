@@ -308,9 +308,7 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of info * ustring * Symb.t * pesym * tm * env Lazy.t (* Closure *)
-  (* Fix point *)
-  | TmFix of info
+  | TmClos of info * ustring * Symb.t * pesym * tm * env ref (* Closure *)
   (* Reference *)
   | TmRef of info * tm ref
   (* Tensor *)
@@ -460,7 +458,7 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmExt (fi, x, s, ty, e, t'))
   | TmClos (fi, x, s, pes, t, env) ->
       f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, pes, t', env))
-  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
+  | (TmVar _ | TmConst _ | TmNever _ | TmRef _ | TmTensor _) as t ->
       (acc, t)
   | TmDive (fi, l, t) ->
       f acc t |> fun (acc, t') -> (acc, TmDive (fi, l, t'))
@@ -499,7 +497,6 @@ let tm_info = function
   | TmNever fi
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _, _)
-  | TmFix fi
   | TmRef (fi, _)
   | TmTensor (fi, _)
   | TmDive (fi, _, _)
