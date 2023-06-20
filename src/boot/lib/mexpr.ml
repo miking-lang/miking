@@ -2094,14 +2094,17 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
-     let env_ref = ref env in
-     List.iter (fun (_,_,s1,_,t) ->
-         (match t with
-          | TmLam(fi,str,s2,pe,_,tm) ->
-             env_ref := (s1, TmClos(fi, str, s2, pe, tm, env_ref))::!env_ref
-          | _ -> failwith "Incorrect RecLets"
-         )) lst;
-     eval !env_ref pe t2
+      let env_ref = ref env in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              failwith "Incorrect RecLets" )
+        lst ;
+      eval !env_ref pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
@@ -2201,14 +2204,17 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
   | TmType (_, _, _, _, t1) ->
       eval_toplevel env pe t1
   | TmRecLets (_, lst, t2) ->
-     let env_ref = ref env in
-     List.iter (fun (_,_,s1,_,t) ->
-         (match t with
-          | TmLam(fi,str,s2,pe,_,tm) ->
-             env_ref := (s1, TmClos(fi, str, s2, pe, tm, env_ref))::!env_ref
-          | _ -> failwith "Incorrect RecLets"
-         )) lst;
-     eval_toplevel !env_ref pe t2
+      let env_ref = ref env in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              failwith "Incorrect RecLets" )
+        lst ;
+      eval_toplevel !env_ref pe t2
   | TmConDef (_, _, _, _, t) ->
       eval_toplevel env pe t
   | ( TmVar _
