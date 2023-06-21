@@ -1,7 +1,7 @@
 { lib, stdenv, fetchFromGitHub,
   binutils-unwrapped,
   coreutils,
-  clang,
+  gcc,
   ocaml-ng,
   pkgsStatic,
   which
@@ -26,7 +26,7 @@ stdenv.mkDerivation rec {
       dune_3
       linenoise
       binutils-unwrapped
-      clang.cc
+      gcc.cc
 
       coreutils  # For sys.mc (mkdir, echo, rm, ...)
       which      # For sys.mc

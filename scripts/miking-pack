@@ -1,5 +1,5 @@
 #! /usr/bin/env nix-shell
-#! nix-shell -i bash -p bash coreutils gnutar gzip
+#! nix-shell -i bash -p bash coreutils gnutar gzip gnused patchelf
 
 # Build a tarball with Miking and the necessary dependencies.
 # Usage:
@@ -9,33 +9,42 @@
 # This produces a tarball 'miking-pack.tar.gz' with structure
 #
 #     miking-pack/
-#       mi-env
 #       bin/
-#         mi
+#         ...
 #       lib/
 #         mcore/stdlib/
 #         ...
-#       miking-opam-switch/
-#         bin/
-#         lib/
-#         ...
+#       mi
+#       mi-setup
+#       ...
 #
-# 'mi-env' provides a script setting the necessary environment
-# variables needed to run the Miking compiler and its compiled
-# binaries.  To use the tarball, simply run
+# The directories bin/ and lib/, et.c., contain the necessary dependencies for
+# the Miking compiler.  'mi-setup' is a shell script which must be run after
+# extracting the tarball to set the dynamic linker path inside the bundled
+# executables.  'mi' runs the Miking compiler itself.  To use this bundle on a
+# system, simply run
 #
 #     tar xzf miking-pack.tar.gz
-#     . miking-pack/mi-env
+#     miking-pack/mi-setup
 #
-# You will then be in an environment where 'mi' and its dependencies
-# are available.
+# You should then be able to compile Miking programs using, e.g.,
 #
-# To run this script, you need only nix installed.
+#     miking-pack/mi compile my_file.mc
+#
+# Note that 'mi-setup' only needs to be run once as long as 'miking-pack' is
+# not moved on the filesystem.  The folder can be renamed and moved around
+# freely as long as its internal structure is preserved, as long as 'mi-setup'
+# is run afterwards.
+#
+# 'mi-setup' is a POSIX shell script which depends on the commands 'realpath',
+# 'dirname' and 'find' usually available on any UNIX system (shipped with the
+# coreutils and findutils packages).
+#
+# To run this script, you need only nix.
 
-# Force the script to exit upon error.
 set -e
 
-TMP_DIR="/tmp/miking-pack"
+export TMP_DIR="/tmp/miking-pack"
 
 init_temp_dir() {
     echo "Making build directory at $TMP_DIR."
@@ -45,8 +54,8 @@ init_temp_dir() {
 
 install_miking() {
     echo "Installing miking and dependencies to $TMP_DIR."
-    dep_path="$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A miking --no-out-link)"
-    nix-store --query --requisites "$dep_path" | while read dep_path; do
+    mi_path="$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A miking --no-out-link)"
+    nix-store --query --requisites "$mi_path" | while read dep_path; do
         cp -drnv $dep_path/* $TMP_DIR
         # Files copied from the nix store are unwritable, so update the permissions.
         chmod +w -R $TMP_DIR
@@ -55,32 +64,43 @@ install_miking() {
        $TMP_DIR/bin
 }
 
+patch_binaries() {
+    echo "Patching dynamic library paths in binaries."
+    find $TMP_DIR/bin $TMP_DIR/libexec -type f \
+     -exec bash -c 'patchelf --set-rpath "\$ORIGIN/$(realpath --relative-to="$(dirname {})" $TMP_DIR/lib)" {}' \;
+    find $TMP_DIR/lib -type f \
+     \( -name '*.so*' ! -name ld-linux-x86-64.so.2 -o -name '*.cmxs' \) \
+     -exec bash -c 'patchelf --set-rpath "\$ORIGIN/$(realpath --relative-to="$(dirname {})" $TMP_DIR/lib)" {}' \;
+    sed -i -e 's,/nix/store/[^/]*/lib/,,g' $TMP_DIR/lib/libc.so $TMP_DIR/lib/libm.so
+}
+
 prepare_scripts() {
     echo "Preparing setup and environment scripts."
     cat <<'EOS' > $TMP_DIR/mi-setup
 SOURCE="$(dirname "$(realpath "$0")")"
-find $SOURCE/bin -type f \
+find $SOURCE/bin $SOURCE/libexec -type f \
      -exec $SOURCE/bin/patchelf \
-     --set-interpreter $SOURCE/lib/ld-linux-x86-64.so.2 \
-     --set-rpath $SOURCE/lib {} \;
+     --set-interpreter $SOURCE/lib/ld-linux-x86-64.so.2 {} \;
 EOS
-    cat <<'EOS' > $TMP_DIR/mi-env
+    cat <<'EOS' > $TMP_DIR/mi
 SOURCE="$(dirname "$(realpath "$0")")"
 export OCAMLPATH="$SOURCE/lib/ocaml:$SOURCE/lib/ocaml/5.0.0/site-lib"
 export OCAMLLIB="$SOURCE/lib/ocaml"
 export PATH="$SOURCE/bin"
 export LIBRARY_PATH="$SOURCE/lib"
 export MCORE_LIBS="stdlib=$SOURCE/lib/mcore/stdlib"
+export OCAMLPARAM=":_:ccopt=-Wl,--dynamic-linker=$SOURCE/lib/ld-linux-x86-64.so.2,-rpath=$SOURCE/lib"
 unset  OPAM_SWITCH_PREFIX
 unset  LD_LIBRARY_PATH
-exec "$@"
+exec -a "$0" "$SOURCE/bin/mi" "$@"
 EOS
-    chmod +x $TMP_DIR/mi-env $TMP_DIR/mi-setup
+    chmod +x $TMP_DIR/mi $TMP_DIR/mi-setup
 }
 
 make_tarball() {
     init_temp_dir
     install_miking
+    patch_binaries
     prepare_scripts
     tar -C /tmp -czvf miking-pack.tar.gz ./miking-pack
 }
