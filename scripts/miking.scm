@@ -8,11 +8,12 @@
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module ((guix licenses) #:prefix license:)
+  #:use-module (gnu packages base)
   #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
+  ;; #:use-module (gnu packages java)
   #:use-module (gnu packages maths)
-  #:use-module (gnu packages autotools)
-  #:use-module (gnu packages base)
+  ;; #:use-module (gnu packages node)
   #:use-module (gnu packages python)
   #:use-module (gnu packages python-xyz)
   #:use-module (gnu packages ocaml))
@@ -164,9 +165,7 @@ the OCaml compiler.")
     (license license:expat)))
 
 
-;; A base Miking definition with only the dependencies needed to build
-;; and run the compiler
-(define miking-base
+(define-public miking
   (package
     (name "miking")
     (version "0.0.1")
@@ -183,12 +182,24 @@ the OCaml compiler.")
     (build-system gnu-build-system)
     (propagated-inputs
      (list
-      gcc-toolchain
       ocaml-5.0
       ocaml5.0-dune
-      (package-with-ocaml5.0 ocaml-linenoise)))
+      (package-with-ocaml5.0 ocaml-linenoise)
+      gcc-toolchain
+
+      coreutils                           ;; For sys.mc (mkdir, echo, rm, ...)
+      ocaml-base-bytes                    ;; Needed for ocaml5.0-{lwt,owl}
+      (package-with-ocaml5.0 ocaml-lwt)   ;; For async-ext.mc
+      (package-with-ocaml5.0 ocaml-owl)   ;; For dist-ext.mc
+      (package-with-ocaml5.0 ocaml-toml)  ;; For toml-ext.mc
+      which                               ;; For sys.mc
+
+      ;; (package-with-ocaml5.0 ocaml-pyml)  ;; For boot python bindings
+      ;; node-lts                            ;; For javascript backend
+      ;; (list openjdk "jdk"))               ;; For java backend
+     ))
     (arguments
-     `(#:tests? #f
+     `(#:test-target "test-compile"
        #:phases
        (modify-phases %standard-phases
          (delete 'configure)
@@ -206,10 +217,7 @@ the OCaml compiler.")
                (invoke "dune" "install" "--prefix" out "--libdir"
                        (string-append lib "/ocaml/site-lib"))
                (install-file "build/mi" bin)
-               (copy-recursively "stdlib" (string-append lib "/mcore/stdlib"))
-               (wrap-program (string-append bin "/mi")
-                 `("MCORE_LIBS" ":" prefix
-                   (,(string-append "stdlib=" lib "/mcore/stdlib"))))))))))
+               (copy-recursively "stdlib" (string-append lib "/mcore/stdlib"))))))))
     (synopsis "Meta language system for creating embedded DSLs.")
     (description "Miking (Meta vIKING) is a meta language system for creating
 embedded domain-specific and general-purpose languages.  The system features
@@ -217,32 +225,3 @@ a polymorphic core calculus and a DSL definition language where languages
 can be extended and composed from smaller fragments.")
     (home-page "https://miking.org")
     (license license:expat)))
-
-;; The full Miking compiler, with all dependencies needed for test-compile to pass.
-(define-public miking
-  (package
-    (inherit miking-base)
-    (arguments
-     (ensure-keyword-arguments
-      (package-arguments miking-base)
-      '(#:tests? #t
-        #:test-target "test-compile")))
-    (propagated-inputs
-     (modify-inputs
-      (package-propagated-inputs miking-base)
-      (append
-       coreutils        ;; For sys.mc (mkdir, echo, rm, ...)
-       ocaml-base-bytes ;; Needed for ocaml5.0-{lwt,owl}
-       (package-with-ocaml5.0 ocaml-lwt)      ;; For async-ext.mc
-       (package-with-ocaml5.0 ocaml-owl)      ;; For dist-ext.mc
-       (package-with-ocaml5.0 ocaml-toml)     ;; For toml-ext.mc
-       which            ;; For sys.mc
-
-       ;; Boot python bindings excluded to decrease dependencies
-       ;; (package-with-ocaml5.0 ocaml-pyml)  ;; For boot python bindings
-       ;; python                              ;; For boot python bindings
-
-       ;; TODO(aathn, 2023-05-25): Add support / package variations for
-       ;; other dependencies like javascript, java, and sundials,
-       ;; and for other OCaml versions.
-       )))))
