@@ -2064,9 +2064,22 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
 and scan (env : (Symb.t * tm) list) (t : tm) =
   match t with
   | TmLet (fi, x, s, ty, t1, t2) ->
+      (*  printf "TmLet: %s \n" (Ustring.to_utf8 x); *)
       let t1' = scan env t1 in
       TmLet (fi, x, s, ty, t1', scan ((s, t1') :: env) t2)
+  (* | TmLam (fi, x, s, pe, ty, t) ->
+         printf "TmLam: %s \n" (Ustring.to_utf8 x);
+         let s' = Symb.gensym () in
+         let tvar = TmVar (fi, x, s', pe, false) in
+         TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
+     | TmVar (_, _, s, _, _) as t1 -> (
+        match List.assoc_opt s env with
+        | Some t2 -> (
+          match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
+        | None ->
+        failwith "Error" ) *)
   | TmPreRun (_, _, t) ->
+      (*      printf "TmPreRun: \n"; *)
       eval env pe_init t
   | t ->
       smap_tm_tm (scan env) t
@@ -2079,6 +2092,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
     match List.assoc_opt s env with
     | Some t ->
         t
+    (* eval env pe t *)
     | None ->
         raise_error fi "Undefined variable" )
   (* Application *)

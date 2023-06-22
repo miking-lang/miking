@@ -8,8 +8,8 @@ recursive
     else muli (pow (subi n 1) x) x
 in
 
---let pow3 = lam x. prerun (pow 3 x) in
---let pow6 = lam x. prerun (pow 6 x) in
+let pow3 = lam x. prerun (pow 3 x) in
+let pow6 = lam x. prerun (pow 6 x) in
 
 --let f = lam x. prerun (addi x 1) in
 

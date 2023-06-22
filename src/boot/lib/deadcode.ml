@@ -11,21 +11,29 @@ let _symbmap = ref SymbMap.empty
    and returns only false if it is _sure_ to not have a side effect.
    The 'nmap' contains information (third element of the tuple) if
    a symbol may contain a side effect. *)
-let rec tm_has_side_effect nmap acc = function
-  | TmVar (_, _, s, _, _) -> (
-      if acc then true
-      else
-        match SymbMap.find_opt s nmap with
-        | Some (_, _, effect, _) ->
-            effect
-        | None ->
-            false (* In case of lambda or pattern variables *) )
-  | TmConst (_, c) ->
-      if acc then true else const_has_side_effect c
-  | TmRef (_, _) | TmTensor (_, _) ->
-      true
-  | t ->
-      if acc then true else sfold_tm_tm (tm_has_side_effect nmap) acc t
+let tm_has_side_effect nmap tm =
+  let rec work nmap (acc_se, acc_prerun) = function
+    | TmVar (_, _, s, _, _) -> (
+        if acc_se then (true, acc_prerun)
+        else
+          match SymbMap.find_opt s nmap with
+          | Some (_, _, effect, _) ->
+              (effect, acc_prerun)
+          | None ->
+              (false, acc_prerun) (* In case of lambda or pattern variables *)
+        )
+    | TmConst (_, c) ->
+        if acc_se then (true, acc_prerun)
+        else (const_has_side_effect c, acc_prerun)
+    | TmRef (_, _) | TmTensor (_, _) ->
+        (true, acc_prerun)
+    | TmPreRun (_, _, _) ->
+        (true, true)
+    | t ->
+        if acc_se then (true, acc_prerun)
+        else sfold_tm_tm (work nmap) (acc_se, acc_prerun) t
+  in
+  work nmap (false, false) tm
 
 (* Help function that collects all variables in a term *)
 let rec collect_vars (free : SymbSet.t) = function
@@ -51,7 +59,8 @@ let rec lam_counts n nmap = function
    If negative, it needs to be treated as an open let with side effects *)
 let rec lambdas_left nmap n se = function
   | TmApp (_, t1, t2) ->
-      lambdas_left nmap (n - 1) (tm_has_side_effect nmap se t2) t1
+      let tm_se, _ = tm_has_side_effect nmap t2 in
+      lambdas_left nmap (n - 1) (se || tm_se) t1
   | TmVar (_, _, s, _, _) -> (
     match SymbMap.find_opt s nmap with
     | Some (_, _, se2, n_lambdas) ->
@@ -60,7 +69,8 @@ let rec lambdas_left nmap n se = function
     | None ->
         (0, se) )
   | t ->
-      (max 0 n, se || tm_has_side_effect nmap false t)
+      let tm_se, _ = tm_has_side_effect nmap t in
+      (max 0 n, se || tm_se)
 
 (* Count the number of lambdas (arrow types) in a type *)
 let rec lambdas_in_type = function
@@ -80,14 +90,17 @@ let rec lambdas_in_type = function
 let collect_in_body s nmap free = function
   | TmLam (_, _, _, _, _, tlam) ->
       let vars = collect_vars SymbSet.empty tlam in
-      (* Note: we need to compute the side effect, if other open terms refer to this term *)
-      let se = tm_has_side_effect nmap false tlam in
-      (SymbMap.add s (vars, false, se, lam_counts 1 nmap tlam) nmap, free)
+      (* Note: we need to compute the side effect,
+         if other open terms refer to this term *)
+      let se, se_prerun = tm_has_side_effect nmap tlam in
+      (SymbMap.add s (vars, se_prerun, se, lam_counts 1 nmap tlam) nmap, free)
   | body ->
       let lambdas, se_free = lambdas_left nmap 0 false body in
-      let se_all = tm_has_side_effect nmap false body in
+      let se_all, se_prerun = tm_has_side_effect nmap body in
       let vars = collect_vars SymbSet.empty body in
-      let used = if lambdas > 0 && not se_free then false else se_all in
+      let used =
+        se_prerun || if lambdas > 0 && not se_free then false else se_all
+      in
       let free = if used then SymbSet.union free vars else free in
       (SymbMap.add s (vars, used, se_all, lambdas) nmap, free)
 
@@ -192,7 +205,8 @@ let pprint_nmap symbmap nmap =
 let make_builtin_nmap builtin_sym2term =
   let f acc (s, t) =
     let v =
-      (SymbSet.empty, false, tm_has_side_effect SymbMap.empty false t, 0)
+      let se_tm, _ = tm_has_side_effect SymbMap.empty t in
+      (SymbSet.empty, false, se_tm, 0)
     in
     SymbMap.add s v acc
   in
