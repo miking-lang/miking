@@ -533,6 +533,17 @@ utest lastIndex (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]]
 utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
       with Some 4 using optionEq eqi
 
+-- Return a sequence of all indices for which the corresponding element
+-- satisfies the predicate.
+let indices : all a. (a -> Bool) -> [a] -> [Int] = lam pred. lam seq.
+  recursive let rec = lam i. lam acc. lam seq.
+    if null seq then acc
+    else if pred (head seq) then rec (addi i 1) (cons i acc) (tail seq)
+    else rec (addi i 1) acc (tail seq)
+  in reverse (rec 0 [] seq)
+
+utest indices (eqi 1) [1,2,3,1,2,3,1,2,3,1] with [0,3,6,9] using eqSeq eqi
+
 -- Check if s1 is a prefix of s2
 recursive let isPrefix : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool
   = lam eq. lam s1. lam s2.
