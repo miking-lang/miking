@@ -183,10 +183,23 @@ lang ConstAppAst = ConstAst
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
 
-lang ConstEval =
+lang ConstEvalNoDefault =
   Eval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst + ConstArity +
   PrettyPrint
 
+  sem delta : Info -> (Const, [Expr]) -> Expr
+
+  sem apply ctx info =
+  | (TmConst r, arg) -> delta info (r.val, [arg])
+  | (TmConstApp r, arg) -> delta info (r.const, snoc r.args arg)
+
+  sem eval ctx =
+  | TmConst {val = CArgv {}, info = info} ->
+    TmSeq {tms = map str_ argv, ty = tyunknown_, info = info}
+  | TmConst c -> TmConst c
+end
+
+lang ConstEval = ConstEvalNoDefault
   sem delta : Info -> (Const, [Expr]) -> Expr
   sem delta info =
   | (const, args) ->
@@ -197,15 +210,6 @@ lang ConstEval =
              "Invalid application\n",
              expr2str (TmConstApp {const = const, args = args, info = info})
            ])
-
-  sem apply ctx info =
-  | (TmConst r, arg) -> delta info (r.val, [arg])
-  | (TmConstApp r, arg) -> delta info (r.const, snoc r.args arg)
-
-  sem eval ctx =
-  | TmConst {val = CArgv {}, info = info} ->
-    TmSeq {tms = map str_ argv, ty = tyunknown_, info = info}
-  | TmConst c -> TmConst c
 end
 
 lang TypeEval = Eval + TypeAst
@@ -337,12 +341,12 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
-lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEval + UnsafeCoerceArity
+lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEvalNoDefault + UnsafeCoerceArity
   sem delta info =
   | (CUnsafeCoerce _, [arg]) -> arg
 end
 
-lang ArithIntEval = ArithIntAst + ConstEval + ArithIntArity
+lang ArithIntEval = ArithIntAst + ConstEvalNoDefault + ArithIntArity
   sem delta info =
   | (CAddi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CInt {val = addi n1.val n2.val}}
@@ -358,7 +362,7 @@ lang ArithIntEval = ArithIntAst + ConstEval + ArithIntArity
     TmConst {t with val = CInt {val = negi n.val}}
 end
 
-lang ShiftIntEval = ShiftIntAst + ConstEval + ShiftIntArity
+lang ShiftIntEval = ShiftIntAst + ConstEvalNoDefault + ShiftIntArity
   sem delta info =
   | (CSlli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CInt {val = slli n1.val n2.val}}
@@ -368,7 +372,7 @@ lang ShiftIntEval = ShiftIntAst + ConstEval + ShiftIntArity
     TmConst {t with val = CInt {val = srai n1.val n2.val}}
 end
 
-lang ArithFloatEval = ArithFloatAst + ConstEval + ArithFloatArity
+lang ArithFloatEval = ArithFloatAst + ConstEvalNoDefault + ArithFloatArity
   sem delta info =
   | (CAddf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
     TmConst {t with val = CFloat {val = addf f1.val f2.val}}
@@ -394,7 +398,7 @@ lang FloatIntConversionEval = FloatIntConversionAst + FloatIntConversionArity
     TmConst {t with val = CFloat {val = int2float n.val}}
 end
 
-lang CmpIntEval = CmpIntAst + ConstEval + CmpIntArity
+lang CmpIntEval = CmpIntAst + ConstEvalNoDefault + CmpIntArity
   sem delta info =
   | (CEqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CBool {val = eqi n1.val n2.val}}
@@ -410,14 +414,14 @@ lang CmpIntEval = CmpIntAst + ConstEval + CmpIntArity
     TmConst {t with val = CBool {val = geqi n1.val n2.val}}
 end
 
-lang CmpCharEval = CmpCharAst + ConstEval + CmpCharArity
+lang CmpCharEval = CmpCharAst + ConstEvalNoDefault + CmpCharArity
   sem delta info =
   | (CEqc _, [TmConst {val = CChar c1}, TmConst (t & {val = CChar c2})]) ->
     TmConst {t with val = CBool {val = eqc c1.val c2.val}}
 end
 
 lang IntCharConversionEval =
-  IntCharConversionAst + ConstEval + IntCharConversionArity
+  IntCharConversionAst + ConstEvalNoDefault + IntCharConversionArity
 
   sem delta info =
   | (CInt2Char _, [TmConst (t & {val = CInt n})]) ->
@@ -426,7 +430,7 @@ lang IntCharConversionEval =
     TmConst {t with val = CInt {val = char2int c.val}}
 end
 
-lang CmpFloatEval = CmpFloatAst + ConstEval + CmpFloatArity
+lang CmpFloatEval = CmpFloatAst + ConstEvalNoDefault + CmpFloatArity
   sem delta info =
   | (CEqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
     TmConst {t with val = CBool {val = eqf f1.val f2.val}}
@@ -442,7 +446,7 @@ lang CmpFloatEval = CmpFloatAst + ConstEval + CmpFloatArity
     TmConst {t with val = CBool {val = neqf f1.val f2.val}}
 end
 
-lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval + SymbArity
+lang SymbEval = SymbAst + IntAst + RecordAst + ConstEvalNoDefault + SymbArity
   sem delta info =
   | (CGensym _, [_]) ->
     TmConst {val = CSymb {val = gensym ()}, ty = tyunknown_, info = NoInfo ()}
@@ -450,13 +454,13 @@ lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval + SymbArity
     TmConst {t with val = CInt {val = sym2hash s.val}}
 end
 
-lang CmpSymbEval = CmpSymbAst + ConstEval + CmpSymbArity
+lang CmpSymbEval = CmpSymbAst + ConstEvalNoDefault + CmpSymbArity
   sem delta info =
   | (CEqsym _, [TmConst {val = CSymb s1}, TmConst (t & {val = CSymb s2})]) ->
     TmConst {t with val = CBool {val = eqsym s1.val s2.val}}
 end
 
-lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval + SeqOpArity
+lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
   sem delta info =
   | (CHead _, [TmSeq s]) -> head s.tms
   | (CTail _, [TmSeq s]) -> TmSeq {s with tms = tail s.tms}
@@ -653,7 +657,7 @@ lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
 end
 
 lang TensorOpEval =
-  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst +
+  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEvalNoDefault + BoolAst +
   TensorOpArity
 
   sem _ofTmSeq (info : Info) =

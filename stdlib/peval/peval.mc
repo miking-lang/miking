@@ -285,6 +285,24 @@ lang RecordPEval = PEval + RecordAst + VarAst
       r1.rec
 end
 
+lang TypePEval = PEval + TypeAst
+  sem pevalIsValue =
+  | TmType _ -> false
+
+  sem pevalEval ctx k =
+  | TmType t -> TmType {t with inexpr = pevalBind ctx k t.inexpr}
+end
+
+lang DataPEval = PEval + DataAst
+  sem pevalIsValue =
+  | TmConDef _ -> false
+  | TmConApp _ -> false
+
+  sem pevalEval ctx k =
+  | TmConDef t -> TmConDef {t with inexpr = pevalBind ctx k t.inexpr}
+  | TmConApp t -> pevalBind ctx (lam body. k (TmConApp {t with body = body})) t.body
+end
+
 lang SeqPEval = PEval + SeqAst
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the sequences as the
   -- elements vill always be values in the PEval transformation.
@@ -299,7 +317,7 @@ lang SeqPEval = PEval + SeqAst
       (lam tms. k (TmSeq { r with tms = tms }))
 end
 
-lang ConstPEval = PEval + ConstEval
+lang ConstPEval = PEval + ConstEvalNoDefault
   sem pevalReadbackH ctx =
   | TmConstApp r ->
     match mapAccumL pevalReadbackH ctx r.args with (ctx, args) in
@@ -316,6 +334,16 @@ lang ConstPEval = PEval + ConstEval
 
   sem pevalEval ctx k =
   | t & (TmConst _ | TmConstApp _) -> k t
+
+  sem delta info =
+  | (const, args) ->
+    if lti (length args) (constArity const) then
+      -- Accumulate arguments if still not a complete application
+      TmConstApp {const = const, args = args, info = info}
+    else
+      -- No available pattern, don't do any partial evaluation
+      let b = astBuilder info in
+      b.appSeq (b.uconst const) args
 
   sem pevalApply info ctx k =
   | (TmConst r, arg) -> k (delta info (r.val, [arg]))
@@ -346,6 +374,30 @@ lang MatchPEval = PEval + MatchEval + NeverAst + VarAst
       r.target
 end
 
+lang UtestPEval = PEval + UtestAst
+  sem pevalIsValue =
+  | TmUtest _ -> false
+
+  sem pevalEval ctx k =
+  | TmUtest t ->
+    pevalBind ctx
+      (lam test.
+         pevalBind ctx
+           (lam expected.
+              let inner = lam tusing.
+                TmUtest { t with test = test,
+                                 expected = expected,
+                                 next = pevalBind ctx k t.next,
+                                 tusing = tusing }
+              in
+              match t.tusing with Some tusing then
+                pevalBind ctx (lam tusing. inner (Some tusing)) tusing
+              else
+                inner (None ()))
+           t.expected)
+      t.test
+end
+
 lang NeverPEval = PEval + NeverAst
   sem pevalIsValue =
   | TmNever _ -> true
@@ -355,6 +407,14 @@ lang NeverPEval = PEval + NeverAst
 
   sem pevalApply info ctx k =
   | (t & TmNever _, _) -> k t
+end
+
+lang ExtPEval = PEval + ExtAst
+  sem pevalIsValue =
+  | TmExt _ -> false
+
+  sem pevalEval ctx k =
+  | TmExt t -> TmExt {t with inexpr = pevalBind ctx k t.inexpr}
 end
 
 lang ArithIntPEval = ArithIntEval + VarAst
@@ -494,7 +554,8 @@ end
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
-  RecLetsPEval + MatchPEval + NeverPEval + SeqPEval +
+  RecLetsPEval + MatchPEval + NeverPEval + DataPEval + TypePEval + SeqPEval +
+  UtestPEval + ExtPEval +
 
   -- Constants
   ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
