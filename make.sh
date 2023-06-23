@@ -17,8 +17,10 @@ MI_NAME=mi
 MI_LITE_NAME=mi-lite
 MI_TMP_NAME=mi-tmp
 
-BIN_PATH=$HOME/.local/bin
-LIB_PATH=$HOME/.local/lib/mcore
+prefix="${prefix:-$HOME/.local}"
+bindir="${bindir:-$prefix/bin}"
+libdir="${libdir:-$prefix/lib}"
+mcoredir=$libdir/mcore
 
 # Setup environment variable to find standard library
 # (and set test namespace for testing)
@@ -35,7 +37,7 @@ build_boot(){
 }
 
 install_boot(){
-    dune install > /dev/null 2>&1
+    dune install --prefix=$prefix > /dev/null 2>&1
 }
 
 # Compile a new version of the compiler using the current one
@@ -86,10 +88,10 @@ lite() {
 # Install the Miking compiler
 install() {
     if [ -e build/$MI_NAME ]; then
-        rm -rf $LIB_PATH/stdlib
-        mkdir -p $BIN_PATH $LIB_PATH
-        cp -rf stdlib $LIB_PATH
-        cp -f build/$MI_NAME $BIN_PATH
+        rm -rf $libdir/stdlib
+        mkdir -p $bindir $libdir
+        cp -rf stdlib $libdir
+        cp -f build/$MI_NAME $bindir
     else
         echo "No existing compiler binary was found."
         echo "Try compiling the project first!"
@@ -100,8 +102,8 @@ install() {
 uninstall() {
     set +e
     dune uninstall > /dev/null 2>&1
-    rm -f $BIN_PATH/$MI_NAME
-    rm -rf $LIB_PATH/stdlib
+    rm -f $bindir/$MI_NAME
+    rm -rf $mcoredir/stdlib
     set -e
 }
 

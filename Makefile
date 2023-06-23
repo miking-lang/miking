@@ -8,6 +8,10 @@
 #  the system, we just run the batch make.sh file.
 ###################################################
 
+export prefix
+export bindir
+export libdir
+
 .PHONY :\
   all\
   boot\
