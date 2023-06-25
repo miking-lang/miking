@@ -153,12 +153,8 @@ lang FutharkTypePrettyPrint = FutharkAst
     match pprintType indent env from with (env, from) in
     match pprintType indent env to with (env, to) in
     (env, join ["(", from, ") -> (", to, ")"])
-  | FTyParamsApp {ty = ty, params = params} ->
-    -- NOTE(larshum, 2021-05-31): For now we always use implicit parameter
-    -- types.
-    match pprintType indent env ty with (env, ty) in
-    let implicitParams = create (length params) (lam. "[]") in
-    (env, join [ty, " ", join implicitParams])
+  | FTyAll {info = info} ->
+    errorSingle [info] "Cannot print intermediate TyAll construct"
 end
 
 lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +

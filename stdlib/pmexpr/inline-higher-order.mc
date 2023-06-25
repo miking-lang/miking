@@ -49,9 +49,9 @@ lang PMExprInlineFunctions = PMExprAst + PMExprVariableSub
         match work subMap t.lhs with (subMap, lhs) in
         match lhs with TmLam l then
           let infoFn = lam info.
-            TmVar {ident = l.ident, ty = tyTm t.rhs, info = info,
+            TmVar {ident = id, ty = tyTm t.rhs, info = info,
                    frozen = false} in
-          (mapInsert id infoFn subMap, l.body)
+          (mapInsert l.ident infoFn subMap, l.body)
         else (subMap, lhs)
       else (subMap, app)
     in
