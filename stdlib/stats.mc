@@ -38,8 +38,7 @@ let logWeightedMean: [Float] -> [Float] -> Float = lam lws. lam vs.
 
 mexpr
 
-let cmpfe = cmpfApprox 1e-10 in
-let eqfe = lam f1. lam f2. if eqi (cmpfe f1 f2) 0 then true else false in
+let eqfe = eqfApprox 1e-10 in
 
 utest logSumExp [log 1., log 2., log 3.] with log 6. using eqfe in
 utest logSumExp [log 5., log 6., log 7.] with log 18. using eqfe in
