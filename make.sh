@@ -137,24 +137,17 @@ compile_test () {
     rm $binary
     exit 1
   fi
-  echo "$output\n"
-  set -e
-}
-
-run_test_prototype() {
-  set +e
-  output=$2
-  output="$output\n$($1 $2 2>&1)\n"
-  echo $output
+  printf "$output\n\n"
   set -e
 }
 
 run_test() {
-  run_test_prototype "build/mi run --test --disable-prune-warning" $1
-}
-
-run_test_boot() {
-  run_test_prototype "build/boot eval src/main/mi.mc -- run --test --disable-prune-warning" $1
+  set +e
+  output="$2\n$($1 "$2" 2>&1)"
+  exit_code=$?
+  printf "$output\n\n"
+  if [ $exit_code -ne 0 ]; then exit 1; fi
+  set -e
 }
 
 run_js_test() {
@@ -179,10 +172,7 @@ case $1 in
         build_mi
         ;;
     run-test)
-        run_test "$2"
-        ;;
-    run-test-boot)
-        run_test_boot "$2"
+        run_test "$2" "$3"
         ;;
     compile-test)
         compile_test "$2" "$3"
