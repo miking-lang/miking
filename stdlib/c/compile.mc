@@ -35,8 +35,9 @@ include "ext/math-ext.ext-c.mc"
 ----------------------
 
 -- Check for unit type
-let _isUnitTy = use RecordTypeAst in lam ty.
+let _isUnitTy = use MExprAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
+  else match ty with TyVar _ then true
   else false
 
 -- Unwrap type variables until something useful falls out
@@ -659,6 +660,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
 
   | TyAlias t -> compileType env t.display
 
+  | TyVar _ -> CTyVoid {}
+
   | ty -> errorSingle [infoTy ty] "Unsupported type in compileType"
 
 
@@ -690,7 +693,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         else (acc, rest)
     in
     match detachParams [] fun with (params, body) then
-      match funTypes [] ty with (paramTypes, retType) then
+      match funTypes [] (inspectType ty) with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
           errorSingle [infoTy ty] "Number of parameters in compileFun does not match."
         else
@@ -744,8 +747,11 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   | TmRecord { ty = TyRecord _, bindings = bindings } & t ->
     -- If the type is TyRecord, it follows from type lifting that this must be
     -- an empty record.
-    -- TODO(dlunde,2021-10-07): Handle this how?
-    errorSingle [infoTm t] "Empty bindings in TmRecord in compileAlloc"
+    let n = match name with Some name then name else nameSym "empty" in
+    let def = [
+      { ty = getCIntType env, id = Some n, init = Some (CIExpr {expr = CEInt {i = 0}})}
+    ] in
+    (env, def, [], n)
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
     let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
@@ -945,7 +951,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           match _unwrapType typeEnv ty with TyRecord { fields = fields } then
             match mapLookup sid fields with Some fTy then
               let label = sidToString sid in
-              let expr = match ty with TyCon { ident = ident } then
+              let expr = match unwrapType ty with TyCon { ident = ident } then
                   if any (nameEq ident) env.ptrTypes then
                     CEArrow { lhs = target, id = nameNoSym label }
                   else

@@ -145,16 +145,29 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
     let acc = cudaWellFormedType acc from in
     cudaWellFormedType acc to
   | (TyRecord {fields = fields}) & recTy ->
-    let isArrowType = lam ty. match ty with TyArrow _ then true else false in
+    let containsArrowType = lam ty. containsArrowType false ty in
     let acc =
-      if any isArrowType (mapValues fields) then cons (CudaTypeError recTy) acc
-      else acc in
+      if any containsArrowType (mapValues fields) then
+        cons (CudaTypeError recTy) acc
+      else acc
+    in
     mapFoldWithKey
       (lam acc. lam. lam ty. cudaWellFormedType acc ty) acc fields
-  | TySeq {ty = ty & !(TyArrow _)} -> cudaWellFormedType acc ty
+  | TySeq {ty = ty} & seqTy ->
+    if containsArrowType false ty then
+      cons (CudaTypeError seqTy) acc
+    else
+      cudaWellFormedType acc ty
   | TyTensor {ty = TyInt _ | TyFloat _} -> acc
   | TyCon _ -> acc
+  | TyVar _ -> acc
+  | TyAlias t -> cudaWellFormedType acc t.content
   | ty -> cons (CudaTypeError ty) acc
+
+  sem containsArrowType : Bool -> Type -> Bool
+  sem containsArrowType acc =
+  | TyArrow _ -> true
+  | ty -> sfold_Type_Type containsArrowType acc ty
 
   sem cudaWellFormedPattern : [WFError] -> Pat -> [WFError]
   sem cudaWellFormedPattern acc =
