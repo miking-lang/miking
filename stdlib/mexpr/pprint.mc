@@ -667,7 +667,9 @@ end
 
 lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CInt t -> int2string t.val
+  | CInt t ->
+    if lti t.val 0 then join ["(negi ", int2string (negi t.val), ")"]
+    else int2string t.val
 end
 
 lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
