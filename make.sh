@@ -88,9 +88,9 @@ lite() {
 # Install the Miking compiler
 install() {
     if [ -e build/$MI_NAME ]; then
-        rm -rf $libdir/stdlib
-        mkdir -p $bindir $libdir
-        cp -rf stdlib $libdir
+        rm -rf $mcoredir/stdlib
+        mkdir -p $bindir $mcoredir
+        cp -rf stdlib $mcoredir
         cp -f build/$MI_NAME $bindir
     else
         echo "No existing compiler binary was found."
@@ -100,11 +100,9 @@ install() {
 
 # Uninstall the Miking bootstrap interpreter and compiler
 uninstall() {
-    set +e
-    dune uninstall > /dev/null 2>&1
+    dune uninstall --prefix=$prefix > /dev/null 2>&1
     rm -f $bindir/$MI_NAME
     rm -rf $mcoredir/stdlib
-    set -e
 }
 
 # Lint ocaml source code
