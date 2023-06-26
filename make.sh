@@ -52,7 +52,7 @@ build_mi() {
     fi
 }
 
-# Build the Miking compiler
+# Build the Miking compiler.  If $1 is 'lite', skip the last stage.
 build() {
     if [ -e build/$MI_NAME ]
     then
@@ -62,28 +62,15 @@ build() {
         time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
         time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
-        echo "Bootstrapping the Miking compiler (3rd round, might take some more time)"
-        time ./$MI_NAME compile src/main/mi.mc
+        if [ "$1" != "lite" ]
+        then
+            echo "Bootstrapping the Miking compiler (3rd round, might take some more time)"
+            time ./$MI_NAME compile src/main/mi.mc
+        fi
         mv -f $MI_NAME build/$MI_NAME
         rm -f $MI_LITE_NAME
     fi
 }
-
-# As build(), but skips the third bootstrapping step
-lite() {
-    if [ -e build/$MI_NAME ]
-    then
-        echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
-    else
-        echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
-        echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
-        mv -f $MI_NAME build/$MI_NAME
-        rm -f $MI_LITE_NAME
-    fi
-}
-
 
 # Install the Miking compiler
 install() {
@@ -163,7 +150,7 @@ case $1 in
         build_boot
         ;;
     lite)
-        lite
+        build lite
         ;;
     install-boot)
         install_boot
