@@ -105,21 +105,20 @@ fix () {
 
 compile_test () {
   set +e
-  echo $1
   binary=$(mktemp)
   compile="$2 --output $binary"
   output="$($compile "$1" 2>&1)"
   exit_code=$?
   if [ $exit_code -ne 0 ]
   then
-    printf "$output\nCommand '$compile $1 2>&1' exited with code $exit_code\n\n"
+    printf "$1\n$output\nCommand '$compile $1 2>&1' exited with code $exit_code\n\n"
     rm -f $binary
     exit 1
   else
     output="$($binary)"
     exit_code=$?
     rm $binary
-    printf "$output\n\n"
+    printf "$1\n$output\n\n"
     if [ $exit_code -ne 0 ]; then exit 1; fi
   fi
   set -e
@@ -127,7 +126,7 @@ compile_test () {
 
 run_test() {
   set +e
-  output="$2\n$($1 "$2" 2>&1)"
+  output="$1\n$($2 "$1" 2>&1)"
   exit_code=$?
   printf "$output\n\n"
   if [ $exit_code -ne 0 ]; then exit 1; fi

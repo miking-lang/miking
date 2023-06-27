@@ -7,4 +7,4 @@ all: $(src_files_all)
 selected: $(run_files)
 
 $(src_files_all):
-	@./make.sh run-test "build/mi run --test --disable-prune-warning" $@
+	@./make.sh run-test $@ "build/mi run --test --disable-prune-warning"
