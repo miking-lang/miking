@@ -29,14 +29,17 @@ recursive
         match (eval env t1, eval env t2) with (TmClos(x, t1_, env_), v2) in
         eval (insert x v2 env) t1_
       case TmVar(x) then
-        match lookup x env with Some v in v
+        switch lookup x env
+          case Some (TmInt(i)) then i
+          case Some t then t
+        end
       case TmClos _ then
         t
       case TmAdd(t1, t2) then
-        match (eval env t1, eval env t2) with (TmInt(i1), TmInt(i2)) in
-        TmInt(addi i1 i2)
-      case TmInt(_) then
-        t
+        match (eval env t1, eval env t2) with (i1, i2) in
+        addi i1 i2
+      case TmInt(i) then
+        i
     end
 in
 
