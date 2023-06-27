@@ -20,6 +20,8 @@ let p1 = TmAdd(TmInt(1),TmInt(2)) in
 let p2 = TmApp(TmLam("x", TmAdd(TmVar("x"), TmInt(3))),
                TmInt(2)) in
 
+let p3 = TmAdd(p2, TmVar("y") in
+
 recursive
   let eval = lam env. lam t.
     switch t
@@ -40,4 +42,5 @@ recursive
     end
 in
 
-dprint (eval [] p2); print "\n"
+-- dprint (eval [] p2); print "\n"
+dprint (eval [("y", TmInt(10))] p3); print "\n"
