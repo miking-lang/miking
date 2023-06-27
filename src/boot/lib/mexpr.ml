@@ -1019,7 +1019,7 @@ let rec parseMCoreFile
         |> Symbolize.symbolize name2sym
         |> Parserutils.raise_parse_error_on_partially_applied_external
         |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
-        |> deadcode_elimination |> scan builtin_sym2term
+        |> deadcode_elimination (* |> scan builtin_sym2term *)
         |> Parserutils.prune_external_utests
              ~enable:(keep_utests && prune_external_utests)
              ~externals_exclude ~warn
@@ -2030,6 +2030,64 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
   | CPy v, t ->
       Pyffi.delta apply fi v t
 
+and pt_seq env ps =
+  let rec work env = function
+    | h :: ts ->
+        let env', h' = pat_transform env h in
+        let env'', ts' = work env' ts in
+        (env'', h' :: ts')
+    | [] ->
+        (env, [])
+  in
+  let env', ps_list' = work env (Mseq.Helpers.to_list ps) in
+  (env', Mseq.Helpers.of_list_list ps_list')
+
+(*and pat_transform (env : (Symb.t * tm) list) (p : pat) : ((Symb.t * tm) list * pat) = *)
+and pat_transform (env : (Symb.t * tm) list) (p : pat) =
+  match p with
+  | PatNamed (fi, NameStr (x, s)) ->
+      let s' = Symb.gensym () in
+      let tvar = TmVar (fi, x, s', false, false) in
+      ((s, tvar) :: env, PatNamed (fi, NameStr (x, s')))
+  | PatNamed (_, _) as p ->
+      (env, p)
+  | PatSeqTot (fi, ps) ->
+      let env', ps' = pt_seq env ps in
+      (env', PatSeqTot (fi, ps'))
+  | PatSeqEdge (fi, ps1, NameStr (x, s), ps2) ->
+      let s' = Symb.gensym () in
+      let tvar = TmVar (fi, x, s', false, false) in
+      let env', ps1' = pt_seq env ps1 in
+      let env'', ps2' = pt_seq ((s, tvar) :: env') ps2 in
+      (env'', PatSeqEdge (fi, ps1', NameStr (x, s'), ps2'))
+  | PatSeqEdge (fi, ps1, n, ps2) ->
+      let env', ps1' = pt_seq env ps1 in
+      let env'', ps2' = pt_seq env' ps2 in
+      (env'', PatSeqEdge (fi, ps1', n, ps2'))
+  | PatRecord (fi, patrec) ->
+      let _ = (fi, patrec) in
+      (env, p)
+  (* TODO: Bug, with pattern records
+       let f _ p env = pat_transform env p in
+       let env', patrec' = Record.map_fold f patrec env in
+       (env', PatRecord (fi, patrec')) *)
+  | PatCon (fi, x, s, p) ->
+      let env', p' = pat_transform env p in
+      (env', PatCon (fi, x, s, p'))
+  | (PatInt (_, _) | PatChar (_, _) | PatBool (_, _)) as t ->
+      (env, t)
+  | PatAnd (fi, p1, p2) ->
+      let env', p1' = pat_transform env p1 in
+      let env'', p2' = pat_transform env' p2 in
+      (env'', PatAnd (fi, p1', p2'))
+  | PatOr (fi, p1, p2) ->
+      let env', p1' = pat_transform env p1 in
+      let env'', p2' = pat_transform env' p2 in
+      (env'', PatOr (fi, p1', p2'))
+  | PatNot (fi, p) ->
+      let env', p' = pat_transform env p in
+      (env', PatNot (fi, p'))
+
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
@@ -2054,32 +2112,65 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
           raise e )
   (* Constant application using the delta function *)
-  | TmConst (_, c), a ->
+  | ( TmConst (_, c)
+    , ( TmConst (_, _)
+      | TmSeq (_, _)
+      | TmRecord (_, _)
+      | TmConApp (_, _, _, _)
+      | TmConDef (_, _, _, _, _)
+      | TmNever _
+      | TmClos (_, _, _, _, _, _)
+      | TmRef (_, _)
+      | TmTensor (_, _) ) ) ->
       delta (apply pe) fiapp c a
-  | f, _ ->
-      raise_error fiapp
-        ( "Incorrect application. This is not a function: "
-        ^ Ustring.to_utf8 (ustring_of_tm f) )
+  (* Symbolic application *)
+  | f, a ->
+      TmApp (fiapp, f, a)
 
 and scan (env : (Symb.t * tm) list) (t : tm) =
   match t with
   | TmLet (fi, x, s, ty, t1, t2) ->
       (*  printf "TmLet: %s \n" (Ustring.to_utf8 x); *)
       let t1' = scan env t1 in
-      TmLet (fi, x, s, ty, t1', scan ((s, t1') :: env) t2)
-  (* | TmLam (fi, x, s, pe, ty, t) ->
-         printf "TmLam: %s \n" (Ustring.to_utf8 x);
-         let s' = Symb.gensym () in
-         let tvar = TmVar (fi, x, s', pe, false) in
-         TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
-     | TmVar (_, _, s, _, _) as t1 -> (
-        match List.assoc_opt s env with
-        | Some t2 -> (
-          match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
-        | None ->
-        failwith "Error" ) *)
+      TmLet
+        ( fi
+        , x
+        , s
+        , ty
+        , t1'
+        , scan ((s, TmBox (fi, ref (t1', Some env))) :: env) t2 )
+  | TmRecLets (fi, lst, t2) ->
+      let env_ref = ref env in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              failwith "Incorrect RecLets" )
+        lst ;
+      let lst' =
+        List.map
+          (fun (fi2, x, s, ty, t) -> (fi2, x, s, ty, scan !env_ref t))
+          lst
+      in
+      TmRecLets (fi, lst', scan !env_ref t2)
+  | TmMatch (fi, t1, p, t2, t3) ->
+      let env', p' = pat_transform env p in
+      TmMatch (fi, scan env t1, p', scan env' t2, scan env' t3)
+  | TmLam (fi, x, s, pe, ty, t) ->
+      (* printf "TmLam: %s \n" (Ustring.to_utf8 x); *)
+      let s' = Symb.gensym () in
+      let tvar = TmVar (fi, x, s', pe, false) in
+      TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
+  | TmVar (_, _, s, _, _) as t1 -> (
+    match List.assoc_opt s env with
+    | Some t2 -> (
+      match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
+    | None ->
+        t1 )
   | TmPreRun (_, _, t) ->
-      (*      printf "TmPreRun: \n"; *)
       eval env pe_init t
   | t ->
       smap_tm_tm (scan env) t
@@ -2088,13 +2179,22 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (fi, _, s, _, _) -> (
+  | TmVar (_, _, s, _, _) -> (
     match List.assoc_opt s env with
-    | Some t ->
-        t
-    (* eval env pe t *)
+    | Some t2 -> (
+      match t2 with
+      | TmBox (_, b) -> (
+        match !b with
+        | t, None ->
+            t
+        | t, Some env' ->
+            let t' = eval env' pe t in
+            b := (t', None) ;
+            t' )
+      | _ ->
+          t2 )
     | None ->
-        raise_error fi "Undefined variable" )
+        t )
   (* Application *)
   | TmApp (fiapp, t1, t2) ->
       let f = eval env pe t1 in
@@ -2170,6 +2270,15 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* PreRun *)
   | TmPreRun (_, _, t) ->
       eval env pe t
+  (* Box *)
+  | TmBox (_, b) -> (
+    match !b with
+    | t, None ->
+        t
+    | t, Some env' ->
+        let t' = eval env' pe t in
+        b := (t', None) ;
+        t' )
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
@@ -2248,5 +2357,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
     | TmTensor _
     | TmDive _
     | TmPreRun _
+    | TmBox _
     | TmExt _ ) as t ->
       (env, eval env pe t)

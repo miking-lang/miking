@@ -819,6 +819,8 @@ let rec desugar_tm nss env subs =
       TmDive (fi, l, desugar_tm nss env subs a)
   | TmPreRun (fi, l, a) ->
       TmPreRun (fi, l, desugar_tm nss env subs a)
+  | TmBox (_, _) ->
+      failwith "Box is a runtime value"
   (* Non-recursive *)
   | (TmConst _ | TmRef _ | TmTensor _ | TmExt _) as tm ->
       tm

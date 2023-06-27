@@ -245,6 +245,8 @@ let rec symbolize (env : sym_env) (t : tm) =
       TmDive (fi, l, symbolize env t)
   | TmPreRun (fi, l, t) ->
       TmPreRun (fi, l, symbolize env t)
+  | TmBox (_, _) ->
+      failwith "Box is a runtime value"
   | TmConst _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
@@ -307,5 +309,6 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmRef _
     | TmDive _
     | TmPreRun _
+    | TmBox _
     | TmTensor _ ) as t ->
       (env, symbolize env t)

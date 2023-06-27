@@ -317,6 +317,8 @@ and tm =
   | TmDive of info * int * tm
   (* Run *)
   | TmPreRun of info * int * tm
+  (* Box *)
+  | TmBox of info * (tm * env option) ref
 
 (* Kind of pattern name *)
 and patName =
@@ -464,6 +466,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmDive (fi, l, t'))
   | TmPreRun (fi, l, t) ->
       f acc t |> fun (acc, t') -> (acc, TmPreRun (fi, l, t'))
+  | TmBox (_, _) ->
+      failwith "TmBox is a runtime value"
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) (t : tm) : tm =
@@ -501,6 +505,7 @@ let tm_info = function
   | TmTensor (fi, _)
   | TmDive (fi, _, _)
   | TmPreRun (fi, _, _)
+  | TmBox (fi, _)
   | TmExt (fi, _, _, _, _, _) ->
       fi
 

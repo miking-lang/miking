@@ -587,6 +587,7 @@ and print_tm fmt (prec, t) =
     | TmRef _
     | TmDive _
     | TmPreRun _
+    | TmBox _
     | TmTensor _ ->
         Atom
   in
@@ -715,6 +716,8 @@ and print_tm' fmt t =
       fprintf fmt "@[<hv 0>dive %a@]" print_tm (Match, t)
   | TmPreRun (_, _, t) ->
       fprintf fmt "@[<hv 0>prerun %a@]" print_tm (Match, t)
+  | TmBox (_, _) ->
+      fprintf fmt "(box)"
   | TmTensor (_, t) ->
       let float_ f = TmConst (NoInfo, CFloat f) in
       let int_ n = TmConst (NoInfo, CInt n) in
