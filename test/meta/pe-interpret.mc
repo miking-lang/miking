@@ -46,6 +46,7 @@ in
 
 -- dprint (eval [("y", TmInt(10))] p3); print "\n"
 
-let prog = lam y. eval [("y", TmInt(y))] p3 in
+let prog = lam y. prerun (eval [("y", TmInt(y))] p3) in
+dprint prog; print "\n-------\n";
 dprint (prog 10); print "\n";
 dprint (prog 100); print "\n"
