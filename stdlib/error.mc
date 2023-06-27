@@ -280,6 +280,12 @@ let errorMsg
       (info, msg)
     end
 
+let _partitionInfosByFile : [Info] -> [[Info]] = lam infos.
+  recursive let work = lam acc. lam info.
+    match info with Info x then
+      mapInsertWith concat x.filename [info] acc
+    else acc
+  in mapValues (foldl work (mapEmpty cmpString) infos)
 let _die : all a. (Info, String) -> a = lam msg.
   printError (join ["\n", infoErrorString msg.0 msg.1, "\n"]);
   flushStderr ();
@@ -288,7 +294,8 @@ let errorGeneral : all a. [ErrorSection] -> {single: String, multi: String} -> a
   = lam sections. lam msg. _die (errorMsg sections msg)
 let errorSingle : all a. [Info] -> String -> a
   = lam infos. lam msg.
-    _die (errorMsg [{errorDefault with infos = infos, msg = msg}] {single = "", multi = ""})
+    let mkSection = lam infos. {errorDefault with infos = infos} in
+    _die (errorMsg (map mkSection (_partitionInfosByFile infos)) {single = msg, multi = ""})
 let errorMulti : all a. [(Info, String)] -> String -> a
   = lam sections. lam msg.
     _die (errorMsg (map (lam sec. {errorDefault with info = sec.0, msg = sec.1}) sections) {single = msg, multi = ""})
