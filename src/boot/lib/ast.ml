@@ -308,7 +308,7 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of info * ustring * Symb.t * pesym * tm * env ref (* Closure *)
+  | TmClos of info * ustring * Symb.t * pesym * tm * env ref
   (* Reference *)
   | TmRef of info * tm ref
   (* Tensor *)

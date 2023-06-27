@@ -2071,6 +2071,15 @@ and pat_transform (env : (Symb.t * tm) list) (p : pat) =
        let f _ p env = pat_transform env p in
        let env', patrec' = Record.map_fold f patrec env in
        (env', PatRecord (fi, patrec')) *)
+  (* TODO: Alternative, without the imperative map_fold. Still does not work.
+      let plst = Record.bindings patrec in
+      let f env (x,p) =
+        let env', p' = pat_transform env p in (env', (x,p'))
+      in
+      let env', plst' = List.fold_left_map f env plst in
+      let patrec' = List.fold_left
+                      (fun a (k,v) -> Record.add k v a) (Record.empty) plst' in
+      (env', PatRecord(fi, patrec')) *)
   | PatCon (fi, x, s, p) ->
       let env', p' = pat_transform env p in
       (env', PatCon (fi, x, s, p'))
@@ -2265,8 +2274,15 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
     | None ->
         eval env pe t3 )
   (* Dive *)
-  | TmDive (_, _, t) ->
-      eval env pe t
+  | TmDive (_, _, t) -> (
+    match eval env pe t with
+    | TmClos (fi, x, s, _, t, env_ref) ->
+        let s' = Symb.gensym () in
+        let tvar = TmVar (fi, x, s', false, false) in
+        let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
+        TmLam (fi, x, s', false, TyUnknown fi, t')
+    | t' ->
+        t' )
   (* PreRun *)
   | TmPreRun (_, _, t) ->
       eval env pe t
