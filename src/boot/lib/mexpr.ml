@@ -1019,7 +1019,8 @@ let rec parseMCoreFile
         |> Symbolize.symbolize name2sym
         |> Parserutils.raise_parse_error_on_partially_applied_external
         |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
-        |> deadcode_elimination (* |> scan builtin_sym2term *)
+        |> deadcode_elimination
+           (* |> scan builtin_sym2term  (* TODO: Bug, cannot compile with meta programming *)*)
         |> Parserutils.prune_external_utests
              ~enable:(keep_utests && prune_external_utests)
              ~externals_exclude ~warn
