@@ -329,6 +329,9 @@ lang MExprANF =
   | TmLam _ -> false
   | TmConst _ -> false
   | TmNever _ -> false
+  | TmRecord r ->
+    if mapIsEmpty r.bindings then false
+    else true
 
 end
 
