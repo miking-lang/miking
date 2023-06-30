@@ -2,14 +2,12 @@
   #:use-module (guix build-system dune)
   #:use-module (guix build-system gnu)
   #:use-module (guix build-system ocaml)
-  #:use-module (guix build-system trivial)
   #:use-module (guix gexp)
   #:use-module (guix git-download)
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module ((guix licenses) #:prefix license:)
   #:use-module (gnu packages base)
-  #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
   #:use-module (gnu packages maths)
   #:use-module (gnu packages python)
@@ -141,34 +139,6 @@ simplifies developing machine learning and neural network
 algorithms.")
     (license license:expat)))
 
-(define-public ocaml-base-bytes
-  (package
-    (name "ocaml-base-bytes")
-    (version "base")
-    (source #f)
-    (build-system trivial-build-system)
-    (arguments
-     (list
-      #:modules '((guix build utils))
-      #:builder
-      #~(begin
-          (use-modules (guix build utils))
-          (let ((bytes (string-append #$output "/lib/ocaml/bytes")))
-            (mkdir-p bytes)
-            (call-with-output-file (string-append bytes "/META")
-              (lambda (port)
-                (format port "name=\"bytes\"
-version=\"[distributed with OCaml 4.02 or above]\"
-description=\"dummy backward-compatibility package for mutable strings\"
-requires=\"\"
-")))))))
-    (home-page "https://opam-4.ocaml.org/packages/base-bytes/")
-    (synopsis "Dummy backward-compatibility package for mutable strings")
-    (description
-     "A dummy package for depending on the base Bytes module distributed with
-the OCaml compiler.")
-    (license license:expat)))
-
 (define-syntax-rule (and/fn functions ...)
   (lambda args (and (apply functions args) ...)))
 
@@ -215,7 +185,6 @@ the OCaml compiler.")
       ))
     (native-inputs
      (list
-      ocaml-base-bytes  ;; For ocaml5.0-{lwt,owl}
       ocaml-lwt         ;; For async-ext.mc
       ocaml-owl         ;; For dist-ext.mc
       ocaml-toml        ;; For toml-ext.mc
@@ -227,9 +196,9 @@ a polymorphic core calculus and a DSL definition language where languages
 can be extended and composed from smaller fragments.
 
 Note: Depending on the target runtime, miking requires the presence of
-additional packages within an environment, such as dune, ocaml, and
-gcc-toolchain for native builds, node for javascript, and a suitable JDK when
-targeting the JVM.")
+additional packages within an environment, such as dune, ocaml, ocaml-findlib
+and gcc-toolchain for native builds, node for javascript, and a suitable JDK
+when targeting the JVM.")
     (home-page "https://miking.org")
     (license license:expat)))
 
