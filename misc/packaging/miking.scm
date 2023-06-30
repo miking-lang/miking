@@ -155,29 +155,26 @@ algorithms.")
                  (and/fn (git-predicate %miking-root)
                          (lambda (file stat)
                            (not (string-contains file "misc/packaging"))))))
-    (build-system gnu-build-system)
+    (build-system dune-build-system)
     (arguments
-     (list #:imported-modules %dune-build-system-modules
-           #:modules '((guix build utils)
-                       (guix build gnu-build-system)
-                       ((guix build dune-build-system) #:prefix dune:))
-           #:make-flags #~(list (string-append "prefix=" #$output))
+     (list #:modules '((guix build utils)
+                       (guix build dune-build-system)
+                       ((guix build gnu-build-system) #:prefix gnu:))
            #:test-target "test-compile"
            #:phases
-           #~(modify-phases dune:%standard-phases
-               (replace 'build (assoc-ref %standard-phases 'build))
-               (replace 'check (assoc-ref %standard-phases 'check))
-               (replace 'install (assoc-ref %standard-phases 'install))
+           #~(modify-phases %standard-phases
+               (add-before 'build 'set-prefix
+                 (lambda* (#:key outputs #:allow-other-keys)
+                   (setenv "prefix" (assoc-ref outputs "out"))))
+               (replace 'build (assoc-ref gnu:%standard-phases 'build))
+               (replace 'check (assoc-ref gnu:%standard-phases 'check))
+               (replace 'install (assoc-ref gnu:%standard-phases 'install))
                (add-after 'install 'wrap
                  (lambda* (#:key inputs outputs #:allow-other-keys)
-                   (for-each
-                    (lambda (prog)
-                      (wrap-program prog
-                         `("PATH" suffix (,(dirname (search-input-file inputs "bin/mkdir"))))
-                         `("OCAMLPATH" suffix (,(string-append (assoc-ref inputs "ocaml-linenoise")
-                                                               "/lib/ocaml/site-lib")))))
-                    (find-files (string-append (assoc-ref outputs "out")
-                                               "/bin"))))))))
+                   (wrap-program (string-append (assoc-ref outputs "out") "/bin/mi")
+                     `("PATH" suffix (,(dirname (search-input-file inputs "bin/mkdir"))))
+                     `("OCAMLPATH" suffix (,(string-append (assoc-ref inputs "ocaml-linenoise")
+                                                           "/lib/ocaml/site-lib")))))))))
     (inputs
      (list
       ocaml-linenoise
