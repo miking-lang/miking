@@ -7,6 +7,15 @@ let _pathSep = "/"
 let _tempBase = "/tmp"
 let _null = "/dev/null"
 
+let sysCommandExists : String -> Bool = lam cmd.
+  eqi 0 (command (join ["command -v ", cmd, " >/dev/null 2>&1"]))
+
+utest sysCommandExists "ls" with true
+
+let #var"ASSERT_MKDIR" : () =
+  if sysCommandExists "mkdir" then ()
+  else error "Couldn't find 'mkdir' on PATH, exiting."
+
 let _commandListTime : [String] -> (Float, Int) = lam cmd.
   let cmd = strJoin " " cmd in
   let t1 = wallTimeMs () in
@@ -129,17 +138,12 @@ let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
     match sysRunCommandWithTiming cmd stdin cwd with (_, res) then res else never
 
-let sysCommandExists : String -> Bool = lam cmd.
-  eqi 0 (command (join ["which ", cmd, " >/dev/null 2>&1"]))
-
 let sysGetCwd : () -> String = lam. strTrim (sysRunCommand ["pwd"] "" ".").stdout
 
 let sysGetEnv : String -> Option String = lam env.
   let res = strTrim (sysRunCommand ["echo", concat "$" env] "" ".").stdout in
   if null res then None ()
   else Some res
-
-utest sysCommandExists "ls" with true
 
 let sysAppendFile : String -> String -> ReturnCode =
   lam filename. lam str.

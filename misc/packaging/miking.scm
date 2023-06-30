@@ -11,9 +11,7 @@
   #:use-module (gnu packages base)
   #:use-module (gnu packages commencement)
   #:use-module (gnu packages compression)
-  ;; #:use-module (gnu packages java)
   #:use-module (gnu packages maths)
-  ;; #:use-module (gnu packages node)
   #:use-module (gnu packages python)
   #:use-module (gnu packages python-xyz)
   #:use-module (gnu packages ocaml))
@@ -206,8 +204,7 @@ the OCaml compiler.")
                          `("PATH" suffix
                            (,(dirname (search-input-file inputs "bin/dune"))
                             ,(dirname (search-input-file inputs "bin/ocaml"))
-                            ,(dirname (search-input-file inputs "bin/mkdir"))
-                            ,(dirname (search-input-file inputs "bin/which"))))
+                            ,(dirname (search-input-file inputs "bin/mkdir"))))
                          `("OCAMLPATH" suffix (,(getenv "OCAMLPATH")))))
                     (find-files (string-append (assoc-ref outputs "out")
                                                "/bin"))))))))
@@ -221,7 +218,6 @@ the OCaml compiler.")
       (package-with-ocaml5.0 ocaml-lwt)   ;; For async-ext.mc
       (package-with-ocaml5.0 ocaml-owl)   ;; For dist-ext.mc
       (package-with-ocaml5.0 ocaml-toml)  ;; For toml-ext.mc
-      which                               ;; For sys.mc
       ))
     (native-inputs
      (list ocaml-5.0 ocaml5.0-dune))

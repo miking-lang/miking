@@ -2,9 +2,7 @@
   binutils-unwrapped,
   coreutils,
   gcc,
-  ocaml-ng,
-  pkgsStatic,
-  which
+  ocaml-ng
 }:
 
 let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
@@ -26,7 +24,6 @@ stdenv.mkDerivation rec {
       gcc.cc
 
       coreutils  # For sys.mc (mkdir, echo, rm, ...)
-      which      # For sys.mc
       lwt        # For async-ext.mc
       owl        # For dist-ext.mc
       toml       # For toml-ext.mc
