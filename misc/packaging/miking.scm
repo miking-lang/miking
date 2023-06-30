@@ -201,37 +201,35 @@ the OCaml compiler.")
                    (for-each
                     (lambda (prog)
                       (wrap-program prog
-                         `("PATH" suffix
-                           (,(dirname (search-input-file inputs "bin/dune"))
-                            ,(dirname (search-input-file inputs "bin/ocaml"))
-                            ,(dirname (search-input-file inputs "bin/mkdir"))))
-                         `("OCAMLPATH" suffix (,(getenv "OCAMLPATH")))))
+                         `("PATH" suffix (,(dirname (search-input-file inputs "bin/mkdir"))))
+                         `("OCAMLPATH" suffix (,(string-append (assoc-ref inputs "ocaml-linenoise")
+                                                               "/lib/ocaml/site-lib")))))
                     (find-files (string-append (assoc-ref outputs "out")
                                                "/bin"))))))))
     (inputs
      (list
-      ocaml-5.0
-      ocaml5.0-dune
-      (package-with-ocaml5.0 ocaml-linenoise)
-      coreutils                           ;; For sys.mc (mkdir, echo, rm, ...)
-      ocaml-base-bytes                    ;; Needed for ocaml5.0-{lwt,owl}
-      (package-with-ocaml5.0 ocaml-lwt)   ;; For async-ext.mc
-      (package-with-ocaml5.0 ocaml-owl)   ;; For dist-ext.mc
-      (package-with-ocaml5.0 ocaml-toml)  ;; For toml-ext.mc
+      ocaml-linenoise
+      coreutils         ;; Miking currently requires mkdir to be available to run
       ))
     (native-inputs
-     (list ocaml-5.0 ocaml5.0-dune))
+     (list
+      ocaml-base-bytes  ;; For ocaml5.0-{lwt,owl}
+      ocaml-lwt         ;; For async-ext.mc
+      ocaml-owl         ;; For dist-ext.mc
+      ocaml-toml        ;; For toml-ext.mc
+      ))
     (synopsis "Meta language system for creating embedded DSLs.")
     (description "Miking (Meta vIKING) is a meta language system for creating
 embedded domain-specific and general-purpose languages.  The system features
 a polymorphic core calculus and a DSL definition language where languages
 can be extended and composed from smaller fragments.
 
-Note: Depending on the target runtime, miking requires the precense of
-additional packages within an environment, such as gcc-toolchain for native
-builds, node for javascript, and a suitable JDK when targeting the JVM.")
+Note: Depending on the target runtime, miking requires the presence of
+additional packages within an environment, such as dune, ocaml, and
+gcc-toolchain for native builds, node for javascript, and a suitable JDK when
+targeting the JVM.")
     (home-page "https://miking.org")
     (license license:expat)))
 
 ;; For `guix build -f'
-miking
+(package-with-ocaml5.0 miking)
