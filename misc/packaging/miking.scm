@@ -186,24 +186,6 @@ the OCaml compiler.")
                          (lambda (file stat)
                            (not (string-contains file "misc/packaging"))))))
     (build-system gnu-build-system)
-    (propagated-inputs
-     (list
-      ocaml-5.0
-      ocaml5.0-dune
-      (package-with-ocaml5.0 ocaml-linenoise)
-      gcc-toolchain
-
-      coreutils                           ;; For sys.mc (mkdir, echo, rm, ...)
-      ocaml-base-bytes                    ;; Needed for ocaml5.0-{lwt,owl}
-      (package-with-ocaml5.0 ocaml-lwt)   ;; For async-ext.mc
-      (package-with-ocaml5.0 ocaml-owl)   ;; For dist-ext.mc
-      (package-with-ocaml5.0 ocaml-toml)  ;; For toml-ext.mc
-      which                               ;; For sys.mc
-
-      ;; (package-with-ocaml5.0 ocaml-pyml)  ;; For boot python bindings
-      ;; node-lts                            ;; For javascript backend
-      ;; (list openjdk "jdk"))               ;; For java backend
-     ))
     (arguments
      (list #:imported-modules %dune-build-system-modules
            #:modules '((guix build utils)
@@ -215,12 +197,43 @@ the OCaml compiler.")
            #~(modify-phases dune:%standard-phases
                (replace 'build (assoc-ref %standard-phases 'build))
                (replace 'check (assoc-ref %standard-phases 'check))
-               (replace 'install (assoc-ref %standard-phases 'install)))))
+               (replace 'install (assoc-ref %standard-phases 'install))
+               (add-after 'install 'wrap
+                 (lambda* (#:key inputs outputs #:allow-other-keys)
+                   (for-each
+                    (lambda (prog)
+                      (wrap-program prog
+                         `("PATH" suffix
+                           (,(dirname (search-input-file inputs "bin/dune"))
+                            ,(dirname (search-input-file inputs "bin/ocaml"))
+                            ,(dirname (search-input-file inputs "bin/mkdir"))
+                            ,(dirname (search-input-file inputs "bin/which"))))
+                         `("OCAMLPATH" suffix (,(getenv "OCAMLPATH")))))
+                    (find-files (string-append (assoc-ref outputs "out")
+                                               "/bin"))))))))
+    (inputs
+     (list
+      ocaml-5.0
+      ocaml5.0-dune
+      (package-with-ocaml5.0 ocaml-linenoise)
+      coreutils                           ;; For sys.mc (mkdir, echo, rm, ...)
+      ocaml-base-bytes                    ;; Needed for ocaml5.0-{lwt,owl}
+      (package-with-ocaml5.0 ocaml-lwt)   ;; For async-ext.mc
+      (package-with-ocaml5.0 ocaml-owl)   ;; For dist-ext.mc
+      (package-with-ocaml5.0 ocaml-toml)  ;; For toml-ext.mc
+      which                               ;; For sys.mc
+      ))
+    (native-inputs
+     (list ocaml-5.0 ocaml5.0-dune))
     (synopsis "Meta language system for creating embedded DSLs.")
     (description "Miking (Meta vIKING) is a meta language system for creating
 embedded domain-specific and general-purpose languages.  The system features
 a polymorphic core calculus and a DSL definition language where languages
-can be extended and composed from smaller fragments.")
+can be extended and composed from smaller fragments.
+
+Note: Depending on the target runtime, miking requires the precense of
+additional packages within an environment, such as gcc-toolchain for native
+builds, node for javascript, and a suitable JDK when targeting the JVM.")
     (home-page "https://miking.org")
     (license license:expat)))
 
