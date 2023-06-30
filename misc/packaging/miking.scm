@@ -17,28 +17,30 @@
   #:use-module (gnu packages ocaml))
 
 (define-public ocaml-ISO8601
-  (package
-    (name "ocaml-ISO8601")
-    (version "0.2.6")
-    (source (origin
-              (method git-fetch)
-              (uri (git-reference
-                    (url "https://github.com/ocaml-community/ISO8601.ml")
-                    (commit version)))
-              (file-name (git-file-name name version))
-              (sha256
-               (base32
-                "0nzadswspizi7s6sf67icn2xgc3w150x8vdg5nk1mjrm2s98n6d3"))))
-    (build-system dune-build-system)
-    (arguments
-     '(#:tests? #f)) ;; Tests import Pervasives module, unavailable in OCaml 5 (?)
-    (propagated-inputs (list ocaml-odoc))
-    (native-inputs (list ocaml-ounit))
-    (home-page "https://github.com/ocaml-community/ISO8601.ml/")
-    (synopsis "ISO 8601 and RFC 3339 date parsing for OCaml")
-    (description
-     "OCaml parser and printer for date-times in ISO8601 and RFC 3339")
-    (license license:expat)))
+  ;; NOTE: Using commit from master branch as 0.2.6 uses the Pervasives
+  ;; module in its tests, which is incompatible with OCaml 5.0.
+  (let ((revision "0")
+        (commit "ad50cb01061405623c834608c26f1ef2d44f8340"))
+    (package
+      (name "ocaml-ISO8601")
+      (version (git-version "0.2.6" revision commit))
+      (source (origin
+                (method git-fetch)
+                (uri (git-reference
+                      (url "https://github.com/ocaml-community/ISO8601.ml")
+                      (commit commit)))
+                (file-name (git-file-name name version))
+                (sha256
+                 (base32
+                  "1lvjrxz66b7dv40cbl8xyfv3x8nmwj0m5ipfvxc37mjaaf3xrr5g"))))
+      (build-system dune-build-system)
+      (propagated-inputs (list ocaml-odoc))
+      (native-inputs (list ocaml-ounit))
+      (home-page "https://github.com/ocaml-community/ISO8601.ml/")
+      (synopsis "ISO 8601 and RFC 3339 date parsing for OCaml")
+      (description
+       "OCaml parser and printer for date-times in ISO8601 and RFC 3339")
+      (license license:expat))))
 
 (define-public ocaml-ocb
   (package
