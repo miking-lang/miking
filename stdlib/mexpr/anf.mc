@@ -483,11 +483,11 @@ utest _test data with _parse "
 
 let seq = _parse " [1 (2 3), 4, 5 6] " in
 utest _test seq with _parse "
-  let t = 5 6 in
   let t1 = 2 3 in
   let t2 = 1 t1 in
-  let t3 = [t2, 4, t] in
-  t3
+  let t3 = 5 6 in
+  let t4 = [t2, 4, t3] in
+  t4
 " using eqExpr in
 
 let smatch = _parse "
