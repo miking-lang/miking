@@ -1,4 +1,4 @@
-{ lib, stdenv, fetchFromGitHub,
+{ lib, stdenv, fetchGit,
   binutils-unwrapped,
   coreutils,
   gcc,
@@ -11,14 +11,11 @@ let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
 
 stdenv.mkDerivation rec {
   pname = "miking";
-  version = "0.0.1";
+  version = "0.0.0+git";
 
-  src = fetchFromGitHub {
-    owner = "miking-lang";
-    repo = "miking";
-    rev = "fb0e67d781cb24b8c2d25693286054a845d64112";
-    sha256 = "16ixfrrn9ns3ypr7c4krpham1lx32i801d12yv0f4y3fl8fn5vv2";
-  };
+  # Unlike Guix, Nix does not seem to expose the filter used by the git fetcher.
+  # Changing this file will result in another derivation.
+  src = fetchGit ../..;
 
   propagatedBuildInputs = with ocamlPackages;
     [ ocaml
@@ -34,19 +31,6 @@ stdenv.mkDerivation rec {
       owl        # For dist-ext.mc
       toml       # For toml-ext.mc
     ];
-
-  preBuild = ''
-    substituteInPlace make.sh --replace 'OCAMLPATH=' 'OCAMLPATH=$OCAMLPATH:'
-    substituteInPlace test-boot.mk \
-      --replace 'MCORE_LIBS=' 'OCAMLPATH=''${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS='
-  '';
-
-  installPhase = ''
-    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR
-    cp build/mi $out/bin
-    mkdir -p $out/lib/mcore
-    cp -r stdlib $out/lib/mcore
-  '';
 
   doCheck = true;
   checkTarget = "test-compile";
