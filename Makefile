@@ -8,6 +8,11 @@
 #  the system, we just run the batch make.sh file.
 ###################################################
 
+export ocamlprefix
+export prefix
+export bindir
+export libdir
+
 .PHONY :\
   all\
   boot\
