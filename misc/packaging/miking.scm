@@ -169,21 +169,22 @@ requires=\"\"
 the OCaml compiler.")
     (license license:expat)))
 
+(define-syntax-rule (and/fn functions ...)
+  (lambda args (and (apply functions args) ...)))
+
+(define %miking-root ((compose dirname dirname dirname) current-filename))
 
 (define-public miking
   (package
     (name "miking")
-    (version "0.0.1")
+    (version "0.0.0+git")
     (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://github.com/miking-lang/miking")
-             (commit "fb0e67d781cb24b8c2d25693286054a845d64112")))
-       (file-name (git-file-name name version))
-       (sha256
-        (base32
-         "16ixfrrn9ns3ypr7c4krpham1lx32i801d12yv0f4y3fl8fn5vv2"))))
+     (local-file %miking-root
+                 #:recursive? #t
+                 #:select?
+                 (and/fn (git-predicate %miking-root)
+                         (lambda (file stat)
+                           (not (string-contains file "misc/packaging"))))))
     (build-system gnu-build-system)
     (propagated-inputs
      (list
@@ -204,25 +205,17 @@ the OCaml compiler.")
       ;; (list openjdk "jdk"))               ;; For java backend
      ))
     (arguments
-     `(#:test-target "test-compile"
-       #:phases
-       (modify-phases %standard-phases
-         (delete 'configure)
-         (add-before 'build 'fixup-makescript
-           (lambda _
-             (substitute* "make.sh"
-               (("OCAMLPATH=") "OCAMLPATH=$OCAMLPATH:"))
-             (substitute* "test-boot.mk"
-               (("MCORE_LIBS=") "OCAMLPATH=${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS="))))
-         (replace 'install
-           (lambda* (#:key outputs #:allow-other-keys)
-             (let* ((out (assoc-ref outputs "out"))
-                    (bin (string-append out "/bin"))
-                    (lib (string-append out "/lib")))
-               (invoke "dune" "install" "--prefix" out "--libdir"
-                       (string-append lib "/ocaml/site-lib"))
-               (install-file "build/mi" bin)
-               (copy-recursively "stdlib" (string-append lib "/mcore/stdlib"))))))))
+     (list #:imported-modules %dune-build-system-modules
+           #:modules '((guix build utils)
+                       (guix build gnu-build-system)
+                       ((guix build dune-build-system) #:prefix dune:))
+           #:make-flags #~(list (string-append "prefix=" #$output))
+           #:test-target "test-compile"
+           #:phases
+           #~(modify-phases dune:%standard-phases
+               (replace 'build (assoc-ref %standard-phases 'build))
+               (replace 'check (assoc-ref %standard-phases 'check))
+               (replace 'install (assoc-ref %standard-phases 'install)))))
     (synopsis "Meta language system for creating embedded DSLs.")
     (description "Miking (Meta vIKING) is a meta language system for creating
 embedded domain-specific and general-purpose languages.  The system features
@@ -230,3 +223,6 @@ a polymorphic core calculus and a DSL definition language where languages
 can be extended and composed from smaller fragments.")
     (home-page "https://miking.org")
     (license license:expat)))
+
+;; For `guix build -f'
+miking
