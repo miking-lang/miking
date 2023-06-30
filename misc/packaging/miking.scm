@@ -27,6 +27,7 @@
               (uri (git-reference
                     (url "https://github.com/ocaml-community/ISO8601.ml")
                     (commit version)))
+              (file-name (git-file-name name version))
               (sha256
                (base32
                 "0nzadswspizi7s6sf67icn2xgc3w150x8vdg5nk1mjrm2s98n6d3"))))
@@ -50,6 +51,7 @@
               (uri (git-reference
                     (url "https://github.com/OCamlPro/ocb")
                     (commit version)))
+              (file-name (git-file-name name version))
               (sha256
                (base32
                 "1nk90jax91ld8qd36qi408mll8a7w1d60fa2qdsnff7cldwixc1d"))))
@@ -71,6 +73,7 @@ provided.")
               (uri (git-reference
                     (url "https://github.com/LaurentMazare/npy-ocaml")
                     (commit version)))
+              (file-name (git-file-name name version))
               (sha256
                (base32
                 "1fryglkm20h6kdqjl55b7065b34bdg3g3p6j0jv33zvd1m5888m1"))))
@@ -94,6 +97,7 @@ from python using numpy.")
               (uri (git-reference
                     (url "https://github.com/ocaml-toml/to.ml")
                     (commit version)))
+              (file-name (git-file-name name version))
               (sha256
                (base32
                 "0z2873mj3i6h9cg8zlkipcjab8jympa4c4avhk4l04755qzphkds"))))
@@ -118,6 +122,7 @@ OCaml primitive types are also supplied.")
               (uri (git-reference
                     (url "https://github.com/owlbarn/owl")
                     (commit version)))
+              (file-name (git-file-name name version))
               (sha256
                (base32
                 "08jvgf1fd7d28cxxjifx4ikmwcbfbiyw0sivw3xy4vdzvbyc9xw9"))))
