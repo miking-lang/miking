@@ -51,16 +51,21 @@ let sysJoinPath = lam p1. lam p2.
   strJoin _pathSep [p1, p2]
 
 let sysTempMake = lam dir: Bool. lam prefix: String. lam.
+  let maxTries = 10000 in
   recursive let mk = lam base. lam i.
-    let name = concat base (int2string i) in
-    match
-      _commandList [
-        if dir then "mkdir" else "touch",
-        sysJoinPath _tempBase name, "2>", _null
-      ]
-    with 0
-    then name
-    else mk base (addi i 1) in
+    if lti i maxTries then
+      let name = concat base (int2string i) in
+      match
+        _commandList [
+          if dir then "mkdir" else "touch",
+          sysJoinPath _tempBase name, "2>", _null
+        ]
+        with 0
+      then name
+      else mk base (addi i 1)
+    else
+      error "sysTempMake: Failed to make temporary directory."
+  in
   let alphanumStr = create 10 (lam. randAlphanum ()) in
   let base = concat prefix alphanumStr in
   let name = mk base 0 in
