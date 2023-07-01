@@ -1,12 +1,12 @@
-{ lib, stdenv, fetchGit,
-  binutils-unwrapped,
+{ lib, stdenv,
   coreutils,
-  gcc,
+  makeWrapper,
   ocaml-ng
 }:
 
 let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
 
+with ocamlPackages;
 stdenv.mkDerivation rec {
   pname = "miking";
   version = "0.0.0+git";
@@ -15,19 +15,29 @@ stdenv.mkDerivation rec {
   # Changing this file will result in another derivation.
   src = fetchGit ../..;
 
-  propagatedBuildInputs = with ocamlPackages;
-    [ ocaml
-      findlib
-      dune_3
-      linenoise
-      binutils-unwrapped
-      gcc.cc
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    dune_3
+    makeWrapper
 
-      coreutils  # For sys.mc (mkdir, echo, rm, ...)
-      lwt        # For async-ext.mc
-      owl        # For dist-ext.mc
-      toml       # For toml-ext.mc
-    ];
+    lwt        # For async-ext.mc
+    owl        # For dist-ext.mc
+    toml       # For toml-ext.mc
+  ];
+
+  buildInputs = [
+    coreutils  # Miking currently requires mkdir to be able to run
+    linenoise
+  ];
+
+  makeFlags = [ "prefix=$(out)" "ocamllibdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
+
+  postInstall = ''
+    wrapProgram $out/bin/mi \
+      --suffix PATH : ${coreutils}/bin \
+      --suffix OCAMLPATH : ${linenoise}/lib/ocaml/${ocaml.version}/site-lib
+  '';
 
   doCheck = true;
   checkTarget = "test-compile";
@@ -42,6 +52,11 @@ stdenv.mkDerivation rec {
       system features a polymorphic core calculus and a DSL definition
       language where languages can be extended and composed from
       smaller fragments.
+
+      Note: Depending on the target runtime, miking requires the presence of
+      additional packages within an environment, such as dune, ocaml, findlib
+      and a C compiler for native builds, node for javascript, and a suitable JDK
+      when targeting the JVM.
     '';
   };
 }

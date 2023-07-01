@@ -178,7 +178,7 @@ algorithms.")
     (inputs
      (list
       ocaml-linenoise
-      coreutils         ;; Miking currently requires mkdir to be available to run
+      coreutils         ;; Miking currently requires mkdir to be able to run
       ))
     (native-inputs
      (list
