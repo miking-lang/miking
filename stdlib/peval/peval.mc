@@ -79,20 +79,21 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
     let ctx = {pevalCtxEmpty () with env = env} in
     pevalExpr ctx ast
 
-  sem pevalIsValue : Expr -> Bool
-  sem pevalIsValue =
+  sem pevalBindThis : Expr -> Bool
+  sem pevalBindThis =
   | t ->
-    errorSingle [infoTm t] (join ["pevalIsValue: undefined for:\n", expr2str t])
+    errorSingle [infoTm t] (join ["pevalBindThis: undefined for:\n", expr2str t])
 
   sem pevalBind : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
   sem pevalBind ctx k =| t ->
     pevalEval ctx
       (lam t.
-        if pevalIsValue t then k t
-        else
+        if pevalBindThis t then
           let b = astBuilder (infoTm t) in
           let ident = nameSym "t" in
-          bind_ (b.nulet ident t) (k (b.var ident)))
+          bind_ (b.nulet ident t) (k (b.var ident))
+        else
+          k t)
       t
 
   sem pevalEval : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
@@ -110,19 +111,12 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
 end
 
 lang AppPEval = PEval + AppAst
-  sem pevalIsValue =
-  | TmApp _ -> false
+  sem pevalBindThis =
+  | TmApp _ -> true
 
   sem pevalApply : Info -> PEvalCtx -> (Expr -> Expr) -> (Expr, Expr) -> Expr
   sem pevalApply info ctx k =
-  | (f, arg) ->
-    errorSingle [info]
-      (join [
-        "Bad application between:\n",
-        expr2str f,
-        "\nand:\n",
-        expr2str arg
-      ])
+  | (f, arg) -> k (app_ f arg)
 
   sem pevalEval ctx k =
   | TmApp r ->
@@ -135,11 +129,8 @@ lang AppPEval = PEval + AppAst
 end
 
 lang VarPEval = PEval + VarAst + AppPEval
-  sem pevalIsValue =
-  | TmVar _ -> true
-
-  sem pevalApply info ctx k =
-  | (f & TmVar _, arg) -> k (app_ f arg)
+  sem pevalBindThis =
+  | TmVar _ -> false
 
   sem pevalEval ctx k =
   | t & TmVar r ->
@@ -151,8 +142,8 @@ lang VarPEval = PEval + VarAst + AppPEval
 end
 
 lang LamPEval = PEval + LamAst + ClosAst + AppEval
-  sem pevalIsValue =
-  | TmClos _ -> true
+  sem pevalBindThis =
+  | TmClos _ -> false
 
   sem pevalApply info ctx k =
   | (TmClos r, arg) ->
@@ -175,18 +166,18 @@ lang LamPEval = PEval + LamAst + ClosAst + AppEval
 end
 
 lang LetPEval = PEval + LetAst
-  sem pevalIsValue =
-  | TmLet _ -> false
+  sem pevalBindThis =
+  | TmLet _ -> true
 
   sem pevalEval ctx k =
   | TmLet r ->
     pevalBind ctx
       (lam body.
-        if pevalIsValue body then
-          pevalBind
-            { ctx with env = evalEnvInsert r.ident body ctx.env } k r.inexpr
+        if pevalBindThis body then
+          TmLet { r with body = body, inexpr = pevalBind ctx k r.inexpr }
         else
-          TmLet { r with body = body, inexpr = pevalBind ctx k r.inexpr })
+          pevalBind
+            { ctx with env = evalEnvInsert r.ident body ctx.env } k r.inexpr)
       r.body
 
   sem pevalReadbackH ctx =
@@ -203,8 +194,8 @@ lang LetPEval = PEval + LetAst
 end
 
 lang RecLetsPEval = PEval + RecLetsAst + ClosAst + LamAst
-  sem pevalIsValue =
-  | TmRecLets _ -> false
+  sem pevalBindThis =
+  | TmRecLets _ -> true
 
   sem pevalEval ctx k =
   | TmRecLets r ->
@@ -266,11 +257,11 @@ lang RecLetsPEval = PEval + RecLetsAst + ClosAst + LamAst
 end
 
 lang RecordPEval = PEval + RecordAst + VarAst
-  sem pevalIsValue =
+  sem pevalBindThis =
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the record as the
   -- bindings vill always bind to values after the PEval transformation.
-  | TmRecord _ -> true
-  | TmRecordUpdate _ -> false
+  | TmRecord _ -> false
+  | TmRecordUpdate _ -> true
 
   sem pevalEval ctx k =
   | TmRecord r ->
@@ -289,7 +280,7 @@ lang RecordPEval = PEval + RecordAst + VarAst
                 { r2 with bindings = mapInsert r1.key value r2.bindings }
               in
               k (TmRecord r2)
-            case TmVar _ then
+            case _ then
               k (TmRecordUpdate { r1 with rec = rec, value = value })
             end)
           r1.value)
@@ -297,16 +288,16 @@ lang RecordPEval = PEval + RecordAst + VarAst
 end
 
 lang TypePEval = PEval + TypeAst
-  sem pevalIsValue =
-  | TmType _ -> false
+  sem pevalBindThis =
+  | TmType _ -> true
 
   sem pevalEval ctx k =
   | TmType t -> TmType {t with inexpr = pevalBind ctx k t.inexpr}
 end
 
 lang DataPEval = PEval + DataAst
-  sem pevalIsValue =
-  | TmConDef _ -> false
+  sem pevalBindThis =
+  | TmConDef _ -> true
   | TmConApp _ -> false
 
   sem pevalEval ctx k =
@@ -317,8 +308,8 @@ end
 lang SeqPEval = PEval + SeqAst
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the sequences as the
   -- elements vill always be values in the PEval transformation.
-  sem pevalIsValue =
-  | TmSeq _ -> true
+  sem pevalBindThis =
+  | TmSeq _ -> false
 
   sem pevalEval ctx k =
   | TmSeq r ->
@@ -335,9 +326,9 @@ lang ConstPEval = PEval + ConstEvalNoDefault
     let b = astBuilder r.info in
     (ctx, b.appSeq (b.uconst r.const) args)
 
-  sem pevalIsValue =
-  | TmConst _ -> true
-  | TmConstApp _ -> true
+  sem pevalBindThis =
+  | TmConst _ -> false
+  | TmConstApp _ -> false
   -- NOTE(oerikss, 2022-02-15): We treat partially applied constants as
   -- values. We then have to make sure to transform these to normal TmApp's to
   -- avoid re-computations when we see that we cannot statically evaluate the
@@ -361,33 +352,35 @@ lang ConstPEval = PEval + ConstEvalNoDefault
   | (TmConstApp r, arg) -> k (delta info (r.const, snoc r.args arg))
 end
 
-lang MatchPEval = PEval + MatchEval + NeverAst + VarAst
-  sem pevalIsValue =
-  | TmMatch _ -> false
+lang MatchPEval =
+  PEval + MatchEval + RecordAst + ConstAst + DataAst + SeqAst + NeverAst + VarAst
+
+  sem pevalBindThis =
+  | TmMatch _ -> true
 
   sem pevalEval ctx k =
   | TmMatch r ->
     pevalBind ctx
       (lam target.
         switch target
-        case TmVar _ then
+        case t & TmNever _ then k t
+        case TmRecord _ | TmConst _ | TmConApp _ | TmSeq _ then
+          match tryMatch ctx.env target r.pat with Some env then
+            pevalBind { ctx with env = env } k r.thn
+          else pevalBind ctx k r.els
+        case _ then
           k (TmMatch {r with
                       target = target,
                       thn = pevalBind ctx (lam x. x) r.thn,
                       els = pevalBind ctx (lam x. x) r.els
           })
-        case t & TmNever _ then k t
-        case _ then
-          match tryMatch ctx.env target r.pat with Some env then
-            pevalBind { ctx with env = env } k r.thn
-          else pevalBind ctx k r.els
         end)
       r.target
 end
 
 lang UtestPEval = PEval + UtestAst
-  sem pevalIsValue =
-  | TmUtest _ -> false
+  sem pevalBindThis =
+  | TmUtest _ -> true
 
   sem pevalEval ctx k =
   | TmUtest t ->
@@ -410,8 +403,8 @@ lang UtestPEval = PEval + UtestAst
 end
 
 lang NeverPEval = PEval + NeverAst
-  sem pevalIsValue =
-  | TmNever _ -> true
+  sem pevalBindThis =
+  | TmNever _ -> false
 
   sem pevalEval ctx k =
   | t & TmNever _ -> k t
@@ -421,8 +414,8 @@ lang NeverPEval = PEval + NeverAst
 end
 
 lang ExtPEval = PEval + ExtAst
-  sem pevalIsValue =
-  | TmExt _ -> false
+  sem pevalBindThis =
+  | TmExt _ -> true
 
   sem pevalEval ctx k =
   | TmExt t -> TmExt {t with inexpr = pevalBind ctx k t.inexpr}
@@ -430,7 +423,7 @@ end
 
 lang ArithIntPEval = ArithIntEval + VarAst
   sem delta info =
-  | (c & (CAddi _ | CMuli _), args & [TmVar _, TmConst _]) ->
+  | (c & (CAddi _ | CMuli _), args & [!TmConst _, TmConst _]) ->
     -- NOTE(oerikss, 2022-02-15): We move constants to the lhs for associative
     -- operators to make later simplifications easier.
     delta info (c, reverse args)
@@ -460,7 +453,8 @@ lang ArithIntPEval = ArithIntEval + VarAst
     let b = astBuilder info in
     if nameEqSymUnsafe r1.ident r2.ident then b.int 0
     else b.appSeq (b.uconst c) [x, y]
-  | (c & (CDivi _), args & [TmConst {val = CInt x}, y & TmVar _]) ->
+  | (c & (CDivi _),
+     args & [TmConst {val = CInt x}, y & !TmConst {val = CInt _}]) ->
     let b = astBuilder info in
     if eqi x.val 0 then b.int 0 else b.appSeq (b.uconst c) args
   | (c & (CDivi _), args & [x, TmConst {val = CInt y}]) ->
@@ -470,23 +464,16 @@ lang ArithIntPEval = ArithIntEval + VarAst
     case 1 then x
     case _ then b.appSeq (b.uconst c) args
     end
-  | (c & (CModi _), args & [TmConst {val = CInt x}, TmVar _]) ->
+  | (c & (CModi _), args & [TmConst {val = CInt x}, !TmConst {val = CInt _}]) ->
     let b = astBuilder info in
     if eqi x.val 0 then b.int 0 else b.appSeq (b.uconst c) args
-  | (c & (CModi _), args & [TmVar _, TmConst {val = CInt y}]) ->
+  | (c & (CModi _), args & [!TmConst {val = CInt _}, TmConst {val = CInt y}]) ->
     let b = astBuilder info in
     switch y.val
     case 0 then errorSingle [info] "Division by zero"
     case 1 then b.int 0
     case _ then b.appSeq (b.uconst c) args
     end
-  | (c & (CAddi _ | CMuli _ | CSubi _ | CDivi _ | CModi _),
-     args & [TmVar _, TmVar _]) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-  | (c & CNegi _, [a & TmVar _]) ->
-    let b = astBuilder info in
-    b.app (b.uconst c) a
 end
 
 lang ArithFloatPEval = ArithFloatEval + VarAst
@@ -498,11 +485,12 @@ lang ArithFloatPEval = ArithFloatEval + VarAst
     else (ctx, t)
 
   sem delta info =
-  | (c & (CAddf _ | CMulf _), args & [TmVar _, TmConst _]) ->
+  | (c & (CAddf _ | CMulf _), args & [!TmConst _, TmConst _]) ->
     -- NOTE(oerikss, 2022-02-15): We move constants to the lhs for associative
     -- operators to make later simplifications easier.
     delta info (c, reverse args)
-  | (c & CAddf _, args & [TmConst {val = CFloat x}, y & TmVar _]) ->
+  | (c & CAddf _,
+     args & [TmConst {val = CFloat x}, y & !TmConst {val = CFloat _}]) ->
     if eqf x.val 0. then y else
       let b = astBuilder info in
       b.appSeq (b.uconst c) args
@@ -510,22 +498,24 @@ lang ArithFloatPEval = ArithFloatEval + VarAst
     let b = astBuilder info in
     if nameEqSymUnsafe r1.ident r2.ident then b.mulf (b.float 2.) y
     else b.appSeq (b.uconst c) [x, y]
-  | (c & CMulf _, args & [TmConst {val = CFloat x}, y & TmVar _]) ->
+  | (c & CMulf _,
+     args & [TmConst {val = CFloat x}, y & !TmConst {val = CFloat _}]) ->
     let b = astBuilder info in
     if eqf x.val 0. then b.float 0.
     else if eqf x.val 1. then y
     else b.appSeq (b.uconst c) args
-  | (c & CSubf _, args & [TmConst {val = CFloat x}, y & TmVar _]) ->
+  | (c & CSubf _,
+     args & [TmConst {val = CFloat x}, y & !TmConst {val = CFloat _}]) ->
     let b = astBuilder info in
     if eqf x.val 0. then b.negf y else b.appSeq (b.uconst c) args
-  | (c & CSubf _, args & [x & TmVar _, TmConst {val = CFloat y}]) ->
+  | (c & CSubf _, args & [x & !TmConst {val = CFloat _}, TmConst {val = CFloat y}]) ->
     let b = astBuilder info in
     if eqf y.val 0. then x else b.appSeq (b.uconst c) args
   | (c & CSubf _, [x & TmVar r1, y & TmVar r2]) ->
     let b = astBuilder info in
     if nameEqSymUnsafe r1.ident r2.ident then b.float 0.
     else b.appSeq (b.uconst c) [x, y]
-  | (c & (CDivf _), args & [TmConst {val = CFloat x}, y & TmVar _]) ->
+  | (c & (CDivf _), args & [TmConst {val = CFloat x}, y & !TmConst {val = CFloat _}]) ->
     let b = astBuilder info in
     if eqf x.val 0. then b.float 0. else b.appSeq (b.uconst c) args
   | (c & (CDivf _), args & [x, TmConst {val = CFloat y}]) ->
@@ -533,50 +523,26 @@ lang ArithFloatPEval = ArithFloatEval + VarAst
     if eqf y.val 0. then errorSingle [info] "Division by zero"
     else if eqf y.val 1. then x
     else b.appSeq (b.uconst c) args
-  | (c & (CAddf _ | CMulf _ | CSubf _ | CDivf _),
-     args & [TmVar _, TmVar _]) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-  | (c & CNegf _, [a & TmVar _]) ->
-    let b = astBuilder info in
-    b.app (b.uconst c) a
 end
 
-lang CmpFloatPEval = CmpFloatEval + VarAst
-  sem delta info =
-  | (c & (CEqf _ | CLtf _ | CLeqf _ | CGtf _ | CGeqf _ | CNeqf _),
-     args & ([TmVar _, TmVar _] | [!TmVar _, TmVar _] | [TmVar _, !TmVar _])) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-end
+lang CmpFloatPEval = CmpFloatEval + VarAst end
 
-lang CmpIntPEval = CmpIntEval + VarAst
-  sem delta info =
-  | (c & (CEqi _ | CLti _ | CLeqi _ | CGti _ | CGeqi _ | CNeqi _),
-     args & ([TmVar _, TmVar _] | [!TmVar _, TmVar _] | [TmVar _, !TmVar _])) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-end
+lang CmpIntPEval = CmpIntEval + VarAst end
 
-lang CmpCharPEval = CmpCharEval + VarAst
-  sem delta info =
-  | (c & CEqc _, args & ([TmVar _, _] | [_, TmVar _])) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-end
+lang CmpCharPEval = CmpCharEval + VarAst end
 
-lang IOPEval = IOAst + SeqAst + IOArity
-  sem delta info =
-  | (c & (CPrint _ | CPrintError _), args & [TmSeq s]) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-  | (c & (CDPrint _ | CFlushStdout _ | CFlushStderr _ | CReadLine _),
-     args & [_]) ->
-    let b = astBuilder info in
-    b.appSeq (b.uconst c) args
-end
+lang IOPEval = IOAst + SeqAst + IOArity end
 
-lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + VarAst
+lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
+  sem pevalBindThis =
+  | TmApp {
+    lhs = TmApp {
+      lhs = TmConst { val = CGet _},
+      rhs = TmVar _
+    },
+    rhs = TmConst { val = CInt _} | TmVar _
+  } -> false
+
   sem pevalApply info ctx k =
   | (TmConstApp {const = CMap _, args = [f]}, TmSeq s) ->
     let f = lam x. lam k.
@@ -1017,6 +983,39 @@ lam x.
   using eqExpr
 in
 
+---------------
+-- Test Lets --
+---------------
+
+let prog = _parse "
+  lam y. let f = lam x. x in f y
+  " in
+utest _test prog with _parse "
+  lam y. y
+  "
+  using eqExpr
+in
+
+let prog = _parse "
+  lam y. let f = y (lam x. x) in f (lam x. x)
+  " in
+utest _test prog with _parse "
+  lam y.
+    let t =
+      y
+        (lam x1.
+           x1)
+    in
+    let t1 =
+      t
+        (lam x.
+           x)
+    in
+    t1
+  "
+  using eqExpr
+in
+
 -------------------------
 -- Test Recursive Lets --
 -------------------------
@@ -1219,19 +1218,16 @@ utest _test prog with _parse "false" using eqExpr in
 -- Test Seq Operations --
 -------------------------
 
-logSetLogLevel logLevel.error;
-
 let prog = _parse "map (addi 1) [1, 2, 3]" in
 utest _test prog with _parse "[2, 3, 4]" using eqExpr in
 
 let prog = _parse "lam x. map (addi x) [1, 2, 3]" in
 utest _test prog with _parse "
-let f = lam x.
+lam x.
   let t1 = addi 1 x in
   let t2 = addi 2 x in
   let t3 = addi 3 x in
   [t1, t2, t3]
-in f
   "
   using eqExpr
 in
@@ -1242,12 +1238,11 @@ utest _test prog with _parse "[1, 3, 5]" using eqExpr in
 let prog = _parse "lam x. mapi (lam i. lam y. muli i (addi x y)) [1, 2, 3]" in
 utest _test prog with
   _parse "
-let f = lam x.
+lam x.
   let t1 = addi 2 x in
   let t2 = addi 3 x in
   let t3 = muli 2 t2 in
   [0, t1, t3]
-in f
     "
   using eqExpr
 in
@@ -1265,10 +1260,7 @@ lam x.
   " using eqExpr in
 
 let prog = _parse "lam x. lam y. [get x y, get x 1, get x 2]" in
-utest _test prog with _parse "
-  let f = lam x.
-    let f = lam y. [get x y, get x 1, get x 2] in f
-  in f"
+utest _test prog with _parse "lam x. lam y. [get x y, get x 1, get x 2]"
   using eqExpr
 in
 
