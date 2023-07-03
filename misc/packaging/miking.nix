@@ -4,16 +4,18 @@
   ocaml-ng
 }:
 
-let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
+with ocaml-ng.ocamlPackages_5_0;
 
-with ocamlPackages;
 stdenv.mkDerivation rec {
   pname = "miking";
   version = "0.0.0+git";
 
   # Unlike Guix, Nix does not seem to expose the filter used by the git fetcher.
-  # Changing this file will result in another derivation.
-  src = fetchGit ../..;
+  # Each new commit will result in a different derivation.
+  src = fetchGit {
+    url = ../..;
+    ref = "HEAD";
+  };
 
   nativeBuildInputs = [
     ocaml
