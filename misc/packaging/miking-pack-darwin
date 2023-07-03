@@ -19,8 +19,6 @@ ocaml_deps=('findlib' 'dune_3' 'owl' 'lwt' 'toml')
 
 nixpkgs_deps=('binutils-unwrapped' 'gcc.cc')
 
-static_deps=('patchelf' 'gnugrep' 'file')
-
 install_dep() {
     echo "Copying from $1 to $packdir."
     cp -an $1/* $packdir
@@ -47,9 +45,6 @@ install_miking() {
     for dep in "${nixpkgs_deps[@]}"; do
         install_transitive_deps "$(nix-build '<nixpkgs>' -A $dep --no-out-link)"
     done
-    for dep in "${static_deps[@]}"; do
-        install_dep "$(nix-build '<nixpkgs>' -A pkgsStatic.$dep --no-out-link)"
-    done
 }
 
 patch_binaries() {
@@ -57,27 +52,13 @@ patch_binaries() {
     find $packdir/bin $packdir/libexec $packdir/lib -type f \
          ! -name '*.a' ! -name '*.cma' ! -name '*.cmi' ! -name '*.cmti' ! -name '*.cmx' \
          ! -name '*.h' ! -name '*.la' ! -name '*.ml' ! -name '*.mli' ! -name '*.o' \
-         -exec bash -c 'file {} | grep -e "ELF.*\(executable\|shared\).*dynamic"' \; \
-         -exec bash -c 'patchelf --set-rpath "\$ORIGIN/$(realpath --relative-to="$(dirname {})" $packdir/lib)" {}' \;
-    sed -i -e 's,/nix/store/[^/]*/lib/,,g' $packdir/lib/libc.so $packdir/lib/libm.so
+         -exec bash -c 'file {} | grep -e "Mach-O"' \; \
+         -exec bash -c 'otool -L {} | grep -oe "/nix/store/[^/]*/[^ ]*" | while read name; do install_name_tool -change $name "@loader_path/$(realpath --relative-to="$(dirname {})" $packdir/lib)/$(basename $name)" {}; done' \;
     mv $packdir/bin/.mi-wrapped $packdir/bin/mi
-    ln -s gcc $packdir/bin/cc
 }
 
 prepare_scripts() {
     echo "Preparing setup and wrapper scripts."
-    cat <<'EOS' > $packdir/mi-setup
-#!/bin/sh
-echo "Setting up bundled Miking for use."
-export SOURCE="$(dirname "$(realpath "$0")")"
-echo "Bundle directory:  $SOURCE"
-export MAGIC="$SOURCE/share/misc/magic.mgc"
-find $SOURCE/bin $SOURCE/libexec -type f \
-     -exec /bin/sh -c '$SOURCE/bin/file {} | $SOURCE/bin/grep -qe "ELF.*executable.*dynamic"' \; \
-     -exec $SOURCE/bin/patchelf \
-     --set-interpreter $SOURCE/lib/ld-linux-x86-64.so.2 {} \;
-echo "Finished setup."
-EOS
     cat <<'EOS' > $packdir/mi
 #!/bin/sh
 SOURCE="$(dirname "$(realpath "$0")")"
@@ -86,12 +67,10 @@ export OCAMLLIB="$SOURCE/lib/ocaml"
 export PATH="$SOURCE/bin"
 export LIBRARY_PATH="$SOURCE/lib"
 export MCORE_LIBS="stdlib=$SOURCE/lib/mcore/stdlib"
-export OCAMLPARAM=":_:ccopt=-Wl,--dynamic-linker=$SOURCE/lib/ld-linux-x86-64.so.2,-rpath=$SOURCE/lib"
 unset  OPAM_SWITCH_PREFIX
-unset  LD_LIBRARY_PATH
 exec -a "$0" "$SOURCE/bin/mi" "$@"
 EOS
-    chmod +x $packdir/mi $packdir/mi-setup
+    chmod +x $packdir/mi
 }
 
 make_tarball() {
