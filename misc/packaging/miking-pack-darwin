@@ -13,9 +13,9 @@ set -e
 
 export packdir="$(mktemp -d /tmp/miking-pack.XXXXXX)"
 
-custom_deps=('ocaml-with-cc' 'miking')
+custom_deps=('miking')
 
-ocaml_deps=('findlib' 'dune_3' 'owl' 'lwt' 'toml')
+ocaml_deps=('ocaml' 'findlib' 'dune_3' 'owl' 'lwt' 'toml')
 
 nixpkgs_deps=('binutils-unwrapped' 'clang.cc')
 
