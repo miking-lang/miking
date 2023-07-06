@@ -37,6 +37,8 @@ set statuses
 set current
 set tmpdir (mktemp -d)
 
+set miking_url https://github.com/miking-lang/miking.git
+
 function cleanup -a dir
     git reset --merge >/dev/null 2>&1
     git bisect reset >/dev/null 2>&1
@@ -114,7 +116,7 @@ function doMerge -a runTest
         set --erase prs[1]
         set current "*?"$pr
         printMergeStatus
-        if git pull --ff --squash origin pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
+        if git pull --ff --squash "$miking_url" pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
             if test -n "$runTest"
                 test (count $prs) -eq 0 -a (count $test_fail) -eq 0
                 set -l fail_already_known $status
@@ -151,6 +153,12 @@ if test (count $makeFlags) -gt 0
 end
 echo "Merging PRs:"
 doMerge "" $allPrs
+if test (count $picked) -eq 0
+    echo -e "\nNo PRs merged cleanly, exiting"
+    printFinalStatus
+    cleanup dir
+    exit 1
+end
 echo -e "\nTesting all merged PRs together (happy path)"
 
 if make clean && make test-all $makeFlags >$tmpdir/$allPrs[-1] 2>&1
