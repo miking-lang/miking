@@ -268,7 +268,7 @@ let argPrintErrorString = lam result.
   end
 
 let argPrintError = lam result.
-  print (join [argPrintErrorString result, "\n"])
+  error (join [argPrintErrorString result, "\n"])
 
 
 mexpr
@@ -368,8 +368,9 @@ let testOptions = {
 } in
 let argParseCustom = argParse_general testOptions in
 let res : ArgResult Options =
-  match argParseCustom default config with ParseOK r then r
-  else error "Incorrect type"
+  let r = argParseCustom default config in
+  match r with ParseOK r then r
+  else argPrintError r
 in
 let opt : Options = res.options in
 utest res.strings with ["file.mc", "f2"] using eqSeq eqString in
