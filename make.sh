@@ -20,7 +20,8 @@ MI_TMP_NAME=mi-tmp
 prefix="${prefix:-$HOME/.local}"
 bindir="${bindir:-$prefix/bin}"
 libdir="${libdir:-$prefix/lib}"
-ocamlprefix="${ocamlprefix:-${OPAM_SWITCH_PREFIX:-$prefix}}"
+opamlibdir="${OPAM_SWITCH_PREFIX:+$OPAM_SWITCH_PREFIX/lib}"
+ocamllibdir="${ocamllibdir:-${opamlibdir:-$libdir/ocaml/site-lib}}"
 mcoredir=$libdir/mcore
 
 # Setup environment variable to find standard library
@@ -38,7 +39,7 @@ build_boot(){
 }
 
 install_boot(){
-    dune install --prefix=$ocamlprefix > /dev/null 2>&1
+    dune install --prefix=$prefix --libdir=$ocamllibdir > /dev/null 2>&1
 }
 
 # Compile a new version of the compiler using the current one
@@ -88,7 +89,7 @@ install() {
 
 # Uninstall the Miking bootstrap interpreter and compiler
 uninstall() {
-    dune uninstall --prefix=$ocamlprefix > /dev/null 2>&1
+    dune uninstall --prefix=$prefix --libdir=$ocamllibdir > /dev/null 2>&1
     rm -f $bindir/$MI_NAME
     rm -rf $mcoredir/stdlib
 }

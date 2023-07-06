@@ -1,51 +1,44 @@
-{ lib, stdenv, fetchFromGitHub,
-  binutils-unwrapped,
+{ lib, stdenv,
   coreutils,
-  gcc,
-  ocaml-ng,
-  pkgsStatic,
-  which
+  makeWrapper,
+  ocaml-ng
 }:
 
-let ocamlPackages = ocaml-ng.ocamlPackages_5_0; in
+with ocaml-ng.ocamlPackages_5_0;
 
 stdenv.mkDerivation rec {
   pname = "miking";
-  version = "0.0.1";
+  version = "0.0.0+git";
 
-  src = fetchFromGitHub {
-    owner = "miking-lang";
-    repo = "miking";
-    rev = "fb0e67d781cb24b8c2d25693286054a845d64112";
-    sha256 = "16ixfrrn9ns3ypr7c4krpham1lx32i801d12yv0f4y3fl8fn5vv2";
+  # Unlike Guix, Nix does not seem to expose the filter used by the git fetcher.
+  # Each new commit will result in a different derivation.
+  src = fetchGit {
+    url = ../..;
+    ref = "HEAD";
   };
 
-  propagatedBuildInputs = with ocamlPackages;
-    [ ocaml
-      findlib
-      dune_3
-      linenoise
-      binutils-unwrapped
-      gcc.cc
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    dune_3
+    makeWrapper
 
-      coreutils  # For sys.mc (mkdir, echo, rm, ...)
-      which      # For sys.mc
-      lwt        # For async-ext.mc
-      owl        # For dist-ext.mc
-      toml       # For toml-ext.mc
-    ];
+    lwt        # For async-ext.mc
+    owl        # For dist-ext.mc
+    toml       # For toml-ext.mc
+  ];
 
-  preBuild = ''
-    substituteInPlace make.sh --replace 'OCAMLPATH=' 'OCAMLPATH=$OCAMLPATH:'
-    substituteInPlace test-boot.mk \
-      --replace 'MCORE_LIBS=' 'OCAMLPATH=''${OCAMLPATH}:`pwd`/build/lib MCORE_LIBS='
-  '';
+  buildInputs = [
+    coreutils  # Miking currently requires mkdir to be able to run
+    linenoise
+  ];
 
-  installPhase = ''
-    dune install --prefix $out --libdir $OCAMLFIND_DESTDIR
-    cp build/mi $out/bin
-    mkdir -p $out/lib/mcore
-    cp -r stdlib $out/lib/mcore
+  makeFlags = [ "prefix=$(out)" "ocamllibdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
+
+  postInstall = ''
+    wrapProgram $out/bin/mi \
+      --suffix PATH : ${coreutils}/bin \
+      --suffix OCAMLPATH : ${linenoise}/lib/ocaml/${ocaml.version}/site-lib
   '';
 
   doCheck = true;
@@ -61,6 +54,11 @@ stdenv.mkDerivation rec {
       system features a polymorphic core calculus and a DSL definition
       language where languages can be extended and composed from
       smaller fragments.
+
+      Note: Depending on the target runtime, miking requires the presence of
+      additional packages within an environment, such as dune, ocaml, findlib
+      and a C compiler for native builds, node for javascript, and a suitable JDK
+      when targeting the JVM.
     '';
   };
 }
