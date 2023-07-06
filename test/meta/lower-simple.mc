@@ -8,7 +8,6 @@ type Term in
 con TmLam  : (String, Term) -> Term in
 con TmApp  : (Term, Term) -> Term in
 con TmVar  : (String) -> Term in
-con TmClos : (String, Term, AssocSec String Term) in
 con TmInt  : (int) -> Term in
 con TmAdd  : (Term, Term) -> Term in
 
@@ -36,7 +35,7 @@ recursive
     end
 in
 
-let prog = lam y. prerun lower [("y", y)] p3 in
-dprint prog; print "\n------\n"
+let prog = lam y. prerun (lower [("y", y)] p3) in
+dprint prog; print "\n------\n";
 dprint (prog 10); print "\n";
 dprint (prog 100); print "\n"

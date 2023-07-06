@@ -8,13 +8,14 @@ type Term in
 con TmLam  : (String, Term) -> Term in
 con TmApp  : (Term, Term) -> Term in
 con TmVar  : (String) -> Term in
-con TmClos : (String, Term, AssocSec String Term) in
-con TmInt  : (int) -> Term in
+con TmInt  : (Int) -> Term in
 con TmAdd  : (Term, Term) -> Term in
+con TmClos : (String, Term, AssocSec String Term) -> Term in
 
 let insert = assocSeqInsert in
 let lookup = assocSeqLookup {eq = eqString} in
 
+--addi y ((lam x. addi x 3) 2)
 let p1 = TmAdd(TmInt(1),TmInt(2)) in
 let p2 = TmApp(TmLam("x", TmAdd(TmVar("x"), TmInt(3))), TmInt(2)) in
 let p3 = TmAdd(TmVar("y"), p2) in
@@ -39,11 +40,12 @@ recursive
     end
 in
 
--- dprint (eval [] p1); print "\n"
+--dprint (eval [] p1); print "\n"
 
 -- dprint (eval [] p2); print "\n"
 
 -- dprint (eval [("y", TmInt(10))] p3); print "\n"
+
 
 let prog = lam y. eval [("y", TmInt(y))] p3 in
 dprint prog; print "\n------\n";

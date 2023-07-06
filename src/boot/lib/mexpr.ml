@@ -977,6 +977,21 @@ let parseMExprString allow_free keywords str =
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
     reportErrorAndExit e
 
+let rec is_value = function
+  | TmConst (_, _) -> true
+  | TmSeq (_, tms) -> let _ = tms in true
+  (*Mseq.Helpers.fold_left (fun a t -> a && (is_value t)) true tms *) (* TODO FIX *)
+  | TmRecord(_, tms) -> let _ = tms in true
+  (* Record.for_all (fun _ t -> is_value t) tms *)
+  | TmConDef (_, _, _, _, t) -> is_value t
+  | TmConApp (_, _, _, t) -> is_value t
+  | TmNever _ -> true
+  | TmClos (_, _, _, _, _, _) -> true
+  | TmRef (_, _) -> true
+  | TmTensor (_, _) -> true
+  | _ -> false
+
+
 let rec parseMCoreFile
     ( keep_utests
     , prune_external_utests
@@ -2151,6 +2166,7 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
         , scan ((s, TmBox (fi, ref (t1', Some env))) :: env) t2 )
   | TmRecLets (fi, lst, t2) ->
       let env_ref = ref env in
+      let peval = ref false in
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
@@ -2158,14 +2174,17 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
               env_ref :=
                 (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
           | _ ->
-              failwith "Incorrect RecLets" )
+              peval := true )
         lst ;
-      let lst' =
-        List.map
-          (fun (fi2, x, s, ty, t) -> (fi2, x, s, ty, scan !env_ref t))
-          lst
-      in
-      TmRecLets (fi, lst', scan !env_ref t2)
+      if false then (* if !peval then *)
+        TmRecLets(fi, lst, t2)  (* TODO: must be fixed *)
+      else
+        let lst' =
+          List.map
+            (fun (fi2, x, s, ty, t) -> (fi2, x, s, ty, scan !env_ref t))
+            lst
+        in
+        TmRecLets (fi, lst', scan !env_ref t2)
   | TmMatch (fi, t1, p, t2, t3) ->
       let env', p' = pat_transform env p in
       TmMatch (fi, scan env t1, p', scan env' t2, scan env' t3)
@@ -2184,6 +2203,7 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
       eval env pe_init t
   | t ->
       smap_tm_tm (scan env) t
+
 
 and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
@@ -2217,18 +2237,31 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
-  | TmRecLets (_, lst, t2) ->
-      let env_ref = ref env in
-      List.iter
+  | TmRecLets (fi, lst, t2) ->
+     let env_ref = ref env in
+     let peval = ref false in
+      (List.iter
         (fun (_, _, s1, _, t) ->
           match t with
           | TmLam (fi, str, s2, pe, _, tm) ->
               env_ref :=
                 (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
           | _ ->
-              failwith "Incorrect RecLets" )
-        lst ;
-      eval !env_ref pe t2
+             peval := true)
+        lst);
+      if !peval then
+        let f env (fi, x, s, ty, t) =
+          let s' = Symb.gensym () in
+          let tvar = TmVar (fi, x, s', false, false) in
+          let env' = (s, tvar)::env in
+          (env', (fi, x, s', ty, t))
+        in
+        let (env',lst') = List.fold_left_map f env lst in
+        let g (fi, x, s, ty, t) = (fi, x, s, ty, eval env' pe t) in
+        let lst'' = List.map g lst' in
+        TmRecLets(fi, lst'', eval env' pe t2)
+      else
+        eval !env_ref pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
@@ -2268,12 +2301,33 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConApp (fi, x, s, rhs)
   (* Match *)
-  | TmMatch (_, t1, p, t2, t3) -> (
+  | TmMatch (fi, t1, p, t2, t3) -> (
+    let _ = fi in
     match try_match env (eval env pe t1) p with
-    | Some env ->
+     | Some env ->
         eval env pe t2
-    | None ->
+     | None ->
         eval env pe t3 )
+    (* try 1 --
+       let t1' = eval env pe t1 in
+     if is_value t1' then
+      (match try_match env t1' p with
+       | Some env ->
+          eval env pe t2
+       | None ->
+          eval env pe t3 )
+    else
+      TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)) *)
+    (* try 2 --
+    let t1' = eval env pe t1 in
+    match try_match env t1' p with
+     | Some env ->
+        eval env pe t2
+     | None ->
+        if is_value t1' then
+          TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)
+        else
+          eval env pe t3 ) *)
   (* Dive *)
   | TmDive (_, _, t) -> (
     match eval env pe t with

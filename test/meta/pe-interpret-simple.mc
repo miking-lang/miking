@@ -8,9 +8,9 @@ type Term in
 con TmLam  : (String, Term) -> Term in
 con TmApp  : (Term, Term) -> Term in
 con TmVar  : (String) -> Term in
-con TmClos : (String, Term, AssocSec String Term) in
 con TmInt  : (int) -> Term in
 con TmAdd  : (Term, Term) -> Term in
+con TmClos : (String, Term, AssocSec String Term) -> Term in
 
 
 let insert = assocSeqInsert in
