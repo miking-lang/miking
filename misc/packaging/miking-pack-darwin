@@ -13,11 +13,9 @@ set -e
 
 export packdir="$(mktemp -d /tmp/miking-pack.XXXXXX)"
 
-custom_deps=('miking')
+top_deps=('clang.cc' 'llvmPackages.compiler-rt' 'miking')
 
 ocaml_deps=('ocaml' 'findlib' 'dune_3' 'owl' 'lwt' 'toml')
-
-nixpkgs_deps=('binutils-unwrapped' 'clang.cc')
 
 declare -A installed_deps
 
@@ -42,16 +40,13 @@ install_transitive_deps() {
 
 install_miking() {
     echo "Installing Miking and dependencies to $packdir."
-    for dep in "${custom_deps[@]}"; do
+    for dep in "${top_deps[@]}"; do
         install_transitive_deps \
             "$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A $dep --no-out-link)"
     done
     for dep in "${ocaml_deps[@]}"; do
         install_transitive_deps \
-            "$(nix-build '<nixpkgs>' -A ocaml-ng.ocamlPackages_5_0.$dep --no-out-link)"
-    done
-    for dep in "${nixpkgs_deps[@]}"; do
-        install_transitive_deps "$(nix-build '<nixpkgs>' -A $dep --no-out-link)"
+	    "$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A ocamlPackages.$dep --no-out-link)"
     done
 }
 
@@ -66,20 +61,24 @@ patch_binaries() {
 }
 
 prepare_scripts() {
-    echo "Preparing setup and wrapper scripts."
+    echo "Preparing wrapper scripts."
     cat <<'EOS' > "$packdir/mi"
 #!/bin/sh
 SOURCE="$(dirname "$(realpath "$0")")"
 export OCAMLPATH="$SOURCE/lib/ocaml:$SOURCE/lib/ocaml/5.0.0/site-lib"
 export OCAMLLIB="$SOURCE/lib/ocaml"
-export OCAMLPARAM=":_:ccopt=-Wl,-rpath,$SOURCE/lib"
+export OCAMLPARAM=":_:ccopt=-resource-dir=$SOURCE:ccopt=-Wl,-rpath,$SOURCE/lib"
 export PATH="$SOURCE/bin"
 export LIBRARY_PATH="$SOURCE/lib"
 export MCORE_LIBS="stdlib=$SOURCE/lib/mcore/stdlib"
 unset  OPAM_SWITCH_PREFIX
 exec -a "$0" "$SOURCE/bin/mi" "$@"
 EOS
-    chmod +x "$packdir/mi"
+    cat <<'EOS' > "$packdir/bin/as"
+#!/bin/sh
+exec clang -x assembler -integrated-as -c "$@"
+EOS
+    chmod +x "$packdir/mi" "$packdir/bin/as"
 }
 
 make_tarball() {

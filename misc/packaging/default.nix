@@ -1,38 +1,46 @@
-with import <nixpkgs> {
+import <nixpkgs> {
   overlays =
     [ (pkgs-self: pkgs-super:
       { ocamlPackages =
           if pkgs-super.stdenv.isDarwin then
-            pkgs-super.ocaml-ng.ocamlPackages_5_0.overrideScope' (self: super: {
-              ocaml = super.ocaml.overrideAttrs (finalAttrs: previousAttrs: {
+            pkgs-super.ocaml-ng.ocamlPackages_5_0.overrideScope' (ocaml-self: ocaml-super: {
+              ocaml = ocaml-super.ocaml.overrideAttrs (finalAttrs: previousAttrs: {
                 preConfigure = ''AS="cc -c" ASPP="cc -c"'';
               });
-              owl-base = super.owl-base.overrideAttrs (finalAttrs: previousAttrs: {
-                version = "1.1";
-                src = pkgs-super.fetchurl {
-                  url = "https://github.com/owlbarn/owl/releases/download/${finalAttrs.version}/owl-${finalAttrs.version}.tbz";
-                  hash = "sha256-mDYCZ2z33VTEvc6gV4JTecIXA/vHIWuU37BADGl/yog=";
+              eigen = ocaml-super.eigen.overrideAttrs (finalAttrs: previousAttrs: {
+                meta = {
+                  inherit (previousAttrs.meta) homepage description maintainers license;
+                };
+                preBuild = ''
+                  export EIGENCPP_OPTFLAGS="-Ofast -funroll-loops -ffast-math"
+                  export EIGEN_FLAGS="-O3 -Ofast -funroll-loops -ffast-math"
+                '';
+              });
+              owl-base = ocaml-super.owl-base.overrideAttrs (finalAttrs: previousAttrs: {
+                src = pkgs-super.fetchFromGitHub {
+                  owner = "mseri";
+                  repo  = "owl";
+                  rev   = "9420a4cd04cd7483580264996001ae57a64fad62";
+                  hash  = "sha256-f8+YM/N4wjT40ZdoBZNziRNIH13dZ+L+JUEBj/vZa9k=";
                 };
                 meta = {
                   inherit (previousAttrs.meta) description homepage changelog maintainers license;
                 };
               });
-              owl = super.owl.overrideAttrs (finalAttrs: previousAttrs: {
-                inherit (self.owl-base) version src meta;
+              owl = ocaml-super.owl.overrideAttrs (finalAttrs: previousAttrs: {
+                propagatedBuildInputs = [ ocaml-self.eigen ] ++ previousAttrs.propagatedBuildInputs;
                 preBuild = ''
-                  export OWL_CFLAGS="-g -O3 -Ofast -funroll-loops -ffast-math -DSFMT_MEXP=19937 -msse2 -fno-strict-aliasing"
+                  export OWL_CFLAGS="-g -O3 -Ofast -funroll-loops -ffast-math -DSFMT_MEXP=19937 -fno-strict-aliasing"
+                  export OWL_AEOS_CFLAGS="-g -O3 -Ofast -funroll-loops -ffast-math -DSFMT_MEXP=19937 -fno-strict-aliasing"
                 '';
-                hardeningDisable = [ "strictoverflow" ];
               });
             })
           else
             pkgs-super.ocaml-ng.ocamlPackages_5_0;
+        miking = with pkgs-self; callPackage (import ./miking.nix) {};
+        miking-shell = pkgs-super.mkShell {
+          buildInputs = [ pkgs-self.miking ];
+        };
       })
     ];
-};
-rec {
-  miking = callPackage (import ./miking.nix) {};
-  miking-shell = mkShell {
-    buildInputs = [ miking ];
-  };
 }
