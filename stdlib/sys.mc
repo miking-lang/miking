@@ -26,6 +26,9 @@ let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. la
 let sysFileExists: String -> Bool = lam file.
   if eqi (_commandList ["test", "-e", file]) 0 then true else false
 
+let sysCopyFile = lam fromFile. lam toFile.
+  _commandList ["cp", "-f", fromFile, toFile]
+
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 

@@ -279,10 +279,25 @@ lang LambdaLiftInsertFreeVariables = MExprAst
 end
 
 lang LambdaLiftLiftGlobal = MExprAst
-  sem _bindIfNonEmpty (lifted : [Expr]) =
+  sem _bindLifted : [Expr] -> Expr -> Expr
+  sem _bindLifted lifted =
   | t ->
-    if null lifted then t
-    else bindall_ (snoc lifted t)
+    let binds = snoc lifted t in
+    _bindLiftedH binds
+
+  sem _bindLiftedH : [Expr] -> Expr
+  sem _bindLiftedH =
+  | [bind] ++ rest ->
+    if null rest then bind else
+    let rest = _bindLiftedH rest in
+    switch bind
+    case TmLet t then TmLet {t with inexpr = rest}
+    case TmRecLets t then TmRecLets {t with inexpr = rest}
+    case TmConDef t then TmConDef {t with inexpr = rest}
+    case TmType t then TmType {t with inexpr = rest}
+    case TmExt t then TmExt {t with inexpr = rest}
+    case _ then rest
+    end
 
   sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
   | TmLet t ->
@@ -338,9 +353,6 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmConDef t ->
     let lifted = snoc lifted (TmConDef {t with inexpr = unit_}) in
     liftGlobalH lifted t.inexpr
-  | TmUtest t ->
-    let lifted = snoc lifted (TmUtest {t with next = unit_}) in
-    liftGlobalH lifted t.next
   | TmExt t ->
     let lifted = snoc lifted (TmExt {t with inexpr = unit_}) in
     liftGlobalH lifted t.inexpr
@@ -349,20 +361,18 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftGlobal =
   | TmLet t ->
     match liftGlobalH [] t.body with (lifted, body) in
-    _bindIfNonEmpty
+    _bindLifted
       lifted
       (TmLet {{t with body = body} with inexpr = liftGlobal t.inexpr})
   | TmRecLets t ->
     let lifted = [liftRecursiveBinding (TmRecLets t)] in
-    _bindIfNonEmpty
-      lifted
-      (liftGlobal t.inexpr)
+    _bindLifted lifted (liftGlobal t.inexpr)
   | TmType t -> TmType {t with inexpr = liftGlobal t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = liftGlobal t.inexpr}
   | TmUtest t ->
     match liftGlobalH [] t.test with (lifted, test) in
     match liftGlobalH lifted t.expected with (lifted, expected) in
-    _bindIfNonEmpty
+    _bindLifted
       lifted
       (TmUtest {{{t with test = test}
                     with expected = expected}
@@ -370,9 +380,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmExt t -> TmExt {t with inexpr = liftGlobal t.inexpr}
   | t ->
     match liftGlobalH [] t with (lifted, t) in
-    _bindIfNonEmpty
-      lifted
-      t
+    _bindLifted lifted t
 end
 
 lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
@@ -879,7 +887,7 @@ let letMultiParam = preprocess (bindall_ [
   ulet_ "b" (int_ 6),
   ulet_ "f" (ulam_ "x" (
     addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))),
-  app_ (var_ "f") (int_ 7)]) in 
+  app_ (var_ "f") (int_ 7)]) in
 let expected = preprocess (bindall_ [
   ulet_ "a" (int_ 2),
   ulet_ "b" (int_ 6),
@@ -1015,5 +1023,12 @@ let expected = preprocess
 -- NOTE(larshum, 2022-09-15): Test that the expressions are equal and that the
 -- let-bodies are given equivalent types.
 utest liftLambdas types with expected using eqExpr in
+
+let nestedUtest = preprocess (bindall_ [
+  ulet_ "f" (ulam_ "x" (
+    utest_ (var_ "x") (int_ 0) (
+    addi_ (var_ "x") (int_ 1))))
+]) in
+utest liftLambdas nestedUtest with nestedUtest using eqExpr in
 
 ()
