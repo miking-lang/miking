@@ -14,17 +14,21 @@ To produce a shell with Miking itself, use the following command.
 
     $ nix-shell -A miking-shell
 
+To support native compilation, ocaml, findlib, dune and a C compiler must also be added to the environment.
+
 ## Guix package definition
 
 `miking.scm` contains a package definition of Miking for the [Guix](https://guix.gnu.org) package manager.
 
 For users of Guix, a shell containing all development inputs for Miking can be produced by running the following command from this directory.
 
-    $ guix shell -L . -D miking
+    $ guix shell -L . -D -f miking.scm
 
 To produce a shell with Miking itself, use the following command.
 
-    $ guix shell -L . miking
+    $ guix shell -L . -f miking.scm
+
+To support native compilation, ocaml, findlib, dune and a C compiler must also be added to the environment.
 
 ## Self-contained tarball script
 
