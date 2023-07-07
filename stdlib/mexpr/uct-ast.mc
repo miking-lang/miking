@@ -104,7 +104,7 @@ lang OpImplAst = Ast
 end
 
 lang OpVarAst = Ast
-  type TmOpVarRec = {ident : Name, ty : Type, info : Info, frozen : Bool, reprs : [Repr], scaling : OpCost}
+  type TmOpVarRec = {ident : Name, ty : Type, info : Info, frozen : Bool, scaling : OpCost}
   syn Expr =
   | TmOpVar TmOpVarRec
 
@@ -155,6 +155,9 @@ lang ReprDeclAst = Ast
     match f acc x.pat with (acc, pat) in
     match f acc x.repr with (acc, repr) in
     (acc, TmReprDecl {x with pat = pat, repr = repr})
+end
+
+lang UCTAst = CollTypeAst + OpDeclAst + OpImplAst + OpVarAst + ReprDeclAst + TyWildAst
 end
 
 type CollectedImpl =

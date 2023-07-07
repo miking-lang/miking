@@ -41,17 +41,18 @@ lang MCoreCompile =
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
   SpecializeCompile +
   UCTFragments +
-  CollectImpls +
   DumpUCTProblem +
   PrintMostFrequentRepr +
-  PprintTyAnnot + HtmlAnnotator +
-  UCTSolveAndReconstruct + UCTDummySolver
+  PprintTyAnnot + HtmlAnnotator
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + UCTFragments + MetaVarTypePrettyPrint
 end
 
 lang CollectUCTImpls = CollectImpls + MExprConvertImpl + MExprEval + MExprPrettyPrint
+end
+
+lang MExprUCTComposedSolver = UCTComposedSolver + MExprAst + UCTAst
 end
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
@@ -84,7 +85,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     endPhaseStats log "symbolize" ast;
 
     -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    writeFile "out1.html" (pprintAst ast);
+    -- writeFile "out1.html" (pprintAst ast);
 
     let ast = demoteRecursive ast in
     endPhaseStats log "demote-recursive" ast;
@@ -96,20 +97,21 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
        endPhaseStats log "debug-type-check" ast
      else ());
 
+    -- writeFile "out1.html" (pprintAst ast);
+
     let ast = use MExprUCTAnalysis in typeCheckLeaveMeta ast in
     endPhaseStats log "uct-analysis" ast;
 
-    dumpUCTProblem 0 ast;
-    exit 0;
+    -- dumpUCTProblem 0 ast;
 
-    let ast = uctSolve (initSolverState ()) ast in
+    let ast = use MExprUCTComposedSolver in uctSolve (initSolverState ()) ast in
     endPhaseStats log "uct-solve" ast;
 
     let ast = removeMetaVarExpr ast in
     endPhaseStats log "remove-ty-flex" ast;
 
     -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    writeFile "out2.html" (pprintAst ast);
+    -- writeFile "out2.html" (pprintAst ast);
 
     -- (match findMostCommonRepr ast with Some sym then
     --   printIfExprHasRepr sym ast;
@@ -118,7 +120,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
 
     -- let ast = solveUCTs ast in
     -- endPhaseStats log "solve-ucts" ast;
-    exit 0;
+    -- exit 0;
 
     let ast = compileSpecialize ast in
 
@@ -203,7 +205,7 @@ let compile = lam files. lam options : Options. lam args.
   match partition (lam f. match f with _ ++ ".imc" then true else false) files
   with (implFiles, files) in
   let impls = foldl
-    (lam acc. lam f. mergeImplData acc (collectImpls f))
+    (lam acc. lam f. mergeImplData acc (use CollectUCTImpls in collectImpls f))
     emptyImplData
     implFiles in
   if options.accelerate then compileAccelerate files options args

@@ -35,6 +35,7 @@ include "builtin.mc"
 include "eval.mc"
 include "cp/high-level.mc"
 include "mexpr/annotate.mc"
+include "multicore/promise.mc"
 
 lang AnnotateSimple = HtmlAnnotator + AnnotateSources
 end
@@ -604,7 +605,7 @@ lang LetUCTAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDe
           [ { selfCost = 1.0
             , body = body
             , specType = tyBody
-            , delayedReprUnifications = delayedReprUnifications  -- TODO(vipa, 2023-06-15): see if these can be simplified (transitivity, duplicates)
+            , delayedReprUnifications = delayedReprUnifications
             }
           ]
         , inexpr = inexpr
@@ -796,13 +797,11 @@ lang VarUCTAnalysis = TypeCheck + VarAst + OpVarAst + UCTHelpers + SubstituteNew
         -- NOTE(vipa, 2023-06-16): We're looking at an operator,
         -- insert new reprs and record this fact
         let ty = substituteNewReprs env ty in
-        let reprs = findReprs [] ty in
         TmOpVar
           { ident = t.ident
           , ty = ty
           , info = t.info
           , frozen = t.frozen
-          , reprs = reprs
           , scaling = 1.0
           }
       else TmVar {t with ty = ty}
@@ -815,8 +814,36 @@ lang VarUCTAnalysis = TypeCheck + VarAst + OpVarAst + UCTHelpers + SubstituteNew
       errorSingle [t.info] msg
 end
 
+lang OpImplUCTAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + UCTHelpers + ApplyReprSubsts
+  sem typeCheckExpr env =
+  | TmOpImpl x ->
+    let typeCheckAlt = lam env. lam alt.
+      let newLvl = addi 1 env.currentLvl in
+      let specType = substituteNewReprs env alt.specType in
+      let newEnv = {env with currentLvl = newLvl} in
+      let reprType = applyReprSubsts newEnv specType in
+      match stripTyAll reprType with (vars, reprType) in
+      let newTyVars = foldr (lam v. mapInsert v.0 newLvl) newEnv.tyVarEnv vars in
+      let newEnv = {newEnv with tyVarEnv = newTyVars} in
+      match captureDelayedReprUnifications newEnv
+        (lam. typeCheckExpr newEnv alt.body)
+        with (body, delayedReprUnifications) in
+      unify newEnv [infoTy reprType, infoTm body] reprType (tyTm body);
+      {alt with body = body, delayedReprUnifications = delayedReprUnifications, specType = specType}
+    in
+    match withNewReprScope env (lam env. map (typeCheckAlt env) x.alternatives)
+      with (alternatives, reprScope, []) in
+    let inexpr = typeCheckExpr env x.inexpr in
+    TmOpImpl
+    { x with alternatives = alternatives
+    , reprScope = reprScope
+    , inexpr = inexpr
+    , ty = tyTm inexpr
+    }
+end
+
 -- NOTE(vipa, 2023-06-26): The UCT analysis is essentially
--- type-checking, except we want actual /type-checking/, not
+-- type-checking, except we want actual type-/checking/, not
 -- inference; we want to have precise type annotations to start. We
 -- thus replace the type-checking of AST nodes with a tyAnnot field
 -- with a version that uses the inferred field instead (TmLam, TmLet,
@@ -829,10 +856,10 @@ end
 --
 -- Finally, we replace the TmVars that reference TmOpDecls with
 -- TmOpVars.
-lang UCTAnalysis = LamUCTAnalysis + LetUCTAnalysis + RecLetsUCTAnalysis + VarUCTAnalysis
+lang UCTAnalysis = LamUCTAnalysis + LetUCTAnalysis + RecLetsUCTAnalysis + VarUCTAnalysis + OpImplUCTAnalysis
 end
 
-lang MExprUCTAnalysis = MExprTypeCheckMost + UCTAnalysis + MExprPrettyPrint
+lang MExprUCTAnalysis = MExprTypeCheckMost + UCTAnalysis + MExprPrettyPrint + UCTPrettyPrint
 end
 
 lang UCTFragments = CollTypeAst + CollTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + UCTPrettyPrint + UCTKeywordMaker + MExprConvertImpl
@@ -854,11 +881,13 @@ lang UCTSolverInterface = OpVarAst
     , delayedReprUnifications : [(Repr, Repr)]
     , selfCost : OpCost
     , specType : Type
+    , reprScope : Int
+    , info : Info
     -- NOTE(vipa, 2023-07-06): A token used by the surrounding system
     -- to carry data required to reconstruct a solved AST.
     , token : a
     }
-  sem solveOne : all a. SolverState -> [UCTProblemAlt a] -> OpImplSolutionSet a
+  sem solveOne : all a. SolverState -> Option (OpImplSolutionSet a) -> [UCTProblemAlt a] -> OpImplSolutionSet a
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`
@@ -875,32 +904,6 @@ lang UCTSolverInterface = OpVarAst
   sem cmpSolution : all a. OpImplSolution a -> OpImplSolution a -> Int
 end
 
-lang UCTDummySolver = UCTSolverInterface
-  syn SolverState =
-  | DummyState ()
-  sem initSolverState = | _ -> DummyState ()
-
-  syn OpImplSolutionSet a =
-  | DummySet ([OpImplSolution a], a)
-
-  syn OpImplSolution a =
-  | DummySolution ([OpImplSolution a], a)
-
-  sem solveOne st = | [alt] ++ _ -> DummySet
-    ( map (lam info. cheapestSolution info.solutionSet) alt.opUses
-    , alt.token
-    )
-
-  sem concretizeSolution =
-  | DummySolution (solutions, token) ->
-    (token, solutions)
-
-  sem cheapestSolution =
-  | DummySet x -> DummySolution x
-
-  sem cmpSolution a = | b -> 0
-end
-
 lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + CollTypeAst
   sem uctSolve : SolverState -> Expr -> Expr
   sem uctSolve st = | tm ->
@@ -911,8 +914,10 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
       , selfCost = 1.0
       , token = tm
       , specType = tyTm tm
+      , reprScope = 0
+      , info = infoTm tm
       } in
-    let topSolutionSet = solveOne st [alt] in
+    let topSolutionSet = solveOne st (None ()) [alt] in
     match concretizeSolution (cheapestSolution topSolutionSet) with (tm, pickedSolutions) in
     match concretizeAlt (mapEmpty nameCmp) pickedSolutions tm with ([], tm) in
     tm
@@ -929,8 +934,7 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
     else
       let msg = join [
         "* Encountered an operation without preceeding impl: ",
-        nameGetStr x.ident, "\n",
-        "* When collecting op uses for\n"
+        nameGetStr x.ident, "\n"
       ] in
       errorSingle [x.info] msg
   | TmOpImpl x ->
@@ -939,9 +943,11 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
       , delayedReprUnifications = alt.delayedReprUnifications
       , selfCost = alt.selfCost
       , specType = alt.specType
+      , reprScope = x.reprScope
       , token = alt.body
+      , info = infoTm alt.body
       } in
-    let solutionSet = solveOne st (map mkAlt x.alternatives) in
+    let solutionSet = solveOne st (mapLookup x.ident env) (map mkAlt x.alternatives) in
     let env = mapInsert x.ident solutionSet env in
     workAltBody st env opUses x.inexpr
 
@@ -1013,6 +1019,392 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
       , info = infoTm inexpr
       } in
     (pickedSolutions, mapFoldWithKey mkLet inexpr (deref concretizations))
+end
+
+lang UCTDummySolver = UCTSolverInterface
+  syn SolverState =
+  | DummyState ()
+  sem initSolverState = | _ -> DummyState ()
+
+  syn OpImplSolutionSet a =
+  | DummySet ([OpImplSolution a], a)
+
+  syn OpImplSolution a =
+  | DummySolution ([OpImplSolution a], a)
+
+  sem solveOne st prev = | [alt] ++ _ -> DummySet
+    ( map (lam info. cheapestSolution info.solutionSet) alt.opUses
+    , alt.token
+    )
+
+  sem concretizeSolution =
+  | DummySolution (solutions, token) ->
+    (token, solutions)
+
+  sem cheapestSolution =
+  | DummySet x -> DummySolution x
+
+  sem cmpSolution a = | b -> 0
+end
+
+lang TyPatMatching = Unify + Generalize + UCTHelpers + WildToMeta
+  type Links =
+    { meta : Map Name Type
+    , repr : [(Repr, Repr)]
+    }
+
+  sem tyPatMatches : {ty : Type, pat : Type} -> Option Links
+  sem tyPatMatches = | {ty = ty, pat = pat} ->
+    recursive let findMetas = lam metas. lam ty.
+      let ty = unwrapType ty in
+      match ty with TyMetaVar x then
+        match deref x.contents with Unbound x in
+        setInsert x.ident metas
+      else sfold_Type_Type findMetas metas ty in
+    let cmpRepr = lam a. lam b.
+      match (deref (botRepr a), deref (botRepr b)) with (BotRepr a, BotRepr b) in
+      subi (sym2hash a.sym) (sym2hash b.sym) in
+    let rigidMetas = findMetas (setEmpty nameCmp) ty in
+    -- NOTE(vipa, 2023-08-18): TyWild in `ty` should be matched by
+    -- anything in the pattern. We achieve this by turning them into
+    -- meta-vars *without* putting them in `rigidMetas`, i.e., it's ok
+    -- to unify them with anything.
+    let ty = wildToMeta 0 ty in
+    let pat = inst (NoInfo ()) 0 pat in
+    let env : UnifyEnv =
+      { wrappedLhs = ty
+      , wrappedRhs = pat
+      , boundNames = biEmpty
+      } in
+    let emptyLinks = { meta = mapEmpty nameCmp, repr = [] } in
+    recursive let unwrapTypeWith = lam links. lam ty. switch unwrapType ty
+      case ty & TyMetaVar x then
+        match deref x.contents with Unbound x in
+        match mapLookup x.ident links with Some ty
+        then unwrapTypeWith links ty
+        else ty
+      case ty then
+       ty
+      end in
+    let inductConsume
+      : all acc. all a. all w. all e. (acc -> a -> Result w e (acc, [a])) -> acc -> [a] -> Result w e acc
+      = lam f.
+        recursive let work = lam acc. lam remaining.
+          match remaining with [x] ++ remaining then
+            result.bind (f acc x) (lam pair. match pair with (acc, new) in work acc (concat remaining new))
+          else result.ok acc
+        in work
+    in
+    let work = lam links. lam obl. switch obl
+      case TypeUnification u then
+        switch (unwrapTypeWith links.meta u.left, unwrapTypeWith links.meta u.right)
+        case (lTy & TyMetaVar l, rTy & TyMetaVar r) then
+          match (deref l.contents, deref r.contents) with (Unbound lc, Unbound rc) in
+          if nameEq lc.ident rc.ident then result.ok (links, []) else
+          let lRigid = setMem lc.ident rigidMetas in
+          let rRigid = setMem rc.ident rigidMetas in
+          if and lRigid rRigid then result.err (Types (u.left, u.right)) else
+          let src = if lRigid then rc.ident else lc.ident in
+          let dst = if lRigid then lTy else rTy in
+          let links = {links with meta = mapInsert src dst links.meta} in
+          result.ok (links, [])
+        case (mTy & TyMetaVar meta, ty) | (ty, mTy & TyMetaVar meta) then
+          match deref meta.contents with Unbound x in
+          if setMem x.ident rigidMetas then result.err (Types (mTy, ty)) else
+          let links = {links with meta = mapInsert x.ident ty links.meta} in
+          result.ok (links, [])
+        case pair then
+          result.map (lam x. (links, x)) (unifyTypes u.env pair)
+        end
+      case ReprUnification u then
+        let links = {links with repr = snoc links.repr (u.left, u.right)} in
+        result.ok (links, [])
+      end
+    in result.toOption (inductConsume work emptyLinks [TypeUnification {env = env, left = ty, right = pat}])
+end
+
+lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLevel
+  syn SolverState =
+  | CPState ()
+  sem initSolverState = | _ -> CPState ()
+
+  type ReprUniMap =
+    { assignments : Map Symbol (Either Name Repr)
+    , reprScopes : Map Symbol Int
+    }
+
+  type CPSol a =
+    { cost : OpCost
+    , specType : Type
+    , reprAssignments : ReprUniMap
+    , innerSolutions : [OpImplSolution a]
+    , idx : Int
+    , token : a
+    }
+
+  syn OpImplSolutionSet a =
+  | CPSolutionSet (Promise [CPSol a])
+
+  syn OpImplSolution a =
+  | CPSolution (CPSol a)
+
+  sem emptyReprUniMap : () -> ReprUniMap
+  sem emptyReprUniMap = | _ ->
+    { assignments = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+    , reprScopes = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+    }
+
+  sem derefRepr : ReprUniMap -> Repr -> Either Name Repr
+  sem derefRepr links = | repr ->
+    let repr = botRepr repr in
+    match deref repr with BotRepr r then
+      switch mapLookup r.sym links.assignments
+      case Some (x & Left _) then x
+      case Some (Right repr) then derefRepr links repr
+      case None _ then Right repr
+      end
+    else Right repr
+
+  sem derefReprSym : ReprUniMap -> Symbol -> Either Name Symbol
+  sem derefReprSym links = | sym ->
+    let reprToSym = lam x. match deref (botRepr x) with BotRepr x in x.sym in
+    match mapLookup sym links.assignments with Some e then
+      eitherMapRight reprToSym (eitherBindRight e (derefRepr links))
+    else Right sym
+
+  sem linkUnify : ReprUniMap -> Either Name Repr -> Either Name Repr -> Option ReprUniMap
+  sem linkUnify links a = | b ->
+    switch (eitherBindRight a (derefRepr links), eitherBindRight b (derefRepr links))
+    case (Left a, Left b) then
+      if nameEq a b then Some links else None ()
+    case (dst & Left _, Right r) | (Right r, dst & Left _) then
+      (match deref r with x & !BotRepr _ then dprintLn x else ());
+      match deref r with BotRepr x in
+      let links = {links with assignments = mapInsert x.sym dst links.assignments} in
+      let links = {links with reprScopes = mapInsert x.sym x.scope links.reprScopes} in
+      Some links
+    case (Right aref, Right bref) then
+      match (deref aref, deref bref) with (BotRepr a, BotRepr b) in
+      if eqsym a.sym b.sym then Some links else
+      let dst = if gti a.scope b.scope then aref else bref in
+      let src = if gti a.scope b.scope then b else a in
+      Some
+      { assignments = mapInsert src.sym (Right dst) links.assignments
+      , reprScopes = mapInsert src.sym src.scope links.reprScopes
+      }
+    end
+
+  sem mergeReprUnis : ReprUniMap -> ReprUniMap -> Option ReprUniMap
+  sem mergeReprUnis l = | r ->
+    let rSymToRepr : Symbol -> Repr = lam sym. ref (BotRepr {scope = mapFindExn sym r.reprScopes, sym = sym}) in
+    let insertOne = lam acc. lam pair. linkUnify acc (Right (rSymToRepr pair.0)) pair.1 in
+    optionFoldlM insertOne l (mapBindings r.assignments)
+
+  sem solveOne st prev = | alts ->
+    match prev with Some _ then
+      errorSingle [] "[panic] The cp-based UCT solver currently assumes all opimpls are merged into one op-impl"
+    else
+    let promise = promiseMkThread_ (lam.
+      let f = lam alt.
+        let emptyAssignments = emptyReprUniMap () in
+
+        -- NOTE(vipa, 2023-08-11): Move delayedReprUnifications to
+        -- reprAssignments
+        let reprAssignments = optionFoldlM
+          (lam acc. lam pair. linkUnify acc (Right pair.0) (Right pair.1))
+          emptyAssignments
+          alt.delayedReprUnifications in
+
+        -- NOTE(vipa, 2023-08-11): Pull substitutions from the
+        -- type-signature and add to reprAssignments
+        recursive let applySubsts = lam oLinks. lam ty.
+          let oLinks = match ty with TyColl {repr = r, explicitSubst = Some subst, info = info}
+            then optionBind oLinks (lam links. (match deref (botRepr r) with x & !BotRepr _ then errorSingle [info] "blub" else ()); linkUnify links (Right r) (Left subst))
+            else oLinks in
+          match ty with TyAlias x then applySubsts oLinks x.content else
+          sfold_Type_Type applySubsts oLinks ty in
+        let reprAssignments = match applySubsts reprAssignments alt.specType
+          with Some x then x
+          else errorSingle [alt.info] (strJoin "\n"
+            [ "This impl makes conflicting substitutions of a repr"
+            , "and is thus never valid, regardless of what other"
+            , "implementations are available."
+            ]) in
+
+        -- NOTE(vipa, 2023-08-11): Collect Repr's that are in the type
+        -- signature of the alt, which are thus externally visible
+        -- even though their reprScope might be in the current alt or
+        -- further down.
+        let signatureReprs : Set Symbol = foldl
+          (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
+          (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+          (findReprs [] alt.specType) in
+
+        -- NOTE(vipa, 2023-08-11): Go through the opUses and filter
+        -- out alternatives that cannot be relevant for this impl
+        let f = lam idx. lam opUse.
+          let f = lam sol.
+            let solReprAssignments = optionBind
+              (tyPatMatches {ty = opUse.app.ty, pat = sol.specType})
+              (lam links. optionFoldlM
+                (lam acc. lam pair. linkUnify acc (Right pair.0) (Right pair.1))
+                sol.reprAssignments
+                links.repr) in
+            -- NOTE(vipa, 2023-08-11): Check that the sol is
+            -- consistent with the overarching assignments of the alt
+            let solReprAssignments = optionAnd
+              solReprAssignments
+              (optionBind solReprAssignments (mergeReprUnis reprAssignments)) in
+            optionMap
+              (lam reprAssignments. {sol with reprAssignments = reprAssignments})
+              solReprAssignments
+          in
+          let solutionSet = match opUse.solutionSet with CPSolutionSet prom in promiseForce prom in
+          { app = opUse.app
+          , solutionSet = mapOption f solutionSet
+          , idxes = setInsert idx (setEmpty subi)
+          }
+        in
+        let opUses = mapi f alt.opUses in
+        if any (lam opUse. null opUse.solutionSet) opUses then
+          printError (join [info2str alt.info, ": an op-use has no viable alternatives, thus this alt is dead.\n"]);
+          flushStderr ();
+          []
+        else
+        -- TODO(vipa, 2023-08-11): At this point `any (lam opUse. null
+        -- opUse.solutionSet) opUses` implies no solutions for this
+        -- alt, so we could shortcut here
+
+        -- TODO(vipa, 2023-08-11): This is the place to insert
+        -- deduplication of opUses, by merging them and doing
+        -- `setUnion` on the `idxes` field. Reprs that are merged
+        -- during deduplication should be unified via reprAssignments
+
+        let solutions =
+          printError (join ["Starting to construct model, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
+          flushStderr ();
+          let m = newModel () in
+          let cmpSol = lam a. lam b. subi a.idx b.idx in
+          let reprTy = m.newEnumType nameCmp in
+          let getReprSymVar : Symbol -> COPExpr =
+            let reprMap : Ref (Map Symbol COPExpr) = ref (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))) in
+            let newReprVar = lam sym.
+              let expr = m.var (m.newVar reprTy "repr") in
+              modref reprMap (mapInsert sym expr (deref reprMap));
+              expr in
+            lam sym. mapLookupOrElse (lam. newReprVar sym) sym (deref reprMap) in
+          let uniMapToPredicate = lam uniMap.
+            let keys = mapKeys uniMap.assignments in
+            let mkEq = lam key.
+              let l = derefReprSym reprAssignments key in
+              let r = eitherBindRight (derefReprSym uniMap key) (derefReprSym reprAssignments) in
+              if eitherEq nameEq eqsym l r then None () else
+              let toCOPExpr = eitherEither (m.enum reprTy) getReprSymVar in
+              Some (m.eq (toCOPExpr l) (toCOPExpr r)) in
+            m.andMany (mapOption mkEq keys)
+          in
+          let cost : Ref [COPExpr] = ref [m.float alt.selfCost] in
+          let addCost : COPExpr -> () = lam c. modref cost (snoc (deref cost) c) in
+          let useToVar = lam opUse.
+            let ident = opUse.app.ident in
+            let opTy = m.newEnumType cmpSol in
+            m.registerValues opTy (setOfSeq cmpSol opUse.solutionSet);
+            let var = m.newVar opTy (nameGetStr ident) in
+            -- NOTE(vipa, 2023-08-16): `uniMapToPredicate` make create
+            -- new repr-vars as a side-effect, and since elimEnum is
+            -- lazy and might run to late we pre-run it here to ensure
+            -- the reprs are created.
+            iter (lam sol. uniMapToPredicate sol.reprAssignments; ()) opUse.solutionSet;
+            m.newConstraint (m.elimEnum opTy (m.var var) (lam sol. uniMapToPredicate sol.reprAssignments));
+            addCost (m.elimEnum opTy (m.var var) (lam sol. m.float (mulf opUse.app.scaling sol.cost)));
+            (opUse.idxes, var) in
+          let vars = map useToVar opUses in
+          let orderedVars = mapValues (foldl
+            (lam acc. lam pair. mapUnion acc (mapMap (lam. pair.1) pair.0))
+            (mapEmpty subi)
+            vars) in
+          let cost = m.addMany (deref cost) in
+          recursive let work = lam prevSolutions.
+            if gti (length prevSolutions) 5 then
+              errorSingle [alt.info] (join ["Found a surprising number of solutions for alt. Final model:\n", m.debugModel (), "\n"])
+            else
+            switch m.minimize cost
+            case COPSolution {objective = Some (COPFloat {val = cost})} then
+              -- NOTE(vipa, 2023-08-14): The CP-solver should
+              -- guarantee that this never fails
+              let combinedAssignments = optionGetOrElse (lam. never)
+                (optionFoldlM
+                  (lam acc. lam pair.
+                    let uniMap = (m.readVar pair.1).reprAssignments in
+                    mergeReprUnis acc uniMap)
+                  (emptyReprUniMap ())
+                  vars) in
+              -- NOTE(vipa, 2023-08-14): Filter reprAssignments by
+              -- externally visible reprs
+              let filterUniMapToExternals = lam uniMap.
+                let assignments = mapFoldWithKey
+                  (lam acc. lam sym. lam rhs.
+                    let keep =
+                      if setMem sym signatureReprs then true else
+                      optionMapOrElse (lam. never)
+                        (lam x. lti x alt.reprScope)
+                        (mapLookup sym uniMap.reprScopes) in
+                    if keep
+                    then mapInsert sym (eitherBindRight rhs (derefRepr uniMap)) acc
+                    else acc)
+                  (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+                  uniMap.assignments in
+                { assignments = assignments
+                , reprScopes = mapIntersectWith (lam l. lam. l) uniMap.reprScopes assignments
+                } in
+              let combinedAssignments = filterUniMapToExternals combinedAssignments in
+              -- NOTE(vipa, 2023-08-18): Assert that any later
+              -- solution must differ from this one in some externally
+              -- visible way
+              m.newConstraint (m.not (uniMapToPredicate combinedAssignments));
+              -- NOTE(vipa, 2023-08-18): Combine with the global
+              -- reprAssignments. We don't do that until now to avoid
+              -- introducing new repr variables to the model that are
+              -- unfixed by operations, since that will make us loop
+              -- forever.
+              let reprAssignments = filterUniMapToExternals
+                (optionGetOrElse (lam. never)
+                  (mergeReprUnis reprAssignments combinedAssignments)) in
+
+              let sol =
+                { cost = cost
+                , specType = alt.specType
+                , reprAssignments = reprAssignments
+                , innerSolutions = map (lam v. CPSolution (m.readVar v)) orderedVars
+                , idx = 0
+                , token = alt.token
+                }
+              in work (snoc prevSolutions sol)
+            case COPUnsat _ then
+              (if null prevSolutions then
+                 warnSingle [alt.info] (join ["Found no solutions for alt. Final model:\n", m.debugModel (), "\n"])
+               else
+                 printError (join ["solutions: ", int2string (length prevSolutions), ", info: ", info2str alt.info, "\n"]);
+                 flushStderr ());
+              prevSolutions
+            case COPError x then
+              errorSingle [alt.info] (concat "CP-solver error during UCT solving:\n" x.msg)
+            end
+          in work []
+        in solutions
+      in mapi (lam idx. lam sol. {sol with idx = idx}) (join (map f alts))
+    ) in CPSolutionSet promise
+
+  sem concretizeSolution =
+  | CPSolution sol -> (sol.token, sol.innerSolutions)
+
+  sem cheapestSolution =
+  | CPSolutionSet promise ->
+    let forced = promiseForce promise in
+    CPSolution (minOrElse (lam. errorSingle [] "Couldn't find an assignment of UCT collections, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
+end
+
+lang UCTComposedSolver = UCTSolveAndReconstruct + UCTSolveWithExhaustiveCP + MExprUnify
 end
 
 lang DumpUCTProblem = UCTFragments

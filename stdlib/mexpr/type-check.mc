@@ -237,8 +237,7 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
   sem unifyCheckBase env info boundVars tv =
   | TyVar t ->
     if not (setMem t.ident boundVars) then
-      match optionMap (lti tv.level) (mapLookup t.ident env.tyVarEnv) with
-        !Some false then
+      if optionMapOr true (lti tv.level) (mapLookup t.ident env.tyVarEnv) then
         let msg = join [
           "* Encountered a type variable escaping its scope: ",
           nameGetStr t.ident, "\n",
@@ -745,8 +744,7 @@ lang LetTypeCheck =
                   ty = tyTm inexpr}
 end
 
-
-lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta
+lang ApplyReprSubsts = TypeCheck + WildToMeta
   sem applyReprSubsts : TCEnv -> Type -> Type
   sem applyReprSubsts env =
   | ty & TyColl (x & {explicitSubst = Some subst}) ->
@@ -768,8 +766,13 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       ] in
       errorSingle [x.info] msg
   | TyAlias x -> TyAlias {x with content = applyReprSubsts env x.content}
+  | TyAll x ->
+    let newEnv = {env with tyVarEnv = mapInsert x.ident env.currentLvl env.tyVarEnv} in
+    TyAll { x with ty = applyReprSubsts newEnv x.ty }
   | ty -> smap_Type_Type (applyReprSubsts env) ty
+end
 
+lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta + ApplyReprSubsts
   sem typeCheckExpr env =
   | TmOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
@@ -784,22 +787,21 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         let ty = inst x.info newLvl ty in
         let ty = substituteNewReprs env ty in
         let specType = resolveType (infoTy alt.specType) env.tyConEnv alt.specType in
+        let specType = inst x.info newLvl specType in
         let specType = substituteNewReprs env specType in
         let specType = wildToMeta newLvl specType in
-        match stripTyAll specType with (vars, specType) in
         -- NOTE(vipa, 2023-07-03): This may do some unifications from
         -- substitutions, as a side-effect, so we do it here rather
         -- than later.
-        let reprType = applyReprSubsts env specType in
-        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
-        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
+        let newEnv = {env with currentLvl = newLvl} in
+        let reprType = applyReprSubsts newEnv specType in
         unify newEnv [opTypeInfo, specTypeInfo] ty specType;
         -- NOTE(vipa, 2023-06-30): Next we want to type-check the body
         -- of the impl against the strictest type signature we have
         -- available: `specType` after filling in wildcards and
         -- applying explicit repr substitutions. We get there by
         -- generalizing `reprType`, then stripping it.
-        match gen env.currentLvl (mapEmpty nameCmp) reprType with (reprType, _) in
+        match gen env.currentLvl (mapEmpty nameCmp) reprType with (reprType, genVars) in
         match stripTyAll reprType with (vars, reprType) in
         let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
@@ -807,7 +809,12 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
           (lam. typeCheckExpr newEnv (propagateTyAnnot (alt.body, reprType)))
           with (body, delayedReprUnifications) in
         unify newEnv [specTypeInfo, infoTm body] reprType (tyTm body);
-        {alt with body = body, delayedReprUnifications = delayedReprUnifications} in
+
+        -- NOTE(vipa, 2023-08-15): Later analysis requires that
+        -- `specType` references the reprs that exist in the alt-body,
+        -- thus we generalize it here
+        match gen env.currentLvl (mapFromSeq nameCmp genVars) specType with (specType, _) in
+        {alt with body = body, delayedReprUnifications = delayedReprUnifications, specType = specType} in
       match withNewReprScope env (lam env. map (typeCheckAlt env) x.alternatives)
         with (alternatives, reprScope, []) in
       let inexpr = typeCheckExpr env x.inexpr in
@@ -1197,10 +1204,10 @@ lang MExprTypeCheckMost =
   MetaVarTypePrettyPrint +
 
   -- UCT related things
-  OpImplTypeCheck + OpDeclTypeCheck + ReprDeclTypeCheck
+  OpDeclTypeCheck + ReprDeclTypeCheck
 end
 
-lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar
+lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar + OpImplTypeCheck
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it
