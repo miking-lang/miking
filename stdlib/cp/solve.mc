@@ -19,6 +19,7 @@ lang COPSolve = COP + COPPrettyPrint
       solution: Map Name COPVarValue,
       objective: Option COPVarValue
     }
+  | COPUnsat ()
   | COPError {msg: String}
 
   sem solve: COPModel -> COPSolverResult
@@ -37,6 +38,7 @@ lang COPSolve = COP + COPPrettyPrint
         "-o", outputFile,
         "--output-objective",
         "--solver", "gecode",
+        "--unsat-msg", "!UNSAT!",
         modelFile
       ] "" ""
     with (elapsed, {stdout = stdout, stderr = stderr, returncode = returncode}) in
@@ -51,6 +53,18 @@ lang COPSolve = COP + COPPrettyPrint
     in
     -- Read the result back
     let res =
+      let unsat =
+        if isPrefix eqc "!UNSAT!" stdout then true else
+        if fileExists outputFile then
+          -- OPT(vipa, 2023-08-16): This is inconvenient, minizinc
+          -- seems to vary where it puts the unsat message, sometimes
+          -- on stdout, sometimes in the output file. This means we
+          -- read the file twice right now, we should refactor to
+          -- avoid that. Maybe use --json-stream instead of
+          -- --output-mode, and skipping --output-to-file?
+          isPrefix eqc "!UNSAT!" (readFile outputFile)
+        else false in
+      if unsat then COPUnsat () else
       match _parseResult outputFile with Some resMap then
         -- Build a map with relevant variables
         let m: Option (Map Name COPVarValue) =

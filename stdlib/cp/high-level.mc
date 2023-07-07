@@ -23,6 +23,15 @@ lang COPHighLevel = COPSolve
       } in
     pprintCOPDomain env dom
 
+  syn COPExpr =
+  -- NOTE(vipa, 2023-08-16): Again, we'd prefer to store the `COPType
+  -- a` here, but we cannot
+  | COPDeferredElim { buildExpr : () -> COPExpr }
+
+  sem pprintCOPExpr env =
+  | COPDeferredElim x ->
+    pprintCOPExpr env (x.buildExpr ())
+
   -- NOTE(vipa, 2023-04-24): This should be considered opaque
   type COPVar a =
     { domain : Option (Set a)
@@ -51,6 +60,8 @@ lang COPHighLevel = COPSolve
     , maximize : COPExpr -> COPSolverResult
     -- Reading variables after solving. Fails if no solution has been found.
     , readVar : all a. COPVar a -> a
+
+    , debugModel : () -> String
 
     -- Types and variables
     , boolTy : COPType Bool
@@ -144,6 +155,16 @@ lang COPHighLevel = COPSolve
       else COPDomainDeferredEnum { numValues = lam. length (deref x.alternatives).1 } in
     COPVarDecl { id = name, domain = domain }
 
+  sem mkDeferredElim : all a. COPExpr -> (a -> COPExpr) -> COPType a -> () -> COPExpr
+  sem mkDeferredElim scrutinee f =
+  | COPTypeEnum x ->
+    let work = lam x. lam acc. COPExprIfThenElse
+      { cond = COPExprEq {left = scrutinee, right = COPExprInt {value = x.1}}
+      , ifTrue = f x.0
+      , ifFalse = acc
+      } in
+    lam. match mapBindings (deref x.alternatives).0 with alts ++ [(a, _)] in foldr work (f a) alts
+
   sem newModel : () -> API
   sem newModel = | _ ->
     let varUpdaters : Ref (Map Name (COPVarValue -> ())) = ref (mapEmpty nameCmp) in
@@ -175,10 +196,12 @@ lang COPHighLevel = COPSolve
       } in
     let api : API =
       { newVar =
-        let f : all a. COPType a -> String -> COPVar a = lam ty. lam name. mkVar name (None ()) ty
+        let f : all a. COPType a -> String -> COPVar a = lam ty. lam name.
+          mkVar name (None ()) ty
         in #frozen"f"
       , newConstrainedVar =
-        let f : all a. COPType a -> String -> Set a -> COPVar a = lam ty. lam name. lam dom. mkVar name (Some dom) ty
+        let f : all a. COPType a -> String -> Set a -> COPVar a = lam ty. lam name. lam dom.
+          mkVar name (Some dom) ty
         in #frozen"f"
       , newConstraint = lam constraint.
         modref decls (snoc (deref decls) (COPConstraintDeclExpr { constraint = constraint }))
@@ -201,6 +224,8 @@ lang COPHighLevel = COPSolve
           error "Called readVar on a variable without first finding a solution to its model."
         in #frozen"f"
 
+      , debugModel = lam. (pprintCOPModel (deref decls)).1
+
       , boolTy = COPTypeBool {}
       , intRangeTy = lam min. lam max. COPTypeInt { min = min, max = max }
       , newEnumType =
@@ -216,7 +241,8 @@ lang COPHighLevel = COPSolve
       , declPred = lam f : AddParam -> COPExpr. never
 
       , elimEnum =
-        let f : all a. COPType a -> COPExpr -> (a -> COPExpr) -> COPExpr = lam. never
+        let f : all a. COPType a -> COPExpr -> (a -> COPExpr) -> COPExpr = lam ty. lam scrutinee. lam mkBody.
+          COPDeferredElim { buildExpr = mkDeferredElim scrutinee mkBody ty }
         in #frozen"f"
       , enum =
         let f : all a. COPType a -> a -> COPExpr = lam ty. lam val.

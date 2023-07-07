@@ -16,12 +16,14 @@ lang COPPrettyPrintBase = COPAst + IdentifierPrettyPrint
   sem pprintCOPDomain: PprintEnv -> COPDomain -> (PprintEnv, String)
   sem pprintCOPExpr: PprintEnv -> COPExpr -> (PprintEnv, String)
 
-  -- NOTE(Linnea, 2023-02-08): Assumes that the base string of the name is a
-  -- valid MiniZinc identifier (not a MiniZinc keyword, etc.).
+  -- NOTE(vipa, 2023-08-16): Assumes that the base string of the name
+  -- is a valid MiniZinc identifier (only contains valid characters).
   sem pprintVarName : PprintEnv -> Name -> (PprintEnv, String)
   sem pprintVarName env =
   | name ->
     match pprintEnvGetStr env name with (env, str) in
+    -- NOTE(vipa, 2023-08-16): No minizinc keywords start with 'z',
+    -- thus this ensures we don't conflict with a keyword
     (env, cons 'z' str)
 end
 
@@ -206,6 +208,7 @@ lang COPExprAddPrettyPrint = COPPrettyPrintBase + COPExprAddAst
   sem pprintCOPExpr env =
   | COPExprAdd x ->
     match mapAccumL pprintCOPExpr env x.exprs with (env, exprs) in
+    if null exprs then (env, "0") else
     (env, join ["(", strJoin " + " exprs, ")"])
 end
 
@@ -221,6 +224,7 @@ lang COPExprMulPrettyPrint = COPPrettyPrintBase + COPExprMulAst
   sem pprintCOPExpr env =
   | COPExprMul x ->
     match mapAccumL pprintCOPExpr env x.exprs with (env, exprs) in
+    if null exprs then (env, "1") else
     (env, join ["(", strJoin " * " exprs, ")"])
 end
 
@@ -284,6 +288,7 @@ lang COPExprAndPrettyPrint = COPPrettyPrintBase + COPExprAndAst
   sem pprintCOPExpr env =
   | COPExprAnd x ->
     match mapAccumL pprintCOPExpr env x.exprs with (env, exprs) in
+    if null exprs then (env, "true") else
     (env, join ["(", strJoin " /\\ " exprs, ")"])
 end
 
@@ -291,6 +296,7 @@ lang COPExprOrPrettyPrint = COPPrettyPrintBase + COPExprOrAst
   sem pprintCOPExpr env =
   | COPExprOr x ->
     match mapAccumL pprintCOPExpr env x.exprs with (env, exprs) in
+    if null exprs then (env, "false") else
     (env, join ["(", strJoin " \\/ " exprs, ")"])
 end
 
