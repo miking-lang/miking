@@ -10,10 +10,20 @@ type Promise a =
 let _wrapAndMk : all a. (() -> a) -> (() -> (), Promise a) = lam f.
   let prom = {mutex = mutexCreate (), cond = condCreate (), value = ref (None ())} in
   let f = lam.
+    printError "pre _wrapAndMk f\n";
+    flushStderr ();
     let res = f () in
+    printError "pre-lock _wrapAndMk f\n";
+    flushStderr ();
     mutexLock prom.mutex;
+    printError "post-lock _wrapAndMk f\n";
+    flushStderr ();
     modref prom.value (Some res);
+    printError "pre-broadcast _wrapAndMk f\n";
+    flushStderr ();
     condBroadcast prom.cond;
+    printError "post-broadcast _wrapAndMk f\n";
+    flushStderr ();
     mutexRelease prom.mutex in
   (f, prom)
 
@@ -39,3 +49,12 @@ let promiseForce : all a. Promise a -> a = lam prom.
     condWait prom.cond prom.mutex;
     work ()
   in work ()
+
+
+-- Fake promises that don't actually suspend anything
+
+type Promise a = { val : a }
+
+let promiseMkThread_ : all a. (() -> a) -> Promise a = lam f. { val = f () }
+
+let promiseForce : all a. Promise a -> a = lam x. x.val
