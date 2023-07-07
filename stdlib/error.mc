@@ -286,19 +286,33 @@ let _partitionInfosByFile : [Info] -> [[Info]] = lam infos.
       mapInsertWith concat x.filename [info] acc
     else acc
   in mapValues (foldl work (mapEmpty cmpString) infos)
+
 let _die : all a. (Info, String) -> a = lam msg.
   printError (join ["\n", infoErrorString msg.0 msg.1, "\n"]);
   flushStderr ();
   exit 1
+let _warn : (Info, String) -> () = lam msg.
+  printError (join ["\n", infoWarningString msg.0 msg.1, "\n"]);
+  flushStderr ()
+
+let _general = lam f. lam sections. lam msg. f (errorMsg sections msg)
 let errorGeneral : all a. [ErrorSection] -> {single: String, multi: String} -> a
-  = lam sections. lam msg. _die (errorMsg sections msg)
+  = lam x. _general _die x
+
+let _single = lam f. lam infos. lam msg.
+  let mkSection = lam infos. {errorDefault with infos = infos} in
+  f (errorMsg (map mkSection (_partitionInfosByFile infos)) {single = msg, multi = ""})
 let errorSingle : all a. [Info] -> String -> a
-  = lam infos. lam msg.
-    let mkSection = lam infos. {errorDefault with infos = infos} in
-    _die (errorMsg (map mkSection (_partitionInfosByFile infos)) {single = msg, multi = ""})
+  = lam x. _single _die x
+let warnSingle : all a. [Info] -> String -> ()
+  = lam x. _single _warn x
+
+let _multi = lam f. lam sections. lam msg.
+  f (errorMsg (map (lam sec. {errorDefault with info = sec.0, msg = sec.1}) sections) {single = msg, multi = ""})
 let errorMulti : all a. [(Info, String)] -> String -> a
-  = lam sections. lam msg.
-    _die (errorMsg (map (lam sec. {errorDefault with info = sec.0, msg = sec.1}) sections) {single = msg, multi = ""})
+  = lam x. _multi _die x
+let warnMulti : all a. [(Info, String)] -> String -> ()
+  = lam x. _multi _warn x
 
 mexpr
 
