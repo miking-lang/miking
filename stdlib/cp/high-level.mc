@@ -19,7 +19,7 @@ lang COPHighLevel = COPSolve
   | COPDomainDeferredEnum x ->
     let dom = COPDomainIntRange
       { min = COPExprInt {value = 0}
-      , max = COPExprInt {value = subi (x.numValues ()) 1}
+      , max = COPExprInt {value = maxi 0 (subi (x.numValues ()) 1)}
       } in
     pprintCOPDomain env dom
 
@@ -125,7 +125,9 @@ lang COPHighLevel = COPSolve
   sem _decodeVar ref =
   | COPTypeEnum x -> lam var.
     match var with COPInt {val = v} in
-    let v = get (deref x.alternatives).1 v in
+    let alts = deref x.alternatives in
+    if null alts.1 then () else
+    let v = get alts.1 v in
     modref ref (Some v)
   | COPTypeBool _ -> lam var.
     match var with COPBool {val = v} in
