@@ -1503,7 +1503,7 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA
     initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
 
   | CTensorSubExn _ ->
-    utest length args with 2 in
+    utest length args with 3 in
     initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
 
 end
@@ -3834,6 +3834,59 @@ utest _test false t ["t1", "t2", "t3", "t4", "t5"] with [
   ("t3", ["x","y"]),
   ("t4", ["x","y"]),
   ("t5", ["x","y"])
+] using eqTestLam in
+
+-- Tensor
+let t = _parse "
+  let f = lam x. x in
+  let g = lam y. y in
+
+  let t1 = tensorCreateUninitInt [3,3] in
+  let t2 = tensorCreateUninitFloat [3,3] in
+  let t3 = tensorCreateCArrayInt [3,3] (lam i1. 1) in
+  let t4 = tensorCreateCArrayFloat [3,3] (lam f1. 1.0) in
+  let t5 = tensorCreateDense [3,3] (lam x1. f) in
+  let t6 = tensorGetExn t1 [0,0] in
+  let t7 = tensorGetExn t5 [0,0] in
+  let t8 = tensorLinearGetExn t2 0 in
+  let t9 = tensorLinearGetExn t5 0 in
+  let t10 = tensorReshapeExn t5 [1,9] in
+  let t11 = tensorCopy t10 in
+  let t12 = tensorTransposeExn t11 0 1 in
+  let t13 = tensorSliceExn t5 [0] in
+  let t14 = tensorSubExn t5 1 1 in
+  let t15 = tensorShape t14 in
+  let t16 = map (lam x2. g) t15 in
+  let t17 = get t16 0 in
+  let t18 = tensorLinearGetExn t12 0 in
+  let t19 = tensorLinearGetExn t13 0 in
+  let t20 = tensorLinearGetExn t14 0 in
+  ()
+------------------------" in
+utest _test false t
+  ["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10",
+   "t11","t12","t13","t14","t15","t16","t17","t18","t19","t20"]
+with [
+  ("t1",  []),
+  ("t2",  []),
+  ("t3",  []),
+  ("t4",  []),
+  ("t5",  []),
+  ("t6",  []),
+  ("t7",  ["x"]),
+  ("t8",  []),
+  ("t9",  ["x"]),
+  ("t10", []),
+  ("t11", []),
+  ("t12", []),
+  ("t13", []),
+  ("t14", []),
+  ("t15", []),
+  ("t16", []),
+  ("t17", ["y"]),
+  ("t18", ["x"]),
+  ("t19", ["x"]),
+  ("t20", ["x"])
 ] using eqTestLam in
 
 -----------------
