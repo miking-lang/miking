@@ -384,13 +384,12 @@ let test =
 let tensorFoldliSlice
   : all a. all b. (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t1.
-  let accr = ref acc in
-  tensorIterSlice
-    (lam i. lam t.
-      let acc = f (deref accr) i t in
-      modref accr acc)
-    t1;
-  deref accr
+  let s = head (tensorShape t1) in
+  recursive let rec = lam acc. lam i.
+    if eqi i s then acc else
+      let acc = f acc i (tensorSliceExn t1 [i]) in
+      rec acc (addi i 1)
+  in rec acc 0
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
