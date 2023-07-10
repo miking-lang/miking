@@ -1432,36 +1432,80 @@ lang RefOpCFA = CFA + ConstCFA + RefOpAst
 
 end
 
-lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
+lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA
+
   sem generateConstraintsConst info ident =
-  -- Contains simple values (int, float), that require no handling for the
-  -- basic analysis.
-  | CTensorCreateUninitInt _ -> []
-  | CTensorCreateUninitFloat _ -> []
-  | CTensorCreateInt _ -> []
-  | CTensorCreateFloat _ -> []
+  | ( CTensorCreateUninitInt _
+    | CTensorCreateUninitFloat _
+    | CTensorCreateInt _
+    | CTensorCreateFloat _
+    | CTensorCreate _
+    | CTensorGetExn _
+    | CTensorLinearGetExn _
+    | CTensorReshapeExn _
+    | CTensorCopy _
+    | CTensorTransposeExn _
+    | CTensorSliceExn _
+    | CTensorSubExn _
+    | CTensorShape _
+    ) & const -> [
+      CstrInit {
+        lhs = AVConst { id = ident, const = const, args = []}, rhs = ident
+      }
+    ]
 
-  | CTensorCreate _ -> []
-  | CTensorGetExn _ -> []
-  | CTensorLinearGetExn _ -> []
-  | CTensorReshapeExn _ -> []
-  | CTensorCopy _ -> []
-  | CTensorTransposeExn _ -> []
-  | CTensorSliceExn _ -> []
-  | CTensorSubExn _ -> []
+  | ( CTensorIterSlice _
+    | CTensorRank _
+    | CTensorEq _
+    | CTensorToString _ ) -> []
 
-  -- Returns simple values (unit, boolean, string) that require no handling for
-  -- the basic analysis.
-  | CTensorIterSlice _ -> []
-  | CTensorEq _ -> []
-  | CTensorToString _ -> []
-  | CTensorRank _ -> []
-  | CTensorShape _ -> []
-
-  -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
+  -- TODO(dlunde,2023-07-10): Mutability complicates the analysis, but could
   -- probably be added.
   -- | CTensorSetExn _ -> []
   -- | CTensorLinearSetExn _ -> []
+
+  sem propagateConstraintConst res args graph =
+  -- NOTE(2023-07-10,dlunde): We do not need to track integers and floats (at
+  -- least in the basic analysis) and can therefore just initialize empty AVSets
+  -- here.
+  | ( CTensorCreateUninitInt _
+    | CTensorCreateUninitFloat _
+    | CTensorShape _
+    | CTensorCreateInt _
+    | CTensorCreateFloat _ ) ->
+    let av: AbsVal = AVSet { names = setEmpty subi } in
+    initConstraint graph (CstrInit { lhs = av, rhs = res })
+
+  | CTensorCreate _ ->
+    utest length args with 2 in
+    initConstraint graph (
+      CstrSetMap2 { f = get args 1, names = setEmpty subi, res = res })
+
+  | ( CTensorGetExn _
+    | CTensorLinearGetExn _ ) ->
+    utest length args with 2 in
+    initConstraint graph (CstrSet { lhs = head args, rhs = res })
+
+  | CTensorReshapeExn _ ->
+    utest length args with 2 in
+    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+
+  | CTensorCopy _ ->
+    utest length args with 1 in
+    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+
+  | CTensorTransposeExn _ ->
+    utest length args with 3 in
+    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+
+  | CTensorSliceExn _ ->
+    utest length args with 2 in
+    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+
+  | CTensorSubExn _ ->
+    utest length args with 2 in
+    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+
 end
 
 lang BootParserCFA = CFA + ConstCFA + BootParserAst
