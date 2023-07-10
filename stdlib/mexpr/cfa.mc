@@ -685,15 +685,233 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
 
 end
 
-lang SeqCFA = CFA + BaseConstraint + SeqAst
+-- Abstract values representing sets/collections.
+lang SetCFA = CFA + LamCFA
 
   syn AbsVal =
-  -- Abstract representation of sequences. Contains a set of names that may
-  -- flow to the sequence.
-  | AVSeq { names: Set IName }
+  | AVSet { names: Set IName }
 
   sem cmpAbsValH =
-  | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
+  | (AVSet { names = lhs }, AVSet { names = rhs }) -> setCmp lhs rhs
+
+  sem absValToString im (env: PprintEnv) =
+  | AVSet { names = names } ->
+    match mapAccumL (pprintVarIName im) env (setToSeq names)
+    with (env,names) in
+    let names = strJoin ", " names in
+    (env, join ["[{", names, "}]"])
+
+  syn Constraint =
+  -- [{names}] ∈ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
+  | CstrSet {lhs : IName, rhs : IName}
+  -- [{names}] ∈ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
+  | CstrSetUnion {lhs : IName, rhs : IName, res : IName}
+  -- [{names}] ∈ seq ⇒ [{f n : n ∈ names}] ∈ res
+  | CstrSetMap1 {seq: IName, f: IName, res: IName}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
+  | CstrSetMap2 {f: IName, names: Set IName, res: IName}
+  -- CstrSetFold<n> constraints implement foldl when left = true, and foldr
+  -- otherwise
+  -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
+  -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
+  | CstrSetFold1 {seq: IName, f: IName, acc: IName, res: IName, left: Bool}
+  -- l: {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and c ⊆ res))
+  -- r: {lam x. b} ⊆ f ⇒ (names ⊆ x and {lam y. c} ⊆ b ⇒ (acc ⊆ y and c ⊆ res))
+  | CstrSetFold2 {f: IName, acc: IName, names: Set IName, res: IName, left: Bool}
+  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and b ⊆ res)
+  | CstrSetFold3 {f: IName, names: Set IName, res: IName}
+
+  sem cmpConstraintH =
+  | (CstrSet { lhs = lhs1, rhs = rhs1 },
+     CstrSet { lhs = lhs2, rhs = rhs2 }) ->
+     let d = subi lhs1 lhs2 in
+     if eqi d 0 then subi rhs1 rhs2
+     else d
+  | (CstrSetUnion { lhs = lhs1, rhs = rhs1, res = res1 },
+     CstrSetUnion { lhs = lhs2, rhs = rhs2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi lhs1 lhs2 in
+       if eqi d 0 then subi rhs1 rhs2
+       else d
+     else d
+  | (CstrSetMap1 { seq = seq1, f = f1, res = res1 },
+     CstrSetMap1 { seq = seq2, f = f2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi seq1 seq2 in
+       if eqi d 0 then subi f1 f2
+       else d
+     else d
+  | (CstrSetMap2 { f = f1, names = names1, res = res1 },
+     CstrSetMap2 { f = f2, names = names2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
+  | (CstrSetFold1 { seq = seq1, f = f1, acc = acc1, res = res1, left = l1 },
+     CstrSetFold1 { seq = seq2, f = f2, acc = acc2, res = res2, left = l2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi seq1 seq2 in
+       if eqi d 0 then
+         let d = subi acc1 acc2 in
+         if eqi d 0 then
+           let d = subi f1 f2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
+         else d
+       else d
+     else d
+  | (CstrSetFold2 { f = f1, acc = acc1, names = names1, res = res1, left = l1 },
+     CstrSetFold2 { f = f2, acc = acc2, names = names2, res = res2, left = l2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi acc1 acc2 in
+       if eqi d 0 then
+         let d = subi f1 f2 in
+         if eqi d 0 then
+           let d = setCmp names1 names2 in
+           if eqi d 0 then cmpBool l1 l2
+           else d
+         else d
+       else d
+     else d
+  | (CstrSetFold3 { f = f1, names = names1, res = res1 },
+     CstrSetFold3 { f = f2, names = names2, res = res2 }) ->
+     let d = subi res1 res2 in
+     if eqi d 0 then
+       let d = subi f1 f2 in
+       if eqi d 0 then setCmp names1 names2
+       else d
+     else d
+
+  sem initConstraint (graph: CFAGraph) =
+  | CstrSet r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrSetUnion r & cstr -> initConstraintName r.lhs graph cstr
+  | CstrSetMap1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSetMap2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSetFold1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSetFold2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSetFold3 r & cstr -> initConstraintName r.f graph cstr
+
+  sem constraintToString im (env: PprintEnv) =
+  | CstrSet { lhs = lhs, rhs = rhs } ->
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    (env, join [ "[{names}] ∈ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
+  | CstrSetUnion { lhs = lhs, rhs = rhs, res = res } ->
+    match pprintVarIName im env lhs with (env,lhs) in
+    match pprintVarIName im env rhs with (env,rhs) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
+      ])
+  | CstrSetMap1 { seq = seq, f = f, res = res } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, " n : n ∈ names}] ∈ ", res
+      ])
+  | CstrSetMap2 { f = f, names = names, res = res } ->
+    match pprintVarIName im env f with (env,f) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
+        "[{b}] ∈ ", res
+      ])
+  | CstrSetFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env acc with (env,acc) in
+    match pprintVarIName im env res with (env,res) in
+    let app = if left then [" ", acc, " n"] else [" n ", acc] in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ [{", f, join app, " : n ∈ names}] ∈ ", res
+      ])
+  | CstrSetFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env acc with (env,acc) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    let args =
+      if left then (acc, join ["{", strJoin ", " names, "}"])
+      else (join ["{", strJoin ", " names, "}"], acc) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ ", args.0, " ⊆ x AND ",
+        "{lam y. c} ⊆ b ⇒ ", args.1, " ⊆ y AND {c} ⊆ ", res
+      ])
+  | CstrSetFold3 { f = f, names = names, res = res } ->
+    match pprintVarIName im env f with (env,f) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ {", (strJoin ", " names), "} ⊆ x AND ",
+        "b ⊆ ", res
+      ])
+
+  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
+  | CstrSet { lhs = lhs, rhs = rhs } ->
+    match update.1 with AVSet { names = names } then
+      setFold (lam graph. lam name.
+          initConstraint graph (CstrDirect {lhs = name, rhs = rhs})
+        ) graph names
+    else graph
+  | CstrSetUnion { lhs = lhs, rhs = rhs, res = res } ->
+    match update.1 with AVSet { names = names } then
+      addData graph (AVSet {names = setInsert rhs names}) res
+    else graph
+  | CstrSetMap1 { seq = seq, f = f, res = res } ->
+    match update.1 with AVSet { names = names } then
+      initConstraint graph (CstrSetMap2 { f = f, names = names, res = res })
+    else graph
+  | CstrSetMap2 { f = f, names = names, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = x })
+        ) graph names in
+      -- Add [{b}] ⊆ res constraint
+      initConstraint graph (
+        CstrInit { lhs = AVSet {names = setOfSeq subi [b]}, rhs = res })
+    else graph
+  | CstrSetFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
+    match update.1 with AVSet { names = names } then
+      initConstraint graph (
+        CstrSetFold2 { f = f, acc = acc, names = names, res = res, left = left }
+      )
+    else graph
+  | CstrSetFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      if left then
+        -- Add acc ⊆ x constraint
+        let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = x }) in
+        initConstraint graph (CstrSetFold3 {f = b, names = names, res = res})
+      else
+        -- Add names ⊆ x constraint
+        let graph = setFold (lam graph. lam n.
+            initConstraint graph (CstrDirect { lhs = n, rhs = x })
+          ) graph names in
+        initConstraint graph (
+          CstrSetFold3 {f = b, names = setOfSeq subi [acc], res = res})
+    else graph
+  | CstrSetFold3 { f = f, names = names, res = res } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add names ⊆ x constraints
+      let graph = setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = x })
+        ) graph names in
+      -- Add b ⊆ res constraint
+      initConstraint graph (CstrDirect { lhs = b, rhs = res })
+    else graph
+
+end
+
+lang SeqCFA = CFA + BaseConstraint + SetCFA + SeqAst
 
   sem generateConstraints im =
   | TmLet { ident = ident, body = TmSeq t, info = info } ->
@@ -702,15 +920,9 @@ lang SeqCFA = CFA + BaseConstraint + SeqAst
         cons (name2int im t.info t.ident) acc
       else acc) [] t.tms
     in
-    let av: AbsVal = AVSeq { names = setOfSeq subi names } in
+    let av: AbsVal = AVSet { names = setOfSeq subi names } in
     [ CstrInit { lhs = av, rhs = name2int im info ident } ]
 
-  sem absValToString im (env: PprintEnv) =
-  | AVSeq { names = names } ->
-    match mapAccumL (pprintVarIName im) env (setToSeq names)
-    with (env,names) in
-    let names = strJoin ", " names in
-    (env, join ["[{", names, "}]"])
 end
 
 lang TypeCFA = CFA + TypeAst
@@ -1017,215 +1229,7 @@ lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
   | CEqsym _ -> []
 end
 
-lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
-
-  syn Constraint =
-  -- [{names}] ∈ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
-  | CstrSeq {lhs : IName, rhs : IName}
-  -- [{names}] ∈ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
-  | CstrSeqUnion {lhs : IName, rhs : IName, res : IName}
-  -- [{names}] ∈ seq ⇒ [{f n : n ∈ names}] ∈ res
-  | CstrSeqMap1 {seq: IName, f: IName, res: IName}
-  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
-  | CstrSeqMap2 {f: IName, names: Set IName, res: IName}
-  -- CstrSeqFold<n> constraints implement foldl when left = true, and foldr
-  -- otherwise
-  -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
-  -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
-  | CstrSeqFold1 {seq: IName, f: IName, acc: IName, res: IName, left: Bool}
-  -- l: {lam x. b} ⊆ f ⇒ (acc ⊆ x and {lam y. c} ⊆ b ⇒ (names ⊆ y and c ⊆ res))
-  -- r: {lam x. b} ⊆ f ⇒ (names ⊆ x and {lam y. c} ⊆ b ⇒ (acc ⊆ y and c ⊆ res))
-  | CstrSeqFold2 {f: IName, acc: IName, names: Set IName, res: IName, left: Bool}
-  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and b ⊆ res)
-  | CstrSeqFold3 {f: IName, names: Set IName, res: IName}
-
-  sem cmpConstraintH =
-  | (CstrSeq { lhs = lhs1, rhs = rhs1 },
-     CstrSeq { lhs = lhs2, rhs = rhs2 }) ->
-     let d = subi lhs1 lhs2 in
-     if eqi d 0 then subi rhs1 rhs2
-     else d
-  | (CstrSeqUnion { lhs = lhs1, rhs = rhs1, res = res1 },
-     CstrSeqUnion { lhs = lhs2, rhs = rhs2, res = res2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi lhs1 lhs2 in
-       if eqi d 0 then subi rhs1 rhs2
-       else d
-     else d
-  | (CstrSeqMap1 { seq = seq1, f = f1, res = res1 },
-     CstrSeqMap1 { seq = seq2, f = f2, res = res2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi seq1 seq2 in
-       if eqi d 0 then subi f1 f2
-       else d
-     else d
-  | (CstrSeqMap2 { f = f1, names = names1, res = res1 },
-     CstrSeqMap2 { f = f2, names = names2, res = res2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi f1 f2 in
-       if eqi d 0 then setCmp names1 names2
-       else d
-     else d
-  | (CstrSeqFold1 { seq = seq1, f = f1, acc = acc1, res = res1, left = l1 },
-     CstrSeqFold1 { seq = seq2, f = f2, acc = acc2, res = res2, left = l2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi seq1 seq2 in
-       if eqi d 0 then
-         let d = subi acc1 acc2 in
-         if eqi d 0 then
-           let d = subi f1 f2 in
-           if eqi d 0 then cmpBool l1 l2
-           else d
-         else d
-       else d
-     else d
-  | (CstrSeqFold2 { f = f1, acc = acc1, names = names1, res = res1, left = l1 },
-     CstrSeqFold2 { f = f2, acc = acc2, names = names2, res = res2, left = l2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi acc1 acc2 in
-       if eqi d 0 then
-         let d = subi f1 f2 in
-         if eqi d 0 then
-           let d = setCmp names1 names2 in
-           if eqi d 0 then cmpBool l1 l2
-           else d
-         else d
-       else d
-     else d
-  | (CstrSeqFold3 { f = f1, names = names1, res = res1 },
-     CstrSeqFold3 { f = f2, names = names2, res = res2 }) ->
-     let d = subi res1 res2 in
-     if eqi d 0 then
-       let d = subi f1 f2 in
-       if eqi d 0 then setCmp names1 names2
-       else d
-     else d
-
-  sem initConstraint (graph: CFAGraph) =
-  | CstrSeq r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrSeqUnion r & cstr -> initConstraintName r.lhs graph cstr
-  | CstrSeqMap1 r & cstr -> initConstraintName r.seq graph cstr
-  | CstrSeqMap2 r & cstr -> initConstraintName r.f graph cstr
-  | CstrSeqFold1 r & cstr -> initConstraintName r.seq graph cstr
-  | CstrSeqFold2 r & cstr -> initConstraintName r.f graph cstr
-  | CstrSeqFold3 r & cstr -> initConstraintName r.f graph cstr
-
-  sem constraintToString im (env: PprintEnv) =
-  | CstrSeq { lhs = lhs, rhs = rhs } ->
-    match pprintVarIName im env lhs with (env,lhs) in
-    match pprintVarIName im env rhs with (env,rhs) in
-    (env, join [ "[{names}] ∈ ", lhs, " ⇒ ∀n ∈ names: {n} ⊆ ", rhs ])
-  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
-    match pprintVarIName im env lhs with (env,lhs) in
-    match pprintVarIName im env rhs with (env,rhs) in
-    match pprintVarIName im env res with (env,res) in
-    (env, join [
-        "[{names}] ∈ ", lhs, " ⇒ [{names} ∪ { ", rhs," }] ⊆ ", res
-      ])
-  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
-    match pprintVarIName im env seq with (env,seq) in
-    match pprintVarIName im env f with (env,f) in
-    match pprintVarIName im env res with (env,res) in
-    (env, join [
-        "[{names}] ∈ ", seq, " ⇒ [{", f, " n : n ∈ names}] ∈ ", res
-      ])
-  | CstrSeqMap2 { f = f, names = names, res = res } ->
-    match pprintVarIName im env f with (env,f) in
-    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
-    match pprintVarIName im env res with (env,res) in
-    (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
-        "[{b}] ∈ ", res
-      ])
-  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
-    match pprintVarIName im env seq with (env,seq) in
-    match pprintVarIName im env f with (env,f) in
-    match pprintVarIName im env acc with (env,acc) in
-    match pprintVarIName im env res with (env,res) in
-    let app = if left then [" ", acc, " n"] else [" n ", acc] in
-    (env, join [
-        "[{names}] ∈ ", seq, " ⇒ [{", f, join app, " : n ∈ names}] ∈ ", res
-      ])
-  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
-    match pprintVarIName im env f with (env,f) in
-    match pprintVarIName im env acc with (env,acc) in
-    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
-    match pprintVarIName im env res with (env,res) in
-    let args =
-      if left then (acc, join ["{", strJoin ", " names, "}"])
-      else (join ["{", strJoin ", " names, "}"], acc) in
-    (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ ", args.0, " ⊆ x AND ",
-        "{lam y. c} ⊆ b ⇒ ", args.1, " ⊆ y AND {c} ⊆ ", res
-      ])
-  | CstrSeqFold3 { f = f, names = names, res = res } ->
-    match pprintVarIName im env f with (env,f) in
-    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
-    match pprintVarIName im env res with (env,res) in
-    (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ {", (strJoin ", " names), "} ⊆ x AND ",
-        "b ⊆ ", res
-      ])
-
-  sem propagateConstraint (update: (IName,AbsVal)) (graph: CFAGraph) =
-  | CstrSeq { lhs = lhs, rhs = rhs } ->
-    match update.1 with AVSeq { names = names } then
-      setFold (lam graph. lam name.
-          initConstraint graph (CstrDirect {lhs = name, rhs = rhs})
-        ) graph names
-    else graph
-  | CstrSeqUnion { lhs = lhs, rhs = rhs, res = res } ->
-    match update.1 with AVSeq { names = names } then
-      addData graph (AVSeq {names = setInsert rhs names}) res
-    else graph
-  | CstrSeqMap1 { seq = seq, f = f, res = res } ->
-    match update.1 with AVSeq { names = names } then
-      initConstraint graph (CstrSeqMap2 { f = f, names = names, res = res })
-    else graph
-  | CstrSeqMap2 { f = f, names = names, res = res } ->
-    match update.1 with AVLam { ident = x, body = b } then
-      -- Add names ⊆ x constraints
-      let graph = setFold (lam graph. lam n.
-          initConstraint graph (CstrDirect { lhs = n, rhs = x })
-        ) graph names in
-      -- Add [{b}] ⊆ res constraint
-      initConstraint graph (
-        CstrInit { lhs = AVSeq {names = setOfSeq subi [b]}, rhs = res })
-    else graph
-  | CstrSeqFold1 { seq = seq, f = f, acc = acc, res = res, left = left } ->
-    match update.1 with AVSeq { names = names } then
-      initConstraint graph (
-        CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left }
-      )
-    else graph
-  | CstrSeqFold2 { f = f, acc = acc, names = names, res = res, left = left } ->
-    match update.1 with AVLam { ident = x, body = b } then
-      if left then
-        -- Add acc ⊆ x constraint
-        let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = x }) in
-        initConstraint graph (CstrSeqFold3 {f = b, names = names, res = res})
-      else
-        -- Add names ⊆ x constraint
-        let graph = setFold (lam graph. lam n.
-            initConstraint graph (CstrDirect { lhs = n, rhs = x })
-          ) graph names in
-        initConstraint graph (
-          CstrSeqFold3 {f = b, names = setOfSeq subi [acc], res = res})
-    else graph
-  | CstrSeqFold3 { f = f, names = names, res = res } ->
-    match update.1 with AVLam { ident = x, body = b } then
-      -- Add names ⊆ x constraints
-      let graph = setFold (lam graph. lam n.
-          initConstraint graph (CstrDirect { lhs = n, rhs = x })
-        ) graph names in
-      -- Add b ⊆ res constraint
-      initConstraint graph (CstrDirect { lhs = b, rhs = res })
-    else graph
+lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
 
   sem generateConstraintsConst info ident =
   | ( CSet _
@@ -1268,20 +1272,20 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     utest length args with 3 in
     let seq = get args 0 in
     let val = get args 2 in
-    initConstraint graph (CstrSeqUnion {lhs = seq, rhs = val, res = res})
+    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
   | CGet _ ->
     utest length args with 2 in
-    initConstraint graph (CstrSeq {lhs = head args, rhs = res})
+    initConstraint graph (CstrSet {lhs = head args, rhs = res})
   | CCons _ ->
     utest length args with 2 in
     let val = get args 0 in
     let seq = get args 1 in
-    initConstraint graph (CstrSeqUnion {lhs = seq, rhs = val, res = res})
+    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
   | CSnoc _ ->
     utest length args with 2 in
     let seq = get args 0 in
     let val = get args 1 in
-    initConstraint graph (CstrSeqUnion {lhs = seq, rhs = val, res = res})
+    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
   | CConcat _ ->
     utest length args with 2 in
     let graph = initConstraint graph (CstrDirect {lhs = head args, rhs = res}) in
@@ -1291,7 +1295,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     initConstraint graph (CstrDirect {lhs = head args, rhs = res})
   | CHead _ ->
     utest length args with 1 in
-    initConstraint graph (CstrSeq {lhs = head args, rhs = res})
+    initConstraint graph (CstrSet {lhs = head args, rhs = res})
   | CTail _ ->
     utest length args with 1 in
     initConstraint graph (CstrDirect {lhs = head args, rhs = res})
@@ -1301,7 +1305,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
   | CMap _ ->
     utest length args with 2 in
     initConstraint graph (
-      CstrSeqMap1 {seq = get args 1, f = head args, res = res})
+      CstrSetMap1 {seq = get args 1, f = head args, res = res})
   | CFoldl _ ->
     utest length args with 3 in
     let seq = get args 2 in
@@ -1309,7 +1313,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     let acc = get args 1 in
     -- Add acc ⊆ res constraint
     let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
-    initConstraint graph (CstrSeqFold1 {
+    initConstraint graph (CstrSetFold1 {
       seq = seq, f = f, acc = acc, res = res, left = true})
   | CFoldr _ ->
     utest length args with 3 in
@@ -1318,7 +1322,7 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + LamCFA
     let acc = get args 1 in
     -- Add acc ⊆ res constraint
     let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
-    initConstraint graph (CstrSeqFold1 {
+    initConstraint graph (CstrSetFold1 {
       seq = seq, f = f, acc = acc, res = res, left = false})
 
 end
@@ -1489,7 +1493,7 @@ end
 
 lang SeqTotPatCFA = MatchCFA + SeqCFA + SeqTotPat
   sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
-  | (PatSeqTot p, AVSeq { names = names }) ->
+  | (PatSeqTot p, AVSet { names = names }) ->
     let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs =
           foldl (lam acc. lam f. concat (f id name pat) acc) [] graph.mcgfs
@@ -1501,7 +1505,7 @@ end
 
 lang SeqEdgePatCFA = MatchCFA + SeqCFA + SeqEdgePat
   sem propagateMatchConstraint (graph: CFAGraph) (id: IName) =
-  | (PatSeqEdge p, AVSeq { names = names } & av) ->
+  | (PatSeqEdge p, AVSet { names = names } & av) ->
     let f = lam graph. lam pat: Pat. setFold (lam graph: CFAGraph. lam name.
         let cstrs = foldl (lam acc. lam f. concat (f id name pat) acc)
           [] graph.mcgfs in
