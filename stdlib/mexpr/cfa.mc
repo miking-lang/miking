@@ -122,6 +122,7 @@ lang CFA = CFABase
 
   type GenFun = Expr -> [Constraint]
   type MatchGenFun = IName -> IName -> Pat -> [Constraint]
+  type ConstPropFun = IName -> [IName] -> Const -> [Constraint]
 
   type CFAGraph = {
 
@@ -139,6 +140,11 @@ lang CFA = CFABase
     -- TODO(dlunde,2021-11-17): Should be added as a product extension
     -- in the MatchCFA fragment instead, when possible.
     mcgfs: [MatchGenFun],
+
+    -- Constant propagation functions
+    -- TODO(dlunde,2023-07-10): Should be added as a product extension
+    -- in the MatchCFA fragment instead, when possible.
+    cpfs: [ConstPropFun],
 
     -- Bidirectional mapping between names and integers.
     im: IndexMap,
@@ -163,6 +169,7 @@ lang CFA = CFABase
       data = tensorCreateDense shape (lam. setEmpty cmpAbsVal),
       edges = tensorCreateDense shape (lam. setEmpty cmpConstraint),
       mcgfs = [],
+      cpfs = [],
       im = im,
       graphData = None () }
 
@@ -570,8 +577,11 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
       let arity = constArity const in
       let args = snoc args rhs in
       if eqi arity (length args) then
-        -- Last application
-        propagateConstraintConst res args graph const
+        -- Last application, call constant propagation functions
+        let cstrs =
+          foldl (lam acc. lam p. concat (p res args const) acc) [] graph.cpfs
+        in
+        foldl initConstraint graph cstrs
       else
         -- Curried application, add the new argument
         addData graph (AVConst { avc with args = args }) res
@@ -604,7 +614,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
 
-  sem propagateConstraintConst : IName -> [IName] -> CFAGraph -> Const -> CFAGraph
+  sem propagateConstraintConst : ConstPropFun
 end
 
 lang RecordCFA = CFA + BaseConstraint + RecordAst
@@ -1010,7 +1020,7 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
         ) cstrs mcgfs
     else errorSingle [infoTm t.target] "Not a TmVar in match target"
 
-  sem generateMatchConstraints: IName -> IName -> Pat -> [Constraint]
+  sem generateMatchConstraints: MatchGenFun
   sem generateMatchConstraints (id: IName) (target: IName) =
   | pat -> [ CstrMatch { id = id, pat = pat, target = target } ]
 
@@ -1267,63 +1277,66 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
   --   | CSplitAt _
   --   ) -> []
 
-  sem propagateConstraintConst res args graph =
+  sem propagateConstraintConst res args =
   | CSet _ ->
     utest length args with 3 in
     let seq = get args 0 in
     let val = get args 2 in
-    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
+    [CstrSetUnion {lhs = seq, rhs = val, res = res}]
   | CGet _ ->
     utest length args with 2 in
-    initConstraint graph (CstrSet {lhs = head args, rhs = res})
+    [CstrSet {lhs = head args, rhs = res}]
   | CCons _ ->
     utest length args with 2 in
     let val = get args 0 in
     let seq = get args 1 in
-    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
+    [CstrSetUnion {lhs = seq, rhs = val, res = res}]
   | CSnoc _ ->
     utest length args with 2 in
     let seq = get args 0 in
     let val = get args 1 in
-    initConstraint graph (CstrSetUnion {lhs = seq, rhs = val, res = res})
+    [CstrSetUnion {lhs = seq, rhs = val, res = res}]
   | CConcat _ ->
     utest length args with 2 in
-    let graph = initConstraint graph (CstrDirect {lhs = head args, rhs = res}) in
-    initConstraint graph (CstrDirect {lhs = get args 1, rhs = res})
+    [
+      CstrDirect {lhs = head args, rhs = res},
+      CstrDirect {lhs = get args 1, rhs = res}
+    ]
   | CReverse _ ->
     utest length args with 1 in
-    initConstraint graph (CstrDirect {lhs = head args, rhs = res})
+    [CstrDirect {lhs = head args, rhs = res}]
   | CHead _ ->
     utest length args with 1 in
-    initConstraint graph (CstrSet {lhs = head args, rhs = res})
+    [CstrSet {lhs = head args, rhs = res}]
   | CTail _ ->
     utest length args with 1 in
-    initConstraint graph (CstrDirect {lhs = head args, rhs = res})
+    [CstrDirect {lhs = head args, rhs = res}]
   | CSubsequence _ ->
     utest length args with 3 in
-    initConstraint graph (CstrDirect {lhs = head args, rhs = res})
+    [CstrDirect {lhs = head args, rhs = res}]
   | CMap _ ->
     utest length args with 2 in
-    initConstraint graph (
-      CstrSetMap1 {seq = get args 1, f = head args, res = res})
+    [CstrSetMap1 {seq = get args 1, f = head args, res = res}]
   | CFoldl _ ->
     utest length args with 3 in
     let seq = get args 2 in
     let f = head args in
     let acc = get args 1 in
-    -- Add acc ⊆ res constraint
-    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
-    initConstraint graph (CstrSetFold1 {
-      seq = seq, f = f, acc = acc, res = res, left = true})
+    [
+      -- Add acc ⊆ res constraint
+      CstrDirect { lhs = acc, rhs = res },
+      CstrSetFold1 { seq = seq, f = f, acc = acc, res = res, left = true }
+    ]
   | CFoldr _ ->
     utest length args with 3 in
     let seq = get args 2 in
     let f = head args in
     let acc = get args 1 in
-    -- Add acc ⊆ res constraint
-    let graph = initConstraint graph (CstrDirect { lhs = acc, rhs = res }) in
-    initConstraint graph (CstrSetFold1 {
-      seq = seq, f = f, acc = acc, res = res, left = false})
+    [
+      -- Add acc ⊆ res constraint
+      CstrDirect { lhs = acc, rhs = res },
+      CstrSetFold1 { seq = seq, f = f, acc = acc, res = res, left = false}
+    ]
 
 end
 
@@ -1420,15 +1433,13 @@ lang RefOpCFA = CFA + ConstCFA + RefOpAst
   -- probably be added.
   -- | CModRef _ -> []
 
-  sem propagateConstraintConst res args graph =
+  sem propagateConstraintConst res args =
   | CRef _ ->
     utest length args with 1 in
-    initConstraint graph
-      (CstrInit {lhs = AVRef { contents = head args }, rhs = res})
+    [CstrInit {lhs = AVRef { contents = head args }, rhs = res}]
   | CDeRef _ ->
     utest length args with 1 in
-    initConstraint graph
-      (CstrRef {lhs = head args, rhs = res})
+    [CstrRef {lhs = head args, rhs = res}]
 
 end
 
@@ -1448,14 +1459,14 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA
     | CTensorSliceExn _
     | CTensorSubExn _
     | CTensorShape _
+    | CTensorIterSlice _
     ) & const -> [
       CstrInit {
         lhs = AVConst { id = ident, const = const, args = []}, rhs = ident
       }
     ]
 
-  | ( CTensorIterSlice _
-    | CTensorRank _
+  | ( CTensorRank _
     | CTensorEq _
     | CTensorToString _ ) -> []
 
@@ -1464,7 +1475,7 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA
   -- | CTensorSetExn _ -> []
   -- | CTensorLinearSetExn _ -> []
 
-  sem propagateConstraintConst res args graph =
+  sem propagateConstraintConst res args =
   -- NOTE(2023-07-10,dlunde): We do not need to track integers and floats (at
   -- least in the basic analysis) and can therefore just initialize empty AVSets
   -- here.
@@ -1474,37 +1485,36 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA
     | CTensorCreateInt _
     | CTensorCreateFloat _ ) ->
     let av: AbsVal = AVSet { names = setEmpty subi } in
-    initConstraint graph (CstrInit { lhs = av, rhs = res })
+    [CstrInit { lhs = av, rhs = res }]
 
   | CTensorCreate _ ->
     utest length args with 2 in
-    initConstraint graph (
-      CstrSetMap2 { f = get args 1, names = setEmpty subi, res = res })
+    [ CstrSetMap2 { f = get args 1, names = setEmpty subi, res = res } ]
 
   | ( CTensorGetExn _
     | CTensorLinearGetExn _ ) ->
     utest length args with 2 in
-    initConstraint graph (CstrSet { lhs = head args, rhs = res })
+    [CstrSet { lhs = head args, rhs = res }]
 
   | CTensorReshapeExn _ ->
     utest length args with 2 in
-    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+    [CstrDirect {lhs = get args 0, rhs = res}]
 
   | CTensorCopy _ ->
     utest length args with 1 in
-    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+    [CstrDirect {lhs = get args 0, rhs = res}]
 
   | CTensorTransposeExn _ ->
     utest length args with 3 in
-    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+    [CstrDirect {lhs = get args 0, rhs = res}]
 
   | CTensorSliceExn _ ->
     utest length args with 2 in
-    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+    [CstrDirect {lhs = get args 0, rhs = res}]
 
   | CTensorSubExn _ ->
     utest length args with 3 in
-    initConstraint graph (CstrDirect {lhs = get args 0, rhs = res})
+    [CstrDirect {lhs = get args 0, rhs = res}]
 
 end
 
@@ -1653,11 +1663,14 @@ lang MExprCFA = CFA +
   -- Function that adds a set of universal base match constraints to a CFAGraph
   sem addBaseMatchConstraints =
   | graph ->
-    { graph with mcgfs = concat [generateMatchConstraints] graph.mcgfs }
+    { graph with mcgfs = cons generateMatchConstraints graph.mcgfs }
 
   -- Function that adds a set of universal base constraints to a CFAGraph
   sem addBaseConstraints (graph: CFAGraph) =
   | t ->
+
+    -- Set constant propagation functions
+    let graph = {graph with cpfs = cons propagateConstraintConst graph.cpfs} in
 
     -- Initialize constraint generating functions
     let cgfs = [ generateConstraints graph.im,
