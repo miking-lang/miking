@@ -2345,7 +2345,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         let s' = Symb.gensym () in
         let tvar = TmVar (fi, x, s', false, false) in
         let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
-        TmLam (fi, x, s', false, TyUnknown fi, t')
+        TmClos (fi, x, s', false, t', env_ref)
     | t' ->
         t' )
   (* PreRun *)
