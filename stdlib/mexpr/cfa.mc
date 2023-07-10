@@ -269,6 +269,13 @@ lang CFA = CFABase
         graph avs
     else graph
 
+  -- Helper function for initializing a constraint for a given name (mainly
+  -- used for convenience in initConstraint)
+  sem initConstraintNames: [IName] -> CFAGraph -> Constraint -> CFAGraph
+  sem initConstraintNames (names: [IName]) (graph: CFAGraph) =
+  | cstr ->
+    foldl (lam graph. lam name. initConstraintName name graph cstr) graph names
+
   sem dataLookup: IName -> CFAGraph -> Set AbsVal
   sem dataLookup (key: IName) =
   | graph -> tensorLinearGetExn graph.data key
