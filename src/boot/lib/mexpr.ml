@@ -2070,44 +2070,40 @@ and pt_seq env ps =
   let env', ps_list' = work env (Mseq.Helpers.to_list ps) in
   (env', Mseq.Helpers.of_list_list ps_list')
 
-(*and pat_transform (env : (Symb.t * tm) list) (p : pat) : ((Symb.t * tm) list * pat) = *)
 and pat_transform (env : (Symb.t * tm) list) (p : pat) =
+  let new_sym fi env s x =
+    match List.assoc_opt s env with
+    | Some (TmVar (_, _, s', _, _)) ->
+        (env, s')
+    | Some _ ->
+        failwith "Should not happen"
+    | None ->
+        let s' = Symb.gensym () in
+        let tvar = TmVar (fi, x, s', false, false) in
+        ((s, tvar) :: env, s')
+  in
   match p with
   | PatNamed (fi, NameStr (x, s)) ->
-      let s' = Symb.gensym () in
-      let tvar = TmVar (fi, x, s', false, false) in
-      ((s, tvar) :: env, PatNamed (fi, NameStr (x, s')))
+      let env', s' = new_sym fi env s x in
+      (env', PatNamed (fi, NameStr (x, s')))
   | PatNamed (_, _) as p ->
       (env, p)
   | PatSeqTot (fi, ps) ->
       let env', ps' = pt_seq env ps in
       (env', PatSeqTot (fi, ps'))
   | PatSeqEdge (fi, ps1, NameStr (x, s), ps2) ->
-      let s' = Symb.gensym () in
-      let tvar = TmVar (fi, x, s', false, false) in
       let env', ps1' = pt_seq env ps1 in
-      let env'', ps2' = pt_seq ((s, tvar) :: env') ps2 in
-      (env'', PatSeqEdge (fi, ps1', NameStr (x, s'), ps2'))
+      let env'', ps2' = pt_seq env' ps2 in
+      let env''', s' = new_sym fi env'' s x in
+      (env''', PatSeqEdge (fi, ps1', NameStr (x, s'), ps2'))
   | PatSeqEdge (fi, ps1, n, ps2) ->
       let env', ps1' = pt_seq env ps1 in
       let env'', ps2' = pt_seq env' ps2 in
       (env'', PatSeqEdge (fi, ps1', n, ps2'))
   | PatRecord (fi, patrec) ->
-      let _ = (fi, patrec) in
-      (env, p)
-  (* TODO: Bug, with pattern records
-       let f _ p env = pat_transform env p in
-       let env', patrec' = Record.map_fold f patrec env in
-       (env', PatRecord (fi, patrec')) *)
-  (* TODO: Alternative, without the imperative map_fold. Still does not work.
-      let plst = Record.bindings patrec in
-      let f env (x,p) =
-        let env', p' = pat_transform env p in (env', (x,p'))
-      in
-      let env', plst' = List.fold_left_map f env plst in
-      let patrec' = List.fold_left
-                      (fun a (k,v) -> Record.add k v a) (Record.empty) plst' in
-      (env', PatRecord(fi, patrec')) *)
+      let f _ p env = pat_transform env p in
+      let env', patrec' = Record.map_fold f patrec env in
+      (env', PatRecord (fi, patrec'))
   | PatCon (fi, x, s, p) ->
       let env', p' = pat_transform env p in
       (env', PatCon (fi, x, s, p'))
