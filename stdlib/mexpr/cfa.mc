@@ -15,6 +15,7 @@ include "set.mc"
 include "either.mc"
 include "name.mc"
 include "tensor.mc"
+include "stringid.mc"
 
 include "pprint.mc"
 include "boot-parser.mc"
@@ -719,14 +720,33 @@ lang SetCFA = CFA + LamCFA
     (env, join ["[{", names, "}]"])
 
   syn Constraint =
+
   -- [{names}] ∈ lhs ⇒ ∀n ∈ names: {n} ⊆ rhs
   | CstrSet {lhs : IName, rhs : IName}
+
   -- [{names}] ∈ lhs ⇒ [{names} ∪ {rhs}] ⊆ res
   | CstrSetUnion {lhs : IName, rhs : IName, res : IName}
-  -- [{names}] ∈ seq ⇒ [{f n : n ∈ names}] ∈ res
-  | CstrSetMap1 {seq: IName, f: IName, res: IName}
-  -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
-  | CstrSetMap2 {f: IName, names: Set IName, res: IName}
+
+  -- [{names}] ∈ seq ⇒
+  --   ({lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res))
+  | CstrSetMap1 {seq: IName,       f: IName, res: IName}
+  | CstrSetMap2 {names: Set IName, f: IName, res: IName}
+
+  -- {lam _. b} ⊆ f ⇒
+  --   ([{names}] ∈ seq ⇒
+  --     ({lam y. c} ⊆ b ⇒ (names ⊆ y and [{c}] ∈ res)))
+  | CstrSetMapi {seq: IName, f: IName, res: IName}
+
+  -- [{names}] ∈ seq ⇒
+  --   ({lam x. b} ⊆ f ⇒ names ⊆ x)
+  | CstrSetIter1 {seq: IName,       f: IName}
+  | CstrSetIter2 {names: Set IName, f: IName}
+
+  -- {lam _. b} ⊆ f ⇒
+  --   ([{names}] ∈ seq ⇒
+  --     ({lam y. c} ⊆ b ⇒ names ⊆ y))
+  | CstrSetIteri {seq: IName,       f: IName}
+
   -- CstrSetFold<n> constraints implement foldl when left = true, and foldr
   -- otherwise
   -- l: [{names}] ∈ seq ⇒
@@ -737,17 +757,10 @@ lang SetCFA = CFA + LamCFA
   --      ({lam x. b} ⊆ f ⇒
   --        (names ⊆ x and ({lam y. c} ⊆ b ⇒
   --          (acc ⊆ y and c ⊆ res and c ⊆ y ))))
-  | CstrSetFold1 {left: Bool, seq: IName, f: IName, acc: IName, res: IName}
-  -- l: {lam x. b} ⊆ f ⇒
-  --      (acc ⊆ x and ({lam y. c} ⊆ b ⇒
-  --        (names ⊆ y and c ⊆ res and c ⊆ x )))
-  -- r: {lam x. b} ⊆ f ⇒
-  --      (names ⊆ x and ({lam y. c} ⊆ b ⇒
-  --        (acc ⊆ y and c ⊆ res and c ⊆ y )))
-  | CstrSetFold2 {left: Bool, names: Set IName, f: IName, acc: IName, res: IName}
-  -- l: {lam y. c} ⊆ b ⇒ (names ⊆ y and c ⊆ res and c ⊆ x)
-  -- r: {lam y. c} ⊆ b ⇒ (acc ⊆ y and c ⊆ res and c ⊆ y)
+  | CstrSetFold1 {left: Bool, seq:   IName,     f: IName,  acc: IName, res: IName}
+  | CstrSetFold2 {left: Bool, names: Set IName, f: IName,  acc: IName, res: IName}
   | CstrSetFold3 {left: Bool, names: Set IName, f: AbsVal, acc: IName, res: IName}
+
 
   sem cmpConstraintH =
   | (CstrSet { lhs = lhs1, rhs = rhs1 },
@@ -778,6 +791,32 @@ lang SetCFA = CFA + LamCFA
        let d = subi f1 f2 in
        if eqi d 0 then setCmp names1 names2
        else d
+     else d
+  | (CstrSetMapi { seq = seq1, f = f1, res = res1 },
+     CstrSetMapi { seq = seq2, f = f2, res = res2 }) ->
+     let d = subi seq1 seq2 in
+     if eqi d 0 then
+       let d = subi f1 f2 in
+       if eqi d 0 then subi res1 res2
+       else d
+     else d
+  | (CstrSetIter1 { seq = seq1, f = f1 },
+     CstrSetIter1 { seq = seq2, f = f2 }) ->
+     let d = subi seq1 seq2 in
+     if eqi d 0 then
+       subi f1 f2
+     else d
+  | (CstrSetIter2 { f = f1, names = names1 },
+     CstrSetIter2 { f = f2, names = names2 }) ->
+     let d = subi f1 f2 in
+     if eqi d 0 then
+       setCmp names1 names2
+     else d
+  | (CstrSetIteri { seq = seq1, f = f1 },
+     CstrSetIteri { seq = seq2, f = f2 }) ->
+     let d = subi seq1 seq2 in
+     if eqi d 0 then
+       subi f1 f2
      else d
   | (CstrSetFold1 { left = l1, seq = seq1, f = f1, acc = acc1, res = res1},
      CstrSetFold1 { left = l2, seq = seq2, f = f2, acc = acc2, res = res2}) ->
@@ -827,6 +866,10 @@ lang SetCFA = CFA + LamCFA
   | CstrSetUnion r & cstr -> initConstraintName r.lhs graph cstr
   | CstrSetMap1 r & cstr -> initConstraintName r.seq graph cstr
   | CstrSetMap2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSetMapi r & cstr -> initConstraintName r.f graph cstr
+  | CstrSetIter1 r & cstr -> initConstraintName r.seq graph cstr
+  | CstrSetIter2 r & cstr -> initConstraintName r.f graph cstr
+  | CstrSetIteri r & cstr -> initConstraintName r.f graph cstr
   | CstrSetFold1 r & cstr -> initConstraintName r.seq graph cstr
   | CstrSetFold2 r & cstr -> initConstraintName r.f graph cstr
   | CstrSetFold3 { f = AVLam { ident = x, body = b } } & cstr ->
@@ -849,15 +892,41 @@ lang SetCFA = CFA + LamCFA
     match pprintVarIName im env f with (env,f) in
     match pprintVarIName im env res with (env,res) in
     (env, join [
-        "[{names}] ∈ ", seq, " ⇒ [{", f, " n : n ∈ names}] ∈ ", res
+        "[{names}] ∈ ", seq, " ⇒ ({lam x. b} ⊆ ", f, " ⇒ (names ⊆ x and [{b}] ∈ ", res, "))"
       ])
   | CstrSetMap2 { f = f, names = names, res = res } ->
     match pprintVarIName im env f with (env,f) in
     match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    let names = join ["{", strJoin ", " names, "}"] in
     match pprintVarIName im env res with (env,res) in
     (env, join [
-        "{lam x. b} ⊆ ", f, " ⇒ {", strJoin ", " names, "} ⊆ x AND ",
-        "[{b}] ∈ ", res
+        "{lam x. b} ⊆ ", f, " ⇒ (", names, " ⊆ x and [{b}] ∈ ", res, ")"
+      ])
+  | CstrSetMapi { seq = seq, f = f, res = res } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    match pprintVarIName im env res with (env,res) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ ({lam _. b} ⊆ ", f, " ⇒ ({lam y. c} ⊆ b ⇒ (names ⊆ y and [{c}] ∈ ", res, ")))"
+      ])
+  | CstrSetIter1 { seq = seq, f = f } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ ({lam x. b} ⊆ ", f, " ⇒ names ⊆ x)"
+      ])
+  | CstrSetIter2 { f = f, names = names } ->
+    match pprintVarIName im env f with (env,f) in
+    match mapAccumL (pprintVarIName im) env (setToSeq names) with (env,names) in
+    let names = join ["{", strJoin ", " names, "}"] in
+    (env, join [
+        "{lam x. b} ⊆ ", f, " ⇒ ", names, " ⊆ x"
+      ])
+  | CstrSetIteri { seq = seq, f = f } ->
+    match pprintVarIName im env seq with (env,seq) in
+    match pprintVarIName im env f with (env,f) in
+    (env, join [
+        "[{names}] ∈ ", seq, " ⇒ ({lam _. b} ⊆ ", f, " ⇒ ({lam y. c} ⊆ b ⇒ names ⊆ y))"
       ])
   | CstrSetFold1 { left = left, seq = seq, f = f, acc = acc, res = res} ->
     match pprintVarIName im env seq with (env,seq) in
@@ -922,6 +991,25 @@ lang SetCFA = CFA + LamCFA
       -- Add [{b}] ⊆ res constraint
       initConstraint graph (
         CstrInit { lhs = AVSet {names = setOfSeq subi [b]}, rhs = res })
+    else graph
+  | CstrSetMapi { seq = seq, f = f, res = res } ->
+    match update.1 with AVLam { ident = _, body = b } & f then
+      initConstraint graph (CstrSetMap1 { seq = seq, f = b, res = res})
+    else graph
+  | CstrSetIter1 { seq = seq, f = f } ->
+    match update.1 with AVSet { names = names } then
+      initConstraint graph (CstrSetIter2 { f = f, names = names })
+    else graph
+  | CstrSetIter2 { f = f, names = names } ->
+    match update.1 with AVLam { ident = x, body = b } then
+      -- Add names ⊆ x constraints
+      setFold (lam graph. lam n.
+          initConstraint graph (CstrDirect { lhs = n, rhs = x })
+        ) graph names
+    else graph
+  | CstrSetIteri { seq = seq, f = f } ->
+    match update.1 with AVLam { ident = _, body = b } & f then
+      initConstraint graph (CstrSetIter1 { seq = seq, f = b })
     else graph
   | CstrSetFold1 { left = left, seq = seq, f = f, acc = acc, res = res } ->
     match update.1 with AVSet { names = names } then
@@ -1290,7 +1378,7 @@ lang CmpSymbCFA = CFA + ConstCFA + CmpSymbAst
   | CEqsym _ -> []
 end
 
-lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
+lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint + RecordCFA
 
   sem generateConstraintsConst info ident =
   | ( CSet _
@@ -1305,6 +1393,13 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
     | CFoldl _
     | CFoldr _
     | CMap _
+    | CMapi _
+    | CIter _
+    | CIteri _
+    | CCreate _
+    | CCreateList _
+    | CCreateRope _
+    | CSplitAt _
     ) & const ->
     [
       CstrInit {
@@ -1318,15 +1413,6 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
     | CIsRope _
     ) -> []
 
-  -- TODO(Linnea, 2022-05-13): Add flow constraints to all sequence operations
-  -- | ( CMapi _
-  --   | CIter _
-  --   | CIteri _
-  --   | CCreate _
-  --   | CCreateList _
-  --   | CCreateRope _
-  --   | CSplitAt _
-  --   ) -> []
 
   sem propagateConstraintConst res args =
   | CSet _ ->
@@ -1388,6 +1474,28 @@ lang SeqOpCFA = CFA + ConstCFA + SeqCFA + SeqOpAst + BaseConstraint
       CstrDirect { lhs = acc, rhs = res },
       CstrSetFold1 { seq = seq, f = f, acc = acc, res = res, left = false }
     ]
+  | CMapi _ ->
+    utest length args with 2 in
+    [CstrSetMapi { seq = get args 1, f = head args, res = res }]
+  | CIter _ ->
+    utest length args with 2 in
+    [CstrSetIter1 { seq = get args 1, f = head args }]
+  | CIteri _ ->
+    utest length args with 2 in
+    [CstrSetIteri { seq = get args 1, f = head args }]
+  | ( CCreate _
+    | CCreateList _
+    | CCreateRope _
+    ) ->
+    utest length args with 2 in
+    [ CstrSetMap2 { f = get args 1, names = setEmpty subi, res = res } ]
+  | CSplitAt _ ->
+    utest length args with 2 in
+    let seq = head args in
+    let bindings = mapEmpty subi in
+    let bindings = mapInsert (stringToSid "0") seq bindings in
+    let bindings = mapInsert (stringToSid "1") seq bindings in
+    [CstrInit {lhs = AVRec { bindings = bindings }, rhs = res}]
 
 end
 
@@ -2904,6 +3012,10 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
   | CstrSeqMap1 {seq: (IName,Ctx), f: (IName,Ctx), res: (IName,Ctx)}
   -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
   | CstrSeqMap2 {f: (IName,Ctx), names: Set (IName,Ctx), res: (IName,Ctx)}
+
+  -- TODO(2023-07-11,dlunde): I suspect the fold constraints below have the
+  -- same problem as in the 0-CFA case. Namely, the constraint that c ⊆ y or c
+  -- ⊆ x (whichever is the accumulator) is missing.
   -- CstrSeqFold<n> implements foldl when left = true, and foldr otherwise
   -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
   -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
@@ -3712,11 +3824,55 @@ let t = _parse "
   let r1 = head s1 in
   let s2 = map (lam a. lam d. d) [lam b. b, lam c. c] in
   let r2 = head s2 in
+  let s3 = mapi (lam i. lam x. x) [lam y. y, lam z. z] in
+  let r3 = head s3 in
+  ()
+------------------------" in
+utest _test false t ["r1", "r2", "r3"] with [
+  ("r1", ["y", "z"]),
+  ("r2", ["d"]),
+  ("r3", ["y", "z"])
+] using eqTestLam in
+
+-- Iter over sequences
+let t = _parse "
+  let s0 = lam a. a in
+  let s1 = iter (lam x. let t1 = x in x) [lam y. y, lam z. z] in
+  let s2 = iteri (lam i. lam x. let t2 = x in x) [lam y. y, lam z. z] in
+  ()
+------------------------" in
+utest _test false t ["t1", "t2"] with [
+  ("t1", ["y", "z"]),
+  ("t2", ["y", "z"])
+] using eqTestLam in
+
+-- Create sequences
+let t = _parse "
+  let s1 = create 1 (lam i1. lam x. x) in
+  let r1 = head s1 in
+  let s2 = createList 2 (lam i2. lam y. y) in
+  let r2 = head s2 in
+  let s3 = createRope 3 (lam i3. lam z. z) in
+  let r3 = head s3 in
+  ()
+------------------------" in
+utest _test false t ["r1", "r2", "r3"] with [
+  ("r1", ["x"]),
+  ("r2", ["y"]),
+  ("r3", ["z"])
+] using eqTestLam in
+
+-- Split sequences
+let t = _parse "
+  let s1 = [lam x. x, lam y. y, lam z. z] in
+  match splitAt s1 1 with (t1,t2) in
+  let r1 = head t1 in
+  let r2 = head t2 in
   ()
 ------------------------" in
 utest _test false t ["r1", "r2"] with [
-  ("r1", ["y", "z"]),
-  ("r2", ["d"])
+  ("r1", ["x", "y", "z"]),
+  ("r2", ["x", "y", "z"])
 ] using eqTestLam in
 
 -- Foldl
