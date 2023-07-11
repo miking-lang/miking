@@ -55,6 +55,8 @@ type side_effect = bool
 
 type frozen = bool
 
+type pesym = bool
+
 (* Map type for record implementation *)
 module Record = struct
   include Map.Make (Ustring)
@@ -269,11 +271,11 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t * frozen
+  | TmVar of info * ustring * Symb.t * pesym * frozen
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
-  | TmLam of info * ustring * Symb.t * ty * tm
+  | TmLam of info * ustring * Symb.t * pesym * ty * tm
   (* Let *)
   | TmLet of info * ustring * Symb.t * ty * tm * tm
   (* Recursive lets *)
@@ -306,13 +308,17 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
-  (* Fix point *)
-  | TmFix of info
+  | TmClos of info * ustring * Symb.t * pesym * tm * env ref
   (* Reference *)
   | TmRef of info * tm ref
   (* Tensor *)
   | TmTensor of info * tm T.t
+  (* Dive *)
+  | TmDive of info * int * tm
+  (* Run *)
+  | TmPreRun of info * int * tm
+  (* Box *)
+  | TmBox of info * (tm * env option) ref
 
 (* Kind of pattern name *)
 and patName =
@@ -400,8 +406,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t1
       |> fun (acc, t1') ->
       f acc t2 |> fun (acc, t2') -> (acc, TmApp (fi, t1', t2'))
-  | TmLam (fi, x, s, ty, t) ->
-      f acc t |> fun (acc, t') -> (acc, TmLam (fi, x, s, ty, t'))
+  | TmLam (fi, x, s, pes, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmLam (fi, x, s, pes, ty, t'))
   | TmLet (fi, x, s, ty, t1, t2) ->
       f acc t1
       |> fun (acc, t1') ->
@@ -452,10 +458,16 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmUse (fi, l, t'))
   | TmExt (fi, x, s, ty, e, t) ->
       f acc t |> fun (acc, t') -> (acc, TmExt (fi, x, s, ty, e, t'))
-  | TmClos (fi, x, s, t, env) ->
-      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, t', env))
-  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
+  | TmClos (fi, x, s, pes, t, env) ->
+      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, pes, t', env))
+  | (TmVar _ | TmConst _ | TmNever _ | TmRef _ | TmTensor _) as t ->
       (acc, t)
+  | TmDive (fi, l, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmDive (fi, l, t'))
+  | TmPreRun (fi, l, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmPreRun (fi, l, t'))
+  | TmBox (_, _) ->
+      failwith "TmBox is a runtime value"
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) (t : tm) : tm =
@@ -472,9 +484,9 @@ let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
 
 (* Returns the info field from a term *)
 let tm_info = function
-  | TmVar (fi, _, _, _)
+  | TmVar (fi, _, _, _, _)
   | TmApp (fi, _, _)
-  | TmLam (fi, _, _, _, _)
+  | TmLam (fi, _, _, _, _, _)
   | TmLet (fi, _, _, _, _, _)
   | TmRecLets (fi, _, _)
   | TmConst (fi, _)
@@ -488,10 +500,12 @@ let tm_info = function
   | TmUtest (fi, _, _, _, _)
   | TmNever fi
   | TmUse (fi, _, _)
-  | TmClos (fi, _, _, _, _)
-  | TmFix fi
+  | TmClos (fi, _, _, _, _, _)
   | TmRef (fi, _)
   | TmTensor (fi, _)
+  | TmDive (fi, _, _)
+  | TmPreRun (fi, _, _)
+  | TmBox (fi, _)
   | TmExt (fi, _, _, _, _, _) ->
       fi
 
@@ -724,3 +738,7 @@ let record2tuple (r : tm Record.t) =
   List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst
 
 type 'a tokendata = {i: info; v: 'a}
+
+type peval = {inPeval: bool; inBranch: bool}
+
+let pe_init = {inPeval= false; inBranch= false}

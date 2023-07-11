@@ -43,6 +43,8 @@ let reserved_strings = [
   ("switch",        fun(i) -> Parser.SWITCH{i=i;v=()});
   ("case",          fun(i) -> Parser.CASE{i=i;v=()});
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
+  ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
+  ("prerun",        fun(i) -> Parser.PRERUN{i=i;v=()});
 
 
   (* Types *)

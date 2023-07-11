@@ -163,13 +163,18 @@ let rec symbolize (env : sym_env) (t : tm) =
         (patEnv, PatNot (fi, p))
   in
   match t with
-  | TmVar (fi, x, _, frozen) ->
-      TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env, frozen)
-  | TmLam (fi, x, _, ty, t1) ->
+  | TmVar (fi, x, _, pes, frozen) ->
+      TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env, pes, frozen)
+  | TmLam (fi, x, _, pes, ty, t1) ->
       let s = Symb.gensym () in
       TmLam
-        (fi, x, s, ty, symbolize (addsym (IdVar (sid_of_ustring x)) s env) t1)
-  | TmClos (_, _, _, _, _) ->
+        ( fi
+        , x
+        , s
+        , pes
+        , ty
+        , symbolize (addsym (IdVar (sid_of_ustring x)) s env) t1 )
+  | TmClos (_, _, _, _, _, _) ->
       failwith "Closures should not be available."
   | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in
@@ -236,7 +241,13 @@ let rec symbolize (env : sym_env) (t : tm) =
       let s = Symb.gensym () in
       TmExt
         (fi, x, s, e, ty, symbolize (addsym (IdVar (sid_of_ustring x)) s env) t)
-  | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
+  | TmDive (fi, l, t) ->
+      TmDive (fi, l, symbolize env t)
+  | TmPreRun (fi, l, t) ->
+      TmPreRun (fi, l, symbolize env t)
+  | TmBox (_, _) ->
+      failwith "Box is a runtime value"
+  | TmConst _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -295,7 +306,9 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmUtest _
     | TmNever _
     | TmClos _
-    | TmFix _
     | TmRef _
+    | TmDive _
+    | TmPreRun _
+    | TmBox _
     | TmTensor _ ) as t ->
       (env, symbolize env t)
