@@ -31,20 +31,36 @@ lang Index = Ast
     else {{acc with map = mapInsert name acc.nextIndex acc.map }
                with nextIndex = addi 1 acc.nextIndex }
 
+  -- Same as addKey, but return the new mapped-to integer. Also reversed
+  -- argument order for convenient mapAccumL.
+  sem addKeyGet: IndexAcc -> Name -> (IndexAcc,Int)
+  sem addKeyGet acc =
+  | name ->
+    let i = acc.nextIndex in
+    (addKey name acc, i)
+
   -- Entry point
   sem indexGen: Expr -> IndexMap
   sem indexGen =
-  | t ->
-    let acc = indexGenH (emptyAcc ()) t in
+  | t -> indexClose (indexAccGen t)
+
+  -- Alternative entry point, leaving the index open for more additions
+  sem indexAccGen: Expr -> IndexAcc
+  sem indexAccGen =
+  | t -> indexAccGenH (emptyAcc ()) t
+
+  sem indexClose: IndexAcc -> IndexMap
+  sem indexClose =
+  | acc ->
     let name2int = acc.map in
     let int2name: Tensor[Name] =
       tensorCreateDense [acc.nextIndex] (lam. nameNoSym "t") in
     mapMapWithKey (lam n. lam i. tensorLinearSetExn int2name i n) name2int;
     {name2int = name2int, int2name = int2name}
 
-  sem indexGenH: IndexAcc -> Expr -> IndexAcc
-  sem indexGenH (acc: IndexAcc) =
-  | t -> let acc = indexAdd acc t in sfold_Expr_Expr indexGenH acc t
+  sem indexAccGenH: IndexAcc -> Expr -> IndexAcc
+  sem indexAccGenH (acc: IndexAcc) =
+  | t -> let acc = indexAdd acc t in sfold_Expr_Expr indexAccGenH acc t
 
   sem indexAdd: IndexAcc -> Expr -> IndexAcc
   sem indexAdd (acc: IndexAcc) =
