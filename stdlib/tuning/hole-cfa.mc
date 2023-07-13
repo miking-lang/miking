@@ -212,43 +212,50 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       else propagateDirectConstraint res graph av
     else propagateDirectConstraint res graph update.1
 
-  sem generateHoleConstraints (graph: CFAGraph) =
-  | _ -> []
+  sem generateHoleConstraints (graph: CFAGraphInit) =
+  | _ -> graph
     -- Holes
   | TmLet { ident = ident, body = TmHole _, info = info} ->
     match graph with {graphData = graphData} in
     match graphData with Some (HoleCtxInfo {contextMap = contextMap}) then
-      let ident = name2int graph.im info ident in
+      let ident = name2intAcc graph.ia info ident in
       let av = AVDHole {
         id = ident,
         contexts = mapFindExn ident contextMap
       } in
-      [ CstrInit {lhs = av, rhs = ident } ]
+      let cstr = CstrInit {lhs = av, rhs = ident } in
+      { graph with cstrs = cons cstr graph.cstrs }
     else errorSingle [info] "Expected context information"
   | TmLet { ident = ident, body = TmConst { val = c }, info = info } ->
     let arity = constArity c in
-    if eqi arity 0 then []
-    else [ CstrInit {
-             lhs = AVConstHole { const = c, args = [] },
-             rhs = name2int graph.im info ident } ]
+    let cstrs =
+      if eqi arity 0 then []
+      else [ CstrInit {
+               lhs = AVConstHole { const = c, args = [] },
+               rhs = name2intAcc graph.ia info ident } ]
+    in
+    { graph with cstrs = concat cstrs graph.cstrs }
   | TmLet { ident = ident, body = TmApp app, info = info } ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
-        let lhs = name2int graph.im l.info l.ident in
-        let rhs = name2int graph.im r.info r.ident in
-        let ident = name2int graph.im info ident in
-        [ CstrHoleApp { lhs = lhs, res = ident},
+        let lhs = name2intAcc graph.ia l.info l.ident in
+        let rhs = name2intAcc graph.ia r.info r.ident in
+        let ident = name2intAcc graph.ia info ident in
+        let cstrs = [
+          CstrHoleApp { lhs = lhs, res = ident},
           CstrHoleConstApp { lhs = lhs, rhs = rhs, res = ident }
-        ]
+        ] in
+        { graph with cstrs = concat cstrs graph.cstrs }
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
   | TmLet { ident = ident, body = TmIndependent t, info = info} ->
     match t.lhs with TmVar lhs then
       match t.rhs with TmVar rhs then
-        let lhs = name2int graph.im lhs.info lhs.ident in
-        let rhs = name2int graph.im rhs.info rhs.ident in
-        let ident = name2int graph.im info ident in
-        [ CstrHoleIndependent {lhs = lhs, rhs = rhs, res = ident} ]
+        let lhs = name2intAcc graph.ia lhs.info lhs.ident in
+        let rhs = name2intAcc graph.ia rhs.info rhs.ident in
+        let ident = name2intAcc graph.ia info ident in
+        let cstr = CstrHoleIndependent {lhs = lhs, rhs = rhs, res = ident} in
+        { graph with cstrs = cons cstr graph.cstrs }
       else errorSingle [infoTm t.rhs] "Not a TmVar in independent annotation"
     else errorSingle [infoTm t.lhs] "Not a TmVar in independent annotation"
 
@@ -319,16 +326,16 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   -- are used in the graph coloring. By construction, these references
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
-  sem generateConstraintsConst info ident =
-  | CModRef _ -> []
+  sem generateConstraintsConst graph info ident =
+  | CModRef _ -> graph
 
-  sem generateHoleMatchConstraints (im: IndexMap) (id: Int) (target: Int) =
+  sem generateHoleMatchConstraints (ia: IndexAcc) (id: Int) (target: Int) =
   | pat ->
     recursive let f = lam acc. lam pat.
       let acc =
         match pat with PatNamed { ident = PName name, info = info }
                      | PatSeqEdge { middle = PName name, info = info }
-        then cons (name2int im info name) acc else acc in
+        then cons (name2intAcc ia info name) acc else acc in
       sfold_Pat_Pat f acc pat
     in
     let pnames = f [] pat in
@@ -339,30 +346,29 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   sem addHoleMatchConstraints =
   | graph ->
     -- Initialize match constraint generating functions
-    { graph with mcgfs = concat [ generateHoleMatchConstraints graph.im
+    { graph with mcgfs = concat [ generateHoleMatchConstraints graph.ia
                                 , generateHoleMatchResConstraints
                                 ]
                                 graph.mcgfs }
 
-  sem addHoleConstraints (graphData: GraphData) (graph: CFAGraph) =
+  sem addHoleConstraints (graphData: GraphData) (graph: CFAGraphInit) =
   | t ->
     -- Initialize graph data
     match graphData with (HoleCtxEnv {env = env}) in
-    let graph = {graph with graphData = Some (graphDataFromEnv graph.im env)} in
+    let graph = {graph with graphData = Some (graphDataFromEnv graph.ia env)} in
 
     -- Initialize constraint generating functions
-    let cgfs = [ generateHoleConstraints graph ] in
+    let cgfs = [ generateHoleConstraints ] in
 
     -- Recurse over program and generate constraints
-    let cstrs: [Constraint] = collectConstraints cgfs [] t in
+    let graph = collectConstraints cgfs graph t in
 
-    -- Initialize all collected constraints and return the result
-    foldl initConstraint graph cstrs
+    graph
 
   sem holeCfa : GraphData -> Expr -> CFAGraph
   sem holeCfa gd =
   | t ->
-    let graph = emptyCFAGraph t in
+    let graph = emptyCFAGraphInit t in
     let graph = addBaseMatchConstraints graph in
     let graph = addHoleMatchConstraints graph in
     let graph = addBaseConstraints graph t in
@@ -372,7 +378,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   sem holeCfaDebug : GraphData -> PprintEnv -> Expr -> (PprintEnv, CFAGraph)
   sem holeCfaDebug gd pprintenv =
   | t ->
-    let graph = emptyCFAGraph t in
+    let graph = emptyCFAGraphInit t in
     let graph = addBaseMatchConstraints graph in
     let graph = addHoleMatchConstraints graph in
     let graph = addBaseConstraints graph t in
@@ -383,8 +389,8 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   sem graphDataInit =
   | env -> HoleCtxEnv {env = env}
 
-  sem graphDataFromEnv: IndexMap -> CallCtxEnv -> GraphData
-  sem graphDataFromEnv im =
+  sem graphDataFromEnv: IndexAcc -> CallCtxEnv -> GraphData
+  sem graphDataFromEnv ia =
   | env ->
     -- Converts a prefix tree for a hole to a mapping from a call site to the
     -- set of contexts that pass through the call site.
@@ -397,8 +403,8 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
             -- is not part of the program, but a sentinel in the prefix tree.
             -- Thus, we will never look it up during CFA, and it is safe to not
             -- insert it in the map.
-            if mapMem (nameInfoGetName root) im.name2int then
-              let r = name2int im (nameInfoGetInfo root) (nameInfoGetName root) in
+            if mapMem (nameInfoGetName root) ia.map then
+              let r = name2intAcc ia (nameInfoGetInfo root) (nameInfoGetName root) in
               let s: Set Int =
                 match mapLookup r acc with Some s
                 then s else setEmpty subi in
@@ -422,7 +428,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       mapFoldWithKey
         (lam acc : Map IName (Set Int). lam n: NameInfo.
          lam vals : Map [NameInfo] Int.
-           let n = name2int im (nameInfoGetInfo n) (nameInfoGetName n) in
+           let n = name2intAcc ia (nameInfoGetInfo n) (nameInfoGetName n) in
            mapInsert n (setOfSeq subi (mapValues vals)) acc
         ) (mapEmpty subi) env.hole2idx
     in
@@ -432,7 +438,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
         (lam acc : Map IName (Map IName (Set Int)).
          lam n : NameInfo.
          lam tree : PTree NameInfo.
-           let n = name2int im (nameInfoGetInfo n) (nameInfoGetName n) in
+           let n = name2intAcc ia (nameInfoGetInfo n) (nameInfoGetName n) in
            mapInsert n (treeToCallSiteCtxUnion tree) acc
         ) (mapEmpty subi) env.contexts
     in

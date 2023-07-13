@@ -167,14 +167,16 @@ lang CFA = CFABase
     mcgfs: [MatchGenFun],
     cpfs: [ConstPropFun],
     cstrs: [Constraint],
-    ia: IndexAcc
+    ia: IndexAcc,
+    graphData: Option GraphData
   }
 
   type GenFun = CFAGraphInit -> Expr -> CFAGraphInit
 
   sem emptyCFAGraphInit: Expr -> CFAGraphInit
   sem emptyCFAGraphInit =
-  | t -> { mcgfs = [], cpfs = [], cstrs = [], ia = indexAccGen t }
+  | t -> { mcgfs = [], cpfs = [], cstrs = [], ia = indexAccGen t,
+           graphData = None () }
 
   sem finalizeCFAGraphInit: CFAGraphInit -> CFAGraph
   sem finalizeCFAGraphInit =
@@ -190,7 +192,7 @@ lang CFA = CFABase
       mcgfs = t.mcgfs,
       cpfs = t.cpfs,
       im = im,
-      graphData = None () } in
+      graphData = t.graphData } in
     let graph = foldl initConstraint graph t.cstrs in
     graph
 
@@ -569,9 +571,12 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
     if eqi 0 cmp then
       let ncmp = subi lhs.id rhs.id in
       if eqi 0 ncmp then
-        let acmp = seqCmp subi lhs.args rhs.args in
-        if eqi 0 acmp then seqCmp subi lhs.intermediates rhs.intermediates
-        else acmp
+        -- We intentionally do not include the intermediates in the comparison.
+        -- This ensures that every specific occurence of a constant have at
+        -- most one initial AVConst. The result is that all ConstPropFuns
+        -- operating on the constant share and have access to the same
+        -- intermediates.
+        seqCmp subi lhs.args rhs.args
       else ncmp
     else cmp
 
@@ -579,8 +584,8 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
   | TmLet { ident = ident, body = TmConst t, info = info } ->
     generateConstraintsConst graph t.info (name2intAcc graph.ia info ident) t.val
 
-  sem generateConstraintsConst: CFAGraphInit -> Info
-                                -> IName -> Const -> CFAGraphInit
+  sem generateConstraintsConst:
+    CFAGraphInit -> Info -> IName -> Const -> CFAGraphInit
   sem generateConstraintsConst graph info ident =
   | _ -> errorSingle [info] "Constant not supported in CFA"
 
@@ -1214,7 +1219,8 @@ lang SeqOpCFA =
     | CCreateList _
     | CCreateRope _
     -----------------
-    ) & const -> addNewConst graph ident const
+    ) & const ->
+      addNewConst graph ident const
 
   | ( CLength _
     | CNull _
