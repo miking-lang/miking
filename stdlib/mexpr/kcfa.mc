@@ -8,6 +8,11 @@
 --   constraints from table 3.7 in Nielson et al. (see p. 202 in Nielson et al.
 --   for a discussion about this).
 --
+-- TODO(2023-07-11,dlunde): I just fixed a number of bugs in cfa.mc related to
+-- higher-order constants (and this also involved quite significant changes in
+-- other parts of the CFA framework). I am pretty sure k-CFA also have the same
+-- bugs/problems with higher-order constants, but I have not fixed them. We
+-- should rework kcfa.mc in the same way as for cfa.mc.
 
 include "set.mc"
 include "either.mc"
@@ -1192,9 +1197,6 @@ lang SeqOpKCFA = KCFA + ConstKCFA + SeqKCFA + SeqOpAst + KBaseConstraint
   -- {lam x. b} ⊆ f ⇒ (names ⊆ x and [{b}] ∈ res)
   | CstrSeqMap2 {f: (IName,Ctx), names: Set (IName,Ctx), res: (IName,Ctx)}
 
-  -- TODO(2023-07-11,dlunde): I suspect the fold constraints below have the
-  -- same problem as in the 0-CFA case. Namely, the constraint that c ⊆ y or c
-  -- ⊆ x (whichever is the accumulator) is missing.
   -- CstrSeqFold<n> implements foldl when left = true, and foldr otherwise
   -- l: [{names}] ∈ seq ⇒ [{f acc n : n ∈ names}] ∈ res
   -- r: [{names}] ∈ seq ⇒ [{f n acc : n ∈ names}] ∈ res
