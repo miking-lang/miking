@@ -1472,7 +1472,7 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA + AppCFA
   | CTensorCreateInt _ -> 2
   | CTensorCreateFloat _ -> 2
   | CTensorCreate _ -> 2
-  | CTensorIterSlice _ -> 2
+  | CTensorIterSlice _ -> 4
 
   sem generateConstraintsConst graph info ident =
   | ( CTensorCreateUninitInt _
@@ -1528,6 +1528,16 @@ lang TensorOpCFA = CFA + ConstCFA + TensorOpAst + SetCFA + AppCFA
     join [
       appConstraints f i a1,
       [CstrInit { lhs = AVSet {names = setOfSeq subi [a1]}, rhs = res }]
+    ]
+  | CTensorIterSlice _ ->
+    utest length args with 2 in
+    let f = get args 0 in
+    let tensor = get args 1 in
+    match intermediates with [ti,i,a1,empty] in
+    join [
+      [CstrSet {lhs = tensor, rhs = ti}],
+      appConstraints f i a1,
+      appConstraints a1 ti empty
     ]
   | ( CTensorGetExn _
     | CTensorLinearGetExn _ ) ->
@@ -2206,11 +2216,12 @@ let t = _parse "
   let t18 = tensorLinearGetExn t12 0 in
   let t19 = tensorLinearGetExn t13 0 in
   let t20 = tensorLinearGetExn t14 0 in
+  let t21 = tensorIterSlice (lam i. lam e. let t22 = e in ()) t5 in
   ()
 ------------------------" in
 utest _test false t
   ["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10",
-   "t11","t12","t13","t14","t15","t16","t17","t18","t19","t20"]
+   "t11","t12","t13","t14","t15","t16","t17","t18","t19","t20", "t21", "t22"]
 with [
   ("t1",  []),
   ("t2",  []),
@@ -2231,7 +2242,9 @@ with [
   ("t17", ["y"]),
   ("t18", ["x"]),
   ("t19", ["x"]),
-  ("t20", ["x"])
+  ("t20", ["x"]),
+  ("t21", []),
+  ("t22", ["x"])
 ] using eqTestLam in
 
 ()
