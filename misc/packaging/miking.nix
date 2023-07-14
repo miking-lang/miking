@@ -1,10 +1,10 @@
 { lib, stdenv,
   coreutils,
   makeWrapper,
-  ocaml-ng
+  ocamlPackages
 }:
 
-with ocaml-ng.ocamlPackages_5_0;
+with ocamlPackages;
 
 stdenv.mkDerivation rec {
   pname = "miking";

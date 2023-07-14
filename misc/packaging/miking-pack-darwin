@@ -1,0 +1,92 @@
+#! /usr/bin/env nix-shell
+#! nix-shell -i bash -p nix git --pure
+
+# Build a tarball with Miking and the necessary dependencies.
+# Usage:
+#
+#     $ /path/to/miking-pack-darwin
+#
+# To run this script, you need only Nix.  See README.md for more
+# information.
+
+set -e
+
+export packdir="$(mktemp -d /tmp/miking-pack.XXXXXX)"
+
+top_deps=('clang.cc' 'llvmPackages.compiler-rt' 'miking')
+
+ocaml_deps=('ocaml' 'findlib' 'dune_3' 'owl' 'lwt' 'toml')
+
+declare -A installed_deps
+
+install_dep() {
+    if [ ! "${installed_deps[$1]+present}" ]; then
+        echo "Copying from $1 to $packdir."
+        cp -an $1/* "$packdir" || :
+        # Files copied from the nix store are unwritable, so update the permissions.
+        chmod -R +w "$packdir"
+        installed_deps["$1"]=
+    else
+	echo "Skipping installed path $1."
+    fi
+}
+
+install_transitive_deps() {
+    # We assume nix store paths contain no spaces or newlines.
+    for dep_path in $(nix-store --query --requisites "$1"); do
+        install_dep "$dep_path"
+    done
+}
+
+install_miking() {
+    echo "Installing Miking and dependencies to $packdir."
+    for dep in "${top_deps[@]}"; do
+        install_transitive_deps \
+            "$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A $dep --no-out-link)"
+    done
+    for dep in "${ocaml_deps[@]}"; do
+        install_transitive_deps \
+	    "$(nix-build "$(dirname "${BASH_SOURCE[0]}")" -A ocamlPackages.$dep --no-out-link)"
+    done
+}
+
+patch_binaries() {
+    echo "Patching dynamic library paths in binaries."
+    find "$packdir/bin" "$packdir/libexec" "$packdir/lib" -type f \
+         ! -name '*.a' ! -name '*.cma' ! -name '*.cmi' ! -name '*.cmti' ! -name '*.cmx' \
+         ! -name '*.h' ! -name '*.la' ! -name '*.ml' ! -name '*.mli' ! -name '*.o' \
+         -exec bash -c 'file "{}" | grep -e "Mach-O"' \; \
+         -exec bash -c 'for name in $(otool -L "{}" | grep -oe "/nix/store/[^/]*/[^ ]*"); do install_name_tool -change "$name" "@loader_path/$(realpath --relative-to="$(dirname "{}")" "$packdir/${name#/nix/store/*/}")" "{}"; done; f="{}"; install_name_tool -id "@rpath/${f#$packdir/lib/}" "{}"' \;
+    mv "$packdir/bin/.mi-wrapped" "$packdir/bin/mi"
+}
+
+prepare_scripts() {
+    echo "Preparing wrapper scripts."
+    cat <<'EOS' > "$packdir/mi"
+#!/bin/sh
+SOURCE="$(dirname "$(realpath "$0")")"
+export OCAMLPATH="$SOURCE/lib/ocaml:$SOURCE/lib/ocaml/5.0.0/site-lib"
+export OCAMLLIB="$SOURCE/lib/ocaml"
+export OCAMLPARAM=":_:ccopt=-resource-dir=$SOURCE:ccopt=-Wl,-rpath,$SOURCE/lib"
+export PATH="$SOURCE/bin"
+export LIBRARY_PATH="$SOURCE/lib"
+export MCORE_LIBS="stdlib=$SOURCE/lib/mcore/stdlib"
+unset  OPAM_SWITCH_PREFIX
+exec -a "$0" "$SOURCE/bin/mi" "$@"
+EOS
+    cat <<'EOS' > "$packdir/bin/as"
+#!/bin/sh
+exec clang -x assembler -integrated-as -c "$@"
+EOS
+    chmod +x "$packdir/mi" "$packdir/bin/as"
+}
+
+make_tarball() {
+    install_miking
+    patch_binaries
+    prepare_scripts
+    tar -C "$(dirname $packdir)" -czvf miking-pack.tar.gz "$(basename $packdir)"
+    rm -rf "$packdir"
+}
+
+make_tarball
