@@ -8,7 +8,7 @@
 -- the compiler is in place.
 
 include "stdlib.mc"
-include "mexpr/utest-generate.mc"
+include "mexpr/load-runtime.mc"
 include "mexpr/duplicate-code-elimination.mc"
 
 
@@ -177,13 +177,12 @@ let includeOtherFuncs =
 
 let includeSpecializeNames = ["pevalWithEnv"]
 
-lang SpecializeInclude = MExprUtestGenerate
+lang SpecializeInclude = MExprLoadRuntime + MExprEliminateDuplicateCode
 
   sem includeSpecializeDeps : Expr -> Expr
   sem includeSpecializeDeps =
   | ast ->
-    let ff = loadRuntime includesLoc in
-    let ast = mergeWithUtestHeaderH (utestEnvEmpty ()) ast ff in
-    resetStore ();
+    let includes = loadRuntime includesLoc in
+    let ast = mergeWithHeader ast includes in
     eliminateDuplicateCode ast
 end

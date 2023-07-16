@@ -22,14 +22,12 @@
 
 include "stdlib.mc"
 include "mexpr/ast.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
 include "mexpr/cmp.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/eval.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
+include "mexpr/load-runtime.mc"
 
 let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
 
@@ -41,10 +39,6 @@ let _utestRuntimeExpected = [
 ]
 let _utestRuntimeCode = ref (None ())
 let _utestRuntimeIds = ref (None ())
-
-let resetStore = lam. modref _utestRuntimeCode (None ());
-                 modref _utestRuntimeIds (None ());
-                 ()
 
 let _pprintId = ref 0
 let _eqId = ref 0
@@ -373,97 +367,87 @@ lang UtestBase =
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"
 end
 
--- The language fragment for handling the utest runtime. This includes a
--- function that produces a typed AST for the runtime file (utest-runtime.mc),
--- as well as functions for accessing identifiers defined in the runtime file.
-lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
-
-  sem loadRuntime : String -> Expr
-  sem loadRuntime =
-  | file ->
-    match deref _utestRuntimeCode with Some ast then ast
-    else
-      let args = defaultBootParserParseMCoreFileArg in
-      let utestRuntimeFile = concat stdlibLoc file in
-      let ast = typeCheck (symbolize (parseMCoreFile args utestRuntimeFile)) in
-      modref _utestRuntimeCode (Some ast);
-      ast
+-- The language fragment for handling the utest runtime. This includes
+-- handling the caching of the loaded AST, as well as functions for
+-- accessing identifiers defined in the runtime file.
+lang UtestRuntime = MExprLoadRuntime + MExprFindSym
 
   sem loadUtestRuntime : () -> Expr
   sem loadUtestRuntime =
-  | _ -> loadRuntime _utestRuntimeLoc
+  | _ ->
+    match deref _utestRuntimeCode with Some ast then ast
+    else
+      let ast = loadRuntime _utestRuntimeLoc in
+      modref _utestRuntimeCode (Some ast);
+      ast
 
-  sem findRuntimeIds : [String] -> String -> [Name]
-  sem findRuntimeIds expected =
-  | file ->
+  sem findRuntimeIds : () -> [Name]
+  sem findRuntimeIds =
+  | _ ->
     match deref _utestRuntimeIds with Some ids then ids
     else
-      let rt = loadRuntime file in
-      match optionMapM identity (findNamesOfStrings expected rt)
+      let rt = loadUtestRuntime () in
+      match optionMapM identity (findNamesOfStrings _utestRuntimeExpected rt)
       with Some ids then
         modref _utestRuntimeIds (Some ids);
         ids
       else error "Missing required identifiers in utest runtime file"
 
-  sem findUtestRuntimeIds : () -> [Name]
-  sem findUtestRuntimeIds =
-  | _ -> findRuntimeIds _utestRuntimeExpected _utestRuntimeLoc
-
   sem utestRunnerName : () -> Name
   sem utestRunnerName =
-  | _ -> get (findUtestRuntimeIds ()) 0
+  | _ -> get (findRuntimeIds ()) 0
 
   sem utestExitOnFailureName : () -> Name
   sem utestExitOnFailureName =
-  | _ -> get (findUtestRuntimeIds ()) 1
+  | _ -> get (findRuntimeIds ()) 1
 
   sem defaultPrettyPrintName : () -> Name
   sem defaultPrettyPrintName =
-  | _ -> get (findUtestRuntimeIds ()) 2
+  | _ -> get (findRuntimeIds ()) 2
 
   sem ppBoolName : () -> Name
   sem ppBoolName =
-  | _ -> get (findUtestRuntimeIds ()) 3
+  | _ -> get (findRuntimeIds ()) 3
 
   sem ppIntName : () -> Name
   sem ppIntName =
-  | _ -> get (findUtestRuntimeIds ()) 4
+  | _ -> get (findRuntimeIds ()) 4
 
   sem ppFloatName : () -> Name
   sem ppFloatName =
-  | _ -> get (findUtestRuntimeIds ()) 5
+  | _ -> get (findRuntimeIds ()) 5
 
   sem ppCharName : () -> Name
   sem ppCharName =
-  | _ -> get (findUtestRuntimeIds ()) 6
+  | _ -> get (findRuntimeIds ()) 6
 
   sem ppSeqName : () -> Name
   sem ppSeqName =
-  | _ -> get (findUtestRuntimeIds ()) 7
+  | _ -> get (findRuntimeIds ()) 7
 
   sem eqBoolName : () -> Name
   sem eqBoolName =
-  | _ -> get (findUtestRuntimeIds ()) 8
+  | _ -> get (findRuntimeIds ()) 8
 
   sem eqIntName : () -> Name
   sem eqIntName =
-  | _ -> get (findUtestRuntimeIds ()) 9
+  | _ -> get (findRuntimeIds ()) 9
 
   sem eqFloatName : () -> Name
   sem eqFloatName =
-  | _ -> get (findUtestRuntimeIds ()) 10
+  | _ -> get (findRuntimeIds ()) 10
 
   sem eqCharName : () -> Name
   sem eqCharName =
-  | _ -> get (findUtestRuntimeIds ()) 11
+  | _ -> get (findRuntimeIds ()) 11
 
   sem eqSeqName : () -> Name
   sem eqSeqName =
-  | _ -> get (findUtestRuntimeIds ()) 12
+  | _ -> get (findRuntimeIds ()) 12
 
   sem joinName : () -> Name
   sem joinName =
-  | _ -> get (findUtestRuntimeIds ()) 13
+  | _ -> get (findRuntimeIds ()) 13
 end
 
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
@@ -1052,32 +1036,6 @@ lang MExprUtestGenerate =
       _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
     _apps exitOnFailure [t]
 
-  -- Merges the AST with the utest header, which consists of the runtime
-  -- definitions from 'utest-runtime.mc'.
-  sem mergeWithUtestHeader : UtestEnv -> Expr -> Expr
-  sem mergeWithUtestHeader env =
-  | ast -> mergeWithUtestHeaderH env ast (loadUtestRuntime ())
-
-  sem mergeWithUtestHeaderH : UtestEnv -> Expr -> Expr -> Expr
-  sem mergeWithUtestHeaderH env ast =
-  | TmLet t ->
-    TmLet {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                  ty = tyTm ast}
-  | TmRecLets t ->
-    TmRecLets {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                      ty = tyTm ast}
-  | TmType t ->
-    TmType {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                   ty = tyTm ast}
-  | TmConDef t ->
-    TmConDef {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                     ty = tyTm ast}
-  | TmUtest t ->
-    TmUtest {t with next = mergeWithUtestHeaderH env ast t.next, ty = tyTm ast}
-  | TmExt t ->
-    TmExt {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                  ty = tyTm ast}
-  | _ -> ast
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
@@ -1090,7 +1048,7 @@ lang MExprUtestGenerate =
     if testsEnabled then
       match replaceUtests (utestEnvEmpty ()) ast with (env, ast) in
       let ast = insertUtestTail ast in
-      let ast = mergeWithUtestHeader env ast in
+      let ast = mergeWithHeader ast (loadUtestRuntime ()) in
       eliminateDuplicateCode ast
     else stripUtests ast
 end
@@ -1106,7 +1064,7 @@ use TestLang in
 let emptyEnv = utestEnvEmpty () in
 
 let eval = lam env. lam e.
-  let e = mergeWithUtestHeader env e in
+  let e = mergeWithHeader e (loadUtestRuntime ()) in
   eval (evalCtxEmpty ()) e
 in
 

@@ -11,7 +11,7 @@ include "mexpr/ast.mc"
 
 include "set.mc"
 
-lang SpecializeUtils = SpecializeAst + SpecializeInclude
+lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
 
   -- Holds the names of constructors/functions/types that could be needed
   -- in peval transformation.

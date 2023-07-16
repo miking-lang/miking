@@ -48,7 +48,6 @@ lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
       mapInsert id extracted m
     ) (mapEmpty nameCmp) ids
 
-
 end
 
 lang TestLang =
