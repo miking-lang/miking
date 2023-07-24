@@ -639,3 +639,52 @@ utest permute "abc" [1, 2, 0] with "cab"
 utest permute "xy" [0, 1] with "xy"
 utest permute "abcd" [0, 3, 1, 2] with "acdb"
 utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
+
+
+-- Concatenate a sequence of sequences [s1, s2, ..., sn], interleaving each
+-- sequence si with a delimiter
+recursive
+  let seqJoin: all a. [a] -> [[a]] -> [a] = lam delim. lam ss.
+  if null ss
+  then []
+  else if eqi (length ss) 1
+       then head ss
+       else concat (concat (head ss) delim) (seqJoin delim (tail ss))
+end
+
+utest seqJoin [7,7] [[1,2,3], [4,5,6], [0,0]] with [1,2,3,7,7,4,5,6,7,7,0,0]
+utest seqJoin [] [[1,2,3],[4,5,6]] with [1,2,3,4,5,6]
+utest seqJoin [7,7,7,7,7] [[1,2,3]] with [1,2,3]
+utest seqJoin [7,7,7,7] [] with []
+
+
+-- Replace all subsequences that match the provided check sequence by a fixed
+-- replacement subsequence.
+let subseqReplace: all a. (a -> a -> Bool) -> [a] -> [a] -> [a] -> [a] =
+    lam eq. lam check. lam replacement. lam seq.
+    -- Ignore empty check sequences
+    if null check then seq
+    else --continue
+    recursive let work = lam checkIdx. lam seqIdx. lam acc.
+      if eqi checkIdx (length check) then -- found match
+        work 0 seqIdx (concat acc replacement)
+      else if eqi seqIdx (length seq) then -- base case, end of sequence
+        concat acc (subsequence seq (subi seqIdx checkIdx) (addi checkIdx 1))
+      else
+        let eCheck = get check checkIdx in
+        let eSeq = get seq seqIdx in
+        if eq eCheck eSeq then
+          work (addi checkIdx 1) (addi seqIdx 1) acc
+        else
+          work 0 (addi seqIdx 1) (concat acc (subsequence seq (subi seqIdx checkIdx) (addi checkIdx 1)))
+    in
+    work 0 0 []
+
+utest subseqReplace eqi [] [10] [1,1,1] with [1,1,1]
+utest subseqReplace eqi [1] [2] [1,1,1] with [2,2,2]
+utest subseqReplace eqi [1] [2] [3,1,3] with [3,2,3]
+utest subseqReplace eqi [1,1] [2,2] [3,1,3,1,1,1] with [3,1,3,2,2,1]
+utest subseqReplace eqi [1,1] [2] [3,1,3,1,1] with [3,1,3,2]
+utest subseqReplace eqi [3,4,5] [42,42] [1,2,3,4,5,6,7] with [1,2,42,42,6,7]
+utest subseqReplace eqi [1,1] [100,101,100] [0,1,0,1,2,1,1,3,4,0,0,1,1,0,1,0] with [0,1,0,1,2,100,101,100,3,4,0,0,100,101,100,0,1,0]
+utest subseqReplace eqi [1,1] [2] [3,4,3] with [3,4,3]
