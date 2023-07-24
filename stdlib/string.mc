@@ -248,7 +248,7 @@ utest stringIsInt "a1" with false
 utest stringIsInt "" with false
 
 
--- Joins the strings in strs on delim
+-- Join a list of strings on a delimiter
 let strJoin: String -> [String] -> String = seqJoin
 
 utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
@@ -264,5 +264,6 @@ utest strReplace "" "bar" "a string" with "a string"
 utest strReplace "." "bar" "a string" with "a string"
 utest strReplace "bar" "babar" "foo bar" with "foo babar"
 utest strReplace "-" "--" "mi run -help -flag" with "mi run --help --flag"
-utest strReplace "-" "--" "mi run --help --flag" with "mi run ----help ----flag"
-utest strReplace "viking" "miking" "two vikings on a boat" with "two mikings on a boat"
+utest strReplace "-" "--" "mi --help --flag" with "mi ----help ----flag"
+utest strReplace "viking" "miking" "two vikings" with "two mikings"
+utest strReplace "dog" "cat" "every dog loves dogs" with "every cat loves cats"

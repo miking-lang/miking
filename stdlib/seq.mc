@@ -642,7 +642,7 @@ utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
 
 
 -- Concatenate a sequence of sequences [s1, s2, ..., sn], interleaving each
--- sequence si with a delimiter
+-- sequence si on a delimiter
 recursive
   let seqJoin: all a. [a] -> [[a]] -> [a] = lam delim. lam ss.
   if null ss
@@ -658,8 +658,8 @@ utest seqJoin [7,7,7,7,7] [[1,2,3]] with [1,2,3]
 utest seqJoin [7,7,7,7] [] with []
 
 
--- Replace all subsequences that match the provided check sequence by a fixed
--- replacement subsequence.
+-- Replace all occurrences of the provided sequence `check` by another sequence
+-- `replacement`, in order of left to right.
 let subseqReplace: all a. (a -> a -> Bool) -> [a] -> [a] -> [a] -> [a] =
     lam eq. lam check. lam replacement. lam seq.
     -- Ignore empty check sequences
@@ -676,7 +676,9 @@ let subseqReplace: all a. (a -> a -> Bool) -> [a] -> [a] -> [a] -> [a] =
         if eq eCheck eSeq then
           work (addi checkIdx 1) (addi seqIdx 1) acc
         else
-          work 0 (addi seqIdx 1) (concat acc (subsequence seq (subi seqIdx checkIdx) (addi checkIdx 1)))
+          work 0 (addi seqIdx 1) (concat acc (subsequence seq
+                                                          (subi seqIdx checkIdx)
+                                                          (addi checkIdx 1)))
     in
     work 0 0 []
 
