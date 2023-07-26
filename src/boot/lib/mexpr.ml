@@ -1001,6 +1001,8 @@ let rec is_value = function
       true
   | TmTensor (_, _) ->
       true
+  | TmVar (_, _, _, _, _) ->
+      true
   | _ ->
       false
 
@@ -2307,33 +2309,15 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConApp (fi, x, s, rhs)
   (* Match *)
-  | TmMatch (fi, t1, p, t2, t3) -> (
-      let _ = fi in
-      match try_match env (eval env pe t1) p with
-      | Some env ->
-          eval env pe t2
-      | None ->
-          eval env pe t3 )
-  (* try 1 --
-        let t1' = eval env pe t1 in
+  | TmMatch (fi, t1, p, t2, t3) ->
+      let t1' = eval env pe t1 in
       if is_value t1' then
-       (match try_match env t1' p with
+        match try_match env t1' p with
         | Some env ->
-           eval env pe t2
+            eval env pe t2
         | None ->
-           eval env pe t3 )
-     else
-       TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)) *)
-  (* try 2 --
-     let t1' = eval env pe t1 in
-     match try_match env t1' p with
-      | Some env ->
-         eval env pe t2
-      | None ->
-         if is_value t1' then
-           TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)
-         else
-           eval env pe t3 ) *)
+            eval env pe t3
+      else TmMatch (fi, t1', p, eval env pe t2, eval env pe t3)
   (* Dive *)
   | TmDive (_, _, t) -> (
     match eval env pe t with
