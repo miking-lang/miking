@@ -13,7 +13,7 @@ let _symbmap = ref SymbMap.empty
    a symbol may contain a side effect. *)
 let tm_has_side_effect nmap tm =
   let rec work nmap (acc_se, acc_prerun) = function
-    | TmVar (_, _, s, _, _) -> (
+    | TmVar (_, _, s, _) -> (
         if acc_se then (true, acc_prerun)
         else
           match SymbMap.find_opt s nmap with
@@ -37,16 +37,16 @@ let tm_has_side_effect nmap tm =
 
 (* Help function that collects all variables in a term *)
 let rec collect_vars (free : SymbSet.t) = function
-  | TmVar (_, _, s, _, _) ->
+  | TmVar (_, _, s, _) ->
       SymbSet.add s free
   | t ->
       sfold_tm_tm collect_vars free t
 
 (* Helper function that counts the number of lambdas directly below in a term *)
 let rec lam_counts n nmap = function
-  | TmLam (_, _, _, _, _, tlam) ->
+  | TmLam (_, _, _, _, tlam) ->
       lam_counts (n + 1) nmap tlam
-  | TmVar (_, _, s, _, _) -> (
+  | TmVar (_, _, s, _) -> (
     match SymbMap.find_opt s nmap with
     | Some (_, _, _, n_lambdas) ->
         n + n_lambdas
@@ -61,7 +61,7 @@ let rec lambdas_left nmap n se = function
   | TmApp (_, t1, t2) ->
       let tm_se, _ = tm_has_side_effect nmap t2 in
       lambdas_left nmap (n - 1) (se || tm_se) t1
-  | TmVar (_, _, s, _, _) -> (
+  | TmVar (_, _, s, _) -> (
     match SymbMap.find_opt s nmap with
     | Some (_, _, se2, n_lambdas) ->
         let left = max 0 (n + n_lambdas) in
@@ -88,7 +88,7 @@ let rec lambdas_in_type = function
           (d) Lambda count. That is, how many lambdas that are at the top of the body
    2. Free Vars: A symbol set with all variables that are free (not under a lambda in a let) *)
 let collect_in_body s nmap free = function
-  | TmLam (_, _, _, _, _, tlam) ->
+  | TmLam (_, _, _, _, tlam) ->
       let vars = collect_vars SymbSet.empty tlam in
       (* Note: we need to compute the side effect,
          if other open terms refer to this term *)
@@ -109,7 +109,7 @@ let collect_in_body s nmap free = function
    all variables that are free, not under a lambda in a let *)
 let collect_lets nmap t =
   let rec work (nmap, free) = function
-    | TmVar (_, _, s, _, _) ->
+    | TmVar (_, _, s, _) ->
         (nmap, SymbSet.add s free)
     | TmLet (_, _, s, _, t1, t2) ->
         work (collect_in_body s nmap free t1) t2

@@ -16,7 +16,6 @@ con TmLeq    : (Term, Term) -> Term in
 con TmAdd    : (Term, Term) -> Term in
 con TmSub    : (Term, Term) -> Term in
 con TmClos   : (String, Term, AssocSec String Term) -> Term in
-con TmFix    : (Term) -> Term in
 
 let insert = assocSeqInsert in
 let lookup = assocSeqLookup {eq = eqString} in
@@ -42,6 +41,7 @@ let p3 = TmLam("x",
            TmIf(TmLeq(TmVar("x"), TmInt(7)), TmInt(100), TmInt(200)))
 in
 
+let p4 = TmLetRec("my", TmLam("x", TmVar("x")), TmVar("my")) in
 
 recursive
   let lower = lam env. lam t.
@@ -82,6 +82,6 @@ dprint (fib 10); print "\n"
 -/
 
 
-let fib = lam y. prerun (lower [] p3) y in
+let fib = lam y. prerun (lower [] p4) y in
 dprint fib; print "\n------\n";
 dprint (fib 3); print "\n"

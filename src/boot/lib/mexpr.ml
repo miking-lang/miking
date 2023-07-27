@@ -154,11 +154,11 @@ let reportErrorAndExit err =
 
 let getData = function
   (* Terms *)
-  | PTreeTm (TmVar (fi, x, _, _, frozen)) ->
+  | PTreeTm (TmVar (fi, x, _, frozen)) ->
       (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
-  | PTreeTm (TmLam (fi, x, _, _, ty, t)) ->
+  | PTreeTm (TmLam (fi, x, _, ty, t)) ->
       (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
       (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
@@ -1001,7 +1001,7 @@ let rec is_value = function
       true
   | TmTensor (_, _) ->
       true
-  | TmVar (_, _, _, _, _) ->
+  | TmVar (_, _, _, _) ->
       true
   | _ ->
       false
@@ -2075,13 +2075,13 @@ and pt_seq env ps =
 and pat_transform (env : (Symb.t * tm) list) (p : pat) =
   let new_sym fi env s x =
     match List.assoc_opt s env with
-    | Some (TmVar (_, _, s', _, _)) ->
+    | Some (TmVar (_, _, s', _)) ->
         (env, s')
     | Some _ ->
         failwith "Should not happen"
     | None ->
         let s' = Symb.gensym () in
-        let tvar = TmVar (fi, x, s', false, false) in
+        let tvar = TmVar (fi, x, s', false) in
         ((s, tvar) :: env, s')
   in
   match p with
@@ -2180,9 +2180,9 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
+          | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref)) :: !env_ref
           | _ ->
               peval := true )
         lst ;
@@ -2198,15 +2198,15 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
   | TmMatch (fi, t1, p, t2, t3) ->
       let env', p' = pat_transform env p in
       TmMatch (fi, scan env t1, p', scan env' t2, scan env' t3)
-  | TmLam (fi, x, s, pe, ty, t) ->
+  | TmLam (fi, x, s, ty, t) ->
       (* printf "TmLam: %s \n" (Ustring.to_utf8 x); *)
       let s' = Symb.gensym () in
-      let tvar = TmVar (fi, x, s', pe, false) in
-      TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
-  | TmVar (_, _, s, _, _) as t1 -> (
+      let tvar = TmVar (fi, x, s', false) in
+      TmLam (fi, x, s', ty, scan ((s, tvar) :: env) t)
+  | TmVar (_, _, s, _) as t1 -> (
     match List.assoc_opt s env with
     | Some t2 -> (
-      match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
+      match t2 with TmVar (_, _, _, _) -> t2 | _ -> t1 )
     | None ->
         t1 )
   | TmPreRun (_, _, t) ->
@@ -2218,7 +2218,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s, _, _) -> (
+  | TmVar (_, _, s, _) -> (
     match List.assoc_opt s env with
     | Some t2 -> (
       match t2 with
@@ -2240,8 +2240,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       let a = eval env pe t2 in
       apply pe fiapp f a
   (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, pes, _ty, t1) ->
-      TmClos (fi, x, s, pes, t1, ref env)
+  | TmLam (fi, x, s, ty, t1) ->
+      TmClos (fi, x, s, ty, t1, ref env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
@@ -2252,16 +2252,16 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
+          | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref)) :: !env_ref
           | _ ->
               peval := true )
         lst ;
       if !peval then
         let f env (fi, x, s, ty, t) =
           let s' = Symb.gensym () in
-          let tvar = TmVar (fi, x, s', false, false) in
+          let tvar = TmVar (fi, x, s', false) in
           let env' = (s, tvar) :: env in
           (env', (fi, x, s', ty, t))
         in
@@ -2321,11 +2321,11 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* Dive *)
   | TmDive (_, _, t) -> (
     match eval env pe t with
-    | TmClos (fi, x, s, _, t, env_ref) ->
+    | TmClos (fi, x, s, ty, t, env_ref) ->
         let s' = Symb.gensym () in
-        let tvar = TmVar (fi, x, s', false, false) in
+        let tvar = TmVar (fi, x, s', false) in
         let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
-        TmClos (fi, x, s', false, t', env_ref)
+        TmClos (fi, x, s', ty, t', env_ref)
     | t' ->
         t' )
   (* PreRun *)
@@ -2392,9 +2392,9 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
+          | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref)) :: !env_ref
           | _ ->
               failwith "Incorrect RecLets" )
         lst ;
