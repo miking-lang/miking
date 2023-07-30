@@ -2247,7 +2247,33 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (fi, lst, t2) ->
-      let env_ref = ref env in
+      let env_top = List.map (fun (_, _, s, _, t) -> (s, eval env pe t)) lst in
+      let update_env = function
+        | _, TmClos (_, _, _, _, _, env_ref) ->
+            env_ref := env_top @ !env_ref
+        | _ ->
+            raise_error fi "Recursive lets must be of function types."
+      in
+      List.iter update_env env_top ;
+      eval (env_top @ env) pe t2
+  (*
+     let lst_tms =
+       List.map (fun (fi, x, s, ty, t) ->
+           ((fi, x, s, ty, t), eval env pe t)) lst in
+     let env_top =
+       List.map (fun ((_, _, s, _, _), t) -> (s,t)) lst_tms  in
+     let mk_env = function
+       | ((fi, x, s, ty, _),
+          TmClos(_,_,_,_,_, env_ref)) ->
+          env_ref := env_top @ !env_ref
+       | _ -> raise_error fi
+                "Recursive lets must be of function types."
+     in
+     List.iter mk_env lst_tms;
+     eval (env_top@env) pe t2
+     *)
+  (*
+     let env_ref = ref env in
       let peval = ref false in
       List.iter
         (fun (_, _, s1, _, t) ->
@@ -2269,7 +2295,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         let g (fi, x, s, ty, t) = (fi, x, s, ty, eval env' pe t) in
         let lst'' = List.map g lst' in
         TmRecLets (fi, lst'', eval env' pe t2)
-      else eval !env_ref pe t2
+        else eval !env_ref pe t2
+             *)
   (* Constant *)
   | TmConst (_, _) ->
       t

@@ -65,4 +65,4 @@ in
 let fib = lam y. prerun lower [("y", y)] p in
 
 dprint fib; print "\n------\n";
-dprint (fib 1); print "\n"
+dprint (fib 3); print "\n"
