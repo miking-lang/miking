@@ -1,15 +1,18 @@
-
--- Tests the feature of having expressions in recursive lets
+-- Tests that recursive lets can have expressions that evaluates
+-- to closures.
 
 mexpr
 
--- Makes the false choice if an argument is supplied to the program
-let choice = eqi (length argv) 1 in
-
-recursive
-let f = if choice then lam x. x else lam x. fact x
-let fact = lam n. if eqi n 0 then 1 else muli (fact (subi n 1)) n
+let foo = lam b. lam x.
+    recursive
+    let f = if b then lam x. fact x else lam x. x
+    let fact = lam n. if eqi n 0 then 1 else muli (fact (subi n 1)) n
+    in
+    f x
 in
 
-
-dprint (f 4); print "\n"
+utest foo false 4 with 4 in
+utest foo false 10 with 10 in
+utest foo true 4 with 24 in
+utest foo true 5 with 120 in
+()
