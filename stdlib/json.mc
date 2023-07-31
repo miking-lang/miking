@@ -1,4 +1,4 @@
--- Compiant with the specification from
+-- Compliant with the specification from
 -- https://www.json.org/json-en.html
 -- Only divergence from the spec is the distinction between floats and integers
 
