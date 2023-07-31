@@ -98,8 +98,8 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let env : AddIdentifierAccelerateEnv = env in
     (env.functions, t)
 
-  sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
-  | TmAccelerate t ->
+  sem replaceTermWithLet (env : AddIdentifierAccelerateEnv) =
+  | t ->
     let accelerateIdent = getUniqueIdentifier env.programIdentifiers in
     let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
     let retType = t.ty in
@@ -132,6 +132,9 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
         ty = retType, info = info}
     in
     (env, accelerateLet)
+
+  sem addIdentifierToAccelerateTermsH (env : AddIdentifierAccelerateEnv) =
+  | TmAccelerate t -> replaceTermWithLet env t
   | t -> smapAccumL_Expr_Expr addIdentifierToAccelerateTermsH env t
 
   -- Construct an extracted AST from the given AST, containing all terms that
