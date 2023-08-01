@@ -334,6 +334,8 @@ end
 
 let bind_ = bindF_ (lam. lam expr. expr)
 
+let bindWithEnd_ = bindF_ (lam letexpr. lam expr. bind_ expr letexpr)
+
 let bindall_ = use MExprAst in
   lam exprs.
   foldr1 bind_ exprs
