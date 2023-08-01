@@ -1,5 +1,8 @@
 
 
+-- The example show two ways of specializing a function,
+-- using only prerun, or a combination of prerun and dive
+
 mexpr
 
 recursive
