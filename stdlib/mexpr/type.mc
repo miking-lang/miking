@@ -23,6 +23,20 @@ lang AppTypeGetArgs = AppTypeAst
     (ty, [])
 end
 
+-- Return the type (TyCon) which a constructor (TmConDef) belongs to.
+lang GetConDefType = MExprAst
+  sem getConDefType: Type -> Type
+  sem getConDefType =
+  | ty ->
+    let ty = (stripTyAll ty).1 in
+    match ty with TyArrow t then
+      recursive let getTyLhs = lam ty.
+        match ty with TyApp t then getTyLhs t.lhs
+        else ty
+      in getTyLhs t.to
+    else error "Invalid type in getConDefType"
+end
+
 -- Returns the arity of a function type
 recursive let arityFunType = use MExprAst in lam ty.
   match ty with TyArrow t then addi 1 (arityFunType t.to) else 0
@@ -39,7 +53,7 @@ let isHigherOrderFunType = use MExprAst in lam ty.
   in
   rec false false ty
 
-lang Test = MExprAst + MExprConstType end
+lang Test = MExprAst + MExprConstType + GetConDefType end
 
 mexpr
 use Test in
@@ -49,4 +63,10 @@ utest isHigherOrderFunType (tyConst (CGet ())) with false in
 utest isHigherOrderFunType (tyConst (CAddi ())) with false in
 utest isHigherOrderFunType (tyConst (CMap ())) with true in
 utest isHigherOrderFunType (tyConst (CIter ())) with true in
+
+utest match getConDefType (tyall_ "a" (tyall_ "b"
+        (tyarrow_ (tyint_) (tyapp_ (tycon_ "Con") (tyvar_ "a")))))
+      with TyCon t then t.ident else error "Impossible"
+with nameNoSym "Con" in
+
 ()

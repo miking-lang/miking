@@ -5,6 +5,8 @@
 include "either.mc"
 include "map.mc"
 include "string.mc"
+include "option.mc"
+include "tensor.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue
@@ -337,6 +339,63 @@ recursive let jsonEq: JsonValue -> JsonValue -> Bool =
   end
 end
 
+-- JSON Serialization and deserialization functions for builtin MExpr data
+-- types
+let jsonSerializeBool: Bool -> JsonValue = lam b. JsonBool b
+let jsonDeserializeBool: JsonValue -> Option Bool = lam jb.
+  match jb with JsonBool b then Some b else None ()
+
+let jsonSerializeInt: Int -> JsonValue = lam i. JsonInt i
+let jsonDeserializeInt: JsonValue -> Option Int = lam ji.
+  match ji with JsonInt i then Some i else None ()
+
+let jsonSerializeFloat: Float -> JsonValue = lam f. JsonFloat f
+let jsonDeserializeFloat: JsonValue -> Option Float = lam jf.
+  match jf with JsonFloat f then Some f else None ()
+
+let jsonSerializeChar: Char -> JsonValue = lam c. JsonString [c]
+let jsonDeserializeChar: JsonValue -> Option Char = lam jc.
+  match jc with JsonString [c] then Some c else None ()
+
+let jsonSerializeString: String -> JsonValue = lam s. JsonString s
+let jsonDeserializeString: JsonValue -> Option String = lam js.
+  match js with JsonString s then Some s else None ()
+
+let jsonSerializeSeq: all a. (a -> JsonValue) -> [a] -> JsonValue =
+  lam f. lam seq. JsonArray (map f seq)
+let jsonDeserializeSeq: all a. (JsonValue -> Option a) -> JsonValue -> Option [a] =
+  lam f. lam jseq.
+    match jseq with JsonArray jv then optionMapM f jv else None ()
+
+let keyTensorShape = "__tensorShape__"
+let keyTensor = "__tensor__"
+let jsonSerializeTensor: all a. (a -> JsonValue) -> Tensor[a] -> JsonValue =
+  lam f. lam tensor.
+    let shape = tensorShape tensor in
+    let jshape = jsonSerializeSeq jsonSerializeInt shape in
+    let n = foldl muli 1 shape in
+    let seq = create n (lam i. tensorLinearGetExn tensor i) in
+    let jseq = jsonSerializeSeq f seq in
+    JsonObject (mapFromSeq cmpString [
+      (keyTensorShape,jshape),
+      (keyTensor,jseq)
+    ])
+let jsonDeserializeTensor: all a.
+  (JsonValue -> Option a) ->
+  ([Int] -> ([Int] -> a) -> Tensor[a]) ->
+  JsonValue -> Option Tensor[a] =
+    lam f. lam tcreate. lam jtensor.
+      match jtensor with JsonObject m then
+        match mapLookup keyTensorShape m with Some jshape then
+          match mapLookup keyTensor m with Some jseq then
+            match jsonDeserializeSeq jsonDeserializeInt jshape with Some shape then
+              match jsonDeserializeSeq f jseq with Some seq then
+                Some (tensorOfSeqExn tcreate shape seq)
+              else None ()
+            else None ()
+          else None ()
+        else None ()
+      else None ()
 
 mexpr
 
@@ -424,5 +483,49 @@ utest jsonParse "    {\t\t\t
    \"mynull\":
    null}"
 with Left myOtherJsonObject using eitherEq jsonEq eqString in
+
+-- Tests for JSON serializers and deserializers
+
+utest jsonSerializeBool false with JsonBool false using jsonEq in
+utest jsonDeserializeBool (JsonBool false) with Some false in
+utest jsonDeserializeBool (JsonNull ()) with None () in
+
+utest jsonSerializeInt 1 with JsonInt 1 using jsonEq in
+utest jsonDeserializeInt (JsonInt 1) with Some 1 in
+utest jsonDeserializeInt (JsonNull ()) with None () in
+
+utest jsonSerializeFloat 1. with JsonFloat 1. using jsonEq in
+utest jsonDeserializeFloat (JsonFloat 1.) with Some 1. in
+utest jsonDeserializeFloat (JsonNull ()) with None () in
+
+utest jsonSerializeChar 'c' with JsonString "c" using jsonEq in
+utest jsonDeserializeChar (JsonString "c") with Some 'c' in
+utest jsonDeserializeChar (JsonNull ()) with None () in
+
+utest jsonSerializeString "str" with JsonString "str" using jsonEq in
+utest jsonDeserializeString (JsonString "str") with Some "str" in
+utest jsonDeserializeString (JsonNull ()) with None () in
+
+utest jsonSerializeSeq jsonSerializeBool [false, true]
+with JsonArray [JsonBool false, JsonBool true]
+using jsonEq in
+utest jsonDeserializeSeq jsonDeserializeBool (JsonArray [JsonBool false, JsonBool true])
+with Some [false, true] in
+utest jsonDeserializeSeq jsonDeserializeBool (JsonArray [JsonInt 1, JsonBool true])
+with None () in
+
+let tensor = (tensorOfSeqExn tensorCreateCArrayInt [3,3]
+                [1,2,3,
+                 4,5,6,
+                 7,8,9]) in
+let jtensor = JsonObject (mapFromSeq cmpString [
+                (keyTensorShape, JsonArray [JsonInt 3, JsonInt 3]),
+                (keyTensor, JsonArray [JsonInt 1, JsonInt 2, JsonInt 3,
+                                       JsonInt 4, JsonInt 5, JsonInt 6,
+                                       JsonInt 7, JsonInt 8, JsonInt 9])
+              ]) in
+utest jsonSerializeTensor jsonSerializeInt tensor with jtensor using jsonEq in
+utest jsonDeserializeTensor jsonDeserializeInt tensorCreateCArrayInt jtensor
+with Some tensor in
 
 ()
