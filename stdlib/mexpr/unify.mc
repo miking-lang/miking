@@ -60,8 +60,21 @@ lang FlexTypeAst = VarSortAst + Ast
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyFlex t & ty ->
-    match deref t.contents with Link inner then f acc inner
-    else (acc, ty)
+    recursive let work = lam ty.
+      match ty with TyFlex x then
+        switch deref x.contents
+        case Link l then
+          let new = work l in
+          modref x.contents (Link new);
+          new
+        case Unbound _ then
+          ty
+        end
+      else ty in
+    switch work ty
+    case TyFlex _ then (acc, ty)
+    case ty1 then f acc ty1
+    end
 end
 
 lang FlexTypeCmp = Cmp + FlexTypeAst
@@ -117,38 +130,28 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unifier = FlexTypeAst
-  syn TCError =
-  | TypeUnificationError (Type, Type)
+lang Unify = AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
+  type UnifyEnv = {
+    wrappedLhs: Type,  -- The currently examined left-hand subtype, before resolving aliases
+    wrappedRhs: Type,  -- The currently examined right-hand subtype, before resolving aliases
+    boundNames: BiNameMap  -- The bijective correspondence between bound variables in scope
+  }
 
-  type TCResult a = Result () TCError a
+  syn UnifyError =
+  | Types (Type, Type)
+  | Rows (Map SID Type, Map SID Type)
+  | Kinds (VarSort, VarSort)
 
-  syn Unifier =
-  -- Intentionally left blank
+  type UnifyResult a = Result () UnifyError a
+  type Unifier = [(Ref FlexVar, Type)]
 
-  sem uempty : () -> Unifier
-
-  sem uconcat : Unifier -> Unifier -> TCResult Unifier
-
-  sem uinsert : FlexVarRec -> Type -> Unifier -> TCResult Unifier
-end
-
-lang Unify = Unifier + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
-  syn UnifyExt =
-  -- Intentionally left blank
-
-  type UnifyEnv =
-    { wrappedLhs : Type
-    , wrappedRhs : Type
-    , boundNames : BiNameMap
-    , ext        : UnifyExt
-    }
-
-  -- Unify the types `ty1' and `ty2', where
-  -- `ty1' is the expected type of an expression, and
-  -- `ty2' is the inferred type of the expression,
-  -- under the assumptions of `env'.
-  sem unifyTypes : UnifyEnv -> (Type, Type) -> TCResult Unifier
+  -- Unify the types `ty1` and `ty2`, where
+  -- `ty1` is the expected type of an expression, and
+  -- `ty2` is the inferred type of the expression,
+  -- under the assumptions of `env`.  Returns a list of pairs
+  -- `var, ty`, where variable `var` should be unified with the type
+  -- `ty`.
+  sem unifyTypes : UnifyEnv -> (Type, Type) -> UnifyResult Unifier
   sem unifyTypes env =
   | (ty1, ty2) ->
     unifyBase
@@ -159,197 +162,122 @@ lang Unify = Unifier + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   -- assumptions of env.
   -- IMPORTANT: Assumes that ty1 = unwrapType env.wrappedLhs and
   -- ty2 = unwrapType env.wrappedRhs.
-  sem unifyBase : UnifyEnv -> (Type, Type) -> TCResult Unifier
+  sem unifyBase : UnifyEnv -> (Type, Type) -> UnifyResult Unifier
   sem unifyBase env =
   | (ty1, ty2) ->
-    result.err (TypeUnificationError (ty1, ty2))
-
-  -- unifyCheck is called before a variable `tv' is unified with another type.
-  sem unifyCheck : UnifyEnv -> FlexVarRec -> Type -> TCResult ()
+    result.err (Types (ty1, ty2))
 end
 
 -- Helper language providing functions to unify fields of record-like types
 lang UnifyRows = Unify
-
   -- Check that 'm1' is a subset of 'm2'
-  sem unifyRowsSubset : UnifyEnv -> Map SID Type -> Map SID Type -> TCResult Unifier
+  sem unifyRowsSubset : UnifyEnv -> Map SID Type -> Map SID Type -> UnifyResult Unifier
   sem unifyRowsSubset env m1 =
   | m2 ->
-    let f = lam b.
-      match b with (k, tyfield1) in
-      match mapLookup k m2 with Some tyfield2 then
-        unifyTypes env (tyfield1, tyfield2)
-      else
-        result.err (RowUnificationError (m1, m2))
+    let f = lam acc. lam b.
+      let unifier =
+        match b with (k, tyfield1) in
+        match mapLookup k m2 with Some tyfield2 then
+          unifyTypes env (tyfield1, tyfield2)
+        else
+          result.err (Rows (m1, m2))
+      in
+      result.map2 concat acc unifier
     in
-    let g = lam acc. lam b. result.bind (result.map2 uconcat acc (f b)) (lam x. x) in
-    (result.mapAccumLM g (mapBindings m1)).0
+    foldl f (result.ok []) (mapBindings m1)
 
   -- Check that 'm1' and 'm2' contain the same fields
-  sem unifyRowsStrict : UnifyEnv -> Map SID Type -> Map SID Type -> TCResult Unifier
+  sem unifyRowsStrict : UnifyEnv -> Map SID Type -> Map SID Type -> UnifyResult Unifier
   sem unifyRowsStrict env m1 =
   | m2 ->
     if eqi (mapSize m1) (mapSize m2) then
       unifyRowsSubset env m1 m2
     else
-      result.err (RowUnificationError (m1, m2))
+      result.err (Rows (m1, m2))
+
+  -- Check that the intersection of 'm1' and 'm2' unifies, then return their union
+  sem unifyRowsUnion : UnifyEnv -> Map SID Type -> Map SID Type -> (UnifyResult Unifier, Map SID Type)
+  sem unifyRowsUnion env m1 =
+  | m2 ->
+    let f = lam acc. lam b.
+      match b with (k, tyfield1) in
+      match mapLookup k acc.1 with Some tyfield2 then
+        (result.map2 concat acc.0 (unifyTypes env (tyfield1, tyfield2)), acc.1)
+      else
+        (acc.0, mapInsert k tyfield1 acc.1)
+    in
+    foldl f (result.ok [], m2) (mapBindings m1)
 end
 
 lang VarTypeUnify = Unify + VarTypeAst
   sem unifyBase env =
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
-    if nameEq t1.ident t2.ident then result.ok (uempty ())
-    else if biMem (t1.ident, t2.ident) env.boundNames then result.ok (uempty ())
-    else result.err (TypeUnificationError (ty1, ty2))
+    if nameEq t1.ident t2.ident then result.ok []
+    else if biMem (t1.ident, t2.ident) env.boundNames then result.ok []
+    else result.err (Types (ty1, ty2))
 end
 
-lang FlexTypeUnify = UnifyRows + FlexTypeAst + RecordTypeAst
-  sem addSorts : UnifyEnv -> (VarSort, VarSort) -> TCResult (Unifier, VarSort)
-  sem addSorts env =
-  | (RecordVar r1, RecordVar r2) ->
-    let f = lam acc. lam b.
-      match b with (k, tyfield1) in
-      match mapLookup k acc.1 with Some tyfield2 then
-        let res =
-          result.bind
-            (result.map2 uconcat acc.0 (unifyTypes env (tyfield1, tyfield2) b))
-            (lam x. x)
-        in
-        (res, acc.1)
-      else
-        (acc.0, mapInsert k tyfield1 acc.1)
-    in
-    match foldl f (result.ok (uempty ()), r2.fields) (mapBindings r1.fields)
-      with (unifier, fields)
-    in (unifier, RecordVar {r1 with fields = fields})
-  | (RecordVar _ & rv, ! RecordVar _ & tv)
-  | (! RecordVar _ & tv, RecordVar _ & rv) ->
-    (uempty (), rv)
-  | (PolyVar _, PolyVar _) -> (uempty (), PolyVar ())
-  | (s1, s2) -> (uempty (), MonoVar ())
-
+lang FlexTypeUnify = Unify + FlexTypeAst + RecordTypeAst
   sem unifyBase env =
-  | (TyFlex t1 & ty1, TyFlex t2 & ty2) ->
-    match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
-    if not (nameEq r1.ident r2.ident) then
-      unifyCheck env r1 ty2;
-      unifyCheck env r2 ty1;
-      let updated =
-        Unbound {r1 with level = mini r1.level r2.level,
-                         sort = addSorts env (r1.sort, r2.sort)} in
-      modref t1.contents updated;
-      modref t2.contents (Link ty1)
-    else ()
-  | (TyFlex t1 & ty1, !TyFlex _ & ty2) ->
-    match deref t1.contents with Unbound tv in
-    unifyCheck env tv ty2;
-    (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
-      unifyRowsSubset env r1.fields r2.fields
-    else match tv.sort with RecordVar _ then
-      unificationError env
-    else ());
-    modref t1.contents (Link env.rhsName)
+  | (TyFlex t1, ty2) ->
+    result.ok [(t1.contents, env.wrappedRhs)]
   | (!TyFlex _ & ty1, TyFlex _ & ty2) ->
-    unifyBase {env with lhsName = env.rhsName, rhsName = env.lhsName} (ty2, ty1)
-
-  sem unifyCheckBase env boundVars tv =
-  | TyFlex t ->
-    match deref t.contents with Unbound r in
-    if nameEq r.ident tv.ident then
-      let msg = join [
-        "* Encountered a type occurring within itself.\n",
-        "* Recursive types are only permitted using data constructors.\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle env.info msg
-    else
-      let sort =
-        match (tv.sort, r.sort) with (MonoVar _, PolyVar _) then MonoVar ()
-        else
-          sfold_VarSort_Type
-            (lam. lam ty. unifyCheckType env boundVars tv ty) () r.sort;
-          r.sort
-      in
-      let updated = Unbound {r with level = mini r.level tv.level,
-                                    sort  = sort} in
-      modref t.contents updated
+    unifyBase {env with wrappedLhs = env.wrappedRhs, wrappedRhs = env.wrappedLhs} (ty2, ty1)
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyArrow {from = from1, to = to1}, TyArrow {from = from2, to = to2}) ->
-    unifyTypes env (from1, from2);
-    unifyTypes env (to1, to2)
+  | (TyArrow t1, TyArrow t2) ->
+    result.map2 concat
+      (unifyTypes env (t1.from, t2.from))
+      (unifyTypes env (t1.to, t2.to))
 end
 
 lang AppTypeUnify = Unify + AppTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyApp t1, TyApp t2) ->
-    unifyTypes env (t1.lhs, t2.lhs);
-    unifyTypes env (t1.rhs, t2.rhs)
+    result.map2 concat
+      (unifyTypes env (t1.lhs, t2.lhs))
+      (unifyTypes env (t1.rhs, t2.rhs))
 end
 
 lang AllTypeUnify = UnifyRows + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
-    (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
-      unifyRowsStrict env r1.fields r2.fields
-    else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
-    else unificationError env);
-    let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
-    unifyTypes env (t1.ty, t2.ty)
-
-  sem unifyCheckBase env boundVars tv =
-  | TyAll t ->
-    match tv.sort with MonoVar _ then
-      let msg = join [
-        "* Encountered a monomorphic type used in a polymorphic position.\n",
-        "* Perhaps you encountered the value restriction, or need a type annotation?\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle env.info msg
-    else
-      sfold_VarSort_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () t.sort;
-      unifyCheckType env (setInsert t.ident boundVars) tv t.ty
+    result.map2 concat
+      (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
+        unifyRowsStrict env r1.fields r2.fields
+       else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then result.ok []
+            else result.err (Kinds (t1.sort, t2.sort)))
+      (let env = {env with boundNames = biInsert (t1.ident, t2.ident) env.boundNames} in
+       unifyTypes env (t1.ty, t2.ty))
 end
 
 lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
-    if nameEq t1.ident t2.ident then ()
-    else unificationError env
-
-  sem unifyCheckBase env boundVars tv =
-  | TyCon t ->
-    match optionMap (lam r. lti tv.level r.0) (mapLookup t.ident env.tyConEnv) with
-      !Some false then
-      let msg = join [
-        "* Encountered a type constructor escaping its scope: ",
-        nameGetStr t.ident, "\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle env.info msg
-    else ()
+    if nameEq t1.ident t2.ident then result.ok []
+    else result.err (Types (ty1, ty2))
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyBool _, TyBool _) -> ()
+  | (TyBool _, TyBool _) -> result.ok []
 end
 
 lang IntTypeUnify = Unify + IntTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyInt _, TyInt _) -> ()
+  | (TyInt _, TyInt _) -> result.ok []
 end
 
 lang FloatTypeUnify = Unify + FloatTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyFloat _, TyFloat _) -> ()
+  | (TyFloat _, TyFloat _) -> result.ok []
 end
 
 lang CharTypeUnify = Unify + CharTypeAst
   sem unifyBase (env : UnifyEnv) =
-  | (TyChar _, TyChar _) -> ()
+  | (TyChar _, TyChar _) -> result.ok []
 end
 
 lang SeqTypeUnify = Unify + SeqTypeAst
