@@ -2210,7 +2210,7 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
     | None ->
         t1 )
   | TmPreRun (_, _, t) ->
-      eval env pe_init t
+      eval env {pe_init with inPeval= true} t
   | t ->
       smap_tm_tm (scan env) t
 
@@ -2297,7 +2297,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* Match *)
   | TmMatch (fi, t1, p, t2, t3) ->
       let t1' = eval env pe t1 in
-      if is_value t1' then
+      if (not pe.inPeval) || is_value t1' then
         match try_match env t1' p with
         | Some env ->
             eval env pe t2
@@ -2310,7 +2310,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
     | TmClos (fi, x, s, ty, t, env_ref) ->
         let s' = Symb.gensym () in
         let tvar = TmVar (fi, x, s', false) in
-        let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
+        let pe' = {pe with inPeval= true} in
+        let t' = eval ((s, tvar) :: !env_ref) pe' (TmDive (fi, 0, t)) in
         TmClos (fi, x, s', ty, t', env_ref)
     | t' ->
         t' )
