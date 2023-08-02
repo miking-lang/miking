@@ -16,51 +16,54 @@ include "mexpr/pprint.mc"
 -- A level denotes the level in the AST that a type was introduced at
 type Level = Int
 
--- Unification (or 'flexible') variables.  These variables represent some
--- specific but as-of-yet undetermined type, and are used only in type checking.
-lang FlexTypeAst = KindAst + Ast
-  type FlexVarRec = {ident  : Name,
+-- Unification meta variables.  These variables represent some
+-- specific but as-of-yet undetermined type.
+lang MetaTypeAst = KindAst + Ast
+  type MetaVarRec = {ident  : Name,
                      level  : Level,
-    -- The level indicates at what depth the variable was bound introduced,
-    -- which is used to determine which variables can be generalized.
+    -- The level indicates at what depth of let-binding the variable
+    -- was introduced, which is used to determine which variables can
+    -- be generalized and to check that variables stay in their scope.
+                     rigid  : Bool,
+    -- Rigid variables cannot be unified with other types.
                      kind   : Kind}
 
-  syn FlexVar =
-  | Unbound FlexVarRec
+  syn MetaVar =
+  | Unbound MetaVarRec
   | Link Type
 
   syn Type =
-  -- Flexible type variable
-  | TyFlex {info     : Info,
-            contents : Ref FlexVar}
+  -- Meta type variable
+  | TyMeta {info     : Info,
+            contents : Ref MetaVar}
 
   sem tyWithInfo (info : Info) =
-  | TyFlex t ->
+  | TyMeta t ->
     switch deref t.contents
     case Unbound _ then
-      TyFlex {t with info = info}
+      TyMeta {t with info = info}
     case Link ty then
       tyWithInfo info ty
     end
 
   sem infoTy =
-  | TyFlex {info = info} -> info
+  | TyMeta {info = info} -> info
 
   sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t ->
+  | TyMeta t ->
     switch deref t.contents
     case Unbound r then
       match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
       modref t.contents (Unbound {r with kind = kind});
-      (acc, TyFlex t)
+      (acc, TyMeta t)
     case Link ty then
       f acc ty
     end
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t & ty ->
+  | TyMeta t & ty ->
     recursive let work = lam ty.
-      match ty with TyFlex x then
+      match ty with TyMeta x then
         switch deref x.contents
         case Link l then
           let new = work l in
@@ -71,23 +74,23 @@ lang FlexTypeAst = KindAst + Ast
         end
       else ty in
     switch work ty
-    case TyFlex _ then (acc, ty)
+    case TyMeta _ then (acc, ty)
     case ty1 then f acc ty1
     end
 end
 
-lang FlexTypeCmp = Cmp + FlexTypeAst
+lang MetaTypeCmp = Cmp + MetaTypeAst
   sem cmpTypeH =
-  | (TyFlex l, TyFlex r) ->
-    -- NOTE(vipa, 2023-04-19): Any non-link TyFlex should have been
+  | (TyMeta l, TyMeta r) ->
+    -- NOTE(vipa, 2023-04-19): Any non-link TyMeta should have been
     -- unwrapped already, thus we can assume `Unbound` here.
     match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
     nameCmp l.ident r.ident
 end
 
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
+lang MetaTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaTypeAst
   sem typePrecedence =
-  | TyFlex t ->
+  | TyMeta t ->
     switch deref t.contents
     case Unbound _ then
       100000
@@ -95,7 +98,7 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
       typePrecedence ty
     end
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlex t ->
+  | TyMeta t ->
     switch deref t.contents
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
@@ -108,17 +111,17 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
     end
 end
 
-lang FlexTypeEq = KindEq + FlexTypeAst
+lang MetaTypeEq = KindEq + MetaTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
-  | TyFlex _ & rhs ->
+  | TyMeta _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
-    case (TyFlex l, TyFlex r) then
+    case (TyMeta l, TyMeta r) then
       match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
       optionBind
         (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
         (lam freeTyFlex.
           eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
-    case (! TyFlex _, ! TyFlex _) then
+    case (! TyMeta _, ! TyMeta _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()
     end
@@ -129,7 +132,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
+lang Unify = AliasTypeAst + PrettyPrint + Cmp + MetaTypeCmp
   type UnifyEnv = {
     wrappedLhs: Type,  -- The currently examined left-hand subtype, before resolving aliases
     wrappedRhs: Type,  -- The currently examined right-hand subtype, before resolving aliases
@@ -142,7 +145,7 @@ lang Unify = AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   | Kinds (Kind, Kind)
 
   type UnifyResult a = Result () UnifyError a
-  type Unifier = [(Ref FlexVar, Type)]
+  type Unifier = [(Ref MetaVar, Type)]
 
   -- Unify the types `ty1` and `ty2`, where
   -- `ty1` is the expected type of an expression, and
@@ -216,11 +219,11 @@ lang VarTypeUnify = Unify + VarTypeAst
     else result.err (Types (ty1, ty2))
 end
 
-lang FlexTypeUnify = Unify + FlexTypeAst + RecordTypeAst
+lang MetaTypeUnify = Unify + MetaTypeAst + RecordTypeAst
   sem unifyBase env =
-  | (TyFlex t1, ty2) ->
+  | (TyMeta t1, ty2) ->
     result.ok [(t1.contents, env.wrappedRhs)]
-  | (!TyFlex _ & ty1, TyFlex _ & ty2) ->
+  | (!TyMeta _ & ty1, TyMeta _ & ty2) ->
     unifyBase {env with wrappedLhs = env.wrappedRhs, wrappedRhs = env.wrappedLhs} (ty2, ty1)
 end
 

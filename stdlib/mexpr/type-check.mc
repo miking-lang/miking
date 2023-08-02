@@ -26,10 +26,10 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
+include "mexpr/unify.mc"
 include "mexpr/value.mc"
 
--- A level denotes the level in the AST that a type was introduced at
-type Level = Int
+type TypeScheme = ([MetaVarRec], Type)
 
 type TCEnv = {
   varEnv: Map Name Type,
@@ -59,117 +59,11 @@ let _insertVar = lam name. lam ty. lam env : TCEnv.
 let _insertCon = lam name. lam ty. lam env : TCEnv.
   {env with conEnv = mapInsert name ty env.conEnv}
 
-type UnifyEnv = {
-  info: [Info],  -- The info of the expression(s) triggering the unification
-  expectedType: Type,  -- The expected type of the expression
-  foundType: Type,  -- The inferred type of the expression
-  lhsName: Type,  -- The currently examined left-hand subtype, before resolving aliases
-  rhsName: Type,  -- The currently examined right-hand subtype, before resolving aliases
-  tyVarEnv: Map Name Level,  -- The free type variables in scope and their levels
-  tyConEnv: Map Name (Level, [Name], Type),  -- The free type constructors in scope
-  names: BiNameMap  -- The bijective correspondence between bound variables in scope
-}
-
--- Unification (or 'flexible') variables.  These variables represent some
--- specific but as-of-yet undetermined type, and are used only in type checking.
-lang FlexTypeAst = KindAst + Ast
-  type FlexVarRec = {ident  : Name,
-                     level  : Level,
-    -- The level indicates at what depth the variable was bound introduced,
-    -- which is used to determine which variables can be generalized.
-                     kind   : Kind}
-
-  syn FlexVar =
-  | Unbound FlexVarRec
-  | Link Type
-
-  syn Type =
-  -- Flexible type variable
-  | TyFlex {info     : Info,
-            contents : Ref FlexVar}
-
-  sem tyWithInfo (info : Info) =
-  | TyFlex t ->
-    switch deref t.contents
-    case Unbound _ then
-      TyFlex {t with info = info}
-    case Link ty then
-      tyWithInfo info ty
-    end
-
-  sem infoTy =
-  | TyFlex {info = info} -> info
-
-  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t ->
-    switch deref t.contents
-    case Unbound r then
-      match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
-      modref t.contents (Unbound {r with kind = kind});
-      (acc, TyFlex t)
-    case Link ty then
-      f acc ty
-    end
-
-  sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t & ty ->
-    match deref t.contents with Link inner then f acc inner
-    else (acc, ty)
-end
-
-lang FlexTypeCmp = Cmp + FlexTypeAst
-  sem cmpTypeH =
-  | (TyFlex l, TyFlex r) ->
-    -- NOTE(vipa, 2023-04-19): Any non-link TyFlex should have been
-    -- unwrapped already, thus we can assume `Unbound` here.
-    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
-    nameCmp l.ident r.ident
-end
-
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
-  sem typePrecedence =
-  | TyFlex t ->
-    switch deref t.contents
-    case Unbound _ then
-      100000
-    case Link ty then
-      typePrecedence ty
-    end
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlex t ->
-    switch deref t.contents
-    case Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getKindStringCode indent env idstr t.kind with (env, str) in
-      let monoPrefix =
-        match t.kind with Mono _ then "_" else "" in
-      (env, concat monoPrefix str)
-    case Link ty then
-      getTypeStringCode indent env ty
-    end
-end
-
-lang FlexTypeEq = KindEq + FlexTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
-  | TyFlex _ & rhs ->
-    switch (unwrapType lhs, unwrapType rhs)
-    case (TyFlex l, TyFlex r) then
-      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
-      optionBind
-        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        (lam freeTyFlex.
-          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
-    case (! TyFlex _, ! TyFlex _) then
-      eqTypeH typeEnv free lhs rhs
-    case _ then None ()
-    end
-end
-
 ----------------------
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
+lang TCUnify = Unify
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -177,44 +71,27 @@ lang Unify = FlexTypeAst + AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   sem unify (tcEnv : TCEnv) (info : [Info]) (ty1 : Type) =
   | ty2 ->
     let env : UnifyEnv = {
-      names = biEmpty,
-      info = info,
-      expectedType = ty1,
-      foundType = ty2,
-      lhsName = ty1,
-      rhsName = ty2,
-      tyVarEnv = tcEnv.tyVarEnv,
-      tyConEnv = tcEnv.tyConEnv
+      boundNames = biEmpty,
+      wrappedLhs = ty1,
+      wrappedRhs = ty2
     } in
     unifyTypes env (ty1, ty2)
-
-  sem unifyTypes (env : UnifyEnv) =
-  | (ty1, ty2) ->
-    unifyBase
-      {env with lhsName = ty1, rhsName = ty2}
-      (unwrapType ty1, unwrapType ty2)
-
-  -- Unify the types `ty1' and `ty2' under the assumptions of `env'.
-  -- IMPORTANT: Assumes that ty1 and ty2 have been unwrapped using unwrapType
-  sem unifyBase (env : UnifyEnv) =
-  | (ty1, ty2) ->
-    unificationError env
 
   -- unifyCheck is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
   -- - Occurs check
-  -- - Update level fields of FlexVars
+  -- - Update level fields of MetaVars
   -- - If `tv' is monomorphic, ensure it is not unified with a polymorphic type
   -- - If `tv' is unified with a free type variable, ensure no capture occurs
-  sem unifyCheck : UnifyEnv -> FlexVarRec -> Type -> ()
+  sem unifyCheck : UnifyEnv -> MetaVarRec -> Type -> ()
   sem unifyCheck env tv =
   | ty -> unifyCheckType env (setEmpty nameCmp) tv ty
 
-  sem unifyCheckType : UnifyEnv -> Set Name -> FlexVarRec -> Type -> ()
+  sem unifyCheckType : UnifyEnv -> Set Name -> MetaVarRec -> Type -> ()
   sem unifyCheckType env boundVars tv =
   | ty -> unifyCheckBase env boundVars tv (unwrapType ty)
 
-  sem unifyCheckBase : UnifyEnv -> Set Name -> FlexVarRec -> Type -> ()
+  sem unifyCheckBase : UnifyEnv -> Set Name -> MetaVarRec -> Type -> ()
   sem unifyCheckBase env boundVars tv =
   | ty ->
     sfold_Type_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () ty
@@ -300,7 +177,7 @@ lang VarTypeUnify = Unify + VarTypeAst
     else ()
 end
 
-lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
+lang MetaTypeUnify = UnifyFields + MetaTypeAst + RecordTypeAst
   sem addKinds (env : UnifyEnv) =
   | (Row r1, Row r2) ->
     let f = lam ty1. lam ty2. unifyTypes env (ty1, ty2); ty1 in
@@ -312,7 +189,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
   | (s1, s2) -> Mono ()
 
   sem unifyBase (env : UnifyEnv) =
-  | (TyFlex t1 & ty1, TyFlex t2 & ty2) ->
+  | (TyMeta t1 & ty1, TyMeta t2 & ty2) ->
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
     if not (nameEq r1.ident r2.ident) then
       unifyCheck env r1 ty2;
@@ -323,7 +200,7 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
-  | (TyFlex t1 & ty1, !TyFlex _ & ty2) ->
+  | (TyMeta t1 & ty1, !TyMeta _ & ty2) ->
     match deref t1.contents with Unbound tv in
     unifyCheck env tv ty2;
     (match (tv.kind, ty2) with (Row r1, TyRecord r2) then
@@ -332,11 +209,11 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
       unificationError env
     else ());
     modref t1.contents (Link env.rhsName)
-  | (!TyFlex _ & ty1, TyFlex _ & ty2) ->
+  | (!TyMeta _ & ty1, TyMeta _ & ty2) ->
     unifyBase {env with lhsName = env.rhsName, rhsName = env.lhsName} (ty2, ty1)
 
   sem unifyCheckBase env boundVars tv =
-  | TyFlex t ->
+  | TyMeta t ->
     match deref t.contents with Unbound r in
     if nameEq r.ident tv.ident then
       let msg = join [
@@ -457,21 +334,21 @@ end
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
 
-let newflexvar =
-  lam kind. lam level. lam info. use FlexTypeAst in
-  TyFlex {info = info,
+let newmetavar =
+  lam kind. lam level. lam info. use MetaTypeAst in
+  TyMeta {info = info,
           contents = ref (Unbound {ident = nameSym "a",
                                    level = level,
                                    kind = kind})}
 
 let newvarMono = use KindAst in
-  newflexvar (Mono ())
+  newmetavar (Mono ())
 let newvar = use KindAst in
-  newflexvar (Poly ())
+  newmetavar (Poly ())
 let newrecvar = use KindAst in
-  lam fields. newflexvar (Row {fields = fields})
+  lam fields. newmetavar (Row {fields = fields})
 
-lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
+lang Generalize = AllTypeAst + VarTypeSubstitute + MetaTypeAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
   sem inst (info : Info) (lvl : Level) =
   | ty ->
@@ -480,7 +357,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
     case (vars, stripped) then
       let inserter = lam subst. lam v : (Name, Kind).
         let kind = smap_Kind_Type (substituteVars subst) v.1 in
-        mapInsert v.0 (newflexvar kind lvl info) subst
+        mapInsert v.0 (newmetavar kind lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
       substituteVars subst stripped
@@ -505,9 +382,9 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
       concat vars (genBase lvl vs bound ty)) [] ty
 end
 
-lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
+lang MetaTypeGeneralize = Generalize + MetaTypeAst + VarTypeAst
   sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
-  | TyFlex t ->
+  | TyMeta t ->
     switch deref t.contents
     case Unbound {ident = n, level = k, kind = s} then
       if lti lvl k then
@@ -545,25 +422,25 @@ end
 -- TYPE CHECKING UTILS --
 -------------------------
 
-lang FlexDisableGeneralize = Unify
-  sem weakenTyFlex (lvl : Level) =
-  | TyFlex t & ty ->
+lang MetaDisableGeneralize = Unify
+  sem weakenTyMeta (lvl : Level) =
+  | TyMeta t & ty ->
     switch deref t.contents
     case Unbound r then
-      sfold_Kind_Type (lam. lam ty. weakenTyFlex lvl ty) () r.kind;
+      sfold_Kind_Type (lam. lam ty. weakenTyMeta lvl ty) () r.kind;
       let kind = match r.kind with Poly _ then Mono () else r.kind in
       modref t.contents (Unbound {r with level = mini lvl r.level, kind = kind})
     case Link tyL then
-      weakenTyFlex lvl tyL
+      weakenTyMeta lvl tyL
     end
   | ty ->
-    sfold_Type_Type (lam. lam ty. weakenTyFlex lvl ty) () ty
+    sfold_Type_Type (lam. lam ty. weakenTyMeta lvl ty) () ty
 
   sem disableRecordGeneralize (lvl : Level) =
-  | TyFlex t & ty ->
+  | TyMeta t & ty ->
     switch deref t.contents
     case Unbound {kind = Row _} then
-      weakenTyFlex lvl ty
+      weakenTyMeta lvl ty
     case Unbound _ then ()
     case Link tyL then
       disableRecordGeneralize lvl tyL
@@ -628,43 +505,43 @@ end
 lang SubstituteUnknown = UnknownTypeAst + KindAst + AliasTypeAst
   sem substituteUnknown (kind : Kind) (lvl : Level) (info : Info) =
   | TyUnknown _ ->
-    newflexvar kind lvl info
+    newmetavar kind lvl info
   | TyAlias t ->
     TyAlias {t with content = substituteUnknown kind lvl info t.content}
   | ty ->
     smap_Type_Type (substituteUnknown kind lvl info) ty
 end
 
-lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
-  sem removeFlexType =
-  | TyFlex t ->
+lang RemoveMeta = MetaTypeAst + UnknownTypeAst + RecordTypeAst
+  sem removeMetaType =
+  | TyMeta t ->
     switch deref t.contents
     case Unbound {kind = Row x} then
-      TyRecord {info = t.info, fields = mapMap removeFlexType x.fields}
+      TyRecord {info = t.info, fields = mapMap removeMetaType x.fields}
     case Unbound _ then TyUnknown { info = t.info }
-    case Link ty then removeFlexType ty
+    case Link ty then removeMetaType ty
     end
   | ty ->
-    smap_Type_Type removeFlexType ty
+    smap_Type_Type removeMetaType ty
 
-  sem removeFlexExpr =
+  sem removeMetaExpr =
   | tm ->
-    let tm = smap_Expr_TypeLabel removeFlexType tm in
-    let tm = smap_Expr_Type removeFlexType tm in
-    let tm = smap_Expr_Pat removeFlexPat tm in
-    smap_Expr_Expr removeFlexExpr tm
+    let tm = smap_Expr_TypeLabel removeMetaType tm in
+    let tm = smap_Expr_Type removeMetaType tm in
+    let tm = smap_Expr_Pat removeMetaPat tm in
+    smap_Expr_Expr removeMetaExpr tm
 
-  sem removeFlexPat =
+  sem removeMetaPat =
   | pat ->
-    let pat = withTypePat (removeFlexType (tyPat pat)) pat in
-    smap_Pat_Pat removeFlexPat pat
+    let pat = withTypePat (removeMetaType (tyPat pat)) pat in
+    smap_Pat_Pat removeMetaPat pat
 end
 
 -------------------
 -- TYPE CHECKING --
 -------------------
 
-lang TypeCheck = Unify + Generalize + RemoveFlex
+lang TypeCheck = Unify + Generalize + RemoveMeta
   -- Type check 'tm', with FreezeML-style type inference. Returns the
   -- term annotated with its type. The resulting type contains no
   -- unification variables or links.
@@ -673,7 +550,7 @@ lang TypeCheck = Unify + Generalize + RemoveFlex
   sem typeCheck : Expr -> Expr
   sem typeCheck =
   | tm ->
-    removeFlexExpr (typeCheckExpr _tcEnvEmpty tm)
+    removeMetaExpr (typeCheckExpr _tcEnvEmpty tm)
 
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain unification variables and links.
@@ -744,7 +621,7 @@ end
 
 lang LetTypeCheck =
   TypeCheck + LetAst + LamAst + FunTypeAst + ResolveType + SubstituteUnknown +
-  IsValue + FlexDisableGeneralize
+  IsValue + MetaDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
@@ -766,7 +643,7 @@ lang LetTypeCheck =
         let body = typeCheckExpr {env with currentLvl = newLvl} t.body in
         unify env [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body);
         -- TODO(aathn, 2023-05-07): Relax value restriction
-        weakenTyFlex env.currentLvl tyBody;
+        weakenTyMeta env.currentLvl tyBody;
         (body, tyBody)
       with (body, tyBody) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
@@ -784,7 +661,7 @@ lang LetTypeCheck =
   | (tm, ty) -> tm
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGeneralize
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaDisableGeneralize
   sem typeCheckExpr env =
   | TmRecLets t ->
 
@@ -830,7 +707,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
             disableRecordGeneralize env.currentLvl b.tyBody else ());
           gen env.currentLvl acc.1 b.tyBody
         else
-          weakenTyFlex env.currentLvl b.tyBody;
+          weakenTyMeta env.currentLvl b.tyBody;
           (b.tyBody, [])
         with (tyBody, vars) in
       let newEnv = _insertVar b.ident tyBody acc.0 in
@@ -1078,12 +955,12 @@ end
 lang MExprTypeCheck =
 
   -- Type unification
-  VarTypeUnify + FlexTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
+  VarTypeUnify + MetaTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + SeqTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify +
   CharTypeUnify + TensorTypeUnify + RecordTypeUnify +
 
   -- Type generalization
-  FlexTypeGeneralize + VarTypeGeneralize + AllTypeGeneralize +
+  MetaTypeGeneralize + VarTypeGeneralize + AllTypeGeneralize +
 
   -- Terms
   VarTypeCheck + LamTypeCheck + AppTypeCheck + LetTypeCheck + RecLetsTypeCheck +
@@ -1099,7 +976,7 @@ lang MExprTypeCheck =
   MExprIsValue +
 
   -- Pretty Printing
-  FlexTypePrettyPrint
+  MetaTypePrettyPrint
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it
@@ -1132,7 +1009,7 @@ lang TyAnnot = AnnotateSources + PrettyPrint + Ast
     res
 end
 
-lang TestLang = MExprTypeCheck + MExprEq + FlexTypeEq + MExprPrettyPrint
+lang TestLang = MExprTypeCheck + MExprEq + MetaTypeEq + MExprPrettyPrint
   sem unwrapTypes =
   | ty ->
     smap_Type_Type unwrapTypes (unwrapType ty)
