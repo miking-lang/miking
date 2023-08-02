@@ -705,7 +705,7 @@ and print_tm' fmt t =
         "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a using@ %a in@]@]@ %a@]"
         !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
         (Match, t3) print_tm (Match, t4)
-  | TmClos (_, x, _, _, t1, _) ->
+  | TmClos (_, x, _, _, t1, _, _) ->
       let x = string_of_ustring x in
       fprintf fmt "@[<hov %d>clos %s.@ %a@]" !ref_indent x print_tm (Lam, t1)
   | TmNever _ ->

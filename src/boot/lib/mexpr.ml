@@ -995,7 +995,7 @@ let rec is_value = function
       is_value t
   | TmNever _ ->
       true
-  | TmClos (_, _, _, _, _, _) ->
+  | TmClos (_, _, _, _, _, _, _) ->
       true
   | TmRef (_, _) ->
       true
@@ -2127,7 +2127,7 @@ and pat_transform (env : (Symb.t * tm) list) (p : pat) =
 and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
   (* Closure application *)
-  | TmClos (ficlos, _, s, _, t3, env2), a -> (
+  | (TmClos (ficlos, _, s, _, t3, env2, is_rec) as f), a -> (
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
@@ -2140,6 +2140,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
         let t2 = Time.get_wall_time_ms () in
         add_call ficlos (t2 -. t1) ;
         res )
+      else if is_rec && pe.inBranch then TmApp (fiapp, f, a)
       else
         try eval ((s, a) :: !env2) pe t3
         with e ->
@@ -2154,7 +2155,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
       | TmConApp (_, _, _, _)
       | TmConDef (_, _, _, _, _)
       | TmNever _
-      | TmClos (_, _, _, _, _, _)
+      | TmClos (_, _, _, _, _, _, _)
       | TmRef (_, _)
       | TmTensor (_, _) ) ) ->
       delta (apply pe) fiapp c a
@@ -2182,7 +2183,7 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
           match t with
           | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, ty, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref, true)) :: !env_ref
           | _ ->
               peval := true )
         lst ;
@@ -2241,15 +2242,17 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       apply pe fiapp f a
   (* Lambda and closure conversions *)
   | TmLam (fi, x, s, ty, t1) ->
-      TmClos (fi, x, s, ty, t1, ref env)
+      TmClos (fi, x, s, ty, t1, ref env, false)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (fi, lst, t2) ->
-      let env_top = List.map (fun (_, _, s, _, t) -> (s, eval env pe t)) lst in
+      let env_top =
+        List.map (fun (_, _, s, _, t) -> (s, setIsRec (eval env pe t))) lst
+      in
       let update_env = function
-        | _, TmClos (_, _, _, _, _, env_ref) ->
+        | _, TmClos (_, _, _, _, _, env_ref, _) ->
             env_ref := env_top @ !env_ref
         | _ ->
             raise_error fi "Recursive lets must be of function types."
@@ -2303,16 +2306,18 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
             eval env pe t2
         | None ->
             eval env pe t3
-      else TmMatch (fi, t1', p, eval env pe t2, eval env pe t3)
+      else
+        let pe' = {pe with inBranch= true} in
+        TmMatch (fi, t1', p, eval env pe' t2, eval env pe' t3)
   (* Dive *)
   | TmDive (_, _, t) -> (
     match eval env pe t with
-    | TmClos (fi, x, s, ty, t, env_ref) ->
+    | TmClos (fi, x, s, ty, t, env_ref, is_rec) ->
         let s' = Symb.gensym () in
         let tvar = TmVar (fi, x, s', false) in
         let pe' = {pe with inPeval= true} in
         let t' = eval ((s, tvar) :: !env_ref) pe' (TmDive (fi, 0, t)) in
-        TmClos (fi, x, s', ty, t', env_ref)
+        TmClos (fi, x, s', ty, t', env_ref, is_rec)
     | t' ->
         t' )
   (* PreRun *)
@@ -2381,7 +2386,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
           match t with
           | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, ty, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref, true)) :: !env_ref
           | _ ->
               failwith "Incorrect RecLets" )
         lst ;

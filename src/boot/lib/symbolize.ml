@@ -169,7 +169,7 @@ let rec symbolize (env : sym_env) (t : tm) =
       let s = Symb.gensym () in
       TmLam
         (fi, x, s, ty, symbolize (addsym (IdVar (sid_of_ustring x)) s env) t1)
-  | TmClos (_, _, _, _, _, _) ->
+  | TmClos (_, _, _, _, _, _, _) ->
       failwith "Closures should not be available."
   | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in

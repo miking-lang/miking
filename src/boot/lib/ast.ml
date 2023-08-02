@@ -57,6 +57,8 @@ type frozen = bool
 
 type pesym = bool
 
+type is_rec = bool
+
 (* Map type for record implementation *)
 module Record = struct
   include Map.Make (Ustring)
@@ -308,7 +310,7 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of info * ustring * Symb.t * ty * tm * env ref
+  | TmClos of info * ustring * Symb.t * ty * tm * env ref * is_rec
   (* Reference *)
   | TmRef of info * tm ref
   (* Tensor *)
@@ -458,8 +460,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmUse (fi, l, t'))
   | TmExt (fi, x, s, ty, e, t) ->
       f acc t |> fun (acc, t') -> (acc, TmExt (fi, x, s, ty, e, t'))
-  | TmClos (fi, x, s, ty, t, env) ->
-      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, ty, t', env))
+  | TmClos (fi, x, s, ty, t, env, is_rec) ->
+      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, ty, t', env, is_rec))
   | (TmVar _ | TmConst _ | TmNever _ | TmRef _ | TmTensor _) as t ->
       (acc, t)
   | TmDive (fi, l, t) ->
@@ -500,7 +502,7 @@ let tm_info = function
   | TmUtest (fi, _, _, _, _)
   | TmNever fi
   | TmUse (fi, _, _)
-  | TmClos (fi, _, _, _, _, _)
+  | TmClos (fi, _, _, _, _, _, _)
   | TmRef (fi, _)
   | TmTensor (fi, _)
   | TmDive (fi, _, _)
@@ -742,3 +744,9 @@ type 'a tokendata = {i: info; v: 'a}
 type peval = {inPeval: bool; inBranch: bool}
 
 let pe_init = {inPeval= false; inBranch= false}
+
+let setIsRec = function
+  | TmClos (fi, x, s, ty, t, env, _) ->
+      TmClos (fi, x, s, ty, t, env, true)
+  | _ ->
+      failwith "Cannot set recursive. Should not happen"
