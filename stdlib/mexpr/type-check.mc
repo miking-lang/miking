@@ -72,13 +72,12 @@ type UnifyEnv = {
 
 -- Unification (or 'flexible') variables.  These variables represent some
 -- specific but as-of-yet undetermined type, and are used only in type checking.
-lang FlexTypeAst = VarSortAst + Ast
+lang FlexTypeAst = KindAst + Ast
   type FlexVarRec = {ident  : Name,
                      level  : Level,
     -- The level indicates at what depth the variable was bound introduced,
     -- which is used to determine which variables can be generalized.
-                     sort   : VarSort}
-    -- The sort of a variable can be polymorphic, monomorphic or a record.
+                     kind   : Kind}
 
   syn FlexVar =
   | Unbound FlexVarRec
@@ -105,8 +104,8 @@ lang FlexTypeAst = VarSortAst + Ast
   | TyFlex t ->
     switch deref t.contents
     case Unbound r then
-      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
-      modref t.contents (Unbound {r with sort = sort});
+      match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
+      modref t.contents (Unbound {r with kind = kind});
       (acc, TyFlex t)
     case Link ty then
       f acc ty
@@ -127,7 +126,7 @@ lang FlexTypeCmp = Cmp + FlexTypeAst
     nameCmp l.ident r.ident
 end
 
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
+lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
   sem typePrecedence =
   | TyFlex t ->
     switch deref t.contents
@@ -141,16 +140,16 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexType
     switch deref t.contents
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
-      match getVarSortStringCode indent env idstr t.sort with (env, str) in
+      match getKindStringCode indent env idstr t.kind with (env, str) in
       let monoPrefix =
-        match t.sort with MonoVar _ then "_" else "" in
+        match t.kind with Mono _ then "_" else "" in
       (env, concat monoPrefix str)
     case Link ty then
       getTypeStringCode indent env ty
     end
 end
 
-lang FlexTypeEq = VarSortEq + FlexTypeAst
+lang FlexTypeEq = KindEq + FlexTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFlex _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
@@ -159,7 +158,7 @@ lang FlexTypeEq = VarSortEq + FlexTypeAst
       optionBind
         (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
         (lam freeTyFlex.
-          eqVarSort typeEnv {free with freeTyFlex = freeTyFlex} (n1.sort, n2.sort))
+          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
     case (! TyFlex _, ! TyFlex _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()
@@ -302,15 +301,15 @@ lang VarTypeUnify = Unify + VarTypeAst
 end
 
 lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
-  sem addSorts (env : UnifyEnv) =
-  | (RecordVar r1, RecordVar r2) ->
+  sem addKinds (env : UnifyEnv) =
+  | (Row r1, Row r2) ->
     let f = lam ty1. lam ty2. unifyTypes env (ty1, ty2); ty1 in
-    RecordVar {r1 with fields = mapUnionWith f r1.fields r2.fields}
-  | (RecordVar _ & rv, ! RecordVar _ & tv)
-  | (! RecordVar _ & tv, RecordVar _ & rv) ->
+    Row {r1 with fields = mapUnionWith f r1.fields r2.fields}
+  | (Row _ & rv, ! Row _ & tv)
+  | (! Row _ & tv, Row _ & rv) ->
     rv
-  | (PolyVar _, PolyVar _) -> PolyVar ()
-  | (s1, s2) -> MonoVar ()
+  | (Poly _, Poly _) -> Poly ()
+  | (s1, s2) -> Mono ()
 
   sem unifyBase (env : UnifyEnv) =
   | (TyFlex t1 & ty1, TyFlex t2 & ty2) ->
@@ -320,16 +319,16 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
       unifyCheck env r2 ty1;
       let updated =
         Unbound {r1 with level = mini r1.level r2.level,
-                         sort = addSorts env (r1.sort, r2.sort)} in
+                         kind = addKinds env (r1.kind, r2.kind)} in
       modref t1.contents updated;
       modref t2.contents (Link ty1)
     else ()
   | (TyFlex t1 & ty1, !TyFlex _ & ty2) ->
     match deref t1.contents with Unbound tv in
     unifyCheck env tv ty2;
-    (match (tv.sort, ty2) with (RecordVar r1, TyRecord r2) then
+    (match (tv.kind, ty2) with (Row r1, TyRecord r2) then
       unifyFields env r1.fields r2.fields
-    else match tv.sort with RecordVar _ then
+    else match tv.kind with Row _ then
       unificationError env
     else ());
     modref t1.contents (Link env.rhsName)
@@ -347,15 +346,15 @@ lang FlexTypeUnify = UnifyFields + FlexTypeAst + RecordTypeAst
       ] in
       errorSingle env.info msg
     else
-      let sort =
-        match (tv.sort, r.sort) with (MonoVar _, PolyVar _) then MonoVar ()
+      let kind =
+        match (tv.kind, r.kind) with (Mono _, Poly _) then Mono ()
         else
-          sfold_VarSort_Type
-            (lam. lam ty. unifyCheckType env boundVars tv ty) () r.sort;
-          r.sort
+          sfold_Kind_Type
+            (lam. lam ty. unifyCheckType env boundVars tv ty) () r.kind;
+          r.kind
       in
       let updated = Unbound {r with level = mini r.level tv.level,
-                                    sort  = sort} in
+                                    kind  = kind} in
       modref t.contents updated
 end
 
@@ -376,16 +375,16 @@ end
 lang AllTypeUnify = UnifyFields + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
-    (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
+    (match (t1.kind, t2.kind) with (Row r1, Row r2) then
       unifyFieldsStrict env r1.fields r2.fields
-    else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then ()
+    else if eqi (constructorTag t1.kind) (constructorTag t2.kind) then ()
     else unificationError env);
     let env = {env with names = biInsert (t1.ident, t2.ident) env.names} in
     unifyTypes env (t1.ty, t2.ty)
 
   sem unifyCheckBase env boundVars tv =
   | TyAll t ->
-    match tv.sort with MonoVar _ then
+    match tv.kind with Mono _ then
       let msg = join [
         "* Encountered a monomorphic type used in a polymorphic position.\n",
         "* Perhaps you encountered the value restriction, or need a type annotation?\n",
@@ -393,7 +392,7 @@ lang AllTypeUnify = UnifyFields + AllTypeAst
       ] in
       errorSingle env.info msg
     else
-      sfold_VarSort_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () t.sort;
+      sfold_Kind_Type (lam. lam ty. unifyCheckType env boundVars tv ty) () t.kind;
       unifyCheckType env (setInsert t.ident boundVars) tv t.ty
 end
 
@@ -459,18 +458,18 @@ end
 ------------------------------------
 
 let newflexvar =
-  lam sort. lam level. lam info. use FlexTypeAst in
+  lam kind. lam level. lam info. use FlexTypeAst in
   TyFlex {info = info,
           contents = ref (Unbound {ident = nameSym "a",
                                    level = level,
-                                   sort = sort})}
+                                   kind = kind})}
 
-let newvarMono = use VarSortAst in
-  newflexvar (MonoVar ())
-let newvar = use VarSortAst in
-  newflexvar (PolyVar ())
-let newrecvar = use VarSortAst in
-  lam fields. newflexvar (RecordVar {fields = fields})
+let newvarMono = use KindAst in
+  newflexvar (Mono ())
+let newvar = use KindAst in
+  newflexvar (Poly ())
+let newrecvar = use KindAst in
+  lam fields. newflexvar (Row {fields = fields})
 
 lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
@@ -479,9 +478,9 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
     switch stripTyAll ty
     case ([], _) then ty
     case (vars, stripped) then
-      let inserter = lam subst. lam v : (Name, VarSort).
-        let sort = smap_VarSort_Type (substituteVars subst) v.1 in
-        mapInsert v.0 (newflexvar sort lvl info) subst
+      let inserter = lam subst. lam v : (Name, Kind).
+        let kind = smap_Kind_Type (substituteVars subst) v.1 in
+        mapInsert v.0 (newflexvar kind lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
       substituteVars subst stripped
@@ -490,32 +489,32 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + FlexTypeAst
   -- Generalize the unification variables in `ty' introduced at least at level `lvl`.
   -- Return the generalized type and the sequence of variables quantified.
   -- Any rigid variable in the map `vs' encountered will also be quantified over.
-  sem gen (lvl : Level) (vs : Map Name VarSort) =
+  sem gen (lvl : Level) (vs : Map Name Kind) =
   | ty ->
     let vars = distinct (lam x. lam y. nameEq x.0 y.0)
                  (genBase lvl vs (setEmpty nameCmp) ty) in
     let iteratee = lam v. lam ty1.
-      let sort = match v.1 with MonoVar _ then PolyVar () else v.1 in
-      TyAll {info = infoTy ty, ident = v.0, ty = ty1, sort = sort}
+      let kind = match v.1 with Mono _ then Poly () else v.1 in
+      TyAll {info = infoTy ty, ident = v.0, ty = ty1, kind = kind}
     in
     (foldr iteratee ty vars, vars)
 
-  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
   | ty ->
     sfold_Type_Type (lam vars. lam ty.
       concat vars (genBase lvl vs bound ty)) [] ty
 end
 
 lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
-  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
   | TyFlex t ->
     switch deref t.contents
-    case Unbound {ident = n, level = k, sort = s} then
+    case Unbound {ident = n, level = k, kind = s} then
       if lti lvl k then
         -- Var is free, generalize
         let f = lam vars. lam ty.
           concat vars (genBase lvl vs bound ty) in
-        let vars = sfold_VarSort_Type f [] s in
+        let vars = sfold_Kind_Type f [] s in
         modref t.contents (Link (TyVar {info = t.info, ident = n}));
         snoc vars (n, s)
       else
@@ -527,16 +526,16 @@ lang FlexTypeGeneralize = Generalize + FlexTypeAst + VarTypeAst
 end
 
 lang VarTypeGeneralize = Generalize + VarTypeAst
-  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
   | TyVar t ->
-    match mapLookup t.ident vs with Some sort then
-      if not (setMem t.ident bound) then [(t.ident, sort)]
+    match mapLookup t.ident vs with Some kind then
+      if not (setMem t.ident bound) then [(t.ident, kind)]
       else []
     else []
 end
 
 lang AllTypeGeneralize = Generalize + AllTypeAst
-  sem genBase (lvl : Level) (vs : Map Name VarSort) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
   | TyAll t -> genBase lvl vs (setInsert t.ident bound) t.ty
 end
 
@@ -551,9 +550,9 @@ lang FlexDisableGeneralize = Unify
   | TyFlex t & ty ->
     switch deref t.contents
     case Unbound r then
-      sfold_VarSort_Type (lam. lam ty. weakenTyFlex lvl ty) () r.sort;
-      let sort = match r.sort with PolyVar _ then MonoVar () else r.sort in
-      modref t.contents (Unbound {r with level = mini lvl r.level, sort = sort})
+      sfold_Kind_Type (lam. lam ty. weakenTyFlex lvl ty) () r.kind;
+      let kind = match r.kind with Poly _ then Mono () else r.kind in
+      modref t.contents (Unbound {r with level = mini lvl r.level, kind = kind})
     case Link tyL then
       weakenTyFlex lvl tyL
     end
@@ -563,7 +562,7 @@ lang FlexDisableGeneralize = Unify
   sem disableRecordGeneralize (lvl : Level) =
   | TyFlex t & ty ->
     switch deref t.contents
-    case Unbound {sort = RecordVar _} then
+    case Unbound {kind = Row _} then
       weakenTyFlex lvl ty
     case Unbound _ then ()
     case Link tyL then
@@ -626,21 +625,21 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     smap_Type_Type (resolveType info tycons) ty
 end
 
-lang SubstituteUnknown = UnknownTypeAst + VarSortAst + AliasTypeAst
-  sem substituteUnknown (sort : VarSort) (lvl : Level) (info : Info) =
+lang SubstituteUnknown = UnknownTypeAst + KindAst + AliasTypeAst
+  sem substituteUnknown (kind : Kind) (lvl : Level) (info : Info) =
   | TyUnknown _ ->
-    newflexvar sort lvl info
+    newflexvar kind lvl info
   | TyAlias t ->
-    TyAlias {t with content = substituteUnknown sort lvl info t.content}
+    TyAlias {t with content = substituteUnknown kind lvl info t.content}
   | ty ->
-    smap_Type_Type (substituteUnknown sort lvl info) ty
+    smap_Type_Type (substituteUnknown kind lvl info) ty
 end
 
 lang RemoveFlex = FlexTypeAst + UnknownTypeAst + RecordTypeAst
   sem removeFlexType =
   | TyFlex t ->
     switch deref t.contents
-    case Unbound {sort = RecordVar x} then
+    case Unbound {kind = Row x} then
       TyRecord {info = t.info, fields = mapMap removeFlexType x.fields}
     case Unbound _ then TyUnknown { info = t.info }
     case Link ty then removeFlexType ty
@@ -725,7 +724,7 @@ lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown
   sem typeCheckExpr env =
   | TmLam t ->
     let tyAnnot = resolveType t.info env.tyConEnv t.tyAnnot in
-    let tyParam = substituteUnknown (MonoVar ()) env.currentLvl t.info tyAnnot in
+    let tyParam = substituteUnknown (Mono ()) env.currentLvl t.info tyAnnot in
     let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
     let tyLam = ityarrow_ t.info tyParam (tyTm body) in
     TmLam {t with body = body, tyAnnot = tyAnnot, tyParam = tyParam, ty = tyLam}
@@ -750,7 +749,7 @@ lang LetTypeCheck =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let tyAnnot = resolveType t.info env.tyConEnv t.tyAnnot in
-    let tyBody = substituteUnknown (PolyVar ()) newLvl t.info tyAnnot in
+    let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
@@ -793,7 +792,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + FlexDisableGener
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyAnnot = resolveType t.info env.tyConEnv b.tyAnnot in
-      let tyBody = substituteUnknown (PolyVar ()) newLvl t.info tyAnnot in
+      let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
       let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in

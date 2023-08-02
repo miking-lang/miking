@@ -18,13 +18,12 @@ type Level = Int
 
 -- Unification (or 'flexible') variables.  These variables represent some
 -- specific but as-of-yet undetermined type, and are used only in type checking.
-lang FlexTypeAst = VarSortAst + Ast
+lang FlexTypeAst = KindAst + Ast
   type FlexVarRec = {ident  : Name,
                      level  : Level,
     -- The level indicates at what depth the variable was bound introduced,
     -- which is used to determine which variables can be generalized.
-                     sort   : VarSort}
-    -- The sort of a variable can be polymorphic, monomorphic or a record.
+                     kind   : Kind}
 
   syn FlexVar =
   | Unbound FlexVarRec
@@ -51,8 +50,8 @@ lang FlexTypeAst = VarSortAst + Ast
   | TyFlex t ->
     switch deref t.contents
     case Unbound r then
-      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
-      modref t.contents (Unbound {r with sort = sort});
+      match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
+      modref t.contents (Unbound {r with kind = kind});
       (acc, TyFlex t)
     case Link ty then
       f acc ty
@@ -86,7 +85,7 @@ lang FlexTypeCmp = Cmp + FlexTypeAst
     nameCmp l.ident r.ident
 end
 
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
+lang FlexTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + FlexTypeAst
   sem typePrecedence =
   | TyFlex t ->
     switch deref t.contents
@@ -100,16 +99,16 @@ lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexType
     switch deref t.contents
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
-      match getVarSortStringCode indent env idstr t.sort with (env, str) in
+      match getKindStringCode indent env idstr t.kind with (env, str) in
       let monoPrefix =
-        match t.sort with MonoVar _ then "_" else "" in
+        match t.kind with Mono _ then "_" else "" in
       (env, concat monoPrefix str)
     case Link ty then
       getTypeStringCode indent env ty
     end
 end
 
-lang FlexTypeEq = VarSortEq + FlexTypeAst
+lang FlexTypeEq = KindEq + FlexTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyFlex _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
@@ -118,7 +117,7 @@ lang FlexTypeEq = VarSortEq + FlexTypeAst
       optionBind
         (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
         (lam freeTyFlex.
-          eqVarSort typeEnv {free with freeTyFlex = freeTyFlex} (n1.sort, n2.sort))
+          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
     case (! TyFlex _, ! TyFlex _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()
@@ -140,7 +139,7 @@ lang Unify = AliasTypeAst + PrettyPrint + Cmp + FlexTypeCmp
   syn UnifyError =
   | Types (Type, Type)
   | Rows (Map SID Type, Map SID Type)
-  | Kinds (VarSort, VarSort)
+  | Kinds (Kind, Kind)
 
   type UnifyResult a = Result () UnifyError a
   type Unifier = [(Ref FlexVar, Type)]
@@ -245,10 +244,10 @@ lang AllTypeUnify = UnifyRows + AllTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyAll t1, TyAll t2) ->
     result.map2 concat
-      (match (t1.sort, t2.sort) with (RecordVar r1, RecordVar r2) then
+      (match (t1.kind, t2.kind) with (Row r1, Row r2) then
         unifyRowsStrict env r1.fields r2.fields
-       else if eqi (constructorTag t1.sort) (constructorTag t2.sort) then result.ok []
-            else result.err (Kinds (t1.sort, t2.sort)))
+       else if eqi (constructorTag t1.kind) (constructorTag t2.kind) then result.ok []
+            else result.err (Kinds (t1.kind, t2.kind)))
       (let env = {env with boundNames = biInsert (t1.ident, t2.ident) env.boundNames} in
        unifyTypes env (t1.ty, t2.ty))
 end

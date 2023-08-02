@@ -108,18 +108,18 @@ let tyvar_ =
   ntyvar_ (nameNoSym s)
 
 let nstyall_ = use AllTypeAst in
-  lam n. lam sort. lam ty.
-  TyAll {ident = n, info = NoInfo (), ty = ty, sort = sort}
+  lam n. lam kind. lam ty.
+  TyAll {ident = n, info = NoInfo (), ty = ty, kind = kind}
 
 let styall_ = lam s. nstyall_ (nameNoSym s)
 
-let ntyall_ : Name -> Type -> Type  = use VarSortAst in
+let ntyall_ : Name -> Type -> Type  = use KindAst in
   lam n.
-  nstyall_ n (PolyVar ())
+  nstyall_ n (Poly ())
 
-let tyall_ = use VarSortAst in
+let tyall_ = use KindAst in
   lam s.
-  styall_ s (PolyVar ())
+  styall_ s (Poly ())
 
 let tyalls_ =
   lam strs. lam ty.

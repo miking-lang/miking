@@ -646,9 +646,9 @@ lang VarTypeEq = Eq + VarTypeAst
     else None ()
 end
 
-lang VarSortEq = Eq + VarSortAst
-  sem eqVarSort (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
-  | (RecordVar l, RecordVar r) ->
+lang KindEq = Eq + KindAst
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (Row l, Row r) ->
       if eqi (mapSize l.fields) (mapSize r.fields) then
         mapFoldlOption
           (lam free. lam k1. lam v1.
@@ -662,11 +662,11 @@ lang VarSortEq = Eq + VarSortAst
     else None ()
 end
 
-lang AllTypeEq = VarSortEq + AllTypeAst
+lang AllTypeEq = KindEq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
     match unwrapType lhs with TyAll l then
-      optionBind (eqVarSort typeEnv free (l.sort, r.sort))
+      optionBind (eqKind typeEnv free (l.kind, r.kind))
         (lam free.
           eqTypeH
             {typeEnv with tyVarEnv = biInsert (l.ident, r.ident) typeEnv.tyVarEnv}

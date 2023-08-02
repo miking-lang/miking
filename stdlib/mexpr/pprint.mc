@@ -1156,23 +1156,23 @@ lang VarTypePrettyPrint = IdentifierPrettyPrint + VarTypeAst
     pprintVarName env t.ident
 end
 
-lang VarSortPrettyPrint = PrettyPrint + RecordTypeAst + VarSortAst
-  sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
-  | RecordVar r ->
+lang KindPrettyPrint = PrettyPrint + RecordTypeAst + KindAst
+  sem getKindStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
+  | Row r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [init recstr, " ... ", [last recstr]])
   | _ -> (env, idstr)
 end
 
-lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + VarSortPrettyPrint
+lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
   sem typePrecedence =
   | TyAll _ -> 0
 
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyAll t ->
     match pprintVarName env t.ident with (env, idstr) in
-    match getVarSortStringCode indent env idstr t.sort with (env, varstr) in
+    match getKindStringCode indent env idstr t.kind with (env, varstr) in
     match getTypeStringCode indent env t.ty with (env, tystr) in
     (env, join ["all ", varstr, ". ", tystr])
 end

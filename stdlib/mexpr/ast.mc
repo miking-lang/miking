@@ -1420,38 +1420,36 @@ lang VarTypeAst = Ast
   | TyVar t -> t.info
 end
 
-lang VarSortAst
-  -- VarSort indicates the sort of a type variable, like type variable or
-  -- record variable, and contains related data
-  syn VarSort =
-  | PolyVar ()
-  | MonoVar ()
-  | RecordVar {fields : Map SID Type}
+lang KindAst
+  syn Kind =
+  | Poly ()
+  | Mono ()
+  | Row {fields : Map SID Type}
 
-  sem smapAccumL_VarSort_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> VarSort -> (acc, VarSort)
-  sem smapAccumL_VarSort_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | RecordVar r ->
+  sem smapAccumL_Kind_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Kind -> (acc, Kind)
+  sem smapAccumL_Kind_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | Row r ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
-    (acc, RecordVar {r with fields = flds})
+    (acc, Row {r with fields = flds})
   | s ->
     (acc, s)
 
-  sem smap_VarSort_Type : (Type -> Type) -> VarSort -> VarSort
-  sem smap_VarSort_Type (f : Type -> Type) =
+  sem smap_Kind_Type : (Type -> Type) -> Kind -> Kind
+  sem smap_Kind_Type (f : Type -> Type) =
   | s ->
-    match smapAccumL_VarSort_Type (lam. lam x. ((), f x)) () s with (_, s) in s
+    match smapAccumL_Kind_Type (lam. lam x. ((), f x)) () s with (_, s) in s
 
-  sem sfold_VarSort_Type : all acc. (acc -> Type -> acc) -> acc -> VarSort -> acc
-  sem sfold_VarSort_Type (f : acc -> Type -> acc) (acc : acc) =
+  sem sfold_Kind_Type : all acc. (acc -> Type -> acc) -> acc -> Kind -> acc
+  sem sfold_Kind_Type (f : acc -> Type -> acc) (acc : acc) =
   | s ->
-    match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
+    match smapAccumL_Kind_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-lang AllTypeAst = VarSortAst + Ast
+lang AllTypeAst = KindAst + Ast
   syn Type =
   | TyAll {info  : Info,
            ident : Name,
-           sort  : VarSort,
+           kind  : Kind,
            ty    : Type}
 
   sem tyWithInfo (info : Info) =
@@ -1462,10 +1460,10 @@ lang AllTypeAst = VarSortAst + Ast
 
   sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAll t ->
-    match smapAccumL_VarSort_Type f acc t.sort with (acc, sort) in
+    match smapAccumL_Kind_Type f acc t.kind with (acc, kind) in
     match f acc t.ty with (acc, ty) in
-    (acc, TyAll {{t with sort = sort}
-                    with ty = ty})
+    (acc, TyAll {t with kind = kind,
+                        ty = ty})
 
   sem inspectType =
   | TyAll t -> inspectType t.ty
@@ -1473,8 +1471,8 @@ lang AllTypeAst = VarSortAst + Ast
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty
 
-  sem stripTyAllBase (vars : [(Name, VarSort)]) =
-  | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.sort)) t.ty
+  sem stripTyAllBase (vars : [(Name, Kind)]) =
+  | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.kind)) t.ty
   | ty -> rappAccumL_Type_Type stripTyAllBase vars ty
 end
 
