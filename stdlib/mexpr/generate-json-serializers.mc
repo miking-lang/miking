@@ -10,6 +10,8 @@ include "utils.mc"
 
 include "json.mc"
 include "stdlib.mc"
+include "stringid.mc"
+include "map.mc"
 
 lang GenerateJsonSerializers =
   MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + GetConDefType
@@ -45,7 +47,11 @@ lang GenerateJsonSerializers =
     sBool: Name, dBool: Name, sInt: Name, dInt: Name,
     sFloat: Name, dFloat: Name, sChar: Name, dChar: Name,
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
-    sTensor: Name, dTensor: Name
+    sTensor: Name, dTensor: Name,
+    jsonObject: Name,
+    mapInsert: Name, mapEmpty: Name, mapLookup: Name,
+    cmpString: Name,
+    some: Name, none: Name
 
   }
 
@@ -58,19 +64,31 @@ lang GenerateJsonSerializers =
         "jsonDeserializeInt", "jsonSerializeFloat", "jsonDeserializeFloat",
         "jsonSerializeChar", "jsonDeserializeChar", "jsonSerializeString",
         "jsonDeserializeString", "jsonSerializeSeq", "jsonDeserializeSeq",
-        "jsonSerializeTensor", "jsonDeserializeTensor"
+        "jsonSerializeTensor", "jsonDeserializeTensor",
+        "JsonObject",
+        "mapInsert", "mapEmpty", "mapLookup",
+        "cmpString",
+        "Some", "None"
       ] lib with [
-        sBool, dBool, sInt, dInt, sFloat, dFloat, sChar, dChar,
-        sString, dString, sSeq, dSeq, sTensor, dTensor
+        sb, db, si, di, sf, df, sc, dc,
+        ss, ds, ssq, dsq, st, dt,
+        jo,
+        mi,me,ml,
+        cs,
+        s,n
       ] in
     let env: GJSEnv = {
       namedTypes = mapEmpty nameCmp, constructors = mapEmpty nameCmp,
       lib = lib,
       varEnv = mapEmpty nameCmp,
-      sBool = sBool, dBool = dBool, sInt = sInt, dInt = dInt,
-      sFloat = sFloat, dFloat = dFloat, sChar = sChar, dChar = dChar,
-      sString = sString, dString = dString, sSeq = sSeq, dSeq = dSeq,
-      sTensor = sTensor, dTensor = dTensor
+      sBool = sb, dBool = db, sInt = si, dInt = di,
+      sFloat = sf, dFloat = df, sChar = sc, dChar = dc,
+      sString = ss, dString = ds, sSeq = ssq, dSeq = dsq,
+      sTensor = st, dTensor = dt,
+      jsonObject = jo,
+      mapInsert = mi, mapEmpty = me, mapLookup = ml,
+      cmpString = cs,
+      some = s, none = n
     } in
     let env: GJSEnv = foldPre_Expr_Expr _addType env expr in
     let acc: GJSAcc = mapEmpty nameCmp in
@@ -141,16 +159,52 @@ lang GenerateJsonSerializers =
 
   -- | TyVar _ ->
     -- TODO
-    -- We can handle TyVars in specific cases where we are recursing down (1) the
-    -- type of a TmConDefs part of a complete variant type, or (2) the RHS of a TmType.
-    -- Lookup in some env
-  -- | TyRecord _ ->
-    -- TODO
+    -- Lookup in varEnv
+  | TyRecord t ->
+    match mapMapAccum (lam acc. lam k. _generateType env acc) acc t.fields
+    with (acc,iss) in
+    let sarg = nameSym "r" in
+    let m = nameSym "m" in
+    let serializer =
+      nulam_ sarg (
+        (nconapp_ env.jsonObject
+          (mapFoldWithKey (lam acc. lam k. lam s.
+               let k = sidToString k in
+               (appf3_ (nvar_ env.mapInsert)
+                  (str_ k)
+                  (app_ s.serializer (recordproj_ k (nvar_ sarg)))
+                  acc))
+             (app_ (nvar_ env.mapEmpty) (nvar_ env.cmpString)) iss)))
+    in
+    let darg = nameSym "jr" in
+    let m = nameSym "m" in
+    let iss = mapMap (lam s. (s,nameSym "rv")) iss in
+    let inner = urecord_ (map (lam t. (sidToString t.0, (nvar_ (t.1).1))) (mapToSeq iss)) in
+    let none = nconapp_ env.none unit_ in
+    let deserializer =
+      nulam_ darg (
+          match_
+            (nvar_ darg)
+            (npcon_ env.jsonObject (npvar_ m))
+            (mapFoldWithKey  (lam acc. lam k. lam v.
+                let k = sidToString k in
+                let jrv = nameSym "jrv" in
+                match_
+                  (appf2_ (nvar_ env.mapLookup) (str_ k) (nvar_ m))
+                  (npcon_ env.some (npvar_ jrv))
+                  (match_
+                    (app_ (v.0).deserializer (nvar_ jrv))
+                    (npcon_ env.some (npvar_ v.1))
+                    acc
+                    none)
+                  none)
+              inner iss)
+            none)
+    in
+    let s = { serializer = serializer, deserializer = deserializer } in
+    (acc, s)
   -- | TyCon _ ->
-  -- How do we handle mutual recursion between types?
     -- TODO
-    -- TyCon must point outside of the current higher-order type
-    -- Whenever we go under a higher-order type, we need to reset the accumulator in the end, as it is under a Lambda (at the type level).
   -- | TyApp _ ->
     -- TODO
   | ( TyUnknown _ | TyArrow _ | TyAll _ | TyAlias _ | TyVariant _ ) ->
@@ -277,6 +331,7 @@ utest test false
   ]
 with true in
 
+-- Sequences and tensors
 utest test false
   [tyseq_ tyint_, tytensor_ tyint_]
   "()"
@@ -288,6 +343,45 @@ utest test false
     (tytensor_ tyint_,
        "jsonSerializeTensor jsonSerializeInt",
        "jsonDeserializeTensor jsonDeserializeInt")
+  ]
+with true in
+
+-- Records
+utest test false
+  [tyrecord_ [("a",tyint_), ("b",tyfloat_), ("c",tyseq_ tybool_)]]
+  "()"
+  []
+  [
+    (tyrecord_ [("a",tyint_), ("b",tyfloat_), ("c",tyseq_ tybool_)],
+       "
+         lam r.
+           JsonObject
+             (mapInsert \"c\"
+                (jsonSerializeSeq jsonSerializeBool r.c)
+                (mapInsert \"b\"
+                   (jsonSerializeFloat r.b)
+                   (mapInsert \"a\"
+                      (jsonSerializeInt r.a)
+                      (mapEmpty cmpString))))
+       ",
+       "
+         lam jr.
+           match jr with JsonObject m then
+             match mapLookup \"c\" m with Some jrv then
+               match jsonDeserializeSeq jsonDeserializeBool jrv with Some rv then
+                 match mapLookup \"b\" m with Some jrv1 then
+                   match jsonDeserializeFloat jrv1 with Some rv1 then
+                     match mapLookup \"a\" m with Some jrv2 then
+                       match jsonDeserializeInt jrv2 with Some rv2 then
+                         { a = rv2, b = rv1, c = rv }
+                       else None {}
+                     else None {}
+                   else None {}
+                 else None {}
+               else None {}
+             else None {}
+           else None {}
+       ")
   ]
 with true in
 
