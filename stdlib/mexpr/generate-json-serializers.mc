@@ -15,24 +15,41 @@ lang GenerateJsonSerializers =
   MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + GetConDefType
 
   type GJSSerializer = {
-    serializerName: Option Name, serializer: Expr,
-    deserializerName: Option Name, deserializer: Expr
+    serializer: Expr,
+    deserializer: Expr
   }
 
   type GJSRes = Map Type GJSSerializer
 
+
+  type GJSNamedSerializer = {
+    serializerName: Name, serializer: Option Expr,
+    deserializerName: Name, deserializer: Option Expr
+  }
+
+  type GJSAcc = Map Name GJSNamedSerializer -- The keys are only names of TyCon
+
   type GJSEnv = {
+
+    -- Information from the given program
     namedTypes: Map Name Expr, -- Expr only TmTypes
     constructors: Map Name [Expr], -- [Expr] only TmConDefs
+
+    -- Required libraries for the generation
     lib: Expr,
+
+    -- Type variables currently bound
+    varEnv: Map Name GJSSerializer,
+
     -- For easy access to lib names
     sBool: Name, dBool: Name, sInt: Name, dInt: Name,
     sFloat: Name, dFloat: Name, sChar: Name, dChar: Name,
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
     sTensor: Name, dTensor: Name
+
   }
 
-  sem generateJsonSerializers: Set Type -> Expr -> GJSRes
+  sem generateJsonSerializers: [Type] -> Expr -> (GJSAcc, GJSRes)
   sem generateJsonSerializers tys =
   | expr ->
     let lib = _lib () in
@@ -49,16 +66,19 @@ lang GenerateJsonSerializers =
     let env: GJSEnv = {
       namedTypes = mapEmpty nameCmp, constructors = mapEmpty nameCmp,
       lib = lib,
+      varEnv = mapEmpty nameCmp,
       sBool = sBool, dBool = dBool, sInt = sInt, dInt = dInt,
       sFloat = sFloat, dFloat = dFloat, sChar = sChar, dChar = dChar,
       sString = sString, dString = dString, sSeq = sSeq, dSeq = dSeq,
       sTensor = sTensor, dTensor = dTensor
     } in
     let env: GJSEnv = foldPre_Expr_Expr _addType env expr in
-    let acc: GJSRes = mapEmpty cmpType in
-    let acc: GJSRes = setFold (lam acc. lam ty.
-                          match _generateType env acc ty with (acc,_) in acc
-                        ) acc tys
+    let acc: GJSAcc = mapEmpty nameCmp in
+    let r: (GJSAcc, GJSRes) =
+      foldl (lam t. lam ty.
+          match _generateType env t.0 ty with (acc,s) in
+          (acc, mapInsert ty s t.1)
+        ) (acc, mapEmpty cmpType) tys
     in
     -- let funs = join (map (lam t. [t.0,t.1]) (mapValues acc)) in
     -- let funs = if null funs then unit_ else bindall_ funs in
@@ -68,7 +88,7 @@ lang GenerateJsonSerializers =
     --     match v with (TmLet t1, TmLet t2) then (t1.ident,t2.ident)
     --     else error "Impossible"
     --   ) acc in
-    acc
+    (r.0, r.1)
 
   sem _addType: GJSEnv -> Expr -> GJSEnv
   sem _addType env =
@@ -85,48 +105,39 @@ lang GenerateJsonSerializers =
     else error "Not a TyCon at RHS of TmConDef type"
   | _ -> env
 
-  sem _baseSerializer env =
-  | TyBool _ -> env.sBool | TyInt _ -> env.sInt | TyFloat _ -> env.sFloat
-  | TyChar _ -> env.sChar | TySeq { ty = TyChar _ } -> env.sString
-  | TySeq _ -> env.sSeq | TyTensor _ -> env.sTensor
-
-  sem _baseDeserializer env =
-  | TyBool _ -> env.dBool | TyInt _ -> env.dInt | TyFloat _ -> env.dFloat
-  | TyChar _ -> env.dChar | TySeq { ty = TyChar _ } -> env.dString
-  | TySeq _ -> env.dSeq | TyTensor _ -> env.dTensor
-
-  sem _generateType: GJSEnv -> GJSRes -> Type -> (GJSRes, GJSSerializer)
+  sem _generateType: GJSEnv -> GJSAcc -> Type -> (GJSAcc, GJSSerializer)
   sem _generateType env acc =
-  | ty -> match mapLookup ty acc with Some s then (acc,s)
-          else _generateTypeH env acc ty
-
-  sem _generateTypeH: GJSEnv -> GJSRes -> Type -> (GJSRes, GJSSerializer)
-  sem _generateTypeH env acc =
 
   -- Basic types
-  | ( TyBool _ | TyInt _ | TyFloat _ | TyChar _ | TySeq { ty = TyChar _ } ) & ty ->
-    let s = {
-      serializerName = None (), serializer = nvar_ (_baseSerializer env ty),
-      deserializerName = None (), deserializer = nvar_ (_baseDeserializer env ty)
-    } in
-    (mapInsert ty s acc, s)
+  | TyBool _ ->
+    let s = { serializer = nvar_ env.sBool, deserializer = nvar_ env.dBool } in
+    (acc, s)
+  | TyInt _ ->
+    let s = { serializer = nvar_ env.sInt, deserializer = nvar_ env.dInt } in
+    (acc, s)
+  | TyFloat _ ->
+    let s = { serializer = nvar_ env.sFloat, deserializer = nvar_ env.dFloat } in
+    (acc, s)
+  | TyChar _ ->
+    let s = { serializer = nvar_ env.sChar, deserializer = nvar_ env.dChar } in
+    (acc, s)
+  | TySeq { ty = TyChar _ } ->
+    let s = { serializer = nvar_ env.sSeq, deserializer = nvar_ env.dSeq } in
+    (acc, s)
 
   -- Builtin type constructors
-  | ( TySeq { ty = ! TyChar _ & tyi }
-    | TyTensor { ty = tyi } ) & ty ->
+  | TySeq { ty = ! TyChar _ & tyi } & ty->
     match _generateType env acc tyi with (acc, si) in
-    let serializer =
-      appf1_ (nvar_ (_baseSerializer env ty))
-        (match si.serializerName with Some n then nvar_ n else si.serializer)
-    in
-    let deserializer =
-      appf1_ (nvar_ (_baseDeserializer env ty))
-        (match si.deserializerName with Some n then nvar_ n else si.deserializer) in
-    let s = {
-      serializerName = None (), serializer = serializer,
-      deserializerName = None (), deserializer = deserializer
-    } in
-    (mapInsert ty s acc, s)
+    let serializer = appf1_ (nvar_ env.sSeq) si.serializer in
+    let deserializer = appf1_ (nvar_ env.dSeq) si.deserializer in
+    let s = { serializer = serializer, deserializer = deserializer } in
+    (acc, s)
+  | TyTensor { ty = tyi } & ty ->
+    match _generateType env acc tyi with (acc, si) in
+    let serializer = appf1_ (nvar_ env.sTensor) si.serializer in
+    let deserializer = appf1_ (nvar_ env.dTensor) si.deserializer in
+    let s = { serializer = serializer, deserializer = deserializer } in
+    (acc, s)
 
   -- | TyVar _ ->
     -- TODO
@@ -136,7 +147,9 @@ lang GenerateJsonSerializers =
   -- | TyRecord _ ->
     -- TODO
   -- | TyCon _ ->
+  -- How do we handle mutual recursion between types?
     -- TODO
+    -- TyCon must point outside of the current higher-order type
     -- Whenever we go under a higher-order type, we need to reset the accumulator in the end, as it is under a Lambda (at the type level).
   -- | TyApp _ ->
     -- TODO
@@ -166,49 +179,77 @@ let parseTest = parseMExprString {
     allowFree = true
 } in
 
-let debugPrintGJSRes: GJSRes -> () = lam res.
+let debugTestPrint: GJSAcc -> GJSRes -> () = lam acc. lam res.
+  printLn "## Acc";
+  mapMapWithKey (lam k. lam v.
+     printLn (join [
+       "TyCon name: ", nameGetStr k, "\n",
+       "serializerName: ", nameGetStr v.serializerName, "\n",
+       match v.serializer with Some s then
+         join ["serializer: \n", mexprToString s, "\n"]
+       else "serializer:\n",
+       "deserializerName: ", nameGetStr v.deserializerName, "\n",
+       match v.deserializer with Some s then
+         join ["deserializer: \n", mexprToString s, "\n"]
+       else "deserializer:\n"
+     ]
+    )) acc;
+  printLn "## Res";
   mapMapWithKey (lam k. lam v.
      printLn (join [
        "Type: ", type2str k, "\n",
-       match v.serializerName with Some n then
-         join ["serializerName: ", nameGetStr n, "\n"]
-       else "serializerName:\n",
        "serializer: \n", mexprToString v.serializer, "\n",
-       match v.deserializerName with Some n then
-         join ["deserializerName: ", nameGetStr n, "\n"]
-       else "deserializerName:\n",
        "deserializer: \n", mexprToString v.deserializer, "\n"
      ]
-    )) res; ()
+    )) res;
+  ()
 in
 
-let test: Bool -> [Type] -> String -> [(Type,String,String,String,String)] -> Bool =
-  lam debug. lam tys. lam expr. lam expected.
-  let tys = setOfSeq cmpType tys in
+let test: Bool -> [Type] -> String -> [(String,String,String,String,String)]
+          -> [(Type,String,String)] -> Bool =
+  lam debug. lam tys. lam expr. lam eAcc. lam eRes.
   let expr = parseTest expr in
-  let res: GJSRes = generateJsonSerializers tys expr in
-  let expected: GJSRes = foldl (lam m. lam t.
-      mapInsert t.0 {
-        serializerName = if null t.1 then None () else Some (nameNoSym t.1),
-        serializer = parseTest t.2,
-        deserializerName = if null t.3 then None () else Some (nameNoSym t.3),
-        deserializer = parseTest t.4
+  match generateJsonSerializers tys expr with (acc,res) in
+  let eAcc: GJSAcc = foldl (lam m. lam t.
+      mapInsert (nameNoSym t.0) {
+        serializerName = nameNoSym t.1,
+        serializer = if null t.2 then None () else Some (parseTest t.2),
+        deserializerName = nameNoSym t.3,
+        deserializer = if null t.4 then None () else Some (parseTest t.4)
       } m
-    ) (mapEmpty cmpType) expected in
+    ) (mapEmpty nameCmp) eAcc
+  in
+  let eRes: GJSRes = foldl (lam m. lam t.
+      mapInsert t.0 {
+        serializer = parseTest t.1,
+        deserializer = parseTest t.2
+      } m
+    ) (mapEmpty cmpType) eRes
+  in
   (if debug then
-     printLn "--- Result ---"; debugPrintGJSRes res;
-     printLn "--- Expected ---"; debugPrintGJSRes expected
+     printLn "# Output"; debugTestPrint acc res;
+     printLn "# Expected"; debugTestPrint eAcc eRes
    else ()
   );
-  mapEq (lam r. lam e.
-      if optionEq nameEqStr r.serializerName e.serializerName then
-        if optionEq nameEqStr r.deserializerName e.deserializerName then
-          if eqExpr r.serializer e.serializer then
-            eqExpr r.deserializer e.deserializer
+  let eq1 =
+    mapEq (lam r. lam e.
+        if nameEqStr r.serializerName e.serializerName then
+          if nameEqStr r.deserializerName e.deserializerName then
+            if optionEq eqExpr r.serializer e.serializer then
+              optionEq eqExpr r.deserializer e.deserializer
+            else false
           else false
         else false
-      else false
-    ) res expected
+      ) acc eAcc
+  in
+  if eq1 then
+    mapEq (lam r. lam e.
+            if eqExpr r.serializer e.serializer then
+              eqExpr r.deserializer e.deserializer
+            else false
+      ) res eRes
+  else false
+
 in
 
 -- Base types. The specific names of the expressions are not actually checked,
@@ -216,37 +257,37 @@ in
 utest test false
   [tybool_,tyint_,tyfloat_,tychar_,tystr_]
   "()"
+  []
   [
     (tybool_,
-       "","jsonSerializeBool",
-       "","jsonDeserializeBool"),
+       "jsonSerializeBool",
+       "jsonDeserializeBool"),
     (tyint_,
-       "","jsonSerializeInt",
-       "","jsonDeserializeInt"),
+       "jsonSerializeInt",
+       "jsonDeserializeInt"),
     (tyfloat_,
-       "","jsonSerializeFloat",
-       "","jsonDeserializeFloat"),
+       "jsonSerializeFloat",
+       "jsonDeserializeFloat"),
     (tychar_,
-       "","jsonSerializeChar",
-       "","jsonDeserializeChar"),
+       "jsonSerializeChar",
+       "jsonDeserializeChar"),
     (tystr_,
-       "","jsonSerializeString",
-       "","jsonDeserializeString")
+       "jsonSerializeString",
+       "jsonDeserializeString")
   ]
 with true in
+
 utest test false
   [tyseq_ tyint_, tytensor_ tyint_]
   "()"
+  []
   [
-    (tyint_,
-       "","jsonSerializeInt",
-       "","jsonDeserializeInt"),
     (tyseq_ tyint_,
-       "","jsonSerializeSeq jsonSerializeInt",
-       "","jsonDeserializeSeq jsonDeserializeInt"),
+       "jsonSerializeSeq jsonSerializeInt",
+       "jsonDeserializeSeq jsonDeserializeInt"),
     (tytensor_ tyint_,
-       "","jsonSerializeTensor jsonSerializeInt",
-       "","jsonDeserializeTensor jsonDeserializeInt")
+       "jsonSerializeTensor jsonSerializeInt",
+       "jsonDeserializeTensor jsonDeserializeInt")
   ]
 with true in
 
