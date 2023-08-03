@@ -18,14 +18,12 @@ type Level = Int
 
 -- Unification meta variables.  These variables represent some
 -- specific but as-of-yet undetermined type.
-lang MetaTypeAst = KindAst + Ast
+lang MetaVarTypeAst = KindAst + Ast
   type MetaVarRec = {ident  : Name,
                      level  : Level,
     -- The level indicates at what depth of let-binding the variable
     -- was introduced, which is used to determine which variables can
     -- be generalized and to check that variables stay in their scope.
-                     rigid  : Bool,
-    -- Rigid variables cannot be unified with other types.
                      kind   : Kind}
 
   syn MetaVar =
@@ -34,36 +32,36 @@ lang MetaTypeAst = KindAst + Ast
 
   syn Type =
   -- Meta type variable
-  | TyMeta {info     : Info,
+  | TyMetaVar {info     : Info,
             contents : Ref MetaVar}
 
   sem tyWithInfo (info : Info) =
-  | TyMeta t ->
+  | TyMetaVar t ->
     switch deref t.contents
     case Unbound _ then
-      TyMeta {t with info = info}
+      TyMetaVar {t with info = info}
     case Link ty then
       tyWithInfo info ty
     end
 
   sem infoTy =
-  | TyMeta {info = info} -> info
+  | TyMetaVar {info = info} -> info
 
   sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyMeta t ->
+  | TyMetaVar t ->
     switch deref t.contents
     case Unbound r then
       match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
       modref t.contents (Unbound {r with kind = kind});
-      (acc, TyMeta t)
+      (acc, TyMetaVar t)
     case Link ty then
       f acc ty
     end
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyMeta t & ty ->
+  | TyMetaVar t & ty ->
     recursive let work = lam ty.
-      match ty with TyMeta x then
+      match ty with TyMetaVar x then
         switch deref x.contents
         case Link l then
           let new = work l in
@@ -74,23 +72,23 @@ lang MetaTypeAst = KindAst + Ast
         end
       else ty in
     switch work ty
-    case TyMeta _ then (acc, ty)
+    case TyMetaVar _ & ty1 then (acc, ty1)
     case ty1 then f acc ty1
     end
 end
 
-lang MetaTypeCmp = Cmp + MetaTypeAst
+lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
   sem cmpTypeH =
-  | (TyMeta l, TyMeta r) ->
-    -- NOTE(vipa, 2023-04-19): Any non-link TyMeta should have been
+  | (TyMetaVar l, TyMetaVar r) ->
+    -- NOTE(vipa, 2023-04-19): Any non-link TyMetaVar should have been
     -- unwrapped already, thus we can assume `Unbound` here.
     match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
     nameCmp l.ident r.ident
 end
 
-lang MetaTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaTypeAst
+lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarTypeAst
   sem typePrecedence =
-  | TyMeta t ->
+  | TyMetaVar t ->
     switch deref t.contents
     case Unbound _ then
       100000
@@ -98,7 +96,7 @@ lang MetaTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaTypeAst
       typePrecedence ty
     end
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyMeta t ->
+  | TyMetaVar t ->
     switch deref t.contents
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
@@ -111,17 +109,17 @@ lang MetaTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaTypeAst
     end
 end
 
-lang MetaTypeEq = KindEq + MetaTypeAst
+lang MetaVarTypeEq = KindEq + MetaVarTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
-  | TyMeta _ & rhs ->
+  | TyMetaVar _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
-    case (TyMeta l, TyMeta r) then
+    case (TyMetaVar l, TyMetaVar r) then
       match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
       optionBind
         (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
         (lam freeTyFlex.
           eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
-    case (! TyMeta _, ! TyMeta _) then
+    case (! TyMetaVar _, ! TyMetaVar _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()
     end
@@ -132,7 +130,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = AliasTypeAst + PrettyPrint + Cmp + MetaTypeCmp
+lang Unify = Ast
   type UnifyEnv = {
     wrappedLhs: Type,  -- The currently examined left-hand subtype, before resolving aliases
     wrappedRhs: Type,  -- The currently examined right-hand subtype, before resolving aliases
@@ -145,14 +143,14 @@ lang Unify = AliasTypeAst + PrettyPrint + Cmp + MetaTypeCmp
   | Kinds (Kind, Kind)
 
   type UnifyResult a = Result () UnifyError a
-  type Unifier = [(Ref MetaVar, Type)]
+  type Unifier = [(UnifyEnv, Type, Type)]
 
   -- Unify the types `ty1` and `ty2`, where
   -- `ty1` is the expected type of an expression, and
   -- `ty2` is the inferred type of the expression,
-  -- under the assumptions of `env`.  Returns a list of pairs
-  -- `var, ty`, where variable `var` should be unified with the type
-  -- `ty`.
+  -- under the assumptions of `env`.  Returns a list of unification obligations
+  -- `(TyMetaVar m, ty)`, where the variable of the left-hand side
+  -- should be unified with the type `ty`.
   sem unifyTypes : UnifyEnv -> (Type, Type) -> UnifyResult Unifier
   sem unifyTypes env =
   | (ty1, ty2) ->
@@ -219,11 +217,11 @@ lang VarTypeUnify = Unify + VarTypeAst
     else result.err (Types (ty1, ty2))
 end
 
-lang MetaTypeUnify = Unify + MetaTypeAst + RecordTypeAst
+lang MetaVarTypeUnify = Unify + MetaVarTypeAst + RecordTypeAst
   sem unifyBase env =
-  | (TyMeta t1, ty2) ->
-    result.ok [(t1.contents, env.wrappedRhs)]
-  | (!TyMeta _ & ty1, TyMeta _ & ty2) ->
+  | (TyMetaVar _ & ty1, ty2) ->
+    result.ok [(env, ty1, ty2)]
+  | (!TyMetaVar _ & ty1, TyMetaVar _ & ty2) ->
     unifyBase {env with wrappedLhs = env.wrappedRhs, wrappedRhs = env.wrappedLhs} (ty2, ty1)
 end
 
@@ -298,4 +296,10 @@ lang RecordTypeUnify = UnifyRows + RecordTypeAst
   sem unifyBase (env : UnifyEnv) =
   | (TyRecord t1, TyRecord t2) ->
     unifyRowsStrict env t1.fields t2.fields
+end
+
+lang MExprUnify =
+  VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
+  ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
+  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
 end

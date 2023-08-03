@@ -451,7 +451,7 @@ lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
 end
 
 lang LambdaLiftTyAlls = MExprAst
-  type TyAllData = (VarSort, Info)
+  type TyAllData = (Kind, Info)
 
   sem liftTyAlls : Expr -> (Map Name TyAllData, Expr)
   sem liftTyAlls =
@@ -478,7 +478,7 @@ lang LambdaLiftTyAlls = MExprAst
   sem liftTyAllsType : Map Name TyAllData -> Type -> (Map Name TyAllData, Type)
   sem liftTyAllsType tyAlls =
   | TyAll t ->
-    let tyAlls = mapInsert t.ident (t.sort, t.info) tyAlls in
+    let tyAlls = mapInsert t.ident (t.kind, t.info) tyAlls in
     liftTyAllsType tyAlls t.ty
   | ty -> smapAccumL_Type_Type liftTyAllsType tyAlls ty
 
@@ -545,8 +545,8 @@ lang LambdaLiftTyAlls = MExprAst
     let ty = eraseUnboundTypesType vars ty in
     ( mapFoldWithKey
         (lam accTy. lam tyId. lam tyAllData.
-          match tyAllData with (varSort, info) in
-          TyAll {ident = tyId, sort = varSort, ty = accTy, info = info})
+          match tyAllData with (kind, info) in
+          TyAll {ident = tyId, kind = kind, ty = accTy, info = info})
         ty vars
     , vars )
 
