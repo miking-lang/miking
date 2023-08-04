@@ -157,9 +157,7 @@ lang GenerateJsonSerializers =
     let s = { serializer = serializer, deserializer = deserializer } in
     (acc, s)
 
-  -- | TyVar _ ->
-    -- TODO
-    -- Lookup in varEnv
+  -- Records
   | TyRecord t ->
     match mapMapAccum (lam acc. lam k. _generateType env acc) acc t.fields
     with (acc,iss) in
@@ -203,8 +201,59 @@ lang GenerateJsonSerializers =
     in
     let s = { serializer = serializer, deserializer = deserializer } in
     (acc, s)
-  -- | TyCon _ ->
-    -- TODO
+
+  | TyVar t ->
+    match mapLookup t.ident env.varEnv with Some s then (acc,s)
+    else error (join ["Type variable not found in environment: ", nameGetStr t.ident])
+  | TyCon t ->
+    match mapLookup t.ident acc with Some s then
+      (acc, { serializer = nvar_ s.serializerName,
+              deserializer = nvar_ s.deserializerName })
+    else
+      match mapLookup t.ident env.namedTypes with Some TmType tt then
+
+        -- Variant type case
+        match tt.tyIdent with TyVariant _ then
+          match mapLookup t.ident env.constructors with Some tmConDefs then
+            error "TODO"
+            -- SERIALIZER
+            -- lam p1. lam p2. lam v.
+            --   match v with Con1 d1 then
+            --     JsonObject m{ "__constructor__": "Con1", "__data__": srlsfun1 d1 }
+            --   else match v with Con2 d2 then
+            --     JsonObject m{ "__constructor__": "Con2", "__data__": srlsfun2 d2 }
+            --   else match v with Con3 d3 then
+            --     JsonObject m{ "__constructor__": "Con3", "__data__": srlsfun3 d3 }
+            --   else never
+            --
+            --
+            -- DESERIALIZER
+          else error (join ["Empty variant type: ", nameGetStr t.ident])
+
+        -- Other types (cannot be self-recursive)
+        else
+          let params = map (lam p. { sf = nameSym "sf", df = nameSym "df", p = p })
+                         tt.params in
+          let varEnv = foldl (lam env. lam p.
+              mapInsert p.p { serializer = nvar_ p.sf, deserializer = nvar_ p.df }
+                env
+            ) env.varEnv params
+          in
+          match _generateType {env with varEnv = varEnv } acc tt.tyIdent
+          with (acc, si) in
+          let serializer = foldl (lam s. lam p. nulam_ p.sf s) si.serializer params in
+          let deserializer = foldl (lam d. lam p. nulam_ p.df d) si.deserializer params in
+          let acc = mapInsert t.ident {
+              serializerName = nameSym (join ["serialize", nameGetStr t.ident]),
+              serializer = Some serializer,
+              deserializerName = nameSym (join ["deserialize", nameGetStr t.ident]),
+              deserializer = Some deserializer
+            } acc in
+          let s = { serializer = serializer, deserializer = deserializer } in
+          (acc, s)
+
+      else error (join ["Unknown type: ", nameGetStr t.ident])
+
   -- | TyApp _ ->
     -- TODO
   | ( TyUnknown _ | TyArrow _ | TyAll _ | TyAlias _ | TyVariant _ ) ->
@@ -240,11 +289,11 @@ let debugTestPrint: GJSAcc -> GJSRes -> () = lam acc. lam res.
        "TyCon name: ", nameGetStr k, "\n",
        "serializerName: ", nameGetStr v.serializerName, "\n",
        match v.serializer with Some s then
-         join ["serializer: \n", mexprToString s, "\n"]
+         join ["serializer:\n", mexprToString s, "\n"]
        else "serializer:\n",
        "deserializerName: ", nameGetStr v.deserializerName, "\n",
        match v.deserializer with Some s then
-         join ["deserializer: \n", mexprToString s, "\n"]
+         join ["deserializer:\n", mexprToString s, "\n"]
        else "deserializer:\n"
      ]
     )) acc;
@@ -252,8 +301,8 @@ let debugTestPrint: GJSAcc -> GJSRes -> () = lam acc. lam res.
   mapMapWithKey (lam k. lam v.
      printLn (join [
        "Type: ", type2str k, "\n",
-       "serializer: \n", mexprToString v.serializer, "\n",
-       "deserializer: \n", mexprToString v.deserializer, "\n"
+       "serializer:\n", mexprToString v.serializer, "\n",
+       "deserializer:\n", mexprToString v.deserializer, "\n"
      ]
     )) res;
   ()
@@ -382,6 +431,26 @@ utest test false
              else None {}
            else None {}
        ")
+  ]
+with true in
+
+-- Type constructors
+utest test true
+  [tycon_ "Seq", tycon_ "Integer"]
+  "
+    type Seq a = [a] in
+    type Integer = Int in
+    ()
+  "
+  []
+  [
+    -- (ty,
+    --    "
+    --      def
+    --    ",
+    --    "
+    --      def
+    --    ")
   ]
 with true in
 
