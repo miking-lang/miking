@@ -2163,6 +2163,17 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   | f, a ->
       TmApp (fiapp, f, a)
 
+and var_update (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmVar (_, _, s, _) as t1 -> (
+    match List.assoc_opt s env with
+    | Some t2 -> (
+      match t2 with TmVar (_, _, _, _) -> t2 | _ -> t1 )
+    | None ->
+        t1 )
+  | t ->
+      smap_tm_tm (var_update env) t
+
 and scan (env : (Symb.t * tm) list) (t : tm) =
   match t with
   | TmLet (fi, x, s, ty, t1, t2) ->
@@ -2242,7 +2253,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       apply pe fiapp f a
   (* Lambda and closure conversions *)
   | TmLam (fi, x, s, ty, t1) ->
-      TmClos (fi, x, s, ty, t1, ref env, false)
+      let t1' = if pe.inPeval then var_update env t1 else t1 in
+      TmClos (fi, x, s, ty, t1', ref env, false)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
