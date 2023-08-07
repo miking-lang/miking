@@ -2,7 +2,9 @@
 -- AST, by replacing polymorphic functions by multiple monomorphic functions
 -- (one for each distinct combination of types used to invoke the function).
 
+include "digraph.mc"
 include "mexpr/ast.mc"
+include "mexpr/call-graph.mc"
 include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/eval.mc"
@@ -287,7 +289,7 @@ lang MonomorphizeResymbolize = Monomorphize
   | ty -> smap_Type_Type (resymbolizeBindingsType nameMap) ty
 end
 
-lang MonomorphizeCollect = MonomorphizeInstantiate
+lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
   -- Collects the monomorphic instantiations of polymorphic constructs of the
   -- provided AST. This is performed in two passes:
   --
@@ -299,7 +301,8 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
   sem collectInstantiations =
   | ast ->
     let env = recordPolymorphicDefinitions (emptyMonoEnv ()) ast in
-    collectInstantiationsExpr [emptyInstantiation ()] env ast
+    let inst = setOfSeq cmpInstantiation [emptyInstantiation ()] in
+    collectInstantiationsExpr inst env ast
 
   sem recordPolymorphicDefinitions : MonoEnv -> Expr -> MonoEnv
   sem recordPolymorphicDefinitions env =
@@ -349,7 +352,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
     recordPolymorphicDefinitions env t.inexpr
   | ast -> sfold_Expr_Expr recordPolymorphicDefinitions env ast
 
-  sem collectInstantiationsExpr : [Instantiation] -> MonoEnv -> Expr -> MonoEnv
+  sem collectInstantiationsExpr : Set Instantiation -> MonoEnv -> Expr -> MonoEnv
   sem collectInstantiationsExpr instantiations env =
   | TmVar t ->
     let env = collectInstantiationsType instantiations env t.ty in
@@ -360,7 +363,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
       -- monomorphic type represents, and add this instantiation to the entry
       -- of the function.
       let updatedInstMap =
-        foldl
+        setFold
           (lam instMap. lam inst.
             let monoType = instantiatePolymorphicType inst t.ty in
             let funTypeInst = findTypeInstantiation instEntry.polyType monoType in
@@ -384,14 +387,66 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
         -- instantiations of the type variables bound in the current
         -- let-binding.
         let innerInst = mapKeys instEntry.map in
-        join
-          (map
-            (lam outerInst. map (mapUnion outerInst) innerInst)
-            instantiations)
+        if null innerInst then
+          instantiations
+        else
+          setOfSeq
+            cmpInstantiation
+            (join
+              (map
+                (lam outerInst. map (mapUnion outerInst) innerInst)
+                (setToSeq instantiations)))
       else
         instantiations
     in
     collectInstantiationsExpr instantiations env t.body
+  | TmRecLets t ->
+    let bindMap : Map Name RecLetBinding =
+      mapFromSeq nameCmp (map (lam bind. (bind.ident, bind)) t.bindings)
+    in
+    recursive let collectInstantiationsPerScc = lam inst. lam env. lam g. lam sccs.
+      match sccs with [scc] ++ sccs then
+        -- NOTE(larshum, 2023-08-07): Add the instantiations of all bindings of
+        -- the strongly connected component to the sequence of instantiations.
+        let sccInst =
+          foldl
+            (lam inst. lam id.
+              match mapLookup id env.funEnv with Some instEntry then
+                let innerInst = mapKeys instEntry.map in
+                if null innerInst then
+                  inst
+                else
+                  setOfSeq
+                    cmpInstantiation
+                    (join
+                      (map
+                        (lam outerInst. map (mapUnion outerInst) innerInst)
+                        (setToSeq inst)))
+              else
+                inst)
+            inst scc
+        in
+        -- NOTE(larshum, 2023-08-07): Collect instantiations for each binding
+        -- in the strongly connected component.
+        let env =
+          foldl
+            (lam env. lam bindId.
+              match mapLookup bindId bindMap with Some bind then
+                let env = collectInstantiationsType sccInst env bind.tyAnnot in
+                let env = collectInstantiationsType sccInst env bind.tyBody in
+                collectInstantiationsExpr sccInst env bind.body
+              else
+                env)
+            env scc
+        in
+        collectInstantiationsPerScc sccInst env g sccs
+      else
+        env
+    in
+    let env = collectInstantiationsExpr instantiations env t.inexpr in
+    let g = constructCallGraph (TmRecLets t) in
+    let sccs = digraphTarjan g in
+    collectInstantiationsPerScc instantiations env g (reverse sccs)
   | TmConDef t ->
     let env = collectInstantiationsExpr instantiations env t.inexpr in
     let env = collectInstantiationsType instantiations env t.ty in
@@ -424,7 +479,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
     let env =
       match mapLookup t.ident env.conEnv with Some instEntry then
         let updatedInstMap =
-          foldl
+          setFold
             (lam instMap. lam inst.
               let ty = tyarrow_ (tyTm t.body) t.ty in
               let monoType = instantiatePolymorphicType inst ty in
@@ -445,13 +500,13 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
     let env = sfold_Expr_Pat (collectInstantiationsPat instantiations) env ast in
     collectInstantiationsType instantiations env (tyTm ast)
 
-  sem collectInstantiationsPat : [Instantiation] -> MonoEnv -> Pat -> MonoEnv
+  sem collectInstantiationsPat : Set Instantiation -> MonoEnv -> Pat -> MonoEnv
   sem collectInstantiationsPat instantiations env =
   | PatCon t ->
     let env =
       match mapLookup t.ident env.conEnv with Some instEntry then
         let updatedInstMap =
-          foldl
+          setFold
             (lam instMap. lam inst.
               let ty = tyarrow_ (tyPat t.subpat) t.ty in
               let monoType = instantiatePolymorphicType inst ty in
@@ -470,7 +525,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
     let env = sfold_Pat_Pat (collectInstantiationsPat instantiations) env p in
     collectInstantiationsType instantiations env (tyPat p)
 
-  sem collectInstantiationsType : [Instantiation] -> MonoEnv -> Type -> MonoEnv
+  sem collectInstantiationsType : Set Instantiation -> MonoEnv -> Type -> MonoEnv
   sem collectInstantiationsType instantiations env =
   | TyAlias t ->
     -- NOTE(larshum, 2023-08-03): We collect instantiations of polymorphic
@@ -479,7 +534,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate
     match collectTypeAppParams [] t.display with (TyCon {ident = id}, ![]) then
       match mapLookup id env.typeEnv with Some instEntry then
         let updatedInstMap =
-          foldl
+          setFold
             (lam instMap. lam inst.
               let ty = instantiatePolymorphicType inst t.display in
               if isMonomorphicTypeX true ty then
@@ -530,6 +585,8 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup varInst instEntry.map with Some newId then
           newId
         else
+          printLn (monoEnvToString env);
+          dprintLn t.ident;
           errorSingle [t.info] "Monomorphization error: Variable instantiation not found"
       else t.ident
     in
@@ -558,6 +615,28 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
                     body = applyMonomorphization env t.body,
                     inexpr = inexpr,
                     ty = applyMonomorphizationType env t.ty}
+  | TmRecLets t ->
+    let applyMonomorphizationBinding = lam env. lam acc. lam bind.
+      match mapLookup bind.ident env.funEnv with Some instEntry then
+        mapFoldWithKey
+          (lam acc. lam inst. lam newId.
+            let body = monomorphizeBody env inst bind.body in
+            let tyAnnot = monomorphizeType env inst bind.tyAnnot in
+            let tyBody = monomorphizeType env inst bind.tyBody in
+            let bind = {
+              bind with ident = newId,
+                        tyAnnot = tyAnnot,
+                        tyBody = tyBody,
+                        body = body
+            } in
+            snoc acc bind)
+          acc instEntry.map
+      else
+        snoc acc bind
+    in
+    let inexpr = applyMonomorphizationExpr env t.inexpr in
+    let bindings = foldl (applyMonomorphizationBinding env) [] t.bindings in
+    TmRecLets {t with bindings = bindings, inexpr = inexpr}
   | TmType t ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.typeEnv with Some instEntry then
@@ -892,6 +971,100 @@ utest distinctSymbols result with true in
 utest eval {env = evalEnvEmpty ()} result
 with utuple_ [utuple_ [int_ 2, float_ 2.5], utuple_ [float_ 2.5, int_ 2]]
 using eqExpr in
+
+-- Simple recursive function
+let recursion = preprocess (bindall_ [
+  ureclets_ [
+    ("f", ulam_ "g" (ulam_ "s" (
+      if_ (null_ (var_ "s"))
+        (seq_ [])
+        (cons_
+          (app_ (var_ "g") (head_ (var_ "s")))
+          (appf2_ (var_ "f") (var_ "g") (tail_ (var_ "s"))))))) ],
+  utuple_ [
+    appf2_ (var_ "f") (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (seq_ [int_ 1, int_ 2]),
+    appf2_ (var_ "f") (ulam_ "x" (negf_ (var_ "x"))) (seq_ [float_ 1.0, float_ 2.0])
+  ]
+]) in
+let env = collectInstantiations recursion in
+utest mapSize env.funEnv with 1 in
+let result = applyMonomorphization env recursion in
+utest isMonomorphic result with true in
+utest distinctSymbols result with true in
+utest eval {env = evalEnvEmpty ()} result with utuple_ [
+  seq_ [int_ 2, int_ 3], seq_ [float_ (negf 1.0), float_ (negf 2.0)]
+] using eqExpr in
+
+-- Mutual recursion with polymorphism
+let mutrec = preprocess (bindall_ [
+  ureclets_ [
+    ("maphd", ulam_ "f" (ulam_ "s" (
+      match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
+        (cons_
+          (app_ (var_ "f") (var_ "h"))
+          (appf2_ (var_ "maptl") (var_ "t") (var_ "f")))
+        (seq_ [])))),
+    ("maptl", ulam_ "s" (ulam_ "f" (
+      match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
+        (snoc_
+          (appf2_ (var_ "maphd") (var_ "f") (var_ "t"))
+          (app_ (var_ "f") (var_ "h")))
+        (seq_ []))))
+  ],
+  appf2_ (var_ "maphd")
+    (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
+    (seq_ [int_ 1, int_ 2, int_ 3])
+]) in
+let env = collectInstantiations mutrec in
+utest mapSize env.funEnv with 2 in
+let result = applyMonomorphization env mutrec in
+utest isMonomorphic result with true in
+utest distinctSymbols result with true in
+utest eval {env = evalEnvEmpty ()} result with seq_ [int_ 2, int_ 4, int_ 3]
+using eqExpr in
+
+-- Mutual recursion of three bindings
+-- NOTE(larshum, 2023-08-07): When using three mutually recursive bindings, a
+-- naive top-down approach on the bindings does not work, as we need to take
+-- the order in which we operate on them into account.
+let mutrec3 = preprocess (bindall_ [
+  ureclets_ [
+    ("f1", ulam_ "f" (ulam_ "s" (
+      match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
+        (cons_
+          (app_ (var_ "f") (var_ "h"))
+          (appf2_ (var_ "f3") (var_ "t") (var_ "f")))
+        (seq_ [])))),
+    ("f2", ulam_ "f" (ulam_ "s" (
+      match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
+        (cons_
+          (app_ (var_ "f") (app_ (var_ "f") (var_ "h")))
+          (appf2_ (var_ "f1") (var_ "f") (var_ "t")))
+        (seq_ [])))),
+    ("f3", ulam_ "s" (ulam_ "f" (
+      match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
+        (snoc_
+          (appf2_ (var_ "f2") (var_ "f") (var_ "t"))
+          (app_ (var_ "f") (var_ "h")))
+        (seq_ []))))
+  ],
+  utuple_ [
+    appf2_ (var_ "f2")
+      (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
+      (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]),
+    appf2_ (var_ "f2")
+      (ulam_ "x" (addf_ (var_ "x") (float_ 1.5)))
+      (seq_ [float_ 2., float_ 3., float_ 4., float_ 5.])
+  ]
+]) in
+let env = collectInstantiations mutrec3 in
+printLn (monoEnvToString env);
+utest mapSize env.funEnv with 3 in
+let result = applyMonomorphization env mutrec3 in
+utest eval {env = evalEnvEmpty ()} mutrec3 with utuple_ [
+  seq_ [int_ 3, int_ 3, int_ 6, int_ 4],
+  seq_ [float_ 5., float_ 4.5, float_ 8., float_ 5.5]
+] using eqExpr in
 
 -- Polymorphic type constructor
 let polyOption = preprocess (bindall_ [
