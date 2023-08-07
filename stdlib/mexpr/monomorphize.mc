@@ -85,6 +85,11 @@ lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
       "Constants",
       strJoin "\n" (innerEnvToString env.constEnv (getConstStringCode 0)) ]
 
+  sem monoError : all a. [Info] -> String -> a
+  sem monoError infos =
+  | msg ->
+    errorSingle infos (concat "Monomorphization error: " msg)
+
   -- Collects the type parameters
   sem collectTypeAppParams : [Type] -> Type -> (Type, [Type])
   sem collectTypeAppParams acc =
@@ -103,7 +108,8 @@ lang MonomorphizeInstantiate = Monomorphize
     let polyType = inspectType polyType in
     let inst = inferInstantiation (emptyInstantiation ()) (polyType, monoType) in
     -- NOTE(larshum, 2023-08-03): If any resulting type contains a TyUnknown,
-    -- we replace it with the unit type to make it concrete.
+    -- we can replace it by any time. For consistency, we always use the unit
+    -- type.
     mapMapWithKey (lam. lam ty. replaceUnknownWithUnit ty) inst
 
   -- Given the type parameter identifiers and the monomorphic types they are
@@ -142,7 +148,7 @@ lang MonomorphizeInstantiate = Monomorphize
       match (lhs, rhs) with (Some lty, Some rty) then
         Some (lty, rty)
       else
-        error "Monomorphization error: Record type field mismatch"
+        monoError [l.info, r.info] "Record type field mismatch"
     in
     let f = lam inst. lam. lam tyPair.
       inferInstantiation inst tyPair
@@ -158,7 +164,7 @@ lang MonomorphizeInstantiate = Monomorphize
     -- its contents if both types have the same constructor tag.
     if eqi (constructorTag lty) (constructorTag rty) then inst
     else
-      error "Monomorphization error: Unsupported polymorphic type instantiation"
+      monoError [infoTy lty, infoTy rty] "Unsupported polymorphic type instantiation"
 
   -- Applies an instantiation on a provided expression, producing a
   -- monomorphized expression over those variables.
@@ -477,7 +483,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
                 match inspectType conMonoType with TyArrow {to = variantTy} then
                   findTypeInstantiation varInstEntry.polyType variantTy
                 else
-                  errorSingle [t.info] "Monomorphization error: Invalid constructor type"
+                  monoError [t.info] "Invalid constructor type"
               in
               if mapMem inst instMap then instMap
               else mapInsert inst (nameSetNewSym variantId) instMap)
@@ -486,7 +492,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
         let varInstEntry = {varInstEntry with map = updatedInstMap} in
         {env with typeEnv = mapInsert variantId varInstEntry env.typeEnv}
       else
-        errorSingle [t.info] "Monomorphization error: Unknown variant type of constructor"
+        monoError [t.info] "Unknown variant type of constructor"
     else env
   | TmConApp t ->
     let env = collectInstantiationsType instantiations env t.ty in
@@ -565,8 +571,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
         -- entry, it must be monomorphic.
         env
     else
-      let info = infoTy t.display in
-      errorSingle [info] "Monomorphization error: Unexpected shape of type alias"
+      env
   | ty -> sfold_Type_Type (collectInstantiationsType instantiations) env ty
 
   sem isMonomorphicTypeX : Bool -> Type -> Bool
@@ -580,7 +585,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
   | TyApp t -> findVariantName t.lhs
   | TyArrow t -> findVariantName t.to
   | TyCon t -> t.ident
-  | ty -> errorSingle [infoTy ty] "Monomorphization error: Constructor type does not refer to a valid variant type"
+  | ty -> monoError [infoTy ty] "Constructor type does not refer to a known variant type"
 end
 
 lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
@@ -599,7 +604,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup varInst instEntry.map with Some newId then
           newId
         else
-          errorSingle [t.info] "Monomorphization error: Variable instantiation not found"
+          monoError [t.info] "Variable instantiation not found"
       else t.ident
     in
     TmVar {t with ident = ident,
@@ -687,7 +692,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup conInst instEntry.map with Some newId then
           newId
         else
-          errorSingle [t.info] "Monomorphization error: Constructor instantiation not found"
+          monoError [t.info] "Constructor instantiation not found"
       else t.ident
     in
     TmConApp {t with ident = ident,
@@ -709,7 +714,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
       match mapLookup inst instEntry.map with Some newId then
         PatCon {t with ident = newId, subpat = subpat}
       else
-        error "Monomorphization error: Invalid constructor pattern instantiation"
+        monoError [t.info] "Invalid pattern constructor instantiation"
     else
       PatCon {t with subpat = subpat}
   | p ->
@@ -725,9 +730,9 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup typeInst instEntry.map with Some newId then
           TyCon {ident = newId, info = infoTy ty}
         else
-          errorSingle [t.info] "Monomorphization error: Invalid constructor instantiation"
+          monoError [t.info] "Invalid type constructor instantiation"
       else
-        errorSingle [t.info] "Monomorphization error: Polymorphic constructor not found"
+        monoError [t.info] "Polymorphic constructor not found"
     else
       smap_Type_Type (applyMonomorphizationType env) ty
   | ty -> smap_Type_Type (applyMonomorphizationType env) ty
