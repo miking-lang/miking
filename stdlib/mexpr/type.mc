@@ -24,7 +24,7 @@ lang AppTypeGetArgs = AppTypeAst
 end
 
 -- Return the type (TyCon) which a constructor (TmConDef) belongs to.
-lang GetConDefType = MExprAst
+lang ConDefTypeUtils = MExprAst
   sem getConDefType: Type -> Type
   sem getConDefType =
   | ty ->
@@ -53,7 +53,7 @@ let isHigherOrderFunType = use MExprAst in lam ty.
   in
   rec false false ty
 
-lang Test = MExprAst + MExprConstType + GetConDefType end
+lang Test = MExprAst + MExprConstType + ConDefTypeUtils end
 
 mexpr
 use Test in

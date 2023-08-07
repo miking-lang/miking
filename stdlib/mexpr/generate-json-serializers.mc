@@ -13,8 +13,11 @@ include "stdlib.mc"
 include "stringid.mc"
 include "map.mc"
 
+let constructorKey = "__constructor__"
+let dataKey = "__data__"
+
 lang GenerateJsonSerializers =
-  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + GetConDefType
+  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + ConDefTypeUtils
 
   type GJSSerializer = {
     serializer: Expr,
@@ -48,7 +51,7 @@ lang GenerateJsonSerializers =
     sFloat: Name, dFloat: Name, sChar: Name, dChar: Name,
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
     sTensor: Name, dTensor: Name,
-    jsonObject: Name,
+    jsonObject: Name, jsonString: Name,
     mapInsert: Name, mapEmpty: Name, mapLookup: Name,
     cmpString: Name,
     some: Name, none: Name
@@ -65,14 +68,14 @@ lang GenerateJsonSerializers =
         "jsonSerializeChar", "jsonDeserializeChar", "jsonSerializeString",
         "jsonDeserializeString", "jsonSerializeSeq", "jsonDeserializeSeq",
         "jsonSerializeTensor", "jsonDeserializeTensor",
-        "JsonObject",
+        "JsonObject", "JsonString",
         "mapInsert", "mapEmpty", "mapLookup",
         "cmpString",
         "Some", "None"
       ] lib with [
         sb, db, si, di, sf, df, sc, dc,
         ss, ds, ssq, dsq, st, dt,
-        jo,
+        jo, js,
         mi,me,ml,
         cs,
         s,n
@@ -85,7 +88,7 @@ lang GenerateJsonSerializers =
       sFloat = sf, dFloat = df, sChar = sc, dChar = dc,
       sString = ss, dString = ds, sSeq = ssq, dSeq = dsq,
       sTensor = st, dTensor = dt,
-      jsonObject = jo,
+      jsonObject = jo, jsonString = js,
       mapInsert = mi, mapEmpty = me, mapLookup = ml,
       cmpString = cs,
       some = s, none = n
@@ -215,44 +218,89 @@ lang GenerateJsonSerializers =
         -- Variant type case
         match tt.tyIdent with TyVariant _ then
           match mapLookup t.ident env.constructors with Some tmConDefs then
-            let sarg = nameSym "d" in
-            -- For each condef:
-            -- * The name
-            -- * Name for serializer pattern match variable
-            -- * generateType_ for constructor contents
-            let serializer = nulams_ tt.params (
+            let pss =
+              map (lam p. { sf = nameSym "sf", df = nameSym "df" }) tt.params
+            in
+            let serializerName = nameSym (join ["serialize", nameGetStr t.ident]) in
+            let deserializerName = nameSym (join ["deserialize", nameGetStr t.ident]) in
+            let acc = mapInsert t.ident {
+                serializerName = serializerName,
+                deserializerName = deserializerName,
+                serializer = None (),
+                deserializer = None ()
+              } acc
+            in
+            match mapAccumL (lam acc. lam tcd.
+                let tcd = match tcd with TmConDef tcd then tcd
+                          else error "Impossible" in
+                match stripTyAll tcd.tyIdent with (tyalls,tyIdent) in
+                let varEnv = foldl2 (lam varEnv. lam ta. lam ps.
+                    match ta with (n,_) in
+                    mapInsert n { serializer = nvar_ ps.sf,
+                                  deserializer = nvar_ ps.df } varEnv
+                  ) env.varEnv tyalls pss in
+                let env = { env with varEnv = varEnv } in
+                match tyIdent with TyArrow t then
+                  match _generateType env acc t.from with (acc, s) in
+                  (acc, { name = tcd.ident, p = nameSym "d", s = s })
+                else error "Not an arrow type in TmConDef"
+              ) acc tmConDefs
+            with (acc, conDefs) in
+            let sarg = nameSym "c" in
+            let serializer = nulams_ (map (lam ps. ps.sf) pss) (
                 nulam_ sarg (
-                  match_
-                    (nvar_ sarg)
-                    (npcon_ tmcondef1 (npvar_ ))
-                    thn
-                    els
+                  foldl (lam acc. lam cd.
+                    match_
+                      (nvar_ sarg)
+                      (npcon_ cd.name (npvar_ cd.p))
+                      (nconapp_ env.jsonObject
+                        (appf3_ (nvar_ env.mapInsert)
+                           (str_ constructorKey)
+                           (nconapp_ env.jsonString (str_ (nameGetStr cd.name)))
+                           (appf3_ (nvar_ env.mapInsert)
+                              (str_ dataKey)
+                              (app_ (cd.s).serializer (nvar_ cd.p))
+                              (app_ (nvar_ env.mapEmpty) (nvar_ env.cmpString)))))
+                      acc) never_ conDefs
                 ))
             in
-            -- SERIALIZER
-            -- lam p1. lam p2. lam d.
-            --   match d with Con1 d1 then
-            --     JsonObject m{ "__constructor__": "Con1", "__data__": srlsfun1<p1, p2> d1 }
-            --   else match d with Con2 d2 then
-            --     JsonObject m{ "__constructor__": "Con2", "__data__": srlsfun2<p1, p2> d2 }
-            --   else match d with Con3 d3 then
-            --     JsonObject m{ "__constructor__": "Con3", "__data__": srlsfun3<p1, p2> d3 }
-            --   else never
-            --
-            --
-            -- DESERIALIZER
-            -- lam p1. lam p2. lam jv.
-            --   match jv with JSONObject m then
-            --     match (mapLookup "__constructor__" m, mapLookup "__data__" m)
-            --     with (Some constr, Some data) then
-            --       match constr with "Con1" then dsrlsfun1<p1,p2> data
-            --       else match constr with "Con2" then dsrlsfun2<p1,p2> data
-            --       else match constr with "Con3" then dsrlsfun3<p1,p2> data
-            --       else None ()
-            --     else None ()
-            --   else None ()
-            --
-          else error (join ["Empty variant type: ", nameGetStr t.ident])
+            let darg = nameSym "jc" in
+            let none = nconapp_ env.none unit_ in
+            let mv = nameSym "m" in
+            let cv = nameSym "con" in
+            let dv = nameSym "data" in
+            let deserializer = nulams_ (map (lam ps. ps.df) pss) (
+                nulam_ darg (
+                  match_
+                    (nvar_ darg)
+                    (npcon_ env.jsonObject (npvar_ mv))
+                    (match_
+                      (appf2_ (nvar_ env.mapLookup) (str_ constructorKey) (nvar_ mv))
+                      (npcon_ env.some (npvar_ cv))
+                      (match_
+                         (appf2_ (nvar_ env.mapLookup) (str_ dataKey) (nvar_ mv))
+                         (npcon_ env.some (npvar_ dv))
+                         (foldl (lam acc. lam cd.
+                            match_
+                              (nvar_ cv)
+                              (pstr_ (nameGetStr cd.name))
+                              (nconapp_ cd.name (app_ (cd.s).deserializer (nvar_ dv)))
+                              acc) none conDefs)
+                         none)
+                      none)
+                    none))
+            in
+            let acc = mapInsert t.ident {
+                serializerName = serializerName,
+                serializer = Some serializer,
+                deserializerName = deserializerName,
+                deserializer = Some deserializer
+              } acc in
+            let s = { serializer = nvar_ serializerName,
+                      deserializer = nvar_ deserializerName } in
+            (acc, s)
+
+          else error (join ["Incorrect variant type: ", nameGetStr t.ident])
 
         -- Other types (cannot be self-recursive)
         else
@@ -278,8 +326,12 @@ lang GenerateJsonSerializers =
 
       else error (join ["Unknown type: ", nameGetStr t.ident])
 
-  -- | TyApp _ ->
-    -- TODO
+  | TyApp t ->
+    match _generateType env acc t.lhs with (acc, sl) in
+    match _generateType env acc t.rhs with (acc, sr) in
+    let s = { serializer = app_ sl.serializer sr.serializer,
+              deserializer = app_ sl.deserializer sr.deserializer } in
+    (acc, s)
   | ( TyUnknown _ | TyArrow _ | TyAll _ | TyAlias _ | TyVariant _ ) ->
     error "Not supported when generating JSON serializers"
 
@@ -459,52 +511,62 @@ utest test false
 with true in
 
 -- Type constructors
-utest test true
+utest test false
   [tycon_ "Seq", tycon_ "Integer"]
   "
     type Seq a = [a] in
     type Integer = Int in
     ()
   "
-  []
-  [
-    -- (ty,
-    --    "
-    --      def
-    --    ",
-    --    "
-    --      def
-    --    ")
-  ]
+  [("Seq", "serializeSeq", "lam sf. jsonSerializeSeq sf",
+           "deserializeSeq", "lam df. jsonDeserializeSeq df"),
+   ("Integer", "serializeInteger", "jsonSerializeInt",
+               "deserializeInteger", "jsonDeserializeInt")]
+  [(tycon_ "Seq", "lam sf. jsonSerializeSeq sf", "lam df. jsonDeserializeSeq df"),
+   (tycon_ "Integer", "jsonSerializeInt", "jsonDeserializeInt")]
 with true in
 
--- utest test false
---   [tycon_ "Option"]
---   "
---     type Option a in
---     con Some : all a. a -> Option a in
---     con None : all a. () -> Option a in
---     ()
---   "
---   [
---     (tycon_ "Option",
---        "someSerializerName","
---          lam f. lam x.
---            match x with Some a then JSONObject {type = Option, constr = Some, data = f a}
---            else match x with None a then JSONObject {type = Option, constr = None, data = serializerforEmptyRecord () }
---            else never
---        ",
---        "someDeserializerName","
---          lam f. lam x.
---            match x with JSONObject { type = Option, constr = constr, data = data } then
---              match constr with Some then
---                match f data with Some data then Some (Some data) else None ()
---              else match constr with None then
---                match deserializerforEmptyRecord () with Some data then Some (None data) else None ()
---            else None ()
---        ")
---   ]
--- with true in
+-- Variants and type applications
+utest test false
+  [tycon_ "Either", tycon_ "MyType"]
+  "
+    type Either a b in
+    con Left: all a. all b. a -> Either a b in
+    con Right: all a. all b. b -> Either a b in
+    type MyType = Either Int Bool in
+    ()
+  "
+  [("Either",
+    "serializeEither","
+      lam sf. lam sf1. lam c.
+        match c with Left d then
+          JsonObject
+            (mapInsert \"__constructor__\" (JsonString \"Left\")
+               (mapInsert \"__data__\" (sf d) (mapEmpty cmpString)))
+        else match c with Right d1 in
+          JsonObject
+              (mapInsert \"__constructor__\" (JsonString \"Right\")
+                 (mapInsert \"__data__\" (sf1 d1) (mapEmpty cmpString)))
+    ",
+    "deserializeEither","
+      lam df. lam df1. lam jc.
+        match jc with JsonObject m then
+          match mapLookup \"__constructor__\" m with Some con1 then
+            match mapLookup \"__data__\" m with Some data then
+              match con1 with \"Left\" then Left (df data)
+              else match con1 with \"Right\" then Right (df1 data)
+              else None {}
+            else None {}
+          else None {}
+        else None {}
+    "),
+    ("MyType", "serializeMyType", "serializeEither jsonSerializeInt jsonSerializeBool",
+              "deserializeMyType", "deserializeEither jsonDeserializeInt jsonDeserializeBool")
+  ]
+  [(tycon_ "Either", "serializeEither", "deserializeEither"),
+   (tycon_ "MyType", "serializeEither jsonSerializeInt jsonSerializeBool",
+                     "deserializeEither jsonDeserializeInt jsonDeserializeBool")]
+with true in
 
 ()
 
