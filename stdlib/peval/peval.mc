@@ -41,7 +41,12 @@ let astBuilder = lam info.
     negi = app (uconst (CNegi ())),
     float = lam f. uconst (CFloat { val = f }),
     mulf = app2 (uconst (CMulf ())),
-    negf = app (uconst (CNegf ()))
+    negf = app (uconst (CNegf ())),
+    seq = lam tms. TmSeq {
+      tms = tms,
+      info = info,
+      ty = tyunknown_
+    }
   }
 
 lang PEvalCtx = Eval + SideEffect
@@ -571,11 +576,36 @@ lang IOPEval = IOAst + SeqAst + IOArity
     b.appSeq (b.uconst c) args
 end
 
+lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + VarAst
+  sem pevalApply info ctx k =
+  | (TmConstApp {const = CMap _, args = [f]}, TmSeq s) ->
+    let f = lam x. lam k.
+      pevalApply info ctx (pevalBind ctx k) (f, x)
+    in
+    mapK f s.tms (lam tms. k (TmSeq { s with tms = tms }))
+  | (TmConstApp {const = CMapi _, args = [f]}, TmSeq s) ->
+    let f = lam i. lam x. lam k.
+      pevalApply info ctx
+        (pevalBind ctx (lam f.
+          pevalApply info ctx (pevalBind ctx k) (f, x)))
+        (f, (int_ i))
+    in
+    mapiK f s.tms (lam tms. k (TmSeq { s with tms = tms }))
+  | (TmConstApp {const = CFoldl _, args = [f, acc]}, TmSeq s) ->
+    let f = lam acc. lam x. lam k.
+      pevalApply info ctx
+        (pevalBind ctx (lam f.
+          pevalApply info ctx (pevalBind ctx k) (f, x)))
+        (f, acc)
+    in
+    foldlK f acc s.tms k
+end
+
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
   RecLetsPEval + MatchPEval + NeverPEval + DataPEval + TypePEval + SeqPEval +
-  UtestPEval + ExtPEval +
+  UtestPEval + ExtPEval + SeqOpPEval +
 
   -- Constants
   ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
@@ -1166,9 +1196,9 @@ lam x.
   using eqExpr
 in
 
---------------------------------
+--------------------------
 -- Test Char Comparison --
---------------------------------
+--------------------------
 
 let prog = _parse "
 lam x.
@@ -1185,5 +1215,61 @@ let prog = _parse "
 
 utest _test prog with _parse "false" using eqExpr in
 
+-------------------------
+-- Test Seq Operations --
+-------------------------
+
+logSetLogLevel logLevel.error;
+
+let prog = _parse "map (addi 1) [1, 2, 3]" in
+utest _test prog with _parse "[2, 3, 4]" using eqExpr in
+
+let prog = _parse "lam x. map (addi x) [1, 2, 3]" in
+utest _test prog with _parse "
+let f = lam x.
+  let t1 = addi 1 x in
+  let t2 = addi 2 x in
+  let t3 = addi 3 x in
+  [t1, t2, t3]
+in f
+  "
+  using eqExpr
+in
+
+let prog = _parse "mapi addi [1, 2, 3]" in
+utest _test prog with _parse "[1, 3, 5]" using eqExpr in
+
+let prog = _parse "lam x. mapi (lam i. lam y. muli i (addi x y)) [1, 2, 3]" in
+utest _test prog with
+  _parse "
+let f = lam x.
+  let t1 = addi 2 x in
+  let t2 = addi 3 x in
+  let t3 = muli 2 t2 in
+  [0, t1, t3]
+in f
+    "
+  using eqExpr
+in
+
+let prog = _parse "foldl addi 0 [1, 2, 3]" in
+utest _test prog with _parse "6" using eqExpr in
+
+let prog = _parse "lam x. foldl addi x [1, 2, 3]" in
+utest _test prog with _parse "
+lam x.
+  let t = addi 1 x in
+  let t1 = addi 2 t in
+  let t2 = addi 3 t1 in
+  t2
+  " using eqExpr in
+
+let prog = _parse "lam x. lam y. [get x y, get x 1, get x 2]" in
+utest _test prog with _parse "
+  let f = lam x.
+    let f = lam y. [get x y, get x 1, get x 2] in f
+  in f"
+  using eqExpr
+in
 
 ()
