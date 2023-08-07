@@ -284,7 +284,11 @@ lang GenerateJsonSerializers =
                             match_
                               (nvar_ cv)
                               (pstr_ (nameGetStr cd.name))
-                              (nconapp_ cd.name (app_ (cd.s).deserializer (nvar_ dv)))
+                              (let d = nameSym "d" in match_
+                                (app_ (cd.s).deserializer (nvar_ dv))
+                                (npcon_ env.some (npvar_ d))
+                                (nconapp_ cd.name (nvar_ d))
+                                none)
                               acc) none conDefs)
                          none)
                       none)
@@ -553,8 +557,10 @@ utest test false
         match jc with JsonObject m then
           match mapLookup \"__constructor__\" m with Some con1 then
             match mapLookup \"__data__\" m with Some data then
-              match con1 with \"Left\" then Left (df data)
-              else match con1 with \"Right\" then Right (df1 data)
+              match con1 with \"Left\" then
+                match df data with Some d1 then Left d1 else None {}
+              else match con1 with \"Right\" then
+                match df1 data with Some d2 then Right d2 else None {}
               else None {}
             else None {}
           else None {}
@@ -566,6 +572,46 @@ utest test false
   [(tycon_ "Either", "serializeEither", "deserializeEither"),
    (tycon_ "MyType", "serializeEither jsonSerializeInt jsonSerializeBool",
                      "deserializeEither jsonDeserializeInt jsonDeserializeBool")]
+with true in
+
+-- Recursive types
+utest test false
+  [tycon_ "List"]
+  "
+    type List a in
+    con Node: all a. List a -> List a in
+    con Leaf: all a. () -> List a in
+    ()
+  "
+  [("List", "serializeList", "
+      lam sf. lam c.
+        match c with Node d then
+          JsonObject
+            (mapInsert \"__constructor__\" (JsonString \"Node\")
+              (mapInsert \"__data__\" (serializeList sf d)
+                 (mapEmpty cmpString)))
+          else match c with Leaf d1 in
+            JsonObject
+              (mapInsert \"__constructor__\" (JsonString \"Leaf\")
+                (mapInsert \"__data__\" ((lam r.  JsonObject (mapEmpty cmpString)) d1)
+                  (mapEmpty cmpString)))
+    ",
+    "deserializeList", "
+      lam df. lam jc.
+          match jc with JsonObject m then
+            match mapLookup \"__constructor__\" m with Some con1 then
+              match mapLookup \"__data__\" m with Some data then
+                match con1 with \"Node\" then
+                  match deserializeList df data with Some d1 then Node d1 else None {}
+                else match con1 with \"Leaf\" then
+                  match (lam jr. match jr with JsonObject m1 then {} else None {}) data
+                  with Some d2 then Leaf d2 else None {}
+                else None {}
+              else None {}
+            else None {}
+          else None {}
+    ")]
+  [(tycon_ "List", "serializeList", "deserializeList")]
 with true in
 
 ()
