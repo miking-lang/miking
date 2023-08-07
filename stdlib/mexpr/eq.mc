@@ -319,10 +319,6 @@ lang NeverEq = Eq + NeverAst
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
-lang TypeEq = Eq + TypeAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-end
-
 lang ExtEq = Eq + ExtAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmExt {ident = i2, inexpr = ie2} ->
