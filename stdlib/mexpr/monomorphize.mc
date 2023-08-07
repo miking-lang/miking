@@ -889,24 +889,9 @@ utest mapMem g env.funEnv with true in
 let result = applyMonomorphization env nestedPoly in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-let expected = preprocess (bindall_ [
--- why do these two seem to be unstable? should be the same outcome every time...
-  ulet_ "f_int_float" (ulam_ "x" (ulam_ "y" (bindall_ [
-    ulet_ "g_float" (ulam_ "z" (var_ "z")),
-    ulet_ "g_int" (ulam_ "z" (var_ "z")),
-    utuple_ [app_ (var_ "g_int") (var_ "x"), app_ (var_ "g_float") (var_ "y")]
-  ]))),
-  ulet_ "f_float_int" (ulam_ "x" (ulam_ "y" (bindall_ [
-    ulet_ "g_float" (ulam_ "z" (var_ "z")),
-    ulet_ "g_int" (ulam_ "z" (var_ "z")),
-    utuple_ [app_ (var_ "g_float") (var_ "x"), app_ (var_ "g_int") (var_ "y")]
-  ]))),
-  utuple_ [
-    appf2_ (var_ "f_int_float") (int_ 2) (float_ 2.5),
-    appf2_ (var_ "f_float_int") (float_ 2.5) (int_ 2)
-  ]
-]) in
-utest result with expected using eqExpr in
+utest eval {env = evalEnvEmpty ()} result
+with utuple_ [utuple_ [int_ 2, float_ 2.5], utuple_ [float_ 2.5, int_ 2]]
+using eqExpr in
 
 -- Polymorphic type constructor
 let polyOption = preprocess (bindall_ [
