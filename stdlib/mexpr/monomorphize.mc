@@ -1,6 +1,17 @@
 -- Eliminates occurrences of polymorphic types in the provided (typed) MExpr
 -- AST, by replacing polymorphic functions by multiple monomorphic functions
 -- (one for each distinct combination of types used to invoke the function).
+--
+-- TODO(larshum, 2023-08-07): The current version does not support higher-order
+-- polymorphic function parameters (frozen types). Adding support for this
+-- would involve:
+-- * Considering all lambda parameters with a TyAll (higher-order polymorphism)
+-- * Collecting monomorphic uses of such lambda parameters
+-- * Replacing each polymorphic lambda parameter with one or more parameters;
+--   one parameter per monomorphic use.
+-- * Updating all uses of the corresponding functions to pass the correct
+--   number of arguments (replacing the #frozen with one or more monomorphized
+--   function variables).
 
 include "digraph.mc"
 include "mexpr/ast.mc"
@@ -1126,5 +1137,42 @@ let result = applyMonomorphization env polyAlias in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
 utest eval {env = evalEnvEmpty ()} result with seq_ [int_ 2, int_ 2] using eqExpr in
+
+-- Higher-order polymorphism
+let higherOrderPoly = preprocess (bindall_ [
+  let_ "f"
+    (tyall_ "a" (tyall_ "b" (tyarrows_ [
+      tyvar_ "a",
+      tyvar_ "b",
+      tyall_ "c" (tyarrow_ (tyvar_ "c") (tyvar_ "c")),
+      tytuple_ [tyvar_ "a", tyvar_ "b"]
+    ])))
+    (ulam_ "x" (ulam_ "y" (ulam_ "g" (
+      utuple_ [app_ (var_ "g") (var_ "x"), app_ (var_ "g") (var_ "y")])))),
+  ulet_ "id" (ulam_ "x" (var_ "x")),
+  utuple_ [
+    app_ (var_ "f") (int_ 2) (float_ 2.5) (freeze_ "id"),
+    app_ (var_ "f") (char_ 'x') (int_ 3) (freeze_ "id")
+  ]
+]) in
+-- NOTE(larshum, 2023-08-07): The order of the bindings may differ in the
+-- actual implementation. Regardless, the result should be monomorphic, use
+-- distinct symbols in instantiations of the same polymorphic function, and
+-- evaluate to the same value we would expect the original program to.
+let expected = preprocess (bindall_ [
+  ulet_ "f_int_float" (ulam_ "x" (ulam_ "y" (ulam_ "g_int" (ulam_ "g_float" (
+    utuple_ [app_ (var_ "g_int") (var_ "x"), app_ (var_ "g_float") (var_ "y")]))))),
+  ulet_ "f_char_int" (ulam_ "x" (ulam_ "y" (ulam_ "g_char" (ulam_ "g_int" (
+    utuple_ [app_ (var_ "g_char") (var_ "x"), app_ (var_ "g_int") (var_ "y")]))))),
+  ulet_ "id_int" (ulam_ "x" (var_ "x")),
+  ulet_ "id_float" (ulam_ "x" (var_ "x")),
+  ulet_ "id_char" (ulam_ "x" (var_ "x")),
+  utuple_ [
+    app_ (var_ "f_int_float") (int_ 2) (float_ 2.5) (var_ "id_int") (var_ "id_float"),
+    app_ (var_ "f_char_int") (char_ 'x') (int_ 3) (var_ "id_char") (var_ "id_int")
+  ]
+]) in
+-- TODO(larshum, 2023-08-07): Higher-order polymorphism is not supported yet
+-- utest result with expected using eqExpr in
 
 ()

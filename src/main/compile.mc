@@ -7,6 +7,7 @@ include "options.mc"
 include "parse.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
+include "mexpr/monomorphize.mc"
 include "mexpr/phase-stats.mc"
 include "mexpr/profiling.mc"
 include "mexpr/remove-ascription.mc"
@@ -30,7 +31,7 @@ lang MCoreCompile =
   BootParser +
   PMExprDemote +
   MExprHoles +
-  MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
+  MExprSym + MExprRemoveTypeAscription + MExprTypeCheck + MExprMonomorphize +
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
@@ -74,6 +75,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     (if options.debugTypeCheck then
        printLn (use TyAnnotFull in annotateMExpr ast) else ());
     endPhaseStats log "typecheck" ast;
+
+    let ast = monomorphize ast in
+    endPhaseStats log "monomorphize" ast;
 
     let ast = compileSpecialize ast in
     -- If --runtime-checks is set, runtime safety checks are instrumented in
