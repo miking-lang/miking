@@ -329,6 +329,9 @@ lang MExprANF =
   | TmLam _ -> false
   | TmConst _ -> false
   | TmNever _ -> false
+  | TmRecord r ->
+    if mapIsEmpty r.bindings then false
+    else true
 
 end
 
@@ -462,8 +465,7 @@ utest _test factorial with _parse "
     in
     t1
   in
-  let t5 = () in
-  t5
+  ()
 " using eqExpr in
 
 let const = _parse "1" in
@@ -519,7 +521,7 @@ let nestedreclet = _parse "
 " in
 utest _test nestedreclet with _parse "
   recursive let f = lam a. lam b. lam c. 1 in
-  let t = () in t
+  ()
 " using eqExpr in
 
 -- Tests for full ANF

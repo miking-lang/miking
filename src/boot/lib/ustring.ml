@@ -725,7 +725,9 @@ let read_bom ic =
   let s = Bytes.create 4 in
   let l = ref 0 in
   try
-    really_input ic s 0 2 ;
+    really_input ic s 0 1 ;
+    l := 1 ;
+    really_input ic s 1 1 ;
     l := 2 ;
     if Bytes.sub s 0 2 = utf16be then (Utf16be, Bytes.empty)
     else (

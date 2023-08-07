@@ -7,6 +7,15 @@ let _pathSep = "/"
 let _tempBase = "/tmp"
 let _null = "/dev/null"
 
+let sysCommandExists : String -> Bool = lam cmd.
+  eqi 0 (command (join ["command -v ", cmd, " >/dev/null 2>&1"]))
+
+utest sysCommandExists "ls" with true
+
+let #var"ASSERT_MKDIR" : () =
+  if sysCommandExists "mkdir" then ()
+  else error "Couldn't find 'mkdir' on PATH, exiting."
+
 let _commandListTime : [String] -> (Float, Int) = lam cmd.
   let cmd = strJoin " " cmd in
   let t1 = wallTimeMs () in
@@ -26,6 +35,9 @@ let _commandListTimeoutWrap : Float -> [String] -> [String] = lam timeoutSec. la
 let sysFileExists: String -> Bool = lam file.
   if eqi (_commandList ["test", "-e", file]) 0 then true else false
 
+let sysCopyFile = lam fromFile. lam toFile.
+  _commandList ["cp", "-f", fromFile, toFile]
+
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
@@ -42,16 +54,21 @@ let sysJoinPath = lam p1. lam p2.
   strJoin _pathSep [p1, p2]
 
 let sysTempMake = lam dir: Bool. lam prefix: String. lam.
+  let maxTries = 10000 in
   recursive let mk = lam base. lam i.
-    let name = concat base (int2string i) in
-    match
-      _commandList [
-        if dir then "mkdir" else "touch",
-        sysJoinPath _tempBase name, "2>", _null
-      ]
-    with 0
-    then name
-    else mk base (addi i 1) in
+    if lti i maxTries then
+      let name = concat base (int2string i) in
+      match
+        _commandList [
+          if dir then "mkdir" else "touch",
+          sysJoinPath _tempBase name, "2>", _null
+        ]
+        with 0
+      then name
+      else mk base (addi i 1)
+    else
+      error "sysTempMake: Failed to make temporary directory."
+  in
   let alphanumStr = create 10 (lam. randAlphanum ()) in
   let base = concat prefix alphanumStr in
   let name = mk base 0 in
@@ -129,17 +146,12 @@ let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
     match sysRunCommandWithTiming cmd stdin cwd with (_, res) then res else never
 
-let sysCommandExists : String -> Bool = lam cmd.
-  eqi 0 (command (join ["which ", cmd, " >/dev/null 2>&1"]))
-
 let sysGetCwd : () -> String = lam. strTrim (sysRunCommand ["pwd"] "" ".").stdout
 
 let sysGetEnv : String -> Option String = lam env.
   let res = strTrim (sysRunCommand ["echo", concat "$" env] "" ".").stdout in
   if null res then None ()
   else Some res
-
-utest sysCommandExists "ls" with true
 
 let sysAppendFile : String -> String -> ReturnCode =
   lam filename. lam str.
