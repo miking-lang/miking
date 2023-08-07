@@ -92,6 +92,23 @@ lang ConstantFold = ConstantFoldCtx + MExprSideEffect + MExprPrettyPrint
   sem constantfold : Expr -> Expr
   sem constantfold =| t -> constantfoldExpr (constantfoldCtxEmpty ()) t
 
+  sem constantfoldLets : Expr -> Expr
+  sem constantfoldLets =| t ->
+    let ctx = updateCtx (constantfoldCtxEmpty ()) t in
+    recursive let inner = lam t.
+      switch t
+      case TmVar r then
+        optionMapOr t inner (constantfoldEnvLookup r.ident ctx)
+      case TmLet r then
+        if optionIsSome (constantfoldEnvLookup r.ident ctx) then
+          inner r.inexpr
+        else smap_Expr_Expr inner t
+      case t then
+        smap_Expr_Expr inner t
+      end
+    in
+    inner t
+
   sem updateCtx : ConstantFoldCtx -> Expr -> ConstantFoldCtx
   sem updateCtx ctx =
   | t -> sfold_Expr_Expr updateCtx ctx t
@@ -324,6 +341,22 @@ let _test = lam expr.
     ]);
   let expr = symbolizeAllowFree expr in
   match constantfold expr with expr in
+  logMsg logLevel.debug (lam.
+    strJoin "\n" [
+      "After constantfold",
+      expr2str expr
+    ]);
+  expr
+in
+
+let _testFoldLets = lam expr.
+  logMsg logLevel.debug (lam.
+    strJoin "\n" [
+      "Before constantfold",
+      expr2str expr
+    ]);
+  let expr = symbolizeAllowFree expr in
+  match constantfoldLets expr with expr in
   logMsg logLevel.debug (lam.
     strJoin "\n" [
       "After constantfold",
@@ -665,7 +698,7 @@ lam x.
   "
 in
 
-utest _test prog with _parse "
+utest _testFoldLets prog with _parse "
 let dh =
   lam x1.
     addf
