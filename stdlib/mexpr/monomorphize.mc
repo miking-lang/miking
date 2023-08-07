@@ -34,10 +34,19 @@ lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
   sem defaultInstEntry =
   | ty -> {map = mapEmpty cmpInstantiation, polyType = ty}
 
+  -- The monomorphization environment used to keep track of which monomorphic
+  -- versions a polymorphic construct should be instantiated as.
   type MonoEnv = {
+    -- Environment for functions bound in let- and recursive let-expressions
     funEnv : Map Name InstEntry,
+
+    -- Environment for polymorphic type constructors
     conEnv : Map Name InstEntry,
+
+    -- Environment for polymorphic type variants and type aliases
     typeEnv : Map Name InstEntry,
+
+    -- Environment for polymorphic instrinsics (e.g., map and foldl)
     constEnv : Map Const InstEntry
   }
 
@@ -114,6 +123,11 @@ lang MonomorphizeInstantiate = Monomorphize
   -- types and its corresponding polymorphic type.
   sem inferInstantiation : Instantiation -> (Type, Type) -> Instantiation
   sem inferInstantiation inst =
+  | (lty, rty) ->
+    inferInstantiationH inst (inspectType lty, inspectType rty)
+
+  sem inferInstantiationH : Instantiation -> (Type, Type) -> Instantiation
+  sem inferInstantiationH inst =
   | (TyVar {ident = ident}, monoType) ->
     mapInsert ident monoType inst
   | (TyArrow l, TyArrow r) ->
@@ -585,8 +599,6 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup varInst instEntry.map with Some newId then
           newId
         else
-          printLn (monoEnvToString env);
-          dprintLn t.ident;
           errorSingle [t.info] "Monomorphization error: Variable instantiation not found"
       else t.ident
     in
@@ -1058,7 +1070,6 @@ let mutrec3 = preprocess (bindall_ [
   ]
 ]) in
 let env = collectInstantiations mutrec3 in
-printLn (monoEnvToString env);
 utest mapSize env.funEnv with 3 in
 let result = applyMonomorphization env mutrec3 in
 utest eval {env = evalEnvEmpty ()} mutrec3 with utuple_ [
