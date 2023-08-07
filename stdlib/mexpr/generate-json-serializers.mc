@@ -184,7 +184,7 @@ lang GenerateJsonSerializers =
           match_
             (nvar_ darg)
             (npcon_ env.jsonObject (npvar_ m))
-            (mapFoldWithKey  (lam acc. lam k. lam v.
+            (mapFoldWithKey (lam acc. lam k. lam v.
                 let k = sidToString k in
                 let jrv = nameSym "jrv" in
                 match_
@@ -215,19 +215,43 @@ lang GenerateJsonSerializers =
         -- Variant type case
         match tt.tyIdent with TyVariant _ then
           match mapLookup t.ident env.constructors with Some tmConDefs then
-            error "TODO"
+            let sarg = nameSym "d" in
+            -- For each condef:
+            -- * The name
+            -- * Name for serializer pattern match variable
+            -- * generateType_ for constructor contents
+            let serializer = nulams_ tt.params (
+                nulam_ sarg (
+                  match_
+                    (nvar_ sarg)
+                    (npcon_ tmcondef1 (npvar_ ))
+                    thn
+                    els
+                ))
+            in
             -- SERIALIZER
-            -- lam p1. lam p2. lam v.
-            --   match v with Con1 d1 then
-            --     JsonObject m{ "__constructor__": "Con1", "__data__": srlsfun1 d1 }
-            --   else match v with Con2 d2 then
-            --     JsonObject m{ "__constructor__": "Con2", "__data__": srlsfun2 d2 }
-            --   else match v with Con3 d3 then
-            --     JsonObject m{ "__constructor__": "Con3", "__data__": srlsfun3 d3 }
+            -- lam p1. lam p2. lam d.
+            --   match d with Con1 d1 then
+            --     JsonObject m{ "__constructor__": "Con1", "__data__": srlsfun1<p1, p2> d1 }
+            --   else match d with Con2 d2 then
+            --     JsonObject m{ "__constructor__": "Con2", "__data__": srlsfun2<p1, p2> d2 }
+            --   else match d with Con3 d3 then
+            --     JsonObject m{ "__constructor__": "Con3", "__data__": srlsfun3<p1, p2> d3 }
             --   else never
             --
             --
             -- DESERIALIZER
+            -- lam p1. lam p2. lam jv.
+            --   match jv with JSONObject m then
+            --     match (mapLookup "__constructor__" m, mapLookup "__data__" m)
+            --     with (Some constr, Some data) then
+            --       match constr with "Con1" then dsrlsfun1<p1,p2> data
+            --       else match constr with "Con2" then dsrlsfun2<p1,p2> data
+            --       else match constr with "Con3" then dsrlsfun3<p1,p2> data
+            --       else None ()
+            --     else None ()
+            --   else None ()
+            --
           else error (join ["Empty variant type: ", nameGetStr t.ident])
 
         -- Other types (cannot be self-recursive)
