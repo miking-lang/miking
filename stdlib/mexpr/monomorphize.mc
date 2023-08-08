@@ -1,6 +1,6 @@
 -- Eliminates occurrences of polymorphic types in the provided (typed) MExpr
--- AST, by replacing polymorphic functions by multiple monomorphic functions
--- (one for each distinct combination of types used to invoke the function).
+-- AST, by replacing polymorphic functions by multiple monomorphic functions,
+-- one per distinct type the function is invoked as.
 --
 -- TODO(larshum, 2023-08-07): The current version does not support higher-order
 -- polymorphic function parameters (frozen types). Adding support for this
@@ -23,7 +23,7 @@ include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 
-lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
+lang Monomorphize = MExprAst + MExprCmp
   -- An instantiation maps type variable identifiers to concrete types. It
   -- represents a monomorphic use of a polymorphic construct.
   type Instantiation = Map Name Type
@@ -67,35 +67,6 @@ lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
     { funEnv = mapEmpty nameCmp, conEnv = mapEmpty nameCmp
     , typeEnv = mapEmpty nameCmp, constEnv = mapEmpty cmpConst }
 
-  -- NOTE(larshum, 2023-08-07): Provides a readable overview of the contents of
-  -- the monomorphization environment, for debugging purposes.
-  sem monoEnvToString : MonoEnv -> String
-  sem monoEnvToString =
-  | env ->
-    let innerEnvToString = lam innerEnv. lam printId.
-      mapFoldWithKey
-        (lam acc. lam id. lam entry.
-          let acc = snoc acc (printId id) in
-          let acc = snoc acc (type2str entry.polyType) in
-          mapFoldWithKey
-            (lam acc. lam inst. lam.
-              mapFoldWithKey
-                (lam acc. lam varId. lam ty.
-                  snoc acc (join ["  ", nameGetStr varId, " -> ", type2str ty]))
-                acc inst)
-            acc entry.map)
-        [] innerEnv
-    in
-    strJoin "\n" [
-      "Functions",
-      strJoin "\n" (innerEnvToString env.funEnv nameGetStr),
-      "Constructors",
-      strJoin "\n" (innerEnvToString env.conEnv nameGetStr),
-      "Types",
-      strJoin "\n" (innerEnvToString env.typeEnv nameGetStr),
-      "Constants",
-      strJoin "\n" (innerEnvToString env.constEnv (getConstStringCode 0)) ]
-
   sem monoError : all a. [Info] -> String -> a
   sem monoError infos =
   | msg ->
@@ -108,6 +79,49 @@ lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
     collectTypeAppParams (cons t.rhs acc) t.lhs
   | ty ->
     (ty, acc)
+end
+
+lang MonomorphizeValidate = MExprAst
+  -- Verifies that all types in the provided AST are monomorphic, i.e., that
+  -- the AST does not contain any type variables or forall quantifiers.
+  sem isMonomorphic : Expr -> Bool
+  sem isMonomorphic =
+  | ast -> isMonomorphicExpr true ast
+
+  sem isMonomorphicExpr : Bool -> Expr -> Bool
+  sem isMonomorphicExpr acc =
+  | e ->
+    let acc = sfold_Expr_Expr isMonomorphicExpr acc e in
+    let acc = sfold_Expr_Pat isMonomorphicPat acc e in
+    let acc = sfold_Expr_Type isMonomorphicType acc e in
+    let acc = sfold_Expr_TypeLabel isMonomorphicTypeLabel acc e in
+    isMonomorphicTypeLabel acc (tyTm e)
+
+  sem isMonomorphicPat : Bool -> Pat -> Bool
+  sem isMonomorphicPat acc =
+  | p ->
+    let acc = sfold_Pat_Pat isMonomorphicPat acc p in
+    isMonomorphicType acc (tyPat p)
+
+  -- NOTE(larshum, 2023-08-08): For fields corresponding to user-annotated
+  -- types, the unknown type represents absence of annotation. However, in
+  -- types annotated by the type checker, an unknown type represents a
+  -- polymorphic type. Because of this, we use different approaches when
+  -- checking whether a type is monomorphic depending on whether it originates
+  -- from a user annotation or from the type checker.
+  sem isMonomorphicType : Bool -> Type -> Bool
+  sem isMonomorphicType acc =
+  | ty -> isMonomorphicTypeH true acc ty
+
+  sem isMonomorphicTypeLabel : Bool -> Type -> Bool
+  sem isMonomorphicTypeLabel acc =
+  | ty -> isMonomorphicTypeH false acc ty
+
+  sem isMonomorphicTypeH : Bool -> Bool -> Type -> Bool
+  sem isMonomorphicTypeH treatUnknownAsMonomorphic acc =
+  | TyAll _ | TyVar _ -> false
+  | TyUnknown _ -> treatUnknownAsMonomorphic
+  | ty -> sfold_Type_Type (isMonomorphicTypeH treatUnknownAsMonomorphic) acc ty
 end
 
 lang MonomorphizeInstantiate = Monomorphize
@@ -320,7 +334,9 @@ lang MonomorphizeResymbolize = Monomorphize
   | ty -> smap_Type_Type (resymbolizeBindingsType nameMap) ty
 end
 
-lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
+lang MonomorphizeCollect =
+  MonomorphizeValidate + MonomorphizeInstantiate + MExprCallGraph
+
   -- Collects the monomorphic instantiations of polymorphic constructs of the
   -- provided AST. This is performed in two passes:
   --
@@ -360,7 +376,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
     let env =
       if not (null t.params) then
         -- NOTE(larshum, 2023-08-03): We construct a polymorphic type
-        -- representation of the type definition so that we can treat them in
+        -- representation of the type definition so that we can treat types in
         -- the same way as other constructs later.
         let polyType =
           foldr
@@ -568,7 +584,7 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
           setFold
             (lam instMap. lam inst.
               let ty = instantiatePolymorphicType inst t.display in
-              if isMonomorphicTypeX true ty then
+              if isMonomorphicTypeLabel true ty then
                 let aliasTypeInst = findTypeInstantiation instEntry.polyType ty in
                 if mapMem aliasTypeInst instMap then instMap
                 else mapInsert aliasTypeInst (nameSetNewSym id) instMap
@@ -579,16 +595,11 @@ lang MonomorphizeCollect = MonomorphizeInstantiate + MExprCallGraph
         {env with typeEnv = mapInsert id instEntry env.conEnv}
       else
         -- NOTE(larshum, 2023-08-07): If the aliased type does not have an
-        -- entry, it must be monomorphic.
+        -- entry, that means it is monomorphic.
         env
     else
       env
   | ty -> sfold_Type_Type (collectInstantiationsType instantiations) env ty
-
-  sem isMonomorphicTypeX : Bool -> Type -> Bool
-  sem isMonomorphicTypeX acc =
-  | TyAll _ | TyVar _ -> false
-  | ty -> sfold_Type_Type isMonomorphicTypeX acc ty
 
   sem findVariantName : Type -> Name
   sem findVariantName =
@@ -601,7 +612,7 @@ end
 
 lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
   -- Replaces polymorphic constructs with their monomorphic bindings
-  -- (bottom-up).
+  -- based on the provided monomorphization environment (bottom-up).
   sem applyMonomorphization : MonoEnv -> Expr -> Expr
   sem applyMonomorphization env =
   | ast -> applyMonomorphizationExpr env ast
@@ -619,7 +630,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
       else t.ident
     in
     TmVar {t with ident = ident,
-                  ty = applyMonomorphizationType env t.ty}
+                  ty = applyMonomorphizationTypeLabel env t.ty}
   | TmLet t ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.funEnv with Some instEntry then
@@ -629,8 +640,8 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         (lam acc. lam inst. lam newId.
           let body = monomorphizeBody env inst t.body in
           let tyAnnot = monomorphizeType env inst t.tyAnnot in
-          let tyBody = monomorphizeType env inst t.tyBody in
-          let ty = monomorphizeType env inst t.ty in
+          let tyBody = monomorphizeTypeLabel env inst t.tyBody in
+          let ty = monomorphizeTypeLabel env inst t.ty in
           TmLet {
             ident = newId, tyAnnot = tyAnnot, tyBody = tyBody,
             body = body, inexpr = acc, ty = tyTm acc, info = t.info})
@@ -650,7 +661,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
           (lam acc. lam inst. lam newId.
             let body = monomorphizeBody env inst bind.body in
             let tyAnnot = monomorphizeType env inst bind.tyAnnot in
-            let tyBody = monomorphizeType env inst bind.tyBody in
+            let tyBody = monomorphizeTypeLabel env inst bind.tyBody in
             let bind = {
               bind with ident = newId,
                         tyAnnot = tyAnnot,
@@ -679,7 +690,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
     else
         TmType {t with tyIdent = applyMonomorphizationType env t.tyIdent,
                        inexpr = inexpr,
-                       ty = applyMonomorphizationType env t.ty}
+                       ty = applyMonomorphizationTypeLabel env t.ty}
   | TmConDef t ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.conEnv with Some instEntry then
@@ -694,7 +705,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
     else
       TmConDef {t with tyIdent = applyMonomorphizationType env t.tyIdent,
                        inexpr = inexpr,
-                       ty = applyMonomorphizationType env t.ty}
+                       ty = applyMonomorphizationTypeLabel env t.ty}
   | TmConApp t ->
     let ident =
       match mapLookup t.ident env.conEnv with Some instEntry then
@@ -707,13 +718,13 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
       else t.ident
     in
     TmConApp {t with ident = ident,
-                     ty = applyMonomorphizationType env t.ty}
+                     ty = applyMonomorphizationTypeLabel env t.ty}
   | ast ->
     let ast = smap_Expr_Expr (applyMonomorphizationExpr env) ast in
     let ast = smap_Expr_Pat (applyMonomorphizationPat env) ast in
     let ast = smap_Expr_Type (applyMonomorphizationType env) ast in
-    let ast = smap_Expr_TypeLabel (applyMonomorphizationType env) ast in
-    withType (applyMonomorphizationType env (tyTm ast)) ast
+    let ast = smap_Expr_TypeLabel (applyMonomorphizationTypeLabel env) ast in
+    withType (applyMonomorphizationTypeLabel env (tyTm ast)) ast
 
   sem applyMonomorphizationPat : MonoEnv -> Pat -> Pat
   sem applyMonomorphizationPat env =
@@ -734,6 +745,14 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
 
   sem applyMonomorphizationType : MonoEnv -> Type -> Type
   sem applyMonomorphizationType env =
+  | ty -> applyMonomorphizationTypeH env false ty
+
+  sem applyMonomorphizationTypeLabel : MonoEnv -> Type -> Type
+  sem applyMonomorphizationTypeLabel env =
+  | ty -> applyMonomorphizationTypeH env true ty
+
+  sem applyMonomorphizationTypeH : MonoEnv -> Bool -> Type -> Type
+  sem applyMonomorphizationTypeH env replaceUnknown =
   | (TyApp _) & ty ->
     match collectTypeAppParams [] ty with (TyCon t, ![]) then
       match mapLookup t.ident env.typeEnv with Some instEntry then
@@ -745,8 +764,14 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
       else
         monoError [t.info] "Polymorphic constructor not found"
     else
-      smap_Type_Type (applyMonomorphizationType env) ty
-  | ty -> smap_Type_Type (applyMonomorphizationType env) ty
+      smap_Type_Type (applyMonomorphizationTypeH env replaceUnknown) ty
+  | TyUnknown t ->
+    -- NOTE(larshum, 2023-08-08): If we find an unknown type inside a type
+    -- label (type annotation from the type-checker), we can safely replace it
+    -- by any type. We choose to replace it with the empty record type.
+    if replaceUnknown then TyRecord {fields = mapEmpty cmpSID, info = t.info}
+    else TyUnknown t
+  | ty -> smap_Type_Type (applyMonomorphizationTypeH env replaceUnknown) ty
 
   sem monomorphizeBody : MonoEnv -> Instantiation -> Expr -> Expr
   sem monomorphizeBody env instantiation =
@@ -760,6 +785,12 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
   | ty ->
     let ty = instantiatePolymorphicType instantiation ty in
     applyMonomorphizationType env ty
+
+  sem monomorphizeTypeLabel : MonoEnv -> Instantiation -> Type -> Type
+  sem monomorphizeTypeLabel env instantiation =
+  | ty ->
+    let ty = instantiatePolymorphicType instantiation ty in
+    applyMonomorphizationTypeLabel env ty
 end
 
 lang MExprMonomorphize = MonomorphizeCollect + MonomorphizeApply
@@ -773,32 +804,6 @@ end
 lang MExprMonomorphizeTest =
   MExprMonomorphize + MExprSym + MExprTypeCheck + MExprEq + MExprPrettyPrint +
   MExprEval
-
-  -- Verifies that all types of the provided AST are monomorphic, i.e., that
-  -- the AST does not contain any type variables or forall quantifiers.
-  sem isMonomorphic : Expr -> Bool
-  sem isMonomorphic =
-  | ast -> isMonomorphicExpr true ast
-
-  sem isMonomorphicExpr : Bool -> Expr -> Bool
-  sem isMonomorphicExpr acc =
-  | e ->
-    let acc = sfold_Expr_Expr isMonomorphicExpr acc e in
-    let acc = sfold_Expr_Pat isMonomorphicPat acc e in
-    let acc = sfold_Expr_Type isMonomorphicType acc e in
-    let acc = sfold_Expr_TypeLabel isMonomorphicType acc e in
-    isMonomorphicType acc (tyTm e)
-
-  sem isMonomorphicPat : Bool -> Pat -> Bool
-  sem isMonomorphicPat acc =
-  | p ->
-    let acc = sfold_Pat_Pat isMonomorphicPat acc p in
-    isMonomorphicType acc (tyPat p)
-
-  sem isMonomorphicType : Bool -> Type -> Bool
-  sem isMonomorphicType acc =
-  | TyAll _ | TyVar _ -> false
-  | ty -> sfold_Type_Type isMonomorphicType acc ty
 
   -- Verifies that all symbols introduced in the provided AST are distinct. We
   -- use this in our test suite to ensure that monomorphization resymbolizes
@@ -996,7 +1001,7 @@ utest mapMem g env.funEnv with true in
 let result = applyMonomorphization env nestedPoly in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-utest eval {env = evalEnvEmpty ()} result
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
 with utuple_ [utuple_ [int_ 2, float_ 2.5], utuple_ [float_ 2.5, int_ 2]]
 using eqExpr in
 
@@ -1019,9 +1024,9 @@ utest mapSize env.funEnv with 1 in
 let result = applyMonomorphization env recursion in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-utest eval {env = evalEnvEmpty ()} result with utuple_ [
-  seq_ [int_ 2, int_ 3], seq_ [float_ (negf 1.0), float_ (negf 2.0)]
-] using eqExpr in
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
+with utuple_ [seq_ [int_ 2, int_ 3], seq_ [float_ (negf 1.0), float_ (negf 2.0)]]
+using eqExpr in
 
 -- Mutual recursion with polymorphism
 let mutrec = preprocess (bindall_ [
@@ -1048,8 +1053,8 @@ utest mapSize env.funEnv with 2 in
 let result = applyMonomorphization env mutrec in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-utest eval {env = evalEnvEmpty ()} result with seq_ [int_ 2, int_ 4, int_ 3]
-using eqExpr in
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
+with seq_ [int_ 2, int_ 4, int_ 3] using eqExpr in
 
 -- Mutual recursion of three bindings
 -- NOTE(larshum, 2023-08-07): When using three mutually recursive bindings, a
@@ -1088,7 +1093,8 @@ let mutrec3 = preprocess (bindall_ [
 let env = collectInstantiations mutrec3 in
 utest mapSize env.funEnv with 3 in
 let result = applyMonomorphization env mutrec3 in
-utest eval {env = evalEnvEmpty ()} mutrec3 with utuple_ [
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
+with utuple_ [
   seq_ [int_ 3, int_ 3, int_ 6, int_ 4],
   seq_ [float_ 5., float_ 4.5, float_ 8., float_ 5.5]
 ] using eqExpr in
@@ -1114,7 +1120,8 @@ utest mapSize env.typeEnv with 1 in
 let result = applyMonomorphization env polyOption in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-utest eval {env = evalEnvEmpty ()} result with seq_ [true_, true_, false_] using eqExpr in
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
+with seq_ [true_, true_, false_] using eqExpr in
 
 -- Polymorphic type alias
 let polyAlias = preprocess (bindall_ [
@@ -1136,7 +1143,17 @@ utest mapSize env.typeEnv with 1 in
 let result = applyMonomorphization env polyAlias in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
-utest eval {env = evalEnvEmpty ()} result with seq_ [int_ 2, int_ 2] using eqExpr in
+utest eval {env = evalEnvEmpty ()} (typeCheck result)
+with seq_ [int_ 2, int_ 2] using eqExpr in
+
+-- Polymorphic anonymous function
+let polyAnon = preprocess (bindall_ [
+  ulam_ "x" (var_ "x")
+]) in
+let result = monomorphize polyAnon in
+utest isMonomorphic result with true in
+utest distinctSymbols result with true in
+utest result with polyAnon using eqExpr in
 
 -- Higher-order polymorphism
 let higherOrderPoly = preprocess (bindall_ [
