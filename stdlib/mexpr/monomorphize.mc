@@ -66,17 +66,14 @@ lang Monomorphize = MExprAst + MExprCmp
     conEnv : Map Name InstEntry,
 
     -- Environment for polymorphic type variants and type aliases
-    typeEnv : Map Name InstEntry,
-
-    -- Environment for polymorphic instrinsics (e.g., map and foldl)
-    constEnv : Map Const InstEntry
+    typeEnv : Map Name InstEntry
   }
 
   sem emptyMonoEnv : () -> MonoEnv
   sem emptyMonoEnv =
   | _ ->
     { funEnv = mapEmpty nameCmp, conEnv = mapEmpty nameCmp
-    , typeEnv = mapEmpty nameCmp, constEnv = mapEmpty cmpConst }
+    , typeEnv = mapEmpty nameCmp }
 
   sem monoError : all a. [Info] -> String -> a
   sem monoError infos =
