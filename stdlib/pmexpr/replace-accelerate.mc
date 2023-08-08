@@ -75,6 +75,7 @@ lang PMExprReplaceAccelerate =
     match _mexprToOCamlType env acc ty with (acc, ty) in
     (acc, OTyArray {info = info, ty = ty})
   | ty & (TyTensor _) -> (acc, _tensorToOCamlType ty)
+  | TyAlias t -> _mexprToOCamlType env acc t.content
   | ty -> (acc, ty)
 
   -- NOTE(larshum, 2022-03-25): The 'convertData' function is meant to convert
