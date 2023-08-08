@@ -1151,8 +1151,8 @@ let higherOrderPoly = preprocess (bindall_ [
       utuple_ [app_ (var_ "g") (var_ "x"), app_ (var_ "g") (var_ "y")])))),
   ulet_ "id" (ulam_ "x" (var_ "x")),
   utuple_ [
-    app_ (var_ "f") (int_ 2) (float_ 2.5) (freeze_ "id"),
-    app_ (var_ "f") (char_ 'x') (int_ 3) (freeze_ "id")
+    appf3_ (var_ "f") (int_ 2) (float_ 2.5) (freeze_ (var_ "id")),
+    appf3_ (var_ "f") (char_ 'x') (int_ 3) (freeze_ (var_ "id"))
   ]
 ]) in
 -- NOTE(larshum, 2023-08-07): The order of the bindings may differ in the
@@ -1168,8 +1168,8 @@ let expected = preprocess (bindall_ [
   ulet_ "id_float" (ulam_ "x" (var_ "x")),
   ulet_ "id_char" (ulam_ "x" (var_ "x")),
   utuple_ [
-    app_ (var_ "f_int_float") (int_ 2) (float_ 2.5) (var_ "id_int") (var_ "id_float"),
-    app_ (var_ "f_char_int") (char_ 'x') (int_ 3) (var_ "id_char") (var_ "id_int")
+    appf4_ (var_ "f_int_float") (int_ 2) (float_ 2.5) (var_ "id_int") (var_ "id_float"),
+    appf4_ (var_ "f_char_int") (char_ 'x') (int_ 3) (var_ "id_char") (var_ "id_int")
   ]
 ]) in
 -- TODO(larshum, 2023-08-07): Higher-order polymorphism is not supported yet
