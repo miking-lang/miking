@@ -12,6 +12,14 @@
 -- * Updating all uses of the corresponding functions to pass the correct
 --   number of arguments (replacing the #frozen with one or more monomorphized
 --   function variables).
+--
+-- Note that the above is not sufficient to eliminate all polymorphic types, as
+-- we could, for example, construct a sequence of frozen types as in
+--
+--   let x : [all a. a -> a] = [frozen"f", frozen"g"] in
+--   (get x 0) 2
+--
+-- I'm unsure what a good approach at the above problem would be.
 
 include "digraph.mc"
 include "mexpr/ast.mc"
