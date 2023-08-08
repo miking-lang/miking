@@ -54,13 +54,14 @@ lang GenerateJsonSerializers =
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
     sTensor: Name, dTensor: Name,
     jsonObject: Name, jsonString: Name,
+    jsonParse: Name, jsonParseExn: Name, json2string: Name,
     mapInsert: Name, mapEmpty: Name, mapLookup: Name,
     cmpString: Name,
     some: Name, none: Name
 
   }
 
-  sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr)
+  sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr, GJSEnv)
   sem addJsonSerializers tys =
   | expr ->
     match generateJsonSerializers tys expr with (acc, res, env) in
@@ -80,7 +81,7 @@ lang GenerateJsonSerializers =
     let expr = bind_ expr lib in
     let expr = bind_ expr rl in
     let expr = eliminateDuplicateCode expr in
-    (res,expr)
+    (res,expr,env)
 
   -- Generate JSON serializers and deserializers. Returns an accumulator of
   -- generated functions and a map from types to serializers/deserializers
@@ -95,6 +96,7 @@ lang GenerateJsonSerializers =
         "jsonDeserializeString", "jsonSerializeSeq", "jsonDeserializeSeq",
         "jsonSerializeTensor", "jsonDeserializeTensor",
         "JsonObject", "JsonString",
+        "jsonParse", "jsonParseExn", "json2string",
         "mapInsert", "mapEmpty", "mapLookup",
         "cmpString",
         "Some", "None"
@@ -102,6 +104,7 @@ lang GenerateJsonSerializers =
         sb, db, si, di, sf, df, sc, dc,
         ss, ds, ssq, dsq, st, dt,
         jo, js,
+        jp,jpe,j2s,
         mi,me,ml,
         cs,
         s,n
@@ -115,6 +118,7 @@ lang GenerateJsonSerializers =
       sString = ss, dString = ds, sSeq = ssq, dSeq = dsq,
       sTensor = st, dTensor = dt,
       jsonObject = jo, jsonString = js,
+      jsonParse = jp, jsonParseExn = jpe, json2string = j2s,
       mapInsert = mi, mapEmpty = me, mapLookup = ml,
       cmpString = cs,
       some = s, none = n
@@ -635,13 +639,14 @@ with true in
 -- let res = addJsonSerializers
 --   [tycon_ "List", tycon_ "Seq"]
 --   (parseTest "
---     type List a in
---     con Node: all a. List a -> List a in
---     con Leaf: all a. () -> List a in
---     type Seq a = List a in
---     ()
+--   type List a in
+--   con Node: all a. { element: a, rest: List a } -> List a in
+--   con Leaf: all a. {} -> List a in
+--   type Seq a = List a in
+--   ()
 --   ") in
--- printLn (mexprToString res.1);
+-- let res2 = mexprToString res.1 in
+-- printLn res2;
 
 ()
 
