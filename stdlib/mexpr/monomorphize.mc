@@ -1,6 +1,9 @@
 -- Eliminates occurrences of polymorphic types in the provided (typed) MExpr
 -- AST, by replacing polymorphic functions by multiple monomorphic functions,
--- one per distinct type the function is invoked as.
+-- one per distinct type the function is invoked as. The result of applying
+-- monomorphization on an AST is that all occurrences of TyAll and TyVar are
+-- eliminated. In addition, for all types annotated by the type checker,
+-- occurrences of TyUnknown are replaced by the unit type (an empty TyRecord).
 --
 -- TODO(larshum, 2023-08-07): The current version does not support higher-order
 -- polymorphic function parameters (frozen types). Adding support for this
