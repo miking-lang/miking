@@ -7,6 +7,7 @@ include "boot-parser.mc"
 include "pprint.mc"
 include "symbolize.mc"
 include "utils.mc"
+include "duplicate-code-elimination.mc"
 
 include "json.mc"
 include "stdlib.mc"
@@ -18,6 +19,7 @@ let dataKey = "__data__"
 
 lang GenerateJsonSerializers =
   MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + ConDefTypeUtils
+  + MExprEliminateDuplicateCode
 
   type GJSSerializer = {
     serializer: Expr,
@@ -58,7 +60,31 @@ lang GenerateJsonSerializers =
 
   }
 
-  sem generateJsonSerializers: [Type] -> Expr -> (GJSAcc, GJSRes)
+  sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr)
+  sem addJsonSerializers tys =
+  | expr ->
+    match generateJsonSerializers tys expr with (acc, res, env) in
+    let lib = env.lib in
+    let eta = lam expr.
+      match expr with TmLam _ then expr
+      else let n = nameSym "x" in nulam_ n (app_ expr (nvar_ n))
+    in
+    let bs = join (map (lam s.
+        [(s.serializerName,
+          match s.serializer with Some s then eta s else error "Empty serializer"),
+         (s.deserializerName,
+          match s.deserializer with Some d then eta d else error "Empty deserializer")])
+      (mapValues acc))
+    in
+    let rl = nureclets_ bs in
+    let expr = bind_ expr lib in
+    let expr = bind_ expr rl in
+    let expr = eliminateDuplicateCode expr in
+    (res,expr)
+
+  -- Generate JSON serializers and deserializers. Returns an accumulator of
+  -- generated functions and a map from types to serializers/deserializers
+  sem generateJsonSerializers: [Type] -> Expr -> (GJSAcc, GJSRes, GJSEnv)
   sem generateJsonSerializers tys =
   | expr ->
     let lib = _lib () in
@@ -101,15 +127,7 @@ lang GenerateJsonSerializers =
           (acc, mapInsert ty s t.1)
         ) (acc, mapEmpty cmpType) tys
     in
-    -- let funs = join (map (lam t. [t.0,t.1]) (mapValues acc)) in
-    -- let funs = if null funs then unit_ else bindall_ funs in
-    -- let additions = bind_ env.lib funs in
-    -- let expr = bindWithEnd_ expr additions in
-    -- let acc = mapMap (lam v.
-    --     match v with (TmLet t1, TmLet t2) then (t1.ident,t2.ident)
-    --     else error "Impossible"
-    --   ) acc in
-    (r.0, r.1)
+    (r.0, r.1, env)
 
   sem _addType: GJSEnv -> Expr -> GJSEnv
   sem _addType env =
@@ -392,7 +410,7 @@ let test: Bool -> [Type] -> String -> [(String,String,String,String,String)]
           -> [(Type,String,String)] -> Bool =
   lam debug. lam tys. lam expr. lam eAcc. lam eRes.
   let expr = parseTest expr in
-  match generateJsonSerializers tys expr with (acc,res) in
+  match generateJsonSerializers tys expr with (acc,res,_) in
   let eAcc: GJSAcc = foldl (lam m. lam t.
       mapInsert (nameNoSym t.0) {
         serializerName = nameNoSym t.1,
@@ -613,6 +631,17 @@ utest test false
     ")]
   [(tycon_ "List", "serializeList", "deserializeList")]
 with true in
+
+-- let res = addJsonSerializers
+--   [tycon_ "List", tycon_ "Seq"]
+--   (parseTest "
+--     type List a in
+--     con Node: all a. List a -> List a in
+--     con Leaf: all a. () -> List a in
+--     type Seq a = List a in
+--     ()
+--   ") in
+-- printLn (mexprToString res.1);
 
 ()
 
