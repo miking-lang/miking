@@ -160,7 +160,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       cudaWellFormedType acc ty
   | TyTensor {ty = TyInt _ | TyFloat _} -> acc
   | TyCon _ -> acc
-  | TyVar _ -> acc
   | TyAlias t -> cudaWellFormedType acc t.content
   | ty -> cons (CudaTypeError ty) acc
 

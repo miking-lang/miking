@@ -35,9 +35,8 @@ include "ext/math-ext.ext-c.mc"
 ----------------------
 
 -- Check for unit type
-let _isUnitTy = use MExprAst in lam ty.
+let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
-  else match ty with TyVar _ then true
   else false
 
 -- Unwrap type variables until something useful falls out
@@ -659,8 +658,6 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
     -- else never
 
   | TyAlias t -> compileType env t.display
-
-  | TyVar _ -> CTyVoid {}
 
   | ty -> errorSingle [infoTy ty] "Unsupported type in compileType"
 

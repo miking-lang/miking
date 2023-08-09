@@ -218,18 +218,18 @@ let compileAccelerated =
   match checkWellFormedness options ast
   with (ast, accelerateData, accelerateAsts) in
 
-  -- Generate utests or strip them from the program.
-  let ast = generateUtest options.runTests ast in
-
-  let ast = lowerAll ast in
-  let ast = typeAnnot ast in
-
   -- Generate GPU code for the AST of each accelerate backend in use.
   let gpuResult = generateGpuCode options accelerateAsts in
 
   -- Construct a sequential version of the AST where parallel constructs have
   -- been demoted to sequential equivalents
   let ast = demoteParallel ast in
+
+  -- Generate utests or strip them from the program.
+  let ast = generateUtest options.runTests ast in
+
+  let ast = lowerAll ast in
+  let ast = typeAnnot ast in
 
   match typeLift ast with (typeLiftEnv, ast) in
   match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in
