@@ -690,7 +690,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
         else (acc, rest)
     in
     match detachParams [] fun with (params, body) then
-      match funTypes [] (inspectType ty) with (paramTypes, retType) then
+      match funTypes [] ty with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
           errorSingle [infoTy ty] "Number of parameters in compileFun does not match."
         else
@@ -744,11 +744,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
   | TmRecord { ty = TyRecord _, bindings = bindings } & t ->
     -- If the type is TyRecord, it follows from type lifting that this must be
     -- an empty record.
-    let n = match name with Some name then name else nameSym "empty" in
-    let def = [
-      { ty = getCIntType env, id = Some n, init = Some (CIExpr {expr = CEInt {i = 0}})}
-    ] in
-    (env, def, [], n)
+    -- TODO(dlunde,2021-10-07): Handle this how?
+    errorSingle [infoTm t] "Empty bindings in TmRecord in compileAlloc"
   | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
     let orderedLabels = recordOrderedLabels (mapKeys bindings) in
     let n = match name with Some name then name else nameSym "alloc" in
