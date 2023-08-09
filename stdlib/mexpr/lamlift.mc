@@ -887,7 +887,7 @@ let letMultiParam = preprocess (bindall_ [
   ulet_ "b" (int_ 6),
   ulet_ "f" (ulam_ "x" (
     addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))),
-  app_ (var_ "f") (int_ 7)]) in 
+  app_ (var_ "f") (int_ 7)]) in
 let expected = preprocess (bindall_ [
   ulet_ "a" (int_ 2),
   ulet_ "b" (int_ 6),

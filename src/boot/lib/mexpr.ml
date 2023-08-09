@@ -9,6 +9,322 @@ open Ast
 open Pprint
 open Printf
 open Intrinsics
+open Builtin
+
+(* Terms *)
+let idTmVar = 100
+
+let idTmApp = 101
+
+let idTmLam = 102
+
+let idTmLet = 103
+
+let idTmRecLets = 104
+
+let idTmConst = 105
+
+let idTmSeq = 106
+
+let idTmRecord = 107
+
+let idTmRecordUpdate = 108
+
+let idTmType = 109
+
+let idTmConDef = 110
+
+let idTmConApp = 111
+
+let idTmMatch = 112
+
+let idTmUtest = 113
+
+let idTmNever = 114
+
+let idTmExt = 115
+
+(* Types *)
+let idTyUnknown = 200
+
+let idTyBool = 201
+
+let idTyInt = 202
+
+let idTyFloat = 203
+
+let idTyChar = 204
+
+let idTyArrow = 205
+
+let idTySeq = 206
+
+let idTyRecord = 207
+
+let idTyVariant = 208
+
+let idTyCon = 209
+
+let idTyVar = 210
+
+let idTyApp = 211
+
+let idTyTensor = 212
+
+let idTyAll = 213
+
+(* Const literals *)
+let idCBool = 300
+
+let idCInt = 301
+
+let idCFloat = 302
+
+let idCChar = 303
+
+let idCdprint = 304
+
+let idCerror = 305
+
+(* Patterns *)
+let idPatNamed = 400
+
+let idPatSeqTot = 401
+
+let idPatSeqEdge = 402
+
+let idPatRecord = 403
+
+let idPatCon = 404
+
+let idPatInt = 405
+
+let idPatChar = 406
+
+let idPatBool = 407
+
+let idPatAnd = 408
+
+let idPatOr = 409
+
+let idPatNot = 410
+
+(* Info *)
+
+let idInfo = 500
+
+let idNoInfo = 501
+
+let sym = Symb.gensym ()
+
+let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
+
+let symbolizeEnvWithKeywords keywords =
+  Mseq.Helpers.fold_left
+    (fun env k ->
+      if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
+        Symbolize.addsym
+          (IdCon (sid_of_ustring k))
+          (Intrinsics.Symb.gensym ())
+          env
+      else
+        Symbolize.addsym
+          (IdVar (sid_of_ustring k))
+          (Intrinsics.Symb.gensym ())
+          env )
+    Symbolize.empty_sym_env keywords
+
+let reportErrorAndExit err =
+  let error_string = Ustring.to_utf8 (Parserutils.error_to_ustring err) in
+  Printf.fprintf stderr "%s\n" error_string ;
+  exit 1
+
+(* Returns a tuple with the following elements
+    1. ID field
+    2. Info field
+    3. List of list lengths
+    4. List of types
+    5. List of terms
+    6. List of strings
+    7. List of integers
+    8. List of floating-point numbers
+    9. List of const
+   10. List of patterns
+*)
+
+let getData = function
+  (* Terms *)
+  | PTreeTm (TmVar (fi, x, _, _, frozen)) ->
+      (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
+  | PTreeTm (TmApp (fi, t1, t2)) ->
+      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
+  | PTreeTm (TmLam (fi, x, _, _, ty, t)) ->
+      (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
+      (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
+  | PTreeTm (TmRecLets (fi, lst, t)) ->
+      let fis = fi :: List.map (fun (fi, _, _, _, _) -> fi) lst in
+      let len = List.length lst in
+      let tys = List.map (fun (_, _, _, ty, _) -> ty) lst in
+      let tms = List.map (fun (_, _, _, _, t) -> t) lst @ [t] in
+      let strs = List.map (fun (_, s, _, _, _) -> s) lst in
+      (idTmRecLets, fis, [len], tys, tms, strs, [], [], [], [])
+  | PTreeTm (TmConst (fi, c)) ->
+      (idTmConst, [fi], [], [], [], [], [], [], [c], [])
+  | PTreeTm (TmSeq (fi, ts)) ->
+      let len = Mseq.length ts in
+      let tms = Mseq.Helpers.to_list ts in
+      (idTmSeq, [fi], [len], [], tms, [], [], [], [], [])
+  | PTreeTm (TmRecord (fi, tmmap)) ->
+      let slst, tlst = tmmap |> Record.bindings |> List.split in
+      (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
+  | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
+      (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
+  | PTreeTm (TmType (fi, x, params, ty, t)) ->
+      let len = List.length params + 1 in
+      (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [])
+  | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
+      (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmConApp (fi, x, _, t)) ->
+      (idTmConApp, [fi], [], [], [t], [x], [], [], [], [])
+  | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
+      (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
+  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (
+    match t4_op with
+    | Some t4 ->
+        (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [])
+    | None ->
+        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
+  | PTreeTm (TmNever fi) ->
+      (idTmNever, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
+      (idTmExt, [fi], [], [ty], [t], [x], [(if e then 1 else 0)], [], [], [])
+  (* Types *)
+  | PTreeTy (TyUnknown fi) ->
+      (idTyUnknown, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTy (TyBool fi) ->
+      (idTyBool, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTy (TyInt fi) ->
+      (idTyInt, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTy (TyFloat fi) ->
+      (idTyFloat, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTy (TyChar fi) ->
+      (idTyChar, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTy (TyArrow (fi, ty1, ty2)) ->
+      (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+  | PTreeTy (TyAll (fi, var, ty)) ->
+      (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
+  | PTreeTy (TySeq (fi, ty)) ->
+      (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
+  | PTreeTy (TyTensor (fi, ty)) ->
+      (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
+  | PTreeTy (TyRecord (fi, tymap)) ->
+      let slst, tylst = List.split (Record.bindings tymap) in
+      let len = List.length slst in
+      (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
+  | PTreeTy (TyVariant (fi, strs)) ->
+      let len = List.length strs in
+      (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
+  | PTreeTy (TyCon (fi, x)) ->
+      (idTyCon, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyVar (fi, x)) ->
+      (idTyVar, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyApp (fi, ty1, ty2)) ->
+      (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+  (* Const *)
+  | PTreeConst (CBool v) ->
+      let i = if v then 1 else 0 in
+      (idCBool, [], [], [], [], [], [i], [], [], [])
+  | PTreeConst (CInt v) ->
+      (idCInt, [], [], [], [], [], [v], [], [], [])
+  | PTreeConst (CFloat v) ->
+      (idCFloat, [], [], [], [], [], [], [v], [], [])
+  | PTreeConst (CChar v) ->
+      (idCChar, [], [], [], [], [], [v], [], [], [])
+  | PTreeConst Cdprint ->
+      (idCdprint, [], [], [], [], [], [], [], [], [])
+  | PTreeConst Cerror ->
+      (idCerror, [], [], [], [], [], [], [], [], [])
+  (* Patterns *)
+  | PTreePat (PatNamed (fi, x)) ->
+      (idPatNamed, [fi], [], [], [], [patNameToStr x], [], [], [], [])
+  | PTreePat (PatSeqTot (fi, pats)) ->
+      let len = Mseq.length pats in
+      let ps = Mseq.Helpers.to_list pats in
+      (idPatSeqTot, [fi], [len], [], [], [], [], [], [], ps)
+  | PTreePat (PatSeqEdge (fi, pats1, px, pats2)) ->
+      let len1 = Mseq.length pats1 in
+      let ps1 = Mseq.Helpers.to_list pats1 in
+      let len2 = Mseq.length pats2 in
+      let ps2 = Mseq.Helpers.to_list pats2 in
+      let x = patNameToStr px in
+      (idPatSeqEdge, [fi], [len1; len2], [], [], [x], [], [], [], ps1 @ ps2)
+  | PTreePat (PatRecord (fi, pats)) ->
+      let slst, plst = pats |> Record.bindings |> List.split in
+      let len = List.length slst in
+      (idPatRecord, [fi], [len], [], [], slst, [], [], [], plst)
+  | PTreePat (PatCon (fi, x, _, p)) ->
+      (idPatCon, [fi], [], [], [], [x], [], [], [], [p])
+  | PTreePat (PatInt (fi, v)) ->
+      (idPatInt, [fi], [], [], [], [], [v], [], [], [])
+  | PTreePat (PatChar (fi, v)) ->
+      (idPatChar, [fi], [], [], [], [], [v], [], [], [])
+  | PTreePat (PatBool (fi, v)) ->
+      let b = if v then 1 else 0 in
+      (idPatBool, [fi], [], [], [], [], [b], [], [], [])
+  | PTreePat (PatAnd (fi, p1, p2)) ->
+      (idPatAnd, [fi], [], [], [], [], [], [], [], [p1; p2])
+  | PTreePat (PatOr (fi, p1, p2)) ->
+      (idPatOr, [fi], [], [], [], [], [], [], [], [p1; p2])
+  | PTreePat (PatNot (fi, p)) ->
+      (idPatNot, [fi], [], [], [], [], [], [], [], [p])
+  (* Info *)
+  | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
+      (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [])
+  | PTreeInfo NoInfo ->
+      (idNoInfo, [], [], [], [], [], [], [], [], [])
+  | _ ->
+      failwith "The AST node is unknown"
+
+let getId t =
+  let id, _, _, _, _, _, _, _, _, _ = getData t in
+  id
+
+let getTerm t n =
+  let _, _, _, _, lst, _, _, _, _, _ = getData t in
+  PTreeTm (List.nth lst n)
+
+let getType t n =
+  let _, _, _, lst, _, _, _, _, _, _ = getData t in
+  PTreeTy (List.nth lst n)
+
+let getString t n =
+  let _, _, _, _, _, lst, _, _, _, _ = getData t in
+  List.nth lst n |> Intrinsics.Mseq.Helpers.of_ustring
+
+let getInt t n =
+  let _, _, _, _, _, _, lst, _, _, _ = getData t in
+  List.nth lst n
+
+let getFloat t n =
+  let _, _, _, _, _, _, _, lst, _, _ = getData t in
+  List.nth lst n
+
+let getListLength t n =
+  let _, _, lst, _, _, _, _, _, _, _ = getData t in
+  List.nth lst n
+
+let getConst t n =
+  let _, _, _, _, _, _, _, _, lst, _ = getData t in
+  PTreeConst (List.nth lst n)
+
+let getPat t n =
+  let _, _, _, _, _, _, _, _, _, lst = getData t in
+  PTreePat (List.nth lst n)
+
+let getInfo t n =
+  let _, lst, _, _, _, _, _, _, _, _ = getData t in
+  PTreeInfo (List.nth lst n)
 
 (* This function determines how to print program output.
    It's used to redirect standard output of a program,
@@ -447,12 +763,307 @@ let fail_constapp f v fi =
     ^ " value: "
     ^ Ustring.to_utf8 (ustring_of_tm v) )
 
+(* Debug function used in the eval function *)
+let debug_eval env t =
+  if !enable_debug_eval_tm || !enable_debug_eval_env then (
+    printf "-- eval step -- \n" ;
+    let env_str =
+      if !enable_debug_eval_env then
+        us "Environment:\n" ^. ustring_of_env ~margin:80 env ^. us "\n"
+      else us ""
+    in
+    let tm_str =
+      if !enable_debug_eval_tm then
+        us "Term:\n" ^. ustring_of_tm ~margin:80 t ^. us "\n"
+      else us ""
+    in
+    uprint_endline (env_str ^. tm_str) )
+  else ()
+
+let shape_str = function
+  | TmRecord (_, record) ->
+      Record.bindings record |> List.map fst
+      |> Ustring.concat (us ",")
+      |> fun x -> us "record: {" ^. x ^. us "}"
+  | TmSeq _ ->
+      us "Sequence"
+  | TmConApp (_, x, s, _) ->
+      ustring_of_var ~symbol:!enable_debug_symbol_print x s
+  | TmConst (_, CInt _) ->
+      us "Int"
+  | TmConst (_, CBool _) ->
+      us "Bool"
+  | TmConst (_, CFloat _) ->
+      us "Float"
+  | TmConst (_, CChar _) ->
+      us "Char"
+  | TmConst (_, CSymb _) ->
+      us "Symbol"
+  | TmConst (_, CPy _) ->
+      us "Python Const"
+  | TmConst (_, _) ->
+      us "Other Const"
+  | TmClos _ ->
+      us "(closure)"
+  | TmRef _ ->
+      us "(ref)"
+  | _ ->
+      us "Other tm"
+
+(* Print out error message when a unit test fails *)
+let unittest_failed fi t1 t2 tusing =
+  uprint_endline
+    (let using_str =
+       match tusing with
+       | Some t ->
+           us "\n    Using: " ^. ustring_of_tm t
+       | None ->
+           us ""
+     in
+     us "\n ** Unit test FAILED: "
+     ^. info2str fi ^. us " **\n    LHS: " ^. ustring_of_tm t1
+     ^. us "\n    RHS: " ^. ustring_of_tm t2 ^. using_str )
+
+(* Check if two value terms are equal *)
+let rec val_equal v1 v2 =
+  match (v1, v2) with
+  | TmSeq (_, s1), TmSeq (_, s2) ->
+      Mseq.Helpers.equal val_equal s1 s2
+  | TmRecord (_, r1), TmRecord (_, r2) ->
+      Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
+  | TmConst (_, c1), TmConst (_, c2) ->
+      c1 = c2
+  | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
+      sym1 = sym2 && val_equal v1 v2
+  | TmTensor (_, T.TBootInt t1), TmTensor (_, T.TBootInt t2) ->
+      t1 = t2
+  | TmTensor (_, T.TBootFloat t1), TmTensor (_, T.TBootFloat t2) ->
+      t1 = t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_generic_generic.equal val_equal t1 t2
+  | TmTensor (fi, T.TBootInt t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CInt x)))
+        t1 t2
+  | TmTensor (fi, T.TBootFloat t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CFloat x)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootInt t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CInt y)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootFloat t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CFloat y)))
+        t1 t2
+  | _ ->
+      false
+
+let rec try_match env value pat =
+  let go v p env = Option.bind env (fun env -> try_match env v p) in
+  let split_nth_or_double_empty n s =
+    if Mseq.length s == 0 then (Mseq.empty, Mseq.empty) else Mseq.split_at s n
+  in
+  let bind fi n tms env =
+    match n with
+    | NameStr (_, s) ->
+        Option.bind env (fun env -> Some ((s, TmSeq (fi, tms)) :: env))
+    | NameWildcard ->
+        Option.bind env (fun env -> Some env)
+  in
+  match pat with
+  | PatNamed (_, NameStr (_, s)) ->
+      Some ((s, value) :: env)
+  | PatNamed (_, NameWildcard) ->
+      Some env
+  | PatSeqTot (_, pats) -> (
+      let npats = Mseq.length pats in
+      match value with
+      | TmSeq (_, vs) when npats = Mseq.length vs ->
+          Mseq.Helpers.fold_right2 go vs pats (Some env)
+      | _ ->
+          None )
+  | PatSeqEdge (_, l, x, r) -> (
+      let npre = Mseq.length l in
+      let npost = Mseq.length r in
+      match value with
+      | TmSeq (fi, vs) when npre + npost <= Mseq.length vs ->
+          let pre, vs = split_nth_or_double_empty npre vs in
+          let vs, post =
+            split_nth_or_double_empty (Mseq.length vs - npost) vs
+          in
+          Mseq.Helpers.fold_right2 go post r (Some env)
+          |> bind fi x vs
+          |> Mseq.Helpers.fold_right2 go pre l
+      | _ ->
+          None )
+  | PatRecord (_, pats) -> (
+    match value with
+    | TmRecord (_, vs) ->
+        let merge_f _ v p =
+          match (v, p) with
+          | None, None ->
+              None
+          | Some _, None ->
+              None
+          | Some v, Some p ->
+              Some (go v p)
+          | None, Some _ ->
+              Some (fun _ -> None)
+        in
+        Record.merge merge_f vs pats
+        |> fun merged -> Record.fold (fun _ f env -> f env) merged (Some env)
+    | _ ->
+        None )
+  | PatCon (_, _, s1, p) -> (
+    match value with
+    | TmConApp (_, _, s2, v) when s1 = s2 ->
+        try_match env v p
+    | _ ->
+        None )
+  | PatInt (_, i) -> (
+    match value with TmConst (_, CInt i2) when i = i2 -> Some env | _ -> None )
+  | PatChar (_, c) -> (
+    match value with
+    | TmConst (_, CChar c2) when c = c2 ->
+        Some env
+    | _ ->
+        None )
+  | PatBool (_, b) -> (
+    match value with
+    | TmConst (_, CBool b2) when b = b2 ->
+        Some env
+    | _ ->
+        None )
+  | PatAnd (_, l, r) ->
+      go value r (Some env) |> go value l
+  | PatOr (_, l, r) -> (
+    match try_match env value l with
+    | Some env ->
+        Some env
+    | None ->
+        try_match env value r )
+  | PatNot (_, p) -> (
+    match try_match env value p with Some _ -> None | None -> Some env )
+
+(* Tracks the number of calls and cumulative runtime of closures *)
+let runtimes = Hashtbl.create 1024
+
+(* Record a call to a closure *)
+let add_call fi ms =
+  if Hashtbl.mem runtimes fi then
+    let old_count, old_time = Hashtbl.find runtimes fi in
+    Hashtbl.replace runtimes fi (old_count + 1, old_time +. ms)
+  else Hashtbl.add runtimes fi (1, ms)
+
+let parseMExprString allow_free keywords str =
+  try
+    let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
+    let allow_free_prev = !Symbolize.allow_free in
+    Symbolize.allow_free := allow_free ;
+    let r =
+      PTreeTm
+        ( str |> Intrinsics.Mseq.Helpers.to_ustring
+        |> Parserutils.parse_mexpr_string
+        |> Parserutils.raise_parse_error_on_non_unique_external_id
+        |> Symbolize.symbolize
+             (Symbolize.merge_sym_envs_pick_left builtin_name2sym
+                (symbolizeEnvWithKeywords keywords) )
+        |> Parserutils.raise_parse_error_on_partially_applied_external )
+    in
+    Symbolize.allow_free := allow_free_prev ;
+    r
+  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+    reportErrorAndExit e
+
+let rec is_value = function
+  | TmConst (_, _) ->
+      true
+  | TmSeq (_, tms) ->
+      let _ = tms in
+      true
+      (*Mseq.Helpers.fold_left (fun a t -> a && (is_value t)) true tms *)
+      (* TODO FIX *)
+  | TmRecord (_, tms) ->
+      let _ = tms in
+      true
+  (* Record.for_all (fun _ t -> is_value t) tms *)
+  | TmConDef (_, _, _, _, t) ->
+      is_value t
+  | TmConApp (_, _, _, t) ->
+      is_value t
+  | TmNever _ ->
+      true
+  | TmClos (_, _, _, _, _, _) ->
+      true
+  | TmRef (_, _) ->
+      true
+  | TmTensor (_, _) ->
+      true
+  | _ ->
+      false
+
+let rec parseMCoreFile
+    ( keep_utests
+    , prune_external_utests
+    , externals_exclude
+    , warn
+    , eliminate_deadcode
+    , allow_free ) keywords filename =
+  try
+    let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
+    let symKeywordsMap = symbolizeEnvWithKeywords keywords in
+    let name2sym =
+      Symbolize.merge_sym_envs_pick_left builtin_name2sym symKeywordsMap
+    in
+    let symKeywords =
+      let getElements _ e acc = e :: acc in
+      let elements = [] in
+      let elements = SidMap.fold getElements symKeywordsMap.var elements in
+      let elements = SidMap.fold getElements symKeywordsMap.con elements in
+      let elements = SidMap.fold getElements symKeywordsMap.ty elements in
+      let elements = SidMap.fold getElements symKeywordsMap.label elements in
+      elements
+    in
+    let externals_exclude =
+      Intrinsics.Mseq.Helpers.to_list
+        (Mseq.map Intrinsics.Mseq.Helpers.to_ustring externals_exclude)
+    in
+    let deadcode_elimination =
+      if eliminate_deadcode then
+        Deadcode.elimination builtin_sym2term name2sym symKeywords
+      else fun x -> x
+    in
+    let allow_free_prev = !Symbolize.allow_free in
+    Symbolize.allow_free := allow_free ;
+    let r =
+      PTreeTm
+        ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
+        |> Utils.normalize_path |> Parserutils.parse_mcore_file
+        |> Mlang.flatten |> Mlang.desugar_post_flatten
+        |> Parserutils.raise_parse_error_on_non_unique_external_id
+        |> Symbolize.symbolize name2sym
+        |> Parserutils.raise_parse_error_on_partially_applied_external
+        |> (fun t -> if keep_utests then t else Parserutils.remove_all_utests t)
+        |> deadcode_elimination
+           (* |> scan builtin_sym2term  (* TODO: Bug, cannot compile with meta programming *)*)
+        |> Parserutils.prune_external_utests
+             ~enable:(keep_utests && prune_external_utests)
+             ~externals_exclude ~warn
+        |> deadcode_elimination )
+    in
+    Symbolize.allow_free := allow_free_prev ;
+    r
+  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+    reportErrorAndExit e
+
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
    a value. This is why the returned value is evaluated in the eval() function.
    The reason for this is that if-expressions return expressions
    and not values. *)
-let delta (apply : info -> tm -> tm -> tm) fi c v =
+and delta (apply : info -> tm -> tm -> tm) fi c v =
   let apply = apply fi in
   let apply_args (f : tm) (args : tm list) : tm =
     List.fold_left apply f args
@@ -1319,9 +1930,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       fail_constapp fi
   | CbootParserParseMExprString (Some options, Some keywords), TmSeq (fi, seq)
     ->
-      let t =
-        Bootparser.parseMExprString options keywords (tmseq2seq_of_int fi seq)
-      in
+      let t = parseMExprString options keywords (tmseq2seq_of_int fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
@@ -1373,26 +1982,26 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | ( CbootParserParseMCoreFile (Some prune_arg, Some keywords)
     , TmSeq (fi, filename) ) ->
       let filename = tmseq2seq_of_int fi filename in
-      let t = Bootparser.parseMCoreFile prune_arg keywords filename in
+      let t = parseMCoreFile prune_arg keywords filename in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
-      TmConst (fi, CInt (Bootparser.getId ptree))
+      TmConst (fi, CInt (getId ptree))
   | CbootParserGetId, _ ->
       fail_constapp fi
   | CbootParserGetTerm None, t ->
       TmConst (fi, CbootParserGetTerm (Some t))
   | ( CbootParserGetTerm (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CbootParserTree (Bootparser.getTerm ptree n))
+      TmConst (fi, CbootParserTree (getTerm ptree n))
   | CbootParserGetTerm (Some _), _ ->
       fail_constapp fi
   | CbootParserGetType None, t ->
       TmConst (fi, CbootParserGetType (Some t))
   | ( CbootParserGetType (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CbootParserTree (Bootparser.getType ptree n))
+      TmConst (fi, CbootParserTree (getType ptree n))
   | CbootParserGetType (Some _), _ ->
       fail_constapp fi
   | CbootParserGetString None, t ->
@@ -1400,261 +2009,127 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | ( CbootParserGetString (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
       TmSeq
-        ( fi
-        , Mseq.map
-            (fun x -> TmConst (NoInfo, CChar x))
-            (Bootparser.getString ptree n) )
+        (fi, Mseq.map (fun x -> TmConst (NoInfo, CChar x)) (getString ptree n))
   | CbootParserGetString (Some _), _ ->
       fail_constapp fi
   | CbootParserGetInt None, t ->
       TmConst (fi, CbootParserGetInt (Some t))
   | ( CbootParserGetInt (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CInt (Bootparser.getInt ptree n))
+      TmConst (fi, CInt (getInt ptree n))
   | CbootParserGetInt (Some _), _ ->
       fail_constapp fi
   | CbootParserGetFloat None, t ->
       TmConst (fi, CbootParserGetFloat (Some t))
   | ( CbootParserGetFloat (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CFloat (Bootparser.getFloat ptree n))
+      TmConst (fi, CFloat (getFloat ptree n))
   | CbootParserGetFloat (Some _), _ ->
       fail_constapp fi
   | CbootParserGetListLength None, t ->
       TmConst (fi, CbootParserGetListLength (Some t))
   | ( CbootParserGetListLength (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CInt (Bootparser.getListLength ptree n))
+      TmConst (fi, CInt (getListLength ptree n))
   | CbootParserGetListLength (Some _), _ ->
       fail_constapp fi
   | CbootParserGetConst None, t ->
       TmConst (fi, CbootParserGetConst (Some t))
   | ( CbootParserGetConst (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CbootParserTree (Bootparser.getConst ptree n))
+      TmConst (fi, CbootParserTree (getConst ptree n))
   | CbootParserGetConst (Some _), _ ->
       fail_constapp fi
   | CbootParserGetPat None, t ->
       TmConst (fi, CbootParserGetPat (Some t))
   | ( CbootParserGetPat (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CbootParserTree (Bootparser.getPat ptree n))
+      TmConst (fi, CbootParserTree (getPat ptree n))
   | CbootParserGetPat (Some _), _ ->
       fail_constapp fi
   | CbootParserGetInfo None, t ->
       TmConst (fi, CbootParserGetInfo (Some t))
   | ( CbootParserGetInfo (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
-      TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
+      TmConst (fi, CbootParserTree (getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta apply fi v t
 
-(* Debug function used in the eval function *)
-let debug_eval env t =
-  if !enable_debug_eval_tm || !enable_debug_eval_env then (
-    printf "-- eval step -- \n" ;
-    let env_str =
-      if !enable_debug_eval_env then
-        us "Environment:\n" ^. ustring_of_env ~margin:80 env ^. us "\n"
-      else us ""
-    in
-    let tm_str =
-      if !enable_debug_eval_tm then
-        us "Term:\n" ^. ustring_of_tm ~margin:80 t ^. us "\n"
-      else us ""
-    in
-    uprint_endline (env_str ^. tm_str) )
-  else ()
-
-let shape_str = function
-  | TmRecord (_, record) ->
-      Record.bindings record |> List.map fst
-      |> Ustring.concat (us ",")
-      |> fun x -> us "record: {" ^. x ^. us "}"
-  | TmSeq _ ->
-      us "Sequence"
-  | TmConApp (_, x, s, _) ->
-      ustring_of_var ~symbol:!enable_debug_symbol_print x s
-  | TmConst (_, CInt _) ->
-      us "Int"
-  | TmConst (_, CBool _) ->
-      us "Bool"
-  | TmConst (_, CFloat _) ->
-      us "Float"
-  | TmConst (_, CChar _) ->
-      us "Char"
-  | TmConst (_, CSymb _) ->
-      us "Symbol"
-  | TmConst (_, CPy _) ->
-      us "Python Const"
-  | TmConst (_, _) ->
-      us "Other Const"
-  | TmClos _ ->
-      us "(closure)"
-  | TmRef _ ->
-      us "(ref)"
-  | _ ->
-      us "Other tm"
-
-(* Print out error message when a unit test fails *)
-let unittest_failed fi t1 t2 tusing =
-  uprint_endline
-    (let using_str =
-       match tusing with
-       | Some t ->
-           us "\n    Using: " ^. ustring_of_tm t
-       | None ->
-           us ""
-     in
-     us "\n ** Unit test FAILED: "
-     ^. info2str fi ^. us " **\n    LHS: " ^. ustring_of_tm t1
-     ^. us "\n    RHS: " ^. ustring_of_tm t2 ^. using_str )
-
-(* Check if two value terms are equal *)
-let rec val_equal v1 v2 =
-  match (v1, v2) with
-  | TmSeq (_, s1), TmSeq (_, s2) ->
-      Mseq.Helpers.equal val_equal s1 s2
-  | TmRecord (_, r1), TmRecord (_, r2) ->
-      Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
-  | TmConst (_, c1), TmConst (_, c2) ->
-      c1 = c2
-  | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
-      sym1 = sym2 && val_equal v1 v2
-  | TmTensor (_, T.TBootInt t1), TmTensor (_, T.TBootInt t2) ->
-      t1 = t2
-  | TmTensor (_, T.TBootFloat t1), TmTensor (_, T.TBootFloat t2) ->
-      t1 = t2
-  | TmTensor (_, T.TBootGen t1), TmTensor (_, T.TBootGen t2) ->
-      Tensor.Bop_generic_generic.equal val_equal t1 t2
-  | TmTensor (fi, T.TBootInt t1), TmTensor (_, T.TBootGen t2) ->
-      Tensor.Bop_barray_generic.equal
-        (fun x -> val_equal (TmConst (fi, CInt x)))
-        t1 t2
-  | TmTensor (fi, T.TBootFloat t1), TmTensor (_, T.TBootGen t2) ->
-      Tensor.Bop_barray_generic.equal
-        (fun x -> val_equal (TmConst (fi, CFloat x)))
-        t1 t2
-  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootInt t2) ->
-      Tensor.Bop_generic_barray.equal
-        (fun x y -> val_equal x (TmConst (fi, CInt y)))
-        t1 t2
-  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootFloat t2) ->
-      Tensor.Bop_generic_barray.equal
-        (fun x y -> val_equal x (TmConst (fi, CFloat y)))
-        t1 t2
-  | _ ->
-      false
-
-let rec try_match env value pat =
-  let go v p env = Option.bind env (fun env -> try_match env v p) in
-  let split_nth_or_double_empty n s =
-    if Mseq.length s == 0 then (Mseq.empty, Mseq.empty) else Mseq.split_at s n
+and pt_seq env ps =
+  let rec work env = function
+    | h :: ts ->
+        let env', h' = pat_transform env h in
+        let env'', ts' = work env' ts in
+        (env'', h' :: ts')
+    | [] ->
+        (env, [])
   in
-  let bind fi n tms env =
-    match n with
-    | NameStr (_, s) ->
-        Option.bind env (fun env -> Some ((s, TmSeq (fi, tms)) :: env))
-    | NameWildcard ->
-        Option.bind env (fun env -> Some env)
-  in
-  match pat with
-  | PatNamed (_, NameStr (_, s)) ->
-      Some ((s, value) :: env)
-  | PatNamed (_, NameWildcard) ->
-      Some env
-  | PatSeqTot (_, pats) -> (
-      let npats = Mseq.length pats in
-      match value with
-      | TmSeq (_, vs) when npats = Mseq.length vs ->
-          Mseq.Helpers.fold_right2 go vs pats (Some env)
-      | _ ->
-          None )
-  | PatSeqEdge (_, l, x, r) -> (
-      let npre = Mseq.length l in
-      let npost = Mseq.length r in
-      match value with
-      | TmSeq (fi, vs) when npre + npost <= Mseq.length vs ->
-          let pre, vs = split_nth_or_double_empty npre vs in
-          let vs, post =
-            split_nth_or_double_empty (Mseq.length vs - npost) vs
-          in
-          Mseq.Helpers.fold_right2 go post r (Some env)
-          |> bind fi x vs
-          |> Mseq.Helpers.fold_right2 go pre l
-      | _ ->
-          None )
-  | PatRecord (_, pats) -> (
-    match value with
-    | TmRecord (_, vs) ->
-        let merge_f _ v p =
-          match (v, p) with
-          | None, None ->
-              None
-          | Some _, None ->
-              None
-          | Some v, Some p ->
-              Some (go v p)
-          | None, Some _ ->
-              Some (fun _ -> None)
-        in
-        Record.merge merge_f vs pats
-        |> fun merged -> Record.fold (fun _ f env -> f env) merged (Some env)
-    | _ ->
-        None )
-  | PatCon (_, _, s1, p) -> (
-    match value with
-    | TmConApp (_, _, s2, v) when s1 = s2 ->
-        try_match env v p
-    | _ ->
-        None )
-  | PatInt (_, i) -> (
-    match value with TmConst (_, CInt i2) when i = i2 -> Some env | _ -> None )
-  | PatChar (_, c) -> (
-    match value with
-    | TmConst (_, CChar c2) when c = c2 ->
-        Some env
-    | _ ->
-        None )
-  | PatBool (_, b) -> (
-    match value with
-    | TmConst (_, CBool b2) when b = b2 ->
-        Some env
-    | _ ->
-        None )
-  | PatAnd (_, l, r) ->
-      go value r (Some env) |> go value l
-  | PatOr (_, l, r) -> (
-    match try_match env value l with
-    | Some env ->
-        Some env
+  let env', ps_list' = work env (Mseq.Helpers.to_list ps) in
+  (env', Mseq.Helpers.of_list_list ps_list')
+
+and pat_transform (env : (Symb.t * tm) list) (p : pat) =
+  let new_sym fi env s x =
+    match List.assoc_opt s env with
+    | Some (TmVar (_, _, s', _, _)) ->
+        (env, s')
+    | Some _ ->
+        failwith "Should not happen"
     | None ->
-        try_match env value r )
-  | PatNot (_, p) -> (
-    match try_match env value p with Some _ -> None | None -> Some env )
-
-(* Tracks the number of calls and cumulative runtime of closures *)
-let runtimes = Hashtbl.create 1024
-
-(* Record a call to a closure *)
-let add_call fi ms =
-  if Hashtbl.mem runtimes fi then
-    let old_count, old_time = Hashtbl.find runtimes fi in
-    Hashtbl.replace runtimes fi (old_count + 1, old_time +. ms)
-  else Hashtbl.add runtimes fi (1, ms)
+        let s' = Symb.gensym () in
+        let tvar = TmVar (fi, x, s', false, false) in
+        ((s, tvar) :: env, s')
+  in
+  match p with
+  | PatNamed (fi, NameStr (x, s)) ->
+      let env', s' = new_sym fi env s x in
+      (env', PatNamed (fi, NameStr (x, s')))
+  | PatNamed (_, _) as p ->
+      (env, p)
+  | PatSeqTot (fi, ps) ->
+      let env', ps' = pt_seq env ps in
+      (env', PatSeqTot (fi, ps'))
+  | PatSeqEdge (fi, ps1, NameStr (x, s), ps2) ->
+      let env', ps1' = pt_seq env ps1 in
+      let env'', ps2' = pt_seq env' ps2 in
+      let env''', s' = new_sym fi env'' s x in
+      (env''', PatSeqEdge (fi, ps1', NameStr (x, s'), ps2'))
+  | PatSeqEdge (fi, ps1, n, ps2) ->
+      let env', ps1' = pt_seq env ps1 in
+      let env'', ps2' = pt_seq env' ps2 in
+      (env'', PatSeqEdge (fi, ps1', n, ps2'))
+  | PatRecord (fi, patrec) ->
+      let f _ p env = pat_transform env p in
+      let env', patrec' = Record.map_fold f patrec env in
+      (env', PatRecord (fi, patrec'))
+  | PatCon (fi, x, s, p) ->
+      let env', p' = pat_transform env p in
+      (env', PatCon (fi, x, s, p'))
+  | (PatInt (_, _) | PatChar (_, _) | PatBool (_, _)) as t ->
+      (env, t)
+  | PatAnd (fi, p1, p2) ->
+      let env', p1' = pat_transform env p1 in
+      let env'', p2' = pat_transform env' p2 in
+      (env'', PatAnd (fi, p1', p2'))
+  | PatOr (fi, p1, p2) ->
+      let env', p1' = pat_transform env p1 in
+      let env'', p2' = pat_transform env' p2 in
+      (env'', PatOr (fi, p1', p2'))
+  | PatNot (fi, p) ->
+      let env', p' = pat_transform env p in
+      (env', PatNot (fi, p'))
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
-let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
+and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
   (* Closure application *)
-  | TmClos (ficlos, _, s, t3, env2), a -> (
+  | TmClos (ficlos, _, s, _, t3, env2), a -> (
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
-          try eval ((s, a) :: Lazy.force env2) t3
+          try eval ((s, a) :: !env2) pe t3
           with e ->
             if !enable_debug_stack_trace then
               uprint_endline (us "TRACE: " ^. info2str fiapp) ;
@@ -1664,77 +2139,149 @@ let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
         add_call ficlos (t2 -. t1) ;
         res )
       else
-        try eval ((s, a) :: Lazy.force env2) t3
+        try eval ((s, a) :: !env2) pe t3
         with e ->
           if !enable_debug_stack_trace then
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
           raise e )
   (* Constant application using the delta function *)
-  | TmConst (_, c), a ->
-      delta apply fiapp c a
-  (* Fix *)
-  | TmFix _, (TmClos (fi, _, s, t3, env2) as tt) ->
-      eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
-  | TmFix _, _ ->
-      raise_error (tm_info f) "Incorrect CFix"
-  | f, _ ->
-      raise_error fiapp
-        ( "Incorrect application. This is not a function: "
-        ^ Ustring.to_utf8 (ustring_of_tm f) )
+  | ( TmConst (_, c)
+    , ( TmConst (_, _)
+      | TmSeq (_, _)
+      | TmRecord (_, _)
+      | TmConApp (_, _, _, _)
+      | TmConDef (_, _, _, _, _)
+      | TmNever _
+      | TmClos (_, _, _, _, _, _)
+      | TmRef (_, _)
+      | TmTensor (_, _) ) ) ->
+      delta (apply pe) fiapp c a
+  (* Symbolic application *)
+  | f, a ->
+      TmApp (fiapp, f, a)
 
-and eval (env : (Symb.t * tm) list) (t : tm) =
+and scan (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmLet (fi, x, s, ty, t1, t2) ->
+      (*  printf "TmLet: %s \n" (Ustring.to_utf8 x); *)
+      let t1' = scan env t1 in
+      TmLet
+        ( fi
+        , x
+        , s
+        , ty
+        , t1'
+        , scan ((s, TmBox (fi, ref (t1', Some env))) :: env) t2 )
+  | TmRecLets (fi, lst, t2) ->
+      let env_ref = ref env in
+      let peval = ref false in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              peval := true )
+        lst ;
+      if false then (* if !peval then *)
+        TmRecLets (fi, lst, t2) (* TODO: must be fixed *)
+      else
+        let lst' =
+          List.map
+            (fun (fi2, x, s, ty, t) -> (fi2, x, s, ty, scan !env_ref t))
+            lst
+        in
+        TmRecLets (fi, lst', scan !env_ref t2)
+  | TmMatch (fi, t1, p, t2, t3) ->
+      let env', p' = pat_transform env p in
+      TmMatch (fi, scan env t1, p', scan env' t2, scan env' t3)
+  | TmLam (fi, x, s, pe, ty, t) ->
+      (* printf "TmLam: %s \n" (Ustring.to_utf8 x); *)
+      let s' = Symb.gensym () in
+      let tvar = TmVar (fi, x, s', pe, false) in
+      TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
+  | TmVar (_, _, s, _, _) as t1 -> (
+    match List.assoc_opt s env with
+    | Some t2 -> (
+      match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
+    | None ->
+        t1 )
+  | TmPreRun (_, _, t) ->
+      eval env pe_init t
+  | t ->
+      smap_tm_tm (scan env) t
+
+and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (fi, _, s, _) -> (
+  | TmVar (_, _, s, _, _) -> (
     match List.assoc_opt s env with
-    | Some (TmApp (fi, (TmFix _ as f), a)) ->
-        apply fi f a
-    | Some t ->
-        t
+    | Some t2 -> (
+      match t2 with
+      | TmBox (_, b) -> (
+        match !b with
+        | t, None ->
+            t
+        | t, Some env' ->
+            let t' = eval env' pe t in
+            b := (t', None) ;
+            t' )
+      | _ ->
+          t2 )
     | None ->
-        raise_error fi "Undefined variable" )
+        t )
   (* Application *)
   | TmApp (fiapp, t1, t2) ->
-      let f = eval env t1 in
-      let a = eval env t2 in
-      apply fiapp f a
+      let f = eval env pe t1 in
+      let a = eval env pe t2 in
+      apply pe fiapp f a
   (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, _ty, t1) ->
-      TmClos (fi, x, s, t1, lazy env)
+  | TmLam (fi, x, s, pes, _ty, t1) ->
+      TmClos (fi, x, s, pes, t1, ref env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
-      eval ((s, eval env t1) :: env) t2
+      eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
-  | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst )
-      in
-      eval (Lazy.force env') t2
+  | TmRecLets (fi, lst, t2) ->
+      let env_ref = ref env in
+      let peval = ref false in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              peval := true )
+        lst ;
+      if !peval then
+        let f env (fi, x, s, ty, t) =
+          let s' = Symb.gensym () in
+          let tvar = TmVar (fi, x, s', false, false) in
+          let env' = (s, tvar) :: env in
+          (env', (fi, x, s', ty, t))
+        in
+        let env', lst' = List.fold_left_map f env lst in
+        let g (fi, x, s, ty, t) = (fi, x, s, ty, eval env' pe t) in
+        let lst'' = List.map g lst' in
+        TmRecLets (fi, lst'', eval env' pe t2)
+      else eval !env_ref pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
   (* Sequences *)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.map (eval env) tms)
+      TmSeq (fi, Mseq.map (eval env pe) tms)
   (* Records *)
   | TmRecord (fi, tms) ->
-      TmRecord (fi, Record.map (eval env) tms)
+      TmRecord (fi, Record.map (eval env pe) tms)
   (* Records update *)
   | TmRecordUpdate (fi, t1, l, t2) -> (
-    match eval env t1 with
+    match eval env pe t1 with
     | TmRecord (fi, r) ->
-        if Record.mem l r then TmRecord (fi, Record.add l (eval env t2) r)
+        if Record.mem l r then TmRecord (fi, Record.add l (eval env pe t2) r)
         else
           raise_error fi
             ( "No label '" ^ Ustring.to_utf8 l ^ "' in record "
@@ -1745,13 +2292,13 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           ^ Ustring.to_utf8 (ustring_of_tm v) ) )
   (* Type (ignore) *)
   | TmType (_, _, _, _, t1) ->
-      eval env t1
+      eval env pe t1
   (* Data constructors *)
   | TmConDef (_, _, _, _, t) ->
-      eval env t
+      eval env pe t
   (* Constructor application *)
   | TmConApp (fi, x, s, t) ->
-      let rhs = eval env t in
+      let rhs = eval env pe t in
       ( if !enable_debug_con_shape then
         let shape = shape_str rhs in
         let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
@@ -1760,20 +2307,63 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConApp (fi, x, s, rhs)
   (* Match *)
-  | TmMatch (_, t1, p, t2, t3) -> (
-    match try_match env (eval env t1) p with
-    | Some env ->
-        eval env t2
-    | None ->
-        eval env t3 )
+  | TmMatch (fi, t1, p, t2, t3) -> (
+      let _ = fi in
+      match try_match env (eval env pe t1) p with
+      | Some env ->
+          eval env pe t2
+      | None ->
+          eval env pe t3 )
+  (* try 1 --
+        let t1' = eval env pe t1 in
+      if is_value t1' then
+       (match try_match env t1' p with
+        | Some env ->
+           eval env pe t2
+        | None ->
+           eval env pe t3 )
+     else
+       TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)) *)
+  (* try 2 --
+     let t1' = eval env pe t1 in
+     match try_match env t1' p with
+      | Some env ->
+         eval env pe t2
+      | None ->
+         if is_value t1' then
+           TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)
+         else
+           eval env pe t3 ) *)
+  (* Dive *)
+  | TmDive (_, _, t) -> (
+    match eval env pe t with
+    | TmClos (fi, x, s, _, t, env_ref) ->
+        let s' = Symb.gensym () in
+        let tvar = TmVar (fi, x, s', false, false) in
+        let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
+        TmClos (fi, x, s', false, t', env_ref)
+    | t' ->
+        t' )
+  (* PreRun *)
+  | TmPreRun (_, _, t) ->
+      eval env pe t
+  (* Box *)
+  | TmBox (_, b) -> (
+    match !b with
+    | t, None ->
+        t
+    | t, Some env' ->
+        let t' = eval env' pe t in
+        b := (t', None) ;
+        t' )
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
-        let v1, v2 = (eval env t1, eval env t2) in
+        let v1, v2 = (eval env pe t1, eval env pe t2) in
         let equal =
           match tusing with
           | Some t -> (
-            match eval env (TmApp (fi, TmApp (fi, t, v1), v2)) with
+            match eval env pe (TmApp (fi, TmApp (fi, t, v1), v2)) with
             | TmConst (_, CBool b) ->
                 b
             | _ ->
@@ -1790,7 +2380,7 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
           unittest_failed fi v1 v2 tusing ;
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
-      eval env tnext
+      eval env pe tnext
   (* Never term *)
   | TmNever fi ->
       raise_error fi
@@ -1801,41 +2391,37 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
       raise_error fi "A 'use' of a language was not desugared"
   (* External *)
   | TmExt (_, _, _, _, _, t) ->
-      eval env t
+      eval env pe t
   (* Only at runtime *)
-  | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
+  | TmClos _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
    with the evaluated result *)
-let rec eval_toplevel (env : (Symb.t * tm) list) = function
+let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
-      eval_toplevel ((s, eval env t1) :: env) t2
+      eval_toplevel ((s, eval env pe t1) :: env) pe t2
   | TmType (_, _, _, _, t1) ->
-      eval_toplevel env t1
+      eval_toplevel env pe t1
   | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst )
-      in
-      eval_toplevel (Lazy.force env') t2
+      let env_ref = ref env in
+      List.iter
+        (fun (_, _, s1, _, t) ->
+          match t with
+          | TmLam (fi, str, s2, pe, _, tm) ->
+              env_ref :=
+                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+          | _ ->
+              failwith "Incorrect RecLets" )
+        lst ;
+      eval_toplevel !env_ref pe t2
   | TmConDef (_, _, _, _, t) ->
-      eval_toplevel env t
+      eval_toplevel env pe t
   | ( TmVar _
     | TmLam _
     | TmClos _
     | TmApp _
     | TmConst _
-    | TmFix _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
@@ -1846,5 +2432,8 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmNever _
     | TmRef _
     | TmTensor _
+    | TmDive _
+    | TmPreRun _
+    | TmBox _
     | TmExt _ ) as t ->
-      (env, eval env t)
+      (env, eval env pe t)

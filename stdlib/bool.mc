@@ -82,3 +82,12 @@ let bool2string: Bool -> String = lam b.
 
 utest bool2string true with "true"
 utest bool2string false with "false"
+
+-- String to Boolean
+let string2bool: String -> Bool = lam s.
+  match s with "true" then true
+  else match s with "false" then false
+  else error (concat "Cannot convert string " (concat s " to Bool."))
+
+utest string2bool "true" with true
+utest string2bool "false" with false

@@ -268,7 +268,7 @@ let argPrintErrorString = lam result.
   end
 
 let argPrintError = lam result.
-  print (join [argPrintErrorString result, "\n"])
+  error (join [argPrintErrorString result, "\n"])
 
 
 mexpr
@@ -284,6 +284,7 @@ utest stringLineFormat s1 13 1 0 with s2 in
 
 type Options = {
   foo : Bool,
+  fooExt : Bool,
   len : Int,
   message : String,
   real : Float,
@@ -294,6 +295,7 @@ type Options = {
 
 let default = {
   foo = false,
+  fooExt = true,
   len = 7,
   message = "",
   real = 0.,
@@ -303,6 +305,12 @@ let default = {
 } in
 
 let config = [
+  -- NOTE(2023-06-28,dlunde): We must handle the option "--foo-ext" before
+  -- "--foo", as the latter is a prefix of the former. If we reverse their
+  -- order in the config list, the parsing fails. Bug or feature?
+  ([("--foo-ext", "", "")],
+   "This is another boolean option. ",
+   lam p. { p.options with fooExt = false }),
   ([("--foo", "", "")],
    "This is a boolean option. ",
    lam p. { p.options with foo = true }),
@@ -347,7 +355,9 @@ let testOptions = {
   args = [
     "file.mc",
     "--len", "12",
-    "--foo", "-m",
+    "--foo",
+    "--foo-ext",
+    "-m",
     "mymsg",
     "--real", "1.",
     "--positiveReal", "1.",
@@ -358,12 +368,14 @@ let testOptions = {
 } in
 let argParseCustom = argParse_general testOptions in
 let res : ArgResult Options =
-  match argParseCustom default config with ParseOK r then r
-  else error "Incorrect type"
+  let r = argParseCustom default config in
+  match r with ParseOK r then r
+  else argPrintError r
 in
 let opt : Options = res.options in
 utest res.strings with ["file.mc", "f2"] using eqSeq eqString in
 utest opt.foo with true in
+utest opt.fooExt with false in
 utest opt.message with "mymsg" in
 utest opt.len with 12 in
 
@@ -471,6 +483,6 @@ utest res with ParseFailUnknownOption("--unknown") in
 
 let text = argHelpOptions config in
 --print "\n---\n"; print text; print "\n---\n";
-utest length text with 776 in
+utest length text with 838 in
 
 ()

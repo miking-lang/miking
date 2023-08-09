@@ -22,14 +22,15 @@
 
 include "stdlib.mc"
 include "mexpr/ast.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
 include "mexpr/cmp.mc"
 include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/eval.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
+include "mexpr/load-runtime.mc"
+
+let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
+
 
 let _utestRuntimeExpected = [
   "utestRunner", "utestExitOnFailure", "defaultPprint", "ppBool", "ppInt",
@@ -366,18 +367,17 @@ lang UtestBase =
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"
 end
 
--- The language fragment for handling the utest runtime. This includes a
--- function that produces a typed AST for the runtime file (utest-runtime.mc),
--- as well as functions for accessing identifiers defined in the runtime file.
-lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
-  sem loadRuntime : () -> Expr
-  sem loadRuntime =
+-- The language fragment for handling the utest runtime. This includes
+-- handling the caching of the loaded AST, as well as functions for
+-- accessing identifiers defined in the runtime file.
+lang UtestRuntime = MExprLoadRuntime + MExprFindSym
+
+  sem loadUtestRuntime : () -> Expr
+  sem loadUtestRuntime =
   | _ ->
     match deref _utestRuntimeCode with Some ast then ast
     else
-      let args = defaultBootParserParseMCoreFileArg in
-      let utestRuntimeFile = concat stdlibLoc "/mexpr/utest-runtime.mc" in
-      let ast = typeCheck (symbolize (parseMCoreFile args utestRuntimeFile)) in
+      let ast = loadRuntime _utestRuntimeLoc in
       modref _utestRuntimeCode (Some ast);
       ast
 
@@ -386,7 +386,7 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
   | _ ->
     match deref _utestRuntimeIds with Some ids then ids
     else
-      let rt = loadRuntime () in
+      let rt = loadUtestRuntime () in
       match optionMapM identity (findNamesOfStrings _utestRuntimeExpected rt)
       with Some ids then
         modref _utestRuntimeIds (Some ids);
@@ -1036,32 +1036,6 @@ lang MExprUtestGenerate =
       _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
     _apps exitOnFailure [t]
 
-  -- Merges the AST with the utest header, which consists of the runtime
-  -- definitions from 'utest-runtime.mc'.
-  sem mergeWithUtestHeader : UtestEnv -> Expr -> Expr
-  sem mergeWithUtestHeader env =
-  | ast -> mergeWithUtestHeaderH env ast (loadRuntime ())
-
-  sem mergeWithUtestHeaderH : UtestEnv -> Expr -> Expr -> Expr
-  sem mergeWithUtestHeaderH env ast =
-  | TmLet t ->
-    TmLet {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                  ty = tyTm ast}
-  | TmRecLets t ->
-    TmRecLets {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                      ty = tyTm ast}
-  | TmType t ->
-    TmType {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                   ty = tyTm ast}
-  | TmConDef t ->
-    TmConDef {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                     ty = tyTm ast}
-  | TmUtest t ->
-    TmUtest {t with next = mergeWithUtestHeaderH env ast t.next, ty = tyTm ast}
-  | TmExt t ->
-    TmExt {t with inexpr = mergeWithUtestHeaderH env ast t.inexpr,
-                  ty = tyTm ast}
-  | _ -> ast
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
@@ -1074,7 +1048,7 @@ lang MExprUtestGenerate =
     if testsEnabled then
       match replaceUtests (utestEnvEmpty ()) ast with (env, ast) in
       let ast = insertUtestTail ast in
-      let ast = mergeWithUtestHeader env ast in
+      let ast = mergeWithHeader ast (loadUtestRuntime ()) in
       eliminateDuplicateCode ast
     else stripUtests ast
 end
@@ -1090,7 +1064,7 @@ use TestLang in
 let emptyEnv = utestEnvEmpty () in
 
 let eval = lam env. lam e.
-  let e = mergeWithUtestHeader env e in
+  let e = mergeWithHeader e (loadUtestRuntime ()) in
   eval (evalCtxEmpty ()) e
 in
 

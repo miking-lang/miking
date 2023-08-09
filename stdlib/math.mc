@@ -1,5 +1,5 @@
 include "ext/math-ext.mc"
-include "common.mc"
+include "bool.mc"
 
 -- Float stuff
 let inf = divf 1.0 0.0

@@ -17,15 +17,20 @@ MI_NAME=mi
 MI_LITE_NAME=mi-lite
 MI_TMP_NAME=mi-tmp
 
-BIN_PATH=$HOME/.local/bin
-LIB_PATH=$HOME/.local/lib/mcore
+prefix="${prefix:-$HOME/.local}"
+bindir="${bindir:-$prefix/bin}"
+libdir="${libdir:-$prefix/lib}"
+opamlibdir="${OPAM_SWITCH_PREFIX:+$OPAM_SWITCH_PREFIX/lib}"
+ocamllibdir="${ocamllibdir:-${opamlibdir:-$libdir/ocaml/site-lib}}"
+mcoredir=$libdir/mcore
 
 # Setup environment variable to find standard library
 # (and set test namespace for testing)
 export MCORE_LIBS=stdlib=`pwd`/stdlib:test=`pwd`/test
 
 # Setup dune/ocamlfind to use local boot library when available
-export OCAMLPATH=`pwd`/build/lib
+# Do preserve existing OCAML_PATH to find linenoise et al.
+export OCAMLPATH="$(pwd)/build/lib${OCAMLPATH:+:}$OCAMLPATH"
 
 # Compile and build the boot interpreter
 build_boot(){
@@ -34,7 +39,7 @@ build_boot(){
 }
 
 install_boot(){
-    dune install > /dev/null 2>&1
+    dune install --prefix=$prefix --libdir=$ocamllibdir > /dev/null 2>&1
 }
 
 # Compile a new version of the compiler using the current one
@@ -49,7 +54,7 @@ build_mi() {
     fi
 }
 
-# Build the Miking compiler
+# Build the Miking compiler.  If $1 is 'lite', skip the last stage.
 build() {
     if [ -e build/$MI_NAME ]
     then
@@ -59,36 +64,23 @@ build() {
         time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
         time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
-        echo "Bootstrapping the Miking compiler (3rd round, might take some more time)"
-        time ./$MI_NAME compile src/main/mi.mc
+        if [ "$1" != "lite" ]
+        then
+            echo "Bootstrapping the Miking compiler (3rd round, might take some more time)"
+            time ./$MI_NAME compile src/main/mi.mc
+        fi
         mv -f $MI_NAME build/$MI_NAME
         rm -f $MI_LITE_NAME
     fi
 }
-
-# As build(), but skips the third bootstrapping step
-lite() {
-    if [ -e build/$MI_NAME ]
-    then
-        echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
-    else
-        echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc ./$MI_LITE_NAME
-        echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_LITE_NAME 1 src/main/mi.mc ./$MI_NAME
-        mv -f $MI_NAME build/$MI_NAME
-        rm -f $MI_LITE_NAME
-    fi
-}
-
 
 # Install the Miking compiler
 install() {
     if [ -e build/$MI_NAME ]; then
-        rm -rf $LIB_PATH/stdlib
-        mkdir -p $BIN_PATH $LIB_PATH
-        cp -rf stdlib $LIB_PATH
-        cp -f build/$MI_NAME $BIN_PATH
+        rm -rf $mcoredir/stdlib
+        mkdir -p $bindir $mcoredir
+        cp -rf stdlib $mcoredir
+        cp -f build/$MI_NAME $bindir
     else
         echo "No existing compiler binary was found."
         echo "Try compiling the project first!"
@@ -97,11 +89,9 @@ install() {
 
 # Uninstall the Miking bootstrap interpreter and compiler
 uninstall() {
-    set +e
-    dune uninstall > /dev/null 2>&1
-    rm -f $BIN_PATH/$MI_NAME
-    rm -rf $LIB_PATH/stdlib
-    set -e
+    dune uninstall --prefix=$prefix --libdir=$ocamllibdir > /dev/null 2>&1
+    rm -f $bindir/$MI_NAME
+    rm -rf $mcoredir/stdlib
 }
 
 # Lint ocaml source code
@@ -117,43 +107,31 @@ fix () {
 compile_test () {
   set +e
   binary=$(mktemp)
-  output=$1
   compile="$2 --output $binary"
-  output="$output\n$($compile $1 2>&1)"
+  output="$($compile "$1" 2>&1)"
   exit_code=$?
-  if [ $exit_code -eq 0 ]
+  if [ $exit_code -ne 0 ]
   then
-    output="$output$($binary)"
+    printf "$1\n$output\nCommand '$compile $1 2>&1' exited with code $exit_code\n\n"
+    rm -f $binary
+    exit 1
+  else
+    output="$($binary)"
     exit_code=$?
     rm $binary
-    if [ $exit_code -ne 0 ]
-    then
-        echo "ERROR: the compiled binary for $1 exited with $exit_code"
-        exit 1
-    fi
-  else
-    echo "ERROR: command '$compile $1 2>&1' exited with $exit_code"
-    rm $binary
-    exit 1
+    printf "$1\n$output\n\n"
+    if [ $exit_code -ne 0 ]; then exit 1; fi
   fi
-  echo "$output\n"
-  set -e
-}
-
-run_test_prototype() {
-  set +e
-  output=$2
-  output="$output\n$($1 $2 2>&1)\n"
-  echo $output
   set -e
 }
 
 run_test() {
-  run_test_prototype "build/mi run --test --disable-prune-warning" $1
-}
-
-run_test_boot() {
-  run_test_prototype "build/boot eval src/main/mi.mc -- run --test --disable-prune-warning" $1
+  set +e
+  output="$1\n$($2 "$1" 2>&1)"
+  exit_code=$?
+  printf "$output\n\n"
+  if [ $exit_code -ne 0 ]; then exit 1; fi
+  set -e
 }
 
 run_js_test() {
@@ -169,7 +147,7 @@ case $1 in
         build_boot
         ;;
     lite)
-        lite
+        build lite
         ;;
     install-boot)
         install_boot
@@ -178,10 +156,7 @@ case $1 in
         build_mi
         ;;
     run-test)
-        run_test "$2"
-        ;;
-    run-test-boot)
-        run_test_boot "$2"
+        run_test "$2" "$3"
         ;;
     compile-test)
         compile_test "$2" "$3"

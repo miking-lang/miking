@@ -137,7 +137,13 @@ let exponentialPdf : Float -> Float -> Float = lam lambda. lam x.
 
 -- Seed
 external externalSetSeed ! : Int -> ()
-let setSeed : Int -> () = lam seed. externalSetSeed seed
+let setSeed : Int -> () = lam seed.
+
+  -- VERY important to also call this intrinsic here. Otherwise, the compiled code
+  -- _self-initializes the seed_ at the first call to the intrinsic randIntU.
+  randSetSeed seed;
+
+  externalSetSeed seed
 
 mexpr
 
@@ -220,6 +226,13 @@ utest exp (exponentialLogPdf 1.0 2.0) with 0.135335283237 using _eqf in
 utest exponentialPdf 2.0 2.0 with 0.0366312777775 using _eqf in
 
 -- Testing seed
-utest setSeed 0; uniformSample () with setSeed 0; uniformSample () in
+utest setSeed 0; uniformSample (); uniformSample ()
+with setSeed 0; uniformSample (); uniformSample () in
+utest setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.
+with  setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1. in
+utest setSeed 0; uniformSample (); gaussianSample 0. 1.
+with  setSeed 0; uniformSample (); gaussianSample 0. 1. in
+utest setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.; uniformSample ()
+with  setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.; uniformSample () in
 
 ()

@@ -138,7 +138,7 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
   let new_name2sym, symbolized =
     Symbolize.symbolize_toplevel name2sym desugared
   in
-  let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
+  let new_sym2term, result = Mexpr.eval_toplevel sym2term pe_init symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
 
 (* Wrap the final mexpr in a lambda application to prevent scope leak *)
@@ -148,6 +148,7 @@ let wrap_mexpr (Program (inc, tops, tm)) =
       ( NoInfo
       , us "_"
       , Symb.Helpers.nosym
+      , false
       , TyArrow (NoInfo, TyInt NoInfo, TyUnknown NoInfo)
       , tm )
   in
