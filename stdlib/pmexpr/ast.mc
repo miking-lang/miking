@@ -3,10 +3,11 @@ include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/pprint.mc"
+include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 
 lang PMExprAst =
-  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeCheck
+  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeCheck + MExprTypeAnnot
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
@@ -211,6 +212,55 @@ lang PMExprAst =
   | TmParallelSizeCoercion t ->
     let e = typeCheckExpr env t.e in
     TmParallelSizeCoercion {{t with e = e} with ty = tyTm e}
+  | TmParallelSizeEquality t ->
+    TmParallelSizeEquality {t with ty = tyWithInfo t.info tyunit_}
+
+  sem typeAnnotExpr env =
+  | TmAccelerate t ->
+    let e = typeAnnotExpr env t.e in
+    TmAccelerate {t with e = e, ty = tyTm e}
+  | TmFlatten t ->
+    let e = typeAnnotExpr env t.e in
+    let ty =
+      match tyTm e with TySeq {ty = TySeq {ty = elemTy}} then
+        TySeq {ty = elemTy, info = t.info}
+      else ityunknown_ t.info
+    in
+    TmFlatten {t with e = e, ty = ty}
+  | TmMap2 t ->
+    let f = typeAnnotExpr env t.f in
+    let as = typeAnnotExpr env t.as in
+    let bs = typeAnnotExpr env t.bs in
+    let elemTy =
+      match tyTm f with TyArrow {from = _, to = TyArrow {from = _, to = outTy}} then
+        outTy
+      else ityunknown_ t.info
+    in
+    TmMap2 {t with f = f, as = as, bs = bs, ty = TySeq {ty = elemTy, info = t.info}}
+  | TmParallelReduce t ->
+    let f = typeAnnotExpr env t.f in
+    let ne = typeAnnotExpr env t.ne in
+    let as = typeAnnotExpr env t.as in
+    TmParallelReduce {t with f = f, ne = ne, as = as, ty = tyTm ne}
+  | TmLoop t ->
+    let n = typeAnnotExpr env t.n in
+    let f = typeAnnotExpr env t.f in
+    TmLoop {t with n = n, f = f, ty = tyWithInfo t.info tyunit_}
+  | TmLoopAcc t ->
+    let ne = typeAnnotExpr env t.ne in
+    let n = typeAnnotExpr env t.n in
+    let f = typeAnnotExpr env t.f in
+    TmLoopAcc {t with ne = ne, n = n, f = f, ty = tyTm ne}
+  | TmParallelLoop t ->
+    let n = typeAnnotExpr env t.n in
+    let f = typeAnnotExpr env t.f in
+    TmParallelLoop {t with n = n, f = f, ty = tyWithInfo t.info tyunit_}
+  | TmPrintFloat t ->
+    let e = typeAnnotExpr env t.e in
+    TmPrintFloat {t with e = e, ty = tyWithInfo t.info tyunit_}
+  | TmParallelSizeCoercion t ->
+    let e = typeAnnotExpr env t.e in
+    TmParallelSizeCoercion {t with e = e, ty = tyTm e}
   | TmParallelSizeEquality t ->
     TmParallelSizeEquality {t with ty = tyWithInfo t.info tyunit_}
 
