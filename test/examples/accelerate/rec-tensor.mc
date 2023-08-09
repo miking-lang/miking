@@ -11,6 +11,5 @@ accelerate (
 );
 let x = tensorGetExn r.a [3] in
 let y = tensorGetExn r.b [1] in
-if eqf (addf (int2float x) y) 9.5 then
-  print "OK\n"
-else error "Unexpected result"
+utest addf (int2float x) y with 9.5 using eqf in
+()

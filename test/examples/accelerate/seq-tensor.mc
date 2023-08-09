@@ -7,12 +7,14 @@ let s : [Tensor[Int]] = [t1, t2]
 
 mexpr
 
-let z : Int = accelerate (
+let z = accelerate (
   loop 1 (lam. ());
-  let fst : Tensor[Int] = get s 0 in
-  let snd : Tensor[Int] = get s 1 in
+  let fst = get s 0 in
+  let snd = get s 1 in
   let x = tensorGetExn fst [0] in
   let y = tensorGetExn snd [0] in
   addi x y
 ) in
-printLn (int2string z)
+
+utest z with 3 in
+()

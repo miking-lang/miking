@@ -25,11 +25,12 @@ let rows = 1000 in
 let cols = 2000 in
 let sh = [rows, cols] in
 let n = foldl muli 1 sh in
-let out : Tensor[Float] = tensorCreateCArrayFloat sh (lam. 0.0) in
+let out1 = tensorCreateCArrayFloat sh (lam. 0.0) in
+let out2 = tensorCreateCArrayFloat sh (lam. 0.0) in
 let s : [Tensor[Float]] =
   create 5 (lam. tensorCreateCArrayFloat sh (lam. randFloat ())) in
 
-accelerate (
+let op = lam out.
   loop n (lam i.
     let r = divi i cols in
     let c = modi i cols in
@@ -40,7 +41,8 @@ accelerate (
           let t = get s i in
           addf acc (tensorGetExn t [r,c])) in
     tensorSetExn out [r,c] x)
-);
-
-let x = sumTensor out in
-printLn (float2string x)
+in
+let x = accelerate (op out1) in
+let y = op out2 in
+utest sumTensor out1 with sumTensor out2 in
+()

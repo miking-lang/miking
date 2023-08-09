@@ -38,7 +38,7 @@ let s2 : [Data] =
     (lam d : (Int, Float). {a = d.0, b = d.1})
     (zip sx sb) in
 
-(if eqSeq eqData s1 s2 then print "reconstruct OK\n" else error "Reconstruction error");
+utest s1 with s2 using eqSeq eqData in
 
 -- We compute the sum by storing the sum of both in the first argument, and
 -- then computing the sum of these.
@@ -54,6 +54,6 @@ let sum2 : Int = accelerate (
   let sa : [Int] = map getInt s in
   reduce addi 0 sa) in
 
-(if eqi sum1 sum2 then print "sum OK\n" else error "Sum error");
+utest sum1 with sum2 in
 
 ()

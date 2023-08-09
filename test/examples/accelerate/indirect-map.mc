@@ -17,5 +17,4 @@ let s2 : [Int] = accelerate (f s1) in
 let s3 : [Int] = accelerate (f s2) in
 
 utest addi (sum s2) n with sum s3 in
-printLn (int2string (sum s2));
-printLn (int2string (sum s3))
+()

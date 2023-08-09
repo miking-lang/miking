@@ -34,9 +34,5 @@ let c = tensorSubExn t2 3 1 in
 let d = tensorSubExn t2 2 1 in
 writeTensors a b c d;
 
-if tensorEq eqi t t2 then
-  print "OK"
-else
-  printTensor t;
-  printTensor t2;
-  exit 1
+utest t with t2 using tensorEq eqi in
+()

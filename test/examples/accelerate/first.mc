@@ -8,5 +8,5 @@ let a = addOne 25.0 in
 -- Accelerated function application, running on the GPU
 let b = accelerate (head (map addOne [25.0])) in
 
-if eqf a b then print "OK"
-else error "Result mismatch"
+utest a with b in
+()

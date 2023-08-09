@@ -7,4 +7,5 @@ let s2f = accelerate (map sin s1) in
 let s3f = accelerate (map cos s2f) in
 let s2s = map sin s1 in
 let s3s = map cos s2s in
-if eqSeq eqf s3f s3s then print "OK" else error "different results"
+utest s3f with s3s using eqSeq eqf in
+()

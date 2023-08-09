@@ -32,7 +32,7 @@ let n = 100 in
 let t = tensorCreateCArrayInt [muli 3 n] (lam. randIntU 0 100) in
 let t1 = tensorSubExn t 0 100 in
 let t2 = tensorSubExn t 100 100 in
-let t3 = tensorSubExn t 100 100 in
+let t3 = tensorSubExn t 200 100 in
 tensorAdd t1 t2 t3;
 utest addi (tensorSum t1) (tensorSum t2) with tensorSum t3 in
 
