@@ -248,17 +248,22 @@ utest stringIsInt "a1" with false
 utest stringIsInt "" with false
 
 
--- Joins the strings in strs on delim
-recursive
-  let strJoin = lam delim. lam strs.
-    if null strs
-    then ""
-    else if eqi (length strs) 1
-         then head strs
-         else concat (concat (head strs) delim) (strJoin delim (tail strs))
-end
+-- Join a list of strings on a delimiter
+let strJoin: String -> [String] -> String = seqJoin
 
 utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
 utest strJoin "--" [] with emptyStr
 utest strJoin "--" ["coffee"] with "coffee"
 utest strJoin "water" ["coffee", "tea"] with "coffeewatertea"
+
+
+-- Replaces all occurrences of the string by the replacement
+let strReplace: String -> String -> String -> String = subseqReplace eqChar
+
+utest strReplace "" "bar" "a string" with "a string"
+utest strReplace "." "bar" "a string" with "a string"
+utest strReplace "bar" "babar" "foo bar" with "foo babar"
+utest strReplace "-" "--" "mi run -help -flag" with "mi run --help --flag"
+utest strReplace "-" "--" "mi --help --flag" with "mi ----help ----flag"
+utest strReplace "viking" "miking" "two vikings" with "two mikings"
+utest strReplace "dog" "cat" "every dog loves dogs" with "every cat loves cats"
