@@ -126,6 +126,7 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   | (TySeq _) & seqTy -> cons (FutharkFunctionInArray seqTy) acc
   | TyCon _ -> acc
   | TyVar _ -> acc
+  | TyAlias t -> futharkWellFormedType acc t.content
   | ty -> cons (FutharkTypeError ty) acc
 
   sem futharkWellFormedPattern : [WFError] -> Pat -> [WFError]
