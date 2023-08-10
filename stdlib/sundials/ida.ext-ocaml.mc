@@ -183,5 +183,15 @@ end
           otyunit_
         ]
       }
+    ]),
+    ("idaSetStopTime", [
+      impl {
+        expr = "Ida.set_stop_time",
+        ty = tyarrows_ [
+          otyopaque_,
+          tyfloat_,
+          otyunit_
+        ]
+      }
     ])
   ]
