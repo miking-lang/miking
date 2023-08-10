@@ -10,6 +10,7 @@ open Pprint
 open Printf
 open Intrinsics
 open Builtin
+open Symbutils
 
 (* Terms *)
 let idTmVar = 100
@@ -2174,6 +2175,38 @@ and var_update (env : (Symb.t * tm) list) (t : tm) =
   | t ->
       smap_tm_tm (var_update env) t
 
+and free_vars (free : SymbSet.t) (t : tm) =
+  match t with
+  | TmVar (_, _, s, _) ->
+      SymbSet.add s free
+  | TmLam (_, _, s, _, _) ->
+      SymbSet.remove s free
+  | TmClos (_, _, _, _, _, _, _) | TmBox (_, _) ->
+      free
+  | t ->
+      sfold_tm_tm free_vars free t
+
+and closure_elim (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmClos (fi, x, s_clos, ty, tm, env_ref, _) ->
+      let fv = free_vars SymbSet.empty tm in
+      let expand s t2 =
+        match List.assoc_opt s env with
+        | Some _ ->
+            t2
+        | None -> (
+          match List.assoc_opt s !env_ref with
+          | Some t3 ->
+              let t3' = closure_elim env t3 in
+              TmLet (fi, us "_hidden_", s, TyUnknown fi, t3', t2)
+          | None ->
+              t2 )
+      in
+      let tm' = SymbSet.fold expand (SymbSet.remove s_clos fv) tm in
+      TmLam (fi, x, s_clos, ty, closure_elim env tm')
+  | t ->
+      smap_tm_tm (closure_elim env) t
+
 and scan (env : (Symb.t * tm) list) (t : tm) =
   match t with
   | TmLet (fi, x, s, ty, t1, t2) ->
@@ -2222,7 +2255,8 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
     | None ->
         t1 )
   | TmPreRun (_, _, t) ->
-      eval env {pe_init with inPeval= true} t
+      let t' = eval env {pe_init with inPeval= true} t in
+      closure_elim env t'
   | t ->
       smap_tm_tm (scan env) t
 
@@ -2329,7 +2363,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         let tvar = TmVar (fi, x, s', false) in
         let pe' = {pe with inPeval= true} in
         let t' = eval ((s, tvar) :: !env_ref) pe' (TmDive (fi, 0, t)) in
-        TmClos (fi, x, s', ty, t', env_ref, is_rec)
+        let t'' = if pe.inPeval then t' else closure_elim !env_ref t' in
+        TmClos (fi, x, s', ty, t'', env_ref, is_rec)
     | t' ->
         t' )
   (* PreRun *)
