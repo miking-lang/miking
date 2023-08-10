@@ -202,7 +202,8 @@ lang GenerateJsonSerializers =
     let darg = nameSym "jr" in
     let m = nameSym "m" in
     let iss = mapMap (lam s. (s,nameSym "rv")) iss in
-    let inner = urecord_ (map (lam t. (sidToString t.0, (nvar_ (t.1).1))) (mapToSeq iss)) in
+    let inner = nconapp_ env.some
+      (urecord_ (map (lam t. (sidToString t.0, (nvar_ (t.1).1))) (mapToSeq iss))) in
     let none = nconapp_ env.none unit_ in
     let deserializer =
       nulam_ darg (
@@ -306,11 +307,12 @@ lang GenerateJsonSerializers =
                             match_
                               (nvar_ cv)
                               (pstr_ (nameGetStr cd.name))
-                              (let d = nameSym "d" in match_
-                                (app_ (cd.s).deserializer (nvar_ dv))
-                                (npcon_ env.some (npvar_ d))
-                                (nconapp_ cd.name (nvar_ d))
-                                none)
+                              (let d = nameSym "d" in
+                                match_
+                                  (app_ (cd.s).deserializer (nvar_ dv))
+                                  (npcon_ env.some (npvar_ d))
+                                  (nconapp_ env.some (nconapp_ cd.name (nvar_ d)))
+                                  none)
                               acc) none conDefs)
                          none)
                       none)
@@ -524,7 +526,7 @@ utest test false
                    match jsonDeserializeFloat jrv1 with Some rv1 then
                      match mapLookup \"a\" m with Some jrv2 then
                        match jsonDeserializeInt jrv2 with Some rv2 then
-                         { a = rv2, b = rv1, c = rv }
+                         Some { a = rv2, b = rv1, c = rv }
                        else None {}
                      else None {}
                    else None {}
@@ -580,9 +582,9 @@ utest test false
           match mapLookup \"__constructor__\" m with Some con1 then
             match mapLookup \"__data__\" m with Some data then
               match con1 with \"Left\" then
-                match df data with Some d1 then Left d1 else None {}
+                match df data with Some d1 then Some (Left d1) else None {}
               else match con1 with \"Right\" then
-                match df1 data with Some d2 then Right d2 else None {}
+                match df1 data with Some d2 then Some (Right d2) else None {}
               else None {}
             else None {}
           else None {}
@@ -624,10 +626,10 @@ utest test false
             match mapLookup \"__constructor__\" m with Some con1 then
               match mapLookup \"__data__\" m with Some data then
                 match con1 with \"Node\" then
-                  match deserializeList df data with Some d1 then Node d1 else None {}
+                  match deserializeList df data with Some d1 then Some (Node d1) else None {}
                 else match con1 with \"Leaf\" then
-                  match (lam jr. match jr with JsonObject m1 then {} else None {}) data
-                  with Some d2 then Leaf d2 else None {}
+                  match (lam jr. match jr with JsonObject m1 then Some {} else None {}) data
+                  with Some d2 then Some (Leaf d2) else None {}
                 else None {}
               else None {}
             else None {}
