@@ -676,9 +676,8 @@ let subseqReplace: all a. (a -> a -> Bool) -> [a] -> [a] -> [a] -> [a] =
         if eq eCheck eSeq then
           work (addi checkIdx 1) (addi seqIdx 1) acc
         else
-          work 0 (addi seqIdx 1) (concat acc (subsequence seq
-                                                          (subi seqIdx checkIdx)
-                                                          (addi checkIdx 1)))
+          let seqIdx = subi seqIdx checkIdx in
+          work 0 (addi seqIdx 1) (snoc acc (get seq seqIdx))
     in
     work 0 0 []
 
@@ -690,3 +689,4 @@ utest subseqReplace eqi [1,1] [2] [3,1,3,1,1] with [3,1,3,2]
 utest subseqReplace eqi [3,4,5] [42,42] [1,2,3,4,5,6,7] with [1,2,42,42,6,7]
 utest subseqReplace eqi [1,1] [100,101,100] [0,1,0,1,2,1,1,3,4,0,0,1,1,0,1,0] with [0,1,0,1,2,100,101,100,3,4,0,0,100,101,100,0,1,0]
 utest subseqReplace eqi [1,1] [2] [3,4,3] with [3,4,3]
+utest subseqReplace eqi [0,1,2] [88] [0,0,1,2,100,0,1] with [0,88,100,0,1]
