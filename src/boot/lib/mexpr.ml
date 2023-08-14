@@ -189,12 +189,19 @@ let getData = function
       (idTmConApp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
-  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (
-    match t4_op with
-    | Some t4 ->
+  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t5_op, t3)) -> (
+    (* NOTE(oerikss, 2023-08-14): We use the list length field to determine if
+       using, onfail, or both are present (i.e., list length is not necessarily
+       the number of terms). *)
+    match (t4_op, t5_op) with
+    | None, None ->
+        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], [])
+    | Some t4, None ->
         (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [])
-    | None ->
-        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
+    | None, Some t5 ->
+        (idTmUtest, [fi], [5], [], [t1; t2; t3; t5], [], [], [], [], [])
+    | Some t4, Some t5 ->
+        (idTmUtest, [fi], [6], [], [t1; t2; t3; t4; t5], [], [], [], [], []) )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
   | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
@@ -2357,7 +2364,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         b := (t', None) ;
         t' )
   (* Unit testing *)
-  | TmUtest (fi, t1, t2, tusing, tnext) ->
+  | TmUtest (fi, t1, t2, tusing, tonfail, tnext) ->
       ( if !utest then
         let v1, v2 = (eval env pe t1, eval env pe t2) in
         let equal =
@@ -2377,7 +2384,17 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
           printf "." ;
           utest_ok := !utest_ok + 1 )
         else (
-          unittest_failed fi v1 v2 tusing ;
+          ( match tonfail with
+          | Some tonfail' -> (
+            match eval env pe (TmApp (fi, TmApp (fi, tonfail', v1), v2)) with
+            | TmRecord (_, r) when Record.is_empty r ->
+                ()
+            | _ ->
+                raise_error fi
+                  ( "Invalid failure function: "
+                  ^ Ustring.to_utf8 (ustring_of_tm tonfail') ) )
+          | None ->
+              unittest_failed fi v1 v2 tusing ) ;
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
       eval env pe tnext

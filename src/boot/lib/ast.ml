@@ -251,7 +251,7 @@ and rec_let_decl = RecLet of info * (info * ustring * ty * tm) list
 
 and con_decl = Con of info * ustring * ty
 
-and utest_top = Utest of info * tm * tm * tm option
+and utest_top = Utest of info * tm * tm * tm option * tm option
 
 and ext_decl = Ext of info * ustring * bool * ty
 
@@ -298,7 +298,7 @@ and tm =
   (* Match data *)
   | TmMatch of info * tm * pat * tm * tm
   (* Unit testing *)
-  | TmUtest of info * tm * tm * tm option * tm
+  | TmUtest of info * tm * tm * tm option * tm option * tm
   (* Never term *)
   | TmNever of info
   (* -- The following term is removed during MLang desugaring *)
@@ -441,7 +441,7 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t2
       |> fun (acc, t2') ->
       f acc t3 |> fun (acc, t3') -> (acc, TmMatch (fi, t1', p, t2', t3'))
-  | TmUtest (fi, t1, t2, tusing, tnext) ->
+  | TmUtest (fi, t1, t2, tusing, tonfail, tnext) ->
       f acc t1
       |> fun (acc, t1') ->
       f acc t2
@@ -452,8 +452,15 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       | None ->
           (acc, tusing) )
       |> fun (acc, tusing') ->
+      ( match tonfail with
+      | Some tonfail' ->
+          f acc tonfail' |> fun (acc, tonfail'') -> (acc, Some tonfail'')
+      | None ->
+          (acc, tonfail) )
+      |> fun (acc, onfail') ->
       f acc tnext
-      |> fun (acc, tnext') -> (acc, TmUtest (fi, t1', t2', tusing', tnext'))
+      |> fun (acc, tnext') ->
+      (acc, TmUtest (fi, t1', t2', tusing', onfail', tnext'))
   | TmUse (fi, l, t) ->
       f acc t |> fun (acc, t') -> (acc, TmUse (fi, l, t'))
   | TmExt (fi, x, s, ty, e, t) ->
@@ -497,7 +504,7 @@ let tm_info = function
   | TmConDef (fi, _, _, _, _)
   | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)
-  | TmUtest (fi, _, _, _, _)
+  | TmUtest (fi, _, _, _, _, _)
   | TmNever fi
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _, _)

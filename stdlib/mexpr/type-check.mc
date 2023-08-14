@@ -936,15 +936,28 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let expected = typeCheckExpr env t.expected in
     let next = typeCheckExpr env t.next in
     let tusing = optionMap (typeCheckExpr env) t.tusing in
-    (match tusing with Some tu then
-       unify env [infoTm tu] (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
-     else
-       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected));
+    let tonfail = optionMap (typeCheckExpr env) t.tonfail in
+    (switch (tusing, tonfail)
+     case (Some tu, Some to) then
+      unify env [infoTm tu]
+        (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu);
+      unify env [infoTm to]
+        (tyarrows_ [tyTm test, tyTm expected, tyunit_]) (tyTm to)
+     case (Some tu, None _) then
+      unify env [infoTm tu]
+        (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
+     case (None _, Some to) then
+      unify env [infoTm to]
+        (tyarrows_ [tyTm test, tyTm expected, tyunit_]) (tyTm to)
+     case (None _, None _) then
+      unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
+     end);
     TmUtest {t with test = test
-                  , expected = expected
-                  , next = next
-                  , tusing = tusing
-                  , ty = tyTm next}
+            , expected = expected
+            , next = next
+            , tusing = tusing
+            , tonfail = tonfail
+            , ty = tyTm next}
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst

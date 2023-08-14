@@ -650,6 +650,7 @@ lang UtestAst = Ast
              expected : Expr,
              next : Expr,
              tusing : Option Expr,
+             tonfail : Option Expr,
              ty : Type,
              info : Info}
 
@@ -667,21 +668,20 @@ lang UtestAst = Ast
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmUtest t ->
-    match f acc t.test with (acc, test) then
-      match f acc t.expected with (acc, expected) then
-        match f acc t.next with (acc, next) then
-          match optionMapAccum f acc t.tusing with (acc, tusing) then
-            ( acc
-            , TmUtest
-              {{{{t with test = test}
-                    with expected = expected}
-                    with next = next}
-                    with tusing = tusing}
-            )
-          else never
-        else never
-      else never
-    else never
+    match f acc t.test with (acc, test) in
+    match f acc t.expected with (acc, expected) in
+    match f acc t.next with (acc, next) in
+    match optionMapAccum f acc t.tusing with (acc, tusing) in
+    match optionMapAccum f acc t.tonfail with (acc, tonfail) in
+    ( acc
+    , TmUtest {
+      t with
+      test = test,
+      expected = expected,
+      next = next,
+      tusing = tusing,
+      tonfail = tonfail
+    })
 end
 
 

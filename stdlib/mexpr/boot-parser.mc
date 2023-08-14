@@ -211,13 +211,26 @@ lang BootParser = MExprAst + ConstTransformer
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 113 /-TmUtest-/ ->
-    let tusing = match (glistlen t 0) with 4 then
-                   Some (gterm t 3)
-                 else None () in
+    -- NOTE(oerikss, 2023-08-14): We use the list length field to determine if
+    -- using, onfail, or both are present (i.e., list length is not necessarily
+    -- the number of terms).
+    let tusing = switch glistlen t 0
+                 case 4 then Some (gterm t 3)
+                 case 6 then Some (gterm t 3)
+                 case _ then None ()
+                 end
+    in
+    let tonfail = switch glistlen t 0
+                  case 5 then Some (gterm t 3)
+                  case 6 then Some (gterm t 4)
+                  case _ then None ()
+                  end
+    in
     TmUtest {test = gterm t 0,
              expected = gterm t 1,
              next = gterm t 2,
              tusing = tusing,
+             tonfail = tonfail,
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 114 /-TmNever-/ ->

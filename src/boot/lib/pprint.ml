@@ -696,15 +696,27 @@ and print_tm' fmt t =
   | TmUse (_, l, t) ->
       let l = string_of_ustring l in
       fprintf fmt "@[<hov 0>use %s in@ %a@]" l print_tm (Match, t)
-  | TmUtest (_, t1, t2, None, t4) ->
+  | TmUtest (_, t1, t2, None, None, t4) ->
       fprintf fmt "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a in@]@]@ %a@]"
         !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
         (Match, t4)
-  | TmUtest (_, t1, t2, Some t3, t4) ->
+  | TmUtest (_, t1, t2, Some t3, None, t4) ->
       fprintf fmt
         "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a using@ %a in@]@]@ %a@]"
         !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
         (Match, t3) print_tm (Match, t4)
+  | TmUtest (_, t1, t2, None, Some t3, t4) ->
+      fprintf fmt
+        "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a onfail@ %a in@]@]@ \
+         %a@]"
+        !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
+        (Match, t3) print_tm (Match, t4)
+  | TmUtest (_, t1, t2, Some t3, Some t4, t5) ->
+      fprintf fmt
+        "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a using@ %a onfail@ %a \
+         in@]@]@ %a@]"
+        !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
+        (Match, t3) print_tm (Match, t4) print_tm (Match, t5)
   | TmClos (_, x, _, _, t1, _) ->
       let x = string_of_ustring x in
       fprintf fmt "@[<hov %d>clos %s.@ %a@]" !ref_indent x print_tm (Lam, t1)

@@ -233,10 +233,16 @@ let rec symbolize (env : sym_env) (t : tm) =
         , symbolize env t3 )
   | TmUse (fi, l, t) ->
       TmUse (fi, l, symbolize env t)
-  | TmUtest (fi, t1, t2, tusing, tnext) ->
+  | TmUtest (fi, t1, t2, tusing, onfail, tnext) ->
       let sym_using = Option.map (fun t -> symbolize env t) tusing in
+      let sym_onfail = Option.map (fun t -> symbolize env t) onfail in
       TmUtest
-        (fi, symbolize env t1, symbolize env t2, sym_using, symbolize env tnext)
+        ( fi
+        , symbolize env t1
+        , symbolize env t2
+        , sym_using
+        , sym_onfail
+        , symbolize env tnext )
   | TmExt (fi, x, _, e, ty, t) ->
       let s = Symb.gensym () in
       TmExt

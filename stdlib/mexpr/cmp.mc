@@ -181,14 +181,22 @@ lang UtestCmp = Cmp + UtestAst
       if eqi expectedDiff 0 then
         let nextDiff = cmpExpr l.next r.next in
         if eqi nextDiff 0 then
-          let t = (l.tusing, r.tusing) in
-          match t with (Some a, Some b) then
-            cmpExpr a b
-          else match t with (Some _, None _) then
-            1
-          else match t with (None _, Some _) then
-            negi 1
-          else 0
+          let usingDiff =
+            switch (l.tusing, r.tusing)
+            case (Some a, Some b) then cmpExpr a b
+            case (Some _, None _) then 1
+            case (None _, Some _) then negi 1
+            case _ then 0
+            end
+          in
+          if eqi usingDiff 0 then
+            switch (l.tonfail, r.tonfail)
+            case (Some a, Some b) then cmpExpr a b
+            case (Some _, None _) then 1
+            case (None _, Some _) then negi 1
+            case _ then 0
+            end
+          else usingDiff
         else nextDiff
       else expectedDiff
     else testDiff
@@ -553,9 +561,29 @@ utest cmpExpr (utest_ (var_ "a") (var_ "a") unit_)
 utest cmpExpr (utest_ (var_ "b") (var_ "a") unit_)
               (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
 utest cmpExpr (utest_ (var_ "a") (var_ "b") unit_)
-              (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
-utest cmpExpr (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp"))
-              (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
+        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
+utest cmpExpr
+        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp"))
+        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp")) with 0 in
+utest cmpExpr
+        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail"))
+        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail")) with 0 in
+utest cmpExpr
+        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
+        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
+  with 0 in
+utest cmpExpr
+        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp"))
+        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
+utest cmpExpr
+        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail"))
+        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
+utest cmpExpr
+        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
+        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp")) with 0 using neqi in
+utest cmpExpr
+        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
+        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail")) with 0 using neqi in
 
 utest cmpExpr never_ never_ with 0 in
 

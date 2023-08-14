@@ -218,16 +218,26 @@ lang UtestANF = ANF + UtestAst
       (lam test.
          normalizeName
            (lam expected.
-              let inner = lam tusing.
-                TmUtest { t with test = test,
-                                 expected = expected,
-                                 next = normalize k t.next,
-                                 tusing = tusing }
+             let inner = lam x.
+               match x with (tusing, tonfail) in
+               TmUtest {
+                 t with test = test,
+                 expected = expected,
+                 next = normalize k t.next,
+                 tusing = tusing,
+                 tonfail = tonfail
+               }
               in
-              match t.tusing with Some tusing then
-                normalizeName (lam tusing. inner (Some tusing)) tusing
-              else
-                inner (None ()))
+             switch (t.tusing, t.tonfail)
+             case (Some tusing, Some tonfail) then
+               normalizeName
+                 (lam tusing.
+                   normalizeName
+                     (lam tonfail. inner (Some tusing, Some tonfail))
+                     tonfail)
+                 tusing
+             case (None (), None ()) then inner (None (), None())
+             end)
            t.expected)
       t.test
 

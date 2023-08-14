@@ -45,7 +45,7 @@ let reserved_strings = [
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("prerun",        fun(i) -> Parser.PRERUN{i=i;v=()});
-
+  ("onfail",        fun(i) -> Parser.ONFAIL{i=i;v=()});
 
   (* Types *)
   ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});

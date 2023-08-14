@@ -77,6 +77,7 @@
 %token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> PRERUN
+%token <unit Ast.tokendata> ONFAIL
 
 
 /* Types */
@@ -203,10 +204,16 @@ topcon:
 toputest:
   | UTEST mexpr WITH mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
-        Utest (fi,$2,$4,None) }
+        Utest (fi,$2,$4,None,None) }
   | UTEST mexpr WITH mexpr USING mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
-        Utest (fi,$2,$4,Some $6) }
+        Utest (fi,$2,$4,Some $6,None) }
+  | UTEST mexpr WITH mexpr ONFAIL mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        Utest (fi,$2,$4,None,Some $6) }
+  | UTEST mexpr WITH mexpr USING mexpr ONFAIL mexpr
+      { let fi = mkinfo $1.i (tm_info $8) in
+        Utest (fi,$2,$4,Some $6,Some $8) }
 
 mlang:
   | LANG ident lang_includes decls END
@@ -344,10 +351,16 @@ mexpr:
         TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i $5.i in
-        TmUtest(fi,$2,$4,None,$6) }
+        TmUtest(fi,$2,$4,None,None,$6) }
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmUtest(fi,$2,$4,Some $6,$8) }
+        TmUtest(fi,$2,$4,Some $6,None,$8) }
+  | UTEST mexpr WITH mexpr ONFAIL mexpr IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmUtest(fi,$2,$4,None,Some $6,$8) }
+  | UTEST mexpr WITH mexpr USING mexpr ONFAIL mexpr IN mexpr
+      { let fi = mkinfo $1.i (tm_info $8) in
+        TmUtest(fi,$2,$4,Some $6,Some $8,$10) }
   | EXTERNAL ident COLON ty IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmExt(fi,$2.v,Symb.Helpers.nosym,false,$4,$6) }

@@ -234,7 +234,7 @@ lang MatchEval = Eval + MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
+lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst + RecordAst
   sem eq (e1 : Expr) =
   | _ -> errorSingle [infoTm e1] "Equality not defined for expression"
 
@@ -249,7 +249,17 @@ lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
       else errorSingle [r.info] "Invalid utest equivalence function"
     else
       eqExpr v1 v2 in
-    (if result then print "Test passed\n" else print "Test failed\n");
+    (if result then print "Test passed\n" else
+      match r.tonfail with Some tonfail then
+        match
+          apply ctx r.info (apply ctx r.info (tonfail, v1), v2)
+          with TmRecord recr
+        then
+          if mapIsEmpty recr.bindings then ()
+          else
+            errorSingle [r.info] "Invalid utest failure function return value"
+        else errorSingle [r.info] "Invalid utest failure function"
+      else print "Test failed\n");
     eval ctx r.next
 end
 
