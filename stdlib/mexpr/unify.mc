@@ -4,126 +4,10 @@
 include "result.mc"
 
 include "mexpr/ast.mc"
-include "mexpr/cmp.mc"
+include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/info.mc"
-include "mexpr/pprint.mc"
-
----------------------------
--- UNIFICATION VARIABLES --
----------------------------
-
--- A level denotes the level in the AST that a type was introduced at
-type Level = Int
-
--- Unification meta variables.  These variables represent some
--- specific but as-of-yet undetermined type.
-lang MetaVarTypeAst = KindAst + Ast
-  type MetaVarRec = {ident  : Name,
-                     level  : Level,
-    -- The level indicates at what depth of let-binding the variable
-    -- was introduced, which is used to determine which variables can
-    -- be generalized and to check that variables stay in their scope.
-                     kind   : Kind}
-
-  syn MetaVar =
-  | Unbound MetaVarRec
-  | Link Type
-
-  syn Type =
-  -- Meta type variable
-  | TyMetaVar {info     : Info,
-            contents : Ref MetaVar}
-
-  sem tyWithInfo (info : Info) =
-  | TyMetaVar t ->
-    switch deref t.contents
-    case Unbound _ then
-      TyMetaVar {t with info = info}
-    case Link ty then
-      tyWithInfo info ty
-    end
-
-  sem infoTy =
-  | TyMetaVar {info = info} -> info
-
-  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyMetaVar t ->
-    switch deref t.contents
-    case Unbound r then
-      match smapAccumL_Kind_Type f acc r.kind with (acc, kind) in
-      modref t.contents (Unbound {r with kind = kind});
-      (acc, TyMetaVar t)
-    case Link ty then
-      f acc ty
-    end
-
-  sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyMetaVar t & ty ->
-    recursive let work = lam ty.
-      match ty with TyMetaVar x then
-        switch deref x.contents
-        case Link l then
-          let new = work l in
-          modref x.contents (Link new);
-          new
-        case Unbound _ then
-          ty
-        end
-      else ty in
-    switch work ty
-    case TyMetaVar _ & ty1 then (acc, ty1)
-    case ty1 then f acc ty1
-    end
-end
-
-lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
-  sem cmpTypeH =
-  | (TyMetaVar l, TyMetaVar r) ->
-    -- NOTE(vipa, 2023-04-19): Any non-link TyMetaVar should have been
-    -- unwrapped already, thus we can assume `Unbound` here.
-    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
-    nameCmp l.ident r.ident
-end
-
-lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarTypeAst
-  sem typePrecedence =
-  | TyMetaVar t ->
-    switch deref t.contents
-    case Unbound _ then
-      100000
-    case Link ty then
-      typePrecedence ty
-    end
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyMetaVar t ->
-    switch deref t.contents
-    case Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getKindStringCode indent env idstr t.kind with (env, str) in
-      let monoPrefix =
-        match t.kind with Mono _ then "_" else "" in
-      (env, concat monoPrefix str)
-    case Link ty then
-      getTypeStringCode indent env ty
-    end
-end
-
-lang MetaVarTypeEq = KindEq + MetaVarTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
-  | TyMetaVar _ & rhs ->
-    switch (unwrapType lhs, unwrapType rhs)
-    case (TyMetaVar l, TyMetaVar r) then
-      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
-      optionBind
-        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        (lam freeTyFlex.
-          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
-    case (! TyMetaVar _, ! TyMetaVar _) then
-      eqTypeH typeEnv free lhs rhs
-    case _ then None ()
-    end
-end
+include "mexpr/type.mc"
 
 
 ----------------------
@@ -145,12 +29,13 @@ lang Unify = Ast
   type UnifyResult a = Result () UnifyError a
   type Unifier = [(UnifyEnv, Type, Type)]
 
-  -- Unify the types `ty1` and `ty2`, where
-  -- `ty1` is the expected type of an expression, and
-  -- `ty2` is the inferred type of the expression,
-  -- under the assumptions of `env`.  Returns a list of unification obligations
-  -- `(TyMetaVar m, ty)`, where the variable of the left-hand side
-  -- should be unified with the type `ty`.
+  -- Unify the types `ty1` and `ty2` under the assumptions of `env`.
+  -- Returns a list of unification obligations `(env, TyMetaVar m, ty)`, where the
+  -- variable of the left-hand side should be unified with the type `ty`.  Note that
+  -- this function can return a non-error result even for two incompatible types.
+  -- For instance, it could return `[(env, varA, Int), (env, varA, Bool)]`, which gives
+  -- two incompatible types to `varA`.
+  -- For a full unification which errors in this scenario, see `unifyPure` below.
   sem unifyTypes : UnifyEnv -> (Type, Type) -> UnifyResult Unifier
   sem unifyTypes env =
   | (ty1, ty2) ->
@@ -217,7 +102,18 @@ lang VarTypeUnify = Unify + VarTypeAst
     else result.err (Types (ty1, ty2))
 end
 
-lang MetaVarTypeUnify = Unify + MetaVarTypeAst + RecordTypeAst
+lang MetaVarTypeUnify = Unify + UnifyRows + MetaVarTypeAst
+  sem addKinds : UnifyEnv -> (Kind, Kind) -> (UnifyResult Unifier, Kind)
+  sem addKinds env =
+  | (Row r1, Row r2) ->
+    match unifyRowsUnion env r1.fields r2.fields with (unifier, fields) in
+    (unifier, Row {r1 with fields = fields})
+  | (Row _ & rv, ! Row _ & tv)
+  | (! Row _ & tv, Row _ & rv) ->
+    (result.ok [], rv)
+  | (Poly _, Poly _) -> (result.ok [], Poly ())
+  | (s1, s2) -> (result.ok [], Mono ())
+
   sem unifyBase env =
   | (TyMetaVar _ & ty1, ty2) ->
     result.ok [(env, ty1, ty2)]
@@ -298,8 +194,115 @@ lang RecordTypeUnify = UnifyRows + RecordTypeAst
     unifyRowsStrict env t1.fields t2.fields
 end
 
+
+lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
+  -- Unify types `ty1` and `ty2`, returning a map of variable substitutions
+  -- equating the two, or giving an error if the types are incompatible.
+  -- This function does not perform any occurs checks, scope checking, or
+  -- level updates, and accepts cyclic equations.
+  sem unifyPure : Type -> Type -> UnifyResult (Map Name Type)
+  sem unifyPure ty1 = | ty2 ->
+  recursive let work = lam acc. lam unifier.
+    switch unifier
+    case [] then result.ok acc
+    case [ (env, meta, ty) ] ++ rest then
+      switch unwrapType meta
+      case TyMetaVar t then
+        match deref t.contents with Unbound r in
+        let isEqual =
+          match unwrapType ty with TyMetaVar t2 then
+            match deref t2.contents with Unbound r2 in nameEq r.ident r2.ident
+          else false
+        in
+        if isEqual then work acc rest else
+          if mapMem r.ident acc then work acc rest else
+            let subst = mapInsert r.ident ty (mapEmpty nameCmp) in
+            let f = substituteMetaVars subst in
+            let g = lam x. (x.0, f x.1, f x.2) in
+            work (mapUnion (mapMap f acc) subst) (map g rest)
+      case other then
+        result.bind (unifyTypes env (other, ty))
+          (lam newUnifier. work acc (concat newUnifier rest))
+      end
+    end
+  in
+  let env : UnifyEnv = {
+    boundNames = biEmpty,
+    wrappedLhs = ty1,
+    wrappedRhs = ty2
+  } in
+  result.bind (unifyTypes env (ty1, ty2)) (work (mapEmpty nameCmp))
+end
+
+
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
   SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
 end
+
+lang TestLang = UnifyPure + MExprUnify + MExprEq + MetaVarTypeEq end
+
+mexpr
+
+use TestLang in
+
+let eqUnifyError = lam e1. lam e2.
+  switch (e1, e2)
+  case (Types t1, Types t2) then and (eqType t1.0 t2.0) (eqType t1.1 t2.1)
+  case _ then error "eqUnifyError: TODO"
+  end
+in
+
+let unifyEq = eitherEq (eqSeq eqUnifyError) (mapEq eqType) in
+
+let a = nameSym "a" in
+let b = nameSym "b" in
+
+let wa =
+  TyMetaVar {info = NoInfo (),
+             contents = ref (Unbound {ident = a,
+                                      level = 0,
+                                      kind  = Mono ()})} in
+let wb =
+  TyMetaVar {info = NoInfo (),
+             contents = ref (Unbound {ident = b,
+                                      level = 0,
+                                      kind  = Mono ()})} in
+
+let ok  = lam x. Right (mapFromSeq nameCmp x) in
+let err = lam x. Left (map (lam y. Types y) x) in
+let testUnify = lam ty1. lam ty2. (result.consume (unifyPure ty1 ty2)).1 in
+
+utest testUnify tyint_ tyint_ with ok [] using unifyEq in
+
+utest testUnify tybool_ tyint_ with err [(tybool_, tyint_)] using unifyEq in
+
+utest testUnify wa tyint_ with ok [(a, tyint_)] using unifyEq in
+
+utest testUnify (tyarrow_ wa wb) (tyarrow_ tyint_ tybool_)
+  with ok [(a, tyint_), (b, tybool_)]
+  using unifyEq
+in
+
+utest testUnify (tyarrow_ wa wa) (tyarrow_ tyint_ tybool_)
+  with err [(tyint_, tybool_)]
+  using unifyEq
+in
+
+utest testUnify (tyarrow_ wa tybool_) (tyarrow_ wb wb)
+  with ok [(a, tybool_), (b, tybool_)]
+  using unifyEq
+in
+
+utest testUnify (tytuple_ [wa, wb]) (tytuple_ [wa, wa])
+  with ok [(b, wa)]
+  using unifyEq
+in
+
+utest testUnify (tytuple_ [wa, wa]) (tytuple_ [tyseq_ wa, tyseq_ (tyseq_ wa)])
+  with ok [(a, tyseq_ wa)]
+  using unifyEq
+in
+
+()

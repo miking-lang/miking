@@ -168,18 +168,7 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
     else ()
 end
 
-lang MetaVarTypeTCUnify = TCUnify + UnifyRows + MetaVarTypeAst + RecordTypeAst
-  sem addKinds : UnifyEnv -> (Kind, Kind) -> (UnifyResult Unifier, Kind)
-  sem addKinds env =
-  | (Row r1, Row r2) ->
-    match unifyRowsUnion env r1.fields r2.fields with (unifier, fields) in
-    (unifier, Row {r1 with fields = fields})
-  | (Row _ & rv, ! Row _ & tv)
-  | (! Row _ & tv, Row _ & rv) ->
-    (result.ok [], rv)
-  | (Poly _, Poly _) -> (result.ok [], Poly ())
-  | (s1, s2) -> (result.ok [], Mono ())
-
+lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + RecordTypeAst
   sem unifyMeta tcenv info env =
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
@@ -260,20 +249,6 @@ end
 ------------------------------------
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
-
-let newmetavar =
-  lam kind. lam level. lam info. use MetaVarTypeAst in
-  TyMetaVar {info = info,
-          contents = ref (Unbound {ident = nameSym "a",
-                                   level = level,
-                                   kind = kind})}
-
-let newvarMono = use KindAst in
-  newmetavar (Mono ())
-let newvar = use KindAst in
-  newmetavar (Poly ())
-let newrecvar = use KindAst in
-  lam fields. newmetavar (Row {fields = fields})
 
 lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
@@ -495,7 +470,7 @@ lang PatTypeCheck = TCUnify
   sem typeCheckPatSimple : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
   sem typeCheckPatSimple env patEnv =
   | pat ->
-    let patTy = newvar env.currentLvl (infoPat pat) in
+    let patTy = newpolyvar env.currentLvl (infoPat pat) in
     match smapAccumL_Pat_Pat
       (lam patEnv. lam pat.
         match typeCheckPat env patEnv pat with (patEnv, pat) in
@@ -539,8 +514,8 @@ lang AppTypeCheck = TypeCheck + AppAst
   | TmApp t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
-    let tyRhs = newvar env.currentLvl t.info in
-    let tyRes = newvar env.currentLvl t.info in
+    let tyRhs = newpolyvar env.currentLvl t.info in
+    let tyRes = newpolyvar env.currentLvl t.info in
     unify env [infoTm t.lhs] (ityarrow_ (infoTm lhs) tyRhs tyRes) (tyTm lhs);
     unify env [infoTm t.rhs] tyRhs (tyTm rhs);
     TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
@@ -674,7 +649,7 @@ end
 lang SeqTypeCheck = TypeCheck + SeqAst
   sem typeCheckExpr env =
   | TmSeq t ->
-    let elemTy = newvar env.currentLvl t.info in
+    let elemTy = newpolyvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
     iter (lam tm. unify env [infoTm tm] elemTy (tyTm tm)) tms;
     TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
@@ -691,7 +666,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
     let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
-    unify env [infoTm rec] (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
+    unify env [infoTm rec] (newrowvar fields env.currentLvl (infoTm rec)) (tyTm rec);
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
@@ -707,7 +682,7 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
     let inexpr =
       typeCheckExpr {env with currentLvl = addi 1 env.currentLvl,
                               tyConEnv = newTyConEnv} t.inexpr in
-    unify env [t.info, infoTm inexpr] (newvar env.currentLvl t.info) (tyTm inexpr);
+    unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
     TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
 
@@ -765,7 +740,7 @@ end
 
 lang NeverTypeCheck = TypeCheck + NeverAst
   sem typeCheckExpr env =
-  | TmNever t -> TmNever {t with ty = newvar env.currentLvl t.info}
+  | TmNever t -> TmNever {t with ty = newpolyvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
@@ -788,16 +763,16 @@ lang NamedPatTypeCheck = PatTypeCheck + NamedPat
       match mapLookup n patEnv with Some ty then
         (patEnv, PatNamed {t with ty = ty})
       else
-        let patTy = newvar env.currentLvl t.info in
+        let patTy = newpolyvar env.currentLvl t.info in
         (mapInsert n patTy patEnv, PatNamed {t with ty = patTy})
     else
-      (patEnv, PatNamed {t with ty = newvar env.currentLvl t.info})
+      (patEnv, PatNamed {t with ty = newpolyvar env.currentLvl t.info})
 end
 
 lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
   sem typeCheckPat env patEnv =
   | PatSeqTot t ->
-    let elemTy = newvar env.currentLvl t.info in
+    let elemTy = newpolyvar env.currentLvl t.info in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
     iter (lam pat. unify env [infoPat pat] elemTy (tyPat pat)) pats;
     (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
@@ -806,7 +781,7 @@ end
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
-    let elemTy = newvar env.currentLvl t.info in
+    let elemTy = newpolyvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
     let unifyPat = lam pat. unify env [infoPat pat] elemTy (tyPat pat) in
     match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
@@ -827,7 +802,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat
   | PatRecord t ->
     let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
     match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
-    let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
+    let ty = newrowvar (mapMap tyPat bindings) env.currentLvl t.info in
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
@@ -949,10 +924,10 @@ let inst_ = lam tm. bind_ (ulet_ "x" tm) (var_ "x") in
 
 let a = tyvar_ "a" in
 let b = tyvar_ "b" in
-let fa = newvar 0 (NoInfo ()) in
-let fb = newvar 0 (NoInfo ()) in
-let wa = newvarMono 0 (NoInfo ()) in
-let wb = newvarMono 0 (NoInfo ()) in
+let fa = newpolyvar 0 (NoInfo ()) in
+let fb = newpolyvar 0 (NoInfo ()) in
+let wa = newmonovar 0 (NoInfo ()) in
+let wb = newmonovar 0 (NoInfo ()) in
 
 let tychoose_ = tyall_ "a" (tyarrows_ [a, a, a]) in
 let choose_ = ("choose", tychoose_) in
@@ -1253,7 +1228,7 @@ let tests = [
                   (mapInsert (stringToSid "y") wb
                   (mapEmpty cmpSID))
      in
-     let r = newrecvar fields 0 (NoInfo ()) in
+     let r = newrowvar fields 0 (NoInfo ()) in
      tyarrows_ [r, wa, wb, r],
    env = []},
 

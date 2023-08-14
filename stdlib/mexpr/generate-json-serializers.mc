@@ -6,6 +6,7 @@ include "cmp.mc"
 include "boot-parser.mc"
 include "pprint.mc"
 include "symbolize.mc"
+include "type.mc"
 include "utils.mc"
 include "duplicate-code-elimination.mc"
 

@@ -15,7 +15,6 @@ include "builtin.mc"
 include "info.mc"
 include "error.mc"
 include "pprint.mc"
-include "type.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
