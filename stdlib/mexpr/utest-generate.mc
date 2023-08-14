@@ -31,11 +31,10 @@ include "mexpr/load-runtime.mc"
 
 let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
 
-
 let _utestRuntimeExpected = [
-  "utestRunner", "utestExitOnFailure", "defaultPprint", "ppBool", "ppInt",
-  "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt", "eqFloat", "eqChar",
-  "eqSeq", "join"
+  "utestRunner", "utestDefaultOnFail", "utestExitOnFailure", "defaultPprint",
+  "ppBool", "ppInt", "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt",
+  "eqFloat", "eqChar", "eqSeq", "join"
 ]
 let _utestRuntimeCode = ref (None ())
 let _utestRuntimeIds = ref (None ())
@@ -397,57 +396,61 @@ lang UtestRuntime = MExprLoadRuntime + MExprFindSym
   sem utestRunnerName =
   | _ -> get (findRuntimeIds ()) 0
 
+  sem utestDefaultOnFailName : () -> Name
+  sem utestDefaultOnFailName =
+  | _ -> get (findRuntimeIds ()) 1
+
   sem utestExitOnFailureName : () -> Name
   sem utestExitOnFailureName =
-  | _ -> get (findRuntimeIds ()) 1
+  | _ -> get (findRuntimeIds ()) 2
 
   sem defaultPrettyPrintName : () -> Name
   sem defaultPrettyPrintName =
-  | _ -> get (findRuntimeIds ()) 2
+  | _ -> get (findRuntimeIds ()) 3
 
   sem ppBoolName : () -> Name
   sem ppBoolName =
-  | _ -> get (findRuntimeIds ()) 3
+  | _ -> get (findRuntimeIds ()) 4
 
   sem ppIntName : () -> Name
   sem ppIntName =
-  | _ -> get (findRuntimeIds ()) 4
+  | _ -> get (findRuntimeIds ()) 5
 
   sem ppFloatName : () -> Name
   sem ppFloatName =
-  | _ -> get (findRuntimeIds ()) 5
+  | _ -> get (findRuntimeIds ()) 6
 
   sem ppCharName : () -> Name
   sem ppCharName =
-  | _ -> get (findRuntimeIds ()) 6
+  | _ -> get (findRuntimeIds ()) 7
 
   sem ppSeqName : () -> Name
   sem ppSeqName =
-  | _ -> get (findRuntimeIds ()) 7
+  | _ -> get (findRuntimeIds ()) 8
 
   sem eqBoolName : () -> Name
   sem eqBoolName =
-  | _ -> get (findRuntimeIds ()) 8
+  | _ -> get (findRuntimeIds ()) 9
 
   sem eqIntName : () -> Name
   sem eqIntName =
-  | _ -> get (findRuntimeIds ()) 9
+  | _ -> get (findRuntimeIds ()) 10
 
   sem eqFloatName : () -> Name
   sem eqFloatName =
-  | _ -> get (findRuntimeIds ()) 10
+  | _ -> get (findRuntimeIds ()) 11
 
   sem eqCharName : () -> Name
   sem eqCharName =
-  | _ -> get (findRuntimeIds ()) 11
+  | _ -> get (findRuntimeIds ()) 12
 
   sem eqSeqName : () -> Name
   sem eqSeqName =
-  | _ -> get (findRuntimeIds ()) 12
+  | _ -> get (findRuntimeIds ()) 13
 
   sem joinName : () -> Name
   sem joinName =
-  | _ -> get (findRuntimeIds ()) 13
+  | _ -> get (findRuntimeIds ()) 14
 end
 
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
@@ -831,10 +834,12 @@ lang MExprUtestGenerate =
 
   -- Generates a recursive let-expression containing pretty-print binding
   -- definitions for each subtype required to support pretty-printing all
-  -- types in the provided sequence.
-  sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> (UtestEnv, Expr)
-  sem generatePrettyPrintBindings info env =
-  | types ->
+  -- types in the provided sequence. If the user provided a custom on-fail
+  -- printing function, we do not generate any bindings.
+  sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> Option Expr -> (UtestEnv, Expr)
+  sem generatePrettyPrintBindings info env types =
+  | Some _ -> (env, _unit)
+  | None _ ->
     let types = map unwrapAlias types in
     match mapAccumL (generatePrettyPrintBindingsH info) env types with (env, binds) in
     ( env
@@ -928,13 +933,27 @@ lang MExprUtestGenerate =
     let usingStr =
       _stringLit
         (match t.tusing with Some eqfn then
-          concat "\n    Using: " (expr2str eqfn)
+          concat "    Using: " (expr2str eqfn)
         else "")
     in
     let lty = tyTm t.test in
     let rty = tyTm t.expected in
-    match getPrettyPrintExpr t.info env lty with (env, lpp) in
-    match getPrettyPrintExpr t.info env rty with (env, rpp) in
+    match
+      match t.tonfail with Some ppfn then
+        (env, ppfn)
+      else
+        match getPrettyPrintExpr t.info env lty with (env, lpp) in
+        match getPrettyPrintExpr t.info env rty with (env, rpp) in
+        let utestDefaultOnFailExpr =
+          let ty =
+            _tyarrows [
+              _tyarrows [lty, _stringTy], _tyarrows [rty, _stringTy], lty, rty,
+              _stringTy ]
+          in
+          _var (utestDefaultOnFailName ()) ty
+        in
+        (env, _apps utestDefaultOnFailExpr [lpp, rpp])
+    with (env, ppfn) in
     match
       match t.tusing with Some eqfn then (env, eqfn)
       else
@@ -945,10 +964,9 @@ lang MExprUtestGenerate =
     let utestRunnerType =
       let infoTy = _stringTy in
       let usingStrTy = _stringTy in
-      let lppTy = _tyarrows [lty, _stringTy] in
-      let rppTy = _tyarrows [rty, _stringTy] in
+      let ppTy = _tyarrows [lty, rty, _stringTy] in
       let eqTy = _tyarrows [lty, rty, _boolTy] in
-      tyarrows_ [infoTy, usingStrTy, lppTy, rppTy, eqTy, lty, rty, _unitTy]
+      tyarrows_ [infoTy, usingStrTy, ppTy, eqTy, lty, rty, _unitTy]
     in
     let utestRunner = TmVar {
       ident = utestRunnerName (), ty = utestRunnerType,
@@ -957,14 +975,14 @@ lang MExprUtestGenerate =
 
     -- Insert definitions of equality and pretty-print functions that have not
     -- yet been declared.
-    match generatePrettyPrintBindings t.info env [lty, rty] with (env, ppBinds) in
+    match generatePrettyPrintBindings t.info env [lty, rty] t.tonfail with (env, ppBinds) in
     match generateEqualityBindings t.info env lty t.tusing with (env, eqBinds) in
 
     match replaceUtests env t.test with (_, test) in
     match replaceUtests env t.expected with (_, expected) in
     match replaceUtests env t.next with (env, next) in
     let testExpr =
-      _apps utestRunner [info, usingStr, lpp, rpp, eqfn, test, expected]
+      _apps utestRunner [info, usingStr, ppfn, eqfn, test, expected]
     in
     let utestBinds = TmLet {
       ident = nameNoSym "", tyAnnot = _unitTy, tyBody = _unitTy,
@@ -1078,7 +1096,7 @@ in
 let evalPrettyPrint : UtestEnv -> Type -> Expr -> Expr =
   lam env. lam ty. lam t.
   match getPrettyPrintExpr (NoInfo ()) env ty with (env, expr) in
-  match generatePrettyPrintBindings (NoInfo ()) env [ty] with (env, binds) in
+  match generatePrettyPrintBindings (NoInfo ()) env [ty] (None ()) with (env, binds) in
   eval env (bind_ binds (app_ expr t))
 in
 
