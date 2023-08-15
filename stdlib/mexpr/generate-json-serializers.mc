@@ -165,7 +165,7 @@ lang GenerateJsonSerializers =
     let s = { serializer = nvar_ env.sChar, deserializer = nvar_ env.dChar } in
     (acc, s)
   | TySeq { ty = TyChar _ } ->
-    let s = { serializer = nvar_ env.sSeq, deserializer = nvar_ env.dSeq } in
+    let s = { serializer = nvar_ env.sString, deserializer = nvar_ env.dString } in
     (acc, s)
 
   -- Builtin type constructors
@@ -299,7 +299,7 @@ lang GenerateJsonSerializers =
                     (npcon_ env.jsonObject (npvar_ mv))
                     (match_
                       (appf2_ (nvar_ env.mapLookup) (str_ constructorKey) (nvar_ mv))
-                      (npcon_ env.some (npvar_ cv))
+                      (npcon_ env.some (npcon_ env.jsonString (npvar_ cv)))
                       (match_
                          (appf2_ (nvar_ env.mapLookup) (str_ dataKey) (nvar_ mv))
                          (npcon_ env.some (npvar_ dv))
@@ -579,7 +579,7 @@ utest test false
     "deserializeEither","
       lam df. lam df1. lam jc.
         match jc with JsonObject m then
-          match mapLookup \"__constructor__\" m with Some con1 then
+          match mapLookup \"__constructor__\" m with Some (JsonString con1) then
             match mapLookup \"__data__\" m with Some data then
               match con1 with \"Left\" then
                 match df data with Some d1 then Some (Left d1) else None {}
@@ -623,7 +623,7 @@ utest test false
     "deserializeList", "
       lam df. lam jc.
           match jc with JsonObject m then
-            match mapLookup \"__constructor__\" m with Some con1 then
+            match mapLookup \"__constructor__\" m with Some (JsonString con1) then
               match mapLookup \"__data__\" m with Some data then
                 match con1 with \"Node\" then
                   match deserializeList df data with Some d1 then Some (Node d1) else None {}
