@@ -727,14 +727,16 @@ module Ext = struct
 
   let load_libraries dyn_ext_file =
     let dyn_ext_file = Mseq.Helpers.to_utf8 dyn_ext_file in
-    try
-      Dynlink.loadfile dyn_ext_file
+    try Dynlink.loadfile dyn_ext_file
     with
-    | Dynlink.Error (Dynlink.Linking_error (_,
-       Dynlink.Uninitialized_global str)) ->
-         Printf.eprintf "ERROR: Module \"%s\" must be fully initialized before %s\
-         can be loaded\n" str dyn_ext_file;
-         Printf.eprintf "HINT: let bars = peval bar in () \n\
-         ===>> let f = lam. let bars = peval bar in () in f ()\n";
-         exit 1
+    | Dynlink.Error
+        (Dynlink.Linking_error (_, Dynlink.Uninitialized_global str))
+    ->
+      Printf.eprintf
+        "ERROR: Module \"%s\" must be fully initialized before %scan be loaded\n"
+        str dyn_ext_file ;
+      Printf.eprintf
+        "HINT: let bars = peval bar in () \n\
+         ===>> let f = lam. let bars = peval bar in () in f ()\n" ;
+      exit 1
 end

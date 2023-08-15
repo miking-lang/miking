@@ -1617,7 +1617,7 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       fail_constapp fi
   | CloadLibraries, TmSeq (fi, s) ->
       let s = tm_seq2int_seq fi s in
-      Intrinsics.Ext.load_libraries s;
+      Intrinsics.Ext.load_libraries s ;
       tm_unit
   | CloadLibraries, _ ->
       fail_constapp fi

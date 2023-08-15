@@ -123,7 +123,7 @@ let builtin =
   ; ("modref", f (CmodRef None)) (* MCore intrinsics: External support *)
   ; ("addExternal", f (CaddExternal None))
   ; ("getExternal", f CgetExternal)
-  ; ("loadLibraries", f (CloadLibraries)) (* MCore intrinsics: Tensors *)
+  ; ("loadLibraries", f CloadLibraries) (* MCore intrinsics: Tensors *)
   ; ("tensorCreateUninitInt", f CtensorCreateUninitInt)
   ; ("tensorCreateUninitFloat", f CtensorCreateUninitFloat)
   ; ("tensorCreateCArrayInt", f (CtensorCreateCArrayInt None))
