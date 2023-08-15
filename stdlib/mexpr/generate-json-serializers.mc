@@ -291,7 +291,6 @@ lang GenerateJsonSerializers =
             let none = nconapp_ env.none unit_ in
             let mv = nameSym "m" in
             let cv = nameSym "con" in
-            let dv = nameSym "data" in
             let deserializer = nulams_ (map (lam ps. ps.df) pss) (
                 nulam_ darg (
                   match_
@@ -300,21 +299,22 @@ lang GenerateJsonSerializers =
                     (match_
                       (appf2_ (nvar_ env.mapLookup) (str_ constructorKey) (nvar_ mv))
                       (npcon_ env.some (npcon_ env.jsonString (npvar_ cv)))
-                      (match_
-                         (appf2_ (nvar_ env.mapLookup) (str_ dataKey) (nvar_ mv))
-                         (npcon_ env.some (npvar_ dv))
-                         (foldl (lam acc. lam cd.
+                      (foldl (lam acc. lam cd.
+                         match_
+                           (nvar_ cv)
+                           (pstr_ (nameGetStr cd.name))
+                           (let dv = nameSym "data" in
                             match_
-                              (nvar_ cv)
-                              (pstr_ (nameGetStr cd.name))
+                              (appf2_ (nvar_ env.mapLookup) (str_ dataKey) (nvar_ mv))
+                              (npcon_ env.some (npvar_ dv))
                               (let d = nameSym "d" in
-                                match_
-                                  (app_ (cd.s).deserializer (nvar_ dv))
-                                  (npcon_ env.some (npvar_ d))
-                                  (nconapp_ env.some (nconapp_ cd.name (nvar_ d)))
-                                  none)
-                              acc) none conDefs)
-                         none)
+                               match_
+                                 (app_ (cd.s).deserializer (nvar_ dv))
+                                 (npcon_ env.some (npvar_ d))
+                                 (nconapp_ env.some (nconapp_ cd.name (nvar_ d)))
+                                 none)
+                               none)
+                           acc) none conDefs)
                       none)
                     none))
             in
@@ -580,10 +580,12 @@ utest test false
       lam df. lam df1. lam jc.
         match jc with JsonObject m then
           match mapLookup \"__constructor__\" m with Some (JsonString con1) then
-            match mapLookup \"__data__\" m with Some data then
-              match con1 with \"Left\" then
+            match con1 with \"Left\" then
+              match mapLookup \"__data__\" m with Some data then
                 match df data with Some d1 then Some (Left d1) else None {}
-              else match con1 with \"Right\" then
+              else None {}
+            else match con1 with \"Right\" then
+              match mapLookup \"__data__\" m with Some data then
                 match df1 data with Some d2 then Some (Right d2) else None {}
               else None {}
             else None {}
@@ -624,10 +626,12 @@ utest test false
       lam df. lam jc.
           match jc with JsonObject m then
             match mapLookup \"__constructor__\" m with Some (JsonString con1) then
-              match mapLookup \"__data__\" m with Some data then
-                match con1 with \"Node\" then
+              match con1 with \"Node\" then
+                match mapLookup \"__data__\" m with Some data then
                   match deserializeList df data with Some d1 then Some (Node d1) else None {}
-                else match con1 with \"Leaf\" then
+                else None {}
+              else match con1 with \"Leaf\" then
+                match mapLookup \"__data__\" m with Some data then
                   match (lam jr. match jr with JsonObject m1 then Some {} else None {}) data
                   with Some d2 then Some (Leaf d2) else None {}
                 else None {}
