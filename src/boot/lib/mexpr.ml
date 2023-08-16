@@ -198,10 +198,10 @@ let getData = function
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], [])
     | Some t4, None ->
         (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [])
-    | None, Some t5 ->
-        (idTmUtest, [fi], [5], [], [t1; t2; t3; t5], [], [], [], [], [])
     | Some t4, Some t5 ->
-        (idTmUtest, [fi], [6], [], [t1; t2; t3; t4; t5], [], [], [], [], []) )
+       (idTmUtest, [fi], [5], [], [t1; t2; t3; t4; t5], [], [], [], [], [])
+    | (_, _) ->
+       failwith "bootparser getData undefined")
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
   | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->

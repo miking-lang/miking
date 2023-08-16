@@ -127,7 +127,7 @@ let prune_external_utests ?(enable = true) ?(warn = true)
             let (sm, ntests, hasref'), t4' = recur (sm, ntests, hasref') t4' in
             ((sm, ntests, hasref'), Some t4')
         | None ->
-            ((sm, ntests, hasref'), t3) )
+            ((sm, ntests, hasref'), t4) )
         |> fun ((sm, ntests, hasref'), t4') ->
         recur (sm, ntests, false) t5
         |> fun ((sm, ntests, hasref''), t5') ->

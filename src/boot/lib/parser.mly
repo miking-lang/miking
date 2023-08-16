@@ -355,9 +355,6 @@ mexpr:
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmUtest(fi,$2,$4,Some $6,None,$8) }
-  | UTEST mexpr WITH mexpr ONFAIL mexpr IN mexpr
-      { let fi = mkinfo $1.i (tm_info $6) in
-        TmUtest(fi,$2,$4,None,Some $6,$8) }
   | UTEST mexpr WITH mexpr USING mexpr ONFAIL mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
         TmUtest(fi,$2,$4,Some $6,Some $8,$10) }

@@ -214,17 +214,14 @@ lang BootParser = MExprAst + ConstTransformer
     -- NOTE(oerikss, 2023-08-14): We use the list length field to determine if
     -- using, onfail, or both are present (i.e., list length is not necessarily
     -- the number of terms).
-    let tusing = switch glistlen t 0
-                 case 4 then Some (gterm t 3)
-                 case 6 then Some (gterm t 3)
-                 case _ then None ()
-                 end
-    in
-    let tonfail = switch glistlen t 0
-                  case 5 then Some (gterm t 3)
-                  case 6 then Some (gterm t 4)
-                  case _ then None ()
-                  end
+    match
+      switch glistlen t 0
+      case 3 then (None (), None ())
+      case 4 then (Some (gterm t 3), None ())
+      case 5 then (Some (gterm t 3), Some (gterm t 4))
+      case _ then error "BootParser.matchTerm: Invalid list length for tmUtest"
+      end
+      with (tusing, tonfail)
     in
     TmUtest {test = gterm t 0,
              expected = gterm t 1,
