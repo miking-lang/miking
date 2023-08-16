@@ -942,13 +942,13 @@ lang UtestTypeCheck = TypeCheck + UtestAst
       unify env [infoTm tu]
         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu);
       unify env [infoTm to]
-        (tyarrows_ [tyTm test, tyTm expected, tyunit_]) (tyTm to)
+        (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (Some tu, None _) then
       unify env [infoTm tu]
         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
      case (None _, Some to) then
       unify env [infoTm to]
-        (tyarrows_ [tyTm test, tyTm expected, tyunit_]) (tyTm to)
+        (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (None _, None _) then
       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
      end);
