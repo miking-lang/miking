@@ -573,28 +573,25 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
         case
           ty & (TyArrow (ta1 & {
             from = lty,
-            to = TyArrow (ta2 & {from = rty, to = TyRecord recr})
+            to = TyArrow (ta2 & {from = rty, to = TySeq {ty = TyChar _}})
           }))
         then
-          if mapIsEmpty recr.fields then
-            match compatibleType env.tyEnv (tyTm test) lty with Some lty then
-              match compatibleType env.tyEnv (tyTm expected) rty
-                with Some rty
-              then
-                let arrowTy =
-                  TyArrow
-                    {ta1 with from = lty, to = TyArrow {ta2 with from = rty}}
-                in
-                {t with
-                 test = withType lty test,
-                 expected = withType rty expected,
-                 tonfail = Some (withType arrowTy to)}
-              else
-                errorSingle [t.info] (failMsgArgType true rty)
+          match compatibleType env.tyEnv (tyTm test) lty with Some lty then
+            match compatibleType env.tyEnv (tyTm expected) rty
+              with Some rty
+            then
+              let arrowTy =
+                TyArrow
+                  {ta1 with from = lty, to = TyArrow {ta2 with from = rty}}
+              in
+              {t with
+               test = withType lty test,
+               expected = withType rty expected,
+               tonfail = Some (withType arrowTy to)}
             else
-              errorSingle [t.info] (failMsgArgType false lty)
+              errorSingle [t.info] (failMsgArgType true rty)
           else
-            errorSingle [t.info] (failMsgType ty)
+            errorSingle [t.info] (failMsgArgType false lty)
         case ty then
           errorSingle [t.info] (failMsgType ty)
         end

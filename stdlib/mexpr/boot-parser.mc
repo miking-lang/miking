@@ -211,9 +211,6 @@ lang BootParser = MExprAst + ConstTransformer
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 113 /-TmUtest-/ ->
-    -- NOTE(oerikss, 2023-08-14): We use the list length field to determine if
-    -- using, onfail, or both are present (i.e., list length is not necessarily
-    -- the number of terms).
     match
       switch glistlen t 0
       case 3 then (None (), None ())
