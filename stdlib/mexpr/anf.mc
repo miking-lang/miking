@@ -236,6 +236,10 @@ lang UtestANF = ANF + UtestAst
                      (lam tonfail. inner (Some tusing, Some tonfail))
                      tonfail)
                  tusing
+             case (Some tusing, None ()) then
+               normalizeName (lam tusing. inner (Some tusing, None ())) tusing
+             case (None (), Some tonfail) then
+               normalizeName (lam tonfail. inner (None (), Some tonfail)) tonfail
              case (None (), None ()) then inner (None (), None())
              end)
            t.expected)

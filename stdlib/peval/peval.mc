@@ -390,16 +390,30 @@ lang UtestPEval = PEval + UtestAst
       (lam test.
          pevalBind ctx
            (lam expected.
-              let inner = lam tusing.
-                TmUtest { t with test = test,
-                                 expected = expected,
-                                 next = pevalBind ctx k t.next,
-                                 tusing = tusing }
-              in
-              match t.tusing with Some tusing then
-                pevalBind ctx (lam tusing. inner (Some tusing)) tusing
-              else
-                inner (None ()))
+             let inner = lam x.
+               match x with (tusing, tonfail) in
+                TmUtest { t with
+                          test = test,
+                          expected = expected,
+                          next = pevalBind ctx k t.next,
+                          tusing = tusing,
+                          tonfail = tonfail
+                }
+               in
+               switch (t.tusing, t.tonfail)
+               case (Some tusing, Some tonfail) then
+                 pevalBind ctx
+                   (lam tusing.
+                     pevalBind ctx
+                       (lam tonfail. inner (Some tusing, Some tonfail))
+                       tonfail)
+                   tusing
+               case (Some tusing, None ()) then
+                 pevalBind ctx (lam tusing. inner (Some tusing, None ())) tusing
+               case (None (), Some tonfail) then
+                 pevalBind ctx (lam tonfail. inner (None (), Some tonfail)) tonfail
+               case (None (), None ()) then inner (None (), None ())
+               end)
            t.expected)
       t.test
 end
