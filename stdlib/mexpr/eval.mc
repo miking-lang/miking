@@ -1080,7 +1080,7 @@ lang NamedPatEval = Eval + NamedPat
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = SeqTotPat + SeqAst
+lang SeqTotPatEval = Eval + SeqTotPat + SeqAst
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
