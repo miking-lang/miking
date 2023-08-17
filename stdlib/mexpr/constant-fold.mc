@@ -92,6 +92,23 @@ lang ConstantFold = ConstantFoldCtx + MExprSideEffect + MExprPrettyPrint
   sem constantfold : Expr -> Expr
   sem constantfold =| t -> constantfoldExpr (constantfoldCtxEmpty ()) t
 
+  sem constantfoldLets : Expr -> Expr
+  sem constantfoldLets =| t ->
+    let ctx = updateCtx (constantfoldCtxEmpty ()) t in
+    recursive let inner = lam t.
+      switch t
+      case TmVar r then
+        optionMapOr t inner (constantfoldEnvLookup r.ident ctx)
+      case TmLet r then
+        if optionIsSome (constantfoldEnvLookup r.ident ctx) then
+          inner r.inexpr
+        else smap_Expr_Expr inner t
+      case t then
+        smap_Expr_Expr inner t
+      end
+    in
+    inner t
+
   sem updateCtx : ConstantFoldCtx -> Expr -> ConstantFoldCtx
   sem updateCtx ctx =
   | t -> sfold_Expr_Expr updateCtx ctx t
@@ -176,16 +193,20 @@ lang ArithFloatConstantFold = ConstantFold + ArithFloatEval + AppAst
       if eqf f.val 0. then Some b else None ()
     case (_, _) then None ()
     end
-  | TmApp {
-    lhs = TmApp {
+  | TmApp (appr1 & {
+    lhs = TmApp (appr2 & {
       lhs = TmConst {val = c & CMulf _},
-      rhs = a},
+      rhs = a}),
     rhs = b,
     info = info
-  } ->
+  }) ->
     switch (a, b)
     case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
       Some (delta info (c, [a, b]))
+    case (TmApp {lhs = TmConst {val = CNegf _}, rhs = a},
+          TmApp {lhs = TmConst {val = CNegf _}, rhs = b})
+    then
+      Some (TmApp { appr1 with lhs = TmApp { appr2 with rhs = a }, rhs = b })
     case
       (TmApp (appr1 & {
         lhs = TmApp (appr2 & {
@@ -320,6 +341,22 @@ let _test = lam expr.
     ]);
   let expr = symbolizeAllowFree expr in
   match constantfold expr with expr in
+  logMsg logLevel.debug (lam.
+    strJoin "\n" [
+      "After constantfold",
+      expr2str expr
+    ]);
+  expr
+in
+
+let _testFoldLets = lam expr.
+  logMsg logLevel.debug (lam.
+    strJoin "\n" [
+      "Before constantfold",
+      expr2str expr
+    ]);
+  let expr = symbolizeAllowFree expr in
+  match constantfoldLets expr with expr in
   logMsg logLevel.debug (lam.
     strJoin "\n" [
       "After constantfold",
@@ -517,6 +554,9 @@ utest _test prog with _parse "mulf x 6." using eqExpr in
 let prog = _parse "mulf 2. (mulf x 3.)" in
 utest _test prog with _parse "mulf x 6." using eqExpr in
 
+let prog = _parse "mulf (negf x) (negf y)" in
+utest _test prog with _parse "mulf x y" using eqExpr in
+
 let prog = _parse "divf x 1." in
 utest _test prog with _parse "x" using eqExpr in
 
@@ -658,7 +698,7 @@ lam x.
   "
 in
 
-utest _test prog with _parse "
+utest _testFoldLets prog with _parse "
 let dh =
   lam x1.
     addf
