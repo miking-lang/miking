@@ -77,7 +77,6 @@
 %token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> PRERUN
-%token <unit Ast.tokendata> ONFAIL
 
 
 /* Types */
@@ -208,10 +207,10 @@ toputest:
   | UTEST mexpr WITH mexpr USING mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         Utest (fi,$2,$4,Some $6,None) }
-  | UTEST mexpr WITH mexpr ONFAIL mexpr
+  | UTEST mexpr WITH mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         Utest (fi,$2,$4,None,Some $6) }
-  | UTEST mexpr WITH mexpr USING mexpr ONFAIL mexpr
+  | UTEST mexpr WITH mexpr USING mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
         Utest (fi,$2,$4,Some $6,Some $8) }
 
@@ -355,7 +354,7 @@ mexpr:
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmUtest(fi,$2,$4,Some $6,None,$8) }
-  | UTEST mexpr WITH mexpr USING mexpr ONFAIL mexpr IN mexpr
+  | UTEST mexpr WITH mexpr USING mexpr ELSE mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
         TmUtest(fi,$2,$4,Some $6,Some $8,$10) }
   | EXTERNAL ident COLON ty IN mexpr
