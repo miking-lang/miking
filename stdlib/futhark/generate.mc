@@ -105,7 +105,7 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
           else futPvarw_ ())
         fields
     in
-    match targetTy with TyRecord {fields = fields} then
+    match unwrapType targetTy with TyRecord {fields = fields} then
       FPRecord {bindings = mergeBindings t.bindings fields,
                 ty = generateType env t.ty, info = t.info}
     else
