@@ -5,24 +5,10 @@
 -- eliminated. In addition, for all types annotated by the type checker,
 -- occurrences of TyUnknown are replaced by the unit type (an empty TyRecord).
 --
--- TODO(larshum, 2023-08-07): The current version does not support higher-order
--- polymorphic function parameters (frozen types). Adding support for this
--- would involve:
--- * Considering all lambda parameters with a TyAll (higher-order polymorphism)
--- * Collecting monomorphic uses of such lambda parameters
--- * Replacing each polymorphic lambda parameter with one or more parameters;
---   one parameter per monomorphic use.
--- * Updating all uses of the corresponding functions to pass the correct
---   number of arguments (replacing the #frozen with one or more monomorphized
---   function variables).
---
--- Note that the above is not sufficient to eliminate all polymorphic types, as
--- we could, for example, construct a sequence of frozen types as in
---
---   let x : [all a. a -> a] = [frozen"f", frozen"g"] in
---   (get x 0) 2
---
--- I'm unsure what a good approach at the above problem would be.
+-- The monomorphization does not support polymorphic recursion, nor any form of
+-- higher-order polymorphism through frozen types. We cannot handle these in
+-- the general case; if a program containing such types is given to the
+-- monomorphization pass, it will fail with an error.
 
 include "digraph.mc"
 include "mexpr/ast.mc"
@@ -410,6 +396,9 @@ lang MonomorphizeCollect =
   sem collectInstantiationsExpr : Set Instantiation -> MonoEnv -> Expr -> MonoEnv
   sem collectInstantiationsExpr instantiations env =
   | TmVar t ->
+    (if t.frozen then
+      monoError [t.info] "Frozen types are not supported"
+    else ());
     let env = collectInstantiationsType instantiations env t.ty in
     match mapLookup t.ident env.funEnv with Some instEntry then
       -- NOTE(larshum, 2023-08-03): For each possible type instantiation of
@@ -582,6 +571,15 @@ lang MonomorphizeCollect =
 
   sem collectInstantiationsType : Set Instantiation -> MonoEnv -> Type -> MonoEnv
   sem collectInstantiationsType instantiations env =
+  | TyAll (t & {ty = !TyAll _}) ->
+    recursive let containsNestedTyAlls = lam acc. lam ty.
+      match ty with TyAll _ then true
+      else sfold_Type_Type containsNestedTyAlls acc ty
+    in
+    if containsNestedTyAlls false t.ty then
+      monoError [t.info] "Nested polymorphism is not supported"
+    else
+      collectInstantiationsType instantiations env t.ty
   | TyAlias t ->
     -- NOTE(larshum, 2023-08-03): We collect instantiations of polymorphic
     -- aliases through occurrences of the type, as their use in expressions or
@@ -634,7 +632,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
         match mapLookup varInst instEntry.map with Some newId then
           newId
         else
-          monoError [t.info] "Variable instantiation not found"
+          monoError [t.info] "Variable instantiation not found\nThis error may be caused by polymorphic recursion, which is not supported by the monomorphization pass."
       else t.ident
     in
     TmVar {t with ident = ident,
@@ -1162,42 +1160,5 @@ let result = monomorphize polyAnon in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in
 utest result with polyAnon using eqExpr in
-
--- Higher-order polymorphism
-let higherOrderPoly = preprocess (bindall_ [
-  let_ "f"
-    (tyall_ "a" (tyall_ "b" (tyarrows_ [
-      tyvar_ "a",
-      tyvar_ "b",
-      tyall_ "c" (tyarrow_ (tyvar_ "c") (tyvar_ "c")),
-      tytuple_ [tyvar_ "a", tyvar_ "b"]
-    ])))
-    (ulam_ "x" (ulam_ "y" (ulam_ "g" (
-      utuple_ [app_ (var_ "g") (var_ "x"), app_ (var_ "g") (var_ "y")])))),
-  ulet_ "id" (ulam_ "x" (var_ "x")),
-  utuple_ [
-    appf3_ (var_ "f") (int_ 2) (float_ 2.5) (freeze_ (var_ "id")),
-    appf3_ (var_ "f") (char_ 'x') (int_ 3) (freeze_ (var_ "id"))
-  ]
-]) in
--- NOTE(larshum, 2023-08-07): The order of the bindings may differ in the
--- actual implementation. Regardless, the result should be monomorphic, use
--- distinct symbols in instantiations of the same polymorphic function, and
--- evaluate to the same value we would expect the original program to.
-let expected = preprocess (bindall_ [
-  ulet_ "f_int_float" (ulam_ "x" (ulam_ "y" (ulam_ "g_int" (ulam_ "g_float" (
-    utuple_ [app_ (var_ "g_int") (var_ "x"), app_ (var_ "g_float") (var_ "y")]))))),
-  ulet_ "f_char_int" (ulam_ "x" (ulam_ "y" (ulam_ "g_char" (ulam_ "g_int" (
-    utuple_ [app_ (var_ "g_char") (var_ "x"), app_ (var_ "g_int") (var_ "y")]))))),
-  ulet_ "id_int" (ulam_ "x" (var_ "x")),
-  ulet_ "id_float" (ulam_ "x" (var_ "x")),
-  ulet_ "id_char" (ulam_ "x" (var_ "x")),
-  utuple_ [
-    appf4_ (var_ "f_int_float") (int_ 2) (float_ 2.5) (var_ "id_int") (var_ "id_float"),
-    appf4_ (var_ "f_char_int") (char_ 'x') (int_ 3) (var_ "id_char") (var_ "id_int")
-  ]
-]) in
--- TODO(larshum, 2023-08-07): Higher-order polymorphism is not supported yet
--- utest result with expected using eqExpr in
 
 ()

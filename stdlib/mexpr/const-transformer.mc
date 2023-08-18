@@ -9,6 +9,7 @@ include "name.mc"
 include "map.mc"
 include "ast-builder.mc"
 include "ast.mc"
+include "option.mc"
 
 -- Add info for both term and type in const tms
 let _constWithInfos: Info -> Expr -> Expr = use MExprAst in
@@ -19,7 +20,7 @@ let _constWithInfos: Info -> Expr -> Expr = use MExprAst in
       TmConst {{t with info = i} with ty = TyUnknown {ty with info = i}}
     else tm
 
-lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAst + NamedPat
+lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAst + NamedPat + ConstAst
 
   sem constTransform builtin =
   | t ->
@@ -65,5 +66,19 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAs
       match r.ident with PName n then cons (nameGetStr n) acc else acc
   | t -> sfold_Pat_Pat ctGetPatVars acc t
 
-
+  -- Replaces all constants in an expression with variables where the name of
+  -- the variable is defined by `env`. Only constant that are
+  -- present in `env` are replaced.
+  sem constTransformConstsToVars : Map Const Name -> Expr -> Expr
+  sem constTransformConstsToVars env =
+  | t & TmConst r ->
+    optionMapOr t
+      (lam ident. TmVar {
+        ident = ident,
+        ty = r.ty,
+        info = r.info,
+        frozen = false
+      })
+      (mapLookup r.val env)
+  | t -> smap_Expr_Expr (constTransformConstsToVars env) t
 end

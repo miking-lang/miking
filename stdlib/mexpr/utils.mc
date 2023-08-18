@@ -102,6 +102,12 @@ lang MExprFindSym = MExprAst
         (mapEmpty subi) t in
     create (length strs) (lam i. mapLookup i result)
 
+  sem findNamesOfStringsExn : [String] -> Expr -> [Name]
+  sem findNamesOfStringsExn strs =
+  | t ->
+    let r = findNamesOfStrings strs t in
+    map (lam n. match n with Some n then n else error (join ["Couldn't find name"])) r
+
   sem findName : String -> Expr -> Option Name
   sem findName str =
   | t ->

@@ -80,16 +80,6 @@ let mapReverse : all a. all b. (a -> b) -> [a] -> [b] = lam f. lam lst.
 
 utest toRope (mapReverse (lam x. addi x 1) [10,20,30]) with [31,21,11]
 
--- `mapK f seq k` maps the continuation passing function `f` over the sequence
--- `seq`, passing the result of the mapping to the continuation `k`.
-let mapK : all a. all b. all c. (a -> (b -> c) -> c) -> [a] -> ([b] -> c) -> c =
-  lam f. lam seq. lam k.
-    foldl (lam k. lam x. (lam xs. f x (lam x. k (cons x xs)))) k seq []
-
-utest mapK (lam x. lam k. k (addi x 1)) [] (lam seq. reverse seq) with []
-utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. reverse seq) with [4,3,2]
-utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. foldl addi 0 seq) with 9
-
 -- Folds
 let foldl1 : all a. (a -> a -> a) -> [a] -> a = lam f. lam l. foldl f (head l) (tail l)
 
@@ -165,6 +155,72 @@ utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] [5.0]
 with [(0, 5.0)]
 utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] ["foo", "bar", "babar"]
 with [(0, "foo"), (1, "bar"), (2, "babar")]
+
+-- CPS style maps and folds
+
+-- `mapK f seq k` maps the continuation passing function `f` over the sequence
+-- `seq`, passing the result of the mapping to the continuation `k`.
+let mapK : all a. all b. all c. (a -> (b -> c) -> c) -> [a] -> ([b] -> c) -> c =
+  lam f. lam seq. lam k.
+    foldl (lam k. lam x. (lam xs. f x (lam x. k (snoc xs x)))) k (reverse seq) []
+
+utest mapK (lam x. lam k. k (addi x 1)) [] (lam seq. reverse seq) with []
+utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. reverse seq) with [4,3,2]
+utest mapK (lam x. lam k. k (addi x 1)) [1,2,3] (lam seq. foldl addi 0 seq) with 9
+
+-- `mapiK f seq k` maps the continuation passing function `f` with the index
+-- over the sequence `seq`, passing the result of the mapping to the
+-- continuation `k`.
+let mapiK : all a. all b. all c. (Int -> a -> (b -> c) -> c) -> [a] -> ([b] -> c) -> c =
+  lam f. lam seq. lam k.
+    (foldl
+       (lam ik. match ik with (i, k) in
+              lam x. (subi i 1, lam xs. f i x (lam x. k (snoc xs x))))
+       (subi (length seq) 1, k) (reverse seq)).1 []
+
+utest mapiK (lam i. lam x. lam k. k (muli x i)) [] (lam seq. reverse seq) with []
+utest mapiK (lam i. lam x. lam k. k (muli x i)) [1,2,3] (lam seq. reverse seq)
+  with [6,2,0]
+utest mapiK (lam i. lam x. lam k. k (muli x i)) [1,2,3] (lam seq. foldl addi 0 seq)
+  with 8
+
+-- `foldlK f acc seq k` fold the continuation passing function `f` over the
+-- sequence `seq`, from the left, with the initial accumulator `acc` and
+-- continuation `k`. (from
+-- https://leastfixedpoint.com/tonyg/kcbbs/lshift_archive/folds-and-continuation-passing-style-20070611.html)
+let foldlK
+  = lam f. lam acc. lam seq. lam k.
+    recursive let recur = lam acc. lam seq. lam k.
+      if null seq then k acc
+      else f acc (head seq) (lam acc. recur acc (tail seq) k)
+    in
+    recur acc seq k
+
+utest
+  let acc : [Int] = [] in
+  utest
+    foldlK (lam acc. lam x. lam k. k (cons (addi x 1) acc)) acc [] (lam x. reverse x)
+    with []
+  in
+  utest
+    foldlK
+      (lam acc. lam x. lam k. k (cons (addi x 1) acc))
+      acc
+      [1, 2, 3]
+      (lam x. reverse x)
+    with [2, 3, 4]
+  in
+  utest
+    foldlK
+      (lam acc. lam x. lam k.
+        if geqi (length acc) 2 then acc -- short circuit
+        else k (cons (addi x 1) acc))
+      acc
+      [1, 2, 3]
+      (lam x. reverse x)          -- which also skips this computation
+    with [3, 2]
+  in
+  () with ()
 
 -- zips
 let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
@@ -676,9 +732,8 @@ let subseqReplace: all a. (a -> a -> Bool) -> [a] -> [a] -> [a] -> [a] =
         if eq eCheck eSeq then
           work (addi checkIdx 1) (addi seqIdx 1) acc
         else
-          work 0 (addi seqIdx 1) (concat acc (subsequence seq
-                                                          (subi seqIdx checkIdx)
-                                                          (addi checkIdx 1)))
+          let seqIdx = subi seqIdx checkIdx in
+          work 0 (addi seqIdx 1) (snoc acc (get seq seqIdx))
     in
     work 0 0 []
 
@@ -690,3 +745,4 @@ utest subseqReplace eqi [1,1] [2] [3,1,3,1,1] with [3,1,3,2]
 utest subseqReplace eqi [3,4,5] [42,42] [1,2,3,4,5,6,7] with [1,2,42,42,6,7]
 utest subseqReplace eqi [1,1] [100,101,100] [0,1,0,1,2,1,1,3,4,0,0,1,1,0,1,0] with [0,1,0,1,2,100,101,100,3,4,0,0,100,101,100,0,1,0]
 utest subseqReplace eqi [1,1] [2] [3,4,3] with [3,4,3]
+utest subseqReplace eqi [0,1,2] [88] [0,0,1,2,100,0,1] with [0,88,100,0,1]

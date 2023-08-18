@@ -460,13 +460,44 @@ lang CmpSymbEval = CmpSymbAst + ConstEvalNoDefault + CmpSymbArity
     TmConst {t with val = CBool {val = eqsym s1.val s2.val}}
 end
 
-lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
+lang SeqOpEvalFirstOrder =
+  SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
+
   sem delta info =
   | (CHead _, [TmSeq s]) -> head s.tms
   | (CTail _, [TmSeq s]) -> TmSeq {s with tms = tail s.tms}
   | (CNull _, [TmSeq s]) -> TmConst {
     val = CBool {val = null s.tms}, ty = tyunknown_, info = NoInfo ()
   }
+  | (CGet _, [TmSeq s, TmConst {val = CInt n}]) -> get s.tms n.val
+  | (CSet _, [TmSeq s, TmConst {val = CInt n}, val]) ->
+    TmSeq {s with tms = set s.tms n.val val}
+  | (CCons _, [tm, TmSeq s]) -> TmSeq {s with tms = cons tm s.tms}
+  | (CSnoc _, [TmSeq s, tm]) -> TmSeq {s with tms = snoc s.tms tm}
+  | (CConcat _, [TmSeq s1, TmSeq s2]) ->
+    TmSeq {s2 with tms = concat s1.tms s2.tms}
+  | (CLength _, [TmSeq s]) ->
+    TmConst {val = CInt {val = length s.tms}, ty = tyunknown_, info = NoInfo ()}
+  | (CReverse _, [TmSeq s]) -> TmSeq {s with tms = reverse s.tms}
+  | (CSplitAt _, [TmSeq s, TmConst {val = CInt n}]) ->
+    let t = splitAt s.tms n.val in
+    utuple_ [TmSeq {s with tms = t.0}, TmSeq {s with tms = t.1}]
+  | (CIsList _, [TmSeq s]) ->
+    TmConst {
+      val = CBool {val = isList s.tms}, ty = tyunknown_, info = NoInfo ()
+    }
+  | (CIsRope _, [TmSeq s]) ->
+    TmConst {
+      val = CBool {val = isRope s.tms}, ty = tyunknown_, info = NoInfo ()
+    }
+  | (CSubsequence _, [
+    TmSeq s, TmConst {val = CInt ofs}, TmConst {val = CInt len}
+  ]) ->
+    TmSeq {s with tms = subsequence s.tms ofs.val len.val}
+end
+
+lang SeqOpEval = SeqOpEvalFirstOrder
+  sem delta info =
   | (CMap _, [f, TmSeq s]) ->
     let f = lam x. apply (evalCtxEmpty ()) info (f, x) in
     TmSeq {s with tms = map f s.tms}
@@ -496,19 +527,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
       apply (evalCtxEmpty ()) info (apply (evalCtxEmpty ()) info (f, x), acc)
     in
     foldr f acc s.tms
-  | (CGet _, [TmSeq s, TmConst {val = CInt n}]) -> get s.tms n.val
-  | (CSet _, [TmSeq s, TmConst {val = CInt n}, val]) ->
-    TmSeq {s with tms = set s.tms n.val val}
-  | (CCons _, [tm, TmSeq s]) -> TmSeq {s with tms = cons tm s.tms}
-  | (CSnoc _, [TmSeq s, tm]) -> TmSeq {s with tms = snoc s.tms tm}
-  | (CConcat _, [TmSeq s1, TmSeq s2]) ->
-    TmSeq {s2 with tms = concat s1.tms s2.tms}
-  | (CLength _, [TmSeq s]) ->
-    TmConst {val = CInt {val = length s.tms}, ty = tyunknown_, info = NoInfo ()}
-  | (CReverse _, [TmSeq s]) -> TmSeq {s with tms = reverse s.tms}
-  | (CSplitAt _, [TmSeq s, TmConst {val = CInt n}]) ->
-    let t = splitAt s.tms n.val in
-    utuple_ [TmSeq {s with tms = t.0}, TmSeq {s with tms = t.1}]
   | (CCreate _, [TmConst {val = CInt n}, f]) ->
     let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
     TmSeq {tms = create n.val f, ty = tyunknown_, info = NoInfo ()}
@@ -518,18 +536,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
   | (CCreateRope _, [TmConst {val = CInt n}, f]) ->
     let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
     TmSeq {tms = createRope n.val f, ty = tyunknown_, info = NoInfo ()}
-  | (CIsList _, [TmSeq s]) ->
-    TmConst {
-      val = CBool {val = isList s.tms}, ty = tyunknown_, info = NoInfo ()
-    }
-  | (CIsRope _, [TmSeq s]) ->
-    TmConst {
-      val = CBool {val = isRope s.tms}, ty = tyunknown_, info = NoInfo ()
-    }
-  | (CSubsequence _, [
-    TmSeq s, TmConst {val = CInt ofs}, TmConst {val = CInt len}
-  ]) ->
-    TmSeq {s with tms = subsequence s.tms ofs.val len.val}
 end
 
 lang FloatStringConversionEval =
@@ -1074,7 +1080,7 @@ lang NamedPatEval = Eval + NamedPat
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = SeqTotPat + SeqAst
+lang SeqTotPatEval = Eval + SeqTotPat + SeqAst
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
