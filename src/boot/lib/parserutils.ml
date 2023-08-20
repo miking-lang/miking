@@ -51,7 +51,7 @@ let raise_parse_error_on_partially_applied_external t =
     | TmApp (fi, t1, t2) ->
         let _ = recur (symb_map, app_depth + 1, fi) t1 in
         recur (symb_map, 0, NoInfo) t2
-    | TmVar (_, id, s, _, _) -> (
+    | TmVar (_, id, s, _) -> (
         SymbMap.find_opt s symb_map
         |> function
         | Some arity ->
@@ -78,7 +78,7 @@ let prune_external_utests ?(enable = true) ?(warn = true)
      removed utests, and [hasref] which is a Boolean indicating if a sub
      expression contains references to an external *)
   let rec recur (sm, ntests, hasref) = function
-    | TmVar (_, _, s, _, _) as t ->
+    | TmVar (_, _, s, _) as t ->
         ((sm, ntests, SymbMap.mem s sm || hasref), t)
     | TmExt (fi, x, s, ty, e, t) ->
         let sm, hasref' =

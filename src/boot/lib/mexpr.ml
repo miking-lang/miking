@@ -10,6 +10,7 @@ open Pprint
 open Printf
 open Intrinsics
 open Builtin
+open Symbutils
 
 (* Terms *)
 let idTmVar = 100
@@ -154,11 +155,11 @@ let reportErrorAndExit err =
 
 let getData = function
   (* Terms *)
-  | PTreeTm (TmVar (fi, x, _, _, frozen)) ->
+  | PTreeTm (TmVar (fi, x, _, frozen)) ->
       (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
-  | PTreeTm (TmLam (fi, x, _, _, ty, t)) ->
+  | PTreeTm (TmLam (fi, x, _, ty, t)) ->
       (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
       (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
@@ -995,11 +996,13 @@ let rec is_value = function
       is_value t
   | TmNever _ ->
       true
-  | TmClos (_, _, _, _, _, _) ->
+  | TmClos (_, _, _, _, _, _, _) ->
       true
   | TmRef (_, _) ->
       true
   | TmTensor (_, _) ->
+      true
+  | TmVar (_, _, _, _) ->
       true
   | _ ->
       false
@@ -2073,13 +2076,13 @@ and pt_seq env ps =
 and pat_transform (env : (Symb.t * tm) list) (p : pat) =
   let new_sym fi env s x =
     match List.assoc_opt s env with
-    | Some (TmVar (_, _, s', _, _)) ->
+    | Some (TmVar (_, _, s', _)) ->
         (env, s')
     | Some _ ->
         failwith "Should not happen"
     | None ->
         let s' = Symb.gensym () in
-        let tvar = TmVar (fi, x, s', false, false) in
+        let tvar = TmVar (fi, x, s', false) in
         ((s, tvar) :: env, s')
   in
   match p with
@@ -2125,7 +2128,7 @@ and pat_transform (env : (Symb.t * tm) list) (p : pat) =
 and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   match (f, a) with
   (* Closure application *)
-  | TmClos (ficlos, _, s, _, t3, env2), a -> (
+  | (TmClos (ficlos, _, s, _, t3, env2, is_rec) as f), a -> (
       if !enable_debug_profiling then (
         let t1 = Time.get_wall_time_ms () in
         let res =
@@ -2138,6 +2141,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
         let t2 = Time.get_wall_time_ms () in
         add_call ficlos (t2 -. t1) ;
         res )
+      else if is_rec && pe.inBranch then TmApp (fiapp, f, a)
       else
         try eval ((s, a) :: !env2) pe t3
         with e ->
@@ -2152,13 +2156,56 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
       | TmConApp (_, _, _, _)
       | TmConDef (_, _, _, _, _)
       | TmNever _
-      | TmClos (_, _, _, _, _, _)
+      | TmClos (_, _, _, _, _, _, _)
       | TmRef (_, _)
       | TmTensor (_, _) ) ) ->
       delta (apply pe) fiapp c a
   (* Symbolic application *)
   | f, a ->
       TmApp (fiapp, f, a)
+
+and var_update (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmVar (_, _, s, _) as t1 -> (
+    match List.assoc_opt s env with
+    | Some t2 -> (
+      match t2 with TmVar (_, _, _, _) -> t2 | _ -> t1 )
+    | None ->
+        t1 )
+  | t ->
+      smap_tm_tm (var_update env) t
+
+and free_vars (free : SymbSet.t) (t : tm) =
+  match t with
+  | TmVar (_, _, s, _) ->
+      SymbSet.add s free
+  | TmLam (_, _, s, _, _) ->
+      SymbSet.remove s free
+  | TmClos (_, _, _, _, _, _, _) | TmBox (_, _) ->
+      free
+  | t ->
+      sfold_tm_tm free_vars free t
+
+and closure_elim (env : (Symb.t * tm) list) (t : tm) =
+  match t with
+  | TmClos (fi, x, s_clos, ty, tm, env_ref, _) ->
+      let fv = free_vars SymbSet.empty tm in
+      let expand s t2 =
+        match List.assoc_opt s env with
+        | Some _ ->
+            t2
+        | None -> (
+          match List.assoc_opt s !env_ref with
+          | Some t3 ->
+              let t3' = closure_elim env t3 in
+              TmLet (fi, us "_hidden_", s, TyUnknown fi, t3', t2)
+          | None ->
+              t2 )
+      in
+      let tm' = SymbSet.fold expand (SymbSet.remove s_clos fv) tm in
+      TmLam (fi, x, s_clos, ty, closure_elim env tm')
+  | t ->
+      smap_tm_tm (closure_elim env) t
 
 and scan (env : (Symb.t * tm) list) (t : tm) =
   match t with
@@ -2178,9 +2225,9 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
+          | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref, true)) :: !env_ref
           | _ ->
               peval := true )
         lst ;
@@ -2196,19 +2243,20 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
   | TmMatch (fi, t1, p, t2, t3) ->
       let env', p' = pat_transform env p in
       TmMatch (fi, scan env t1, p', scan env' t2, scan env' t3)
-  | TmLam (fi, x, s, pe, ty, t) ->
+  | TmLam (fi, x, s, ty, t) ->
       (* printf "TmLam: %s \n" (Ustring.to_utf8 x); *)
       let s' = Symb.gensym () in
-      let tvar = TmVar (fi, x, s', pe, false) in
-      TmLam (fi, x, s', pe, ty, scan ((s, tvar) :: env) t)
-  | TmVar (_, _, s, _, _) as t1 -> (
+      let tvar = TmVar (fi, x, s', false) in
+      TmLam (fi, x, s', ty, scan ((s, tvar) :: env) t)
+  | TmVar (_, _, s, _) as t1 -> (
     match List.assoc_opt s env with
     | Some t2 -> (
-      match t2 with TmVar (_, _, _, _, _) -> t2 | _ -> t1 )
+      match t2 with TmVar (_, _, _, _) -> t2 | _ -> t1 )
     | None ->
         t1 )
   | TmPreRun (_, _, t) ->
-      eval env pe_init t
+      let t' = eval env {pe_init with inPeval= true} t in
+      closure_elim env t'
   | t ->
       smap_tm_tm (scan env) t
 
@@ -2216,7 +2264,7 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s, _, _) -> (
+  | TmVar (_, _, s, _) -> (
     match List.assoc_opt s env with
     | Some t2 -> (
       match t2 with
@@ -2238,36 +2286,25 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       let a = eval env pe t2 in
       apply pe fiapp f a
   (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, pes, _ty, t1) ->
-      TmClos (fi, x, s, pes, t1, ref env)
+  | TmLam (fi, x, s, ty, t1) ->
+      let t1' = if pe.inPeval then var_update env t1 else t1 in
+      TmClos (fi, x, s, ty, t1', ref env, false)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env pe t1) :: env) pe t2
   (* Recursive lets *)
   | TmRecLets (fi, lst, t2) ->
-      let env_ref = ref env in
-      let peval = ref false in
-      List.iter
-        (fun (_, _, s1, _, t) ->
-          match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
-              env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
-          | _ ->
-              peval := true )
-        lst ;
-      if !peval then
-        let f env (fi, x, s, ty, t) =
-          let s' = Symb.gensym () in
-          let tvar = TmVar (fi, x, s', false, false) in
-          let env' = (s, tvar) :: env in
-          (env', (fi, x, s', ty, t))
-        in
-        let env', lst' = List.fold_left_map f env lst in
-        let g (fi, x, s, ty, t) = (fi, x, s, ty, eval env' pe t) in
-        let lst'' = List.map g lst' in
-        TmRecLets (fi, lst'', eval env' pe t2)
-      else eval !env_ref pe t2
+      let env_top =
+        List.map (fun (_, _, s, _, t) -> (s, setIsRec (eval env pe t))) lst
+      in
+      let update_env = function
+        | _, TmClos (_, _, _, _, _, env_ref, _) ->
+            env_ref := env_top @ !env_ref
+        | _ ->
+            raise_error fi "Recursive lets must be of function types."
+      in
+      List.iter update_env env_top ;
+      eval (env_top @ env) pe t2
   (* Constant *)
   | TmConst (_, _) ->
       t
@@ -2307,41 +2344,27 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConApp (fi, x, s, rhs)
   (* Match *)
-  | TmMatch (fi, t1, p, t2, t3) -> (
-      let _ = fi in
-      match try_match env (eval env pe t1) p with
-      | Some env ->
-          eval env pe t2
-      | None ->
-          eval env pe t3 )
-  (* try 1 --
-        let t1' = eval env pe t1 in
-      if is_value t1' then
-       (match try_match env t1' p with
+  | TmMatch (fi, t1, p, t2, t3) ->
+      let t1' = eval env pe t1 in
+      if (not pe.inPeval) || is_value t1' then
+        match try_match env t1' p with
         | Some env ->
-           eval env pe t2
+            eval env pe t2
         | None ->
-           eval env pe t3 )
-     else
-       TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)) *)
-  (* try 2 --
-     let t1' = eval env pe t1 in
-     match try_match env t1' p with
-      | Some env ->
-         eval env pe t2
-      | None ->
-         if is_value t1' then
-           TmMatch(fi, t1', p, eval env pe t2, eval env pe t2)
-         else
-           eval env pe t3 ) *)
+            eval env pe t3
+      else
+        let pe' = {pe with inBranch= true} in
+        TmMatch (fi, t1', p, eval env pe' t2, eval env pe' t3)
   (* Dive *)
   | TmDive (_, _, t) -> (
     match eval env pe t with
-    | TmClos (fi, x, s, _, t, env_ref) ->
+    | TmClos (fi, x, s, ty, t, env_ref, is_rec) ->
         let s' = Symb.gensym () in
-        let tvar = TmVar (fi, x, s', false, false) in
-        let t' = eval ((s, tvar) :: !env_ref) pe (TmDive (fi, 0, t)) in
-        TmClos (fi, x, s', false, t', env_ref)
+        let tvar = TmVar (fi, x, s', false) in
+        let pe' = {pe with inPeval= true} in
+        let t' = eval ((s, tvar) :: !env_ref) pe' (TmDive (fi, 0, t)) in
+        let t'' = if pe.inPeval then t' else closure_elim !env_ref t' in
+        TmClos (fi, x, s', ty, t'', env_ref, is_rec)
     | t' ->
         t' )
   (* PreRun *)
@@ -2408,9 +2431,9 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
       List.iter
         (fun (_, _, s1, _, t) ->
           match t with
-          | TmLam (fi, str, s2, pe, _, tm) ->
+          | TmLam (fi, str, s2, ty, tm) ->
               env_ref :=
-                (s1, TmClos (fi, str, s2, pe, tm, env_ref)) :: !env_ref
+                (s1, TmClos (fi, str, s2, ty, tm, env_ref, true)) :: !env_ref
           | _ ->
               failwith "Incorrect RecLets" )
         lst ;

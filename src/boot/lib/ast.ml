@@ -57,6 +57,8 @@ type frozen = bool
 
 type pesym = bool
 
+type is_rec = bool
+
 (* Map type for record implementation *)
 module Record = struct
   include Map.Make (Ustring)
@@ -271,11 +273,11 @@ and program = Program of include_ list * top list * tm
 (* Terms in MExpr *)
 and tm =
   (* Variable *)
-  | TmVar of info * ustring * Symb.t * pesym * frozen
+  | TmVar of info * ustring * Symb.t * frozen
   (* Application *)
   | TmApp of info * tm * tm
   (* Lambda abstraction *)
-  | TmLam of info * ustring * Symb.t * pesym * ty * tm
+  | TmLam of info * ustring * Symb.t * ty * tm
   (* Let *)
   | TmLet of info * ustring * Symb.t * ty * tm * tm
   (* Recursive lets *)
@@ -308,7 +310,7 @@ and tm =
   | TmExt of info * ustring * Symb.t * side_effect * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
-  | TmClos of info * ustring * Symb.t * pesym * tm * env ref
+  | TmClos of info * ustring * Symb.t * ty * tm * env ref * is_rec
   (* Reference *)
   | TmRef of info * tm ref
   (* Tensor *)
@@ -406,8 +408,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t1
       |> fun (acc, t1') ->
       f acc t2 |> fun (acc, t2') -> (acc, TmApp (fi, t1', t2'))
-  | TmLam (fi, x, s, pes, ty, t) ->
-      f acc t |> fun (acc, t') -> (acc, TmLam (fi, x, s, pes, ty, t'))
+  | TmLam (fi, x, s, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmLam (fi, x, s, ty, t'))
   | TmLet (fi, x, s, ty, t1, t2) ->
       f acc t1
       |> fun (acc, t1') ->
@@ -458,8 +460,8 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmUse (fi, l, t'))
   | TmExt (fi, x, s, ty, e, t) ->
       f acc t |> fun (acc, t') -> (acc, TmExt (fi, x, s, ty, e, t'))
-  | TmClos (fi, x, s, pes, t, env) ->
-      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, pes, t', env))
+  | TmClos (fi, x, s, ty, t, env, is_rec) ->
+      f acc t |> fun (acc, t') -> (acc, TmClos (fi, x, s, ty, t', env, is_rec))
   | (TmVar _ | TmConst _ | TmNever _ | TmRef _ | TmTensor _) as t ->
       (acc, t)
   | TmDive (fi, l, t) ->
@@ -484,9 +486,9 @@ let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
 
 (* Returns the info field from a term *)
 let tm_info = function
-  | TmVar (fi, _, _, _, _)
+  | TmVar (fi, _, _, _)
   | TmApp (fi, _, _)
-  | TmLam (fi, _, _, _, _, _)
+  | TmLam (fi, _, _, _, _)
   | TmLet (fi, _, _, _, _, _)
   | TmRecLets (fi, _, _)
   | TmConst (fi, _)
@@ -500,7 +502,7 @@ let tm_info = function
   | TmUtest (fi, _, _, _, _)
   | TmNever fi
   | TmUse (fi, _, _)
-  | TmClos (fi, _, _, _, _, _)
+  | TmClos (fi, _, _, _, _, _, _)
   | TmRef (fi, _)
   | TmTensor (fi, _)
   | TmDive (fi, _, _)
@@ -742,3 +744,9 @@ type 'a tokendata = {i: info; v: 'a}
 type peval = {inPeval: bool; inBranch: bool}
 
 let pe_init = {inPeval= false; inBranch= false}
+
+let setIsRec = function
+  | TmClos (fi, x, s, ty, t, env, _) ->
+      TmClos (fi, x, s, ty, t, env, true)
+  | _ ->
+      failwith "Cannot set recursive. Should not happen"
