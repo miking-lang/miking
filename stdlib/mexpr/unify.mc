@@ -30,7 +30,8 @@ lang Unify = Ast
     empty : u,
     combine : u -> u -> u,
     unify : UnifyEnv -> Type -> Type -> u,
-    err   : UnifyError -> u
+    unifyRepr : UnifyEnv -> ReprVar -> ReprVar -> u,
+    err : UnifyError -> u
   }
 
   -- Unify the types `ty1` and `ty2` under the assumptions of `env`.
@@ -188,20 +189,22 @@ lang TyWildUnify = Unify + TyWildAst
   | (TyWild _, TyWild _) -> u.empty
 end
 
-lang CollTypeUnify = CollTypeAst + Unify
+lang ReprTypeUnify = ReprTypeAst + Unify
   sem unifyBase u env =
-  | (ty1 & TyColl a, ty2 & TyColl b) ->
+  | (TyRepr a, TyRepr b) ->
     u.combine
-      (u.combine
-        (unifyTypes u env (a.filter, b.filter))
-        (unifyTypes u env (a.permutation, b.permutation)))
-      (unifyTypes u env (a.element, b.element))
+      (u.unifyRepr a.repr b.repr)
+      (unifyTypes u env (a.arg, b.arg))
 end
 
 lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
 
   type UnifyPureResult a = Result () UnifyError a
-  type UnifyPureUnifier = [(UnifyEnv, Type, Type)]
+  syn UnificationObligation =
+  | TypeUnification {env : UnifyEnv, left : Type, right : Type}
+  | ReprUnification {env : UnifyEnv, left : ReprVar, right : ReprVar}
+
+  type UnifyPureUnifier = [UnificationObligation]
 
   -- Unify types `ty1` and `ty2`, returning a map of variable substitutions
   -- equating the two, or giving an error if the types are incompatible.
@@ -251,7 +254,7 @@ end
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify + TyWildUnify + CollTypeUnify
+  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify + TyWildUnify + ReprTypeUnify
 end
 
 lang TestLang = UnifyPure + MExprUnify + MExprEq + MetaVarTypeEq end

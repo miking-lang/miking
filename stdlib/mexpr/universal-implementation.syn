@@ -94,7 +94,6 @@ prod ImplDecl: UTop =
   "=" body:Merged
 
 prod MetaVar: Merged = "?" var:LName
-prod Coll: Merged = "Coll"
 
 
 -- Expressions -----------------------------------------------------------------

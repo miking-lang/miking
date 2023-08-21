@@ -4,7 +4,7 @@ type OpCost = Float
 
 -- A representation unification variable, for use in the UCT analysis
 type ReprContent
-type Repr = Ref ReprContent
+type ReprVar = Ref ReprContent
 con UninitRepr : () -> ReprContent
 con BotRepr :
   { sym : Symbol
@@ -12,9 +12,7 @@ con BotRepr :
   } -> ReprContent
 con LinkRepr :
   -- Invariant: link may only point to a repr with <= scope
-  { link : Repr
-  , scope : Int
-  } -> ReprContent
+  ReprVar -> ReprContent
 
 lang TyWildAst = Ast
   syn Type =
@@ -27,22 +25,39 @@ lang TyWildAst = Ast
   | TyWild x -> x.info
 end
 
-lang CollTypeAst = Ast
+lang ReprTypeAst = Ast
+ syn Type =
+ | TyRepr { info : Info, arg : Type, repr : ReprVar }
+
+ sem tyWithInfo info =
+ | TyRepr x -> TyRepr {x with info = info}
+
+ sem infoTy =
+ | TyRepr x -> x.info
+
+ sem smapAccumL_Type_Type f acc =
+ | TyRepr x ->
+   match f acc x.arg with (acc, arg) in
+   (acc, TyRepr { x with arg = arg })
+end
+
+lang ReprSubstAst = Ast
   syn Type =
-  | TyColl { info : Info, filter : Type, permutation : Type, element : Type, repr : Repr, explicitSubst : Option Name }
+  | TySubst { info : Info, arg : Type, subst : Name }
 
   sem tyWithInfo info =
-  | TyColl x -> TyColl {x with info = info}
+  | TySubst x -> TySubst {x with info = info}
 
   sem infoTy =
-  | TyColl x -> x.info
+  | TySubst x -> x.info
 
   sem smapAccumL_Type_Type f acc =
-  | TyColl x ->
-    match f acc x.filter with (acc, filter) in
-    match f acc x.permutation with (acc, permutation) in
-    match f acc x.element with (acc, element) in
-    (acc, TyColl {x with filter = filter, permutation = permutation, element = element})
+  | TySubst x ->
+   match f acc x.arg with (acc, arg) in
+   (acc, TySubst { x with arg = arg })
+
+  sem rappAccumL_Type_Type f acc =
+  | TySubst x -> f acc x.arg
 end
 
 lang OpDeclAst = Ast + LetAst + NeverAst + UnknownTypeAst
@@ -77,7 +92,7 @@ lang OpImplAst = Ast
     { selfCost : OpCost
     , body : Expr
     , specType : Type
-    , delayedReprUnifications : [(Repr, Repr)]
+    , delayedReprUnifications : [(ReprVar, ReprVar)]
     }
   syn Expr =
   | TmOpImpl {ident : Name, alternatives : [OpImplAlt], inexpr : Expr, ty : Type, reprScope : Int, info : Info}
@@ -157,7 +172,7 @@ lang ReprDeclAst = Ast
     (acc, TmReprDecl {x with pat = pat, repr = repr})
 end
 
-lang UCTAst = CollTypeAst + OpDeclAst + OpImplAst + OpVarAst + ReprDeclAst + TyWildAst
+lang RepTypesAst = ReprTypeAst + ReprSubstAst + OpDeclAst + OpImplAst + OpVarAst + ReprDeclAst + TyWildAst
 end
 
 type CollectedImpl =

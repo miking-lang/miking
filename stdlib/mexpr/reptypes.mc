@@ -40,24 +40,21 @@ include "multicore/promise.mc"
 lang AnnotateSimple = HtmlAnnotator + AnnotateSources
 end
 
-lang UCTKeywordMaker = KeywordMakerBase + CollTypeAst + TyWildAst + OpDeclAst
+lang RepTypesKeywordMaker = KeywordMakerBase + ReprTypeAst + TyWildAst + OpDeclAst
   sem matchTypeKeywordString info =
   | "_" ->
     let mk = lam. TyWild {info = info} in
     Some (0, mk)
-  | "Coll" ->
-    let mk = lam args. match args with [filter, permutation, element] in TyColl
+  | "Repr" ->
+    let mk = lam args. match args with [arg] in TyRepr
       { info = info
-      , filter = filter
-      , permutation = permutation
-      , element = element
+      , arg = arg
       , repr = ref (UninitRepr ())
-      , explicitSubst = None ()
       } in
-    Some (3, mk)
+    Some (1, mk)
 
   sem isTypeKeyword =
-  | TyColl _ -> true
+  | TyRepr _ -> true
 
   -- TODO(vipa, 2022-09-26): This is a bit hacky, but is probably a
   -- reasonable first version
@@ -81,27 +78,30 @@ lang TyWildPrettyPrint = PrettyPrint + TyWildAst
   | TyWild _ -> (env, "_")
 end
 
-lang CollTypePrettyPrint = PrettyPrint + CollTypeAst + UCTHelpers
+lang ReprTypePrettyPrint = PrettyPrint + ReprTypeAst + RepTypesHelpers
   sem typePrecedence =
-  | TyColl _ -> 1
+  | TyRepr _ -> 1
 
   sem getTypeStringCode indent env =
-  | TyColl x ->
+  | TyRepr x ->
     let repr = switch deref (botRepr x.repr)
       case BotRepr repr then join [int2string repr.scope, ", ", int2string (sym2hash repr.sym)]
       case UninitRepr _ then "uninit"
       case _ then "impossible"
       end in
-    match
-      match x.explicitSubst with Some n then
-        match pprintEnvGetStr env n with (env, n) in
-        (env, cons '!' n)
-      else (env, "")
-    with (env, subst) in
-    match printTypeParen indent 2 env x.filter with (env, filter) in
-    match printTypeParen indent 2 env x.permutation with (env, permutation) in
-    match printTypeParen indent 2 env x.element with (env, element) in
-    (env, join ["Coll[", repr, "]", subst, " ", filter, " ", permutation, " ", element])
+    match printTypeParen indent 2 env x.arg with (env, arg) in
+    (env, join ["Repr[", repr, "] ", arg])
+end
+
+lang ReprSubstPrettyPrint = PrettyPrint + ReprSubstAst
+  sem typePrecedence =
+  | TySubst _ -> 1
+
+  sem getTypeStringCode indent env =
+  | TySubst x ->
+    match pprintConName env x.subst with (env, subst) in
+    match printTypeParen indent 2 env x.arg with (env, arg) in
+    (env, join ["!", subst, " ", arg])
 end
 
 lang OpDeclPrettyPrint = PrettyPrint + OpDeclAst
@@ -114,7 +114,7 @@ lang OpDeclPrettyPrint = PrettyPrint + OpDeclAst
     match pprintCode indent env x.inexpr with (env, inexpr) in
     match getTypeStringCode indent env x.tyAnnot with (env, ty) in
     (env,
-     join ["opdecl ", pprintVarString ident, " : ", ty, " in",
+     join ["letop ", pprintVarString ident, " : ", ty, " in",
            pprintNewline indent, inexpr])
 end
 
@@ -365,50 +365,42 @@ lang ConvertWild = ConvertToMExpr + WildMergedAst + TyWildAst + NamedPat
   | WildMerged x -> PatNamed {ident = PWildcard (), info = x.info, ty = tyunknown_}
 end
 
-lang ConvertColl = ConvertToMExpr + CollTypeAst + CollMergedAst + NotMergedAst + AppMergedAst + ConMergedAst
+lang ConvertSubst = ConvertToMExpr + ConMergedAst + NotMergedAst + AppMergedAst + ReprSubstAst + TyWildAst + ReprTypeAst
+  sem convertToMExprTy =
+  | NotMerged
+    { right = ConMerged {c = {v = subst}}
+    , info = overallInfo
+    } ->
+    TySubst
+    { info = overallInfo
+    , arg = TyRepr { info = overallInfo, arg = TyWild {info = overallInfo}, repr = ref (UninitRepr ()) }
+    , subst = subst
+    }
+  | AppMerged
+    { left = NotMerged {right = ConMerged {c = {v = subst}}}
+    , right = reprTy
+    , info = overallInfo
+    } ->
+    TySubst
+    { info = overallInfo
+    , arg = convertToMExprTy reprTy
+    , subst = subst
+    }
+end
+
+lang ConvertRepr = ConvertToMExpr + ReprTypeAst + ConMergedAst + AppMergedAst
   sem convertToMExprTy =
   | AppMerged
-    { left = AppMerged
-      { left = AppMerged
-        { left = CollMerged x
-        , right = pred
-        }
-      , right = perm
-      }
-    , right = elem
+    { left = ConMerged {c = {v = ("Repr", _)}}
+    , right = arg
     , info = overallInfo
     } ->
-    TyColl
+    TyRepr
     { info = overallInfo
-    , filter = convertToMExprTy pred
-    , permutation = convertToMExprTy perm
-    , element = convertToMExprTy elem
+    , arg = convertToMExprTy arg
     , repr = ref (UninitRepr ())
-    , explicitSubst = None ()
     }
-  | AppMerged
-    { left = AppMerged
-      { left = AppMerged
-        { left = AppMerged
-          { left = CollMerged x
-          , right = NotMerged {right = ConMerged {c = {v = subst}}}
-          }
-        , right = pred
-        }
-      , right = perm
-      }
-    , right = elem
-    , info = overallInfo
-    } ->
-    TyColl
-    { info = overallInfo
-    , filter = convertToMExprTy pred
-    , permutation = convertToMExprTy perm
-    , element = convertToMExprTy elem
-    , repr = ref (UninitRepr ())
-    , explicitSubst = Some subst
-    }
-  | CollMerged x -> errorSingle [x.info] "A Coll takes an optional substitution and three type arguments."
+  | ConMerged {c = {v = ("Repr", _)}, info = info} -> errorSingle [info] "Repr must be applied to a type argument"
 end
 
 lang ConvertVar = ConvertToMExpr + VarMergedAst + VarAst + VarTypeAst + NamedPat
@@ -498,10 +490,10 @@ lang ConvertConcatPat = ConvertToMExpr + ConcatMergedAst + SeqEdgePat
   | ConcatMerged x -> errorSingle [x.info] "Conversion not supported yet"
 end
 
-lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertColl + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf
+lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf
 end
 
-lang UCTPrettyPrint = TyWildPrettyPrint + CollTypePrettyPrint + OpDeclPrettyPrint + OpVarPrettyPrint + OpImplPrettyPrint + ReprDeclPrettyPrint
+lang RepTypesPrettyPrint = TyWildPrettyPrint + ReprTypePrettyPrint + ReprSubstPrettyPrint + OpDeclPrettyPrint + OpVarPrettyPrint + OpImplPrettyPrint + ReprDeclPrettyPrint
 end
 
 lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
@@ -561,7 +553,7 @@ lang CollectImpls = ConvertToMExpr + UniversalImplementationAst + EvalCost + OpV
     in foldl f emptyImplData tops
 end
 
-lang LamUCTAnalysis = TypeCheck + LamAst + SubstituteNewReprs
+lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmLam t ->
     let tyParam = substituteNewReprs env t.tyParam in
@@ -570,12 +562,12 @@ lang LamUCTAnalysis = TypeCheck + LamAst + SubstituteNewReprs
     TmLam {t with body = body, tyParam = tyParam, ty = tyLam}
 end
 
-lang LetUCTAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDeclAst + IsValue + MetaVarDisableGeneralize
+lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDeclAst + IsValue + MetaVarDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let isValue = isValue (GVal ()) t.body in
-    let shouldBeOp = if isValue then containsColl t.tyBody else false in
+    let shouldBeOp = if isValue then containsRepr t.tyBody else false in
     if shouldBeOp then
       -- Replace with an OpDecl and OpImpl
       match withNewReprScope env (lam env.
@@ -591,7 +583,7 @@ lang LetUCTAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDe
         disableRecordGeneralize env.currentLvl tyBody else ());
       match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
       let env = _insertVar t.ident tyBody env in
-      let env = {env with uct = {env.uct with opNamesInScope = mapInsert t.ident (None ()) env.uct.opNamesInScope}} in
+      let env = {env with reptypes = {env.reptypes with opNamesInScope = mapInsert t.ident (None ()) env.reptypes.opNamesInScope}} in
       let inexpr = typeCheckExpr env t.inexpr in
       let ty = tyTm inexpr in
       TmOpDecl
@@ -646,7 +638,7 @@ lang LetUCTAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDe
                     ty = tyTm inexpr}
 end
 
-lang RecLetsUCTAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + UCTHelpers + IsValue + SubstituteNewReprs
+lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + IsValue + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmRecLets t ->
     let typeCheckRecLets = lam env. lam t.
@@ -708,7 +700,7 @@ lang RecLetsUCTAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Re
 
     let shouldBeOp =
       if forAll (lam b. isValue (GVal ()) b.body) t.bindings
-      then any (lam b. containsColl b.tyBody) t.bindings
+      then any (lam b. containsRepr b.tyBody) t.bindings
       else false in
     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
     let bindingToBindingPair = lam b.
@@ -733,11 +725,11 @@ lang RecLetsUCTAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Re
     let inexpr =
       let opNamesInScope = foldl
         (lam acc. lam b. mapInsert b.ident (Some (recordName, stringToSid (nameGetStr b.ident))) acc)
-        env.uct.opNamesInScope
+        env.reptypes.opNamesInScope
         newT.bindings in
       let opNamesInScope = mapInsert recordName (None ()) opNamesInScope in
       let env = _insertVar recordName newT.ty env in
-      let env = {env with uct = {env.uct with opNamesInScope = opNamesInScope}} in
+      let env = {env with reptypes = {env.reptypes with opNamesInScope = opNamesInScope}} in
       typeCheckExpr env t.inexpr in
     let ty = tyTm inexpr in
     TmOpDecl
@@ -762,10 +754,10 @@ lang RecLetsUCTAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Re
     }
 end
 
-lang VarUCTAnalysis = TypeCheck + VarAst + OpVarAst + UCTHelpers + SubstituteNewReprs + NeverAst + MatchAst + NamedPat + RecordPat
+lang VarRepTypesAnalysis = TypeCheck + VarAst + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + MatchAst + NamedPat + RecordPat
   sem typeCheckExpr env =
   | TmVar t ->
-    let opInfo = mapLookup t.ident env.uct.opNamesInScope in
+    let opInfo = mapLookup t.ident env.reptypes.opNamesInScope in
     match opInfo with Some (Some (rName, label)) then
       -- NOTE(vipa, 2023-06-16): "Desugar" the variable to an access
       -- of the record it was changed into
@@ -814,7 +806,7 @@ lang VarUCTAnalysis = TypeCheck + VarAst + OpVarAst + UCTHelpers + SubstituteNew
       errorSingle [t.info] msg
 end
 
-lang OpImplUCTAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + UCTHelpers + ApplyReprSubsts
+lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + RepTypesHelpers + ApplyReprSubsts
   sem typeCheckExpr env =
   | TmOpImpl x ->
     let typeCheckAlt = lam env. lam alt.
@@ -842,7 +834,7 @@ lang OpImplUCTAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewRepr
     }
 end
 
--- NOTE(vipa, 2023-06-26): The UCT analysis is essentially
+-- NOTE(vipa, 2023-06-26): The RepTypes analysis is essentially
 -- type-checking, except we want actual type-/checking/, not
 -- inference; we want to have precise type annotations to start. We
 -- thus replace the type-checking of AST nodes with a tyAnnot field
@@ -856,16 +848,16 @@ end
 --
 -- Finally, we replace the TmVars that reference TmOpDecls with
 -- TmOpVars.
-lang UCTAnalysis = LamUCTAnalysis + LetUCTAnalysis + RecLetsUCTAnalysis + VarUCTAnalysis + OpImplUCTAnalysis
+lang RepTypesAnalysis = LamRepTypesAnalysis + LetRepTypesAnalysis + RecLetsRepTypesAnalysis + VarRepTypesAnalysis + OpImplRepTypesAnalysis
 end
 
-lang MExprUCTAnalysis = MExprTypeCheckMost + UCTAnalysis + MExprPrettyPrint + UCTPrettyPrint
+lang MExprRepTypesAnalysis = MExprTypeCheckMost + RepTypesAnalysis + MExprPrettyPrint + RepTypesPrettyPrint
 end
 
-lang UCTFragments = CollTypeAst + CollTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + UCTPrettyPrint + UCTKeywordMaker + MExprConvertImpl
+lang RepTypesFragments = ReprTypeAst + ReprSubstAst + ReprTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + RepTypesPrettyPrint + RepTypesKeywordMaker + MExprConvertImpl
 end
 
-lang UCTSolverInterface = OpVarAst
+lang RepTypesSolverInterface = OpVarAst
   -- NOTE(vipa, 2023-07-05): Potential global state shared between
   -- individual solving processes
   syn SolverState =
@@ -876,9 +868,9 @@ lang UCTSolverInterface = OpVarAst
   syn OpImplSolutionSet a =
   syn OpImplSolution a =
   type OpVarInfo a = { app : TmOpVarRec, solutionSet : OpImplSolutionSet a }
-  type UCTProblemAlt a =
+  type RepTypesProblemAlt a =
     { opUses : [OpVarInfo a]
-    , delayedReprUnifications : [(Repr, Repr)]
+    , delayedReprUnifications : [(ReprVar, ReprVar)]
     , selfCost : OpCost
     , specType : Type
     , reprScope : Int
@@ -887,7 +879,7 @@ lang UCTSolverInterface = OpVarAst
     -- to carry data required to reconstruct a solved AST.
     , token : a
     }
-  sem solveOne : all a. SolverState -> Option (OpImplSolutionSet a) -> [UCTProblemAlt a] -> OpImplSolutionSet a
+  sem solveOne : all a. SolverState -> Option (OpImplSolutionSet a) -> [RepTypesProblemAlt a] -> OpImplSolutionSet a
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`
@@ -900,13 +892,13 @@ lang UCTSolverInterface = OpVarAst
   -- NOTE(vipa, 2023-07-06): An arbitrary comparison between two
   -- solutions. Will only ever be called on two solutions from the
   -- same solution set. Should be equal iff both represent the same
-  -- solution, using the same UCTProblemAlt as the base.
+  -- solution, using the same RepTypesProblemAlt as the base.
   sem cmpSolution : all a. OpImplSolution a -> OpImplSolution a -> Int
 end
 
-lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + CollTypeAst
-  sem uctSolve : SolverState -> Expr -> Expr
-  sem uctSolve st = | tm ->
+lang RepTypesSolveAndReconstruct = RepTypesSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst
+  sem reprSolve : SolverState -> Expr -> Expr
+  sem reprSolve st = | tm ->
     let opUses = workAltBody st (mapEmpty nameCmp) [] tm in
     let alt =
       { opUses = opUses
@@ -969,21 +961,21 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
     modref ref.ref (mapInsert solution conc (deref ref.ref));
     conc.ident
 
-  -- TODO(vipa, 2023-07-07): This swaps all `TyColl`s with
+  -- TODO(vipa, 2023-07-07): This swaps all `TyRepr`s with
   -- `TyUnknown`. This *should* be good enough for the OCaml backend,
   -- but isn't as good as it could be; we should be able to insert
   -- precise types according to what reprs were chosen. I leave that
   -- for later.
-  sem removeCollTypes : Type -> Type
-  sem removeCollTypes =
-  | ty -> smap_Type_Type removeCollTypes ty
-  | TyColl x -> TyUnknown {info = x.info}
+  sem removeReprTypes : Type -> Type
+  sem removeReprTypes =
+  | ty -> smap_Type_Type removeReprTypes ty
+  | TyRepr x -> TyUnknown {info = x.info}
 
   sem concretizeAlt : ConcretizationEnv -> [OpImplSolution Expr] -> Expr -> ([OpImplSolution Expr], Expr)
   sem concretizeAlt env pickedSolutions =
   | tm ->
-    let tm = smap_Expr_Type removeCollTypes tm in
-    let tm = smap_Expr_TypeLabel removeCollTypes tm in
+    let tm = smap_Expr_Type removeReprTypes tm in
+    let tm = smap_Expr_TypeLabel removeReprTypes tm in
     smapAccumL_Expr_Expr (concretizeAlt env) pickedSolutions tm
   | TmOpDecl {inexpr = inexpr} | TmReprDecl {inexpr = inexpr} ->
     concretizeAlt env pickedSolutions inexpr
@@ -993,7 +985,7 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
       let newIdent = lookupConcreteName ref x.ident solution in
       let var = TmVar
         { ident = newIdent
-        , ty = removeCollTypes x.ty
+        , ty = removeReprTypes x.ty
         , info = x.info
         , frozen = x.frozen
         } in
@@ -1021,7 +1013,7 @@ lang UCTSolveAndReconstruct = UCTSolverInterface + OpImplAst + VarAst + LetAst +
     (pickedSolutions, mapFoldWithKey mkLet inexpr (deref concretizations))
 end
 
-lang UCTDummySolver = UCTSolverInterface
+lang RepTypesDummySolver = RepTypesSolverInterface
   syn SolverState =
   | DummyState ()
   sem initSolverState = | _ -> DummyState ()
@@ -1047,10 +1039,10 @@ lang UCTDummySolver = UCTSolverInterface
   sem cmpSolution a = | b -> 0
 end
 
-lang TyPatMatching = Unify + Generalize + UCTHelpers + WildToMeta
+lang TyPatMatching = Unify + Generalize + RepTypesHelpers + WildToMeta
   type Links =
     { meta : Map Name Type
-    , repr : [(Repr, Repr)]
+    , repr : [(ReprVar, ReprVar)]
     }
 
   sem tyPatMatches : {ty : Type, pat : Type} -> Option Links
@@ -1123,13 +1115,13 @@ lang TyPatMatching = Unify + Generalize + UCTHelpers + WildToMeta
     in result.toOption (inductConsume work emptyLinks [TypeUnification {env = env, left = ty, right = pat}])
 end
 
-lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLevel
+lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + COPHighLevel + ReprSubstAst
   syn SolverState =
   | CPState ()
   sem initSolverState = | _ -> CPState ()
 
   type ReprUniMap =
-    { assignments : Map Symbol (Either Name Repr)
+    { assignments : Map Symbol (Either Name ReprVar)
     , reprScopes : Map Symbol Int
     }
 
@@ -1154,7 +1146,7 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
     , reprScopes = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
     }
 
-  sem derefRepr : ReprUniMap -> Repr -> Either Name Repr
+  sem derefRepr : ReprUniMap -> ReprVar -> Either Name ReprVar
   sem derefRepr links = | repr ->
     let repr = botRepr repr in
     match deref repr with BotRepr r then
@@ -1172,7 +1164,7 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
       eitherMapRight reprToSym (eitherBindRight e (derefRepr links))
     else Right sym
 
-  sem linkUnify : ReprUniMap -> Either Name Repr -> Either Name Repr -> Option ReprUniMap
+  sem linkUnify : ReprUniMap -> Either Name ReprVar -> Either Name ReprVar -> Option ReprUniMap
   sem linkUnify links a = | b ->
     switch (eitherBindRight a (derefRepr links), eitherBindRight b (derefRepr links))
     case (Left a, Left b) then
@@ -1196,13 +1188,13 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
 
   sem mergeReprUnis : ReprUniMap -> ReprUniMap -> Option ReprUniMap
   sem mergeReprUnis l = | r ->
-    let rSymToRepr : Symbol -> Repr = lam sym. ref (BotRepr {scope = mapFindExn sym r.reprScopes, sym = sym}) in
+    let rSymToRepr : Symbol -> ReprVar = lam sym. ref (BotRepr {scope = mapFindExn sym r.reprScopes, sym = sym}) in
     let insertOne = lam acc. lam pair. linkUnify acc (Right (rSymToRepr pair.0)) pair.1 in
     optionFoldlM insertOne l (mapBindings r.assignments)
 
   sem solveOne st prev = | alts ->
     match prev with Some _ then
-      errorSingle [] "[panic] The cp-based UCT solver currently assumes all opimpls are merged into one op-impl"
+      errorSingle [] "[panic] The cp-based RepTypes solver currently assumes all opimpls are merged into one op-impl"
     else
     let promise = promiseMkThread_ (lam.
       let f = lam alt.
@@ -1218,8 +1210,11 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
         -- NOTE(vipa, 2023-08-11): Pull substitutions from the
         -- type-signature and add to reprAssignments
         recursive let applySubsts = lam oLinks. lam ty.
-          let oLinks = match ty with TyColl {repr = r, explicitSubst = Some subst, info = info}
-            then optionBind oLinks (lam links. (match deref (botRepr r) with x & !BotRepr _ then errorSingle [info] "blub" else ()); linkUnify links (Right r) (Left subst))
+          let oLinks =
+            match ty with TySubst {arg = arg, subst = subst, info = info} then
+              match unwrapType arg with TyRepr {repr = r} then
+                optionBind oLinks (lam links. linkUnify links (Right r) (Left subst))
+              else errorSingle [info] "This substitution seems to be applied to a non-repr type"
             else oLinks in
           match ty with TyAlias x then applySubsts oLinks x.content else
           sfold_Type_Type applySubsts oLinks ty in
@@ -1231,10 +1226,10 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
             , "implementations are available."
             ]) in
 
-        -- NOTE(vipa, 2023-08-11): Collect Repr's that are in the type
-        -- signature of the alt, which are thus externally visible
-        -- even though their reprScope might be in the current alt or
-        -- further down.
+        -- NOTE(vipa, 2023-08-11): Collect ReprVar's that are in the
+        -- type signature of the alt, which are thus externally
+        -- visible even though their reprScope might be in the current
+        -- alt or further down.
         let signatureReprs : Set Symbol = foldl
           (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
           (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
@@ -1277,7 +1272,7 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
 
         -- TODO(vipa, 2023-08-11): This is the place to insert
         -- deduplication of opUses, by merging them and doing
-        -- `setUnion` on the `idxes` field. Reprs that are merged
+        -- `setUnion` on the `idxes` field. ReprVars that are merged
         -- during deduplication should be unified via reprAssignments
 
         let solutions =
@@ -1388,7 +1383,7 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
                  flushStderr ());
               prevSolutions
             case COPError x then
-              errorSingle [alt.info] (concat "CP-solver error during UCT solving:\n" x.msg)
+              errorSingle [alt.info] (concat "CP-solver error during RepTypes solving:\n" x.msg)
             end
           in work []
         in solutions
@@ -1401,16 +1396,16 @@ lang UCTSolveWithExhaustiveCP = UCTSolverInterface + TyPatMatching + COPHighLeve
   sem cheapestSolution =
   | CPSolutionSet promise ->
     let forced = promiseForce promise in
-    CPSolution (minOrElse (lam. errorSingle [] "Couldn't find an assignment of UCT collections, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
+    CPSolution (minOrElse (lam. errorSingle [] "Couldn't find a complete assignment of Reprs, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 end
 
-lang UCTComposedSolver = UCTSolveAndReconstruct + UCTSolveWithExhaustiveCP + MExprUnify
+lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + RepTypesSolveWithExhaustiveCP + MExprUnify
 end
 
-lang DumpUCTProblem = UCTFragments
-  sem dumpUCTProblem : Int -> Expr -> ()
-  sem dumpUCTProblem reprScope = | tm ->
-    let apps = dumpUCTProblemWork [] tm in
+lang DumpRepTypesProblem = RepTypesFragments
+  sem dumpRepTypesProblem : Int -> Expr -> ()
+  sem dumpRepTypesProblem reprScope = | tm ->
+    let apps = dumpRepTypesProblemWork [] tm in
     let reprToJson = lam repr. switch deref (botRepr repr)
       case BotRepr x then JsonArray [JsonInt x.scope, JsonInt (sym2hash x.sym)]
       case UninitRepr _ then JsonString "uninit"
@@ -1428,26 +1423,24 @@ lang DumpUCTProblem = UCTFragments
       printLn (json2string json) in
     iteri appToLine apps
 
-  sem dumpUCTProblemWork : [(Name, Type)] -> Expr -> [(Name, Type)]
-  sem dumpUCTProblemWork acc =
+  sem dumpRepTypesProblemWork : [(Name, Type)] -> Expr -> [(Name, Type)]
+  sem dumpRepTypesProblemWork acc =
   | TmOpVar x -> snoc acc (x.ident, x.ty)
   | TmOpImpl x ->
-    for_ x.alternatives (lam alt. dumpUCTProblem x.reprScope alt.body);
-    dumpUCTProblemWork acc x.inexpr
-  | tm -> sfold_Expr_Expr dumpUCTProblemWork acc tm
+    for_ x.alternatives (lam alt. dumpRepTypesProblem x.reprScope alt.body);
+    dumpRepTypesProblemWork acc x.inexpr
+  | tm -> sfold_Expr_Expr dumpRepTypesProblemWork acc tm
 
-  sem clearAndCollectReprs : [Repr] -> Type -> ([Repr], Type)
+  sem clearAndCollectReprs : [ReprVar] -> Type -> ([ReprVar], Type)
   sem clearAndCollectReprs reprs =
-  | TyColl x ->
+  | TyRepr x ->
     let reprs = snoc reprs x.repr in
-    match clearAndCollectReprs reprs x.filter with (reprs, filter) in
-    match clearAndCollectReprs reprs x.permutation with (reprs, permutation) in
-    match clearAndCollectReprs reprs x.element with (reprs, element) in
-    (reprs, TyColl {x with repr = ref (UninitRepr ()), filter = filter, permutation = permutation, element = element})
+    match clearAndCollectReprs reprs x.arg with (reprs, arg) in
+    (reprs, TyRepr {x with repr = ref (UninitRepr ()), arg = arg})
   | ty -> smapAccumL_Type_Type clearAndCollectReprs reprs ty
 end
 
-lang PrintMostFrequentRepr = UCTFragments + MExprAst
+lang PrintMostFrequentRepr = RepTypesFragments + MExprAst
   sem findMostCommonRepr : Expr -> Option Symbol
   sem findMostCommonRepr = | tm ->
     let counts = findMostCommonRepr_ (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))) tm in
@@ -1474,7 +1467,7 @@ lang PrintMostFrequentRepr = UCTFragments + MExprAst
 
   sem printIfTypeIsRepr : Symbol -> [Info] -> Type -> ()
   sem printIfTypeIsRepr reprSymbol infos = | ty ->
-    match unwrapType ty with TyColl c then
+    match unwrapType ty with TyRepr c then
       match deref (botRepr c.repr) with BotRepr x then
         if eqsym x.sym reprSymbol then
           let mkSection = lam info. {errorDefault with info = info} in

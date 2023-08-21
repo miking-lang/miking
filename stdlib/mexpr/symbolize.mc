@@ -15,7 +15,7 @@ include "builtin.mc"
 include "info.mc"
 include "error.mc"
 include "pprint.mc"
-include "uct-ast.mc"
+include "repr-ast.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -451,22 +451,18 @@ lang AllTypeSym = Sym + AllTypeAst + KindAst
                   kind = kind}
 end
 
-lang CollTypeSym = Sym + CollTypeAst
+lang ReprSubstSym = Sym + ReprSubstAst
   sem symbolizeType env =
-  -- NOTE(vipa, 2023-07-03): The `None` case is covered by the default
-  -- case (`smap`)
-  | TyColl (x & {explicitSubst = Some subst}) ->
-    let filter = symbolizeType env x.filter in
-    let permutation = symbolizeType env x.permutation in
-    let element = symbolizeType env x.element in
+  | TySubst x ->
+    let arg = symbolizeType env x.arg in
     let subst = getSymbol
       { kind = "repr"
       , info = [x.info]
       , allowFree = env.allowFree
       }
       env.reprEnv
-      subst in
-    TyColl {x with filter = filter, permutation = permutation, element = element, explicitSubst = Some subst}
+      x.subst in
+    TySubst {x with arg = arg, subst = subst}
 end
 
 --------------
@@ -556,8 +552,8 @@ lang MExprSym =
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym +
 
-  -- UCT stuff
-  OpDeclSym + OpImplSym + OpVarSym + CollTypeSym
+  -- RepTypes stuff
+  OpDeclSym + OpImplSym + OpVarSym + ReprSubstSym
 end
 
 -----------
