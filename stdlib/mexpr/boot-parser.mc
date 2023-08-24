@@ -211,13 +211,20 @@ lang BootParser = MExprAst + ConstTransformer
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 113 /-TmUtest-/ ->
-    let tusing = match (glistlen t 0) with 4 then
-                   Some (gterm t 3)
-                 else None () in
+    match
+      switch glistlen t 0
+      case 3 then (None (), None ())
+      case 4 then (Some (gterm t 3), None ())
+      case 5 then (Some (gterm t 3), Some (gterm t 4))
+      case _ then error "BootParser.matchTerm: Invalid list length for tmUtest"
+      end
+      with (tusing, tonfail)
+    in
     TmUtest {test = gterm t 0,
              expected = gterm t 1,
              next = gterm t 2,
              tusing = tusing,
+             tonfail = tonfail,
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 114 /-TmNever-/ ->

@@ -110,7 +110,7 @@ let prune_external_utests ?(enable = true) ?(warn = true)
         recur (sm, ntests, false) t
         |> fun ((sm, ntests, hasref''), t') ->
         ((sm, ntests, hasref || hasref' || hasref''), TmRecLets (fi, lst', t'))
-    | TmUtest (fi, t1, t2, t3, t4) ->
+    | TmUtest (fi, t1, t2, t3, t4, t5) ->
         recur (sm, ntests, false) t1
         |> fun ((sm, ntests, hasref'), t1') ->
         recur (sm, ntests, hasref') t2
@@ -122,11 +122,19 @@ let prune_external_utests ?(enable = true) ?(warn = true)
         | None ->
             ((sm, ntests, hasref'), t3) )
         |> fun ((sm, ntests, hasref'), t3') ->
-        recur (sm, ntests, false) t4
-        |> fun ((sm, ntests, hasref''), t4') ->
-        if hasref' then ((sm, succ ntests, hasref || hasref''), t4')
+        ( match t4 with
+        | Some t4' ->
+            let (sm, ntests, hasref'), t4' = recur (sm, ntests, hasref') t4' in
+            ((sm, ntests, hasref'), Some t4')
+        | None ->
+            ((sm, ntests, hasref'), t4) )
+        |> fun ((sm, ntests, hasref'), t4') ->
+        recur (sm, ntests, false) t5
+        |> fun ((sm, ntests, hasref''), t5') ->
+        if hasref' then ((sm, succ ntests, hasref || hasref''), t5')
         else
-          ((sm, ntests, hasref || hasref''), TmUtest (fi, t1', t2', t3', t4'))
+          ( (sm, ntests, hasref || hasref'')
+          , TmUtest (fi, t1', t2', t3', t4', t5') )
     | t ->
         smap_accum_left_tm_tm recur (sm, ntests, hasref) t
   in
@@ -148,7 +156,7 @@ let prune_external_utests_boot t =
     t
 
 let rec remove_all_utests = function
-  | TmUtest (_, _, _, _, t) ->
+  | TmUtest (_, _, _, _, _, t) ->
       remove_all_utests t
   | t ->
       smap_tm_tm remove_all_utests t

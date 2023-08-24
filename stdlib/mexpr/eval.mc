@@ -27,7 +27,7 @@ let _evalSeqOfCharsToString = use MExprAst in
     let f = lam c.
       match c with TmConst {val = CChar c} then
         c.val
-      else errorSingle [info] "Not a character"
+      else errorSingle [info] "Expected a seqence of characters"
     in
     map f tms
 
@@ -234,7 +234,7 @@ lang MatchEval = Eval + MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
+lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst + SeqAst
   sem eq (e1 : Expr) =
   | _ -> errorSingle [infoTm e1] "Equality not defined for expression"
 
@@ -249,7 +249,15 @@ lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst
       else errorSingle [r.info] "Invalid utest equivalence function"
     else
       eqExpr v1 v2 in
-    (if result then print "Test passed\n" else print "Test failed\n");
+    (if result then print "Test passed\n" else
+      match r.tonfail with Some tonfail then
+        match
+          apply ctx r.info (apply ctx r.info (tonfail, v1), v2)
+          with TmSeq seqr
+        then
+          print (_evalSeqOfCharsToString seqr.info seqr.tms)
+        else errorSingle [r.info] "Invalid utest failure function"
+      else print "Test failed\n");
     eval ctx r.next
 end
 

@@ -805,13 +805,15 @@ let rec desugar_tm nss env subs =
   | TmRecordUpdate (fi, a, lab, b) ->
       TmRecordUpdate
         (fi, desugar_tm nss env subs a, lab, desugar_tm nss env subs b)
-  | TmUtest (fi, a, b, using, body) ->
+  | TmUtest (fi, a, b, using, onfail, body) ->
       let using_desugared = Option.map (desugar_tm nss env subs) using in
+      let onfail_desugared = Option.map (desugar_tm nss env subs) onfail in
       TmUtest
         ( fi
         , desugar_tm nss env subs a
         , desugar_tm nss env subs b
         , using_desugared
+        , onfail_desugared
         , desugar_tm nss env subs body )
   | TmNever fi ->
       TmNever fi
@@ -956,8 +958,8 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
       (nss, langs, subs, syns, wrap :: stack)
-  | TopUtest (Utest (fi, lhs, rhs, using)) ->
-      let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
+  | TopUtest (Utest (fi, lhs, rhs, using, onfail)) ->
+      let wrap tm' = TmUtest (fi, lhs, rhs, using, onfail, tm') in
       (nss, langs, subs, syns, wrap :: stack)
   | TopExt (Ext (fi, id, e, ty)) ->
       let wrap tm' =

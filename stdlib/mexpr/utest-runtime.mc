@@ -10,19 +10,23 @@ let utestTestPassed : () -> () = lam.
   modref numPassed (addi (deref numPassed) 1);
   print "."
 
-let utestTestFailed : String -> String -> String -> String -> () =
-  lam info. lam lstr. lam rstr. lam usingstr.
+let utestTestFailed : String -> String -> String -> () =
+  lam info. lam usingstr. lam onfailStr.
   modref numFailed (addi (deref numFailed) 1);
   printLn (join [
-    "\n ** Unit test FAILED: ", info, " **\n    LHS: ", lstr,
-    "\n    RHS: ", rstr, usingstr])
+    "\n ** Unit test FAILED: ", info, " **\n", onfailStr, "\n", usingstr ])
+
+let utestDefaultOnFail : all a. all b. (a -> String) -> (b -> String)
+                                     -> a -> b -> String =
+  lam lpp. lam rpp. lam l. lam r.
+  join [ "    LHS: ", lpp l, "\n    RHS: ", rpp r ]
 
 let utestRunner
-  : all a. all b. String -> String -> (a -> String) -> (b -> String)
-               -> (a -> b -> Bool) -> a -> b -> () =
-  lam info. lam usingstr. lam lpp. lam rpp. lam eqfn. lam l. lam r.
+  : all a. all b. String -> String -> (a -> b -> String) -> (a -> b -> Bool)
+               -> a -> b -> () =
+  lam info. lam usingstr. lam ppfn. lam eqfn. lam l. lam r.
   if eqfn l r then utestTestPassed ()
-  else utestTestFailed info (lpp l) (rpp r) usingstr
+  else utestTestFailed info usingstr (ppfn l r)
 
 let defaultPprint : all a. a -> String = lam. "?"
 let ppBool : Bool -> String = bool2string
@@ -50,5 +54,6 @@ mexpr
 -- NOTE(larshum, 2022-12-30): Declare a tuple containing the functions that we
 -- want to be included. This allows us to remove other functions that are not
 -- of interest through deadcode elimination.
-( utestRunner, utestExitOnFailure, defaultPprint, ppBool, ppInt, ppFloat,
-ppChar, ppSeq , eqBool, eqInt , eqFloat, eqChar , eqSeq, join )
+( utestRunner, utestDefaultOnFail, utestExitOnFailure, defaultPprint, ppBool
+, ppInt, ppFloat, ppChar, ppSeq , eqBool, eqInt , eqFloat, eqChar , eqSeq
+, join)

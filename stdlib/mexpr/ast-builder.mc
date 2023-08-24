@@ -693,11 +693,51 @@ let appf8_ = use MExprAst in
 
 let utestu_ = use MExprAst in
   lam t. lam e. lam n. lam u.
-  TmUtest {test = t, expected = e, next = n, tusing = Some u, ty = tyunknown_, info = NoInfo ()}
+    TmUtest {
+      test = t,
+      expected = e,
+      next = n,
+      tusing = Some u,
+      tonfail = None (),
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
+
+let utesto_ = use MExprAst in
+  lam t. lam e. lam n. lam o.
+    TmUtest {
+      test = t,
+      expected = e,
+      next = n,
+      tusing = None (),
+      tonfail = Some o,
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
+
+let utestuo_ = use MExprAst in
+  lam t. lam e. lam n. lam u. lam o.
+    TmUtest {
+      test = t,
+      expected = e,
+      next = n,
+      tusing = Some u,
+      tonfail = Some o,
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
 
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n, tusing = None (), ty = tyunknown_, info = NoInfo ()}
+    TmUtest {
+      test = t,
+      expected = e,
+      next = n,
+      tusing = None (),
+      tonfail = None (),
+      ty = tyunknown_,
+      info = NoInfo ()
+    }
 
 -- Ascription
 let asc_ = use MExprAst in

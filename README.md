@@ -158,7 +158,6 @@ utest addi 1 2 with 3 in
 ```
 checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test` (assuming that you have now installed `mi` in your path):
 
-
 ```
 mi run program.mc --test
 ```
@@ -166,6 +165,20 @@ mi run program.mc --test
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
 In the rest of this document, we omit the `mexpr` keyword for brevity, and just write the MExpr itself. Remember to add it as appropriate when trying the various examples.
+
+The equality between the left-hand and right-hand sides in a utest is automatically deduced for many expressions. However, if you want to compare more complex language structures, or want to define equality in a different way, you can supply a custom equality function as, e.g., 
+
+```
+utest addi 1 2 with 0 using neqi in ()
+```
+
+where `neqi : Int -> Int -> bool` returns `true` if two integers are not equal. Moreover, when a test fails the left-hand and right-hand sides are pretty printed to standard out. For more complex expressions you may have to or want to modify this string representation. There is therefore an option to supply a custom `toString : a -> b -> String` function to utests with the following syntax (`a` and `b` are the types of the left-hand and right-hand sides, respectively)
+
+```
+utest addi 1 2 with 0 using neqi else lam l. lam r. "1+2 should not be 0" in ()
+```
+
+The function `lam l. lam r. "1+2 should not be 0"` is only applied to the left-hand and right-hand sides of the of utest if the test fails.
 
 ### Intrinsics
 

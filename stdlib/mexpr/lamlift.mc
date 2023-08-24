@@ -370,13 +370,23 @@ lang LambdaLiftLiftGlobal = MExprAst
   | TmType t -> TmType {t with inexpr = liftGlobal t.inexpr}
   | TmConDef t -> TmConDef {t with inexpr = liftGlobal t.inexpr}
   | TmUtest t ->
+    let optionLiftGlobalH = lam lifted. lam t.
+      match t with Some t then
+        match liftGlobalH lifted t with (lifted, t) in (lifted, Some t)
+      else (lifted, t)
+    in
     match liftGlobalH [] t.test with (lifted, test) in
     match liftGlobalH lifted t.expected with (lifted, expected) in
+    match optionLiftGlobalH lifted t.tusing with (lifted, tusing) in
+    match optionLiftGlobalH lifted t.tonfail with (lifted, tonfail) in
     _bindLifted
       lifted
-      (TmUtest {{{t with test = test}
-                    with expected = expected}
-                    with next = liftGlobal t.next})
+      (TmUtest {t with
+                test = test,
+                expected = expected,
+                tusing = tusing,
+                tonfail = tonfail,
+                next = liftGlobal t.next})
   | TmExt t -> TmExt {t with inexpr = liftGlobal t.inexpr}
   | t ->
     match liftGlobalH [] t with (lifted, t) in

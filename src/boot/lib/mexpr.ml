@@ -189,12 +189,16 @@ let getData = function
       (idTmConApp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
-  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (
-    match t4_op with
-    | Some t4 ->
+  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t5_op, t3)) -> (
+    match (t4_op, t5_op) with
+    | None, None ->
+        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], [])
+    | Some t4, None ->
         (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [])
-    | None ->
-        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
+    | Some t4, Some t5 ->
+        (idTmUtest, [fi], [5], [], [t1; t2; t3; t4; t5], [], [], [], [], [])
+    | _, _ ->
+        failwith "bootparser getData undefined" )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
   | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
@@ -810,19 +814,23 @@ let shape_str = function
   | _ ->
       us "Other tm"
 
+(* Default failing test message *)
+let unittest_default_onfail t1 t2 =
+  us " **\n    LHS: " ^. ustring_of_tm t1 ^. us "\n    RHS: "
+  ^. ustring_of_tm t2
+
 (* Print out error message when a unit test fails *)
-let unittest_failed fi t1 t2 tusing =
+let unittest_failed fi onfail_str using_str =
   uprint_endline
     (let using_str =
-       match tusing with
-       | Some t ->
-           us "\n    Using: " ^. ustring_of_tm t
+       match using_str with
+       | Some using_str ->
+           us "\n    Using: " ^. using_str
        | None ->
            us ""
      in
      us "\n ** Unit test FAILED: "
-     ^. info2str fi ^. us " **\n    LHS: " ^. ustring_of_tm t1
-     ^. us "\n    RHS: " ^. ustring_of_tm t2 ^. using_str )
+     ^. info2str fi ^. us " **\n    " ^. onfail_str ^. using_str )
 
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
@@ -2357,8 +2365,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         b := (t', None) ;
         t' )
   (* Unit testing *)
-  | TmUtest (fi, t1, t2, tusing, tnext) ->
-      ( if !utest then
+  | TmUtest (fi, t1, t2, tusing, tonfail, tnext) ->
+      if !utest then (
         let v1, v2 = (eval env pe t1, eval env pe t2) in
         let equal =
           match tusing with
@@ -2376,10 +2384,23 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         if equal then (
           printf "." ;
           utest_ok := !utest_ok + 1 )
-        else (
-          unittest_failed fi v1 v2 tusing ;
+        else
+          let onfail_str =
+            match tonfail with
+            | Some tonfail' -> (
+              match eval env pe (TmApp (fi, TmApp (fi, tonfail', v1), v2)) with
+              | TmSeq (_, tms) ->
+                  tmseq2ustring fi tms
+              | _ ->
+                  raise_error fi
+                    ( "Invalid failure function: "
+                    ^ Ustring.to_utf8 (ustring_of_tm tonfail') ) )
+            | None ->
+                unittest_default_onfail v1 v2
+          in
+          unittest_failed fi onfail_str (Option.map ustring_of_tm tusing) ;
           utest_fail := !utest_fail + 1 ;
-          utest_fail_local := !utest_fail_local + 1 ) ) ;
+          utest_fail_local := !utest_fail_local + 1 ) ;
       eval env pe tnext
   (* Never term *)
   | TmNever fi ->

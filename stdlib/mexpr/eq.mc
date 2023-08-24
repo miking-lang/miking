@@ -286,17 +286,33 @@ end
 
 lang UtestEq = Eq + UtestAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmUtest {test = t2, expected = e2, next = n2, tusing = u2} ->
-    match lhs with TmUtest {test = t1, expected = e1, next = n1, tusing = u1} then
+  | TmUtest {test = t2, expected = e2, next = n2, tusing = u2, tonfail = o2} ->
+    match lhs with
+      TmUtest {test = t1, expected = e1, next = n1, tusing = u1, tonfail = o1}
+    then
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free e1 e2 with Some free then
           match (u1, u2) with (Some tu1, Some tu2) then
             match eqExprH env free tu1 tu2 with Some free then
-              eqExprH env free n1 n2
+              match (o1, o2) with (Some to1, Some to2) then
+                match eqExprH env free to1 to2 with Some free then
+                  eqExprH env free n1 n2
+                else None ()
+              else
+                match (o1, o2) with (None (), None ()) then
+                  eqExprH env free n1 n2
+                else None ()
             else None ()
           else
             match (u1, u2) with (None (), None ()) then
-              eqExprH env free n1 n2
+              match (o1, o2) with (Some to1, Some to2) then
+                match eqExprH env free to1 to2 with Some free then
+                  eqExprH env free n1 n2
+                else None ()
+              else
+                match (o1, o2) with (None (), None ()) then
+                  eqExprH env free n1 n2
+                else None ()
             else None ()
         else None ()
       else None ()
@@ -1131,6 +1147,12 @@ utest ut1 with ut2 using eqExpr in
 utest eqExpr ut1 ut3e with false in
 utest eqExpr ut1 ut4e with false in
 utest eqExpr ut1 ut5e with false in
+let ut1 = utestu_ lam1 lam2 v3 v4 in
+let ut2 = utestu_ lam2 lam1 v4 v3 in
+utest ut1 with ut2 using eqExpr in
+let ut1 = utestuo_ lam1 lam2 v3 v4 v3 in
+let ut2 = utestuo_ lam2 lam1 v4 v3 v4 in
+utest ut1 with ut2 using eqExpr in
 
 -- Sequences
 let s1 = seq_ [lam1, lam2, v3] in
