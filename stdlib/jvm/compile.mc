@@ -76,7 +76,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                     { env with bytecode = concat env.bytecode [new_ vb, dup_, invokespecial_ vb "<init>" "()V"] }
                     tms in
             { e with bytecode = snoc e.bytecode (invokevirtual_ vb "result" "()Lscala/collection/immutable/Vector;") }
-    | TmConst { val = val, ty = ty } ->
+    | TmConst { val = val, ty = ty } & t ->
         let bc = (match val with CInt { val = val } then
             concat [ldcLong_ val] wrapInteger_
         else match val with CFloat { val = val } then
@@ -254,7 +254,9 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             initClass_ "DPrint_INTRINSIC"
         else match val with CSet _ then
             initClass_ "Set_INTRINSIC$"
-        else never) in
+        else match val with CConstructorTag _ then 
+            initClass_ "ConstructorTag_INTRINSIC" 
+        else (printLn (concat "Unknown intrinsic: " (expr2str t))); never) in
         { env with bytecode = concat env.bytecode bc }
     | TmApp { lhs = lhs, rhs = rhs, ty = ty } ->
         let arg = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } rhs in
@@ -451,14 +453,15 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             constSeqBC = concat bodyEnv.constSeqBC env.constSeqBC,
             recordMap = mapUnion env.recordMap bodyEnv.recordMap }
     | TmUtest _ -> (error "TmUtest"); env
-    | TmNever _ -> { env with bytecode = foldl concat
-                            env.bytecode
-                            [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
-                            ldcString_ "Never Reached!",
-                            invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
-                            ldcInt_ 1,
-                            invokestatic_ "java/lang/System" "exit" "(I)V"],
-                            nothing_] }
+    | TmNever _ -> --(printLn "TmNever"); 
+    { env with bytecode = foldl concat
+        env.bytecode
+        [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
+        ldcString_ "Never Reached!",
+        invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
+        ldcInt_ 1,
+        invokestatic_ "java/lang/System" "exit" "(I)V"],
+        nothing_] }
     | TmExt _ -> (error "TmExt"); env
     | a ->
         (error "unknown expr\n");
@@ -832,7 +835,6 @@ let collectRecords = lam records.
 let compileJVMEnv = lam ast.
     use MExprJVMCompile in
     use MExprTypeLift in
-
     -- using typeLiftExpr to get all record keys
     let emptyTypeLiftEnv : TypeLiftEnv = {
       typeEnv = [],
@@ -862,11 +864,33 @@ let compileJVMEnv = lam ast.
             adtTags = adt.2,
             globalFuncMap = mapEmpty nameCmp,
             constSeqBC = [] } in
+    let interfaceLen = length adt.0 in
+    let endLabel = createName_ "end" in
+    let bc = foldli  
+                (lam acc. lam i. lam interf. 
+                    let name = match interf with Interface { name = n } then n else never in
+                    let last = subi (length adt.0) 1 in 
+                    let label = (match i with last then endLabel else createName_ "next") in  
+                    let nextLabel = createName_ "next" in
+                    concat 
+                        acc
+                        [aload_ 1,
+                        instanceof_ (concat pkg_ name),
+                        ifeq_ label, -- jump if 0
+                        pop_,
+                        aload_ 1,
+                        checkcast_ (concat pkg_ name),
+                        invokeinterface_ (concat pkg_ name) "getTag" "()I",
+                        goto_ endLabel,
+                        label_ label]) 
+                [ldcInt_ 0] adt.0 in
+    let constructorTagBC = foldl concat (subsequence bc 0 (subi (length bc) 2)) [[label_ endLabel, i2l_], wrapInteger_, [areturn_]] in
+    let constructorTagClass = createClass "ConstructorTag_INTRINSIC" (concat pkg_ "Function") [] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" constructorTagBC] in 
     let compiledEnv = (toJSONExpr env tlAst) in
     let bytecode = concat compiledEnv.bytecode [pop_, return_] in
     --let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in
-    let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC]] in
+    let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC, constructorTagClass]] in
     let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) (snoc adt.0 objToObj) in
     prog
 
@@ -929,6 +953,7 @@ let compileMCoreToJVM = lam ast. lam sourcePath. lam options.
     use MExprJVMCompileLang in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
+    --(printLn (expr2str liftedAst));
     let jvmProgram = compileJVMEnv liftedAst in
     let path = concat stdlibLoc "/jvm/" in
     let json = sysTempFileMake () in
