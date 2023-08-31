@@ -667,14 +667,18 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
         stlAcc
     ) stackTypeLabel table.tokenConTypes in
 
-    -- TODO(johnwikman, 2023-08-31): The unsymbolized "toList" function should
-    -- be abstracted away somehow. I would believe that having the stacks as
-    -- lists should be critical to performance.
     let stackRecordExpr = 
       let tytms = (mapFoldWithKey (lam acc: ([(String, Type)], [(String, Expr)]). lam ty: Type. lam label: String.
         match acc with (tys, tms) in
         let tys = cons (label, (tyseq_ ty)) tys in
-        let tms = cons (label, withType (tyseq_ ty) (appf1_ (var_ "toList") (seq_ []))) tms in
+        -- TODO(johnwikman, 2023-08-31): The previous usage of "toList" below
+        -- has been replaced by the usage of createList_, but it makes use of a
+        -- function that selects from a list with no type. Usage of an
+        -- intrinsic emptyList and emptyRope or something would be better
+        -- suited here, as I know the type of the list but cannot instantiate
+        -- any elements from that type.
+        --let tms = cons (label, withType (tyseq_ ty) (appf1_ (var_ "toList") (seq_ []))) tms in
+        let tms = cons (label, withType (tyseq_ ty) (createList_ 0 (ulam_ "i" (get_ (seq_ []) (var_ i))))) tms in
         (tys, tms)
       ) ([], []) stackTypeLabel) in
       match tytms with (tys, tms) in
