@@ -678,7 +678,7 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
         -- suited here, as I know the type of the list but cannot instantiate
         -- any elements from that type.
         --let tms = cons (label, withType (tyseq_ ty) (appf1_ (var_ "toList") (seq_ []))) tms in
-        let tms = cons (label, withType (tyseq_ ty) (createList_ 0 (ulam_ "i" (get_ (seq_ []) (var_ i))))) tms in
+        let tms = cons (label, withType (tyseq_ ty) (createList_ (int_ 0) (ulam_ "i" (get_ (seq_ []) (var_ "i"))))) tms in
         (tys, tms)
       ) ([], []) stackTypeLabel) in
       match tytms with (tys, tms) in
