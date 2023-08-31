@@ -485,75 +485,106 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
     strJoin "\n" lines
 
 
-  -- Generates AST-code for an LR parser corresponding to the provided parse
-  -- table. The generated code will follow this structure:
-  -- let myLRParser: all a. (a -> (a, Option LRToken)) -> a -> Result String String a =
-  --   lam nextToken. lam lexerState.
-  --   let stack_LRToken: [<LRTokenType>] = toList [] in
-  --   let stack_NType0: [<NonTerminalType0>] = toList [] in
-  --   let stack_NType1: [<NonTerminalType1>] = toList [] in
-  --   ...
-  --   let stack_NType(k-1): [<NonTerminalType(k-1)>] = toList [] in
-  --   let stacks = {
-  --     stack_LRToken = stack_LRToken,
-  --     stack_NType0 = stack_NType0,
-  --     stack_NType1 = stack_NType1,
-  --     ...
-  --     stack_NType(k-1) = stack_NType(k-1)
-  --   } in
-  --   let gotos_ON_NonTerminal0: [Int] = toRope [..., ..., ..., ...] in
-  --   let gotos_ON_NonTerminal1: [Int] = toRope [..., ..., ..., ...] in
-  --   ...
-  --   recursive let runLRParser =
-  --     lam stacks: {...}.
-  --     lam trace: [Int].
-  --     lam lookahead: [a].
-  --     ...
-  --     let currentState: Int = head trace in
-  --     switch currentState
-  --     case 0 then
-  --       switch lookahead
-  --       case [..., ...] then
-  --         <perform action on this lookahead and tail-recurse on runLRParser>
-  --       case [..., ...] then
-  --         -- let's pretend this is a reduce action
-  --         let stack_NTypeX = stacks.stack.NTypeX in
-  --         let stack_NTypeY = stacks.stack.NTypeY in
-  --         let stack_NTypeZ = stacks.stack.NTypeZ in
-  --         let stack_NTypeW = stacks.stack.NTypeW in
-  --         let a3 = head stack_NTypeX in
-  --         let stack_NTypeX = tail stack_NTypeX in
-  --         let a2 = head stack_NTypeY in
-  --         let stack_NTypeY = tail stack_NTypeY in
-  --         let a1 = head stack_NTypeZ in
-  --         let stack_NTypeZ = tail stack_NTypeZ in
-  --         let prodresult = prodfun a1 a2 a3 in
-  --         let stack_NTypeW = cons prodresult stack_NTypeW in
-  --         let stacks = {stacks with stack_NTypeX = stack_NTypeX,
-  --                                   stack_NTypeY = stack_NTypeY,
-  --                                   stack_NTypeZ = stack_NTypeZ,
-  --                                   stack_NTypeW = stack_NTypeW} in
-  --         let trace = subsequence trace 3 (length trace) in
-  --         let currentState = head trace in
-  --         let nextState = get gotos_ON_NonTerminal0 currentState in
-  --         let trace = cons nextState trace in
-  --         -- NOTE: lookahead is unchanged by a reduce action
-  --         runLRParser stacks trace lookahead ...
-  --       ...
-  --       case _ then
-  --         <parse error, expected>
-  --       end
-  --     ...
-  --     end
-  --   in
-
+  -- Generates an expression for a LR(k) parser that begins parsing as soon as
+  -- it is evaluated. It is by default not wrapped in any lambdas and will be
+  -- immediately evaluated unless the caller wraps the returned expression in a
+  -- lambda. As such, the type of the generated expressions will not be an
+  -- arrow type and will instead directly be:
+  --   Result (Info, String) (Info, String) <entrypointType>
+  --
+  -- Example usage:
+  --
+  --    let table = lrCreateParseTable ... in
+  --    -- Generate and bind important names to be used inside the parser
+  --    -- expression. In this case we want to bind the lambda argument
+  --    match (nameSym "nextToken", nameSym "stream") with (nNextToken, nStream) in
+  --    let bindings = {lrDefaultGeneratorBindings () with
+  --      v_stream = nvar_ nStream,
+  --      v_nextToken = nvar_ nNextToken
+  --    } in
+  --    let parserExpr = nulams_ [nStream, nNextToken] (
+  --      lrGenerateParser bindings table
+  --    ) in
+  --    ...
+  --
+  -- See the LRGeneratorBindings type definitons for more bindings that you
+  -- potentially have to provide.
+  --
+  -- The generated LR(k) parser expression will follow the following stucture:
+  --
+  --    let actionState = <initial action state from parse table> in
+  --    let gotoLookup_<NT0> = [...] in
+  --    let gotoLookup_<NT1> = [...] in
+  --    ...
+  --    let initialStacks = {
+  --      typeStack0 = toList [],
+  --      typeStack1 = toList [],
+  --      ...
+  --    } in
+  --    let initialStateTrace = [<entrypoint state index>] in
+  --    -- extract the first k tokens of lookahead
+  --    let lookahead_check: Result w e (Stream, [Token]) =
+  --      ...
+  --    in
+  --    switch lookahead_check
+  --      case ResultOk {value = (lexerState, lookahead)} then
+  --        recursive let parseLoop =
+  --          lam stacks.
+  --          lam lexerState: Stream.
+  --          lam stateTrace: [Int].
+  --          lam lookahead: [Token].
+  --          match stateTrace with [currentState] ++ _
+  --            switch currentState
+  --            case 0 then
+  --              switch lookahead
+  --              -- first all the shift cases
+  --              case [TokenX x, ...] & ([_] ++ lookahead) then
+  --                let stacks = {stacks with typeStack<X> = cons x stacks.typeStack<X>} in
+  --                let stateTrace = cons <shift index> stateTrace in
+  --                switch nextToken lexerState
+  --                case ResultOk {value = {token = token, stream = stream}} then
+  --                  parseLoop stacks stream stateTrace (snoc lookahead token)
+  --                case ResultErr {errors = errors} then
+  --                  result.err errors
+  --                end
+  --              -- then the reduce cases
+  --              case [TokenA _, ...] then
+  --                let stackY = stack.typeStack<Y> in
+  --                let stackN = stack.typeStack<N> in
+  --                ...
+  --                match (head stackY, tail stackY) with (tokenY1, stackY) in
+  --                ...
+  --                let newProduce = <semantic action> actionState tokenY1 ... in
+  --                <if reducing on entrypoint rule>
+  --                  result.ok newProduce
+  --                <otherwise (majority of cases)>
+  --                  let stackN = cons newProduce stackN in
+  --                  let stacks = {stacks with typeStack<Y> = stackY, typeStack<N> = stackN, ...} in
+  --                  let stateTrace = subsequence stateTrace <n popped tokens> (length stateTrace) in
+  --                  let nextState = get (head stateTrace) gotoLookup_<reduced NT> in
+  --                  let stateTrace = cons nextState stateTrace in
+  --                  parseLoop stacks lexerState stateTrace lookahead
+  --              ...
+  --              case _ then
+  --                result.err "unexpected tokens"
+  --            case _ then
+  --              result.err "internal invalid state error"
+  --          else
+  --            result.err "internal state trace error"
+  --        in
+  --        parseLoop initialStacks
+  --                  lexerState
+  --                  initialStateTrace
+  --                  lookahead
+  --      case ResultErr {errors = errors} then
+  --        result.err errors
+  --    end
   type LRGeneratorBindings = {
     -- t_ := type names
     t_Result : Name,
     t_Info : Name,
     t_Token : Name,
     t_Stream : Name,
-    t_NextTokenResult : Name,
     -- c_ := constructor names
     c_NoInfo : Name,
     c_ResultOk : Name,
@@ -561,7 +592,7 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
     -- v_ := values and functions (see expected type signature in comments)
     v_result_ok : Expr,  -- all e,w,c. c -> Result e w c
     v_result_err : Expr, -- all e,w,c. e -> Result e w c
-    v_nextToken : Expr,  -- Stream -> Result (Info, String) (Info, String) NextTokenResult
+    v_nextToken : Expr,  -- Stream -> Result (Info, String) (Info, String) {token: Token, stream: Stream, ...}
     v_stream : Expr,     -- Stream
     v_mergeInfo : Expr,  -- Info -> Info -> Info
     v_tokInfo : Expr,    -- Token -> Info
@@ -576,7 +607,6 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
     t_Info = nameNoSym "Info",
     t_Token = nameNoSym "Token",
     t_Stream = nameNoSym "Stream",
-    t_NextTokenResult = nameNoSym "NextTokenResult",
     c_NoInfo = nameNoSym "NoInfo",
     c_ResultOk = nameNoSym "ResultOk",
     c_ResultErr = nameNoSym "ResultErr",
@@ -603,21 +633,10 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
     let resErrNoInfo = lam s: String. resExprErrNoInfo (str_ s) in
 
     /---- Set up the types ----/
-    -- TODO(johnwikman, 2023-02-22): Tried to do this with polymorphic types,
-    -- but couldn't get it to work. Clean this mess up or fix it.
     let errorType = tytuple_ [ntycon_ binds.t_Info, tystr_] in
     let warningType = errorType in
-    --let tokenTypeName = nameSym "tokenType" in
-    --let tokenType = ntyvar_ tokenTypeName in
     let tokenType = ntycon_ binds.t_Token in
-    --let lexerStreamTypeName = nameSym "lexerStreamType" in
-    --let lexerStreamType = ntyvar_ lexerStreamTypeName in
     let lexerStreamType = ntycon_ binds.t_Stream in
-    -- assuming that this type is a record {... with token: tokenType, stream: lexerStreamType}
-    --let lexerNextTokenResultTypeName = nameSym "lexerNextTokenResult" in
-    --let lexerNextTokenResultType = ntyvar_ lexerNextTokenResultTypeName in
-    --let lexerNextTokenResultType = tyrecord_ [("token", tokenType), ("stream", lexerStreamType)] in
-    let lexerNextTokenResultType = ntycon_ binds.t_NextTokenResult in
 
     let entrypointType = mapLookupOrElse (lam. tyunknown_) table.syntaxDef.entrypoint table.nonTerminalTypes in
     let resultType = tyapps_ (ntycon_ binds.t_Result) [warningType, errorType, entrypointType] in
@@ -648,6 +667,9 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
         stlAcc
     ) stackTypeLabel table.tokenConTypes in
 
+    -- TODO(johnwikman, 2023-08-31): The unsymbolized "toList" function should
+    -- be abstracted away somehow. I would believe that having the stacks as
+    -- lists should be critical to performance.
     let stackRecordExpr = 
       let tytms = (mapFoldWithKey (lam acc: ([(String, Type)], [(String, Expr)]). lam ty: Type. lam label: String.
         match acc with (tys, tms) in
@@ -660,7 +682,7 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
     in
 
     /---- Set up the GOTO lists ----/
-    let missingGOTO = 200000 in -- using a large number here since we cannot parse negative numbers yet, for some reason
+    let missingGOTO = 200000 in -- using a large number here since MCore cannot parse negative numbers yet
 
     let gotoLookup: Map Name (Map Int Int) = mapFoldWithKey (lam acc. lam nt. lam.
       mapInsert nt (mapEmpty subi) acc
@@ -936,7 +958,7 @@ lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
       let lookahead_check: Result w e (LexerStateType, [Tokens]) =
         recursive let work = lam lexerState. lam acc. lam i.
           if eqi i 0 then acc else
-          let r = lexerState nextToken in
+          let r = nextToken lexerState in
           match r with ResultOk {value = rexres} then
             work lexres.stream (snoc acc lexres.token) (subi i 1)
           else match r with ResultErr {errors = errors} in
