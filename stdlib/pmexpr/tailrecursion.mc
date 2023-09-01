@@ -24,8 +24,8 @@ type TailRecursiveEnv = {
 }
 
 type Side
-con Left : () -> Side
-con Right : () -> Side
+con LeftSide : () -> Side
+con RightSide : () -> Side
 con Both : () -> Side
 
 -- Combines two options by choosing Some over None. Should both options be
@@ -47,8 +47,8 @@ let compatibleSide : Option Side -> Option Side -> Option Side =
       let o = (l, r) in
       match o with (Both (), rhs) then Some rhs
       else match o with (lhs, Both ()) then Some lhs
-      else match o with (Left (), Left ()) then Some (Left ())
-      else match o with (Right (), Right ()) then Some (Right ())
+      else match o with (LeftSide (), LeftSide ()) then Some (LeftSide ())
+      else match o with (RightSide (), RightSide ()) then Some (RightSide ())
       else None ())
 
 -- Determines whether a given expression is a recursive call to a function with
@@ -73,8 +73,8 @@ let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
     let lrec = isRecursiveCall arg1 ident in
     let rrec = isRecursiveCall arg2 ident in
     let side =
-      if lrec then if rrec then Some (Both ()) else Some (Left ())
-      else if rrec then Some (Right ())
+      if lrec then if rrec then Some (Both ()) else Some (LeftSide ())
+      else if rrec then Some (RightSide ())
       else None () in
     optionBind
       side
@@ -123,7 +123,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
             let ne = withType elemTy (withInfo binding.info ne) in
             match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
               let leftArgRecursion =
-                match side with Left () | Both () then true else false
+                match side with LeftSide () | Both () then true else false
               in
               Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
             else None ()

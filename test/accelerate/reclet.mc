@@ -11,4 +11,5 @@ recursive let fn = lam n.
 in
 
 let x = fn 4 in
-printLn (int2string x)
+utest x with 10 in
+()

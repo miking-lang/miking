@@ -111,6 +111,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     match mapLookup ty cenv.revTypeEnv with Some id then
       Some (TyCon {ident = id, info = infoTy ty})
     else None ()
+  | TyAlias t -> lookupTypeIdent env t.content
   | ty -> Some ty
 
   sem getCudaType : TargetWrapperEnv -> Type -> CType
@@ -190,6 +191,8 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
     let ty = _unwrapType cenv.compileCEnv.typeEnv ty in
     match ty with TyCon _ then errorSingle [infoTy ty] "Could not unwrap type"
     else _generateCDataRepresentation env ty
+  | TyAlias t ->
+    _generateCDataRepresentation env t.content
   | ty ->
     CudaBaseTypeRepr {
       ident = nameSym "cuda_tmp",

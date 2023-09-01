@@ -15,4 +15,5 @@ let s2 : [Int] = create 100 (lam i. subi 100 i) in
 let x : Int = accelerate (
   utest length s1 with length s2 in
   zip s1 s2) in
-printLn (int2string x)
+utest x with 10000 in
+()

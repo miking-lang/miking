@@ -18,4 +18,5 @@ accelerate
   tensorSetExn t [0,0,0] c
 );
 
-printLn (int2string (tensorGetExn t [0,0,0]))
+utest tensorGetExn t [0,0,0] with 28 in
+()

@@ -16,9 +16,7 @@ src_files_all =\
 # install or are mutually exclusive with other dependencies.
 sundials_files = $(wildcard stdlib/sundials/*.mc)
 ipopt_files = $(wildcard stdlib/ipopt/*.mc)
-accelerate_files = $(wildcard test/examples/accelerate/*.mc)
-cuda_files = $(wildcard test/examples/accelerate/cuda/*.mc)
-futhark_files = $(wildcard test/examples/accelerate/futhark/*.mc)
+accelerate_files = $(wildcard test/accelerate/*.mc)
 
 special_dependencies_files +=\
 	$(sundials_files)\

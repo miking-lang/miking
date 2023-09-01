@@ -18,18 +18,23 @@ let sumTensor : Tensor[Float] -> Float = lam t.
 mexpr
 
 let shape = [100, 100] in
-let t = tensorCreateCArrayFloat shape (lam. 0.0) in
+let t1 = tensorCreateCArrayFloat shape (lam. 0.0) in
+let t2 = tensorCreateCArrayFloat shape (lam. 0.0) in
 let n : Int = foldl multiply 1 shape in
 
-let x : Float = accelerate (
+let op = lam out.
   loop n
     (lam i : Int.
       let x = divi i 100 in
       let y = modi i 100 in
       let v = f (int2float x) (int2float y) in
       let sh = [x, y] in
-      tensorSetExn t sh v);
-  sumTensor t
-) in
+      tensorSetExn out sh v);
+  sumTensor out
 
-print (concat (float2string x) "\n")
+in
+
+let x = accelerate (op t1) in
+let y = op t2 in
+utest x with y in
+()

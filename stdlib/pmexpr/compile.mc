@@ -8,6 +8,7 @@ include "mexpr/anf.mc"
 include "mexpr/cse.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/demote-recursive.mc"
+include "mexpr/monomorphize.mc"
 include "pmexpr/build.mc"
 include "pmexpr/classify.mc"
 include "pmexpr/copy-analysis.mc"
@@ -157,7 +158,7 @@ end
 
 lang PMExprCudaWellFormed =
   PMExprCompileWellFormedBase + CudaPMExprAst + CudaLanguageFragmentFix +
-  CudaInlineHigherOrder + MExprANF
+  CudaInlineHigherOrder + MExprANF + MExprMonomorphize
 
   sem cudaCheckTensorRank : Int -> Name -> Expr -> Type -> Expr
   sem cudaCheckTensorRank tensorMaxRank id acc =
@@ -214,6 +215,7 @@ lang PMExprCudaWellFormed =
   sem checkWellFormedAst entry =
   | Cuda _ ->
     match entry with (_, ast) in
+    let ast = monomorphize ast in
     let ast = fixLanguageFragmentSemanticFunction ast in
     let ast = normalizeTerm ast in
     let ast = inlinePartialFunctions ast in

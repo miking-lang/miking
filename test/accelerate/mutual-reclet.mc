@@ -12,6 +12,10 @@ end
 
 mexpr
 
-if accelerate (loop 1 (lam. ()); even 3) then
-  print "3 is even\n"
-else print "3 is not even\n"
+let b = accelerate (
+  loop 1 (lam. ());
+  even 3
+) in
+utest b with false in
+
+()

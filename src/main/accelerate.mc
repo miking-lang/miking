@@ -24,6 +24,7 @@ include "mexpr/cse.mc"
 include "mexpr/demote-recursive.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/remove-ascription.mc"
+include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
@@ -53,8 +54,8 @@ include "sys.mc"
 lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeCheck + MExprRemoveTypeAscription +
-  MExprUtestGenerate + PMExprAst + MExprANF + PMExprDemote + PMExprRewrite +
-  PMExprTailRecursion + PMExprParallelPattern +
+  MExprLowerNestedPatterns + MExprUtestGenerate + PMExprAst + MExprANF +
+  PMExprDemote + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + MExprDemoteRecursive +
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
@@ -226,6 +227,9 @@ let compileAccelerated =
 
   -- Generate utests or strip them from the program.
   let ast = generateUtest options.runTests ast in
+
+  let ast = lowerAll ast in
+  let ast = typeAnnot ast in
 
   match typeLift ast with (typeLiftEnv, ast) in
   match generateTypeDecls typeLiftEnv with (generateEnv, typeTops) in

@@ -66,7 +66,7 @@ lang FutharkTypeAst = FutharkTypeParamAst
   | FTyArray { elem : FutType, dim : Option Name, info : Info }
   | FTyRecord { fields : Map SID FutType, info : Info }
   | FTyArrow { from : FutType, to : FutType, info : Info }
-  | FTyParamsApp { ty : FutType, params : [FutTypeParam], info : Info }
+  | FTyAll { ident : Name, ty : FutType, info : Info }
 
   sem infoFutTy =
   | FTyUnknown t -> t.info
@@ -77,7 +77,7 @@ lang FutharkTypeAst = FutharkTypeParamAst
   | FTyArray t -> t.info
   | FTyRecord t -> t.info
   | FTyArrow t -> t.info
-  | FTyParamsApp t -> t.info
+  | FTyAll t -> t.info
 
   sem withInfoFutTy (info : Info) =
   | FTyUnknown t -> FTyUnknown {t with info = info}
@@ -88,29 +88,24 @@ lang FutharkTypeAst = FutharkTypeParamAst
   | FTyArray t -> FTyArray {t with info = info}
   | FTyRecord t -> FTyRecord {t with info = info}
   | FTyArrow t -> FTyArrow {t with info = info}
-  | FTyParamsApp t -> FTyParamsApp {t with info = info}
+  | FTyAll t -> FTyAll {t with info = info}
 
   sem smapAccumL_FType_FType : all a. (a -> FutType -> (a, FutType)) -> a
                                     -> FutType -> (a, FutType)
   sem smapAccumL_FType_FType f acc =
   | FTyArray t ->
-    match f acc t.elem with (acc, elem) then
-      (acc, FTyArray {t with elem = elem})
-    else never
+    match f acc t.elem with (acc, elem) in
+    (acc, FTyArray {t with elem = elem})
   | FTyRecord t ->
-    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) then
-      (acc, FTyRecord {t with fields = fields})
-    else never
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) in
+    (acc, FTyRecord {t with fields = fields})
   | FTyArrow t ->
-    match f acc t.from with (acc, from) then
-      match f acc t.to with (acc, to) then
-        (acc, FTyArrow {{t with from = from} with to = to})
-      else never
-    else never
-  | FTyParamsApp t ->
-    match f acc t.ty with (acc, ty) then
-      (acc, FTyParamsApp {t with ty = ty})
-    else never
+    match f acc t.from with (acc, from) in
+    match f acc t.to with (acc, to) in
+    (acc, FTyArrow {{t with from = from} with to = to})
+  | FTyAll t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, FTyAll {t with ty = ty})
   | t -> (acc, t)
 
   sem smap_FType_FType : (FutType -> FutType) -> FutType -> FutType

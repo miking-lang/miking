@@ -945,7 +945,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
           match _unwrapType typeEnv ty with TyRecord { fields = fields } then
             match mapLookup sid fields with Some fTy then
               let label = sidToString sid in
-              let expr = match ty with TyCon { ident = ident } then
+              let expr = match unwrapType ty with TyCon { ident = ident } then
                   if any (nameEq ident) env.ptrTypes then
                     CEArrow { lhs = target, id = nameNoSym label }
                   else
