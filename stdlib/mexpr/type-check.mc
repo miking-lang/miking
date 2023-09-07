@@ -909,9 +909,41 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
 end
 
 lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
+  -- NOTE(larshum, 2023-09-07): Verify that the annotated type of a constructor
+  -- is of the form we expect, and provide understandable error messages
+  -- otherwise.
+  sem _checkConstructorType : Type -> ()
+  sem _checkConstructorType =
+  | ty ->
+    recursive let isValidConstructorType = lam ty.
+      switch ty
+      case TyCon _ then true
+      case TyApp {lhs = lhs} then isConstructorType lhs
+      case _ then false
+      end
+    in
+    match inspectType ty with TyArrow {to = to & (TyCon _ | TyApp _)} then
+      if isValidConstructorType to then ()
+      else
+        let msg = join [
+          "* Invalid type of constructor: ", nameGetStr t.ident, "\n",
+          "* The right-hand side should refer to a constructor type.\n",
+          "* When type checking the expression\n"
+        ] in
+        errorSingle [t.info] msg
+    else
+      let msg = join [
+        "* Invalid type of constructor: ", nameGetStr t.ident, "\n",
+        "* The constructor should be given a type A -> B such that B\n",
+        "  determines the constructor type.\n",
+        "* When type checking the expression\n"
+      ] in
+      errorSingle [t.info] msg
+
   sem typeCheckExpr env =
   | TmConDef t ->
     let tyIdent = resolveType t.info env.tyConEnv t.tyIdent in
+    _checkConstructorType tyIdent;
     let inexpr = typeCheckExpr (_insertCon t.ident tyIdent env) t.inexpr in
     TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->
