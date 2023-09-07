@@ -23,8 +23,12 @@ external rtpplCloseFileDescriptor : Int -> ()
 type Opaque
 
 -- Writing and reading RTPPL data types to and from a given file descriptor.
+external rtpplReadInt : Int -> [(Timespec, Int)]
+external rtpplWriteInt : Int -> (Timespec, Int) -> ()
 external rtpplReadFloat : Int -> [(Timespec, Float)]
 external rtpplWriteFloat : Int -> (Timespec, Float) -> ()
+external rtpplReadIntRecord : Int -> Int -> [(Timespec, Opaque)]
+external rtpplWriteIntRecord : Int -> Int -> (Timespec, Opaque) -> ()
 external rtpplReadDistFloat : Int -> [(Timespec, [(Float, Float)])]
 external rtpplWriteDistFloat : Int -> (Timespec, ([Float], [Float])) -> ()
 external rtpplReadDistFloatRecord : Int -> Int -> [(Timespec, [(Float, Opaque)])]
