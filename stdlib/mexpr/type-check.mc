@@ -934,8 +934,8 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
     else
       let msg = join [
         "* Invalid type of constructor: ", nameGetStr ident, "\n",
-        "* The constructor should be given a type A -> B such that B\n",
-        "  determines the constructor type.\n",
+        "* The constructor should be given type A -> B, where B\n",
+        "  is a fully applied datatype in scope.\n",
         "* When type checking the expression\n"
       ] in
       errorSingle [info] msg
