@@ -546,7 +546,22 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   -- can be any type, and the result type can be any type, it's thus
   -- very economical
     TmApp {{t with lhs = objMagic (generate env lhs)}
-              with rhs = generate env rhs}
+           with rhs = generate env rhs}
+  -- OPT(oerikss, 2023-10-06): Integer and float constant can be both negative
+  -- and positive in OCaml. Generating code that construct these as applications
+  -- of negf and negi on positive numbers leads to less efficient code than
+  -- explicitly constructing these negative numbers when the code contains many
+  -- negative number literals.
+  | TmApp {
+    lhs = TmConst (lr & {val = CNegi _}),
+    rhs = TmConst {val = CInt rr}
+  } ->
+    TmConst { lr with val = CInt { val = negi rr.val }}
+  | TmApp {
+    lhs = TmConst (lr & {val = CNegf _}),
+    rhs = TmConst {val = CFloat rr}
+  } ->
+    TmConst { lr with val = CFloat { val = negf rr.val }}
   | TmNever t ->
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {

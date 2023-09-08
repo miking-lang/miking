@@ -170,14 +170,25 @@ lang OCamlPrettyPrint =
 
   sem getConstStringCode (indent : Int) =
   | CUnsafeCoerce _ -> "(fun x -> x)"
-  | CInt {val = i} -> int2string i
+  -- NOTE(oerikss, 2023-10-06): Integer and float constant can here be both
+  -- negative and positive. Note that -0 = 0, which is the reason for the
+  -- condition on grouping below.
+  | CInt {val = n} ->
+    if eqi n 0 then "0"
+    else
+      let str = int2string n in
+      if leqi n 0 then join ["(", str, ")"] else str
+  | CFloat {val = f} ->
+    if eqf f 0. then "0."
+    else
+      let str = float2string f in
+      if leqf f 0. then join ["(", str, ")"] else str
   | CAddi _ -> "Int.add"
   | CSubi _ -> "Int.sub"
   | CMuli _ -> "Int.mul"
   | CDivi _ -> "Int.div"
   | CModi _ -> "Int.rem"
   | CNegi _ -> "Int.neg"
-  | CFloat {val = f} -> float2string f
   | CAddf _ -> "Float.add"
   | CSubf _ -> "Float.sub"
   | CMulf _ -> "Float.mul"
