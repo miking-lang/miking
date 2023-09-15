@@ -68,8 +68,5 @@ let rtpplExtMap =
            , ty = tyarrows_ [tyint_, tyint_, otyarray_ (otytuple_ [timespec, readDistTy tyunknown_])] } ),
     ( "rtpplWriteDistFloatRecord"
     , impl { expr = "Rtppl.write_dist_float_record"
-           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } ),
-    ( "rtpplBatchedInference"
-    , impl { expr = "Rtppl.rtppl_batched_inference"
-           , ty = tyarrows_ [tyarrow_ otyunit_ tyunknown_, timespec, otylist_ tyunknown_] } )
+           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } )
   ]

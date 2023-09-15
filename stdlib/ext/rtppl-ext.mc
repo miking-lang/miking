@@ -33,5 +33,3 @@ external rtpplReadDistFloat : Int -> [(Timespec, [(Float, Float)])]
 external rtpplWriteDistFloat : Int -> (Timespec, ([Float], [Float])) -> ()
 external rtpplReadDistFloatRecord : Int -> Int -> [(Timespec, [(Float, Opaque)])]
 external rtpplWriteDistFloatRecord : Int -> Int -> (Timespec, ([Opaque], [Float])) -> ()
-
-external rtpplBatchedInference : (() -> Opaque) -> Timespec -> [Opaque]
