@@ -313,7 +313,7 @@ recursive let json2string: JsonValue -> String = lam value.
     in
     (snoc (foldl escape "\"" s) '\"')
   case JsonFloat f then
-    -- NOTE(vsenderov, 2022-09-14): Need to append/prepend 0 to conform to the
+    -- NOTE(vsenderov, 2023-09-14): Need to append/prepend 0 to conform to the
     -- JSON standard.  What is the situation in locales that don't use a dot
     -- to delimit decimals?
     let str = float2string f in
@@ -415,8 +415,8 @@ utest json2string (JsonFloat (negf 1e-5)) with "-1e-05" in
 utest jsonParse "1.0" with Left (JsonFloat 1.) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat 1.) with "1.0" in
 
-utest jsonParse "0.1" with Left (JsonFloat 0.1) using eitherEq jsonEq eqString in
-utest json2string (JsonFloat 0.1) with "0.1" in
+utest jsonParse "0.25" with Left (JsonFloat 0.25) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat 0.25) with "0.25" in
 
 utest jsonParse "1233" with Left (JsonInt 1233) using eitherEq jsonEq eqString in
 utest json2string (JsonInt 1233) with "1233" in
