@@ -294,12 +294,14 @@ utest checkWellFormedExpr recUpdate with [CudaExprError recordUpdateExpr]
 using eqSeq eqCudaError in
 
 let t = nameSym "Tree" in
-let recursiveConstructorExpr = condef_ "Con" (tyarrow_ (ntyvar_ t) (ntyvar_ t)) in
+let recursiveConstructorExpr =
+  ncondef_ (nameSym "Con") (tyarrow_ (tytuple_ [ntycon_ t, ntycon_ t]) (ntycon_ t))
+in
 let conDef = bindall_ [
   ntype_ t [] (tyvariant_ []),
   recursiveConstructorExpr,
   int_ 0] in
-let expectedExpr = preprocess (bind_ recursiveConstructorExpr (int_ 0)) in
+let expectedExpr = bind_ recursiveConstructorExpr (int_ 0) in
 -- NOTE(larshum, 2022-07-12): Skip the first expression (a type) since we
 -- cannot compare those.
 utest tail (checkWellFormedExpr conDef) with [CudaExprError expectedExpr]
