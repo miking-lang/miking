@@ -2,6 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "mexpr/const-arity.mc"
 include "javascript/ast.mc"
+include "stdlib.mc"
 
 
 -- Fragments used by the intrinsic functions
@@ -55,10 +56,10 @@ let intrWebNS   = nameSym "MExpr_Web_JS_Intrinsics"
 let intrNodeNS  = nameSym "MExpr_Node_JS_Intrinsics"
 let intrBunNS   = nameSym "MExpr_Bun_JS_Intrinsics"
 
-let jsIntrinsicsFile_generic  = "stdlib/javascript/generic/intrinsics.js"
-let jsIntrinsicsFile_web      = "stdlib/javascript/web/intrinsics.js"
-let jsIntrinsicsFile_node     = "stdlib/javascript/node/intrinsics.js"
-let jsIntrinsicsFile_bun      = "stdlib/javascript/bun/intrinsics.js"
+let jsIntrinsicsFile_generic  = concat stdlibLoc "/javascript/generic/intrinsics.js"
+let jsIntrinsicsFile_web      = concat stdlibLoc "/javascript/web/intrinsics.js"
+let jsIntrinsicsFile_node     = concat stdlibLoc "/javascript/node/intrinsics.js"
+let jsIntrinsicsFile_bun      = concat stdlibLoc "/javascript/bun/intrinsics.js"
 
 let intrinsicGen  = use JSIntrinsic in intrinsic intrGenNS
 let intrinsicWeb  = use JSIntrinsic in intrinsic intrWebNS
