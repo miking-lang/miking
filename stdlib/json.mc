@@ -57,6 +57,8 @@ recursive
       _jsonParseArray ws (addi pos 1)
     case ['\"'] ++ ws then
       _jsonParseString [] ws (addi pos 1)
+    case "-Infinity" ++ ws then
+      Left (JsonFloat (negf inf), ws, addi pos 9)
     case ['-'] ++ ws then
       _jsonParseNegativeNumber ws (addi pos 1)
     case ['0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'] ++ _ then
@@ -64,8 +66,6 @@ recursive
     -- TODO
     case "Infinity" ++ ws then
       Left (JsonFloat inf, ws, addi pos 8)
-    case "-Infinity" ++ ws then
-      Left (JsonFloat (negf inf), ws, addi pos 9)
     case "NaN" ++ ws then
       Left (JsonFloat nan, ws, addi pos 3)
     case "true" ++ ws then
