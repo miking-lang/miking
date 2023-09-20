@@ -7,6 +7,7 @@ include "map.mc"
 include "string.mc"
 include "option.mc"
 include "tensor.mc"
+include "math.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue
@@ -60,6 +61,13 @@ recursive
       _jsonParseNegativeNumber ws (addi pos 1)
     case ['0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'] ++ _ then
       _jsonParseNumber s pos
+    -- TODO
+    case "Infinity" ++ ws then
+      Left (JsonFloat inf, ws, addi pos 8)
+    case "-Infinity" ++ ws then
+      Left (JsonFloat (negf inf), ws, addi pos 9)
+    case "NaN" ++ ws then
+      Left (JsonFloat nan, ws, addi pos 3)
     case "true" ++ ws then
       Left (JsonBool true, ws, addi pos 4)
     case "false" ++ ws then
@@ -318,6 +326,10 @@ recursive let json2string: JsonValue -> String = lam value.
     -- to delimit decimals?
     let str = float2string f in
     switch str
+        case "nan" then "NaN"
+        case "-nan" then "NaN" -- NOTE(vsenderov, 2023-09-20): for some reason this case is needed
+        case "inf" then "Infinity"
+        case "-inf" then "-Infinity"
         case _ ++ "." then snoc str '0'
         case "." ++ _ then cons '0' str
         case _ then str
@@ -405,6 +417,15 @@ let jsonDeserializeTensor: all a.
       else None ()
 
 mexpr
+
+utest jsonParse "NaN" with Left (JsonFloat nan) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat nan) with "NaN" in
+
+utest jsonParse "Infinity" with Left (JsonFloat inf) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat inf) with "Infinity" in
+
+utest jsonParse "-Infinity" with Left (JsonFloat (negf inf)) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat (negf inf)) with "-Infinity" in
 
 utest jsonParse "123.45" with Left (JsonFloat 123.45) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat 123.45) with "123.45" in
