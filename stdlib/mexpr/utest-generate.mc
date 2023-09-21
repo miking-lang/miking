@@ -104,7 +104,7 @@ let _tyalls = lam vars. lam ty.
   if null vars then error "" else
   foldr
     (lam tyvar. lam acc.
-      TyAll {ident = tyvar, sort = PolyVar (), ty = acc,
+      TyAll {ident = tyvar, kind = Poly (), ty = acc,
              info = _utestInfo})
     ty vars
 recursive let _pprintTy = lam ty.

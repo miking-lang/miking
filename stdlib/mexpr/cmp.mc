@@ -413,23 +413,23 @@ lang VarTypeCmp = Cmp + VarTypeAst
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
 end
 
-lang VarSortCmp = Cmp + VarSortAst
-  sem cmpVarSort =
-  | (RecordVar l, RecordVar r) ->
+lang KindCmp = Cmp + KindAst
+  sem cmpKind =
+  | (Row l, Row r) ->
     mapCmp cmpType l.fields r.fields
   | (lhs, rhs) ->
     subi (constructorTag lhs) (constructorTag rhs)
 end
 
-lang AllTypeCmp = VarSortCmp + AllTypeAst
+lang AllTypeCmp = KindCmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
     if eqi identDiff 0 then
-      let sortDiff = cmpVarSort (t1.sort, t2.sort) in
-      if eqi sortDiff 0 then
+      let kindDiff = cmpKind (t1.kind, t2.kind) in
+      if eqi kindDiff 0 then
         cmpType t1.ty t2.ty
-      else sortDiff
+      else kindDiff
     else identDiff
 end
 
