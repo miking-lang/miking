@@ -7,6 +7,7 @@ include "map.mc"
 include "string.mc"
 include "option.mc"
 include "tensor.mc"
+include "math.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue
@@ -313,15 +314,22 @@ recursive let json2string: JsonValue -> String = lam value.
     in
     (snoc (foldl escape "\"" s) '\"')
   case JsonFloat f then
-    -- NOTE(vsenderov, 2023-09-14): Need to append/prepend 0 to conform to the
-    -- JSON standard.  What is the situation in locales that don't use a dot
-    -- to delimit decimals?
-    let str = float2string f in
-    switch str
-        case _ ++ "." then snoc str '0'
-        case "." ++ _ then cons '0' str
-        case _ then str
-    end
+    if neqf f f then
+      "{\"__float__\": \"nan\"}"
+    else if eqf f inf then
+      "{\"__float__\": \"inf\"}"
+    else if eqf f (negf inf) then
+      "{\"__float__\": \"-inf\"}"
+    else
+      -- NOTE(vsenderov, 2023-09-14): Need to append/prepend 0 to conform to the
+      -- JSON standard.  What is the situation in locales that don't use a dot
+      -- to delimit decimals?
+      let str = float2string f in
+      switch str
+          case _ ++ "." then snoc str '0'
+          case "." ++ _ then cons '0' str
+          case _ then str
+      end
 
   case JsonInt i then
     int2string i
@@ -417,6 +425,10 @@ utest json2string (JsonFloat 1.) with "1.0" in
 
 utest jsonParse "0.25" with Left (JsonFloat 0.25) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat 0.25) with "0.25" in
+
+utest json2string (JsonFloat nan) with "{\"__float__\": \"nan\"}" in
+utest json2string (JsonFloat inf) with "{\"__float__\": \"inf\"}" in
+utest json2string (JsonFloat (negf inf)) with "{\"__float__\": \"-inf\"}" in
 
 utest jsonParse "1233" with Left (JsonInt 1233) using eitherEq jsonEq eqString in
 utest json2string (JsonInt 1233) with "1233" in
