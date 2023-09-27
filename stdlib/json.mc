@@ -2,6 +2,12 @@
 -- https://www.json.org/json-en.html
 -- Only divergence from the spec is the distinction between floats and integers
 
+-- The JSON specification does not support the special float values `nan`, `inf` and `-inf`.
+-- These are therefore encoded using the following objects:
+-- - `inf` is encoded as `{"__float__": "inf"}`
+-- - `-inf` is encoded as `{"__float__": "-inf"}`
+-- - `nan` is encoded as `{"__float__": "nan"}`
+
 include "either.mc"
 include "map.mc"
 include "string.mc"
