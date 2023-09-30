@@ -402,10 +402,10 @@ let jsonSerializeTensor: all a. (a -> JsonValue) -> Tensor[a] -> JsonValue =
       (keyTensor,jseq)
     ])
 let jsonDeserializeTensor: all a.
-  (JsonValue -> Option a) ->
   ([Int] -> ([Int] -> a) -> Tensor[a]) ->
+  (JsonValue -> Option a) ->
   JsonValue -> Option Tensor[a] =
-    lam f. lam tcreate. lam jtensor.
+    lam tcreate. lam f. lam jtensor.
       match jtensor with JsonObject m then
         match mapLookup keyTensorShape m with Some jshape then
           match mapLookup keyTensor m with Some jseq then
@@ -417,6 +417,17 @@ let jsonDeserializeTensor: all a.
           else None ()
         else None ()
       else None ()
+let jsonDeserializeTensorCArrayInt:
+    (JsonValue -> Option Int) -> JsonValue -> Option Tensor[Int] =
+  jsonDeserializeTensor tensorCreateCArrayInt
+let jsonDeserializeTensorCArrayFloat:
+    (JsonValue -> Option Float) -> JsonValue -> Option Tensor[Float] =
+  jsonDeserializeTensor tensorCreateCArrayFloat
+let jsonDeserializeTensorDense:
+    all a. (JsonValue -> Option a) -> JsonValue -> Option Tensor[a] =
+  -- NOTE(2023-09-30,dlunde): We need an eta expansion here due to value
+  -- restriction.
+  lam a1. jsonDeserializeTensor tensorCreateDense a1
 
 mexpr
 
@@ -545,6 +556,7 @@ with Some [false, true] in
 utest jsonDeserializeSeq jsonDeserializeBool (JsonArray [JsonInt 1, JsonBool true])
 with None () in
 
+-- Int tensors
 let tensor = (tensorOfSeqExn tensorCreateCArrayInt [3,3]
                 [1,2,3,
                  4,5,6,
@@ -556,7 +568,35 @@ let jtensor = JsonObject (mapFromSeq cmpString [
                                        JsonInt 7, JsonInt 8, JsonInt 9])
               ]) in
 utest jsonSerializeTensor jsonSerializeInt tensor with jtensor using jsonEq in
-utest jsonDeserializeTensor jsonDeserializeInt tensorCreateCArrayInt jtensor
+utest jsonDeserializeTensorCArrayInt jsonDeserializeInt jtensor
+with Some tensor in
+
+-- Float tensors
+let tensor = (tensorOfSeqExn tensorCreateCArrayFloat [3,3]
+                [1.,2.,3.,
+                 4.,5.,6.,
+                 7.,8.,9.]) in
+let jtensor = JsonObject (mapFromSeq cmpString [
+                (keyTensorShape, JsonArray [JsonInt 3, JsonInt 3]),
+                (keyTensor, JsonArray [JsonFloat 1., JsonFloat 2., JsonFloat 3.,
+                                       JsonFloat 4., JsonFloat 5., JsonFloat 6.,
+                                       JsonFloat 7., JsonFloat 8., JsonFloat 9.])
+              ]) in
+utest jsonDeserializeTensorCArrayFloat jsonDeserializeFloat jtensor
+with Some tensor in
+
+-- General tensors
+let tensor = (tensorOfSeqExn tensorCreateDense [3,3]
+                ["1","2","3",
+                 "4","5","6",
+                 "7","8","9"]) in
+let jtensor = JsonObject (mapFromSeq cmpString [
+                (keyTensorShape, JsonArray [JsonInt 3, JsonInt 3]),
+                (keyTensor, JsonArray [JsonString "1", JsonString "2", JsonString "3",
+                                       JsonString "4", JsonString "5", JsonString "6",
+                                       JsonString "7", JsonString "8", JsonString "9"])
+              ]) in
+utest jsonDeserializeTensorDense jsonDeserializeString jtensor
 with Some tensor in
 
 ()
