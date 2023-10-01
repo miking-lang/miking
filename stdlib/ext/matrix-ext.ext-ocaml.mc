@@ -39,5 +39,12 @@ let matrixExtMap =
         libraries = ["owl"],
         cLibraries = []
       }
-    ])
+    ]),
+    ("externalMatrixElemAdd", [
+    { expr = "Owl_dense.Matrix.D.( + )",
+      ty = tyarrows_ [otygenarrayclayoutfloat_, otygenarrayclayoutfloat_, otygenarrayclayoutfloat_],
+      libraries = ["owl"],
+      cLibraries = []
+    }
+  ])
   ]
