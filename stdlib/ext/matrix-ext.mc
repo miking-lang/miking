@@ -18,6 +18,10 @@ let matrixMul = lam m1. lam m2. externalMatrixMul m1 m2
 external externalMatrixElemMul : Tensor[Float] -> Tensor[Float] -> Tensor[Float]
 let matrixElemMul = lam m1. lam m2. externalMatrixElemMul m1 m2
 
+-- New functionality for element-wise addition
+external externalMatrixElemAdd : Tensor[Float] -> Tensor[Float] -> Tensor[Float]
+let matrixElemAdd = lam m1. lam m2. externalMatrixElemAdd m1 m2
+
 mexpr
 
 let _m = tensorOfSeqExn tensorCreateCArrayFloat in
@@ -103,6 +107,19 @@ with
    (_m33 [1.,  4.,  9.,
           16., 25., 36.,
           49., 64., 81.])
+using _eqm in
+
+utest matrixElemAdd
+   (_m33 [1., 2., 3.,
+          4., 5., 6.,
+          7., 8., 9.])
+   (_m33 [1., 2., 3.,
+          4., 5., 6.,
+          7., 8., 9.])
+with
+   (_m33 [2., 4., 6.,
+          8., 10., 12.,
+          14., 16., 18.])
 using _eqm in
 
 ()
