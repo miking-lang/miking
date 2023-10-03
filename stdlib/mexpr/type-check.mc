@@ -84,16 +84,6 @@ let _insertCon = lam name. lam ty. lam env : TCEnv.
   {env with conEnv = mapInsert name ty env.conEnv}
 
 lang RepTypesHelpers = Unify + ReprTypeAst + AliasTypeAst + TyWildAst
-  sem botRepr : ReprVar -> ReprVar
-  sem botRepr = | r ->
-    switch deref r
-    case BotRepr _ | UninitRepr _ then r
-    case LinkRepr x then
-      let bot = botRepr x in
-      modref r (LinkRepr bot);
-      bot
-    end
-
   sem unifyReprs : Int -> Ref [(ReprVar, ReprVar)] -> ReprVar -> ReprVar -> ()
   sem unifyReprs scope delayedReprUnifications a = | b ->
     let abot = botRepr a in
@@ -164,8 +154,8 @@ lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + MetaVarTypeCmp + RepTy
       { empty = (),
         combine = lam. lam. (),
         unify = lam env. lam ty1. lam ty2. unifyMeta (u ()) tcenv info env (ty1, ty2),
-        unifyRepr = lam env. lam l. lam r. unifyReprs env.reptypes.reprScope env.reptypes.delayedReprUnifications l r,
-        err = lam errs. unificationError errs info ty1 ty2
+        unifyRepr = lam env. lam l. lam r. unifyReprs tcenv.reptypes.reprScope tcenv.reptypes.delayedReprUnifications l r,
+        err = lam err. unificationError [err] info ty1 ty2
       } in
     let env : UnifyEnv = {
       boundNames = biEmpty,

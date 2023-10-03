@@ -14,6 +14,17 @@ con LinkRepr :
   -- Invariant: link may only point to a repr with <= scope
   ReprVar -> ReprContent
 
+recursive let botRepr : ReprVar -> ReprVar = lam r.
+  switch deref r
+  case BotRepr _ | UninitRepr _ then r
+  case LinkRepr x then
+    let bot = botRepr x in
+    modref r (LinkRepr bot);
+    bot
+  end
+end
+
+
 lang TyWildAst = Ast
   syn Type =
   | TyWild { info : Info }

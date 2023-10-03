@@ -1039,96 +1039,15 @@ lang RepTypesDummySolver = RepTypesSolverInterface
   sem cmpSolution a = | b -> 0
 end
 
-lang TyPatMatching = Unify + Generalize + RepTypesHelpers + WildToMeta
-  type Links =
-    { meta : Map Name Type
-    , repr : [(ReprVar, ReprVar)]
-    }
-
-  sem tyPatMatches : {ty : Type, pat : Type} -> Option Links
-  sem tyPatMatches = | {ty = ty, pat = pat} ->
-    recursive let findMetas = lam metas. lam ty.
-      let ty = unwrapType ty in
-      match ty with TyMetaVar x then
-        match deref x.contents with Unbound x in
-        setInsert x.ident metas
-      else sfold_Type_Type findMetas metas ty in
-    let cmpRepr = lam a. lam b.
-      match (deref (botRepr a), deref (botRepr b)) with (BotRepr a, BotRepr b) in
-      subi (sym2hash a.sym) (sym2hash b.sym) in
-    let rigidMetas = findMetas (setEmpty nameCmp) ty in
-    -- NOTE(vipa, 2023-08-18): TyWild in `ty` should be matched by
-    -- anything in the pattern. We achieve this by turning them into
-    -- meta-vars *without* putting them in `rigidMetas`, i.e., it's ok
-    -- to unify them with anything.
-    let ty = wildToMeta 0 ty in
-    let pat = inst (NoInfo ()) 0 pat in
-    let env : UnifyEnv =
-      { wrappedLhs = ty
-      , wrappedRhs = pat
-      , boundNames = biEmpty
-      } in
-    let emptyLinks = { meta = mapEmpty nameCmp, repr = [] } in
-    recursive let unwrapTypeWith = lam links. lam ty. switch unwrapType ty
-      case ty & TyMetaVar x then
-        match deref x.contents with Unbound x in
-        match mapLookup x.ident links with Some ty
-        then unwrapTypeWith links ty
-        else ty
-      case ty then
-       ty
-      end in
-    let inductConsume
-      : all acc. all a. all w. all e. (acc -> a -> Result w e (acc, [a])) -> acc -> [a] -> Result w e acc
-      = lam f.
-        recursive let work = lam acc. lam remaining.
-          match remaining with [x] ++ remaining then
-            result.bind (f acc x) (lam pair. match pair with (acc, new) in work acc (concat remaining new))
-          else result.ok acc
-        in work
-    in
-    let work = lam links. lam obl. switch obl
-      case TypeUnification u then
-        switch (unwrapTypeWith links.meta u.left, unwrapTypeWith links.meta u.right)
-        case (lTy & TyMetaVar l, rTy & TyMetaVar r) then
-          match (deref l.contents, deref r.contents) with (Unbound lc, Unbound rc) in
-          if nameEq lc.ident rc.ident then result.ok (links, []) else
-          let lRigid = setMem lc.ident rigidMetas in
-          let rRigid = setMem rc.ident rigidMetas in
-          if and lRigid rRigid then result.err (Types (u.left, u.right)) else
-          let src = if lRigid then rc.ident else lc.ident in
-          let dst = if lRigid then lTy else rTy in
-          let links = {links with meta = mapInsert src dst links.meta} in
-          result.ok (links, [])
-        case (mTy & TyMetaVar meta, ty) | (ty, mTy & TyMetaVar meta) then
-          match deref meta.contents with Unbound x in
-          if setMem x.ident rigidMetas then result.err (Types (mTy, ty)) else
-          let links = {links with meta = mapInsert x.ident ty links.meta} in
-          result.ok (links, [])
-        case pair then
-          result.map (lam x. (links, x)) (unifyTypes u.env pair)
-        end
-      case ReprUnification u then
-        let links = {links with repr = snoc links.repr (u.left, u.right)} in
-        result.ok (links, [])
-      end
-    in result.toOption (inductConsume work emptyLinks [TypeUnification {env = env, left = ty, right = pat}])
-end
-
-lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + COPHighLevel + ReprSubstAst
+lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHighLevel + ReprSubstAst + RepTypesHelpers
   syn SolverState =
   | CPState ()
   sem initSolverState = | _ -> CPState ()
 
-  type ReprUniMap =
-    { assignments : Map Symbol (Either Name ReprVar)
-    , reprScopes : Map Symbol Int
-    }
-
   type CPSol a =
     { cost : OpCost
     , specType : Type
-    , reprAssignments : ReprUniMap
+    , uni : Unification
     , innerSolutions : [OpImplSolution a]
     , idx : Int
     , token : a
@@ -1140,85 +1059,31 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
   syn OpImplSolution a =
   | CPSolution (CPSol a)
 
-  sem emptyReprUniMap : () -> ReprUniMap
-  sem emptyReprUniMap = | _ ->
-    { assignments = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
-    , reprScopes = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
-    }
-
-  sem derefRepr : ReprUniMap -> ReprVar -> Either Name ReprVar
-  sem derefRepr links = | repr ->
-    let repr = botRepr repr in
-    match deref repr with BotRepr r then
-      switch mapLookup r.sym links.assignments
-      case Some (x & Left _) then x
-      case Some (Right repr) then derefRepr links repr
-      case None _ then Right repr
-      end
-    else Right repr
-
-  sem derefReprSym : ReprUniMap -> Symbol -> Either Name Symbol
-  sem derefReprSym links = | sym ->
-    let reprToSym = lam x. match deref (botRepr x) with BotRepr x in x.sym in
-    match mapLookup sym links.assignments with Some e then
-      eitherMapRight reprToSym (eitherBindRight e (derefRepr links))
-    else Right sym
-
-  sem linkUnify : ReprUniMap -> Either Name ReprVar -> Either Name ReprVar -> Option ReprUniMap
-  sem linkUnify links a = | b ->
-    switch (eitherBindRight a (derefRepr links), eitherBindRight b (derefRepr links))
-    case (Left a, Left b) then
-      if nameEq a b then Some links else None ()
-    case (dst & Left _, Right r) | (Right r, dst & Left _) then
-      (match deref r with x & !BotRepr _ then dprintLn x else ());
-      match deref r with BotRepr x in
-      let links = {links with assignments = mapInsert x.sym dst links.assignments} in
-      let links = {links with reprScopes = mapInsert x.sym x.scope links.reprScopes} in
-      Some links
-    case (Right aref, Right bref) then
-      match (deref aref, deref bref) with (BotRepr a, BotRepr b) in
-      if eqsym a.sym b.sym then Some links else
-      let dst = if gti a.scope b.scope then aref else bref in
-      let src = if gti a.scope b.scope then b else a in
-      Some
-      { assignments = mapInsert src.sym (Right dst) links.assignments
-      , reprScopes = mapInsert src.sym src.scope links.reprScopes
-      }
-    end
-
-  sem mergeReprUnis : ReprUniMap -> ReprUniMap -> Option ReprUniMap
-  sem mergeReprUnis l = | r ->
-    let rSymToRepr : Symbol -> ReprVar = lam sym. ref (BotRepr {scope = mapFindExn sym r.reprScopes, sym = sym}) in
-    let insertOne = lam acc. lam pair. linkUnify acc (Right (rSymToRepr pair.0)) pair.1 in
-    optionFoldlM insertOne l (mapBindings r.assignments)
-
   sem solveOne st prev = | alts ->
     match prev with Some _ then
       errorSingle [] "[panic] The cp-based RepTypes solver currently assumes all opimpls are merged into one op-impl"
     else
     let promise = promiseMkThread_ (lam.
       let f = lam alt.
-        let emptyAssignments = emptyReprUniMap () in
-
         -- NOTE(vipa, 2023-08-11): Move delayedReprUnifications to
-        -- reprAssignments
-        let reprAssignments = optionFoldlM
-          (lam acc. lam pair. linkUnify acc (Right pair.0) (Right pair.1))
-          emptyAssignments
+        -- the root unification
+        let uni = optionFoldlM
+          (lam acc. lam pair. unifyReprPure acc pair.0 pair.1)
+          (emptyUnification ())
           alt.delayedReprUnifications in
 
         -- NOTE(vipa, 2023-08-11): Pull substitutions from the
-        -- type-signature and add to reprAssignments
-        recursive let applySubsts = lam oLinks. lam ty.
-          let oLinks =
+        -- type-signature and add to uni
+        recursive let applySubsts = lam oUni. lam ty.
+          let oUni =
             match ty with TySubst {arg = arg, subst = subst, info = info} then
               match unwrapType arg with TyRepr {repr = r} then
-                optionBind oLinks (lam links. linkUnify links (Right r) (Left subst))
+                optionBind oUni (lam uni. unifySetReprPure uni r subst)
               else errorSingle [info] "This substitution seems to be applied to a non-repr type"
-            else oLinks in
-          match ty with TyAlias x then applySubsts oLinks x.content else
-          sfold_Type_Type applySubsts oLinks ty in
-        let reprAssignments = match applySubsts reprAssignments alt.specType
+            else oUni in
+          match ty with TyAlias x then applySubsts oUni x.content else
+          sfold_Type_Type applySubsts oUni ty in
+        let uni = match applySubsts uni alt.specType
           with Some x then x
           else errorSingle [alt.info] (strJoin "\n"
             [ "This impl makes conflicting substitutions of a repr"
@@ -1226,33 +1091,36 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
             , "implementations are available."
             ]) in
 
-        -- NOTE(vipa, 2023-08-11): Collect ReprVar's that are in the
-        -- type signature of the alt, which are thus externally
-        -- visible even though their reprScope might be in the current
-        -- alt or further down.
-        let signatureReprs : Set Symbol = foldl
-          (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
-          (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
-          (findReprs [] alt.specType) in
+        -- NOTE(vipa, 2023-08-11): Collect ReprVar's and MetaVar's
+        -- that are in the type signature of the alt, which are thus
+        -- externally visible even though their reprScope might be in
+        -- the current alt or further down.
+        let uniFilter =
+          let signatureReprs : Set Symbol = foldl
+            (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
+            (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+            (findReprs [] alt.specType) in
+          { reprs =
+            { scope = alt.reprScope
+            , syms = signatureReprs
+            }
+          , types =
+            { level = never
+            , names = never
+            }
+          } in
 
         -- NOTE(vipa, 2023-08-11): Go through the opUses and filter
         -- out alternatives that cannot be relevant for this impl
         let f = lam idx. lam opUse.
           let f = lam sol.
-            let solReprAssignments = optionBind
-              (tyPatMatches {ty = opUse.app.ty, pat = sol.specType})
-              (lam links. optionFoldlM
-                (lam acc. lam pair. linkUnify acc (Right pair.0) (Right pair.1))
-                sol.reprAssignments
-                links.repr) in
-            -- NOTE(vipa, 2023-08-11): Check that the sol is
-            -- consistent with the overarching assignments of the alt
-            let solReprAssignments = optionAnd
-              solReprAssignments
-              (optionBind solReprAssignments (mergeReprUnis reprAssignments)) in
+            let solUni = unifyPure sol.uni opUse.app.ty sol.specType in
+            let solUni = optionAnd
+              solUni
+              (optionBind solUni (mergeUnifications uni)) in
             optionMap
-              (lam reprAssignments. {sol with reprAssignments = reprAssignments})
-              solReprAssignments
+              (lam uni. {sol with uni = uni})
+              solUni
           in
           let solutionSet = match opUse.solutionSet with CPSolutionSet prom in promiseForce prom in
           { app = opUse.app
@@ -1262,18 +1130,19 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
         in
         let opUses = mapi f alt.opUses in
         if any (lam opUse. null opUse.solutionSet) opUses then
+          -- TODO(vipa, 2023-10-10): For now we print an error/warning
+          -- when this happens, because it's likely to be unintended,
+          -- but later it might be a result of business as usual, so
+          -- that might change
           printError (join [info2str alt.info, ": an op-use has no viable alternatives, thus this alt is dead.\n"]);
           flushStderr ();
           []
         else
-        -- TODO(vipa, 2023-08-11): At this point `any (lam opUse. null
-        -- opUse.solutionSet) opUses` implies no solutions for this
-        -- alt, so we could shortcut here
 
         -- TODO(vipa, 2023-08-11): This is the place to insert
         -- deduplication of opUses, by merging them and doing
         -- `setUnion` on the `idxes` field. ReprVars that are merged
-        -- during deduplication should be unified via reprAssignments
+        -- during deduplication should be unified via uni
 
         let solutions =
           printError (join ["Starting to construct model, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
@@ -1288,15 +1157,18 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
               modref reprMap (mapInsert sym expr (deref reprMap));
               expr in
             lam sym. mapLookupOrElse (lam. newReprVar sym) sym (deref reprMap) in
-          let uniMapToPredicate = lam uniMap.
-            let keys = mapKeys uniMap.assignments in
-            let mkEq = lam key.
-              let l = derefReprSym reprAssignments key in
-              let r = eitherBindRight (derefReprSym uniMap key) (derefReprSym reprAssignments) in
+          let uniToPredicate = lam localUni.
+            let localReprs = localUni.reprs in
+            let reprs = uni.reprs in
+            let mkEq = lam repr.
+              let l = eitherMapRight (lam x. x.0)
+                (pufUnwrap reprs (repr, negi 1)) in
+              let r = eitherMapRight (lam x. x.0)
+                (eitherBindRight (pufUnwrap localReprs (repr, negi 1)) (pufUnwrap reprs)) in
               if eitherEq nameEq eqsym l r then None () else
               let toCOPExpr = eitherEither (m.enum reprTy) getReprSymVar in
               Some (m.eq (toCOPExpr l) (toCOPExpr r)) in
-            m.andMany (mapOption mkEq keys)
+            m.andMany (mapOption mkEq (mapKeys localReprs))
           in
           let cost : Ref [COPExpr] = ref [m.float alt.selfCost] in
           let addCost : COPExpr -> () = lam c. modref cost (snoc (deref cost) c) in
@@ -1305,17 +1177,19 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
             let opTy = m.newEnumType cmpSol in
             m.registerValues opTy (setOfSeq cmpSol opUse.solutionSet);
             let var = m.newVar opTy (nameGetStr ident) in
-            -- NOTE(vipa, 2023-08-16): `uniMapToPredicate` make create
+            -- NOTE(vipa, 2023-08-16): `uniMapToPredicate` may create
             -- new repr-vars as a side-effect, and since elimEnum is
-            -- lazy and might run to late we pre-run it here to ensure
-            -- the reprs are created.
-            iter (lam sol. uniMapToPredicate sol.reprAssignments; ()) opUse.solutionSet;
-            m.newConstraint (m.elimEnum opTy (m.var var) (lam sol. uniMapToPredicate sol.reprAssignments));
+            -- lazy and might run too late we pre-run it here to
+            -- ensure the reprs are created.
+            iter (lam sol. uniToPredicate sol.uni; ()) opUse.solutionSet;
+            m.newConstraint (m.elimEnum opTy (m.var var) (lam sol. uniToPredicate sol.uni));
             addCost (m.elimEnum opTy (m.var var) (lam sol. m.float (mulf opUse.app.scaling sol.cost)));
-            (opUse.idxes, var) in
+            (opUse.idxes, var, opTy) in
           let vars = map useToVar opUses in
+          -- NOTE(vipa, 2023-10-10): This undoes any deduplication
+          -- done previously, using the `idxes` set.
           let orderedVars = mapValues (foldl
-            (lam acc. lam pair. mapUnion acc (mapMap (lam. pair.1) pair.0))
+            (lam acc. lam var. mapUnion acc (mapMap (lam. var.1) var.0))
             (mapEmpty subi)
             vars) in
           let cost = m.addMany (deref cost) in
@@ -1325,56 +1199,57 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + TyPatMatching + C
             else
             switch m.minimize cost
             case COPSolution {objective = Some (COPFloat {val = cost})} then
-              -- NOTE(vipa, 2023-08-14): The CP-solver should
-              -- guarantee that this never fails
-              let combinedAssignments = optionGetOrElse (lam. never)
-                (optionFoldlM
-                  (lam acc. lam pair.
-                    let uniMap = (m.readVar pair.1).reprAssignments in
-                    mergeReprUnis acc uniMap)
-                  (emptyReprUniMap ())
-                  vars) in
-              -- NOTE(vipa, 2023-08-14): Filter reprAssignments by
-              -- externally visible reprs
-              let filterUniMapToExternals = lam uniMap.
-                let assignments = mapFoldWithKey
-                  (lam acc. lam sym. lam rhs.
-                    let keep =
-                      if setMem sym signatureReprs then true else
-                      optionMapOrElse (lam. never)
-                        (lam x. lti x alt.reprScope)
-                        (mapLookup sym uniMap.reprScopes) in
-                    if keep
-                    then mapInsert sym (eitherBindRight rhs (derefRepr uniMap)) acc
-                    else acc)
-                  (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
-                  uniMap.assignments in
-                { assignments = assignments
-                , reprScopes = mapIntersectWith (lam l. lam. l) uniMap.reprScopes assignments
-                } in
-              let combinedAssignments = filterUniMapToExternals combinedAssignments in
-              -- NOTE(vipa, 2023-08-18): Assert that any later
-              -- solution must differ from this one in some externally
-              -- visible way
-              m.newConstraint (m.not (uniMapToPredicate combinedAssignments));
-              -- NOTE(vipa, 2023-08-18): Combine with the global
-              -- reprAssignments. We don't do that until now to avoid
-              -- introducing new repr variables to the model that are
-              -- unfixed by operations, since that will make us loop
-              -- forever.
-              let reprAssignments = filterUniMapToExternals
-                (optionGetOrElse (lam. never)
-                  (mergeReprUnis reprAssignments combinedAssignments)) in
+              -- NOTE(vipa, 2023-10-10): The translation to a
+              -- constraint model isn't perfect: we don't model type
+              -- constraints. By merging all the Unification's we
+              -- check that the combination actually type-checks,
+              -- i.e., it's a valid solution.
+              let combinedUni = optionFoldlM
+                (lam acc. lam var. mergeUnifications acc (m.readVar var.1).uni)
+                -- NOTE(vipa, 2023-10-10): We start from an empty
+                -- unification, not `uni`, since the latter might
+                -- introduce more variables to the model, which can
+                -- make us loop forever.
+                (emptyUnification ())
+                vars in
+              let combinedUni = optionMap (filterUnification uniFilter) combinedUni in
+              match (combinedUni, optionBind combinedUni (lam x. mergeUnifications x uni))
+              with (Some localExternallyVisibleUni, Some uni) then
+                -- NOTE(vipa, 2023-08-18): Assert that any later
+                -- solution must differ from this one in some externally
+                -- visible way
+                m.newConstraint (m.not (uniToPredicate localExternallyVisibleUni));
+                let sol =
+                  { cost = cost
+                  , specType = alt.specType
+                  , uni = uni
+                  , innerSolutions = map (lam v. CPSolution (m.readVar v)) orderedVars
+                  , idx = 0  -- NOTE(vipa, 2023-10-10): Updated later, to be unique across all alts
+                  , token = alt.token
+                  }
+                in work (snoc prevSolutions sol)
+              else
+                -- NOTE(vipa, 2023-10-10): The chosen implementations
+                -- do not type-check together. We need to rule out
+                -- this particular combination, then find another
+                -- solution.
 
-              let sol =
-                { cost = cost
-                , specType = alt.specType
-                , reprAssignments = reprAssignments
-                , innerSolutions = map (lam v. CPSolution (m.readVar v)) orderedVars
-                , idx = 0
-                , token = alt.token
-                }
-              in work (snoc prevSolutions sol)
+                -- NOTE(vipa, 2023-10-10): Most likely it's just a
+                -- *subset* of the implementations that don't mesh. As
+                -- an approximation of this set, we merge the `uni`s
+                -- of the `vars` until we fail, then assert that at
+                -- least one of the seen `vars` must differ.
+                let vars =
+                  recursive let work = lam checkedVars. lam uni. lam varPairs.
+                    match varPairs with [(_, var, opTy)] ++ varPairs then
+                      let checkedVars = snoc checkedVars (m.eq (m.var var) (m.enum opTy (m.readVar var))) in
+                      match mergeUnifications uni (m.readVar var).uni with Some uni
+                      then work checkedVars uni varPairs
+                      else checkedVars
+                    else error "Compiler error, there should be a unification failure somewhere"
+                  in work [] uni vars in
+                m.newConstraint (m.not (m.andMany vars));
+                work prevSolutions
             case COPUnsat _ then
               (if null prevSolutions then
                  warnSingle [alt.info] (join ["Found no solutions for alt. Final model:\n", m.debugModel (), "\n"])

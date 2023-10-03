@@ -193,62 +193,295 @@ lang ReprTypeUnify = ReprTypeAst + Unify
   sem unifyBase u env =
   | (TyRepr a, TyRepr b) ->
     u.combine
-      (u.unifyRepr a.repr b.repr)
+      (u.unifyRepr env a.repr b.repr)
       (unifyTypes u env (a.arg, b.arg))
 end
 
-lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
+-- A map representing the partitioning induced by a series of
+-- unifications of variables. Variables have a concept of levels, such
+-- that the representative element of each partition will have the
+-- lowest level included in the partition. Each partition may also
+-- have an `out` (e.g., a `Type` when working with type unification
+-- variables) and multiple `extra`s (constraints that are suspended
+-- until the partition gets an `out`).
+type PUFContent k extra out
+con PUFLink : all k. all extra. all out. k -> PUFContent k extra out
+con PUFOut : all k. all extra. all out. out -> PUFContent k extra out
+con PUFExtra : all k. all extra. all out. [extra] -> PUFContent k extra out
+type PureUnionFind k extra out =
+  Map k {level : Int, content : PUFContent k extra out}
 
-  type UnifyPureResult a = Result () UnifyError a
-  syn UnificationObligation =
-  | TypeUnification {env : UnifyEnv, left : Type, right : Type}
-  | ReprUnification {env : UnifyEnv, left : ReprVar, right : ReprVar}
+-- All operations that "modify" a PUF return this type, which
+-- summarizes obligations to the user of the interface. The two extra
+-- values represent unifications between `out`s of two partitions that
+-- were merged by the operation, and `extra`s that now have an
+-- assigned `out`, respectively.
+type PUFResult k extra out =
+  { newOutUnification : Option (out, out)
+  , newExtraResolutions : Option (out, [extra])
+  , puf : PureUnionFind k extra out
+  }
 
-  type UnifyPureUnifier = [UnificationObligation]
+let pufEmpty = mapEmpty
 
-  -- Unify types `ty1` and `ty2`, returning a map of variable substitutions
-  -- equating the two, or giving an error if the types are incompatible.
-  -- This function does not perform any occurs checks, scope checking, or
-  -- level updates, and accepts cyclic equations.
-  sem unifyPure : Type -> Type -> UnifyPureResult (Map Name Type)
-  sem unifyPure ty1 = | ty2 ->
-    let u : Unifier (UnifyPureResult UnifyPureUnifier) = {
-      empty = result.ok [],
-      combine = result.map2 concat,
-      unify = lam env. lam ty1. lam ty2. result.ok [(env, ty1, ty2)],
-      err = result.err
-    }
-    in
-    recursive let work = lam acc. lam unifier.
-      switch unifier
-      case [] then result.ok acc
-      case [ (env, meta, ty) ] ++ rest then
-        switch unwrapType meta
-        case TyMetaVar t then
-          match deref t.contents with Unbound r in
-          let isEqual =
-            match unwrapType ty with TyMetaVar t2 then
-              match deref t2.contents with Unbound r2 in nameEq r.ident r2.ident
-            else false
-          in
-          if isEqual then work acc rest else
-            if mapMem r.ident acc then work acc rest else
-              let subst = mapInsert r.ident ty (mapEmpty nameCmp) in
-              let f = substituteMetaVars subst in
-              let g = lam x. (x.0, f x.1, f x.2) in
-              work (mapUnion (mapMap f acc) subst) (map g rest)
-        case other then
-          result.bind (unifyTypes u env (other, ty))
-            (lam newUnifier. work acc (concat newUnifier rest))
-        end
+let _pufUnwrap : all k. all extra. all out.
+  (k, Int)
+  -> PureUnionFind k extra out
+  -> {k : k, level : Int, content : Either out [extra]}
+  = lam k. lam puf.
+    recursive let work = lam k.
+      switch mapLookup k.0 puf
+      case Some {content = PUFLink n} then work (n, negi 0)
+      case Some (a & {content = PUFOut out}) then {k = k.0, level = a.level, content = Left out}
+      case Some (a & {content = PUFExtra extra}) then {k = k.0, level = a.level, content = Right extra}
+      case None _ then {k = k.0, level = k.1, content = Right []}
       end
+    in work k
+
+let _pufWrap : all k. all extra. all out.
+  {k : k, level : Int, content : Either out [extra]}
+  -> {level : Int, content : PUFContent k extra out}
+  = lam x. switch x.content
+    case Left out then {level = x.level, content = PUFOut out}
+    case Right extra then {level = x.level, content = PUFExtra extra}
+    end
+
+-- let _pufUpdate
+--   : all k. all extra. all out. all x.
+--   (k, Int)
+--   -> ({out : Option out, extra : [extra]} -> (x, {out : Option out, extra : [extra]}))
+--   -> PureUnionFind k extra out
+--   -> (x, PureUnionFind k extra out)
+--   = lam k. lam f. lam puf.
+--     let res = _pufUnwrap k puf in
+
+--     recursive let work = lam k.
+--       switch mapLookup k.0 puf
+--       case Some {content = Left n} then work (k, negi 0)
+--       case Some w&{content = Right x} then
+--         match f x with (ret, newX) in
+--         (newX, mapInsert k.0 {w with content = Right newX} puf)
+--       case _ then
+--         match f {out = None (), extra = []} with (ret, newX) in
+--         (newX, mapInsert k.0 {level = k.1, content = Right newX})
+--       end
+
+let pufUnwrapN : all k. all out. all extra. PureUnionFind k extra out -> (k, Int) -> (k, Int)
+  = lam puf. lam k.
+    let x = _pufUnwrap k puf in
+    (x.k, x.level)
+
+let pufUnwrap : all k. all out. all extra. PureUnionFind k extra out -> (k, Int) -> Either out (k, Int)
+  = lam puf. lam k.
+    switch _pufUnwrap k puf
+    case {content = Left out} then Left out
+    case x then Right (x.k, x.level)
+    end
+
+let pufAddExtra
+  : all k. all out. all extra. all x. (k, Int) -> [extra] -> PureUnionFind k extra out -> PUFResult k extra out
+  = lam k. lam extra. lam puf.
+    switch _pufUnwrap k puf
+    case {content = Left out} then
+      { newOutUnification = None ()
+      , newExtraResolutions = Some (out, extra)
+      , puf = puf}
+    case x & {content = Right prev} then
+      let x = {x with content = Right (concat prev extra)} in
+      { newOutUnification = None ()
+      , newExtraResolutions = None ()
+      , puf = mapInsert x.k (_pufWrap x) puf
+      }
+    end
+
+let pufUnify
+  : all k. all out. all extra. (k, Int) -> (k, Int) -> PureUnionFind k extra out -> PUFResult k extra out
+  = lam l. lam r. lam puf.
+    match (_pufUnwrap l puf, _pufUnwrap r puf) with (l, r) in
+    if eqi 0 (mapGetCmpFun puf l.k r.k) then { newOutUnification = None (), newExtraResolutions = None (), puf = puf} else
+    match if lti l.level r.level then (r, l) else (l, r) with (from, to) in
+    match
+      switch (from.content, to.content)
+      case (Left out, Right extra) | (Right extra, Left out) then
+        (Left out, None (), if null extra then None () else Some (out, extra))
+      case (Left a, Left b) then
+        (Left b, Some (a, b), None ())
+      case (Right a, Right b) then
+        (Right (concat a b), None (), None ())
+      end
+    with (content, newPair, newExtra) in
+    { newOutUnification = newPair
+    , newExtraResolutions = newExtra
+    , puf = mapInsert from.k {level = from.level, content = PUFLink to.k}
+      (mapInsert to.k (_pufWrap {to with content = content}) puf)
+    }
+
+let pufSetOut
+  : all k. all out. all extra. (k, Int) -> out -> PureUnionFind k extra out -> PUFResult k extra out
+  = lam k. lam out. lam puf.
+    switch _pufUnwrap k puf
+    case {content = Left prev} then
+      { newOutUnification = Some (prev, out)
+      , newExtraResolutions = None ()
+      , puf = puf
+      }
+    case x & {content = Right extra} then
+      { newOutUnification = None ()
+      , newExtraResolutions = if null extra then None () else Some (out, extra)
+      , puf = mapInsert x.k (_pufWrap {x with content = Left out}) puf
+      }
+    end
+
+let pufFold
+  : all k. all out. all extra. all acc
+  .  (acc -> (k, Int) -> (k, Int) -> acc)
+  -> (acc -> (k, Int) -> out -> acc)
+  -> (acc -> (k, Int) -> [extra] -> acc)
+  -> acc
+  -> PureUnionFind k extra out
+  -> acc
+  = lam feq. lam fout. lam fextra. lam acc. lam puf.
+    mapFoldWithKey
+      (lam acc. lam k. lam kX.
+        let k = (k, kX.level) in
+        let x = _pufUnwrap k puf in
+        switch (x.content, mapGetCmpFun puf k.0 x.k)
+        case (Left out, _) then
+          fout acc k out
+        case (_, !0) then
+          feq acc k (x.k, x.level)
+        case (Right [], 0) then
+          acc
+        case (Right extra, 0) then
+          fextra acc k extra
+        end)
+      acc
+      puf
+
+lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst
+
+  type Unification =
+    { reprs : PureUnionFind Symbol () Name
+    , types : PureUnionFind Name () Type
+    }
+
+  sem emptyUnification : () -> Unification
+  sem emptyUnification = | _ ->
+    { reprs = pufEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+    , types = pufEmpty nameCmp
+    }
+
+  sem mergeUnifications : Unification -> Unification -> Option Unification
+  sem mergeUnifications l = | r ->
+    let juggle
+      : all k. all out. all extra. all a. all b
+      . (a -> b -> PureUnionFind k extra out -> PUFResult k extra out)
+      -> ([(out, out)], [(out, [extra])], PureUnionFind k extra out)
+      -> a
+      -> b
+      -> ([(out, out)], [(out, [extra])], PureUnionFind k extra out)
+      = lam f. lam acc. lam a. lam b.
+        match acc with (pairs, extras, puf) in
+        let x = f a b puf in
+        let pairs = optionMapOr pairs (lam p. snoc pairs p) x.newOutUnification in
+        let extras = optionMapOr extras (lam e. snoc extras e) x.newExtraResolutions in
+        (pairs, extras, x.puf) in
+
+    match pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra) ([], [], l.reprs) r.reprs
+    with (newReprEqs, _newReprExtras, reprs) in
+    if any (lam eq. not (nameEq eq.0 eq.1)) newReprEqs then None () else
+    -- NOTE(vipa, 2023-10-04): If we checked that each repr is
+    -- compatible with all types it's applied to, this is where we'd
+    -- do it, with newReprExtras
+
+    match pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra) ([], [], l.types) r.types
+    with (newTypeEqs, _newTypeExtras, types) in
+    let uni = {reprs = reprs, types = types} in
+    optionFoldlM (lam uni. lam eq. unifyPure uni eq.0 eq.1) uni newTypeEqs
+
+  sem _handlePufRepr : Unification -> PUFResult Symbol () Name -> Option Unification
+  sem _handlePufRepr uni = | x ->
+    let pairOk = match x.newOutUnification with Some (a, b)
+      then nameEq a b
+      else true in
+    -- NOTE(vipa, 2023-10-05): We would check if reprs can be applied
+    -- to each of the `Repr` arguments they've been used with here, if
+    -- we did it (they would be in x.newExtraResolutions)
+    if pairOk then
+      Some {uni with reprs = x.puf}
+    else None ()
+
+  sem _handlePufType : UnifyEnv -> Unification -> PUFResult Name () Type -> Option Unification
+  sem _handlePufType env uni = | x ->
+    let uni = {uni with types = x.puf} in
+    match x.newOutUnification with Some (a, b) then unifyPureWithEnv env uni a b else Some uni
+
+  sem unifyReprPure : Unification -> ReprVar -> ReprVar -> Option Unification
+  sem unifyReprPure uni lr = | rr ->
+    match (deref (botRepr lr), deref (botRepr rr)) with (BotRepr lr, BotRepr rr) in
+    _handlePufRepr uni (pufUnify (lr.sym, lr.scope) (rr.sym, rr.scope) uni.reprs)
+
+  sem unifySetReprPure : Unification -> ReprVar -> Name -> Option Unification
+  sem unifySetReprPure uni r = | subst ->
+    match deref (botRepr r) with BotRepr r in
+    _handlePufRepr uni (pufSetOut (r.sym, r.scope) subst uni.reprs)
+
+  sem unifyPureWithEnv : UnifyEnv -> Unification -> Type -> Type -> Option Unification
+  sem unifyPureWithEnv env uni lty = | rty ->
+    let uniRef = ref (Some uni) in
+    let tyAsMeta = lam ty.
+      match ty with TyMetaVar x then
+        match deref x.contents with Unbound x in
+        Right (x.ident, x.level)
+      else Left ty in
+    recursive
+      let unifier = lam.
+        { empty = ()
+        , combine = lam. lam. ()
+        , unify = lam env. lam lty. lam rty.
+          match deref uniRef with Some uni then
+            switch
+              ( eitherBindRight (tyAsMeta lty) (pufUnwrap uni.types)
+              , eitherBindRight (tyAsMeta rty) (pufUnwrap uni.types)
+              )
+            case (Left lty, Left rty) then
+              modref uniRef (unifyPureWithEnv env uni lty rty)
+            case (Left ty, Right n) | (Right n, Left ty) then
+              modref uniRef (_handlePufType env uni (pufSetOut n ty uni.types))
+            case (Right l, Right r) then
+              modref uniRef (_handlePufType env uni (pufUnify l r uni.types))
+            end
+          else ()
+        , unifyRepr = lam env. lam lvar. lam rvar.
+          match deref uniRef with Some uni then
+            modref uniRef (unifyReprPure uni lvar rvar)
+          else ()
+        , err = lam err.
+          (match err with Types ((ty & !TyRepr _, r & TyRepr _) | (r & TyRepr _, ty & !TyRepr _))
+           then printError (concat "Feared unification failure: " (use MExprPrettyPrint in type2str (tytuple_ [ty, r])));
+             flushStderr ()
+           else ());
+          modref uniRef (None ())
+        }
     in
-    let env : UnifyEnv = {
-      boundNames = biEmpty,
-      wrappedLhs = ty1,
-      wrappedRhs = ty2
-    } in
-    result.bind (unifyTypes u env (ty1, ty2)) (work (mapEmpty nameCmp))
+    unifyTypes (unifier ()) env (lty, rty);
+    deref uniRef
+
+  sem unifyPure : Unification -> Type -> Type -> Option Unification
+  sem unifyPure uni lty = | rty ->
+    let env : UnifyEnv =
+      { boundNames = biEmpty
+      , wrappedLhs = lty
+      , wrappedRhs = rty
+      } in
+    unifyPureWithEnv env uni lty rty
+
+  sem filterUnification
+    : {reprs : {scope : Int, syms : Set Symbol}, types : {level : Int, names : Set Name}}
+    -> Unification
+    -> Unification
+  sem filterUnification filters = | uni ->
+    never
 end
 
 lang MExprUnify =
