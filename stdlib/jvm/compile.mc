@@ -47,8 +47,6 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         constSeqBC : [Function]
     }
 
-    -- go through AST and translate to JVM bytecode
-
     sem toJSONExpr : JVMEnv -> Expr -> JVMEnv
     sem toJSONExpr env =
     | TmSeq { tms = tms } ->
@@ -322,7 +320,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else match mapLookup ident env.globalFuncMap with Some global then
             (initClass_ global)
         else
-            (print (join ["No identifier! ", nameGetStr ident, "\n"]));
+            (error (join ["No identifier! ", nameGetStr ident, "\n"]));
             []) in
         { env with bytecode = concat env.bytecode store }
     | TmMatch { target = target, pat = pat, thn = thn, els = els } ->
@@ -393,7 +391,7 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         let name = (match realTy with TyCon { ident = ident } then ident else never) in
         let mapping = (match mapLookup name env.recordMap with Some map then map else never) in
         let inew = (match mapLookup key mapping with Some i then i else never) in
-        let valueEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } value in
+        let valueEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [], localVars = addi env.localVars 4 } value in
         let recEnv = toJSONExpr env rec in
         let arr = env.localVars in
         let len = addi env.localVars 1 in 
@@ -437,8 +435,8 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                 wrapRecord_ [aload_ newarr]],
             classes = concat recEnv.classes valueEnv.classes,
             constSeqBC = concat recEnv.constSeqBC valueEnv.constSeqBC }
-    | TmType _ -> (error "TmType: Should be gone"); env
-    | TmConDef _ -> (error "TmConDef: Should be gone"); env
+    | TmType _ -> (error "TmType: Should not be present in AST."); env
+    | TmConDef _ -> (error "TmConDef: Should not be present in AST."); env
     | TmConApp { ident = ident, body = body } ->
         let constructor = nameGetStr ident in
         let bodyEnv = toJSONExpr { env with bytecode = [], classes = [], constSeqBC = [] } body in
@@ -452,19 +450,19 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
             classes = concat bodyEnv.classes env.classes,
             constSeqBC = concat bodyEnv.constSeqBC env.constSeqBC,
             recordMap = mapUnion env.recordMap bodyEnv.recordMap }
-    | TmUtest _ -> (error "TmUtest"); env
-    | TmNever _ -> --(printLn "TmNever"); 
-    { env with bytecode = foldl concat
-        env.bytecode
-        [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
-        ldcString_ "Never Reached!",
-        invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
-        ldcInt_ 1,
-        invokestatic_ "java/lang/System" "exit" "(I)V"],
-        nothing_] }
-    | TmExt _ -> (error "TmExt"); env
+    | TmUtest _ -> (error "TmUtest: Should not be present in AST."); env
+    | TmNever _ -> 
+        { env with bytecode = foldl concat
+            env.bytecode
+            [[getstatic_ "java/lang/System" "err" "Ljava/io/PrintStream;",
+            ldcString_ "Never Reached!",
+            invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/String;)V",
+            ldcInt_ 1,
+            invokestatic_ "java/lang/System" "exit" "(I)V"],
+            nothing_] }
+    | TmExt _ -> (error "Unsupported language feature in JVM backend: Extensions"); env
     | a ->
-        (error "unknown expr\n");
+        (error "Unknown Expression\n");
         env
 
     sem jvmPat : JVMEnv -> Type -> Expr -> Expr -> Pat -> JVMEnv
@@ -636,7 +634,15 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
                                 astore_ acc.localVars],
                             localVars = addi 1 acc.localVars,
                             vars = mapInsert name acc.localVars acc.vars }
-                    else never
+                    else -- Wildcard
+                        { acc with
+                            bytecode = concat
+                                acc.bytecode
+                                [dup_,
+                                checkcast_ seq_T,
+                                ldcInt_ i,
+                                invokevirtual_ seq_T "apply" (methodtype_T "I" object_LT),
+                                pop_] }
                 else never)
             { env with
                 bytecode = concat
@@ -755,29 +761,18 @@ lang MExprJVMCompile = MExprAst + JVMAst + MExprPrettyPrint + MExprCmp
         else
             toJSONExpr { env with bytecode = snoc env.bytecode pop_ } thn
     | PatAnd _ ->
-        (error "Unknown PatAnd");
+        (error "Unknown: PatAnd");
         env
     | PatOr _ ->
-        (error "Unknown PatOr");
+        (error "Unknown: PatOr");
         env
     | PatNot _ ->
-        (error "Unknown PatNot");
+        (error "Unknown: PatNot");
         env
     | a ->
-        (error "Unknown Pat");
+        (error "Unknown: Pat");
         env
-
-    sem getJavaType : Type -> String
-    sem getJavaType =
-    | TyInt _ -> "I"
-    | a -> ""
-
-    sem toJSONConst : JVMEnv -> Const -> JVMEnv
-    sem toJSONConst env =
-    | a ->
-        (print "unknown const\n");
-        env
-
+    
 end
 
 lang CombinedLang = MExprLowerNestedPatterns + MExprPrettyPrint + MExprJVMCompile + MExprLambdaLift + MExprTypeCheck end
@@ -843,7 +838,6 @@ let compileJVMEnv = lam ast.
       tensors = mapEmpty cmpType,
       variants = mapEmpty nameCmp
     } in
-
     let tl = (match typeLiftExpr emptyTypeLiftEnv ast with (tlEnv, t) then
                 let typeEnv = _replaceVariantNamesInTypeEnv tlEnv in
                 (typeEnv, t, tlEnv.records)
@@ -851,7 +845,6 @@ let compileJVMEnv = lam ast.
     let recordMap = collectRecords tl.2 in
     let adt = collectADTTypes tl.0 in
     let tlAst = tl.1 in
-    let objToObj = createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []] in
     let env = {
             bytecode = setArgvBC_,
             vars = mapEmpty nameCmp,
@@ -864,34 +857,11 @@ let compileJVMEnv = lam ast.
             adtTags = adt.2,
             globalFuncMap = mapEmpty nameCmp,
             constSeqBC = [] } in
-    let interfaceLen = length adt.0 in
-    let endLabel = createName_ "end" in
-    let bc = foldli  
-                (lam acc. lam i. lam interf. 
-                    let name = match interf with Interface { name = n } then n else never in
-                    let last = subi (length adt.0) 1 in 
-                    let label = (match i with last then endLabel else createName_ "next") in  
-                    let nextLabel = createName_ "next" in
-                    concat 
-                        acc
-                        [aload_ 1,
-                        instanceof_ (concat pkg_ name),
-                        ifeq_ label, -- jump if 0
-                        pop_,
-                        aload_ 1,
-                        checkcast_ (concat pkg_ name),
-                        invokeinterface_ (concat pkg_ name) "getTag" "()I",
-                        goto_ endLabel,
-                        label_ label]) 
-                [ldcInt_ 0] adt.0 in
-    let constructorTagBC = foldl concat (subsequence bc 0 (subi (length bc) 2)) [[label_ endLabel, i2l_], wrapInteger_, [areturn_]] in
-    let constructorTagClass = createClass "ConstructorTag_INTRINSIC" (concat pkg_ "Function") [] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" constructorTagBC] in 
-    let compiledEnv = (toJSONExpr env tlAst) in
+    let compiledEnv = toJSONExpr env tlAst in
     let bytecode = concat compiledEnv.bytecode [pop_, return_] in
-    --let bytecode = concat compiledEnv.bytecode [astore_ 0, getstatic_ "java/lang/System" "out" "Ljava/io/PrintStream;", aload_ 0, invokevirtual_ "java/io/PrintStream" "print" "(Ljava/lang/Object;)V", return_] in
     let mainFunc = createFunction "main" "([Ljava/lang/String;)V" bytecode in
-    let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC, constructorTagClass]] in
-    let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) (snoc adt.0 objToObj) in
+    let constClasses = foldl concat constClassList_ [adt.1, [constSeqClass_ compiledEnv.constSeqBC, createConstructorTagClass_ adt]] in
+    let prog = createProg pkg_ (snoc (concat compiledEnv.classes constClasses) (createClass "Main" "" [] defaultConstructor [mainFunc])) (concat adt.0 constInterfList_) in
     prog
 
 lang MExprJVMCompileLang = MExprJVMCompile + MExprLambdaLift + MExprTypeCheck + MExprPrettyPrint end
@@ -953,22 +923,31 @@ let compileMCoreToJVM = lam ast. lam sourcePath. lam options.
     use MExprJVMCompileLang in
     let typeFix = typeCheck ast in -- types dissapear in pattern lowering
     let liftedAst = liftLambdas typeFix in
-    --(printLn (expr2str liftedAst));
     let jvmProgram = compileJVMEnv liftedAst in
     let path = concat stdlibLoc "/jvm/" in
     let json = sysTempFileMake () in
+    let tmpCompile = sysTempDirMake () in
+    let tmpScalaUnpack = sysTempDirMake () in 
     writeFile json (toStringProg jvmProgram);
-    (prepare path);
+    prepare path;
     let jarPath = concat path "jar/" in 
     let classpath = (join [":", jarPath, "jackson-annotations-2.14.2.jar:", jarPath, "jackson-core-2.14.2.jar:", jarPath, "jackson-databind-2.14.2.jar:", jarPath, "asm-9.4.jar"]) in
-    (sysRunCommand ["java", "-cp", (join [path, "out/", classpath]), "codegen/Parser", json] "" ".");
-    sysDeleteDir json;
-    --create run script
-    let outputPath = (match options.output with Some path then
-                            (sysRunCommand ["mkdir", path] "" ".");
-                            (sysRunCommand ["mv", pkg_, join [path, "/", pkg_]] "" ".");
-                            concat path "/"
-                        else "") in
-    (createRunScript_ (concat outputPath (trimSourcePath sourcePath)));
-    "pkg/"
+    -- create classfiles
+    sysRunCommand ["java", "-cp", join [path, "out/", classpath], "codegen/Parser", json] "" tmpCompile;
+    sysDeleteFile json;
+    -- unpack scala library
+    sysRunCommand ["jar", "--file", concat jarPath "scala-library-2.13.10.jar", "--extract"] "" tmpScalaUnpack;
+    (sysMoveFile (concat tmpScalaUnpack "/scala") (concat tmpCompile "/scala"));
+    sysDeleteDir tmpScalaUnpack;
+    -- create jar file
+    let destination = (
+        match options.output with Some path then
+            join [path, "/", trimSourcePath sourcePath, ".jar"]
+        else 
+            concat (trimSourcePath sourcePath) ".jar"
+    ) in
+    sysRunCommand ["jar", "--create", "--file", "x.jar", "--main-class=pkg.Main", pkg_, "scala"] "" tmpCompile;
+    sysMoveFile (concat tmpCompile "/x.jar") destination;
+    sysDeleteDir tmpCompile;
+    destination
 

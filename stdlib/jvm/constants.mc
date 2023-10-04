@@ -151,8 +151,15 @@ let ificmpne_ = use JVMAst in
 let ificmpge_ = use JVMAst in 
     lam label. createBString "IF_ICMPGE" label
 
+
+let ificmpgt_ = use JVMAst in 
+    lam label. createBString "IF_ICMPGT" label
+
 let ificmplt_ = use JVMAst in 
     lam label. createBString "IF_ICMPLT" label
+
+let ificmple_ = use JVMAst in 
+    lam label. createBString "IF_ICMPLE" label
 
 let label_ = use JVMAst in 
     lam name. createBString "LABEL" name
@@ -205,13 +212,6 @@ let arraylength_ = use JVMAst in
 let putstatic_ = use JVMAst in
     lam owner. lam name. lam desc. createBApply "PUTSTATIC" owner name desc
 
----
-
-let jvmTrue = 1
-
-let jvmFalse = 0
-
----
 
 let type_LT = lam x. join ["L", x, ";"]
 
@@ -1657,7 +1657,7 @@ let flushStdoutClass_ = use JVMAst in
                     [areturn_]])]
 
 let commandClass_ = use JVMAst in
-    -- do ["sh", "-c", command] Runtime.exec(String[])
+    -- ["sh", "-c", command] Runtime.exec(String[])
     createClass
         "Command_INTRINSIC"
         (concat pkg_ "Function")
@@ -2215,6 +2215,11 @@ let setArgvBC_ = use JVMAst in
         (initClass_ "SetArgv") 
         [aload_ 0,
         invokevirtual_ (concat pkg_ "SetArgv") "setArgv" (methodtype_T "[Ljava/lang/String;" "V")]
+
+let objToObj = use JVMAst in createInterface "Function" [] [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" []]
+
+let constInterfList_ = 
+    [objToObj]
                     
 let constClassList_ = 
     [addiClass_,
@@ -2355,9 +2360,30 @@ let constClassList_ =
     threeArgApplyClass2_ "Set_INTRINSIC",
     argvClass_]
 
-let createRunScript_ = lam programName.
-    (sysRunCommand ["touch", programName] "" ".");
-    let script = join ["#!/bin/bash\n\n", "java -classpath :", stdlibLoc, "/jvm/jar/scala-library-2.13.10.jar ", subsequence pkg_ 0 (subi (length pkg_) 1), ".Main $*\n"] in
-    (writeFile programName script);
-    (sysRunCommand ["chmod", "+x", programName] "" ".");
-    ()
+let createConstructorTagClass_ = use JVMAst in lam adt.
+    let interfaceLen = length adt.0 in 
+    let constructorTagBC = 
+        (match interfaceLen with 0 then 
+            foldl concat [ldcInt_ 0] [wrapInteger_, [areturn_]]
+        else 
+            let endLabel = createName_ "end" in
+            let bc = foldli  
+                        (lam acc. lam i. lam interf. 
+                            let name = match interf with Interface { name = n } then n else never in
+                            let last = subi interfaceLen 1 in 
+                            let label = (match i with last then endLabel else createName_ "next") in  
+                            let nextLabel = createName_ "next" in
+                            concat 
+                                acc
+                                [aload_ 1,
+                                instanceof_ (concat pkg_ name),
+                                ifeq_ label, -- jump if 0
+                                pop_,
+                                aload_ 1,
+                                checkcast_ (concat pkg_ name),
+                                invokeinterface_ (concat pkg_ name) "getTag" "()I",
+                                goto_ endLabel,
+                                label_ label]) 
+                        [ldcInt_ 0] adt.0 in
+                foldl concat (subsequence bc 0 (subi (length bc) 2)) [[label_ endLabel, i2l_], wrapInteger_, [areturn_]]) in 
+    createClass "ConstructorTag_INTRINSIC" (concat pkg_ "Function") [] defaultConstructor [createFunction "apply" "(Ljava/lang/Object;)Ljava/lang/Object;" constructorTagBC]

@@ -13,13 +13,13 @@ import java.util.*;
 import javax.swing.event.CaretEvent;
 import javax.swing.text.FieldView;
 
-//import org.objectweb.asm.util.CheckClassAdapter;
+import org.objectweb.asm.util.CheckClassAdapter;
 
 import com.fasterxml.jackson.databind.*;
 
 class ClassfileMaker {
-    //CheckClassAdapter cw;
-    ClassWriterF cw;
+    CheckClassAdapter cw;
+    //ClassWriterF cw;
     JsonNode classes;
     JsonNode interfaces;
     ClassWriterF iw;
@@ -421,6 +421,14 @@ class ClassfileMaker {
                         case "IF_ICMPLT":
                             createLabel(constant);
                             mv.visitJumpInsn(IF_ICMPLT, labels.get(constant));
+                            break;
+                        case "IF_ICMPLE":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IF_ICMPLE, labels.get(constant));
+                            break;
+                        case "IF_ICMPGT":
+                            createLabel(constant);
+                            mv.visitJumpInsn(IF_ICMPGT, labels.get(constant));
                             break;
                         case "IF_ICMPEQ":
                             createLabel(constant);

@@ -96,7 +96,10 @@ lang LambdaLiftFindFreeVariables =
         mapUnion fv funFreeVars
       else fv
     else fv
-  | TmLam t -> findFreeVariablesInBody state fv t.body
+  | TmLam t ->
+    let state = {state with vars = setInsert t.ident state.vars} in
+    let fv = findFreeVariablesInBody state fv t.body in
+      mapRemove t.ident fv
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr

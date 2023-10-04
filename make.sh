@@ -154,17 +154,15 @@ compile_and_run_jvm_test() {
     rm -r $binary
   else
     runscript=$(basename $1 | cut -d . -f1)
-    output="$output\n$(cd $binary && ./$runscript)"
+    output="$output\n$(cd $binary && java -jar $runscript.jar)"
     exit_code=$?
     rm -r $binary
     if [ $exit_code -ne 0 ]
     then
-      echo "ERROR: Tests failed for $1!\n"
-      echo "-----------------------------------------\n"
+      echo "[JVM BACKEND] $1: $output FAIL\n"
       echo $output
-      echo "-----------------------------------------\n"
     else 
-      echo "Succesfully tested $1:$output"
+      echo "[JVM BACKEND] $1: $output OK"
     fi 
   fi
   set -e
