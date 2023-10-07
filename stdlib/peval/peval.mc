@@ -1,6 +1,7 @@
 include "map.mc"
 include "set.mc"
 include "log.mc"
+include "utest.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -63,7 +64,7 @@ lang PEvalCtx = Eval + SideEffect
     env = evalEnvEmpty (),
     freeVar = setEmpty nameCmp,
     effectEnv = sideEffectEnvEmpty (),
-    maxRecDepth = 2,
+    maxRecDepth = 1000,
     recFlag = true
   }
 end
@@ -73,7 +74,7 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
 
   sem pevalExpr : PEvalCtx -> Expr -> Expr
-  sem pevalExpr ctx =| t -> pevalReadback (pevalBind ctx (lam x. x) t)
+  sem pevalExpr ctx =| t -> pevalReadback (pevalBindTop ctx (lam x. x) t)
 
   sem pevalWithEnv : EvalEnv -> Expr -> Expr
   sem pevalWithEnv env =
@@ -86,6 +87,12 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   | t ->
     errorSingle [infoTm t] (join ["pevalBindThis: undefined for:\n", expr2str t])
 
+  -- Entry point for top-level expressions, the default case is that this
+  -- function calls `pevalBind`
+  sem pevalBindTop : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
+  sem pevalBindTop ctx k =| t -> pevalBind ctx k t
+
+  -- Entry point for partial evaluation of non top-level expressions
   sem pevalBind : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
   sem pevalBind ctx k =| t ->
     pevalEval ctx
@@ -143,39 +150,11 @@ lang VarPEval = PEval + VarAst + AppPEval
   | t & TmVar r -> ({ ctx with freeVar = setInsert r.ident ctx.freeVar }, t)
 end
 
-lang LamPEval = PEval + VarAst + LamAst + ClosAst + AppEval
-  sem pevalBindThis =
-  | TmClos _ -> false
-
-  sem pevalApply info ctx k =
-  | (TmClos r, arg) ->
-    let env = evalEnvInsert r.ident arg (r.env ()) in
-    pevalEval { ctx with env = env } k r.body
-
-  sem pevalEval ctx k =
-  | TmLam r ->
-    k (TmClos {
-      ident = r.ident, body = r.body, env = lam. ctx.env, info = r.info
-    })
-  | TmClos r -> k (TmClos r)
-
-  sem pevalReadbackH ctx =
-  | TmClos r ->
-    let b = astBuilder r.info in
-    let newident = nameSetNewSym r.ident in
-    let env = evalEnvInsert r.ident (b.var newident) (r.env ()) in
-    match
-      pevalReadbackH ctx (pevalBind { ctx with env = env } (lam x. x) r.body)
-      with (ctx, body)
-    in
-    (ctx, b.nulam newident body)
-end
-
 lang ClosPAst = ClosAst
   syn Expr =
   | TmClosP {
     cls : {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info},
-    ident : Name,
+    ident : Option Name,
     isRecursive : Bool
   }
 
@@ -186,9 +165,67 @@ lang ClosPAst = ClosAst
   | TmClosP r -> TmClosP { r with cls = { r.cls with info = info } }
 end
 
-lang LetPEval = PEval + LetAst
+lang LamPEval = PEval + VarAst + LamAst + ClosPAst + AppEval
+  sem pevalBindThis =
+  | TmClosP _ -> false
+
+  sem pevalApply info ctx k =
+  | (TmClosP r, arg) ->
+    if and (and (not ctx.recFlag) r.isRecursive) (optionIsSome r.ident) then
+      let ident = optionGetOrElse (lam. error "impossible") r.ident in
+      let b = astBuilder r.cls.info in k (b.app (b.var ident) arg)
+    else
+      let env = evalEnvInsert r.cls.ident arg (r.cls.env ()) in
+      pevalEval { ctx with env = env } k r.cls.body
+
+  sem pevalEval ctx k =
+  | TmLam r ->
+    let cls =
+      { ident = r.ident, body = r.body, env = lam. ctx.env, info = r.info }
+    in
+    k (TmClosP {
+      cls = cls, ident = None (), isRecursive = false
+    })
+  | TmClosP r -> k (TmClosP r)
+
+  sem pevalReadbackH ctx =
+  | TmClosP r ->
+    let b = astBuilder r.cls.info in
+    match r.ident with Some ident then
+      ({ ctx with freeVar = setInsert ident ctx.freeVar }, b.var ident)
+    else
+      let newident = nameSetNewSym r.cls.ident in
+      let env = evalEnvInsert r.cls.ident (b.var newident) (r.cls.env ()) in
+      match
+        pevalReadbackH ctx
+          (pevalBind { ctx with env = env } (lam x. x) r.cls.body)
+        with (ctx, body)
+      in
+      (ctx, b.nulam newident body)
+end
+
+lang LetPEval = PEval + ClosPAst + LetAst
   sem pevalBindThis =
   | TmLet _ -> true
+
+  sem pevalBindTop ctx k =
+  | TmLet r ->
+    pevalBind ctx
+      (lam body.
+        match body with TmClosP clspr then
+          let ctx = {
+            ctx with env =
+              evalEnvInsert
+                r.ident (TmClosP { clspr with ident = Some r.ident }) ctx.env
+          } in
+          TmLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }
+        else
+          if pevalBindThis body then
+            TmLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }
+          else
+            pevalBindTop
+              { ctx with env = evalEnvInsert r.ident body ctx.env } k r.inexpr)
+      r.body
 
   sem pevalEval ctx k =
   | TmLet r ->
@@ -214,11 +251,50 @@ lang LetPEval = PEval + LetAst
         (inexprCtx, inexpr)
 end
 
--- NOTE(oerikss, 2023-08-14): We currently do not partially evaluate recursive
--- calls.
 lang RecLetsPEval = PEval + RecLetsAst + ClosPAst + LamAst
   sem pevalBindThis =
   | TmRecLets _ -> true
+
+  sem pevalBindTop ctx k =
+  | TmRecLets r ->
+    recursive let envPrime : Int -> Lazy EvalEnv = lam n. lam.
+      let wraplambda = lam bind.
+        if geqi n ctx.maxRecDepth then TmVar {
+          ident = bind.ident,
+          info = bind.info,
+          ty = bind.tyBody,
+          frozen = false
+        }
+        else
+          match bind.body with TmLam r then TmClosP {
+            cls = {
+              ident = r.ident,
+              body = r.body,
+              env = envPrime (succ n),
+              info = r.info
+            },
+            ident = Some bind.ident,
+            isRecursive = true
+          }
+          else
+            errorSingle [infoTm bind.body]
+              "Right-hand side of recursive let must be a lambda"
+      in
+      foldl
+        (lam env. lam bind.
+          evalEnvInsert bind.ident (wraplambda bind) env)
+        ctx.env r.bindings
+    in
+    let bindings =
+      map
+        (lam bind. { bind with body = pevalBind ctx (lam x. x) bind.body })
+        r.bindings
+    in
+    TmRecLets {
+      r with
+      bindings = bindings,
+      inexpr = pevalBindTop { ctx with env = envPrime 0 () } k r.inexpr
+    }
 
   sem pevalEval ctx k =
   | TmRecLets r ->
@@ -233,7 +309,7 @@ lang RecLetsPEval = PEval + RecLetsAst + ClosPAst + LamAst
       inexpr = pevalBind ctx k r.inexpr
     }
 
-    sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx =
   | TmRecLets r ->
     let fv = setOfSeq nameCmp (map (lam bind. bind.ident) r.bindings) in
     match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
@@ -290,6 +366,9 @@ lang TypePEval = PEval + TypeAst
   sem pevalBindThis =
   | TmType _ -> true
 
+  sem pevalBindTop ctx k =
+  | TmType t -> TmType {t with inexpr = pevalBindTop ctx k t.inexpr}
+
   sem pevalEval ctx k =
   | TmType t -> TmType {t with inexpr = pevalBind ctx k t.inexpr}
 end
@@ -298,6 +377,9 @@ lang DataPEval = PEval + DataAst
   sem pevalBindThis =
   | TmConDef _ -> true
   | TmConApp _ -> false
+
+  sem pevalBindTop ctx k =
+  | TmConDef t -> TmConDef {t with inexpr = pevalBindTop ctx k t.inexpr}
 
   sem pevalEval ctx k =
   | TmConDef t -> TmConDef {t with inexpr = pevalBind ctx k t.inexpr}
@@ -583,104 +665,6 @@ lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
     foldlK f acc s.tms k
 end
 
--- NOTE(oerikss, 2023-08-14): WIP handling of recursion and better handling of
--- closures. It avoids code-swell due to closure inlineing. This fragment is not
--- correct for functions returning functions.
-lang LamRecLetsPEval = PEval + VarAst + LamAst + RecLetsAst + ClosPAst + AppEval
-  sem pevalBindThis =
-  | TmClosP _ -> false
-  | TmRecLets _ -> true
-
-  sem pevalApply info ctx k =
-  | (TmClosP r, arg) ->
-    if and (not ctx.recFlag) r.isRecursive then
-      let b = astBuilder r.cls.info in k (b.app (b.var r.ident) arg)
-    else
-      let env = evalEnvInsert r.cls.ident arg (r.cls.env ()) in
-      pevalEval { ctx with env = env } k r.cls.body
-
-  sem pevalEval ctx k =
-  | TmLam r ->
-    let b = astBuilder r.info in
-    let cls =
-      { ident = r.ident, body = r.body, env = lam. ctx.env, info = r.info }
-    in
-    let newident = nameSetNewSym r.ident in
-    let env = evalEnvInsert r.ident (b.var newident) ctx.env in
-    let body =
-      (pevalBind { ctx with env = env } (lam x. x) r.body)
-    in
-    let ident = nameSym "t" in
-    bind_
-      (b.nulet ident (TmLam { r with ident = newident, body = body }))
-      (k (TmClosP { cls = cls, ident = ident, isRecursive = false }))
-  | TmClosP r -> k (TmClosP r)
-  | TmRecLets r ->
-    recursive let envPrime : Int -> Lazy EvalEnv = lam n. lam.
-      let wraplambda = lam bind.
-        if geqi n ctx.maxRecDepth then TmVar {
-          ident = bind.ident,
-          info = bind.info,
-          ty = bind.tyBody,
-          frozen = false
-        }
-        else
-          match bind.body with TmLam r then TmClosP {
-            cls = {
-              ident = r.ident,
-              body = r.body,
-              env = envPrime (succ n),
-              info = r.info
-            },
-            ident = bind.ident,
-            isRecursive = true
-          }
-          else
-            errorSingle [infoTm bind.body]
-              "Right-hand side of recursive let must be a lambda"
-      in
-      foldl
-        (lam env. lam bind.
-          evalEnvInsert bind.ident (wraplambda bind) env)
-        ctx.env r.bindings
-    in
-    let bindings =
-      map
-        (lam bind. { bind with body = pevalBind ctx (lam x. x) bind.body })
-        r.bindings
-    in
-    TmRecLets {
-      r with
-      bindings = bindings,
-      inexpr = pevalBind { ctx with env = envPrime 0 () } k r.inexpr
-    }
-
-  sem pevalReadbackH ctx =
-  | TmClosP r ->
-    let b = astBuilder r.cls.info in
-    ({ ctx with freeVar = setInsert r.ident ctx.freeVar }, b.var r.ident)
-  | TmRecLets r ->
-    let fv = setOfSeq nameCmp (map (lam bind. bind.ident) r.bindings) in
-    match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
-    if
-      forAll (lam bind. not (setMem bind.ident inexprCtx.freeVar)) r.bindings
-    then
-      (inexprCtx, inexpr)
-    else
-      let ctx = { inexprCtx with freeVar = setUnion inexprCtx.freeVar fv } in
-    match
-      mapAccumL
-        (lam ctx. lam bind.
-          match pevalReadbackH ctx bind.body with (bodyCtx, body) in
-          (bodyCtx, { bind with body = body }))
-        ctx
-        r.bindings
-      with (ctx, bindings)
-    in
-    (ctx, TmRecLets { r with bindings = bindings, inexpr = inexpr })
-end
-
-
 type PEvalLetInlineOrRemove
 con PEvalLetInline : () -> PEvalLetInlineOrRemove
 con PEvalLetRemove : () -> PEvalLetInlineOrRemove
@@ -766,1028 +750,872 @@ lang TestLang =
   MExprPEval + MExprPrettyPrint + MExprEq + BootParser + PEvalLetInline
 end
 
--- NOTE(oerikss, 2023-08-14): This new language supports recursion and tries to
--- to avoid code-swell from substitution of closures.
-lang MExprPEvalNew =
-  -- Terms
-  VarPEval + LamRecLetsPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
-  MatchPEval + NeverPEval + DataPEval + TypePEval + SeqPEval +
-  UtestPEval + ExtPEval + SeqOpPEval +
-
-  -- Constants
-  ArithIntPEval + ArithFloatPEval + CmpIntPEval + CmpFloatPEval + IOPEval +
-  CmpCharPEval +
-
-  -- Patterns
-  NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
-  IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval +
-
-  -- Side effects
-  MExprSideEffect
-end
-
-lang TestLangNew =
-  MExprPEvalNew + MExprPrettyPrint + MExprEq + BootParser + PEvalLetInline
-end
-
 mexpr
 
-utest
-  ----------------------------------
-  -- Test standard implementation --
-  ----------------------------------
-  use TestLang in
+use TestLang in
 
-  let pevalInlineLets = pevalInlineLets (sideEffectEnvEmpty ()) in
+let pevalInlineLets = pevalInlineLets (sideEffectEnvEmpty ()) in
 
-  let _test = lam expr.
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "Before peval",
-        expr2str expr
-      ]);
-    let expr = symbolizeAllowFree expr in
-    match pevalExpr (pevalCtxEmpty ()) expr with expr in
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "After peval",
-        expr2str expr
-      ]);
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "After peval (pevalInlineLets)",
-        expr2str (pevalInlineLets expr)
-      ]);
-    expr
-  in
+let _test = lam expr.
+  let expr = symbolizeAllowFree expr in
+  pevalExpr { pevalCtxEmpty () with maxRecDepth = 10 } expr
+in
 
-  let _parse =
-    parseMExprString
-      { _defaultBootParserParseMExprStringArg () with allowFree = true }
-  in
+let _toString = utestDefaultToString expr2str expr2str in
+
+let _parse =
+  parseMExprString
+    { _defaultBootParserParseMExprStringArg () with allowFree = true }
+in
 
 
-  ------------------------------
-  -- Test closure application --
-  ------------------------------
+------------------------------
+-- Test closure application --
+------------------------------
 
-  let prog = _parse "lam x. x" in
-  utest _test prog with _parse "lam x. x" using eqExpr in
+let prog = _parse "lam x. x" in
+utest _test prog with _parse "lam x. x" using eqExpr else _toString in
 
-  let prog = _parse "(lam x. x) (lam z. z)" in
-  utest _test prog with _parse "lam z. z" using eqExpr in
+let prog = _parse "(lam x. x) (lam z. z)" in
+utest _test prog with _parse "lam z. z" using eqExpr else _toString in
 
-  let prog = _parse "(lam x. x y) (lam z. z)" in
-  utest _test prog with _parse "y" using eqExpr in
+let prog = _parse "(lam x. x y) (lam z. z)" in
+utest _test prog with _parse "y" using eqExpr else _toString in
 
-  let prog = _parse "(lam x. y y x) (lam z. z)" in
-  utest _test prog with _parse "
-  let t1 =
+let prog = _parse "(lam x. y y x) (lam z. z)" in
+utest _test prog with _parse "
+let t1 =
+  y
     y
-      y
-  in
-  let t2 =
-    t1
-      (lam z. z)
-  in
-  t2
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "(lam f. (f, f)) (lam z. z)" in
-  utest _test prog with _parse "
-  (lam z. z, lam z. z)
-    " using eqExpr in
-
-  -----------------------------
-  -- Test integer arithmetic --
-  -----------------------------
-
-  let prog = _parse "lam x. addi x 0" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addi x 1" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      addi
-        1
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addi 0 x" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addi 1 x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      addi
-        1
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addi x x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      muli
-        2
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli x 0" in
-  utest _test prog with _parse "lam x. 0"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli 0 x" in
-  utest _test prog with _parse "lam x. 0"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli 1 x" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli x 1" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli 2 x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      muli
-        2
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. muli x 2" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      muli
-        2
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. divi x 1" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. divi 0 x" in
-  utest _test prog with _parse "lam x. 0"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. modi x 1" in
-  utest _test prog with _parse "lam x. 0" using eqExpr in
-
-  let prog = _parse "lam x. modi 0 x" in
-  utest _test prog with _parse "lam x. 0" using eqExpr in
-
-  ------------------------------------
-  -- Test floating point arithmetic --
-  ------------------------------------
-
-  let prog = _parse "lam x. addf x 0." in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addf x 1." in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      addf
-        1.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addf 0. x" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addf 1. x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      addf
-        1.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. addf x x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      mulf
-        2.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf x 0." in
-  utest _test prog with _parse "lam x. 0."
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf 0. x" in
-  utest _test prog with _parse "lam x. 0."
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf 1. x" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf x 1." in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf 2. x" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      mulf
-        2.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. mulf x 2." in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      mulf
-        2.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. divf x 1." in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. divf 0. x" in
-  utest _test prog with _parse "lam x. 0."
-    using eqExpr
-  in
-
-
-  -------------------------------------------
-  -- Test Composite Arithmetic Expressions --
-  -------------------------------------------
-
-  let prog = _parse "lam x. mulf (addf 1. x) 1." in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      addf
-        1.
-        x
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "lam y. (lam x. mulf x x) (mulf (mulf 2. y) y)" in
-  utest _test prog with _parse "
-  lam y.
-    let t =
-      mulf
-        2.
-        y
-    in
-    let t1 =
-      mulf
-        t
-        y
-    in
-    let t2 =
-      mulf
-        t1
-        t1
-    in
-    t2
-    "
-    using eqExpr
-  in
-
-  ----------------------------------------
-  -- Test Record Updates and Projection --
-  ----------------------------------------
-
-  let prog = _parse "{ a = 1, b = 2}.b" in
-  utest _test prog with _parse "2"
-    using eqExpr
-  in
-
-  let prog = _parse "{ a = 1, b = 2}.a" in
-  utest _test prog with _parse "1"
-    using eqExpr
-  in
-
-  let prog = _parse "lam x. x.a" in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      x.a
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "{{ a = 1, b = 2} with a = 3}.a" in
-  utest _test prog with _parse "3"
-    using eqExpr
-  in
-
-  let prog = _parse "{x with a = 3}.a" in
-  utest _test prog with _parse "
-  let t =
-    { x
-      with
-      a =
-        3 }
-  in
-  let t1 =
-    t.a
-  in
+in
+let t2 =
   t1
-    "
-    using eqExpr
-  in
-
-  ---------------------------
-  -- Test Pattern Matching --
-  ---------------------------
-
-  let prog = _parse "lam x. match (lam z. (1, z)) x with (u, v) in v" in
-  utest _test prog with _parse "lam x. x"
-    using eqExpr
-  in
-
-  let prog = _parse "
-  lam x. match x with (f, g) then (lam x. x) (f, g) else (lam x. x) (lam z. z)
-    " in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      match
-        x
-      with
-        (f, g)
-      then
-        (f, g)
-      else
-        lam z. z
-    in
-    t
-    "
-    using eqExpr
-  in
-
-  ---------------
-  -- Test Lets --
-  ---------------
-
-  let prog = _parse "
-    lam y. let f = lam x. x in f y
-    " in
-  utest _test prog with _parse "
-    lam y. y
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-    lam y. let f = y (lam x. x) in f (lam x. x)
-    " in
-  utest _test prog with _parse "
-    lam y.
-      let t1 = y (lam x. x) in
-      let t2 = t1 (lam x. x) in
-      t2
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-    (lam f. (f, f)) (lam x. x)
-    " in
-  utest _test prog with _parse "
-    (lam x. x, lam x. x)
-    "
-    using eqExpr
-  in
-
-  --------------------------------
-  -- Test Dead Code Elimination --
-  --------------------------------
-
-  let prog = _parse "
-  lam y. (lam x. mulf x 0.) (addf y y)
-    " in
-  utest _test prog with _parse "lam y. 0."
-    using eqExpr
-  in
-
-  let prog = _parse "
-  lam y. (lam x. mulf x 0.) (addf (print \"hello\"; y) y)
-    " in
-  utest _test prog with _parse "
-  lam t.
-    let t = print \"hello\" in
-    0.
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-  lam x.
-      (lam x1. lam x2. addf x1 x2)
-        ((lam y. addf y y) x)
-        ((lam z. addf z z) x)
-    " in
-  utest _test prog with _parse "
-  lam x.
-    let t =
-      mulf
-        2.
-        x
-    in
-    let t1 =
-      mulf
-        2.
-        x
-    in
-    let t2 =
-      addf
-        t
-        t1
-    in
-    t2
-    "
-    using eqExpr
-  in
-
-  --------------------------
-  -- Test Char Comparison --
-  --------------------------
-
-  let prog = _parse "
-  lam x.
-    eqc 'v' x
-  " in
-
-  utest _test prog with _parse "
-  lam x.
-    let t = eqc 'v' x in
-    t
+    (lam z. z)
+in
+t2
   "
-    using eqExpr in
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-    eqc 'v' 'a'" in
+let prog = _parse "(lam f. (f, f)) (lam z. z)" in
+utest _test prog with _parse "
+(lam z. z, lam z. z)
+  " using eqExpr else _toString in
 
-  utest _test prog with _parse "false" using eqExpr in
+-----------------------------
+-- Test integer arithmetic --
+-----------------------------
 
-  -------------------------
-  -- Test Seq Operations --
-  -------------------------
+let prog = _parse "lam x. addi x 0" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
 
-  let prog = _parse "map (addi 1) [1, 2, 3]" in
-  utest _test prog with _parse "[2, 3, 4]" using eqExpr in
-
-  let prog = _parse "lam x. map (addi x) [1, 2, 3]" in
-  utest _test prog with _parse "
-  lam x.
-    let t1 = addi 1 x in
-    let t2 = addi 2 x in
-    let t3 = addi 3 x in
-    [t1, t2, t3]
-    "
-    using eqExpr
+let prog = _parse "lam x. addi x 1" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    addi
+      1
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "mapi addi [1, 2, 3]" in
-  utest _test prog with _parse "[1, 3, 5]" using eqExpr in
+let prog = _parse "lam x. addi 0 x" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
 
-  let prog = _parse "lam x. mapi (lam i. lam y. muli i (addi x y)) [1, 2, 3]" in
-  utest _test prog with
-    _parse "
-  lam x.
-    let t1 = addi 2 x in
-    let t2 = addi 3 x in
-    let t3 = muli 2 t2 in
-    [0, t1, t3]
-      "
-    using eqExpr
+let prog = _parse "lam x. addi 1 x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    addi
+      1
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "foldl addi 0 [1, 2, 3]" in
-  utest _test prog with _parse "6" using eqExpr in
-
-  let prog = _parse "lam x. foldl addi x [1, 2, 3]" in
-  utest _test prog with _parse "
-  lam x.
-    let t = addi 1 x in
-    let t1 = addi 2 t in
-    let t2 = addi 3 t1 in
-    t2
-    " using eqExpr in
-
-  let prog = _parse "lam x. lam y. [get x y, get x 1, get x 2]" in
-  utest _test prog with _parse "
-    lam x.
-      lam y. [get x y, get x 1, get x 2]
-    "
-    using eqExpr
+let prog = _parse "lam x. addi x x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    muli
+      2
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  -------------------------
-  -- Test Recursive Lets --
-  -------------------------
+let prog = _parse "lam x. muli x 0" in
+utest _test prog with _parse "lam x. 0"
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-  recursive let pow = lam n. lam x.
-    if eqi n 0 then 1.
-    else
-      if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. pow 10 x
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
-  recursive let pow = lam n. lam x.
-    if eqi n 0 then 1.
-    else
-      if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. pow 10 x
-    "
-    using eqExpr
+let prog = _parse "lam x. muli 0 x" in
+utest _test prog with _parse "lam x. 0"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. muli 1 x" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. muli x 1" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. muli 2 x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    muli
+      2
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-  recursive let pow = lam n. lam x.
-    if eqi n 0 then 1.
-    else
-      if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. x
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
-    lam x. x
-    "
-    using eqExpr
+let prog = _parse "lam x. muli x 2" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    muli
+      2
+      x
   in
-  ()
-  with () in
+  t
+  "
+  using eqExpr else _toString
+in
 
-utest
-  -----------------------------
-  -- Test new implementation --
-  -----------------------------
-  use TestLangNew in
+let prog = _parse "lam x. divi x 1" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
 
-  let pevalInlineLets = pevalInlineLets (sideEffectEnvEmpty ()) in
+let prog = _parse "lam x. divi 0 x" in
+utest _test prog with _parse "lam x. 0"
+  using eqExpr else _toString
+in
 
-  let _test = lam expr.
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "Before peval",
-        expr2str expr
-      ]);
-    let expr = symbolizeAllowFree expr in
-    match pevalExpr { pevalCtxEmpty () with maxRecDepth = 10 } expr with expr in
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "After peval",
-        expr2str expr
-      ]);
-    logMsg logLevel.debug (lam.
-      strJoin "\n" [
-        "After peval (pevalInlineLets)",
-        expr2str (pevalInlineLets expr)
-      ]);
-    expr
+let prog = _parse "lam x. modi x 1" in
+utest _test prog with _parse "lam x. 0" using eqExpr else _toString in
+
+let prog = _parse "lam x. modi 0 x" in
+utest _test prog with _parse "lam x. 0" using eqExpr else _toString in
+
+------------------------------------
+-- Test floating point arithmetic --
+------------------------------------
+
+let prog = _parse "lam x. addf x 0." in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. addf x 1." in
+utest _test prog with _parse "
+lam x.
+  let t =
+    addf
+      1.
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  let _parse =
-    parseMExprString
-      { _defaultBootParserParseMExprStringArg () with allowFree = true }
+let prog = _parse "lam x. addf 0. x" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. addf 1. x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    addf
+      1.
+      x
   in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  ----------------------------------
-  -- Test new closure application --
-  ----------------------------------
+let prog = _parse "lam x. addf x x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    mulf
+      2.
+      x
+  in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "lam x. x" in
-  utest _test prog with _parse "let f = lam x. x in f" using eqExpr in
+let prog = _parse "lam x. mulf x 0." in
+utest _test prog with _parse "lam x. 0."
+  using eqExpr else _toString
+in
 
-  let prog = _parse "(lam x. x) (lam z. z)" in
-  utest _test prog with _parse "let f = lam z. z in f" using eqExpr in
+let prog = _parse "lam x. mulf 0. x" in
+utest _test prog with _parse "lam x. 0."
+  using eqExpr else _toString
+in
 
-  let prog = _parse "(lam x. x y) (lam z. z)" in
-  utest _test prog with _parse "y" using eqExpr in
+let prog = _parse "lam x. mulf 1. x" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
 
-  let prog = _parse "(lam x. y y x) (lam z. z)" in
-  utest _test prog with _parse "
-  let t =  lam z. z in
+let prog = _parse "lam x. mulf x 1." in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. mulf 2. x" in
+utest _test prog with _parse "
+lam x.
+  let t =
+    mulf
+      2.
+      x
+  in
+  t
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. mulf x 2." in
+utest _test prog with _parse "
+lam x.
+  let t =
+    mulf
+      2.
+      x
+  in
+  t
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. divf x 1." in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. divf 0. x" in
+utest _test prog with _parse "lam x. 0."
+  using eqExpr else _toString
+in
+
+
+-------------------------------------------
+-- Test Composite Arithmetic Expressions --
+-------------------------------------------
+
+let prog = _parse "lam x. mulf (addf 1. x) 1." in
+utest _test prog with _parse "
+lam x.
+  let t =
+    addf
+      1.
+      x
+  in
+  t
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam y. (lam x. mulf x x) (mulf (mulf 2. y) y)" in
+utest _test prog with _parse "
+lam y.
+  let t =
+    mulf
+      2.
+      y
+  in
   let t1 =
-    y
+    mulf
+      t
       y
   in
   let t2 =
-    t1
-      t
+    mulf
+      t1
+      t1
   in
   t2
-    "
-    using eqExpr
-  in
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "(lam f. (f, f)) (lam z. z)" in
-  utest _test prog with _parse "
+----------------------------------------
+-- Test Record Updates and Projection --
+----------------------------------------
+
+let prog = _parse "{ a = 1, b = 2}.b" in
+utest _test prog with _parse "2"
+  using eqExpr else _toString
+in
+
+let prog = _parse "{ a = 1, b = 2}.a" in
+utest _test prog with _parse "1"
+  using eqExpr else _toString
+in
+
+let prog = _parse "lam x. x.a" in
+utest _test prog with _parse "
+lam x.
   let t =
-    lam z.
-      z
+    x.a
   in
-  (t, t)
-    " using eqExpr in
+  t
+  "
+  using eqExpr else _toString
+in
 
-  -------------------------
-  -- Test Recursive Lets --
-  -------------------------
+let prog = _parse "{{ a = 1, b = 2} with a = 3}.a" in
+utest _test prog with _parse "3"
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-  recursive let pow = lam n. lam x.
-    if eqi n 0 then 1.
+let prog = _parse "{x with a = 3}.a" in
+utest _test prog with _parse "
+let t =
+  { x
+    with
+    a =
+      3 }
+in
+let t1 =
+  t.a
+in
+t1
+  "
+  using eqExpr else _toString
+in
+
+---------------------------
+-- Test Pattern Matching --
+---------------------------
+
+let prog = _parse "lam x. match (lam z. (1, z)) x with (u, v) in v" in
+utest _test prog with _parse "lam x. x"
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+lam x. match x with (f, g) then (lam x. x) (f, g) else (lam x. x) (lam z. z)
+  "
+in
+utest _test prog with _parse "
+lam x.
+  let t =
+    match
+      x
+    with
+      (f, g)
+    then
+      (f, g)
     else
-      if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. pow 10 x
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
+      lam z. z
+  in
+  t
+  "
+  using eqExpr else _toString
+in
+
+---------------
+-- Test Lets --
+---------------
+
+let prog = _parse "
+  lam y. let f = lam x. x in f y
+  "
+in
+utest _test prog with _parse "
+  lam y. y
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  lam y. let f = y (lam x. x) in f (lam x. x)
+  "
+in
+utest _test prog with _parse "
+  lam y.
+    let t1 = y (lam x. x) in
+    let t2 = t1 (lam x. x) in
+    t2
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  (lam f. (f, f)) (lam x. x)
+  "
+in
+utest _test prog with _parse "
+  (lam x. x, lam x. x)
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  let f = lam x. x in (f, f)
+  "
+in
+utest _test prog with _parse "
+  let f = lam x. x in (f, f)
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  let f = lam x.
+    let g = lam y. y in (g, g)
+  in (f, f)
+  "
+in
+utest _test prog with _parse "
+  let f = lam x. (lam y. y, lam y. y)
+  in (f, f)
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  let f = lam x.
+    let g = lam y. y in g
+  in (f, f 0)
+  "
+in
+utest _test prog with _parse "
+  let f = lam x. lam y. y
+  in (f, lam y. y)
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+  let f = lam x. lam y. (y, x) in (f 0, f 1)
+  "
+in
+utest _test prog with _parse "
+  (lam y. (y, 0), lam y. (y, 1))
+  "
+  using eqExpr else _toString
+in
+
+---------------------------------------------
+-- Tests top-level constructor definitions --
+---------------------------------------------
+
+let prog = _parse "
+  con A : Float -> A in
+  let f = lam x. x in (f, f)
+  "
+in
+utest _test prog with _parse "
+  con A : Float -> A in
+  let f = lam x. x in (f, f)
+  "
+  using eqExpr else _toString
+in
+
+--------------------------------
+-- Test Dead Code Elimination --
+--------------------------------
+
+let prog = _parse "
+lam y. (lam x. mulf x 0.) (addf y y)
+  "
+in
+utest _test prog with _parse "lam y. 0."
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+lam y. (lam x. mulf x 0.) (addf (print \"hello\"; y) y)
+  "
+in
+utest _test prog with _parse "
+lam t.
+  let t = print \"hello\" in
+  0.
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+lam x.
+    (lam x1. lam x2. addf x1 x2)
+      ((lam y. addf y y) x)
+      ((lam z. addf z z) x)
+  "
+in
+utest _test prog with _parse "
+lam x.
+  let t =
+    mulf
+      2.
+      x
+  in
+  let t1 =
+    mulf
+      2.
+      x
+  in
+  let t2 =
+    addf
+      t
+      t1
+  in
+  t2
+  "
+  using eqExpr else _toString
+in
+
+--------------------------
+-- Test Char Comparison --
+--------------------------
+
+let prog = _parse "
+lam x.
+  eqc 'v' x
+  "
+in
+
+utest _test prog with _parse "
+lam x.
+  let t = eqc 'v' x in
+  t
+"
+  using eqExpr else _toString in
+
+let prog = _parse "
+  eqc 'v' 'a'" in
+
+utest _test prog with _parse "false" using eqExpr else _toString in
+
+-------------------------
+-- Test Seq Operations --
+-------------------------
+
+let prog = _parse "map (addi 1) [1, 2, 3]" in
+utest _test prog with _parse "[2, 3, 4]" using eqExpr else _toString in
+
+let prog = _parse "lam x. map (addi x) [1, 2, 3]" in
+utest _test prog with _parse "
+lam x.
+  let t1 = addi 1 x in
+  let t2 = addi 2 x in
+  let t3 = addi 3 x in
+  [t1, t2, t3]
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "mapi addi [1, 2, 3]" in
+utest _test prog with _parse "[1, 3, 5]" using eqExpr else _toString in
+
+let prog = _parse "lam x. mapi (lam i. lam y. muli i (addi x y)) [1, 2, 3]" in
+utest _test prog with
+  _parse "
+lam x.
+  let t1 = addi 2 x in
+  let t2 = addi 3 x in
+  let t3 = muli 2 t2 in
+  [0, t1, t3]
+    "
+  using eqExpr else _toString
+in
+
+let prog = _parse "foldl addi 0 [1, 2, 3]" in
+utest _test prog with _parse "6" using eqExpr else _toString in
+
+let prog = _parse "lam x. foldl addi x [1, 2, 3]" in
+utest _test prog with _parse "
+lam x.
+  let t = addi 1 x in
+  let t1 = addi 2 t in
+  let t2 = addi 3 t1 in
+  t2
+  " using eqExpr else _toString in
+
+let prog = _parse "lam x. lam y. [get x y, get x 1, get x 2]" in
+utest _test prog with _parse "
   lam x.
-    mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf x x) x) x) x) x) x) x) x) x
-    "
-    using eqExpr
-  in
+    lam y. [get x y, get x 1, get x 2]
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-  recursive let pow = lam n. lam x.
+-------------------------
+-- Test Recursive Lets --
+-------------------------
+
+let prog = _parse "
+recursive let pow = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (pow (subi n 1) x) x
+in lam x. pow 10 x
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+lam x.
+  mulf
+    (mulf
+       (mulf
+          (mulf
+             (mulf
+                (mulf
+                   (mulf
+                      (mulf
+                         (mulf x x) x) x) x) x) x) x) x) x
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+recursive let pow = lam x. lam n.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf x (pow x (subi n 1))
+in lam n. (pow 2. n, pow 1. n)
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+recursive
+  let pow = lam x. lam n1.
+    if eqi n1 0 then 1.
+    else
+      if eqi n1 1 then x
+      else mulf x (pow x (subi n1 1))
+in
+lam n.
+  (if eqi n 0 then 1.
+   else if eqi n 1 then 2.
+        else mulf 2. (pow 2. (subi n 1)),
+   if eqi n 0 then 1.
+   else
+     if eqi n 1 then 1.
+     else pow 1. (subi n 1))
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+let pow =
+  recursive let recur = lam n. lam x.
     if eqi n 0 then 1.
     else
       if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. lam n. (pow 10 x, pow n x)
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
-  recursive let pow = lam n. lam x.
-    match eqi n 0 with true then 1.
-    else match eqi n 1 with true then x
-         else mulf (pow (subi n 1) x) x
-  in
-  lam x. lam n.
-    (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf x x) x) x) x) x) x) x) x) x,
-     match eqi n 0 with true then 1.
-     else
-       match eqi n 1 with true then x
-       else mulf (pow (subi n 1) x) x)
-    "
-    using eqExpr
-  in
+      else mulf (recur (subi n 1) x) x
+  in recur
+in lam x. (pow 10 x, pow 9 x)
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+recursive let recur = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (recur (subi n 1) x) x
+in lam x. (recur 10 x, recur 9 x)
+  "
+  using eqExpr else _toString
+in
 
-  let prog = _parse "
-  recursive let pow = lam n. lam x.
-    if eqi n 0 then 1.
+let prog = _parse "
+recursive let pow = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (pow (subi n 1) x) x
+in lam x. x
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+  lam x. x
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+recursive let pow = lam n. lam x.
+  if eqi n 0 then 1.
+  else
+    if eqi n 1 then x
+    else mulf (pow (subi n 1) x) x
+in lam x. lam n. (pow 10 x, pow n x)
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+recursive let pow = lam n. lam x.
+  match eqi n 0 with true then 1.
+  else match eqi n 1 with true then x
+       else mulf (pow (subi n 1) x) x
+in
+lam x. lam n.
+  (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf x x) x) x) x) x) x) x) x) x,
+   match eqi n 0 with true then 1.
+   else
+     match eqi n 1 with true then x
+     else mulf (pow (subi n 1) x) x)
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+odd 9
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+true
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+odd 10
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+odd 0
+  "
+  using eqExpr else _toString
+in
+
+let prog = _parse "
+recursive let pow = lam x. lam n.
+  if eqi n 0 then 1.
+  else mulf x (pow x (subi n 1))
+in
+recursive let powpp = lam xpp. lam npp.
+    match lti npp 1 with true then (1., 0., 0.)
     else
-      if eqi n 1 then x
-      else mulf (pow (subi n 1) x) x
-  in lam x. pow 2 x
-    " in
-  utest _test prog with _parse "
-  let f = lam x. let t = mulf x x in t in f
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-  recursive
-  let odd = lam n.
-      if eqi n 1 then true
-      else if lti n 1 then false
-      else even (subi n 1)
-  let even = lam n.
-      if eqi n 0 then true
-      else if lti n 0 then false
-      else odd (subi n 1)
-  in
-  odd 9
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
-  true
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-  recursive
-  let odd = lam n.
-      if eqi n 1 then true
-      else if lti n 1 then false
-      else even (subi n 1)
-  let even = lam n.
-      if eqi n 0 then true
-      else if lti n 0 then false
-      else odd (subi n 1)
-  in
-  odd 10
-    " in
-  utest pevalInlineLets (_test prog) with _parse "
-  recursive
-  let odd = lam n.
-      if eqi n 1 then true
-      else if lti n 1 then false
-      else even (subi n 1)
-  let even = lam n.
-      if eqi n 0 then true
-      else if lti n 0 then false
-      else odd (subi n 1)
-  in
-  odd 0
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-  recursive let pow = lam x. lam n.
-    if eqi n 0 then 1.
-    else mulf x (pow x (subi n 1))
-  in
-  lam x. [
-    pow x 0,
-    pow x 1,
-    pow x 2,
-    pow x 3,
-    pow x 4,
-    pow x 5,
-    pow x 6,
-    pow x 7,
-    pow x 8,
-    pow x 9,
-    pow x 10
-  ]
-    " in
-
-  utest pevalInlineLets (_test prog) with _parse "
-  recursive let pow = lam x. lam n.
-    if eqi n 0 then 1.
-    else mulf x (pow x (subi n 1))
-  in
-  lam x.
-    [ 1.,
-      x,
-      mulf
-        x
-        x,
-      mulf
-        x
-        (mulf
-           x
-           x),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              x)),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 x))),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 (mulf
-                    x
-                    x)))),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 (mulf
-                    x
-                    (mulf
-                       x
-                       x))))),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 (mulf
-                    x
-                    (mulf
-                       x
-                       (mulf
-                          x
-                          x)))))),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 (mulf
-                    x
-                    (mulf
-                       x
-                       (mulf
-                          x
-                          (mulf
-                             x
-                             x))))))),
-      mulf
-        x
-        (mulf
-           x
-           (mulf
-              x
-              (mulf
-                 x
-                 (mulf
-                    x
-                    (mulf
-                       x
-                       (mulf
-                          x
-                          (mulf
-                             x
-                             (mulf
-                                x
-                                (mulf
-                                   x
-                                   (pow
-                                      x
-                                      0)))))))))) ]
-    "
-    using eqExpr
-  in
-
-  let prog = _parse "
-  lam p.
-  recursive let pow = lam x. lam n.
-    if eqi n 0 then 1.
-    else mulf x (pow x (subi n 1))
-  in
-  recursive let powpp = lam xpp. lam npp.
-      match lti npp 1 with true then (1., 0., 0.)
-      else
-        let t = powpp xpp (subi npp 1) in
-        (mulf xpp.0 t.0
-        ,addf (mulf xpp.0 t.1) (mulf xpp.1 t.0)
-        ,addf
-           (addf (mulf xpp.0 t.2) (mulf 2. (mulf xpp.1 t.1)))
-           (mulf xpp.2 t.0))
-  in
-  lam y. lam yp. {
-    r0 = subf (get yp 1) (mulf (get y 0) (get y 4)),
-    r1 = subf (get yp 3) (subf (mulf (get y 2) (get y 4)) 1.),
-    r2 = addf
-      (powpp (get y 0, get y 1, get yp 1) p).2
-      (powpp (get y 2, get y 3, get yp 3) p).2,
-    r3 =
-      subf
-        (get y 5)
-        (addf
-          (pow x 2)
-          (pow x 3)),
-    r4 = subf (get y 1) (get yp 0),
-    r5 = subf (get y 3) (get yp 2)
-  }
-    " in
-
-  utest pevalInlineLets (_test prog) with _parse "
-  lam p.
-    recursive let powpp = lam xpp. lam npp.
-      match lti npp 1 with true then (1., 0., 0.)
-      else
-        let t2 = powpp xpp (subi npp 1) in
-        (mulf xpp.0 t2.0
-        ,addf (mulf xpp.0 t2.1) (mulf xpp.1 t2.0)
-        ,addf
-           (addf (mulf xpp.0 t2.2) (mulf 2. (mulf xpp.1 t2.1)))
-           (mulf xpp.2 t2.0))
-    in
-    lam y. lam yp. {
-      r0 = subf (get yp 1) (mulf (get y 0) (get y 4)),
-      r1 = subf (get yp 3) (subf (mulf (get y 2) (get y 4)) 1.),
-      r2 =
-      addf
-        (match lti p 1 with true then (1., 0., 0.)
-         else
-          let t = powpp (get y 0, get y 1, get yp 1) (subi p 1) in
-          (mulf (get y 0) t.0
-          ,addf (mulf (get y 0) t.1) (mulf (get y 1) t.0)
-          ,addf
-             (addf
-                (mulf (get y 0) t.2)
-                (mulf 2. (mulf (get y 1) t.1)))
-             (mulf (get yp 1) t.0))).2
-        (match lti p 1 with true then (1., 0., 0.)
-         else
-          let t1 = powpp (get y 2, get y 3, get yp 3) (subi p 1) in
-          (mulf (get y 2) t1.0
-          ,addf
-             (mulf (get y 2) t1.1)
-             (mulf (get y 3) t1.0)
-          ,addf
-             (addf
-                (mulf (get y 2) t1.2)
-                (mulf 2. (mulf (get y 3) t1.1)))
-             (mulf (get yp 3) t1.0))).2,
-      r3 = subf (get y 5) (addf (mulf x x) (mulf x (mulf x x))),
-      r4 = subf (get y 1) (get yp 0),
-      r5 = subf (get y 3) (get yp 2)
-    }
-    "
-    using eqExpr
-  in
-  () with () in
-
+      let t = powpp xpp (subi npp 1) in
+      (mulf xpp.0 t.0
+      ,addf (mulf xpp.0 t.1) (mulf xpp.1 t.0)
+      ,addf
+         (addf (mulf xpp.0 t.2) (mulf 2. (mulf xpp.1 t.1)))
+         (mulf xpp.2 t.0))
+in
+lam p. lam y. lam yp. {
+  r0 = subf (get yp 1) (mulf (get y 0) (get y 4)),
+  r1 = subf (get yp 3) (subf (mulf (get y 2) (get y 4)) 1.),
+  r2 = ((lam x. lam y. (subf x.0 y.0, subf x.1 y.1, subf x.2 y.2))
+        ((lam x. lam y. (addf x.0 y.0, addf x.1 y.1, addf x.2 y.2))
+          (powpp (get y 0, get y 1, get yp 1) 2)
+          (powpp (get y 2, get y 3, get yp 3) p))
+        (powpp (1., 0., 0.) 2)).2,
+  r3 =
+    subf
+      (get y 5)
+      (addf
+        (pow x 2)
+        (pow x 3)),
+  r4 = subf (get y 1) (get yp 0),
+  r5 = subf (get y 3) (get yp 2)
+}
+  "
+in
+utest pevalInlineLets (_test prog) with _parse "
+recursive
+  let powpp = lam xpp. lam npp.
+    if lti npp 1 then (1., 0., 0.)
+    else
+      let t1 = powpp xpp (subi npp 1) in
+      (mulf xpp.0 t1.0,
+       addf
+         (mulf xpp.0 t1.1)
+         (mulf xpp.1 t1.0),
+       addf
+         (addf
+            (mulf xpp.0 t1.2)
+            (mulf 2. (mulf xpp.1 t1.1)))
+         (mulf xpp.2 t1.0))
+in
+lam p. lam y. lam yp. {
+  r0 = subf (get yp 1) (mulf (get y 0) (get y 4)),
+  r1 = subf (get yp 3) (subf (mulf (get y 2) (get y 4)) 1.),
+  r2 =
+    addf
+      (addf
+         (addf
+            (mulf (get y 0) (get yp 1))
+            (mulf 2. (mulf (get y 1) (get y 1))))
+         (mulf (get yp 1) (get y 0)))
+      (if lti p 1 then (1., 0., 0.)
+       else
+        let t = powpp (get y 2, get y 3, get yp 3) (subi p 1) in
+        (mulf (get y 2) t.0,
+         addf
+           (mulf (get y 2) t.1)
+           (mulf (get y 3) t.0),
+         addf
+           (addf
+              (mulf (get y 2) t.2)
+              (mulf 2. (mulf (get y 3) t.1)))
+           (mulf (get yp 3) t.0))).2,
+  r3 = subf (get y 5) (addf (mulf x x) (mulf x (mulf x x))),
+  r4 = subf (get y 1) (get yp 0),
+  r5 = subf (get y 3) (get yp 2)
+}
+  "
+  using eqExpr else _toString
+in
 ()
