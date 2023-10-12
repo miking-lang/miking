@@ -287,18 +287,27 @@ utest
   let tget = tensorGetExn in
   let tset = tensorSetExn in
   let tcreate = tensorCreateCArrayFloat in
+  let mset = sundialsMatrixDenseSet in
 
   let jacf = lam jacargs : IdaJacArgs. lam m : SundialsMatrixDense.
-    let m = sundialsMatrixDenseUnwrap m in
+    -- let m = sundialsMatrixDenseUnwrap m in
     let x = tget jacargs.y [0] in
     let vx = tget jacargs.y [1] in
     let dx = tget jacargs.yp [0] in
     let dvx = tget jacargs.yp [1] in
-    tset m [0, 0] jacargs.c;
-    tset m [0, 1] (negf 1.);
-    tset m [1, 0] 1.;
-    tset m [1, 1] (addf 1. jacargs.c);
+    mset m 0 0 jacargs.c;
+    mset m 0 1 (negf 1.);
+    mset m 1 0 1.;
+    mset m 1 1 (addf 1. jacargs.c);
     ()
+  in
+
+  let resf = lam y. lam yp.
+    let x = get y 0 in
+    let vx = get y 1 in
+    let dx = get yp 0 in
+    let dvx = get yp 1 in
+    [subf dx vx, addf dvx (addf vx x)]
   in
 
   let resf = lam. lam y. lam yp. lam r.
@@ -306,8 +315,11 @@ utest
     let vx = tget y [1] in
     let dx = tget yp [0] in
     let dvx = tget yp [1] in
-    tset r [0] (subf dx vx);
-    tset r [1] (addf dvx (addf vx x));
+    let y = create 2 (lam i. tget y [i]) in
+    let yp = create 2 (lam i. tget yp [i]) in
+    let rr = resf y yp in
+    tset r [0] (get rr 0);
+    tset r [1] (get rr 1);
     ()
   in
 
@@ -342,7 +354,9 @@ utest
       y        = v,
       yp       = vp
     } in
-    idaSetStopTime s 10.;
+
+    let tstop = 10000. in
+    idaSetStopTime s tstop;
     utest idaCalcICYaYd s { tend = 1.e-4, y = v, yp = vp }
       with IdaCalcICOK {}
     in
@@ -351,9 +365,9 @@ utest
     utest r with IdaSuccess {} in
     utest tend with 2. using eqf in
 
-    match idaSolveNormal s { tend = 100., y = v, yp = vp } with (tend, r) in
+    match idaSolveNormal s { tend = mulf 2. tstop, y = v, yp = vp } with (tend, r) in
     utest r with IdaStopTimeReached {} in
-    utest tend with 10. using eqf in
+    utest tend with tstop using eqf in
 
     let y = nvectorSerialUnwrap v in
     let yp = nvectorSerialUnwrap vp in
