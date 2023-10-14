@@ -1,0 +1,68 @@
+-----------
+-- Ropes --
+-----------
+
+repr Rope {UColl _ ?x = Rope ?x}
+
+-- We take into account that the built-in ropes have one extra layer
+-- of indirection, so basically all operations must unwrap and rewrap
+-- that, i.e., +1 cost for each rope input/output.
+
+letimpl[0.0] empty : !Rope = ropeEmpty
+letimpl[3.0] append_op : !Rope -> _ -> !Rope = ropeAppend
+letimpl[3.0] prepend_op : _ -> !Rope -> !Rope = ropePrepend
+letimpl[addf n 2.0] foldl : _ -> _ -> !Rope -> _ = ropeFoldl
+letimpl[addf n 2.0] foldr : _ -> _ -> !Rope -> _ = ropeFoldr
+
+letimpl[0.0] collFromSeq : _ -> !Rope = lam x. x
+letimpl[0.0] q : _ -> !Rope = lam x. x
+letimpl[0.0] seqFromColl : !Rope -> _ = lam x. x
+
+letimpl[4.0] concat_op : !Rope -> !Rope -> !Rope = ropeConcat
+
+---------------
+-- Cons-list --
+---------------
+
+repr Cons {UColl _ ?x = ConsList ?x}
+
+letimpl[0.0] empty : !Cons = consEmpty
+letimpl[addf n 1.0] append_op : !Cons -> _ -> !Cons = consAppend
+letimpl[1.0] prepend_op : _ -> !Cons -> !Cons = consPrepend
+letimpl[n] foldl : _ -> _ -> !Cons -> _ = consFoldl
+letimpl[n] foldr : _ -> _ -> !Cons -> _ = consFoldr
+
+letimpl[1.0] splitFirst_op : !Cons -> _ /(_, !Cons) = consUncons
+
+--------------------------------------
+-- Defaults/general implementations --
+--------------------------------------
+
+letimpl[3.0] q = lam xs. ropeFoldr (@(divf 1.0 n) prepend_op) (@1 empty) xs
+letimpl[3.0] q = lam xs. ropeFoldl (@(divf 1.0 n) append_op) (@1 empty) xs
+
+letimpl[addf n 2.0] collFromSeq = lam xs. ropeFoldr (@n prepend_op) (@1 empty) xs
+letimpl[addf n 2.0] collFromSeq = lam xs. ropeFoldl (@n append_op) (@1 empty) xs
+letimpl[mulf n 3.0] seqFromColl = lam xs. foldl ropeAppend ropeEmpty xs
+letimpl[mulf n 3.0] seqFromColl = lam xs. foldr ropePrepend ropeEmpty xs
+
+letimpl[0.0] view : all p. Coll p _ -> Coll p _ = lam xs. xs
+letimpl[1.0] view = lam xs. foldl (@n append_op) empty xs
+letimpl[1.0] view = lam xs. foldr (@n prepend_op) empty xs
+
+letimpl[1.0] singleton = lam x. append_op empty x
+letimpl[1.0] singleton = lam x. prepend_op x empty
+
+letimpl[1.0] concat_op : all p. Coll p _ -> _ -> Coll p _ = lam a. lam b. foldl (@n append_op) a b
+letimpl[1.0] concat_op : all p. _ -> Coll p _ -> Coll p _ = lam a. lam b. foldr (@n prepend_op) b a
+
+-- foldl1
+-- foldr1
+-- unfoldl
+-- unfoldr
+-- foldl2_op
+
+letimpl[1.0] map_op = lam f. lam xs. foldl (lam acc. lam x. @n append_op acc (f x)) empty xs
+letimpl[1.0] map_op = lam f. lam xs. foldr (lam x. lam acc. @n prepend_op (f x) acc) empty xs
+
+letimpl[1.0] map2_op = lam f. lam as. lam bs. foldl2_op (lam acc. lam l. lam r. @n append_op acc (f l r)) empty as bs

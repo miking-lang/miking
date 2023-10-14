@@ -89,7 +89,7 @@ prod ReprDecl: UTop =
   "repr" name:UName "{" pat:Merged "=" repr:Merged "}"
 
 prod ImplDecl: UTop =
-  "impl" "[" cost:Merged "]" name:LName
+  "letimpl" "[" cost:Merged "]" name:LName
   (":" tyAnnot:Merged)?
   "=" body:Merged
 
@@ -180,6 +180,7 @@ precedence {
 
 infix right Arrow: Merged = "->"
 
+prefix All: Merged = "all" v:LName "."
 prod BoolCon: Merged = "Bool"
 prod IntCon: Merged = "Int"
 prod CharCon: Merged = "Char"
@@ -190,4 +191,5 @@ precedence {
   Not;
   App;
   Arrow;
+  All;
 }

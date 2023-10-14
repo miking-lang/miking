@@ -70,105 +70,6 @@ lang RepTypesKeywordMaker = KeywordMakerBase + ReprTypeAst + TyWildAst + OpDeclA
     }
 end
 
-lang TyWildPrettyPrint = PrettyPrint + TyWildAst
-  sem typePrecedence =
-  | TyWild _ -> 0
-
-  sem getTypeStringCode indent env =
-  | TyWild _ -> (env, "_")
-end
-
-lang ReprTypePrettyPrint = PrettyPrint + ReprTypeAst + RepTypesHelpers
-  sem typePrecedence =
-  | TyRepr _ -> 1
-
-  sem getTypeStringCode indent env =
-  | TyRepr x ->
-    let repr = switch deref (botRepr x.repr)
-      case BotRepr repr then join [int2string repr.scope, ", ", int2string (sym2hash repr.sym)]
-      case UninitRepr _ then "uninit"
-      case _ then "impossible"
-      end in
-    match printTypeParen indent 2 env x.arg with (env, arg) in
-    (env, join ["Repr[", repr, "] ", arg])
-end
-
-lang ReprSubstPrettyPrint = PrettyPrint + ReprSubstAst
-  sem typePrecedence =
-  | TySubst _ -> 1
-
-  sem getTypeStringCode indent env =
-  | TySubst x ->
-    match pprintConName env x.subst with (env, subst) in
-    match printTypeParen indent 2 env x.arg with (env, arg) in
-    (env, join ["!", subst, " ", arg])
-end
-
-lang OpDeclPrettyPrint = PrettyPrint + OpDeclAst
-  sem isAtomic =
-  | TmOpDecl _ -> false
-
-  sem pprintCode indent env =
-  | TmOpDecl x ->
-    match pprintEnvGetStr env x.ident with (env, ident) in
-    match pprintCode indent env x.inexpr with (env, inexpr) in
-    match getTypeStringCode indent env x.tyAnnot with (env, ty) in
-    (env,
-     join ["letop ", pprintVarString ident, " : ", ty, " in",
-           pprintNewline indent, inexpr])
-end
-
-lang OpVarPrettyPrint = PrettyPrint + OpVarAst
-  sem isAtomic =
-  | TmOpVar _ -> true
-
-  sem pprintCode indent env =
-  | TmOpVar x ->
-    match pprintEnvGetStr env x.ident with (env, ident) in
-    (env, join ["<Op>", ident])
-end
-
-lang OpImplPrettyPrint = PrettyPrint + OpImplAst
-  sem isAtomic =
-  | TmOpImpl _ -> false
-
-  sem pprintCode indent env =
-  | TmOpImpl x ->
-    let newIndent = pprintIncr indent in
-    let pprintAlt = lam env. lam alt.
-      match getTypeStringCode newIndent env alt.specType with (env, specType) in
-      match pprintCode newIndent env alt.body with (env, body) in
-      (env, join [specType, pprintNewline newIndent, body]) in
-    match pprintEnvGetStr env x.ident with (env, ident) in
-    match mapAccumL pprintAlt env x.alternatives with (env, alternatives) in
-    match pprintCode indent env x.inexpr with (env, inexpr) in
-    let start = concat (pprintNewline indent) "* " in
-    let str = join
-      [ "impl[", int2string x.reprScope, "] ", ident, " ="
-      , join (map (lam alt. concat start alt) alternatives)
-      , pprintNewline indent, "in"
-      , pprintNewline indent, inexpr
-      ] in
-    (env, str)
-end
-
-lang ReprDeclPrettyPrint = PrettyPrint + ReprDeclAst
-  sem isAtomic =
-  | TmReprDecl _ -> false
-
-  sem pprintCode indent env =
-  | TmReprDecl x ->
-    match pprintEnvGetStr env x.ident with (env, ident) in
-    match getTypeStringCode indent env x.pat with (env, pat) in
-    match getTypeStringCode indent env x.repr with (env, repr) in
-    match pprintCode indent env x.inexpr with (env, inexpr) in
-    let str = join
-      [ "repr ", ident, " {", pat, " = ", repr, "} in"
-      , pprintNewline indent, inexpr
-      ] in
-    (env, str)
-end
-
 lang ConvertToMExpr = Ast + UniversalImplementationBaseAst
   sem convertToMExpr : Merged -> Expr
   sem convertToMExpr =
@@ -179,6 +80,21 @@ lang ConvertToMExpr = Ast + UniversalImplementationBaseAst
   sem convertToMExprPat : Merged -> Pat
   sem convertToMExprPat =
   | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in a pattern context"
+end
+
+lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
+  sem _evalCost : Merged -> OpCost
+  sem _evalCost = | tm ->
+    let tm = convertToMExpr tm in
+    let tm = constTransform builtin tm in
+    let ctx = evalCtxEmpty () in
+    -- TODO(vipa, 2023-05-02): Name hygiene, symbolize over all of an imc file in general
+    let ctx = {ctx with env = evalEnvInsert (nameNoSym "n") (float_ 100.0) ctx.env} in
+    switch eval ctx tm
+    case TmConst {val = CFloat f} then f.val
+    case TmConst {val = CInt i} then int2float i.val
+    case _ then errorSingle [infoTm tm] "This expression did not evaluate to a number."
+    end
 end
 
 lang ConvertLam = ConvertToMExpr + LamMergedAst + LamAst
@@ -310,6 +226,38 @@ lang ConvertApp = ConvertToMExpr + AppMergedAst + AppAst + AppTypeAst
   | AppMerged x -> errorSingle [x.info] "Invalid application in pattern context"
 end
 
+lang ConvertOpApp = ConvertToMExpr + OperatorAppBaseMergedAst + AppMergedAst + EvalCost + OpVarAst + FrozenVarMergedAst + VarMergedAst
+  sem convertToMExpr =
+  | AppMerged
+    { left = AppMerged
+      { left = OperatorAppBaseMerged _
+      , right = scaling
+      }
+    , right = VarMerged x
+    , info = info
+    } -> TmOpVar
+      { ident = x.v.v
+      , ty = tyunknown_
+      , info = info
+      , frozen = false
+      , scaling = _evalCost scaling
+      }
+  | AppMerged
+    { left = AppMerged
+      { left = OperatorAppBaseMerged _
+      , right = scaling
+      }
+    , right = FrozenVarMerged x
+    , info = info
+    } -> TmOpVar
+      { ident = x.v.v
+      , ty = tyunknown_
+      , info = info
+      , frozen = true
+      , scaling = _evalCost scaling
+      }
+end
+
 lang ConvertTypeDef = ConvertToMExpr + TypeMergedAst + TypeAst + VariantTypeAst
   sem convertToMExpr =
   | TypeMerged x -> TmType
@@ -412,6 +360,16 @@ lang ConvertVar = ConvertToMExpr + VarMergedAst + VarAst + VarTypeAst + NamedPat
   | VarMerged x -> PatNamed {ident = PName x.v.v, info = x.info, ty = tyunknown_}
 end
 
+lang ConvertAll = ConvertToMExpr + AllMergedAst + AllTypeAst
+  sem convertToMExprTy =
+  | AllMerged x -> TyAll
+    { info = x.info
+    , ident = x.v.v
+    , kind = Poly ()
+    , ty = convertToMExprTy x.right
+    }
+end
+
 lang ConvertFrozenVar = ConvertToMExpr + FrozenVarMergedAst + VarAst
   sem convertToMExpr =
   | FrozenVarMerged x -> TmVar {ident = x.v.v, ty = tyunknown_, info = x.info, frozen = true}
@@ -490,25 +448,7 @@ lang ConvertConcatPat = ConvertToMExpr + ConcatMergedAst + SeqEdgePat
   | ConcatMerged x -> errorSingle [x.info] "Conversion not supported yet"
 end
 
-lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf
-end
-
-lang RepTypesPrettyPrint = TyWildPrettyPrint + ReprTypePrettyPrint + ReprSubstPrettyPrint + OpDeclPrettyPrint + OpVarPrettyPrint + OpImplPrettyPrint + ReprDeclPrettyPrint
-end
-
-lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
-  sem _evalCost : Merged -> OpCost
-  sem _evalCost = | tm ->
-    let tm = convertToMExpr tm in
-    let tm = constTransform builtin tm in
-    let ctx = evalCtxEmpty () in
-    -- TODO(vipa, 2023-05-02): Name hygiene, symbolize over all of an imc file in general
-    let ctx = {ctx with env = evalEnvInsert (nameNoSym "n") (float_ 100.0) ctx.env} in
-    switch eval ctx tm
-    case TmConst {val = CFloat f} then f.val
-    case TmConst {val = CInt i} then int2float i.val
-    case _ then errorSingle [infoTm tm] "This expression did not evaluate to a number."
-    end
+lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf + ConvertOpApp + ConvertAll
 end
 
 lang CollectImpls = ConvertToMExpr + UniversalImplementationAst + EvalCost + OpVarAst
@@ -603,6 +543,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
         , inexpr = inexpr
         , ty = ty
         , reprScope = reprScope
+        , metaLevel = env.currentLvl
         , info = t.info
         }
       }
@@ -749,6 +690,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       , inexpr = inexpr
       , ty = ty
       , reprScope = reprScope
+      , metaLevel = env.currentLvl
       , info = t.info
       }
     }
@@ -829,6 +771,7 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
     TmOpImpl
     { x with alternatives = alternatives
     , reprScope = reprScope
+    , metaLevel = env.currentLvl
     , inexpr = inexpr
     , ty = tyTm inexpr
     }
@@ -874,6 +817,7 @@ lang RepTypesSolverInterface = OpVarAst
     , selfCost : OpCost
     , specType : Type
     , reprScope : Int
+    , metaLevel : Int
     , info : Info
     -- NOTE(vipa, 2023-07-06): A token used by the surrounding system
     -- to carry data required to reconstruct a solved AST.
@@ -907,6 +851,7 @@ lang RepTypesSolveAndReconstruct = RepTypesSolverInterface + OpImplAst + VarAst 
       , token = tm
       , specType = tyTm tm
       , reprScope = 0
+      , metaLevel = 0
       , info = infoTm tm
       } in
     let topSolutionSet = solveOne st (None ()) [alt] in
@@ -924,11 +869,7 @@ lang RepTypesSolveAndReconstruct = RepTypesSolverInterface + OpImplAst + VarAst 
     match mapLookup x.ident env with Some solutionSet then
       snoc opUses {app = x, solutionSet = solutionSet}
     else
-      let msg = join [
-        "* Encountered an operation without preceeding impl: ",
-        nameGetStr x.ident, "\n"
-      ] in
-      errorSingle [x.info] msg
+      snoc opUses {app = x, solutionSet = solveOne st (None ()) []}
   | TmOpImpl x ->
     let mkAlt = lam alt.
       { opUses = workAltBody st env [] alt.body
@@ -936,6 +877,7 @@ lang RepTypesSolveAndReconstruct = RepTypesSolverInterface + OpImplAst + VarAst 
       , selfCost = alt.selfCost
       , specType = alt.specType
       , reprScope = x.reprScope
+      , metaLevel = x.metaLevel
       , token = alt.body
       , info = infoTm alt.body
       } in
@@ -1039,7 +981,7 @@ lang RepTypesDummySolver = RepTypesSolverInterface
   sem cmpSolution a = | b -> 0
 end
 
-lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHighLevel + ReprSubstAst + RepTypesHelpers
+lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHighLevel + ReprSubstAst + RepTypesHelpers + Generalize
   syn SolverState =
   | CPState ()
   sem initSolverState = | _ -> CPState ()
@@ -1058,6 +1000,10 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
 
   syn OpImplSolution a =
   | CPSolution (CPSol a)
+
+  sem cmpSolution a = | b ->
+    match (a, b) with (CPSolution a, CPSolution b) in
+    subi a.idx b.idx
 
   sem solveOne st prev = | alts ->
     match prev with Some _ then
@@ -1100,13 +1046,21 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
             (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
             (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
             (findReprs [] alt.specType) in
+          let signatureMetas : Set Name =
+            recursive let work = lam acc. lam ty.
+              let ty = unwrapType ty in
+              match ty with TyMetaVar x then
+                match deref x.contents with Unbound x in
+                setInsert x.ident acc
+              else sfold_Type_Type work acc ty
+            in work (setEmpty nameCmp) alt.specType in
           { reprs =
             { scope = alt.reprScope
             , syms = signatureReprs
             }
           , types =
-            { level = never
-            , names = never
+            { level = alt.metaLevel
+            , names = signatureMetas
             }
           } in
 
@@ -1114,7 +1068,7 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
         -- out alternatives that cannot be relevant for this impl
         let f = lam idx. lam opUse.
           let f = lam sol.
-            let solUni = unifyPure sol.uni opUse.app.ty sol.specType in
+            let solUni = unifyPure sol.uni opUse.app.ty (inst alt.info alt.metaLevel (removeReprSubsts sol.specType)) in
             let solUni = optionAnd
               solUni
               (optionBind solUni (mergeUnifications uni)) in
@@ -1194,8 +1148,8 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
             vars) in
           let cost = m.addMany (deref cost) in
           recursive let work = lam prevSolutions.
-            if gti (length prevSolutions) 5 then
-              errorSingle [alt.info] (join ["Found a surprising number of solutions for alt. Final model:\n", m.debugModel (), "\n"])
+            if gti (length prevSolutions) 20 then
+              errorSingle [alt.info] (join ["Found a surprising number of solutions for alt (more than 20, should be reasonable later on, but in early testing it's mostly been caused by bugs). Final model:\n", m.debugModel (), "\n"])
             else
             switch m.minimize cost
             case COPSolution {objective = Some (COPFloat {val = cost})} then
@@ -1271,7 +1225,7 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
   sem cheapestSolution =
   | CPSolutionSet promise ->
     let forced = promiseForce promise in
-    CPSolution (minOrElse (lam. errorSingle [] "Couldn't find a complete assignment of Reprs, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
+    CPSolution (minOrElse (lam. errorSingle [] "Couldn't put together a complete program, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 end
 
 lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + RepTypesSolveWithExhaustiveCP + MExprUnify

@@ -8,6 +8,7 @@ include "name.mc"
 include "map.mc"
 
 include "ast.mc"
+include "repr-ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
 include "keywords.mc"
@@ -1196,6 +1197,107 @@ lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
   | TyAlias t -> getTypeStringCode indent env t.display
 end
 
+lang TyWildPrettyPrint = PrettyPrint + TyWildAst
+  sem typePrecedence =
+  | TyWild _ -> 0
+
+  sem getTypeStringCode indent env =
+  | TyWild _ -> (env, "_")
+end
+
+lang ReprTypePrettyPrint = PrettyPrint + ReprTypeAst
+  sem typePrecedence =
+  | TyRepr _ -> 1
+
+  sem getTypeStringCode indent env =
+  | TyRepr x ->
+    let repr = switch deref (botRepr x.repr)
+      case BotRepr repr then join [int2string repr.scope, ", ", int2string (sym2hash repr.sym)]
+      case UninitRepr _ then "uninit"
+      case _ then "impossible"
+      end in
+    match printTypeParen indent 2 env x.arg with (env, arg) in
+    (env, join ["Repr[", repr, "] ", arg])
+end
+
+lang ReprSubstPrettyPrint = PrettyPrint + ReprSubstAst
+  sem typePrecedence =
+  | TySubst _ -> 1
+
+  sem getTypeStringCode indent env =
+  | TySubst x ->
+    match pprintConName env x.subst with (env, subst) in
+    match printTypeParen indent 2 env x.arg with (env, arg) in
+    (env, join ["!", subst, " ", arg])
+end
+
+lang OpDeclPrettyPrint = PrettyPrint + OpDeclAst
+  sem isAtomic =
+  | TmOpDecl _ -> false
+
+  sem pprintCode indent env =
+  | TmOpDecl x ->
+    match pprintEnvGetStr env x.ident with (env, ident) in
+    match pprintCode indent env x.inexpr with (env, inexpr) in
+    match getTypeStringCode indent env x.tyAnnot with (env, ty) in
+    (env,
+     join ["letop ", pprintVarString ident, " : ", ty, " in",
+           pprintNewline indent, inexpr])
+end
+
+lang OpVarPrettyPrint = PrettyPrint + OpVarAst
+  sem isAtomic =
+  | TmOpVar _ -> true
+
+  sem pprintCode indent env =
+  | TmOpVar x ->
+    match pprintEnvGetStr env x.ident with (env, ident) in
+    (env, join ["<Op>", ident])
+end
+
+lang OpImplPrettyPrint = PrettyPrint + OpImplAst
+  sem isAtomic =
+  | TmOpImpl _ -> false
+
+  sem pprintCode indent env =
+  | TmOpImpl x ->
+    let newIndent = pprintIncr indent in
+    let pprintAlt = lam env. lam alt.
+      match getTypeStringCode newIndent env alt.specType with (env, specType) in
+      match pprintCode newIndent env alt.body with (env, body) in
+      (env, join [specType, pprintNewline newIndent, body]) in
+    match pprintEnvGetStr env x.ident with (env, ident) in
+    match mapAccumL pprintAlt env x.alternatives with (env, alternatives) in
+    match pprintCode indent env x.inexpr with (env, inexpr) in
+    let start = concat (pprintNewline indent) "* " in
+    let str = join
+      [ "impl[", int2string x.reprScope, "] ", ident, " ="
+      , join (map (lam alt. concat start alt) alternatives)
+      , pprintNewline indent, "in"
+      , pprintNewline indent, inexpr
+      ] in
+    (env, str)
+end
+
+lang ReprDeclPrettyPrint = PrettyPrint + ReprDeclAst
+  sem isAtomic =
+  | TmReprDecl _ -> false
+
+  sem pprintCode indent env =
+  | TmReprDecl x ->
+    match pprintEnvGetStr env x.ident with (env, ident) in
+    match getTypeStringCode indent env x.pat with (env, pat) in
+    match getTypeStringCode indent env x.repr with (env, repr) in
+    match pprintCode indent env x.inexpr with (env, inexpr) in
+    let str = join
+      [ "repr ", ident, " {", pat, " = ", repr, "} in"
+      , pprintNewline indent, inexpr
+      ] in
+    (env, str)
+end
+
+lang RepTypesPrettyPrint = TyWildPrettyPrint + ReprTypePrettyPrint + ReprSubstPrettyPrint + OpDeclPrettyPrint + OpVarPrettyPrint + OpImplPrettyPrint + ReprDeclPrettyPrint
+end
 
 ---------------------------
 -- MEXPR PPRINT FRAGMENT --
@@ -1249,6 +1351,8 @@ lang MExprPrettyPrint =
 
 end
 
+lang MExprPrettyPrintWithReprs = MExprPrettyPrint + RepTypesPrettyPrint
+end
 
 -----------
 -- TESTS --

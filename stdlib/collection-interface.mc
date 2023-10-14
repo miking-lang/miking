@@ -1,3 +1,6 @@
+include "basic-types.mc"
+include "uct-implementations.mc"
+
 -- This file gives a general interface for collection types.
 
 type UColl p x
@@ -53,21 +56,39 @@ type Coll p x = Repr (UColl p x)
 -- Seen as a filtering function, this is the identity.
 type KeepAll
 
--- KeepLast indicates to only keep the last occurrence of duplicate values.
+-- KeepLast indicates to only keep the last occurrence of duplicate
+-- values.
 type KeepLast
 
--- KeepLastKey applies to collections of key-value pairs `(k, v)`, and indicates
--- to only keep the last occurrence whenever two pairs have the same keys.
+-- KeepLastKey applies to collections of key-value pairs `(k, v)`, and
+-- indicates to only keep the last occurrence whenever two pairs have
+-- the same keys.
 type KeepLastKey
 
 -- Orderings.
 
--- SeqOrder arranges the values in the order they were originally inserted.
--- Seen as a permutation, this is the identity.
+-- SeqOrder arranges the values in the order they were originally
+-- inserted. Seen as a permutation, this is the identity.
 type SeqOrder
 
 -- SortedOrder arranges the values in sorted order.
 type SortedOrder
+
+-- SortedKeyOrder applies to collections of key-value pairs `(k, v)`,
+-- and arranges them in order sortedy by the keys.
+type SortedKeyOrder
+
+-----------------------------
+-- Collection type aliases --
+-----------------------------
+
+type Seq a = Coll (KeepAll, SeqOrder) a
+
+type Set a = Coll (KeepLast, _) a
+type OrderedSet a = Coll (KeepLast, SortedOrder) a
+
+type Map k v = Coll (KeepLastKey, _) (k, v)
+type OrderedMap k v = Coll (KeepLastKey, SortedKeyOrder) (k, v)
 
 ----------------------------
 -- Fundamental operations --
@@ -76,7 +97,7 @@ type SortedOrder
 -- These should be used to give default implementations for all other operations.
 
 -- `empty` denotes an empty collection with any properties.
-let empty : all p. all a. Coll o p a
+let empty : all p. all a. Coll p a
   = never
 
 -- `append_op c a` appends `a` to the elements of `c`.
@@ -105,7 +126,7 @@ let foldl
   : all p. all a. all acc
   . (acc -> a -> acc)
   -> acc
-  -> Coll o p a
+  -> Coll p a
   -> acc
   = never
 
@@ -122,6 +143,30 @@ let foldr
 --------------------------
 -- Composite operations --
 --------------------------
+
+-- Interacting with the built-in sequences
+
+let collFromSeq
+  : all p. all a
+  . [a]
+  -> Coll p a
+  = never
+
+-- This function should *only* be called on small literals. It's
+-- equivalent with `collFromSeq`, but the cost annotation assumes n=5,
+-- which gives it a much lower cost
+
+let q
+  : all p. all a
+  . [a]
+  -> Coll p a
+  = never
+
+let seqFromColl
+  : all p. all a
+  . Coll p a
+  -> [a]
+  = never
 
 -- Property manipulation
 
@@ -197,10 +242,10 @@ let unfoldr : all p. all a. all b
   -> Coll p b
   = never
 
--- `foldl2 f acc c1 c2` left folds `f` over the first `k` elements in `c1` and
+-- `foldl2_op f acc c1 c2` left folds `f` over the first `k` elements in `c1` and
 -- `c2`, accumulating on `acc`, where `k` is the minimum of the two collections'
 -- sizes.
-let foldl2
+let foldl2_op
   : all p1. all p2. all a. all b. all c
   . (a -> b -> c -> a)
   -> a
@@ -208,6 +253,16 @@ let foldl2
   -> Coll p2 c
   -> a
   = never
+
+
+let foldl2
+  : all p. all a. all b. all c
+  . (a -> b -> c -> a)
+  -> a
+  -> Coll p b
+  -> Coll p c
+  -> a
+  = foldl2_op
 
 -- Functor / applicative
 
@@ -241,12 +296,16 @@ let map2_op
   = never
 
 let map2
-  : all p. all a. all b
-  . (a -> b)
-  -> Coll p a
+  : all p. all a. all b. all c
+  . (a -> b -> c)
   -> Coll p a
   -> Coll p b
+  -> Coll p c
   = map2_op
+
+-- TODO(vipa, 2023-10-14): naming, it's actually a deterministic
+-- function, but it's amongst other things useful to simulate
+-- non-determinism (all possible combinations)
 
 -- `map2_nondet_op f c1 c2` gives a new collection with elements `f xi yj` for
 -- all j <= m, i <= n, where `x0, x1, ..., xn` are the elements of `c1`, and
@@ -424,7 +483,7 @@ let every
 -- `findMap f c` returns `Some y` for the first element `x` of `c` such that
 -- `f x = Some y`, or returns `None ()` if there is no such `x`.
 let findMap
-  : all p. all a
+  : all p. all a. all b
   . (a -> Option b)
   -> Coll p a
   -> Option b
@@ -443,7 +502,7 @@ let find
 let member
   : all p. all a
   .  a
-  -> Coll o p a
+  -> Coll p a
   -> Bool
   = never
 
@@ -519,7 +578,7 @@ let cmpColl : all p1. all p2. all a
 let reverse_op : all p1. all p2. all a. Coll p1 a -> Coll p2 a
   = never
 
-let reverse : all p. all a. Coll o p a -> Coll o p a
+let reverse : all p. all a. Coll p a -> Coll p a
   = reverse_op
 
 -- `splitAt_op c i` returns a tuple `(c1, c2)`, where `c1` has elements
@@ -566,7 +625,31 @@ let setAt
   -> Int
   -> a
   -> Coll p a
-  = set_op
+  = setAt_op
+
+let splitFirst_op
+  : all p1. all p2. all a
+  . Coll p1 a
+  -> Option (a, Coll p2 a)
+  = never
+
+let splitFirst
+  : all p. all a
+  . Coll p a
+  -> Option (a, Coll p a)
+  = splitFirst_op
+
+let splitLast_op
+  : all p1. all p2. all a
+  . Coll p1 a
+  -> Option (Coll p2 a, a)
+  = never
+
+let splitLast
+  : all p. all a
+  . Coll p a
+  -> Option (Coll p a, a)
+  = splitLast_op
 
 -- `first c` is equivalent to `getAt c 0`.
 -- WARNING: Errors on empty input.
@@ -580,10 +663,10 @@ let last : all p. all a. Coll p a -> a
 
 -- `tail_op c` is equivalent to the second component of `splitAt_op c 1`.
 -- WARNING: Errors on empty input.
-let tail_op : all p. all a. Coll p a -> Coll p a
+let tail_op : all p1. all p2. all a. Coll p1 a -> Coll p2 a
   = never
 
-let tail : all p1. all p2. all a. Coll p1 a -> Coll p2 a
+let tail : all p. all a. Coll p a -> Coll p a
   = tail_op
 
 -- `init_op c` is equivalent to the first component of
@@ -643,7 +726,7 @@ let getRange_op : all p1. all p2. all a
   -> Coll p2 a
   = never
 
-let getRange : all p. all a.
+let getRange : all p. all a
   .  Coll p a
   -> Int
   -> Int
@@ -661,7 +744,7 @@ let removeFirst : all p. all a
   .  a
   -> Coll p a
   -> Coll p a
-  = removeFirst
+  = removeFirst_op
 
 -- `isPrefix c1 c2` returns true iff the elements of `c1` are a prefix of
 -- those of `c2`.
@@ -836,7 +919,7 @@ let differenceKeys
 -- duplicates of a key, all will be used; on the other hand, if `c2` contains
 -- duplicates, only the first occurrence is considered.
 let mergeKeys_op
-  : all p1. all p2. all p3. all k. all a. all b
+  : all p1. all p2. all p3. all k. all a. all b. all c
   . (k -> These a b -> Option c)
   -> Coll p1 (k, a)
   -> Coll p2 (k, b)
@@ -844,7 +927,7 @@ let mergeKeys_op
   = never
 
 let mergeKeys
-  : all p. all k. all a. all b
+  : all p. all k. all a. all b. all c
   . (k -> These a b -> Option c)
   -> Coll p (k, a)
   -> Coll p (k, b)

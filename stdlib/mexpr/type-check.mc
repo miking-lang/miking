@@ -83,7 +83,7 @@ let _insertVar = lam name. lam ty. lam env : TCEnv.
 let _insertCon = lam name. lam ty. lam env : TCEnv.
   {env with conEnv = mapInsert name ty env.conEnv}
 
-lang RepTypesHelpers = Unify + ReprTypeAst + AliasTypeAst + TyWildAst
+lang RepTypesHelpers = Unify + ReprTypeAst + AliasTypeAst + TyWildAst + ReprSubstAst
   sem unifyReprs : Int -> Ref [(ReprVar, ReprVar)] -> ReprVar -> ReprVar -> ()
   sem unifyReprs scope delayedReprUnifications a = | b ->
     let abot = botRepr a in
@@ -137,6 +137,11 @@ lang RepTypesHelpers = Unify + ReprTypeAst + AliasTypeAst + TyWildAst
   sem containsRepr =
   | TyRepr _ -> true
   | ty -> sfold_Type_Type (lam acc. lam ty. if acc then acc else containsRepr ty) false ty
+
+  sem removeReprSubsts : Type -> Type
+  sem removeReprSubsts =
+  | TySubst x -> removeReprSubsts x.arg
+  | ty -> smap_Type_Type removeReprSubsts ty
 end
 
 ----------------------
@@ -633,8 +638,7 @@ lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewRepr
       case Some _ then
         let ty = if x.frozen then ty else inst x.info env.currentLvl ty in
         let ty = substituteNewReprs env ty in
-        let reprs = findReprs [] ty in
-        TmOpVar {x with ty = ty, reprs = reprs}
+        TmOpVar {x with ty = ty}
       case None _ then
         let msg = join [
           "* Encountered scaled application of a non-operator: ",
@@ -775,7 +779,7 @@ lang ApplyReprSubsts = TypeCheck + WildToMeta + ReprSubstAst
   | ty -> smap_Type_Type (applyReprSubsts env) ty
 end
 
-lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta + ApplyReprSubsts
+lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta + ApplyReprSubsts + SubstituteUnknown
   sem typeCheckExpr env =
   | TmOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
@@ -790,6 +794,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         let ty = inst x.info newLvl ty in
         let ty = substituteNewReprs env ty in
         let specType = resolveType (infoTy alt.specType) env.tyConEnv alt.specType in
+        let specType = substituteUnknown (Poly ()) newLvl x.info specType in
         let specType = inst x.info newLvl specType in
         let specType = substituteNewReprs env specType in
         let specType = wildToMeta newLvl specType in
@@ -798,7 +803,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         -- than later.
         let newEnv = {env with currentLvl = newLvl} in
         let reprType = applyReprSubsts newEnv specType in
-        unify newEnv [opTypeInfo, specTypeInfo] ty specType;
+        unify newEnv [opTypeInfo, specTypeInfo] ty (removeReprSubsts specType);
         -- NOTE(vipa, 2023-06-30): Next we want to type-check the body
         -- of the impl against the strictest type signature we have
         -- available: `specType` after filling in wildcards and
@@ -824,6 +829,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       TmOpImpl
       { x with alternatives = alternatives
       , reprScope = reprScope
+      , metaLevel = env.currentLvl
       , inexpr = inexpr
       , ty = tyTm inexpr
       }
@@ -1207,7 +1213,7 @@ lang MExprTypeCheckMost =
   MetaVarTypePrettyPrint +
 
   -- RepTypes related things
-  OpDeclTypeCheck + ReprDeclTypeCheck
+  OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck
 end
 
 lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar + OpImplTypeCheck

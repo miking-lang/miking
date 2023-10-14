@@ -10,12 +10,7 @@
 include "option.mc"
 include "seq.mc"
 include "tuple.mc"
-
-
-type These a b
-con This : all a. all b. a -> These a b
-con That : all a. all b. b -> These a b
-con These : all a. all b. (a, b) -> These a b
+include "basic-types.mc"
 
 -- Construct These types
 let theseThis : all a. all b. a -> These a b = lam a. This a

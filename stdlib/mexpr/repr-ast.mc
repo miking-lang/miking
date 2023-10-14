@@ -106,7 +106,7 @@ lang OpImplAst = Ast
     , delayedReprUnifications : [(ReprVar, ReprVar)]
     }
   syn Expr =
-  | TmOpImpl {ident : Name, alternatives : [OpImplAlt], inexpr : Expr, ty : Type, reprScope : Int, info : Info}
+  | TmOpImpl {ident : Name, alternatives : [OpImplAlt], inexpr : Expr, ty : Type, reprScope : Int, metaLevel : Int, info : Info}
 
   sem tyTm =
   | TmOpImpl x -> x.ty

@@ -357,6 +357,7 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst
         , inexpr = symbolizeExpr newEnv x.inexpr
         , ty = tyunknown_
         , reprScope = negi 1
+        , metaLevel = negi 1
         , info = x.info
         }
       else

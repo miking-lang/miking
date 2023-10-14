@@ -2,6 +2,7 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "repr-ast.mc"
 
 -------------------
 -- BASE FRAGMENT --
@@ -447,6 +448,34 @@ lang AliasTypeCmp = Cmp + AliasTypeAst
   | (ty1 & !TyAlias _, TyAlias t2) -> cmpTypeH (ty1, t2.content)
 end
 
+lang TyWildCmp = Cmp + TyWildAst
+  sem cmpTypeH =
+  | (TyWild _, TyWild _) -> 0
+end
+
+lang ReprTypeCmp = Cmp + ReprTypeAst
+  sem cmpTypeH =
+  | (TyRepr l, TyRepr r) ->
+    let lRep = deref (botRepr l.repr) in
+    let rRep = deref (botRepr r.repr) in
+    let res = subi (constructorTag lRep) (constructorTag rRep) in
+    if neqi res 0 then res else
+    let res = switch (lRep, rRep)
+      case (UninitRepr _, UninitRepr _) then 0
+      case (BotRepr l, BotRepr r) then subi (sym2hash l.sym) (sym2hash r.sym)
+      end in
+    if neqi res 0 then res else
+    cmpType l.arg r.arg
+end
+
+lang ReprSubstCmp = Cmp + ReprSubstAst
+  sem cmpTypeH =
+  | (TySubst l, TySubst r) ->
+    let res = nameCmp l.subst r.subst in
+    if neqi 0 res then res else
+    cmpType l.arg r.arg
+end
+
 --------------------
 -- MEXPR FRAGMENT --
 --------------------
@@ -467,7 +496,8 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
+  ReprTypeCmp + ReprSubstCmp + TyWildCmp
 end
 
 -----------

@@ -358,6 +358,43 @@ let pufFold
       acc
       puf
 
+let pufFilter
+  : all k. all out. all extra
+  . Int
+  -> Set k
+  -> PureUnionFind k extra out
+  -> PureUnionFind k extra out
+  = lam level. lam ks. lam puf.
+    let shouldKeep = lam pair. lam ks.
+      if lti pair.1 level then true
+      else setMem pair.0 ks in
+    let ks = pufFold
+      (lam acc. lam from. lam to. if shouldKeep from ks
+       then setInsert to.0 acc
+       else acc)
+      (lam acc. lam. lam. acc)
+      (lam acc. lam. lam. acc)
+      ks
+      puf in
+    -- NOTE(vipa, 2023-10-14): Here we know, by construction, that the
+    -- extra outputs in PUFResult are empty.
+    pufFold
+      (lam acc. lam from. lam to. if shouldKeep from ks
+       then (pufUnify from to acc).puf
+       else acc)
+      (lam acc. lam from. lam out. if shouldKeep from ks
+       then (pufSetOut from out acc).puf
+       else acc)
+      (lam acc. lam from. lam extra. if shouldKeep from ks
+       then (pufAddExtra from extra acc).puf
+       else acc)
+      (pufEmpty (mapGetCmpFun puf))
+      puf
+
+-- TODO(vipa, 2023-10-15): remove
+lang TempPrettyPrint = MetaVarTypePrettyPrint + MExprPrettyPrintWithReprs
+end
+
 lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst
 
   type Unification =
@@ -457,8 +494,8 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst
             modref uniRef (unifyReprPure uni lvar rvar)
           else ()
         , err = lam err.
-          (match err with Types ((ty & !TyRepr _, r & TyRepr _) | (r & TyRepr _, ty & !TyRepr _))
-           then printError (concat "Feared unification failure: " (use MExprPrettyPrint in type2str (tytuple_ [ty, r])));
+          (match err with Types ((l, r) & ((!TyRepr _, TyRepr _) | (TyRepr _, !TyRepr _)))
+           then printError (join ["Feared unification failure: ", use TempPrettyPrint in type2str (tytuple_ [l, r]), "\n"]);
              flushStderr ()
            else ());
           modref uniRef (None ())
@@ -481,7 +518,9 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst
     -> Unification
     -> Unification
   sem filterUnification filters = | uni ->
-    never
+    { reprs = pufFilter filters.reprs.scope filters.reprs.syms uni.reprs
+    , types = pufFilter filters.types.level filters.types.names uni.types
+    }
 end
 
 lang MExprUnify =
