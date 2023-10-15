@@ -182,12 +182,9 @@ lang BootParser = MExprAst + ConstTransformer
                info = ginfo t 0}
     end
   | 106 /-TmSeq-/ ->
-    TmApp {info = ginfo t 0,
-           ty = TyUnknown { info = ginfo t 0 },
-           lhs = TmVar {ident = nameNoSym "collFromSeq", frozen = false, ty = TyUnknown {info = ginfo t 0}, info = ginfo t 0},
-           rhs = TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
-                        ty =  TyUnknown { info = ginfo t 0 },
-                        info = ginfo t 0}}
+    TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
+           ty =  TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0}
   | 107 /-TmRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
     TmRecord {bindings =
@@ -275,15 +272,8 @@ lang BootParser = MExprAst + ConstTransformer
              from = gtype t 0,
              to = gtype t 1}
   | 206 /-TySeq-/ ->
-    match ginfo t 0 with Info {filename = _ ++ "/seq-intrinsics.mc"} then
-      -- NOTE(vipa, 2023-05-23): Keep TySeq as-is in this file only
-      TySeq {info = ginfo t 0,
-             ty = gtype t 0}
-    else
-      -- NOTE(vipa, 2023-05-23): Desugar to a Seq everywhere else
-      TyApp {info = ginfo t 0,
-             lhs = TyCon {info = ginfo t 0, ident = nameNoSym "Seq"},
-             rhs = gtype t 0}
+    TySeq {info = ginfo t 0,
+           ty = gtype t 0}
   | 207 /-TyRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
     TyRecord {info = ginfo t 0,

@@ -43,7 +43,6 @@ type TCEnv = {
 
   -- Reptypes relevant fields
   reptypes : {
-    seqName : Option Name,
     delayedReprUnifications : Ref [(ReprVar, ReprVar)],
     -- Ops derived from rec-lets get wrapped in a record, in which
     -- case the value below becomes `Some (record, label)`, where
@@ -68,7 +67,6 @@ let _tcEnvEmpty : TCEnv = {
   currentLvl = 0,
   disableRecordPolymorphism = true,
   reptypes = {
-    seqName = None (),
     delayedReprUnifications = ref [],
     opNamesInScope = mapEmpty nameCmp,
     reprEnv = mapEmpty nameCmp,
@@ -957,11 +955,10 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
     let newLvl =
       match tyIdent with !TyVariant _ then addi 1 env.currentLvl else 0 in
     let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyIdent) env.tyConEnv in
-    let seqName = if eqString (nameGetStr t.ident) "Seq" then Some t.ident else env.reptypes.seqName in
     let inexpr =
       typeCheckExpr {env with currentLvl = addi 1 env.currentLvl,
                               tyConEnv = newTyConEnv,
-                              reptypes = {env.reptypes with seqName = seqName}} t.inexpr in
+                              reptypes = env.reptypes} t.inexpr in
     unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
     TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
@@ -1087,16 +1084,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + ConTypeAst + AppTypeAst + R
   sem typeCheckPat env patEnv =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
-    let seqTy = resolveType t.info env.tyConEnv
-      (TyApp
-        { info = t.info
-        , lhs = TyCon {info = t.info, ident = optionGetOrElse (lam. error "panic") env.reptypes.seqName}
-        , rhs = elemTy
-        }) in
-    -- NOTE(vipa, 2023-06-15): this is done *before* we unify the
-    -- element type, so we don't accidentally disconnect any repr that
-    -- appears in there
-    let seqTy = substituteNewReprs env seqTy in
+    let seqTy = tyseq_ elemTy in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
     iter (lam pat. unify env [infoPat pat] elemTy (tyPat pat)) pats;
     (patEnv, PatSeqTot {t with pats = pats, ty = seqTy})
@@ -1106,16 +1094,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + ConTypeAst + AppTypeAst +
   sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
     let elemTy = newpolyvar env.currentLvl t.info in
-    let seqTy = resolveType t.info env.tyConEnv
-      (TyApp
-        { info = t.info
-        , lhs = TyCon {info = t.info, ident = optionGetOrElse (lam. error "panic") env.reptypes.seqName}
-        , rhs = elemTy
-        }) in
-    -- NOTE(vipa, 2023-06-15): this is done *before* we unify the
-    -- element type, so we don't accidentally disconnect any repr that
-    -- appears in there
-    let seqTy = substituteNewReprs env seqTy in
+    let seqTy = tyseq_ elemTy in
     let unifyPat = lam pat. unify env [infoPat pat] elemTy (tyPat pat) in
     match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
     iter unifyPat prefix;
