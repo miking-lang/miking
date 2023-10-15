@@ -38,8 +38,8 @@ letimpl[1.0] splitFirst_op : !Cons -> _ /(_, !Cons) = consUncons
 -- Defaults/general implementations --
 --------------------------------------
 
-letimpl[3.0] q = lam xs. ropeFoldr (@(divf 1.0 n) prepend_op) (@1 empty) xs
-letimpl[3.0] q = lam xs. ropeFoldl (@(divf 1.0 n) append_op) (@1 empty) xs
+letimpl[3.0] q = lam xs. ropeFoldr prepend_op (@1 empty) xs
+letimpl[3.0] q = lam xs. ropeFoldl append_op (@1 empty) xs
 
 letimpl[addf n 2.0] collFromSeq = lam xs. ropeFoldr (@n prepend_op) (@1 empty) xs
 letimpl[addf n 2.0] collFromSeq = lam xs. ropeFoldl (@n append_op) (@1 empty) xs

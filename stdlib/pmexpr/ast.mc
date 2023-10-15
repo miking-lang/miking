@@ -36,30 +36,30 @@ lang PMExprAst =
                                     info = info})
   | "parallelMap" ->
     Some (2, lam lst. TmConst {val = CMap (), ty = TyUnknown {info = info}, info = info})
-  | "flatten" ->
+  | "pm_flatten" ->
     Some (1, lam lst. TmFlatten {e = get lst 0, ty = TyUnknown {info = info},
                                  info = info})
-  | "map2" ->
+  | "pm_map2" ->
     Some (3, lam lst. TmMap2 {f = get lst 0, as = get lst 1,
                               bs = get lst 2,
                               ty = TyUnknown {info = info}, info = info})
-  | "reduce" ->
+  | "pm_reduce" ->
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
                                         as = get lst 2,
                                         ty = TyUnknown {info = info},
                                         info = info})
-  | "seqLoop" ->
+  | "pm_seqLoop" ->
     Some (2, lam lst. TmLoop {n = get lst 0, f = get lst 1,
                               ty = TyUnknown {info = info}, info = info})
-  | "seqLoopAcc" ->
+  | "pm_seqLoopAcc" ->
     Some (3, lam lst. TmLoopAcc {ne = get lst 0, n = get lst 1,
                                  f = get lst 2, ty = TyUnknown {info = info},
                                  info = info})
-  | "loop" ->
+  | "pm_loop" ->
     Some (2, lam lst. TmParallelLoop {n = get lst 0, f = get lst 1,
                                       ty = TyUnknown {info = info},
                                       info = info})
-  | "printFloat" ->
+  | "pm_printFloat" ->
     Some (1, lam lst. TmPrintFloat {e = get lst 0,
                                     ty = TyUnknown {info = info}, info = info})
 

@@ -102,7 +102,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     let ast = use MExprRepTypesAnalysis in typeCheckLeaveMeta ast in
     endPhaseStats log "reptypes-analysis" ast;
 
-    -- dumpRepTypesProblem 0 ast;
+    dumpRepTypesProblem 0 ast;
 
     let ast = use MExprRepTypesComposedSolver in reprSolve (initSolverState ()) ast in
     endPhaseStats log "reptypes-solve" ast;
@@ -111,16 +111,12 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     endPhaseStats log "remove-ty-flex" ast;
 
     -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    -- writeFile "out2.html" (pprintAst ast);
+    writeFile "out2.html" (pprintAst ast);
 
     -- (match findMostCommonRepr ast with Some sym then
     --   printIfExprHasRepr sym ast;
     --   printLn (int2string (sym2hash sym))
     --  else ());
-
-    -- let ast = solveRepTypess ast in
-    -- endPhaseStats log "solve-ucts" ast;
-    -- exit 0;
 
     let ast = compileSpecialize ast in
 

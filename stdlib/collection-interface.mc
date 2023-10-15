@@ -1,4 +1,7 @@
 include "basic-types.mc"
+
+-- We include the implementations here, to ensure they're in scope
+-- when we insert op-impls
 include "uct-implementations.mc"
 
 -- This file gives a general interface for collection types.
