@@ -1096,128 +1096,182 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
         -- TODO(vipa, 2023-08-11): This is the place to insert
         -- deduplication of opUses, by merging them and doing
         -- `setUnion` on the `idxes` field. ReprVars that are merged
-        -- during deduplication should be unified via uni
+        -- during deduplication should be unified via `uni`
 
         let solutions =
-          printError (join ["Starting to construct model, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
+          let problem = {alt = alt, uni = uni, uniFilter = uniFilter, opUses = opUses} in
+          let size = foldl (lam acc. lam opUse. muli acc (length opUse.solutionSet)) 1 opUses in
+          let startT = wallTimeMs () in
+          let res = if lti size 400
+            then solveViaEnumeration problem
+            else solveViaModel problem in
+          let time = subf (wallTimeMs ()) startT in
+          printError (join ["Alt solve complete, took ", float2string time, "ms\n"]);
           flushStderr ();
-          let m = newModel () in
-          let cmpSol = lam a. lam b. subi a.idx b.idx in
-          let reprTy = m.newEnumType nameCmp in
-          let getReprSymVar : Symbol -> COPExpr =
-            let reprMap : Ref (Map Symbol COPExpr) = ref (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))) in
-            let newReprVar = lam sym.
-              let expr = m.var (m.newVar reprTy "repr") in
-              modref reprMap (mapInsert sym expr (deref reprMap));
-              expr in
-            lam sym. mapLookupOrElse (lam. newReprVar sym) sym (deref reprMap) in
-          let uniToPredicate = lam localUni.
-            let localReprs = localUni.reprs in
-            let reprs = uni.reprs in
-            let mkEq = lam repr.
-              let l = eitherMapRight (lam x. x.0)
-                (pufUnwrap reprs (repr, negi 1)) in
-              let r = eitherMapRight (lam x. x.0)
-                (eitherBindRight (pufUnwrap localReprs (repr, negi 1)) (pufUnwrap reprs)) in
-              if eitherEq nameEq eqsym l r then None () else
-              let toCOPExpr = eitherEither (m.enum reprTy) getReprSymVar in
-              Some (m.eq (toCOPExpr l) (toCOPExpr r)) in
-            m.andMany (mapOption mkEq (mapKeys localReprs))
-          in
-          let cost : Ref [COPExpr] = ref [m.float alt.selfCost] in
-          let addCost : COPExpr -> () = lam c. modref cost (snoc (deref cost) c) in
-          let useToVar = lam opUse.
-            let ident = opUse.app.ident in
-            let opTy = m.newEnumType cmpSol in
-            m.registerValues opTy (setOfSeq cmpSol opUse.solutionSet);
-            let var = m.newVar opTy (nameGetStr ident) in
-            -- NOTE(vipa, 2023-08-16): `uniMapToPredicate` may create
-            -- new repr-vars as a side-effect, and since elimEnum is
-            -- lazy and might run too late we pre-run it here to
-            -- ensure the reprs are created.
-            iter (lam sol. uniToPredicate sol.uni; ()) opUse.solutionSet;
-            m.newConstraint (m.elimEnum opTy (m.var var) (lam sol. uniToPredicate sol.uni));
-            addCost (m.elimEnum opTy (m.var var) (lam sol. m.float (mulf opUse.app.scaling sol.cost)));
-            (opUse.idxes, var, opTy) in
-          let vars = map useToVar opUses in
-          -- NOTE(vipa, 2023-10-10): This undoes any deduplication
-          -- done previously, using the `idxes` set.
-          let orderedVars = mapValues (foldl
-            (lam acc. lam var. mapUnion acc (mapMap (lam. var.1) var.0))
-            (mapEmpty subi)
-            vars) in
-          let cost = m.addMany (deref cost) in
-          recursive let work = lam prevSolutions.
-            if gti (length prevSolutions) 20 then
-              errorSingle [alt.info] (join ["Found a surprising number of solutions for alt (more than 20, should be reasonable later on, but in early testing it's mostly been caused by bugs). Final model:\n", m.debugModel (), "\n"])
-            else
-            switch m.minimize cost
-            case COPSolution {objective = Some (COPFloat {val = cost})} then
-              -- NOTE(vipa, 2023-10-10): The translation to a
-              -- constraint model isn't perfect: we don't model type
-              -- constraints. By merging all the Unification's we
-              -- check that the combination actually type-checks,
-              -- i.e., it's a valid solution.
-              let combinedUni = optionFoldlM
-                (lam acc. lam var. mergeUnifications acc (m.readVar var.1).uni)
-                -- NOTE(vipa, 2023-10-10): We start from an empty
-                -- unification, not `uni`, since the latter might
-                -- introduce more variables to the model, which can
-                -- make us loop forever.
-                (emptyUnification ())
-                vars in
-              let combinedUni = optionMap (filterUnification uniFilter) combinedUni in
-              match (combinedUni, optionBind combinedUni (lam x. mergeUnifications x uni))
-              with (Some localExternallyVisibleUni, Some uni) then
-                -- NOTE(vipa, 2023-08-18): Assert that any later
-                -- solution must differ from this one in some externally
-                -- visible way
-                m.newConstraint (m.not (uniToPredicate localExternallyVisibleUni));
-                let sol =
-                  { cost = cost
-                  , specType = alt.specType
-                  , uni = uni
-                  , innerSolutions = map (lam v. CPSolution (m.readVar v)) orderedVars
-                  , idx = 0  -- NOTE(vipa, 2023-10-10): Updated later, to be unique across all alts
-                  , token = alt.token
-                  }
-                in work (snoc prevSolutions sol)
-              else
-                -- NOTE(vipa, 2023-10-10): The chosen implementations
-                -- do not type-check together. We need to rule out
-                -- this particular combination, then find another
-                -- solution.
-
-                -- NOTE(vipa, 2023-10-10): Most likely it's just a
-                -- *subset* of the implementations that don't mesh. As
-                -- an approximation of this set, we merge the `uni`s
-                -- of the `vars` until we fail, then assert that at
-                -- least one of the seen `vars` must differ.
-                let vars =
-                  recursive let work = lam checkedVars. lam uni. lam varPairs.
-                    match varPairs with [(_, var, opTy)] ++ varPairs then
-                      let checkedVars = snoc checkedVars (m.eq (m.var var) (m.enum opTy (m.readVar var))) in
-                      match mergeUnifications uni (m.readVar var).uni with Some uni
-                      then work checkedVars uni varPairs
-                      else checkedVars
-                    else error "Compiler error, there should be a unification failure somewhere"
-                  in work [] uni vars in
-                m.newConstraint (m.not (m.andMany vars));
-                work prevSolutions
-            case COPUnsat _ then
-              (if null prevSolutions then
-                 warnSingle [alt.info] (join ["Found no solutions for alt. Final model:\n", m.debugModel (), "\n"])
-               else
-                 printError (join ["solutions: ", int2string (length prevSolutions), ", info: ", info2str alt.info, "\n"]);
-                 flushStderr ());
-              prevSolutions
-            case COPError x then
-              errorSingle [alt.info] (concat "CP-solver error during RepTypes solving:\n" x.msg)
-            end
-          in work []
+          res
         in solutions
       in mapi (lam idx. lam sol. {sol with idx = idx}) (join (map f alts))
     ) in CPSolutionSet promise
+
+  type ReprProblem a =
+    { alt : RepTypesProblemAlt a
+    , uni : Unification
+    , uniFilter : {reprs : {scope : Int, syms : Set Symbol}, types : {level : Int, names : Set Name}}
+    , opUses : [{app: TmOpVarRec, idxes: Set Int, solutionSet: [CPSol a]}]
+    }
+
+  sem solveViaEnumeration : all a. ReprProblem a -> [CPSol a]
+  sem solveViaEnumeration = | problem ->
+    match problem with {alt = alt, uni = uni, uniFilter = uniFilter, opUses = opUses} in
+    printError (join ["Starting to solve exhaustively, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
+    flushStderr ();
+    let possibleSolutions = seqMapM (lam opUse. opUse.solutionSet) opUses in
+    let checkSolution = lam opUseSelections.
+      let accum = lam acc. lam selection. mergeUnifications acc selection.uni in
+      match optionFoldlM accum uni opUseSelections with Some uni then
+        -- NOTE(vipa, 2023-10-19): This is a valid selection, assemble it
+        let f = lam acc. lam opUse. lam selection.
+          { inner = mapUnion acc.inner (mapMap (lam. CPSolution selection) opUse.idxes)
+          , cost = addf acc.cost (mulf opUse.app.scaling selection.cost)
+          } in
+        let costAndInner = foldl2 f {cost = 0.0, inner = mapEmpty subi} opUses opUseSelections in
+        Some
+          { cost = costAndInner.cost
+          , specType = alt.specType
+          , uni = filterUnification uniFilter uni
+          , innerSolutions = mapValues costAndInner.inner
+          , idx = 0  -- NOTE(vipa, 2023-10-19): Updated later, to be unique across all alts
+          , token = alt.token
+          }
+      else None () in
+    let solutions = mapOption checkSolution possibleSolutions in
+    -- TODO(vipa, 2023-10-19): Might want to filter solutions are
+    -- covered (they look the same from the outside as some other
+    -- solution, and the cost is higher)
+    (if null solutions
+     then warnSingle [alt.info] "Found no solutions for alt (exhaustive solve)."
+     else ());
+    mapi (lam i. lam sol. {sol with idx = i}) solutions
+
+  sem solveViaModel : all a. ReprProblem a -> [CPSol a]
+  sem solveViaModel = | problem ->
+    match problem with {alt = alt, uni = uni, uniFilter = uniFilter, opUses = opUses} in
+    printError (join ["Starting to construct model, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
+    flushStderr ();
+    let m = newModel () in
+    let cmpSol = lam a. lam b. subi a.idx b.idx in
+    let reprTy = m.newEnumType nameCmp in
+    let getReprSymVar : Symbol -> COPExpr =
+      let reprMap : Ref (Map Symbol COPExpr) = ref (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))) in
+      let newReprVar = lam sym.
+        let expr = m.var (m.newVar reprTy "repr") in
+        modref reprMap (mapInsert sym expr (deref reprMap));
+        expr in
+      lam sym. mapLookupOrElse (lam. newReprVar sym) sym (deref reprMap) in
+    let uniToPredicate = lam localUni.
+      let localReprs = localUni.reprs in
+      let reprs = uni.reprs in
+      let mkEq = lam repr.
+        let l = eitherMapRight (lam x. x.0)
+          (pufUnwrap reprs (repr, negi 1)) in
+        let r = eitherMapRight (lam x. x.0)
+          (eitherBindRight (pufUnwrap localReprs (repr, negi 1)) (pufUnwrap reprs)) in
+        if eitherEq nameEq eqsym l r then None () else
+        let toCOPExpr = eitherEither (m.enum reprTy) getReprSymVar in
+        Some (m.eq (toCOPExpr l) (toCOPExpr r)) in
+      m.andMany (mapOption mkEq (mapKeys localReprs))
+    in
+    let cost : Ref [COPExpr] = ref [m.float alt.selfCost] in
+    let addCost : COPExpr -> () = lam c. modref cost (snoc (deref cost) c) in
+    let useToVar = lam opUse.
+      let ident = opUse.app.ident in
+      let opTy = m.newEnumType cmpSol in
+      m.registerValues opTy (setOfSeq cmpSol opUse.solutionSet);
+      let var = m.newVar opTy (nameGetStr ident) in
+      -- NOTE(vipa, 2023-08-16): `uniMapToPredicate` may create
+      -- new repr-vars as a side-effect, and since elimEnum is
+      -- lazy and might run too late we pre-run it here to
+      -- ensure the reprs are created.
+      iter (lam sol. uniToPredicate sol.uni; ()) opUse.solutionSet;
+      m.newConstraint (m.elimEnum opTy (m.var var) (lam sol. uniToPredicate sol.uni));
+      addCost (m.elimEnum opTy (m.var var) (lam sol. m.float (mulf opUse.app.scaling sol.cost)));
+      (opUse.idxes, var, opTy) in
+    let vars = map useToVar opUses in
+    -- NOTE(vipa, 2023-10-10): This undoes any deduplication
+    -- done previously, using the `idxes` set.
+    let orderedVars = mapValues (foldl
+      (lam acc. lam var. mapUnion acc (mapMap (lam. var.1) var.0))
+      (mapEmpty subi)
+      vars) in
+    let cost = m.addMany (deref cost) in
+    recursive let work = lam prevSolutions.
+      if gti (length prevSolutions) 20 then
+        errorSingle [alt.info] (join ["Found a surprising number of solutions for alt (more than 20, should be reasonable later on, but in early testing it's mostly been caused by bugs). Final model:\n", m.debugModel (), "\n"])
+      else
+      switch m.minimize cost
+      case COPSolution {objective = Some (COPFloat {val = cost})} then
+        -- NOTE(vipa, 2023-10-10): The translation to a
+        -- constraint model isn't perfect: we don't model type
+        -- constraints. By merging all the Unification's we
+        -- check that the combination actually type-checks,
+        -- i.e., it's a valid solution.
+        let combinedUni = optionFoldlM
+          (lam acc. lam var. mergeUnifications acc (m.readVar var.1).uni)
+          -- NOTE(vipa, 2023-10-10): We start from an empty
+          -- unification, not `uni`, since the latter might
+          -- introduce more variables to the model, which can
+          -- make us loop forever.
+          (emptyUnification ())
+          vars in
+        let combinedUni = optionMap (filterUnification uniFilter) combinedUni in
+        match (combinedUni, optionBind combinedUni (lam x. mergeUnifications x uni))
+        with (Some localExternallyVisibleUni, Some uni) then
+          -- NOTE(vipa, 2023-08-18): Assert that any later
+          -- solution must differ from this one in some externally
+          -- visible way
+          m.newConstraint (m.not (uniToPredicate localExternallyVisibleUni));
+          let sol =
+            { cost = cost
+            , specType = alt.specType
+            , uni = uni
+            , innerSolutions = map (lam v. CPSolution (m.readVar v)) orderedVars
+            , idx = 0  -- NOTE(vipa, 2023-10-10): Updated later, to be unique across all alts
+            , token = alt.token
+            }
+          in work (snoc prevSolutions sol)
+        else
+          -- NOTE(vipa, 2023-10-10): The chosen implementations
+          -- do not type-check together. We need to rule out
+          -- this particular combination, then find another
+          -- solution.
+
+          -- NOTE(vipa, 2023-10-10): Most likely it's just a
+          -- *subset* of the implementations that don't mesh. As
+          -- an approximation of this set, we merge the `uni`s
+          -- of the `vars` until we fail, then assert that at
+          -- least one of the seen `vars` must differ.
+          let vars =
+            recursive let work = lam checkedVars. lam uni. lam varPairs.
+              match varPairs with [(_, var, opTy)] ++ varPairs then
+                let checkedVars = snoc checkedVars (m.eq (m.var var) (m.enum opTy (m.readVar var))) in
+                match mergeUnifications uni (m.readVar var).uni with Some uni
+                then work checkedVars uni varPairs
+                else checkedVars
+              else error "Compiler error, there should be a unification failure somewhere"
+            in work [] uni vars in
+          m.newConstraint (m.not (m.andMany vars));
+          work prevSolutions
+      case COPUnsat _ then
+        (if null prevSolutions then
+           warnSingle [alt.info] (join ["Found no solutions for alt. Final model:\n", m.debugModel (), "\n"])
+         else
+           printError (join ["solutions: ", int2string (length prevSolutions), ", info: ", info2str alt.info, "\n"]);
+           flushStderr ());
+        prevSolutions
+      case COPError x then
+        errorSingle [alt.info] (concat "CP-solver error during RepTypes solving:\n" x.msg)
+      end
+    in work []
 
   sem concretizeSolution =
   | CPSolution sol -> (sol.token, sol.innerSolutions)
