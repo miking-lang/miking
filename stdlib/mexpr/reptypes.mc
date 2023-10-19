@@ -97,6 +97,40 @@ lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
     end
 end
 
+lang ConvertLet = ConvertToMExpr + LetMergedAst + LetAst
+  sem convertToMExpr =
+  | LetMerged x -> TmLet
+    { info = x.info
+    , ident = x.v.v
+    , tyAnnot = optionMapOr tyunknown_ convertToMExprTy x.ty
+    , body = convertToMExpr x.e
+    , inexpr = convertToMExpr x.right
+    , tyBody = tyunknown_
+    , ty = tyunknown_
+    }
+end
+
+lang ConvertRecLet = ConvertToMExpr + RecLetMergedAst + RecLetsAst
+  sem convertToMExpr =
+  | RecLetMerged x ->
+    let mkBinding = lam binding.
+      { ident = binding.v.v
+      , tyAnnot = optionMapOr tyunknown_ convertToMExprTy binding.ty
+      , body = convertToMExpr binding.e
+      , tyBody = tyunknown_
+      , info = binding.v.i
+      }
+    in TmRecLets
+      -- TODO(vipa, 2023-10-22): for inconvenient syntactic reasons we
+      -- only allow one binding presently, so we're not mapping over
+      -- bindings
+      { bindings = [mkBinding x.bindings]
+      , ty = tyunknown_
+      , inexpr = convertToMExpr x.right
+      , info = x.info
+      }
+end
+
 lang ConvertLam = ConvertToMExpr + LamMergedAst + LamAst
   sem convertToMExpr =
   | LamMerged x -> TmLam
@@ -425,7 +459,17 @@ end
 
 lang ConvertRecord = ConvertToMExpr + RecordMergedAst + RecordAst
   sem convertToMExpr =
-  | RecordMerged x -> errorSingle [x.info] "Conversion not supported yet"
+  | RecordMerged x ->
+    let addField = lam acc. lam field.
+      optionMap (lam ty. warnSingle [get_Merged_info ty] "Type annotations on records are ignored right now.") field.ty;
+      match field.e with Some e then
+        mapInsert (stringToSid field.label.v) (convertToMExpr e) acc
+      else errorSingle [field.label.i] "Field without a right-hand side."
+    in TmRecord
+      { bindings = foldl addField (mapEmpty cmpSID) x.fields
+      , ty = tyunknown_
+      , info = x.info
+      }
 end
 
 lang ConvertNotPat = ConvertToMExpr + NotMergedAst + NotPat
@@ -448,7 +492,7 @@ lang ConvertConcatPat = ConvertToMExpr + ConcatMergedAst + SeqEdgePat
   | ConcatMerged x -> errorSingle [x.info] "Conversion not supported yet"
 end
 
-lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf + ConvertOpApp + ConvertAll
+lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf + ConvertOpApp + ConvertAll + ConvertLet + ConvertRecLet
 end
 
 lang CollectImpls = ConvertToMExpr + UniversalImplementationAst + EvalCost + OpVarAst

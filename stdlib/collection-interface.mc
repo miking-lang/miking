@@ -81,6 +81,16 @@ type SortedOrder
 -- and arranges them in order sortedy by the keys.
 type SortedKeyOrder
 
+-- These first three operations define the semantics of the properties
+-- through execution; there should be exactly one implementation of
+-- the appropriate `...Sem` operation for each property.
+
+type Phantom a
+con Phantom : all a. () -> Phantom a
+
+let orderSem : all o. all a. Phantom o -> [a] -> [Int] = never
+let selectSem : all s. all a. Phantom s -> [a] -> a -> [a] -> Bool = never
+
 -----------------------------
 -- Collection type aliases --
 -----------------------------

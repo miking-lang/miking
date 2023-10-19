@@ -66,9 +66,6 @@ lang ReprSubstAst = Ast
   | TySubst x ->
    match f acc x.arg with (acc, arg) in
    (acc, TySubst { x with arg = arg })
-
-  sem rappAccumL_Type_Type f acc =
-  | TySubst x -> f acc x.arg
 end
 
 lang OpDeclAst = Ast + LetAst + NeverAst + UnknownTypeAst

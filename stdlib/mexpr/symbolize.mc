@@ -308,7 +308,28 @@ lang MatchSym = Sym + MatchAst
                     els = symbolizeExpr env t.els}
 end
 
-lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst
+lang OpImplSym = OpImplAst + Sym + LetSym
+  sem symbolizeExpr env =
+  | TmOpImpl x ->
+    let ident = getSymbol
+      { kind = "variable"
+      , info = [x.info]
+      , allowFree = env.allowFree
+      }
+      env.varEnv
+      x.ident in
+    let alternatives =
+      let env = {env with varEnv = mapRemove (nameGetStr ident) env.varEnv} in
+      let symbAlt = lam alt.
+        match symbolizeTyAnnot env alt.specType with (tyVarEnv, specType) in
+        let body = symbolizeExpr {env with tyVarEnv = tyVarEnv} alt.body in
+        {alt with specType = specType, body = body} in
+      map symbAlt x.alternatives in
+    let inexpr = symbolizeExpr env x.inexpr in
+    TmOpImpl {x with ident = ident, alternatives = alternatives, inexpr = inexpr}
+end
+
+lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
   sem symbolizeExpr env =
   | TmOpDecl x ->
     -- NOTE(vipa, 2023-07-03): Insert *all* reprs, then clear them
@@ -347,19 +368,20 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst
       match mapLookup sid env.opImplsToInsert.impls with Some impls then
         let mkAlt = lam alt.
           { selfCost = alt.selfCost
-          , body = symbolizeExpr env alt.body
-          , specType = symbolizeType env alt.specType
+          , body = alt.body
+          , specType = alt.specType
           , delayedReprUnifications = []
           } in
-        TmOpImpl
-        { ident = ident
-        , alternatives = map mkAlt impls
-        , inexpr = symbolizeExpr newEnv x.inexpr
-        , ty = tyunknown_
-        , reprScope = negi 1
-        , metaLevel = negi 1
-        , info = x.info
-        }
+        let impl = TmOpImpl
+          { ident = ident
+          , alternatives = map mkAlt impls
+          , inexpr = x.inexpr
+          , ty = tyunknown_
+          , reprScope = negi 1
+          , metaLevel = negi 1
+          , info = x.info
+          } in
+        symbolizeExpr newEnv impl
       else
         symbolizeExpr newEnv x.inexpr in
     let decl = TmOpDecl
@@ -370,28 +392,6 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst
       , ty = symbolizeType env x.ty
       } in
     foldr wrapWithRepr decl reprs
-end
-
-lang OpImplSym = OpImplAst + Sym + LetSym
-  sem symbolizeExpr env =
-  | TmOpImpl x ->
-    let ident = getSymbol
-      { kind = "variable"
-      , info = [x.info]
-      , allowFree = env.allowFree
-      }
-      env.varEnv
-      x.ident in
-    -- TODO(vipa, 2023-06-30): symbolize type variables
-    let alternatives =
-      let env = {env with varEnv = mapRemove (nameGetStr ident) env.varEnv} in
-      let symbAlt = lam alt.
-        match symbolizeTyAnnot env alt.specType with (tyVarEnv, specType) in
-        let body = symbolizeExpr {env with tyVarEnv = tyVarEnv} alt.body in
-        {alt with specType = specType, body = body} in
-      map symbAlt x.alternatives in
-    let inexpr = symbolizeExpr env x.inexpr in
-    TmOpImpl {x with ident = ident, alternatives = alternatives, inexpr = inexpr}
 end
 
 lang OpVarSym = OpVarAst + Sym

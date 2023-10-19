@@ -141,8 +141,8 @@ prod String: Merged = v:String
 prod Sequence: Merged = "[" (v:Merged ("," v:Merged)* /- ","? -/)? "]"
 prod Record: Merged =
   "{"
-  (fields:{label:LName (":" ty:Merged)? ("=" e:Merged)?}
-   fields:{"," label:LName (":" ty:Merged)? ("=" e:Merged)?}*
+  (fields:{label:LIdent (":" ty:Merged)? ("=" e:Merged)?}
+   fields:{"," label:LIdent (":" ty:Merged)? ("=" e:Merged)?}*
    /- ","? -/ )?
   "}"
 prod RecordUpdate: Merged =
