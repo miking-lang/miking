@@ -8,7 +8,6 @@ include "mexpr/eval.mc"
 include "mexpr/pprint.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/side-effect.mc"
-include "mexpr/constant-fold.mc"
 
 let astBuilder = lam info.
   use MExprAst in
@@ -682,6 +681,69 @@ lang LamRecLetsPEval = PEval + VarAst + LamAst + RecLetsAst + ClosPAst + AppEval
 end
 
 
+type PEvalLetInlineOrRemove
+con PEvalLetInline : () -> PEvalLetInlineOrRemove
+con PEvalLetRemove : () -> PEvalLetInlineOrRemove
+
+lang PEvalLetInline = LetAst + SideEffect
+  -- Inlines let-bindings that are only referred to once in the expression, and
+  -- removes unused let-bindings. Assumes unique let-binding identifiers.
+  sem pevalInlineLets : SideEffectEnv -> Expr -> Expr
+  sem pevalInlineLets effectEnv =| t ->
+    recursive let subs
+      : Map Name PEvalLetInlineOrRemove -> Map Name Expr -> Expr -> Expr
+      = lam marked. lam env. lam t.
+        switch t
+        case TmVar r then
+          mapFindOrElse (lam. t) r.ident env
+        case TmLet r then
+          switch mapLookup r.ident marked
+          case None _ then
+            smap_Expr_Expr (subs marked env) t
+          case Some (PEvalLetRemove _) then
+            subs marked env r.inexpr
+          case Some (PEvalLetInline _) then
+            let body = subs marked env r.body in
+            subs marked (mapInsert r.ident body env) r.inexpr
+          end
+        case t then smap_Expr_Expr (subs marked env) t
+        end
+    in
+    recursive
+      let mark :
+        (Map Name Int, Map Name PEvalLetInlineOrRemove) ->
+          Expr ->
+            (Map Name Int, Map Name PEvalLetInlineOrRemove)
+        = lam acc. lam t.
+          match acc with (count, subsEnv) in
+          switch t
+          case TmVar r then (mapInsertWith addi r.ident 1 count, subsEnv)
+          case TmLet r then
+            if exprHasSideEffect effectEnv r.body then
+              sfold_Expr_Expr mark acc t
+            else
+              match mark acc r.inexpr with (inexprCount, subsEnv) in
+              let identCount = mapFindOrElse (lam. 0) r.ident inexprCount in
+              if gti identCount 0 then
+                -- This body IS NOT dead but we might substitute its identifier
+                -- for it
+                match mark (inexprCount, subsEnv) r.body
+                  with (count, subsEnv)
+                in
+                if eqi identCount 1 then
+                  (count, mapInsert r.ident (PEvalLetInline ()) subsEnv)
+                else
+                  (count, subsEnv)
+              else
+                -- This body IS dead
+                (inexprCount, mapInsert r.ident (PEvalLetRemove ()) subsEnv)
+          case t then sfold_Expr_Expr mark acc t
+          end
+    in
+    let marked = (mark (mapEmpty nameCmp, mapEmpty nameCmp) t).1 in
+    subs marked (mapEmpty nameCmp) t
+end
+
 lang MExprPEval =
   -- Terms
   VarPEval + LamPEval + AppPEval + RecordPEval + ConstPEval + LetPEval +
@@ -701,7 +763,7 @@ lang MExprPEval =
 end
 
 lang TestLang =
-  MExprPEval + MExprPrettyPrint + MExprEq + BootParser + MExprConstantFold
+  MExprPEval + MExprPrettyPrint + MExprEq + BootParser + PEvalLetInline
 end
 
 -- NOTE(oerikss, 2023-08-14): This new language supports recursion and tries to
@@ -725,7 +787,7 @@ lang MExprPEvalNew =
 end
 
 lang TestLangNew =
-  MExprPEvalNew + MExprPrettyPrint + MExprEq + BootParser + MExprConstantFold
+  MExprPEvalNew + MExprPrettyPrint + MExprEq + BootParser + PEvalLetInline
 end
 
 mexpr
@@ -735,6 +797,8 @@ utest
   -- Test standard implementation --
   ----------------------------------
   use TestLang in
+
+  let pevalInlineLets = pevalInlineLets (sideEffectEnvEmpty ()) in
 
   let _test = lam expr.
     logMsg logLevel.debug (lam.
@@ -751,8 +815,8 @@ utest
       ]);
     logMsg logLevel.debug (lam.
       strJoin "\n" [
-        "After peval (folded)",
-        expr2str (constantfoldLets expr)
+        "After peval (pevalInlineLets)",
+        expr2str (pevalInlineLets expr)
       ]);
     expr
   in
@@ -1306,7 +1370,7 @@ utest
       else mulf (pow (subi n 1) x) x
   in lam x. pow 10 x
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   recursive let pow = lam n. lam x.
     if eqi n 0 then 1.
     else
@@ -1325,7 +1389,7 @@ utest
       else mulf (pow (subi n 1) x) x
   in lam x. x
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
     lam x. x
     "
     using eqExpr
@@ -1338,6 +1402,8 @@ utest
   -- Test new implementation --
   -----------------------------
   use TestLangNew in
+
+  let pevalInlineLets = pevalInlineLets (sideEffectEnvEmpty ()) in
 
   let _test = lam expr.
     logMsg logLevel.debug (lam.
@@ -1354,8 +1420,8 @@ utest
       ]);
     logMsg logLevel.debug (lam.
       strJoin "\n" [
-        "After peval (folded)",
-        expr2str (constantfoldLets expr)
+        "After peval (pevalInlineLets)",
+        expr2str (pevalInlineLets expr)
       ]);
     expr
   in
@@ -1415,7 +1481,7 @@ utest
       else mulf (pow (subi n 1) x) x
   in lam x. pow 10 x
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   lam x.
     mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf (mulf x x) x) x) x) x) x) x) x) x
     "
@@ -1430,7 +1496,7 @@ utest
       else mulf (pow (subi n 1) x) x
   in lam x. lam n. (pow 10 x, pow n x)
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   recursive let pow = lam n. lam x.
     match eqi n 0 with true then 1.
     else match eqi n 1 with true then x
@@ -1473,7 +1539,7 @@ utest
   in
   odd 9
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   true
     "
     using eqExpr
@@ -1492,7 +1558,7 @@ utest
   in
   odd 10
     " in
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   recursive
   let odd = lam n.
       if eqi n 1 then true
@@ -1528,7 +1594,7 @@ utest
   ]
     " in
 
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   recursive let pow = lam x. lam n.
     if eqi n 0 then 1.
     else mulf x (pow x (subi n 1))
@@ -1676,7 +1742,7 @@ utest
   }
     " in
 
-  utest constantfoldLets (_test prog) with _parse "
+  utest pevalInlineLets (_test prog) with _parse "
   lam p.
     recursive let powpp = lam xpp. lam npp.
       match lti npp 1 with true then (1., 0., 0.)
