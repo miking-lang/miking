@@ -663,6 +663,11 @@ lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
         (f, acc)
     in
     foldlK f acc s.tms k
+  | (TmConstApp {const = CIter _, args = [f]}, TmSeq s) ->
+    let f = lam acc. lam x. lam k.
+      pevalApply info ctx (lam t. k (semi_ acc t)) (f, x)
+    in
+    foldlK f unit_ s.tms k
 end
 
 type PEvalLetInlineOrRemove
@@ -1369,6 +1374,31 @@ utest _test prog with _parse "
   "
   using eqExpr else _toString
 in
+
+let prog = _parse "
+  lam x. iter print [\"1\", \"2\", \"3\"]"
+in
+utest _test prog with _parse "
+lam x.
+  let t =
+    (print \"1\"; print \"2\"); print \"3\"
+  in
+  t
+  " using eqExpr else _toString in
+
+let prog = _parse "
+  lam x. iter (lam n. print (int2string n)) [1, 2, 3]"
+in
+utest _test prog with _parse "
+lam x.
+  let t = int2string 1 in
+  let t1 = int2string 2 in
+  let t2 = int2string 3 in
+  let t3 =
+    (print t ; print t1) ; print t2
+  in
+  t3
+  " using eqExpr else _toString in
 
 -------------------------
 -- Test Recursive Lets --
