@@ -156,7 +156,7 @@ with [(0, 5.0)]
 utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] ["foo", "bar", "babar"]
 with [(0, "foo"), (1, "bar"), (2, "babar")]
 
--- CPS style maps and folds
+-- CPS style maps, folds, and iters
 
 -- `mapK f seq k` maps the continuation passing function `f` over the sequence
 -- `seq`, passing the result of the mapping to the continuation `k`.
@@ -221,6 +221,49 @@ utest
     with [3, 2]
   in
   () with ()
+
+-- `iterK f seq k` iteratively applies the function `f` to the elements of `seq`
+-- as long as `()` is passed to its continuation.
+let iterK : all a. all b. (a -> (() -> ()) -> ()) -> [a] -> (() -> ()) -> ()
+  = lam f. lam seq. lam k.
+    recursive let recur = lam seq. lam k.
+      if null seq then k ()
+      else f (head seq) (lam. recur (tail seq) k)
+    in
+    recur seq k
+
+utest
+  let count = ref 0 in
+  let sum = ref 0 in
+  let seq = [1, 2, 3, 4] in
+  utest
+    iterK
+      (lam n. lam k.
+        modref count (addi (deref count) 1);
+        modref sum (addi (deref sum) n);
+        k ())
+      seq (lam. ())
+    with ()
+  in
+  utest deref count with 4 in
+  utest deref sum with 10 in
+  modref count 0; modref sum 0;
+  utest
+    iterK
+      (lam n. lam k.
+        if eqi n 3 then ()      -- short circuit
+        else
+          modref count (addi (deref count) 1);
+          modref sum (addi (deref sum) n);
+          k ())
+      seq (lam. ())
+    with ()
+  in
+  utest deref count with 2 in
+  utest deref sum with 3 in
+  ()
+  with ()
+
 
 -- zips
 let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =
