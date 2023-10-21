@@ -188,7 +188,7 @@ utest mapiK (lam i. lam x. lam k. k (muli x i)) [1,2,3] (lam seq. foldl addi 0 s
 -- sequence `seq`, from the left, with the initial accumulator `acc` and
 -- continuation `k`. (from
 -- https://leastfixedpoint.com/tonyg/kcbbs/lshift_archive/folds-and-continuation-passing-style-20070611.html)
-let foldlK
+let foldlK : all a. all b. all c. all d. (a -> b -> (a -> c) -> c) -> a -> [b] -> (a -> c) -> c
   = lam f. lam acc. lam seq. lam k.
     recursive let recur = lam acc. lam seq. lam k.
       if null seq then k acc
