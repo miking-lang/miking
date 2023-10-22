@@ -1145,13 +1145,35 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
         let solutions =
           let problem = {alt = alt, uni = uni, uniFilter = uniFilter, opUses = opUses} in
           let size = foldl (lam acc. lam opUse. muli acc (length opUse.solutionSet)) 1 opUses in
+
+          -- NOTE(vipa, 2023-10-23): Always run enum, which tends to
+          -- be (much) faster, but behaves much worse in the worst
+          -- case
+          -- let startT = wallTimeMs () in
+          -- let res = solveViaEnumeration problem in
+          -- let time = subf (wallTimeMs ()) startT in
+          -- printError (join ["Alt solve complete, size, took: ", float2string time, "ms\n"]);
+          -- flushStderr ();
+
+          -- NOTE(vipa, 2023-10-23): Run one depending on the maximum size of the problem
           let startT = wallTimeMs () in
           let res = if lti size 400
             then solveViaEnumeration problem
             else solveViaModel problem in
           let time = subf (wallTimeMs ()) startT in
-          printError (join ["Alt solve complete, took ", float2string time, "ms\n"]);
+          printError (join ["Alt solve complete, size, took: ", float2string time, "ms\n"]);
           flushStderr ();
+
+          -- NOTE(vipa, 2023-10-23): Run both, for profiling/timing information
+          -- let startT = wallTimeMs () in
+          -- let res = solveViaEnumeration problem in
+          -- let enumTime = subf (wallTimeMs ()) startT in
+          -- let startT = wallTimeMs () in
+          -- let res = solveViaModel problem in
+          -- let modelTime = subf (wallTimeMs ()) startT in
+          -- printError (join ["Alt solve complete, size: ", int2string size, ", enum took: ", float2string enumTime, "ms, model took: ", float2string modelTime, "\n"]);
+          -- flushStderr ();
+
           res
         in solutions
       in mapi (lam idx. lam sol. {sol with idx = idx}) (join (map f alts))
@@ -1169,29 +1191,31 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
     match problem with {alt = alt, uni = uni, uniFilter = uniFilter, opUses = opUses} in
     printError (join ["Starting to solve exhaustively, size: ", strJoin "*" (map (lam opUse. int2string (length opUse.solutionSet)) opUses), "\n"]);
     flushStderr ();
-    let possibleSolutions = seqMapM (lam opUse. opUse.solutionSet) opUses in
-    let checkSolution = lam opUseSelections.
-      let accum = lam acc. lam selection. mergeUnifications acc selection.uni in
-      match optionFoldlM accum uni opUseSelections with Some uni then
-        -- NOTE(vipa, 2023-10-19): This is a valid selection, assemble it
-        let f = lam acc. lam opUse. lam selection.
-          { inner = mapUnion acc.inner (mapMap (lam. CPSolution selection) opUse.idxes)
-          , cost = addf acc.cost (mulf opUse.app.scaling selection.cost)
-          } in
-        let costAndInner = foldl2 f {cost = 0.0, inner = mapEmpty subi} opUses opUseSelections in
-        Some
-          { cost = costAndInner.cost
-          , specType = alt.specType
-          , uni = filterUnification uniFilter uni
-          , innerSolutions = mapValues costAndInner.inner
-          , idx = 0  -- NOTE(vipa, 2023-10-19): Updated later, to be unique across all alts
-          , token = alt.token
-          }
-      else None () in
-    let solutions = mapOption checkSolution possibleSolutions in
-    -- TODO(vipa, 2023-10-19): Might want to filter solutions are
-    -- covered (they look the same from the outside as some other
-    -- solution, and the cost is higher)
+    type Sol = {uni : Unification, cost : OpCost, innerSolutions : Map Int (OpImplSolution a)} in
+    let applySol : TmOpVarRec -> Set Int -> Sol -> CPSol a -> Option Sol = lam app. lam idxes. lam sol. lam new.
+      match mergeUnifications sol.uni new.uni with Some uni then Some
+        { uni = uni
+        , cost = addf sol.cost (mulf (int2float (setSize idxes)) (mulf app.scaling new.cost))
+        , innerSolutions = mapUnion sol.innerSolutions (mapMap (lam. CPSolution new) idxes)
+        }
+      else None ()
+    in
+    let sols = foldl
+      (lam acc. lam opUse. filterOption (seqLiftA2 (applySol opUse.app opUse.idxes) acc opUse.solutionSet))
+      [{uni = uni, innerSolutions = mapEmpty subi, cost = 0.0}]
+      opUses in
+    let mkCPSol = lam sol.
+      { cost = sol.cost
+      , specType = alt.specType
+      , uni = filterUnification uniFilter sol.uni
+      , innerSolutions = mapValues sol.innerSolutions
+      , idx = 0  -- NOTE(vipa, 2023-10-19): Updated later, to be unique across all alts
+      , token = alt.token
+      } in
+    let solutions = map mkCPSol sols in
+    -- TODO(vipa, 2023-10-19): Definitely want to filter out solutions
+    -- that are covered (they look the same from the outside as some
+    -- other solution, and the cost is higher)
     (if null solutions
      then warnSingle [alt.info] "Found no solutions for alt (exhaustive solve)."
      else ());
@@ -1270,6 +1294,8 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
         let combinedUni = optionMap (filterUnification uniFilter) combinedUni in
         match (combinedUni, optionBind combinedUni (lam x. mergeUnifications x uni))
         with (Some localExternallyVisibleUni, Some uni) then
+          printError ".";  -- TODO(vipa, 2023-10-22): Remove
+          flushStderr ();
           -- NOTE(vipa, 2023-08-18): Assert that any later
           -- solution must differ from this one in some externally
           -- visible way
@@ -1284,6 +1310,8 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
             }
           in work (snoc prevSolutions sol)
         else
+          printError "?";  -- TODO(vipa, 2023-10-22): Remove
+          flushStderr ();
           -- NOTE(vipa, 2023-10-10): The chosen implementations
           -- do not type-check together. We need to rule out
           -- this particular combination, then find another
@@ -1306,6 +1334,8 @@ lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHi
           m.newConstraint (m.not (m.andMany vars));
           work prevSolutions
       case COPUnsat _ then
+        printError "!";  -- TODO(vipa, 2023-10-22): Remove
+        flushStderr ();
         (if null prevSolutions then
            warnSingle [alt.info] (join ["Found no solutions for alt. Final model:\n", m.debugModel (), "\n"])
          else
