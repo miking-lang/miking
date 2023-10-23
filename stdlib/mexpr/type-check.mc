@@ -781,9 +781,9 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
   sem typeCheckExpr env =
   | TmOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
-      let typeCheckAlt = lam env. lam alt.
+      let typeCheckBody = lam env.
         let newLvl = addi 1 env.currentLvl in
-        let specTypeInfo = infoTy alt.specType in
+        let specTypeInfo = infoTy x.specType in
         let opTypeInfo = infoTy ty in
         -- NOTE(vipa, 2023-06-30): First we want to check that
         -- `specType` is a stricter version of the original op-decl's
@@ -791,7 +791,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         -- strip `specType`, and unify the two.
         let ty = inst x.info newLvl ty in
         let ty = substituteNewReprs env ty in
-        let specType = resolveType (infoTy alt.specType) env.tyConEnv alt.specType in
+        let specType = resolveType (infoTy x.specType) env.tyConEnv x.specType in
         let specType = substituteUnknown (Poly ()) newLvl x.info specType in
         let specType = inst x.info newLvl specType in
         let specType = substituteNewReprs env specType in
@@ -812,7 +812,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
         match captureDelayedReprUnifications env
-          (lam. typeCheckExpr newEnv (propagateTyAnnot (alt.body, reprType)))
+          (lam. typeCheckExpr newEnv (propagateTyAnnot (x.body, reprType)))
           with (body, delayedReprUnifications) in
         unify newEnv [specTypeInfo, infoTm body] reprType (tyTm body);
 
@@ -820,13 +820,12 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
         -- `specType` references the reprs that exist in the alt-body,
         -- thus we generalize it here
         match gen env.currentLvl (mapFromSeq nameCmp genVars) specType with (specType, _) in
-        {alt with body = body, delayedReprUnifications = delayedReprUnifications, specType = specType} in
-      match withNewReprScope env (lam env. map (typeCheckAlt env) x.alternatives)
-        with (alternatives, reprScope, []) in
+        {x with body = body, delayedReprUnifications = delayedReprUnifications, specType = specType} in
+      match withNewReprScope env (lam env. typeCheckBody env)
+        with (x, reprScope, []) in
       let inexpr = typeCheckExpr env x.inexpr in
       TmOpImpl
-      { x with alternatives = alternatives
-      , reprScope = reprScope
+      { x with reprScope = reprScope
       , metaLevel = env.currentLvl
       , inexpr = inexpr
       , ty = tyTm inexpr

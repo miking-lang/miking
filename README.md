@@ -21,8 +21,6 @@ on how to use reptypes while they're still in flux.
     their op-decl.
   * It also means that impls can only use operations that are declared
     before themselves, so the order they're declared in matters.
-* The solver is called in cases where it really doesn't need to be, so
-  solving is quite slow.
 
 ## Building the compiler
 
@@ -57,20 +55,31 @@ build/mi compile paper-example.mc std.imc stdlib/uct-implementations.imc --keep-
 Relevant files:
 - `stdlib/collection-interface.mc`, the UCT interface
 - `stdlib/uct-implementations.mc`, normal mcore code implementing some representations
-- `stdlib/uct-implementations.mc`, op-impls connecting the two files above, plus "default" implementations
+- `stdlib/uct-implementations.imc`, op-impls connecting the two files above, plus "default" implementations
 - `paper-example.mc`, code using the UCT interface
 
 ## Debugging and other info
 
-Right now the compiler will spew a bunch of things as it's
-working. It's not pretty, and it's not the most usable output, but
-I'll make it better later on.
+Right now the compiler will print two kinds of debug output:
+- Json values representing the complete reptypes problem. These are
+  what I feed into some analysis to generate graphs from. *Most
+  likely* you won't find much use for this part of the output, but
+  maybe.
+- Text like `INFO<info>: updated reptype solution closure, took
+  0.0029296875ms`. This points at `letimpl` and shows the time it took
+  to process it. "Processing" here means computing all possible
+  implementation solutions that involve it.
 
-The debug output might mention `alt`, that's the internal name for the
-body of a `letimpl`.
-
-The compiler will also output a pprinted version of the program after
-repr solving to `out2.html` in the current directory. Open it in a
-browser, it's interactive and clickable. However, I don't take the
-care to attach proper types to everything right now, so many types
-will be `Unknown`.
+The compiler will also output two pprinted versions of the program to
+`out1.html` and `out2.html` in the current directory. These can be
+examined in a web browser, they're interactive and clickable (showing
+the type of each hovered expression).
+- `out1.html`: After the `reptypes-analysis` phase, i.e., we've
+  type-checked and figured out which representations must be the same,
+  but not substituted operations for actual, concrete implementations.
+- `out2.html`: After substituting operations, i.e., all operations,
+  `letop`s, and `letimpl`s are gone. Limitation for now: I don't take
+  care to properly substitute `Repr` types, instead I just replace
+  them with `Unknown` for now (since that's enough for the OCaml
+  backend), so `out2.html` will likely contain a fair bit of
+  `Unknown`s.

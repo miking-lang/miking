@@ -95,15 +95,23 @@ lang OpDeclAst = Ast + LetAst + NeverAst + UnknownTypeAst
     (env, TmOpDecl {x with tyAnnot = tyAnnot})
 end
 
+type ImplId = Int
 lang OpImplAst = Ast
-  type OpImplAlt =
-    { selfCost : OpCost
+  type TmOpImplRec =
+    { ident : Name
+    , implId : ImplId
+    , reprScope : Int
+    , metaLevel : Int
+    , selfCost : OpCost
     , body : Expr
     , specType : Type
     , delayedReprUnifications : [(ReprVar, ReprVar)]
+    , inexpr : Expr
+    , ty : Type
+    , info : Info
     }
   syn Expr =
-  | TmOpImpl {ident : Name, alternatives : [OpImplAlt], inexpr : Expr, ty : Type, reprScope : Int, metaLevel : Int, info : Info}
+  | TmOpImpl TmOpImplRec
 
   sem tyTm =
   | TmOpImpl x -> x.ty
@@ -112,18 +120,13 @@ lang OpImplAst = Ast
   | TmOpImpl x -> TmOpImpl {x with ty = ty}
 
   sem infoTm =
-  | TmOpImpl x ->
-    match x.alternatives with [alt] ++ _ in
-    infoTm alt.body
+  | TmOpImpl x -> x.info
 
   sem smapAccumL_Expr_Expr f acc =
   | TmOpImpl x ->
-    let applyToAlt = lam acc. lam alt.
-      match f acc alt.body with (acc, body) in
-      (acc, {alt with body = body}) in
-    match mapAccumL applyToAlt acc x.alternatives with (acc, alternatives) in
+    match f acc x.body with (acc, body) in
     match f acc x.inexpr with (acc, inexpr) in
-    (acc, TmOpImpl {x with alternatives = alternatives, inexpr = inexpr})
+    (acc, TmOpImpl {x with body = body, inexpr = inexpr})
 end
 
 lang OpVarAst = Ast
@@ -187,6 +190,7 @@ type CollectedImpl =
   { selfCost : OpCost
   , body : Expr
   , specType : Type
+  , info : Info
   }
 
 type ImplData =

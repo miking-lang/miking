@@ -97,14 +97,14 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
        endPhaseStats log "debug-type-check" ast
      else ());
 
-    -- writeFile "out1.html" (pprintAst ast);
-
     let ast = use MExprRepTypesAnalysis in typeCheckLeaveMeta ast in
     endPhaseStats log "reptypes-analysis" ast;
 
+    writeFile "out1.html" (pprintAst ast);
+
     dumpRepTypesProblem 0 ast;
 
-    let ast = use MExprRepTypesComposedSolver in reprSolve (initSolverState ()) ast in
+    let ast = use MExprRepTypesComposedSolver in reprSolve ast in
     endPhaseStats log "reptypes-solve" ast;
 
     let ast = removeMetaVarExpr ast in

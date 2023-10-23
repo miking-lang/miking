@@ -318,15 +318,10 @@ lang OpImplSym = OpImplAst + Sym + LetSym
       }
       env.varEnv
       x.ident in
-    let alternatives =
-      let env = {env with varEnv = mapRemove (nameGetStr ident) env.varEnv} in
-      let symbAlt = lam alt.
-        match symbolizeTyAnnot env alt.specType with (tyVarEnv, specType) in
-        let body = symbolizeExpr {env with tyVarEnv = tyVarEnv} alt.body in
-        {alt with specType = specType, body = body} in
-      map symbAlt x.alternatives in
+    match symbolizeTyAnnot env x.specType with (tyVarEnv, specType) in
+    let body = symbolizeExpr {env with tyVarEnv = tyVarEnv} x.body in
     let inexpr = symbolizeExpr env x.inexpr in
-    TmOpImpl {x with ident = ident, alternatives = alternatives, inexpr = inexpr}
+    TmOpImpl {x with ident = ident, body = body, specType = specType, inexpr = inexpr}
 end
 
 lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
@@ -366,22 +361,22 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
     let inexpr =
       let sid = stringToSid (nameGetStr x.ident) in
       match mapLookup sid env.opImplsToInsert.impls with Some impls then
-        let mkAlt = lam alt.
-          { selfCost = alt.selfCost
+        -- TODO(vipa, 2023-10-26): Insert when all free variables are
+        -- in scope instead
+        let wrapWithOpImpl = lam acc. lam alt. TmOpImpl
+          { ident = ident
+          , implId = negi 1
+          , reprScope = negi 1
+          , metaLevel = negi 1
+          , selfCost = alt.selfCost
           , body = alt.body
           , specType = alt.specType
           , delayedReprUnifications = []
-          } in
-        let impl = TmOpImpl
-          { ident = ident
-          , alternatives = map mkAlt impls
-          , inexpr = x.inexpr
+          , inexpr = acc
           , ty = tyunknown_
-          , reprScope = negi 1
-          , metaLevel = negi 1
-          , info = x.info
+          , info = alt.info
           } in
-        symbolizeExpr newEnv impl
+        symbolizeExpr newEnv (foldl wrapWithOpImpl x.inexpr impls)
       else
         symbolizeExpr newEnv x.inexpr in
     let decl = TmOpDecl

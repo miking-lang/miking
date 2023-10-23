@@ -395,18 +395,75 @@ let pufFilter
 lang TempPrettyPrint = MetaVarTypePrettyPrint + MExprPrettyPrintWithReprs
 end
 
-lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst
+type Unification =
+  { reprs : PureUnionFind Symbol () Name
+  , types : PureUnionFind Name () Type
+  }
 
-  type Unification =
-    { reprs : PureUnionFind Symbol () Name
-    , types : PureUnionFind Name () Type
-    }
+lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq
 
   sem emptyUnification : () -> Unification
   sem emptyUnification = | _ ->
     { reprs = pufEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
     , types = pufEmpty nameCmp
     }
+
+  -- A partial order over unification environments. True if all
+  -- assertions present in the second argument are true in the first.
+  sem uniImplies : Unification -> Unification -> Bool
+  sem uniImplies a = | b ->
+    let rEq = eitherEq nameEq (lam a. lam b. and (eqsym a.0 b.0) (eqi a.1 b.1)) in
+    let tyEq = eitherEq
+      (lam l. lam r. eqType (pureApplyUniToType a l) (pureApplyUniToType a r))
+      (lam l. lam r. and (nameEq l.0 r.0) (eqi l.1 r.1)) in
+    let reprImplied = pufFold
+      (lam acc. lam r1. lam r2. if acc
+       then rEq (pufUnwrap a.reprs r1) (pufUnwrap a.reprs r2)
+       else false)
+      (lam acc. lam r. lam out. if acc
+       then rEq (pufUnwrap a.reprs r) (Left out)
+       else false)
+      (lam acc. lam. lam. acc)
+      true
+      b.reprs in
+    if reprImplied then pufFold
+      (lam acc. lam ty1. lam ty2. if acc
+       then tyEq (pufUnwrap a.types ty1) (pufUnwrap a.types ty2)
+       else false)
+      (lam acc. lam ty. lam out. if acc
+       then tyEq (pufUnwrap a.types ty) (Left out)
+       else false)
+      (lam acc. lam. lam. acc)
+      true
+      b.types
+    else false
+
+  -- Apply the rewrites present in the `Unification` in the given type
+  -- everywhere. The returned type will be "disconnected" from all
+  -- other types, in the sense that none of its `TyMetaVar` or
+  -- `ReprVar`s are shared, i.e., a side-effecting unification won't
+  -- do the right thing.
+  sem pureApplyUniToType : Unification -> Type -> Type
+  sem pureApplyUniToType uni =
+  | ty -> smap_Type_Type (pureApplyUniToType uni) ty
+  | TyMetaVar x -> switch deref x.contents
+    case Link ty then pureApplyUniToType uni ty
+    case Unbound u then
+      switch pufUnwrap uni.types (u.ident, u.level)
+      case Left ty then pureApplyUniToType uni ty
+      case Right (ident, level) then
+        TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})}
+      end
+    end
+  | TyRepr x ->
+    let arg = pureApplyUniToType uni x.arg in
+    switch deref (botRepr x.repr)
+    case BotRepr {sym = sym, scope = scope} then
+      match pufUnwrapN uni.reprs (sym, scope) with (sym, scope) in
+      TyRepr {x with arg = arg, repr = ref (BotRepr {sym = sym, scope = scope})}
+    case UninitRepr _ then
+      TyRepr {x with arg = arg, repr = ref (UninitRepr ())}
+    end
 
   sem mergeUnifications : Unification -> Unification -> Option Unification
   sem mergeUnifications l = | r ->

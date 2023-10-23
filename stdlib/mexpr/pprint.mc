@@ -1262,17 +1262,15 @@ lang OpImplPrettyPrint = PrettyPrint + OpImplAst
   sem pprintCode indent env =
   | TmOpImpl x ->
     let newIndent = pprintIncr indent in
-    let pprintAlt = lam env. lam alt.
-      match getTypeStringCode newIndent env alt.specType with (env, specType) in
-      match pprintCode newIndent env alt.body with (env, body) in
-      (env, join [specType, pprintNewline newIndent, body]) in
     match pprintEnvGetStr env x.ident with (env, ident) in
-    match mapAccumL pprintAlt env x.alternatives with (env, alternatives) in
+    match getTypeStringCode newIndent env x.specType with (env, specType) in
+    match pprintCode newIndent env x.body with (env, body) in
     match pprintCode indent env x.inexpr with (env, inexpr) in
     let start = concat (pprintNewline indent) "* " in
     let str = join
-      [ "impl[", int2string x.reprScope, "] ", ident, " ="
-      , join (map (lam alt. concat start alt) alternatives)
+      [ "letimpl<scope:", int2string x.reprScope, ">[", float2string x.selfCost, "] "
+      , ident, " : ", specType, " ="
+      , pprintNewline newIndent, body
       , pprintNewline indent, "in"
       , pprintNewline indent, inexpr
       ] in
