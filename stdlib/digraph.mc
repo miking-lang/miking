@@ -26,7 +26,8 @@ type DigraphEdge v l = (v, v, l)
 type Digraph v l = { adj : Map v [(v,l)],
                      eql : l -> l -> Bool }
 
--- Returns an empty graph. Input: equality functions for vertices and labels.
+-- Returns an empty graph. Input: A compare function for vertices and an
+-- equality functions for labels.
 let digraphEmpty : all v. all l. (v -> v -> Int) -> (l -> l -> Bool) -> Digraph v l =
   lam cmpv. lam eql. {adj = mapEmpty cmpv, eql = eql}
 
@@ -252,6 +253,10 @@ let digraphRemoveEdge : all v. all l. v -> v -> l -> Digraph v l -> Digraph v l 
   let outgoing = mapFindExn from g.adj in
   let newOutgoing = filter (lam o : (v, l). or (not (g.eql l o.1)) (not ((digraphEqv g) o.0 to))) outgoing in
   {g with adj = mapInsert from newOutgoing g.adj}
+
+-- Removes all edges in the graph g.
+let digraphRemoveEdges : all v. all l. Digraph v l -> Digraph v l =
+  lam g. { g with adj = mapMap (lam. []) g.adj }
 
 -- Breadth-first search. Marks all reachable vertices from the source with the
 -- distance to the source.
@@ -548,4 +553,9 @@ utest digraphGraphEq g2 g3 with true in
 let g2 = digraphAddUpdateVertex 1 g in
 let g2 = digraphAddUpdateVertex 14 g2 in
 utest digraphVertices g2 with [1,2,3,4,5,6,7,8,14] in
+
+let g = digraphAddVertex 3 (digraphAddVertex 2 (digraphAddVertex 1 empty)) in
+let g = digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 (digraphAddEdge 1 3 l3 g)) in
+utest digraphEdges (digraphRemoveEdges g) with [] in
+
 ()
