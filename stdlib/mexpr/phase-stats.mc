@@ -13,7 +13,7 @@ lang PhaseStats = Ast
       let before = deref state.lastPhaseEnd in
       let now = wallTimeMs () in
       printLn phaseLabel;
-      printLn (concat "  Phase duration: " (float2string (subf now before)));
+      printLn (join ["  Phase duration: ", float2string (subf now before), "ms"]);
       let preTraverse = wallTimeMs () in
       let size = countExprNodes 0 e in
       let postTraverse = wallTimeMs () in
