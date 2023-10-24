@@ -36,7 +36,18 @@ utest eqSeq eqi [2] [1] with false
 
 -- Converting between List and Rope
 let toRope = lam seq.
-  createRope (length seq) (lam i. get seq i)
+  recursive let work = lam acc. lam seq.
+    match seq with [h] ++ t then
+      work (cons h acc) t
+    else
+      acc
+  in
+  if isRope seq then seq else
+  let s = work [] seq in
+  -- NOTE(larshum, 2023-10-24): The below line ensures the rope is collapsed to
+  -- yield constant-time random accesses.
+  map (lam. ()) s;
+  s
 
 let toList = lam seq.
   createList (length seq) (lam i. get seq i)
