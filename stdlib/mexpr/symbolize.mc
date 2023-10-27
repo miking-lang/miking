@@ -389,6 +389,18 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
     foldr wrapWithRepr decl reprs
 end
 
+lang ReprTypeSym = Sym + ReprDeclAst
+  sem symbolizeExpr env =
+  | TmReprDecl x ->
+    match setSymbol env.reprEnv x.ident with (reprEnv, ident) in
+    match mapAccumL setSymbol env.tyVarEnv x.vars with (tyVarEnv, vars) in
+    let rhsEnv = {env with tyVarEnv = tyVarEnv} in
+    let pat = symbolizeType rhsEnv x.pat in
+    let repr = symbolizeType rhsEnv x.repr in
+    let inexpr = symbolizeExpr {env with reprEnv = reprEnv} x.inexpr in
+    TmReprDecl {x with ident = ident, pat = pat, repr = repr, vars = vars, inexpr = inexpr}
+end
+
 lang OpVarSym = OpVarAst + Sym
   sem symbolizeExpr env =
   | TmOpVar x ->
@@ -549,7 +561,7 @@ lang MExprSym =
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym +
 
   -- RepTypes stuff
-  OpDeclSym + OpImplSym + OpVarSym + ReprSubstSym
+  OpDeclSym + OpImplSym + OpVarSym + ReprSubstSym + ReprTypeSym
 end
 
 -----------

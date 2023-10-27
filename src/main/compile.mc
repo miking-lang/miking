@@ -49,9 +49,6 @@ end
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + RepTypesFragments + MetaVarTypePrettyPrint
 end
 
-lang CollectRepTypesImpls = CollectImpls + MExprConvertImpl + MExprEval + MExprPrettyPrint
-end
-
 lang MExprRepTypesComposedSolver = RepTypesComposedSolver + MExprAst + RepTypesAst
 end
 
@@ -100,9 +97,9 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     let ast = use MExprRepTypesAnalysis in typeCheckLeaveMeta ast in
     endPhaseStats log "reptypes-analysis" ast;
 
-    writeFile "out1.html" (pprintAst ast);
+    -- writeFile "out1.html" (pprintAst ast);
 
-    dumpRepTypesProblem 0 ast;
+    -- dumpRepTypesProblem 0 ast;
 
     let ast = use MExprRepTypesComposedSolver in reprSolve ast in
     endPhaseStats log "reptypes-solve" ast;
@@ -111,7 +108,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     endPhaseStats log "remove-ty-flex" ast;
 
     -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    writeFile "out2.html" (pprintAst ast);
+    -- writeFile "out2.html" (pprintAst ast);
 
     -- (match findMostCommonRepr ast with Some sym then
     --   printIfExprHasRepr sym ast;
@@ -201,7 +198,8 @@ let compile = lam files. lam options : Options. lam args.
   match partition (lam f. match f with _ ++ ".imc" then true else false) files
   with (implFiles, files) in
   let impls = foldl
-    (lam acc. lam f. mergeImplData acc (use CollectRepTypesImpls in collectImpls f))
+    -- (lam acc. lam f. mergeImplData acc (use CollectRepTypesImpls in collectImpls f))
+    (lam acc. lam f. error "This compiler has not been built with .imc support")
     emptyImplData
     implFiles in
   if options.accelerate then compileAccelerate files options args

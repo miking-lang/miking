@@ -30,20 +30,19 @@ let _typeEnvEmpty = {
   )
 }
 
-let _pprintType = use MExprPrettyPrint in
-  lam ty.
-  match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
-    tyStr
-  else never
-
 ------------------------
 -- TYPE COMPATIBILITY --
 ------------------------
 
-lang CompatibleType =
+lang CompatibleType = PrettyPrint +
 
   -- NOTE(dlunde,2021-05-05): Part of below hack
   AppTypeAst
+
+  sem _pprintType = | ty ->
+    match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
+      tyStr
+    else never
 
   -- Given two types that are possibly unknown, this function attempts to find
   -- a type that is compatible with both given types in the given type

@@ -29,7 +29,6 @@ include "cmp.mc"
 include "keyword-maker.mc"
 include "type-check.mc"
 include "type.mc"
-include "universal-implementation.mc"
 include "const-transformer.mc"
 include "builtin.mc"
 include "eval.mc"
@@ -70,473 +69,473 @@ lang RepTypesKeywordMaker = KeywordMakerBase + ReprTypeAst + TyWildAst + OpDeclA
     }
 end
 
-lang ConvertToMExpr = Ast + UniversalImplementationBaseAst
-  sem convertToMExpr : Merged -> Expr
-  sem convertToMExpr =
-  | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in an expression context"
-  sem convertToMExprTy : Merged -> Type
-  sem convertToMExprTy =
-  | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in a type context"
-  sem convertToMExprPat : Merged -> Pat
-  sem convertToMExprPat =
-  | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in a pattern context"
-end
+-- lang ConvertToMExpr = Ast + UniversalImplementationBaseAst
+--   sem convertToMExpr : Merged -> Expr
+--   sem convertToMExpr =
+--   | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in an expression context"
+--   sem convertToMExprTy : Merged -> Type
+--   sem convertToMExprTy =
+--   | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in a type context"
+--   sem convertToMExprPat : Merged -> Pat
+--   sem convertToMExprPat =
+--   | m -> errorSingle [get_Merged_info m] "This syntax isn't valid in a pattern context"
+-- end
 
-lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
-  sem _evalCost : Merged -> OpCost
-  sem _evalCost = | tm ->
-    let tm = convertToMExpr tm in
-    let tm = constTransform builtin tm in
-    let ctx = evalCtxEmpty () in
-    -- TODO(vipa, 2023-05-02): Name hygiene, symbolize over all of an imc file in general
-    let ctx = {ctx with env = evalEnvInsert (nameNoSym "n") (float_ 100.0) ctx.env} in
-    switch eval ctx tm
-    case TmConst {val = CFloat f} then f.val
-    case TmConst {val = CInt i} then int2float i.val
-    case _ then errorSingle [infoTm tm] "This expression did not evaluate to a number."
-    end
-end
+-- lang EvalCost = ConstTransformer + IntAst + FloatAst + Eval + ConvertToMExpr
+--   sem _evalCost : Merged -> OpCost
+--   sem _evalCost = | tm ->
+--     let tm = convertToMExpr tm in
+--     let tm = constTransform builtin tm in
+--     let ctx = evalCtxEmpty () in
+--     -- TODO(vipa, 2023-05-02): Name hygiene, symbolize over all of an imc file in general
+--     let ctx = {ctx with env = evalEnvInsert (nameNoSym "n") (float_ 100.0) ctx.env} in
+--     switch eval ctx tm
+--     case TmConst {val = CFloat f} then f.val
+--     case TmConst {val = CInt i} then int2float i.val
+--     case _ then errorSingle [infoTm tm] "This expression did not evaluate to a number."
+--     end
+-- end
 
-lang ConvertLet = ConvertToMExpr + LetMergedAst + LetAst
-  sem convertToMExpr =
-  | LetMerged x -> TmLet
-    { info = x.info
-    , ident = x.v.v
-    , tyAnnot = optionMapOr tyunknown_ convertToMExprTy x.ty
-    , body = convertToMExpr x.e
-    , inexpr = convertToMExpr x.right
-    , tyBody = tyunknown_
-    , ty = tyunknown_
-    }
-end
+-- lang ConvertLet = ConvertToMExpr + LetMergedAst + LetAst
+--   sem convertToMExpr =
+--   | LetMerged x -> TmLet
+--     { info = x.info
+--     , ident = x.v.v
+--     , tyAnnot = optionMapOr tyunknown_ convertToMExprTy x.ty
+--     , body = convertToMExpr x.e
+--     , inexpr = convertToMExpr x.right
+--     , tyBody = tyunknown_
+--     , ty = tyunknown_
+--     }
+-- end
 
-lang ConvertRecLet = ConvertToMExpr + RecLetMergedAst + RecLetsAst
-  sem convertToMExpr =
-  | RecLetMerged x ->
-    let mkBinding = lam binding.
-      { ident = binding.v.v
-      , tyAnnot = optionMapOr tyunknown_ convertToMExprTy binding.ty
-      , body = convertToMExpr binding.e
-      , tyBody = tyunknown_
-      , info = binding.v.i
-      }
-    in TmRecLets
-      -- TODO(vipa, 2023-10-22): for inconvenient syntactic reasons we
-      -- only allow one binding presently, so we're not mapping over
-      -- bindings
-      { bindings = [mkBinding x.bindings]
-      , ty = tyunknown_
-      , inexpr = convertToMExpr x.right
-      , info = x.info
-      }
-end
+-- lang ConvertRecLet = ConvertToMExpr + RecLetMergedAst + RecLetsAst
+--   sem convertToMExpr =
+--   | RecLetMerged x ->
+--     let mkBinding = lam binding.
+--       { ident = binding.v.v
+--       , tyAnnot = optionMapOr tyunknown_ convertToMExprTy binding.ty
+--       , body = convertToMExpr binding.e
+--       , tyBody = tyunknown_
+--       , info = binding.v.i
+--       }
+--     in TmRecLets
+--       -- TODO(vipa, 2023-10-22): for inconvenient syntactic reasons we
+--       -- only allow one binding presently, so we're not mapping over
+--       -- bindings
+--       { bindings = [mkBinding x.bindings]
+--       , ty = tyunknown_
+--       , inexpr = convertToMExpr x.right
+--       , info = x.info
+--       }
+-- end
 
-lang ConvertLam = ConvertToMExpr + LamMergedAst + LamAst
-  sem convertToMExpr =
-  | LamMerged x -> TmLam
-    { info = x.info
-    , ident = optionMapOr (nameNoSym "") (lam x. x.v) x.v
-    , tyAnnot = optionMapOr tyunknown_ convertToMExprTy x.ty
-    , tyParam = tyunknown_
-    , body = convertToMExpr x.right
-    , ty = tyunknown_
-    }
-end
+-- lang ConvertLam = ConvertToMExpr + LamMergedAst + LamAst
+--   sem convertToMExpr =
+--   | LamMerged x -> TmLam
+--     { info = x.info
+--     , ident = optionMapOr (nameNoSym "") (lam x. x.v) x.v
+--     , tyAnnot = optionMapOr tyunknown_ convertToMExprTy x.ty
+--     , tyParam = tyunknown_
+--     , body = convertToMExpr x.right
+--     , ty = tyunknown_
+--     }
+-- end
 
-lang ConvertIf = ConvertToMExpr + IfMergedAst + MatchAst + BoolPat
- sem convertToMExpr =
- | IfMerged x -> TmMatch
-   { target = convertToMExpr x.c
-   , pat = PatBool {info = get_Merged_info x.c, val = true, ty = tyunknown_}
-   , thn = convertToMExpr x.t
-   , els = convertToMExpr x.e
-   , ty = tyunknown_
-   , info = x.info
-   }
-end
+-- lang ConvertIf = ConvertToMExpr + IfMergedAst + MatchAst + BoolPat
+--  sem convertToMExpr =
+--  | IfMerged x -> TmMatch
+--    { target = convertToMExpr x.c
+--    , pat = PatBool {info = get_Merged_info x.c, val = true, ty = tyunknown_}
+--    , thn = convertToMExpr x.t
+--    , els = convertToMExpr x.e
+--    , ty = tyunknown_
+--    , info = x.info
+--    }
+-- end
 
-lang ConvertBoolCon = ConvertToMExpr + BoolConMergedAst + BoolTypeAst
-  sem convertToMExprTy =
-  | BoolConMerged x -> TyBool {info = x.info}
-end
+-- lang ConvertBoolCon = ConvertToMExpr + BoolConMergedAst + BoolTypeAst
+--   sem convertToMExprTy =
+--   | BoolConMerged x -> TyBool {info = x.info}
+-- end
 
-lang ConvertIntCon = ConvertToMExpr + IntConMergedAst + IntTypeAst
-  sem convertToMExprTy =
-  | IntConMerged x -> TyInt {info = x.info}
-end
+-- lang ConvertIntCon = ConvertToMExpr + IntConMergedAst + IntTypeAst
+--   sem convertToMExprTy =
+--   | IntConMerged x -> TyInt {info = x.info}
+-- end
 
-lang ConvertCharCon = ConvertToMExpr + CharConMergedAst + CharTypeAst
-  sem convertToMExprTy =
-  | CharConMerged x -> TyChar {info = x.info}
-end
+-- lang ConvertCharCon = ConvertToMExpr + CharConMergedAst + CharTypeAst
+--   sem convertToMExprTy =
+--   | CharConMerged x -> TyChar {info = x.info}
+-- end
 
-lang ConvertFloatCon = ConvertToMExpr + FloatConMergedAst + FloatTypeAst
-  sem convertToMExprTy =
-  | FloatConMerged x -> TyFloat {info = x.info}
-end
+-- lang ConvertFloatCon = ConvertToMExpr + FloatConMergedAst + FloatTypeAst
+--   sem convertToMExprTy =
+--   | FloatConMerged x -> TyFloat {info = x.info}
+-- end
 
-lang ConvertUnknownCon = ConvertToMExpr + UnknownConMergedAst + UnknownTypeAst
-  sem convertToMExprTy =
-  | UnknownConMerged x -> TyUnknown {info = x.info}
-end
+-- lang ConvertUnknownCon = ConvertToMExpr + UnknownConMergedAst + UnknownTypeAst
+--   sem convertToMExprTy =
+--   | UnknownConMerged x -> TyUnknown {info = x.info}
+-- end
 
-lang ConvertProj = ConvertToMExpr + ProjMergedAst + MatchAst + RecordPat
-  sem convertToMExpr =
-  | ProjMerged x ->
-    let n = nameSym "x" in
-    let pat = withInfoPat x.info
-      (match x.label with Some l then
-         prec_ [(l.v, npvar_ n)]
-       else match x.idx with Some idx then
-         prec_ [(int2string idx.v, npvar_ n)]
-       else never) in
-    TmMatch
-    { target = convertToMExpr x.left
-    , pat = pat
-    , thn = withInfo x.info (nvar_ n)
-    , els = withInfo x.info never_
-    , ty = tyunknown_
-    , info = x.info
-    }
-end
+-- lang ConvertProj = ConvertToMExpr + ProjMergedAst + MatchAst + RecordPat
+--   sem convertToMExpr =
+--   | ProjMerged x ->
+--     let n = nameSym "x" in
+--     let pat = withInfoPat x.info
+--       (match x.label with Some l then
+--          prec_ [(l.v, npvar_ n)]
+--        else match x.idx with Some idx then
+--          prec_ [(int2string idx.v, npvar_ n)]
+--        else never) in
+--     TmMatch
+--     { target = convertToMExpr x.left
+--     , pat = pat
+--     , thn = withInfo x.info (nvar_ n)
+--     , els = withInfo x.info never_
+--     , ty = tyunknown_
+--     , info = x.info
+--     }
+-- end
 
-lang ConvertTuple = ConvertToMExpr + TupleMergedAst + RecordAst + RecordTypeAst + RecordPat
-  sem convertToMExpr =
-  | TupleMerged x -> TmRecord
-    { info = x.info
-    , ty = tyunknown_
-    , bindings = mapFromSeq cmpSID
-      (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExpr e)) x.e)
-    }
+-- lang ConvertTuple = ConvertToMExpr + TupleMergedAst + RecordAst + RecordTypeAst + RecordPat
+--   sem convertToMExpr =
+--   | TupleMerged x -> TmRecord
+--     { info = x.info
+--     , ty = tyunknown_
+--     , bindings = mapFromSeq cmpSID
+--       (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExpr e)) x.e)
+--     }
 
-  sem convertToMExprTy =
-  | TupleMerged x -> TyRecord
-    { info = x.info
-    , fields = mapFromSeq cmpSID
-      (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExprTy e)) x.e)
-    }
+--   sem convertToMExprTy =
+--   | TupleMerged x -> TyRecord
+--     { info = x.info
+--     , fields = mapFromSeq cmpSID
+--       (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExprTy e)) x.e)
+--     }
 
-  sem convertToMExprPat =
-  | TupleMerged x -> PatRecord
-    { info = x.info
-    , bindings = mapFromSeq cmpSID
-      (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExprPat e)) x.e)
-    , ty = tyunknown_
-    }
-end
+--   sem convertToMExprPat =
+--   | TupleMerged x -> PatRecord
+--     { info = x.info
+--     , bindings = mapFromSeq cmpSID
+--       (mapi (lam i. lam e. (stringToSid (int2string i), convertToMExprPat e)) x.e)
+--     , ty = tyunknown_
+--     }
+-- end
 
-lang ConvertArrow = ConvertToMExpr + ArrowMergedAst + FunTypeAst
-  sem convertToMExprTy =
-  | ArrowMerged x -> TyArrow
-    { info = x.info
-    , from = convertToMExprTy x.left
-    , to = convertToMExprTy x.right
-    }
-end
+-- lang ConvertArrow = ConvertToMExpr + ArrowMergedAst + FunTypeAst
+--   sem convertToMExprTy =
+--   | ArrowMerged x -> TyArrow
+--     { info = x.info
+--     , from = convertToMExprTy x.left
+--     , to = convertToMExprTy x.right
+--     }
+-- end
 
-lang ConvertSemi = ConvertToMExpr + SemiMergedAst
-  sem convertToMExpr =
-  | SemiMerged x ->
-    withInfo x.info (semi_ (convertToMExpr x.left) (convertToMExpr x.right))
-end
+-- lang ConvertSemi = ConvertToMExpr + SemiMergedAst
+--   sem convertToMExpr =
+--   | SemiMerged x ->
+--     withInfo x.info (semi_ (convertToMExpr x.left) (convertToMExpr x.right))
+-- end
 
-lang ConvertApp = ConvertToMExpr + AppMergedAst + AppAst + AppTypeAst
-  sem convertToMExpr =
-  | AppMerged x -> TmApp
-    { lhs = convertToMExpr x.left
-    , rhs = convertToMExpr x.right
-    , ty = tyunknown_
-    , info = x.info
-    }
+-- lang ConvertApp = ConvertToMExpr + AppMergedAst + AppAst + AppTypeAst
+--   sem convertToMExpr =
+--   | AppMerged x -> TmApp
+--     { lhs = convertToMExpr x.left
+--     , rhs = convertToMExpr x.right
+--     , ty = tyunknown_
+--     , info = x.info
+--     }
 
-  sem convertToMExprTy =
-  | AppMerged x -> TyApp
-    { lhs = convertToMExprTy x.left
-    , rhs = convertToMExprTy x.right
-    , info = x.info
-    }
+--   sem convertToMExprTy =
+--   | AppMerged x -> TyApp
+--     { lhs = convertToMExprTy x.left
+--     , rhs = convertToMExprTy x.right
+--     , info = x.info
+--     }
 
-  sem convertToMExprPat =
-  | AppMerged x -> errorSingle [x.info] "Invalid application in pattern context"
-end
+--   sem convertToMExprPat =
+--   | AppMerged x -> errorSingle [x.info] "Invalid application in pattern context"
+-- end
 
-lang ConvertOpApp = ConvertToMExpr + OperatorAppBaseMergedAst + AppMergedAst + EvalCost + OpVarAst + FrozenVarMergedAst + VarMergedAst
-  sem convertToMExpr =
-  | AppMerged
-    { left = AppMerged
-      { left = OperatorAppBaseMerged _
-      , right = scaling
-      }
-    , right = VarMerged x
-    , info = info
-    } -> TmOpVar
-      { ident = x.v.v
-      , ty = tyunknown_
-      , info = info
-      , frozen = false
-      , scaling = _evalCost scaling
-      }
-  | AppMerged
-    { left = AppMerged
-      { left = OperatorAppBaseMerged _
-      , right = scaling
-      }
-    , right = FrozenVarMerged x
-    , info = info
-    } -> TmOpVar
-      { ident = x.v.v
-      , ty = tyunknown_
-      , info = info
-      , frozen = true
-      , scaling = _evalCost scaling
-      }
-end
+-- lang ConvertOpApp = ConvertToMExpr + OperatorAppBaseMergedAst + AppMergedAst + EvalCost + OpVarAst + FrozenVarMergedAst + VarMergedAst
+--   sem convertToMExpr =
+--   | AppMerged
+--     { left = AppMerged
+--       { left = OperatorAppBaseMerged _
+--       , right = scaling
+--       }
+--     , right = VarMerged x
+--     , info = info
+--     } -> TmOpVar
+--       { ident = x.v.v
+--       , ty = tyunknown_
+--       , info = info
+--       , frozen = false
+--       , scaling = _evalCost scaling
+--       }
+--   | AppMerged
+--     { left = AppMerged
+--       { left = OperatorAppBaseMerged _
+--       , right = scaling
+--       }
+--     , right = FrozenVarMerged x
+--     , info = info
+--     } -> TmOpVar
+--       { ident = x.v.v
+--       , ty = tyunknown_
+--       , info = info
+--       , frozen = true
+--       , scaling = _evalCost scaling
+--       }
+-- end
 
-lang ConvertTypeDef = ConvertToMExpr + TypeMergedAst + TypeAst + VariantTypeAst
-  sem convertToMExpr =
-  | TypeMerged x -> TmType
-    { ident = x.v.v
-    , params = map (lam x. x.v) x.args
-    , tyIdent = match x.ty with Some ty
-      then convertToMExprTy ty
-      else TyVariant {info = x.info, constrs = mapEmpty nameCmp}
-    , info = x.info
-    , ty = tyunknown_
-    , inexpr = convertToMExpr x.right
-    }
-end
+-- lang ConvertTypeDef = ConvertToMExpr + TypeMergedAst + TypeAst + VariantTypeAst
+--   sem convertToMExpr =
+--   | TypeMerged x -> TmType
+--     { ident = x.v.v
+--     , params = map (lam x. x.v) x.args
+--     , tyIdent = match x.ty with Some ty
+--       then convertToMExprTy ty
+--       else TyVariant {info = x.info, constrs = mapEmpty nameCmp}
+--     , info = x.info
+--     , ty = tyunknown_
+--     , inexpr = convertToMExpr x.right
+--     }
+-- end
 
-lang ConvertConDef = ConvertToMExpr + ConDefMergedAst + DataAst
-  sem convertToMExpr =
-  | ConDefMerged x -> TmConDef
-    { ident = x.v.v
-    , tyIdent = convertToMExprTy x.ty
-    , inexpr = convertToMExpr x.right
-    , ty = tyunknown_
-    , info = x.info
-    }
-end
+-- lang ConvertConDef = ConvertToMExpr + ConDefMergedAst + DataAst
+--   sem convertToMExpr =
+--   | ConDefMerged x -> TmConDef
+--     { ident = x.v.v
+--     , tyIdent = convertToMExprTy x.ty
+--     , inexpr = convertToMExpr x.right
+--     , ty = tyunknown_
+--     , info = x.info
+--     }
+-- end
 
-lang ConvertCon = ConvertToMExpr + ConMergedAst + AppMergedAst + DataAst + ConTypeAst + DataPat
-  sem convertToMExpr =
-  | AppMerged (x & {left = ConMerged c}) ->
-    TmConApp { ident = c.c.v, body = convertToMExpr x.right, ty = tyunknown_, info = x.info }
-  | ConMerged c -> errorSingle [c.info] "Unapplied constructor"
+-- lang ConvertCon = ConvertToMExpr + ConMergedAst + AppMergedAst + DataAst + ConTypeAst + DataPat
+--   sem convertToMExpr =
+--   | AppMerged (x & {left = ConMerged c}) ->
+--     TmConApp { ident = c.c.v, body = convertToMExpr x.right, ty = tyunknown_, info = x.info }
+--   | ConMerged c -> errorSingle [c.info] "Unapplied constructor"
 
-  sem convertToMExprTy =
-  | ConMerged c -> TyCon
-    { ident = c.c.v
-    , info = c.info
-    }
+--   sem convertToMExprTy =
+--   | ConMerged c -> TyCon
+--     { ident = c.c.v
+--     , info = c.info
+--     }
 
-  sem convertToMExprPat =
-  | AppMerged (x & {left = ConMerged c}) -> PatCon
-    { ident = c.c.v
-    , subpat = convertToMExprPat x.right
-    , ty = tyunknown_
-    , info = x.info
-    }
-  | ConMerged c -> errorSingle [c.info] "Unapplied constructor"
-end
+--   sem convertToMExprPat =
+--   | AppMerged (x & {left = ConMerged c}) -> PatCon
+--     { ident = c.c.v
+--     , subpat = convertToMExprPat x.right
+--     , ty = tyunknown_
+--     , info = x.info
+--     }
+--   | ConMerged c -> errorSingle [c.info] "Unapplied constructor"
+-- end
 
-lang ConvertWild = ConvertToMExpr + WildMergedAst + TyWildAst + NamedPat
-  sem convertToMExprTy =
-  | WildMerged x -> TyWild {info = x.info}
+-- lang ConvertWild = ConvertToMExpr + WildMergedAst + TyWildAst + NamedPat
+--   sem convertToMExprTy =
+--   | WildMerged x -> TyWild {info = x.info}
 
-  sem convertToMExprPat =
-  | WildMerged x -> PatNamed {ident = PWildcard (), info = x.info, ty = tyunknown_}
-end
+--   sem convertToMExprPat =
+--   | WildMerged x -> PatNamed {ident = PWildcard (), info = x.info, ty = tyunknown_}
+-- end
 
-lang ConvertSubst = ConvertToMExpr + ConMergedAst + NotMergedAst + AppMergedAst + ReprSubstAst + TyWildAst + ReprTypeAst
-  sem convertToMExprTy =
-  | NotMerged
-    { right = ConMerged {c = {v = subst}}
-    , info = overallInfo
-    } ->
-    TySubst
-    { info = overallInfo
-    , arg = TyRepr { info = overallInfo, arg = TyWild {info = overallInfo}, repr = ref (UninitRepr ()) }
-    , subst = subst
-    }
-  | AppMerged
-    { left = NotMerged {right = ConMerged {c = {v = subst}}}
-    , right = reprTy
-    , info = overallInfo
-    } ->
-    TySubst
-    { info = overallInfo
-    , arg = convertToMExprTy reprTy
-    , subst = subst
-    }
-end
+-- lang ConvertSubst = ConvertToMExpr + ConMergedAst + NotMergedAst + AppMergedAst + ReprSubstAst + TyWildAst + ReprTypeAst
+--   sem convertToMExprTy =
+--   | NotMerged
+--     { right = ConMerged {c = {v = subst}}
+--     , info = overallInfo
+--     } ->
+--     TySubst
+--     { info = overallInfo
+--     , arg = TyRepr { info = overallInfo, arg = TyWild {info = overallInfo}, repr = ref (UninitRepr ()) }
+--     , subst = subst
+--     }
+--   | AppMerged
+--     { left = NotMerged {right = ConMerged {c = {v = subst}}}
+--     , right = reprTy
+--     , info = overallInfo
+--     } ->
+--     TySubst
+--     { info = overallInfo
+--     , arg = convertToMExprTy reprTy
+--     , subst = subst
+--     }
+-- end
 
-lang ConvertRepr = ConvertToMExpr + ReprTypeAst + ConMergedAst + AppMergedAst
-  sem convertToMExprTy =
-  | AppMerged
-    { left = ConMerged {c = {v = ("Repr", _)}}
-    , right = arg
-    , info = overallInfo
-    } ->
-    TyRepr
-    { info = overallInfo
-    , arg = convertToMExprTy arg
-    , repr = ref (UninitRepr ())
-    }
-  | ConMerged {c = {v = ("Repr", _)}, info = info} -> errorSingle [info] "Repr must be applied to a type argument"
-end
+-- lang ConvertRepr = ConvertToMExpr + ReprTypeAst + ConMergedAst + AppMergedAst
+--   sem convertToMExprTy =
+--   | AppMerged
+--     { left = ConMerged {c = {v = ("Repr", _)}}
+--     , right = arg
+--     , info = overallInfo
+--     } ->
+--     TyRepr
+--     { info = overallInfo
+--     , arg = convertToMExprTy arg
+--     , repr = ref (UninitRepr ())
+--     }
+--   | ConMerged {c = {v = ("Repr", _)}, info = info} -> errorSingle [info] "Repr must be applied to a type argument"
+-- end
 
-lang ConvertVar = ConvertToMExpr + VarMergedAst + VarAst + VarTypeAst + NamedPat
-  sem convertToMExpr =
-  | VarMerged x -> TmVar {ident = x.v.v, ty = tyunknown_, info = x.info, frozen = false}
-  sem convertToMExprTy =
-  | VarMerged x -> TyVar {ident = x.v.v, info = x.info}
-  sem convertToMExprPat =
-  | VarMerged x -> PatNamed {ident = PName x.v.v, info = x.info, ty = tyunknown_}
-end
+-- lang ConvertVar = ConvertToMExpr + VarMergedAst + VarAst + VarTypeAst + NamedPat
+--   sem convertToMExpr =
+--   | VarMerged x -> TmVar {ident = x.v.v, ty = tyunknown_, info = x.info, frozen = false}
+--   sem convertToMExprTy =
+--   | VarMerged x -> TyVar {ident = x.v.v, info = x.info}
+--   sem convertToMExprPat =
+--   | VarMerged x -> PatNamed {ident = PName x.v.v, info = x.info, ty = tyunknown_}
+-- end
 
-lang ConvertAll = ConvertToMExpr + AllMergedAst + AllTypeAst
-  sem convertToMExprTy =
-  | AllMerged x -> TyAll
-    { info = x.info
-    , ident = x.v.v
-    , kind = Poly ()
-    , ty = convertToMExprTy x.right
-    }
-end
+-- lang ConvertAll = ConvertToMExpr + AllMergedAst + AllTypeAst
+--   sem convertToMExprTy =
+--   | AllMerged x -> TyAll
+--     { info = x.info
+--     , ident = x.v.v
+--     , kind = Poly ()
+--     , ty = convertToMExprTy x.right
+--     }
+-- end
 
-lang ConvertFrozenVar = ConvertToMExpr + FrozenVarMergedAst + VarAst
-  sem convertToMExpr =
-  | FrozenVarMerged x -> TmVar {ident = x.v.v, ty = tyunknown_, info = x.info, frozen = true}
-end
+-- lang ConvertFrozenVar = ConvertToMExpr + FrozenVarMergedAst + VarAst
+--   sem convertToMExpr =
+--   | FrozenVarMerged x -> TmVar {ident = x.v.v, ty = tyunknown_, info = x.info, frozen = true}
+-- end
 
-lang ConvertChar = ConvertToMExpr + CharMergedAst + CharAst + CharPat
-  sem convertToMExpr =
-  | CharMerged x -> TmConst {val = CChar {val = x.v.v}, ty = tyunknown_, info = x.info}
-  sem convertToMExprPat =
-  | CharMerged x -> PatChar {val = x.v.v, ty = tyunknown_, info = x.info}
-end
+-- lang ConvertChar = ConvertToMExpr + CharMergedAst + CharAst + CharPat
+--   sem convertToMExpr =
+--   | CharMerged x -> TmConst {val = CChar {val = x.v.v}, ty = tyunknown_, info = x.info}
+--   sem convertToMExprPat =
+--   | CharMerged x -> PatChar {val = x.v.v, ty = tyunknown_, info = x.info}
+-- end
 
-lang ConvertInt = ConvertToMExpr + IntMergedAst + IntAst + IntPat
-  sem convertToMExpr =
-  | IntMerged x -> TmConst {val = CInt {val = x.v.v}, ty = tyunknown_, info = x.info}
-  sem convertToMExprPat =
-  | IntMerged x -> PatInt {val = x.v.v, ty = tyunknown_, info = x.info}
-end
+-- lang ConvertInt = ConvertToMExpr + IntMergedAst + IntAst + IntPat
+--   sem convertToMExpr =
+--   | IntMerged x -> TmConst {val = CInt {val = x.v.v}, ty = tyunknown_, info = x.info}
+--   sem convertToMExprPat =
+--   | IntMerged x -> PatInt {val = x.v.v, ty = tyunknown_, info = x.info}
+-- end
 
-lang ConvertFloat = ConvertToMExpr + FloatMergedAst + FloatAst
-  sem convertToMExpr =
-  | FloatMerged x -> TmConst {info = x.info, val = CFloat {val = x.v.v}, ty = tyunknown_}
-end
+-- lang ConvertFloat = ConvertToMExpr + FloatMergedAst + FloatAst
+--   sem convertToMExpr =
+--   | FloatMerged x -> TmConst {info = x.info, val = CFloat {val = x.v.v}, ty = tyunknown_}
+-- end
 
-lang ConvertTrue = ConvertToMExpr + TrueMergedAst + BoolAst + BoolPat
-  sem convertToMExpr =
-  | TrueMerged x -> TmConst {info = x.info, val = CBool {val = true}, ty = tyunknown_}
-  sem convertToMExprPat =
-  | TrueMerged x -> PatBool {val = true, ty = tyunknown_, info = x.info}
-end
+-- lang ConvertTrue = ConvertToMExpr + TrueMergedAst + BoolAst + BoolPat
+--   sem convertToMExpr =
+--   | TrueMerged x -> TmConst {info = x.info, val = CBool {val = true}, ty = tyunknown_}
+--   sem convertToMExprPat =
+--   | TrueMerged x -> PatBool {val = true, ty = tyunknown_, info = x.info}
+-- end
 
-lang ConvertFalse = ConvertToMExpr + FalseMergedAst + BoolAst + BoolPat
-  sem convertToMExpr =
-  | FalseMerged x -> TmConst {info = x.info, val = CBool {val = false}, ty = tyunknown_}
-  sem convertToMExprPat =
-  | FalseMerged x -> PatBool {val = false, ty = tyunknown_, info = x.info}
-end
+-- lang ConvertFalse = ConvertToMExpr + FalseMergedAst + BoolAst + BoolPat
+--   sem convertToMExpr =
+--   | FalseMerged x -> TmConst {info = x.info, val = CBool {val = false}, ty = tyunknown_}
+--   sem convertToMExprPat =
+--   | FalseMerged x -> PatBool {val = false, ty = tyunknown_, info = x.info}
+-- end
 
-lang ConvertNever = ConvertToMExpr + NeverMergedAst + NeverAst
-  sem convertToMExpr =
-  | NeverMerged x -> TmNever {info = x.info, ty = tyunknown_}
-end
+-- lang ConvertNever = ConvertToMExpr + NeverMergedAst + NeverAst
+--   sem convertToMExpr =
+--   | NeverMerged x -> TmNever {info = x.info, ty = tyunknown_}
+-- end
 
-lang ConvertString = ConvertToMExpr + StringMergedAst + SeqAst + CharAst
-  sem convertToMExpr =
-  | StringMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertString = ConvertToMExpr + StringMergedAst + SeqAst + CharAst
+--   sem convertToMExpr =
+--   | StringMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang ConvertSequence = ConvertToMExpr + SequenceMergedAst + SeqAst
-  sem convertToMExpr =
-  | SequenceMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertSequence = ConvertToMExpr + SequenceMergedAst + SeqAst
+--   sem convertToMExpr =
+--   | SequenceMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang ConvertRecord = ConvertToMExpr + RecordMergedAst + RecordAst
-  sem convertToMExpr =
-  | RecordMerged x ->
-    let addField = lam acc. lam field.
-      optionMap (lam ty. warnSingle [get_Merged_info ty] "Type annotations on records are ignored right now.") field.ty;
-      match field.e with Some e then
-        mapInsert (stringToSid field.label.v) (convertToMExpr e) acc
-      else errorSingle [field.label.i] "Field without a right-hand side."
-    in TmRecord
-      { bindings = foldl addField (mapEmpty cmpSID) x.fields
-      , ty = tyunknown_
-      , info = x.info
-      }
-end
+-- lang ConvertRecord = ConvertToMExpr + RecordMergedAst + RecordAst
+--   sem convertToMExpr =
+--   | RecordMerged x ->
+--     let addField = lam acc. lam field.
+--       optionMap (lam ty. warnSingle [get_Merged_info ty] "Type annotations on records are ignored right now.") field.ty;
+--       match field.e with Some e then
+--         mapInsert (stringToSid field.label.v) (convertToMExpr e) acc
+--       else errorSingle [field.label.i] "Field without a right-hand side."
+--     in TmRecord
+--       { bindings = foldl addField (mapEmpty cmpSID) x.fields
+--       , ty = tyunknown_
+--       , info = x.info
+--       }
+-- end
 
-lang ConvertNotPat = ConvertToMExpr + NotMergedAst + NotPat
-  sem convertToMExprPat =
-  | NotMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertNotPat = ConvertToMExpr + NotMergedAst + NotPat
+--   sem convertToMExprPat =
+--   | NotMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang ConvertOrPat = ConvertToMExpr + OrMergedAst + OrPat
-  sem convertToMExprPat =
-  | OrMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertOrPat = ConvertToMExpr + OrMergedAst + OrPat
+--   sem convertToMExprPat =
+--   | OrMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang ConvertAndPat = ConvertToMExpr + AndMergedAst + AndPat
-  sem convertToMExprPat =
-  | AndMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertAndPat = ConvertToMExpr + AndMergedAst + AndPat
+--   sem convertToMExprPat =
+--   | AndMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang ConvertConcatPat = ConvertToMExpr + ConcatMergedAst + SeqEdgePat
-  sem convertToMExprPat =
-  | ConcatMerged x -> errorSingle [x.info] "Conversion not supported yet"
-end
+-- lang ConvertConcatPat = ConvertToMExpr + ConcatMergedAst + SeqEdgePat
+--   sem convertToMExprPat =
+--   | ConcatMerged x -> errorSingle [x.info] "Conversion not supported yet"
+-- end
 
-lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf + ConvertOpApp + ConvertAll + ConvertLet + ConvertRecLet
-end
+-- lang MExprConvertImpl = ConvertConcatPat + ConvertAndPat + ConvertOrPat + ConvertNotPat + ConvertRecord + ConvertSequence + ConvertString + ConvertNever + ConvertFalse + ConvertTrue + ConvertFloat + ConvertInt + ConvertChar + ConvertFrozenVar + ConvertVar + ConvertCon + ConvertConDef + ConvertTypeDef + ConvertApp + ConvertSemi + ConvertProj + ConvertWild + ConvertRepr + ConvertSubst + ConvertArrow + ConvertTuple + ConvertUnknownCon + ConvertFloatCon + ConvertCharCon + ConvertIntCon + ConvertBoolCon + ConvertLam + ConvertIf + ConvertOpApp + ConvertAll + ConvertLet + ConvertRecLet
+-- end
 
-lang CollectImpls = ConvertToMExpr + UniversalImplementationAst + EvalCost + OpVarAst
-  sem collectImpls : String -> ImplData
-  sem collectImpls = | filename ->
-    match parseUniversalImplementationExn filename (readFile filename) with TopsUFile {tops=tops} in
-    let f = lam acc. lam top.
-      switch top
-      case ImplDeclUTop x then
-        let selfCost = _evalCost x.cost in
-        let body = convertToMExpr x.body in
-        let specType = optionMapOr tyunknown_ convertToMExprTy x.tyAnnot in
-        let impl =
-          { selfCost = selfCost
-          , body = body
-          , specType = specType
-          , info = x.info
-          } in
-        { acc with impls = mapInsertWith concat (stringToSid (nameGetStr x.name.v))
-          [impl]
-          acc.impls
-        }
-      case ReprDeclUTop x then
-        recursive let replaceMetaVars = lam acc. lam m.
-          match m with MetaVarMerged x then
-            match
-              match mapLookup (nameGetStr x.var.v) acc with Some name then (acc, name) else
-              let name = nameSetNewSym x.var.v in
-              (mapInsert (nameGetStr name) name acc, name)
-            with (acc, name) in
-            (acc, VarMerged {info = x.info, v = {v = name, i = x.var.i}})
-          else
-            smapAccumL_Merged_Merged replaceMetaVars acc m in
-        match replaceMetaVars (mapEmpty cmpString) x.pat with (vars, pat) in
-        match replaceMetaVars vars x.repr with (vars, repr) in
-        let repr =
-          { vars = mapValues vars
-          , pat = convertToMExprTy pat
-          , repr = convertToMExprTy repr
-          } in
-        { acc with reprs = mapInsert x.name.v repr acc.reprs }
-      end
-    in foldl f emptyImplData tops
-end
+-- lang CollectImpls = ConvertToMExpr + UniversalImplementationAst + EvalCost + OpVarAst
+--   sem collectImpls : String -> ImplData
+--   sem collectImpls = | filename ->
+--     match parseUniversalImplementationExn filename (readFile filename) with TopsUFile {tops=tops} in
+--     let f = lam acc. lam top.
+--       switch top
+--       case ImplDeclUTop x then
+--         let selfCost = _evalCost x.cost in
+--         let body = convertToMExpr x.body in
+--         let specType = optionMapOr tyunknown_ convertToMExprTy x.tyAnnot in
+--         let impl =
+--           { selfCost = selfCost
+--           , body = body
+--           , specType = specType
+--           , info = x.info
+--           } in
+--         { acc with impls = mapInsertWith concat (stringToSid (nameGetStr x.name.v))
+--           [impl]
+--           acc.impls
+--         }
+--       case ReprDeclUTop x then
+--         recursive let replaceMetaVars = lam acc. lam m.
+--           match m with MetaVarMerged x then
+--             match
+--               match mapLookup (nameGetStr x.var.v) acc with Some name then (acc, name) else
+--               let name = nameSetNewSym x.var.v in
+--               (mapInsert (nameGetStr name) name acc, name)
+--             with (acc, name) in
+--             (acc, VarMerged {info = x.info, v = {v = name, i = x.var.i}})
+--           else
+--             smapAccumL_Merged_Merged replaceMetaVars acc m in
+--         match replaceMetaVars (mapEmpty cmpString) x.pat with (vars, pat) in
+--         match replaceMetaVars vars x.repr with (vars, repr) in
+--         let repr =
+--           { vars = mapValues vars
+--           , pat = convertToMExprTy pat
+--           , repr = convertToMExprTy repr
+--           } in
+--         { acc with reprs = mapInsert x.name.v repr acc.reprs }
+--       end
+--     in foldl f emptyImplData tops
+-- end
 
 lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
   sem typeCheckExpr env =
@@ -837,7 +836,7 @@ end
 lang MExprRepTypesAnalysis = MExprTypeCheckMost + RepTypesAnalysis + MExprPrettyPrint + RepTypesPrettyPrint
 end
 
-lang RepTypesFragments = ReprTypeAst + ReprSubstAst + ReprTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + RepTypesPrettyPrint + RepTypesKeywordMaker + MExprConvertImpl
+lang RepTypesFragments = ReprTypeAst + ReprSubstAst + ReprTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + RepTypesPrettyPrint + RepTypesKeywordMaker
 end
 
 lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
@@ -944,8 +943,11 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm -> smapAccumL_Expr_Expr (collectForReprSolve global) state tm
   | tm & TmOpVar x ->
     match allSolutions global state.branch x.ident x.ty with (branch, sols) in
-    let sols = map (lam sol. {sol with cost = mulf x.scaling sol.cost}) sols in
-    ({state with branch = branch, opUses = snoc state.opUses sols}, tm)
+    if null sols then
+      errorSingle [x.info] "There were no valid implementations here."
+    else
+      let sols = map (lam sol. {sol with cost = mulf x.scaling sol.cost}) sols in
+      ({state with branch = branch, opUses = snoc state.opUses sols}, tm)
   | TmOpImpl x ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
