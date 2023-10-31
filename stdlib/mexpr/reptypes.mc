@@ -1585,9 +1585,15 @@ lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + EagerRepSolver + MEx
 end
 
 lang DumpRepTypesProblem = RepTypesFragments
-  sem dumpRepTypesProblem : Int -> Expr -> ()
-  sem dumpRepTypesProblem reprScope = | tm ->
-    let apps = dumpRepTypesProblemWork [] tm in
+  sem dumpRepTypesProblem : String -> Expr -> ()
+  sem dumpRepTypesProblem path = | tm ->
+    let lines = ref [] in
+    dumpRepTypesProblemRoot (lam line. modref lines (snoc (deref lines) line)) 0 tm;
+    writeFile path (strJoin "\n" (deref lines))
+
+  sem dumpRepTypesProblemRoot : (String -> ()) -> Int -> Expr -> ()
+  sem dumpRepTypesProblemRoot output reprScope = | tm ->
+    let apps = dumpRepTypesProblemWork output [] tm in
     let reprToJson = lam repr. switch deref (botRepr repr)
       case BotRepr x then JsonArray [JsonInt x.scope, JsonInt (sym2hash x.sym)]
       case UninitRepr _ then JsonString "uninit"
@@ -1602,16 +1608,16 @@ lang DumpRepTypesProblem = RepTypesFragments
         , ("ty", JsonString (type2str ty))
         , ("reprs", JsonArray (map reprToJson reprs))
         ]) in
-      printLn (json2string json) in
+      output (json2string json) in
     iteri appToLine apps
 
-  sem dumpRepTypesProblemWork : [(Name, Type)] -> Expr -> [(Name, Type)]
-  sem dumpRepTypesProblemWork acc =
+  sem dumpRepTypesProblemWork : (String -> ()) -> [(Name, Type)] -> Expr -> [(Name, Type)]
+  sem dumpRepTypesProblemWork output acc =
   | TmOpVar x -> snoc acc (x.ident, x.ty)
   | TmOpImpl x ->
-    dumpRepTypesProblem x.reprScope x.body;
-    dumpRepTypesProblemWork acc x.inexpr
-  | tm -> sfold_Expr_Expr dumpRepTypesProblemWork acc tm
+    dumpRepTypesProblemRoot output x.reprScope x.body;
+    dumpRepTypesProblemWork output acc x.inexpr
+  | tm -> sfold_Expr_Expr (dumpRepTypesProblemWork output) acc tm
 
   sem clearAndCollectReprs : [ReprVar] -> Type -> ([ReprVar], Type)
   sem clearAndCollectReprs reprs =
