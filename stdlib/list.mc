@@ -85,6 +85,23 @@ let listEq : all a. all b. (a -> b -> Bool) -> List a -> List b -> Bool =
     end
   in work
 
+let listAll : all a. (a -> Bool) -> List a -> Bool =  lam p. lam li.
+  recursive let forAll = lam li.
+    switch li
+    case Cons (x, li) then
+      if p x then forAll li else false
+    case Nil _ then true
+    end
+  in
+  forAll li
+
+let listFilter : all a. (a -> Bool) -> List a -> List a = lam p. lam li.
+  listReverse
+    (listFoldl (lam acc. lam x. if p x then Cons (x, acc) else acc) (Nil ()) li)
+
+let listConcat : all a. List a -> List a -> List a = lam lhs. lam rhs.
+  listFoldl (lam acc. lam x. listCons x acc) rhs (listReverse lhs)
+
 mexpr
 
 let l1 = listEmpty in
@@ -118,5 +135,25 @@ let l6 = listMap (addi 1) l4 in
 utest l6 with Cons (3, Cons (4, Cons (5, Nil ()))) in
 utest listFoldl addi 0 l4 with 9 in
 utest listFoldl addi 0 l6 with 12 in
+
+utest listAll (lti 2) (listFromSeq [4, 4, 5, 3]) with true in
+utest listAll (gti 3) (listFromSeq [4, 4, 5, 3]) with false in
+
+utest listFilter (lti 2) (listFromSeq [4, 3, 5, 3])
+  with listFromSeq [4, 3, 5, 3]
+in
+utest listFilter (lti 3) (listFromSeq [4, 3, 5, 3])
+  with listFromSeq [4, 5]
+in
+
+utest listConcat (listFromSeq [1, 2, 3]) (listFromSeq [4, 5])
+  with listFromSeq [1, 2, 3, 4, 5]
+in
+utest listConcat (listFromSeq []) (listFromSeq [4, 5])
+  with listFromSeq [4, 5]
+in
+utest let l : [Int] = [] in listConcat (listFromSeq l) (listFromSeq l)
+  with listFromSeq []
+in
 
 ()
