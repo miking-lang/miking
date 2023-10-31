@@ -51,6 +51,18 @@ lang Eval = Ast
   sem evalEnvInsert : Name -> Expr -> EvalEnv -> EvalEnv
   sem evalEnvInsert id e =| env -> listCons (id, e) env
 
+  sem evalEnvAll : ((Name, Expr) -> Bool) -> EvalEnv -> Bool
+  sem evalEnvAll p =| env -> listAll p env
+
+  sem evalEnvFilter : ((Name, Expr) -> Bool) -> EvalEnv -> EvalEnv
+  sem evalEnvFilter p =| env -> listFilter p env
+
+  sem evalEnvConcat : EvalEnv -> EvalEnv -> EvalEnv
+  sem evalEnvConcat lhs =| rhs -> listConcat lhs rhs
+
+  sem evalEnvIsEmpty : EvalEnv -> Bool
+  sem evalEnvIsEmpty =| env -> listNil env
+
   type EvalCtx = { env : EvalEnv }
   sem evalCtxEmpty : () -> EvalCtx
   sem evalCtxEmpty =| _ -> { env = evalEnvEmpty () }
@@ -1112,7 +1124,7 @@ end
 lang SeqEdgePatEval = MatchEvalBase + SeqEdgePat + SeqAst + Eval
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
-    match t with TmSeq {tms = tms} then
+    match t with TmSeq (r & {tms = tms}) then
       if geqi (length tms) (addi (length pre) (length post)) then
         match splitAt tms (length pre) with (preTm, tms) then
         match splitAt tms (subi (length tms) (length post)) with (tms, postTm)
@@ -1126,7 +1138,7 @@ lang SeqEdgePatEval = MatchEvalBase + SeqEdgePat + SeqAst + Eval
             paired
         in
         match middle with PName name then
-          optionMap (evalEnvInsert name (seq_ tms)) env
+          optionMap (evalEnvInsert name (TmSeq { r with tms = tms })) env
         else match middle with PWildcard () then
           env
         else never else never else never
