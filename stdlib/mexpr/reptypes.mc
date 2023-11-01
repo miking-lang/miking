@@ -1166,12 +1166,13 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
 
   sem mkSols : all a. all x. OpImpl a -> (TmOpVarRec -> x -> ([(SolId, SolContent a)], x)) -> x -> [SolContent a]
   sem mkSols opImpl getAlts = | x ->
-    let emptySol : SolContent a =
+    let emptySol =
       { token = opImpl.token
       , cost = opImpl.selfCost
       , uni = opImpl.uni
       , specType = opImpl.specType
       , highestImpl = opImpl.implId
+      , maxInnerCost = negf 1.0
       , subSols = []
       } in
     let mergeOpt = lam opUse. lam prev. lam pair.
@@ -1183,6 +1184,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
         { prev with uni = uni
         , highestImpl = maxi prev.highestImpl candidate.highestImpl
         , cost = addf prev.cost (mulf opUse.scaling candidate.cost)
+        , maxInnerCost = maxf prev.maxInnerCost candidate.cost
         , subSols = snoc prev.subSols solId
         } in
       optionMap mkNext oUni
@@ -1192,7 +1194,19 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       match getAlts opUse acc.1 with (solOptions, newX) in
       let sols = filterOption (seqLiftA2 (mergeOpt opUse) acc.0 solOptions) in
       (sols, newX) in
-    (foldl f ([emptySol], x) opImpl.opUses).0
+    let sols = (foldl f ([emptySol], x) opImpl.opUses).0 in
+    let checkCostIncrease = lam sol.
+      if leqf sol.cost sol.maxInnerCost then
+        errorSingle [opImpl.info] "The final cost of an implementation must be greater than the cost of each of its constituent operations."
+      else
+        { token = sol.token
+        , cost = sol.cost
+        , uni = sol.uni
+        , specType = sol.specType
+        , highestImpl = sol.highestImpl
+        , subSols = sol.subSols
+        } in
+    map checkCostIncrease sols
 
   sem addSol : all a. Name -> SBContent a -> SolContent a -> SBContent a
   sem addSol op branch = | sol ->
