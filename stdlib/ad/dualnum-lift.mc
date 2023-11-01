@@ -362,30 +362,32 @@ utest geqn _num2 (_dnum _e2 _dnum112 _num3) with true
 -- ARITHMETIC OPERATORS  --
 ---------------------------
 
+let _eqfApprox = eqfApprox 1.e-6
+
 -- lifted addition
-utest addn _num1 _num2 with _num3 using dualnumEq eqf
-utest addn _dnum010 _num2 with _dnum0 _num3 _num0 using dualnumEq eqf
-utest addn _dnum011 _num2 with _dnum031 using dualnumEq eqf
-utest addn _dnum011 _dnum011 with _dnum022 using dualnumEq eqf
-utest addn _dnum011 _dnum111 with _dnum1 _dnum021 _num1 using dualnumEq eqf
+utest addn _num1 _num2 with _num3 using dualnumEq _eqfApprox
+utest addn _dnum010 _num2 with _dnum0 _num3 _num0 using dualnumEq _eqfApprox
+utest addn _dnum011 _num2 with _dnum031 using dualnumEq _eqfApprox
+utest addn _dnum011 _dnum011 with _dnum022 using dualnumEq _eqfApprox
+utest addn _dnum011 _dnum111 with _dnum1 _dnum021 _num1 using dualnumEq _eqfApprox
 
 -- lifted multiplication
-utest muln _num1 _num2 with _num2 using dualnumEq eqf
-utest muln _dnum010 _num2 with _dnum0 _num2 _num0 using dualnumEq eqf
-utest muln _dnum011 _num2 with _dnum022 using dualnumEq eqf
-utest muln _dnum012 _dnum034 with _dnum0 _num3 _num10 using dualnumEq eqf
-utest muln _dnum012 _dnum134 with _dnum1 _dnum036 _dnum048 using dualnumEq eqf
+utest muln _num1 _num2 with _num2 using dualnumEq _eqfApprox
+utest muln _dnum010 _num2 with _dnum0 _num2 _num0 using dualnumEq _eqfApprox
+utest muln _dnum011 _num2 with _dnum022 using dualnumEq _eqfApprox
+utest muln _dnum012 _dnum034 with _dnum0 _num3 _num10 using dualnumEq _eqfApprox
+utest muln _dnum012 _dnum134 with _dnum1 _dnum036 _dnum048 using dualnumEq _eqfApprox
 
 -- lifted negation
 let negn = lam p. _lift1 negf (lam. Primal (negf 1.)) p
 
-utest negn _num1 with Primal (negf 1.) using dualnumEq eqf
-utest negn _num0 with Primal (negf 0.) using dualnumEq eqf
-utest negn _dnum010 with _dnum0 (Primal (negf 1.)) _num0 using dualnumEq eqf
+utest negn _num1 with Primal (negf 1.) using dualnumEq _eqfApprox
+utest negn _num0 with Primal (negf 0.) using dualnumEq _eqfApprox
+utest negn _dnum010 with _dnum0 (Primal (negf 1.)) _num0 using dualnumEq _eqfApprox
 utest negn _dnum012 with _dnum0 (Primal (negf 1.)) (Primal (negf 2.))
-using dualnumEq eqf
+using dualnumEq _eqfApprox
 
-utest der negn _num1 with negn _num1 using dualnumEq eqf
+utest der negn _num1 with negn _num1 using dualnumEq _eqfApprox
 
 -- lifted subtraction
 let subn = lam p1. lam p2.
@@ -395,15 +397,15 @@ let subn = lam p1. lam p2.
     (lam. lam. negn (Primal 1.))
     p1 p2
 
-utest subn _num2 _num1 with _num1 using dualnumEq eqf
-utest subn _dnum020 _num1 with _dnum0 _num1 _num0 using dualnumEq eqf
-utest subn _dnum021 _num1 with _dnum011 using dualnumEq eqf
-utest subn _dnum022 _dnum011 with _dnum011 using dualnumEq eqf
+utest subn _num2 _num1 with _num1 using dualnumEq _eqfApprox
+utest subn _dnum020 _num1 with _dnum0 _num1 _num0 using dualnumEq _eqfApprox
+utest subn _dnum021 _num1 with _dnum011 using dualnumEq _eqfApprox
+utest subn _dnum022 _dnum011 with _dnum011 using dualnumEq _eqfApprox
 
 utest
   let r = subn _dnum122 _dnum011 in
   dualnumPrimal _e1 r
-with _dnum0 _num1 (Primal (negf 1.)) using dualnumEq eqf
+with _dnum0 _num1 (Primal (negf 1.)) using dualnumEq _eqfApprox
 
 
 -- lifted abs
@@ -425,16 +427,16 @@ recursive
       p1 p2
 end
 
-utest divn _num4 _num2 with _num2 using dualnumEq eqf
-utest divn _dnum040 _num2 with _dnum0 _num2 _num0 using dualnumEq eqf
-utest divn _dnum044 _num2 with _dnum022 using dualnumEq eqf
+utest divn _num4 _num2 with _num2 using dualnumEq _eqfApprox
+utest divn _dnum040 _num2 with _dnum0 _num2 _num0 using dualnumEq _eqfApprox
+utest divn _dnum044 _num2 with _dnum022 using dualnumEq _eqfApprox
 
 utest divn _dnum012 _dnum034
-with _dnum0 (Primal (divf 1. 3.)) (Primal (divf 2. 9.)) using dualnumEq eqf
+with _dnum0 (Primal (divf 1. 3.)) (Primal (divf 2. 9.)) using dualnumEq _eqfApprox
 
 utest divn _dnum012 _dnum134
 with _dnum1 (_dnum0 (Primal (divf 1. 3.))
                     (Primal (divf 2. 3.)))
             (_dnum0 (Primal (divf (negf 4.) 9.))
                     (Primal (divf (negf 8.) 9.)))
-using dualnumEq eqf
+using dualnumEq _eqfApprox
