@@ -31,6 +31,10 @@ let optionsConfig : ParseConfig Options = [
     "Print the AST after lowering nested patterns to shallow ones",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugShallow = true}),
+  ([("--debug-constant-fold", "", "")],
+    "Print the AST after constant folding and constant propagation",
+     lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugConstantFold = true}),
   ([("--debug-phases", "", "")],
     "Show debug and profiling information about each pass",
     lam p: ArgPart Options.
@@ -60,6 +64,10 @@ let optionsConfig : ParseConfig Options = [
     "Disables optimizations to decrease compilation time",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with disableOptimizations = true}),
+  ([("--enable-constant-fold", "", "")],
+    "Enables constant folding and constant propagation",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with enableConstantFold = true}),
   ([("--tuned", "", "")],
     "Use tuned values when compiling, or as defaults when tuning",
     lam p: ArgPart Options.
