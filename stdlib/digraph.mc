@@ -374,21 +374,18 @@ let digraphTopologicalOrder : all v. all l. Digraph v l -> [v] = lam g.
   if eqi (length res) (length (digraphVertices g)) then reverse res
   else error "Cycle detected! Topological order only applies to DAG"
 
--- Print as dot format
-let digraphPrintDot : all v. all l.
-  Digraph v l -> (v -> String) -> (l -> String) -> () =
-  lam g. lam v2str. lam l2str.
-  print "digraph {";
-  (map
-    (lam e : DigraphEdge v l.
-            print (v2str e.0);
-            print " -> ";
-            print (v2str e.1);
-            print "[label=";
-            print (l2str e.2);
-            print "];")
-    (digraphEdges g));
-  print "}\n"; ()
+-- Returns a string representation of the graph in dot format
+let digraphToDot : all v. all l. (v -> String) -> (l -> String) -> Digraph v l -> String
+  = lam v2str. lam l2str. lam g.
+    join [
+      "digraph {\n",
+      strJoin "\n"
+        (map (lam e.
+          join
+            ["  ", v2str e.0, " -> ", v2str e.1, " [label=\"", l2str e.2, "\"];"])
+           (digraphEdges g)),
+      "\n}\n"
+    ]
 
 mexpr
 

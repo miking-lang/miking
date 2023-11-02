@@ -271,7 +271,7 @@ let test : Bool -> Bool -> Expr -> (DependencyGraph, CallCtxEnv) =
       with (dep, ast)
       in
       printLn "\n--- DEPENDENCY GRAPH ---";
-      digraphPrintDot dep.graph int2string int2string;
+      printLn (digraphToDot int2string int2string dep.graph);
       let dep : DependencyGraph = dep in
       (dep, env)
 
@@ -445,7 +445,7 @@ let eqTest = lam lhs : (DependencyGraph, CallCtxEnv). lam rhs : TestResult.
    ) holeTrees;
 
    printLn "Dependency graph";
-   digraphPrintDot dep.graph int2string int2string;
+   printLn (digraphToDot int2string int2string dep.graph);
 
    printLn "meas2fun";
    mapMapWithKey (lam k. lam v.

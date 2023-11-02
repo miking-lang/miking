@@ -50,6 +50,8 @@ let eqPaths = lam g. lam endNode. lam depth. lam startNodes.
   eqPathsToLbls (eqPaths g endNode depth startNodes)
 in
 
+let digraphPrintDot = lam g. printLn (digraphToDot int2string (lam x. x) g) in
+
 -- Create some labels
 let a = 'a' in
 let b = 'b' in
@@ -106,7 +108,7 @@ let g = addEdges
          (3,2,b),
          (2,1,a)]
 in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 let v = 1 in
 -- Without specified start nodes
@@ -153,7 +155,7 @@ let g = addEdges
          (3,2,d),
          (2,1,a)]
 in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 let v = 1 in
 utest eqPaths g v 1 [] with ["a"] in
@@ -171,7 +173,7 @@ utest samePaths (eqPaths g v 3 [3]) ["ba", "cba", "da", "cda"] with true in
 let g0 = addEdges
          (fromList [1])
          [(1,1,a)] in
--- let _ = digraphPrintDot g0 int2string (lam x. x) in
+-- let _ = digraphPrintDot g0 in
 
 utest eqPaths g0 1 0 [] with [""] using eqSeq eqString in
 utest eqPaths g0 1 0 [1] with [""] using eqSeq eqString in
@@ -190,7 +192,7 @@ utest samePaths (eqPaths g0 1 1 [1]) ["", "a"] with true in
 let g = addEdges
         (fromList [1, 2])
         [(1,2,'b'),(2,1,'a')] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest eqPaths g 1 0 [1,2] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g 1 1 [1]) ["", "a"] with true in
@@ -216,7 +218,7 @@ utest samePaths (eqPaths g 1 2 [1,2]) ["", "a", "ba"] with true in
 let g = addEdges
         (fromList [1, 2, 3])
         [(1,2,a), (3,2,c),(2,3,b)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest eqPaths g 2 0 [1,2,3] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g 2 1 [1,2,3]) ["", "a", "c"] with true in
@@ -242,7 +244,7 @@ utest samePaths (eqPaths g 2 1000000000 [1,2,3]) ["", "a", "c", "bc"] with true 
 let g = addEdges
         (fromList [1, 2, 3])
         [(2,1,a), (3,2,b), (1,3,c), (1,2,d)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest samePaths (eqPaths g 2 3 [1,2,3]) ["","d","ad","b","cb","acb"] with true in
 
@@ -265,7 +267,7 @@ utest samePaths (eqPaths g 2 3 [1,2,3]) ["","d","ad","b","cb","acb"] with true i
 let g = addEdges
         (fromList [1, 2, 3])
         [(1,2,a),(2,3,b),(3,1,c)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest samePaths (eqPaths g 2 3 [3]) ["ca","bca"] with true in
 
@@ -288,7 +290,7 @@ utest samePaths (eqPaths g 2 3 [3]) ["ca","bca"] with true in
 let g = addEdges
         (fromList [1,2,3,4])
         [(2,3,b),(3,2,c),(2,4,d),(4,2,e),(2,1,a)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest samePaths (eqPaths g 1 10 [2]) ["a", "bca", "dea"] with true in
 utest samePaths (eqPaths g 1 10 [4]) ["bca", "ea", "dea"] with true in
@@ -316,7 +318,7 @@ utest samePaths (eqPaths g 1 10 [4]) ["bca", "ea", "dea"] with true in
 let g = addEdges
         (fromList [1,2,3])
         [(3,3,c),(2,2,b),(3,2,a),(2,1,d)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
+-- let _ = digraphPrintDot g in
 
 utest samePaths (eqPaths g 1 3 [3]) ["bd", "ad", "cad"] with true in
 
