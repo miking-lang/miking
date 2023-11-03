@@ -1166,11 +1166,13 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
 
   sem mkSols : all a. all x. OpImpl a -> (TmOpVarRec -> x -> ([(SolId, SolContent a)], x)) -> x -> [SolContent a]
   sem mkSols opImpl getAlts = | x ->
+    match instAndSubst (infoTy opImpl.specType) opImpl.metaLevel opImpl.specType
+      with (specType, subst) in
     let emptySol =
       { token = opImpl.token
       , cost = opImpl.selfCost
       , uni = opImpl.uni
-      , specType = opImpl.specType
+      , specType = specType
       , highestImpl = opImpl.implId
       , maxInnerCost = negf 1.0
       , subSols = []
@@ -1178,7 +1180,9 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     let mergeOpt = lam opUse. lam prev. lam pair.
       match pair with (solId, candidate) in
       let oUni = optionBind
-        (unifyPure prev.uni opUse.ty (inst (NoInfo ()) opImpl.metaLevel (removeReprSubsts candidate.specType)))
+        (unifyPure prev.uni
+          (substituteVars opUse.info subst opUse.ty)
+          (inst opUse.info opImpl.metaLevel (removeReprSubsts candidate.specType)))
         (mergeUnifications candidate.uni) in
       let mkNext = lam uni.
         { prev with uni = uni
@@ -1199,10 +1203,30 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       if leqf sol.cost sol.maxInnerCost then
         errorSingle [opImpl.info] "The final cost of an implementation must be greater than the cost of each of its constituent operations."
       else
+        let specType = pureApplyUniToType sol.uni sol.specType in
+        let specType = (gen opImpl.metaLevel (mapEmpty nameCmp) specType).0 in
+        let uniFilter =
+          { reprs =
+            { scope = opImpl.reprScope
+            , syms = foldl
+              (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
+              (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+              (findReprs [] specType)
+            }
+          , types =
+            { level = opImpl.metaLevel
+            -- NOTE(vipa, 2023-11-03): All metavars present in the
+            -- signature that have a level >= opImpl.metaLevel have
+            -- been removed through `gen`, so we don't have to keep
+            -- track of any such names here, it's enough to check the
+            -- level.
+            , names = mapEmpty nameCmp
+            }
+          } in
         { token = sol.token
         , cost = sol.cost
-        , uni = sol.uni
-        , specType = sol.specType
+        , uni = filterUnification uniFilter sol.uni
+        , specType = specType
         , highestImpl = sol.highestImpl
         , subSols = sol.subSols
         } in

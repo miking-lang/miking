@@ -441,8 +441,8 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq
   -- Apply the rewrites present in the `Unification` in the given type
   -- everywhere. The returned type will be "disconnected" from all
   -- other types, in the sense that none of its `TyMetaVar` or
-  -- `ReprVar`s are shared, i.e., a side-effecting unification won't
-  -- do the right thing.
+  -- `ReprVar`s are shared, i.e., a side-effecting unification
+  -- afterwards won't do the right thing.
   sem pureApplyUniToType : Unification -> Type -> Type
   sem pureApplyUniToType uni =
   | ty -> smap_Type_Type (pureApplyUniToType uni) ty

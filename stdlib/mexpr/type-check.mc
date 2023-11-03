@@ -340,19 +340,23 @@ end
 
 lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
-  sem inst (info : Info) (lvl : Level) =
-  | ty ->
-    tyWithInfo info (
+  sem inst : Info -> Level -> Type -> Type
+  sem inst (info : Info) (lvl : Level) = | ty ->
+    (instAndSubst info lvl ty).0
+
+  sem instAndSubst : Info -> Level -> Type -> (Type, Map Name Type)
+  sem instAndSubst info lvl = | ty ->
     switch stripTyAll ty
-    case ([], _) then ty
+    case ([], _) then (tyWithInfo info ty, mapEmpty nameCmp)
     case (vars, stripped) then
       let inserter = lam subst. lam v : (Name, Kind).
         let kind = smap_Kind_Type (substituteVars info subst) v.1 in
         mapInsert v.0 (newmetavar kind lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
-      substituteVars info subst stripped
-    end)
+      (tyWithInfo info (substituteVars info subst stripped), subst)
+    end
+
 
   -- Generalize the unification variables in `ty' introduced at least at level `lvl`.
   -- Return the generalized type and the sequence of variables quantified.
@@ -781,8 +785,8 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
   sem typeCheckExpr env =
   | TmOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
+      let newLvl = addi 1 env.currentLvl in
       let typeCheckBody = lam env.
-        let newLvl = addi 1 env.currentLvl in
         let specTypeInfo = infoTy x.specType in
         let opTypeInfo = infoTy ty in
         -- NOTE(vipa, 2023-06-30): First we want to check that
@@ -826,7 +830,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       let inexpr = typeCheckExpr env x.inexpr in
       TmOpImpl
       { x with reprScope = reprScope
-      , metaLevel = env.currentLvl
+      , metaLevel = newLvl
       , inexpr = inexpr
       , ty = tyTm inexpr
       }
