@@ -211,6 +211,30 @@ con PUFExtra : all k. all extra. all out. [extra] -> PUFContent k extra out
 type PureUnionFind k extra out =
   Map k {level : Int, content : PUFContent k extra out}
 
+let pufToDebug
+  : all k. all extra. all out. all env.
+    (env -> k -> (env, String))
+  -> (env -> extra -> (env, String))
+  -> (env -> out -> (env, String))
+  -> env
+  -> PureUnionFind k extra out
+  -> (env, String)
+  = lam pk. lam pextra. lam pout. lam env. lam puf.
+    let f = lam acc. lam k. lam record.
+      match acc with (env, str) in
+      match pk env k with (env, k) in
+      match switch record.content
+        case PUFLink k then pk env k
+        case PUFOut out then pout env out
+        case PUFExtra extras then
+          match mapAccumL pextra env extras with (env, extras) in
+          (env, strJoin ", " extras)
+        end
+      with (env, content) in
+      (env, join ["  ", k, "@", int2string record.level, " -> ", content, "\n"])
+    in
+    mapFoldWithKey f (env, "") puf
+
 -- All operations that "modify" a PUF return this type, which
 -- summarizes obligations to the user of the interface. The two extra
 -- values represent unifications between `out`s of two partitions that
@@ -400,7 +424,7 @@ type Unification =
   , types : PureUnionFind Name () Type
   }
 
-lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq
+lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq + PrettyPrint
 
   sem emptyUnification : () -> Unification
   sem emptyUnification = | _ ->
@@ -578,6 +602,12 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq
     { reprs = pufFilter filters.reprs.scope filters.reprs.syms uni.reprs
     , types = pufFilter filters.types.level filters.types.names uni.types
     }
+
+  sem unificationToDebug : PprintEnv -> Unification -> (PprintEnv, String)
+  sem unificationToDebug env = | uni ->
+    match pufToDebug (lam env. lam sym. (env, int2string (sym2hash sym))) (lam env. lam. (env, "")) pprintVarName env uni.reprs with (env, reprs) in
+    match pufToDebug pprintVarName (lam env. lam. (env, "")) (getTypeStringCode 2) env uni.types with (env, types) in
+    (env, concat reprs types)
 end
 
 lang MExprUnify =

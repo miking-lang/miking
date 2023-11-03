@@ -101,7 +101,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
 
     -- dumpRepTypesProblem 0 ast;
 
-    let ast = use MExprRepTypesComposedSolver in reprSolve ast in
+    let ast = use MExprRepTypesComposedSolver in reprSolve false ast in
     endPhaseStats log "reptypes-solve" ast;
 
     let ast = removeMetaVarExpr ast in

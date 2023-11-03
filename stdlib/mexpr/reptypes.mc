@@ -803,7 +803,10 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
         (lam. typeCheckExpr newEnv x.body)
         with (body, delayedReprUnifications) in
       unify newEnv [infoTy reprType, infoTm body] reprType (tyTm body);
-      {x with body = body, delayedReprUnifications = delayedReprUnifications, specType = specType}
+      { x with body = body
+      , delayedReprUnifications = delayedReprUnifications
+      , specType = removeReprSubsts specType
+      }
     in
     match withNewReprScope env (lam env. typeCheckBody env)
       with (x, reprScope, []) in
@@ -877,6 +880,15 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-10-25): There's a new `OpImpl` in scope
   sem addImpl : all a. SolverGlobal a -> SolverBranch a -> OpImpl a -> SolverBranch a
 
+  -- NOTE(vipa, 2023-11-03): Create some form of debug output,
+  -- typically printed right after an `addImpl`.
+  sem debugBranch : all a. SolverGlobal a -> SolverBranch a -> ()
+
+  -- NOTE(vipa, 2023-11-04): Produce all solutions available for a
+  -- given op, for error messages when `allSolutions` fails to produce
+  -- anything.
+  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> [{token : a, ty : Type}]
+
   -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
   -- system will ask for a solution from a solution set. Every other
   -- solution will be acquired through concretizeSolution.
@@ -897,10 +909,10 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   sem cmpSolution : all a. SolverSolution a -> SolverSolution a -> Int
 end
 
-lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst
+lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint
   -- Top interface, meant to be used outside --
-  sem reprSolve : Expr -> Expr
-  sem reprSolve = | tm ->
+  sem reprSolve : Bool -> Expr -> Expr
+  sem reprSolve debug = | tm ->
     let global = initSolverGlobal () in
     -- NOTE(vipa, 2023-10-25): Right now we do not handle nested impls
     -- in the collection phase
@@ -908,6 +920,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       { branch = initSolverBranch global
       , opUses = []
       , nextId = 0
+      , debug = debug
       } in
     match collectForReprSolve global initState tm with (state, tm) in
     let pickedSolutions = topSolve global state.opUses in
@@ -932,6 +945,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     { branch : SolverBranch Expr
     , opUses : [[SolProps Expr]]
     , nextId : Int
+    , debug : Bool
     }
 
   sem collectForReprSolve
@@ -944,7 +958,16 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm & TmOpVar x ->
     match allSolutions global state.branch x.ident x.ty with (branch, sols) in
     if null sols then
-      errorSingle [x.info] "There were no valid implementations here."
+      let env = pprintEnvEmpty in
+      recursive let unwrapAll = lam ty. unwrapType (smap_Type_Type unwrapAll ty) in
+      match getTypeStringCode 0 env (unwrapAll x.ty) with (env, reqTy) in
+      let errs = [(x.info, concat "Required type: " reqTy)] in
+      let options = availableSolutions global state.branch x.ident in
+      let optionToError = lam env. lam opt.
+        match getTypeStringCode 0 env (unwrapAll opt.ty) with (env, ty) in
+        (env, (infoTm opt.token, ty)) in
+      match mapAccumL optionToError env options with (env, opts) in
+      errorMulti (cons (x.info, concat "Required type: " reqTy) opts) "There were no valid implementations here."
     else
       let sols = map (lam sol. {sol with cost = mulf x.scaling sol.cost}) sols in
       ({state with branch = branch, opUses = snoc state.opUses sols}, tm)
@@ -956,6 +979,8 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , op = x.ident
       , opUses = findOpUses [] x.body
       , selfCost = x.selfCost
+      -- NOTE(vipa, 2023-11-04): repr unification cannot fail until
+      -- repr substitutions have been applied, which they haven't here
       , uni = optionGetOrElse (lam. error "Compiler error in reptype solver")
         (optionFoldlM
           (lam acc. lam pair. unifyReprPure acc pair.0 pair.1)
@@ -968,6 +993,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , token = x.body
       } in
     let newBranch = addImpl global state.branch opImpl in
+    (if state.debug then debugBranch global state.branch else ());
     match collectForReprSolve global {state with branch = newBranch} x.inexpr
       with (newState, inexpr) in
     -- NOTE(vipa, 2023-10-25): Here we restore the old branch, since
@@ -1020,7 +1046,6 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TmOpVar x ->
     match state.remainingSolutions with [sol] ++ remainingSolutions in
     match lookupSolName x.ident sol state with (state, name) in
-    let state = {state with remainingSolutions = remainingSolutions} in
     ( {state with remainingSolutions = remainingSolutions}
     , TmVar {ident = name, ty = x.ty, info = x.info, frozen = x.frozen}
     )
@@ -1037,8 +1062,8 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
             , tyAnnot = tyTm body
             , tyBody = tyTm body
             , body = body
-            , inexpr = inexpr
-            , ty = tyTm inexpr
+            , inexpr = acc.inexpr
+            , ty = tyTm acc.inexpr
             , info = x.info
             } in
           {state = state, inexpr = inexpr}
@@ -1071,13 +1096,15 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TyRepr x -> TyUnknown {info = x.info}
 end
 
-lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + Generalize
+lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + Generalize + PrettyPrint
   type SolId = Int
   type SolContent a =
     { token : a
     , cost : OpCost
     , uni : Unification
     , specType : Type
+    , impl : OpImpl a
+    , depth : Int
     , highestImpl : ImplId
     , subSols : [SolId]
     }
@@ -1129,6 +1156,15 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       else acc in
     (SBContent branch, setFold checkAndAddSolution [] solIds)
 
+  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> [{token : a, ty : Type}]
+  sem availableSolutions global branch = | name ->
+    match branch with SBContent branch in
+    let solIds = mapLookupOr (setEmpty subi) name branch.solsByOp in
+    let convSol = lam acc. lam solId.
+      let content = mapFindExn solId branch.solsById in
+      snoc acc {token = content.token, ty = content.specType} in
+    setFold convSol [] solIds
+
   sem concretizeSolution global =
   | SSContent (branch, solId) ->
     let content = mapFindExn solId branch.solsById in
@@ -1147,7 +1183,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     match branch with SBContent branch in
     let branch = {branch with implsPerOp = mapInsertWith setUnion
       opImpl.op
-      (setEmpty (lam a. lam b. subi a.implId b.implId))
+      (setInsert opImpl (setEmpty (lam a. lam b. subi a.implId b.implId)))
       branch.implsPerOp} in
 
     -- NOTE(vipa, 2023-10-26): Find new solutions directly due to the
@@ -1164,6 +1200,37 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
 
     SBContent branch
 
+  sem debugBranch global = | SBContent branch ->
+    let printSolByOp = lam env. lam op. lam sols.
+      let printSol = lam env. lam solid.
+        let sol = mapFindExn solid branch.solsById in
+        match getTypeStringCode 0 env sol.specType with (env, specType) in
+        recursive let metaVarLevels = lam acc. lam ty.
+          match unwrapType ty with TyMetaVar x then
+            match deref x.contents with Unbound x in
+            snoc acc (x.ident, x.level)
+          else sfold_Type_Type metaVarLevels acc ty in
+        let metas = metaVarLevels [] sol.specType in
+        let pprintMeta = lam env. lam meta.
+          match pprintVarName env meta.0 with (env, ident) in
+          (env, join [ident, "#", int2string meta.1]) in
+        match mapAccumL pprintMeta env metas with (env, metas) in
+        printLn (join
+          [ "  ", int2string solid, " -> highId: "
+          , int2string sol.highestImpl, ", subs: "
+          , strJoin " " (map int2string sol.subSols)
+          , ", type: ", specType
+          , ", metas: ", strJoin " " metas
+          , ", metaLvl: ", int2string sol.impl.metaLevel
+          , ", cost: ", float2string sol.cost
+          ]);
+        env in
+      printLn (join [nameGetStr op, ", impls: ", int2string (setSize (mapFindExn op branch.implsPerOp)), ", sols:"]);
+      setFold printSol env sols
+    in
+    mapFoldWithKey printSolByOp pprintEnvEmpty branch.solsByOp;
+    ()
+
   sem mkSols : all a. all x. OpImpl a -> (TmOpVarRec -> x -> ([(SolId, SolContent a)], x)) -> x -> [SolContent a]
   sem mkSols opImpl getAlts = | x ->
     match instAndSubst (infoTy opImpl.specType) opImpl.metaLevel opImpl.specType
@@ -1175,20 +1242,21 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       , specType = specType
       , highestImpl = opImpl.implId
       , maxInnerCost = negf 1.0
+      , depth = 0
       , subSols = []
       } in
     let mergeOpt = lam opUse. lam prev. lam pair.
       match pair with (solId, candidate) in
-      let oUni = optionBind
-        (unifyPure prev.uni
-          (substituteVars opUse.info subst opUse.ty)
-          (inst opUse.info opImpl.metaLevel (removeReprSubsts candidate.specType)))
-        (mergeUnifications candidate.uni) in
+      let unified = unifyPure prev.uni
+        (substituteVars opUse.info subst opUse.ty)
+        (inst opUse.info opImpl.metaLevel (removeReprSubsts candidate.specType)) in
+      let oUni = optionBind unified (mergeUnifications candidate.uni) in
       let mkNext = lam uni.
         { prev with uni = uni
         , highestImpl = maxi prev.highestImpl candidate.highestImpl
         , cost = addf prev.cost (mulf opUse.scaling candidate.cost)
         , maxInnerCost = maxf prev.maxInnerCost candidate.cost
+        , depth = maxi prev.depth (addi candidate.depth 1)
         , subSols = snoc prev.subSols solId
         } in
       optionMap mkNext oUni
@@ -1196,15 +1264,21 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     let f = lam acc. lam opUse.
       if null acc.0 then acc else
       match getAlts opUse acc.1 with (solOptions, newX) in
+      -- TODO(vipa, 2023-11-04): This isn't a very nice way to stop
+      -- things exploding, and it doesn't seem to be enough either...
+      let solOptions = filter (lam sol. lti sol.1 .depth 5) solOptions in
+      printLn (join ["mkSols, acc.0 len: ", int2string (length acc.0), " solOpts len: ", int2string (length solOptions)]);
       let sols = filterOption (seqLiftA2 (mergeOpt opUse) acc.0 solOptions) in
       (sols, newX) in
+    printLn (join ["mkSols, opUses length: ", int2string (length opImpl.opUses)]);
     let sols = (foldl f ([emptySol], x) opImpl.opUses).0 in
+    printLn (join ["mkSols, sols length: ", int2string (length sols)]);
     let checkCostIncrease = lam sol.
       if leqf sol.cost sol.maxInnerCost then
         errorSingle [opImpl.info] "The final cost of an implementation must be greater than the cost of each of its constituent operations."
       else
         let specType = pureApplyUniToType sol.uni sol.specType in
-        let specType = (gen opImpl.metaLevel (mapEmpty nameCmp) specType).0 in
+        let specType = (gen (subi opImpl.metaLevel 1) (mapEmpty nameCmp) specType).0 in
         let uniFilter =
           { reprs =
             { scope = opImpl.reprScope
@@ -1227,7 +1301,9 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
         , cost = sol.cost
         , uni = filterUnification uniFilter sol.uni
         , specType = specType
+        , impl = opImpl
         , highestImpl = sol.highestImpl
+        , depth = sol.depth
         , subSols = sol.subSols
         } in
     map checkCostIncrease sols
@@ -1241,16 +1317,47 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     let check = lam acc : Option (Set SolId). lam solId.
       match acc with Some toPrune then
         let oldSol = mapFindExn solId branch.solsById in
+        let debugStuff =
+          let env = pprintEnvEmpty in
+          match unificationToDebug env oldSol.uni with (env, oldUni) in
+          match getTypeStringCode 2 env oldSol.specType with (env, oldType) in
+          match unificationToDebug env sol.uni with (env, newUni) in
+          match getTypeStringCode 2 env sol.specType with (env, newType) in
+          printLn (join
+            [ "addSol.check, old cost: ", float2string oldSol.cost
+            , ", old type: ", oldType, "\n"
+            , oldUni
+            ]);
+          printLn (join
+            [ "addSol.check, new cost: ", float2string sol.cost
+            , ", new type: ", newType, "\n"
+            , newUni
+            ])
+        in
         let newIsCheaper = gtf oldSol.cost sol.cost in
-        let oldFitsWhereNewCouldBe = uniImplies sol.uni oldSol.uni in
+        let mergedUni = mergeUnifications oldSol.uni sol.uni in
+        let oldFitsWhereNewCouldBe =
+          let postUni = optionBind mergedUni (lam uni. unifyPure uni
+            (inst (NoInfo ()) 0 oldSol.specType)
+            (stripTyAll sol.specType).1) in
+          if optionIsSome postUni
+          then uniImplies sol.uni oldSol.uni
+          else false in
         let existenceDenied = and (not newIsCheaper) oldFitsWhereNewCouldBe in
         -- NOTE(vipa, 2023-10-26): It *should* be the case that
         -- `existenceDenied` implies `setIsEmpty toPrune`
         if existenceDenied then None () else
-        let newFitsWhereOldCouldBe = uniImplies oldSol.uni sol.uni in
+        let newFitsWhereOldCouldBe =
+          let postUni = optionBind mergedUni (lam uni. unifyPure uni
+            (stripTyAll oldSol.specType).1
+            (inst (NoInfo ()) 0 sol.specType)) in
+          if optionIsSome postUni
+          then uniImplies oldSol.uni sol.uni
+          else false in
         let oldShouldBePruned = and newIsCheaper newFitsWhereOldCouldBe in
         Some (if oldShouldBePruned then setInsert solId toPrune else toPrune)
       else acc in
+    printLn (join ["addSol, solIds size: ", int2string (setSize solIds)]);
     match setFold check (Some (setEmpty subi)) solIds with Some toPrune then
       let newSolId = branch.nextSolId in
       let branch =
@@ -1273,6 +1380,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
           -- the one with all false, i.e., "use only old solutions",
           -- which won't come up with anything new
           (seqMapM (lam opUse. if nameEq opUse.ident op then [false, true] else [false]) impl.opUses) in
+        printLn (join ["addSol, newPatterns: ", strJoin " " (map (lam pat. map (lam x. if x then 't' else 'f') pat) newPatterns)]);
         let processPattern = lam branch. lam pattern.
           let getPossibleSolutions = lam opUse. lam pattern.
             match pattern with [useNew] ++ pattern in
@@ -1285,7 +1393,9 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
         foldl processPattern branch newPatterns
       in
       foldImpls addSolsFromImpl branch
-    else branch
+    else
+      printLn "addSol, existence denied";
+      branch
 end
 
 -- lang RepTypesSolveWithExhaustiveCP = RepTypesSolverInterface + UnifyPure + COPHighLevel + ReprSubstAst + RepTypesHelpers + Generalize
