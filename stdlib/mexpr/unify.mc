@@ -382,6 +382,26 @@ let pufFold
       acc
       puf
 
+let pufMapK
+  : all k. all out. all extra
+  . (k -> k)
+  -> (out -> out)
+  -> (extra -> extra)
+  -> PureUnionFind k extra out
+  -> PureUnionFind k extra out
+  = lam fk. lam fout. lam fextra. lam puf.
+    mapFoldWithKey
+      (lam acc. lam k. lam res.
+        let content = switch res.content
+          case PUFLink k then PUFLink (fk k)
+          case PUFOut out then PUFOut (fout out)
+          case PUFExtra extras then PUFExtra (map fextra extras)
+          end in
+        let k = fk k in
+        mapInsert k {res with content = content} acc)
+      (mapEmpty (mapGetCmpFun puf))
+      puf
+
 let pufFilter
   : all k. all out. all extra
   . Int
@@ -574,12 +594,7 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq +
           match deref uniRef with Some uni then
             modref uniRef (unifyReprPure uni lvar rvar)
           else ()
-        , err = lam err.
-          (match err with Types ((l, r) & ((!TyRepr _, TyRepr _) | (TyRepr _, !TyRepr _)))
-           then printError (join ["Feared unification failure: ", use TempPrettyPrint in type2str (tytuple_ [l, r]), "\n"]);
-             flushStderr ()
-           else ());
-          modref uniRef (None ())
+        , err = lam err. modref uniRef (None ())
         }
     in
     unifyTypes (unifier ()) env (lty, rty);
@@ -593,6 +608,12 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq +
       , wrappedRhs = rty
       } in
     unifyPureWithEnv env uni lty rty
+
+  sem substituteInUnification : (Name -> Name) -> (Symbol -> Symbol) -> (Type -> Type) -> Unification -> Unification
+  sem substituteInUnification fn fs fty = | uni ->
+    { reprs = pufMapK fs (lam x. x) (lam x. x) uni.reprs
+    , types = pufMapK fn fty (lam x. x) uni.types
+    }
 
   sem filterUnification
     : {reprs : {scope : Int, syms : Set Symbol}, types : {level : Int, names : Set Name}}

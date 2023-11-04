@@ -887,7 +887,7 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-11-04): Produce all solutions available for a
   -- given op, for error messages when `allSolutions` fails to produce
   -- anything.
-  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> [{token : a, ty : Type}]
+  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> (SolverBranch a, [{token : a, ty : Type}])
 
   -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
   -- system will ask for a solution from a solution set. Every other
@@ -957,12 +957,13 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm -> smapAccumL_Expr_Expr (collectForReprSolve global) state tm
   | tm & TmOpVar x ->
     match allSolutions global state.branch x.ident x.ty with (branch, sols) in
+    (if state.debug then debugBranch global branch else ());
     if null sols then
       let env = pprintEnvEmpty in
       recursive let unwrapAll = lam ty. unwrapType (smap_Type_Type unwrapAll ty) in
       match getTypeStringCode 0 env (unwrapAll x.ty) with (env, reqTy) in
       let errs = [(x.info, concat "Required type: " reqTy)] in
-      let options = availableSolutions global state.branch x.ident in
+      match availableSolutions global state.branch x.ident with (_branch, options) in
       let optionToError = lam env. lam opt.
         match getTypeStringCode 0 env (unwrapAll opt.ty) with (env, ty) in
         (env, (infoTm opt.token, ty)) in
@@ -993,7 +994,6 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , token = x.body
       } in
     let newBranch = addImpl global state.branch opImpl in
-    (if state.debug then debugBranch global state.branch else ());
     match collectForReprSolve global {state with branch = newBranch} x.inexpr
       with (newState, inexpr) in
     -- NOTE(vipa, 2023-10-25): Here we restore the old branch, since
@@ -1020,7 +1020,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     -- most recent impl to be added is the largest, i.e., we can find
     -- the insertion point of a concrete solution by inserting it by
     -- the greatest `ImplId` used in the solution
-    , requests : Map ImplId [{op : Name, solName : Name, token : Expr, sols : [SolverSolution Expr]}]
+    , requests : Map ImplId [{solName : Name, body : Expr}]
     , requestsByOpAndSol : Map (Name, SolverSolution Expr) Name
     , global : SolverGlobal Expr
     }
@@ -1031,12 +1031,17 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     with Some name then (state, name) else
       let name = nameSetNewSym op in
       match concretizeSolution state.global sol with (token, implId, sols) in
-      let requestsByOpAndSol = mapInsert (op, sol) name state.requestsByOpAndSol in
-      let requests = mapInsertWith concat
-        implId
-        [{op = op, solName = name, token = token, sols = sols}]
-        state.requests in
-      ({ state with requestsByOpAndSol = requestsByOpAndSol, requests = requests }, name)
+      match concretizeAlt {state with remainingSolutions = sols} token
+        with (newState, body) in
+      let state =
+        { newState with remainingSolutions = state.remainingSolutions
+        , requests = mapInsertWith concat
+          implId
+          [{solName = name, body = body}]
+          newState.requests
+        , requestsByOpAndSol = mapInsert (op, sol) name newState.requestsByOpAndSol
+        } in
+      (state, name)
 
   sem concretizeAlt : ConcreteState -> Expr -> (ConcreteState, Expr)
   sem concretizeAlt state =
@@ -1051,27 +1056,19 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     )
   | TmOpImpl x ->
     match concretizeAlt state x.inexpr with (state, inexpr) in
-    recursive let work = lam acc.
-      match mapLookup x.implId acc.state.requests with Some reqs then
-        let acc = {acc with state = {acc.state with requests = mapRemove x.implId acc.state.requests}} in
-        let f = lam acc. lam req.
-          match concretizeAlt {acc.state with remainingSolutions = req.sols} req.token
-          with (state, body) in
-          let inexpr = TmLet
-            { ident = req.solName
-            , tyAnnot = tyTm body
-            , tyBody = tyTm body
-            , body = body
-            , inexpr = acc.inexpr
-            , ty = tyTm acc.inexpr
-            , info = x.info
-            } in
-          {state = state, inexpr = inexpr}
-        in work (foldl f acc reqs)
-      else acc in
-    match work {state = state, inexpr = inexpr}
-    with {state = newState, inexpr = tm} in
-    ({newState with remainingSolutions = state.remainingSolutions}, tm)
+    let reqs = mapLookupOr [] x.implId state.requests in
+    let wrap = lam req. lam inexpr. TmLet
+      { ident = req.solName
+      , tyAnnot = tyunknown_
+      , tyBody = tyTm req.body
+      , body = req.body
+      , inexpr = inexpr
+      , ty = tyTm inexpr
+      , info = x.info
+      } in
+    let res = foldr wrap inexpr reqs in
+    let state = {state with requests = mapRemove x.implId state.requests} in
+    (state, res)
 
   -- TODO(vipa, 2023-07-07): This swaps all `TyRepr`s with
   -- `TyUnknown`. This *should* be good enough for the OCaml backend,
@@ -1094,6 +1091,337 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   -- different from the type alias definition suggests it is.
   | TyAlias x -> removeReprTypes x.content
   | TyRepr x -> TyUnknown {info = x.info}
+end
+
+lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize
+  syn SolContent a = | SolContent
+    { token : a
+    , cost : OpCost
+    , uni : Unification
+    , impl : OpImpl a
+    , highestImpl : ImplId
+    , ty : Type
+    , subSols : [SolContent a]
+    }
+
+  type SBContent a =
+    { implsPerOp : Map Name (Set (OpImpl a))
+    , memo : Map (Name, Type) [SolContent a]
+    , nameless :
+      { metas : [Name]
+      , vars : [Name]
+      , reprs : [Symbol]
+      }
+    }
+
+  syn SolverGlobal a = | SGContent ()
+  syn SolverBranch a = | SBContent (SBContent a)
+  syn SolverSolution a = | SSContent (SolContent a)
+
+  sem initSolverGlobal = | _ -> SGContent ()
+  sem initSolverBranch = | global -> SBContent
+    { implsPerOp = mapEmpty nameCmp
+    , memo = mapEmpty cmpOpPair
+    , nameless =
+      { metas = []
+      , vars = []
+      , reprs = []
+      }
+    }
+
+  -- NOTE(vipa, 2023-11-07): This typically assumes that the types
+  -- have a representation that is equal if the two types are
+  -- alpha-equivalent.
+  sem cmpOpPair : (Name, Type) -> (Name, Type) -> Int
+  sem cmpOpPair l = | r ->
+    let res = nameCmp l.0 r.0 in
+    if neqi 0 res then res else
+    let res = cmpType l.1 r.1 in
+    res
+
+  sem cmpSolution a = | b ->
+    recursive let work = lam a. lam b.
+      match (a, b) with (SolContent a, SolContent b) in
+      let res = subi a.impl.implId b.impl.implId in
+      if neqi 0 res then res else
+      let res = seqCmp work a.subSols b.subSols in
+      res in
+    match (a, b) with (SSContent a, SSContent b) in
+    work a b
+
+  sem concretizeSolution global =
+  | SSContent (SolContent x) ->
+    (x.token, x.highestImpl, map (lam sub. SSContent sub) x.subSols)
+
+  sem debugBranch global = | SBContent branch ->
+    let perImpl = lam env. lam op. lam impls.
+      match pprintVarName env op with (env, op) in
+      printLn (join ["  ", op, ", letimpl count: ", int2string (setSize impls)]);
+      env in
+    let perSol = lam env. lam sol.
+      match sol with SolContent sol in
+      match getTypeStringCode 0 env (pureApplyUniToType sol.uni sol.ty) with (env, ty) in
+      printLn (join ["    cost: ", float2string sol.cost, ", ty: ", ty]);
+      env in
+    let perMemo = lam env. lam pair. lam sols.
+      match pprintVarName env pair.0 with (env, op) in
+      match getTypeStringCode 0 env pair.1 with (env, ty) in
+      printLn (join ["  ", op, " : ", ty]);
+      let env = foldl perSol env sols in
+      env in
+    let env = pprintEnvEmpty in
+    printLn "\nImpl Solver debug status:\n # Impls:";
+    let env = mapFoldWithKey perImpl env branch.implsPerOp in
+    printLn " # Solutions:";
+    let env = mapFoldWithKey perMemo env branch.memo in
+    ()
+
+  sem addImpl global branch = | impl ->
+    match branch with SBContent branch in
+    let branch =
+      { branch with
+        implsPerOp = mapInsertWith setUnion
+          impl.op
+          (setInsert impl (setEmpty (lam a. lam b. subi a.implId b.implId)))
+          branch.implsPerOp
+      -- OPT(vipa, 2023-11-07): Better memoization cache invalidation,
+      -- or incremental computation that never needs to invalidate
+      , memo = mapEmpty cmpOpPair
+      } in
+    SBContent branch
+
+  sem topSolve global = | opUses ->
+    -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
+    let mergeOpt = lam prev. lam sol.
+      match mergeUnifications prev.uni sol.uni with Some uni then Some
+        { uni = uni
+        , cost = addf prev.cost sol.cost
+        , sols = snoc prev.sols sol.sol
+        }
+      else None () in
+    let f = lam prev. lam sols.
+      filterOption (seqLiftA2 mergeOpt prev sols) in
+    let sols = foldl f [{uni = emptyUnification (), cost = 0.0, sols = []}] opUses in
+    match sols with [sol] ++ sols then
+      (foldl (lam sol. lam sol2. if ltf sol2.cost sol.cost then sol2 else sol) sol sols).sols
+    else errorSingle [] "Could not pick implementations for all operations."
+
+  sem allSolutions global branch op = | ty ->
+    match branch with SBContent branch in
+    match solutionsFor branch op ty with (branch, sols) in
+    let sols = map (lam s. match s with SolContent x in {sol = SSContent s, cost = x.cost, uni = x.uni}) sols in
+    (SBContent branch, sols)
+
+  sem availableSolutions global branch = | op ->
+    match branch with SBContent branch in
+    match solutionsFor branch op (newmonovar 0 (NoInfo ())) with (branch, sols) in
+    let sols = map (lam sol. match sol with SolContent x in {token = x.token, ty = pureApplyUniToType x.uni x.ty}) sols in
+    (SBContent branch, sols)
+
+  sem findMetaVarNames acc =
+  | ty -> sfold_Type_Type findMetaVarNames acc ty
+  | TyMetaVar x -> switch deref x.contents
+    case Link ty then findMetaVarNames acc ty
+    case Unbound u then setInsert u.ident acc
+    end
+
+  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol Symbol, revMeta : Map Name Name}
+  sem undoLocallyNamelessTy : RevNameless -> Type -> Type
+  sem undoLocallyNamelessTy nlEnv =
+  | ty -> smap_Type_Type (undoLocallyNamelessTy nlEnv) ty
+  | TyAll x ->
+    let ident = mapLookupOr x.ident x.ident nlEnv.revMeta in
+    TyAll {x with ident = ident, ty = undoLocallyNamelessTy nlEnv x.ty}
+  | TyVar x ->
+    let ident = mapLookupOr x.ident x.ident nlEnv.revMeta in
+    TyVar {x with ident = ident}
+  | ty & TyMetaVar _ ->
+    switch unwrapType ty
+    case TyMetaVar x then
+      match deref x.contents with Unbound u in
+      let ident = mapLookupOr u.ident u.ident nlEnv.revMeta in
+      TyMetaVar {x with contents = ref (Unbound {u with ident = ident})}
+    case ty then undoLocallyNamelessTy nlEnv ty
+    end
+  | TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr r in
+    let sym = mapLookupOr r.sym r.sym nlEnv.revRepr in
+    TyRepr {x with repr = ref (BotRepr {r with sym = sym}), arg = undoLocallyNamelessTy nlEnv x.arg}
+
+  sem undoLocallyNamelessUni : RevNameless -> Unification -> Unification
+  sem undoLocallyNamelessUni nlEnv = | uni ->
+    substituteInUnification
+      (lam x. mapLookupOr x x nlEnv.revMeta)
+      (lam x. mapLookupOr x x nlEnv.revRepr)
+      (undoLocallyNamelessTy nlEnv)
+      uni
+
+  sem mkLocallyNameless : all a. SBContent a -> Type -> (SBContent a, RevNameless, Type)
+  sem mkLocallyNameless branch = | ty ->
+    type NlSmall x =
+      { forward : Map x x
+      , reverse : Map x x
+      , nextIdx : Int
+      , vals : [x]
+      } in
+    type NlEnv =
+      { metas : NlSmall Name
+      , vars : NlSmall Name
+      , reprs : NlSmall Symbol
+      } in
+    let nextNameless : all x. (() -> x) -> NlSmall x -> (NlSmall x, x)
+      = lam mkNew. lam st.
+        let st = if lti st.nextIdx (length st.vals)
+          then st
+          else {st with vals = snoc st.vals (mkNew ())} in
+        ({st with nextIdx = addi 1 st.nextIdx}, get st.vals st.nextIdx) in
+    let getNameless : all x. (() -> x) -> x -> NlSmall x -> (NlSmall x, x)
+      = lam mkNew. lam x. lam st.
+        match mapLookup x st.forward with Some x then (st, x) else
+        match nextNameless mkNew st with (st, newX) in
+        ( { st with forward = mapInsert x newX st.forward
+          , reverse = mapInsert newX x st.reverse
+          }
+        , newX
+        )
+    in
+    recursive let locallyNameless : NlEnv -> Type -> (NlEnv, Type) = lam acc. lam ty.
+      switch unwrapType ty
+      case TyAll x then
+        match getNameless (lam. nameSym "bound") x.ident acc.vars with (vars, ident) in
+        let acc = {acc with vars = vars} in
+        match locallyNameless acc x.ty with (acc, ty) in
+        (acc, TyAll {x with ident = ident, ty = ty})
+      case TyVar x then
+        match getNameless (lam. nameSym "unbound") x.ident acc.vars with (vars, ident) in
+        (acc, TyVar {x with ident = ident})
+      case ty & TyRepr x then
+        match deref (botRepr x.repr) with BotRepr r in
+        match getNameless gensym r.sym acc.reprs with (reprs, sym) in
+        let acc = {acc with reprs = reprs} in
+        match locallyNameless acc x.arg with (acc, arg) in
+        (acc, TyRepr {x with repr = ref (BotRepr {r with sym = sym}), arg = arg})
+      case TyMetaVar x then
+        switch deref x.contents
+        case Unbound u then
+          match getNameless (lam. nameSym "meta") u.ident acc.metas with (metas, ident) in
+          let acc = {acc with metas = metas} in
+          (acc, TyMetaVar {x with contents = ref (Unbound {u with ident = ident})})
+        case Link ty then
+          locallyNameless acc ty
+        end
+      case ty then
+        smapAccumL_Type_Type locallyNameless acc ty
+      end in
+    let nlEnv =
+      { metas =
+        { forward = mapEmpty nameCmp
+        , reverse = mapEmpty nameCmp
+        , nextIdx = 0
+        , vals = branch.nameless.metas
+        }
+      , reprs =
+        { forward = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+        , reverse = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+        , nextIdx = 0
+        , vals = branch.nameless.reprs
+        }
+      , vars =
+        { forward = mapEmpty nameCmp
+        , reverse = mapEmpty nameCmp
+        , nextIdx = 0
+        , vals = branch.nameless.vars
+        }
+      } in
+    match locallyNameless nlEnv ty with (nlEnv, ty) in
+    ( {branch with nameless = {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}}
+    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = nlEnv.vars.reverse}
+    , ty
+    )
+
+  -- NOTE(vipa, 2023-11-07): Wrapper function that handles memoization and termination
+  sem solutionsFor : all a. SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
+  sem solutionsFor branch op = | ty ->
+    match mkLocallyNameless branch ty with (branch, nlEnv, ty) in
+    match
+      match mapLookup (op, ty) branch.memo with Some sols then (branch, sols) else
+      let branch = {branch with memo = mapInsert (op, ty) [] branch.memo} in
+      match solutionsForWork branch op ty with (branch, sols) in
+      let branch = {branch with memo = mapInsert (op, ty) sols branch.memo} in
+      (branch, sols)
+    with (branch, sols) in
+    let revSol = lam sol.
+      match sol with SolContent sol in SolContent
+      { sol with ty = undoLocallyNamelessTy nlEnv sol.ty
+      , uni = undoLocallyNamelessUni nlEnv sol.uni
+      } in
+    (branch, map revSol sols)
+
+  -- NOTE(vipa, 2023-11-07): Function that does the actual work
+  sem solutionsForWork
+    : all a. SBContent a
+    -> Name
+    -> Type
+    -> (SBContent a, [SolContent a])
+  sem solutionsForWork branch op = | ty ->
+    let perSolInUseInImpl = lam opUse. lam prev. lam sol.
+      match sol with SolContent x in
+      let mk = lam uni.
+        { prev with uni = uni
+        , cost = addf prev.cost (mulf opUse.scaling x.cost)
+        , highestImpl = maxi prev.highestImpl x.highestImpl
+        , subSols = snoc prev.subSols sol
+        }
+      in optionMap mk (mergeUnifications prev.uni x.uni)
+    in
+
+    let perUseInImpl = lam subst. lam uni. lam acc. lam opUse.
+      if null acc.prev then acc else
+      let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
+      match solutionsFor acc.branch opUse.ident ty with (branch, curr) in
+      let curr = filterOption (seqLiftA2 (perSolInUseInImpl opUse) acc.prev curr) in
+      {branch = branch, prev = curr} in
+
+    let perImpl = lam acc : {branch : SBContent a, sols : [SolContent a]}. lam impl.
+      match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
+        with (specType, subst) in
+      match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
+        let solInit =
+          { token = impl.token
+          , cost = impl.selfCost
+          , uni = uni
+          , impl = impl
+          , highestImpl = impl.implId
+          , ty = ty
+          , subSols = []
+          } in
+        let innerAcc = foldl (perUseInImpl subst uni) {branch = acc.branch, prev = [solInit]} impl.opUses in
+        let uniFilter =
+          { reprs =
+            { scope = impl.reprScope
+            , syms = foldl
+              (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
+              (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+              (findReprs [] specType)
+            }
+          , types =
+            { level = impl.metaLevel
+            , names = findMetaVarNames (setEmpty nameCmp) specType
+            }
+          } in
+        let finalizeSol = lam sol.
+          if ltf sol.cost 0.0
+          then errorSingle [sol.impl.info] "This impl gave rise to a solution with a negative cost; this is not allowed."
+          else SolContent {sol with uni = filterUnification uniFilter sol.uni} in
+        let newSols = map finalizeSol innerAcc.prev in
+        {branch = innerAcc.branch, sols = concat acc.sols newSols}
+      else acc
+    in
+
+    let impls = optionMapOr [] (setToSeq) (mapLookup op branch.implsPerOp) in
+    match foldl perImpl {branch = branch, sols = []} impls with {branch = branch, sols = sols} in
+    -- TODO(vipa, 2023-11-07): deshadow ("existence denied" stuff)
+    (branch, sols)
 end
 
 lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + Generalize + PrettyPrint
@@ -1156,14 +1484,13 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       else acc in
     (SBContent branch, setFold checkAndAddSolution [] solIds)
 
-  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> [{token : a, ty : Type}]
   sem availableSolutions global branch = | name ->
     match branch with SBContent branch in
     let solIds = mapLookupOr (setEmpty subi) name branch.solsByOp in
     let convSol = lam acc. lam solId.
       let content = mapFindExn solId branch.solsById in
       snoc acc {token = content.token, ty = content.specType} in
-    setFold convSol [] solIds
+    (SBContent branch, setFold convSol [] solIds)
 
   sem concretizeSolution global =
   | SSContent (branch, solId) ->
@@ -1729,7 +2056,7 @@ end
 --     CPSolution (minOrElse (lam. errorSingle [] "Couldn't put together a complete program, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 -- end
 
-lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + EagerRepSolver + MExprUnify
+lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + MemoedTopDownSolver + MExprUnify
 end
 
 lang DumpRepTypesProblem = RepTypesFragments
