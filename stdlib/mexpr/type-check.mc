@@ -351,7 +351,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst
     case (vars, stripped) then
       let inserter = lam subst. lam v : (Name, Kind).
         let kind = smap_Kind_Type (substituteVars info subst) v.1 in
-        mapInsert v.0 (newmetavar kind lvl info) subst
+        mapInsert v.0 (newnmetavar (nameGetStr v.0) kind lvl info) subst
       in
       let subst = foldl inserter (mapEmpty nameCmp) vars in
       (tyWithInfo info (substituteVars info subst stripped), subst)

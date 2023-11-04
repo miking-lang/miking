@@ -122,12 +122,16 @@ lang MetaVarTypeEq = KindEq + MetaVarTypeAst
     end
 end
 
-let newmetavar =
-  lam kind. lam level. lam info. use MetaVarTypeAst in
-  TyMetaVar {info = info,
-             contents = ref (Unbound {ident = nameSym "a",
-                                      level = level,
-                                      kind  = kind})}
+let newnmetavar =
+  lam str. lam kind. lam level. lam info. use MetaVarTypeAst in TyMetaVar
+   { info = info
+   , contents = ref (Unbound
+     { ident = nameSym str
+     , level = level
+     , kind = kind
+     })
+   }
+let newmetavar = newnmetavar "a"
 
 let newmonovar = use KindAst in
   newmetavar (Mono ())
