@@ -35,14 +35,19 @@ let symEnvEmpty = {
   varEnv = mapEmpty cmpString,
   conEnv = mapEmpty cmpString,
   tyVarEnv = mapEmpty cmpString,
-
-  -- Built-in type constructors
-  tyConEnv =
-  mapFromSeq cmpString (map (lam t. (t.0, nameNoSym t.0)) builtinTypes),
-
+  tyConEnv = mapEmpty cmpString,
   allowFree = false,
   ignoreExternals = false
 }
+
+let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv
+  = lam env. lam tys. {
+    env with tyConEnv =
+      foldl (lam env. lam t. mapInsert t.0 (nameNoSym t.0) env) env.tyConEnv tys
+  }
+
+let symEnvDefault =
+  symEnvAddBuiltinTypes symEnvEmpty builtinTypes
 
 lang SymLookup
   type LookupParams = {kind : String, info : [Info], allowFree : Bool}
@@ -125,13 +130,13 @@ lang Sym = Ast + SymLookup
   -- Symbolize with builtin environment
   sem symbolize =
   | expr ->
-    let env = symEnvEmpty in
+    let env = symEnvDefault in
     symbolizeExpr env expr
 
   -- Symbolize with builtin environment and ignore errors
   sem symbolizeAllowFree =
   | expr ->
-    let env = { symEnvEmpty with allowFree = true } in
+    let env = { symEnvDefault with allowFree = true } in
     symbolizeExpr env expr
 
   -- Add top-level identifiers (along the spine of the program) in `t`
@@ -509,7 +514,7 @@ utest isFullySymbolized (nulam_ x (nvar_ x)) with true in
 let testSymbolize = lam ast. lam testEqStr.
   let symbolizeCalls =
     [ symbolize
-    , symbolizeExpr {symEnvEmpty with allowFree = true}] in
+    , symbolizeExpr {symEnvDefault with allowFree = true}] in
   foldl
     (lam acc. lam symb.
       if acc then
