@@ -1094,7 +1094,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
 end
 
 lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize
-  syn SolContent a = | SolContent
+  type SolContentRec a =
     { token : a
     , cost : OpCost
     , uni : Unification
@@ -1103,6 +1103,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     , ty : Type
     , subSols : [SolContent a]
     }
+  syn SolContent a = | SolContent (SolContentRec a)
 
   type SBContent a =
     { implsPerOp : Map Name (Set (OpImpl a))
@@ -1382,7 +1383,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       let curr = filterOption (seqLiftA2 (perSolInUseInImpl opUse) acc.prev curr) in
       {branch = branch, prev = curr} in
 
-    let perImpl = lam acc : {branch : SBContent a, sols : [SolContent a]}. lam impl.
+    let perImpl = lam acc : {branch : SBContent a, sols : [SolContentRec a]}. lam impl.
       match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
         with (specType, subst) in
       match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
@@ -1412,7 +1413,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         let finalizeSol = lam sol.
           if ltf sol.cost 0.0
           then errorSingle [sol.impl.info] "This impl gave rise to a solution with a negative cost; this is not allowed."
-          else SolContent {sol with uni = filterUnification uniFilter sol.uni} in
+          else {sol with uni = filterUnification uniFilter sol.uni} in
         let newSols = map finalizeSol innerAcc.prev in
         {branch = innerAcc.branch, sols = concat acc.sols newSols}
       else acc
@@ -1420,8 +1421,39 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
 
     let impls = optionMapOr [] (setToSeq) (mapLookup op branch.implsPerOp) in
     match foldl perImpl {branch = branch, sols = []} impls with {branch = branch, sols = sols} in
-    -- TODO(vipa, 2023-11-07): deshadow ("existence denied" stuff)
-    (branch, sols)
+    (branch, map (lam x. SolContent x) (pruneRedundant sols))
+
+  sem pruneRedundant : all a. [SolContentRec a] -> [SolContentRec a]
+  sem pruneRedundant = | sols ->
+    let filterM : all a. (a -> Option Bool) -> [a] -> Option [a] = lam f. lam xs.
+      recursive let work = lam acc. lam xs.
+        match xs with [x] ++ xs then
+          match f x with Some keep
+          then work (if keep then snoc acc x else acc) xs
+          else None ()
+        else Some acc
+      in work [] xs in
+    -- NOTE(vipa, 2023-11-07): `Some _` means add the new, `Some true`
+    -- means keep the old, `Some false` means remove the old.
+    let check = lam new. lam old.
+      let newIsCheaper = gtf old.cost new.cost in
+      let mergedUni = mergeUnifications old.uni new.uni in
+      -- NOTE(vipa, 2023-11-07): Since solutions are created unified
+      -- with the same type we already know that both `ty`s are the
+      -- same modulo assertions in their respective `uni`s, thus we
+      -- skip the (unify (instantiated) (stripped)) in both "fits"
+      -- predicates
+      let oldFitsWhereNewCouldBe = uniImplies new.uni old.uni in
+      let existenceDenied = and (not newIsCheaper) oldFitsWhereNewCouldBe in
+      if existenceDenied then None () else
+      let newFitsWhereOldCouldBe = uniImplies old.uni new.uni in
+      let oldShouldBePruned = and newIsCheaper newFitsWhereOldCouldBe in
+      Some (not oldShouldBePruned)
+    in
+    let addSol = lam prev. lam sol.
+      optionMapOr prev (lam xs. snoc xs sol) (filterM (check sol) prev)
+    in
+    foldl addSol [] sols
 end
 
 lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + Generalize + PrettyPrint

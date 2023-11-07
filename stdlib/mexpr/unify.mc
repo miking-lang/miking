@@ -444,7 +444,7 @@ type Unification =
   , types : PureUnionFind Name () Type
   }
 
-lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq + PrettyPrint
+lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp + PrettyPrint
 
   sem emptyUnification : () -> Unification
   sem emptyUnification = | _ ->
@@ -458,7 +458,7 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Eq +
   sem uniImplies a = | b ->
     let rEq = eitherEq nameEq (lam a. lam b. and (eqsym a.0 b.0) (eqi a.1 b.1)) in
     let tyEq = eitherEq
-      (lam l. lam r. eqType (pureApplyUniToType a l) (pureApplyUniToType a r))
+      (lam l. lam r. eqi 0 (cmpType (pureApplyUniToType a l) (pureApplyUniToType a r)))
       (lam l. lam r. and (nameEq l.0 r.0) (eqi l.1 r.1)) in
     let reprImplied = pufFold
       (lam acc. lam r1. lam r2. if acc
