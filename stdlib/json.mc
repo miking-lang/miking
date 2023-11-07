@@ -2,11 +2,18 @@
 -- https://www.json.org/json-en.html
 -- Only divergence from the spec is the distinction between floats and integers
 
+-- The JSON specification does not support the special float values `nan`, `inf` and `-inf`.
+-- These are therefore encoded using the following objects:
+-- - `inf` is encoded as `{"__float__": "inf"}`
+-- - `-inf` is encoded as `{"__float__": "-inf"}`
+-- - `nan` is encoded as `{"__float__": "nan"}`
+
 include "either.mc"
 include "map.mc"
 include "string.mc"
 include "option.mc"
 include "tensor.mc"
+include "math.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue
@@ -313,9 +320,23 @@ recursive let json2string: JsonValue -> String = lam value.
     in
     (snoc (foldl escape "\"" s) '\"')
   case JsonFloat f then
-    -- TODO(johnwikman, 2022-05-13): Verify that this 2string method actually
-    -- conforms to JSON. ".01" and "13." are not valid floats in JSON.
-    float2string f
+    if neqf f f then
+      "{\"__float__\": \"nan\"}"
+    else if eqf f inf then
+      "{\"__float__\": \"inf\"}"
+    else if eqf f (negf inf) then
+      "{\"__float__\": \"-inf\"}"
+    else
+      -- NOTE(vsenderov, 2023-09-14): Need to append/prepend 0 to conform to the
+      -- JSON standard.  What is the situation in locales that don't use a dot
+      -- to delimit decimals?
+      let str = float2string f in
+      switch str
+          case _ ++ "." then snoc str '0'
+          case "." ++ _ then cons '0' str
+          case _ then str
+      end
+
   case JsonInt i then
     int2string i
   case JsonBool b then
@@ -381,10 +402,10 @@ let jsonSerializeTensor: all a. (a -> JsonValue) -> Tensor[a] -> JsonValue =
       (keyTensor,jseq)
     ])
 let jsonDeserializeTensor: all a.
-  (JsonValue -> Option a) ->
   ([Int] -> ([Int] -> a) -> Tensor[a]) ->
+  (JsonValue -> Option a) ->
   JsonValue -> Option Tensor[a] =
-    lam f. lam tcreate. lam jtensor.
+    lam tcreate. lam f. lam jtensor.
       match jtensor with JsonObject m then
         match mapLookup keyTensorShape m with Some jshape then
           match mapLookup keyTensor m with Some jseq then
@@ -396,6 +417,17 @@ let jsonDeserializeTensor: all a.
           else None ()
         else None ()
       else None ()
+let jsonDeserializeTensorCArrayInt:
+    (JsonValue -> Option Int) -> JsonValue -> Option Tensor[Int] =
+  jsonDeserializeTensor tensorCreateCArrayInt
+let jsonDeserializeTensorCArrayFloat:
+    (JsonValue -> Option Float) -> JsonValue -> Option Tensor[Float] =
+  jsonDeserializeTensor tensorCreateCArrayFloat
+let jsonDeserializeTensorDense:
+    all a. (JsonValue -> Option a) -> JsonValue -> Option Tensor[a] =
+  -- NOTE(2023-09-30,dlunde): We need an eta expansion here due to value
+  -- restriction.
+  lam a1. jsonDeserializeTensor tensorCreateDense a1
 
 mexpr
 
@@ -404,6 +436,16 @@ utest json2string (JsonFloat 123.45) with "123.45" in
 
 utest jsonParse "-1e-5" with Left (JsonFloat (negf 1e-5)) using eitherEq jsonEq eqString in
 utest json2string (JsonFloat (negf 1e-5)) with "-1e-05" in
+
+utest jsonParse "1.0" with Left (JsonFloat 1.) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat 1.) with "1.0" in
+
+utest jsonParse "0.25" with Left (JsonFloat 0.25) using eitherEq jsonEq eqString in
+utest json2string (JsonFloat 0.25) with "0.25" in
+
+utest json2string (JsonFloat nan) with "{\"__float__\": \"nan\"}" in
+utest json2string (JsonFloat inf) with "{\"__float__\": \"inf\"}" in
+utest json2string (JsonFloat (negf inf)) with "{\"__float__\": \"-inf\"}" in
 
 utest jsonParse "1233" with Left (JsonInt 1233) using eitherEq jsonEq eqString in
 utest json2string (JsonInt 1233) with "1233" in
@@ -514,6 +556,7 @@ with Some [false, true] in
 utest jsonDeserializeSeq jsonDeserializeBool (JsonArray [JsonInt 1, JsonBool true])
 with None () in
 
+-- Int tensors
 let tensor = (tensorOfSeqExn tensorCreateCArrayInt [3,3]
                 [1,2,3,
                  4,5,6,
@@ -525,7 +568,35 @@ let jtensor = JsonObject (mapFromSeq cmpString [
                                        JsonInt 7, JsonInt 8, JsonInt 9])
               ]) in
 utest jsonSerializeTensor jsonSerializeInt tensor with jtensor using jsonEq in
-utest jsonDeserializeTensor jsonDeserializeInt tensorCreateCArrayInt jtensor
+utest jsonDeserializeTensorCArrayInt jsonDeserializeInt jtensor
+with Some tensor in
+
+-- Float tensors
+let tensor = (tensorOfSeqExn tensorCreateCArrayFloat [3,3]
+                [1.,2.,3.,
+                 4.,5.,6.,
+                 7.,8.,9.]) in
+let jtensor = JsonObject (mapFromSeq cmpString [
+                (keyTensorShape, JsonArray [JsonInt 3, JsonInt 3]),
+                (keyTensor, JsonArray [JsonFloat 1., JsonFloat 2., JsonFloat 3.,
+                                       JsonFloat 4., JsonFloat 5., JsonFloat 6.,
+                                       JsonFloat 7., JsonFloat 8., JsonFloat 9.])
+              ]) in
+utest jsonDeserializeTensorCArrayFloat jsonDeserializeFloat jtensor
+with Some tensor in
+
+-- General tensors
+let tensor = (tensorOfSeqExn tensorCreateDense [3,3]
+                ["1","2","3",
+                 "4","5","6",
+                 "7","8","9"]) in
+let jtensor = JsonObject (mapFromSeq cmpString [
+                (keyTensorShape, JsonArray [JsonInt 3, JsonInt 3]),
+                (keyTensor, JsonArray [JsonString "1", JsonString "2", JsonString "3",
+                                       JsonString "4", JsonString "5", JsonString "6",
+                                       JsonString "7", JsonString "8", JsonString "9"])
+              ]) in
+utest jsonDeserializeTensorDense jsonDeserializeString jtensor
 with Some tensor in
 
 ()

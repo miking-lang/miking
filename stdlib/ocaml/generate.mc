@@ -546,7 +546,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   -- can be any type, and the result type can be any type, it's thus
   -- very economical
     TmApp {{t with lhs = objMagic (generate env lhs)}
-              with rhs = generate env rhs}
+           with rhs = generate env rhs}
   | TmNever t ->
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {

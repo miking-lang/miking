@@ -22,11 +22,31 @@ external sundialsMatrixDense : Int -> SundialsMatrixDense
 -- Sundials linear solvers, e.g. `idaDlsSolver`.
 let sundialsMatrixDense = lam n. sundialsMatrixDense n
 
-external sundialsMatrixDenseUnwrap ! : SundialsMatrixDense -> Tensor[Float]
+external sundialsMatrixDenseUnwrap : SundialsMatrixDense -> Tensor[Float]
 
 -- `sundialsMatrixDenseUnwrap m` unwraps the sundials dense matrix `m` to a rank
--- 2 tensor.
+-- 2 tensor. This tensor will be the transpose of the input matrix `m`.
 let sundialsMatrixDenseUnwrap = lam m. sundialsMatrixDenseUnwrap m
+
+external sundialsMatrixDenseGet : SundialsMatrixDense -> Int -> Int -> Float
+
+-- `sundialsMatrixDenseGet m i j` gets the `i`,`j`'th element in `m`.
+let sundialsMatrixDenseGet = lam m. lam i. lam j. sundialsMatrixDenseGet m i j
+
+external sundialsMatrixDenseSet ! : SundialsMatrixDense -> Int -> Int -> Float -> ()
+
+-- `sundialsMatrixDenseSet m i j v` sets, inplace, the `i`,`j`'th element in `m`
+-- to the value `v`.
+let sundialsMatrixDenseSet = lam m. lam i. lam j. lam v. sundialsMatrixDenseSet m i j v
+
+external sundialsMatrixDenseUpdate !
+  : SundialsMatrixDense -> Int -> Int -> (Float -> Float) -> ()
+
+-- `sundialsMatrixDenseUpdate m i j f` updates, inplace, the `i`,`j`'th element
+-- in `m` according to the function `f`, where the argument to this function is
+-- the current value at that index in `m`.
+let sundialsMatrixDenseUpdate = lam m. lam i. lam j. lam f.
+  sundialsMatrixDenseUpdate m i j f
 
 external sundialsNonlinearSolverNewtonMake
   : NvectorSerial -> SundialsNonlinearSolver

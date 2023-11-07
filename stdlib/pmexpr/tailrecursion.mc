@@ -39,7 +39,7 @@ let combineOptions : all a. (a -> a -> Option a) -> Option a -> Option a -> Opti
   else never
 
 -- Finds a compatible side which agrees with both given side values. The value
--- None represents neither side (the minimal element), while Some (Both ())
+-- None represents neither side (the minimal element), while Some (BothSides ())
 -- represents either side (the maximal element).
 let compatibleSide : Option Side -> Option Side -> Option Side =
   combineOptions

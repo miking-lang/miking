@@ -61,7 +61,8 @@ lang MExprEliminateDuplicateCode = MExprAst
     -- NOTE(larshum, 2022-10-28): All definitions containing NoInfo are
     -- considered not to be equal. This prevents eliminating code generated as
     -- part of the compilation.
-    match (info, mapLookup definition env.defIds) with (!NoInfo _, Some prevId) then
+    match info with NoInfo _ then elsfn env else
+    match mapLookup definition env.defIds with Some prevId then
       let env = {env with replace = mapInsert id prevId env.replace} in
       let replaced = mapInsert id prevId replaced in
       eliminateDuplicateCodeExpr env replaced inexpr
@@ -135,6 +136,7 @@ lang MExprEliminateDuplicateCode = MExprAst
     let eliminateDuplicateBinding = lam acc. lam binding.
       match acc with (replaced, env) in
       let defn = (binding.info, nameGetStr binding.ident) in
+      match binding.info with NoInfo _ then ((replaced, env), Some binding) else
       match mapLookup defn env.defIds with Some id then
         let env = {env with replace = mapInsert binding.ident id env.replace} in
         let replaced = mapInsert binding.ident id replaced in

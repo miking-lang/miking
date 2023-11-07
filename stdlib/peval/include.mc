@@ -169,7 +169,7 @@ let includeTyConsNames =
    "FloatTypeAst_TyFloat","CharTypeAst_TyChar", "FunTypeAst_TyArrow",
    "SeqTypeAst_TySeq", "TensorTypeAst_TyTensor", "RecordTypeAst_TyRecord",
    "VariantTypeAst_TyVariant", "ConTypeAst_TyCon", "VarTypeAst_TyVar",
-   "VarSortAst_PolyVar","VarSortAst_MonoVar", "VarSortAst_RecordVar",
+   "KindAst_Poly", "KindAst_Mono", "KindAst_Row",
    "AllTypeAst_TyAll", "AppTypeAst_TyApp","AliasTypeAst_TyAlias"]
 
 let includeOtherFuncs =

@@ -34,6 +34,26 @@ let sundialsExtMap =
         ty = tyarrows_ [otyopaque_, (otybaarrayclayoutfloat_ 2)]
       }
     ]),
+    ("sundialsMatrixDenseGet", [
+      impl {
+        expr = "Sundials.Matrix.Dense.get",
+        ty = tyarrows_ [otyopaque_, tyint_, tyint_, tyfloat_]
+      }
+    ]),
+    ("sundialsMatrixDenseSet", [
+      impl {
+        expr = "Sundials.Matrix.Dense.set",
+        ty = tyarrows_ [otyopaque_, tyint_, tyint_, tyfloat_, otyunit_]
+      }
+    ]),
+    ("sundialsMatrixDenseUpdate", [
+      impl {
+        expr = "Sundials.Matrix.Dense.update",
+        ty = tyarrows_ [
+          otyopaque_, tyint_, tyint_, tyarrow_ tyfloat_ tyfloat_, otyunit_
+        ]
+      }
+    ]),
     ("sundialsNonlinearSolverNewtonMake", [
       impl {
         expr = "Sundials_NonlinearSolver.Newton.make",

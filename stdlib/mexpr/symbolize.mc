@@ -15,7 +15,6 @@ include "builtin.mc"
 include "info.mc"
 include "error.mc"
 include "pprint.mc"
-include "type.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -183,7 +182,7 @@ lang LetSym = Sym + LetAst + AllTypeAst
     match mapAccumL setSymbolFirst env.tyVarEnv vars with (tyVarEnv, vars) in
     (tyVarEnv,
      foldr (lam vs. lam ty. TyAll {info = infoTy tyAnnot,
-                                   ident = vs.0, sort = vs.1, ty = ty})
+                                   ident = vs.0, kind = vs.1, ty = ty})
        (symbolizeType {env with tyVarEnv = tyVarEnv} stripped) vars)
 
   sem addTopNames (env : SymEnv) =
@@ -320,14 +319,14 @@ lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
     TyVar {t with ident = ident}
 end
 
-lang AllTypeSym = Sym + AllTypeAst + VarSortAst
+lang AllTypeSym = Sym + AllTypeAst + KindAst
   sem symbolizeType env =
   | TyAll t ->
-    let sort = smap_VarSort_Type (symbolizeType env) t.sort in
+    let kind = smap_Kind_Type (symbolizeType env) t.kind in
     match setSymbol env.tyVarEnv t.ident with (tyVarEnv, ident) in
     TyAll {t with ident = ident,
                   ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,
-                  sort = sort}
+                  kind = kind}
 end
 
 --------------

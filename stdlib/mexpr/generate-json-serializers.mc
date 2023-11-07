@@ -6,6 +6,7 @@ include "cmp.mc"
 include "boot-parser.mc"
 include "pprint.mc"
 include "symbolize.mc"
+include "type.mc"
 include "utils.mc"
 include "duplicate-code-elimination.mc"
 
@@ -52,7 +53,7 @@ lang GenerateJsonSerializers =
     sBool: Name, dBool: Name, sInt: Name, dInt: Name,
     sFloat: Name, dFloat: Name, sChar: Name, dChar: Name,
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
-    sTensor: Name, dTensor: Name,
+    sTensor: Name, dTensorInt: Name, dTensorFloat: Name, dTensorDense: Name,
     jsonObject: Name, jsonString: Name,
     jsonParse: Name, jsonParseExn: Name, json2string: Name,
     mapInsert: Name, mapEmpty: Name, mapLookup: Name,
@@ -90,19 +91,28 @@ lang GenerateJsonSerializers =
   | expr ->
     let lib = _lib () in
     match findNamesOfStringsExn [
-        "jsonSerializeBool", "jsonDeserializeBool", "jsonSerializeInt",
-        "jsonDeserializeInt", "jsonSerializeFloat", "jsonDeserializeFloat",
-        "jsonSerializeChar", "jsonDeserializeChar", "jsonSerializeString",
-        "jsonDeserializeString", "jsonSerializeSeq", "jsonDeserializeSeq",
-        "jsonSerializeTensor", "jsonDeserializeTensor",
+        "jsonSerializeBool", "jsonDeserializeBool",
+        "jsonSerializeInt", "jsonDeserializeInt",
+        "jsonSerializeFloat", "jsonDeserializeFloat",
+        "jsonSerializeChar", "jsonDeserializeChar",
+        "jsonSerializeString", "jsonDeserializeString",
+        "jsonSerializeSeq", "jsonDeserializeSeq",
+        "jsonSerializeTensor",
+        "jsonDeserializeTensorCArrayInt","jsonDeserializeTensorCArrayFloat",
+        "jsonDeserializeTensorDense",
         "JsonObject", "JsonString",
         "jsonParse", "jsonParseExn", "json2string",
         "mapInsert", "mapEmpty", "mapLookup",
         "cmpString",
         "Some", "None"
       ] lib with [
-        sb, db, si, di, sf, df, sc, dc,
-        ss, ds, ssq, dsq, st, dt,
+        sb, db,
+        si, di,
+        sf, df,
+        sc, dc,
+        ss, ds,
+        ssq, dsq,
+        st, dti, dtf, dtd,
         jo, js,
         jp,jpe,j2s,
         mi,me,ml,
@@ -116,7 +126,7 @@ lang GenerateJsonSerializers =
       sBool = sb, dBool = db, sInt = si, dInt = di,
       sFloat = sf, dFloat = df, sChar = sc, dChar = dc,
       sString = ss, dString = ds, sSeq = ssq, dSeq = dsq,
-      sTensor = st, dTensor = dt,
+      sTensor = st, dTensorInt = dti, dTensorFloat = dtf, dTensorDense = dtd,
       jsonObject = jo, jsonString = js,
       jsonParse = jp, jsonParseExn = jpe, json2string = j2s,
       mapInsert = mi, mapEmpty = me, mapLookup = ml,
@@ -178,7 +188,14 @@ lang GenerateJsonSerializers =
   | TyTensor { ty = tyi } & ty ->
     match _generateType env acc tyi with (acc, si) in
     let serializer = appf1_ (nvar_ env.sTensor) si.serializer in
-    let deserializer = appf1_ (nvar_ env.dTensor) si.deserializer in
+    let dTensor =
+      switch tyi
+      case TyInt _ then env.dTensorInt
+      case TyFloat _ then env.dTensorFloat
+      case _ then env.dTensorDense
+      end
+    in
+    let deserializer = appf1_ (nvar_ dTensor) si.deserializer in
     let s = { serializer = serializer, deserializer = deserializer } in
     (acc, s)
 
@@ -486,7 +503,7 @@ with true in
 
 -- Sequences and tensors
 utest test false
-  [tyseq_ tyint_, tytensor_ tyint_]
+  [tyseq_ tyint_, tytensor_ tyint_, tytensor_ tyfloat_, tytensor_ tybool_]
   "()"
   []
   [
@@ -495,7 +512,13 @@ utest test false
        "jsonDeserializeSeq jsonDeserializeInt"),
     (tytensor_ tyint_,
        "jsonSerializeTensor jsonSerializeInt",
-       "jsonDeserializeTensor jsonDeserializeInt")
+       "jsonDeserializeTensorCArrayInt jsonDeserializeInt"),
+    (tytensor_ tyfloat_,
+       "jsonSerializeTensor jsonSerializeFloat",
+       "jsonDeserializeTensorCArrayFloat jsonDeserializeFloat"),
+    (tytensor_ tybool_,
+       "jsonSerializeTensor jsonSerializeBool",
+       "jsonDeserializeTensorDense jsonDeserializeBool")
   ]
 with true in
 
@@ -640,6 +663,47 @@ utest test false
           else None {}
     ")]
   [(tycon_ "List", "serializeList", "deserializeList")]
+with true in
+
+utest test false
+  [tycon_ "TestType"]
+  "
+    type TestType in
+    con TestTypeCon: Tensor[Float] -> TestType in
+    ()
+  "
+  [("TestType",
+    "serializeTestType","
+      lam c.
+        match c with TestTypeCon d in
+        JsonObject
+            (mapInsert \"__constructor__\"
+               (JsonString \"TestTypeCon\")
+               (mapInsert
+                  \"__data__\"
+                  (jsonSerializeTensor jsonSerializeFloat d)
+                  (mapEmpty cmpString)))
+    ",
+    "deserializeTestType","
+      lam jc.
+        match jc with JsonObject m then
+          match mapLookup \"__constructor__\" m with Some (JsonString con1) then
+            match con1 with \"TestTypeCon\" then
+              match mapLookup \"__data__\" m with Some data then
+                match
+                  jsonDeserializeTensorCArrayFloat
+                    jsonDeserializeFloat
+                    data
+                with Some d then
+                  Some (TestTypeCon d)
+                else None {}
+              else None {}
+            else None {}
+          else None {}
+        else None {}
+    ")
+  ]
+  [(tycon_ "TestType", "serializeTestType", "deserializeTestType")]
 with true in
 
 -- let res = addJsonSerializers
