@@ -551,10 +551,15 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let isValue = isValue (GVal ()) t.body in
-    let shouldBeOp = if isValue then containsRepr t.tyBody else false in
+    let shouldBeOp = if env.reptypes.inImpl
+      then false
+      else if isValue
+        then containsRepr t.tyBody
+        else false in
     if shouldBeOp then
       -- Replace with an OpDecl and OpImpl
       match withNewReprScope env (lam env.
+        let env = {env with reptypes = {env.reptypes with inImpl = true}} in
         let tyBody = substituteNewReprs env t.tyBody in
         match stripTyAll tyBody with (vars, stripped) in
         let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
@@ -681,11 +686,12 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       }
     in
 
-    let shouldBeOp =
+    let shouldBeOp = if env.reptypes.inImpl then false else
       if forAll (lam b. isValue (GVal ()) b.body) t.bindings
       then any (lam b. containsRepr b.tyBody) t.bindings
       else false in
     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
+    let env = {env with reptypes = {env.reptypes with inImpl = true}} in
     let bindingToBindingPair = lam b.
       ( stringToSid (nameGetStr b.ident)
       , TmVar
@@ -792,6 +798,7 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
   sem typeCheckExpr env =
   | TmOpImpl x ->
     let typeCheckBody = lam env.
+      let env = {env with reptypes = {env.reptypes with inImpl = true}} in
       let newLvl = addi 1 env.currentLvl in
       let specType = substituteNewReprs env x.specType in
       let newEnv = {env with currentLvl = newLvl} in

@@ -52,6 +52,7 @@ type TCEnv = {
     opNamesInScope : Map Name (Option (Name, SID)),
     reprEnv : Map Name ReprSubst,
     nextReprScope : Ref Int,
+    inImpl : Bool,
     reprScope : Int
   }
 }
@@ -71,6 +72,7 @@ let _tcEnvEmpty : TCEnv = {
     opNamesInScope = mapEmpty nameCmp,
     reprEnv = mapEmpty nameCmp,
     nextReprScope = ref 1,
+    inImpl = false,
     reprScope = 0
   }
 }

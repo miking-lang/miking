@@ -127,6 +127,11 @@ lang OpImplAst = Ast
     match f acc x.body with (acc, body) in
     match f acc x.inexpr with (acc, inexpr) in
     (acc, TmOpImpl {x with body = body, inexpr = inexpr})
+
+  sem smapAccumL_Expr_Type f acc =
+  | TmOpImpl x ->
+    match f acc x.specType with (acc, specType) in
+    (acc, TmOpImpl {x with specType = specType})
 end
 
 lang OpVarAst = Ast
