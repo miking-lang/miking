@@ -44,10 +44,10 @@ let toRope = lam seq.
   in
   if isRope seq then seq else
   let s = work [] seq in
-  -- NOTE(larshum, 2023-10-24): The below line ensures the rope is collapsed to
-  -- yield constant-time random accesses.
-  map (lam. ()) s;
-  s
+  -- NOTE(larshum, 2023-10-24): The below line ensures the elements of the rope
+  -- are in the right order, and it also collapses the rope (to ensure
+  -- constant-time random access).
+  reverse s
 
 let toList = lam seq.
   createList (length seq) (lam i. get seq i)
