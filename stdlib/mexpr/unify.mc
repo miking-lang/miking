@@ -23,7 +23,7 @@ lang Unify = Ast
 
   syn UnifyError =
   | Types (Type, Type)
-  | Rows (Map SID Type, Map SID Type)
+  | Records (Map SID Type, Map SID Type)
   | Kinds (Kind, Kind)
 
   type Unifier u = {
@@ -55,10 +55,10 @@ lang Unify = Ast
 end
 
 -- Helper language providing functions to unify fields of record-like types
-lang UnifyRows = Unify
+lang UnifyRecords = Unify
   -- Check that 'm1' is a subset of 'm2'
-  sem unifyRowsSubset : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> u
-  sem unifyRowsSubset u env m1 =
+  sem unifyRecordsSubset : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> u
+  sem unifyRecordsSubset u env m1 =
   | m2 ->
     let f = lam acc. lam b.
       let unifier =
@@ -66,24 +66,24 @@ lang UnifyRows = Unify
         match mapLookup k m2 with Some tyfield2 then
           unifyTypes u env (tyfield1, tyfield2)
         else
-          u.err (Rows (m1, m2))
+          u.err (Records (m1, m2))
       in
       u.combine acc unifier
     in
     foldl f u.empty (mapBindings m1)
 
   -- Check that 'm1' and 'm2' contain the same fields
-  sem unifyRowsStrict : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> u
-  sem unifyRowsStrict u env m1 =
+  sem unifyRecordsStrict : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> u
+  sem unifyRecordsStrict u env m1 =
   | m2 ->
     if eqi (mapSize m1) (mapSize m2) then
-      unifyRowsSubset u env m1 m2
+      unifyRecordsSubset u env m1 m2
     else
-      u.err (Rows (m1, m2))
+      u.err (Records (m1, m2))
 
   -- Check that the intersection of 'm1' and 'm2' unifies, then return their union
-  sem unifyRowsUnion : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> (u, Map SID Type)
-  sem unifyRowsUnion u env m1 =
+  sem unifyRecordsUnion : all u. Unifier u -> UnifyEnv -> Map SID Type -> Map SID Type -> (u, Map SID Type)
+  sem unifyRecordsUnion u env m1 =
   | m2 ->
     let f = lam acc. lam b.
       match b with (k, tyfield1) in
@@ -126,14 +126,20 @@ lang AppTypeUnify = Unify + AppTypeAst
       (unifyTypes u env (t1.rhs, t2.rhs))
 end
 
-lang AllTypeUnify = UnifyRows + AllTypeAst
+lang AllTypeUnify = UnifyRecords + AllTypeAst
   sem unifyBase u env =
   | (TyAll t1, TyAll t2) ->
     u.combine
-      (match (t1.kind, t2.kind) with (Row r1, Row r2) then
-        unifyRowsStrict u env r1.fields r2.fields
-       else if eqi (constructorTag t1.kind) (constructorTag t2.kind) then u.empty
-            else u.err (Kinds (t1.kind, t2.kind)))
+      (switch (t1.kind, t2.kind)
+       case (Record r1, Record r2) then
+        unifyRecordsStrict u env r1.fields r2.fields
+       case (Data r1, Data r2) then
+         if mapEq setEq r1.types r2.types then u.empty
+         else u.err (Kinds (t1.kind, t2.kind))
+       case _ then
+         if eqi (constructorTag t1.kind) (constructorTag t2.kind) then u.empty
+         else u.err (Kinds (t1.kind, t2.kind))
+      end)
       (let env = {env with boundNames = biInsert (t1.ident, t2.ident) env.boundNames} in
        unifyTypes u env (t1.ty, t2.ty))
 end
@@ -141,8 +147,10 @@ end
 lang ConTypeUnify = Unify + ConTypeAst
   sem unifyBase u env =
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
-    if nameEq t1.ident t2.ident then u.empty
-    else u.err (Types (ty1, ty2))
+    if nameEq t1.ident t2.ident then
+      unifyTypes u env (t1.data, t2.data)
+    else
+      u.err (Types (ty1, ty2))
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
@@ -177,10 +185,10 @@ lang TensorTypeUnify = Unify + TensorTypeAst
     unifyTypes u env (t1.ty, t2.ty)
 end
 
-lang RecordTypeUnify = UnifyRows + RecordTypeAst
+lang RecordTypeUnify = UnifyRecords + RecordTypeAst
   sem unifyBase u env =
   | (TyRecord t1, TyRecord t2) ->
-    unifyRowsStrict u env t1.fields t2.fields
+    unifyRecordsStrict u env t1.fields t2.fields
 end
 
 

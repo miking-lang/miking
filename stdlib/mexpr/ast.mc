@@ -5,6 +5,7 @@ include "name.mc"
 include "string.mc"
 include "stringid.mc"
 include "map.mc"
+include "set.mc"
 
 -----------
 -- TERMS --
@@ -1398,10 +1399,16 @@ end
 lang ConTypeAst = Ast
   syn Type =
   | TyCon {info   : Info,
-           ident  : Name}
+           ident  : Name,
+           data   : Type}
 
   sem tyWithInfo (info : Info) =
   | TyCon t -> TyCon {t with info = info}
+
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyCon t ->
+    match f acc t.data with (acc, data) in
+    (acc, TyCon {t with data = data})
 
   sem infoTy =
   | TyCon r -> r.info
@@ -1424,13 +1431,14 @@ lang KindAst
   syn Kind =
   | Poly ()
   | Mono ()
-  | Row {fields : Map SID Type}
+  | Record {fields : Map SID Type}
+  | Data   {types  : Map Name (Set Name)}
 
   sem smapAccumL_Kind_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Kind -> (acc, Kind)
   sem smapAccumL_Kind_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | Row r ->
+  | Record r ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
-    (acc, Row {r with fields = flds})
+    (acc, Record {r with fields = flds})
   | s ->
     (acc, s)
 

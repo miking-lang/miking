@@ -155,16 +155,18 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
     else ()
 end
 
-lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRows + RecordTypeAst
+lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordTypeAst
   sem addKinds : Unifier () -> UnifyEnv -> (Kind, Kind) -> Kind
   sem addKinds u env =
-  | (Row r1, Row r2) ->
-    match unifyRowsUnion u env r1.fields r2.fields with (_, fields) in
-    Row {r1 with fields = fields}
-  | (Row _ & rv, ! Row _ & tv)
-  | (! Row _ & tv, Row _ & rv) -> rv
-  | (Poly _, Poly _) -> Poly ()
-  | (s1, s2) -> Mono ()
+  | (Record r1, Record r2) ->
+    match unifyRecordsUnion u env r1.fields r2.fields with (_, fields) in
+    Record {r1 with fields = fields}
+  | (Data r1, Data r2) ->
+    Data {r1 with types = mapUnionWith setUnion r1.types r2.types}
+  | (Mono _ | Poly _, k & !(Mono _ | Poly _)) -> k
+  | (Poly _, k & (Poly _ | Mono _)) -> k
+  | (Mono _, Poly _ | Mono _) -> Mono ()
+  | (k1, k2) -> u.err (Kinds (k1, k2)); error "impossible"
 
   sem unifyMeta u tcenv info env =
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
@@ -181,9 +183,9 @@ lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRows + RecordTypeAst
   | (TyMetaVar t1 & ty1, !TyMetaVar _ & ty2) ->
     match deref t1.contents with Unbound tv in
     unifyCheck tcenv info tv ty2;
-    (match (tv.kind, ty2) with (Row r1, TyRecord r2) then
-       unifyRowsSubset u env r1.fields r2.fields
-     else match tv.kind with Row _ then u.err (Types (ty1, ty2)) else ());
+    (match (tv.kind, ty2) with (Record r1, TyRecord r2) then
+       unifyRecordsSubset u env r1.fields r2.fields
+     else match tv.kind with Record _ then u.err (Types (ty1, ty2)) else ());
     modref t1.contents (Link env.wrappedRhs)
 
   sem unifyCheckBase env info boundVars tv =
@@ -333,7 +335,7 @@ lang MetaVarDisableGeneralize = MetaVarTypeAst
   sem disableRecordGeneralize (lvl : Level) =
   | TyMetaVar t & ty ->
     switch deref t.contents
-    case Unbound {kind = Row _} then
+    case Unbound {kind = Record _} then
       weakenMetaVars lvl ty
     case Unbound _ then ()
     case Link tyL then
@@ -385,9 +387,6 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     else
       mkAppTy (resolveType info tycons constr) args
 
-  | TyUnknown _ & ty ->
-    ty
-
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.
   | TyAlias t -> TyAlias t
@@ -410,7 +409,7 @@ lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst
   sem removeMetaVarType =
   | TyMetaVar t ->
     switch deref t.contents
-    case Unbound {kind = Row x} then
+    case Unbound {kind = Record x} then
       TyRecord {info = t.info, fields = mapMap removeMetaVarType x.fields}
     case Unbound _ then TyUnknown { info = t.info }
     case Link ty then removeMetaVarType ty
@@ -680,41 +679,42 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
 end
 
 lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
-  -- NOTE(larshum, 2023-09-07): Verify that the annotated type of a constructor
-  -- is of the form we expect, and provide understandable error messages
-  -- otherwise.
-  sem _checkConstructorType : Info -> Name -> Type -> ()
-  sem _checkConstructorType info ident =
+  sem _makeConstructorType : Info -> Name -> Type -> Type
+  sem _makeConstructorType info ident =
   | ty ->
-    recursive let isValidConstructorType = lam ty.
-      switch ty
-      case TyCon _ then true
-      case TyApp {lhs = lhs} then isValidConstructorType lhs
-      case _ then false
+    let msg = lam. join [
+      "* Invalid type of constructor: ", nameGetStr ident, "\n",
+      "* The constructor should have a function type, where the\n",
+      "* right-hand side should refer to a constructor type.\n",
+      "* When type checking the expression\n"
+    ] in
+    recursive let substituteData = lam v. lam x.
+      switch x
+      case TyCon (t & {data = TyUnknown _}) then
+        TyCon { t with data = v }
+      case TyAlias t then
+        TyAlias { t with content = substituteData v t.content }
+      case _ then
+        smap_Type_Type (substituteData v) x
       end
     in
     match inspectType ty with TyArrow {to = to & (TyCon _ | TyApp _)} then
-      if isValidConstructorType to then ()
-      else
-        let msg = join [
-          "* Invalid type of constructor: ", nameGetStr ident, "\n",
-          "* The right-hand side should refer to a constructor type.\n",
-          "* When type checking the expression\n"
-        ] in
-        errorSingle [info] msg
-    else
-      let msg = join [
-        "* Invalid type of constructor: ", nameGetStr ident, "\n",
-        "* The constructor should be given type A -> B, where B\n",
-        "  is a fully applied datatype in scope.\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle [info] msg
+      match getTypeArgs to with (TyCon t, _) then
+        let data = Data {
+          types = mapFromSeq nameCmp [ (t.ident, setOfSeq nameCmp [ ident ]) ]
+        } in
+        let x = nameSym "x" in
+        TyAll { info = info
+              , ident = x
+              , kind = data
+              , ty = substituteData (TyVar {info = info, ident = x}) ty }
+      else errorSingle [info] (msg ())
+    else errorSingle [info] (msg ())
 
   sem typeCheckExpr env =
   | TmConDef t ->
     let tyIdent = resolveType t.info env.tyConEnv t.tyIdent in
-    _checkConstructorType t.info t.ident tyIdent;
+    let tyIdent = _makeConstructorType t.info t.ident tyIdent in
     let inexpr = typeCheckExpr (_insertCon t.ident tyIdent env) t.inexpr in
     TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->

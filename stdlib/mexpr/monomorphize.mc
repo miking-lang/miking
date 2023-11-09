@@ -764,7 +764,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
       match mapLookup t.ident env.typeEnv with Some instEntry then
         let typeInst = findTypeInstantiation instEntry.polyType ty in
         match mapLookup typeInst instEntry.map with Some newId then
-          TyCon {ident = newId, info = infoTy ty}
+          TyCon {t with ident = newId, info = infoTy ty}
         else
           monoError [t.info] "Invalid type constructor instantiation"
       else

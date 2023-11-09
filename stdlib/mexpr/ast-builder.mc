@@ -92,9 +92,15 @@ let tyalias_ = use AliasTypeAst in
   lam display. lam content.
   TyAlias {display = display, content = content}
 
-let ntycon_ = use ConTypeAst in
-  lam n.
-  TyCon {ident = n, info = NoInfo ()}
+let nsitycon_ = use ConTypeAst in
+  lam n. lam d. lam i.
+  TyCon {ident = n, data = d, info = i}
+
+let nitycon_ = lam n. lam i.
+  nsitycon_ n tyunknown_ i
+
+let ntycon_ = lam n.
+  nitycon_ n (NoInfo ())
 
 let tycon_ = lam s.
   ntycon_ (nameNoSym s)

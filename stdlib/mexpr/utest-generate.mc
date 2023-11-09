@@ -81,9 +81,9 @@ let _stringTy = _seqTy _charTy
 let _tensorTy = lam ty.
   use MExprAst in
   TyTensor {ty = ty, info = _utestInfo}
-let _conTy = lam id.
+let _conTy = lam id. lam d.
   use MExprAst in
-  TyCon {ident = id, info = _utestInfo}
+  TyCon {ident = id, data = d, info = _utestInfo}
 let _varTy = lam id.
   use MExprAst in
   TyVar {ident = id, info = _utestInfo}

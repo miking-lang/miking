@@ -87,11 +87,11 @@ lang TypeLiftAddRecordToEnv = TypeLiftBase + RecordTypeAst
   | TyRecord {fields = fields, info = info} & ty ->
     switch mapLookup fields env.records
     case Some name then
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       (env, tycon)
     case None _ then
       let name = nameSym "Rec" in
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       let env = {{env
                   with records = mapInsert fields name env.records}
                   with typeEnv = assocSeqInsert name ty env.typeEnv}
@@ -106,11 +106,11 @@ lang TypeLiftAddSeqToEnv = TypeLiftBase + SeqTypeAst + ConTypeAst
   sem addSeqToEnv (env: TypeLiftEnv) =
   | TySeq {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.seqs with Some name then
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       (env, tycon)
     else
       let name = nameSym "Seq" in
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       let env = {{env with seqs = mapInsert innerTy name env.seqs}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
@@ -121,11 +121,11 @@ lang TypeLiftAddTensorToEnv = TypeLiftBase + TensorTypeAst + ConTypeAst
   sem addTensorToEnv (env : TypeLiftEnv) =
   | TyTensor {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.tensors with Some name then
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       (env, tycon)
     else
       let name = nameSym "Tensor" in
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       let env = {{env with tensors = mapInsert innerTy name env.tensors}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
