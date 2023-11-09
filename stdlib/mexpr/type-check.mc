@@ -726,6 +726,7 @@ end
 
 lang PropagateTypeAnnot = FunTypeAst + LamAst + UnknownTypeAst
   sem propagateTyAnnot =
+  | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
   | (TmLam l, TyArrow a) ->
     let body = propagateTyAnnot (l.body, a.to) in
     let ty = optionGetOr a.from (sremoveUnknown l.tyAnnot) in
@@ -746,7 +747,7 @@ lang LetTypeCheck =
         match stripTyAll tyBody with (vars, stripped) in
         let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
-        let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, stripped)) in
+        let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, tyAnnot)) in
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
         (if env.disableRecordPolymorphism then
@@ -896,7 +897,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
         if isValue (GVal ()) b.body then
           let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
           match stripTyAll b.tyBody with (_, stripped) in
-          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, stripped)) in
+          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
           -- Unify the inferred type of the body with the annotated one
           unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
           body
