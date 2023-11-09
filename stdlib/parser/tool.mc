@@ -205,6 +205,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         result.ok (TyCon
           { ident = x.name.v
           , info = x.info
+          , data = tyunknown_
           })
       case VariableExpr x then
         result.ok (TyVar

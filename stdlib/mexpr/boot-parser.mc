@@ -309,7 +309,8 @@ lang BootParser = MExprAst + ConstTransformer
     else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyCon-/ ->
     TyCon {info = ginfo t 0,
-           ident = gname t 0}
+           ident = gname t 0,
+           data = TyUnknown { info = ginfo t 0 }}
   | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
            ident = gname t 0}

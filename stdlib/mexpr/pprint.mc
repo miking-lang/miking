@@ -1146,10 +1146,13 @@ lang VariantTypePrettyPrint = PrettyPrint + VariantTypeAst
     -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
-lang ConTypePrettyPrint = PrettyPrint + ConTypeAst
+lang ConTypePrettyPrint = IdentifierPrettyPrint + ConTypeAst + UnknownTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyCon t ->
-    pprintTypeName env t.ident
+    match pprintTypeName env t.ident with (env, idstr) in
+    match t.data with TyUnknown {} then (env, idstr) else
+      match getTypeStringCode indent env t.data with (env, str) in
+      (env, join [str, ".", idstr])
 end
 
 lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
@@ -1159,12 +1162,21 @@ lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
 end
 
 lang KindPrettyPrint = PrettyPrint + RecordTypeAst + KindAst
-  sem getKindStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
-  | Row r ->
+  sem getKindStringCode (indent : Int) (env : PprintEnv) =
+  | Record r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
     (env, join [init recstr, " ... ", [last recstr]])
-  | _ -> (env, idstr)
+  | Data r ->
+    let tstr =
+      mapFoldWithKey (lam strs. lam t. lam ks.
+        snoc strs (join [ nameGetStr t, "{"
+                        , strJoin ", " (map nameGetStr (setToSeq ks))
+                        , "}" ])
+    ) "" r.types in
+    (env, join ["<", strJoin ", " tstr, ">"])
+  | Poly () -> (env, "*")
+  | Mono () -> (env, "o")
 end
 
 lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
@@ -1174,9 +1186,13 @@ lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyAll t ->
     match pprintVarName env t.ident with (env, idstr) in
-    match getKindStringCode indent env idstr t.kind with (env, varstr) in
+    match
+      match t.kind with Mono () | Poly () then (env, "") else
+        match getKindStringCode indent env t.kind with (env, kistr) in
+        (env, concat " :: " kistr)
+    with (env, kistr) in
     match getTypeStringCode indent env t.ty with (env, tystr) in
-    (env, join ["all ", varstr, ". ", tystr])
+    (env, join ["all ", idstr, kistr, ". ", tystr])
 end
 
 lang AppTypePrettyPrint = PrettyPrint + AppTypeAst

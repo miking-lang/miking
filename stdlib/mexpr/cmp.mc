@@ -406,7 +406,10 @@ end
 
 lang ConTypeCmp = Cmp + ConTypeAst
   sem cmpTypeH =
-  | (TyCon t1, TyCon t2) -> nameCmp t1.ident t2.ident
+  | (TyCon t1, TyCon t2) ->
+    let nameDiff = nameCmp t1.ident t2.ident in
+    if eqi nameDiff 0 then cmpType t1.data t2.data
+    else nameDiff
 end
 
 lang VarTypeCmp = Cmp + VarTypeAst
@@ -416,8 +419,10 @@ end
 
 lang KindCmp = Cmp + KindAst
   sem cmpKind =
-  | (Row l, Row r) ->
+  | (Record l, Record r) ->
     mapCmp cmpType l.fields r.fields
+  | (Data l, Data r) ->
+    mapCmp setCmp l.types r.types
   | (lhs, rhs) ->
     subi (constructorTag lhs) (constructorTag rhs)
 end
