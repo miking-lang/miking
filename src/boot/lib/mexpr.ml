@@ -2187,6 +2187,7 @@ and free_vars (free : SymbSet.t) (t : tm) =
       sfold_tm_tm free_vars free t
 
 and closure_elim (env : (Symb.t * tm) list) (t : tm) =
+  printf "closure_elim ---\n";
   match t with
   | TmClos (fi, x, s_clos, ty, tm, env_ref, _) ->
       let fv = free_vars SymbSet.empty tm in
@@ -2256,7 +2257,7 @@ and scan (env : (Symb.t * tm) list) (t : tm) =
         t1 )
   | TmPreRun (_, _, t) ->
       let t' = eval env {pe_init with inPeval= true} t in
-      closure_elim env t'
+      t'  (* closure_elim env t' *)
   | t ->
       smap_tm_tm (scan env) t
 
@@ -2345,6 +2346,8 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
       TmConApp (fi, x, s, rhs)
   (* Match *)
   | TmMatch (fi, t1, p, t2, t3) ->
+(*     print_endline ("TmMatch " ^ (get_line_no_str fi) ^
+                      " : " ^ get_info_filename fi); *)
       let t1' = eval env pe t1 in
       if (not pe.inPeval) || is_value t1' then
         match try_match env t1' p with
@@ -2357,13 +2360,14 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
         TmMatch (fi, t1', p, eval env pe' t2, eval env pe' t3)
   (* Dive *)
   | TmDive (_, _, t) -> (
+    print_endline "TmDive";
     match eval env pe t with
     | TmClos (fi, x, s, ty, t, env_ref, is_rec) ->
         let s' = Symb.gensym () in
         let tvar = TmVar (fi, x, s', false) in
         let pe' = {pe with inPeval= true} in
         let t' = eval ((s, tvar) :: !env_ref) pe' (TmDive (fi, 0, t)) in
-        let t'' = if pe.inPeval then t' else closure_elim !env_ref t' in
+        let t'' = t' in (* if pe.inPeval then t' else closure_elim !env_ref t' in  *)
         TmClos (fi, x, s', ty, t'', env_ref, is_rec)
     | t' ->
         t' )

@@ -88,3 +88,11 @@ let error_message fi sev msg : message = (ERROR msg, sev, fi, [])
 let raise_error fi msg = raise (Error (error_message fi ERROR msg))
 
 let error fi msg = raise_error fi (msg |> Ustring.to_utf8)
+
+let get_line_no_str = function
+  | Info(_,l1,_,_,_) -> string_of_int l1
+  | _ -> ""
+
+let get_info_filename = function
+  | Info(s,_,_,_,_) -> Ustring.to_utf8 s
+  | _ -> ""
