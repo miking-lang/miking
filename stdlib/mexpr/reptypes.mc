@@ -887,9 +887,12 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-10-25): There's a new `OpImpl` in scope
   sem addImpl : all a. SolverGlobal a -> SolverBranch a -> OpImpl a -> SolverBranch a
 
-  -- NOTE(vipa, 2023-11-03): Create some form of debug output,
-  -- typically printed right after an `addImpl`.
-  sem debugBranch : all a. SolverGlobal a -> SolverBranch a -> ()
+  -- NOTE(vipa, 2023-11-03): Create some form of debug output for the
+  -- branch state
+  sem debugBranchState : all a. SolverGlobal a -> SolverBranch a -> ()
+  -- NOTE(vipa, 2023-11-11): Create some form of debug output for a
+  -- particular (top-)solution
+  sem debugSolution : all a. SolverGlobal a -> [SolverSolution a] -> ()
 
   -- NOTE(vipa, 2023-11-04): Produce all solutions available for a
   -- given op, for error messages when `allSolutions` fails to produce
@@ -899,7 +902,7 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
   -- system will ask for a solution from a solution set. Every other
   -- solution will be acquired through concretizeSolution.
-  sem allSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> Type -> (SolverBranch a, [SolProps a])
+  sem allSolutions : all a. Bool -> SolverGlobal a -> SolverBranch a -> Name -> Type -> (SolverBranch a, [SolProps a])
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level, where we just get a
   -- sequence of solutions that are available for each opUse, and
@@ -916,10 +919,22 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   sem cmpSolution : all a. SolverSolution a -> SolverSolution a -> Int
 end
 
+type ReprSolverOptions =
+  { debugBranchState : Bool
+  , debugFinalSolution : Bool
+  , debugSolveProcess : Bool
+  }
+
+let defaultReprSolverOptions : ReprSolverOptions =
+  { debugBranchState = false
+  , debugFinalSolution = false
+  , debugSolveProcess = false
+  }
+
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint
   -- Top interface, meant to be used outside --
-  sem reprSolve : Bool -> Expr -> Expr
-  sem reprSolve debug = | tm ->
+  sem reprSolve : ReprSolverOptions -> Expr -> Expr
+  sem reprSolve options = | tm ->
     let global = initSolverGlobal () in
     -- NOTE(vipa, 2023-10-25): Right now we do not handle nested impls
     -- in the collection phase
@@ -927,10 +942,11 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       { branch = initSolverBranch global
       , opUses = []
       , nextId = 0
-      , debug = debug
+      , options = options
       } in
     match collectForReprSolve global initState tm with (state, tm) in
     let pickedSolutions = topSolve global state.opUses in
+    (if options.debugFinalSolution then debugSolution global pickedSolutions else ());
     -- NOTE(vipa, 2023-10-25): The concretization phase *does* handle
     -- nested impls, so it shouldn't have to be updated if the
     -- collection phase is improved later on
@@ -944,7 +960,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , global = global
       } in
     match concretizeAlt initState tm with (state, tm) in
-    mapFoldWithKey (lam. lam id. lam deps. printLn (join ["Left-over dep, id: ", int2string id, ", num deps: ", int2string (length deps)])) () state.requests;
+    mapFoldWithKey (lam. lam id. lam deps. printLn (join ["(compiler error) Left-over dep, id: ", int2string id, ", num deps: ", int2string (length deps)])) () state.requests;
     removeReprExpr tm
 
   -- Collecting and solving sub-problems --
@@ -952,7 +968,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     { branch : SolverBranch Expr
     , opUses : [[SolProps Expr]]
     , nextId : Int
-    , debug : Bool
+    , options : ReprSolverOptions
     }
 
   sem collectForReprSolve
@@ -963,8 +979,8 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   sem collectForReprSolve global state =
   | tm -> smapAccumL_Expr_Expr (collectForReprSolve global) state tm
   | tm & TmOpVar x ->
-    match allSolutions global state.branch x.ident x.ty with (branch, sols) in
-    (if state.debug then debugBranch global branch else ());
+    match allSolutions state.options.debugSolveProcess global state.branch x.ident x.ty with (branch, sols) in
+    (if state.options.debugBranchState then debugBranchState global branch else ());
     if null sols then
       let env = pprintEnvEmpty in
       recursive let unwrapAll = lam ty. unwrapType (smap_Type_Type unwrapAll ty) in
@@ -1161,7 +1177,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   | SSContent (SolContent x) ->
     (x.token, x.highestImpl, map (lam sub. SSContent sub) x.subSols)
 
-  sem debugBranch global = | SBContent branch ->
+  sem debugBranchState global = | SBContent branch ->
     let perImpl = lam env. lam op. lam impls.
       match pprintVarName env op with (env, op) in
       printLn (join ["  ", op, ", letimpl count: ", int2string (setSize impls)]);
@@ -1183,6 +1199,14 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     printLn " # Solutions:";
     let env = mapFoldWithKey perMemo env branch.memo in
     ()
+
+  sem debugSolution global = | solutions ->
+    printLn "\n# Solution cost tree:";
+    recursive let work = lam indent. lam sol.
+      match sol with SolContent x in
+      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ")"]);
+      for_ x.subSols (work (concat indent "  "))
+    in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
   sem addImpl global branch = | impl ->
     match branch with SBContent branch in
@@ -1214,15 +1238,18 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       (foldl (lam sol. lam sol2. if ltf sol2.cost sol.cost then sol2 else sol) sol sols).sols
     else errorSingle [] "Could not pick implementations for all operations."
 
-  sem allSolutions global branch op = | ty ->
+  sem allSolutions debug global branch op = | ty ->
+    (if debug then
+      printLn "\n# Solving process:"
+     else ());
     match branch with SBContent branch in
-    match solutionsFor branch op ty with (branch, sols) in
+    match solutionsFor (if debug then Some "" else None ()) branch op ty with (branch, sols) in
     let sols = map (lam s. match s with SolContent x in {sol = SSContent s, cost = x.cost, uni = x.uni}) sols in
     (SBContent branch, sols)
 
   sem availableSolutions global branch = | op ->
     match branch with SBContent branch in
-    match solutionsFor branch op (newmonovar 0 (NoInfo ())) with (branch, sols) in
+    match solutionsFor (None ()) branch op (newmonovar 0 (NoInfo ())) with (branch, sols) in
     let sols = map (lam sol. match sol with SolContent x in {token = x.token, ty = pureApplyUniToType x.uni x.ty}) sols in
     (SBContent branch, sols)
 
@@ -1348,15 +1375,20 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     )
 
   -- NOTE(vipa, 2023-11-07): Wrapper function that handles memoization and termination
-  sem solutionsFor : all a. SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
-  sem solutionsFor branch op = | ty ->
+  sem solutionsFor : all a. Option String -> SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
+  sem solutionsFor debugIndent branch op = | ty ->
     match mkLocallyNameless branch ty with (branch, nlEnv, ty) in
     match
-      match mapLookup (op, ty) branch.memo with Some sols then (branch, sols) else
-      let branch = {branch with memo = mapInsert (op, ty) [] branch.memo} in
-      match solutionsForWork branch op ty with (branch, sols) in
-      let branch = {branch with memo = mapInsert (op, ty) sols branch.memo} in
-      (branch, sols)
+      match mapLookup (op, ty) branch.memo with Some sols then
+        (match debugIndent with Some indent then
+          printLn (join [indent, nameGetStr op, " (memo, ", int2string (length sols), " solutions)"])
+         else ());
+        (branch, sols)
+      else
+        let branch = {branch with memo = mapInsert (op, ty) [] branch.memo} in
+        match solutionsForWork debugIndent branch op ty with (branch, sols) in
+        let branch = {branch with memo = mapInsert (op, ty) sols branch.memo} in
+        (branch, sols)
     with (branch, sols) in
     let revSol = lam sol.
       match sol with SolContent sol in SolContent
@@ -1367,11 +1399,12 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
 
   -- NOTE(vipa, 2023-11-07): Function that does the actual work
   sem solutionsForWork
-    : all a. SBContent a
+    : all a. Option String
+    -> SBContent a
     -> Name
     -> Type
     -> (SBContent a, [SolContent a])
-  sem solutionsForWork branch op = | ty ->
+  sem solutionsForWork debugIndent branch op = | ty ->
     let perSolInUseInImpl = lam opUse. lam prev. lam sol.
       match sol with SolContent x in
       let mk = lam uni.
@@ -1384,16 +1417,28 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     in
 
     let perUseInImpl = lam subst. lam uni. lam acc. lam opUse.
+      let debugIndent = optionMap (concat "  ") debugIndent in
       if null acc.prev then acc else
       let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
-      match solutionsFor acc.branch opUse.ident ty with (branch, curr) in
+      match solutionsFor debugIndent acc.branch opUse.ident ty
+        with (branch, curr) in
       let curr = filterOption (seqLiftA2 (perSolInUseInImpl opUse) acc.prev curr) in
+      (match debugIndent with Some indent then
+        printLn (join [indent, "post ", nameGetStr opUse.ident, ", live partials: ", int2string (length curr)])
+       else ());
       {branch = branch, prev = curr} in
 
     let perImpl = lam acc : {branch : SBContent a, sols : [SolContentRec a]}. lam impl.
+      let debugIndent = optionMap (concat " ") debugIndent in
+      (match debugIndent with Some indent then
+        print (join [indent, "trying impl with ", int2string (length impl.opUses), " sub ops"])
+       else ());
       match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
         with (specType, subst) in
       match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
+        (match debugIndent with Some _ then
+          printLn ""
+         else ());
         let solInit =
           { token = impl.token
           , cost = impl.selfCost
@@ -1423,9 +1468,16 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
           else {sol with uni = filterUnification uniFilter sol.uni} in
         let newSols = map finalizeSol innerAcc.prev in
         {branch = innerAcc.branch, sols = concat acc.sols newSols}
-      else acc
+      else
+        (match debugIndent with Some indent then
+          printLn " (failed first unification)"
+         else ());
+        acc
     in
 
+    (match debugIndent with Some indent then
+      printLn (join [indent, nameGetStr op, ":"])
+     else ());
     let impls = optionMapOr [] (setToSeq) (mapLookup op branch.implsPerOp) in
     match foldl perImpl {branch = branch, sols = []} impls with {branch = branch, sols = sols} in
     (branch, map (lam x. SolContent x) (pruneRedundant sols))
@@ -1566,7 +1618,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
 
     SBContent branch
 
-  sem debugBranch global = | SBContent branch ->
+  sem debugBranchState global = | SBContent branch ->
     let printSolByOp = lam env. lam op. lam sols.
       let printSol = lam env. lam solid.
         let sol = mapFindExn solid branch.solsById in
