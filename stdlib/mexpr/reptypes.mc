@@ -812,7 +812,7 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
       unify newEnv [infoTy reprType, infoTm body] reprType (tyTm body);
       { x with body = body
       , delayedReprUnifications = delayedReprUnifications
-      , specType = removeReprSubsts specType
+      , specType = specType
       }
     in
     match withNewReprScope env (lam env. typeCheckBody env)
@@ -931,7 +931,7 @@ let defaultReprSolverOptions : ReprSolverOptions =
   , debugSolveProcess = false
   }
 
-lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint
+lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
   sem reprSolve : ReprSolverOptions -> Expr -> Expr
   sem reprSolve options = | tm ->
@@ -998,6 +998,16 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TmOpImpl x ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
+    recursive let addSubstsToUni = lam oUni. lam ty.
+      switch unwrapType ty
+      case TySubst x then
+        match unwrapType x.arg with TyRepr r then
+          let oUni = optionBind oUni (lam uni. unifySetReprPure uni r.repr x.subst) in
+          addSubstsToUni oUni r.arg
+        else errorSingle [x.info] "Substitutions must be applied to repr-types."
+      case ty then
+        sfold_Type_Type addSubstsToUni oUni ty
+      end in
     let opImpl =
       { implId = implId
       , op = x.ident
@@ -1005,12 +1015,16 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , selfCost = x.selfCost
       -- NOTE(vipa, 2023-11-04): repr unification cannot fail until
       -- repr substitutions have been applied, which they haven't here
-      , uni = optionGetOrElse (lam. error "Compiler error in reptype solver")
-        (optionFoldlM
-          (lam acc. lam pair. unifyReprPure acc pair.0 pair.1)
-          (emptyUnification ())
-          x.delayedReprUnifications)
-      , specType = x.specType
+      , uni =
+        let uni = optionGetOrElse (lam. error "Compiler error in reptype solver")
+          (optionFoldlM
+            (lam acc. lam pair. unifyReprPure acc pair.0 pair.1)
+            (emptyUnification ())
+            x.delayedReprUnifications) in
+        let oUni = addSubstsToUni (Some uni) x.specType in
+        optionGetOrElse (lam. errorSingle [infoTy x.specType] "This type makes inconsistent repr substitutions.")
+          oUni
+      , specType = removeReprSubsts x.specType
       , reprScope = x.reprScope
       , metaLevel = x.metaLevel
       , info = x.info
@@ -1120,6 +1134,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   type SolContentRec a =
     { token : a
     , cost : OpCost
+    , scale : OpCost
     , uni : Unification
     , impl : OpImpl a
     , highestImpl : ImplId
@@ -1184,13 +1199,15 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       env in
     let perSol = lam env. lam sol.
       match sol with SolContent sol in
-      match getTypeStringCode 0 env (pureApplyUniToType sol.uni sol.ty) with (env, ty) in
-      printLn (join ["    cost: ", float2string sol.cost, ", ty: ", ty]);
+      match unificationToDebug "     " env sol.uni with (env, uni) in
+      -- match getTypeStringCode 0 env (pureApplyUniToType sol.uni sol.ty) with (env, ty) in
+      -- TODO(vipa, 2023-11-13): print metalevel and reprscope as well
+      print (join ["    cost: ", float2string sol.cost, ", uni:\n", uni]);
       env in
     let perMemo = lam env. lam pair. lam sols.
       match pprintVarName env pair.0 with (env, op) in
       match getTypeStringCode 0 env pair.1 with (env, ty) in
-      printLn (join ["  ", op, " : ", ty]);
+      printLn (join ["  ", op, " (count: ", int2string (length sols), ") : ", ty]);
       let env = foldl perSol env sols in
       env in
     let env = pprintEnvEmpty in
@@ -1204,7 +1221,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent x in
-      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ")"]);
+      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ")"]);
       for_ x.subSols (work (concat indent "  "))
     in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
@@ -1260,34 +1277,34 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     case Unbound u then setInsert u.ident acc
     end
 
-  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol Symbol, revMeta : Map Name Name}
+  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol (Symbol, Int), revMeta : Map Name (Name, Int)}
   sem undoLocallyNamelessTy : RevNameless -> Type -> Type
   sem undoLocallyNamelessTy nlEnv =
   | ty -> smap_Type_Type (undoLocallyNamelessTy nlEnv) ty
   | TyAll x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revMeta in
+    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
     TyAll {x with ident = ident, ty = undoLocallyNamelessTy nlEnv x.ty}
   | TyVar x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revMeta in
+    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
     TyVar {x with ident = ident}
   | ty & TyMetaVar _ ->
     switch unwrapType ty
     case TyMetaVar x then
       match deref x.contents with Unbound u in
-      let ident = mapLookupOr u.ident u.ident nlEnv.revMeta in
-      TyMetaVar {x with contents = ref (Unbound {u with ident = ident})}
+      match mapLookupOr (u.ident, u.level) u.ident nlEnv.revMeta with (ident, level) in
+      TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})}
     case ty then undoLocallyNamelessTy nlEnv ty
     end
   | TyRepr x ->
     match deref (botRepr x.repr) with BotRepr r in
-    let sym = mapLookupOr r.sym r.sym nlEnv.revRepr in
-    TyRepr {x with repr = ref (BotRepr {r with sym = sym}), arg = undoLocallyNamelessTy nlEnv x.arg}
+    match mapLookupOr (r.sym, r.scope) r.sym nlEnv.revRepr with (sym, scope) in
+    TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = undoLocallyNamelessTy nlEnv x.arg}
 
-  sem undoLocallyNamelessUni : RevNameless -> Unification -> Unification
+  sem undoLocallyNamelessUni : RevNameless -> Unification -> Option Unification
   sem undoLocallyNamelessUni nlEnv = | uni ->
     substituteInUnification
-      (lam x. mapLookupOr x x nlEnv.revMeta)
-      (lam x. mapLookupOr x x nlEnv.revRepr)
+      (lam x. mapLookupOr x x.0 nlEnv.revMeta)
+      (lam x. mapLookupOr x x.0 nlEnv.revRepr)
       (undoLocallyNamelessTy nlEnv)
       uni
 
@@ -1295,7 +1312,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   sem mkLocallyNameless branch = | ty ->
     type NlSmall x =
       { forward : Map x x
-      , reverse : Map x x
+      , reverse : Map x (x, Int)
       , nextIdx : Int
       , vals : [x]
       } in
@@ -1310,38 +1327,42 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
           then st
           else {st with vals = snoc st.vals (mkNew ())} in
         ({st with nextIdx = addi 1 st.nextIdx}, get st.vals st.nextIdx) in
-    let getNameless : all x. (() -> x) -> x -> NlSmall x -> (NlSmall x, x)
+    let getNameless : all x. (() -> x) -> (x, Int) -> NlSmall x -> (NlSmall x, (x, Int))
       = lam mkNew. lam x. lam st.
-        match mapLookup x st.forward with Some x then (st, x) else
+        -- NOTE(vipa, 2023-11-13): The use of `uniFilter` later
+        -- depends on the level/scope returned here is strictly less
+        -- than the current level/scope of the impl. This is true for
+        -- -1, so we go with that.
+        match mapLookup x.0 st.forward with Some x then (st, (x, negi 1)) else
         match nextNameless mkNew st with (st, newX) in
-        ( { st with forward = mapInsert x newX st.forward
+        ( { st with forward = mapInsert x.0 newX st.forward
           , reverse = mapInsert newX x st.reverse
           }
-        , newX
+        , (newX, negi 1)
         )
     in
     recursive let locallyNameless : NlEnv -> Type -> (NlEnv, Type) = lam acc. lam ty.
       switch unwrapType ty
       case TyAll x then
-        match getNameless (lam. nameSym "bound") x.ident acc.vars with (vars, ident) in
+        match getNameless (lam. nameSym "bound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
         let acc = {acc with vars = vars} in
         match locallyNameless acc x.ty with (acc, ty) in
         (acc, TyAll {x with ident = ident, ty = ty})
       case TyVar x then
-        match getNameless (lam. nameSym "unbound") x.ident acc.vars with (vars, ident) in
+        match getNameless (lam. nameSym "unbound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
         (acc, TyVar {x with ident = ident})
       case ty & TyRepr x then
         match deref (botRepr x.repr) with BotRepr r in
-        match getNameless gensym r.sym acc.reprs with (reprs, sym) in
+        match getNameless gensym (r.sym, r.scope) acc.reprs with (reprs, (sym, scope)) in
         let acc = {acc with reprs = reprs} in
         match locallyNameless acc x.arg with (acc, arg) in
-        (acc, TyRepr {x with repr = ref (BotRepr {r with sym = sym}), arg = arg})
+        (acc, TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = arg})
       case TyMetaVar x then
         switch deref x.contents
         case Unbound u then
-          match getNameless (lam. nameSym "meta") u.ident acc.metas with (metas, ident) in
+          match getNameless (lam. nameSym "meta") (u.ident, u.level) acc.metas with (metas, (ident, level)) in
           let acc = {acc with metas = metas} in
-          (acc, TyMetaVar {x with contents = ref (Unbound {u with ident = ident})})
+          (acc, TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})})
         case Link ty then
           locallyNameless acc ty
         end
@@ -1370,7 +1391,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       } in
     match locallyNameless nlEnv ty with (nlEnv, ty) in
     ( {branch with nameless = {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}}
-    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = nlEnv.vars.reverse}
+    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = mapMap (lam x. x.0) nlEnv.vars.reverse}
     , ty
     )
 
@@ -1391,11 +1412,14 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         (branch, sols)
     with (branch, sols) in
     let revSol = lam sol.
-      match sol with SolContent sol in SolContent
-      { sol with ty = undoLocallyNamelessTy nlEnv sol.ty
-      , uni = undoLocallyNamelessUni nlEnv sol.uni
-      } in
-    (branch, map revSol sols)
+      match sol with SolContent sol in
+      match undoLocallyNamelessUni nlEnv sol.uni with Some uni
+      then Some (SolContent
+        { sol with uni = uni
+        , ty = undoLocallyNamelessTy nlEnv sol.ty
+        })
+      else None () in
+    (branch, mapOption revSol sols)
 
   -- NOTE(vipa, 2023-11-07): Function that does the actual work
   sem solutionsForWork
@@ -1411,7 +1435,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         { prev with uni = uni
         , cost = addf prev.cost (mulf opUse.scaling x.cost)
         , highestImpl = maxi prev.highestImpl x.highestImpl
-        , subSols = snoc prev.subSols sol
+        , subSols = snoc prev.subSols (SolContent {x with scale = opUse.scaling})
         }
       in optionMap mk (mergeUnifications prev.uni x.uni)
     in
@@ -1442,6 +1466,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         let solInit =
           { token = impl.token
           , cost = impl.selfCost
+          , scale = 1.0
           , uni = uni
           , impl = impl
           , highestImpl = impl.implId
@@ -1450,16 +1475,17 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
           } in
         let innerAcc = foldl (perUseInImpl subst uni) {branch = acc.branch, prev = [solInit]} impl.opUses in
         let uniFilter =
+          -- NOTE(vipa, 2023-11-13): The substitution business ensures
+          -- that all metas/reprs in `ty` are in a level/scope lesser
+          -- than the current, i.e., we can skip computing the set of
+          -- those in the signature
           { reprs =
             { scope = impl.reprScope
-            , syms = foldl
-              (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
-              (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
-              (findReprs [] specType)
+            , syms = setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
             }
           , types =
             { level = impl.metaLevel
-            , names = findMetaVarNames (setEmpty nameCmp) specType
+            , names = setEmpty nameCmp
             }
           } in
         let finalizeSol = lam sol.
@@ -1478,7 +1504,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     (match debugIndent with Some indent then
       printLn (join [indent, nameGetStr op, ":"])
      else ());
-    let impls = optionMapOr [] (setToSeq) (mapLookup op branch.implsPerOp) in
+    let impls = optionMapOr [] setToSeq (mapLookup op branch.implsPerOp) in
     match foldl perImpl {branch = branch, sols = []} impls with {branch = branch, sols = sols} in
     (branch, map (lam x. SolContent x) (pruneRedundant sols))
 
@@ -1495,8 +1521,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     -- NOTE(vipa, 2023-11-07): `Some _` means add the new, `Some true`
     -- means keep the old, `Some false` means remove the old.
     let check = lam new. lam old.
-      let newIsCheaper = gtf old.cost new.cost in
-      let mergedUni = mergeUnifications old.uni new.uni in
+      let newIsCheaper = ltf new.cost old.cost in
       -- NOTE(vipa, 2023-11-07): Since solutions are created unified
       -- with the same type we already know that both `ty`s are the
       -- same modulo assertions in their respective `uni`s, thus we

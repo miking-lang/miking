@@ -213,25 +213,28 @@ type PureUnionFind k extra out =
 
 let pufToDebug
   : all k. all extra. all out. all env.
-    (env -> k -> (env, String))
+  String
+  -> (env -> k -> (env, String))
   -> (env -> extra -> (env, String))
   -> (env -> out -> (env, String))
   -> env
   -> PureUnionFind k extra out
   -> (env, String)
-  = lam pk. lam pextra. lam pout. lam env. lam puf.
+  = lam indent. lam pk. lam pextra. lam pout. lam env. lam puf.
     let f = lam acc. lam k. lam record.
       match acc with (env, str) in
       match pk env k with (env, k) in
       match switch record.content
         case PUFLink k then pk env k
-        case PUFOut out then pout env out
+        case PUFOut out then
+          match pout env out with (env, out) in
+          (env, concat "(out) " out)
         case PUFExtra extras then
           match mapAccumL pextra env extras with (env, extras) in
-          (env, strJoin ", " extras)
+          (env, concat "(extras) " (strJoin ", " extras))
         end
       with (env, content) in
-      (env, join ["  ", k, "@", int2string record.level, " -> ", content, "\n"])
+      (env, join [str, indent, k, "@", int2string record.level, " -> ", content, "\n"])
     in
     mapFoldWithKey f (env, "") puf
 
@@ -245,6 +248,29 @@ type PUFResult k extra out =
   , newExtraResolutions : Option (out, [extra])
   , puf : PureUnionFind k extra out
   }
+
+type PUFResults k extra out =
+  { newOutUnifications : [(out, out)]
+  , newExtraResolutions : [(out, [extra])]
+  , puf : PureUnionFind k extra out
+  }
+
+let pufEmptyResults = lam puf.
+  { newOutUnifications = []
+  , newExtraResolutions = []
+  , puf = puf
+  }
+
+let pufBind : all k. all extra. all out
+  . PUFResults k extra out
+  -> (PureUnionFind k extra out -> PUFResult k extra out)
+  -> PUFResults k extra out
+  = lam res. lam f.
+    let new = f res.puf in
+    { newOutUnifications = optionMapOr res.newOutUnifications (snoc res.newOutUnifications) new.newOutUnification
+    , newExtraResolutions = optionMapOr res.newExtraResolutions (snoc res.newExtraResolutions) new.newExtraResolutions
+    , puf = new.puf
+    }
 
 let pufEmpty = mapEmpty
 
@@ -323,7 +349,11 @@ let pufUnify
   = lam l. lam r. lam puf.
     match (_pufUnwrap l puf, _pufUnwrap r puf) with (l, r) in
     if eqi 0 (mapGetCmpFun puf l.k r.k) then { newOutUnification = None (), newExtraResolutions = None (), puf = puf} else
-    match if lti l.level r.level then (r, l) else (l, r) with (from, to) in
+    let cmpRes =
+      let res = subi l.level r.level in
+      if neqi res 0 then res else
+      mapGetCmpFun puf l.k r.k in
+    match if lti cmpRes 0 then (r, l) else (l, r) with (from, to) in
     match
       switch (from.content, to.content)
       case (Left out, Right extra) | (Right extra, Left out) then
@@ -383,23 +413,19 @@ let pufFold
       puf
 
 let pufMapK
-  : all k. all out. all extra
-  . (k -> k)
-  -> (out -> out)
-  -> (extra -> extra)
-  -> PureUnionFind k extra out
-  -> PureUnionFind k extra out
-  = lam fk. lam fout. lam fextra. lam puf.
-    mapFoldWithKey
-      (lam acc. lam k. lam res.
-        let content = switch res.content
-          case PUFLink k then PUFLink (fk k)
-          case PUFOut out then PUFOut (fout out)
-          case PUFExtra extras then PUFExtra (map fextra extras)
-          end in
-        let k = fk k in
-        mapInsert k {res with content = content} acc)
-      (mapEmpty (mapGetCmpFun puf))
+  : all k1. all out1. all extra1. all k2. all out2. all extra2
+  . (k2 -> k2 -> Int)
+  -> ((k1, Int) -> (k2, Int))
+  -> (out1 -> out2)
+  -> (extra1 -> extra2)
+  -> PureUnionFind k1 extra1 out1
+  -> PUFResults k2 extra2 out2
+  = lam cmp. lam fk. lam fout. lam fextra. lam puf.
+    pufFold
+      (lam acc. lam l. lam r. pufBind acc (pufUnify (fk l) (fk r)))
+      (lam acc. lam l. lam out. pufBind acc (pufSetOut (fk l) (fout out)))
+      (lam acc. lam l. lam extras. pufBind acc (pufAddExtra (fk l) (map fextra extras)))
+      (pufEmptyResults (mapEmpty cmp))
       puf
 
 let pufFilter
@@ -456,7 +482,7 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
   -- assertions present in the second argument are true in the first.
   sem uniImplies : Unification -> Unification -> Bool
   sem uniImplies a = | b ->
-    let rEq = eitherEq nameEq (lam a. lam b. and (eqsym a.0 b.0) (eqi a.1 b.1)) in
+    let rEq = eitherEq nameEq (lam l. lam r. and (eqsym l.0 r.0) (eqi l.1 r.1)) in
     let tyEq = eitherEq
       (lam l. lam r. eqi 0 (cmpType (pureApplyUniToType a l) (pureApplyUniToType a r)))
       (lam l. lam r. and (nameEq l.0 r.0) (eqi l.1 r.1)) in
@@ -470,16 +496,18 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
       (lam acc. lam. lam. acc)
       true
       b.reprs in
-    if reprImplied then pufFold
-      (lam acc. lam ty1. lam ty2. if acc
-       then tyEq (pufUnwrap a.types ty1) (pufUnwrap a.types ty2)
-       else false)
-      (lam acc. lam ty. lam out. if acc
-       then tyEq (pufUnwrap a.types ty) (Left out)
-       else false)
-      (lam acc. lam. lam. acc)
-      true
-      b.types
+    if reprImplied then
+      let typeImplied = pufFold
+        (lam acc. lam ty1. lam ty2. if acc
+         then tyEq (pufUnwrap a.types ty1) (pufUnwrap a.types ty2)
+         else false)
+        (lam acc. lam ty. lam out. if acc
+         then tyEq (pufUnwrap a.types ty) (Left out)
+         else false)
+        (lam acc. lam. lam. acc)
+        true
+        b.types in
+      typeImplied
     else false
 
   -- Apply the rewrites present in the `Unification` in the given type
@@ -509,33 +537,30 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
       TyRepr {x with arg = arg, repr = ref (UninitRepr ())}
     end
 
+  sem _handlePufReprs : Unification -> PUFResults Symbol () Name -> Option Unification
+  sem _handlePufReprs uni = | res ->
+    if any (lam eq. not (nameEq eq.0 eq.1)) res.newOutUnifications then None () else
+    Some {uni with reprs = res.puf}
+
+  sem _handlePufTypes : Unification -> PUFResults Name () Type -> Option Unification
+  sem _handlePufTypes uni = | res ->
+    let uni = {uni with types = res.puf} in
+    optionFoldlM (lam uni. lam eq. unifyPure uni eq.0 eq.1) uni res.newOutUnifications
+
   sem mergeUnifications : Unification -> Unification -> Option Unification
   sem mergeUnifications l = | r ->
-    let juggle
-      : all k. all out. all extra. all a. all b
-      . (a -> b -> PureUnionFind k extra out -> PUFResult k extra out)
-      -> ([(out, out)], [(out, [extra])], PureUnionFind k extra out)
-      -> a
-      -> b
-      -> ([(out, out)], [(out, [extra])], PureUnionFind k extra out)
-      = lam f. lam acc. lam a. lam b.
-        match acc with (pairs, extras, puf) in
-        let x = f a b puf in
-        let pairs = optionMapOr pairs (lam p. snoc pairs p) x.newOutUnification in
-        let extras = optionMapOr extras (lam e. snoc extras e) x.newExtraResolutions in
-        (pairs, extras, x.puf) in
+    let juggle = lam f. lam acc. lam a. lam b. pufBind acc (f a b) in
 
-    match pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra) ([], [], l.reprs) r.reprs
-    with (newReprEqs, _newReprExtras, reprs) in
-    if any (lam eq. not (nameEq eq.0 eq.1)) newReprEqs then None () else
-    -- NOTE(vipa, 2023-10-04): If we checked that each repr is
-    -- compatible with all types it's applied to, this is where we'd
-    -- do it, with newReprExtras
+    let reprRes = pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra)
+      (pufEmptyResults l.reprs)
+      r.reprs in
+    if any (lam eq. not (nameEq eq.0 eq.1)) reprRes.newOutUnifications then None () else
 
-    match pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra) ([], [], l.types) r.types
-    with (newTypeEqs, _newTypeExtras, types) in
-    let uni = {reprs = reprs, types = types} in
-    optionFoldlM (lam uni. lam eq. unifyPure uni eq.0 eq.1) uni newTypeEqs
+    let typeRes = pufFold (juggle pufUnify) (juggle pufSetOut) (juggle pufAddExtra)
+      (pufEmptyResults l.types)
+      r.types in
+    let uni = {reprs = reprRes.puf, types = typeRes.puf} in
+    optionFoldlM (lam uni. lam eq. unifyPure uni eq.0 eq.1) uni typeRes.newOutUnifications
 
   sem _handlePufRepr : Unification -> PUFResult Symbol () Name -> Option Unification
   sem _handlePufRepr uni = | x ->
@@ -609,11 +634,13 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
       } in
     unifyPureWithEnv env uni lty rty
 
-  sem substituteInUnification : (Name -> Name) -> (Symbol -> Symbol) -> (Type -> Type) -> Unification -> Unification
+  sem substituteInUnification : ((Name, Int) -> (Name, Int)) -> ((Symbol, Int) -> (Symbol, Int)) -> (Type -> Type) -> Unification -> Option Unification
   sem substituteInUnification fn fs fty = | uni ->
-    { reprs = pufMapK fs (lam x. x) (lam x. x) uni.reprs
-    , types = pufMapK fn fty (lam x. x) uni.types
-    }
+    let reprRes = pufMapK (lam a. lam b. subi (sym2hash a) (sym2hash b)) fs (lam x. x) (lam x. x) uni.reprs in
+    match _handlePufReprs uni reprRes with Some uni then
+      let typeRes = pufMapK nameCmp fn fty (lam x. x) uni.types in
+      _handlePufTypes uni typeRes
+    else None ()
 
   sem filterUnification
     : {reprs : {scope : Int, syms : Set Symbol}, types : {level : Int, names : Set Name}}
@@ -624,11 +651,11 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
     , types = pufFilter filters.types.level filters.types.names uni.types
     }
 
-  sem unificationToDebug : PprintEnv -> Unification -> (PprintEnv, String)
-  sem unificationToDebug env = | uni ->
-    match pufToDebug (lam env. lam sym. (env, int2string (sym2hash sym))) (lam env. lam. (env, "")) pprintVarName env uni.reprs with (env, reprs) in
-    match pufToDebug pprintVarName (lam env. lam. (env, "")) (getTypeStringCode 2) env uni.types with (env, types) in
-    (env, concat reprs types)
+  sem unificationToDebug : String -> PprintEnv -> Unification -> (PprintEnv, String)
+  sem unificationToDebug indent env = | uni ->
+    match pufToDebug (cons ' ' indent) (lam env. lam sym. (env, int2string (sym2hash sym))) (lam env. lam. (env, "")) pprintVarName env uni.reprs with (env, reprs) in
+    match pufToDebug (cons ' ' indent) pprintVarName (lam env. lam. (env, "")) (getTypeStringCode 2) env uni.types with (env, types) in
+    (env, join [indent, "reprs:\n", reprs, indent, "types:\n", types])
 end
 
 lang MExprUnify =
