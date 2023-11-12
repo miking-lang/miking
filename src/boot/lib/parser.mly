@@ -596,16 +596,32 @@ ty_atom:
     { TyChar $1.i }
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
-  | type_ident
-    { TyCon($1.i,$1.v) }
+  | type_ident ty_data
+    { TyCon ($1.i, $1.v, $2)}
   | var_ident
     { TyVar($1.i,$1.v)}
+
+ty_data:
+  |
+    { None }
+  | AND LBRACKET con_list RBRACKET
+    { Some (true, $3) }
+  | NOT LBRACKET con_list RBRACKET
+    { Some (false, $3) }
 
 ty_list:
   | ty COMMA ty_list
     { $1 :: $3 }
   | ty
     { [$1] }
+
+con_list:
+  | type_ident BAR con_list
+    { $1.v :: $3 }
+  | type_ident
+    { [$1.v] }
+  |
+    { [] }
 
 label_tys:
   | label_ident COLON ty

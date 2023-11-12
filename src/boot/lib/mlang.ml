@@ -653,8 +653,8 @@ let rec desugar_ty env = function
       TyRecord (fi, Record.map (desugar_ty env) bindings)
   | TyVariant (fi, constrs) ->
       TyVariant (fi, constrs)
-  | TyCon (fi, id) ->
-      TyCon (fi, resolve_alias env id)
+  | TyCon (fi, id, data) ->
+      TyCon (fi, resolve_alias env id, data)
   | TyVar (fi, id) ->
       TyVar (fi, id)
   | TyApp (fi, lty, rty) ->
@@ -862,7 +862,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       let wrap_con ty_name (CDecl (fi, params, cname, ty)) tm =
         let app_param ty param = TyApp (fi, ty, TyVar (fi, param)) in
         let all_param param ty = TyAll (fi, param, ty) in
-        let con = List.fold_left app_param (TyCon (fi, ty_name)) params in
+        let con = List.fold_left app_param (TyCon (fi, ty_name, None)) params in
         TmConDef
           ( fi
           , mangle cname

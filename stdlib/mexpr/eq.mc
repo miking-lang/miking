@@ -637,6 +637,15 @@ lang ConTypeEq = Eq + ConTypeAst
     else None ()
 end
 
+lang DataTypeEq = Eq + DataTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | rhs & TyData r ->
+    match unwrapType lhs with TyData l then
+      if mapEq setEq (computeData l) (computeData r) then Some free
+      else None ()
+    else None ()
+end
+
 lang VarTypeEq = Eq + VarTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyVar r ->
@@ -714,8 +723,8 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + DataTypeEq +
+  VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
 end
 
 -----------

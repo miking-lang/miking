@@ -229,8 +229,12 @@ let getData = function
   | PTreeTy (TyVariant (fi, strs)) ->
       let len = List.length strs in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyCon (fi, x)) ->
-      (idTyCon, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyCon (fi, x, None)) ->
+      (idTyCon, [fi], [], [], [], [x], [0], [], [], [])
+  | PTreeTy (TyCon (fi, x, Some (positive, cons))) ->
+      let pos = if positive then 1 else 2 in
+      let len = List.length cons + 1 in
+      (idTyCon, [fi], [len], [], [], x :: cons, [pos], [], [], [])
   | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->

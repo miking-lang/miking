@@ -304,7 +304,20 @@ lang ConTypeSym = Sym + ConTypeAst
                  allowFree = env.allowFree}
         env.tyConEnv t.ident
     in
-    TyCon {t with ident = ident}
+    TyCon {t with ident = ident, data = symbolizeType env t.data}
+end
+
+lang DataTypeSym = Sym + DataTypeAst
+  sem symbolizeType env =
+  | TyData t ->
+    let cons =
+      setOfSeq nameCmp
+        (map (getSymbol {kind = "constructor",
+                         info = [t.info],
+                         allowFree = env.allowFree}
+                env.conEnv)
+           (setToSeq t.cons))
+    in TyData {t with cons = cons}
 end
 
 lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
@@ -411,7 +424,7 @@ lang MExprSym =
   MatchSym +
 
   -- Non-default implementations (Types)
-  VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
+  VariantTypeSym + ConTypeSym + DataTypeSym + VarTypeSym + AllTypeSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym

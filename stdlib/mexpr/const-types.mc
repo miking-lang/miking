@@ -6,7 +6,6 @@ include "ast-builder.mc"
 
 let tysym_ = tycon_ "Symbol"
 let tyref_ = lam a. tyapp_ (tycon_ "Ref") a
-let tymap_ = lam k. lam v. tyapp_ (tyapp_ (tycon_ "Map") k) v
 let tybootparsetree_ = tycon_ "BootParseTree"
 
 let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
