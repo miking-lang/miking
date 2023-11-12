@@ -1414,6 +1414,32 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
+lang DataTypeAst = Ast
+  type DataRec =
+    {info     : Info,
+     universe : Map Name (Set Name),
+     positive : Bool,
+     cons     : Set Name}
+
+  syn Type =
+  | TyData DataRec
+
+  sem tyWithInfo (info : Info) =
+  | TyData t -> TyData {t with info = info}
+
+  sem infoTy =
+  | TyData r -> r.info
+
+  sem computeData : DataRec -> Map Name (Set Name)
+  sem computeData =
+  | r ->
+    if r.positive then
+      mapMap (setIntersect r.cons) r.universe
+    else
+      mapMap (lam x. setSubtract x r.cons) r.universe
+end
+
+
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
@@ -1559,5 +1585,5 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
+  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
 end

@@ -204,7 +204,7 @@ let rec ustring_of_ty = function
       us "<>"
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
-  | TyCon (_, x) ->
+  | TyCon (_, x, _) ->
       pprint_type_str x
   | TyVar (_, x) ->
       pprint_var_str x

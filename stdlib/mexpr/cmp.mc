@@ -412,6 +412,12 @@ lang ConTypeCmp = Cmp + ConTypeAst
     else nameDiff
 end
 
+lang DataTypeCmp = Cmp + DataTypeAst
+  sem cmpTypeH =
+  | (TyData l, TyData r) ->
+    mapCmp setCmp (computeData l) (computeData r)
+end
+
 lang VarTypeCmp = Cmp + VarTypeAst
   sem cmpTypeH =
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
@@ -501,7 +507,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+  ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
 end
 
 lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp

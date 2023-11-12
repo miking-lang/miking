@@ -100,7 +100,9 @@ lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarT
       switch t.kind
       case Poly () then (env, idstr)
       case Mono () then (env, concat "_" idstr)
-      case _ then getKindStringCode indent env t.kind
+      case _ then
+        match getKindStringCode indent env t.kind with (env, str) in
+        (env, join [init str, " ...", [last str]])
       end
     case Link ty then
       getTypeStringCode indent env ty
@@ -138,7 +140,7 @@ let newmonovar = use KindAst in
   newmetavar (Mono ())
 let newpolyvar = use KindAst in
   newmetavar (Poly ())
-let newrowvar = use KindAst in
+let newrecvar = use KindAst in
   lam fields. newmetavar (Record {fields = fields})
 
 let newvar = newpolyvar

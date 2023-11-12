@@ -154,6 +154,14 @@ lang ConTypeUnify = Unify + ConTypeAst
       u.err (Types (ty1, ty2))
 end
 
+lang DataTypeUnify = Unify + DataTypeAst
+  sem unifyBase u env =
+  | (TyData t1 & ty1, TyData t2 & ty2) ->
+    if mapEq setEq (computeData t1) (computeData t2) then u.empty
+    else
+      u.err (Types (ty1, ty2))
+end
+
 lang BoolTypeUnify = Unify + BoolTypeAst
   sem unifyBase u env =
   | (TyBool _, TyBool _) -> u.empty
@@ -644,8 +652,8 @@ end
 
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
-  ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
+  ConTypeUnify + DataTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify +
+  CharTypeUnify + SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
 end
 
 lang RepTypesUnify = TyWildUnify + ReprTypeUnify

@@ -1146,13 +1146,24 @@ lang VariantTypePrettyPrint = PrettyPrint + VariantTypeAst
     -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
-lang ConTypePrettyPrint = IdentifierPrettyPrint + ConTypeAst + UnknownTypeAst
+lang ConTypePrettyPrint = PrettyPrint + ConTypeAst + UnknownTypeAst + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyCon t ->
     match pprintTypeName env t.ident with (env, idstr) in
-    match t.data with TyUnknown {} then (env, idstr) else
-      match getTypeStringCode indent env t.data with (env, str) in
-      (env, join [str, ".", idstr])
+    let d = unwrapType t.data in
+    match d with TyUnknown _ then (env, idstr) else
+      match getTypeStringCode indent env t.data with (env, datastr) in
+      match d with TyData _ then (env, concat idstr datastr) else
+        (env, join [idstr, "&", datastr])
+end
+
+lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyData t ->
+    let consstr = strJoin "|" (map nameGetStr (setToSeq t.cons)) in
+    let datastr =
+      join [if t.positive then "&" else "!", "{", consstr, "}"]
+    in (env, datastr)
 end
 
 lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
@@ -1161,22 +1172,19 @@ lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
     pprintVarName env t.ident
 end
 
-lang KindPrettyPrint = PrettyPrint + RecordTypeAst + KindAst
+lang KindPrettyPrint = PrettyPrint + RecordTypeAst + DataTypeAst + KindAst
   sem getKindStringCode (indent : Int) (env : PprintEnv) =
   | Record r ->
-    let recty = TyRecord {info = NoInfo (), fields = r.fields} in
-    match getTypeStringCode indent env recty with (env, recstr) in
-    (env, join [init recstr, " ... ", [last recstr]])
+    let tyrec = TyRecord {info = NoInfo (), fields = r.fields} in
+    getTypeStringCode indent env tyrec
   | Data r ->
-    let tstr =
-      mapFoldWithKey (lam strs. lam t. lam ks.
-        snoc strs (join [ nameGetStr t, "{"
-                        , strJoin ", " (map nameGetStr (setToSeq ks))
-                        , "}" ])
-    ) "" r.types in
-    (env, join ["<", strJoin ", " tstr, ">"])
-  | Poly () -> (env, "*")
-  | Mono () -> (env, "o")
+    let consstr =
+      mapFoldWithKey (lam strs. lam. lam ks.
+        snoc strs (strJoin "|" (map nameGetStr (setToSeq ks))))
+        [] r.types in
+    (env, join ["{", strJoin "|" consstr, "}"])
+  | Poly () -> (env, "Poly")
+  | Mono () -> (env, "Mono")
 end
 
 lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
@@ -1189,7 +1197,7 @@ lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
     match
       match t.kind with Mono () | Poly () then (env, "") else
         match getKindStringCode indent env t.kind with (env, kistr) in
-        (env, concat " :: " kistr)
+        (env, concat "::" kistr)
     with (env, kistr) in
     match getTypeStringCode indent env t.ty with (env, tystr) in
     (env, join ["all ", idstr, kistr, ". ", tystr])
@@ -1351,7 +1359,7 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint +
+  ConTypePrettyPrint + DataTypePrettyPrint + VarTypePrettyPrint +
   AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
   AliasTypePrettyPrint
 

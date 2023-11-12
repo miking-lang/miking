@@ -377,8 +377,8 @@ module NoCap = struct
     else (env, name)
 
   let rec subst_ty (env : big_env) : ty -> ty = function
-    | TyCon (fi, name) ->
-        TyCon (fi, subst_name name env.ty_cons)
+    | TyCon (fi, name, data) ->
+        TyCon (fi, subst_name name env.ty_cons, data)
     | TyUse (fi, _, _) ->
         raise_error fi
           "Compiler limitation: we can't easily rename syns or sems if 'use' \
@@ -589,12 +589,12 @@ let merge_env_prefer_right : mlang_env -> mlang_env -> mlang_env =
       Record.union (fun _ _a b -> Some b) a.language_envs b.language_envs }
 
 let rec translate_ty (env : mlang_env) : ty -> ty = function
-  | TyCon (fi, id) -> (
+  | TyCon (fi, id, data) -> (
     match Record.find_opt id env.ty_cons with
     | Some id ->
-        TyCon (fi, id)
+        TyCon (fi, id, data)
     | None ->
-        TyCon (fi, empty_mangle id) )
+        TyCon (fi, empty_mangle id, data) )
   | TyUse (fi, lang, ty) -> (
     match Record.find_opt lang env.language_envs with
     | Some new_env ->
@@ -891,7 +891,7 @@ let wrap_cons : mlang_env -> lang_data -> tm -> tm =
     let wrap_app (ty : ty) (tyvar : ustring) =
       TyApp (con.fi, ty, TyVar (con.fi, tyvar))
     in
-    let ret = List.fold_left wrap_app (TyCon (con.fi, name)) con.ty_params in
+    let ret = List.fold_left wrap_app (TyCon (con.fi, name, None)) con.ty_params in
     let ty = TyArrow (con.fi, con.carried, ret) in
     let ty = List.fold_right wrap_all con.ty_params ty in
     TmConDef
