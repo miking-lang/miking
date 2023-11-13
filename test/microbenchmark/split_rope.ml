@@ -5,6 +5,6 @@ let rec sum acc s =
     let t = Rope.sub_array s 1 (Rope.length_array s) in
     sum (acc + h) t
 
-let s = Rope.create 1000 (fun i -> i)
+let s = Rope.create_array 1000 (fun i -> i)
 
 let _ = Benchmarkcommon.repeat (fun () -> sum 0 s)
