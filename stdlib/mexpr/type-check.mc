@@ -38,18 +38,32 @@ type TCEnv = {
   disableRecordPolymorphism: Bool
 }
 
-let _tcEnvEmpty = {
+let typcheckEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
   tyVarEnv = mapEmpty nameCmp,
-  tyConEnv =
-  mapFromSeq nameCmp
-    (map (lam t: (String, [String]).
-      (nameNoSym t.0, (0, map nameSym t.1, tyvariant_ []))) builtinTypes),
-
+  tyConEnv = mapEmpty nameCmp,
   currentLvl = 0,
   disableRecordPolymorphism = true
 }
+
+let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
+  = lam env. lam tys. {
+    env with
+    tyConEnv =
+      foldl
+        (lam env. lam t.
+          mapInsert (nameNoSym t.0) (0, map nameSym t.1, tyvariant_ []) env)
+        env.tyConEnv tys
+  }
+
+let typcheckEnvDefault =
+  typecheckEnvAddBuiltinTypes typcheckEnvEmpty builtinTypes
+
+-- TODO(oerikss, 2023-11-14): Change all DSLs that use this name for the
+-- type-check environment to instead point to `typcheckEnvDefault` and then
+-- remove this alias.
+let _tcEnvEmpty = typcheckEnvDefault
 
 let _insertVar = lam name. lam ty. lam env : TCEnv.
   {env with varEnv = mapInsert name ty env.varEnv}
@@ -444,7 +458,7 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   sem typeCheck : Expr -> Expr
   sem typeCheck =
   | tm ->
-    removeMetaVarExpr (typeCheckExpr _tcEnvEmpty tm)
+    removeMetaVarExpr (typeCheckExpr typcheckEnvDefault tm)
 
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain unification variables and links.
@@ -994,8 +1008,8 @@ let typeOf = lam test : TypeTest.
   let tyEnv = mapFromSeq nameCmp bindings in
   unwrapTypes
     (tyTm
-       (typeCheckExpr {_tcEnvEmpty with varEnv = tyEnv}
-          (symbolizeExpr {symEnvEmpty with varEnv = symEnv} test.tm)))
+       (typeCheckExpr {typcheckEnvDefault with varEnv = tyEnv}
+          (symbolizeExpr {symEnvDefault with varEnv = symEnv} test.tm)))
 in
 
 let runTest =
