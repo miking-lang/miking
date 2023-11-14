@@ -104,10 +104,6 @@ let main =
       , Arg.Set Boot.Patterns.pat_example_gives_complete_pattern
       , " Make the pattern analysis in mlang print full patterns instead of \
          partial ones." )
-    ; ( "--subsumption-analysis"
-      , Arg.Set Boot.Mlang.enable_subsumption_analysis
-      , " Enables subsumption analysis of language fragments in mlang \
-         transformations." )
     ; ( "--disable-prune-utests"
       , Arg.Set disable_prune_external_utests
       , " Disables pruning of utests with missing external dependencies." )

@@ -19,8 +19,8 @@ let evalprog filename =
   if !utest then printf "%s: " filename ;
   utest_fail_local := 0 ;
   ( try
-      filename |> parse_mcore_file |> Mlang.flatten
-      |> Mlang.desugar_post_flatten |> debug_after_mlang
+      filename |> parse_mcore_file
+      |> Mlang.translate_program |> debug_after_mlang
       |> raise_parse_error_on_non_unique_external_id
       |> (fun t -> if !utest then t else remove_all_utests t)
       |> Symbolize.symbolize builtin_name2sym

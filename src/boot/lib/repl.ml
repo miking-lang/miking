@@ -132,14 +132,11 @@ let rec read_user_input () =
 (* Evaluate a term given existing environments.
    Returns updated environments along with evaluation result.
 *)
-let eval_with_envs (langs, nss, name2sym, sym2term) term =
-  let new_langs, flattened = flatten_with_env langs term in
-  let new_nss, desugared = desugar_post_flatten_with_nss nss flattened in
-  let new_name2sym, symbolized =
-    Symbolize.symbolize_toplevel name2sym desugared
-  in
-  let new_sym2term, result = Mexpr.eval_toplevel sym2term pe_init symbolized in
-  ((new_langs, new_nss, new_name2sym, new_sym2term), result)
+let eval_with_envs (mlang_env, sym_env, sym2term) term =
+  let mlang_env, desugared = translate_program_with_env mlang_env term in
+  let sym_env, symbolized = Symbolize.symbolize_toplevel sym_env desugared in
+  let sym2term, result = Mexpr.eval_toplevel sym2term pe_init symbolized in
+  ((mlang_env, sym_env, sym2term), result)
 
 (* Wrap the final mexpr in a lambda application to prevent scope leak *)
 let wrap_mexpr (Program (inc, tops, tm)) =
@@ -158,7 +155,7 @@ let wrap_mexpr (Program (inc, tops, tm)) =
 let repl_merge_includes = merge_includes (Sys.getcwd ()) []
 
 let repl_envs =
-  ref (Record.empty, USMap.empty, builtin_name2sym, builtin_sym2term)
+  ref (empty_mlang_env, builtin_name2sym, builtin_sym2term)
 
 let initialize_envs () =
   let initial_envs, _ =
@@ -198,22 +195,24 @@ let keywords_and_identifiers () =
     | IdVar s | IdCon s | IdType s | IdLabel s ->
         ustring_of_sid s
   in
-  let _, nss, name2sym, _ = !repl_envs in
+  let mlang_env, sym_env, _ = !repl_envs in
   let names_without_langs =
     List.map
       (fun x -> x |> fst |> extract_name)
-      (Symbolize.sym_env_to_assoc name2sym)
+      (Symbolize.sym_env_to_assoc sym_env)
   in
   let replace_name name mangled_name names =
     names |> USSet.add name |> USSet.remove mangled_name
   in
-  let process_lang lang ns names =
-    names |> USSet.add lang
-    |> USMap.fold replace_name ns.constructors
-    |> USMap.fold replace_name ns.normals
+  let rec process_mlang_env : 'a. 'a -> mlang_env -> USSet.t -> USSet.t = fun _ mlang_env names ->
+    Record.fold replace_name mlang_env.values names
+    |> Record.fold replace_name mlang_env.ty_cons
+    |> Record.fold replace_name mlang_env.constructors
+    |> Record.fold (fun n _ names -> USSet.add n names) mlang_env.language_envs
+    |> Record.fold process_mlang_env mlang_env.language_envs
   in
   names_without_langs |> USSet.of_list
-  |> USMap.fold process_lang nss
+  |> process_mlang_env () mlang_env
   |> USSet.to_seq |> List.of_seq |> List.map Ustring.to_utf8 |> ( @ ) keywords
 
 let starts_with prefix s =
