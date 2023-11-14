@@ -60,6 +60,11 @@ let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
 let typcheckEnvDefault =
   typecheckEnvAddBuiltinTypes typcheckEnvEmpty builtinTypes
 
+-- TODO(oerikss, 2023-11-14): Change all DSLs that use this name for the
+-- type-check environment to instead point to `typcheckEnvDefault` and then
+-- remove this alias.
+let _tcEnvEmpty = typcheckEnvDefault
+
 let _insertVar = lam name. lam ty. lam env : TCEnv.
   {env with varEnv = mapInsert name ty env.varEnv}
 

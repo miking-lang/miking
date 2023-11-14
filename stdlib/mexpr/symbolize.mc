@@ -31,7 +31,7 @@ type SymEnv = {
   ignoreExternals: Bool
 }
 
-let symEnvEmpty = {
+let _symEnvEmpty = {
   varEnv = mapEmpty cmpString,
   conEnv = mapEmpty cmpString,
   tyVarEnv = mapEmpty cmpString,
@@ -47,7 +47,12 @@ let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv
   }
 
 let symEnvDefault =
-  symEnvAddBuiltinTypes symEnvEmpty builtinTypes
+  symEnvAddBuiltinTypes _symEnvEmpty builtinTypes
+
+-- TODO(oerikss, 2023-11-14): Change all DSLs that use this name for the
+-- symbolize environment to instead point to `symEnvDefault` and then
+-- remove this alias and rename `_symEnvEmpty` to `symEnvEmpty`.
+let symEnvEmpty = symEnvDefault
 
 lang SymLookup
   type LookupParams = {kind : String, info : [Info], allowFree : Bool}
