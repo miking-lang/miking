@@ -6,11 +6,18 @@ src_files_all_tmp =\
 	$(wildcard test/mlang/*.mc)\
 	$(wildcard test/py/*.mc)
 
+# These are special, special cases since the python externals are implemented
+# differently from other externals and can therefore not be compiled.
+python_files += stdlib/python/python.mc
+python_files += $(wildcard test/py/*.mc)
+
 # Exclude the tests in the JVM directory, as they depend on Java being
 # installed.
+# NOTE(larshum, 2023-11-14): Also temporarily exclude the Python boot tests
+# since the workflow on MacOS fails because of them.
 jvm_files = $(wildcard stdlib/jvm/*.mc)
 src_files_all =\
-	$(filter-out $(jvm_files), $(src_files_all_tmp))
+	$(filter-out $(jvm_files) $(python_files), $(src_files_all_tmp))
 
 # These programs has special external dependencies which might be tedious to
 # install or are mutually exclusive with other dependencies.
@@ -22,16 +29,6 @@ special_dependencies_files +=\
 	$(sundials_files)\
 	$(ipopt_files)\
 	$(accelerate_files)
-
-
-# These are special, special cases since the python externals are implemented
-# differently from other externals and can therefore not be compiled.
-python_files += stdlib/python/python.mc
-python_files += $(wildcard test/py/*.mc)
-
-# NOTE(larshum, 2023-11-24): Disable the special-case Python files from testing
-# at all due to problems in the MacOS workflow
-src_files_all = $(filter-out $(python_files), $(src_files_all))
 
 # Test programs for the JavaScript backend. These should be compiled with mi
 # and runned with node.js, the result being compared to the original program
