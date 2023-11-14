@@ -434,7 +434,8 @@ lang ConstPEval = PEval + ConstEvalNoDefault
 end
 
 lang MatchPEval =
-  PEval + MatchEval + RecordAst + ConstAst + DataAst + SeqAst + NeverAst + VarAst
+  PEval + MatchEval + RecordAst + ConstAst + DataAst + SeqAst + NeverAst +
+  VarAst + NamedPat
 
   sem pevalBindThis =
   | TmMatch _ -> true
@@ -443,23 +444,36 @@ lang MatchPEval =
   | TmMatch r ->
     pevalBind ctx
       (lam target.
-        switch target
-        case t & TmNever _ then k t
-          -- TODO(oerikss, 2023-07-07): This check is not exhaustive, we must
-          -- probably redefine tryMatch and handle each particular pattern type.
-        case TmRecord _ | TmConst _ | TmConApp _ | TmSeq _ then
-          match tryMatch ctx.env target r.pat with Some env then
-            pevalBind { ctx with env = env } k r.thn
-          else pevalBind ctx k r.els
+        switch (target, tryMatch ctx.env target r.pat)
+        case (TmNever r, _) then TmNever r
+        case (_, Some env) then
+          pevalBind { ctx with env = env } k r.thn
+        case (!TmVar _, None _) then
+          pevalBind ctx k r.els
         case _ then
+          match freshPattern ctx.env r.pat with (env, pat) in
           let ctx = { ctx with recFlag = false } in
-          k (TmMatch {r with
-                      target = target,
-                      thn = pevalBind ctx (lam x. x) r.thn,
-                      els = pevalBind ctx (lam x. x) r.els
-          })
+          k (TmMatch { r with
+                       target = target,
+                       pat = pat,
+                       thn = pevalBind { ctx with env = env } (lam x. x) r.thn,
+                       els = pevalBind ctx (lam x. x) r.els })
         end)
       r.target
+
+  sem freshPattern : EvalEnv -> Pat -> (EvalEnv, Pat)
+  sem freshPattern env =
+  | PatNamed (r & {ident = PName name}) ->
+    let newname = nameSetNewSym name in
+    let newvar = TmVar {
+      ident = newname,
+      ty = r.ty,
+      info = r.info,
+      frozen = false
+    } in
+    (evalEnvInsert name newvar env,
+     PatNamed { r with ident = PName newname })
+  | p -> smapAccumL_Pat_Pat freshPattern env p
 end
 
 lang UtestPEval = PEval + UtestAst
