@@ -29,6 +29,9 @@ special_dependencies_files +=\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
+# NOTE(larshum, 2023-11-24): Disable the special-case Python files from testing
+# at all due to problems in the MacOS workflow
+src_files_all = $(filter-out $(python_files), $(src_files_all))
 
 # Test programs for the JavaScript backend. These should be compiled with mi
 # and runned with node.js, the result being compared to the original program
