@@ -311,12 +311,13 @@ lang DataTypeSym = Sym + DataTypeAst
   sem symbolizeType env =
   | TyData t ->
     let cons =
-      setOfSeq nameCmp
-        (map (getSymbol {kind = "constructor",
-                         info = [t.info],
-                         allowFree = env.allowFree}
-                env.conEnv)
-           (setToSeq t.cons))
+      setFold (lam ks. lam k.
+        setInsert
+          (getSymbol {kind = "constructor",
+                      info = [t.info],
+                      allowFree = env.allowFree}
+             env.conEnv k) ks)
+        (setEmpty nameCmp) t.cons
     in TyData {t with cons = cons}
 end
 
