@@ -449,6 +449,9 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain unification variables and links.
   sem typeCheckExpr : TCEnv -> Expr -> Expr
+  sem typeCheckExpr env =
+  | tm ->
+    dprint tm; print "\n"; error ""
 end
 
 lang PatTypeCheck = TCUnify
