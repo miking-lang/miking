@@ -241,7 +241,11 @@ and decl =
   | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 
-and mlang = Lang of info * ustring * ustring list * decl list
+and with_kind = WithType | WithValue
+
+and lang_with = With of info * with_kind * ustring * (ustring * ustring) list
+
+and mlang = Lang of info * ustring * ustring list * lang_with list * decl list
 
 and let_decl = Let of info * ustring * ty * tm
 

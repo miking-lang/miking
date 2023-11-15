@@ -299,6 +299,146 @@ let merge_langs : info -> lang_data -> lang_data -> lang_data = fun fi a b ->
 
 (* === Functions that facilitate renaming types and values, and thus merging them after the fact === *)
 
+module NoCap = struct
+  (* NOTE(vipa, 2023-11-15): This only supportrs renaming type
+  constructors and values, not type variabels nor constructors *)
+  type small_env =
+    { subst : ustring Record.t
+    ; avoid : USSet.t
+    }
+  let empty_small =
+    { subst = Record.empty
+    ; avoid = USSet.empty
+    }
+  type big_env =
+    { values : small_env
+    ; ty_cons : small_env
+    }
+  let empty_big =
+    { values = empty_small
+    ; ty_cons = empty_small
+    }
+
+  let subst_name : ustring -> small_env -> ustring = fun name env ->
+    Option.value ~default:name (Record.find_opt name env.subst)
+
+  let add_subst : ustring -> ustring -> small_env -> small_env = fun before now env ->
+    { subst = Record.add before now env.subst
+    ; avoid = USSet.add now env.avoid
+    }
+
+  let subst_ty_con_env (before : ustring) (now : ustring) : big_env =
+    {empty_big with ty_cons = add_subst before now empty_big.ty_cons}
+
+  let subst_value_env (before : ustring) (now : ustring) : big_env =
+    {empty_big with values = add_subst before now empty_big.values}
+
+  let process_binding : small_env -> ustring -> small_env * ustring = fun env name ->
+    if USSet.mem name env.avoid then
+      let new_name = name ^. us"_new" in
+      (add_subst name new_name env, new_name)
+    else (env, name)
+
+  let rec subst_ty (env : big_env) : ty -> ty = function
+    | TyCon (fi, name) ->
+       TyCon (fi, subst_name name env.ty_cons)
+    | TyUse (fi, _, _) -> raise_error fi
+                   ( "Compiler limitation: we can't easily rename syns or sems if 'use' is somewhere in the language fragment." )
+    | ty -> smap_ty_ty (subst_ty env) ty
+
+  let rec subst_pat (env : big_env) : pat -> big_env * pat = function
+    | PatNamed (fi, NameStr (id, sym)) ->
+       let values, id = process_binding env.values id in
+       ({env with values}, PatNamed (fi, NameStr (id, sym)))
+    | PatSeqEdge (fi, l, NameStr (id, sym), r) ->
+       let env, l = Mseq.Helpers.map_accum_left subst_pat env l in
+       let values, id = process_binding env.values id in
+       let env = {env with values} in
+       let env, r = Mseq.Helpers.map_accum_left subst_pat env r in
+       (env, PatSeqEdge (fi, l, NameStr (id, sym), r))
+    | _ -> failwith "todo"
+
+  let rec subst_tm (env : big_env) : tm -> tm = function
+    | TmVar (fi, name, sym, pesym, frozen) ->
+       let name = subst_name name env.values in
+       TmVar (fi, name, sym, pesym, frozen)
+    | TmLam (fi, name, sym, pesym, ty, tm) ->
+       let ty = subst_ty env ty in
+       let values, name = process_binding env.values name in
+       let env = {env with values} in
+       let tm = subst_tm env tm in
+       TmLam (fi, name, sym, pesym, ty, tm)
+    | TmLet (fi, name, sym, ty, body, inexpr) ->
+       let ty = subst_ty env ty in
+       let body = subst_tm env body in
+       let values, name = process_binding env.values name in
+       let env = {env with values} in
+       let inexpr = subst_tm env inexpr in
+       TmLet (fi, name, sym, ty, body, inexpr)
+    | TmRecLets (fi, lets, inexpr) ->
+       let process values (fi, id, sym, ty, tm) =
+         let values, id = process_binding values id in
+         (values, (fi, id, sym, ty, tm)) in
+       let values, lets = List.fold_left_map process env.values lets in
+       let env = {env with values} in
+       let subst_let (fi, id, sym, ty, tm) =
+         (fi, id, sym, subst_ty env ty, subst_tm env tm) in
+       let lets = List.map subst_let lets in
+       TmRecLets (fi, lets, subst_tm env inexpr)
+    | TmType (fi, name, params, ty, tm) ->
+       let ty = subst_ty env ty in
+       let ty_cons, name = process_binding env.ty_cons name in
+       let env = {env with ty_cons} in
+       TmType (fi, name, params, ty, subst_tm env tm)
+    | TmUse (fi, _, _) -> raise_error fi
+                   ( "Compiler limitation: we can't easily rename syns or sems if 'use' is somewhere in the language fragment." )
+    | TmExt (fi, name, sym, side, ty, tm) ->
+       let ty = subst_ty env ty in
+       let values, name = process_binding env.values name in
+       let tm = subst_tm {env with values} tm in
+       TmExt (fi, name, sym, side, ty, tm)
+    | TmMatch (fi, scrut, pat, th, el) ->
+       let scrut = subst_tm env scrut in
+       let new_env, pat = subst_pat env pat in
+       let th = subst_tm new_env th in
+       let el = subst_tm env el in
+       TmMatch (fi, scrut, pat, th, el)
+    | tm -> smap_tm_tm (subst_tm env) tm
+
+  let subst_lang (_env : big_env) (_lang : lang_data) : lang_data =
+    (* NOTE(vipa, 2023-11-15):
+
+    I'm not sure we can actually do full and proper capture avoiding
+    substitution here, because of `use`. Consider:
+
+    lang X
+      sem bar =
+    end
+
+    lang A
+      sem foo =
+      | _ -> use X in (foo, bar)
+    end
+
+    lang B = A
+      with bar = A.foo
+    end
+
+    Here we cannot rename `foo` to `bar` without capture, because we
+    cannot also rename `bar` in `X`.
+
+    For this reason I'm waiting with actually using the machinery
+    above, that should otherwise do decent capture-avoiding
+    substitution.
+
+    It's worth noting that none of this would be an issue if we had
+    symbols, so a potential fix would be to make symbolize in boot
+    respect already placed symbols.
+     *)
+
+    failwith "We don't presently support renaming `syn`s or `sem`s using `with`. See this error in the code for why."
+end
+
 let rec_add_with : ('a -> 'a -> 'a) -> ustring -> 'a -> 'a Record.t -> 'a Record.t = fun f k v m ->
   let f = function
     | Some v1 -> Some (f v1 v)
@@ -332,8 +472,11 @@ let rename_type
      let types = Record.remove orig_name data.types in
      let ty_content = Either.map ~left:update_alias ~right:update_syn ty_content in
      let types = rec_add_with (merge_types_in_lang fi new_name) new_name ty_content types in
-     (* TODO(vipa, 2023-11-14): rename all references to the old type *)
-     { data with types = types }
+     let data = {data with types} in
+     if orig_name =. new_name then data
+     else
+       let subst = NoCap.subst_ty_con_env orig_name new_name in
+       NoCap.subst_lang subst data
   | None -> data
 
 let rename_value
@@ -345,8 +488,11 @@ let rename_value
      let update_sem (sem : sem_data) = {sem with id = new_id} in
      let val_content = update_sem val_content in
      let values = rec_add_with (merge_sems_in_lang fi new_name) new_name val_content values in
-     (* TODO(vipa, 2023-11-14): rename all references to the old value *)
-     { data with values = values }
+     let data = {data with values} in
+     if orig_name =. new_name then data
+     else
+       let subst = NoCap.subst_value_env orig_name new_name in
+       NoCap.subst_lang subst data
   | None -> data
 
 (* === Translating from MLang (list of top-declarations, including lang) to MExpr (single tm) === *)
@@ -398,6 +544,12 @@ let rec translate_ty (env : mlang_env) : ty -> ty = function
 let rec translate_pat (env : mlang_env) : pat -> mlang_env * pat = function
   | PatNamed (_, NameStr(id, _)) as pat ->
      ({env with values = Record.remove id env.values}, pat)
+  | PatSeqEdge (fi, l, (NameStr (id, _) as name), r) ->
+     let env, l = Mseq.Helpers.map_accum_left translate_pat env l in
+     let env, r = Mseq.Helpers.map_accum_left translate_pat env r in
+     ( {env with values = Record.remove id env.values}
+     , PatSeqEdge (fi, l, name, r)
+     )
   | PatCon (fi, id, sym, pat) ->
      let id, sym = match Record.find_opt id env.constructors with
        | Some id -> (id, Symb.Helpers.nosym)
@@ -674,19 +826,36 @@ let lang_gen : mlang_env -> ustring -> lang_data -> mlang_env * (tm -> tm) = fun
             (wrap_sems env lang_name lang tm))) in
   (lang_env, wrap)
 
-let translate_lang (env : mlang_env) (Lang(fi, name, includes, decls)) : mlang_env * (tm -> tm) =
+let translate_lang (env : mlang_env) (Lang(fi, name, includes, renames, decls)) : mlang_env * (tm -> tm) =
   let su = Ustring.to_utf8 in
   let fetch_include inc =
     match Record.find_opt inc env.languages with
-    | Some lang -> lang
+    | Some lang -> (inc, lang)
     | None -> raise_error fi ("Unknown language '" ^ su inc ^ "' in include list.") in
-  let includes = List.map fetch_include includes in
-  (* TODO(vipa, 2023-11-14): Apply renames via `where` here once the syntax is in *)
+  let apply_rename includes (With (fi, kind, new_name, inputs)) =
+    let f = match kind with WithType -> rename_type | WithValue -> rename_value in
+    let id = Symb.gensym () in
+    let f lang orig_name = f fi orig_name (name, new_name, id) lang in
+    let process_input includes (lang_name, orig_name) =
+      let f = function
+        | Some lang -> Some (f lang orig_name)
+        | None -> raise_error fi
+                    ( "Unknown language '" ^ su lang_name ^ "' in 'with' clause." ) in
+      Record.update lang_name f includes in
+    List.fold_left process_input includes inputs in
+  let includes =
+    List.to_seq includes
+    |> Seq.map fetch_include
+    |> Record.of_seq in
+  let includes = List.fold_left apply_rename includes renames in
   let lang =
     { values = Record.empty
     ; types = Record.empty
     } in
-  let lang = List.fold_left (merge_langs fi) lang includes in
+  let lang =
+    Record.to_seq includes
+    |> Seq.map snd
+    |> Seq.fold_left (merge_langs fi) lang in
   let lang = List.fold_left (add_decl_to_lang fi name) lang decls in
   let lang_env, wrap = lang_gen env name lang in
   let new_env =
