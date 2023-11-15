@@ -236,8 +236,7 @@ let merge_sems_in_lang : info -> ustring -> sem_data -> sem_data -> sem_data = f
         |> List.to_seq
         |> SubsetOrdSet.of_seq in
       { a with
-        fi = fi
-      ; params = if Option.is_some a.params then a.params else b.params
+        params = if Option.is_some a.params then a.params else b.params
       ; cases = SemCaseSet.union a.cases b.cases
       ; subsets =
           SubsetOrdSet.union
