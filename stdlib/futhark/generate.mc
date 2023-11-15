@@ -116,8 +116,13 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     errorSingle [infoPat p] "Pattern is not supported by Futhark backend"
 end
 
+lang FutharkGenerate
+  sem generateExpr : FutharkGenerateEnv -> Expr -> FutExpr
+end
+
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
-                            FutharkTypeGenerate + FutharkTypePrettyPrint
+                            FutharkTypeGenerate + FutharkTypePrettyPrint +
+                            FutharkGenerate
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
     errorSingle [t.info] (join ["Match expression not supported by the Futhark backend"])
@@ -214,7 +219,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
 end
 
 lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
-                          PMExprVariableSub
+                          PMExprVariableSub + FutharkGenerate
   sem defaultGenerateApp (env : FutharkGenerateEnv) =
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs,
                       ty = generateType env t.ty, info = t.info}
@@ -363,7 +368,7 @@ end
 
 lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                            FutharkMatchGenerate + FutharkAppGenerate +
-                           PMExprAst
+                           PMExprAst + FutharkGenerate
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmVar t ->
     -- NOTE(larshum, 2022-08-15): Special-case handling of external functions.
