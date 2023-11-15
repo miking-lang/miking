@@ -102,15 +102,17 @@ lang NPatImpl = NormPat
     let distributed : [[NPat]] =
       join (map (seqMapM (lam x. x)) nested) in
     setOfSeq npatCmp (map constr distributed)
+
+  sem wildpat : () -> NPat
+  sem wildpat =
+  | () -> NPatNot (setEmpty simpleConCmp)
+
+  sem notpatSimple : SimpleCon -> NPat
+  sem notpatSimple =
+  | c -> NPatNot (setOfSeq simpleConCmp [c])
+
 end
 
-let wildpat =
-  use NPatImpl in
-  lam. NPatNot (setEmpty simpleConCmp)
-
-let notpatSimple =
-  use NPatImpl in
-  lam c. NPatNot (setOfSeq simpleConCmp [c])
 
 lang NormPatImpl = NPatImpl
   sem normpatComplement =
@@ -158,7 +160,7 @@ lang IntNormPat = NPatImpl + IntPat
 
   sem patToNormpat =
   | PatInt a ->
-    setOfSeq npatCmp (SNPat (NPatInt a))
+    setOfSeq npatCmp [SNPat (NPatInt a.val)]
 end
 
 lang CharNormPat = NPatImpl + CharPat
@@ -192,7 +194,7 @@ lang CharNormPat = NPatImpl + CharPat
 
   sem patToNormpat =
   | PatChar a ->
-    setOfSeq npatCmp (SNPat (NPatChar a))
+    setOfSeq npatCmp [SNPat (NPatChar a.val)]
 end
 
 lang BoolNormPat = NPatImpl + BoolPat
@@ -228,7 +230,7 @@ lang BoolNormPat = NPatImpl + BoolPat
 
   sem patToNormpat =
   | PatBool a ->
-    setOfSeq npatCmp (SNPat (NPatBool a))
+    setOfSeq npatCmp [SNPat (NPatBool a.val)]
 end
 
 lang ConNormPat = NPatImpl + DataPat
@@ -465,9 +467,9 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     let post = seqMapM setToSeq (map patToNormpat post) in
     setOfSeq npatCmp
       (seqLiftA2 (lam pre. lam post.
-      (NPatSeqEdge { prefix = pre
-                   , disallowed = setEmpty subi
-                   , postfix = post }))
+      (SNPat (NPatSeqEdge { prefix = pre
+                          , disallowed = setEmpty subi
+                          , postfix = post })))
          pre post)
 end
 
@@ -499,14 +501,14 @@ lang NormPatMatch = NPatImpl + VarAst
   sem matchNormPat : (Expr, NormPat) -> Set (Map Name NormPat)
   sem matchNormPat =
   | (e, np) ->
-    setOfSeq (mapCmp nameCmp)
+    setOfSeq (mapCmp setCmp)
       (mapOption
          (lam p. matchNPat (e, p))
          (setToSeq np))
 
   sem matchNPat : (Expr, NPat) -> Option (Map Name NormPat)
   sem matchNPat =
-  | (TmVar x, p) -> Some (mapFromSeq [(x.ident, setOfSeq npatCmp [p])])
+  | (TmVar x, p) -> Some (mapFromSeq nameCmp [(x.ident, setOfSeq npatCmp [p])])
   | (!TmVar _ & e, SNPat p) -> matchSNPat (e, p)
   | (!TmVar _ & e, NPatNot cons) ->
     if optionMapOr false (lam x. setMem x cons) (exprToSimpleCon e) then None ()
@@ -527,7 +529,7 @@ lang IntNormPatMatch = NormPatMatch + IntAst + IntNormPat
 
   sem matchSNPat =
   | (TmConst {val = CInt i}, NPatInt j) ->
-    if eqi i.val j.val then Some (mapEmpty nameCmp)
+    if eqi i.val j then Some (mapEmpty nameCmp)
     else None ()
 end
 
@@ -537,7 +539,7 @@ lang CharNormPatMatch = NormPatMatch + CharAst + CharNormPat
 
   sem matchSNPat =
   | (TmConst {val = CChar i}, NPatChar j) ->
-    if eqc i.val j.val then Some (mapEmpty nameCmp)
+    if eqc i.val j then Some (mapEmpty nameCmp)
     else None ()
 end
 
@@ -547,7 +549,7 @@ lang BoolNormPatMatch = NormPatMatch + BoolAst + BoolNormPat
 
   sem matchSNPat =
   | (TmConst {val = CBool i}, NPatBool j) ->
-    if eqi (if i.val then 1 else 0) (if j.val then 1 else 0)
+    if eqi (if i.val then 1 else 0) (if j then 1 else 0)
     then Some (mapEmpty nameCmp)
     else None ()
 end
@@ -559,13 +561,13 @@ lang ConNormPatMatch = NormPatMatch + DataAst + ConNormPat
   sem matchSNPat =
   | (TmConApp {ident = cident, body = b}, NPatCon {ident = pident, subpat = p}) ->
     if nameEq cident pident
-    then matchSNPat (b, p)
+    then matchNPat (b, p)
     else None ()
 end
 
 lang RecordNormPatMatch = NormPatMatch + RecordAst + RecordNormPat
   sem matchSNPat =
-  | (TmRecord {bindings = bs}, NPatRecord {bindings = pbs}) ->
+  | (TmRecord {bindings = bs}, NPatRecord pbs) ->
     mapFoldlOption
       (lam acc. lam. lam m. optionMap (mapUnionWith normpatIntersect acc) m)
       (mapEmpty nameCmp)
