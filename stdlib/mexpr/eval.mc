@@ -161,7 +161,7 @@ lang RecLetsEval =
     eval {ctx with env = envPrime ()} t.inexpr
 end
 
-lang ConstAppAst = ConstAst
+lang ConstAppAst = ConstAst + PrettyPrint
   syn Expr =
   | TmConstApp {
     const : Const,
@@ -183,11 +183,13 @@ lang ConstAppAst = ConstAst
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
 
-lang ConstEvalNoDefault =
-  Eval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst + ConstArity +
-  PrettyPrint
-
+lang ConstDelta
   sem delta : Info -> (Const, [Expr]) -> Expr
+end
+
+lang ConstEvalNoDefault =
+  Eval + ConstDelta + AppEval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst +
+  ConstArity + PrettyPrint
 
   sem apply ctx info =
   | (TmConst r, arg) -> delta info (r.val, [arg])
@@ -200,7 +202,6 @@ lang ConstEvalNoDefault =
 end
 
 lang ConstEval = ConstEvalNoDefault
-  sem delta : Info -> (Const, [Expr]) -> Expr
   sem delta info =
   | (const, args) ->
     if lti (length args) (constArity const) then
@@ -394,7 +395,8 @@ lang ArithFloatEval = ArithFloatAst + ConstEvalNoDefault + ArithFloatArity
     TmConst {t with val = CFloat {val = negf f.val}}
 end
 
-lang FloatIntConversionEval = FloatIntConversionAst + FloatIntConversionArity
+lang FloatIntConversionEval =
+  ConstDelta + FloatIntConversionAst + FloatIntConversionArity
   sem delta info =
   | (CFloorfi _, [TmConst (t & {val = CFloat r})]) ->
     TmConst {t with val = CInt {val = floorfi r.val}}
@@ -547,7 +549,7 @@ lang SeqOpEval = SeqOpEvalFirstOrder
 end
 
 lang FloatStringConversionEval =
-  FloatStringConversionAst + BoolAst + FloatStringConversionArity
+  ConstDelta + FloatStringConversionAst + BoolAst + FloatStringConversionArity
 
   sem delta info =
   | (CStringIsFloat _, [TmSeq {tms = tms}]) ->
@@ -571,7 +573,8 @@ lang FloatStringConversionEval =
 end
 
 lang FileOpEval =
-  FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst + FileOpArity
+  ConstDelta + FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst +
+  FileOpArity
 
   sem delta info =
   | (CFileRead _, [TmSeq s]) ->
@@ -593,7 +596,7 @@ lang FileOpEval =
     uunit_
 end
 
-lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst + IOArity
+lang IOEval = ConstDelta + IOAst + SeqAst + RecordAst + UnknownTypeAst + IOArity
   sem delta info =
   | (CPrint _, [TmSeq s]) ->
     let s = _evalSeqOfCharsToString info s.tms in
@@ -616,7 +619,7 @@ lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst + IOArity
 end
 
 lang RandomNumberGeneratorEval =
-  RandomNumberGeneratorAst + IntAst + RandomNumberGeneratorArity
+  ConstDelta + RandomNumberGeneratorAst + IntAst + RandomNumberGeneratorArity
 
   sem delta info =
   | (CRandIntU _, [TmConst {val = CInt lo}, TmConst (t & {val = CInt hi})]) ->
@@ -626,7 +629,7 @@ lang RandomNumberGeneratorEval =
     uunit_
 end
 
-lang SysEval = SysAst + SeqAst + IntAst + CharAst + SysArity
+lang SysEval = ConstDelta + SysAst + SeqAst + IntAst + CharAst + SysArity
   sem delta info =
   | (CError _, [TmSeq s]) ->
     errorSingle [info] (_evalSeqOfCharsToString info s.tms)
@@ -638,7 +641,7 @@ lang SysEval = SysAst + SeqAst + IntAst + CharAst + SysArity
     }
 end
 
-lang TimeEval = TimeAst + IntAst + TimeArity
+lang TimeEval = ConstDelta + TimeAst + IntAst + TimeArity
   sem delta info =
   | (CSleepMs _, [TmConst {val = CInt n}]) ->
     sleepMs n.val;
@@ -647,7 +650,7 @@ lang TimeEval = TimeAst + IntAst + TimeArity
     float_ (wallTimeMs ())
 end
 
-lang RefOpEval = RefOpAst + RefEval + IntAst + RefOpArity
+lang RefOpEval = ConstDelta + RefOpAst + RefEval + IntAst + RefOpArity
   sem delta info =
   | (CRef _, [arg]) -> TmRef {ref = ref arg}
   | (CModRef _, [TmRef r, arg]) ->
@@ -656,7 +659,8 @@ lang RefOpEval = RefOpAst + RefEval + IntAst + RefOpArity
   | (CDeRef _, [TmRef r]) -> deref r.ref
 end
 
-lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
+lang ConTagEval =
+  ConstDelta + ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
   sem delta info =
   | (CConstructorTag _, [TmConApp {ident = id}]) ->
     match nameGetSym id with Some sym then TmConst {
@@ -915,7 +919,7 @@ lang TensorOpEval =
 end
 
 lang BootParserEval =
-  BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
+  ConstDelta + BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
   FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
   RecordAst + BootParserArity
 
@@ -1082,13 +1086,13 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatEval = Eval + NamedPat
+lang NamedPatEval = MatchEval + NamedPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = Eval + SeqTotPat + SeqAst
+lang SeqTotPatEval = MatchEval + SeqTotPat + SeqAst
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
@@ -1101,7 +1105,7 @@ lang SeqTotPatEval = Eval + SeqTotPat + SeqAst
     else None ()
 end
 
-lang SeqEdgePatEval = Eval + SeqEdgePat + SeqAst
+lang SeqEdgePatEval = MatchEval + SeqEdgePat + SeqAst
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq {tms = tms} then
@@ -1126,7 +1130,7 @@ lang SeqEdgePatEval = Eval + SeqEdgePat + SeqAst
     else None ()
 end
 
-lang RecordPatEval = Eval + RecordAst + RecordPat
+lang RecordPatEval = MatchEval + RecordAst + RecordPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
@@ -1145,7 +1149,7 @@ lang RecordPatEval = Eval + RecordAst + RecordPat
     else None ()
 end
 
-lang DataPatEval = Eval + DataAst + DataPat
+lang DataPatEval = MatchEval + DataAst + DataPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatCon {ident = ident, subpat = subpat, info = info} ->
     match t with TmConApp cn then
@@ -1155,7 +1159,7 @@ lang DataPatEval = Eval + DataAst + DataPat
     else None ()
 end
 
-lang IntPatEval = Eval + IntAst + IntPat
+lang IntPatEval = MatchEval + IntAst + IntPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatInt i ->
     match t with TmConst c then
@@ -1165,7 +1169,7 @@ lang IntPatEval = Eval + IntAst + IntPat
     else None ()
 end
 
-lang CharPatEval = Eval + CharAst + CharPat
+lang CharPatEval = MatchEval + CharAst + CharPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatChar ch ->
     match t with TmConst c then
@@ -1175,7 +1179,7 @@ lang CharPatEval = Eval + CharAst + CharPat
     else None ()
 end
 
-lang BoolPatEval = Eval + BoolAst + BoolPat
+lang BoolPatEval = MatchEval + BoolAst + BoolPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
@@ -1186,19 +1190,19 @@ lang BoolPatEval = Eval + BoolAst + BoolPat
     else None ()
 end
 
-lang AndPatEval = Eval + AndPat
+lang AndPatEval = MatchEval + AndPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
-lang OrPatEval = Eval + OrPat
+lang OrPatEval = MatchEval + OrPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
     optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
 end
 
-lang NotPatEval = Eval + NotPat
+lang NotPatEval = MatchEval + NotPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNot {subpat = p} ->
     let res = tryMatch env t p in
