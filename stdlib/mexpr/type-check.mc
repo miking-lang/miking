@@ -535,12 +535,14 @@ lang LetTypeCheck =
     let newLvl = addi 1 env.currentLvl in
     let tyAnnot = resolveType t.info env.tyConEnv t.tyAnnot in
     let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
+    let propagatedType = if isValue (GVal ()) t.body then (stripTyAll tyAnnot).1 else tyAnnot in
+    let body = propagateTyAnnot (t.body, propagatedType) in
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
         let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
-        let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, stripped)) in
+        let body = typeCheckExpr newEnv body in
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
         (if env.disableRecordPolymorphism then
@@ -548,7 +550,7 @@ lang LetTypeCheck =
         match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
         (body, tyBody)
       else
-        let body = typeCheckExpr {env with currentLvl = newLvl} t.body in
+        let body = typeCheckExpr {env with currentLvl = newLvl} body in
         unify env [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body);
         -- TODO(aathn, 2023-05-07): Relax value restriction
         weakenMetaVars env.currentLvl tyBody;
@@ -579,9 +581,11 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
       let tyAnnot = resolveType t.info env.tyConEnv b.tyAnnot in
       let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
       let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
+      let propagatedType = if isValue (GVal ()) b.body then (stripTyAll tyAnnot).1 else tyAnnot in
+      let body = propagateTyAnnot (b.body, propagatedType) in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
-      ((newEnv, newTyVars), {b with tyAnnot = tyAnnot, tyBody = tyBody})
+      ((newEnv, newTyVars), {b with tyAnnot = tyAnnot, tyBody = tyBody, body = body})
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
       with ((recLetEnv, tyVars), bindings) in
@@ -594,7 +598,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
         if isValue (GVal ()) b.body then
           let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
           match stripTyAll b.tyBody with (_, stripped) in
-          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, stripped)) in
+          let body = typeCheckExpr newEnv b.body in
           -- Unify the inferred type of the body with the annotated one
           unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
           body

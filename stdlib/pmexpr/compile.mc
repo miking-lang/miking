@@ -137,7 +137,7 @@ lang PMExprCompileWellFormedBase =
     let ast = typeCheck ast in
     let accelerateIds = mapMap (lam. ()) accelerateData in
     let accelerateAst = extractAccelerateTerms accelerateIds ast in
-    match eliminateDummyParameter solutions accelerateData accelerateAst
+    match eliminateDummyParameter (mapMap (lam x. x.vars) solutions) accelerateData accelerateAst
     with (accelerateData, accelerateAst) in
     checkNestedAccelerate accelerateIds accelerateAst;
     let accelerateData = eliminateTensorCopying accelerateData ast in
