@@ -434,6 +434,12 @@ module NoCap = struct
     It's worth noting that none of this would be an issue if we had
     symbols, so a potential fix would be to make symbolize in boot
     respect already placed symbols.
+
+    It's also worth noting that this would also not be an issue with
+    dot-notation (e.g., `X.foo` instead of `use X in foo`), because
+    the former makes it clear that we're using a name in `X` rather
+    than a name from `X` or the current scope.
+
      *)
 
     failwith "We don't presently support renaming `syn`s or `sem`s using `with`. See this error in the code for why."
