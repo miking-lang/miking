@@ -765,9 +765,9 @@ let wrap_cons : mlang_env -> lang_data -> tm -> tm = fun env lang tm ->
       TyAll (con.fi, tyvar, ty) in
     let wrap_app (ty : ty) (tyvar : ustring) =
       TyApp (con.fi, ty, TyVar (con.fi, tyvar)) in
-    let carried = List.fold_right wrap_all con.ty_params con.carried in
     let ret = List.fold_left wrap_app (TyCon (con.fi, name)) con.ty_params in
-    let ty = TyArrow (con.fi, carried, ret) in
+    let ty = TyArrow (con.fi, con.carried, ret) in
+    let ty = List.fold_right wrap_all con.ty_params ty in
     TmConDef
       ( con.fi
       , lang_con_mangle con.name
