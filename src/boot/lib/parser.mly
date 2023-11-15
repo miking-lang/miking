@@ -555,6 +555,9 @@ ty:
   | ALL var_ident DOT ty
       { let fi = mkinfo $1.i (ty_info $4) in
         TyAll(fi, $2.v, $4) }
+  | USE ident IN ty
+      { let fi = mkinfo $1.i $3.i in
+        TyUse(fi, $2.v, $4) }
 
 ty_left:
   | ty_atom

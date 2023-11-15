@@ -383,6 +383,8 @@ and ty =
   | TyVar of info * ustring
   (* Type application *)
   | TyApp of info * ty * ty
+  (* Type-level use *)
+  | TyUse of info * ustring * ty
 
 (* Kind of identifier *)
 and ident =
@@ -523,6 +525,9 @@ let smap_accum_left_ty_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : ty -> 'a * ty =
      let acc, l = f acc l in
      let acc, r = f acc r in
      (acc, TyApp (fi, l, r))
+  | TyUse (fi, lang, ty) ->
+     let acc, ty = f acc ty in
+     (acc, TyUse (fi, lang, ty))
   | (TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ | TyVariant _ | TyCon _ | TyVar _) as ty -> (acc, ty)
 
 let smap_accum_left_tm_pat (f : 'a -> pat -> 'a * pat) (acc : 'a) : tm -> 'a * tm = function
@@ -660,6 +665,7 @@ let ty_info = function
   | TyVariant (fi, _)
   | TyCon (fi, _)
   | TyVar (fi, _)
+  | TyUse (fi, _, _)
   | TyApp (fi, _, _) ->
       fi
 

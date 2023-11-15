@@ -386,6 +386,12 @@ let rec translate_ty (env : mlang_env) : ty -> ty = function
      | Some id -> TyCon (fi, id)
      | None -> TyCon (fi, empty_mangle id)
      end
+  | TyUse (fi, lang, ty) ->
+     begin match Record.find_opt lang env.language_envs with
+     | Some new_env -> translate_ty (merge_env_prefer_right env new_env) ty
+     | None -> raise_error fi
+                 ( "Unbound language fragment '" ^ Ustring.to_utf8 lang ^ "'" )
+     end
   | ty ->
      let ty = smap_ty_ty (translate_ty env) ty in
      ty
