@@ -119,7 +119,11 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   sem pevalReadbackH ctx =| t -> smapAccumL_Expr_Expr pevalReadbackH ctx t
 end
 
-lang AppPEval = PEval + AppAst
+lang PEvalApply = Ast
+  sem pevalApply : Info -> PEvalCtx -> (Expr -> Expr) -> (Expr, Expr) -> Expr
+end
+
+lang AppPEval = PEval + PEvalApply + AppAst
   sem pevalBindThis =
   | TmApp _ -> true
 
@@ -165,7 +169,7 @@ lang ClosPAst = ClosAst
   | TmClosP r -> TmClosP { r with cls = { r.cls with info = info } }
 end
 
-lang LamPEval = PEval + VarAst + LamAst + ClosPAst + AppEval
+lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
   sem pevalBindThis =
   | TmClosP _ -> false
 
@@ -400,7 +404,7 @@ lang SeqPEval = PEval + SeqAst
       (lam tms. k (TmSeq { r with tms = tms }))
 end
 
-lang ConstPEval = PEval + ConstEvalNoDefault
+lang ConstPEval = PEval + PEvalApply + ConstEvalNoDefault
   sem pevalReadbackH ctx =
   | TmConstApp r ->
     match mapAccumL pevalReadbackH ctx r.args with (ctx, args) in
@@ -500,7 +504,7 @@ lang UtestPEval = PEval + UtestAst
       t.test
 end
 
-lang NeverPEval = PEval + NeverAst
+lang NeverPEval = PEval + PEvalApply + NeverAst
   sem pevalBindThis =
   | TmNever _ -> false
 
@@ -574,7 +578,7 @@ lang ArithIntPEval = ArithIntEval + VarAst
     end
 end
 
-lang ArithFloatPEval = ArithFloatEval + VarAst
+lang ArithFloatPEval = PEval + ArithFloatEval + VarAst
   sem pevalReadbackH ctx =
   | t & TmConst (r & { val = CFloat v }) ->
     if ltf v.val 0. then
@@ -631,7 +635,7 @@ lang CmpCharPEval = CmpCharEval + VarAst end
 
 lang IOPEval = IOAst + SeqAst + IOArity end
 
-lang SeqOpPEval = PEval + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
+lang SeqOpPEval = PEval + PEvalApply + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
   sem pevalBindThis =
   | TmApp {
     lhs = TmApp {

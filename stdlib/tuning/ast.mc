@@ -16,7 +16,7 @@ let _expectConstInt : Info -> String -> Expr -> Int =
     match i with TmConst {val = CInt {val = i}} then i
     else errorSingle [info] (concat "Expected a constant integer: " s)
 
-lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck
+lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
   syn Hole =
 
   syn Expr =
