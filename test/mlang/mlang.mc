@@ -1,4 +1,10 @@
-lang Arith
+lang Base
+  syn Expr =
+
+  sem eval =
+end
+
+lang Arith = Base
   syn Expr =
   | Num Dyn
   | Add (Dyn, Dyn)
@@ -11,7 +17,7 @@ lang Arith
     addi (eval e1) (eval e2)
 end
 
-lang MyBool
+lang MyBool = Base
   syn Expr =
   | True ()
   | False ()
@@ -58,14 +64,15 @@ lang A
   | ACon {afield : Dyn}
 end
 
-lang AExtend = A
-  syn ATy =
-  | ACon {aextfield : Dyn}
-end
-
 lang Overlap = ArithBool + ArithBool2 + Arith end
 
-lang FooA
+lang FooBase
+  syn Val =
+
+  sem foo =
+end
+
+lang FooA = FooBase
   syn Val =
   | A {}
 
@@ -73,7 +80,7 @@ lang FooA
   | A _ -> "A"
 end
 
-lang FooB
+lang FooB = FooBase
   syn Val =
   | B {}
 
@@ -131,11 +138,6 @@ mexpr
 
 let e1 = use ArithBool in If(True(), Num 1, Num 2) in
 let e2 = use ArithBool2 in If(True(), Num 1, Num 2) in
-utest e1 with e2 in
-
-
-let e1 = use A in ACon{afield = 1, aextfield = 2} in -- TODO(vipa,?): this should break once we start typechecking product extensions of a constructor
-let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
 utest e1 with e2 in
 
 

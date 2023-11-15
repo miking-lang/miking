@@ -1,6 +1,10 @@
 -- Remembering constructors from individual language fragments
 
-lang A
+lang ExprDef
+  syn Expr =
+end
+
+lang A = ExprDef
     syn Expr =
     | TmFoo ()
 end
@@ -13,7 +17,7 @@ end
 let isA = use A in lam x. match x with TmFoo () then true else false
 let isB = use B in lam x. match x with TmFoo () then true else false
 
-lang C
+lang C = ExprDef
     syn Expr =
     | TmBar ()
 end
