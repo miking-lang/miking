@@ -113,7 +113,7 @@ end
 -- match-expressions, for different kinds of patterns. We assume pattern
 -- lowering has been applied on the provided AST, which guarantees absence of
 -- AND, OR, and NOT patterns as well as nested patterns.
-lang OCamlMatchGenerate = MExprAst + OCamlAst
+lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
   sem getPatName : PatName -> Option Name
   sem getPatName =
   | PWildcard _ -> None ()
