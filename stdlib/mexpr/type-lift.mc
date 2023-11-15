@@ -25,7 +25,7 @@ include "cmp.mc"
 -- This type is added specifically for the type lifting to allow distinguishing
 -- between variant types in the type environment before their constructors have
 -- been added.
-lang VariantNameTypeAst = Eq
+lang VariantNameTypeAst = Ast + Eq
   syn Type =
   | TyVariantName {ident : Name,
                    info : Info}
