@@ -852,7 +852,7 @@ lang CmpSymbAst = SymbAst + BoolAst
   | CEqsym {}
 end
 
-lang SeqOpAst = SeqAst
+lang SeqOpAst = SeqAst + ConstAst
   syn Const =
   | CSet {}
   | CGet {}
