@@ -756,20 +756,30 @@ let wrap_aliases : mlang_env -> lang_data -> tm -> tm = fun env lang tm ->
   |> fun aliases -> List.fold_right wrap_alias aliases tm
 
 let wrap_cons : mlang_env -> lang_data -> tm -> tm = fun env lang tm ->
-  let wrap_con (tm : tm) (con : syn_case) =
+  let cons_with_syn_name (syn : syn_data) : (ustring * syn_case) Seq.t =
+    let _, name, _ = syn.ty in
+    Record.to_seq syn.cons
+    |> Seq.map (fun (_, c) -> (name, c)) in
+  let wrap_con (tm : tm) ((name : ustring), (con : syn_case)) =
+    let wrap_all (tyvar : ustring) (ty : ty) =
+      TyAll (con.fi, tyvar, ty) in
+    let wrap_app (ty : ty) (tyvar : ustring) =
+      TyApp (con.fi, ty, TyVar (con.fi, tyvar)) in
+    let carried = List.fold_right wrap_all con.ty_params con.carried in
+    let ret = List.fold_left wrap_app (TyCon (con.fi, name)) con.ty_params in
+    let ty = TyArrow (con.fi, carried, ret) in
     TmConDef
       ( con.fi
       , lang_con_mangle con.name
       , Symb.Helpers.nosym
-      , translate_ty env con.carried
+      , translate_ty env ty
       , tm
       ) in
   Record.to_seq lang.types
   |> Seq.map snd
   |> Seq.filter_map Either.find_right
-  |> Seq.flat_map (fun x -> Record.to_seq x.cons)
-  |> Seq.map snd
-  |> Seq.filter (fun (con : syn_case) -> con.def_here)
+  |> Seq.flat_map cons_with_syn_name
+  |> Seq.filter (fun (_, (con : syn_case)) -> con.def_here)
   |> Seq.fold_left wrap_con tm
 
 let wrap_sems : mlang_env -> ustring -> lang_data -> tm -> tm = fun env lang_name lang tm ->
