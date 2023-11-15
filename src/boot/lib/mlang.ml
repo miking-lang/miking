@@ -169,7 +169,7 @@ type lang_data =
  * in the new fragment; this function is what makes it so. *)
 let pre_extend_lang : lang_data -> lang_data = fun lang ->
   let work_syn_case : syn_case -> syn_case = fun case ->
-    { case with def_here = true } in
+    { case with def_here = false } in
   let work_syn : syn_data -> syn_data = fun data ->
     { data with
       def_here = false
