@@ -627,7 +627,7 @@ end
 -- PATTERN TYPE ANNOTATE --
 ---------------------------
 
-lang NamedPatTypeAnnot = TypeAnnot + NamedPat
+lang NamedPatTypeAnnot = MatchTypeAnnot + NamedPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatNamed t ->
     let env =
@@ -637,7 +637,8 @@ lang NamedPatTypeAnnot = TypeAnnot + NamedPat
     (env, PatNamed {t with ty = expectedTy})
 end
 
-lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
+lang SeqTotPatTypeAnnot = MatchTypeAnnot + SeqTotPat + UnknownTypeAst +
+                          SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqTot t ->
     let elemTy =
@@ -649,7 +650,8 @@ lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
     else never
 end
 
-lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
+lang SeqEdgePatTypeAnnot = MatchTypeAnnot + SeqEdgePat + UnknownTypeAst +
+                           SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqEdge t ->
     let elemTy =
@@ -671,7 +673,8 @@ lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
     else never
 end
 
-lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
+lang RecordPatTypeAnnot = MatchTypeAnnot + RecordPat + UnknownTypeAst +
+                          RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
     let expectedTy = unwrapType expectedTy in
@@ -700,7 +703,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
     else never
 end
 
-lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
+lang DataPatTypeAnnot = MatchTypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
                         FunTypeAst + AllTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
@@ -712,22 +715,22 @@ lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
     else (env, PatCon t)
 end
 
-lang IntPatTypeAnnot = TypeAnnot + IntPat
+lang IntPatTypeAnnot = MatchTypeAnnot + IntPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatInt r -> (env, PatInt {r with ty = tyint_})
 end
 
-lang CharPatTypeAnnot = TypeAnnot + CharPat
+lang CharPatTypeAnnot = MatchTypeAnnot + CharPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatChar r -> (env, PatChar {r with ty = tychar_})
 end
 
-lang BoolPatTypeAnnot = TypeAnnot + BoolPat
+lang BoolPatTypeAnnot = MatchTypeAnnot + BoolPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatBool r -> (env, PatBool {r with ty = tybool_})
 end
 
-lang AndPatTypeAnnot = TypeAnnot + AndPat
+lang AndPatTypeAnnot = MatchTypeAnnot + AndPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatAnd t ->
     match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
@@ -737,7 +740,7 @@ lang AndPatTypeAnnot = TypeAnnot + AndPat
     else never
 end
 
-lang OrPatTypeAnnot = TypeAnnot + OrPat
+lang OrPatTypeAnnot = MatchTypeAnnot + OrPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatOr t ->
     match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
@@ -747,7 +750,7 @@ lang OrPatTypeAnnot = TypeAnnot + OrPat
     else never
 end
 
-lang NotPatTypeAnnot = TypeAnnot + NotPat
+lang NotPatTypeAnnot = MatchTypeAnnot + NotPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatNot t ->
     match typeAnnotPat env expectedTy t.subpat with (env, subpat) then
