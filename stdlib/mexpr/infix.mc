@@ -73,11 +73,11 @@ lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint + MExpr
 end
 
 -- Evaluate an expression into a value expression
-let evalExpr : Expr -> Expr =
+let evalExpr : use MExprExt in Expr -> Expr =
   use MExprExt in lam t. eval (evalCtxEmpty ()) (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
-let evalStr : String -> Expr =
+let evalStr : use MExprExt in String -> Expr =
   lam str. use MExprExt in evalExpr (parseExpr (initPos "") str)
 
 -- Parse a string and then evaluate into a value, and pretty print

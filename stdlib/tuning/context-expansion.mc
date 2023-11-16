@@ -12,7 +12,7 @@ include "graph-coloring.mc"
 
 -- Implements context expansion for a program with holes.
 
-type LookupTable = [Expr]
+type LookupTable = [use Ast in Expr]
 
 type ContextExpanded =
 { table : LookupTable    -- The initial lookup table

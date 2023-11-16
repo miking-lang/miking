@@ -79,7 +79,7 @@ lang MExprCudaCompile =
 end
 
 let keywordsSymEnv =
-  {symEnvEmpty with varEnv =
+  {symEnvDefault with varEnv =
     mapFromSeq
       cmpString
       (map (lam s. (s, nameSym s)) mexprExtendedKeywords)}
@@ -110,7 +110,7 @@ let pprintCudaAst = use CudaPrettyPrint in
   lam ast : CudaProg.
   printCudaProg cCompilerNames ast
 
-let futharkTranslation : Set Name -> Expr -> FutProg =
+let futharkTranslation : use MExprFutharkCompile in Set Name -> Expr -> FutProg =
   lam entryPoints. lam ast.
   use MExprFutharkCompile in
   let ast = generateProgram entryPoints ast in
@@ -140,7 +140,7 @@ let cudaTranslation =
                                         options.accelerateTensorMaxRank ccEnv in
   (CuPProg { includes = cudaIncludes, tops = cudaTops }, wrapperProg)
 
-let mergePrograms : CudaProg -> CudaProg -> CudaProg =
+let mergePrograms : use CudaAst in CudaProg -> CudaProg -> CudaProg =
   lam cudaProg. lam wrapperProg.
   use MExprCudaCompile in
   -- NOTE(larshum, 2022-04-01): We split up the tops such that the types

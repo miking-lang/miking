@@ -260,7 +260,7 @@ lang PrettyPrint = IdentifierPrettyPrint
     else (env, join ["(", str, ")"])
 end
 
-lang VarPrettyPrint = MExprIdentifierPrettyPrint + VarAst
+lang VarPrettyPrint = PrettyPrint + MExprIdentifierPrettyPrint + VarAst
   sem isAtomic =
   | TmVar _ -> true
 
@@ -909,13 +909,14 @@ lang PatNamePrettyPrint = IdentifierPrettyPrint
   | PWildcard () -> (env, "_")
 end
 
-lang NamedPatPrettyPrint = NamedPat + PatNamePrettyPrint
+lang NamedPatPrettyPrint = PrettyPrint + NamedPat + PatNamePrettyPrint
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatNamed {ident = patname} -> _pprint_patname env patname
 end
 
-let _pprint_patseq: (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int ->
-                    PprintEnv -> [Pat] -> (PprintEnv, String) =
+let _pprint_patseq
+  : use Ast in (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int
+            -> PprintEnv -> [Pat] -> (PprintEnv, String) =
 lam recur. lam indent. lam env. lam pats.
   use CharPat in
   let extract_char = lam e.
@@ -929,12 +930,12 @@ lam recur. lam indent. lam env. lam pats.
     strJoin (concat "," (pprintNewline (pprintIncr indent))) pats in
   (env, join ["[ ", merged, " ]"])
 
-lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
+lang SeqTotPatPrettyPrint = PrettyPrint + SeqTotPat + CharPat
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
-lang SeqEdgePatPrettyPrint = SeqEdgePat + PatNamePrettyPrint
+lang SeqEdgePatPrettyPrint = PrettyPrint + SeqEdgePat + PatNamePrettyPrint
   sem patPrecedence =
   | PatSeqEdge _ -> 0
 
@@ -951,7 +952,7 @@ lang SeqEdgePatPrettyPrint = SeqEdgePat + PatNamePrettyPrint
     (env, join [pre, pname, post])
 end
 
-lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
+lang RecordPatPrettyPrint = PrettyPrint + RecordPat + IdentifierPrettyPrint
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
     if mapIsEmpty bindings then (env, "{}")
@@ -984,17 +985,17 @@ lang DataPatPrettyPrint = DataPat + PrettyPrint
     (env, join [str, " ", subpat])
 end
 
-lang IntPatPrettyPrint = IntPat
+lang IntPatPrettyPrint = PrettyPrint + IntPat
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatInt t -> (env, int2string t.val)
 end
 
-lang CharPatPrettyPrint = CharPat
+lang CharPatPrettyPrint = PrettyPrint + CharPat
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatChar t -> (env, join ["\'", escapeChar t.val, "\'"])
 end
 
-lang BoolPatPrettyPrint = BoolPat
+lang BoolPatPrettyPrint = PrettyPrint + BoolPat
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatBool b -> (env, if b.val then "true" else "false")
 end
@@ -1032,27 +1033,27 @@ end
 -- TYPES --
 -----------
 
-lang UnknownTypePrettyPrint = UnknownTypeAst
+lang UnknownTypePrettyPrint = PrettyPrint + UnknownTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyUnknown _ -> (env,"Unknown")
 end
 
-lang BoolTypePrettyPrint = BoolTypeAst
+lang BoolTypePrettyPrint = PrettyPrint + BoolTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyBool _ -> (env,"Bool")
 end
 
-lang IntTypePrettyPrint = IntTypeAst
+lang IntTypePrettyPrint = PrettyPrint + IntTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyInt _ -> (env,"Int")
 end
 
-lang FloatTypePrettyPrint = FloatTypeAst
+lang FloatTypePrettyPrint = PrettyPrint + FloatTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyFloat _ -> (env,"Float")
 end
 
-lang CharTypePrettyPrint = CharTypeAst
+lang CharTypePrettyPrint = PrettyPrint + CharTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyChar _ -> (env,"Char")
 end
@@ -1068,21 +1069,21 @@ lang FunTypePrettyPrint = PrettyPrint + FunTypeAst
     (env, join [from, " -> ", to])
 end
 
-lang SeqTypePrettyPrint = SeqTypeAst
+lang SeqTypePrettyPrint = PrettyPrint + SeqTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TySeq t ->
     match getTypeStringCode indent env t.ty with (env, ty) in
     (env, join ["[", ty, "]"])
 end
 
-lang TensorTypePrettyPrint = TensorTypeAst
+lang TensorTypePrettyPrint = PrettyPrint + TensorTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyTensor t ->
     match getTypeStringCode indent env t.ty with (env, ty) in
     (env, join ["Tensor[", ty, "]"])
 end
 
-lang RecordTypePrettyPrint = IdentifierPrettyPrint + RecordTypeAst
+lang RecordTypePrettyPrint = PrettyPrint + RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
@@ -1119,7 +1120,7 @@ lang RecordTypePrettyPrint = IdentifierPrettyPrint + RecordTypeAst
         (env,join ["{", strJoin ", " (map conventry fields), "}"])
 end
 
-lang VariantTypePrettyPrint = VariantTypeAst
+lang VariantTypePrettyPrint = PrettyPrint + VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVariant t ->
     if eqi (mapLength t.constrs) 0 then (env,"<>")
@@ -1129,7 +1130,7 @@ lang VariantTypePrettyPrint = VariantTypeAst
     -- still use TyVariant in the AST and might get compilation errors for it.
 end
 
-lang ConTypePrettyPrint = IdentifierPrettyPrint + ConTypeAst + UnknownTypeAst + DataTypeAst
+lang ConTypePrettyPrint = PrettyPrint + ConTypeAst + UnknownTypeAst + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyCon t ->
     match pprintTypeName env t.ident with (env, idstr) in
@@ -1140,7 +1141,7 @@ lang ConTypePrettyPrint = IdentifierPrettyPrint + ConTypeAst + UnknownTypeAst + 
         (env, join [idstr, "{", datastr, "}"])
 end
 
-lang DataTypePrettyPrint = IdentifierPrettyPrint + DataTypeAst
+lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyData t ->
     let consstr = strJoin "," (map nameGetStr (setToSeq t.cons)) in
@@ -1149,7 +1150,7 @@ lang DataTypePrettyPrint = IdentifierPrettyPrint + DataTypeAst
     in (env, datastr)
 end
 
-lang VarTypePrettyPrint = IdentifierPrettyPrint + VarTypeAst
+lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyVar t ->
     pprintVarName env t.ident
@@ -1170,7 +1171,7 @@ lang KindPrettyPrint = PrettyPrint + RecordTypeAst + DataTypeAst + KindAst
   | Mono () -> (env, "Mono")
 end
 
-lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + KindPrettyPrint
+lang AllTypePrettyPrint = PrettyPrint + AllTypeAst + KindPrettyPrint
   sem typePrecedence =
   | TyAll _ -> 0
 

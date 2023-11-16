@@ -11,7 +11,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
 
-type LambdaLiftState = {
+type LambdaLiftState = use Ast in {
   -- Variables in the current scope that can occur as free variables in the
   -- current expression.
   vars : Set Name,

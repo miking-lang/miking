@@ -3,11 +3,11 @@ include "mexpr/ast-builder.mc"
 
 type OCamlTopBinding =
   { ident : Name
-    , tyBody : Type
-    , body : Expr
+  , tyBody : use Ast in Type
+  , body : use Ast in Expr
   }
 
-lang OCamlTopAst
+lang OCamlTopAst = Ast
   syn Top =
   | OTopTypeDecl { ident : Name, ty : Type }
   | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }
@@ -19,7 +19,7 @@ lang OCamlTopAst
   | OTopTryWith { try : Expr, arms : [(Pat, Expr)] }
 end
 
-lang OCamlRecord
+lang OCamlRecord = Ast
   syn Expr =
   | OTmRecord {bindings : [(String, Expr)], tyident : Type}
   | OTmProject {field : String, tm : Expr}
@@ -53,7 +53,7 @@ lang OCamlRecord
     else never
 end
 
-lang OCamlRecordUpdate
+lang OCamlRecordUpdate = Ast
   syn Expr =
   | OTmRecordUpdate {rec : Expr, updates : [(SID, Expr)]}
 
@@ -71,7 +71,7 @@ lang OCamlRecordUpdate
     (acc, OTmRecordUpdate {t with rec = rec, updates = updates})
 end
 
-lang OCamlMatch
+lang OCamlMatch = Ast
   syn Expr =
   | OTmMatch
     { target : Expr
@@ -96,7 +96,7 @@ lang OCamlMatch
     else never
 end
 
-lang OCamlArray
+lang OCamlArray = Ast
   syn Expr =
   | OTmArray {tms : [Expr]}
 
@@ -109,7 +109,7 @@ lang OCamlArray
     else never
 end
 
-lang OCamlTuple
+lang OCamlTuple = Ast
   syn Expr =
   | OTmTuple { values : [Expr] }
 
@@ -133,7 +133,7 @@ lang OCamlTuple
     else never
 end
 
-lang OCamlData
+lang OCamlData = Ast
   syn Expr =
   | OTmConApp { ident : Name, args : [Expr] }
 
@@ -157,7 +157,7 @@ lang OCamlData
     else never
 end
 
-lang OCamlString
+lang OCamlString = Ast
   syn Expr =
   | OTmString { text : String }
 end
@@ -170,7 +170,7 @@ end
 -- *cannot* overlap with other names. An easy way to do that is to
 -- always use fully qualified names, since normal names cannot contain
 -- dots.
-lang OCamlExternal
+lang OCamlExternal = Ast
   syn Expr =
   | OTmVarExt { ident : String }
   | OTmConAppExt { ident : String, args : [Expr] }
@@ -196,7 +196,7 @@ lang OCamlExternal
     else never
 end
 
-lang OCamlLabel
+lang OCamlLabel = Ast
   syn Expr =
   | OTmLabel { label : String, arg : Expr }
 
@@ -209,7 +209,7 @@ lang OCamlLabel
     else never
 end
 
-lang OCamlLam
+lang OCamlLam = Ast
   syn Expr =
   | OTmLam {label : Option String, ident : Name, body : Expr}
 

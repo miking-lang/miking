@@ -25,7 +25,7 @@ include "cmp.mc"
 -- This type is added specifically for the type lifting to allow distinguishing
 -- between variant types in the type environment before their constructors have
 -- been added.
-lang VariantNameTypeAst = Eq
+lang VariantNameTypeAst = Ast + Eq
   syn Type =
   | TyVariantName {ident : Name,
                    info : Info}
@@ -63,6 +63,15 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     -- Variant types and their constructors encountered so far.
     variants: Map Name (Map Name Type)
   }
+
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem addSeqToEnv (env: TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem addTensorToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
 
   -- Replaces all variant type names with the variant type they represent. This
   -- function is called after going through the program, at which point all
@@ -137,10 +146,6 @@ end
 -----------
 
 lang TypeLift = TypeLiftBase + Cmp
-
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
   sem typeLiftExpr (env : TypeLiftEnv) =
   | t ->
     -- Lift all sub-expressions

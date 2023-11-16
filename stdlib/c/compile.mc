@@ -65,7 +65,7 @@ let _lookupTypeName = use MExprAst in
   work (None ()) ty
 
 -- C assignment shorthand
-let _assign: CExpr -> CExpr -> CExpr = use CAst in
+let _assign: use CAst in CExpr -> CExpr -> CExpr = use CAst in
   lam lhs. lam rhs.
     CEBinOp { op = COAssign {}, lhs = lhs, rhs = rhs }
 
@@ -1379,7 +1379,8 @@ let printCompiledCProg = use CProgPrettyPrint in
 lang Test =
   MExprCCompileAlloc + MExprPrettyPrint + MExprTypeCheck +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
-  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
+  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift +
+  CProgAst
 end
 
 mexpr
@@ -1387,7 +1388,7 @@ use Test in
 let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Symbolize with empty environment
-  let prog = symbolizeExpr symEnvEmpty prog in
+  let prog = symbolizeExpr symEnvDefault prog in
 
   -- Type check and annotate
   let prog = typeCheck prog in

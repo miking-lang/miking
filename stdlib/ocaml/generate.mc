@@ -63,8 +63,14 @@ let lookupRecordFields = use MExprAst in
     else None ()
   else None ()
 
-type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
-                    els : Expr, ty : Type, info : Info}
+type MatchRecord = {
+  target : use Ast in Expr,
+  pat : use Ast in Pat,
+  thn : use Ast in Expr,
+  els : use Ast in Expr,
+  ty : use Ast in Type,
+  info : Info
+}
 
 lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   sem generateTops (env : GenerateEnv) =
@@ -113,7 +119,7 @@ end
 -- match-expressions, for different kinds of patterns. We assume pattern
 -- lowering has been applied on the provided AST, which guarantees absence of
 -- AND, OR, and NOT patterns as well as nested patterns.
-lang OCamlMatchGenerate = MExprAst + OCamlAst
+lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
   sem getPatName : PatName -> Option Name
   sem getPatName =
   | PWildcard _ -> None ()

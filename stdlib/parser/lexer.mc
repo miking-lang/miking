@@ -15,11 +15,11 @@ lang WSACParser
   | x -> {str = x, pos = p}
 end
 
-type Stream = {pos : Pos, str : String}
-type NextTokenResult = {token : Token, lit : String, info : Info, stream : Stream}
-
 -- Base language for parsing tokens preceeded by WSAC
 lang TokenParser = WSACParser + TokenReprBase
+  type Stream = {pos : Pos, str : String}
+  type NextTokenResult = {token : Token, lit : String, info : Info, stream : Stream}
+
   syn Token =
   sem nextToken /- : Stream -> NextTokenResult -/ =
   | stream ->

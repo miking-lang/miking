@@ -23,7 +23,7 @@ let tableFromFile = lam file.
   else error (join ["Tune file ", file, " does not exist"])
 
 let dependencyAnalysis
-  : Options -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
+  : use MCoreTune in Options -> CallCtxEnv -> Expr -> (DependencyGraph, Expr) =
   lam options : Options. lam env : CallCtxEnv. lam ast.
     use MCoreTune in
     if options.tuneOptions.dependencyAnalysis then

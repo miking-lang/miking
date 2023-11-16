@@ -124,7 +124,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
     bindall_ [aExpr, bExpr, tExpr, mapExpr]
 end
 
-lang PMExprDemoteReduce = PMExprAst
+lang PMExprDemoteReduce = PMExprDemoteBase + PMExprAst
   sem demoteParallel =
   | TmParallelReduce t ->
     let tyuk = TyUnknown {info = t.info} in
@@ -137,7 +137,7 @@ lang PMExprDemoteReduce = PMExprAst
       rhs = demoteParallel t.as, ty = tyuk, info = t.info}
 end
 
-lang PMExprDemoteLoop = PMExprAst
+lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
   sem demoteParallel =
   | TmLoop t | TmParallelLoop t ->
     let unitTy = TyRecord {fields = mapEmpty cmpSID, info = t.info} in

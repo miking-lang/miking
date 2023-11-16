@@ -231,7 +231,7 @@ and ptree =
   | PTreeInfo of info
 
 (* Terms in MLang *)
-and cdecl = CDecl of info * ustring list * ustring * ty
+and cdecl = CDecl of info * ustring list * ustring * ty (* info, type-parameters, constructor name, carried type *)
 
 and param = Param of info * ustring * ty
 
@@ -241,7 +241,11 @@ and decl =
   | Inter of info * ustring * ty * param list option * (pat * tm) list
   | Alias of info * ustring * ustring list * ty
 
-and mlang = Lang of info * ustring * ustring list * decl list
+and with_kind = WithType | WithValue
+
+and lang_with = With of info * with_kind * ustring * (ustring * ustring) list
+
+and mlang = Lang of info * ustring * ustring list * lang_with list * decl list
 
 and let_decl = Let of info * ustring * ty * tm
 
@@ -383,6 +387,8 @@ and ty =
   | TyVar of info * ustring
   (* Type application *)
   | TyApp of info * ty * ty
+  (* Type-level use *)
+  | TyUse of info * ustring * ty
 
 (* Kind of identifier *)
 and ident =
@@ -484,14 +490,133 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
   | TmBox (_, _) ->
       failwith "TmBox is a runtime value"
 
-(* smap for terms *)
+let smap_accum_left_tm_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : tm -> 'a * tm = function
+  | TmLam (fi, id, sym, pesym, ty, tm) ->
+     let acc, ty = f acc ty in
+     (acc, TmLam (fi, id, sym, pesym, ty, tm))
+  | TmLet (fi, id, sym, ty, body, inexpr) ->
+     let acc, ty = f acc ty in
+     (acc, TmLet (fi, id, sym, ty, body, inexpr))
+  | TmRecLets (fi, lets, tm) ->
+     let f_bind acc (fi, id, sym, ty, tm) =
+       let acc, ty = f acc ty in
+       (acc, (fi, id, sym, ty, tm)) in
+     let acc, lets = List.fold_left_map f_bind acc lets in
+     (acc, TmRecLets (fi, lets, tm))
+  | TmType (fi, name, params, rhs, inexpr) ->
+     let acc, rhs = f acc rhs in
+     (acc, TmType (fi, name, params, rhs, inexpr))
+  | TmConDef (fi, name, sym, ty, tm) ->
+     let acc, ty = f acc ty in
+     (acc, TmConDef (fi, name, sym, ty, tm))
+  | TmExt (fi, name, sym, side, ty, tm) ->
+     let acc, ty = f acc ty in
+     (acc, TmExt (fi, name, sym, side, ty, tm))
+  | (TmVar _ | TmApp _ | TmConst _ | TmSeq _ | TmRecord _ | TmRecordUpdate _ | TmConApp _ | TmMatch _ | TmUtest _ | TmNever _ | TmUse _ | TmClos _ | TmRef _ | TmTensor _ | TmDive _ | TmPreRun _ | TmBox _) as tm -> (acc, tm)
+
+let smap_accum_left_ty_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : ty -> 'a * ty = function
+  | TyArrow (fi, l, r) ->
+     let acc, l = f acc l in
+     let acc, r = f acc r in
+     (acc, TyArrow (fi, l, r))
+  | TyAll (fi, id, kind, ty) ->
+     let acc, ty = f acc ty in
+     (acc, TyAll (fi, id, kind, ty))
+  | TySeq (fi, ty) ->
+     let acc, ty = f acc ty in
+     (acc, TySeq (fi, ty))
+  | TyTensor (fi, ty) ->
+     let acc, ty = f acc ty in
+     (acc, TyTensor (fi, ty))
+  | TyRecord (fi, tys) ->
+     let acc, tys = Record.to_seq tys
+                    |> List.of_seq
+                    |> List.fold_left_map (fun acc (k, v) -> let acc, v = f acc v in (acc, (k, v))) acc in
+     (acc, TyRecord (fi, Record.of_seq (List.to_seq tys)))
+  | TyApp (fi, l, r) ->
+     let acc, l = f acc l in
+     let acc, r = f acc r in
+     (acc, TyApp (fi, l, r))
+  | TyUse (fi, lang, ty) ->
+     let acc, ty = f acc ty in
+     (acc, TyUse (fi, lang, ty))
+  | (TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ | TyVariant _ | TyCon _ | TyVar _) as ty -> (acc, ty)
+
+let smap_accum_left_tm_pat (f : 'a -> pat -> 'a * pat) (acc : 'a) : tm -> 'a * tm = function
+  | TmMatch (fi, scrut, pat, th, el) ->
+     let acc, pat = f acc pat in
+     (acc, TmMatch (fi, scrut, pat, th, el))
+  | tm -> (acc, tm)
+
+let smap_accum_left_pat_pat (f : 'a -> pat -> 'a * pat) (acc : 'a) : pat -> 'a * pat = function
+  | PatSeqTot (fi, pats) ->
+     let acc, pats = Mseq.Helpers.map_accum_left f acc pats in
+     (acc, PatSeqTot (fi, pats))
+  | PatSeqEdge (fi, l, mid, r) ->
+     let acc, l = Mseq.Helpers.map_accum_left f acc l in
+     let acc, r = Mseq.Helpers.map_accum_left f acc r in
+     (acc, PatSeqEdge (fi, l, mid, r))
+  | PatRecord (fi, pats) ->
+     let acc, pats = Record.to_seq pats
+                    |> List.of_seq
+                    |> List.fold_left_map (fun acc (k, v) -> let acc, v = f acc v in (acc, (k, v))) acc in
+     (acc, PatRecord (fi, Record.of_seq (List.to_seq pats)))
+  | PatCon (fi, id, sym, pat) ->
+     let acc, pat = f acc pat in
+     (acc, PatCon (fi, id, sym, pat))
+  | PatAnd (fi, l, r) ->
+     let acc, l = f acc l in
+     let acc, r = f acc r in
+     (acc, PatAnd (fi, l, r))
+  | PatOr (fi, l, r) ->
+     let acc, l = f acc l in
+     let acc, r = f acc r in
+     (acc, PatOr (fi, l, r))
+  | PatNot (fi, pat) ->
+     let acc, pat = f acc pat in
+     (acc, PatNot (fi, pat))
+  | (PatNamed _ | PatInt _ | PatChar _ | PatBool _) as pat -> (acc, pat)
+
+(* smap and sfold variants of the smap_accum_lefts above *)
+
 let smap_tm_tm (f : tm -> tm) (t : tm) : tm =
   let _, t' = smap_accum_left_tm_tm (fun _ t -> ((), f t)) () t in
   t'
 
-(* sfold over terms *)
 let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) (t : tm) : 'a =
   let acc', _ = smap_accum_left_tm_tm (fun acc t -> (f acc t, t)) acc t in
+  acc'
+
+let smap_tm_ty (f : ty -> ty) (tm : tm) : tm =
+  let _, tm = smap_accum_left_tm_ty (fun _ ty -> ((), f ty)) () tm in
+  tm
+
+let sfold_tm_ty (f : 'a -> ty -> 'a) (acc : 'a) (tm : tm) : 'a =
+  let acc, _ = smap_accum_left_tm_ty (fun acc ty -> (f acc ty, ty)) acc tm in
+  acc
+
+let smap_ty_ty (f : ty -> ty) (t : ty) : ty =
+  let _, t' = smap_accum_left_ty_ty (fun _ t -> ((), f t)) () t in
+  t'
+
+let sfold_ty_ty (f : 'a -> ty -> 'a) (acc : 'a) (t : ty) : 'a =
+  let acc', _ = smap_accum_left_ty_ty (fun acc t -> (f acc t, t)) acc t in
+  acc'
+
+let smap_tm_pat (f : pat -> pat) (tm : tm) : tm =
+  let _, tm = smap_accum_left_tm_pat (fun _ pat -> ((), f pat)) () tm in
+  tm
+
+let sfold_tm_pat (f : 'a -> pat -> 'a) (acc : 'a) (tm : tm) : 'a =
+  let acc, _ = smap_accum_left_tm_pat (fun acc pat -> (f acc pat, pat)) acc tm in
+  acc
+
+let smap_pat_pat (f : pat -> pat) (t : pat) : pat =
+  let _, t' = smap_accum_left_pat_pat (fun _ t -> ((), f t)) () t in
+  t'
+
+let sfold_pat_pat (f : 'a -> pat -> 'a) (acc : 'a) (t : pat) : 'a =
+  let acc', _ = smap_accum_left_pat_pat (fun acc t -> (f acc t, t)) acc t in
   acc'
 
 (* Returns arity given an type *)
@@ -552,6 +677,7 @@ let ty_info = function
   | TyVariant (fi, _)
   | TyCon (fi, _, _)
   | TyVar (fi, _)
+  | TyUse (fi, _, _)
   | TyApp (fi, _, _) ->
       fi
 

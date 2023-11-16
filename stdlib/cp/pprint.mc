@@ -113,15 +113,20 @@ end
 -- OBJECTIVES --
 ----------------
 
-lang COPObjectiveDeclPrettyPrint = COPPrettyPrintBase + COPObjectiveDeclAst
+lang COPObjectivePrettyPrint
   sem pprintCOPObjective: PprintEnv -> COPObjective -> (PprintEnv, String)
+end
+
+lang COPObjectiveDeclPrettyPrint =
+  COPPrettyPrintBase + COPObjectivePrettyPrint + COPObjectiveDeclAst
   sem pprintCOPDecl env =
   | COPObjectiveDecl { objective = objective } ->
     match pprintCOPObjective env objective with (env, obj) in
     (env, join ["solve ", obj, ";"])
 end
 
-lang COPObjectiveMinimizePrettyPrint = COPPrettyPrintBase + COPObjectiveMinimizeAst
+lang COPObjectiveMinimizePrettyPrint =
+  COPPrettyPrintBase + COPObjectivePrettyPrint + COPObjectiveMinimizeAst
   sem pprintCOPObjective env =
   | COPObjectiveMinimize { expr = expr } ->
     match pprintCOPExpr env expr with (env, expr) in

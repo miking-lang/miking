@@ -11,7 +11,7 @@ include "futhark/pprint.mc"
 -- A size parameter represents the size of one dimension of an array. As an
 -- array may be multi-dimensional, we distinguish the size parameters using a
 -- dimension index.
-lang FutharkSizeType
+lang FutharkSizeType = FutharkAst
   type SizeParam = {
     id : Name,
     dim : Int

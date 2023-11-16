@@ -9,7 +9,7 @@ let platformMapJS = mapFromSeq cmpString
   ,("bun", CompileJSTP_Bun ())
   ,("web", CompileJSTP_Web ())]
 
-let compileMCoreToJS : CompileJSOptions -> Expr -> String -> String =
+let compileMCoreToJS : use Ast in CompileJSOptions -> Expr -> String -> String =
   lam opts. lam ast. lam sourcePath.
   let outfile = javascriptCompileFile opts ast sourcePath in
   printLn (concat "Successfully compiled file to: " outfile);
