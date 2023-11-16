@@ -643,8 +643,8 @@ let handle_subsumption env langs lang includes =
 let rec desugar_ty env = function
   | TyArrow (fi, lty, rty) ->
       TyArrow (fi, desugar_ty env lty, desugar_ty env rty)
-  | TyAll (fi, id, ty) ->
-      TyAll (fi, id, desugar_ty env ty)
+  | TyAll (fi, id, ki, ty) ->
+      TyAll (fi, id, ki, desugar_ty env ty)
   | TySeq (fi, ty) ->
       TySeq (fi, desugar_ty env ty)
   | TyTensor (fi, ty) ->
@@ -861,7 +861,7 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, params, cname, ty)) tm =
         let app_param ty param = TyApp (fi, ty, TyVar (fi, param)) in
-        let all_param param ty = TyAll (fi, param, ty) in
+        let all_param param ty = TyAll (fi, param, None, ty) in
         let con = List.fold_left app_param (TyCon (fi, ty_name, None)) params in
         TmConDef
           ( fi

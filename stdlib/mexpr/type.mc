@@ -96,14 +96,8 @@ lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarT
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      switch t.kind
-      case Poly () then (env, idstr)
-      case Mono () then (env, concat "_" idstr)
-      case _ then
-        match getKindStringCode indent env t.kind with (env, str) in
-        (env, join [init str, " ...", [last str]])
-      end
+      match pprintVarName env t.ident with (env, str) in
+      (env, concat "_" str)
     case Link ty then
       getTypeStringCode indent env ty
     end

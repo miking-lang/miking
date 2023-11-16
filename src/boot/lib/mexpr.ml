@@ -216,8 +216,11 @@ let getData = function
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
-  | PTreeTy (TyAll (fi, var, ty)) ->
-      (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
+  | PTreeTy (TyAll (fi, var, None, ty)) ->
+      (idTyAll, [fi], [], [ty], [], [var], [0], [], [], [])
+  | PTreeTy (TyAll (fi, var, Some cons, ty)) ->
+      let len = List.length cons + 1 in
+      (idTyAll, [fi], [len], [ty], [], var :: cons, [1], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
@@ -231,10 +234,15 @@ let getData = function
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
   | PTreeTy (TyCon (fi, x, None)) ->
       (idTyCon, [fi], [], [], [], [x], [0], [], [], [])
-  | PTreeTy (TyCon (fi, x, Some (positive, cons))) ->
-      let pos = if positive then 1 else 2 in
-      let len = List.length cons + 1 in
-      (idTyCon, [fi], [len], [], [], x :: cons, [pos], [], [], [])
+  | PTreeTy (TyCon (fi, x, Some cons)) ->
+      let (typ, strs) =
+        match cons with
+        | DCons cs -> (1, cs)
+        | DNCons cs -> (2, cs)
+        | DVar v -> (3, [v])
+      in
+      let len = List.length strs + 1 in
+      (idTyCon, [fi], [len], [], [], x :: strs, [typ], [], [], [])
   | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->

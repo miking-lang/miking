@@ -101,6 +101,7 @@
 %token <unit Ast.tokendata> LBRACKET      /* "{"   */
 %token <unit Ast.tokendata> RBRACKET      /* "}"   */
 %token <unit Ast.tokendata> COLON         /* ":"   */
+%token <unit Ast.tokendata> DCOLON        /* "::"  */
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> SEMI          /* ";"   */
 %token <unit Ast.tokendata> DOT           /* "."   */
@@ -554,16 +555,55 @@ ty:
         TyArrow(fi,$1,$3) }
   | ALL var_ident DOT ty
       { let fi = mkinfo $1.i (ty_info $4) in
-        TyAll(fi, $2.v, $4) }
+        TyAll(fi, $2.v, None, $4) }
+  | ALL var_ident DCOLON LBRACKET con_list RBRACKET DOT ty
+      { let fi = mkinfo $1.i (ty_info $8) in
+        TyAll(fi, $2.v, Some $5, $8) }
 
 ty_left:
-  | ty_atom
+  | ty_left_con
     { $1 }
-  | ty_left ty_atom
+  | ty_left_nocon
+    { $1 }
+  | type_ident
+    { TyCon ($1.i, $1.v, None) }
+
+ty_left_con:
+  | ty_left_con ty_atom
+    { let fi = mkinfo (ty_info $1) (ty_info $2) in
+      TyApp(fi,$1,$2) }
+  | type_ident ty_data
+    { TyCon ($1.i, $1.v, Some $2) }
+  | type_ident ty_atom_norec
+    { let fi = mkinfo $1.i (ty_info $2) in
+      TyApp (fi, TyCon ($1.i, $1.v, None), $2) }
+
+ty_left_nocon:
+  | ty_atom_nocon
+    { $1 }
+  | ty_left_nocon ty_atom
     { let fi = mkinfo (ty_info $1) (ty_info $2) in
       TyApp(fi,$1,$2) }
 
 ty_atom:
+  | ty_atom_nocon
+    { $1 }
+  | type_ident
+    { TyCon ($1.i, $1.v, None) }
+
+ty_atom_nocon:
+  | ty_atom_noconrec
+    { $1 }
+  | ty_record
+    { $1 }
+
+ty_atom_norec:
+  | ty_atom_noconrec
+    { $1 }
+  | type_ident
+    { TyCon ($1.i, $1.v, None) }
+
+ty_atom_noconrec:
   | LPAREN RPAREN
     { ty_unit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
@@ -574,14 +614,6 @@ ty_atom:
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LPAREN ty COMMA RPAREN
     { TyRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
-  | LBRACKET RBRACKET
-    { ty_unit (mkinfo $1.i $2.i) }
-  | LBRACKET label_tys RBRACKET
-    { let r = $2 |> List.fold_left
-                      (fun acc (k,v) -> Record.add k v acc)
-                      Record.empty
-      in
-      TyRecord(mkinfo $1.i $3.i, r) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN
@@ -596,18 +628,26 @@ ty_atom:
     { TyChar $1.i }
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
-  | type_ident ty_data
-    { TyCon ($1.i, $1.v, $2)}
   | var_ident
-    { TyVar($1.i,$1.v)}
+    { TyVar($1.i,$1.v) }
+
+ty_record:
+  | LBRACKET RBRACKET
+    { ty_unit (mkinfo $1.i $2.i) }
+  | LBRACKET label_tys RBRACKET
+    { let r = $2 |> List.fold_left
+                      (fun acc (k,v) -> Record.add k v acc)
+                      Record.empty
+      in
+      TyRecord(mkinfo $1.i $3.i, r) }
 
 ty_data:
-  |
-    { None }
-  | AND LBRACKET con_list RBRACKET
-    { Some (true, $3) }
-  | NOT LBRACKET con_list RBRACKET
-    { Some (false, $3) }
+  | LBRACKET var_ident RBRACKET
+    { DVar $2.v }
+  | LBRACKET con_list RBRACKET
+    { DCons $2 }
+  | LBRACKET NOT con_list RBRACKET
+    { DNCons $3 }
 
 ty_list:
   | ty COMMA ty_list
@@ -616,7 +656,7 @@ ty_list:
     { [$1] }
 
 con_list:
-  | type_ident BAR con_list
+  | type_ident COMMA con_list
     { $1.v :: $3 }
   | type_ident
     { [$1.v] }
