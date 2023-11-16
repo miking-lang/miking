@@ -566,8 +566,8 @@ end
 
 
 lang NormPatMatch = NPatImpl + VarAst
-  sem matchNormPat : (Expr, NormPat) -> Set (Map Name NormPat)
-  sem matchNormPat =
+  sem matchNormpat : (Expr, NormPat) -> Set (Map Name NormPat)
+  sem matchNormpat =
   | (e, np) ->
     setOfSeq (mapCmp setCmp)
       (mapOption
