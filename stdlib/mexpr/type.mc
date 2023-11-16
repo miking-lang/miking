@@ -171,6 +171,12 @@ lang AppTypeGetArgs = AppTypeAst
   sem getTypeArgsBase (args : [Type]) =
   | TyApp t -> getTypeArgsBase (cons t.rhs args) t.lhs
   | ty -> rappAccumL_Type_Type getTypeArgsBase args ty
+
+  sem mkTypeApp ty =
+  | args ->
+    foldl (lam ty1. lam ty2.
+      TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2})
+      ty args
 end
 
 -- Return the type (TyCon) which a constructor (TmConDef) belongs to.
