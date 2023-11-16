@@ -392,15 +392,16 @@ type MetaState = use LocalSearchBase in MetaState in
 
 let debug = false in
 
-let nIters = lam n. lam state : SearchState.
+let nIters = lam n. lam state : use LocalSearchBase in SearchState.
   or (state.stuck) (geqi state.iter n) in
 
 recursive let loopf =
-  lam terminate : SearchState -> Bool.
-  lam state : (SearchState, MetaState).
-  lam debugMeta : MetaState -> ().
-  lam debugSearch : SearchState -> ().
-  lam minimize : SearchState -> MetaState -> (SearchState, MetaState).
+  lam terminate : use LocalSearchBase in SearchState -> Bool.
+  lam state : use LocalSearchBase in (SearchState, MetaState).
+  lam debugMeta : use LocalSearchBase in MetaState -> ().
+  lam debugSearch : use LocalSearchBase in SearchState -> ().
+  lam minimize :
+    use LocalSearchBase in SearchState -> MetaState -> (SearchState, MetaState).
   match state with (searchState, metaState) then
     (if debug then debugSearch searchState else ());
     (if debug then debugMeta metaState else ());

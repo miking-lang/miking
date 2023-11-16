@@ -193,9 +193,11 @@ let formatHighlights
           case IAdded _ then config.added
           end in
         let nextNeedsPreSpace =
-          match concat content post with _ ++ [c] in
-          if isWhitespace c then false else true in
+          match concat content post with _ ++ [c] then
+            if isWhitespace c then false else true
+          else error "impossible" in
         work (join [acc, pre, f content, post]) nextNeedsPreSpace sections
+
       else acc
     in
     work "" false sections
