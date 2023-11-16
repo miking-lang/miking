@@ -6,8 +6,8 @@ end
 
 lang Arith = Base
   syn Expr =
-  | Num Dyn
-  | Add (Dyn, Dyn)
+  | Num Int
+  | Add (Int, Int)
 
   sem eval =
   | Num n -> n
@@ -21,7 +21,7 @@ lang MyBool = Base
   syn Expr =
   | True ()
   | False ()
-  | If(Dyn, Dyn, Dyn)
+  | If(Expr, Expr, Expr)
 
   sem eval =
   | True _ -> true
@@ -39,7 +39,7 @@ lang ArithBool = Arith + MyBool end
 
 lang ArithBool2 = Arith + MyBool
   syn Expr =
-  | IsZero(Dyn)
+  | IsZero Int
 
   sem eval =
   | IsZero n ->
@@ -55,13 +55,13 @@ lang User
   | Unit _ ->
     use Arith in
     eval (Add (Num 1, Num 2))
-  sem bump (x : Dyn) =
+  sem bump (x : Int) =
   | Unit _ -> addi x 1
 end
 
 lang A
   syn ATy =
-  | ACon {afield : Dyn}
+  | ACon {afield : Int}
 end
 
 lang Overlap = ArithBool + ArithBool2 + Arith end

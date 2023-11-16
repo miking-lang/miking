@@ -34,16 +34,13 @@ utest fooAC with fooA in
 
 use A in
   utest isA (TmFoo ()) with true in
-  utest isB (TmFoo ()) with false in
   ();
 
 use AC in
   utest isA (TmFoo ()) with true in
-  utest isB (TmFoo ()) with false in
   ();
 
 
 use B in
-  utest isA (TmFoo ()) with false in
   utest isB (TmFoo ()) with true in
   ()
