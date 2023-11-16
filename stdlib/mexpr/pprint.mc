@@ -914,8 +914,9 @@ lang NamedPatPrettyPrint = PrettyPrint + NamedPat + PatNamePrettyPrint
   | PatNamed {ident = patname} -> _pprint_patname env patname
 end
 
-let _pprint_patseq: (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int ->
-                    PprintEnv -> [Pat] -> (PprintEnv, String) =
+let _pprint_patseq
+  : use Ast in (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int
+            -> PprintEnv -> [Pat] -> (PprintEnv, String) =
 lam recur. lam indent. lam env. lam pats.
   use CharPat in
   let extract_char = lam e.

@@ -288,7 +288,7 @@ end
 type T
 con TInt : Tensor[Int] -> T
 con TFloat : Tensor[Float] -> T
-con TExpr : Tensor[Expr] -> T
+con TExpr : use Ast in Tensor[Expr] -> T
 
 lang TensorEval = Eval + Eq + PrettyPrint
   syn Expr =

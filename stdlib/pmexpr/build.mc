@@ -21,7 +21,9 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-lang PMExprBuildBase = PMExprClassify
+lang PMExprBuildBase =
+  PMExprClassify + FutharkAst + CudaAst + OCamlTopAst + CProgAst
+
   -- TODO(larshum, 2022-06-06): Move this to separate file defining the
   -- compilation process (in standard library).
   syn GpuCompileResult =

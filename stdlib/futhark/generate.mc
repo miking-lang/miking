@@ -15,7 +15,7 @@ include "pmexpr/utils.mc"
 let extMap = mapFromSeq cmpString
   [("externalSin", "f64.sin"), ("externalCos", "f64.cos")]
 
-type FutharkGenerateEnv = {
+type FutharkGenerateEnv = use Ast in {
   entryPoints : Set Name,
   boundNames : Map Name Expr
 }

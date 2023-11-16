@@ -65,7 +65,7 @@ let _lookupTypeName = use MExprAst in
   work (None ()) ty
 
 -- C assignment shorthand
-let _assign: CExpr -> CExpr -> CExpr = use CAst in
+let _assign: use CAst in CExpr -> CExpr -> CExpr = use CAst in
   lam lhs. lam rhs.
     CEBinOp { op = COAssign {}, lhs = lhs, rhs = rhs }
 

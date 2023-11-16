@@ -277,7 +277,7 @@ let patRecord : [(String, use Ast in Pat)] -> Info -> use Ast in Pat =
 
 let prec_ = lam bindings. patRecord bindings (NoInfo ())
 
-let patTuple = lam ps : [Pat]. lam info : Info.
+let patTuple = lam ps : use Ast in [Pat]. lam info : Info.
   patRecord (mapi (lam i. lam p. (int2string i, p)) ps) info
 
 let ptuple_ = lam ps. patTuple ps (NoInfo ())
@@ -580,7 +580,7 @@ let record_add = use MExprAst in
   else
       errorSingle [infoTm record] "record is not a TmRecord construct"
 
-let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
+let record_add_bindings : use Ast in [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
   foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
 

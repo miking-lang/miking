@@ -30,7 +30,7 @@ let _threadPoolNbrThreadsStr = "threadPoolNbrThreads"
 let _threadPoolId2idxStr = "threadPoolId2idx"
 
 -- Maintains call context information necessary for program transformations.
-type CallCtxEnv = {
+type CallCtxEnv = use Ast in {
 
   -- Call graph of the program. Functions are nodes, function calls are edges.
   callGraph: CallGraph,
@@ -68,7 +68,7 @@ type CallCtxEnv = {
   -- sets of 'hole2idx'.
   -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
   -- expression may be repeated many times.
-  idx2hole: [use Ast in Expr],
+  idx2hole: [Expr],
 
   -- Maps a hole to the function in which it is defined
   hole2fun: Map NameInfo NameInfo,

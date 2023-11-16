@@ -542,7 +542,7 @@ let tuneEntry =
     -- Set the random seed?
     (match options.seed with Some seed then randSetSeed seed else ());
 
-    let holes : [Expr] = env.idx2hole in
+    let holes : use Ast in [Expr] = env.idx2hole in
     let hole2idx : Map NameInfo (Map [NameInfo] Int) = env.hole2idx in
 
     -- Runs the program with a given command-line input and optional timeout

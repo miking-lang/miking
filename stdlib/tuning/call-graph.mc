@@ -26,7 +26,7 @@ let callGraphEdgeNames = lam cg.
 -- The top of the call graph, has no incoming edges.
 let callGraphTop = (nameSym "top", NoInfo ())
 
-type Binding = {ident : Name, body : Expr, info : Info}
+type Binding = use Ast in {ident : Name, body : Expr, info : Info}
 let _handleLetVertex = use LamAst in
   lam f. lam letexpr : Binding.
     match letexpr.body with TmLam lm then

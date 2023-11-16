@@ -10,7 +10,7 @@ let _lookupExit : all a. Info -> String -> Map String a -> a =
   lam info : Info. lam s : String. lam m : Map String a.
     mapLookupOrElse (lam. errorSingle [info] (concat s " not found")) s m
 
-let _expectConstInt : Info -> String -> Expr -> Int =
+let _expectConstInt : use Ast in Info -> String -> Expr -> Int =
   lam info : Info. lam s. lam i.
     use IntAst in
     match i with TmConst {val = CInt {val = i}} then i
