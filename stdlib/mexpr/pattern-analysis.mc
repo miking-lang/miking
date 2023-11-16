@@ -458,7 +458,12 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     in
     let prePost = concat prePost1 prePost2 in
     let postPre = concat postPre1 postPre2 in
-    let dis = setUnion dis1 dis2 in
+    let dis =
+      mapFilterWithKey (lam i. lam.
+        geqi i (addi
+                 (addi prePreLen (length prePost))
+                 (addi (length postPre) postPostLen)))
+        (setUnion dis1 dis2) in
 
     let simple =
       setOfSeq npatCmp

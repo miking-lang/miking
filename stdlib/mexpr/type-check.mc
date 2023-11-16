@@ -1210,19 +1210,24 @@ lang NeverTypeCheck = TypeCheck + NeverAst + PatTypeCheck
       TmNever {t with ty = newpolyvar env.currentLvl t.info}
     case Some m then
       let matchstr =
-        mapFoldWithKey
-          (lam str. lam n. lam p.
-          join [ str
-               , "  ", nameGetStr n
-               , " = "
-               , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
-               , "\n" ]) "" m
+        if mapIsEmpty m then
+          "* An expression is not exhaustively matched on.\n"
+        else
+          join [
+            "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
+            " are not exhaustively matched on.\n",
+            "* An assignment not being matched is:\n",
+            mapFoldWithKey
+              (lam str. lam n. lam p.
+              join [ str
+                   , "  ", nameGetStr n
+                   , " = "
+                   , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
+                   , "\n" ]) "" m ]
       in
       let msg = join [
         "* Encountered a never term in a reachable position.\n",
-        "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
-        " are not exhaustively matched on.\n",
-        "* An assignment not being matched is:\n", matchstr,
+        matchstr,
         "* When type checking the expression\n"
       ] in
       errorSingle [t.info] msg

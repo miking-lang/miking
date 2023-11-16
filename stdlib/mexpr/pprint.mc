@@ -192,8 +192,8 @@ end
 lang PrettyPrint = IdentifierPrettyPrint
   sem isAtomic =
   -- Intentionally left blank
-  sem patIsAtomic =
-  -- Intentionally left blank
+  sem patPrecedence =
+  | p -> 100000
   sem typePrecedence =
   | ty -> 100000
 
@@ -243,17 +243,20 @@ lang PrettyPrint = IdentifierPrettyPrint
     (env, strJoin (pprintNewline indent) args)
 
   -- Helper function for printing parentheses (around patterns)
-  sem printPatParen (indent : Int) (env : PprintEnv) =
+  sem printPatParen (indent : Int) (prec : Int) (env : PprintEnv) =
   | pat ->
-    let i = if patIsAtomic pat then indent else addi 1 indent in
+    let i = if leqi prec (patPrecedence pat) then indent
+            else addi 1 indent in
     match getPatStringCode i env pat with (env, str) in
-    if patIsAtomic pat then (env, str)
+    if leqi prec (patPrecedence pat) then (env, str)
     else (env, join ["(", str, ")"])
 
   -- Helper function for printing parentheses (around types)
   sem printTypeParen (indent : Int) (prec : Int) (env : PprintEnv) =
   | ty ->
-    match getTypeStringCode indent env ty with (env, str) in
+    let i = if leqi prec (typePrecedence ty) then indent
+            else addi 1 indent in
+    match getTypeStringCode i env ty with (env, str) in
     if leqi prec (typePrecedence ty) then (env, str)
     else (env, join ["(", str, ")"])
 end
@@ -908,9 +911,6 @@ lang PatNamePrettyPrint = IdentifierPrettyPrint
 end
 
 lang NamedPatPrettyPrint = PrettyPrint + NamedPat + PatNamePrettyPrint
-  sem patIsAtomic =
-  | PatNamed _ -> true
-
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatNamed {ident = patname} -> _pprint_patname env patname
 end
@@ -932,29 +932,28 @@ lam recur. lam indent. lam env. lam pats.
   (env, join ["[ ", merged, " ]"])
 
 lang SeqTotPatPrettyPrint = PrettyPrint + SeqTotPat + CharPat
-  sem patIsAtomic =
-  | PatSeqTot _ -> true
-
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
 lang SeqEdgePatPrettyPrint = PrettyPrint + SeqEdgePat + PatNamePrettyPrint
-  sem patIsAtomic =
-  | PatSeqEdge _ -> false
+  sem patPrecedence =
+  | PatSeqEdge _ -> 0
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatSeqEdge {prefix = pre, middle = patname, postfix = post} ->
-    match _pprint_patseq getPatStringCode indent env pre with (env, pre) in
+    let make_patseqstr = lam f. lam env. lam pats.
+      if null pats then (env, "") else
+        match _pprint_patseq getPatStringCode indent env pats with (env, pats) in
+        (env, f pats)
+    in
+    match make_patseqstr (lam str. concat str " ++ ") env pre with (env, pre) in
+    match make_patseqstr (concat " ++ ") env post with (env, post) in
     match _pprint_patname env patname with (env, pname) in
-    match _pprint_patseq getPatStringCode indent env post with (env, post) in
-      (env, join [pre, " ++ ", pname, " ++ ", post])
+    (env, join [pre, pname, post])
 end
 
-lang RecordPatPrettyPrint = PrettyPrint + RecordPat + IdentifierPrettyPrint
-  sem patIsAtomic =
-  | PatRecord _ -> true
-
+lang RecordPatPrettyPrint = PrettyPrint + RecordPat
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
     if mapIsEmpty bindings then (env, "{}")
@@ -977,71 +976,57 @@ lang RecordPatPrettyPrint = PrettyPrint + RecordPat + IdentifierPrettyPrint
 end
 
 lang DataPatPrettyPrint = PrettyPrint + DataPat
-  sem patIsAtomic =
-  | PatCon _ -> false
+  sem patPrecedence =
+  | PatCon _ -> 2
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatCon t ->
     match pprintConName env t.ident with (env,str) in
-    match getPatStringCode indent env t.subpat with (env,subpat) in
-    let subpat = if patIsAtomic t.subpat then subpat
-                 else join ["(", subpat, ")"]
-    in (env, join [str, " ", subpat])
+    match printPatParen indent 3 env t.subpat with (env,subpat) in
+    (env, join [str, " ", subpat])
 end
 
 lang IntPatPrettyPrint = PrettyPrint + IntPat
-  sem patIsAtomic =
-  | PatInt _ -> true
-
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatInt t -> (env, int2string t.val)
 end
 
 lang CharPatPrettyPrint = PrettyPrint + CharPat
-  sem patIsAtomic =
-  | PatChar _ -> true
-
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatChar t -> (env, join ["\'", escapeChar t.val, "\'"])
 end
 
 lang BoolPatPrettyPrint = PrettyPrint + BoolPat
-  sem patIsAtomic =
-  | PatBool _ -> true
-
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatBool b -> (env, if b.val then "true" else "false")
 end
 
 lang AndPatPrettyPrint = PrettyPrint + AndPat
-  sem patIsAtomic =
-  | PatAnd _ -> false
+  sem patPrecedence =
+  | PatAnd _ -> 1
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatAnd {lpat = l, rpat = r} ->
-    match printPatParen indent env l with (env, l2) in
-    match printPatParen indent env r with (env, r2) in
+    match printPatParen indent 1 env l with (env, l2) in
+    match printPatParen indent 1 env r with (env, r2) in
     (env, join [l2, " & ", r2])
 end
 
 lang OrPatPrettyPrint = PrettyPrint + OrPat
-  sem patIsAtomic =
-  | PatOr _ -> false
+  sem patPrecedence =
+  | PatOr _ -> 0
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatOr {lpat = l, rpat = r} ->
-    match printPatParen indent env l with (env, l2) in
-    match printPatParen indent env r with (env, r2) in
+    match printPatParen indent 0 env l with (env, l2) in
+    match printPatParen indent 0 env r with (env, r2) in
     (env, join [l2, " | ", r2])
 end
 
 lang NotPatPrettyPrint = PrettyPrint + NotPat
-  sem patIsAtomic =
-  | PatNot _ -> false  -- OPT(vipa, 2020-09-23): this could possibly be true, just because it binds stronger than everything else
-
-  sem getPatStringCode (indent : Int) (env: PprintEnv) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PatNot {subpat = p} ->
-    match printPatParen indent env p with (env, p2) in
+    match printPatParen indent 2 env p with (env, p2) in
     (env, join ["!", p2])
 end
 
