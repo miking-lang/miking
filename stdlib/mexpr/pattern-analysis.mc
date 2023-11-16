@@ -97,7 +97,7 @@ lang NPatImpl = NormPat
           else
             if eqi i target then
               setToSeq (npatComplement p)
-            else [NPatNot (setEmpty simpleConCmp)]) seq)
+            else [wildpat ()]) seq)
     in
     let distributed : [[NPat]] =
       join (map (seqMapM (lam x. x)) nested) in
@@ -117,9 +117,11 @@ end
 lang NormPatImpl = NPatImpl
   sem normpatComplement =
   | np ->
-    foldl normpatIntersect
-      (setOfSeq npatCmp [wildpat ()])
-      (map npatComplement (setToSeq np))
+    if setIsEmpty np then
+      setOfSeq npatCmp [wildpat ()]
+    else
+      foldl1 normpatIntersect
+        (map npatComplement (setToSeq np))
 
   sem normpatIntersect np1 =
   | np2 ->
@@ -385,7 +387,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
               pats1 pats2))
   | (NPatSeqEdge { prefix = pre1, disallowed = dis1, postfix = post1},
      NPatSeqEdge { prefix = pre2, disallowed = dis2, postfix = post2}) ->
-    let prePreLen   = mini (length pre1) (length pre2) in
+    let prePreLen = mini (length pre1) (length pre2) in
     match splitAt pre1 prePreLen with (prePre1, prePost1) in
     match splitAt pre2 prePreLen with (prePre2, prePost2) in
     match (length post1, length post2) with (postLen1, postLen2) in
@@ -401,7 +403,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
       seqMapM setToSeq
         (zipWith (lam p1. lam p2. npatIntersect (p1, p2)) postPost1 postPost2)
     in
-    let prePost = concat prePre1 prePre2 in
+    let prePost = concat prePost1 prePost2 in
     let postPre = concat postPre1 postPre2 in
     let dis = setUnion dis1 dis2 in
 
