@@ -453,9 +453,6 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   sem resolveType : Info -> TCEnv -> Type -> Type
   sem resolveType info env =
   | (TyCon _ | TyApp _) & ty ->
-    let mkAppTy =
-      foldl (lam ty1. lam ty2.
-        TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2}) in
     match getTypeArgs ty with (constr, args) in
     let args = map (resolveType info env) args in
     match constr with (TyCon t) & conTy then
@@ -467,7 +464,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
                           (mapEmpty nameCmp) params args
             in
             -- We assume def has already been resolved before being put into tycons
-            TyAlias {display = mkAppTy conTy args, content = substituteVars subst def}
+            TyAlias {display = mkTypeApp conTy args, content = substituteVars subst def}
           else
             errorSingle [infoTy ty] (join [
               "* Encountered a misformed type constructor or alias.\n",
@@ -484,16 +481,16 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
                 match mapLookup s env.conDeps with Some cons in
                 cons) tys
             in
-            mkAppTy (TyCon {t with data = TyData {d with universe = universe}}) args
+            mkTypeApp (TyCon {t with data = TyData {d with universe = universe}}) args
           else
-            mkAppTy conTy args
+            mkTypeApp conTy args
       else
         errorSingle [t.info] (join [
           "* Encountered an unknown type constructor: ", nameGetStr t.ident, "\n",
           "* When checking the annotation"
         ])
     else
-      mkAppTy (resolveType info env constr) args
+      mkTypeApp (resolveType info env constr) args
 
   | TyAll t ->
     let ty = resolveType info env t.ty in
@@ -633,20 +630,15 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
          (seqMapM setToSeq
             (map matchNormpat env.matches)))
     in
-    find
-      (mapAllWithKey
-         (lam n. lam p.
-      match mapLookup n env.varEnv with Some ty then
-        let ty = inst (infoTy ty) env.currentLvl ty in
-        match
-          match getTypeArgs ty with (TyCon t, _) then
-            match unwrapType t.data with TyMetaVar r then
-              match deref r.contents with Unbound u in
+    recursive
+      let closeType : Type -> Type = lam ty.
+        match getTypeArgs ty with (TyCon t, args) then
+          match unwrapType t.data with TyMetaVar r then
+            match deref r.contents with Unbound u then
               let tys = mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps in
               let universe =
                 mapMapWithKey (lam s. lam.
-                  match mapLookup s env.conDeps with Some cons in
-                  cons) tys
+                  mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps) tys
               in
               let data =
                 TyData { info = t.info
@@ -657,12 +649,19 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
                        , positive = false
                        , cons = setEmpty nameCmp }
               in
-              (TyCon {t with data = data}, lam. unify env [] data t.data)
-            else (ty, lam. ())
-          else (ty, lam. ())
-        with (closed, closeTy) in
+              mkTypeApp (TyCon {t with data = data}) (map closeType args)
+            else error "Unwrapped type was not unwrapped!"
+          else smap_Type_Type closeType ty
+        else smap_Type_Type closeType ty
+    in
+    find
+      (mapAllWithKey
+         (lam n. lam p.
+      match mapLookup n env.varEnv with Some ty then
+        let ty = inst (infoTy ty) env.currentLvl ty in
+        let closed = closeType ty in
         if normpatHasMatches env (closed, p) then true
-        else closeTy (); false
+        else unify env [] closed ty; false
       else
         error "Should not happen!"))
       matchedVariables
