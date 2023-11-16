@@ -306,9 +306,12 @@ let parsed_files = ref []
 let local_parse_mcore_file filename =
   let fs1 = open_in filename in
   let p =
-    Lexer.init (us filename) tablength ;
-    fs1 |> Ustring.lexing_from_channel |> Parser.main Lexer.main
-    |> debug_after_parse
+    Lexer.init (us filename) tablength;
+    let lexbuf = Ustring.lexing_from_channel fs1 in
+    try
+      Parser.main Lexer.main lexbuf |> debug_after_parse
+    with Parser.Error ->
+      raise_error !Lexer.last_info ( "Parse error" )
   in
   close_in fs1 ;
   parsed_files := filename :: !parsed_files ;

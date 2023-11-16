@@ -27,6 +27,10 @@
   let set_con_params params = function
     | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
+  let ty_from_either = function
+    | Either.Right ty -> ty
+    | Either.Left (fi, _) ->
+       raise_error fi "This looks like a constructor type restriction, but appears in an invalid location"
 
 %}
 
@@ -584,49 +588,23 @@ ty:
         TyUse(fi, $2.v, $4) }
 
 ty_left:
-  | ty_left_con
-    { $1 }
-  | ty_left_nocon
-    { $1 }
-  | type_ident
-    { TyCon ($1.i, $1.v, None) }
+  | ty_ish_atom
+    { ty_from_either $1 }
+  | f=ty_left a=ty_ish_atom
+    { match a with
+      | Either.Right ty -> TyApp(mkinfo (ty_info f) (ty_info ty), f, ty)
+      | Either.Left (fi, data) ->
+         match f with
+         | TyCon (lfi, name, None) -> TyCon (mkinfo lfi fi, name, Some data)
+         | _ -> raise_error fi "This looks like a constructor type restriction, but appears in an invalid location" }
 
-ty_left_con:
-  | ty_left_con ty_atom
-    { let fi = mkinfo (ty_info $1) (ty_info $2) in
-      TyApp(fi,$1,$2) }
-  | type_ident ty_data
-    { TyCon ($1.i, $1.v, Some $2) }
-  | type_ident ty_atom_norec
-    { let fi = mkinfo $1.i (ty_info $2) in
-      TyApp (fi, TyCon ($1.i, $1.v, None), $2) }
+ty_ish_atom:
+  | ty_atom
+    { Either.Right $1 }
+  | ty_data
+    { Either.Left $1 }
 
-ty_left_nocon:
-  | ty_atom_nocon
-    { $1 }
-  | ty_left_nocon ty_atom
-    { let fi = mkinfo (ty_info $1) (ty_info $2) in
-      TyApp(fi,$1,$2) }
-
-ty_atom:
-  | ty_atom_nocon
-    { $1 }
-  | type_ident
-    { TyCon ($1.i, $1.v, None) }
-
-ty_atom_nocon:
-  | ty_atom_noconrec
-    { $1 }
-  | ty_record
-    { $1 }
-
-ty_atom_norec:
-  | ty_atom_noconrec
-    { $1 }
-  | type_ident
-    { TyCon ($1.i, $1.v, None) }
-
-ty_atom_noconrec:
+%inline ty_atom:
   | LPAREN RPAREN
     { ty_unit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
@@ -637,6 +615,14 @@ ty_atom_noconrec:
     { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LPAREN ty COMMA RPAREN
     { TyRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
+  | LBRACKET RBRACKET
+    { ty_unit (mkinfo $1.i $2.i) }
+  | LBRACKET label_tys RBRACKET
+    { let r = $2 |> List.fold_left
+                      (fun acc (k,v) -> Record.add k v acc)
+                      Record.empty
+      in
+      TyRecord(mkinfo $1.i $3.i, r) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN
@@ -651,28 +637,22 @@ ty_atom_noconrec:
     { TyChar $1.i }
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
+  | type_ident
+    { TyCon($1.i,$1.v,None) }
   | var_ident
     { TyVar($1.i,$1.v) }
   | UNDERSCORE
     { TyVar($1.i, us"_") }
 
-ty_record:
-  | LBRACKET RBRACKET
-    { ty_unit (mkinfo $1.i $2.i) }
-  | LBRACKET label_tys RBRACKET
-    { let r = $2 |> List.fold_left
-                      (fun acc (k,v) -> Record.add k v acc)
-                      Record.empty
-      in
-      TyRecord(mkinfo $1.i $3.i, r) }
-
-ty_data:
+%inline ty_data:
   | LBRACKET var_ident RBRACKET
-    { DVar $2.v }
+    { (mkinfo $1.i $3.i, DVar $2.v) }
   | LBRACKET con_list RBRACKET
-    { DCons $2 }
+    { (mkinfo $1.i $3.i, DCons $2) }
   | LBRACKET NOT con_list RBRACKET
-    { DNCons $3 }
+    { (mkinfo $1.i $4.i, DNCons $3) }
+  | LBRACKET NOT RBRACKET
+    { (mkinfo $1.i $3.i, DNCons []) }
 
 ty_list:
   | ty COMMA ty_list
@@ -685,8 +665,6 @@ con_list:
     { $1.v :: $3 }
   | type_ident
     { [$1.v] }
-  |
-    { [] }
 
 label_tys:
   | label_ident COLON ty
