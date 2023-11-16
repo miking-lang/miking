@@ -3,11 +3,13 @@
 include "option.mc"
 include "string.mc"
 
-lang AVLTreeImpl
+lang AVLTreeBase
   syn AVL k v =
   | Leaf ()
   | Node {key : k, value : v, l : AVL k v, r : AVL k v, h : Int}
+end
 
+lang AVLTreeImpl = AVLTreeBase
   sem avlSize : all k. all v. AVL k v -> Int
   sem avlSize =
   | Leaf _ -> 0
@@ -257,7 +259,7 @@ lang AVLTreeImpl
   -- data structure, we compare the key-value pairs of the trees in a
   -- left-to-right order.
   syn AuxTree k v =
-  | Cont {key : k, value : v, r : AVL k v, next : AuxTree k v}
+  | Cont {key : k, value : v, r : AVL{!} k v, next : AuxTree k v}
   | End ()
 
   sem avlToAux : all k. all v. AuxTree k v -> AVL k v -> AuxTree k v

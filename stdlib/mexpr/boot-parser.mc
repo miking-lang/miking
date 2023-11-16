@@ -272,6 +272,7 @@ lang BootParser = MExprAst + ConstTransformer
            ty = TyUnknown { info = ginfo t 0 },
            inexpr = gterm t 0,
            info = ginfo t 0}
+  | _ -> error "Unknown expression"
 
   -- Get type help function
   sem gtype(t:Unknown) =
@@ -349,6 +350,7 @@ lang BootParser = MExprAst + ConstTransformer
            ident = gname t 0,
            ty = gtype t 0,
            kind = kind}
+  | _ -> error "Unknown type"
 
 
   -- Get constant help function
@@ -364,6 +366,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 303 /-CChar-/   -> CChar {val = int2char (gint t 0)}
   | 304 /-Cdprint-/ -> CDPrint {}
   | 305 /-Cerror-/  -> CError {}
+  | _               -> error "Unknown constant"
 
   -- Get pattern help function
   sem gpat (t:Unknown) =
@@ -425,6 +428,7 @@ lang BootParser = MExprAst + ConstTransformer
      PatNot {subpat = gpat t 0,
              info = ginfo t 0,
              ty = tyunknown_}
+  | _ -> error "Unknown pattern"
 
   -- Get info help function
   sem ginfo (t:Unknown) =
@@ -441,6 +445,7 @@ lang BootParser = MExprAst + ConstTransformer
             col2 = gint t 3}
   | 501 /-NoInfo-/ ->
       NoInfo {}
+  | _ -> error "Unknown info"
 
 
   sem strToPatName =
