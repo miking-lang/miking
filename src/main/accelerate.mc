@@ -79,7 +79,7 @@ lang MExprCudaCompile =
 end
 
 let keywordsSymEnv =
-  {symEnvEmpty with varEnv =
+  {symEnvDefault with varEnv =
     mapFromSeq
       cmpString
       (map (lam s. (s, nameSym s)) mexprExtendedKeywords)}

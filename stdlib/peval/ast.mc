@@ -5,6 +5,7 @@ include "mexpr/type-check.mc"
 include "mexpr/eval.mc"
 include "mexpr/info.mc"
 include "mexpr/eq.mc"
+include "mexpr/mexpr.mc"
 
 include "peval/peval.mc"
 include "error.mc"

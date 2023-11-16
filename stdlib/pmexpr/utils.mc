@@ -77,7 +77,7 @@ let typeCheckEnv = lam env : [(Name, Type)]. lam expr.
       (lam env. lam x : (Name, Type).
         match x with (id, ty) in
         _insertVar id ty env)
-      _tcEnvEmpty env in
+      typcheckEnvDefault env in
   removeMetaVarExpr (typeCheckExpr tcEnv expr)
 in
 

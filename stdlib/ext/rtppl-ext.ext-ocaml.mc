@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : use Ast in Type }.
-  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
+  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]
 let readDistTy = lam ty. otyarray_ (otytuple_ [tyfloat_, ty])
@@ -39,12 +39,24 @@ let rtpplExtMap =
     ( "rtpplCloseFileDescriptor"
     , impl { expr = "Rtppl.close_file_descriptor"
            , ty = tyarrow_ tyint_ otyunit_ } ),
+    ( "rtpplReadInt"
+    , impl { expr = "Rtppl.read_int"
+           , ty = tyarrow_ tyint_ (otyarray_ (otytuple_ [timespec, tyint_])) } ),
+    ( "rtpplWriteInt"
+    , impl { expr = "Rtppl.write_int"
+           , ty = tyarrows_ [tyint_, otytuple_ [timespec, tyint_], otyunit_] } ),
     ( "rtpplReadFloat"
     , impl { expr = "Rtppl.read_float"
            , ty = tyarrow_ tyint_ (otyarray_ (otytuple_ [timespec, tyfloat_])) } ),
     ( "rtpplWriteFloat"
     , impl { expr = "Rtppl.write_float"
            , ty = tyarrows_ [tyint_, otytuple_ [timespec, tyfloat_], otyunit_] } ),
+    ( "rtpplReadIntRecord"
+    , impl { expr = "Rtppl.read_int_record"
+           , ty = tyarrows_ [tyint_, tyint_, otyarray_ (otytuple_ [timespec, tyunknown_])] } ),
+    ( "rtpplWriteIntRecord"
+    , impl { expr = "Rtppl.write_int_record"
+           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, tyunknown_], otyunit_] } ),
     ( "rtpplReadDistFloat"
     , impl { expr = "Rtppl.read_dist_float"
            , ty = tyarrow_ tyint_ (otyarray_ (otytuple_ [timespec, readDistTy tyfloat_])) } ),
@@ -56,8 +68,5 @@ let rtpplExtMap =
            , ty = tyarrows_ [tyint_, tyint_, otyarray_ (otytuple_ [timespec, readDistTy tyunknown_])] } ),
     ( "rtpplWriteDistFloatRecord"
     , impl { expr = "Rtppl.write_dist_float_record"
-           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } ),
-    ( "rtpplBatchedInference"
-    , impl { expr = "Rtppl.rtppl_batched_inference"
-           , ty = tyarrows_ [tyarrow_ otyunit_ tyunknown_, timespec, otylist_ tyunknown_] } )
+           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } )
   ]
