@@ -648,7 +648,7 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
 end
 
 lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
-  + ConTypeAst + DataTypeAst + Generalize
+  + ConTypeAst + DataTypeAst + AppTypeGetArgs + Generalize
   -- `typeCheckPat env patEnv pat' type checks `pat' under environment `env'
   -- supposing the variables in `patEnv' have been bound previously in the
   -- pattern.  Returns an updated `patEnv' and the type checked `pat'.
@@ -677,9 +677,9 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
 
   sem npatHasMatches : TCEnv -> (Type, NPat) -> Bool
   sem npatHasMatches env =
-  | (ty, SNPat p) -> snpatHasMatches env (unwrapType ty, p)
+  | (ty, SNPat p) -> snpatHasMatches env ((getTypeArgs ty).0, p)
   | (ty, NPatNot cons) ->
-    match unwrapType ty with TyCon t then
+    match getTypeArgs ty with (TyCon t, _) then
       match unwrapType t.data with TyData d then
         match mapLookup t.ident (computeData d) with Some ks in
         any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
@@ -704,8 +704,8 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
          (lam n. lam p.
       match mapLookup n env.varEnv with Some ty then
         let ty = inst (infoTy ty) env.currentLvl ty in
-        let closed =
-          match unwrapType ty with TyCon t then
+        match
+          match getTypeArgs ty with (TyCon t, _) then
             match unwrapType t.data with TyMetaVar r then
               match deref r.contents with Unbound u in
               let tys = mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps in
@@ -715,19 +715,20 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
                   cons) tys
               in
               let data =
-                match u.kind with Data d then
-                  mapUnionWith setUnion universe d.types
-                else universe
+                TyData { info = t.info
+                       , universe =
+                           match u.kind with Data d then
+                             mapUnionWith setUnion universe d.types
+                           else universe
+                       , positive = false
+                       , cons = setEmpty nameCmp }
               in
-              TyCon {t with data = TyData { info = t.info
-                                          , universe = data
-                                          , positive = false
-                                          , cons = setEmpty nameCmp }}
-            else ty
-          else ty
-        in
+              (TyCon {t with data = data}, lam. unify env [] data t.data)
+            else (ty, lam. ())
+          else (ty, lam. ())
+        with (closed, closeTy) in
         if normpatHasMatches env (closed, p) then true
-        else unify env [] ty closed; false
+        else closeTy (); false
       else
         error "Should not happen!"))
       matchedVariables
