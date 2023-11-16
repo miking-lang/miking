@@ -123,7 +123,8 @@ recursive
 let foldl2 : all a. all b. all c. (a -> b -> c -> a) -> a -> [b] -> [c] -> a =
   lam f. lam acc. lam seq1. lam seq2.
     let g = lam acc : (a, [b]). lam x2.
-      match acc with (acc, [x1] ++ xs1) in (f acc x1 x2, xs1)
+      match acc with (acc, [x1] ++ xs1) then (f acc x1 x2, xs1)
+      else error "foldl2: Cannot happen!"
     in
     if geqi (length seq1) (length seq2) then
       match foldl g (acc, seq1) seq2 with (acc, _) in acc

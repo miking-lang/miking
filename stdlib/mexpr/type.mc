@@ -165,11 +165,13 @@ end
 -- Returns the argument list in a type application
 lang AppTypeGetArgs = AppTypeAst
   sem getTypeArgs =
-  | TyApp t ->
-    match getTypeArgs t.lhs with (tycon, args) in
-    (tycon, snoc args t.rhs)
   | ty ->
-    (ty, [])
+    match getTypeArgsBase [] ty with (args, tycon) in
+    (tycon, args)
+
+  sem getTypeArgsBase (args : [Type]) =
+  | TyApp t -> getTypeArgsBase (cons t.rhs args) t.lhs
+  | ty -> rappAccumL_Type_Type getTypeArgsBase args ty
 end
 
 -- Return the type (TyCon) which a constructor (TmConDef) belongs to.
