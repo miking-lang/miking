@@ -360,7 +360,9 @@ lang UtestBase =
   sem specializeConstructorArgumentH : Map Name Type -> ([Type], Type) -> Type
   sem specializeConstructorArgumentH subMap =
   | ([], TyArrow {from = argTy}) -> substituteVars subMap argTy
-  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty}) ->
+  | (tyArgs, TyAll {kind = Data _, ty = ty}) ->
+    specializeConstructorArgumentH subMap (tyArgs, ty)
+  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty, kind = !Data _}) ->
     specializeConstructorArgumentH
       (mapInsert ident tyArg subMap) (tyArgs, ty)
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"
