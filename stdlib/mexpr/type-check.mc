@@ -535,13 +535,14 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
 
   sem npatHasMatches : TCEnv -> (Type, NPat) -> Bool
   sem npatHasMatches env =
-  | (ty, SNPat p) -> snpatHasMatches env (ty, p)
-  | (TyCon t, NPatNot cons) ->
-    match unwrapType t.data with TyData d then
-      match mapLookup t.ident (computeData d) with Some ks in
-      any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
+  | (ty, SNPat p) -> snpatHasMatches env (unwrapType ty, p)
+  | (ty, NPatNot cons) ->
+    match unwrapType ty with TyCon t then
+      match unwrapType t.data with TyData d then
+        match mapLookup t.ident (computeData d) with Some ks in
+        any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
+      else true
     else true
-  | (!TyCon _, NPatNot _) -> true
 
   sem snpatHasMatches : TCEnv -> (Type, SNPat) -> Bool
   sem snpatHasMatches env =
@@ -554,14 +555,37 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
       (map
          (foldl (mapUnionWith normpatIntersect) (mapEmpty nameCmp))
          (seqMapM setToSeq
-            (map matchNormPat env.matches)))
+            (map matchNormpat env.matches)))
     in
     find
       (mapAllWithKey
          (lam n. lam p.
       match mapLookup n env.varEnv with Some ty then
-        normpatHasMatches env
-          (inst (infoTy ty) env.currentLvl ty, p)
+        let ty = inst (infoTy ty) env.currentLvl ty in
+        let closed =
+          match unwrapType ty with TyCon t then
+            match unwrapType t.data with TyMetaVar r then
+              match deref r.contents with Unbound u in
+              let tys = mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps in
+              let universe =
+                mapMapWithKey (lam s. lam.
+                  match mapLookup s env.conDeps with Some cons in
+                  cons) tys
+              in
+              let data =
+                match u.kind with Data d then
+                  mapUnionWith setUnion universe d.types
+                else universe
+              in
+              TyCon {t with data = TyData { info = t.info
+                                          , universe = data
+                                          , positive = false
+                                          , cons = setEmpty nameCmp }}
+            else ty
+          else ty
+        in
+        if normpatHasMatches env (closed, p) then true
+        else unify env [] ty closed; false
       else
         error "Should not happen!"))
       matchedVariables
@@ -907,7 +931,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + PatTypeCheck
                    , "\n" ]) "" m ]
       in
       let msg = join [
-        "* Encountered a never term in a reachable position.\n",
+        "* Encountered a live never term.\n",
         matchstr,
         "* When type checking the expression\n"
       ] in
