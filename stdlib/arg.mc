@@ -193,9 +193,10 @@ let argParse_general : all a. Options_argParse -> a -> ParseConfig a -> ParseRes
             -- No value to the option
             if eqString s op then
               let parse = handleOptionParsing f argOptions "" s in
-              match parse with (Some ret, _) then
+              match parse with (ret, argOptions) in
+              match ret with Some ret then
                 ret
-              else match parse with (None(), argOptions) then
+              else match ret with None () then
                 argMain argOptions strings xs
               else never
             else

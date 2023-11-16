@@ -1385,7 +1385,7 @@ end
 
 mexpr
 use Test in
-let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
+let compile: use CProgAst in CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Symbolize with empty environment
   let prog = symbolizeExpr symEnvDefault prog in
