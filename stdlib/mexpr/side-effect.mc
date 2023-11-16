@@ -56,7 +56,11 @@ lang SideEffect
   | t -> exprHasSideEffect (sideEffectEnvEmpty ()) t
 end
 
-lang ConstSideEffect = MExprAst
+lang ConstSideEffectBase = ConstAst
+  sem constHasSideEffect : Const -> Bool
+end
+
+lang ConstSideEffect = ConstSideEffectBase + MExprAst
   sem constHasSideEffect =
   | CInt _ | CFloat _ | CBool _ | CChar _ -> false
   | CAddi _ | CSubi _ | CMuli _ | CDivi _ | CNegi _ | CModi _ -> false

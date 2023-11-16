@@ -224,7 +224,11 @@ lang DataEval = Eval + DataAst + AppEval
   | TmConApp t -> TmConApp {t with body = eval ctx t.body}
 end
 
-lang MatchEval = Eval + MatchAst
+lang MatchEvalBase = Eval
+  sem tryMatch : EvalEnv -> Expr -> Pat -> Option EvalEnv
+end
+
+lang MatchEval = Eval + MatchAst + MatchEvalBase
   sem eval ctx =
   | TmMatch t ->
     match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
@@ -1086,13 +1090,13 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatEval = MatchEval + NamedPat
+lang NamedPatEval = MatchEvalBase + NamedPat + Eval
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = MatchEval + SeqTotPat + SeqAst
+lang SeqTotPatEval = MatchEvalBase + SeqTotPat + SeqAst
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
@@ -1105,7 +1109,7 @@ lang SeqTotPatEval = MatchEval + SeqTotPat + SeqAst
     else None ()
 end
 
-lang SeqEdgePatEval = MatchEval + SeqEdgePat + SeqAst
+lang SeqEdgePatEval = MatchEvalBase + SeqEdgePat + SeqAst + Eval
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq {tms = tms} then
@@ -1130,7 +1134,7 @@ lang SeqEdgePatEval = MatchEval + SeqEdgePat + SeqAst
     else None ()
 end
 
-lang RecordPatEval = MatchEval + RecordAst + RecordPat
+lang RecordPatEval = MatchEvalBase + RecordAst + RecordPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
@@ -1149,7 +1153,7 @@ lang RecordPatEval = MatchEval + RecordAst + RecordPat
     else None ()
 end
 
-lang DataPatEval = MatchEval + DataAst + DataPat
+lang DataPatEval = MatchEvalBase + DataAst + DataPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatCon {ident = ident, subpat = subpat, info = info} ->
     match t with TmConApp cn then
@@ -1159,7 +1163,7 @@ lang DataPatEval = MatchEval + DataAst + DataPat
     else None ()
 end
 
-lang IntPatEval = MatchEval + IntAst + IntPat
+lang IntPatEval = MatchEvalBase + IntAst + IntPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatInt i ->
     match t with TmConst c then
@@ -1169,7 +1173,7 @@ lang IntPatEval = MatchEval + IntAst + IntPat
     else None ()
 end
 
-lang CharPatEval = MatchEval + CharAst + CharPat
+lang CharPatEval = MatchEvalBase + CharAst + CharPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatChar ch ->
     match t with TmConst c then
@@ -1179,7 +1183,7 @@ lang CharPatEval = MatchEval + CharAst + CharPat
     else None ()
 end
 
-lang BoolPatEval = MatchEval + BoolAst + BoolPat
+lang BoolPatEval = MatchEvalBase + BoolAst + BoolPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
@@ -1190,19 +1194,19 @@ lang BoolPatEval = MatchEval + BoolAst + BoolPat
     else None ()
 end
 
-lang AndPatEval = MatchEval + AndPat
+lang AndPatEval = MatchEvalBase + AndPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
-lang OrPatEval = MatchEval + OrPat
+lang OrPatEval = MatchEvalBase + OrPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
     optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
 end
 
-lang NotPatEval = MatchEval + NotPat
+lang NotPatEval = MatchEvalBase + NotPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatNot {subpat = p} ->
     let res = tryMatch env t p in
