@@ -631,39 +631,42 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
             (map matchNormpat env.matches)))
     in
     recursive
-      let closeType : Type -> Type = lam ty.
+      let closeType : Bool -> Type -> Type = lam inferFull. lam ty.
         match getTypeArgs ty with (TyCon t, args) then
           match unwrapType t.data with TyMetaVar r then
             match deref r.contents with Unbound u then
-              let tys = mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps in
-              let universe =
-                mapMapWithKey (lam s. lam.
-                  mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps) tys
-              in
+              let u1 =
+                if inferFull then
+                  mapMapWithKey (lam s. lam.
+                    mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps)
+                    (mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps)
+                else mapEmpty nameCmp in
+              let u2 =
+                match u.kind with Data d then d.types
+                else mapEmpty nameCmp in
               let data =
                 TyData { info = t.info
-                       , universe =
-                           match u.kind with Data d then
-                             mapUnionWith setUnion universe d.types
-                           else universe
+                       , universe = mapUnionWith setUnion u1 u2
                        , positive = false
                        , cons = setEmpty nameCmp }
               in
-              mkTypeApp (TyCon {t with data = data}) (map closeType args)
+              mkTypeApp (TyCon {t with data = data}) (map (closeType inferFull) args)
             else error "Unwrapped type was not unwrapped!"
-          else smap_Type_Type closeType ty
-        else smap_Type_Type closeType ty
+          else smap_Type_Type (closeType inferFull) ty
+        else smap_Type_Type (closeType inferFull) ty
     in
     find
-      (mapAllWithKey
-         (lam n. lam p.
-      match mapLookup n env.varEnv with Some ty then
-        let ty = inst (infoTy ty) env.currentLvl ty in
-        let closed = closeType ty in
-        if normpatHasMatches env (closed, p) then true
-        else unify env [] closed ty; false
-      else
-        error "Should not happen!"))
+      (lam m.
+      let inferFull = gti (mapSize m) 1 in
+      mapAllWithKey
+        (lam n. lam p.
+        match mapLookup n env.varEnv with Some ty then
+          let ty = inst (infoTy ty) env.currentLvl ty in
+          let closed = closeType inferFull ty in
+          if normpatHasMatches env (closed, p) then true
+          else unify env [] closed ty; false
+        else
+          error "Should not happen!") m)
       matchedVariables
 end
 
