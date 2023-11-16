@@ -2,7 +2,7 @@ include "map.mc"
 include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
-let impl = lam arg : {expr : String, ty : Type }.
+let impl = lam arg : {expr : String, ty : use Ast in Type }.
   [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]

@@ -4,8 +4,8 @@ include "ocaml/external-includes.mc"
 include "mexpr/cmp.mc"
 
 type GenerateEnv = {
-  constrs : Map Name Type,
-  records : Map (Map SID Type) Name,
+  constrs : Map Name (use Ast in Type),
+  records : Map (Map SID (use Ast in Type)) Name,
   exts : Map Name [ExternalImpl]
 }
 
@@ -20,5 +20,5 @@ let objRepr = use OCamlAst in
 let objMagic = use OCamlAst in
   lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
 
-let ocamlTypedFields = lam fields : Map SID Type.
+let ocamlTypedFields = lam fields : Map SID (use Ast in Type).
   mapMap (lam. tyunknown_) fields

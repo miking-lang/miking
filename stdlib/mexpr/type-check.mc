@@ -30,10 +30,10 @@ include "mexpr/unify.mc"
 include "mexpr/value.mc"
 
 type TCEnv = {
-  varEnv: Map Name Type,
-  conEnv: Map Name Type,
+  varEnv: Map Name (use Ast in Type),
+  conEnv: Map Name (use Ast in Type),
   tyVarEnv: Map Name Level,
-  tyConEnv: Map Name (Level, [Name], Type),
+  tyConEnv: Map Name (Level, [Name], use Ast in Type),
   currentLvl: Level,
   disableRecordPolymorphism: Bool
 }

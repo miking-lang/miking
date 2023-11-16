@@ -68,7 +68,7 @@ type CallCtxEnv = {
   -- sets of 'hole2idx'.
   -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
   -- expression may be repeated many times.
-  idx2hole: [Expr],
+  idx2hole: [use Ast in Expr],
 
   -- Maps a hole to the function in which it is defined
   hole2fun: Map NameInfo NameInfo,
@@ -91,7 +91,8 @@ let _newNameFromStr : String -> Name -> Name = lam prefix. lam name.
 -- Get the name of the incoming variable from a name.
 let _incVarFromName = _newNameFromStr "inc_"
 
-let _findLetBinding : Name -> Expr -> Option Expr = use MExprAst in
+let _findLetBinding : Name -> use Ast in Expr -> Option (use Ast in Expr) =
+  use MExprAst in
   lam name. lam expr.
     recursive let findLetBindingH = lam acc. lam expr.
       match acc with Some e then Some e
@@ -105,7 +106,7 @@ let _findLetBinding : Name -> Expr -> Option Expr = use MExprAst in
     findLetBindingH (None ()) expr
 
 -- Compute the initial call context environment for a program.
-let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
+let callCtxInit : [NameInfo] -> CallGraph -> use Ast in Expr -> CallCtxEnv =
   lam publicFns. lam callGraph. lam tm.
     let fun2inc =
       _nameMapInit (callGraphNames callGraph) identity _incVarFromName
@@ -223,7 +224,8 @@ let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
     mapValues fun2inc
   else never
 
-let callCtxAddHole : Expr -> NameInfo -> [[Edge]] -> NameInfo -> CallCtxEnv -> CallCtxEnv =
+let callCtxAddHole
+  : use Ast in Expr -> NameInfo -> [[Edge]] -> NameInfo -> CallCtxEnv -> CallCtxEnv =
   lam h. lam name. lam paths. lam funName. lam env : CallCtxEnv.
     match env with
       { hole2idx = hole2idx, idx2hole = idx2hole, hole2fun = hole2fun,
@@ -260,7 +262,7 @@ let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
       mapFindExn path (mapFindExn nameInfo hole2idx)
     else never
 
-let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [Expr] =
+let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [use Ast in Expr] =
   lam init : Int. lam env : CallCtxEnv.
     match env with { threadPoolInfo = threadPoolInfo } then
       switch threadPoolInfo
@@ -279,7 +281,7 @@ let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [Expr] =
       end
     else never
 
-let callCtxReadIncomingVar : Name -> CallCtxEnv -> Expr =
+let callCtxReadIncomingVar : Name -> CallCtxEnv -> use Ast in Expr =
   lam iv. lam env : CallCtxEnv.
     match env with { threadPoolInfo = threadPoolInfo } then
       switch threadPoolInfo
@@ -295,7 +297,7 @@ let callCtxReadIncomingVar : Name -> CallCtxEnv -> Expr =
       end
     else never
 
-let callCtxModifyIncomingVar : Name -> Int -> CallCtxEnv -> Expr =
+let callCtxModifyIncomingVar : Name -> Int -> CallCtxEnv -> use Ast in Expr =
   lam iv. lam v : Int. lam env : CallCtxEnv.
     match env with { threadPoolInfo = threadPoolInfo } then
       switch threadPoolInfo
@@ -327,7 +329,8 @@ let _privFunFromName = _newNameFromStr "pri_"
 -- Get the leftmost node (callee function) in a nested application node. Returns
 -- optionally the variable name if the leftmost node is a variable, otherwise
 -- None ().
-let _appGetCallee : Expr -> Option NameInfo = use AppAst in use VarAst in lam tm.
+let _appGetCallee
+  : use Ast in Expr -> Option NameInfo = use AppAst in use VarAst in lam tm.
   recursive let work = lam app.
     match app with TmApp {lhs = TmVar v} then
       Some (v.ident, v.info)
@@ -349,7 +352,8 @@ with None () using optionEq nameInfoEq
 
 -- Set the leftmost node (callee function) to a given name in a nested
 -- application.
-let _appSetCallee : Expr -> Name -> Expr = use AppAst in use VarAst in
+let _appSetCallee
+  : use Ast in Expr -> Name -> use Ast in Expr = use AppAst in use VarAst in
   lam tm. lam callee.
     recursive let work : Expr -> Expr = lam app.
       match app with TmApp ({lhs = TmVar v} & a) then
@@ -369,7 +373,9 @@ let t =
 
 -- Replace the innermost body in a nested lambda expression by the result of a
 -- function that operates on the list of arguments of the lambda.
-let _lamWithBody : ([Name] -> Expr) -> Expr -> Expr = use LamAst in
+let _lamWithBody
+  : ([Name] -> use Ast in Expr) -> use Ast in Expr -> use Ast in Expr =
+  use LamAst in
   lam f. lam tm.
     recursive let work : [Name] -> Expr -> Expr = lam acc. lam tm.
       match tm with TmLam ({ body = TmLam lm, ident = ident } & t) then
@@ -394,8 +400,9 @@ let t =
 
 -- Helper for creating a hidden equivalent of a public function and replace the
 -- public function with a forwarding call to the hidden function.
-type Binding = {ident : Name, body : Expr}
-let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
+type Binding = {ident : Name, body : use Ast in Expr}
+let _forwardCall
+  : Name -> (use Ast in Expr -> use Ast in Expr) -> Binding -> (Binding, Binding) =
   lam local. lam f. lam bind : Binding.
     let fwdVar = _fwdVarFromName bind.ident in
     let newBody = lam args.

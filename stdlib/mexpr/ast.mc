@@ -1420,7 +1420,7 @@ lang VarTypeAst = Ast
   | TyVar t -> t.info
 end
 
-lang KindAst
+lang KindAst = Ast
   syn Kind =
   | Poly ()
   | Mono ()

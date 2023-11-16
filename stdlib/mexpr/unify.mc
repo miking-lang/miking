@@ -14,7 +14,7 @@ include "mexpr/type.mc"
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = Ast
+lang Unify = KindAst
   type UnifyEnv = {
     wrappedLhs: Type,  -- The currently examined left-hand subtype, before resolving aliases
     wrappedRhs: Type,  -- The currently examined right-hand subtype, before resolving aliases

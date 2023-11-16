@@ -3,11 +3,11 @@ include "mexpr/ast-builder.mc"
 
 type OCamlTopBinding =
   { ident : Name
-    , tyBody : Type
-    , body : Expr
+  , tyBody : use Ast in Type
+  , body : use Ast in Expr
   }
 
-lang OCamlTopAst
+lang OCamlTopAst = Ast
   syn Top =
   | OTopTypeDecl { ident : Name, ty : Type }
   | OTopVariantTypeDecl { ident : Name, constrs : Map Name Type }

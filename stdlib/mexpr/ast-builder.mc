@@ -58,7 +58,8 @@ let tyarrows_ = use FunTypeAst in
   lam tys.
   foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyRecord : Info -> [(String, Type)] -> Type = use RecordTypeAst in
+let tyRecord : Info -> [(String, use Ast in Type)] -> use Ast in Type =
+  use RecordTypeAst in
   lam info. lam fields.
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
@@ -113,7 +114,7 @@ let nstyall_ = use AllTypeAst in
 
 let styall_ = lam s. nstyall_ (nameNoSym s)
 
-let ntyall_ : Name -> Type -> Type  = use KindAst in
+let ntyall_ : Name -> use Ast in Type -> Type  = use KindAst in
   lam n.
   nstyall_ n (Poly ())
 
@@ -263,7 +264,7 @@ let pcon_ = use MExprAst in
   lam cs. lam cp.
   npcon_ (nameNoSym cs) cp
 
-let patRecord : [(String, Pat)] -> Info -> Pat =
+let patRecord : [(String, use Ast in Pat)] -> Info -> use Ast in Pat =
   use MExprAst in
   lam bindings : [(String, Pat)].
   lam info : Info.

@@ -22,26 +22,27 @@ type ParseOptions = {
   keywords : [String]
 }
 
-let parseParseMCoreFile : ParseOptions -> String -> Expr = lam opt. lam file.
-  use BootParser in
-  if opt.pruneExternalUtests then
-    let externalsExclude =
-      if opt.findExternalsExclude then
-        mapKeys (externalGetSupportedExternalImpls ())
-      else []
-    in
-    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
-      with keepUtests = opt.keepUtests }
-      with pruneExternalUtests = true }
-      with externalsExclude = externalsExclude }
-      with pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning }
-      with eliminateDeadCode = opt.eliminateDeadCode }
-      with keywords = opt.keywords } file
-  else
-    parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
-      with keepUtests = opt.keepUtests }
-      with pruneExternalUtests = false }
-      with externalsExclude = [] }
-      with pruneExternalUtestsWarning = false }
-      with eliminateDeadCode = opt.eliminateDeadCode }
-      with keywords = opt.keywords } file
+let parseParseMCoreFile : ParseOptions -> String -> use Ast in Expr =
+  lam opt. lam file.
+    use BootParser in
+    if opt.pruneExternalUtests then
+      let externalsExclude =
+        if opt.findExternalsExclude then
+          mapKeys (externalGetSupportedExternalImpls ())
+        else []
+      in
+      parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+        with keepUtests = opt.keepUtests }
+        with pruneExternalUtests = true }
+        with externalsExclude = externalsExclude }
+        with pruneExternalUtestsWarning = opt.pruneExternalUtestsWarning }
+        with eliminateDeadCode = opt.eliminateDeadCode }
+        with keywords = opt.keywords } file
+    else
+      parseMCoreFile {{{{{{ defaultBootParserParseMCoreFileArg
+        with keepUtests = opt.keepUtests }
+        with pruneExternalUtests = false }
+        with externalsExclude = [] }
+        with pruneExternalUtestsWarning = false }
+        with eliminateDeadCode = opt.eliminateDeadCode }
+        with keywords = opt.keywords } file

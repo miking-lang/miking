@@ -63,8 +63,14 @@ let lookupRecordFields = use MExprAst in
     else None ()
   else None ()
 
-type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
-                    els : Expr, ty : Type, info : Info}
+type MatchRecord = {
+  target : use Ast in Expr,
+  pat : use Ast in Pat,
+  thn : use Ast in Expr,
+  els : use Ast in Expr,
+  ty : use Ast in Type,
+  info : Info
+}
 
 lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
   sem generateTops (env : GenerateEnv) =

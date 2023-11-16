@@ -17,9 +17,9 @@ include "builtin.mc"
 include "type.mc"
 
 type TypeEnv = {
-  varEnv: Map Name Type,
-  conEnv: Map Name Type,
-  tyEnv : Map Name Type
+  varEnv: Map Name (use Ast in Type),
+  conEnv: Map Name (use Ast in Type),
+  tyEnv : Map Name (use Ast in Type)
 }
 
 let _typeEnvEmpty = {
