@@ -102,8 +102,8 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   con ProdTop : {v: Name, i: Info} -> GenLabel in
   con ProdInternal : {name: {v: Name, i: Info}, info: Info} -> GenLabel in
 
-  let asDyn_ : Expr -> Expr = app_ (var_ "asDyn") in
-  let fromDyn_ : Expr -> Expr = app_ (var_ "fromDyn") in
+  let asDyn_ : use Ast in Expr -> Expr = app_ (var_ "asDyn") in
+  let fromDyn_ : use Ast in Expr -> Expr = app_ (var_ "fromDyn") in
 
   let filename = args.synFile in
   let destinationFile = args.outFile in
@@ -143,7 +143,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- needs a bit of conversion to create proper MExpr code (though most
   -- of it is just switching from XExpr to TmX).
   recursive let exprToMExpr
-    : Expr -> Res Expr
+    : Expr -> Res (use Ast in Expr)
     = lam e. switch e
       case AppExpr (x & {left = ConExpr c}) then
         result.map

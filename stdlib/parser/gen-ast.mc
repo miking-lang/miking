@@ -366,7 +366,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
 end
 
 let _mkFieldStubs
-  : use SelfhostBaseAst in FieldAccessorRequest -> [Decl]
+  : use DeclAst in FieldAccessorRequest -> [Decl]
   = lam request.
     use SemDeclAst in
     let synTy = ntycon_ request.synName in
