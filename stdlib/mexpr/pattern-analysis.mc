@@ -5,6 +5,7 @@ include "set.mc"
 include "stringid.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 
 lang NormPat = Ast
   syn SimpleCon =
@@ -22,6 +23,7 @@ lang NormPat = Ast
     subi (constructorTag lhs) (constructorTag rhs)
 
   sem simpleConComplement : SimpleCon -> SNPat
+  sem simpleConToPat : SimpleCon -> Pat
 
   sem snpatCmp : (SNPat, SNPat) -> Int
   sem snpatCmp =
@@ -38,6 +40,8 @@ lang NormPat = Ast
   sem snpatIntersect =
   | _ -> setEmpty npatCmp
 
+  sem snpatToPat : SNPat -> Pat
+
   sem npatCmp  : NPat -> NPat -> Int
   sem npatCmp np1 = | np2 -> npatCmpH (np1, np2)
 
@@ -48,11 +52,12 @@ lang NormPat = Ast
 
   sem npatComplement : NPat -> NormPat
   sem npatIntersect  : (NPat, NPat) -> NormPat
+  sem npatToPat : NPat -> Pat
 
   sem normpatComplement : NormPat -> NormPat
   sem normpatIntersect  : NormPat -> NormPat -> NormPat
-
   sem patToNormpat : Pat -> NormPat
+  sem normpatToPat : NormPat -> Pat
 end
 
 lang NPatImpl = NormPat
@@ -84,6 +89,14 @@ lang NPatImpl = NormPat
     else setOfSeq npatCmp [pat]
   | (NPatNot cons1, NPatNot cons2) ->
     setOfSeq npatCmp [NPatNot (setUnion cons1 cons2)]
+
+  sem npatToPat =
+  | SNPat a -> snpatToPat a
+  | NPatNot cons ->
+    if setIsEmpty cons then
+      pvarw_
+    else
+      pnot_ (foldl1 por_ (map simpleConToPat (setToSeq cons)))
 
   sem seqComplement : ([NPat] -> NPat) -> [NPat] -> NormPat
   sem seqComplement constr =
@@ -129,6 +142,13 @@ lang NormPatImpl = NPatImpl
       (seqLiftA2 (lam x. lam y. npatIntersect (x, y))
          (setToSeq np1)
          (setToSeq np2))
+
+  sem normpatToPat =
+  | np ->
+    if setIsEmpty np then
+      pnot_ pvarw_
+    else
+      foldl1 por_ (map npatToPat (setToSeq np))
 end
 
 lang IntNormPat = NPatImpl + IntPat
@@ -143,6 +163,9 @@ lang IntNormPat = NPatImpl + IntPat
 
   sem simpleConComplement =
   | IntCon a -> NPatInt a
+
+  sem simpleConToPat =
+  | IntCon a -> pint_ a
 
   sem snpatCmp =
   | (NPatInt a, NPatInt b) -> subi a b
@@ -159,6 +182,9 @@ lang IntNormPat = NPatImpl + IntPat
     if eqi a b
     then setOfSeq npatCmp [SNPat p]
     else setEmpty npatCmp
+
+  sem snpatToPat =
+  | NPatInt a -> pint_ a
 
   sem patToNormpat =
   | PatInt a ->
@@ -178,6 +204,9 @@ lang CharNormPat = NPatImpl + CharPat
   sem simpleConComplement =
   | CharCon a -> NPatChar a
 
+  sem simpleConToPat =
+  | CharCon a -> pchar_ a
+
   sem snpatCmp =
   | (NPatChar a, NPatChar b) -> subi (char2int a) (char2int b)
 
@@ -193,6 +222,9 @@ lang CharNormPat = NPatImpl + CharPat
     if eqc a b
     then setOfSeq npatCmp [SNPat p]
     else setEmpty npatCmp
+
+  sem snpatToPat =
+  | NPatChar a -> pchar_ a
 
   sem patToNormpat =
   | PatChar a ->
@@ -213,6 +245,9 @@ lang BoolNormPat = NPatImpl + BoolPat
   sem simpleConComplement =
   | BoolCon a -> NPatBool a
 
+  sem simpleConToPat =
+  | BoolCon a -> pbool_ a
+
   sem snpatCmp =
   | (NPatBool a, NPatBool b) ->
     subi (if a then 1 else 0) (if b then 1 else 0)
@@ -229,6 +264,9 @@ lang BoolNormPat = NPatImpl + BoolPat
     if eqi (if a then 1 else 0) (if b then 1 else 0)
     then setOfSeq npatCmp [SNPat p]
     else setEmpty npatCmp
+
+  sem snpatToPat =
+  | NPatBool a -> pbool_ a
 
   sem patToNormpat =
   | PatBool a ->
@@ -248,6 +286,9 @@ lang ConNormPat = NPatImpl + DataPat
   sem simpleConComplement =
   | ConCon a ->
     NPatCon { ident = a, subpat = wildpat () }
+
+  sem simpleConToPat =
+  | ConCon a -> npcon_ a pvarw_
 
   sem snpatCmp =
   | (NPatCon a, NPatCon b) ->
@@ -277,6 +318,10 @@ lang ConNormPat = NPatImpl + DataPat
         (npatIntersect (p1, p2))
     else
       setEmpty npatCmp
+
+  sem snpatToPat =
+  | NPatCon {ident = c, subpat = p} ->
+    npcon_ c (npatToPat p)
 
   sem patToNormpat =
   | PatCon {ident = c, subpat = p} ->
@@ -318,6 +363,14 @@ lang RecordNormPat = NPatImpl + RecordPat
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings merged) in
     foldl (lam np. lam bs. setInsert (SNPat (NPatRecord (mapFromSeq cmpSID bs))) np)
       (setEmpty npatCmp) bindings
+
+  sem snpatToPat =
+  | NPatRecord pats ->
+    PatRecord {
+      bindings = mapMap npatToPat pats,
+      info = NoInfo (),
+      ty = tyunknown_
+    }
 
   sem patToNormpat =
   | PatRecord { bindings = bs } ->
@@ -458,6 +511,14 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
              (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
                 (join [pre, make (subi (subi patLen preLen) postLen) (wildpat ()), post])
                 pats))
+
+  sem snpatToPat =
+  | NPatSeqTot pats -> pseqtot_ (map npatToPat pats)
+  | NPatSeqEdge {prefix = pre, disallowed = dis, postfix = post} ->
+    let edgepat = pseqedgew_ (map npatToPat pre) (map npatToPat post) in
+    if setIsEmpty dis then edgepat else
+      pand_ edgepat
+        (pnot_ (foldl1 por_ (map (lam n. pseqtot_ (make n pvarw_)) (setToSeq dis))))
 
   sem patToNormpat =
   | PatSeqTot { pats = ps } ->

@@ -547,7 +547,7 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
   sem snpatHasMatches env =
   | _ -> true
 
-  sem matchesPossible : TCEnv -> Bool
+  sem matchesPossible : TCEnv -> Option (Map Name NormPat)
   sem matchesPossible =
   | env ->
     let matchedVariables : [Map Name NormPat] =
@@ -556,13 +556,14 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
          (seqMapM setToSeq
             (map matchNormPat env.matches)))
     in
-    any (mapAllWithKey
-        (lam n. lam p.
-        match mapLookup n env.varEnv with Some ty then
-          normpatHasMatches env
-            (inst (infoTy ty) env.currentLvl ty, p)
-        else
-          error "Should not happen!"))
+    find
+      (mapAllWithKey
+         (lam n. lam p.
+      match mapLookup n env.varEnv with Some ty then
+        normpatHasMatches env
+          (inst (infoTy ty) env.currentLvl ty, p)
+      else
+        error "Should not happen!"))
       matchedVariables
 end
 
@@ -885,14 +886,28 @@ end
 lang NeverTypeCheck = TypeCheck + NeverAst + PatTypeCheck
   sem typeCheckExpr env =
   | TmNever t ->
-    match matchesPossible env with false then
+    switch matchesPossible env
+    case None () then
       TmNever {t with ty = newpolyvar env.currentLvl t.info}
-    else
+    case Some m then
+      let matchstr =
+        mapFoldWithKey
+          (lam str. lam n. lam p.
+          join [ str
+               , "  ", nameGetStr n
+               , " = "
+               , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
+               , "\n" ]) "" m
+      in
       let msg = join [
-        "* Encountered a never term in a possibly reachable position\n",
-        "* when type checking the expression\n"
+        "* Encountered a never term in a reachable position.\n",
+        "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
+        " are not exhaustively matched on.\n",
+        "* An assignment not being matched is:\n", matchstr,
+        "* When type checking the expression\n"
       ] in
       errorSingle [t.info] msg
+    end
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
@@ -984,7 +999,7 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + ConNormPat + FunTypeAst + Gener
       let msg = join [
         "* Encountered an unbound constructor: ",
         nameGetStr t.ident, "\n",
-        "* when type checking the pattern\n"
+        "* When type checking the pattern\n"
       ] in
       errorSingle [t.info] msg
 
