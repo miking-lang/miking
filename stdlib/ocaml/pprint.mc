@@ -161,12 +161,10 @@ lang OCamlPrettyPrint =
   | OTmLam _ -> false
   | TmVar _ -> true
 
-  sem patIsAtomic =
-  | OPatRecord _ -> false
-  | OPatTuple _ -> true
-  | OPatCon {args = []} -> true
-  | OPatCon _ -> false
-  | OPatConExt _ -> false
+  sem patPrecedence =
+  | OPatRecord _ -> 0
+  | OPatCon {args = ![]} -> 2
+  | OPatConExt _ -> 2
 
   sem getConstStringCode (indent : Int) =
   | CUnsafeCoerce _ -> "(fun x -> x)"
@@ -661,7 +659,7 @@ lang OCamlPrettyPrint =
   | OPatCon {ident = ident, args = []} -> pprintConName env ident
   | OPatCon {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
-      match printPatParen indent env arg with (env, arg) then
+      match printPatParen indent 3 env arg with (env, arg) then
         (env, join [ident, " ", arg])
       else never
     else never
@@ -673,7 +671,7 @@ lang OCamlPrettyPrint =
     else never
   | OPatConExt {ident = ident, args = []} -> (env, ident)
   | OPatConExt {ident = ident, args = [arg]} ->
-    match printPatParen indent env arg with (env, arg) then
+    match printPatParen indent 3 env arg with (env, arg) then
       (env, join [ident, " ", arg])
     else never
   | OPatConExt {ident = ident, args = args} ->
