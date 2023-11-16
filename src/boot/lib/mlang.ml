@@ -887,11 +887,15 @@ let wrap_cons : mlang_env -> lang_data -> tm -> tm =
     Record.to_seq syn.cons |> Seq.map (fun (_, c) -> (name, c))
   in
   let wrap_con (tm : tm) ((name : ustring), (con : syn_case)) =
-    let wrap_all (tyvar : ustring) (ty : ty) = TyAll (con.fi, tyvar, ty) in
+    let wrap_all (tyvar : ustring) (ty : ty) =
+      TyAll (con.fi, tyvar, None, ty)
+    in
     let wrap_app (ty : ty) (tyvar : ustring) =
       TyApp (con.fi, ty, TyVar (con.fi, tyvar))
     in
-    let ret = List.fold_left wrap_app (TyCon (con.fi, name, None)) con.ty_params in
+    let ret =
+      List.fold_left wrap_app (TyCon (con.fi, name, None)) con.ty_params
+    in
     let ty = TyArrow (con.fi, con.carried, ret) in
     let ty = List.fold_right wrap_all con.ty_params ty in
     TmConDef

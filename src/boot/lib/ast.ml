@@ -379,7 +379,7 @@ and ty =
   (* Function type *)
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
-  | TyAll of info * ustring * ty
+  | TyAll of info * ustring * ustring list option * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)
@@ -389,7 +389,7 @@ and ty =
   (* Variant type *)
   | TyVariant of info * ustring list
   (* Type constructors *)
-  | TyCon of info * ustring * (bool * ustring list) option
+  | TyCon of info * ustring * tycon_data option
   (* Type variables *)
   | TyVar of info * ustring
   (* Type application *)
@@ -407,6 +407,14 @@ and ident =
   | IdType of sid
   (* A label identifier *)
   | IdLabel of sid
+
+and tycon_data =
+  (* Constructor set *)
+  | DCons of ustring list
+  (* Complemented constructor set *)
+  | DNCons of ustring list
+  (* Type variable *)
+  | DVar of ustring
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
@@ -538,9 +546,9 @@ let smap_accum_left_ty_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : ty -> 'a * ty
       let acc, l = f acc l in
       let acc, r = f acc r in
       (acc, TyArrow (fi, l, r))
-  | TyAll (fi, id, ty) ->
+  | TyAll (fi, id, kind, ty) ->
       let acc, ty = f acc ty in
-      (acc, TyAll (fi, id, ty))
+      (acc, TyAll (fi, id, kind, ty))
   | TySeq (fi, ty) ->
       let acc, ty = f acc ty in
       (acc, TySeq (fi, ty))
@@ -713,7 +721,7 @@ let ty_info = function
   | TyFloat fi
   | TyChar fi
   | TyArrow (fi, _, _)
-  | TyAll (fi, _, _)
+  | TyAll (fi, _, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
   | TyRecord (fi, _)

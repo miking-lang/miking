@@ -37,7 +37,7 @@ type TCEnv = {
   -- Normal typechecking related fields
   varEnv: Map Name (use Ast in Type),
   conEnv: Map Name (Level, use Ast in Type),
-  tyVarEnv: Map Name Level,
+  tyVarEnv: Map Name (Level, use Ast in Kind),
   tyConEnv: Map Name (Level, [Name], use Ast in Type),
   typeDeps : Map Name (Set Name), -- The set of type names recursively occuring in a type
   conDeps  : Map Name (Set Name), -- The set of constructors in scope for a type
@@ -167,7 +167,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + MetaVarTypeCmp + RepTypesHelpers
+lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + RepTypesHelpers
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -225,22 +225,47 @@ lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + MetaVarTypeCmp + RepTy
     let pprintEnv = pprintEnvEmpty in
     match getTypeStringCode 0 pprintEnv expectedType with (pprintEnv, expected) in
     match getTypeStringCode 0 pprintEnv foundType with (pprintEnv, found) in
-    recursive let collectAliases : Map Type Type -> Type -> Map Type Type
-      = lam acc. lam ty.
-        match ty with TyAlias x then
-          let acc = mapInsert x.display x.content acc in
-          collectAliases (collectAliases acc x.display) x.content
-        else sfold_Type_Type collectAliases acc ty
+    recursive
+      let collectAliasesAndKinds
+        :  {aliases : Map Type Type, kinds : Map Name Kind}
+        -> Type
+        -> {aliases : Map Type Type, kinds : Map Name Kind}
+        = lam acc. lam ty.
+        switch ty
+        case TyAlias x then
+          let acc = {acc with aliases = mapInsert x.display x.content acc.aliases} in
+          collectAliasesAndKinds (collectAliasesAndKinds acc x.display) x.content
+        case TyMetaVar x then
+          switch deref x.contents
+          case Unbound u then
+            let acc = {acc with kinds = mapInsert u.ident u.kind acc.kinds} in
+            sfold_Kind_Type collectAliasesAndKinds acc u.kind
+          case Link ty then
+            collectAliasesAndKinds acc ty
+          end
+        case _ then sfold_Type_Type collectAliasesAndKinds acc ty
+        end
     in
-    let aliases = collectAliases (mapEmpty cmpType) expectedType in
-    let aliases = collectAliases aliases foundType in
+    let aks =
+      collectAliasesAndKinds
+        {aliases = mapEmpty cmpType, kinds = mapEmpty nameCmp} expectedType in
+    let aks = collectAliasesAndKinds aks foundType in
     match
-      if mapIsEmpty aliases then (pprintEnv, "") else
+      if mapIsEmpty aks.kinds then (pprintEnv, "") else
+        let f = lam env. lam pair.
+          match pprintVarName env pair.0 with (env, l) in
+          match getKindStringCode 0 env pair.1 with (env, r) in
+          (env, join ["\n*   _", l, " :: ", r]) in
+        match mapAccumL f pprintEnv (mapBindings aks.kinds) with (pprintEnv, kinds) in
+        (pprintEnv, join ["* where", join kinds, "\n"])
+    with (pprintEnv, kinds) in
+    match
+      if mapIsEmpty aks.aliases then (pprintEnv, "") else
         let f = lam env. lam pair.
           match getTypeStringCode 0 env pair.0 with (env, l) in
           match getTypeStringCode 0 env pair.1 with (env, r) in
           (env, join ["\n*   ", l, " = ", r]) in
-        match mapAccumL f pprintEnv (mapBindings aliases) with (pprintEnv, aliases) in
+        match mapAccumL f pprintEnv (mapBindings aks.aliases) with (pprintEnv, aliases) in
         (pprintEnv, join ["* where", join aliases, "\n"])
     with (pprintEnv, aliases) in
     match mapAccumL pprintUnifyError pprintEnv errors with (pprintEnv, errors) in
@@ -249,6 +274,7 @@ lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + MetaVarTypeCmp + RepTy
       expected, "\n",
       "*    Found an expression of type: ",
       found, "\n",
+      kinds,
       aliases,
       "* (errors: ", strJoin ", " errors, ")\n",
       "* When type checking the expression\n"
@@ -260,7 +286,7 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
   sem unifyCheckBase env info boundVars tv =
   | TyVar t ->
     if not (setMem t.ident boundVars) then
-      if optionMapOr true (lti tv.level) (mapLookup t.ident env.tyVarEnv) then
+      if optionMapOr true (lam x. lti tv.level x.0) (mapLookup t.ident env.tyVarEnv) then
         let msg = join [
           "* Encountered a type variable escaping its scope: ",
           nameGetStr t.ident, "\n",
@@ -304,7 +330,7 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + KindAst
     unifyCheckData env.conEnv env.tyConEnv info tv (computeData t)
 end
 
-lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordTypeAst + DataTypeTCUnify
+lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordTypeAst + VarTypeAst + DataTypeTCUnify
   sem addKinds : Unifier () -> UnifyEnv -> (Kind, Kind) -> Kind
   sem addKinds u env =
   | (Record r1, Record r2) ->
@@ -333,17 +359,30 @@ lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordType
   | (TyMetaVar t1 & ty1, !TyMetaVar _ & ty2) ->
     match deref t1.contents with Unbound tv in
     unifyCheck tcenv info tv ty2;
-    (switch (tv.kind, ty2)
-     case (Record r1, TyRecord r2) then unifyRecordsSubset u env r1.fields r2.fields
-     case (Data r1, TyData r2) then
-       let data = computeData r2 in
-       if mapAllWithKey (lam t. lam ks1.
-         optionMapOr false (setSubset ks1) (mapLookup t data)) r1.types
-       then ()
-       else u.err (Types (ty1, ty2))
-     case (Record _ | Data _, _) then u.err (Types (ty1, ty2))
-     case _ then ()
-     end);
+    (match ty2 with TyVar {ident = n} then
+       let kind = optionMapOr (Poly ()) (lam x. x.1) (mapLookup n tcenv.tyVarEnv) in
+       switch (tv.kind, kind)
+       case (Record r1, Record r2) then unifyRecordsSubset u env r1.fields r2.fields
+       case (Data r1, Data r2) then
+         if mapAllWithKey (lam t. lam ks1.
+           optionMapOr false (setSubset ks1) (mapLookup t r2.types)) r1.types
+         then ()
+         else u.err (Kinds (tv.kind, kind))
+       case (Record _ | Data _, _) then u.err (Kinds (tv.kind, kind))
+       case _ then ()
+       end
+     else
+       switch (tv.kind, ty2)
+       case (Record r1, TyRecord r2) then unifyRecordsSubset u env r1.fields r2.fields
+       case (Data r1, TyData r2) then
+         let data = computeData r2 in
+         if mapAllWithKey (lam t. lam ks1.
+           optionMapOr false (setSubset ks1) (mapLookup t data)) r1.types
+         then ()
+         else u.err (Types (ty1, ty2))
+       case (Record _ | Data _, _) then u.err (Types (ty1, ty2))
+       case _ then ()
+       end);
     modref t1.contents (Link env.wrappedRhs)
 
   sem unifyCheckBase env info boundVars tv =
@@ -522,7 +561,7 @@ end
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + DataTypeAst + VarTypeSubstitute + AppTypeGetArgs
+  UnknownTypeAst + DataTypeAst + FunTypeAst + VarTypeSubstitute + AppTypeGetArgs
   sem resolveType : Info -> TCEnv -> Type -> Type
   sem resolveType info env =
   | (TyCon _ | TyApp _) & ty ->
@@ -567,6 +606,26 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
         ])
     else
       mkAppTy (resolveType info env constr) args
+
+  | TyAll t ->
+    let ty = resolveType info env t.ty in
+    match t.kind with Data d then
+      let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") d.types in
+      let types =
+        setFold (lam m. lam k.
+          match mapLookup k env.conEnv with Some (_, ty) then
+            match stripTyAll ty with (_, TyArrow {to = to}) then
+              match getTypeArgs to with (TyCon t, _) then
+                mapInsertWith setUnion t.ident (setOfSeq nameCmp [k]) m
+              else error "Shouldn't happen!"
+            else error "Shouldn't happen!"
+          else error "Shouldn't happen!")
+          (mapEmpty nameCmp)
+          cons
+      in
+      TyAll {t with ty = ty, kind = Data {types = types}}
+    else
+      TyAll {t with ty = ty}
 
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.
@@ -864,7 +923,7 @@ lang LetTypeCheck =
     match
       if isValue (GVal ()) t.body then
         match stripTyAll tyBody with (vars, stripped) in
-        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+        let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
         let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, tyAnnot)) in
         -- Unify the annotated type with the inferred one and generalize
@@ -1008,7 +1067,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
       with ((recLetEnv, tyVars), bindings) in
     let newTyVarEnv =
-      mapFoldWithKey (lam vs. lam v. lam. mapInsert v newLvl vs) recLetEnv.tyVarEnv tyVars in
+      mapFoldWithKey (lam vs. lam v. lam k. mapInsert v (newLvl, k) vs) recLetEnv.tyVarEnv tyVars in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.

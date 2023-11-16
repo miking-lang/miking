@@ -197,16 +197,10 @@ lang LetSym = Sym + LetAst + AllTypeAst
   sem symbolizeTyAnnot : SymEnv -> Type -> (Map String Name, Type)
   sem symbolizeTyAnnot env =
   | tyAnnot ->
-    let setSymbolFirst = lam env. lam vs.
-      match setSymbol env vs.0 with (env, v) in
-      (env, (v, vs.1))
-    in
-    match stripTyAll tyAnnot with (vars, stripped) in
-    match mapAccumL setSymbolFirst env.tyVarEnv vars with (tyVarEnv, vars) in
-    (tyVarEnv,
-     foldr (lam vs. lam ty. TyAll {info = infoTy tyAnnot,
-                                   ident = vs.0, kind = vs.1, ty = ty})
-       (symbolizeType {env with tyVarEnv = tyVarEnv} stripped) vars)
+    let symbolized = symbolizeType env tyAnnot in
+    match stripTyAll symbolized with (vars, stripped) in
+    (foldl (lam env. lam nk. mapInsert (nameGetStr nk.0) nk.0 env)
+       env.tyVarEnv vars, symbolized)
 
   sem addTopNames (env : SymEnv) =
   | TmLet t ->
@@ -423,10 +417,28 @@ lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
     TyVar {t with ident = ident}
 end
 
-lang AllTypeSym = Sym + AllTypeAst + KindAst
+lang KindSym = Sym + KindAst
+  sem symbolizeKind : Info -> SymEnv -> Kind -> Kind
+  sem symbolizeKind info env =
+  | Record _ & kind -> smap_Kind_Type (symbolizeType env) kind
+  | Data t ->
+    let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") t.types in
+    let cons =
+      setFold (lam ks. lam k.
+        setInsert
+          (getSymbol {kind = "constructor",
+                      info = [info],
+                      allowFree = env.allowFree}
+             env.conEnv k) ks)
+        (setEmpty nameCmp) cons
+    in Data {t with types = mapInsert (nameNoSym "") cons t.types }
+  | ki -> ki
+end
+
+lang AllTypeSym = Sym + AllTypeAst + KindSym
   sem symbolizeType env =
   | TyAll t ->
-    let kind = smap_Kind_Type (symbolizeType env) t.kind in
+    let kind = symbolizeKind t.info env t.kind in
     match setSymbol env.tyVarEnv t.ident with (tyVarEnv, ident) in
     TyAll {t with ident = ident,
                   ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,

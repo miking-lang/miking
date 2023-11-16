@@ -1139,15 +1139,15 @@ lang ConTypePrettyPrint = PrettyPrint + ConTypeAst + UnknownTypeAst + DataTypeAs
     match d with TyUnknown _ then (env, idstr) else
       match getTypeStringCode indent env t.data with (env, datastr) in
       match d with TyData _ then (env, concat idstr datastr) else
-        (env, join [idstr, "&", datastr])
+        (env, join [idstr, "{", datastr, "}"])
 end
 
 lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyData t ->
-    let consstr = strJoin "|" (map nameGetStr (setToSeq t.cons)) in
+    let consstr = strJoin "," (map nameGetStr (setToSeq t.cons)) in
     let datastr =
-      join [if t.positive then "&" else "!", "{", consstr, "}"]
+      join ["{", if t.positive then "" else "!", consstr, "}"]
     in (env, datastr)
 end
 
@@ -1165,9 +1165,9 @@ lang KindPrettyPrint = PrettyPrint + RecordTypeAst + DataTypeAst + KindAst
   | Data r ->
     let consstr =
       mapFoldWithKey (lam strs. lam. lam ks.
-        snoc strs (strJoin "|" (map nameGetStr (setToSeq ks))))
+        snoc strs (strJoin "," (map nameGetStr (setToSeq ks))))
         [] r.types in
-    (env, join ["{", strJoin "|" consstr, "}"])
+    (env, join ["{", strJoin "," consstr, "}"])
   | Poly () -> (env, "Poly")
   | Mono () -> (env, "Mono")
 end

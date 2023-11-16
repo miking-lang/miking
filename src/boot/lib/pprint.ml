@@ -181,7 +181,7 @@ let rec ustring_of_ty = function
       us "Char"
   | TyArrow (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
-  | TyAll (_, var, ty) ->
+  | TyAll (_, var, _, ty) ->
       us "all " ^. pprint_var_str var ^. us ". " ^. ustring_of_ty ty
   | TySeq (_, ty1) -> (
     match ty1 with
