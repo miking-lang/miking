@@ -335,7 +335,7 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
 end
 
-let holeBool_ : Bool -> Int -> Expr =
+let holeBool_ : use Ast in Bool -> Int -> Expr =
   use HoleBoolAst in
   lam default. lam depth.
   TmHole { default = bool_ default
@@ -344,7 +344,7 @@ let holeBool_ : Bool -> Int -> Expr =
          , info = NoInfo ()
          , inner = BoolHole {}}
 
-let holeIntRange_ : Int -> Int -> Int -> Int -> Expr =
+let holeIntRange_ : use Ast in Int -> Int -> Int -> Int -> Expr =
   use HoleIntRangeAst in
   lam default. lam depth. lam min. lam max.
   TmHole { default = int_ default

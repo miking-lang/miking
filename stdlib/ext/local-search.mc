@@ -387,6 +387,9 @@ end
 
 mexpr
 
+type SearchState = use LocalSearchBase in SearchState in
+type MetaState = use LocalSearchBase in MetaState in
+
 let debug = false in
 
 let nIters = lam n. lam state : SearchState.

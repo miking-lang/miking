@@ -1379,7 +1379,8 @@ let printCompiledCProg = use CProgPrettyPrint in
 lang Test =
   MExprCCompileAlloc + MExprPrettyPrint + MExprTypeCheck +
   MExprRemoveTypeAscription + MExprANF + MExprSym + BootParser +
-  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift
+  MExprTypeLift + SeqTypeNoStringTypeLift + TensorTypeTypeLift +
+  CProgAst
 end
 
 mexpr
