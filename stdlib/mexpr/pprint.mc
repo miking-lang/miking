@@ -1145,9 +1145,12 @@ end
 lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyData t ->
-    let consstr = strJoin "," (map nameGetStr (setToSeq t.cons)) in
+    let consstr =
+      mapFoldWithKey (lam strs. lam. lam ks.
+        snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
+        [] (computeData t) in
     let datastr =
-      join ["{", if t.positive then "" else "!", consstr, "}"]
+      join ["{", strJoin ", " consstr, "}"]
     in (env, datastr)
 end
 
@@ -1165,9 +1168,9 @@ lang KindPrettyPrint = PrettyPrint + RecordTypeAst + DataTypeAst + KindAst
   | Data r ->
     let consstr =
       mapFoldWithKey (lam strs. lam. lam ks.
-        snoc strs (strJoin "," (map nameGetStr (setToSeq ks))))
+        snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
         [] r.types in
-    (env, join ["{", strJoin "," consstr, "}"])
+    (env, join ["{", strJoin ", " consstr, "}"])
   | Poly () -> (env, "Poly")
   | Mono () -> (env, "Mono")
 end

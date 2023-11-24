@@ -79,8 +79,9 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
   | (TyMetaVar l, TyMetaVar r) ->
     -- NOTE(vipa, 2023-04-19): Any non-link TyMetaVar should have been
     -- unwrapped already, thus we can assume `Unbound` here.
-    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
-    nameCmp l.ident r.ident
+    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) then
+      nameCmp l.ident r.ident
+    else error "cmpTypeH reached non-unwrapped MetaVar!"
 end
 
 lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarTypeAst
@@ -108,11 +109,12 @@ lang MetaVarTypeEq = KindEq + MetaVarTypeAst
   | TyMetaVar _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
     case (TyMetaVar l, TyMetaVar r) then
-      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
-      optionBind
-        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        (lam freeTyFlex.
-          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
+      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) then
+        optionBind
+          (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
+          (lam freeTyFlex.
+            eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
+      else error "Unwrapped MetaVar was not Unbound!"
     case (! TyMetaVar _, ! TyMetaVar _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()

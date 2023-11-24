@@ -198,6 +198,8 @@ lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + R
 
   -- unifyMeta unifies a metavariable with a given type, in a side-effecting way.
   sem unifyMeta : Unifier () -> TCEnv -> [Info] -> UnifyEnv -> (Type, Type) -> ()
+  sem unifyMeta u tcenv info env =
+  | _ -> error "Left hand side of unifyMeta input not a TyMetaVar!"
 
   -- unifyCheck is called before a variable `tv' is unified with another type.
   -- Performs multiple tasks in one traversal:
@@ -354,44 +356,46 @@ lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordType
 
   sem unifyMeta u tcenv info env =
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
-    match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) in
-    if not (nameEq r1.ident r2.ident) then
-      unifyCheck tcenv info r1 ty2;
-      unifyCheck tcenv info r2 ty1;
-      let updated =
-        Unbound {r1 with level = mini r1.level r2.level,
-                         kind  = addKinds u env (r1.kind, r2.kind)} in
-      modref t1.contents updated;
-      modref t2.contents (Link ty1)
-    else ()
+    match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) then
+      if not (nameEq r1.ident r2.ident) then
+        unifyCheck tcenv info r1 ty2;
+        unifyCheck tcenv info r2 ty1;
+        let updated =
+          Unbound {r1 with level = mini r1.level r2.level,
+                           kind  = addKinds u env (r1.kind, r2.kind)} in
+        modref t1.contents updated;
+        modref t2.contents (Link ty1)
+      else ()
+    else error "unifyMeta reached non-unwrapped MetaVar!"
   | (TyMetaVar t1 & ty1, !TyMetaVar _ & ty2) ->
-    match deref t1.contents with Unbound tv in
-    unifyCheck tcenv info tv ty2;
-    (match ty2 with TyVar {ident = n} then
-       let kind = optionMapOr (Poly ()) (lam x. x.1) (mapLookup n tcenv.tyVarEnv) in
-       switch (tv.kind, kind)
-       case (Record r1, Record r2) then unifyRecordsSubset u env r1.fields r2.fields
-       case (Data r1, Data r2) then
-         if mapAllWithKey (lam t. lam ks1.
-           optionMapOr false (setSubset ks1) (mapLookup t r2.types)) r1.types
-         then ()
-         else u.err (Kinds (tv.kind, kind))
-       case (Record _ | Data _, _) then u.err (Kinds (tv.kind, kind))
-       case _ then ()
-       end
-     else
-       switch (tv.kind, ty2)
-       case (Record r1, TyRecord r2) then unifyRecordsSubset u env r1.fields r2.fields
-       case (Data r1, TyData r2) then
-         let data = computeData r2 in
-         if mapAllWithKey (lam t. lam ks1.
-           optionMapOr false (setSubset ks1) (mapLookup t data)) r1.types
-         then ()
-         else u.err (Types (ty1, ty2))
-       case (Record _ | Data _, _) then u.err (Types (ty1, ty2))
-       case _ then ()
-       end);
-    modref t1.contents (Link env.wrappedRhs)
+    match deref t1.contents with Unbound tv then
+      unifyCheck tcenv info tv ty2;
+      (match ty2 with TyVar {ident = n} then
+        let kind = optionMapOr (Poly ()) (lam x. x.1) (mapLookup n tcenv.tyVarEnv) in
+        switch (tv.kind, kind)
+        case (Record r1, Record r2) then unifyRecordsSubset u env r1.fields r2.fields
+        case (Data r1, Data r2) then
+          if mapAllWithKey (lam t. lam ks1.
+            optionMapOr false (setSubset ks1) (mapLookup t r2.types)) r1.types
+          then ()
+          else u.err (Kinds (tv.kind, kind))
+        case (Record _ | Data _, _) then u.err (Kinds (tv.kind, kind))
+        case _ then ()
+        end
+       else
+        switch (tv.kind, ty2)
+        case (Record r1, TyRecord r2) then unifyRecordsSubset u env r1.fields r2.fields
+        case (Data r1, TyData r2) then
+          let data = computeData r2 in
+          if mapAllWithKey (lam t. lam ks1.
+            optionMapOr false (setSubset ks1) (mapLookup t data)) r1.types
+          then ()
+          else u.err (Types (ty1, ty2))
+        case (Record _ | Data _, _) then u.err (Types (ty1, ty2))
+        case _ then ()
+        end);
+      modref t1.contents (Link env.wrappedRhs)
+    else error "unifyMeta reached non-unwrapped MetaVar!"
 
   sem unifyCheckBase env info boundVars tv =
   | TyMetaVar t ->
@@ -780,9 +784,10 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
         match getTypeArgs ty with (TyCon t, args) then
           match unwrapType t.data with TyMetaVar r then
             match deref r.contents with Unbound u then
+              let universe = _computeUniverse env t.ident in
               let u1 =
-                if inferFull then _computeUniverse env t.ident
-                else mapEmpty nameCmp in
+                if inferFull then universe
+                else mapRemove t.ident universe in
               let u2 =
                 match u.kind with Data d then d.types
                 else mapEmpty nameCmp in
@@ -1240,12 +1245,16 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let tyIdent = resolveType t.info env false t.tyIdent in
     let tyIdent = substituteNewReprs env tyIdent in
     match _makeConstructorType t.info t.ident tyIdent with (target, tydeps, tyIdent) in
+    let tydeps =
+      mapInsert target tydeps
+        (setFold (lam m. lam t. mapInsert t (setOfSeq nameCmp [target]) m)
+           (mapEmpty nameCmp) tydeps) in
     let newLvl = addi 1 env.currentLvl in
     let inexpr =
       typeCheckExpr
         {env with currentLvl = newLvl,
                   conEnv = mapInsert t.ident (newLvl, tyIdent) env.conEnv,
-                  typeDeps = mapInsertWith setUnion target tydeps env.typeDeps,
+                  typeDeps = mapUnionWith setUnion tydeps env.typeDeps,
                   conDeps  = mapInsertWith setUnion target
                                (setOfSeq nameCmp [t.ident]) env.conDeps}
         t.inexpr
