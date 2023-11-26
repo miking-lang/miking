@@ -53,6 +53,15 @@ lang Cmp = Ast
       errorMulti [(infoTy lhs, ""), (infoTy rhs, "")]
         "Missing case in cmpTypeH for types with equal indices."
     else res
+
+  sem cmpKind =
+  -- Default case when kinds are not the same
+  | (lhs, rhs) /- (Kind, Kind) -/ ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      errorSingle []
+        "Missing case in cmpKind for types with equal indices."
+    else res
 end
 
 -----------
@@ -423,17 +432,7 @@ lang VarTypeCmp = Cmp + VarTypeAst
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
 end
 
-lang KindCmp = Cmp + KindAst
-  sem cmpKind =
-  | (Record l, Record r) ->
-    mapCmp cmpType l.fields r.fields
-  | (Data l, Data r) ->
-    mapCmp setCmp l.types r.types
-  | (lhs, rhs) ->
-    subi (constructorTag lhs) (constructorTag rhs)
-end
-
-lang AllTypeCmp = KindCmp + AllTypeAst
+lang AllTypeCmp = Cmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
@@ -486,6 +485,18 @@ lang ReprSubstCmp = Cmp + ReprSubstAst
     if neqi 0 res then res else
     cmpType l.arg r.arg
 end
+lang RecordKindCmp = Cmp + RecordKindAst
+  sem cmpKind =
+  | (Record l, Record r) ->
+    mapCmp cmpType l.fields r.fields
+end
+
+lang DataKindCmp = Cmp + DataKindAst
+  sem cmpKind =
+  | (Data l, Data r) ->
+    mapCmp setCmp l.types r.types
+end
+
 
 --------------------
 -- MEXPR FRAGMENT --
@@ -507,7 +518,10 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+  ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
+
+  -- Kinds
+  RecordKindCmp + DataKindCmp
 end
 
 lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp

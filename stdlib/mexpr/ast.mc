@@ -20,6 +20,9 @@ lang Ast
   syn Type =
   -- Intentionally left blank
 
+  syn Kind =
+  -- Intentionally left blank
+
   syn Pat =
   -- Intentionally left blank
 
@@ -173,6 +176,20 @@ lang Ast
   -- Unwrap links and aliases to expose the underlying type
   sem unwrapType : Type -> Type
   sem unwrapType = | ty -> rapp_Type_Type unwrapType ty
+
+  sem smapAccumL_Kind_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Kind -> (acc, Kind)
+  sem smapAccumL_Kind_Type f acc =
+  | s -> (acc, s)
+
+  sem smap_Kind_Type : (Type -> Type) -> Kind -> Kind
+  sem smap_Kind_Type (f : Type -> Type) =
+  | s ->
+    match smapAccumL_Kind_Type (lam. lam x. ((), f x)) () s with (_, s) in s
+
+  sem sfold_Kind_Type : all acc. (acc -> Type -> acc) -> acc -> Kind -> acc
+  sem sfold_Kind_Type (f : acc -> Type -> acc) (acc : acc) =
+  | s ->
+    match smapAccumL_Kind_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 
   sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
@@ -1453,33 +1470,7 @@ lang VarTypeAst = Ast
   | TyVar t -> t.info
 end
 
-lang KindAst = Ast
-  syn Kind =
-  | Poly ()
-  | Mono ()
-  | Record {fields : Map SID Type}
-  | Data   {types  : Map Name (Set Name)}
-
-  sem smapAccumL_Kind_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Kind -> (acc, Kind)
-  sem smapAccumL_Kind_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | Record r ->
-    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
-    (acc, Record {r with fields = flds})
-  | s ->
-    (acc, s)
-
-  sem smap_Kind_Type : (Type -> Type) -> Kind -> Kind
-  sem smap_Kind_Type (f : Type -> Type) =
-  | s ->
-    match smapAccumL_Kind_Type (lam. lam x. ((), f x)) () s with (_, s) in s
-
-  sem sfold_Kind_Type : all acc. (acc -> Type -> acc) -> acc -> Kind -> acc
-  sem sfold_Kind_Type (f : acc -> Type -> acc) (acc : acc) =
-  | s ->
-    match smapAccumL_Kind_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
-end
-
-lang AllTypeAst = KindAst + Ast
+lang AllTypeAst = Ast
   syn Type =
   | TyAll {info  : Info,
            ident : Name,
@@ -1560,6 +1551,32 @@ lang AliasTypeAst = AllTypeAst
     end
 end
 
+lang PolyKindAst = Ast
+  syn Kind =
+  | Poly ()
+end
+
+lang MonoKindAst = Ast
+  syn Kind =
+  | Mono ()
+end
+
+lang RecordKindAst = Ast
+  syn Kind =
+  | Record {fields : Map SID Type}
+
+  sem smapAccumL_Kind_Type f acc =
+  | Record r ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc r.fields with (acc, flds) in
+    (acc, Record {r with fields = flds})
+end
+
+lang DataKindAst = Ast
+  syn Kind =
+  | Data {types  : Map Name (Bool, Set Name)}
+end
+
+
 ------------------------
 -- MEXPR AST FRAGMENT --
 ------------------------
@@ -1585,5 +1602,8 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
+  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst +
+
+  -- Kinds
+  PolyKindAst + MonoKindAst + RecordKindAst + DataKindAst
 end

@@ -120,11 +120,11 @@ let nstyall_ = use AllTypeAst in
 
 let styall_ = lam s. nstyall_ (nameNoSym s)
 
-let ntyall_ : Name -> use Ast in Type -> Type  = use KindAst in
+let ntyall_ : Name -> use Ast in Type -> Type  = use PolyKindAst in
   lam n.
   nstyall_ n (Poly ())
 
-let tyall_ = use KindAst in
+let tyall_ = use PolyKindAst in
   lam s.
   styall_ s (Poly ())
 

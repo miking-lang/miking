@@ -15,7 +15,7 @@ type Level = Int
 
 -- Unification meta variables.  These variables represent some
 -- specific but as-of-yet undetermined type.
-lang MetaVarTypeAst = KindAst + Ast
+lang MetaVarTypeAst = Ast
   type MetaVarRec = {ident  : Name,
                      level  : Level,
     -- The level indicates at what depth of let-binding the variable
@@ -132,11 +132,11 @@ let newnmetavar =
    }
 let newmetavar = newnmetavar "a"
 
-let newmonovar = use KindAst in
+let newmonovar = use MonoKindAst in
   newmetavar (Mono ())
-let newpolyvar = use KindAst in
+let newpolyvar = use PolyKindAst in
   newmetavar (Poly ())
-let newrecvar = use KindAst in
+let newrecvar = use RecordKindAst in
   lam fields. newmetavar (Record {fields = fields})
 
 let newvar = newpolyvar

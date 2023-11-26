@@ -121,6 +121,11 @@ lang Eq
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   -- Intentionally left blank
 
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (lhs, rhs) ->
+    if eqi (constructorTag lhs) (constructorTag rhs) then Some free
+    else None ()
+
   sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
@@ -656,25 +661,6 @@ lang VarTypeEq = Eq + VarTypeAst
     else None ()
 end
 
-lang KindEq = Eq + KindAst
-  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
-  | (Record l, Record r) ->
-      if eqi (mapSize l.fields) (mapSize r.fields) then
-        mapFoldlOption
-          (lam free. lam k1. lam v1.
-            match mapLookup k1 r.fields with Some v2 then
-              eqTypeH typeEnv free v1 v2
-            else None ())
-          free l.fields
-      else None ()
-  | (Data l, Data r) ->
-    if mapEq setEq l.types r.types then Some free
-    else None ()
-  | (lhs, rhs) ->
-    if eqi (constructorTag lhs) (constructorTag rhs) then Some free
-    else None ()
-end
-
 lang AllTypeEq = KindEq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
@@ -702,6 +688,27 @@ lang AliasTypeEq = Eq + AliasTypeAst
   | TyAlias t -> eqTypeH typeEnv free lhs t.content
 end
 
+lang RecordKindEq = Eq + RecordKindAst
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (Record l, Record r) ->
+      if eqi (mapSize l.fields) (mapSize r.fields) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.fields with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.fields
+      else None ()
+end
+
+lang DataKindEq = Eq + DataKindAst
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (Data l, Data r) ->
+    if mapEq setEq l.types r.types then Some free
+    else None ()
+end
+
+
 -----------------------------
 -- MEXPR ALPHA EQUIVALENCE --
 -----------------------------
@@ -724,7 +731,10 @@ lang MExprEq =
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + DataTypeEq +
-  VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
+  VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq +
+
+  -- Kinds
+  RecordKindEq + DataKindEq
 end
 
 -----------

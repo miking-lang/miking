@@ -135,6 +135,10 @@ lang Sym = Ast + SymLookup
     let t = symbolizeExpr env t in
     addTopNames env t
 
+  sem symbolizeKind : SymEnv -> Kind -> Kind
+  sem symbolizeKind env =
+  | t -> smap_Kind_Type (symbolizeType env) t
+
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader
   -- monad or something. patEnv on the other hand changes, it would be
@@ -417,32 +421,30 @@ lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
     TyVar {t with ident = ident}
 end
 
-lang KindSym = Sym + KindAst
-  sem symbolizeKind : Info -> SymEnv -> Kind -> Kind
-  sem symbolizeKind info env =
-  | Record _ & kind -> smap_Kind_Type (symbolizeType env) kind
+lang AllTypeSym = Sym + AllTypeAst
+  sem symbolizeType env =
+  | TyAll t ->
+    let kind = symbolizeKind env t.kind in
+    match setSymbol env.tyVarEnv t.ident with (tyVarEnv, ident) in
+    TyAll {t with ident = ident,
+                  ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,
+                  kind = kind}
+end
+
+lang DataKindSym = Sym + DataKindAst
+  sem symbolizeKind : SymEnv -> Kind -> Kind
+  sem symbolizeKind env =
   | Data t ->
     let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") t.types in
     let cons =
       setFold (lam ks. lam k.
         setInsert
           (getSymbol {kind = "constructor",
-                      info = [info],
+                      info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
                       allowFree = env.allowFree}
              env.conEnv k) ks)
         (setEmpty nameCmp) cons
-    in Data {t with types = mapInsert (nameNoSym "") cons t.types }
-  | ki -> ki
-end
-
-lang AllTypeSym = Sym + AllTypeAst + KindSym
-  sem symbolizeType env =
-  | TyAll t ->
-    let kind = symbolizeKind t.info env t.kind in
-    match setSymbol env.tyVarEnv t.ident with (tyVarEnv, ident) in
-    TyAll {t with ident = ident,
-                  ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,
-                  kind = kind}
+    in Data {t with types = mapInsert (nameNoSym "") cons t.types}
 end
 
 lang ReprSubstSym = Sym + ReprSubstAst
@@ -533,6 +535,9 @@ lang MExprSym =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + TensorTypeAst + RecordTypeAst + AppTypeAst +
 
+  -- Default implementations (Kinds)
+  PolyKindAst + MonoKindAst + RecordKindAst +
+
   -- Default implementations (Patterns)
   SeqTotPat + RecordPat + IntPat + CharPat + BoolPat + AndPat + OrPat +
 
@@ -542,6 +547,9 @@ lang MExprSym =
 
   -- Non-default implementations (Types)
   VariantTypeSym + ConTypeSym + DataTypeSym + VarTypeSym + AllTypeSym +
+
+  -- Non-default implementations (Kinds)
+  DataKindSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym

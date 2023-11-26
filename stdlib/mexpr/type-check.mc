@@ -83,21 +83,13 @@ let typcheckEnvEmpty = {
 
 let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
   = lam env. lam tys.
-  use DataTypeAst in
-  { env with
-    tyConEnv =
-      foldl
-        (lam env. lam t.
-        let vars = map nameSym t.1 in
-        let ident = nameSym t.0 in
-        let data = TyData { info = NoInfo ()
-                          , universe = mapEmpty nameCmp
-                          , positive = false
-                          , cons = setEmpty nameCmp } in
-        let tycon = nsitycon_ ident data (NoInfo ()) in
-        mapInsert (nameNoSym t.0) (0, vars, tyapps_ tycon (map ntyvar_ vars))
-          (mapInsert ident (0, vars, tyvariant_ []) env))
-        env.tyConEnv tys }
+    use DataTypeAst in
+    { env with
+      tyConEnv =
+        foldl
+          (lam env. lam t.
+            mapInsert (nameNoSym t.0) (0, map nameSym t.1, tyvariant_ []) env)
+          env.tyConEnv tys }
 
 let typcheckEnvDefault =
   typecheckEnvAddBuiltinTypes typcheckEnvEmpty builtinTypes
@@ -175,7 +167,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + RepTypesHelpers
+lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + RepTypesHelpers
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -220,6 +212,11 @@ lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + R
   | ty ->
     sfold_Type_Type (lam. lam ty. unifyCheckType env info boundVars tv ty) () ty
 
+  sem unifyCheckKind : TCEnv -> [Info] -> Set Name -> MetaVarRec -> Kind -> ()
+  sem unifyCheckKind env info boundVars tv =
+  | ki ->
+    sfold_Kind_Type (lam. lam ty. unifyCheckType env info boundVars tv ty) () ki
+
   sem pprintUnifyError : PprintEnv -> UnifyError -> (PprintEnv, String)
   sem pprintUnifyError env =
   | Types (l, r) ->
@@ -256,27 +253,28 @@ lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + R
         case _ then sfold_Type_Type collectAliasesAndKinds acc ty
         end
     in
-    let aks =
+    let res =
       collectAliasesAndKinds
-        {aliases = mapEmpty cmpType, kinds = mapEmpty nameCmp} expectedType in
-    let aks = collectAliasesAndKinds aks foundType in
+        { aliases = mapEmpty cmpType
+        , kinds = mapEmpty nameCmp } expectedType in
+    let res = collectAliasesAndKinds res foundType in
     match
-      if mapIsEmpty aks.kinds then (pprintEnv, "") else
+      if mapIsEmpty res.kinds then (pprintEnv, "") else
         let f = lam env. lam pair.
           match pprintVarName env pair.0 with (env, l) in
           match getKindStringCode 0 env pair.1 with (env, r) in
           (env, join ["\n*   _", l, " :: ", r]) in
-        match mapAccumL f pprintEnv (mapBindings aks.kinds) with (pprintEnv, kinds) in
-        (pprintEnv, join ["* where", join kinds, "\n"])
+        match mapAccumL f pprintEnv (mapBindings res.kinds) with (pprintEnv, kinds) in
+        (pprintEnv, join [join kinds, "\n"])
     with (pprintEnv, kinds) in
     match
-      if mapIsEmpty aks.aliases then (pprintEnv, "") else
+      if mapIsEmpty res.aliases then (pprintEnv, "") else
         let f = lam env. lam pair.
           match getTypeStringCode 0 env pair.0 with (env, l) in
           match getTypeStringCode 0 env pair.1 with (env, r) in
           (env, join ["\n*   ", l, " = ", r]) in
-        match mapAccumL f pprintEnv (mapBindings aks.aliases) with (pprintEnv, aliases) in
-        (pprintEnv, join ["* where", join aliases, "\n"])
+        match mapAccumL f pprintEnv (mapBindings res.aliases) with (pprintEnv, aliases) in
+        (pprintEnv, join [join aliases, "\n"])
     with (pprintEnv, aliases) in
     match mapAccumL pprintUnifyError pprintEnv errors with (pprintEnv, errors) in
     let msg = join [
@@ -284,6 +282,7 @@ lang TCUnify = Unify + AliasTypeAst + KindPrettyPrint + Cmp + MetaVarTypeCmp + R
       expected, "\n",
       "*    Found an expression of type: ",
       found, "\n",
+      if and (null kinds) (null aliases) then "" else "* where",
       kinds,
       aliases,
       "* (errors: ", strJoin ", " errors, ")\n",
@@ -308,7 +307,7 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
     else ()
 end
 
-lang DataTypeTCUnify = TCUnify + DataTypeAst + KindAst
+lang DataTypeTCUnify = TCUnify + DataTypeAst
   sem unifyCheckData
     :  Map Name (Level, Type)
     -> Map Name (Level, [Name], Type)
@@ -338,21 +337,20 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + KindAst
   sem unifyCheckBase env info boundVars tv =
   | TyData t ->
     unifyCheckData env.conEnv env.tyConEnv info tv (computeData t)
+
+  sem unifyCheckKind env info boundVars tv =
+  | Data t ->
+    unifyCheckData env.conEnv env.tyConEnv info tv t.types
 end
 
-lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordTypeAst + VarTypeAst + DataTypeTCUnify
-  sem addKinds : Unifier () -> UnifyEnv -> (Kind, Kind) -> Kind
-  sem addKinds u env =
-  | (Record r1, Record r2) ->
-    match unifyRecordsUnion u env r1.fields r2.fields with (_, fields) in
-    Record {r1 with fields = fields}
-  | (Data r1, Data r2) ->
-    Data {r1 with types = mapUnionWith setUnion r1.types r2.types}
-  | (Mono _ | Poly _, k & !(Mono _ | Poly _)) -> k
-  | (!(Mono _ | Poly _) & k, Mono _ | Poly _) -> k
-  | (Poly _, k & (Poly _ | Mono _)) -> k
-  | (Mono _, Poly _ | Mono _) -> Mono ()
-  | (k1, k2) -> u.err (Kinds (k1, k2)); error "impossible"
+lang MetaVarTypeTCUnify = DataTypeTCUnify + MetaVarTypeUnify + RecordTypeAst + VarTypeAst
+  sem getKind : TCEnv -> Type -> Kind
+  sem getKind env =
+  | TyVar {ident = n} ->
+    optionMapOr (Poly ()) (lam x. x.1) (mapLookup n env.tyVarEnv)
+  | TyRecord r -> Record { fields = r.fields }
+  | TyData r -> Data { types = computeData r }
+  | _ -> Poly ()
 
   sem unifyMeta u tcenv info env =
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
@@ -370,30 +368,7 @@ lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordType
   | (TyMetaVar t1 & ty1, !TyMetaVar _ & ty2) ->
     match deref t1.contents with Unbound tv then
       unifyCheck tcenv info tv ty2;
-      (match ty2 with TyVar {ident = n} then
-        let kind = optionMapOr (Poly ()) (lam x. x.1) (mapLookup n tcenv.tyVarEnv) in
-        switch (tv.kind, kind)
-        case (Record r1, Record r2) then unifyRecordsSubset u env r1.fields r2.fields
-        case (Data r1, Data r2) then
-          if mapAllWithKey (lam t. lam ks1.
-            optionMapOr false (setSubset ks1) (mapLookup t r2.types)) r1.types
-          then ()
-          else u.err (Kinds (tv.kind, kind))
-        case (Record _ | Data _, _) then u.err (Kinds (tv.kind, kind))
-        case _ then ()
-        end
-       else
-        switch (tv.kind, ty2)
-        case (Record r1, TyRecord r2) then unifyRecordsSubset u env r1.fields r2.fields
-        case (Data r1, TyData r2) then
-          let data = computeData r2 in
-          if mapAllWithKey (lam t. lam ks1.
-            optionMapOr false (setSubset ks1) (mapLookup t data)) r1.types
-          then ()
-          else u.err (Types (ty1, ty2))
-        case (Record _ | Data _, _) then u.err (Types (ty1, ty2))
-        case _ then ()
-        end);
+      unifyKinds u env (getKind tcenv ty2, tv.kind);
       modref t1.contents (Link env.wrappedRhs)
     else error "unifyMeta reached non-unwrapped MetaVar!"
 
@@ -410,13 +385,7 @@ lang MetaVarTypeTCUnify = TCUnify + MetaVarTypeUnify + UnifyRecords + RecordType
     else
       let kind =
         match (tv.kind, r.kind) with (Mono _, Poly _) then Mono ()
-        else
-          (match r.kind with Data d then
-             unifyCheckData env.conEnv env.tyConEnv info tv d.types
-           else
-             sfold_Kind_Type
-               (lam. lam ty. unifyCheckType env info boundVars tv ty) () r.kind);
-          r.kind
+        else unifyCheckKind env info boundVars tv r.kind; r.kind
       in
       let updated = Unbound {r with level = mini r.level tv.level,
                                     kind  = kind} in
@@ -434,7 +403,7 @@ lang AllTypeTCUnify = TCUnify + AllTypeAst
       ] in
       errorSingle info msg
     else
-      sfold_Kind_Type (lam. lam ty. unifyCheckType env info boundVars tv ty) () t.kind;
+      unifyCheckKind env info boundVars tv t.kind;
       unifyCheckType env info (setInsert t.ident boundVars) tv t.ty
 end
 
@@ -656,7 +625,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     smap_Type_Type (resolveType info env closeDatas) ty
 end
 
-lang SubstituteUnknown = UnknownTypeAst + KindAst + AliasTypeAst
+lang SubstituteUnknown = UnknownTypeAst + AliasTypeAst
   sem substituteUnknown (kind : Kind) (lvl : Level) (info : Info) =
   | TyUnknown _ ->
     newmetavar kind lvl info
@@ -1499,8 +1468,8 @@ lang MExprTypeCheckMost =
   -- Value restriction
   MExprIsValue +
 
-  -- Pretty Printing
-  MetaVarTypePrettyPrint
+  -- Meta variable handling
+  MetaVarTypeCmp + MetaVarTypeEq + MetaVarTypePrettyPrint
 end
 
 lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar
@@ -1657,7 +1626,7 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
     in work "" (escapeContent str)
 end
 
-lang TestLang = MExprTypeCheck + MExprEq + MetaVarTypeEq + MExprPrettyPrint
+lang TestLang = MExprTypeCheck + MExprEq + MExprPrettyPrint
   sem unwrapTypes =
   | ty ->
     smap_Type_Type unwrapTypes (unwrapType ty)
