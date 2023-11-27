@@ -339,20 +339,29 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
 
   sem unifyCheckKind env info boundVars tv =
   | Data t ->
-    unifyCheckData env.conEnv env.tyConEnv info tv t.types
+    unifyCheckData env.conEnv env.tyConEnv info tv (mapMap (lam ks. ks.cons) t.types)
 end
 
-lang MetaVarTypeTCUnify =
-  TCUnify + MetaVarTypeUnify + VarTypeAst + RecordTypeAst + DataTypeAst +
-  MonoKindAst + PolyKindAst + RecordKindAst + DataKindAst
+lang GetKind =
+  VarTypeAst + MetaVarTypeAst + RecordTypeAst + DataTypeAst +
+  PolyKindAst + RecordKindAst + DataKindAst
 
   sem getKind : TCEnv -> Type -> Kind
   sem getKind env =
   | TyVar {ident = n} ->
     optionMapOr (Poly ()) (lam x. x.1) (mapLookup n env.tyVarEnv)
+  | TyMetaVar t ->
+    match deref t.contents with Unbound r then r.kind
+    else error "Non-unwrapped TyMetaVar in getKind!"
   | TyRecord r -> Record { fields = r.fields }
-  | TyData r -> Data { types = computeData r }
+  | TyData r -> Data { types =
+                         mapMap (lam cons. {covariant = true, cons = cons})
+                                (computeData r) }
   | _ -> Poly ()
+end
+
+lang MetaVarTypeTCUnify =
+  TCUnify + MetaVarTypeUnify + PolyKindAst + MonoKindAst + GetKind
 
   sem unifyMeta u tcenv info env =
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
@@ -586,7 +595,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
                                 , universe = universe
                                 , positive = false
                                 , cons = setEmpty nameCmp } in
-              mkTypeApp (TyCon {t with data = data }) args
+              mkTypeApp (TyCon {t with data = data}) args
             else mkTypeApp conTy args
           case _ then
             mkTypeApp conTy args
@@ -722,7 +731,8 @@ end
 
 lang HasMatches =
   TCUnify + NormPatMatch + ConNormPat + ConTypeAst +
-  DataTypeAst + DataKindAst + AppTypeUtils + Generalize
+  DataTypeAst + DataKindAst + AppTypeUtils + Generalize +
+  GetKind
 
   -- Perform an exhaustiveness check for the given pattern and type.
   sem normpatHasMatches : TCEnv -> (Type, NormPat) -> Bool
@@ -735,9 +745,10 @@ lang HasMatches =
   | (ty, SNPat p) -> snpatHasMatches env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
-      match unwrapType t.data with TyData d then
-        match mapLookup t.ident (computeData d) with Some ks in
-        any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
+      match getKind env (unwrapType t.data) with Data d then
+        match mapLookup t.ident d with Some {covariant = v, cons = ks} in
+        if v then any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
+        else true
       else true
     else true
 

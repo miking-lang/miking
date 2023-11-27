@@ -231,14 +231,31 @@ end
 lang DataKindUnify = Unify + DataKindAst
   sem unifyKinds u env =
   | (Data r1, Data r2) ->
-    if mapAllWithKey (lam t. lam ks2.
-      optionMapOr false (setSubset ks2) (mapLookup t r1.types)) r2.types
+    if mapAllWithKey
+         (lam t. lam ks2.
+           optionMapOr false
+             (lam ks1.
+               if ks2.covariant
+               then and ks1.covariant (setSubset ks1.cons ks2.cons)
+               else and (not ks1.covariant) (setSubset ks2.cons ks1.cons))
+             (mapLookup t r1.types))
+         r2.types
     then u.empty
     else u.err (Kinds (Data r1, Data r2))
 
   sem addKinds u env =
   | (Data r1, Data r2) ->
-    (u.empty, Data {r1 with types = mapUnionWith setUnion r1.types r2.types})
+    match
+      mapMapAccum
+        (lam acc. lam t. lam ks1.
+          match mapLookup t r2.types with Some ks2 then
+            if xor ks1.covariant ks2.covariant
+            then (u.err (Kinds (Data r1, Data r2)), ks1)
+            else (acc, {ks1 with cons = setUnion ks1.cons ks2.cons})
+          else (acc, ks1))
+        u.empty r1.types
+    with (acc, types)
+    in (acc, Data {r1 with types = types})
 end
 
 lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute

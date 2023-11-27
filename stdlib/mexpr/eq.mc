@@ -704,7 +704,11 @@ end
 lang DataKindEq = Eq + DataKindAst
   sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
   | (Data l, Data r) ->
-    if mapEq setEq l.types r.types then Some free
+    let recEq = lam r1. lam r2.
+      if xor r1.covariant r2.covariant then false
+      else setEq r1.cons r2.cons
+    in
+    if mapEq recEq l.types r.types then Some free
     else None ()
 end
 

@@ -1318,8 +1318,10 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
   sem getKindStringCode (indent : Int) (env : PprintEnv) =
   | Data r ->
     let consstr =
-      mapFoldWithKey (lam strs. lam. lam ks.
-        snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
+      mapFoldWithKey (lam strs. lam t. lam ks.
+        let variance = if ks.covariant then "+" else "-" in
+        let consstr = strJoin ", " (map nameGetStr (setToSeq ks.cons)) in
+        snoc strs (join [variance, nameGetStr t, "{", consstr, "}"]))
         [] r.types in
     (env, join ["{", strJoin ", " consstr, "}"])
 end

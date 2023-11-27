@@ -435,16 +435,31 @@ lang DataKindSym = Sym + DataKindAst
   sem symbolizeKind : SymEnv -> Kind -> Kind
   sem symbolizeKind env =
   | Data t ->
-    let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") t.types in
-    let cons =
-      setFold (lam ks. lam k.
-        setInsert
-          (getSymbol {kind = "constructor",
-                      info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
-                      allowFree = env.allowFree}
-             env.conEnv k) ks)
-        (setEmpty nameCmp) cons
-    in Data {t with types = mapInsert (nameNoSym "") cons t.types}
+    let types =
+      foldl
+        (lam m. lam b.
+          match b with (t, r) in
+          let t = getSymbol {kind = "type constructor",
+                             info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
+                             allowFree = env.allowFree}
+                    env.tyConEnv t
+          in
+          let cons =
+            setFold
+              (lam ks. lam k.
+                setInsert
+                  (getSymbol {kind = "constructor",
+                              info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
+                              allowFree = env.allowFree}
+                     env.conEnv k) ks)
+              (setEmpty nameCmp)
+              r.cons
+          in
+          mapInsert t {r with cons = cons} m)
+        (mapEmpty nameCmp)
+        (mapBindings t.types)
+    in
+    Data {t with types = types}
 end
 
 lang ReprSubstSym = Sym + ReprSubstAst

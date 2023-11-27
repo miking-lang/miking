@@ -494,7 +494,12 @@ end
 lang DataKindCmp = Cmp + DataKindAst
   sem cmpKind =
   | (Data l, Data r) ->
-    mapCmp setCmp l.types r.types
+    let recCmp = lam r1. lam r2.
+      let lhsDiff = subi (if r1.covariant then 1 else 0) (if r2.covariant then 1 else 0) in
+      if eqi lhsDiff 0 then setCmp r1.cons r2.cons
+      else lhsDiff
+    in
+    mapCmp recCmp l.types r.types
 end
 
 
