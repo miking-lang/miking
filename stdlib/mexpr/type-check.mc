@@ -699,8 +699,7 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
     dprint tm; print "\n"; error ""
 end
 
-lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
-  + ConTypeAst + DataTypeAst + DataKindAst + AppTypeGetArgs + Generalize
+lang PatTypeCheck = TCUnify
   -- `typeCheckPat env patEnv pat' type checks `pat' under environment `env'
   -- supposing the variables in `patEnv' have been bound previously in the
   -- pattern.  Returns an updated `patEnv' and the type checked `pat'.
@@ -720,6 +719,11 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
       patEnv pat
     with (patEnv, pat) in
     (patEnv, withTypePat patTy pat)
+end
+
+lang HasMatches =
+  TCUnify + NormPatMatch + ConNormPat + ConTypeAst +
+  DataTypeAst + DataKindAst + AppTypeGetArgs + Generalize
 
   -- Perform an exhaustiveness check for the given pattern and type.
   sem normpatHasMatches : TCEnv -> (Type, NormPat) -> Bool
@@ -776,16 +780,16 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
     in
     find
       (lam m.
-      let inferFull = gti (mapSize m) 1 in
-      mapAllWithKey
-        (lam n. lam p.
-        match mapLookup n env.varEnv with Some ty then
-          let ty = inst (infoTy ty) env.currentLvl ty in
-          let closed = closeType inferFull ty in
-          if normpatHasMatches env (closed, p) then true
-          else unify env [] closed ty; false
-        else
-          error "Should not happen!") m)
+        let inferFull = gti (mapSize m) 1 in
+        mapAllWithKey
+          (lam n. lam p.
+            match mapLookup n env.varEnv with Some ty then
+              let ty = inst (infoTy ty) env.currentLvl ty in
+              let closed = closeType inferFull ty in
+              if normpatHasMatches env (closed, p) then true
+              else unify env [] closed ty; false
+            else
+              error "Should not happen!") m)
       matchedVariables
 end
 
@@ -1279,7 +1283,7 @@ lang UtestTypeCheck = TypeCheck + UtestAst
             , ty = tyTm next}
 end
 
-lang NeverTypeCheck = TypeCheck + NeverAst + PatTypeCheck
+lang NeverTypeCheck = TypeCheck + NeverAst + HasMatches
   sem typeCheckExpr env =
   | TmNever t ->
     switch matchesPossible env
@@ -1338,20 +1342,16 @@ lang NamedPatTypeCheck = PatTypeCheck + NamedPat
       (patEnv, PatNamed {t with ty = newpolyvar env.currentLvl t.info})
 end
 
-lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + SeqNormPat + SeqTypeAst + SubstituteNewReprs
+lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + SubstituteNewReprs
   sem typeCheckPat env patEnv =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
     iter (lam pat. unify env [infoPat pat] elemTy (tyPat pat)) pats;
     (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
-
-  sem snpatHasMatches env =
-  | (TySeq { ty = ty }, NPatSeqTot pats) ->
-    forAll (lam p. npatHasMatches env (ty, p)) pats
 end
 
-lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SeqNormPat + SeqTypeAst + SubstituteNewReprs
+lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SubstituteNewReprs
   sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
     let elemTy = newpolyvar env.currentLvl t.info in
@@ -1368,20 +1368,26 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SeqNormPat + SeqTypeAst +
       else patEnv
     in
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
+end
 
+lang SeqPatHasMatches = HasMatches + SeqTypeAst + SeqNormPat
   sem snpatHasMatches env =
+  | (TySeq { ty = ty }, NPatSeqTot pats) ->
+    forAll (lam p. npatHasMatches env (ty, p)) pats
   | (TySeq { ty = ty }, NPatSeqEdge { prefix = pre, postfix = post }) ->
     forAll (lam p. npatHasMatches env (ty, p)) (concat pre post)
 end
 
-lang RecordPatTypeCheck = PatTypeCheck + RecordPat + RecordNormPat + RecordTypeAst
+lang RecordPatTypeCheck = PatTypeCheck + RecordPat
   sem typeCheckPat env patEnv =
   | PatRecord t ->
     let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
     match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
     let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
+end
 
+lang RecordPatHasMatches = HasMatches + RecordTypeAst + RecordNormPat
   sem snpatHasMatches env =
   | (TyRecord { fields = fields }, NPatRecord pats) ->
     mapAll (lam x. x)
@@ -1389,7 +1395,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat + RecordNormPat + RecordTypeA
          fields pats)
 end
 
-lang DataPatTypeCheck = PatTypeCheck + DataPat + ConNormPat + FunTypeAst + Generalize
+lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
   sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some (_, ty) then
@@ -1404,7 +1410,9 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + ConNormPat + FunTypeAst + Gener
         "* When type checking the pattern\n"
       ] in
       errorSingle [t.info] msg
+end
 
+lang ConPatHasMatches = HasMatches + ConNormPat + FunTypeAst + Generalize
   sem snpatHasMatches env =
   | (ty, NPatCon {ident = c, subpat = p}) ->
     match mapLookup c env.conEnv with Some (_, tycon) then
@@ -1466,7 +1474,7 @@ lang MExprTypeCheckMost =
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
   BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck +
 
-  MExprPatAnalysis +
+  SeqPatHasMatches + RecordPatHasMatches + ConPatHasMatches + MExprPatAnalysis +
 
   -- Value restriction
   MExprIsValue +
