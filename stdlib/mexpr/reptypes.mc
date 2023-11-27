@@ -1,29 +1,3 @@
-/-
-
-NOTE(vipa, 2023-07-03): Known sharp edges in the current
-implementation:
-
-- Operation declarations must be written in an `.mc` file, as a `let`
-  with a non-`Unknown` type annotation, and a body that is exactly
-  `never`.
-  - Operation implementations must be written in an `.imc` file, and
-    will be inserted in the mexpr AST each time an operation
-    declaration is encountered with the same string identifier.
-- Repr declarations must be written in an `.imc` file. *All* repr
-  declarations are inserted right before the first operation
-  declaration encountered in the mexpr AST.
-
-These things roughly mean two things:
-
-- Everything referred to by an op implementation or repr declaration
-  must be declared before the first op declaration.
-- References from op impls to other operations are limited: they must
-  follow the order the operations are declared in the mexpr AST;
-  operations may only reference operations declared strictly *before*
-  themselves.
-
--/
-
 include "ast.mc"
 include "cmp.mc"
 include "keyword-maker.mc"
@@ -1221,7 +1195,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent x in
-      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ")"]);
+      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info, ")"]);
       for_ x.subSols (work (concat indent "  "))
     in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
