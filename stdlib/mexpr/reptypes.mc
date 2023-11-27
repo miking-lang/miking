@@ -897,12 +897,14 @@ type ReprSolverOptions =
   { debugBranchState : Bool
   , debugFinalSolution : Bool
   , debugSolveProcess : Bool
+  , debugSolveTiming : Bool
   }
 
 let defaultReprSolverOptions : ReprSolverOptions =
   { debugBranchState = false
   , debugFinalSolution = false
   , debugSolveProcess = false
+  , debugSolveTiming = false
   }
 
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
@@ -918,8 +920,11 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , nextId = 0
       , options = options
       } in
+    let preCollect = wallTimeMs () in
     match collectForReprSolve global initState tm with (state, tm) in
+    let postCollect = wallTimeMs () in
     let pickedSolutions = topSolve global state.opUses in
+    let postTopSolve = wallTimeMs () in
     (if options.debugFinalSolution then debugSolution global pickedSolutions else ());
     -- NOTE(vipa, 2023-10-25): The concretization phase *does* handle
     -- nested impls, so it shouldn't have to be updated if the
@@ -933,7 +938,16 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
         cmpSolution a.1 b.1)
       , global = global
       } in
+    let preConcretize = wallTimeMs () in
     match concretizeAlt initState tm with (state, tm) in
+    let postConcretize = wallTimeMs () in
+    (if options.debugSolveTiming then
+      printLn (join
+        [ "Collect time: ", float2string (subf postCollect preCollect), "ms\n"
+        , "Top-solve time: ", float2string (subf postTopSolve postCollect), "ms\n"
+        , "Concretize time: ", float2string (subf postConcretize preConcretize), "ms\n"
+        ])
+     else ());
     mapFoldWithKey (lam. lam id. lam deps. printLn (join ["(compiler error) Left-over dep, id: ", int2string id, ", num deps: ", int2string (length deps)])) () state.requests;
     removeReprExpr tm
 
