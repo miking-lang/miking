@@ -218,7 +218,8 @@ let _concat =
 lang UtestBase =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + RecordTypeCmp + VariantTypeCmp + ConTypeCmp + VarTypeCmp +
-  AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck
+  AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck +
+  DataKindAst
 
   -- NOTE(larshum, 2022-12-26): We customize the comparison of types such that
   -- all sequence and tensor types are considered equal. This is because we

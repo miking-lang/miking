@@ -167,7 +167,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang TCUnify = Unify + AliasTypeAst + PrettyPrint + Cmp + RepTypesHelpers
+lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + PrettyPrint + Cmp + RepTypesHelpers
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -307,7 +307,7 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
     else ()
 end
 
-lang DataTypeTCUnify = TCUnify + DataTypeAst
+lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
   sem unifyCheckData
     :  Map Name (Level, Type)
     -> Map Name (Level, [Name], Type)
@@ -343,7 +343,10 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst
     unifyCheckData env.conEnv env.tyConEnv info tv t.types
 end
 
-lang MetaVarTypeTCUnify = DataTypeTCUnify + MetaVarTypeUnify + RecordTypeAst + VarTypeAst
+lang MetaVarTypeTCUnify =
+  TCUnify + MetaVarTypeUnify + VarTypeAst + RecordTypeAst + DataTypeAst +
+  MonoKindAst + PolyKindAst + RecordKindAst + DataKindAst
+
   sem getKind : TCEnv -> Type -> Kind
   sem getKind env =
   | TyVar {ident = n} ->
@@ -360,7 +363,7 @@ lang MetaVarTypeTCUnify = DataTypeTCUnify + MetaVarTypeUnify + RecordTypeAst + V
         unifyCheck tcenv info r2 ty1;
         let updated =
           Unbound {r1 with level = mini r1.level r2.level,
-                           kind  = addKinds u env (r1.kind, r2.kind)} in
+                           kind  = (addKinds u env (r1.kind, r2.kind)).1} in
         modref t1.contents updated;
         modref t2.contents (Link ty1)
       else ()
@@ -392,7 +395,7 @@ lang MetaVarTypeTCUnify = DataTypeTCUnify + MetaVarTypeUnify + RecordTypeAst + V
       modref t.contents updated
 end
 
-lang AllTypeTCUnify = TCUnify + AllTypeAst
+lang AllTypeTCUnify = TCUnify + AllTypeAst + MonoKindAst
   sem unifyCheckBase env info boundVars tv =
   | TyAll t ->
     match tv.kind with Mono _ then
@@ -425,7 +428,7 @@ end
 -- INSTANTIATION / GENERALIZATION --
 ------------------------------------
 
-lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst
+lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst + PolyKindAst + MonoKindAst
   -- Instantiate the top-level type variables of `ty' with fresh unification variables.
   sem inst : Info -> Level -> Type -> Type
   sem inst (info : Info) (lvl : Level) = | ty ->
@@ -511,7 +514,7 @@ end
 -- TYPE CHECKING UTILS --
 -------------------------
 
-lang MetaVarDisableGeneralize = MetaVarTypeAst
+lang MetaVarDisableGeneralize = MetaVarTypeAst + PolyKindAst + MonoKindAst + RecordKindAst
   sem weakenMetaVars (lvl : Level) =
   | TyMetaVar t & ty ->
     switch deref t.contents
@@ -548,7 +551,7 @@ let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + DataTypeAst + FunTypeAst + VarTypeSubstitute + AppTypeGetArgs
+  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute + AppTypeGetArgs
   sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
   sem resolveType info env closeDatas =
   | (TyCon _ | TyApp _) & ty ->
@@ -644,7 +647,7 @@ lang SubstituteNewReprs = ReprTypeAst + RepTypesHelpers
   | ty -> smap_Type_Type (substituteNewReprs env) ty
 end
 
-lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst
+lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKindAst
   sem removeMetaVarType =
   | TyMetaVar t ->
     switch deref t.contents
@@ -697,7 +700,7 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
 end
 
 lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
-  + ConTypeAst + DataTypeAst + AppTypeGetArgs + Generalize
+  + ConTypeAst + DataTypeAst + DataKindAst + AppTypeGetArgs + Generalize
   -- `typeCheckPat env patEnv pat' type checks `pat' under environment `env'
   -- supposing the variables in `patEnv' have been bound previously in the
   -- pattern.  Returns an updated `patEnv' and the type checked `pat'.

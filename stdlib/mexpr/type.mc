@@ -84,7 +84,7 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
     else error "cmpTypeH reached non-unwrapped MetaVar!"
 end
 
-lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarTypeAst
+lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
   sem typePrecedence =
   | TyMetaVar t ->
     switch deref t.contents
@@ -104,7 +104,7 @@ lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarT
     end
 end
 
-lang MetaVarTypeEq = KindEq + MetaVarTypeAst
+lang MetaVarTypeEq = Eq + MetaVarTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyMetaVar _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)

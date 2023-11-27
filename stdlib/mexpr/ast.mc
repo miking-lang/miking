@@ -1573,7 +1573,7 @@ end
 
 lang DataKindAst = Ast
   syn Kind =
-  | Data {types  : Map Name (Bool, Set Name)}
+  | Data {types  : Map Name (Set Name)}
 end
 
 

@@ -661,7 +661,7 @@ lang VarTypeEq = Eq + VarTypeAst
     else None ()
 end
 
-lang AllTypeEq = KindEq + AllTypeAst
+lang AllTypeEq = Eq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
     match unwrapType lhs with TyAll l then
