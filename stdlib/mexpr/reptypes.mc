@@ -1249,6 +1249,9 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
      else ());
     match branch with SBContent branch in
     match solutionsFor (if debug then Some "" else None ()) branch op ty with (branch, sols) in
+    (if debug then
+      printLn (join ["=> ", int2string (length sols), " solutions"])
+     else ());
     let sols = map (lam s. match s with SolContent x in {sol = SSContent s, cost = x.cost, uni = x.uni}) sols in
     (SBContent branch, sols)
 
@@ -1424,19 +1427,28 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         , cost = addf prev.cost (mulf opUse.scaling x.cost)
         , highestImpl = maxi prev.highestImpl x.highestImpl
         , subSols = snoc prev.subSols (SolContent {x with scale = opUse.scaling})
-        }
-      in optionMap mk (mergeUnifications prev.uni x.uni)
+        } in
+      let merged = mergeUnifications prev.uni x.uni in
+      optionMap mk merged
     in
 
     let perUseInImpl = lam subst. lam uni. lam acc. lam opUse.
       let debugIndent = optionMap (concat "  ") debugIndent in
       if null acc.prev then acc else
       let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
+      let preSolFor = wallTimeMs () in
       match solutionsFor debugIndent acc.branch opUse.ident ty
         with (branch, curr) in
+      let postSolFor = wallTimeMs () in
       let curr = filterOption (seqLiftA2 (perSolInUseInImpl opUse) acc.prev curr) in
+      let postStep = wallTimeMs () in
       (match debugIndent with Some indent then
-        printLn (join [indent, "post ", nameGetStr opUse.ident, ", live partials: ", int2string (length curr)])
+        printLn (join
+          [ indent, "post ", nameGetStr opUse.ident
+          , ", live partials: ", int2string (length curr)
+          , ", solfor: ", float2string (subf postSolFor preSolFor), "ms"
+          , ", step: ", float2string (subf postStep postSolFor), "ms"
+          ])
        else ());
       {branch = branch, prev = curr} in
 
