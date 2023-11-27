@@ -83,7 +83,6 @@ let typcheckEnvEmpty = {
 
 let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
   = lam env. lam tys.
-    use DataTypeAst in
     { env with
       tyConEnv =
         foldl
@@ -238,20 +237,20 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + PrettyPrint + Cmp + RepTy
         -> Type
         -> {aliases : Map Type Type, kinds : Map Name Kind}
         = lam acc. lam ty.
-        switch ty
-        case TyAlias x then
-          let acc = {acc with aliases = mapInsert x.display x.content acc.aliases} in
-          collectAliasesAndKinds (collectAliasesAndKinds acc x.display) x.content
-        case TyMetaVar x then
-          switch deref x.contents
-          case Unbound u then
-            let acc = {acc with kinds = mapInsert u.ident u.kind acc.kinds} in
-            sfold_Kind_Type collectAliasesAndKinds acc u.kind
-          case Link ty then
-            collectAliasesAndKinds acc ty
+          switch ty
+          case TyAlias x then
+            let acc = {acc with aliases = mapInsert x.display x.content acc.aliases} in
+            collectAliasesAndKinds (collectAliasesAndKinds acc x.display) x.content
+          case TyMetaVar x then
+            switch deref x.contents
+            case Unbound u then
+              let acc = {acc with kinds = mapInsert u.ident u.kind acc.kinds} in
+              sfold_Kind_Type collectAliasesAndKinds acc u.kind
+            case Link ty then
+              collectAliasesAndKinds acc ty
+            end
+          case _ then sfold_Type_Type collectAliasesAndKinds acc ty
           end
-        case _ then sfold_Type_Type collectAliasesAndKinds acc ty
-        end
     in
     let res =
       collectAliasesAndKinds
@@ -324,14 +323,14 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
     ] in
     iter
       (lam tks.
-      if optionMapOr true (lam r. lti tv.level r.0) (mapLookup tks.0 tyConEnv) then
-        errorSingle info (mkMsg "type constructor" tks.0)
-      else
-        iter (lam k.
-          if optionMapOr true (lam r. lti tv.level r.0) (mapLookup k conEnv) then
-            errorSingle info (mkMsg "constructor" k)
-          else ())
-          (setToSeq tks.1))
+        if optionMapOr true (lam r. lti tv.level r.0) (mapLookup tks.0 tyConEnv) then
+          errorSingle info (mkMsg "type constructor" tks.0)
+        else
+          iter (lam k.
+            if optionMapOr true (lam r. lti tv.level r.0) (mapLookup k conEnv) then
+              errorSingle info (mkMsg "constructor" k)
+            else ())
+               (setToSeq tks.1))
       (mapBindings data)
 
   sem unifyCheckBase env info boundVars tv =
@@ -454,7 +453,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst + PolyKindAst 
   sem gen (lvl : Level) (vs : Map Name Kind) =
   | ty ->
     let vars = distinct (lam x. lam y. nameEq x.0 y.0)
-                 (genBase lvl vs (setEmpty nameCmp) ty) in
+                        (genBase lvl vs (setEmpty nameCmp) ty) in
     let iteratee = lam v. lam ty1.
       let kind = match v.1 with Mono _ then Poly () else v.1 in
       TyAll {info = infoTy ty, ident = v.0, ty = ty1, kind = kind}
@@ -545,13 +544,13 @@ let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
   lam env. lam ident.
     mapMapWithKey (lam s. lam.
       mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps)
-      (mapLookupOrElse (lam. setEmpty nameCmp) ident env.typeDeps)
+                  (mapLookupOrElse (lam. setEmpty nameCmp) ident env.typeDeps)
 
 -- resolveType resolves type aliases and checks that they are fully applied.
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute + AppTypeGetArgs
+  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute + AppTypeUtils
   sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
   sem resolveType info env closeDatas =
   | (TyCon _ | TyApp _) & ty ->
@@ -563,7 +562,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
           match (length params, length args) with (paramLen, argLen) in
           if eqi paramLen argLen then
             let subst = foldl2 (lam s. lam v. lam t. mapInsert v t s)
-                          (mapEmpty nameCmp) params args
+                               (mapEmpty nameCmp) params args
             in
             -- We assume def has already been resolved before being put into tycons
             TyAlias {display = mkTypeApp conTy args, content = substituteVars (infoTy ty) subst def}
@@ -613,8 +612,8 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
               else error "Shouldn't happen!"
             else error "Shouldn't happen!"
           else error "Shouldn't happen!")
-          (mapEmpty nameCmp)
-          cons
+                (mapEmpty nameCmp)
+                cons
       in
       TyAll {t with ty = ty, kind = Data {types = types}}
     else
@@ -712,18 +711,18 @@ lang PatTypeCheck = TCUnify
   | pat ->
     let patTy = newpolyvar env.currentLvl (infoPat pat) in
     match smapAccumL_Pat_Pat
-      (lam patEnv. lam pat.
-        match typeCheckPat env patEnv pat with (patEnv, pat) in
-        unify env [infoPat pat] patTy (tyPat pat);
-        (patEnv, pat))
-      patEnv pat
+            (lam patEnv. lam pat.
+              match typeCheckPat env patEnv pat with (patEnv, pat) in
+              unify env [infoPat pat] patTy (tyPat pat);
+              (patEnv, pat))
+            patEnv pat
     with (patEnv, pat) in
     (patEnv, withTypePat patTy pat)
 end
 
 lang HasMatches =
   TCUnify + NormPatMatch + ConNormPat + ConTypeAst +
-  DataTypeAst + DataKindAst + AppTypeGetArgs + Generalize
+  DataTypeAst + DataKindAst + AppTypeUtils + Generalize
 
   -- Perform an exhaustiveness check for the given pattern and type.
   sem normpatHasMatches : TCEnv -> (Type, NormPat) -> Bool
@@ -929,7 +928,7 @@ lang LetTypeCheck =
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
         (if env.disableRecordPolymorphism then
-          disableRecordGeneralize env.currentLvl tyBody else ());
+           disableRecordGeneralize env.currentLvl tyBody else ());
         match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
         (body, tyBody)
       else
@@ -938,7 +937,7 @@ lang LetTypeCheck =
         -- TODO(aathn, 2023-05-07): Relax value restriction
         weakenMetaVars env.currentLvl tyBody;
         (body, tyBody)
-      with (body, tyBody) in
+    with (body, tyBody) in
     let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
     TmLet {t with body = body,
                   tyAnnot = tyAnnot,
@@ -1065,7 +1064,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
       ((newEnv, newTyVars), {b with tyAnnot = tyAnnot, tyBody = tyBody})
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
-      with ((recLetEnv, tyVars), bindings) in
+    with ((recLetEnv, tyVars), bindings) in
     let newTyVarEnv =
       mapFoldWithKey (lam vs. lam v. lam k. mapInsert v (newLvl, k) vs) recLetEnv.tyVarEnv tyVars in
 
@@ -1093,12 +1092,12 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
       match
         if isValue (GVal ()) b.body then
           (if env.disableRecordPolymorphism then
-            disableRecordGeneralize env.currentLvl b.tyBody else ());
+             disableRecordGeneralize env.currentLvl b.tyBody else ());
           gen env.currentLvl acc.1 b.tyBody
         else
           weakenMetaVars env.currentLvl b.tyBody;
           (b.tyBody, [])
-        with (tyBody, vars) in
+      with (tyBody, vars) in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
       ((newEnv, newTyVars), {b with tyBody = tyBody})
@@ -1124,10 +1123,10 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPat
     let els = typeCheckExpr elsEnv t.els in
     unify env [infoTm thn, infoTm els] (tyTm thn) (tyTm els);
     TmMatch {t with target = target
-                  , thn = thn
-                  , els = els
-                  , ty = tyTm thn
-                  , pat = pat}
+            , thn = thn
+            , els = els
+            , ty = tyTm thn
+            , pat = pat}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType + ResolveType
@@ -1188,7 +1187,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
       "* right-hand side should refer to a constructor type.\n",
       "* When type checking the expression\n"
     ] in
-    match inspectType ty with TyArrow {to = to & (TyCon _ | TyApp _)} then
+    match inspectType ty with TyArrow {to = to} then
       match getTypeArgs to with (TyCon target, _) then
         recursive let substituteData = lam v. lam acc. lam x.
           switch x
@@ -1224,7 +1223,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let tydeps =
       mapInsert target tydeps
         (setFold (lam m. lam t. mapInsert t (setOfSeq nameCmp [target]) m)
-           (mapEmpty nameCmp) tydeps) in
+                 (mapEmpty nameCmp) tydeps) in
     let newLvl = addi 1 env.currentLvl in
     let inexpr =
       typeCheckExpr
@@ -1262,18 +1261,18 @@ lang UtestTypeCheck = TypeCheck + UtestAst
     let tonfail = optionMap (typeCheckExpr env) t.tonfail in
     (switch (tusing, tonfail)
      case (Some tu, Some to) then
-      unify env [infoTm tu]
-        (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu);
-      unify env [infoTm to]
-        (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
+       unify env [infoTm tu]
+         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu);
+       unify env [infoTm to]
+         (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (Some tu, None _) then
-      unify env [infoTm tu]
-        (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
+       unify env [infoTm tu]
+         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
      case (None _, Some to) then
-      unify env [infoTm to]
-        (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
+       unify env [infoTm to]
+         (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (None _, None _) then
-      unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
+       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
      end);
     TmUtest {t with test = test
             , expected = expected
@@ -1300,11 +1299,11 @@ lang NeverTypeCheck = TypeCheck + NeverAst + HasMatches
             "* An assignment not being matched is:\n",
             mapFoldWithKey
               (lam str. lam n. lam p.
-              join [ str
-                   , "  ", nameGetStr n
-                   , " = "
-                   , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
-                   , "\n" ]) "" m ]
+                join [ str
+                     , "  ", nameGetStr n
+                     , " = "
+                     , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
+                     , "\n" ]) "" m ]
       in
       let msg = join [
         "* Encountered a live never term.\n",
@@ -1391,8 +1390,8 @@ lang RecordPatHasMatches = HasMatches + RecordTypeAst + RecordNormPat
   sem snpatHasMatches env =
   | (TyRecord { fields = fields }, NPatRecord pats) ->
     mapAll (lam x. x)
-      (mapIntersectWith (lam ty. lam p. npatHasMatches env (ty, p))
-         fields pats)
+           (mapIntersectWith (lam ty. lam p. npatHasMatches env (ty, p))
+                             fields pats)
 end
 
 lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
@@ -1704,12 +1703,12 @@ in
 
 let runTest =
   lam test : TypeTest.
-  -- Make sure to print the test name if the test fails.
-  let eqTypeTest = lam a : Type. lam b : Type.
-    if eqType a b then true
-    else print (join ["\n ** Type test FAILED: ", test.name, " **"]); false
-  in
-  utest typeOf test with test.ty using eqTypeTest in ()
+    -- Make sure to print the test name if the test fails.
+    let eqTypeTest = lam a : Type. lam b : Type.
+      if eqType a b then true
+      else print (join ["\n ** Type test FAILED: ", test.name, " **"]); false
+    in
+    utest typeOf test with test.ty using eqTypeTest in ()
 in
 
 let tests = [
@@ -1825,13 +1824,13 @@ let tests = [
    tm = bindall_ [
      ureclets_ [
        ("even", ulam_ "n"
-         (if_ (eqi_ (var_ "n") (int_ 0))
-           true_
-           (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
+                  (if_ (eqi_ (var_ "n") (int_ 0))
+                       true_
+                       (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
        ("odd", ulam_ "n"
-         (if_ (eqi_ (var_ "n") (int_ 0))
-           false_
-           (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))
+                 (if_ (eqi_ (var_ "n") (int_ 0))
+                      false_
+                      (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))
      ],
      var_ "even"
    ],
@@ -1856,16 +1855,16 @@ let tests = [
 
   {name = "Match2",
    tm = ulam_ "x"
-     (match_ (var_ "x") (pvar_ "y") (addi_ (var_ "y") (int_ 1)) (int_ 0)),
+          (match_ (var_ "x") (pvar_ "y") (addi_ (var_ "y") (int_ 1)) (int_ 0)),
    ty = tyarrow_ tyint_ tyint_,
    env = []},
 
   {name = "Match3",
    tm = match_
-     (seq_ [str_ "a", str_ "b", str_ "c", str_ "d"])
-     (pseqedge_ [pseqtot_ [pchar_ 'a']] "mid" [pseqtot_ [pchar_ 'd']])
-     (var_ "mid")
-     never_,
+          (seq_ [str_ "a", str_ "b", str_ "c", str_ "d"])
+          (pseqedge_ [pseqtot_ [pchar_ 'a']] "mid" [pseqtot_ [pchar_ 'd']])
+          (var_ "mid")
+          never_,
    ty = tyseq_ tystr_,
    env = []},
 
@@ -1944,17 +1943,17 @@ let tests = [
 
   {name = "Record5",
    tm = bind_
-     (ulet_ "f"
-       (ulam_ "r" (ulam_ "x" (ulam_ "y"
-         (recordupdate_
-           (recordupdate_
-             (var_ "r") "x" (var_ "x"))
-           "y" (var_ "y"))))))
-     (freeze_ (var_ "f")),
+          (ulet_ "f"
+             (ulam_ "r" (ulam_ "x" (ulam_ "y"
+                                      (recordupdate_
+                                         (recordupdate_
+                                            (var_ "r") "x" (var_ "x"))
+                                         "y" (var_ "y"))))))
+          (freeze_ (var_ "f")),
    ty =
      let fields =  mapInsert (stringToSid "x") wa
-                  (mapInsert (stringToSid "y") wb
-                  (mapEmpty cmpSID))
+                             (mapInsert (stringToSid "y") wb
+                                        (mapEmpty cmpSID))
      in
      let r = newrecvar fields 0 (NoInfo ()) in
      tyarrows_ [r, wa, wb, r],
@@ -1972,12 +1971,12 @@ let tests = [
          conapp_ "Leaf" (seq_ [int_ 2]),
          conapp_ "Leaf" (seq_ [])])])),
      (match_ (var_ "t")
-       (pcon_ "Branch" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]))
-       (match_ (var_ "lhs")
-         (pcon_ "Leaf" (pvar_ "n"))
-         (var_ "n")
-         never_)
-       never_)
+             (pcon_ "Branch" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]))
+             (match_ (var_ "lhs")
+                     (pcon_ "Leaf" (pvar_ "n"))
+                     (var_ "n")
+                     never_)
+             never_)
    ],
    ty = tyseq_ tyint_,
    env = []},
@@ -2008,17 +2007,17 @@ let tests = [
 
   {name = "Unknown1",
    tm = bind_
-     (let_ "f" (tyarrow_ tyunknown_ tyunknown_)
-       (ulam_ "x" (var_ "x")))
-     (freeze_ (var_ "f")),
+          (let_ "f" (tyarrow_ tyunknown_ tyunknown_)
+                (ulam_ "x" (var_ "x")))
+          (freeze_ (var_ "f")),
    ty = tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")),
    env = []},
 
   {name = "Unknown2",
    tm = bind_
-     (let_ "f" (tyarrow_ tyint_ tyunknown_)
-       (ulam_ "x" (var_ "x")))
-     (freeze_ (var_ "f")),
+          (let_ "f" (tyarrow_ tyint_ tyunknown_)
+                (ulam_ "x" (var_ "x")))
+          (freeze_ (var_ "f")),
    ty = tyarrow_ tyint_ tyint_,
    env = []}
 

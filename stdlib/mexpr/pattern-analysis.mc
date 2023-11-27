@@ -76,8 +76,8 @@ lang NPatImpl = NormPat
   | NPatNot cons ->
     setFold (lam ks. lam k.
       setInsert (SNPat (simpleConComplement k)) ks)
-      (setEmpty npatCmp)
-      cons
+            (setEmpty npatCmp)
+            cons
 
   sem npatIntersect =
   | (SNPat a, SNPat b) ->
@@ -103,14 +103,14 @@ lang NPatImpl = NormPat
   | seq ->
     let nested : [[[NPat]]] =
       create (length seq)
-        (lam target.
-        mapi (lam i. lam p.
-          if lti i target then
-            [p]
-          else
-            if eqi i target then
-              setToSeq (npatComplement p)
-            else [wildpat ()]) seq)
+             (lam target.
+               mapi (lam i. lam p.
+                 if lti i target then
+                   [p]
+                 else
+                   if eqi i target then
+                     setToSeq (npatComplement p)
+                   else [wildpat ()]) seq)
     in
     let distributed : [[NPat]] =
       join (map (seqMapM (lam x. x)) nested) in
@@ -139,9 +139,9 @@ lang NormPatImpl = NPatImpl
   sem normpatIntersect np1 =
   | np2 ->
     foldl setUnion (setEmpty npatCmp)
-      (seqLiftA2 (lam x. lam y. npatIntersect (x, y))
-         (setToSeq np1)
-         (setToSeq np2))
+          (seqLiftA2 (lam x. lam y. npatIntersect (x, y))
+                     (setToSeq np1)
+                     (setToSeq np2))
 
   sem normpatToPat =
   | np ->
@@ -344,7 +344,7 @@ lang RecordNormPat = NPatImpl + RecordPat
     match unzip (mapBindings pats) with (labels, pats) in
     seqComplement
       (lam pats.
-      SNPat (NPatRecord (mapFromSeq cmpSID (zip labels pats))))
+        SNPat (NPatRecord (mapFromSeq cmpSID (zip labels pats))))
       pats
 
   sem snpatIntersect =
@@ -352,17 +352,17 @@ lang RecordNormPat = NPatImpl + RecordPat
     let merged =
       mapMerge
         (lam p1. lam p2.
-        switch (p1, p2)
-        case (None (), None ()) then None ()
-        case (Some p, None ()) | (None (), Some p) then Some [p]
-        case (Some p1, Some p2) then Some (setToSeq (npatIntersect (p1, p2)))
-        end)
+          switch (p1, p2)
+          case (None (), None ()) then None ()
+          case (Some p, None ()) | (None (), Some p) then Some [p]
+          case (Some p1, Some p2) then Some (setToSeq (npatIntersect (p1, p2)))
+          end)
         pats1 pats2
     in
     let bindings =
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings merged) in
     foldl (lam np. lam bs. setInsert (SNPat (NPatRecord (mapFromSeq cmpSID bs))) np)
-      (setEmpty npatCmp) bindings
+          (setEmpty npatCmp) bindings
 
   sem snpatToPat =
   | NPatRecord pats ->
@@ -378,7 +378,7 @@ lang RecordNormPat = NPatImpl + RecordPat
     let bindings =
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings nested) in
     foldl (lam np. lam bs. setInsert (SNPat (NPatRecord (mapFromSeq cmpSID bs))) np)
-      (setEmpty npatCmp) bindings
+          (setEmpty npatCmp) bindings
 end
 
 lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
@@ -402,27 +402,27 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     setInsert (SNPat (NPatSeqEdge { prefix = []
                                   , disallowed = setOfSeq subi [length pats]
                                   , postfix = [] }))
-      (seqComplement (lam x. SNPat (NPatSeqTot x)) pats)
+              (seqComplement (lam x. SNPat (NPatSeqTot x)) pats)
   | NPatSeqEdge { prefix = pre, disallowed = dis, postfix = post } ->
     match (length pre, length post) with (preLen, postLen) in
     let complementedProduct =
       seqComplement
         (lam pats.
-        match splitAt pats preLen with (pre, post) in
-        SNPat (NPatSeqEdge { prefix = pre
-                           , disallowed = dis
-                           , postfix = post }))
+          match splitAt pats preLen with (pre, post) in
+          SNPat (NPatSeqEdge { prefix = pre
+                             , disallowed = dis
+                             , postfix = post }))
         (concat pre post)
     in
     let shortTotPats =
       setOfSeq npatCmp
         (create (addi preLen postLen)
-           (lam n. SNPat (NPatSeqTot (make n (wildpat ())))))
+                (lam n. SNPat (NPatSeqTot (make n (wildpat ())))))
     in
     let disTotPats =
       setFold
         (lam np. lam n.
-        setInsert (SNPat (NPatSeqTot (make n (wildpat ())))) np)
+          setInsert (SNPat (NPatSeqTot (make n (wildpat ())))) np)
         (setEmpty npatCmp)
         dis
     in
@@ -434,10 +434,10 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     then setEmpty npatCmp
     else
       foldl (lam np. lam x. setInsert (SNPat (NPatSeqTot x)) np)
-        (setEmpty npatCmp)
-        (seqMapM setToSeq
-           (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
-              pats1 pats2))
+            (setEmpty npatCmp)
+            (seqMapM setToSeq
+               (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
+                        pats1 pats2))
   | (NPatSeqEdge { prefix = pre1, disallowed = dis1, postfix = post1},
      NPatSeqEdge { prefix = pre2, disallowed = dis2, postfix = post2}) ->
     let prePreLen = mini (length pre1) (length pre2) in
@@ -461,17 +461,17 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     let dis =
       mapFilterWithKey (lam i. lam.
         geqi i (addi
-                 (addi prePreLen (length prePost))
-                 (addi (length postPre) postPostLen)))
-        (setUnion dis1 dis2) in
+                  (addi prePreLen (length prePost))
+                  (addi (length postPre) postPostLen)))
+                       (setUnion dis1 dis2) in
 
     let simple =
       setOfSeq npatCmp
         (seqLiftA2 (lam pre. lam post.
-        (SNPat (NPatSeqEdge { prefix = concat pre prePost
-                            , disallowed = dis
-                            , postfix = concat postPre post })))
-           prePre postPost)
+          (SNPat (NPatSeqEdge { prefix = concat pre prePost
+                              , disallowed = dis
+                              , postfix = concat postPre post })))
+                   prePre postPost)
     in
 
     let overlap =
@@ -485,20 +485,20 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
         let mids =
           join
             (create (absi k) (lam i.
-            if setMem (foldl addi 0 [ prePreLen, m, i, postPostLen ]) dis
-            then []
-            else
-              seqMapM setToSeq
-                (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
-                   (concat prePost (make (addi (maxi 0 (negi k)) i) (wildpat ())))
-                   (concat (make (addi (maxi 0 k) i) (wildpat ())) postPre))))
+              if setMem (foldl addi 0 [ prePreLen, m, i, postPostLen ]) dis
+              then []
+              else
+                seqMapM setToSeq
+                  (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
+                           (concat prePost (make (addi (maxi 0 (negi k)) i) (wildpat ())))
+                           (concat (make (addi (maxi 0 k) i) (wildpat ())) postPre))))
         in
         let liftA3 = lam f. lam as. lam bs. lam cs.
           join (map (lam a. seqLiftA2 (f a) bs cs) as) in
         setOfSeq npatCmp
           (liftA3 (lam prePre. lam mid. lam postPost.
-          (SNPat (NPatSeqTot (join [prePre, mid, postPost]))))
-             prePre mids postPost)
+            (SNPat (NPatSeqTot (join [prePre, mid, postPost]))))
+                  prePre mids postPost)
     in
     setUnion simple overlap
 
@@ -511,11 +511,11 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
       if gti (addi preLen postLen) patLen then setEmpty npatCmp
       else
         foldl (lam np. lam x. setInsert (SNPat (NPatSeqTot x)) np)
-          (setEmpty npatCmp)
-          (seqMapM setToSeq
-             (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
-                (join [pre, make (subi (subi patLen preLen) postLen) (wildpat ()), post])
-                pats))
+              (setEmpty npatCmp)
+              (seqMapM setToSeq
+                 (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
+                          (join [pre, make (subi (subi patLen preLen) postLen) (wildpat ()), post])
+                          pats))
 
   sem snpatToPat =
   | NPatSeqTot pats -> pseqtot_ (map npatToPat pats)
@@ -528,17 +528,17 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
   sem patToNormpat =
   | PatSeqTot { pats = ps } ->
     foldl (lam np. lam x. setInsert (SNPat (NPatSeqTot x)) np)
-      (setEmpty npatCmp)
-      (seqMapM setToSeq (map patToNormpat ps))
+          (setEmpty npatCmp)
+          (seqMapM setToSeq (map patToNormpat ps))
   | PatSeqEdge { prefix = pre, postfix = post } ->
     let pre  = seqMapM setToSeq (map patToNormpat pre)  in
     let post = seqMapM setToSeq (map patToNormpat post) in
     setOfSeq npatCmp
       (seqLiftA2 (lam pre. lam post.
-      (SNPat (NPatSeqEdge { prefix = pre
-                          , disallowed = setEmpty subi
-                          , postfix = post })))
-         pre post)
+        (SNPat (NPatSeqEdge { prefix = pre
+                            , disallowed = setEmpty subi
+                            , postfix = post })))
+                 pre post)
 end
 
 lang NamedNormPat = NPatImpl + NamedPat
@@ -570,9 +570,9 @@ lang NormPatMatch = NPatImpl + VarAst
   sem matchNormpat =
   | (e, np) ->
     setOfSeq (mapCmp setCmp)
-      (mapOption
-         (lam p. matchNPat (e, p))
-         (setToSeq np))
+             (mapOption
+                (lam p. matchNPat (e, p))
+                (setToSeq np))
 
   sem matchNPat : (Expr, NPat) -> Option (Map Name NormPat)
   sem matchNPat =
@@ -663,7 +663,7 @@ lang SeqNormPatMatch = NormPatMatch + SeqAst + SeqNormPat
           (lam acc. lam m. optionMap (mapUnionWith normpatIntersect acc) m)
           (mapEmpty nameCmp)
           (zipWith (lam e. lam p. matchNPat (e, p))
-             (concat preTm postTm) (concat pre post))
+                   (concat preTm postTm) (concat pre post))
 end
 
 lang MExprPatAnalysis =
