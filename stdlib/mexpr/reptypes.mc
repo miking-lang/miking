@@ -907,6 +907,87 @@ let defaultReprSolverOptions : ReprSolverOptions =
   , debugSolveTiming = false
   }
 
+type VarMap v = {reprs : Map Symbol v, metas : Map Name v}
+let varMapEmpty : all v. VarMap v = unsafeCoerce
+  { metas = mapEmpty nameCmp
+  , reprs = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+  }
+let varMapSingleton
+  : all a. Either Symbol Name -> a -> VarMap a
+  = lam k. lam v. switch k
+    case Left sym then
+      {varMapEmpty with reprs = mapInsert sym v varMapEmpty.reprs}
+    case Right name then
+      {varMapEmpty with metas = mapInsert name v varMapEmpty.metas}
+    end
+let varMapMap
+  : all a. all b. (a -> b) -> VarMap a -> VarMap b
+  = lam f. lam a.
+    { metas = mapMap f a.metas
+    , reprs = mapMap f a.reprs
+    }
+let varMapHasMeta
+  : all a. Name -> VarMap a -> Bool
+  = lam n. lam m. mapMem n m.metas
+let varMapHasRepr
+  : all a. Symbol -> VarMap a -> Bool
+  = lam s. lam m. mapMem s m.reprs
+let varMapDifference
+  : all a. all b. VarMap a -> VarMap b -> VarMap a
+  = lam a. lam b.
+    { metas = mapDifference a.metas b.metas
+    , reprs = mapDifference a.reprs b.reprs
+    }
+let varMapIsEmpty
+  : all a. VarMap a -> Bool
+  = lam a. if mapIsEmpty a.metas then mapIsEmpty a.reprs else false
+let varMapMinBy
+  : all a. (a -> a -> Int) -> VarMap a -> Option (Either Symbol Name, a)
+  = lam cmp. lam a.
+    let pickSmallest : all k. Option (k, a) -> k -> a -> Option (k, a) = lam opt. lam k. lam a.
+      match opt with Some (pk, pa) then
+        if lti (cmp a pa) 0 then Some (k, a) else opt
+      else Some (k, a) in
+    let res = mapFoldWithKey (lam acc. lam k. lam v. pickSmallest acc (Left k) v) (None ()) a.reprs in
+    let res = mapFoldWithKey (lam acc. lam k. lam v. pickSmallest acc (Right k) v) res a.metas in
+    res
+
+lang VarAccessHelpers = Ast + ReprTypeAst + MetaVarTypeAst
+  sem getMetaHere : Type -> Option MetaVarRec
+  sem getMetaHere =
+  | TyMetaVar x ->
+    match deref x.contents with Unbound x
+    then Some x
+    else None ()
+  | _ -> None ()
+
+  sem getReprHere : Type -> Option {sym : Symbol, scope : Int}
+  sem getReprHere =
+  | TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr x
+    then Some x
+    else None ()
+  | _ -> None ()
+
+  sem getVarsInType : {metaLevel : Int, scope : Int} -> VarMap () -> Type -> VarMap ()
+  sem getVarsInType filter acc = | ty ->
+    let addMeta = lam x. if geqi x.level filter.metaLevel
+      then setInsert x.ident acc.metas
+      else acc.metas in
+    let addRepr = lam x. if geqi x.scope filter.scope
+      then setInsert x.sym acc.reprs
+      else acc.reprs in
+    let metas = optionMapOr acc.metas addMeta (getMetaHere ty) in
+    let reprs = optionMapOr acc.reprs addRepr (getReprHere ty) in
+    sfold_Type_Type (getVarsInType filter) {metas = metas, reprs = reprs} ty
+
+  sem typeMentionsVarInVarMap : all a. VarMap a -> Type -> Bool
+  sem typeMentionsVarInVarMap m = | ty ->
+    if optionMapOr false (lam x. varMapHasMeta x.ident m) (getMetaHere ty) then true else
+    if optionMapOr false (lam x. varMapHasRepr x.sym m) (getReprHere ty) then true else
+    sfold_Type_Type (lam found. lam ty. if found then found else typeMentionsVarInVarMap m ty) false ty
+end
+
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
   sem reprSolve : ReprSolverOptions -> Expr -> Expr
@@ -1118,21 +1199,43 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TyRepr x -> TyUnknown {info = x.info}
 end
 
-lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize
+lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers
+  -- NOTE(vipa, 2023-11-28): We pre-process impls to merge repr vars,
+  -- meta vars, and opUses, split the problem into disjoint
+  -- sub-problems, and re-order opUses such that we can drop internal
+  -- repr vars and meta vars as soon as possible.
+  syn SolveCommand =
+  | AddOpVar {idxes : Set Int, opUse : TmOpVarRec}
+  | FilterVars (VarMap ())
+  type ProcOpImpl a  =
+    { implId: ImplId
+    , op : Name
+    , problem : [SolveCommand]
+    , selfCost : OpCost
+    , uni : Unification
+    , specType : Type
+    , reprScope : Int
+    , metaLevel : Int
+    , info : Info
+    -- NOTE(vipa, 2023-07-06): A token used by the surrounding system
+    -- to carry data required to reconstruct a solved AST.
+    , token : a
+    }
+
   type SolContentRec a =
     { token : a
     , cost : OpCost
     , scale : OpCost
     , uni : Unification
-    , impl : OpImpl a
+    , impl : ProcOpImpl a
     , highestImpl : ImplId
     , ty : Type
-    , subSols : [SolContent a]
+    , subSols : [{idxes : Set Int, sol : SolContent a}]
     }
   syn SolContent a = | SolContent (SolContentRec a)
 
   type SBContent a =
-    { implsPerOp : Map Name (Set (OpImpl a))
+    { implsPerOp : Map Name (Set (ProcOpImpl a))
     , memo : Map (Name, Type) [SolContent a]
     , nameless :
       { metas : [Name]
@@ -1167,18 +1270,22 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     res
 
   sem cmpSolution a = | b ->
-    recursive let work = lam a. lam b.
-      match (a, b) with (SolContent a, SolContent b) in
+    recursive let work : all x. {idxes : x, sol : Unknown} -> {idxes : x, sol : Unknown} -> Int = lam a. lam b.
+      match (a, b) with ({sol = SolContent a}, {sol = SolContent b}) in
       let res = subi a.impl.implId b.impl.implId in
       if neqi 0 res then res else
       let res = seqCmp work a.subSols b.subSols in
       res in
     match (a, b) with (SSContent a, SSContent b) in
-    work a b
+    work {idxes = (), sol = a} {idxes = (), sol = b}
 
   sem concretizeSolution global =
   | SSContent (SolContent x) ->
-    (x.token, x.highestImpl, map (lam sub. SSContent sub) x.subSols)
+    let subSols = foldl
+      (lam acc. lam sub. setFold (lam acc. lam idx. mapInsert idx (SSContent sub.sol) acc) acc sub.idxes)
+      (mapEmpty subi)
+      x.subSols in
+    (x.token, x.highestImpl, mapValues subSols)
 
   sem debugBranchState global = | SBContent branch ->
     let perImpl = lam env. lam op. lam impls.
@@ -1210,16 +1317,61 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     recursive let work = lam indent. lam sol.
       match sol with SolContent x in
       printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info, ")"]);
-      for_ x.subSols (work (concat indent "  "))
+      -- TODO(vipa, 2023-11-28): This will print things in a strange
+      -- order, and de-duped, which might not be desirable
+      for_ x.subSols (lam x. work (concat indent "  ") x.sol)
     in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
   sem addImpl global branch = | impl ->
     match branch with SBContent branch in
+
+    let preProc = wallTimeMs () in
+    let idxedOpUses = mapi (lam i. lam opUse. {idxes = setInsert i (setEmpty subi), opUse = opUse}) impl.opUses in
+    let filter = {metaLevel = impl.metaLevel, scope = impl.reprScope} in
+    let externalVars = getVarsInType filter varMapEmpty impl.specType in
+    let countInternalVarUses = lam acc. lam idxedOpUse.
+      let internal = varMapDifference (getVarsInType filter varMapEmpty idxedOpUse.opUse.ty) externalVars in
+      let addOne = lam acc. lam k. mapInsertWith addi k 1 acc in
+      let metas = setFold addOne acc.metas internal.metas in
+      let reprs = setFold addOne acc.reprs internal.reprs in
+      {metas = metas, reprs = reprs} in
+    recursive let mkCommands
+      : [SolveCommand] -> VarMap Int -> [{idxes : Set Int, opUse : TmOpVarRec}] -> [SolveCommand]
+      = lam acc. lam initialVars. lam rest.
+        match rest with [] then acc else
+        match varMapMinBy subi initialVars with Some (sOrN, _) then
+          match partition (lam x. typeMentionsVarInVarMap (varMapSingleton sOrN ()) x.opUse.ty) rest with (mention, rest) in
+          let acc = concat acc (map (lam x. AddOpVar x) mention) in
+          let nextVars = varMapDifference (foldl countInternalVarUses varMapEmpty rest) externalVars in
+          let acc = snoc acc (FilterVars (varMapMap (lam. ()) nextVars)) in
+          mkCommands acc nextVars rest
+        else
+          printLn (join ["mkCommands else ", int2string (length rest)]);
+          concat acc (map (lam x. AddOpVar x) rest)
+    in
+
+    let procImpl =
+      { implId = impl.implId
+      , op = impl.op
+      , problem = mkCommands []
+        (varMapDifference (foldl countInternalVarUses varMapEmpty idxedOpUses) externalVars)
+        idxedOpUses
+      , selfCost = impl.selfCost
+      , uni = impl.uni
+      , specType = impl.specType
+      , reprScope = impl.reprScope
+      , metaLevel = impl.metaLevel
+      , info = impl.info
+      , token = impl.token
+      } in
+    let postProc = wallTimeMs () in
+    printLn (join ["rejuggle: ", float2string (subf postProc preProc)]);
+
     let branch =
       { branch with
         implsPerOp = mapInsertWith setUnion
           impl.op
-          (setInsert impl (setEmpty (lam a. lam b. subi a.implId b.implId)))
+          (setInsert procImpl (setEmpty (lam a. lam b. subi a.implId b.implId)))
           branch.implsPerOp
       -- OPT(vipa, 2023-11-07): Better memoization cache invalidation,
       -- or incremental computation that never needs to invalidate
@@ -1420,42 +1572,66 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     -> Type
     -> (SBContent a, [SolContent a])
   sem solutionsForWork debugIndent branch op = | ty ->
-    let perSolInUseInImpl = lam opUse. lam prev. lam sol.
+    let perSolInUseInImpl = lam idxedOpUse. lam prev. lam sol.
       match sol with SolContent x in
       let mk = lam uni.
         { prev with uni = uni
-        , cost = addf prev.cost (mulf opUse.scaling x.cost)
+        , cost = addf prev.cost (mulf idxedOpUse.opUse.scaling x.cost)
         , highestImpl = maxi prev.highestImpl x.highestImpl
-        , subSols = snoc prev.subSols (SolContent {x with scale = opUse.scaling})
+        , subSols = snoc prev.subSols {idxes = idxedOpUse.idxes, sol = SolContent {x with scale = idxedOpUse.opUse.scaling}}
         } in
       let merged = mergeUnifications prev.uni x.uni in
       optionMap mk merged
     in
 
-    let perUseInImpl = lam subst. lam uni. lam acc. lam opUse.
-      let debugIndent = optionMap (concat "  ") debugIndent in
+    let perCommandInImpl = lam filter. lam subst. lam uni. lam acc. lam command.
       if null acc.prev then acc else
-      let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
-      let preSolFor = wallTimeMs () in
-      match solutionsFor debugIndent acc.branch opUse.ident ty
-        with (branch, curr) in
-      let postSolFor = wallTimeMs () in
-      let curr = filterOption (seqLiftA2 (perSolInUseInImpl opUse) acc.prev curr) in
-      let postStep = wallTimeMs () in
-      (match debugIndent with Some indent then
-        printLn (join
-          [ indent, "post ", nameGetStr opUse.ident
-          , ", live partials: ", int2string (length curr)
-          , ", solfor: ", float2string (subf postSolFor preSolFor), "ms"
-          , ", step: ", float2string (subf postStep postSolFor), "ms"
-          ])
-       else ());
-      {branch = branch, prev = curr} in
+      let debugIndent = optionMap (concat "  ") debugIndent in
+      switch command
+      case AddOpVar idxedOpUse then
+        let opUse = idxedOpUse.opUse in
+        let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
+        let preSolFor = wallTimeMs () in
+        match solutionsFor debugIndent acc.branch opUse.ident ty
+          with (branch, here) in
+        let postSolFor = wallTimeMs () in
+        let curr = filterOption (seqLiftA2 (perSolInUseInImpl idxedOpUse) acc.prev here) in
+        let postStep = wallTimeMs () in
+        (match debugIndent with Some indent then
+          printLn (join
+            [ indent, "post ", nameGetStr opUse.ident
+            , ", live partials: ", int2string (length acc.prev), "*", int2string (length here)
+            , " -> ", int2string (length curr)
+            , ", solfor: ", float2string (subf postSolFor preSolFor), "ms"
+            , ", step: ", float2string (subf postStep postSolFor), "ms"
+            ])
+         else ());
+        {branch = branch, prev = curr}
+      case FilterVars vars then
+        let filter =
+          { types = {level = filter.level, names = vars.metas}
+          , reprs = {scope = filter.scope, syms = vars.reprs}
+          } in
+        let prevCount = length acc.prev in
+        let preTime = wallTimeMs () in
+        let prev = map (lam x. {x with uni = filterUnification filter x.uni}) acc.prev in
+        let prev = pruneRedundant prev in
+        let postTime = wallTimeMs () in
+        let postCount = length prev in
+        (match debugIndent with Some indent then
+          printLn (join
+            [ indent, "filter and prune vars ("
+            , int2string prevCount, " -> ", int2string postCount
+            , ", ", float2string (subf postTime preTime), "ms)"
+            ])
+         else ());
+        {prev = pruneRedundant prev, branch = acc.branch}
+      end in
 
     let perImpl = lam acc : {branch : SBContent a, sols : [SolContentRec a]}. lam impl.
       let debugIndent = optionMap (concat " ") debugIndent in
       (match debugIndent with Some indent then
-        print (join [indent, "trying impl with ", int2string (length impl.opUses), " sub ops"])
+        print (join [indent, "trying impl with ", int2string (length impl.problem), " commands"])
        else ());
       match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
         with (specType, subst) in
@@ -1473,7 +1649,8 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
           , ty = ty
           , subSols = []
           } in
-        let innerAcc = foldl (perUseInImpl subst uni) {branch = acc.branch, prev = [solInit]} impl.opUses in
+        let filterValues = {level = impl.metaLevel, scope = impl.reprScope} in
+        let innerAcc = foldl (perCommandInImpl filterValues subst uni) {branch = acc.branch, prev = [solInit]} impl.problem in
         let uniFilter =
           -- NOTE(vipa, 2023-11-13): The substitution business ensures
           -- that all metas/reprs in `ty` are in a level/scope lesser
