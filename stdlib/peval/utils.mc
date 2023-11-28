@@ -35,7 +35,7 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
      idMapping = (mapEmpty nameCmp)}
 
   sem updateIds : SpecializeArgs -> Map Name Name -> SpecializeArgs
-  sem updateIds args = | idm -> {args with idMapping =idm}
+  sem updateIds args = | idm -> {args with idMapping = idm}
 
   sem _nameSeqToMap : [Name] -> Map String Name
   sem _nameSeqToMap =
