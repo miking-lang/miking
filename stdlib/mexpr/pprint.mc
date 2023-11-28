@@ -1319,9 +1319,17 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
   | Data r ->
     let consstr =
       mapFoldWithKey (lam strs. lam t. lam ks.
-        let variance = if ks.covariant then "+" else "-" in
-        let consstr = strJoin ", " (map nameGetStr (setToSeq ks.cons)) in
-        snoc strs (join [variance, nameGetStr t, "{", consstr, "}"]))
+        let lower =
+          if not (mapIsEmpty ks.lower) then
+            join ["-{", strJoin ", " (map nameGetStr (setToSeq ks.lower)), "}"]
+          else ""
+        in
+        let upper =
+          match ks.upper with Some m then
+            join ["+{", strJoin ", " (map nameGetStr (setToSeq m)), "}"]
+          else ""
+        in
+        snoc strs (join [nameGetStr t, lower, upper]))
         [] r.types in
     (env, join ["{", strJoin ", " consstr, "}"])
 end

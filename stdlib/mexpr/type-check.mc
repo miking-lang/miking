@@ -339,7 +339,10 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
 
   sem unifyCheckKind env info boundVars tv =
   | Data t ->
-    unifyCheckData env.conEnv env.tyConEnv info tv (mapMap (lam ks. ks.cons) t.types)
+    unifyCheckData env.conEnv env.tyConEnv info tv
+      (mapMap
+         (lam ks. setUnion ks.lower (optionGetOr (setEmpty nameCmp) ks.upper))
+         t.types)
 end
 
 lang GetKind =
@@ -355,7 +358,7 @@ lang GetKind =
     else error "Non-unwrapped TyMetaVar in getKind!"
   | TyRecord r -> Record { fields = r.fields }
   | TyData r -> Data { types =
-                         mapMap (lam cons. {covariant = true, cons = cons})
+                         mapMap (lam cons. {lower = cons, upper = Some (setEmpty nameCmp)})
                                 (computeData r) }
   | _ -> Poly ()
 end
@@ -746,8 +749,10 @@ lang HasMatches =
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
       match getKind env (unwrapType t.data) with Data d then
-        match mapLookup t.ident d with Some {covariant = v, cons = ks} in
-        if v then any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
+        match mapLookup t.ident d with Some {lower = lower, upper = upper} in
+        match upper with Some u then
+          let ks = setUnion lower upper in
+          any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
         else true
       else true
     else true

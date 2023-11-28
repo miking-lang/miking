@@ -1573,7 +1573,7 @@ end
 
 lang DataKindAst = Ast
   syn Kind =
-  | Data {types : Map Name { lower : Set Name, upper : Set Name } }
+  | Data { types : Map Name { lower : Set Name, upper : Option (Set Name) } }
 end
 
 

@@ -337,18 +337,17 @@ lang BootParser = MExprAst + ConstTransformer
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
   | 213 /-TyAll-/ ->
-    let ident = gname t 0 in
     let kind =
       switch gint t 0
       case 0 then Poly ()
       case 1 then
-        let cons = setOfSeq nameCmp (map (gname t) (range 1 (glistlen t 0) 1)) in
-        Data { types = mapFromSeq nameCmp [(ident, {covariant = false, cons = cons})] }
+        let cons = setOfSeq nameCmp (map (gname t) (range 2 (glistlen t 0) 1)) in
+        Data {types = mapFromSeq nameCmp [(gname t 1, {lower = cons, upper = None ()})]}
       case _ then error "BootParser.matchTerm: Invalid data specifier for TyAll"
       end
     in
     TyAll {info = ginfo t 0,
-           ident = ident,
+           ident = gname t 0,
            ty = gtype t 0,
            kind = kind}
   | _ -> error "Unknown type"

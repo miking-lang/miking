@@ -435,6 +435,17 @@ lang DataKindSym = Sym + DataKindAst
   sem symbolizeKind : SymEnv -> Kind -> Kind
   sem symbolizeKind env =
   | Data t ->
+    let symbolizeCons = lam cons.
+      setFold
+        (lam ks. lam k.
+          setInsert
+            (getSymbol {kind = "constructor",
+                        info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
+                        allowFree = env.allowFree}
+               env.conEnv k) ks)
+        (setEmpty nameCmp)
+        cons
+    in
     let types =
       foldl
         (lam m. lam b.
@@ -444,18 +455,8 @@ lang DataKindSym = Sym + DataKindAst
                              allowFree = env.allowFree}
                     env.tyConEnv t
           in
-          let cons =
-            setFold
-              (lam ks. lam k.
-                setInsert
-                  (getSymbol {kind = "constructor",
-                              info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
-                              allowFree = env.allowFree}
-                     env.conEnv k) ks)
-              (setEmpty nameCmp)
-              r.cons
-          in
-          mapInsert t {r with cons = cons} m)
+          mapInsert t {r with lower = symbolizeCons r.lower,
+                              upper = optionMap symbolizeCons r.upper} m)
         (mapEmpty nameCmp)
         (mapBindings t.types)
     in

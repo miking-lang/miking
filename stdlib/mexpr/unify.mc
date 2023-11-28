@@ -245,17 +245,31 @@ lang DataKindUnify = Unify + DataKindAst
 
   sem addKinds u env =
   | (Data r1, Data r2) ->
+    let checkSubset = lam lower1. lam lower2. lam upper.
+      optionMapOr true
+        (lam m. mapAllWithKey (lam k. lam. mapMem k m) (mapDifference lower1 lower2))
+        upper
+    in
     match
-      mapMapAccum
+      mapFoldlOption
         (lam acc. lam t. lam ks1.
-          match mapLookup t r2.types with Some ks2 then
-            if xor ks1.covariant ks2.covariant
-            then (u.err (Kinds (Data r1, Data r2)), ks1)
-            else (acc, {ks1 with cons = setUnion ks1.cons ks2.cons})
-          else (acc, ks1))
-        u.empty r1.types
-    with (acc, types)
-    in (acc, Data {r1 with types = types})
+          match mapLookup t acc with Some ks2 then
+            if and (checkSubset ks1.lower ks2.lower ks2.upper)
+                 (checkSubset ks2.lower ks1.lower ks1.upper)
+            then
+              Some
+                (mapInsert t {lower = setUnion ks1.lower ks2.lower,
+                              upper =
+                                optionCombine
+                                  (lam u1. lam u2. Some (setUnion u1 u2))
+                                  ks1.upper ks2.upper} acc)
+            else None ()
+          else Some (mapInsert t ks1 acc))
+        r2.types r1.types
+    with Some types then
+      (u.empty, Data {r1 with types = types})
+    else
+      (u.err (Kinds (Data r1, Data r2)), Data r1)
 end
 
 lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute

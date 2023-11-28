@@ -1215,7 +1215,7 @@ end
 lang OrPatEval = MatchEvalBase + OrPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
-    optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
+    optionMapOrElse (lam. tryMatch env t r) (lam x. Some x) (tryMatch env t l)
 end
 
 lang NotPatEval = MatchEvalBase + NotPat
