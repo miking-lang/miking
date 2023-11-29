@@ -1335,27 +1335,29 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       let metas = setFold addOne acc.metas internal.metas in
       let reprs = setFold addOne acc.reprs internal.reprs in
       {metas = metas, reprs = reprs} in
-    recursive let mkCommands
-      : [SolveCommand] -> VarMap Int -> [{idxes : Set Int, opUse : TmOpVarRec}] -> [SolveCommand]
-      = lam acc. lam initialVars. lam rest.
-        match rest with [] then acc else
-        match varMapMinBy subi initialVars with Some (sOrN, _) then
-          match partition (lam x. typeMentionsVarInVarMap (varMapSingleton sOrN ()) x.opUse.ty) rest with (mention, rest) in
-          let acc = concat acc (map (lam x. AddOpVar x) mention) in
-          let nextVars = varMapDifference (foldl countInternalVarUses varMapEmpty rest) externalVars in
-          let acc = snoc acc (FilterVars (varMapMap (lam. ()) nextVars)) in
-          mkCommands acc nextVars rest
-        else
-          printLn (join ["mkCommands else ", int2string (length rest)]);
-          concat acc (map (lam x. AddOpVar x) rest)
-    in
+    -- recursive let mkCommands
+    --   : [SolveCommand] -> VarMap Int -> [{idxes : Set Int, opUse : TmOpVarRec}] -> [SolveCommand]
+    --   = lam acc. lam initialVars. lam rest.
+    --     match rest with [] then acc else
+    --     match varMapMinBy subi initialVars with Some (sOrN, _) then
+    --       match partition (lam x. typeMentionsVarInVarMap (varMapSingleton sOrN ()) x.opUse.ty) rest with (mention, rest) in
+    --       let acc = concat acc (map (lam x. AddOpVar x) mention) in
+    --       let nextVars = varMapDifference (foldl countInternalVarUses varMapEmpty rest) externalVars in
+    --       let acc = snoc acc (FilterVars (varMapMap (lam. ()) nextVars)) in
+    --       mkCommands acc nextVars rest
+    --     else
+    --       printLn (join ["mkCommands else ", int2string (length rest)]);
+    --       concat acc (map (lam x. AddOpVar x) rest)
+    -- in
+    let mkCommandsOld = lam idxedOpUses. snoc (map (lam x. AddOpVar x) idxedOpUses) (FilterVars varMapEmpty) in
 
     let procImpl =
       { implId = impl.implId
       , op = impl.op
-      , problem = mkCommands []
-        (varMapDifference (foldl countInternalVarUses varMapEmpty idxedOpUses) externalVars)
-        idxedOpUses
+      -- , problem = mkCommands []
+      --   (varMapDifference (foldl countInternalVarUses varMapEmpty idxedOpUses) externalVars)
+      --   idxedOpUses
+      , problem = mkCommandsOld idxedOpUses
       , selfCost = impl.selfCost
       , uni = impl.uni
       , specType = impl.specType
