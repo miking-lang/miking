@@ -6,13 +6,15 @@ type LibCompileResult = {
   libPath : String
 }
 
-let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
-  lam libs. lam clibs. lam ocamlProg.
+
+let compileOcamlLibrary : String -> [String] -> [String] -> String -> LibCompileResult =
+  lam id. lam libs. lam clibs. lam ocamlProg.
 
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
-  let t = tempfile ("plugin.ml") in
+--  let t = tempfile (join ["plugin.ml"]) in
+  let t = tempfile (concat id ".ml") in
   writeFile t ocamlProg;
   -- Assume that needed dependencies are present in the cwd
   let includePath = sysGetCwd () in
@@ -24,31 +26,38 @@ let compileOcamlLibrary : [String] -> [String] -> String -> LibCompileResult =
     print (join ["Something went wrong when compiling the plugin\n",
                  r.stdout, "\n", r.stderr, "\n"]);
     exit 1
-  else ()); 
+  else ());
   {
   libPath = tempfile ("plugin.cmxs"),
   cleanup = lam. sysTempDirDelete td (); ()
   }
 
+-- To keep track of names that have previously been JIT compiled
 let _jitCompiled = ref (mapEmpty nameCmp)
 
 let jitCompile : all a. Name -> Map Name String -> Expr -> a =
   lam id. lam pprintEnv.  lam e.
-  match mapLookup id (deref _jitCompiled) with Some f then unsafeCoerce f
-  else
-    let nameToStr = lam id.
-      let s = nameGetStr id in
-      match nameGetSym id with Some sym then
-        join [s, "_", int2string (sym2hash sym)]
-      else s
-    in
-  let extId = concat "mexpr_jit_" (nameToStr id) in
+  -- With current implementation, each residual must be uniquely identified when
+  -- dynamically loaded.
+  let counter = match mapLookup id (deref _jitCompiled) with Some lastCount
+    then addi lastCount 1 else 1 in
+
+  modref _jitCompiled (mapInsert id counter (deref _jitCompiled));
+
+  let nameToStr = lam id.
+    let s = nameGetStr id in
+    match nameGetSym id with Some sym then
+        join [s, "_", int2string (sym2hash sym), "_", int2string counter]
+    else s
+  in
+
+  let residualId = concat "mexpr_jit_" (nameToStr id) in
   let p =
     use MCoreCompileLang in
-    compileMCorePlugin extId pprintEnv e (mkEmptyHooks (compileOcamlLibrary))
+    compileMCorePlugin residualId pprintEnv e
+      (mkEmptyHooks (compileOcamlLibrary residualId))
   in
   loadLibraries p.libPath;
   p.cleanup ();
-  let residual = getExternal extId in
-  modref _jitCompiled (mapInsert id residual (deref _jitCompiled));
+  let residual = getExternal residualId in
   unsafeCoerce residual
