@@ -97,7 +97,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclu
   | TmLet t ->
     match compileSpecializeBinding pnames args idMap t.ident t.body
       with Some (idMapping, newBody) then
-        (idMapping, TmLet {t with body = newBody})
+        let updatedLet = TmLet {t with body = newBody} in
+        smapAccumL_Expr_Expr (specializePass pnames args) idMapping updatedLet
     else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
   | TmRecLets t ->
     match
