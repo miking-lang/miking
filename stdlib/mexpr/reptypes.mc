@@ -836,6 +836,8 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
 
   -- NOTE(vipa, 2023-10-25): A solution to some particular op
   syn SolverSolution a =
+  -- NOTE(vipa, 2023-10-25): A set of solutions to some particular op
+  syn SolverSolutionSet a =
 
   type OpImpl a =
     { implId: ImplId
@@ -876,13 +878,16 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
   -- system will ask for a solution from a solution set. Every other
   -- solution will be acquired through concretizeSolution.
-  sem allSolutions : all a. Bool -> SolverGlobal a -> SolverBranch a -> Name -> Type -> (SolverBranch a, [SolProps a])
+  sem allSolutions : all a. Bool -> SolverGlobal a -> SolverBranch a -> Name -> Type -> (SolverBranch a, SolverSolutionSet a)
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level, where we just get a
   -- sequence of solutions that are available for each opUse, and
   -- we're to find the cheapest solution (i.e., pick one
   -- `SolverSolution` per element in the input list).
-  sem topSolve : all a. SolverGlobal a -> [[SolProps a]] -> [SolverSolution a]
+  sem topSolve : all a. SolverGlobal a -> [(OpCost, SolverSolutionSet a)] -> [SolverSolution a]
+
+  -- NOTE(vipa, 2023-11-29): Check if a solution set is empty
+  sem solSetIsEmpty : all a. SolverGlobal a -> SolverBranch a -> SolverSolutionSet a -> Bool
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`. The returned `ImplId` should be
@@ -1035,7 +1040,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   -- Collecting and solving sub-problems --
   type CollectState =
     { branch : SolverBranch Expr
-    , opUses : [[SolProps Expr]]
+    , opUses : [(OpCost, SolverSolutionSet Expr)]
     , nextId : Int
     , options : ReprSolverOptions
     }
@@ -1050,7 +1055,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm & TmOpVar x ->
     match allSolutions state.options.debugSolveProcess global state.branch x.ident x.ty with (branch, sols) in
     (if state.options.debugBranchState then debugBranchState global branch else ());
-    if null sols then
+    if solSetIsEmpty global state.branch sols then
       let env = pprintEnvEmpty in
       recursive let unwrapAll = lam ty. unwrapType (smap_Type_Type unwrapAll ty) in
       match getTypeStringCode 0 env (unwrapAll x.ty) with (env, reqTy) in
@@ -1062,8 +1067,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       match mapAccumL optionToError env options with (env, opts) in
       errorMulti (cons (x.info, concat "Required type: " reqTy) opts) "There were no valid implementations here."
     else
-      let sols = map (lam sol. {sol with cost = mulf x.scaling sol.cost}) sols in
-      ({state with branch = branch, opUses = snoc state.opUses sols}, tm)
+      ({state with branch = branch, opUses = snoc state.opUses (x.scaling, sols)}, tm)
   | TmOpImpl x ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
@@ -1247,6 +1251,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   syn SolverGlobal a = | SGContent ()
   syn SolverBranch a = | SBContent (SBContent a)
   syn SolverSolution a = | SSContent (SolContent a)
+  syn SolverSolutionSet a = | SSSContent ([SolContent a])
 
   sem initSolverGlobal = | _ -> SGContent ()
   sem initSolverBranch = | global -> SBContent
@@ -1258,6 +1263,10 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       , reprs = []
       }
     }
+
+  sem solSetIsEmpty global branch =
+  | SSSContent [] -> true
+  | SSSContent _ -> false
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
@@ -1390,6 +1399,13 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         , sols = snoc prev.sols sol.sol
         }
       else None () in
+    let mapF = lam opUse.
+      match opUse with (scaling, SSSContent sols) in
+      let mapF = lam sol.
+        match sol with SolContent x in
+        { sol = SSContent sol, uni = x.uni, cost = mulf x.cost scaling } in
+      map mapF sols in
+    let opUses = map mapF opUses in
     let f = lam prev. lam sols.
       filterOption (seqLiftA2 mergeOpt prev sols) in
     let sols = foldl f [{uni = emptyUnification (), cost = 0.0, sols = []}] opUses in
@@ -1406,8 +1422,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     (if debug then
       printLn (join ["=> ", int2string (length sols), " solutions"])
      else ());
-    let sols = map (lam s. match s with SolContent x in {sol = SSContent s, cost = x.cost, uni = x.uni}) sols in
-    (SBContent branch, sols)
+    (SBContent branch, SSSContent sols)
 
   sem availableSolutions global branch = | op ->
     match branch with SBContent branch in
