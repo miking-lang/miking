@@ -100,8 +100,7 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
   | TyUnknown _ | TyArrow _ ->
     None ()
   | t ->
-    match liftViaTypeH args names varName t with Some t then Some t
-    else None ()
+    liftViaTypeH args names varName t
 
   sem _liftBasicType : SpecializeNames -> Name -> Type -> Option Expr
   sem _liftBasicType names varName =
@@ -482,7 +481,8 @@ let _createFakeNames = lam.
    consNames = consNames,
    builtinsNames = builtinsNames,
    tyConsNames = tyConsNames,
-   otherFuncs=otherFuncs}
+   otherFuncs=otherFuncs,
+   nameMapPH = nameSym "nmapph"}
 
 let _setup =
   use SetupLang in

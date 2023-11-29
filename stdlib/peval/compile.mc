@@ -10,12 +10,18 @@ include "name.mc"
 include "seq.mc"
 include "error.mc"
 include "set.mc"
+include "option.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/lamlift.mc"
+include "mexpr/shallow-patterns.mc"
+include "mexpr/utils.mc"
+include "mexpr/free-vars.mc"
 
-lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
-                    + SpecializeInclude + SpecializeLiftMExpr
-                    + MExprLambdaLift + SpecializeExtract
+
+lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst + SpecializeInclude +
+                    SpecializeLiftMExpr + MExprLambdaLift + SpecializeExtract +
+                    MExprLowerNestedPatterns + MExprSubstitute + MExprFreeVars
 
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
@@ -27,44 +33,84 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
   | TmLam t -> smap_Expr_Expr (updateBody e) (TmLam t)
   | t -> e
 
-  sem rmCopy : Name -> Expr -> Expr
-  sem rmCopy rm =
-  | TmLet t ->
-    if nameEq t.ident rm then
-      t.inexpr
-    else smap_Expr_Expr (rmCopy rm) (TmLet t)
-  | t -> smap_Expr_Expr (rmCopy rm) t
+  sem getNames : Expr -> Set Name
+  sem getNames =
+  | t ->
+    let identifiers = getUsedIdentifiers (setEmpty nameCmp) t in
+    let fvs = freeVars t in
+    setSubtract identifiers fvs
 
-  sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
-                  Expr -> (Map Name Name, Expr)
-  sem specializePass pnames args idMap =
-  | TmLet t ->
-    match mapLookup t.ident args.extractMap with Some e then
-      -- Remove the copy of this let binding in the extracted bindings
-      let e = rmCopy t.ident e in
-      -- Bind the dependencies to the thing we want to specialize, disregarding
-      -- any outer lambdas, i.e. with specialize (lam x. addi x y)
-      -- we will only look at addi x y
-      let toSpec = createSpecExpr e t.body in
+  sem getUsedIdentifiers : Set Name -> Expr -> Set Name
+  sem getUsedIdentifiers names =
+  | TmVar t ->
+    setInsert (t.ident) names
+  | t -> sfold_Expr_Expr getUsedIdentifiers names t
+
+  sem createNameSubMap : Set Name -> Map Name Name
+  sem createNameSubMap =
+  | s -> setFold
+          (lam subMap. lam name. let newName = nameSetNewSym name in
+            mapInsert name newName subMap)
+          (mapEmpty nameCmp) s
+
+  sem compileSpecializeBinding: SpecializeNames -> SpecializeArgs -> Map Name Name ->
+            Name -> Expr -> Option (Map Name Name, Expr)
+  sem compileSpecializeBinding pnames args idMap ident =
+  | body ->
+    match mapLookup ident args.extractMap with Some e then
+      -- This step ensures that the relevant identifiers used in the expression that we
+      -- want to specialize aren't also used in the extracted dependencies.
+      -- That  necessary to find the correct free variables
+
+      let namesToSubstitute = getNames body in
+      let nameSubstitutionMap = createNameSubMap namesToSubstitute in
+      let e = substituteIdentifiers nameSubstitutionMap e in
+
+      let toSpec = createSpecExpr e body in
+
+      -- TODO(adamssonj, 2023-11-26): Remove once peval handles nested patterns correctly
+      let toSpec = lowerAll toSpec in
 
       -- Update the map of names that have been bound already
       let args = updateIds args idMap in
 
-      -- TODO: extractMap in args is useless for lift, maybe exclude
-
-      -- The environment holds the free variables of the expression to spec.
+      -- TODO(adamssonj, 2023-11-26): extractMap in args is useless for lift, maybe exclude
+      -- The environment pevalEnv holds the free variables of the expression to spec.
       match getLiftedEnv pnames args toSpec with (args, pevalEnv) in
       match liftExpr pnames args toSpec with (args, pevalArg) in
-      let lhs = nvar_ (pevalName pnames) in
-      -- temporary
-      let f = appf2_ lhs pevalEnv pevalArg in
-      let p = nvar_ (mexprStringName pnames) in
-      let ff = app_ p f in
-      let fff = print_ ff in
-      -- Update the specialize let-binding
-      let bodyn = updateBody (semi_ fff never_) t.body in
-      (args.idMapping, TmLet {t with body = bodyn})
+      match liftName pnames args (nameSym "residualID") with (args, id) in
+
+      let jitCompile = nvar_ (jitName pnames) in
+      let placeHolderPprint = nvar_ (nameMapName pnames) in
+      let jitCompile = appf2_ jitCompile id placeHolderPprint in
+      let pevalFunc = nvar_ (pevalName pnames) in
+      let residual = appf2_ pevalFunc pevalEnv pevalArg in
+      let compiledResidual = app_ jitCompile residual in
+      let newBody = updateBody compiledResidual body in
+
+      Some (args.idMapping, newBody)
+    else None ()
+
+  sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
+                       Expr -> (Map Name Name, Expr)
+  sem specializePass pnames args idMap =
+  | TmLet t ->
+    match compileSpecializeBinding pnames args idMap t.ident t.body
+      with Some (idMapping, newBody) then
+        let updatedLet = TmLet {t with body = newBody} in
+        smapAccumL_Expr_Expr (specializePass pnames args) idMapping updatedLet
     else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
+  | TmRecLets t ->
+    match
+      mapAccumL (lam ids. lam bind.
+        match compileSpecializeBinding pnames args ids bind.ident bind.body
+          with Some (idMapping, newBody) then
+            (idMapping, { bind with body = newBody })
+          else
+            (ids, bind)) idMap t.bindings
+    with (idMapping, bindings) in
+    let updatedRecLet = TmRecLets { t with bindings = bindings } in
+    smapAccumL_Expr_Expr (specializePass pnames args) idMapping updatedRecLet
   | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
   sem hasSpecializeTerm : Bool -> Expr -> Bool
@@ -72,9 +118,42 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
   | TmSpecialize _ -> true
   | t -> or acc (sfold_Expr_Expr hasSpecializeTerm acc t)
 
+  sem updatePprintPH : SpecializeNames -> Map Name Name -> Map Name String ->
+                       Expr -> (Map Name String, Expr)
+  sem updatePprintPH names idMap nameMap =
+  | TmLet t ->
+    if nameEq t.ident (nameMapName names) then
+      -- IdMap : ActualName -> GeneratedName
+      --       : NameInProgram.ml -> NameInPlugin.ml
+      -- ActualName and GeneratedName should be pprinted to same string
+      -- Here, we create the strings for those names explicitly
+      let stringName = lam acName.
+       join ["specialize_", nameGetStr acName
+       , "\'"
+       , (int2string (sym2hash (optionGetOrElse
+                                 (lam. error "Expected symbol")
+                                 (nameGetSym acName))))] in
+
+      -- Create Expr of nameMap (used in plugins)
+      let kvSeq = mapFoldWithKey (lam l. lam acName. lam genName.
+         let name = utuple_ [str_ acName.0, nvar_ genName] in
+         snoc l (utuple_ [name, str_ (stringName acName)])) [] idMap in
+      let mfs = nvar_ (mapFromSeqName names) in
+      let ncmp = nvar_ (nameCmpName names) in
+      let nameMapExpr = appf2_ mfs ncmp (seq_ kvSeq) in
+
+      -- Create actual nameMap (used in actual program)
+      let nameMap = mapFoldWithKey (lam m. lam acName. lam genName.
+        mapInsert acName (stringName acName) m) (mapEmpty nameCmp) idMap in
+      (nameMap, TmLet {t with body=nameMapExpr})
+    else
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap (TmLet t)
+  | t ->
+      smapAccumL_Expr_Expr (updatePprintPH names idMap) nameMap t
+
   sem compileSpecialize =
   | ast ->
-    if not (hasSpecializeTerm false ast) then ast
+    if not (hasSpecializeTerm false ast) then (false, (mapEmpty nameCmp), ast)
     else
     match addIdentifierToSpecializeTerms ast with (specializeData, ast) in
     match liftLambdasWithSolutions ast with (solutions, ast) in
@@ -84,10 +163,9 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     let extractMap : Map Name Expr = extractSeparate specializeIds ast in
 
     -- Bulk of the time taken
-    match includeSpecializeDeps ast with ast in
-
+    match includeSpecializeDeps ast with (ast, nameMapName) in
     -- Find the names of the functions and constructors needed later
-    let names = createNames ast in
+    let names = createNames ast nameMapName in
 
     let args = initArgs extractMap in
     match specializePass names args (mapEmpty nameCmp) ast
@@ -100,8 +178,9 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
           symDefs,
           ast]
     else ast in
-    ast
-
+    match updatePprintPH names idMapping (mapEmpty nameCmp) ast
+      with (nameMap, ast) in
+    (true, nameMap, ast)
 end
 
 
@@ -115,28 +194,6 @@ use TestLang in
 let preprocess = lam t.
   typeCheck (symbolize t)
 in
-
-
---let distinctCalls = preprocess (bindall_ [
---  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
---  specialize_ (app_ (var_ "f") (int_ 1))
---]) in
---
---let distinctCalls = preprocess (bindall_ [
---  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
---  ulam_ "x" (bindall_ [
---    ulet_ "k" (addi_ (var_ "x") (var_ "x")),
---    ulet_ "q" (specialize_ (var_ "k")),
---    var_ "k"
---    ])
---]) in
---
---let distinctCalls = preprocess (bindall_ [
---    ulet_ "f" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
---    ulet_ "p" (ulam_ "x" (specialize_ (app_ (var_ "f") (var_ "x")))),
---    app_ (var_ "p") (int_ 4)
---]) in
-
 
 -- TyInt
 let unknownTyInt = preprocess (bindall_ [
@@ -235,6 +292,6 @@ let distinctCalls = preprocess (bindall_ [
     app_ (var_ "p") (int_ 4)
 ]) in
 
-match compileSpecialize unknownTyRecUnknown with ast in
+match compileSpecialize unknownTyRecUnknown with (_, _, ast) in
 
 ()

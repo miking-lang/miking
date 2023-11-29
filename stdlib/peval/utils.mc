@@ -20,7 +20,8 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
     consNames : Map String Name,
     builtinsNames : Map String Name,
     tyConsNames : Map String Name,
-    otherFuncs : Map String Name
+    otherFuncs : Map String Name,
+    nameMapPH : Name
   }
 
   type SpecializeArgs = {
@@ -34,7 +35,7 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
      idMapping = (mapEmpty nameCmp)}
 
   sem updateIds : SpecializeArgs -> Map Name Name -> SpecializeArgs
-  sem updateIds args = | idm -> {args with idMapping =idm}
+  sem updateIds args = | idm -> {args with idMapping = idm}
 
   sem _nameSeqToMap : [Name] -> Map String Name
   sem _nameSeqToMap =
@@ -51,9 +52,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
       let notIn = strJoin "\n" notIn in
       error (concat "A necessary include could not be found in the AST\n" notIn)
 
-  sem createNames : Expr -> SpecializeNames
-  sem createNames =
-  | ast ->
+  sem createNames : Expr -> Name -> SpecializeNames
+  sem createNames ast =
+  | nameMapName ->
     let pevalNames = findNames ast includeSpecializeNames in
     let consNames = findNames ast includeConsNames in
     let builtinsNames = findNames ast includeBuiltins in
@@ -63,7 +64,8 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
      consNames = consNames,
      builtinsNames = builtinsNames,
      tyConsNames = tyConsNames,
-     otherFuncs=otherFuncs}
+     otherFuncs = otherFuncs,
+     nameMapPH = nameMapName}
 
   sem getName : Map String Name -> String -> Name
   sem getName names =
@@ -73,6 +75,9 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
 
   sem pevalName : SpecializeNames -> Name
   sem pevalName = | names -> getName (names.pevalNames) "pevalWithEnv"
+
+  sem jitName : SpecializeNames -> Name
+  sem jitName = | names -> getName (names.pevalNames) "jitCompile"
 
   sem tmClosName : SpecializeNames -> Name
   sem tmClosName = | names -> getName (names.consNames) "ClosAst_TmClos"
@@ -164,9 +169,6 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
   sem stringToSidName : SpecializeNames -> Name
   sem stringToSidName = | names -> getName (names.otherFuncs) "stringToSid"
 
-  sem mexprStringName : SpecializeNames -> Name
-  sem mexprStringName = | names -> getName (names.otherFuncs) "toString"
-
   sem patIntName : SpecializeNames -> Name
   sem patIntName = | names -> getName (names.consNames) "IntPat_PatInt"
 
@@ -205,6 +207,12 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
 
   sem pWildcardName: SpecializeNames -> Name
   sem pWildcardName = | names -> getName (names.consNames) "PWildcard"
+
+  sem nameMapName : SpecializeNames -> Name
+  sem nameMapName = | names -> names.nameMapPH
+
+  sem nameCmpName : SpecializeNames -> Name
+  sem nameCmpName = | names -> getName (names.otherFuncs) "nameCmp"
 
   -- Return a string representation of the constant along with whether
   -- it takes an argument when constructed
