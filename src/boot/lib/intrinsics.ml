@@ -735,8 +735,5 @@ module Ext = struct
       Printf.eprintf
         "ERROR: Module \"%s\" must be fully initialized before %scan be loaded\n"
         str dyn_ext_file ;
-      Printf.eprintf
-        "HINT: let bars = peval bar in () \n\
-         ===>> let f = lam. let bars = peval bar in () in f ()\n" ;
       exit 1
 end
