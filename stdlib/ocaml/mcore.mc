@@ -16,7 +16,7 @@ type Hooks a =
   , exitBefore : () -> ()
   , postprocessOcamlTops : [Top] -> [Top]
   , compileOcaml : [String] -> [String] -> String -> a
-  , compileOcamlPEval : Option ([String] -> [String] -> String -> String -> a)
+  , compileOcamlSpecialize : Option ([String] -> [String] -> String -> String -> a)
   , nameMap : Option (Map Name String)
   }
 
@@ -27,7 +27,7 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
   , compileOcaml = compileOcaml
-  , compileOcamlPEval = None ()
+  , compileOcamlSpecialize = None ()
   , nameMap = None ()
   }
 
@@ -67,7 +67,7 @@ lang MCoreCompileLang =
     match generateTops env ast with (entryPointId, exprTops) in
     -- If we are partially evaluating then we'll call into program.ml
     -- from elsewhere
-    let exprTops = match hooks.compileOcamlPEval with Some _
+    let exprTops = match hooks.compileOcamlSpecialize with Some _
       then init exprTops else exprTops in
 
     let exprTops = hooks.postprocessOcamlTops exprTops in
@@ -97,7 +97,7 @@ lang MCoreCompileLang =
     hooks.exitBefore ();
 
     -- Compile OCaml AST
-    match hooks.compileOcamlPEval with Some comp then
+    match hooks.compileOcamlSpecialize with Some comp then
       use OCamlPrettyPrint in
       match pprintVarName pprintEnv entryPointId with (_, entryPointName) in
       comp libs clibs ocamlProg entryPointName

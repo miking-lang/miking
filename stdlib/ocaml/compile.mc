@@ -21,7 +21,7 @@ let defaultCompileOptions : CompileOptions = {
   cLibraries = []
 }
 
-let ocamlCompilePEval : CompileOptions -> String -> String -> CompileResult =
+let ocamlCompileSpecializeWithConfig : CompileOptions -> String -> String -> CompileResult =
   lam options. lam p. lam entryPointId.
   let mainFile = join ["open Program let () = Program.", entryPointId, " ()"] in
 

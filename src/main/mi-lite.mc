@@ -62,7 +62,7 @@ let ocamlCompile : Options -> String -> [String] -> [String] -> String -> String
   p.cleanup ();
   destinationFile
 
-let ocamlCompilePEval : Options -> String -> [String] -> [String] -> String ->
+let ocamlCompileSpecialize : Options -> String -> [String] -> [String] -> String ->
                         String -> String =
   lam options. lam sourcePath. lam libs. lam clibs.
   lam ocamlProg. lam entryPointId.
@@ -77,7 +77,8 @@ let ocamlCompilePEval : Options -> String -> [String] -> [String] -> String ->
     else opts
   in
 
-  let p : CompileResult = ocamlCompilePEval compileOptions ocamlProg entryPointId in
+  let p : CompileResult =
+    ocamlCompileSpecializeWithConfig compileOptions ocamlProg entryPointId in
   let destinationFile =
     switch options.output
     case None () then filenameWithoutExtension (filename sourcePath)
