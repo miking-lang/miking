@@ -1318,19 +1318,22 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
   sem getKindStringCode (indent : Int) (env : PprintEnv) =
   | Data r ->
     let consstr =
-      mapFoldWithKey (lam strs. lam t. lam ks.
-        let lower =
-          if not (mapIsEmpty ks.lower) then
-            join ["-{", strJoin ", " (map nameGetStr (setToSeq ks.lower)), "}"]
-          else ""
-        in
-        let upper =
-          match ks.upper with Some m then
-            join ["+{", strJoin ", " (map nameGetStr (setToSeq m)), "}"]
-          else ""
-        in
-        snoc strs (join [nameGetStr t, lower, upper]))
-        [] r.types in
+      mapFoldWithKey
+        (lam strs. lam t. lam ks.
+          let lower =
+            if not (mapIsEmpty ks.lower) then
+              [ join ["> ", strJoin " " (map nameGetStr (setToSeq ks.lower)) ] ]
+            else []
+          in
+          let upper =
+            match ks.upper with Some m then
+              [ join ["< ", strJoin " " (map nameGetStr (setToSeq m))] ]
+            else []
+          in
+          snoc strs
+            (join [ nameGetStr t, "[", strJoin " " (concat lower upper), "]"]))
+        [] r.types
+    in
     (env, join ["{", strJoin ", " consstr, "}"])
 end
 

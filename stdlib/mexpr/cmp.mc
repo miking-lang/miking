@@ -502,6 +502,7 @@ lang DataKindCmp = Cmp + DataKindAst
         case (Some _, None _) then 1
         case (None _, Some _) then negi 1
         case _ then 0
+        end
       else lowerDiff
     in
     mapCmp recCmp l.types r.types

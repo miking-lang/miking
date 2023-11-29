@@ -96,11 +96,8 @@ lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyMetaVar t ->
     switch deref t.contents
-    case Unbound t then
-      match pprintVarName env t.ident with (env, str) in
-      (env, concat "_" str)
-    case Link ty then
-      getTypeStringCode indent env ty
+    case Unbound t then pprintVarName env t.ident
+    case Link ty then getTypeStringCode indent env ty
     end
 end
 

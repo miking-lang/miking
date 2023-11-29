@@ -235,9 +235,13 @@ lang DataKindUnify = Unify + DataKindAst
          (lam t. lam ks2.
            optionMapOr false
              (lam ks1.
-               if ks2.covariant
-               then and ks1.covariant (setSubset ks1.cons ks2.cons)
-               else and (not ks1.covariant) (setSubset ks2.cons ks1.cons))
+               if setSubset ks2.lower ks1.lower then
+                 match ks2.upper with Some m2 then
+                   match ks1.upper with Some m1 then
+                     setSubset (setUnion ks1.lower m1) (setUnion ks2.lower m2)
+                   else false
+                 else true
+               else false)
              (mapLookup t r1.types))
          r2.types
     then u.empty
@@ -247,22 +251,23 @@ lang DataKindUnify = Unify + DataKindAst
   | (Data r1, Data r2) ->
     let checkSubset = lam lower1. lam lower2. lam upper.
       optionMapOr true
-        (lam m. mapAllWithKey (lam k. lam. mapMem k m) (mapDifference lower1 lower2))
+        (lam m.
+          mapAllWithKey (lam k. lam. mapMem k m) (mapDifference lower1 lower2))
         upper
     in
     match
       mapFoldlOption
         (lam acc. lam t. lam ks1.
           match mapLookup t acc with Some ks2 then
-            if and (checkSubset ks1.lower ks2.lower ks2.upper)
-                 (checkSubset ks2.lower ks1.lower ks1.upper)
-            then
-              Some
-                (mapInsert t {lower = setUnion ks1.lower ks2.lower,
-                              upper =
-                                optionCombine
-                                  (lam u1. lam u2. Some (setUnion u1 u2))
-                                  ks1.upper ks2.upper} acc)
+            if checkSubset ks1.lower ks2.lower ks2.upper then
+              if checkSubset ks2.lower ks1.lower ks1.upper then
+                Some
+                  (mapInsert t {lower = setUnion ks1.lower ks2.lower,
+                                upper =
+                                  optionCombine
+                                    (lam u1. lam u2. Some (setIntersect u1 u2))
+                                    ks1.upper ks2.upper} acc)
+              else None ()
             else None ()
           else Some (mapInsert t ks1 acc))
         r2.types r1.types

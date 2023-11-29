@@ -262,7 +262,7 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + PrettyPrint + Cmp + RepTy
         let f = lam env. lam pair.
           match pprintVarName env pair.0 with (env, l) in
           match getKindStringCode 0 env pair.1 with (env, r) in
-          (env, join ["\n*   _", l, " :: ", r]) in
+          (env, join ["\n*   ", l, " :: ", r]) in
         match mapAccumL f pprintEnv (mapBindings res.kinds) with (pprintEnv, kinds) in
         (pprintEnv, join [join kinds, "\n"])
     with (pprintEnv, kinds) in
@@ -611,26 +611,6 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     else
       mkTypeApp (resolveType info env closeDatas constr) args
 
-  | TyAll t ->
-    let ty = resolveType info env closeDatas t.ty in
-    match t.kind with Data d then
-      let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") d.types in
-      let types =
-        setFold (lam m. lam k.
-          match mapLookup k env.conEnv with Some (_, ty) then
-            match stripTyAll ty with (_, TyArrow {to = to}) then
-              match getTypeArgs to with (TyCon t, _) then
-                mapInsertWith setUnion t.ident (setOfSeq nameCmp [k]) m
-              else error "Shouldn't happen!"
-            else error "Shouldn't happen!"
-          else error "Shouldn't happen!")
-                (mapEmpty nameCmp)
-                cons
-      in
-      TyAll {t with ty = ty, kind = Data {types = types}}
-    else
-      TyAll {t with ty = ty}
-
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.
   | TyAlias t -> TyAlias t
@@ -749,9 +729,9 @@ lang HasMatches =
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
       match getKind env (unwrapType t.data) with Data d then
-        match mapLookup t.ident d with Some {lower = lower, upper = upper} in
+        match mapLookup t.ident d.types with Some {lower = lower, upper = upper} in
         match upper with Some u then
-          let ks = setUnion lower upper in
+          let ks = setUnion lower u in
           any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
         else true
       else true
@@ -776,15 +756,9 @@ lang HasMatches =
           match unwrapType t.data with TyMetaVar r then
             match deref r.contents with Unbound u then
               let universe = _computeUniverse env t.ident in
-              let u1 =
-                if inferFull then universe
-                else mapRemove t.ident universe in
-              let u2 =
-                match u.kind with Data d then d.types
-                else mapEmpty nameCmp in
               let data =
                 TyData { info = t.info
-                       , universe = mapUnionWith setUnion u1 u2
+                       , universe = universe
                        , positive = false
                        , cons = setEmpty nameCmp }
               in
@@ -1219,9 +1193,10 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
         let x = nameSym "x" in
         match substituteData (TyVar {info = info, ident = x}) (setEmpty nameCmp) ty
         with (tydeps, newTy) in
-        let data = Data {
-          types = mapFromSeq nameCmp [ (target.ident, setOfSeq nameCmp [ ident ]) ]
-        } in
+        let data =
+          Data { types = mapFromSeq nameCmp [ ( target.ident
+                                              , { lower = setOfSeq nameCmp []
+                                                , upper = None () }) ] } in
         (target.ident,
          tydeps,
          TyAll { info = info
@@ -1255,9 +1230,14 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
-      match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} in
-      unify env [infoTm body] from (tyTm body);
-      TmConApp {t with body = body, ty = to}
+      match lty with TyAll (r & {kind = Data d}) then
+        let types = mapMap (lam ks. {ks with lower = setInsert t.ident ks.lower}) d.types in
+        let lty = TyAll {r with kind = Data {d with types = types}} in
+        match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
+          unify env [infoTm body] from (tyTm body);
+          TmConApp {t with body = body, ty = to}
+        else error "Invalid constructor type in typeCheckExpr!"
+      else error "Invalid constructor type in typeCheckExpr!"
     else
       let msg = join [
         "* Encountered an unbound constructor: ",
