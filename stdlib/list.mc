@@ -1,7 +1,6 @@
 -- MExpr implementation of a cons list using explicit constructors.
 
 include "option.mc"
-include "map.mc"
 
 type List a
 con Cons : all a. (a, List a) -> List a
@@ -24,21 +23,21 @@ let listFind : all a. (a -> Bool) -> List a -> Option a = lam p. lam li.
     end
   in find li
 
-let listFindMap : all a. (a -> Option b) -> List a -> Option b = lam p. lam li.
+let listFindMap : all a. all b. (a -> Option b) -> List a -> Option b = lam p. lam li.
   recursive let find = lam li.
     switch li
     case Cons (e, li) then
-      match p e with Some e2 then e2
+      match p e with r & Some _ then r
       else find li
     case Nil _ then None ()
     end
   in find li
 
-let listFindMapWithIndex : all a. (Int -> a -> Option b) -> List a -> Option b = lam p. lam li.
+let listFindMapWithIndex : all a. all b. (Int -> a -> Option b) -> List a -> Option b = lam p. lam li.
   recursive let find = lam idx. lam li.
     switch li
     case Cons (e, li) then
-      match p idx e with Some e2 then e2
+      match p idx e with r & Some _ then r
       else find (addi idx 1) li
     case Nil _ then None ()
     end
