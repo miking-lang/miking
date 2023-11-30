@@ -251,9 +251,7 @@ lang DataKindUnify = Unify + DataKindAst
   | (Data r1, Data r2) ->
     let checkSubset = lam lower1. lam lower2. lam upper.
       optionMapOr true
-        (lam m.
-          mapAllWithKey (lam k. lam. mapMem k m) (mapDifference lower1 lower2))
-        upper
+        (lam m. setSubset (setSubtract lower1 lower2) m) upper
     in
     match
       mapFoldlOption
@@ -261,12 +259,17 @@ lang DataKindUnify = Unify + DataKindAst
           match mapLookup t acc with Some ks2 then
             if checkSubset ks1.lower ks2.lower ks2.upper then
               if checkSubset ks2.lower ks1.lower ks1.upper then
+                let upper =
+                  switch (ks1.upper, ks2.upper)
+                  case (Some u1, Some u2) then Some (setIntersect u1 u2)
+                  case (Some u, None _) then Some (setSubtract u ks2.lower)
+                  case (None _, Some u) then Some (setSubtract u ks1.lower)
+                  case _ then None ()
+                  end
+                in
                 Some
                   (mapInsert t {lower = setUnion ks1.lower ks2.lower,
-                                upper =
-                                  optionCombine
-                                    (lam u1. lam u2. Some (setIntersect u1 u2))
-                                    ks1.upper ks2.upper} acc)
+                                upper = upper} acc)
               else None ()
             else None ()
           else Some (mapInsert t ks1 acc))

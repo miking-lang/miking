@@ -712,20 +712,47 @@ lang PatTypeCheck = TCUnify
     (patEnv, withTypePat patTy pat)
 end
 
-lang HasMatches =
+lang IsExhaustive =
   TCUnify + NormPatMatch + ConNormPat + ConTypeAst +
   DataTypeAst + DataKindAst + AppTypeUtils + Generalize +
   GetKind
 
-  -- Perform an exhaustiveness check for the given pattern and type.
-  sem normpatHasMatches : TCEnv -> (Type, NormPat) -> Bool
-  sem normpatHasMatches env =
-  | (ty, np) ->
-    any (lam p. npatHasMatches env (ty, p)) (setToSeq np)
+  -- Merge two assignments of meta variables to upper bound constructor sets
+  -- by choosing the most open of the two assignments, or intersecting the two if
+  -- neither is more open than the other.
+  sem mergeBounds : Map Type (Set Name) -> Map Type (Set Name) -> Map Type (Set Name)
+  sem mergeBounds m1 =
+  | m2 ->
+    let isMoreOpen = lam m1. lam m2.
+      mapAllWithKey
+        (lam v. lam ks1.
+          match mapLookup v m2 with Some ks2 then
+            setSubset ks2 ks1
+          else false)
+        m1
+    in
+    if isMoreOpen m1 m2 then m1 else
+      if isMoreOpen m2 m1 then m2 else
+        mapUnionWith setIntersect m1 m2
 
-  sem npatHasMatches : TCEnv -> (Type, NPat) -> Bool
-  sem npatHasMatches env =
-  | (ty, SNPat p) -> snpatHasMatches env (unwrapType ty, p)
+  -- Perform an exhaustiveness check for the given pattern and type.
+  -- Returns a mapping from meta variables of Data kind to the upper bound
+  -- constructor set they should be assigned for the match to be exhaustive,
+  -- if such an assignment exists, and nothing otherwise.
+  sem normpatIsExhaustive : TCEnv -> (Type, NormPat) -> Option (Map Type (Set Name))
+  sem normpatIsExhaustive env =
+  | (ty, np) ->
+    optionFoldlM
+      (lam m. lam p.
+        optionMap
+          (mapUnionWith setIntersect m)
+          (npatIsExhaustive env (ty, p)))
+      (mapEmpty cmpType)
+      (setToSeq np)
+
+  sem npatIsExhaustive : TCEnv -> (Type, NPat) -> Option (Map Type (Set Name))
+  sem npatIsExhaustive env =
+  | (ty, SNPat p) -> snpatIsExhaustive env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
       match getKind env (unwrapType t.data) with Data d then
@@ -737,10 +764,14 @@ lang HasMatches =
       else true
     else true
 
-  sem snpatHasMatches : TCEnv -> (Type, SNPat) -> Bool
-  sem snpatHasMatches env =
+  sem snpatIsExhaustive : TCEnv -> (Type, SNPat) -> Option (Map Type (Set Name))
+  sem snpatIsExhaustive env =
   | _ -> true
 
+  -- Perform an analysis on the matches performed so far in the program execution,
+  -- returning a map from variable names to patterns indicating a possible assignment
+  -- of values through which this program point could be reached, or nothing if no such
+  -- assignment could be found.
   sem matchesPossible : TCEnv -> Option (Map Name NormPat)
   sem matchesPossible =
   | env ->
@@ -775,7 +806,7 @@ lang HasMatches =
             match mapLookup n env.varEnv with Some ty then
               let ty = inst (infoTy ty) env.currentLvl ty in
               let closed = closeType inferFull ty in
-              if normpatHasMatches env (closed, p) then true
+              if normpatIsExhaustive env (closed, p) then true
               else unify env [] closed ty; false
             else
               error "Should not happen!") m)
@@ -1278,7 +1309,7 @@ lang UtestTypeCheck = TypeCheck + UtestAst
             , ty = tyTm next}
 end
 
-lang NeverTypeCheck = TypeCheck + NeverAst + HasMatches
+lang NeverTypeCheck = TypeCheck + NeverAst + IsExhaustive
   sem typeCheckExpr env =
   | TmNever t ->
     switch matchesPossible env
@@ -1365,12 +1396,12 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SubstituteNewReprs
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
-lang SeqPatHasMatches = HasMatches + SeqTypeAst + SeqNormPat
-  sem snpatHasMatches env =
+lang SeqPatIsExhaustive = IsExhaustive + SeqTypeAst + SeqNormPat
+  sem snpatIsExhaustive env =
   | (TySeq { ty = ty }, NPatSeqTot pats) ->
-    forAll (lam p. npatHasMatches env (ty, p)) pats
+    forAll (lam p. npatIsExhaustive env (ty, p)) pats
   | (TySeq { ty = ty }, NPatSeqEdge { prefix = pre, postfix = post }) ->
-    forAll (lam p. npatHasMatches env (ty, p)) (concat pre post)
+    forAll (lam p. npatIsExhaustive env (ty, p)) (concat pre post)
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat
@@ -1382,11 +1413,11 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
-lang RecordPatHasMatches = HasMatches + RecordTypeAst + RecordNormPat
-  sem snpatHasMatches env =
+lang RecordPatIsExhaustive = IsExhaustive + RecordTypeAst + RecordNormPat
+  sem snpatIsExhaustive env =
   | (TyRecord { fields = fields }, NPatRecord pats) ->
     mapAll (lam x. x)
-           (mapIntersectWith (lam ty. lam p. npatHasMatches env (ty, p))
+           (mapIntersectWith (lam ty. lam p. npatIsExhaustive env (ty, p))
                              fields pats)
 end
 
@@ -1407,13 +1438,13 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
       errorSingle [t.info] msg
 end
 
-lang ConPatHasMatches = HasMatches + ConNormPat + FunTypeAst + Generalize
-  sem snpatHasMatches env =
+lang ConPatIsExhaustive = IsExhaustive + ConNormPat + FunTypeAst + Generalize
+  sem snpatIsExhaustive env =
   | (ty, NPatCon {ident = c, subpat = p}) ->
     match mapLookup c env.conEnv with Some (_, tycon) then
       match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} in
       unify env [infoTy ty] ty to;
-      npatHasMatches env (from, p)
+      npatIsExhaustive env (from, p)
     else
       error "Should not happen!"
 end
@@ -1469,7 +1500,7 @@ lang MExprTypeCheckMost =
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
   BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck +
 
-  SeqPatHasMatches + RecordPatHasMatches + ConPatHasMatches + MExprPatAnalysis +
+  SeqPatIsExhaustive + RecordPatIsExhaustive + ConPatIsExhaustive + MExprPatAnalysis +
 
   -- Value restriction
   MExprIsValue +
