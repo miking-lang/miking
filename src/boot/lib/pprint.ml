@@ -209,7 +209,7 @@ let rec ustring_of_ty = function
   | TyVar (_, x) ->
       pprint_var_str x
   | TyUse (_, lang, ty) ->
-     us"use " ^. lang ^. us" in " ^. ustring_of_ty ty
+      us "use " ^. lang ^. us " in " ^. ustring_of_ty ty
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 

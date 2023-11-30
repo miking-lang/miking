@@ -154,8 +154,7 @@ let wrap_mexpr (Program (inc, tops, tm)) =
 
 let repl_merge_includes = merge_includes (Sys.getcwd ()) []
 
-let repl_envs =
-  ref (empty_mlang_env, builtin_name2sym, builtin_sym2term)
+let repl_envs = ref (empty_mlang_env, builtin_name2sym, builtin_sym2term)
 
 let initialize_envs () =
   let initial_envs, _ =
@@ -204,7 +203,8 @@ let keywords_and_identifiers () =
   let replace_name name mangled_name names =
     names |> USSet.add name |> USSet.remove mangled_name
   in
-  let rec process_mlang_env : 'a. 'a -> mlang_env -> USSet.t -> USSet.t = fun _ mlang_env names ->
+  let rec process_mlang_env : 'a. 'a -> mlang_env -> USSet.t -> USSet.t =
+   fun _ mlang_env names ->
     Record.fold replace_name mlang_env.values names
     |> Record.fold replace_name mlang_env.ty_cons
     |> Record.fold replace_name mlang_env.constructors
