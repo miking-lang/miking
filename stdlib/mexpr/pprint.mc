@@ -1148,12 +1148,12 @@ lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyData t ->
     let consstr =
-      mapFoldWithKey (lam strs. lam. lam ks.
-        snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
+      mapFoldWithKey
+        (lam strs. lam. lam ks.
+          if setIsEmpty ks then strs
+          else snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
         [] (computeData t) in
-    let datastr =
-      join ["{", strJoin ", " consstr, "}"]
-    in (env, datastr)
+    (env, join ["{", strJoin ", " consstr, "}"])
 end
 
 lang VarTypePrettyPrint = PrettyPrint + VarTypeAst
@@ -1318,20 +1318,24 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
   sem getKindStringCode (indent : Int) (env : PprintEnv) =
   | Data r ->
     let consstr =
+      let cons2str = lam cons.
+        if setIsEmpty cons then None ()
+        else Some (strJoin " " (map nameGetStr (setToSeq cons)))
+      in
       mapFoldWithKey
         (lam strs. lam t. lam ks.
           let lower =
-            if not (mapIsEmpty ks.lower) then
-              [ join ["> ", strJoin " " (map nameGetStr (setToSeq ks.lower)) ] ]
-            else []
+            optionMap
+              (lam l. if optionMapOr false mapIsEmpty ks.upper then l
+                      else concat "> " l)
+              (cons2str ks.lower)
           in
-          let upper =
-            match ks.upper with Some m then
-              [ join ["< ", strJoin " " (map nameGetStr (setToSeq m))] ]
-            else []
+          let upper = optionMap (concat "< ") (optionBind ks.upper cons2str) in
+          let consstr =
+            optionGetOr ""
+              (optionCombine (lam x. lam y. Some (join [x, " ", y])) lower upper)
           in
-          snoc strs
-            (join [ nameGetStr t, "[", strJoin " " (concat lower upper), "]"]))
+          snoc strs (join [ nameGetStr t, "[", consstr, "]"]))
         [] r.types
     in
     (env, join ["{", strJoin ", " consstr, "}"])

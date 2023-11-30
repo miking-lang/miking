@@ -712,61 +712,75 @@ lang PatTypeCheck = TCUnify
     (patEnv, withTypePat patTy pat)
 end
 
-lang IsExhaustive =
+lang IsEmpty =
   TCUnify + NormPatMatch + ConNormPat + ConTypeAst +
   DataTypeAst + DataKindAst + AppTypeUtils + Generalize +
   GetKind
 
   -- Merge two assignments of meta variables to upper bound constructor sets
   -- by choosing the most open of the two assignments, or intersecting the two if
-  -- neither is more open than the other.
-  sem mergeBounds : Map Type (Set Name) -> Map Type (Set Name) -> Map Type (Set Name)
+  -- neither is more open than the other.  Returns an option for compatibility
+  -- with optionCombine.
+  sem mergeBounds
+    :  Map Type (Map Name (Set Name))
+    -> Map Type (Map Name (Set Name))
+    -> Option (Map Type (Map Name (Set Name)))
   sem mergeBounds m1 =
   | m2 ->
     let isMoreOpen = lam m1. lam m2.
       mapAllWithKey
-        (lam v. lam ks1.
-          match mapLookup v m2 with Some ks2 then
-            setSubset ks2 ks1
+        (lam ty. lam d1.
+          match mapLookup ty m2 with Some d2 then
+            mapAllWithKey
+              (lam t. lam ks1.
+                match mapLookup t d2 with Some ks2 then
+                  setSubset ks2 ks1
+                else false)
+              d1
           else false)
         m1
     in
-    if isMoreOpen m1 m2 then m1 else
-      if isMoreOpen m2 m1 then m2 else
-        mapUnionWith setIntersect m1 m2
+    Some
+      (if isMoreOpen m1 m2 then m1 else
+        if isMoreOpen m2 m1 then m2 else
+          mapUnionWith (mapUnionWith setIntersect) m1 m2)
 
-  -- Perform an exhaustiveness check for the given pattern and type.
+  -- Perform an emptiness check for the given pattern and type.
   -- Returns a mapping from meta variables of Data kind to the upper bound
-  -- constructor set they should be assigned for the match to be exhaustive,
+  -- constructor set they should be assigned for the pattern to be empty,
   -- if such an assignment exists, and nothing otherwise.
-  sem normpatIsExhaustive : TCEnv -> (Type, NormPat) -> Option (Map Type (Set Name))
-  sem normpatIsExhaustive env =
+  sem normpatIsEmpty
+    : TCEnv -> (Type, NormPat) -> Option (Map Type (Map Name (Set Name)))
+  sem normpatIsEmpty env =
   | (ty, np) ->
     optionFoldlM
       (lam m. lam p.
         optionMap
-          (mapUnionWith setIntersect m)
-          (npatIsExhaustive env (ty, p)))
+          (mapUnionWith (mapUnionWith setIntersect) m)
+          (npatIsEmpty env (ty, p)))
       (mapEmpty cmpType)
       (setToSeq np)
 
-  sem npatIsExhaustive : TCEnv -> (Type, NPat) -> Option (Map Type (Set Name))
-  sem npatIsExhaustive env =
-  | (ty, SNPat p) -> snpatIsExhaustive env (unwrapType ty, p)
+  sem npatIsEmpty
+    : TCEnv -> (Type, NPat) -> Option (Map Type (Map Name (Set Name)))
+  sem npatIsEmpty env =
+  | (ty, SNPat p) -> snpatIsEmpty env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
-      match getKind env (unwrapType t.data) with Data d then
-        match mapLookup t.ident d.types with Some {lower = lower, upper = upper} in
-        match upper with Some u then
-          let ks = setUnion lower u in
-          any (lam k. not (setMem (ConCon k) cons)) (setToSeq ks)
-        else true
-      else true
-    else true
+      let cons =
+        setFold
+          (lam ks. lam k.
+            match k with ConCon k then setInsert k ks
+            else ks)
+          (setEmpty nameCmp) cons
+      in
+      Some (mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])])
+    else None ()
 
-  sem snpatIsExhaustive : TCEnv -> (Type, SNPat) -> Option (Map Type (Set Name))
-  sem snpatIsExhaustive env =
-  | _ -> true
+  sem snpatIsEmpty
+    : TCEnv -> (Type, SNPat) -> Option (Map Type (Map Name (Set Name)))
+  sem snpatIsEmpty env =
+  | _ -> None ()
 
   -- Perform an analysis on the matches performed so far in the program execution,
   -- returning a map from variable names to patterns indicating a possible assignment
@@ -776,41 +790,47 @@ lang IsExhaustive =
   sem matchesPossible =
   | env ->
     let matchedVariables : [Map Name NormPat] =
-      (map
-         (foldl (mapUnionWith normpatIntersect) (mapEmpty nameCmp))
-         (seqMapM setToSeq
-            (map matchNormpat env.matches)))
+      map
+        (foldl (mapUnionWith normpatIntersect) (mapEmpty nameCmp))
+        (seqMapM setToSeq
+           (map matchNormpat env.matches))
     in
-    recursive
-      let closeType : Bool -> Type -> Type = lam inferFull. lam ty.
-        match getTypeArgs ty with (TyCon t, args) then
-          match unwrapType t.data with TyMetaVar r then
-            match deref r.contents with Unbound u then
-              let universe = _computeUniverse env t.ident in
-              let data =
-                TyData { info = t.info
-                       , universe = universe
-                       , positive = false
-                       , cons = setEmpty nameCmp }
-              in
-              mkTypeApp (TyCon {t with data = data}) (map (closeType inferFull) args)
-            else error "Unwrapped type was not unwrapped!"
-          else smap_Type_Type (closeType inferFull) ty
-        else smap_Type_Type (closeType inferFull) ty
+    recursive let work = lam f. lam a. lam bs.
+      match bs with [b] ++ bs then
+        match f a b with Some a then work f a bs
+        else Left b
+      else Right a
     in
-    find
-      (lam m.
-        let inferFull = gti (mapSize m) 1 in
-        mapAllWithKey
-          (lam n. lam p.
-            match mapLookup n env.varEnv with Some ty then
-              let ty = inst (infoTy ty) env.currentLvl ty in
-              let closed = closeType inferFull ty in
-              if normpatIsExhaustive env (closed, p) then true
-              else unify env [] closed ty; false
-            else
-              error "Should not happen!") m)
-      matchedVariables
+    let possible =
+      work
+        (lam acc. lam m.
+          optionMap
+            (mapUnionWith (mapUnionWith setIntersect) acc)
+            (mapFoldWithKey
+               (lam acc. lam n. lam p.
+                 match mapLookup n env.varEnv with Some ty then
+                   let ty = inst (infoTy ty) env.currentLvl ty in
+                   optionCombine mergeBounds acc (normpatIsEmpty env (ty, p))
+                 else
+                   error "Unknown variable in matchesPossible!")
+               (None ()) m))
+        (mapEmpty cmpType)
+        matchedVariables
+    in
+    switch possible
+    case Left m then Some m
+    case Right m then
+      iter
+        (lam x.
+          let data =
+            Data { types =
+                   mapMap (lam ks. { lower = setEmpty nameCmp
+                                   , upper = Some ks }) x.1 } in
+          unify env [infoTy x.0]
+            (newmetavar data env.currentLvl (infoTy x.0)) x.0)
+        (mapBindings m);
+      None ()
+    end
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -1309,7 +1329,7 @@ lang UtestTypeCheck = TypeCheck + UtestAst
             , ty = tyTm next}
 end
 
-lang NeverTypeCheck = TypeCheck + NeverAst + IsExhaustive
+lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
   sem typeCheckExpr env =
   | TmNever t ->
     switch matchesPossible env
@@ -1327,7 +1347,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsExhaustive
             mapFoldWithKey
               (lam str. lam n. lam p.
                 join [ str
-                     , "  ", nameGetStr n
+                     , "*   ", nameGetStr n
                      , " = "
                      , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
                      , "\n" ]) "" m ]
@@ -1396,12 +1416,16 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SubstituteNewReprs
     (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
-lang SeqPatIsExhaustive = IsExhaustive + SeqTypeAst + SeqNormPat
-  sem snpatIsExhaustive env =
+lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
+  sem snpatIsEmpty env =
   | (TySeq { ty = ty }, NPatSeqTot pats) ->
-    forAll (lam p. npatIsExhaustive env (ty, p)) pats
+    foldl
+      (lam m. lam p. optionCombine mergeBounds m (npatIsEmpty env (ty, p)))
+      (None ()) pats
   | (TySeq { ty = ty }, NPatSeqEdge { prefix = pre, postfix = post }) ->
-    forAll (lam p. npatIsExhaustive env (ty, p)) (concat pre post)
+    foldl
+      (lam m. lam p. optionCombine mergeBounds m (npatIsEmpty env (ty, p)))
+      (None ()) (concat pre post)
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat
@@ -1413,12 +1437,12 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat
     (patEnv, PatRecord {t with bindings = bindings, ty = ty})
 end
 
-lang RecordPatIsExhaustive = IsExhaustive + RecordTypeAst + RecordNormPat
-  sem snpatIsExhaustive env =
+lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
+  sem snpatIsEmpty env =
   | (TyRecord { fields = fields }, NPatRecord pats) ->
-    mapAll (lam x. x)
-           (mapIntersectWith (lam ty. lam p. npatIsExhaustive env (ty, p))
-                             fields pats)
+    mapFoldWithKey
+      (lam m1. lam. lam m2. optionCombine mergeBounds m1 m2) (None ())
+      (mapIntersectWith (lam ty. lam p. npatIsEmpty env (ty, p)) fields pats)
 end
 
 lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
@@ -1438,15 +1462,15 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
       errorSingle [t.info] msg
 end
 
-lang ConPatIsExhaustive = IsExhaustive + ConNormPat + FunTypeAst + Generalize
-  sem snpatIsExhaustive env =
+lang ConPatIsEmpty = IsEmpty + ConNormPat + FunTypeAst + Generalize
+  sem snpatIsEmpty env =
   | (ty, NPatCon {ident = c, subpat = p}) ->
     match mapLookup c env.conEnv with Some (_, tycon) then
       match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} in
       unify env [infoTy ty] ty to;
-      npatIsExhaustive env (from, p)
+      npatIsEmpty env (from, p)
     else
-      error "Should not happen!"
+      error "Unknown constructor in snpatIsEmpty!"
 end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat + IntTypeAst
@@ -1500,7 +1524,7 @@ lang MExprTypeCheckMost =
   RecordPatTypeCheck + DataPatTypeCheck + IntPatTypeCheck + CharPatTypeCheck +
   BoolPatTypeCheck + AndPatTypeCheck + OrPatTypeCheck + NotPatTypeCheck +
 
-  SeqPatIsExhaustive + RecordPatIsExhaustive + ConPatIsExhaustive + MExprPatAnalysis +
+  SeqPatIsEmpty + RecordPatIsEmpty + ConPatIsEmpty + MExprPatAnalysis +
 
   -- Value restriction
   MExprIsValue +
