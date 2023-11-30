@@ -6,6 +6,8 @@ include "type.mc"
 include "const-transformer.mc"
 include "builtin.mc"
 include "eval.mc"
+include "lazy.mc"
+include "heap.mc"
 include "cp/high-level.mc"
 include "mexpr/annotate.mc"
 include "multicore/promise.mc"
@@ -993,6 +995,131 @@ lang VarAccessHelpers = Ast + ReprTypeAst + MetaVarTypeAst
     sfold_Type_Type (lam found. lam ty. if found then found else typeMentionsVarInVarMap m ty) false ty
 end
 
+lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeAst + UnifyPure
+  type NamelessState =
+    { metas : [Name]
+    , vars : [Name]
+    , reprs : [Symbol]
+    }
+  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol (Symbol, Int), revMeta : Map Name (Name, Int)}
+  sem undoLocallyNamelessTy : RevNameless -> Type -> Type
+  sem undoLocallyNamelessTy nlEnv =
+  | ty -> smap_Type_Type (undoLocallyNamelessTy nlEnv) ty
+  | TyAll x ->
+    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
+    TyAll {x with ident = ident, ty = undoLocallyNamelessTy nlEnv x.ty}
+  | TyVar x ->
+    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
+    TyVar {x with ident = ident}
+  | ty & TyMetaVar _ ->
+    switch unwrapType ty
+    case TyMetaVar x then
+      match deref x.contents with Unbound u in
+      match mapLookupOr (u.ident, u.level) u.ident nlEnv.revMeta with (ident, level) in
+      TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})}
+    case ty then undoLocallyNamelessTy nlEnv ty
+    end
+  | TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr r in
+    match mapLookupOr (r.sym, r.scope) r.sym nlEnv.revRepr with (sym, scope) in
+    TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = undoLocallyNamelessTy nlEnv x.arg}
+
+  sem undoLocallyNamelessUni : RevNameless -> Unification -> Option Unification
+  sem undoLocallyNamelessUni nlEnv = | uni ->
+    substituteInUnification
+      (lam x. mapLookupOr x x.0 nlEnv.revMeta)
+      (lam x. mapLookupOr x x.0 nlEnv.revRepr)
+      (undoLocallyNamelessTy nlEnv)
+      uni
+
+  sem mkLocallyNameless : all a. NamelessState -> Type -> (NamelessState, RevNameless, Type)
+  sem mkLocallyNameless nameless = | ty ->
+    type NlSmall x =
+      { forward : Map x x
+      , reverse : Map x (x, Int)
+      , nextIdx : Int
+      , vals : [x]
+      } in
+    type NlEnv =
+      { metas : NlSmall Name
+      , vars : NlSmall Name
+      , reprs : NlSmall Symbol
+      } in
+    let nextNameless : all x. (() -> x) -> NlSmall x -> (NlSmall x, x)
+      = lam mkNew. lam st.
+        let st = if lti st.nextIdx (length st.vals)
+          then st
+          else {st with vals = snoc st.vals (mkNew ())} in
+        ({st with nextIdx = addi 1 st.nextIdx}, get st.vals st.nextIdx) in
+    let getNameless : all x. (() -> x) -> (x, Int) -> NlSmall x -> (NlSmall x, (x, Int))
+      = lam mkNew. lam x. lam st.
+        -- NOTE(vipa, 2023-11-13): The use of `uniFilter` later
+        -- depends on the level/scope returned here is strictly less
+        -- than the current level/scope of the impl. This is true for
+        -- -1, so we go with that.
+        match mapLookup x.0 st.forward with Some x then (st, (x, negi 1)) else
+        match nextNameless mkNew st with (st, newX) in
+        ( { st with forward = mapInsert x.0 newX st.forward
+          , reverse = mapInsert newX x st.reverse
+          }
+        , (newX, negi 1)
+        )
+    in
+    recursive let locallyNameless : NlEnv -> Type -> (NlEnv, Type) = lam acc. lam ty.
+      switch unwrapType ty
+      case TyAll x then
+        match getNameless (lam. nameSym "bound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
+        let acc = {acc with vars = vars} in
+        match locallyNameless acc x.ty with (acc, ty) in
+        (acc, TyAll {x with ident = ident, ty = ty})
+      case TyVar x then
+        match getNameless (lam. nameSym "unbound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
+        (acc, TyVar {x with ident = ident})
+      case ty & TyRepr x then
+        match deref (botRepr x.repr) with BotRepr r in
+        match getNameless gensym (r.sym, r.scope) acc.reprs with (reprs, (sym, scope)) in
+        let acc = {acc with reprs = reprs} in
+        match locallyNameless acc x.arg with (acc, arg) in
+        (acc, TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = arg})
+      case TyMetaVar x then
+        switch deref x.contents
+        case Unbound u then
+          match getNameless (lam. nameSym "meta") (u.ident, u.level) acc.metas with (metas, (ident, level)) in
+          let acc = {acc with metas = metas} in
+          (acc, TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})})
+        case Link ty then
+          locallyNameless acc ty
+        end
+      case ty then
+        smapAccumL_Type_Type locallyNameless acc ty
+      end in
+    let nlEnv =
+      { metas =
+        { forward = mapEmpty nameCmp
+        , reverse = mapEmpty nameCmp
+        , nextIdx = 0
+        , vals = nameless.metas
+        }
+      , reprs =
+        { forward = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+        , reverse = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+        , nextIdx = 0
+        , vals = nameless.reprs
+        }
+      , vars =
+        { forward = mapEmpty nameCmp
+        , reverse = mapEmpty nameCmp
+        , nextIdx = 0
+        , vals = nameless.vars
+        }
+      } in
+    match locallyNameless nlEnv ty with (nlEnv, ty) in
+    ( {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}
+    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = mapMap (lam x. x.0) nlEnv.vars.reverse}
+    , ty
+    )
+end
+
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
   sem reprSolve : ReprSolverOptions -> Expr -> Expr
@@ -1203,7 +1330,345 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TyRepr x -> TyUnknown {info = x.info}
 end
 
-lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers
+lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff
+  type ProcOpImpl a  =
+    { implId : ImplId
+    , op : Name
+    , opUses : [{idxes : Set Int, opUse : TmOpVarRec}]
+    , selfCost : OpCost
+    , uni : Unification
+    , specType : Type
+    , reprScope : Int
+    , metaLevel : Int
+    , info : Info
+    -- NOTE(vipa, 2023-07-06): A token used by the surrounding system
+    -- to carry data required to reconstruct a solved AST.
+    , token : a
+    }
+  type SolContentRec a =
+    { token : a
+    , cost : OpCost
+    , scale : OpCost
+    , uni : Unification
+    , impl : ProcOpImpl a
+    , highestImpl : ImplId
+    , ty : Type
+    , subSols : [{idxes : Set Int, sol : SolContent a}]
+    }
+  syn SolContent a = | SolContent (SolContentRec a)
+
+  type SBContent a =
+    { implsPerOp : Map Name (Set (ProcOpImpl a))
+    , memo : Map (Name, Type) (LStream (SolContentRec a))
+    , nameless : NamelessState
+    }
+
+  syn SolverGlobal a = | SGContent ()
+  syn SolverBranch a = | SBContent (SBContent a)
+  syn SolverSolution a = | SSContent (SolContent a)
+  syn SolverSolutionSet a = | SSSContent (LStream (SolContentRec a))
+
+  sem initSolverGlobal = | _ -> SGContent ()
+  sem initSolverBranch = | global -> SBContent
+    { implsPerOp = mapEmpty nameCmp
+    , memo = mapEmpty cmpOpPair
+    , nameless =
+      { metas = []
+      , vars = []
+      , reprs = []
+      }
+    }
+
+  sem solSetIsEmpty global branch =
+  | SSSContent stream -> optionIsNone (lazyStreamUncons stream)
+
+  -- NOTE(vipa, 2023-11-07): This typically assumes that the types
+  -- have a representation that is equal if the two types are
+  -- alpha-equivalent.
+  sem cmpOpPair : (Name, Type) -> (Name, Type) -> Int
+  sem cmpOpPair l = | r ->
+    let res = nameCmp l.0 r.0 in
+    if neqi 0 res then res else
+    let res = cmpType l.1 r.1 in
+    res
+
+  sem cmpSolution a = | b ->
+    recursive let work : all x. {idxes : x, sol : Unknown} -> {idxes : x, sol : Unknown} -> Int = lam a. lam b.
+      match (a, b) with ({sol = SolContent a}, {sol = SolContent b}) in
+      let res = subi a.impl.implId b.impl.implId in
+      if neqi 0 res then res else
+      let res = seqCmp work a.subSols b.subSols in
+      res in
+    match (a, b) with (SSContent a, SSContent b) in
+    work {idxes = (), sol = a} {idxes = (), sol = b}
+
+  sem concretizeSolution global =
+  | SSContent (SolContent x) ->
+    let subSols = foldl
+      (lam acc. lam sub. setFold (lam acc. lam idx. mapInsert idx (SSContent sub.sol) acc) acc sub.idxes)
+      (mapEmpty subi)
+      x.subSols in
+    (x.token, x.highestImpl, mapValues subSols)
+
+  sem addImpl global branch = | impl ->
+    match branch with SBContent branch in
+
+    let idxedOpUses = mapi (lam i. lam opUse. {idxes = setInsert i (setEmpty subi), opUse = opUse}) impl.opUses in
+    let procImpl =
+      { implId = impl.implId
+      , op = impl.op
+      , opUses = idxedOpUses
+      , selfCost = impl.selfCost
+      , uni = impl.uni
+      , specType = impl.specType
+      , reprScope = impl.reprScope
+      , metaLevel = impl.metaLevel
+      , info = impl.info
+      , token = impl.token
+      } in
+
+    let branch =
+      { branch with
+        implsPerOp = mapInsertWith setUnion
+          impl.op
+          (setInsert procImpl (setEmpty (lam a. lam b. subi a.implId b.implId)))
+          branch.implsPerOp
+      -- OPT(vipa, 2023-11-07): Better memoization cache invalidation,
+      -- or incremental computation that never needs to invalidate
+      , memo = mapEmpty cmpOpPair
+      } in
+    SBContent branch
+
+
+  sem debugBranchState global = | SBContent branch ->
+    printLn "debugBranchState"
+
+  sem debugSolution global = | solutions ->
+    printLn "\n# Solution cost tree:";
+    recursive let work = lam indent. lam sol.
+      match sol with SolContent x in
+      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info, ")"]);
+      -- TODO(vipa, 2023-11-28): This will print things in a strange
+      -- order, and de-duped, which might not be desirable
+      for_ x.subSols (lam x. work (concat indent "  ") x.sol)
+    in (iter (lam x. match x with SSContent x in work "" x) solutions)
+
+  sem topSolve global = | choices ->
+    let prepChoice = lam idx. lam choice.
+      match choice with (scaling, SSSContent stream) in
+      { idxes = setInsert idx (setEmpty subi)
+      , scaling = scaling
+      , sols = stream
+      } in
+    let sols = exploreSolutions 0.0 (emptyUnification ()) (mapi prepChoice choices) in
+    match lazyStreamUncons sols with Some (sol, _) then
+      let sols = foldl
+        (lam acc. lam sub.
+          setFold (lam acc. lam idx. mapInsert idx (SSContent (SolContent sub.sol)) acc) acc sub.idxes)
+        (mapEmpty subi)
+        sol.sols in
+      mapValues sols
+    else errorSingle [] "Could not pick implementations for all operations."
+
+  sem allSolutions debug global branch op = | ty ->
+    match branch with SBContent branch in
+    match solutionsFor branch op ty with (branch, stream) in
+    (SBContent branch, SSSContent stream)
+
+  sem availableSolutions global branch = | op ->
+    error "availableSolutions"
+
+  sem solutionsFor : all a. SBContent a -> Name -> Type -> (SBContent a, LStream (SolContentRec a))
+  sem solutionsFor branch op = | ty ->
+    match mkLocallyNameless branch.nameless ty with (nameless, nlEnv, ty) in
+    let branch = {branch with nameless = nameless} in
+    match
+      match mapLookup (op, ty) branch.memo with Some sols then
+        (branch, sols)
+      else
+        let branch = {branch with memo = mapInsert (op, ty) (lazyStreamEmpty ()) branch.memo} in
+        match solutionsForWork branch op ty with (branch, sols) in
+        let branch = {branch with memo = mapInsert (op, ty) sols branch.memo} in
+        (branch, sols)
+    with (branch, sols) in
+    let revSol = lam sol.
+      match undoLocallyNamelessUni nlEnv sol.uni with Some uni
+      then Some
+        { sol with uni = uni
+        , ty = undoLocallyNamelessTy nlEnv sol.ty
+        }
+      else None () in
+    (branch, lazyStreamMapOption revSol sols)
+
+  sem cmpSolCost : all a. SolContentRec a -> SolContentRec a -> Int
+  sem cmpSolCost a = | b ->
+    if ltf a.cost b.cost then negi 1 else
+    if gtf a.cost b.cost then 1 else
+    0
+
+  type Choices a = {idxes : Set Int, scaling : OpCost, sols : LStream (SolContentRec a)}
+  type SolBase a = {cost : OpCost, uni : Unification, sols : [{idxes : Set Int, sol : SolContentRec a}]}
+
+  sem solutionsForWork
+    : all a. SBContent a
+    -> Name
+    -> Type
+    -> (SBContent a, LStream (SolContentRec a))
+  sem solutionsForWork branch op = | ty ->
+    let perUseInImpl = lam subst. lam uni. lam branch. lam idxedOpUse.
+      let opUse = idxedOpUse.opUse in
+      let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
+      match solutionsFor branch opUse.ident ty
+        with (branch, here) in
+      (branch, {idxes = idxedOpUse.idxes, scaling = opUse.scaling, sols = here}) in
+
+    let finalizeSolBase : ProcOpImpl a -> SolBase a -> SolContentRec a
+      = lam impl. lam sol.
+      { token = impl.token
+      , cost = sol.cost
+      , scale = 1.0
+      , uni = filterUnification
+        { types = {level = impl.metaLevel, names = setEmpty nameCmp}
+        , reprs = {scope = impl.reprScope, syms = setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))}
+        }
+        sol.uni
+      , impl = impl
+      , highestImpl = foldl
+        (lam acc. lam x. if geqi acc x.sol.highestImpl then acc else x.sol.highestImpl)
+        impl.implId
+        sol.sols
+      , ty = ty
+      , subSols = map (lam x. {idxes = x.idxes, sol = SolContent x.sol}) sol.sols
+      }
+    in
+
+    let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, LStream (SolContentRec a))
+      = lam branch. lam impl.
+        match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
+          with (specType, subst) in
+        match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
+          match mapAccumL (perUseInImpl subst uni) branch impl.opUses with (branch, subSols) in
+          (branch, lazyStreamMap (finalizeSolBase impl) (exploreSolutions impl.selfCost uni subSols))
+        else (branch, lazyStreamEmpty ()) in
+
+    let filterShadow : [Unification] -> SolContentRec a -> ([Unification], Bool)
+      = lam prev. lam new.
+        recursive let work = lam acc. lam rest.
+          match rest with [old] ++ rest then
+            let oldFitsWhereNewCouldBe = uniImplies new.uni old in
+            if oldFitsWhereNewCouldBe then (prev, false) else
+            let newFitsWhereOldCouldBe = uniImplies old new.uni in
+            if newFitsWhereOldCouldBe
+            then work acc rest
+            else work (snoc acc old) rest
+          else (snoc acc new.uni, true)
+        in work [] prev in
+
+    let impls = optionMapOr [] setToSeq (mapLookup op branch.implsPerOp) in
+    match mapAccumL perImpl branch impls with (branch, impls) in
+    let sols = lazyStreamMergeMin cmpSolCost impls in
+    let sols = lazyStreamStatefulFilter filterShadow [] sols in
+    (branch, sols)
+
+  sem exploreSolutions : all a. OpCost -> Unification -> [Choices a] -> LStream (SolBase a)
+  sem exploreSolutions baseCost baseUni = | choices ->
+    let idxes = map (lam x. x.idxes) choices in
+    -- NOTE(vipa, 2023-12-01): The index chosen for this potential
+    -- solution for each choice (i.e., how many times we've stepped in
+    -- the respective streams).
+    type ComboId = [Int] in
+    type PotentialSolution =
+      { cost : OpCost
+      , combo : ComboId
+      , here : [SolContentRec a]
+      , tails : [LStream (SolContentRec a)]
+      } in
+    type State =
+      { queue : Heap PotentialSolution
+      , consideredCombos : Set ComboId
+      } in
+
+    let cmpByCost = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else
+      0 in
+    let cmpComboId = seqCmp subi in
+
+    let splitFirst = lam choices.
+      let sols = lazyStreamMap
+        (lam x.
+          { x with cost = mulf choices.scaling x.cost
+          , scale = mulf choices.scaling x.scale
+          })
+        choices.sols in
+      lazyStreamUncons sols in
+
+    let addSuccessors : PotentialSolution -> Int -> State -> State = lam sol. lam failIdx. lam st.
+      let stepAtIdx : Int -> Option PotentialSolution = lam idx.
+        match lazyStreamUncons (get sol.tails idx) with Some (new, tail)
+        then Some
+          -- TODO(vipa, 2023-12-01): Do I need to worry about float
+          -- stability here? Hopefully not.
+          { cost = addf (subf sol.cost (get sol.here idx).cost) new.cost
+          , combo = set sol.combo idx (addi 1 (get sol.combo idx))
+          , here = set sol.here idx new
+          , tails = set sol.tails idx tail
+          }
+        else None () in
+      let checkSeen = lam potential.
+        if setMem potential.combo st.consideredCombos
+        then None ()
+        else Some potential in
+      let succ = create failIdx stepAtIdx in
+      let succ = mapOption (lam x. optionBind x checkSeen) succ in
+      { queue = heapAddMany cmpByCost succ st.queue
+      , consideredCombos = foldl (lam acc. lam x. setInsert x.combo acc) st.consideredCombos succ
+      }
+    in
+
+    recursive let step : State -> Option (() -> State, SolBase a) = lam state.
+      let foldlFailIdx : all acc. all a. (acc -> a -> Option acc) -> acc -> [a] -> Either Int acc
+        = lam f. lam acc. lam l.
+          recursive let work = lam acc. lam idx. lam l.
+            match l with [x] ++ l then
+              match f acc x with Some acc
+              then work acc (addi idx 1) l
+              else Left (addi idx 1)
+            else Right acc
+          in work acc 0 l
+      in
+      match heapPop cmpByCost state.queue with Some (potential, queue) then
+        let state = {state with queue = queue} in
+        switch foldlFailIdx (lam acc. lam x. mergeUnifications acc x.uni) baseUni potential.here
+        case Right uni then
+          let solBase =
+            { cost = potential.cost
+            , uni = uni
+            , sols = zipWith (lam idxes. lam sol. {idxes = idxes, sol = sol}) idxes potential.here
+            } in
+          Some (lam. addSuccessors potential (length idxes) state, solBase)
+        case Left idx then
+          step (addSuccessors potential idx state)
+        end
+      else None ()
+    in
+
+    match optionMapM splitFirst choices with Some zipped then
+      let mkState = lam.
+        match unzip zipped with (here, tails) in
+        let cost = foldl (lam acc. lam x. addf acc x.cost) baseCost here in
+        let combo = make (length here) 0 in
+        { queue = heapSingleton {cost = cost, combo = combo, here = here, tails = tails}
+        -- NOTE(vipa, 2023-12-01): We can never add the first combo
+        -- again, so it's unnecessary to track that we've already seen
+        -- it
+        , consideredCombos = setEmpty cmpComboId
+        } in
+      lazyStreamLaziest step mkState
+    else lazyStreamEmpty ()
+end
+
+lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff
   -- NOTE(vipa, 2023-11-28): We pre-process impls to merge repr vars,
   -- meta vars, and opUses, split the problem into disjoint
   -- sub-problems, and re-order opUses such that we can drop internal
@@ -1241,11 +1706,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   type SBContent a =
     { implsPerOp : Map Name (Set (ProcOpImpl a))
     , memo : Map (Name, Type) [SolContent a]
-    , nameless :
-      { metas : [Name]
-      , vars : [Name]
-      , reprs : [Symbol]
-      }
+    , nameless : NamelessState
     }
 
   syn SolverGlobal a = | SGContent ()
@@ -1430,135 +1891,11 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     let sols = map (lam sol. match sol with SolContent x in {token = x.token, ty = pureApplyUniToType x.uni x.ty}) sols in
     (SBContent branch, sols)
 
-  sem findMetaVarNames acc =
-  | ty -> sfold_Type_Type findMetaVarNames acc ty
-  | TyMetaVar x -> switch deref x.contents
-    case Link ty then findMetaVarNames acc ty
-    case Unbound u then setInsert u.ident acc
-    end
-
-  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol (Symbol, Int), revMeta : Map Name (Name, Int)}
-  sem undoLocallyNamelessTy : RevNameless -> Type -> Type
-  sem undoLocallyNamelessTy nlEnv =
-  | ty -> smap_Type_Type (undoLocallyNamelessTy nlEnv) ty
-  | TyAll x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
-    TyAll {x with ident = ident, ty = undoLocallyNamelessTy nlEnv x.ty}
-  | TyVar x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
-    TyVar {x with ident = ident}
-  | ty & TyMetaVar _ ->
-    switch unwrapType ty
-    case TyMetaVar x then
-      match deref x.contents with Unbound u in
-      match mapLookupOr (u.ident, u.level) u.ident nlEnv.revMeta with (ident, level) in
-      TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})}
-    case ty then undoLocallyNamelessTy nlEnv ty
-    end
-  | TyRepr x ->
-    match deref (botRepr x.repr) with BotRepr r in
-    match mapLookupOr (r.sym, r.scope) r.sym nlEnv.revRepr with (sym, scope) in
-    TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = undoLocallyNamelessTy nlEnv x.arg}
-
-  sem undoLocallyNamelessUni : RevNameless -> Unification -> Option Unification
-  sem undoLocallyNamelessUni nlEnv = | uni ->
-    substituteInUnification
-      (lam x. mapLookupOr x x.0 nlEnv.revMeta)
-      (lam x. mapLookupOr x x.0 nlEnv.revRepr)
-      (undoLocallyNamelessTy nlEnv)
-      uni
-
-  sem mkLocallyNameless : all a. SBContent a -> Type -> (SBContent a, RevNameless, Type)
-  sem mkLocallyNameless branch = | ty ->
-    type NlSmall x =
-      { forward : Map x x
-      , reverse : Map x (x, Int)
-      , nextIdx : Int
-      , vals : [x]
-      } in
-    type NlEnv =
-      { metas : NlSmall Name
-      , vars : NlSmall Name
-      , reprs : NlSmall Symbol
-      } in
-    let nextNameless : all x. (() -> x) -> NlSmall x -> (NlSmall x, x)
-      = lam mkNew. lam st.
-        let st = if lti st.nextIdx (length st.vals)
-          then st
-          else {st with vals = snoc st.vals (mkNew ())} in
-        ({st with nextIdx = addi 1 st.nextIdx}, get st.vals st.nextIdx) in
-    let getNameless : all x. (() -> x) -> (x, Int) -> NlSmall x -> (NlSmall x, (x, Int))
-      = lam mkNew. lam x. lam st.
-        -- NOTE(vipa, 2023-11-13): The use of `uniFilter` later
-        -- depends on the level/scope returned here is strictly less
-        -- than the current level/scope of the impl. This is true for
-        -- -1, so we go with that.
-        match mapLookup x.0 st.forward with Some x then (st, (x, negi 1)) else
-        match nextNameless mkNew st with (st, newX) in
-        ( { st with forward = mapInsert x.0 newX st.forward
-          , reverse = mapInsert newX x st.reverse
-          }
-        , (newX, negi 1)
-        )
-    in
-    recursive let locallyNameless : NlEnv -> Type -> (NlEnv, Type) = lam acc. lam ty.
-      switch unwrapType ty
-      case TyAll x then
-        match getNameless (lam. nameSym "bound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
-        let acc = {acc with vars = vars} in
-        match locallyNameless acc x.ty with (acc, ty) in
-        (acc, TyAll {x with ident = ident, ty = ty})
-      case TyVar x then
-        match getNameless (lam. nameSym "unbound") (x.ident, 0) acc.vars with (vars, (ident, _)) in
-        (acc, TyVar {x with ident = ident})
-      case ty & TyRepr x then
-        match deref (botRepr x.repr) with BotRepr r in
-        match getNameless gensym (r.sym, r.scope) acc.reprs with (reprs, (sym, scope)) in
-        let acc = {acc with reprs = reprs} in
-        match locallyNameless acc x.arg with (acc, arg) in
-        (acc, TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = arg})
-      case TyMetaVar x then
-        switch deref x.contents
-        case Unbound u then
-          match getNameless (lam. nameSym "meta") (u.ident, u.level) acc.metas with (metas, (ident, level)) in
-          let acc = {acc with metas = metas} in
-          (acc, TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})})
-        case Link ty then
-          locallyNameless acc ty
-        end
-      case ty then
-        smapAccumL_Type_Type locallyNameless acc ty
-      end in
-    let nlEnv =
-      { metas =
-        { forward = mapEmpty nameCmp
-        , reverse = mapEmpty nameCmp
-        , nextIdx = 0
-        , vals = branch.nameless.metas
-        }
-      , reprs =
-        { forward = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
-        , reverse = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
-        , nextIdx = 0
-        , vals = branch.nameless.reprs
-        }
-      , vars =
-        { forward = mapEmpty nameCmp
-        , reverse = mapEmpty nameCmp
-        , nextIdx = 0
-        , vals = branch.nameless.vars
-        }
-      } in
-    match locallyNameless nlEnv ty with (nlEnv, ty) in
-    ( {branch with nameless = {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}}
-    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = mapMap (lam x. x.0) nlEnv.vars.reverse}
-    , ty
-    )
-
   -- NOTE(vipa, 2023-11-07): Wrapper function that handles memoization and termination
   sem solutionsFor : all a. Option String -> SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
   sem solutionsFor debugIndent branch op = | ty ->
-    match mkLocallyNameless branch ty with (branch, nlEnv, ty) in
+    match mkLocallyNameless branch.nameless ty with (nameless, nlEnv, ty) in
+    let branch = {branch with nameless = nameless} in
     match
       match mapLookup (op, ty) branch.memo with Some sols then
         (match debugIndent with Some indent then
@@ -2366,7 +2703,7 @@ end
 --     CPSolution (minOrElse (lam. errorSingle [] "Couldn't put together a complete program, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 -- end
 
-lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + MemoedTopDownSolver + MExprUnify
+lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + LazyTopDownSolver + MExprUnify
 end
 
 lang DumpRepTypesProblem = RepTypesFragments
