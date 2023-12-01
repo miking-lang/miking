@@ -1443,6 +1443,13 @@ lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
     mapFoldWithKey
       (lam m1. lam. lam m2. optionCombine mergeBounds m1 m2) (None ())
       (mapIntersectWith (lam ty. lam p. npatIsEmpty env (ty, p)) fields pats)
+  | (TyMetaVar r, NPatRecord pats) ->
+    match deref r.contents with Unbound r then
+      match r.kind with Record { fields = fields } then
+        snpatIsEmpty env ( TyRecord {info = NoInfo (), fields = fields}
+                         , NPatRecord pats )
+      else None ()
+    else error "Encountered non-unwrapped TyMetaVar in snpatIsEmpty!"
 end
 
 lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize

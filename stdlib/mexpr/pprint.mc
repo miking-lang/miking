@@ -1324,18 +1324,21 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
       in
       mapFoldWithKey
         (lam strs. lam t. lam ks.
-          let lower =
-            optionMap
-              (lam l. if optionMapOr false mapIsEmpty ks.upper then l
-                      else concat "> " l)
-              (cons2str ks.lower)
+          let lower = cons2str ks.lower in
+          let upper = optionBind ks.upper cons2str in
+          let prefix =
+            optionOr
+              (optionMap (lam. "< ") upper)
+              (optionMap (lam. if optionMapOr false setIsEmpty ks.upper then ""
+                               else "> ") lower)
           in
-          let upper = optionMap (concat "< ") (optionBind ks.upper cons2str) in
           let consstr =
-            optionGetOr ""
-              (optionCombine (lam x. lam y. Some (join [x, " ", y])) lower upper)
+            optionCombine (lam x. lam y. Some (join [x, " | ", y])) upper lower
           in
-          snoc strs (join [ nameGetStr t, "[", consstr, "]"]))
+          snoc strs (join [ nameGetStr t, "["
+                          , optionGetOr "" prefix
+                          , optionGetOr "" consstr
+                          , "]"]))
         [] r.types
     in
     (env, join ["{", strJoin ", " consstr, "}"])

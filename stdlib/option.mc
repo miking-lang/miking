@@ -210,10 +210,14 @@ let optionCombine : all a. (a -> a -> Option a) -> Option a -> Option a -> Optio
     case (Some a, Some b) then f a b
     end
 
-utest optionCombine (None ()) (None ()) with (None ()) using optionEq eqi
-utest optionCombine (None ()) (Some 2) with (Some 2) using optionEq eqi
-utest optionCombine (Some 1) (None ()) with (Some 1) using optionEq eqi
-utest optionCombine addi (Some 1) (Some 2) with (Some 3) using optionEq eqi
+utest optionCombine (lam x. lam y. Some (addi x y)) (None ()) (None ())
+with (None ()) using optionEq eqi
+utest optionCombine (lam x. lam y. Some (addi x y)) (None ()) (Some 2)
+with (Some 2) using optionEq eqi
+utest optionCombine (lam x. lam y. Some (addi x y)) (Some 1) (None ())
+with (Some 1) using optionEq eqi
+utest optionCombine (lam x. lam y. Some (addi x y)) (Some 1) (Some 2)
+with (Some 3) using optionEq eqi
 
 -- Returns `None` if either option is `None`, otherwise returns
 -- the first option.
