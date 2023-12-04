@@ -717,52 +717,84 @@ lang IsEmpty =
   DataTypeAst + DataKindAst + AppTypeUtils + Generalize +
   GetKind
 
-  -- Merge two assignments of meta variables to upper bound constructor sets
-  -- by choosing the most open of the two assignments, or intersecting the two if
-  -- neither is more open than the other.  Returns an option for compatibility
-  -- with optionCombine.
+  -- Merge two assignments of meta variables to upper bound constructor sets.
+  -- In particular, if either assignment is more open than the other, that one
+  -- is returned, and otherwise the union is taken.
+  -- When taking the union of the two assignments, if either one is
+  -- more open than the other on the set of overlapping keys, that one
+  -- is preferred whenever overlap is encountered.  Otherwise, we
+  -- intersect the constructor sets of overlapping keys.
   sem mergeBounds
     :  Map Type (Map Name (Set Name))
     -> Map Type (Map Name (Set Name))
-    -> Option (Map Type (Map Name (Set Name)))
+    -> Map Type (Map Name (Set Name))
   sem mergeBounds m1 =
   | m2 ->
-    let isMoreOpen = lam m1. lam m2.
+    let dataMoreOpen = lam d1. lam d2.
       mapAllWithKey
-        (lam ty. lam d1.
-          match mapLookup ty m2 with Some d2 then
-            mapAllWithKey
-              (lam t. lam ks1.
-                match mapLookup t d2 with Some ks2 then
-                  setSubset ks2 ks1
-                else false)
-              d1
+        (lam t. lam ks1.
+          match mapLookup t d2 with Some ks2 then
+            setSubset ks2 ks1
           else false)
-        m1
+        d1
     in
-    Some
-      (if isMoreOpen m1 m2 then m1 else
-        if isMoreOpen m2 m1 then m2 else
-          mapUnionWith (mapUnionWith setIntersect) m1 m2)
+
+    type Ord in
+    con LOpen : () -> Ord in
+    con ROpen : () -> Ord in
+    con Neither : () -> Ord in
+    let combine = lam e1. lam e2.
+        switch (e1, e2)
+        case (Neither _ | LOpen _, LOpen _) then Some (LOpen ())
+        case (Neither _ | ROpen _, ROpen _) then Some (ROpen ())
+        case _ then None ()
+        end
+    in
+
+    if mapIsEmpty m1 then m1 else
+      if mapIsEmpty m2 then m2 else
+
+        let middle =
+          mapFoldlOption
+            (lam acc. lam ty. lam d1.
+              match mapLookup ty m2 with Some d2 then
+                if dataMoreOpen d1 d2 then combine acc (LOpen ()) else
+                  if dataMoreOpen d2 d1 then combine acc (ROpen ()) else
+                    None ()
+              else
+                Some acc)
+            (Neither ())
+            m1
+        in
+
+        switch middle
+        case Some (LOpen ()) then
+          if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then m1
+          else mapUnionWith (lam x. lam. x) m1 m2
+        case Some (ROpen ()) then
+          if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then m2
+          else mapUnionWith (lam x. lam. x) m2 m1
+        case _ then
+          mapUnionWith (mapUnionWith setIntersect) m1 m2
+        end
 
   -- Perform an emptiness check for the given pattern and type.
-  -- Returns a mapping from meta variables of Data kind to the upper bound
-  -- constructor set they should be assigned for the pattern to be empty,
-  -- if such an assignment exists, and nothing otherwise.
+  -- Returns a list of mappings from meta variables of Data kind to
+  -- upper bound constructor sets, where each element represents a way
+  -- of closing the types that makes the pattern empty. If the list is
+  -- empty, then the pattern is not empty.
   sem normpatIsEmpty
-    : TCEnv -> (Type, NormPat) -> Option (Map Type (Map Name (Set Name)))
+    : TCEnv -> (Type, NormPat) -> [Map Type (Map Name (Set Name))]
   sem normpatIsEmpty env =
   | (ty, np) ->
-    optionFoldlM
-      (lam m. lam p.
-        optionMap
-          (mapUnionWith (mapUnionWith setIntersect) m)
+    foldl
+      (lam ms. lam p.
+        seqLiftA2 (mapUnionWith (mapUnionWith setIntersect)) ms
           (npatIsEmpty env (ty, p)))
-      (mapEmpty cmpType)
+      [mapEmpty cmpType]
       (setToSeq np)
 
-  sem npatIsEmpty
-    : TCEnv -> (Type, NPat) -> Option (Map Type (Map Name (Set Name)))
+  sem npatIsEmpty : TCEnv -> (Type, NPat) -> [Map Type (Map Name (Set Name))]
   sem npatIsEmpty env =
   | (ty, SNPat p) -> snpatIsEmpty env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
@@ -774,13 +806,12 @@ lang IsEmpty =
             else ks)
           (setEmpty nameCmp) cons
       in
-      Some (mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])])
-    else None ()
+      [mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])]]
+    else []
 
-  sem snpatIsEmpty
-    : TCEnv -> (Type, SNPat) -> Option (Map Type (Map Name (Set Name)))
+  sem snpatIsEmpty : TCEnv -> (Type, SNPat) -> [Map Type (Map Name (Set Name))]
   sem snpatIsEmpty env =
-  | _ -> None ()
+  | _ -> []
 
   -- Perform an analysis on the matches performed so far in the program execution,
   -- returning a map from variable names to patterns indicating a possible assignment
@@ -797,29 +828,28 @@ lang IsEmpty =
     in
     recursive let work = lam f. lam a. lam bs.
       match bs with [b] ++ bs then
-        match f a b with Some a then work f a bs
+        match f a b with a & ![] then work f a bs
         else Left b
       else Right a
     in
     let possible =
       work
         (lam acc. lam m.
-          optionMap
-            (mapUnionWith (mapUnionWith setIntersect) acc)
+          seqLiftA2 (mapUnionWith (mapUnionWith setIntersect)) acc
             (mapFoldWithKey
                (lam acc. lam n. lam p.
                  match mapLookup n env.varEnv with Some ty then
                    let ty = inst (infoTy ty) env.currentLvl ty in
-                   optionCombine mergeBounds acc (normpatIsEmpty env (ty, p))
+                   concat acc (normpatIsEmpty env (ty, p))
                  else
                    error "Unknown variable in matchesPossible!")
-               (None ()) m))
-        (mapEmpty cmpType)
+               [] m))
+        [mapEmpty cmpType]
         matchedVariables
     in
     switch possible
     case Left m then Some m
-    case Right m then
+    case Right ms then
       iter
         (lam x.
           let data =
@@ -828,7 +858,7 @@ lang IsEmpty =
                                    , upper = Some ks }) x.1 } in
           unify env [infoTy x.0]
             (newmetavar data env.currentLvl (infoTy x.0)) x.0)
-        (mapBindings m);
+        (mapBindings (foldl1 mergeBounds ms));
       None ()
     end
 end
@@ -1419,13 +1449,10 @@ end
 lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
   sem snpatIsEmpty env =
   | (TySeq { ty = ty }, NPatSeqTot pats) ->
-    foldl
-      (lam m. lam p. optionCombine mergeBounds m (npatIsEmpty env (ty, p)))
-      (None ()) pats
+    foldl (lam ms. lam p. concat ms (npatIsEmpty env (ty, p))) [] pats
   | (TySeq { ty = ty }, NPatSeqEdge { prefix = pre, postfix = post }) ->
-    foldl
-      (lam m. lam p. optionCombine mergeBounds m (npatIsEmpty env (ty, p)))
-      (None ()) (concat pre post)
+    let pats = concat pre post in
+    foldl (lam ms. lam p. concat ms (npatIsEmpty env (ty, p))) [] pats
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat
@@ -1440,15 +1467,14 @@ end
 lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
   sem snpatIsEmpty env =
   | (TyRecord { fields = fields }, NPatRecord pats) ->
-    mapFoldWithKey
-      (lam m1. lam. lam m2. optionCombine mergeBounds m1 m2) (None ())
+    mapFoldWithKey (lam o1. lam. lam o2. concat o1 o2) []
       (mapIntersectWith (lam ty. lam p. npatIsEmpty env (ty, p)) fields pats)
   | (TyMetaVar r, NPatRecord pats) ->
     match deref r.contents with Unbound r then
       match r.kind with Record { fields = fields } then
         snpatIsEmpty env ( TyRecord {info = NoInfo (), fields = fields}
                          , NPatRecord pats )
-      else None ()
+      else []
     else error "Encountered non-unwrapped TyMetaVar in snpatIsEmpty!"
 end
 
