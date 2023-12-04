@@ -200,25 +200,6 @@ utest optionFilter (eqi 1) (Some 1) with (Some 1) using optionEq eqi
 utest optionFilter (eqi 2) (Some 1) with (None ()) using optionEq eqi
 utest optionFilter (eqi 2) (None ()) with (None ()) using optionEq eqi
 
--- Combines two options by choosing Some over None. Should both options be
--- Some, they are combined according to the given function.
-let optionCombine : all a. (a -> a -> Option a) -> Option a -> Option a -> Option a =
-  lam f. lam o1. lam o2.
-    switch (o1, o2)
-    case (None (), rhs) then rhs
-    case (lhs, None ()) then lhs
-    case (Some a, Some b) then f a b
-    end
-
-utest optionCombine (lam x. lam y. Some (addi x y)) (None ()) (None ())
-with (None ()) using optionEq eqi
-utest optionCombine (lam x. lam y. Some (addi x y)) (None ()) (Some 2)
-with (Some 2) using optionEq eqi
-utest optionCombine (lam x. lam y. Some (addi x y)) (Some 1) (None ())
-with (Some 1) using optionEq eqi
-utest optionCombine (lam x. lam y. Some (addi x y)) (Some 1) (Some 2)
-with (Some 3) using optionEq eqi
-
 -- Returns `None` if either option is `None`, otherwise returns
 -- the first option.
 let optionAnd: all a. Option a -> Option a -> Option a = lam o1. lam o2.
@@ -229,9 +210,34 @@ utest optionAnd (Some 1) (None ()) with (None ()) using optionEq eqi
 utest optionAnd (None ()) (Some 1) with (None ()) using optionEq eqi
 utest optionAnd (None ()) (None ()) with (None ()) using optionEq eqi
 
+-- Combines two options by choosing Some over None. Should both options be
+-- Some, they are combined according to the given function.
+let optionCombine
+  : all a. (a -> a -> Option a) -> Option a -> Option a -> Option a
+  = lam f. lam o1. lam o2.
+    switch (o1, o2)
+    case (None (), rhs) then rhs
+    case (lhs, None ()) then lhs
+    case (Some a, Some b) then f a b
+    end
+
+-- NOTE(aathn, 2023-12-04): optionCombine is tested by the utests for
+-- optionOrWith, optionOr, and optionXor.
+
+-- Combines two options by choosing Some over None. Should both options be
+-- Some, their contents are combined according to the given function.
+let optionOrWith : all a. (a -> a -> a) -> Option a -> Option a -> Option a
+  = lam f. lam o1. lam o2.
+    optionCombine (lam x. lam y. Some (f x y)) o1 o2
+
+utest optionOrWith addi (Some 1) (Some 2) with (Some 3) using optionEq eqi
+utest optionOrWith addi (Some 1) (None ()) with (Some 1) using optionEq eqi
+utest optionOrWith addi (None ()) (Some 2) with (Some 2) using optionEq eqi
+utest optionOrWith addi (None ()) (None ()) with (None ()) using optionEq eqi
+
 -- Returns the first option if it contains a value, otherwise returns
 -- the second option.
-let optionOr: all a. Option a -> Option a -> Option a = lam o1. lam o2.
+let optionOr : all a. Option a -> Option a -> Option a = lam o1. lam o2.
   optionCombine (lam x. lam. Some x) o1 o2
 
 utest optionOr (Some 1) (Some 2) with (Some 1) using optionEq eqi
@@ -241,7 +247,7 @@ utest optionOr (None ()) (None ()) with (None ()) using optionEq eqi
 
 -- If exactly one option is `Some`, that option is returned,
 -- otherwise returns `None`.
-let optionXor: all a. Option a -> Option a -> Option a = lam o1. lam o2.
+let optionXor : all a. Option a -> Option a -> Option a = lam o1. lam o2.
   optionCombine (lam. lam. None ()) o1 o2
 
 utest optionXor (Some 1) (Some 2) with (None ()) using optionEq eqi
