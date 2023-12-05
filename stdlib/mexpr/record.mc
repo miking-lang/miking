@@ -19,17 +19,17 @@ let recordOrderedLabels = lam labels: [SID].
   match partition isTupleLabel labels with (tupLabels, recLabels) in
   concat (sortLabel tupLabels) (sortLabel recLabels)
 
-let tyRecordOrderedLabels = use RecordTypeAst in
-  lam ty: Type.
-  match ty with TyRecord {fields = fields} then
+lang RecordTypeUtils = RecordTypeAst
+  sem tyRecordOrderedLabels =
+  | TyRecord {fields = fields} ->
     recordOrderedLabels (mapKeys fields)
-  else
+  | ty ->
     errorSingle [infoTy ty] "Not a TyRecord, cannot extract labels."
 
-let tyRecordOrderedFields = use RecordTypeAst in
-  lam ty: Type.
-  match ty with TyRecord {fields = fields} then
+  sem tyRecordOrderedFields =
+  | TyRecord {fields = fields} ->
     let labels = recordOrderedLabels (mapKeys fields) in
     map (lam sid. (sid, mapFindExn sid fields)) labels
-  else
+  | ty ->
     errorSingle [infoTy ty] "Not a TyRecord, cannot extract fields."
+end

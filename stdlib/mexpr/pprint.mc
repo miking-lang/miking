@@ -1086,7 +1086,7 @@ lang TensorTypePrettyPrint = PrettyPrint + TensorTypeAst
     (env, join ["Tensor[", ty, "]"])
 end
 
-lang RecordTypePrettyPrint = PrettyPrint + RecordTypeAst
+lang RecordTypePrettyPrint = PrettyPrint + RecordTypeUtils
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env,"()") else
