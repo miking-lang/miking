@@ -36,7 +36,18 @@ utest eqSeq eqi [2] [1] with false
 
 -- Converting between List and Rope
 let toRope = lam seq.
-  createRope (length seq) (lam i. get seq i)
+  recursive let work = lam acc. lam seq.
+    match seq with [h] ++ t then
+      work (cons h acc) t
+    else
+      acc
+  in
+  if isRope seq then seq else
+  let s = work [] seq in
+  -- NOTE(larshum, 2023-10-24): The below line ensures the elements of the rope
+  -- are in the right order, and it also collapses the rope (to ensure
+  -- constant-time random access).
+  reverse s
 
 let toList = lam seq.
   createList (length seq) (lam i. get seq i)
@@ -156,7 +167,7 @@ with [(0, 5.0)]
 utest foldli (lam acc. lam i. lam e. snoc acc (i, e)) [] ["foo", "bar", "babar"]
 with [(0, "foo"), (1, "bar"), (2, "babar")]
 
--- CPS style maps and folds
+-- CPS style maps, folds, and iters
 
 -- `mapK f seq k` maps the continuation passing function `f` over the sequence
 -- `seq`, passing the result of the mapping to the continuation `k`.
@@ -188,7 +199,7 @@ utest mapiK (lam i. lam x. lam k. k (muli x i)) [1,2,3] (lam seq. foldl addi 0 s
 -- sequence `seq`, from the left, with the initial accumulator `acc` and
 -- continuation `k`. (from
 -- https://leastfixedpoint.com/tonyg/kcbbs/lshift_archive/folds-and-continuation-passing-style-20070611.html)
-let foldlK
+let foldlK : all a. all b. all c. all d. (a -> b -> (a -> c) -> c) -> a -> [b] -> (a -> c) -> c
   = lam f. lam acc. lam seq. lam k.
     recursive let recur = lam acc. lam seq. lam k.
       if null seq then k acc
@@ -221,6 +232,49 @@ utest
     with [3, 2]
   in
   () with ()
+
+-- `iterK f seq k` iteratively applies the function `f` to the elements of `seq`
+-- as long as `()` is passed to its continuation.
+let iterK : all a. all b. (a -> (() -> ()) -> ()) -> [a] -> (() -> ()) -> ()
+  = lam f. lam seq. lam k.
+    recursive let recur = lam seq. lam k.
+      if null seq then k ()
+      else f (head seq) (lam. recur (tail seq) k)
+    in
+    recur seq k
+
+utest
+  let count = ref 0 in
+  let sum = ref 0 in
+  let seq = [1, 2, 3, 4] in
+  utest
+    iterK
+      (lam n. lam k.
+        modref count (addi (deref count) 1);
+        modref sum (addi (deref sum) n);
+        k ())
+      seq (lam. ())
+    with ()
+  in
+  utest deref count with 4 in
+  utest deref sum with 10 in
+  modref count 0; modref sum 0;
+  utest
+    iterK
+      (lam n. lam k.
+        if eqi n 3 then ()      -- short circuit
+        else
+          modref count (addi (deref count) 1);
+          modref sum (addi (deref sum) n);
+          k ())
+      seq (lam. ())
+    with ()
+  in
+  utest deref count with 2 in
+  utest deref sum with 3 in
+  ()
+  with ()
+
 
 -- zips
 let zipWith : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c] =

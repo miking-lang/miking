@@ -598,7 +598,9 @@ module FloatConversion = struct
 
   let string2float s = s |> Mseq.Helpers.to_ustring |> float_of_ustring
 
-  let float2string r = r |> ustring_of_float |> Mseq.Helpers.of_ustring
+  let float2string r =
+    (if Float.is_nan r then us "nan" else r |> ustring_of_float)
+    |> Mseq.Helpers.of_ustring
 end
 
 module IO = struct

@@ -1387,7 +1387,7 @@ use Test in
 let compile: CompileCOptions -> Expr -> CProg = lam opts. lam prog.
 
   -- Symbolize with empty environment
-  let prog = symbolizeExpr symEnvEmpty prog in
+  let prog = symbolizeExpr symEnvDefault prog in
 
   -- Type check and annotate
   let prog = typeCheck prog in

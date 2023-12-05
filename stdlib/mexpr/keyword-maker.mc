@@ -11,7 +11,6 @@
 include "ast.mc"
 include "info.mc"
 include "error.mc"
-include "mexpr.mc"
 include "ast-builder.mc"
 include "eq.mc"
 
@@ -159,7 +158,7 @@ end
 
 -- A test fragment that is used to test the approach. This
 -- fragment can be used as a template when using the keyword maker.
-lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
+lang _testKeywordMaker = KeywordMaker + MExprEq
 
   -- Example terms that will be used to represent the values of the
   -- the keyword expressions (the new language constructs). The term
