@@ -1327,16 +1327,15 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
           let lower = cons2str ks.lower in
           let upper = optionBind ks.upper cons2str in
           let prefix =
-            optionOr
-              (optionMap (lam. "< ") upper)
-              (optionMap (lam. if optionMapOr false setIsEmpty ks.upper then ""
-                               else "> ") lower)
+            if optionIsSome upper then "< " else
+              if optionMapOr false setIsEmpty ks.upper then "| " else
+                "> "
           in
           let consstr =
             optionCombine (lam x. lam y. Some (join [x, " | ", y])) upper lower
           in
           snoc strs (join [ nameGetStr t, "["
-                          , optionGetOr "" prefix
+                          , prefix
                           , optionGetOr "" consstr
                           , "]"]))
         [] r.types
