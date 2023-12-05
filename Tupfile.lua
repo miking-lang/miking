@@ -61,7 +61,7 @@ if USE_BUILT then
   do
     local compile = 'build/boot eval %f -- 0 %f %o'
     local display = '^o '..compile..'^ '
-    local inputs = {'src/main/mi-lite.mc', extra_inputs = {'build/boot', synGroup}}
+    local inputs = {'src/main/mi-lite.mc', extra_inputs = {'build/boot'}}
     tup.rule(inputs, display..setStdlib..compile, 'build/mi-lite')
   end
 
@@ -69,7 +69,7 @@ if USE_BUILT then
   do
     local compile = 'build/mi-lite 1 %f %o'
     local display = '^o '..compile..'^ '
-    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi-lite', synGroup}}
+    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi-lite'}}
     tup.rule(inputs, display..setStdlib..compile, 'build/mi1')
   end
 
@@ -77,7 +77,7 @@ if USE_BUILT then
   do
     local compile = 'build/mi1 compile %f --output %o'
     local display = '^o '..compile..'^ '
-    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi1', synGroup}}
+    local inputs = {'src/main/mi.mc', extra_inputs = {'build/mi1'}}
     tup.rule(inputs, display..setStdlib..compile, {'build/mi', miGroup})
   end
 end
@@ -87,7 +87,7 @@ if USE_CHEATED then
   do
     local compile = 'mi compile %f --output %o'
     local display = '^o '..compile..'^ '
-    local inputs = {'src/main/mi.mc', extra_inputs = {synGroup}}
+    local inputs = {'src/main/mi.mc'}
     tup.rule(inputs, display..setStdlib..compile, {'build/mi-cheat', miCheatGroup})
   end
 end

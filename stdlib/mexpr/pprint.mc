@@ -1349,8 +1349,6 @@ lang MExprPrettyPrint =
 
 end
 
-lang MExprPrettyPrintWithReprs = MExprPrettyPrint + RepTypesPrettyPrint
-end
 
 -----------
 -- TESTS --

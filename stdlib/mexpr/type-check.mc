@@ -578,11 +578,11 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   sem typeCheck : Expr -> Expr
   sem typeCheck =
   | tm ->
-    removeMetaVarExpr (typeCheckExpr typcheckEnvDefault tm)
+    removeMetaVarExpr (typeCheckLeaveMeta tm)
 
   sem typeCheckLeaveMeta : Expr -> Expr
   sem typeCheckLeaveMeta =
-  | tm -> typeCheckExpr _tcEnvEmpty tm
+  | tm -> typeCheckExpr typcheckEnvDefault tm
 
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain unification variables and links.
@@ -954,8 +954,8 @@ end
 lang SeqTypeCheck = TypeCheck + SeqAst
   sem typeCheckExpr env =
   | TmSeq t ->
-    let tms = map (typeCheckExpr env) t.tms in
     let elemTy = newpolyvar env.currentLvl t.info in
+    let tms = map (typeCheckExpr env) t.tms in
     iter (lam tm. unify env [infoTm tm] elemTy (tyTm tm)) tms;
     TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
 end
@@ -1113,17 +1113,16 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + ConTypeAst + AppTypeAst + R
   sem typeCheckPat env patEnv =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
-    let seqTy = tyseq_ elemTy in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
     iter (lam pat. unify env [infoPat pat] elemTy (tyPat pat)) pats;
-    (patEnv, PatSeqTot {t with pats = pats, ty = seqTy})
+    (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + ConTypeAst + AppTypeAst + ResolveType + SubstituteNewReprs
   sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
     let elemTy = newpolyvar env.currentLvl t.info in
-    let seqTy = tyseq_ elemTy in
+    let seqTy = ityseq_ t.info elemTy in
     let unifyPat = lam pat. unify env [infoPat pat] elemTy (tyPat pat) in
     match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
     iter unifyPat prefix;
@@ -1218,13 +1217,13 @@ lang MExprTypeCheckMost =
   MExprIsValue +
 
   -- Pretty Printing
-  MetaVarTypePrettyPrint +
-
-  -- RepTypes related things
-  OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck
+  MetaVarTypePrettyPrint
 end
 
-lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar + OpImplTypeCheck
+lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar
+end
+
+lang RepTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it
@@ -1262,6 +1261,117 @@ lang TyAnnot = AnnotateSources + PrettyPrint + Ast + AliasTypeAst
     let res = sfold_Pat_Expr (helper _annotateExpr) res pat in
     let res = sfold_Pat_Pat (helper _annotatePat) res pat in
     res
+end
+
+lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
+  syn Expr = | FakeExpr {id : Int, result : Ref String, real : Expr}
+  syn Type = | FakeType {id : Int, result : Ref String, real : Type}
+  syn Pat  = | FakePat  {id : Int, result : Ref String, real : Pat}
+
+  sem isAtomic =
+  | FakeExpr x -> isAtomic x.real
+  sem patIsAtomic =
+  | FakePat x -> patIsAtomic x.real
+  sem typePrecedence =
+  | FakeType x -> typePrecedence x.real
+
+  sem pprintCode indent env =
+  | FakeExpr x ->
+    match pprintAnnotExpr indent env x.real with (env, real) in
+    modref x.result real;
+    (env, cons '!' (cons '!' (int2string x.id)))
+  sem getPatStringCode indent env =
+  | FakePat x ->
+    match pprintAnnotPat indent env x.real with (env, real) in
+    modref x.result real;
+    (env, cons '!' (cons '!' (int2string x.id)))
+  sem getTypeStringCode indent env =
+  | FakeType x ->
+    match pprintAnnotType indent env x.real with (env, real) in
+    modref x.result real;
+    (env, cons '!' (cons '!' (int2string x.id)))
+
+  sem subSwap
+  : all a. (a -> Int -> (Ref String, a))
+  -> [Ref String]
+  -> a
+  -> ([Ref String], a)
+  sem subSwap mkPlaceholder acc = | a ->
+    match mkPlaceholder a (length acc) with (newRef, fake) in
+    (snoc acc newRef, fake)
+  sem mkFakeExpr real = | id ->
+    let r = ref "" in
+    (r, FakeExpr {id = id, result = r, real = real})
+  sem mkFakeType real = | id ->
+    let r = ref "" in
+    (r, FakeType {id = id, result = r, real = real})
+  sem mkFakePat real = | id ->
+    let r = ref "" in
+    (r, FakePat {id = id, result = r, real = real})
+
+  sem pprintAst : Expr -> Output
+  sem pprintAst = | tm ->
+    match pprintAnnotExpr 0 pprintEnvEmpty tm with (_, output) in
+    finalize output
+
+  sem pprintAnnotExpr : Int -> PprintEnv -> Expr -> (PprintEnv, Output)
+  sem pprintAnnotExpr indent env =
+  | orig & x ->
+    let subs = [] in
+    match smapAccumL_Expr_Expr (subSwap mkFakeExpr) subs x with (subs, x) in
+    match smapAccumL_Expr_Type (subSwap mkFakeType) subs x with (subs, x) in
+    match smapAccumL_Expr_Pat (subSwap mkFakePat) subs x with (subs, x) in
+    match pprintCode indent env x with (env, x) in
+    match getTypeStringCode 0 env (_removeAliases (tyTm orig)) with (env, ty) in
+    (env, annotate ty (_fixOutput x subs))
+
+  sem pprintAnnotPat : Int -> PprintEnv -> Pat -> (PprintEnv, Output)
+  sem pprintAnnotPat indent env =
+  | orig & x ->
+    let subs = [] in
+    match smapAccumL_Pat_Expr (subSwap mkFakeExpr) subs x with (subs, x) in
+    match smapAccumL_Pat_Type (subSwap mkFakeType) subs x with (subs, x) in
+    match smapAccumL_Pat_Pat (subSwap mkFakePat) subs x with (subs, x) in
+    match getPatStringCode indent env x with (env, x) in
+    match getTypeStringCode 0 env (_removeAliases (tyPat orig)) with (env, ty) in
+    (env, annotate ty (_fixOutput x subs))
+
+  sem pprintAnnotType : Int -> PprintEnv -> Type -> (PprintEnv, Output)
+  sem pprintAnnotType indent env =
+  | orig & x ->
+    let subs = [] in
+    match smapAccumL_Type_Type (subSwap mkFakeType) subs x with (subs, x) in
+    match getTypeStringCode indent env x with (env, x) in
+    match getTypeStringCode 0 env (_removeAliases orig) with (env, ty) in
+    (env, annotate ty (_fixOutput x subs))
+
+  sem _removeAliases : Type -> Type
+  sem _removeAliases =
+  | TyAlias x -> _removeAliases x.content
+  | ty -> smap_Type_Type _removeAliases ty
+
+  sem _fixOutput : String -> [Ref String] -> Output
+  sem _fixOutput str = | subs ->
+    recursive let splitWhile : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam pred. lam seq.
+      match seq with [x] ++ rest then
+        if pred x then
+          match splitWhile pred rest with (passing, rest) in
+          (cons x passing, rest)
+        else ([], seq)
+      else ([], [])
+    in
+    recursive let work = lam acc. lam str.
+      switch str
+      case ['!', '!', c & ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9')] ++ str then
+        match splitWhile isDigit (cons c str) with (number, str) in
+        let acc = concat acc (deref (get subs (string2int number))) in
+        work acc str
+      case [c] ++ str then
+        work (snoc acc c) str
+      case [] then
+        acc
+      end
+    in work "" (escapeContent str)
 end
 
 lang TestLang = MExprTypeCheck + MExprEq + MetaVarTypeEq + MExprPrettyPrint

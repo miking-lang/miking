@@ -165,22 +165,9 @@ lang BootParser = MExprAst + ConstTransformer
                info = ginfo t 0}
   | 105 /-TmConst-/ ->
     let c = gconst t 0 in
-    switch gconst t 0
-    case CDPrint _ then
-      TmVar {info = ginfo t 0,
-             ident = nameNoSym "dprint",
-             frozen = false,
-             ty = tyunknown_}
-    case CError _ then
-      TmVar {info = ginfo t 0,
-             ident = nameNoSym "error",
-             frozen = false,
-             ty = tyunknown_}
-    case c then
-      TmConst {val = c,
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
-    end
+    TmConst {val = gconst t 0,
+             ty = TyUnknown { info = ginfo t 0 },
+             info = ginfo t 0}
   | 106 /-TmSeq-/ ->
     TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
            ty =  TyUnknown { info = ginfo t 0 },

@@ -496,8 +496,10 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
-  ReprTypeCmp + ReprSubstCmp + TyWildCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+end
+
+lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp
 end
 
 -----------

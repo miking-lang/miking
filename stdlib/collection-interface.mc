@@ -1,13 +1,15 @@
 include "basic-types.mc"
 
--- We include the implementations here, to ensure they're in scope
--- when we insert op-impls
-include "uct-implementations.mc"
+-- TODO(vipa, 2023-12-06): There are a number of temporary changes
+-- made to this file, all with the same date as this comment. These
+-- should be undone when reprs are properly supported in the main
+-- compiler.
 
 -- This file gives a general interface for collection types.
 
 type UColl p x
 
+type Repr x -- TODO(vipa, 2023-12-06): Remove when reprs are added for real
 type Coll p x = Repr (UColl p x)
 
 -- The first thing to note is that `Coll` is a `Repr`-type, meaning
@@ -97,10 +99,10 @@ let selectSem : all s. all a. Phantom s -> [a] -> a -> [a] -> Bool = never
 
 type Seq a = Coll (KeepAll, SeqOrder) a
 
-type Set a = Coll (KeepLast, _) a
+-- type Set a = Coll (KeepLast, _) a  -- TODO(vipa, 2023-12-06): Uncomment when reprs are supported
 type OrderedSet a = Coll (KeepLast, SortedOrder) a
 
-type Map k v = Coll (KeepLastKey, _) (k, v)
+-- type Map k v = Coll (KeepLastKey, _) (k, v)  -- TODO(vipa, 2023-12-06): Uncomment when reprs are supported
 type OrderedMap k v = Coll (KeepLastKey, SortedKeyOrder) (k, v)
 
 ----------------------------

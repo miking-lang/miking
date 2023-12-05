@@ -17,5 +17,3 @@ tags
 
 .vscode/*
 test/js/*.js
-
-stdlib/mexpr/universal-implementation.mc

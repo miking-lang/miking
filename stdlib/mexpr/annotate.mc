@@ -168,7 +168,6 @@ lang AnnotateMExprBase = AnnotateSources + Ast
     let res = match typeAnnot ty with Some annot
       then [(infoTy ty, annot)]
       else [] in
-    let res = sfold_Type_Expr (lam acc. lam e. concat acc (_exprAnnots e)) res ty in
     let res = sfold_Type_Type (lam acc. lam t. concat acc (_typeAnnots t)) res ty in
     res
 end

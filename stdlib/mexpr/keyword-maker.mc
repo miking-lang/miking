@@ -17,7 +17,7 @@ include "eq.mc"
 -- The base fragment that includes the keyword maker, but
 -- no checks for incorrect bindings in e.g. let or lam.
 -- See the separate fragments to include this.
-lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + VarTypeAst
+lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
   sem isKeyword =
   | _ -> false
 
@@ -38,7 +38,13 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + VarTypeAst
              " arguments, but found ", int2string n2, "."])
 
   sem makeKeywords : Expr -> Expr
-  sem makeKeywords = | expr -> makeExprKeywords [] expr
+  sem makeKeywords =
+  | expr ->
+    let expr = makeExprKeywords [] expr in
+    let expr = mapPre_Expr_Expr (lam expr.
+        smap_Expr_Type (makeTypeKeywords []) expr
+      ) expr
+    in expr
 
   sem makeExprKeywords (args: [Expr]) =
   | TmApp r ->
@@ -46,13 +52,15 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + VarTypeAst
      let lhs = makeExprKeywords (cons rhs args) r.lhs in
      if isKeyword lhs then lhs
      else TmApp {r with lhs = lhs, rhs = rhs}
-  | tm & TmVar r ->
+  | TmVar r ->
      let ident = nameGetStr r.ident in
-     match matchKeywordString r.info ident with Some (noArgs, f) then
-       if eqi noArgs (length args) then f args
-       else makeKeywordError r.info noArgs (length args) ident
-     else tm
-  | expr -> smap_Expr_Type (makeTypeKeywords []) (smap_Expr_Expr (makeExprKeywords []) expr)
+     match matchKeywordString r.info ident with Some n then
+       match n with (noArgs, f) then
+         if eqi noArgs (length args) then f args
+         else makeKeywordError r.info noArgs (length args) ident
+       else never
+     else TmVar r
+  | expr -> smap_Expr_Expr (makeExprKeywords []) expr
 
   sem makeTypeKeywords : [Type] -> Type -> Type
   sem makeTypeKeywords args =
@@ -61,19 +69,15 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + VarTypeAst
     let lhs = makeTypeKeywords (cons rhs args) r.lhs in
     if isTypeKeyword lhs then lhs
     else TyApp {r with lhs = lhs, rhs = rhs}
-  | ty & TyCon r ->
+  | TyCon r ->
     let ident = nameGetStr r.ident in
-    match matchTypeKeywordString r.info ident with Some (noArgs, f) then
-      if eqi noArgs (length args) then f args
-      else makeKeywordError r.info noArgs (length args) ident
-    else ty
-  | ty & TyVar r ->
-    let ident = nameGetStr r.ident in
-     match matchTypeKeywordString r.info ident with Some (noArgs, f) then
-       if eqi noArgs (length args) then f args
-       else makeKeywordError r.info noArgs (length args) ident
-     else ty
-  | ty -> smap_Type_Expr (makeExprKeywords []) (smap_Type_Type (makeTypeKeywords []) ty)
+    match matchTypeKeywordString r.info ident with Some n then
+       match n with (noArgs, f) then
+         if eqi noArgs (length args) then f args
+         else makeKeywordError r.info noArgs (length args) ident
+       else never
+     else TyCon r
+  | ty -> smap_Type_Type (makeTypeKeywords []) ty
 
 end
 
@@ -94,7 +98,7 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
-     else TmConDef {r with inexpr = makeExprKeywords [] r.inexpr, tyIdent = makeTypeKeywords [] r.tyIdent}
+     else TmConDef {r with inexpr = makeExprKeywords [] r.inexpr}
 end
 
 lang KeywordMakerType = KeywordMakerBase + TypeAst
@@ -104,7 +108,7 @@ lang KeywordMakerType = KeywordMakerBase + TypeAst
      match matchTypeKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Type keyword '", ident,
        "' cannot be used in a type definition."])
-     else TmType {r with inexpr = makeExprKeywords [] r.inexpr, tyIdent = makeTypeKeywords [] r.tyIdent}
+     else TmType {r with inexpr = makeExprKeywords [] r.inexpr}
 end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
@@ -114,7 +118,7 @@ lang KeywordMakerLam = KeywordMakerBase + LamAst
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
-     else TmLam {r with body = makeExprKeywords [] r.body, tyAnnot = makeTypeKeywords [] r.tyAnnot}
+     else TmLam {r with body = makeExprKeywords [] r.body}
 end
 
 
@@ -126,7 +130,7 @@ lang KeywordMakerLet = KeywordMakerBase + LetAst
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
-       TmLet {r with body = makeExprKeywords [] r.body, inexpr = makeExprKeywords [] r.inexpr, tyAnnot = makeTypeKeywords [] r.tyAnnot}
+       TmLet {{r with body = makeExprKeywords [] r.body} with inexpr = makeExprKeywords [] r.inexpr}
 end
 
 
@@ -140,7 +144,7 @@ lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
           errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used inside a pattern."])
         else PatNamed r
       else PatNamed r
-  | pat -> smap_Pat_Expr (makeExprKeywords []) (smap_Pat_Type (makeTypeKeywords []) (smap_Pat_Pat matchKeywordPat pat))
+  | pat -> smap_Pat_Pat matchKeywordPat pat
 
   sem makeExprKeywords (args: [Expr]) =
   | TmMatch r ->

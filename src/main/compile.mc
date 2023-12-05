@@ -7,7 +7,6 @@ include "options.mc"
 include "parse.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
-include "mexpr/demote-recursive.mc"
 include "mexpr/phase-stats.mc"
 include "mexpr/profiling.mc"
 include "mexpr/remove-ascription.mc"
@@ -16,7 +15,6 @@ include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utest-generate.mc"
-include "mexpr/reptypes.mc"
 include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
@@ -37,19 +35,12 @@ lang MCoreCompile =
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
-  MExprDemoteRecursive +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
   SpecializeCompile +
-  RepTypesFragments +
-  DumpRepTypesProblem +
-  PrintMostFrequentRepr +
   PprintTyAnnot + HtmlAnnotator
 end
 
-lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + RepTypesFragments + MetaVarTypePrettyPrint
-end
-
-lang MExprRepTypesComposedSolver = RepTypesComposedSolver + MExprAst + RepTypesAst
+lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + MetaVarTypePrettyPrint
 end
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
@@ -66,7 +57,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
     else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
-let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam ast.
+let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
     let log = mkPhaseLogState options.debugPhases in
 
@@ -78,42 +69,15 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
     in
     endPhaseStats log "instrument-profiling" ast;
 
-    let ast = symbolizeAndInsertOpImpls impls ast in
+    let ast = symbolize ast in
     endPhaseStats log "symbolize" ast;
 
-    -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    -- writeFile "out1.html" (pprintAst ast);
-
-    let ast = demoteRecursive ast in
-    endPhaseStats log "demote-recursive" ast;
-
-    let ast = typeCheckLeaveMeta ast in
+    let ast = typeCheck ast in
     endPhaseStats log "type-check" ast;
     (if options.debugTypeCheck then
        printLn (use TyAnnotFull in annotateMExpr ast);
        endPhaseStats log "debug-type-check" ast
      else ());
-
-    let ast = use MExprRepTypesAnalysis in typeCheckLeaveMeta ast in
-    endPhaseStats log "reptypes-analysis" ast;
-
-    -- writeFile "out1.html" (pprintAst ast);
-
-    -- dumpRepTypesProblem 0 ast;
-
-    let ast = use MExprRepTypesComposedSolver in reprSolve defaultReprSolverOptions ast in
-    endPhaseStats log "reptypes-solve" ast;
-
-    let ast = removeMetaVarExpr ast in
-    endPhaseStats log "remove-ty-flex" ast;
-
-    -- TODO(vipa, 2023-06-26): debug-flag for post uct-analysis pprintAst
-    -- writeFile "out2.html" (pprintAst ast);
-
-    -- (match findMostCommonRepr ast with Some sym then
-    --   printIfExprHasRepr sym ast;
-    --   printLn (int2string (sym2hash sym))
-    --  else ());
 
     let ast = compileSpecialize ast in
 
@@ -157,7 +121,7 @@ let compileWithUtests = lam impls. lam options : Options. lam sourcePath. lam as
 -- args: the program arguments to the executed program, if any
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
-  let compileFile = lam impls. lam file.
+  let compileFile = lam file.
     let log = mkPhaseLogState options.debugPhases in
     let ast = parseParseMCoreFile {
       keepUtests = options.runTests,
@@ -193,14 +157,7 @@ let compile = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
-    compileWithUtests impls options file ast; ()
+    compileWithUtests options file ast; ()
   in
-  match partition (lam f. match f with _ ++ ".imc" then true else false) files
-  with (implFiles, files) in
-  let impls = foldl
-    -- (lam acc. lam f. mergeImplData acc (use CollectRepTypesImpls in collectImpls f))
-    (lam acc. lam f. error "This compiler has not been built with .imc support")
-    emptyImplData
-    implFiles in
   if options.accelerate then compileAccelerate files options args
-  else iter (compileFile impls) files
+  else iter compileFile files

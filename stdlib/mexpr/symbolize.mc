@@ -30,10 +30,6 @@ type SymEnv = {
   tyConEnv: Map String Name,
   allowFree: Bool,
   ignoreExternals: Bool,
-
-  -- NOTE(vipa, 2023-06-29): Semi-temporary fields for inserting op
-  -- impls, until we can write them directly in an mcore program
-  opImplsToInsert: ImplData,
   reprEnv: Map String Name
 }
 
@@ -44,8 +40,6 @@ let _symEnvEmpty : SymEnv = {
   tyConEnv = mapEmpty cmpString,
   allowFree = false,
   ignoreExternals = false,
-
-  opImplsToInsert = emptyImplData,
   reprEnv = mapEmpty cmpString
 }
 
@@ -132,7 +126,7 @@ lang Sym = Ast + SymLookup
 
   sem symbolizeType : SymEnv -> Type -> Type
   sem symbolizeType env =
-  | t -> smap_Type_Expr (symbolizeExpr env) (smap_Type_Type (symbolizeType env) t)
+  | t -> smap_Type_Type (symbolizeType env) t
 
   -- Same as symbolizeExpr, but also return an env with all names bound at the
   -- top-level
@@ -155,11 +149,6 @@ lang Sym = Ast + SymLookup
   sem symbolize =
   | expr ->
     let env = symEnvDefault in
-    symbolizeExpr env expr
-
-  sem symbolizeAndInsertOpImpls impls =
-  | expr ->
-    let env = {symEnvEmpty with opImplsToInsert = impls} in
     symbolizeExpr env expr
 
   -- Symbolize with builtin environment and ignore errors
@@ -337,10 +326,6 @@ end
 lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
   sem symbolizeExpr env =
   | TmOpDecl x ->
-    -- NOTE(vipa, 2023-07-03): Insert *all* reprs, then clear them
-    -- from the environment so they don't get inserted again
-    let reprs = mapBindings env.opImplsToInsert.reprs in
-    let env = {env with opImplsToInsert = {env.opImplsToInsert with reprs = emptyImplData.reprs}} in
     let symbolizeReprDecl = lam reprEnv. lam binding.
       match mapAccumL setSymbol env.tyVarEnv binding.1 .vars with (tyVarEnv, vars) in
       let newEnv = {env with tyVarEnv = tyVarEnv} in
@@ -352,51 +337,16 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
         , repr = symbolizeType newEnv binding.1 .repr
         }
       in (reprEnv, res) in
-    match mapAccumL symbolizeReprDecl env.reprEnv reprs with (reprEnv, reprs) in
-    let env = {env with reprEnv = reprEnv} in
-    let wrapWithRepr = lam repr. lam tm. TmReprDecl
-      { ident = repr.ident
-      , vars = repr.vars
-      , pat = repr.pat
-      , repr = repr.repr
-      , ty = tyunknown_
-      , inexpr = tm
-      , info = infoTm tm
-      } in
 
-    -- NOTE(vipa, 2023-07-03): Insert implementations of *this*
-    -- operation, if any
     match setSymbol env.varEnv x.ident with (varEnv, ident) in
     let newEnv = {env with varEnv = varEnv} in
-    let inexpr =
-      let sid = stringToSid (nameGetStr x.ident) in
-      match mapLookup sid env.opImplsToInsert.impls with Some impls then
-        -- TODO(vipa, 2023-10-26): Insert when all free variables are
-        -- in scope instead
-        let wrapWithOpImpl = lam acc. lam alt. TmOpImpl
-          { ident = ident
-          , implId = negi 1
-          , reprScope = negi 1
-          , metaLevel = negi 1
-          , selfCost = alt.selfCost
-          , body = alt.body
-          , specType = alt.specType
-          , delayedReprUnifications = []
-          , inexpr = acc
-          , ty = tyunknown_
-          , info = alt.info
-          } in
-        symbolizeExpr newEnv (foldl wrapWithOpImpl x.inexpr impls)
-      else
-        symbolizeExpr newEnv x.inexpr in
-    let decl = TmOpDecl
-      { x
-      with ident = ident
+    let inexpr = symbolizeExpr newEnv x.inexpr in
+    TmOpDecl
+      { x with ident = ident
       , tyAnnot = symbolizeType env x.tyAnnot
       , inexpr = inexpr
       , ty = symbolizeType env x.ty
-      } in
-    foldr wrapWithRepr decl reprs
+      }
 end
 
 lang ReprTypeSym = Sym + ReprDeclAst
@@ -568,10 +518,10 @@ lang MExprSym =
   VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
 
   -- Non-default implementations (Patterns)
-  NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym +
+  NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
+end
 
-  -- RepTypes stuff
-  OpDeclSym + OpImplSym + OpVarSym + ReprSubstSym + ReprTypeSym
+lang RepTypesSym = OpDeclSym + OpImplSym + OpVarSym + ReprSubstSym + ReprTypeSym
 end
 
 -----------

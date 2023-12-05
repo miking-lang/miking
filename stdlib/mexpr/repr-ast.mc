@@ -1,3 +1,5 @@
+include "mexpr/ast.mc"
+
 -- NOTE(vipa, 2023-06-12): We assume a certain collection size and
 -- explicitly evaluate the cost expression
 type OpCost = Float

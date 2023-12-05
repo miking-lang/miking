@@ -9,7 +9,6 @@ lang COPSolve = COP + COPPrettyPrint
   syn COPVarValue =
   | COPInt {val: Int}
   | COPBool {val: Bool}
-  | COPFloat {val: Float}
   | COPArray {vals: [COPVarValue]}
 
   -- TODO(Linnea, 2023-03-16): Include other possible results (unsatisfiable,
@@ -19,7 +18,6 @@ lang COPSolve = COP + COPPrettyPrint
       solution: Map Name COPVarValue,
       objective: Option COPVarValue
     }
-  | COPUnsat ()
   | COPError {msg: String}
 
   sem solve: COPModel -> COPSolverResult
@@ -38,7 +36,6 @@ lang COPSolve = COP + COPPrettyPrint
         "-o", outputFile,
         "--output-objective",
         "--solver", "gecode",
-        "--unsat-msg", "!UNSAT!",
         modelFile
       ] "" ""
     with (elapsed, {stdout = stdout, stderr = stderr, returncode = returncode}) in
@@ -53,24 +50,12 @@ lang COPSolve = COP + COPPrettyPrint
     in
     -- Read the result back
     let res =
-      let unsat =
-        if isPrefix eqc "!UNSAT!" stdout then true else
-        if fileExists outputFile then
-          -- OPT(vipa, 2023-08-16): This is inconvenient, minizinc
-          -- seems to vary where it puts the unsat message, sometimes
-          -- on stdout, sometimes in the output file. This means we
-          -- read the file twice right now, we should refactor to
-          -- avoid that. Maybe use --json-stream instead of
-          -- --output-mode, and skipping --output-to-file?
-          isPrefix eqc "!UNSAT!" (readFile outputFile)
-        else false in
-      if unsat then COPUnsat () else
       match _parseResult outputFile with Some resMap then
         -- Build a map with relevant variables
         let m: Option (Map Name COPVarValue) =
           mapFoldWithKey (lam acc. lam n. lam s.
             match acc with Some m then
-              match mapLookup (cons 'z' s) resMap with Some v then
+              match mapLookup s resMap with Some v then
                 Some (mapInsert n v m)
               else None ()
             else None ()
@@ -95,7 +80,6 @@ lang COPSolve = COP + COPPrettyPrint
   | v ->
     switch v
     case JsonInt i then Some (COPInt {val = i})
-    case JsonFloat i then Some (COPFloat {val = i})
     case JsonBool b then Some (COPBool {val = b})
     case JsonArray a then
       let vals =
