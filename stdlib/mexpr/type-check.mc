@@ -1223,7 +1223,7 @@ end
 lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar
 end
 
-lang RepTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck
+lang RepTypesTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck + RepTypesUnify
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it

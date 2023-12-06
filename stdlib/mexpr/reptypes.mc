@@ -316,7 +316,7 @@ end
 --
 -- Finally, we replace the TmVars that reference TmOpDecls with
 -- TmOpVars.
-lang RepTypesAnalysis = LamRepTypesAnalysis + LetRepTypesAnalysis + RecLetsRepTypesAnalysis + VarRepTypesAnalysis + OpImplRepTypesAnalysis
+lang RepTypesAnalysis = LamRepTypesAnalysis + LetRepTypesAnalysis + RecLetsRepTypesAnalysis + VarRepTypesAnalysis + OpImplRepTypesAnalysis + OpDeclTypeCheck + RepTypesUnify + OpVarTypeCheck + ReprDeclTypeCheck
 end
 
 lang MExprRepTypesAnalysis = MExprTypeCheckMost + RepTypesAnalysis + MExprPrettyPrint + RepTypesPrettyPrint
@@ -1103,8 +1103,8 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
         choices.sols in
       lazyStreamUncons sols in
 
-    let addSuccessors : PotentialSolution -> Int -> State -> State = lam sol. lam failIdx. lam st.
-      let stepAtIdx : Int -> Option PotentialSolution = lam idx.
+    let addSuccessors : PotentialSolution -> Option Int -> State -> State = lam sol. lam failIdx. lam st.
+      let stepAtIdx : PotentialSolution -> Int -> Option PotentialSolution = lam sol. lam idx.
         match lazyStreamUncons (get sol.tails idx) with Some (new, tail)
         then Some
           -- TODO(vipa, 2023-12-01): Do I need to worry about float
@@ -1115,14 +1115,55 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
           , tails = set sol.tails idx tail
           }
         else None () in
-      let checkSeen = lam potential.
-        if setMem potential.combo st.consideredCombos
-        then None ()
-        else Some potential in
-      let succ = create failIdx stepAtIdx in
-      let succ = mapOption (lam x. optionBind x checkSeen) succ in
+      let succ =
+        match failIdx with Some failIdx then
+          -- NOTE(vipa, 2023-12-06): Try to find repr conflicts, pairs
+          -- of operations that trivially cannot co-exist in the same
+          -- solution
+          let singleton = lam k. lam v. mapInsert k v (mapEmpty nameCmp) in
+          let collectIdxes = lam acc. lam idx. lam sol.
+            pufFold
+              (lam a. lam. lam. a)
+              (lam acc. lam pair. lam repr. mapInsertWith (mapUnionWith concat) pair.0 (singleton repr [idx]) acc)
+              (lam a. lam. lam. a)
+              acc
+              sol.uni.reprs in
+          let potentialConflicts = foldli collectIdxes
+            (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+            sol.here in
+          let collectConflicts = lam acc. lam entry.
+            let mapWithOthers : all a. all b. ([a] -> a -> [a] -> b) -> [a] -> [b] = lam f. lam xs.
+              mapi (lam i. lam x. f (splitAt xs i).0 x (splitAt xs (addi i 1)).1) xs in
+            if gti (mapSize entry) 1 then
+              let partitions = map (setOfSeq subi) (mapValues entry) in
+              let fillNeededSteps = lam pre. lam here. lam post.
+                let val = foldl setUnion (foldl setUnion (setEmpty subi) pre) post in
+                mapMap (lam. val) here in
+              foldl (mapUnionWith setUnion) acc (mapWithOthers fillNeededSteps partitions)
+            else acc in
+          let conflicts = mapFoldWithKey
+            (lam acc. lam. lam entry. collectConflicts acc entry)
+            (mapEmpty subi)
+            potentialConflicts in
+          if mapIsEmpty conflicts
+          -- NOTE(vipa, 2023-12-06): Couldn't find simple repr
+          -- conflicts, fall back to failIdx
+          then create failIdx (stepAtIdx sol)
+          else mapFoldWithKey
+            (lam acc. lam. lam idxesToStep. snoc acc (optionFoldlM stepAtIdx sol (setToSeq idxesToStep)))
+            []
+            conflicts
+        else create (length sol.here) (stepAtIdx sol) in
+      let checkSeen = lam seen. lam potential.
+        match potential with Some potential then
+          if setMem potential.combo seen
+          then (seen, None ())
+          else (setInsert potential.combo seen, Some potential)
+        else (seen, None ()) in
+      match mapAccumL checkSeen st.consideredCombos succ with (consideredCombos, succ) in
+      let succ = filterOption succ in
       { queue = heapAddMany cmpByCost succ st.queue
-      , consideredCombos = foldl (lam acc. lam x. setInsert x.combo acc) st.consideredCombos succ
+      , consideredCombos = consideredCombos
       }
     in
 
@@ -1146,9 +1187,9 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
             , uni = uni
             , sols = zipWith (lam idxes. lam sol. {idxes = idxes, sol = sol}) idxes potential.here
             } in
-          Some (lam. addSuccessors potential (length idxes) state, solBase)
+          Some (lam. addSuccessors potential (None ()) state, solBase)
         case Left idx then
-          step (addSuccessors potential idx state)
+          step (addSuccessors potential (Some idx) state)
         end
       else None ()
     in

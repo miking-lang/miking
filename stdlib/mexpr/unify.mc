@@ -640,7 +640,7 @@ lang MExprUnify =
   SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
 end
 
-lang RepTypeUnify = TyWildUnify + ReprTypeUnify
+lang RepTypesUnify = TyWildUnify + ReprTypeUnify
 end
 
 lang TestLang = UnifyPure + MExprUnify + MExprCmp + MetaVarTypeCmp + MExprPrettyPrint + MetaVarTypePrettyPrint end
