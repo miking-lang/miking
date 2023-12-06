@@ -1125,7 +1125,6 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
             pufFold
               (lam a. lam. lam. a)
               (lam acc. lam pair. lam repr. mapInsertWith (mapUnionWith concat) pair.0 (singleton repr [idx]) acc)
-              (lam a. lam. lam. a)
               acc
               sol.uni.reprs in
           let potentialConflicts = foldli collectIdxes
