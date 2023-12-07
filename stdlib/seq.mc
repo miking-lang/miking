@@ -382,26 +382,58 @@ utest forAll (lam x. eqi x 1) [1, 1, 1, 2] with false
 utest forAll (lam x. eqi x 0) [0, 0, 0] with true
 utest forAll (lam x. eqi x 1) [] with true
 
--- Join
+-- Monadic and Applicative operations
+
 let join : all a. [[a]] -> [a] = lam seqs. foldl concat [] seqs
 
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
 utest join [[],[],[]] with [] using eqSeq eqi
 
--- Monadic and Applicative operations
+let joinMap : all a. all b. (a -> [b]) -> [a] -> [b] =
+  lam f. lam a.
+    foldl (lam s. lam x. concat s (f x)) [] a
+
+utest joinMap (lam x. [subi (muli x 2) 1, muli x 2]) [1,2,3] with [1,2,3,4,5,6]
+utest joinMap
+        (lam x. if eqi 1 (modi x 2) then [subi (muli x 2) 1, muli x 2] else [])
+        [1,2,3]
+with [1,2,5,6]
 
 let seqLiftA2
   : all a. all b. all c. (a -> b -> c) -> [a] -> [b] -> [c]
   = lam f. lam as. lam bs.
-    join (map (lam a. map (f a) bs) as)
+    if null bs then [] else
+      joinMap (lam a. map (f a) bs) as
 
 utest seqLiftA2 addi [10, 20, 30] [1, 2, 3]
 with [11, 12, 13, 21, 22, 23, 31, 32, 33]
 
+let seqLiftA3
+  : all a. all b. all c. all d. (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+  = lam f. lam as. lam bs. lam cs.
+  joinMap (lam a. seqLiftA2 (f a) bs cs) as
+
+utest seqLiftA3 (lam x. lam y. lam z. addi (addi x y) z)
+        [100, 200, 300] [10, 20, 30] [1, 2, 3]
+with [ 111, 112, 113, 121, 122, 123, 131, 132, 133
+     , 211, 212, 213, 221, 222, 223, 231, 232, 233
+     , 311, 312, 313, 321, 322, 323, 331, 332, 333 ]
+
 let seqMapM
   : all a. all b. (a -> [b]) -> [a] -> [[b]]
-  = lam f. foldr (lam a. lam acc. seqLiftA2 cons (f a) acc) [[]]
+  = lam f.
+    recursive let work = lam g. lam a. lam bs.
+      match bs with [b] ++ bs then
+        match g a b with a & ![] then work g a bs
+        else []
+      else a
+    in
+    work (lam acc. lam a. seqLiftA2 snoc acc (f a)) [[]]
+
+utest seqMapM (lam x. [x, addi x 1]) [10, 20, 30]
+with [ [10, 20, 30], [10, 20, 31], [10, 21, 30], [10, 21, 31]
+     , [11, 20, 30], [11, 20, 31], [11, 21, 30], [11, 21, 31] ]
 
 -- Searching
 recursive
