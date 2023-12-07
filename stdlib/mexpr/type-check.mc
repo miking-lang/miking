@@ -1179,13 +1179,13 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
     let np = patToNormpat pat in
     let mkMatches = lam p.
-      seqLiftA2 (mapUnionWith normpatIntersect)
-        (matchNormpat (t.target, p))
-        env.matches
+      filter (mapAll (lam np. not (null np)))
+        (seqLiftA2 (mapUnionWith normpatIntersect)
+           (matchNormpat (t.target, p))
+           env.matches)
     in
-
     let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv,
-                           matches = mkMatches np } in
+                           matches = mkMatches np} in
     let elsEnv = {env with varEnv = mapUnion env.varEnv patEnv,
                            matches = mkMatches (normpatComplement np)} in
     let thn = typeCheckExpr thnEnv t.thn in
