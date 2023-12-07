@@ -3,6 +3,7 @@
 -- result, and all its arguments, are wrapped in calls to convertAccelerateParameters to ensure
 -- they have a valid OCaml type.
 
+include "mexpr/record.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/external.mc"
@@ -14,7 +15,7 @@ include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
   PMExprAst + PMExprExtractAccelerate + OCamlDataConversionMExpr + OCamlTopAst +
-  OCamlPrettyPrint
+  OCamlPrettyPrint + RecordTypeUtils
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->

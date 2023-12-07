@@ -68,7 +68,7 @@ let noSymConPrefix = "N"
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
-  FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
+  FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint + RecordTypeUtils
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | (TyRecord t) & ty ->
