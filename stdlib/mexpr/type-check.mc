@@ -228,7 +228,10 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
     match getTypeStringCode 0 env l with (env, l) in
     match getTypeStringCode 0 env r with (env, r) in
     (env, join ["types ", l, " != ", r])
-  | Records _ -> (env, "record inequality (pprint todo)")
+  | Records (l, r) ->
+    let lExclusive = strJoin ", " (map sidToString (mapKeys (mapDifference l r))) in
+    let rExclusive = strJoin ", " (map sidToString (mapKeys (mapDifference r l))) in
+    (env, join ["record inequality (only in left: ", lExclusive, ", only in right: ", rExclusive, ")"])
   | Kinds (Data d1, Data d2) ->
     let getDiff = lam ks1. lam ks2.
       match ks2.upper with Some upper then

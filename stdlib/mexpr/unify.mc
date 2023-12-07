@@ -757,8 +757,8 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
 
   sem unificationToDebug : String -> PprintEnv -> Unification -> (PprintEnv, String)
   sem unificationToDebug indent env = | uni ->
-    match pufToDebug (cons ' ' indent) (lam env. lam sym. (env, int2string (sym2hash sym))) "<unknown>" pprintVarName env uni.reprs with (env, reprs) in
-    match pufToDebug (cons ' ' indent) pprintVarName "<unknown>" (getTypeStringCode 2) env uni.types with (env, types) in
+    match pufToDebug (snoc indent ' ') (lam env. lam sym. (env, int2string (sym2hash sym))) "<unknown>" pprintVarName env uni.reprs with (env, reprs) in
+    match pufToDebug (snoc indent ' ') pprintVarName "<unknown>" (getTypeStringCode 2) env uni.types with (env, types) in
     (env, join [indent, "reprs:\n", reprs, indent, "types:\n", types])
 end
 
