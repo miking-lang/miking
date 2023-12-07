@@ -99,7 +99,7 @@ end
 
 type ImplId = Int
 lang OpImplAst = Ast
-  type TmOpImplRec =
+  type TmOpImplRec = use Ast in
     { ident : Name
     , implId : ImplId
     , reprScope : Int

@@ -13,6 +13,10 @@ include "json.mc"
 lang AnnotateSimple = HtmlAnnotator + AnnotateSources
 end
 
+-- TODO(vipa, 2023-12-13): Move to a more central location when we've
+-- fully decided on what guarantees this function should have
+let _symCmp = lam a. lam b. subi (sym2hash a) (sym2hash b)
+
 lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmLam t ->
@@ -380,7 +384,7 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level, i.e., find a
   -- `SolverSolution` per previous call to `addOpUse`.
-  sem topSolve : all a. SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
+  sem topSolve : all a. Bool -> SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`. The returned `ImplId` should be
@@ -408,7 +412,7 @@ let defaultReprSolverOptions : ReprSolverOptions =
 type VarMap v = {reprs : Map Symbol v, metas : Map Name v}
 let varMapEmpty : all v. VarMap v = unsafeCoerce
   { metas = mapEmpty nameCmp
-  , reprs = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+  , reprs = mapEmpty _symCmp
   }
 let varMapSingleton
   : all a. Either Symbol Name -> a -> VarMap a
@@ -492,7 +496,11 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
     , vars : [Name]
     , reprs : [Symbol]
     }
-  type NamelessMapping = {var : Map Name Name, repr : Map Symbol (Symbol, Int), meta : Map Name (Name, Int)}
+  type NamelessMapping =
+    { var : Map Name Name
+    , repr : Map Symbol (Symbol, Int)
+    , meta : Map Name (Name, Int)
+    }
   sem applyLocallyNamelessMappingTy : NamelessMapping -> Type -> Type
   sem applyLocallyNamelessMappingTy mapping =
   | ty -> smap_Type_Type (applyLocallyNamelessMappingTy mapping) ty
@@ -525,7 +533,7 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
 
   sem applyLocallyNamelessMappingReprPuf : all a. NamelessMapping -> PureUnionFind Symbol a -> PureUnionFind Symbol a
   sem applyLocallyNamelessMappingReprPuf mapping = | puf ->
-    (pufMapAll (lam a. lam b. subi (sym2hash a) (sym2hash b))
+    (pufMapAll _symCmp
       (lam k. optionGetOr k (mapLookup k.0 mapping.repr))
       (lam x. x)
       (lam. error "applyLocallyNamelessMappingReprPuf")
@@ -600,8 +608,8 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
         , vals = nameless.metas
         }
       , reprs =
-        { forward = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
-        , reverse = mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+        { forward = mapEmpty _symCmp
+        , reverse = mapEmpty _symCmp
         , nextIdx = 0
         , vals = nameless.reprs
         }
@@ -636,7 +644,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     let preCollect = wallTimeMs () in
     match collectForReprSolve global initState tm with (state, tm) in
     let postCollect = wallTimeMs () in
-    let pickedSolutions = topSolve global state.topQuery in
+    let pickedSolutions = topSolve options.debugSolveProcess global state.topQuery in
     let postTopSolve = wallTimeMs () in
     (if options.debugFinalSolution then debugSolution global pickedSolutions else ());
     -- NOTE(vipa, 2023-10-25): The concretization phase *does* handle
@@ -817,6 +825,1261 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TyRepr x -> TyUnknown {info = x.info}
 end
 
+type SolInterface constraint childInfo env =
+  -- NOTE(vipa, 2023-12-12): We given `c = approxOr a b` we assume the
+  -- following holds:
+  -- * a -> c
+  -- * b -> c
+  -- Notably we do *not* assume that `c -> a || b` holds.
+  { approxOr : constraint -> constraint -> constraint
+  -- NOTE(vipa, 2023-12-12): Are two constraints equivalent (i.e., `eq
+  -- a b` should be true if a <-> b holds)
+  , eq : constraint -> constraint -> Bool
+  -- NOTE(vipa, 2023-12-08): Update the constraints of a parent and
+  -- child because one or both of them have changed. The two functions
+  -- differ by which constraint-space they're called in: fromAbove is
+  -- called in the constraint space of the child, fromBelow is called
+  -- in the constraint space of the parent.
+  , constrainFromAbove
+    : {parent : constraint, here : constraint, path : [childInfo]}
+    -> Option {parentChanged : Bool, hereChanged : Bool, res : constraint}
+  , constrainFromBelow
+    : {here : constraint, child : constraint, path : [childInfo]}
+    -> Option {hereChanged : Bool, childChanged : Bool, res : constraint}
+  -- NOTE(vipa, 2023-12-08): Take a constraint and a set of dependent
+  -- subproblems, split the constraint into conjunctions, and
+  -- partition the subproblems such that they are independent
+  -- regardless of which of the new constraints is chosen. If it's not
+  -- useful to make a split here, return `None`.
+  , split
+    : all x. constraint
+    -> [{spaceSize : Int, maxCost : Float, minCost : Float, token : x}]  -- TODO(vipa, 2023-12-17): Provide enough information to actually partition by type here
+    -> Option ([[x]], [constraint])
+  , pprintConstraint : String -> env -> constraint -> (env, String)
+  , pprintChildInfo : String -> env -> childInfo -> (env, String)
+  }
+
+type SolTree constraint childInfo a
+type AndComponents constraint childInfo a
+con AndDep : all constraint. all childInfo. all a. [{scale : Float, child : SolTree constraint childInfo a}] -> AndComponents constraint childInfo a
+con AndIndep : all constraint. all childInfo. all a. [SolTree constraint childInfo a] -> AndComponents constraint childInfo a
+type STAndRec a b constraint childInfo =
+  { construct : [b] -> a
+  , components : AndComponents constraint childInfo b
+  , constraint : constraint
+  , childInfo : Option childInfo
+  , selfCost : Float
+  , minCost : Float
+  , maxCost : Float
+  , spaceSize : Int
+  }
+con STAnd : all a. all b. all constraint. all childInfo.
+  STAndRec a b constraint childInfo -> SolTree constraint childInfo a
+con STConstraintTransform : all a. all constraint. all childInfo.
+  { child : SolTree constraint childInfo a
+  -- NOTE(vipa, 2023-12-13): If either of these functions fail
+  -- (returning `None`), then the subtree at this point is dead.
+  , fromAbove : constraint -> Option constraint
+  , fromBelow : constraint -> Option constraint
+  } -> SolTree constraint childInfo a
+con STOr : all a. all constraint. all childInfo.
+  { alternatives : [SolTree constraint childInfo a]
+  , minCost : Float
+  , maxCost : Float
+  , spaceSize : Int
+  } -> SolTree constraint childInfo a
+con STSingle : all a. all constraint. all childInfo.
+  { res : a
+  , cost : Float
+  , constraint : constraint
+  , childInfo : Option childInfo
+  } -> SolTree constraint childInfo a
+
+let andComponentsToList : all constraint. all childInfo. all a.
+  AndComponents constraint childInfo a -> [SolTree constraint childInfo a]
+  = lam comp. switch comp
+    case AndIndep x then x
+    case AndDep x then
+      map (lam x. x.child) x
+    end
+
+type SolTreeInput constraint childInfo a
+con STIAndDep : all a. all b. all constraint. all childInfo.
+  { components : [{scale : Float, child : SolTreeInput constraint childInfo b}]
+  , childInfo : childInfo
+  , cost : Float
+  , construct : [b] -> a
+  , constraint : constraint
+  } -> SolTreeInput constraint childInfo a
+con STIConstraintTransform : all a. all constraint. all childInfo.
+  { child : SolTreeInput constraint childInfo a
+  -- NOTE(vipa, 2023-12-13): If either of these functions fail
+  -- (returning `None`), then the subtree at this point is dead.
+  , fromAbove : constraint -> Option constraint
+  , fromBelow : constraint -> Option constraint
+  } -> SolTreeInput constraint childInfo a
+con STIOr : all a. all constraint. all childInfo.
+  { alternatives : [SolTreeInput constraint childInfo a]
+  } -> SolTreeInput constraint childInfo a
+
+recursive let solTreeMap : all a. all b. all constraint. all childInfo.
+  (a -> b) -> SolTreeInput constraint childInfo a -> SolTreeInput constraint childInfo b
+  = lam f. lam tree. switch tree
+    case STIAndDep x then STIAndDep
+      { components = x.components
+      , childInfo = x.childInfo
+      , cost = x.cost
+      , construct = lam bs. f (x.construct bs)
+      , constraint = x.constraint
+      }
+    case STIConstraintTransform x then STIConstraintTransform
+      { child = solTreeMap f x.child
+      , fromAbove = x.fromAbove
+      , fromBelow = x.fromBelow
+      }
+    case STIOr x then STIOr
+      { alternatives = map (solTreeMap f) x.alternatives
+      }
+    end
+end
+
+let solTreeConvert : all constraint. all a. all childInfo. SolTreeInput constraint childInfo a -> SolTree constraint childInfo a
+  = lam sti.
+    recursive let work = lam sti. switch sti
+      case STIAndDep x then
+        let transformChild = lam acc. lam child.
+          match work child.child with ((min, max, space), newChild) in
+          ( (addf acc.0 (mulf child.scale min), addf acc.1 (mulf child.scale max), muli acc.2 space)
+          , {scale = child.scale, child = newChild}
+          ) in
+        match mapAccumL transformChild (x.cost, x.cost, 1) x.components with (acc, components) in
+        ( acc
+        , STAnd
+          { construct = x.construct
+          , constraint = x.constraint
+          , components = AndDep components
+          , childInfo = Some x.childInfo
+          , selfCost = x.cost
+          , minCost = acc.0
+          , maxCost = acc.1
+          , spaceSize = acc.2
+          }
+        )
+      case STIConstraintTransform x then
+        match work x.child with (acc, child) in
+        ( acc
+        , STConstraintTransform
+          { child = child
+          , fromAbove = x.fromAbove
+          , fromBelow = x.fromBelow
+          }
+        )
+      case STIOr {alternatives = [alt] ++ alts} then
+        let transformAlt = lam acc. lam alt.
+          match work alt with ((min, max, space), alt) in
+          ((minf acc.0 min, maxf acc.1 max, addi acc.2 space), alt) in
+        match work alt with (acc, alt) in
+        match mapAccumL transformAlt acc alts with (acc, alts) in
+        ( acc
+        , STOr
+          { alternatives = cons alt alts
+          , minCost = acc.0
+          , maxCost = acc.1
+          , spaceSize = acc.2
+          }
+        )
+      case STIOr {alternatives = []} then
+        let min = divf 1.0 0.0 in
+        let max = negf min in
+        ( (min, max, 0)
+        , STOr
+          { alternatives = []
+          , minCost = min
+          , maxCost = max
+          , spaceSize = 0
+          }
+        )
+      end
+    in (work sti).1
+
+let debugSolTree
+  : all a. all constraint. all env. all childInfo.
+  (String -> env -> childInfo -> (env, String))
+  -> (String -> env -> constraint -> (env, String))
+  -> env
+  -> SolTree constraint childInfo a
+  -> (env, JsonValue)
+  = lam pchild. lam pconstraint. lam env. lam tree.
+    let pconstraint = lam indent. lam env. lam constraint.
+      match pconstraint indent env constraint with (env, constraintLines) in
+      (env, JsonArray (map (lam x. JsonString x) (strSplit "\n" constraintLines))) in
+    let commonFields = lam fields.
+      let res =
+        [ ("min", JsonFloat fields.min)
+        , ("max", JsonFloat fields.max)
+        , ("size", JsonInt fields.size)
+        ] in
+      (env, res) in
+    recursive let work = lam env. lam tree.
+      switch tree
+      case STAnd x then
+        match commonFields {min = x.minCost, max = x.maxCost, size = x.spaceSize} with (env, common) in
+        match pconstraint "" env x.constraint with (env, constraint) in
+        match optionMapAccum (pchild "") env x.childInfo with (env, chinfo) in
+        let chinfo = optionGetOr "" chinfo in
+        match
+          switch x.components
+          case AndDep components then
+            let f = lam env. lam comp. work env comp.child in
+            mapAccumL f env components
+          case AndIndep components then
+            mapAccumL work env components
+          end
+        with (env, components) in
+        let fields = mapFromSeq cmpString (concat common
+          [ ("type", JsonString "and")
+          , ("dep", JsonBool (match x.components with AndDep _ then true else false))
+          , ("info", JsonString chinfo)
+          , ("constraint", constraint)
+          , ("components", JsonArray components)
+          ]) in
+        (env, JsonObject fields)
+      case STConstraintTransform x then
+        match work env x.child with (env, child) in
+        let fields = mapFromSeq cmpString
+          [ ("type", JsonString "con-trans")
+          , ("child", child)
+          ] in
+        (env, JsonObject fields)
+      case STOr x then
+        match commonFields {min = x.minCost, max = x.maxCost, size = x.spaceSize} with (env, common) in
+        match mapAccumL work env x.alternatives with (env, alternatives) in
+        let fields = mapFromSeq cmpString (concat common
+          [ ("type", JsonString "or")
+          , ("alternatives", JsonArray alternatives)
+          ]) in
+        (env, JsonObject fields)
+      case STSingle x then
+        match optionMapAccum (pchild "") env x.childInfo with (env, chinfo) in
+        let chinfo = optionGetOr "" chinfo in
+        match pconstraint "" env x.constraint with (env, constraint) in
+        let fields = mapFromSeq cmpString
+          [ ("type", JsonString "single")
+          , ("cost", JsonFloat x.cost)
+          , ("info", JsonString chinfo)
+          , ("constraint", constraint)
+          ] in
+        (env, JsonObject fields)
+      end
+    in work env tree
+
+type STMeta =
+  { min : Float
+  , max : Float
+  , size : Int
+  }
+
+recursive let getMeta : all constraint. all a. all childInfo. SolTree constraint childInfo a -> STMeta =
+  lam tree. switch tree
+    case STAnd x then {min = x.minCost, max = x.maxCost, size = x.spaceSize}
+    case STConstraintTransform x then getMeta x.child
+    case STOr x then {min = x.minCost, max = x.maxCost, size = x.spaceSize}
+    case STSingle x then {min = x.cost, max = x.cost, size = 1}
+    end
+end
+
+let orMetaCombine
+  : all childInfo. all constraint. all a. STMeta
+  -> SolTree constraint childInfo a
+  -> STMeta
+  = lam acc. lam tree.
+    let res = getMeta tree in
+    { min = minf acc.min res.min
+    , max = maxf acc.max res.max
+    , size = addi acc.size res.size
+    }
+let andMetaEmpty = lam cost. {min = cost, max = cost, size = 1}
+let andMetaCombineIndep = lam acc. lam tree.
+  let res = getMeta tree in
+  { min = addf acc.min res.min
+  , max = addf acc.max res.max
+  , size = muli acc.size res.size
+  }
+let andMetaCombine
+  : all constraint. all a. all childInfo. STMeta
+  -> {scale : Float, child : SolTree constraint childInfo a}
+  -> STMeta
+  = lam acc. lam item.
+    let res = getMeta item.child in
+    { min = addf acc.min (mulf item.scale res.min)
+    , max = addf acc.max (mulf item.scale res.max)
+    , size = muli acc.size res.size
+    }
+
+let solTreeMaterializeCheapest
+  : all constraint. all a. all env. all childInfo. SolInterface constraint childInfo env -> SolTree constraint childInfo a -> Option a
+  = lam fs. lam tree.
+    recursive let work : all a. [childInfo] -> SolTree constraint childInfo a -> Option (constraint, a) = lam path. lam tree. switch tree
+      case STAnd x then
+        let path = optionMapOr path (lam item. snoc path item) x.childInfo in
+        let f = lam acc. lam child.
+          optionBind (work path child)
+            (lam res. match res with (constraint, child) in
+              optionBind (fs.constrainFromBelow {here = acc.0, child = constraint, path = path})
+                (lam res. Some (res.res, snoc acc.1 child))) in
+        let res = andComponentsToList x.components in
+        let res = optionFoldlM f (x.constraint, []) res in
+        optionMap (lam res. (res.0, x.construct res.1)) res
+      case STConstraintTransform x then
+        optionBind (work path x.child)
+          (lam res. match res with (constraint, child) in
+            optionMap (lam c. (c, child)) (x.fromBelow constraint))
+      case STOr {alternatives = [item] ++ items} then
+        let min = foldl
+          (lam min. lam new. let newCost = (getMeta new).min in if ltf newCost min.0 then (newCost, new) else min)
+          ((getMeta item).min, item)
+          items in
+        work path min.1
+      case STSingle x then
+        Some (x.constraint, x.res)
+      end
+    in optionMap (lam x. x.1) (work [] tree)
+
+let trySplitAnd
+  : all a. all b. all constraint. all childInfo. all env.
+  SolInterface constraint childInfo env
+  -> STAndRec a b constraint childInfo
+  -> Option (SolTree constraint childInfo a)
+  = lam fs. lam x. switch x.components
+    case AndDep components then
+      let prepComponent = lam i. lam comp.
+        let meta = getMeta comp.child in
+        { minCost = meta.min
+        , maxCost = meta.max
+        , spaceSize = meta.size
+        , token = i
+        } in
+      match fs.split x.constraint (mapi prepComponent components) with Some (partitionIdxes, constraints) then
+        let mkPartition = lam idxes.
+          let components = map (lam idx. get components idx) idxes in
+          (foldl andMetaCombine (andMetaEmpty 0.0) components, components) in
+        let partitions = map mkPartition partitionIdxes in
+        let buildAlt = lam constraint.
+          let mkPartition = lam construct. lam chinfo. lam partition.
+            match partition with (meta, components) in
+            STAnd
+            { components = AndDep components
+            , construct = construct
+            , constraint = constraint
+            , childInfo = chinfo
+            , selfCost = 0.0
+            , minCost = meta.min
+            , maxCost = meta.max
+            , spaceSize = meta.size
+            } in
+          let indep = match partitions with [partition]
+            then mkPartition x.construct x.childInfo partition
+            else STAnd
+              { construct = lam partitions.
+                let merge = lam acc. lam idxes. lam sols.
+                  foldl2 (lam acc. lam idx. lam sol. mapInsert idx sol acc) acc idxes sols in
+                let merged = foldl2 merge (mapEmpty subi) partitionIdxes partitions in
+                x.construct (mapValues merged)
+              , components = AndIndep (map (mkPartition (lam x. x) (None ())) partitions)
+              , constraint = constraint
+              , childInfo = x.childInfo
+              , selfCost = x.selfCost
+              , minCost = x.minCost
+              , maxCost = x.maxCost
+              , spaceSize = x.spaceSize
+              } in
+          indep in
+        let or = STOr
+          { alternatives = map buildAlt constraints
+          , minCost = x.minCost
+          , maxCost = x.maxCost
+          , spaceSize = muli x.spaceSize (length partitions)
+          } in
+        Some or
+      else None ()
+    case AndIndep _ then None ()
+    end
+
+let solTreeMaterializeOrSplit
+  : all constraint. all a. all env. all childInfo. SolInterface constraint childInfo env -> SolTree constraint childInfo a -> Option (Either (SolTree constraint childInfo a) a)
+  = lam fs. lam tree.
+    type Res a = Option (Either (SolTree constraint childInfo a) (constraint, a)) in
+    let allRightOrOneLeft : all a. all b. (a -> Option (Either a b)) -> [a] -> Option (Either [a] [b])
+      = lam f. lam full.
+        recursive let work = lam bs. lam l.
+          match l with [x] ++ l then
+            switch f x
+            case Some (Left left) then
+              match splitAt full (length bs) with (pre, [_] ++ post) then
+                Some (Left (concat pre (cons left post)))
+              else error "Compiler error: failed splitAt"
+            case Some (Right b) then
+              work (snoc bs b) l
+            case None _ then
+              None ()
+            end
+          else Some (Right bs)
+        in work [] full in
+    recursive let work : all a. [childInfo] -> SolTree constraint childInfo a -> Res a = lam path. lam tree. switch tree
+      case STAnd x then
+        let path = optionMapOr path (lam item. snoc path item) x.childInfo in
+        let wrapSplit : Unknown -> Res a = lam components.
+          let components = match x.components with AndDep prev
+            then AndDep (zipWith (lam prev. lam child. {prev with child = child}) prev components)
+            else AndIndep components in
+          Some (Left (STAnd {x with components = components})) in
+        let materialize : Unknown -> Res a = lam sols.
+          let tryConstrain = lam acc. lam pair.
+            let res = fs.constrainFromBelow {here = acc, child = pair.0, path = path} in
+            optionMap (lam x. x.res) res in
+          match optionFoldlM tryConstrain x.constraint sols with Some constraint then
+            Some (Right (constraint, x.construct (map (lam x. x.1) sols)))
+          else None () in
+        let splitHere : () -> Res a = lam.
+          let dprint = lam.
+            match mapAccumL (fs.pprintChildInfo "| ") (unsafeCoerce pprintEnvEmpty) path with (_, path) in
+            printLn (join ["Split at this path: ", strJoin ", " path]) in
+          optionMap (lam x. dprint (); Left x) (trySplitAnd fs x) in
+
+        let res = allRightOrOneLeft (work path) (andComponentsToList x.components) in
+        let res = optionBind res (eitherEither wrapSplit materialize) in
+        optionOrElse splitHere res
+      case STConstraintTransform x then
+        let wrapSplit : Unknown -> Res a = lam child.
+          Some (Left (STConstraintTransform {x with child = child})) in
+        let transform : Unknown -> Res a = lam pair.
+          match pair with (constraint, sol) in
+          optionMap (lam constraint. Right (constraint, sol)) (x.fromBelow constraint) in
+        optionBind (work path x.child) (eitherEither wrapSplit transform)
+      case STOr x then
+        let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+        -- NOTE(vipa, 2023-12-18): Mergesort because we expect the
+        -- list to be sorted most of the time
+        match mergeSort (lam a. lam b. cmpf (getMeta a).min (getMeta b).min) x.alternatives with [alt] ++ alts then
+          let wrapSplit = lam alt. STOr {x with alternatives = cons alt alts} in
+          optionMap (eitherMapLeft wrapSplit) (work path alt)
+        else error "Compiler error: empty 'or' in materalize"
+      case STSingle x then
+        Some (Right (x.constraint, x.res))
+      end
+    in optionMap (eitherMapRight (lam x. x.1)) (work [] tree)
+
+let solTreePropagate
+  : all constraint. all a. all env. all childInfo. SolInterface constraint childInfo env -> env -> Bool -> SolTree constraint childInfo a -> Option (SolTree constraint childInfo a)
+  = lam fs. lam env. lam forceDepth. lam tree.
+    let optionPredicated : all a. all b. all c. Option a -> (a -> Option b) -> (Option b -> Option c) -> Option c
+      = lam opt. lam pred. lam next.
+        match opt with Some opt then
+          match pred opt with opt & Some _
+          then next opt
+          else None ()
+        else next (None ()) in
+    let asSingleton : SolTree constraint childInfo a -> Option a = lam tree.
+      match tree with STSingle x then Some x.res else None () in
+    recursive let getConstraint : all a. SolTree constraint childInfo a -> constraint = lam tree. switch tree
+      case STAnd x then x.constraint
+      case STConstraintTransform x then
+        optionGetOrElse (lam. error "Compiler error: fromBelow failed on a live child") (x.fromBelow (getConstraint x.child))
+      case STOr x then
+        match x.alternatives with [alt] ++ alts then
+          foldl (lam acc. lam alt. fs.approxOr acc (getConstraint alt)) (getConstraint alt) alts
+        else error "Compiler error: alternative with no children in getConstraint"
+      case STSingle x then x.constraint
+      end in
+    recursive
+      let propagateAndList
+        : all a. Bool -> [childInfo] -> constraint -> [SolTree constraint childInfo a] -> Option (Option constraint, [SolTree constraint childInfo a])
+        = lam forceDepth. lam path. lam constraint. lam list.
+          recursive let work = lam previouslyChanged. lam constraint. lam list.
+            let f = lam acc. lam child.
+              match workNodeDebug (if forceDepth then not previouslyChanged else false) path (Some acc.0) child with Some (newConstraint, child) then
+                optionPredicated newConstraint (lam child. fs.constrainFromBelow {here = acc.0, child = child, path = path})
+                  (lam res.
+                    let res = optionGetOr {hereChanged = false, childChanged = false, res = acc.0} res in
+                    -- NOTE(vipa, 2023-12-15): We ignore
+                    -- `childChanged` with the assumption that it's
+                    -- due to filtering that happened between the two
+                    -- points in the tree
+                    let changed = if acc.2 then true else res.hereChanged in
+                    Some (res.res, snoc acc.1 child, changed))
+              else None () in
+            match optionFoldlM f (constraint, [], false) list with Some (constraint2, list, changed) then
+              if changed
+              then work true constraint2 list
+              else Some (if previouslyChanged then Some constraint2 else None (), list)
+            else None ()
+          in work false constraint list
+      let workNodeDebug
+        : all a. Bool -> [childInfo] -> Option constraint -> SolTree constraint childInfo a -> Option (Option constraint, SolTree constraint childInfo a)
+        = lam forceDepth. lam path. lam constraintM. lam tree.
+          let res = workNodeReal forceDepth path constraintM tree in
+          res
+      let workNodeReal
+        : all a. Bool -> [childInfo] -> Option constraint -> SolTree constraint childInfo a -> Option (Option constraint, SolTree constraint childInfo a)
+        = lam forceDepth. lam path. lam constraintM. lam tree. switch tree
+          case STOr {alternatives = []} then
+            printLn "empty or";
+            None ()
+          case STAnd x then
+            printLn "and";
+            let path = optionMapOr path (lam item. snoc path item) x.childInfo in
+            optionPredicated constraintM (lam parent. fs.constrainFromAbove {parent = parent, here = x.constraint, path = path})
+              (lam resM.
+                let res = optionGetOr {parentChanged = false, hereChanged = false, res = x.constraint} resM in
+                let constraint = res.res in
+                let propagateDown = if forceDepth then true else res.hereChanged in
+                let belowResults =
+                  if propagateDown then
+                    switch x.components
+                    case AndDep components then
+                      let res = propagateAndList forceDepth path constraint (map (lam x. x.child) components) in
+                      let rebuild = lam prev. lam child.
+                        {scale = prev.scale, child = child} in
+                      let juggle = lam res.
+                        let rebuilt = zipWith rebuild components res.1 in
+                        (res.0, foldl andMetaCombine (andMetaEmpty x.selfCost) rebuilt, AndDep rebuilt) in
+                      optionMap juggle res
+                    case AndIndep components then
+                      let juggle = lam res.
+                        (res.0, foldl andMetaCombineIndep (andMetaEmpty x.selfCost) components, AndIndep components) in
+                      optionMap juggle (propagateAndList forceDepth path constraint components)
+                    end
+                  else Some (None (), {min = x.minCost, max = x.maxCost, size = x.spaceSize}, x.components) in
+                match belowResults with Some (newConstraint, meta, components) then
+                  printLn (join ["=== Post belowResults:"]);
+                  (match newConstraint with Some new then
+                    printLn (fs.pprintConstraint "| " env new).1
+                   else printLn "No new constraint from below");
+                  let constraint = optionGetOr constraint newConstraint in
+                  printLn (fs.pprintConstraint "| " env constraint).1;
+                  let new =
+                    match optionMapM asSingleton (andComponentsToList components) with Some singles
+                    then STSingle
+                      { res = x.construct singles
+                      , cost = meta.max
+                      , constraint = constraint
+                      , childInfo = x.childInfo
+                      }
+                    else STAnd
+                      { x with components = components
+                      , constraint = constraint
+                      , minCost = meta.min
+                      , maxCost = meta.max
+                      , spaceSize = meta.size
+                      } in
+                  Some (optionOr newConstraint (if res.parentChanged then Some constraint else None ()), new)
+                else None ())
+          case STConstraintTransform x then
+            printLn "constraint transform";
+            match optionMapAccum (fs.pprintConstraint "| ") env constraintM with (env, pre) in
+            optionPredicated constraintM x.fromAbove
+              (lam transformed.
+                match optionMapAccum (fs.pprintConstraint "| ") env transformed with (env, post) in
+                (match (pre, post) with (Some pre, Some post) then
+                  printLn pre;
+                  printLn post
+                 else ());
+                optionBind (workNodeDebug forceDepth path transformed x.child)
+                  (lam res.
+                    match res with (belowConstraint, child) in
+                    optionPredicated belowConstraint x.fromBelow
+                      (lam transformedGoingUp.
+                        let tree = match child with STSingle single
+                          then
+                            let constraint = optionGetOrElse
+                              (lam. optionGetOrElse (lam. error "Compiler error: fromBelow failed on the constraint of a single") (x.fromBelow single.constraint))
+                              transformedGoingUp in
+                            STSingle {single with constraint = constraint}
+                          else STConstraintTransform {x with child = child} in
+                        Some (transformedGoingUp, tree))))
+          case STOr x then
+            printLn "non-empty or";
+            let combine = lam acc. lam item. (or acc.0 item.0, fs.approxOr acc.1 item.1, concat acc.2 item.2) in
+            match mapOption (workNodeDebug forceDepth path constraintM) x.alternatives with everything & ([item] ++ items) then
+              let changed = if optionIsSome item.0 then true else any (lam item. optionIsSome item.0) items in
+              let flattened = join (map (lam x. match x.1 with STOr x then x.alternatives else [x.1]) everything) in
+              let constraintM =
+                if changed then
+                  let constraint = optionGetOrElse (lam. getConstraint item.1) item.0 in
+                  let merge =
+                    lam acc. lam item. fs.approxOr acc (optionGetOrElse (lam. getConstraint item.1) item.0) in
+                  Some (foldl merge constraint items)
+                else None () in
+              let new = if null items
+                then item.1
+                else
+                  let meta = foldl (lam acc. lam item. orMetaCombine acc item.1) (getMeta item.1) items in
+                  STOr
+                  { alternatives = flattened
+                  , minCost = meta.min
+                  , maxCost = meta.max
+                  , spaceSize = meta.size
+                  } in
+              Some (constraintM, new)
+            else None ()
+          case tree & STSingle x then
+            printLn "single";
+            match constraintM with Some constraint then
+            let path = optionMapOr path (lam item. snoc path item) x.childInfo in
+              match fs.constrainFromAbove {parent = constraint, here = x.constraint, path = path} with Some res then
+                let tree = if res.hereChanged
+                  then STSingle {x with constraint = res.res}
+                  else tree in
+                let toAbove = if res.parentChanged
+                  then Some res.res
+                  else None () in
+                Some (toAbove, tree)
+              else None ()
+            else Some (None (), tree)
+          end
+    in optionMap (lam x. x.1) (workNodeDebug forceDepth [] (None ()) tree)
+
+let solTreeSplitOnce : all a. all constraint. all childInfo. all env.
+  SolInterface constraint childInfo env -> SolTree constraint childInfo a -> SolTree constraint childInfo a
+  = lam fs. lam tree.
+    let optionMapFirst : all a. (a -> Option a) -> [a] -> Option [a] = lam f. lam full.
+      recursive let work = lam idx. lam l.
+        match l with [x] ++ rest then
+          match f x with Some x then
+            match splitAt full idx with (pre, [_] ++ post)
+            then Some (concat pre (cons x rest))
+            else error "Impossible"
+          else work (addi idx 1) rest
+        else None ()
+      in work 0 full in
+    recursive let work = lam tree. switch tree
+      case STSingle _ then
+        None ()
+      case STConstraintTransform x then
+        optionMap (lam child. STConstraintTransform {x with child = child}) (work x.child)
+      -- NOTE(vipa, 2023-12-15): The "Or" and "And" cases are the
+      -- primary points to steer where we try to split first
+      case STOr x then
+        let cmpf = lam a. lam b. if leqf a b then negi 1 else if gtf a b then 1 else 0 in
+        let alts = sort (lam a. lam b. subi (getMeta a).size (getMeta b).size) x.alternatives in
+        optionMap (lam alts. STOr {x with alternatives = alts}) (optionMapFirst work alts)
+      case STAnd x then
+        let splitHere = switch x.components
+          case AndDep components then
+            let prepComponent = lam i. lam comp.
+              let meta = getMeta comp.child in
+              { minCost = meta.min
+              , maxCost = meta.max
+              , spaceSize = meta.size
+              , token = i
+              } in
+            match fs.split x.constraint (mapi prepComponent components) with Some (partitionIdxes, constraints) then
+              let mkPartition = lam idxes.
+                let components = map (lam idx. get components idx) idxes in
+                (foldl andMetaCombine (andMetaEmpty 0.0) components, components) in
+              let partitions = map mkPartition partitionIdxes in
+              let buildAlt = lam constraint.
+                let mkPartition = lam construct. lam chinfo. lam partition.
+                  match partition with (meta, components) in
+                  STAnd
+                  { components = AndDep components
+                  , construct = construct
+                  , constraint = constraint
+                  , childInfo = chinfo
+                  , selfCost = 0.0
+                  , minCost = meta.min
+                  , maxCost = meta.max
+                  , spaceSize = meta.size
+                  } in
+                let indep = match partitions with [partition]
+                  then mkPartition x.construct x.childInfo partition
+                  else STAnd
+                    { construct = lam partitions.
+                      let merge = lam acc. lam idxes. lam sols.
+                        foldl2 (lam acc. lam idx. lam sol. mapInsert idx sol acc) acc idxes sols in
+                      let merged = foldl2 merge (mapEmpty subi) partitionIdxes partitions in
+                      x.construct (mapValues merged)
+                    , components = AndIndep (map (mkPartition (lam x. x) (None ())) partitions)
+                    , constraint = constraint
+                    , childInfo = x.childInfo
+                    , selfCost = x.selfCost
+                    , minCost = x.minCost
+                    , maxCost = x.maxCost
+                    , spaceSize = x.spaceSize
+                    } in
+                indep in
+              let or = STOr
+                { alternatives = map buildAlt constraints
+                , minCost = x.minCost
+                , maxCost = x.maxCost
+                , spaceSize = muli x.spaceSize (length partitions)
+                } in
+              Some or
+            else None ()
+          case AndIndep _ then None ()
+          end in
+        if optionIsSome splitHere then splitHere else -- NOTE(vipa, 2023-12-15): Early exit
+
+        -- NOTE(vipa, 2023-12-15): Try to split a child
+        -- TODO(vipa, 2023-12-15): Could prioritize which child to attempt first maybe?
+        switch x.components
+        case AndDep components then
+           let components = optionMapFirst
+             (lam x. optionMap (lam new. {x with child = new}) (work x.child))
+             components in
+           optionMap (lam components. STAnd {x with components = AndDep components}) components
+        case AndIndep components then
+          let components = optionMapFirst work components in
+          optionMap (lam components. STAnd {x with components = AndIndep components}) components
+        end
+      end in
+    match work tree with Some tree
+    then tree
+    else error "Couldn't find a point to split the soltree"
+
+lang SolTreeSolver
+  sem solTreeMinimumSolution : all a. all constraint. all env. all childInfo.
+    Bool -> SolInterface constraint childInfo env -> env -> SolTreeInput constraint childInfo a -> Option a
+end
+
+lang SolTreeSoloSolver = SolTreeSolver
+  sem solTreeMinimumSolution debug fs env = | tree ->
+    let tree = solTreeConvert tree in
+    recursive
+      let materialize = lam splits. lam tree.
+        (if debug then
+          printLn (join ["=== Solving step ", int2string splits, ", post-propagate ==="]);
+          printLn (json2string (debugSolTree fs.pprintChildInfo fs.pprintConstraint env tree).1)
+         else ());
+        switch solTreeMaterializeOrSplit fs tree
+        case Some (Right sol) then printLn (join ["Done after ", int2string splits, " splits"]); Some sol
+        case Some (Left tree) then propagate (addi splits 1) tree
+        case None _ then None ()
+        end
+      let propagate = lam splits. lam tree.
+        (if debug then
+          printLn (join ["=== Solving step ", int2string splits, ", pre-propagate ==="]);
+          printLn (json2string (debugSolTree fs.pprintChildInfo fs.pprintConstraint env tree).1)
+         else ());
+        match solTreePropagate fs env true tree with Some tree
+        then materialize splits tree
+        else None ()
+    in propagate 0 tree
+end
+
+lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver
+  type ProcOpImpl a  =
+    { implId : ImplId
+    , op : Name
+    , opUses : [{idxes : Set Int, opUse : TmOpVarRec}]
+    , selfCost : OpCost
+    , uni : Unification
+    , specType : Type
+    , reprScope : Int
+    , metaLevel : Int
+    , info : Info
+    -- NOTE(vipa, 2023-07-06): A token used by the surrounding system
+    -- to carry data required to reconstruct a solved AST.
+    , token : a
+    }
+  type SolContentRec a =
+    { token : a
+    , cost : OpCost
+    , impl : ProcOpImpl a
+    , highestImpl : ImplId
+    , subSols : [{idxes : Set Int, scale : OpCost, sol : SolContent a}]
+    }
+  syn SolContent a = | SolContent (SolContentRec a)
+  type Constraint a =
+    -- NOTE(vipa, 2023-12-12): 'None' means the full set
+    { unfixedReprs : Map Symbol (Option (Set Name))
+    -- NOTE(vipa, 2023-12-12): This will be 'None' if it's the union
+    -- of multiple alts, i.e., we don't propagate equality constraints
+    -- on reprs, or *any* constraints on types until we've fixed a
+    -- single solution
+    , fixedUni : Option Unification
+    }
+  type ChildInfo a =
+    { name : Name
+    , info : Info
+    }
+  type QueryItem a =
+    { scale : OpCost
+    , child: SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)
+    }
+
+  type SBContent a =
+    { implsPerOp : Map Name (Set (ProcOpImpl a))
+    , memo : Map (Name, Type) {reprLevels : Map Symbol Int, tree : SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)}
+    , nameless : NamelessState
+    }
+
+  syn SolverGlobal a = | SGContent ()
+  syn SolverBranch a = | SBContent (SBContent a)
+  syn SolverSolution a = | SSContent (SolContent a)
+
+  syn SolverTopQuery a = | STQContent [QueryItem a]
+
+  sem initSolverGlobal = | _ -> SGContent ()
+  sem initSolverBranch = | _ -> SBContent
+    { implsPerOp = mapEmpty nameCmp
+    , memo = mapEmpty cmpOpPair
+    , nameless =
+      { metas = []
+      , vars = []
+      , reprs = []
+      }
+    }
+  sem initSolverTopQuery = | _ -> STQContent []
+
+  -- NOTE(vipa, 2023-11-07): This typically assumes that the types
+  -- have a representation that is equal if the two types are
+  -- alpha-equivalent.
+  sem cmpOpPair : (Name, Type) -> (Name, Type) -> Int
+  sem cmpOpPair l = | r ->
+    let res = nameCmp l.0 r.0 in
+    if neqi 0 res then res else
+    let res = cmpType l.1 r.1 in
+    res
+
+  sem cmpSolution a = | b ->
+    recursive let work : all x. all y. {idxes : x, scale : y, sol : Unknown} -> {idxes : x, scale : y, sol : Unknown} -> Int = lam a. lam b.
+      match (a, b) with ({sol = SolContent a}, {sol = SolContent b}) in
+      let res = subi a.impl.implId b.impl.implId in
+      if neqi 0 res then res else
+      let res = seqCmp work a.subSols b.subSols in
+      res in
+    match (a, b) with (SSContent a, SSContent b) in
+    work {idxes = (), scale = (), sol = a} {idxes = (), scale = (), sol = b}
+
+  sem concretizeSolution global =
+  | SSContent (SolContent x) ->
+    let subSols = foldl
+      (lam acc. lam sub. setFold (lam acc. lam idx. mapInsert idx (SSContent sub.sol) acc) acc sub.idxes)
+      (mapEmpty subi)
+      x.subSols in
+    (x.token, x.highestImpl, mapValues subSols)
+
+  sem addImpl global branch = | impl ->
+    match branch with SBContent branch in
+
+    let idxedOpUses = mapi (lam i. lam opUse. {idxes = setInsert i (setEmpty subi), opUse = opUse}) impl.opUses in
+    let procImpl =
+      { implId = impl.implId
+      , op = impl.op
+      , opUses = idxedOpUses
+      , selfCost = impl.selfCost
+      , uni = impl.uni
+      , specType = impl.specType
+      , reprScope = impl.reprScope
+      , metaLevel = impl.metaLevel
+      , info = impl.info
+      , token = impl.token
+      } in
+
+    let branch =
+      { branch with
+        implsPerOp = mapInsertWith setUnion
+          impl.op
+          (setInsert procImpl (setEmpty (lam a. lam b. subi a.implId b.implId)))
+          branch.implsPerOp
+      -- OPT(vipa, 2023-11-07): Better memoization cache invalidation,
+      -- or incremental computation that never needs to invalidate
+      , memo = mapEmpty cmpOpPair
+      } in
+    SBContent branch
+
+  sem debugBranchState global = | SBContent branch ->
+    printLn "debugBranchState"
+
+  sem debugSolution global = | solutions ->
+    printLn "\n# Solution cost tree:";
+    recursive let work = lam indent. lam solWithMeta.
+      match solWithMeta.sol with SolContent x in
+      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string solWithMeta.scale, ", info: ", info2str x.impl.info, ")"]);
+      -- TODO(vipa, 2023-11-28): This will print things in a strange
+      -- order, and de-duped, which might not be desirable
+      for_ x.subSols (lam x. work (concat indent "  ") x)
+    in (iter (lam x. match x with SSContent x in work "" {idxes = setEmpty subi, scale = 1.0, sol = x}) solutions)
+
+  sem topSolve debug global = | STQContent topTrees ->
+    let constraintOr = lam a. lam b.
+      { unfixedReprs = mapUnionWith (optionZipWith setUnion) a.unfixedReprs b.unfixedReprs
+      , fixedUni = None ()
+      } in
+    let constraintEq = lam a. lam b.
+      if mapEq (optionEq setEq) a.unfixedReprs b.unfixedReprs
+      then optionEq (lam a. lam b. if uniImplies a b then uniImplies b a else false) a.fixedUni b.fixedUni
+      else false in
+    let constrain = lam input.
+      -- NOTE(vipa, 2023-12-12): Try to extract information about
+      -- what has changed when it changes, to avoid extraneous
+      -- checks afterwards. Currently easiest to do with (local)
+      -- side-effects.
+      let parentChanged = ref false in
+      let childChanged = ref false in
+      let foundEmptyRepr = ref false in
+      let intersect = lam parent. lam child. switch (parent, child)
+        case (Some parent, Some child) then
+          let res = setIntersect parent child in
+          if setIsEmpty res then
+            modref foundEmptyRepr true;
+            None ()
+          else
+            (if lti (setSize res) (setSize parent) then
+              modref parentChanged true
+             else ());
+            (if lti (setSize res) (setSize child) then
+              modref childChanged true
+             else ());
+            Some res
+        case (None _, Some x) then
+          modref parentChanged true;
+          Some x
+        case (Some x, None _) then
+          modref childChanged true;
+          Some x
+        case (None _, None _) then
+          None ()
+        end in
+      let unfixedReprs = mapUnionWith intersect input.parent.unfixedReprs input.child.unfixedReprs in
+      if deref foundEmptyRepr then None () else -- NOTE(vipa, 2023-12-12): Early exit
+
+      -- NOTE(vipa, 2023-12-12): The code above detects changes in
+      -- shared reprs, but changes can also come from unshared
+      -- reprs, these we detect here
+      (if deref parentChanged then () else
+        modref parentChanged (neqi (mapSize input.parent.unfixedReprs) (mapSize unfixedReprs))
+      );
+      (if deref childChanged then () else
+        modref childChanged (neqi (mapSize input.child.unfixedReprs) (mapSize unfixedReprs))
+      );
+
+      match
+        match (input.parent.fixedUni, input.child.fixedUni) with (Some par, Some chi) then
+          let newUni = mergeUnifications par chi in
+          let parentChanged =
+            if deref parentChanged then true else
+            -- NOTE(vipa, 2023-12-12): We know (by construction) that
+            -- newUni implies par (because `mergeUnifications` is a
+            -- logical 'and') so we don't need to check that here
+            not (optionMapOr true (uniImplies par) newUni) in
+          let childChanged =
+            if deref childChanged then true else
+            -- NOTE(vipa, 2023-12-12): We know (by construction) that
+            -- newUni implies chi (because `mergeUnifications` is a
+            -- logical 'and') so we don't need to check that here
+            not (optionMapOr true (uniImplies chi) newUni) in
+          (optionIsSome newUni, newUni, parentChanged, childChanged)
+        else
+          (true, optionOr input.parent.fixedUni input.child.fixedUni, deref parentChanged, deref childChanged)
+      with (success, fixedUni, parentChanged, childChanged) in
+
+      if success then Some
+        { parentChanged = parentChanged
+        , childChanged = childChanged
+        , res = { unfixedReprs = unfixedReprs, fixedUni = fixedUni }
+        }
+      else None () in
+    let split
+      : all x. Constraint a
+      -> [{spaceSize : Int, maxCost : OpCost, minCost : OpCost, token : x}]
+      -> Option ([[x]], [Constraint a])
+      = lam constraint. lam components.
+        let eitherCmp = lam l. lam r. lam a. lam b.
+          let res = subi (constructorTag a) (constructorTag b) in
+          if neqi 0 res then res else
+          switch (a, b)
+          case (Left a, Left b) then l a b
+          case (Right a, Right b) then r a b
+          end in
+        let puf : PureUnionFind (Either Symbol Name) (Set Int) = pufEmpty (eitherCmp _symCmp nameCmp) in
+        let setChoices = lam sym. lam choices.
+          match choices with Some alts then
+            if gti (setSize alts) 1 then Some (sym, alts) else None ()
+          else None () in
+        let f = lam acc. lam reprsym. lam alts.
+          optionOrElse (lam. setChoices reprsym alts) acc in
+        match mapFoldWithKey f (None ()) constraint.unfixedReprs with Some (reprsym, alts) then
+          let mkConstraint = lam alt.
+            -- TODO(vipa, 2023-12-15): Currently ignoring fixedUni,
+            -- with the hope that the constraint propagates properly
+            -- to there later.
+            { unfixedReprs = mapInsert reprsym (Some (setInsert alt (setEmpty nameCmp))) constraint.unfixedReprs
+            , fixedUni = constraint.fixedUni
+            } in
+          -- NOTE(vipa, 2023-12-15): Not partitioning for now, though
+          -- it's probably a good thing to do later
+          Some ([map (lam x. x.token) components], map mkConstraint (setToSeq alts))
+        else None () in
+    let pprintChildInfo = lam indent. lam env. lam chinfo.
+      match pprintVarName env chinfo.name with (env, name) in
+      let res = join [ indent, name, " ", info2str chinfo.info ] in
+      (env, res) in
+    let pprintConstraint = lam indent. lam env. lam constraint.
+      let unfixed = mapBindings constraint.unfixedReprs in
+      let pprintUnfixed = lam binding.
+        let set = optionMapOr "Any" (lam set. join ["{", strJoin ", " (map nameGetStr (setToSeq set)), "}"]) binding.1 in
+        join [indent, int2string (sym2hash binding.0), " \\in ", set, "\n"] in
+      match optionMapAccum (unificationToDebug indent) env constraint.fixedUni with (env, uni) in
+      let uni = optionGetOr "" uni in
+      (env, join (snoc (map pprintUnfixed unfixed) uni)) in
+    let interface : SolInterface (Constraint a) (ChildInfo a) PprintEnv =
+      { approxOr = constraintOr
+      , eq = constraintEq
+      , constrainFromAbove = lam input.
+        let res = constrain {parent = input.parent, child = input.here} in
+        let env = pprintEnvEmpty in
+        match mapAccumL (pprintChildInfo "") env input.path with (env, path) in
+        let path = join["[", strJoin ", " path, "]"] in
+        printLn (join ["=== constrainFromAbove ", if optionIsSome res then "success " else "fail ", path, ":"]);
+        match pprintConstraint "| " env input.parent with (env, parent) in
+        match pprintConstraint "| " env input.here with (env, here) in
+        printLn parent;
+        printLn here;
+        (match res with Some res then
+          printLn (pprintConstraint "| " env res.res).1
+         else ());
+        optionMap (lam res. {parentChanged = res.parentChanged, hereChanged = res.childChanged, res = res.res}) res
+      , constrainFromBelow = lam input.
+        let res = constrain {parent = input.here, child = input.child} in
+        let env = pprintEnvEmpty in
+        match mapAccumL (pprintChildInfo "") env input.path with (env, path) in
+        let path = join["[", strJoin ", " path, "]"] in
+        printLn (join ["=== constrainFromBelow ", if optionIsSome res then "success " else "fail ", path, ":"]);
+        match pprintConstraint "| " env input.here with (env, here) in
+        match pprintConstraint "| " env input.child with (env, child) in
+        printLn here;
+        printLn child;
+        (match res with Some res then
+          printLn (pprintConstraint "| " env res.res).1
+         else ());
+        optionMap (lam res. {hereChanged = res.parentChanged, childChanged = res.childChanged, res = res.res}) res
+      , split = #frozen"split"
+      , pprintConstraint = pprintConstraint
+      , pprintChildInfo = pprintChildInfo
+      } in
+    let top = STIAndDep
+      { components = topTrees
+      , cost = 0.0
+      , childInfo = {name = nameNoSym "<program>", info = NoInfo ()}
+      , construct = lam x. x
+      , constraint =
+        { unfixedReprs = mapEmpty _symCmp
+        , fixedUni = Some (emptyUnification ())
+        }
+      } in
+    match solTreeMinimumSolution debug interface pprintEnvEmpty top with Some sol
+    then map (lam x. SSContent x) sol
+    else error "Could not find a consistent assignment of operation implementations for the program."
+
+  sem addOpUse debug global branch query = | opUse ->
+    match branch with SBContent branch in
+    match query with STQContent query in
+    match buildQueryItem branch opUse.scaling opUse.ident opUse.ty with (branch, itemWithMeta) in
+    (SBContent branch, STQContent (snoc query itemWithMeta.item))
+
+  sem buildQueryItem
+    : all a. SBContent a
+    -> OpCost
+    -> Name
+    -> Type
+    -> (SBContent a, {reprLevels : Map Symbol Int, item : QueryItem a})
+  sem buildQueryItem branch scale op = | ty ->
+    match mkLocallyNameless branch.nameless ty with nl & {res = ty} in
+    let branch = {branch with nameless = nl.state} in
+    match
+      match mapLookup (op, ty) branch.memo with Some subWithMeta
+      then (branch, subWithMeta)
+      else
+        let emptyWithMeta =
+          { reprLevels = mapEmpty _symCmp
+          , tree = STIOr {alternatives = []}
+          } in
+        let branch = {branch with memo = mapInsert (op, ty) emptyWithMeta branch.memo} in
+        match buildQueryItemWork branch op ty with (branch, subWithMeta) in
+        let branch = {branch with memo = mapInsert (op, ty) subWithMeta branch.memo} in
+        (branch, subWithMeta)
+    with (branch, subWithMeta) in
+    let rewriteConstraint = lam mapping. lam constraint.
+      -- TODO(vipa, 2023-12-18): This likely clobbers some variables
+      -- for the same reason we change how things work in the NOTE
+      -- comment below with the same date.
+      let fixedUni = optionBind constraint.fixedUni (applyLocallyNamelessMappingUni mapping) in
+      let uniFailed = if optionIsSome constraint.fixedUni
+        then optionIsNone fixedUni
+        else false in
+      if uniFailed then None () else  -- NOTE(vipa, 2023-12-13): Early return
+
+      let translateRepr = lam acc. lam k. lam v.
+        -- NOTE(vipa, 2023-12-18): If an unrewritten binding conflicts
+        -- with a rewritten binding we prefer the rewritten one,
+        -- because the unrewritten one must be irrelevant to the child
+        -- we're interacting with now
+        match mapLookup k mapping.repr with Some (k, _) then
+          mapInsert k v acc
+        else mapInsertWith (lam x. lam. x) k v acc in
+      let unfixedReprs = mapFoldWithKey translateRepr (mapEmpty _symCmp) constraint.unfixedReprs in
+      Some
+      { unfixedReprs = unfixedReprs
+      , fixedUni = fixedUni
+      } in
+    let tree = match subWithMeta.tree with STIOr {alternatives = []}
+      then subWithMeta.tree
+      else STIConstraintTransform
+        { child = subWithMeta.tree
+        , fromAbove = lam x.
+          printLn "Constraint transform using this mapping:";
+          let printMap = lam pk. lam pv. lam env. lam m.
+            let pairs = mapAccumL
+              (lam env. lam pair.
+                match pk env pair.0 with (env, k) in
+                match pv env pair.1 with (env, v) in
+                (env, join [k, " -> ", v, "\n"]))
+              env
+              (mapBindings m) in
+            match pairs with (env, pairs) in
+            printLn (join pairs);
+            env in
+          let pprintSymPair = lam e. lam pair.
+            (e, join [int2string (sym2hash pair.0), "#", int2string pair.1]) in
+          let env = printMap pprintVarName pprintVarName pprintEnvEmpty nl.forward.var in
+          let env = printMap (lam e. lam s. (e, int2string (sym2hash s))) pprintSymPair env nl.forward.repr in
+          let env = printMap pprintVarName (lam e. lam n. pprintVarName e n.0) env nl.forward.meta in
+          let res = rewriteConstraint nl.forward x in
+          (if optionIsNone res then
+            printLn "Failed via constraint transform fromAbove (nl)"
+           else ());
+          res
+        , fromBelow = lam x.
+          let res = rewriteConstraint nl.backward x in
+          (if optionIsNone res then
+            printLn "Failed via constraint transform fromBelow (nl)"
+           else ());
+          res
+        } in
+    let item =
+      { child = tree
+      , scale = scale
+      } in
+    let translateReprLevelUp = lam acc. lam k. lam v.
+      let pair = mapLookupOr (k, v) k nl.backward.repr in
+      mapInsert pair.0 pair.1 acc in
+    let reprLevels = mapFoldWithKey translateReprLevelUp
+      (mapEmpty _symCmp)
+      subWithMeta.reprLevels in
+    (branch, {reprLevels = reprLevels, item = item})
+
+  sem buildQueryItemWork : all a. SBContent a -> Name -> Type -> (SBContent a, {reprLevels : Map Symbol Int, tree : SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)})
+  sem buildQueryItemWork branch op = | ty ->
+    let perUseInImpl = lam subst. lam uni. lam acc. lam idxedOpUse.
+      match acc with (branch, reprLevels) in
+      let opUse = idxedOpUse.opUse in
+      let ty = pureApplyUniToType uni (substituteVars opUse.info subst opUse.ty) in
+      match buildQueryItem branch opUse.scaling opUse.ident ty
+        with (branch, itemWithMeta) in
+      match itemWithMeta.item.child with STIOr {alternatives = []} then ((branch, reprLevels), None ()) else
+      let reprLevels = mapUnion reprLevels itemWithMeta.reprLevels in
+      ( (branch, reprLevels)
+      , Some
+        { child = solTreeMap (lam sol. {idxes = idxedOpUse.idxes, sol = sol}) itemWithMeta.item.child
+        , scale = itemWithMeta.item.scale
+        }
+      )
+    in
+
+    let uniToReprInfo : Unification -> (Map Symbol Int, Map Symbol (Option (Set Name)))
+      = lam uni.
+        let reprLevels = pufFold
+          (lam acc. lam r1. lam r2.
+            let acc = mapInsert r1.0 r1.1 acc in
+            mapInsert r2.0 r2.1 acc)
+          (lam acc. lam r. lam repr.
+            mapInsert r.0 r.1 acc)
+          (mapEmpty _symCmp)
+          uni.reprs in
+        let unfixedReprs = pufFold
+          (lam acc. lam r1. lam r2.
+            let acc = mapInsert r1.0 (None ()) acc in
+            mapInsert r2.0 (None ()) acc)
+          (lam acc. lam r. lam repr.
+            mapInsert r.0 (Some (setInsert repr (setEmpty nameCmp))) acc)
+          (mapEmpty _symCmp)
+          uni.reprs in
+        (reprLevels, unfixedReprs) in
+
+    let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, Option (Map Symbol Int, SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)))
+      = lam branch. lam impl.
+        match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
+          with (specType, subst) in
+        match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
+          match uniToReprInfo uni with (reprLevels, unfixedReprs) in
+          match mapAccumL (perUseInImpl subst uni) (branch, reprLevels) impl.opUses with ((branch, reprLevels), subTrees) in
+          match optionMapM (lam x. x) subTrees with Some subTrees then
+            let tree = STIAndDep
+              { components = subTrees
+              , cost = impl.selfCost
+              , childInfo = {name = impl.op, info = impl.info}
+              , construct = lam subSols. SolContent
+                { token = impl.token
+                , cost =
+                  let addCost = lam acc. lam idxedOpUse. lam idxedSol.
+                    match idxedSol.sol with SolContent x in
+                    addf acc (mulf idxedOpUse.opUse.scaling x.cost) in
+                  foldl2 addCost impl.selfCost impl.opUses subSols
+                , impl = impl
+                , highestImpl =
+                  let getMaxId = lam acc. lam idxedSol.
+                    match idxedSol.sol with SolContent x in
+                    maxi acc x.highestImpl in
+                  foldl getMaxId impl.implId subSols
+                , subSols =
+                  let addScale = lam idxedOpUse. lam idxedSol.
+                    { idxes = idxedSol.idxes
+                    , scale = idxedOpUse.opUse.scaling
+                    , sol = idxedSol.sol
+                    } in
+                  zipWith addScale impl.opUses subSols
+                }
+              , constraint =
+                { unfixedReprs = unfixedReprs
+                , fixedUni = Some uni
+                }
+              } in
+            -- NOTE(vipa, 2023-12-13): Filter constraints by which ones
+            -- are relevant in the child/parent.
+            let reprLevelsToKeep = mapFilter (lam scope. lti scope impl.reprScope) reprLevels in
+            let uniFilter =
+              { reprs = {scope = impl.reprScope, syms = setEmpty _symCmp}
+              , types = {level = impl.metaLevel, names = setEmpty nameCmp}
+              } in
+            let tree = STIConstraintTransform
+              { child = tree
+              , fromBelow = lam constraint. Some
+                { unfixedReprs = mapIntersectWith (lam a. lam. a) constraint.unfixedReprs reprLevelsToKeep
+                , fixedUni = optionMap (filterUnification uniFilter) constraint.fixedUni
+                }
+              , fromAbove = lam constraint. Some
+                { unfixedReprs = mapIntersectWith (lam a. lam. a) constraint.unfixedReprs reprLevels
+                -- TODO(vipa, 2023-12-13): I don't have an easy way to
+                -- filter this properly, so I'm returning a less
+                -- restrictive `uni` for now, namely the one that makes
+                -- no restrictions whatsoever (which is expressed with
+                -- `None` in this case).
+                , fixedUni = None ()
+                }
+              } in
+            (branch, Some (reprLevelsToKeep, tree))
+          else (branch, None ())
+        else (branch, None ()) in
+
+    let possibleImpls = optionMapOr [] setToSeq (mapLookup op branch.implsPerOp) in
+    match mapAccumL perImpl branch possibleImpls with (branch, impls) in
+    match mapAccumL (lam acc. lam pair. (mapUnion acc pair.0, pair.1)) (mapEmpty _symCmp) (filterOption impls)
+      with (reprLevels, impls) in
+    (branch, {reprLevels = reprLevels, tree = STIOr {alternatives = impls}})
+end
+
 lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff
   type ProcOpImpl a  =
     { implId : ImplId
@@ -937,7 +2200,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       for_ x.subSols (lam x. work (concat indent "  ") x.sol)
     in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
-  sem topSolve global = | STQContent choices ->
+  sem topSolve debug global = | STQContent choices ->
     let sols = exploreSolutions 0.0 (emptyUnification ()) choices in
     match lazyStreamUncons sols with Some (sol, _) then
       let sols = foldl
@@ -1007,7 +2270,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       , scale = 1.0
       , uni = filterUnification
         { types = {level = impl.metaLevel, names = setEmpty nameCmp}
-        , reprs = {scope = impl.reprScope, syms = setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))}
+        , reprs = {scope = impl.reprScope, syms = setEmpty _symCmp}
         }
         sol.uni
       , impl = impl
@@ -1106,7 +2369,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
               acc
               sol.uni.reprs in
           let potentialConflicts = foldli collectIdxes
-            (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+            (mapEmpty _symCmp)
             sol.here in
           let collectConflicts = lam acc. lam entry.
             let mapWithOthers : all a. all b. ([a] -> a -> [a] -> b) -> [a] -> [b] = lam f. lam xs.
@@ -1280,8 +2543,6 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     let perSol = lam env. lam sol.
       match sol with SolContent sol in
       match unificationToDebug "     " env sol.uni with (env, uni) in
-      -- match getTypeStringCode 0 env (pureApplyUniToType sol.uni sol.ty) with (env, ty) in
-      -- TODO(vipa, 2023-11-13): print metalevel and reprscope as well
       print (join ["    cost: ", float2string sol.cost, ", uni:\n", uni]);
       env in
     let perMemo = lam env. lam pair. lam sols.
@@ -1366,7 +2627,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       } in
     SBContent branch
 
-  sem topSolve global = | STQContent opUses ->
+  sem topSolve debug global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some
@@ -1523,7 +2784,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
           -- those in the signature
           { reprs =
             { scope = impl.reprScope
-            , syms = setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))
+            , syms = setEmpty _symCmp
             }
           , types =
             { level = impl.metaLevel
@@ -1614,7 +2875,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     }
   sem initSolverTopQuery = | _ -> STQContent []
 
-  sem topSolve global = | STQContent opUses ->
+  sem topSolve debug global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some
@@ -1764,7 +3025,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
             { scope = opImpl.reprScope
             , syms = foldl
               (lam acc. lam repr. setInsert (match deref (botRepr repr) with BotRepr x in x.sym) acc)
-              (setEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b)))
+              (setEmpty _symCmp)
               (findReprs [] specType)
             }
           , types =
@@ -2209,7 +3470,8 @@ end
 --     CPSolution (minOrElse (lam. errorSingle [] "Couldn't put together a complete program, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 -- end
 
-lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + LazyTopDownSolver + MExprUnify end
+-- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + SATishSolver + MExprUnify end
+-- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + LazyTopDownSolver + MExprUnify end
 -- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + MemoedTopDownSolver + MExprUnify end
 -- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + EagerRepSolver + MExprUnify end
 
@@ -2260,14 +3522,14 @@ end
 lang PrintMostFrequentRepr = RepTypesFragments + MExprAst
   sem findMostCommonRepr : Expr -> Option Symbol
   sem findMostCommonRepr = | tm ->
-    let counts = findMostCommonRepr_ (mapEmpty (lam a. lam b. subi (sym2hash a) (sym2hash b))) tm in
+    let counts = findMostCommonRepr_ (mapEmpty _symCmp) tm in
     optionMap (lam x. x.0) (max (lam a. lam b. subi a.1 b.1) (mapBindings counts))
 
   sem findMostCommonRepr_ : Map Symbol Int -> Expr -> Map Symbol Int
   sem findMostCommonRepr_ acc =
   | TmOpVar x ->
     let symFromRepr = lam x. match deref (botRepr x) with BotRepr x in x.sym in
-    let reprs = setOfSeq (lam a. lam b. subi (sym2hash a) (sym2hash b)) (map symFromRepr x.reprs) in
+    let reprs = setOfSeq _symCmp (map symFromRepr x.reprs) in
     setFold (lam acc. lam repr. mapInsertWith addi repr 1 acc) acc reprs
   | tm -> sfold_Expr_Expr findMostCommonRepr_ acc tm
 
