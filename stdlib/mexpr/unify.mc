@@ -516,6 +516,19 @@ let pufFold
       acc
       puf
 
+let pufMerge
+  : all k. all out. all side
+  . (out -> out -> (side, out))
+  -> PureUnionFind k out
+  -> PureUnionFind k out
+  -> PUFResults k out side
+  = lam combine. lam a. lam b.
+    pufFold
+      (lam acc. lam l. lam r. pufBind acc (pufUnify combine l r))
+      (lam acc. lam l. lam out. pufBind acc (pufSetOut combine l out))
+      (pufEmptyResults a)
+      b
+
 let pufMapAll
   : all k1. all out1. all k2. all out2. all side
   . (k2 -> k2 -> Int)

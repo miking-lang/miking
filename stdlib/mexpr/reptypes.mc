@@ -501,41 +501,49 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
     , vars : [Name]
     , reprs : [Symbol]
     }
-  type RevNameless = {revVar : Map Name Name, revRepr : Map Symbol (Symbol, Int), revMeta : Map Name (Name, Int)}
-  sem undoLocallyNamelessTy : RevNameless -> Type -> Type
-  sem undoLocallyNamelessTy nlEnv =
-  | ty -> smap_Type_Type (undoLocallyNamelessTy nlEnv) ty
+  type NamelessMapping = {var : Map Name Name, repr : Map Symbol (Symbol, Int), meta : Map Name (Name, Int)}
+  sem applyLocallyNamelessMappingTy : NamelessMapping -> Type -> Type
+  sem applyLocallyNamelessMappingTy mapping =
+  | ty -> smap_Type_Type (applyLocallyNamelessMappingTy mapping) ty
   | TyAll x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
-    TyAll {x with ident = ident, ty = undoLocallyNamelessTy nlEnv x.ty}
+    let ident = mapLookupOr x.ident x.ident mapping.var in
+    TyAll {x with ident = ident, ty = applyLocallyNamelessMappingTy mapping x.ty}
   | TyVar x ->
-    let ident = mapLookupOr x.ident x.ident nlEnv.revVar in
+    let ident = mapLookupOr x.ident x.ident mapping.var in
     TyVar {x with ident = ident}
   | ty & TyMetaVar _ ->
     switch unwrapType ty
     case TyMetaVar x then
       match deref x.contents with Unbound u in
-      match mapLookupOr (u.ident, u.level) u.ident nlEnv.revMeta with (ident, level) in
+      match mapLookupOr (u.ident, u.level) u.ident mapping.meta with (ident, level) in
       TyMetaVar {x with contents = ref (Unbound {u with ident = ident, level = level})}
-    case ty then undoLocallyNamelessTy nlEnv ty
+    case ty then applyLocallyNamelessMappingTy mapping ty
     end
   | TyRepr x ->
     match deref (botRepr x.repr) with BotRepr r in
-    match mapLookupOr (r.sym, r.scope) r.sym nlEnv.revRepr with (sym, scope) in
-    TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = undoLocallyNamelessTy nlEnv x.arg}
+    match mapLookupOr (r.sym, r.scope) r.sym mapping.repr with (sym, scope) in
+    TyRepr {x with repr = ref (BotRepr {r with sym = sym, scope = scope}), arg = applyLocallyNamelessMappingTy mapping x.arg}
 
-  sem undoLocallyNamelessUni : RevNameless -> Unification -> Option Unification
-  sem undoLocallyNamelessUni nlEnv = | uni ->
+  sem applyLocallyNamelessMappingUni : NamelessMapping -> Unification -> Option Unification
+  sem applyLocallyNamelessMappingUni mapping = | uni ->
     substituteInUnification
-      (lam x. mapLookupOr x x.0 nlEnv.revMeta)
-      (lam x. mapLookupOr x x.0 nlEnv.revRepr)
-      (undoLocallyNamelessTy nlEnv)
+      (lam x. mapLookupOr x x.0 mapping.meta)
+      (lam x. mapLookupOr x x.0 mapping.repr)
+      (applyLocallyNamelessMappingTy mapping)
       uni
 
-  sem mkLocallyNameless : all a. NamelessState -> Type -> (NamelessState, RevNameless, Type)
+  sem applyLocallyNamelessMappingReprPuf : all a. NamelessMapping -> PureUnionFind Symbol a -> PureUnionFind Symbol a
+  sem applyLocallyNamelessMappingReprPuf mapping = | puf ->
+    (pufMapAll (lam a. lam b. subi (sym2hash a) (sym2hash b))
+      (lam k. optionGetOr k (mapLookup k.0 mapping.repr))
+      (lam x. x)
+      (lam. error "applyLocallyNamelessMappingReprPuf")
+      puf).puf
+
+  sem mkLocallyNameless : all a. NamelessState -> Type -> {state : NamelessState, forward : NamelessMapping, backward : NamelessMapping, res : Type}
   sem mkLocallyNameless nameless = | ty ->
     type NlSmall x =
-      { forward : Map x x
+      { forward : Map x (x, Int)
       , reverse : Map x (x, Int)
       , nextIdx : Int
       , vals : [x]
@@ -553,13 +561,13 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
         ({st with nextIdx = addi 1 st.nextIdx}, get st.vals st.nextIdx) in
     let getNameless : all x. (() -> x) -> (x, Int) -> NlSmall x -> (NlSmall x, (x, Int))
       = lam mkNew. lam x. lam st.
+        match mapLookup x.0 st.forward with Some x then (st, x) else
         -- NOTE(vipa, 2023-11-13): The use of `uniFilter` later
         -- depends on the level/scope returned here is strictly less
         -- than the current level/scope of the impl. This is true for
         -- -1, so we go with that.
-        match mapLookup x.0 st.forward with Some x then (st, (x, negi 1)) else
         match nextNameless mkNew st with (st, newX) in
-        ( { st with forward = mapInsert x.0 newX st.forward
+        ( { st with forward = mapInsert x.0 (newX, negi 1) st.forward
           , reverse = mapInsert newX x st.reverse
           }
         , (newX, negi 1)
@@ -614,10 +622,11 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
         }
       } in
     match locallyNameless nlEnv ty with (nlEnv, ty) in
-    ( {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}
-    , {revMeta = nlEnv.metas.reverse, revRepr = nlEnv.reprs.reverse, revVar = mapMap (lam x. x.0) nlEnv.vars.reverse}
-    , ty
-    )
+    { state = {metas = nlEnv.metas.vals, reprs = nlEnv.reprs.vals, vars = nlEnv.vars.vals}
+    , forward = {meta = nlEnv.metas.forward, repr = nlEnv.reprs.forward, var = mapMap (lam x. x.0) nlEnv.vars.forward}
+    , backward = {meta = nlEnv.metas.reverse, repr = nlEnv.reprs.reverse, var = mapMap (lam x. x.0) nlEnv.vars.reverse}
+    , res = ty
+    }
 end
 
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
@@ -939,7 +948,6 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       } in
     SBContent branch
 
-
   sem debugBranchState global = | SBContent branch ->
     printLn "debugBranchState"
 
@@ -980,8 +988,9 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
 
   sem solutionsFor : all a. SBContent a -> Name -> Type -> (SBContent a, LStream (SolContentRec a))
   sem solutionsFor branch op = | ty ->
-    match mkLocallyNameless branch.nameless ty with (nameless, nlEnv, ty) in
-    let branch = {branch with nameless = nameless} in
+    let nl = mkLocallyNameless branch.nameless ty in
+    let ty = nl.res in
+    let branch = {branch with nameless = nl.state} in
     match
       match mapLookup (op, ty) branch.memo with Some sols then
         (branch, sols)
@@ -992,10 +1001,10 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
         (branch, sols)
     with (branch, sols) in
     let revSol = lam sol.
-      match undoLocallyNamelessUni nlEnv sol.uni with Some uni
+      match applyLocallyNamelessMappingUni nl.backward sol.uni with Some uni
       then Some
         { sol with uni = uni
-        , ty = undoLocallyNamelessTy nlEnv sol.ty
+        , ty = applyLocallyNamelessMappingTy nl.backward sol.ty
         }
       else None () in
     (branch, lazyStreamMapOption revSol sols)
@@ -1434,8 +1443,9 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   -- NOTE(vipa, 2023-11-07): Wrapper function that handles memoization and termination
   sem solutionsFor : all a. Option String -> SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
   sem solutionsFor debugIndent branch op = | ty ->
-    match mkLocallyNameless branch.nameless ty with (nameless, nlEnv, ty) in
-    let branch = {branch with nameless = nameless} in
+    let nl = mkLocallyNameless branch.nameless ty in
+    let ty = nl.res in
+    let branch = {branch with nameless = nl.state} in
     match
       match mapLookup (op, ty) branch.memo with Some sols then
         (match debugIndent with Some indent then
@@ -1450,10 +1460,10 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     with (branch, sols) in
     let revSol = lam sol.
       match sol with SolContent sol in
-      match undoLocallyNamelessUni nlEnv sol.uni with Some uni
+      match applyLocallyNamelessMappingUni nl.backward sol.uni with Some uni
       then Some (SolContent
         { sol with uni = uni
-        , ty = undoLocallyNamelessTy nlEnv sol.ty
+        , ty = applyLocallyNamelessMappingTy nl.backward sol.ty
         })
       else None () in
     (branch, mapOption revSol sols)
