@@ -11,69 +11,82 @@ lang COPSolve = COP + COPPrettyPrint
   | COPBool {val: Bool}
   | COPArray {vals: [COPVarValue]}
 
-  -- TODO(Linnea, 2023-03-16): Include other possible results (unsatisfiable,
-  -- unknown, unbounded, optimal, all solutions).
-  syn COPSolverResult =
-  | COPSolution {
-      solution: Map Name COPVarValue,
-      objective: Option COPVarValue
-    }
-  | COPError {msg: String}
+  type COPSolution = {
+    solution: Map Name COPVarValue,
+    objective: Option COPVarValue
+  }
+
+  syn COPSolverStatus =
+  | COPError {}
+  | COPUnknown {}
+  | COPUnbounded {}
+  | COPUnsatisfiable {}
+  | COPSatisfied {}
+  | COPAllSolutions {}
+  | COPOptimalSolution {}
+
+  type COPSolverResult = (COPSolverStatus, [COPSolution])
+  type COPSolverResultRaw = (COPSolverStatus, [Map String COPVarValue])
+
+  type COPSolverOptions = {
+    solver: String,
+    timeoutMs: Int,
+    allSolutions: Bool,
+    solverFlags: [String]
+  }
+
+  sem solverOptionsDefault =
+  | {} -> {
+    solver = "gecode",
+    timeoutMs = 0,
+    allSolutions = false,
+    solverFlags = []}
 
   sem solve: COPModel -> COPSolverResult
   sem solve =
+  | model -> solve (solverOptionsDefault {}) model
+
+  sem solveOptions: COPSolverOptions -> COPModel -> COPSolverResult
+  sem solveOptions options =
   | model ->
+    let isOpt = isOptimizationModel model in
     match pprintCOPModel model with (env, model) in
+    _solveString isOpt options env.nameMap model
+
+  -- Takes a string instead of a model, to simplify testing.
+  sem _solveString: Bool -> COPSolverOptions -> Map Name String -> String -> COPSolverResult
+  sem _solveString isOpt options env =
+  | model ->
     -- Output the model to a temporary file
     let tempDir = sysTempDirMake () in
     let modelFile = sysJoinPath tempDir "model.mzn" in
     let outputFile = sysJoinPath tempDir "result.json" in
     writeFile modelFile model;
     -- Solve the model
-    match sysRunCommandWithTiming [
-      "minizinc",
-        "--output-mode", "json",
-        "-o", outputFile,
-        "--output-objective",
-        "--solver", "gecode",
-        modelFile
-      ] "" ""
-    with (elapsed, {stdout = stdout, stderr = stderr, returncode = returncode}) in
-    let errorStr = lam.
-      strJoin "\n"
-        [ "> Output file",
-          if fileExists outputFile then readFile outputFile else "-- No output file --",
-          "\n> Model", readFile modelFile,
-          "\n> Stdout", stdout,
-          "\n> Stderr", stderr,
-          "\n> Returncode", int2string returncode ]
-    in
-    -- Read the result back
-    let res =
-      match _parseResult outputFile with Some resMap then
-        -- Build a map with relevant variables
-        let m: Option (Map Name COPVarValue) =
-          mapFoldWithKey (lam acc. lam n. lam s.
-            match acc with Some m then
-              match mapLookup s resMap with Some v then
-                Some (mapInsert n v m)
-              else None ()
-            else None ()
-          ) (Some (mapEmpty nameCmp)) env.nameMap in
-        match m with Some m then
-          COPSolution {
-            solution = m,
-            -- Objective value stored as key "_objective"
-            objective = mapLookup "_objective" resMap
-          }
-        else COPError { msg = strJoin "\n"
-          ["Some variables were not found", errorStr ()]}
-      else
-        COPError { msg = strJoin "\n" ["Could not parse solution:", errorStr ()]}
-    in
+    match _runSolver options modelFile outputFile with
+    (_, {stdout = stdout}) in
+    -- Parse the result
+    match _parseAll isOpt stdout outputFile
+    with (status, solutions) in
+    let getSolution = lam s. _validateObjective isOpt (_solutionFromRaw env s) in
+    let res = (status, map getSolution solutions) in
     -- Remove temporary directory and return
     sysTempDirDelete tempDir ();
     res
+
+  sem _runSolver: COPSolverOptions -> String -> String -> (Float, ExecResult)
+  sem _runSolver options inputFile =
+  | outputFile ->
+    let flags = concat
+      ["--output-mode", "json",
+       "-o", outputFile,
+       "--output-objective",
+       "--solver", options.solver,
+       if options.allSolutions then "--all-solutions" else "",
+       "--time-limit", int2string options.timeoutMs]
+      options.solverFlags
+    in
+    sysRunCommandWithTiming (join [["minizinc"], flags, [inputFile]]) "" ""
 
   sem _json2COPVarValue: JsonValue -> Option COPVarValue
   sem _json2COPVarValue =
@@ -95,57 +108,110 @@ lang COPSolve = COP + COPPrettyPrint
       else None ()
     end
 
-  sem _parseResult: String -> Option (Map String COPVarValue)
-  sem _parseResult =
+  -- Parse all solutions from the solver output.
+  sem _parseAll: Bool -> String -> String -> COPSolverResultRaw
+  sem _parseAll isOpt stdout =
   | jsonFile ->
-    -- Cut out the last outputed solution
-    let lastSolution: String -> Option String = lam str.
+    if fileExists jsonFile then
+      let str = readFile jsonFile in
       let split = strSplit "----------" str in
       switch length split
-      case 1 then None ()
+      case 1 then
+        let status = _parseSolverStatus isOpt (strTrim (head split)) in
+        (status, [])
       case n then
-        Some (strTrim (get split (subi n 2)))
+        match splitAt split (subi n 1) with (solutionsStr, [statusStr]) in
+        let status = _parseSolverStatus isOpt (strTrim statusStr) in
+        let solutions = map _parseOne solutionsStr in
+        (status, solutions)
       end
-    in
-    utest lastSolution "
-    one
-    ----------
-    " with Some "one" in
-    utest lastSolution "
-    one
-    ----------
-    two
-    ----------
-    " with Some "two" in
-    utest lastSolution "
-    optimal
-    ----------
-    ==========
-    " with Some "optimal" in
-    utest lastSolution "" with None () in
+    else
+      -- If no output file, check for solver status in stdout
+      let status = _parseSolverStatus isOpt (strTrim stdout) in
+      (status, [])
 
-    -- Parse a solution in json format
-    let parseSolution: String -> Option (Map String COPVarValue) = lam str.
-      switch jsonParse str
-      case Left (JsonObject m) then
-        mapFoldWithKey (lam acc. lam k. lam v.
-            match acc with Some m then
-              match _json2COPVarValue v with Some v2 then
-                Some (mapInsert k v2 m)
-              else None ()
-            else None ()
-          ) (Some (mapEmpty cmpString)) m
-      case _ then
-        -- Incorrectly formatted solution
-        None ()
-      end
-    in
+  -- Parse one solution.
+  sem _parseOne: String -> Map String COPVarValue
+  sem _parseOne =
+  | str ->
+    switch jsonParse str
+    case Left (JsonObject m) then
+      mapFoldWithKey (lam acc. lam k. lam v.
+          match _json2COPVarValue v with Some v2 then
+            mapInsert k v2 acc
+          else error (concat "Unknown json value: " (json2string v))
+        ) (mapEmpty cmpString) m
+    case _ then
+      error (concat "Cannot parse solution: " str)
+    end
 
-    if fileExists jsonFile then
-      match lastSolution (readFile jsonFile) with Some sol then
-        parseSolution sol
-      else None ()
-    else None ()
+  sem _parseSolverStatus: Bool -> String -> COPSolverStatus
+  sem _parseSolverStatus isOpt =
+  | "=====ERROR=====" -> COPError {}
+  | "=====UNKNOWN=====" -> COPUnknown {}
+  | "=====UNSATISFIABLE=====" -> COPUnsatisfiable {}
+  | "=====UNSATorUNBOUNDED=====" -> COPUnbounded {}
+  | "=====UNBOUNDED=====" -> COPUnbounded {}
+  | "==========" -> if isOpt then COPOptimalSolution {} else COPAllSolutions {}
+  | "" -> COPSatisfied {}
+  | str ->
+    error (concat "Unknown solver status string: " str)
+
+  sem _solutionFromRaw: Map Name String -> Map String COPVarValue -> COPSolution
+  sem _solutionFromRaw env =
+  | resMap ->
+    let m: Map Name COPVarValue =
+      mapFoldWithKey (lam acc. lam n. lam s.
+        match mapLookup s resMap with Some v then mapInsert n v acc
+        else error (concat "Variable not found: " s)
+      ) (mapEmpty nameCmp) env in
+    {solution = m, objective = mapLookup "_objective" resMap}
+
+  sem _validateObjective: Bool -> COPSolution -> COPSolution
+  sem _validateObjective isOpt =
+  | sols ->
+    switch (isOpt, sols.objective)
+    case (true, Some _) then sols
+    case (false, None _) then sols
+    case (true, _) then
+      error "Impossible: no objective value found for optimization model"
+    case (false, _) then
+      error "Impossible: objective value found for satisfaction model"
+    end
+
+  sem eqCOPSolverResult r1 =
+  | r2 ->
+    if eqCOPSolverStatus r1.0 r2.0 then
+      eqSeq eqCOPSolution r1.1 r2.1
+    else false
+
+  sem eqCOPSolverStatus s1 =
+  | s2 -> _eqCOPSolverStatusH (s1, s2)
+
+  sem _eqCOPSolverStatusH =
+  | (COPError {}, COPError {}) -> true
+  | (COPUnknown {}, COPUnknown {}) -> true
+  | (COPUnbounded {}, COPUnbounded {}) -> true
+  | (COPUnsatisfiable {}, COPUnsatisfiable {}) -> true
+  | (COPSatisfied {}, COPSatisfied {}) -> true
+  | (COPAllSolutions {}, COPAllSolutions {}) -> true
+  | (COPOptimalSolution {}, COPOptimalSolution {}) -> true
+  | _ -> false
+
+  sem eqCOPSolution s1 =
+  | s2 ->
+    if mapEq eqCOPVarValue s1.solution s2.solution then
+      optionEq eqCOPVarValue s1.objective s2.objective
+    else false
+
+  sem eqCOPVarValue v1 =
+  | v2 -> _eqCOPVarValueH (v1, v2)
+
+  sem _eqCOPVarValueH =
+  | (COPInt v1, COPInt v2) -> eqi v1.val v2.val
+  | (COPBool v1, COPBool v2) -> eqBool v1.val v2.val
+  | (COPArray v1, COPArray v2) ->
+    forAll (lam x. x) (zipWith eqCOPVarValue v1.vals v2.vals)
 
 end
 
@@ -159,62 +225,130 @@ utest _json2COPVarValue (JsonInt 2) with Some (COPInt {val = 2}) in
 utest _json2COPVarValue (JsonArray [JsonBool true])
 with Some (COPArray {vals = [COPBool {val = true}]}) in
 
-recursive let eqCOPVarValue = lam v1. lam v2.
-  switch (v1, v2)
-  case (COPInt v1, COPInt v2) then eqi v1.val v2.val
-  case (COPBool v1, COPBool v2) then eqBool v1.val v2.val
-  case (COPArray v1, COPArray v2) then
-    forAll (lam x. x) (zipWith eqCOPVarValue v1.vals v2.vals)
-  end
+type TestRhs = {status: COPSolverStatus, solutions: [[(String, String)]]} in
+
+let rhs2Result: Map Name String -> TestRhs -> COPSolverResult = lam m. lam rhs.
+  -- Create inverse of name map
+  let mInv: Map String Name = mapFoldWithKey (lam acc. lam k. lam v.
+      mapInsert v k acc
+    ) (mapEmpty cmpString) m
+  in
+
+  -- Create solution map
+  let solutions: [[(String, COPVarValue)]] = map (lam s: [(String, String)].
+    map (lam kv: (String, String).
+      match kv with (k, v) in
+      let v = optionGetOrElse (lam. error "Not a COPVarValue") (
+          _json2COPVarValue (jsonParseExn v)) in
+      (k, v)) s
+    ) rhs.solutions
+  in
+  let sols: [Map Name COPVarValue] = map (lam s: [(String, COPVarValue)].
+      foldl (lam acc: Map Name COPVarValue. lam kv: (String, COPVarValue).
+        match kv with (k, v) in
+        mapInsert (mapFindExn k mInv) v acc
+      ) (mapEmpty nameCmp) s
+    ) solutions
+  in
+
+  -- Read objective values
+  let strSols: [Map String COPVarValue] = map (mapFromSeq cmpString) solutions in
+  let objectives: [Option COPVarValue] = map (mapLookup "_objective") strSols in
+
+  (rhs.status, map (lam t. {solution=t.0, objective=t.1}) (zip sols objectives))
 in
 
-let eqCOPSolverResult = lam s1. lam s2.
-  switch (s1, s2)
-  case (COPSolution s1, COPSolution s2) then
-    if mapEq eqCOPVarValue s1.solution s2.solution then
-      optionEq eqCOPVarValue s1.objective s2.objective
-    else false
-  case (COPError _, COPError _) then true
-  case _ then false
-  end
+let createEnv: [String] -> Map Name String = lam vars.
+  foldl (lam acc. lam str.
+    mapInsert (nameSym str) str acc) (mapEmpty nameCmp) vars
 in
 
-let eqTest = lam lhs: COPModel. lam rhs: COPSolverResult.
-  if sysCommandExists "minizinc" then
-    let lhs = solve lhs in
-    eqCOPSolverResult lhs rhs
-  else true
+let eqTest =
+  lam options: COPSolverOptions. lam isOpt: Bool. lam vars: [String].
+  lam lhs: String. lam rhs: TestRhs.
+    if sysCommandExists "minizinc" then
+      let env = (createEnv vars) in
+      let lhs = _solveString isOpt options env lhs in
+      eqCOPSolverResult lhs (rhs2Result env rhs)
+    else true
 in
+
+let eqTestOpt = eqTest (solverOptionsDefault {}) true in
+let eqTestSat = eqTest (solverOptionsDefault {}) false in
 
 let x = nameSym "x" in
 
+-- Optimization problem
 utest
-  let zero = cpInt_ 0 in
-  let one = cpInt_ 1 in
-  [COPVarArrayDecl {
-     id = x,
-     domain = COPDomainIntRange {min = cpInt_ 0, max = cpInt_ 1},
-     length = cpInt_ 3},
-   COPConstraintDecl {constraint = COPConstraintTable {
-     vars = COPExprVar {id = x},
-     tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one],[zero,zero,zero]]}}},
-   COPObjectiveDecl {
-     objective = COPObjectiveMinimize {
-       expr = COPExprSum {expr = COPExprVar {id = x}}
-     }
-   }
-  ]
-with
-  COPSolution {
-    solution = mapFromSeq nameCmp [
-      (x, COPArray {vals=[COPInt{val=0},COPInt{val=0},COPInt{val=0}]})],
-    objective = Some (COPInt {val = 0})}
-using eqTest in
+"
+array [1..3] of var 0..1: x;
+include \"table.mzn\";
+constraint table(x,[|0,0,1|1,0,1|0,0,0|]);
+solve minimize sum(x);
+"
+with {
+  status = COPOptimalSolution {},
+  solutions = [[("x", "[0, 0, 0]"), ("_objective", "0")]]
+} using eqTestOpt ["x", "_objective"]
+in
 
+-- Satisfaction problem
 utest
-  [COPObjectiveDecl {
-    objective = COPObjectiveMinimize {expr = COPExprVar {id = x}}}]
-with COPError {msg = ""}
-using eqTest in
+"
+var bool: x;
+solve satisfy;
+"
+with {
+  status = COPSatisfied {},
+  solutions = [[("x", "false")]]
+} using eqTestSat ["x"]
+in
+
+-- Unknown (short timeout)
+utest
+"
+var bool: x;
+solve satisfy;
+"
+with {
+  status = COPUnknown {}, solutions = []
+} using eqTest {(solverOptionsDefault {}) with timeoutMs = 1} false ["x"]
+in
+
+-- All solutions
+utest
+"
+var bool: x;
+solve satisfy;
+"
+with {
+  status = COPAllSolutions {}, solutions = [[("x", "false")], [("x", "true")]]
+} using eqTest {(solverOptionsDefault {}) with allSolutions = true} false ["x"]
+in
+
+-- Unbounded
+utest
+"
+var int: x;
+solve maximize x;
+"
+with {
+  status = COPUnbounded {}, solutions = []
+} using eqTest {(solverOptionsDefault {}) with solver = "coinbc"} false ["x"]
+in
+
+-- Unsatisfiable
+utest
+"
+var 0..1: x;
+var 1..2: y;
+constraint x > y;
+solve satisfy;
+"
+with {
+  status = COPUnsatisfiable {}, solutions = []
+} using eqTestSat ["x", "y"]
+in
+
 
 ()
