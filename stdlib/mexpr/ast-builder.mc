@@ -229,6 +229,12 @@ let tytensortostring_ = lam ty.
             , tytensor_ ty
             , tystr_ ]
 
+-- Kinds --
+
+let kidata_ =
+  use DataKindAst in
+  lam s. Data {types = mapFromSeq nameCmp s}
+
 -- Patterns --
 
 let npvar_ = use MExprAst in

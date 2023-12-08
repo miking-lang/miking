@@ -1202,8 +1202,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType + ResolveType
   sem typeCheckExpr env =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = resolveType t.info env true (f (tyConst t.val)) in
-    TmConst {t with ty = inst t.info env.currentLvl ty}
+    TmConst {t with ty = inst t.info env.currentLvl (f (tyConst t.val))}
 end
 
 lang SeqTypeCheck = TypeCheck + SeqAst
