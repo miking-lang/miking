@@ -335,11 +335,12 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- the AST.
   syn SolverBranch a =
   sem initSolverBranch : all a. SolverGlobal a -> SolverBranch a
+  sem initSolverTopQuery : all a. SolverGlobal a -> SolverTopQuery a
 
   -- NOTE(vipa, 2023-10-25): A solution to some particular op
   syn SolverSolution a =
   -- NOTE(vipa, 2023-10-25): A set of solutions to some particular op
-  syn SolverSolutionSet a =
+  syn SolverTopQuery a =
 
   type OpImpl a =
     { implId: ImplId
@@ -365,6 +366,11 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- NOTE(vipa, 2023-10-25): There's a new `OpImpl` in scope
   sem addImpl : all a. SolverGlobal a -> SolverBranch a -> OpImpl a -> SolverBranch a
 
+  -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
+  -- system will ask for a solution from a solution set. Every other
+  -- solution will be acquired through concretizeSolution.
+  sem addOpUse : all a. Bool -> SolverGlobal a -> SolverBranch a -> SolverTopQuery a -> TmOpVarRec -> (SolverBranch a, SolverTopQuery a)
+
   -- NOTE(vipa, 2023-11-03): Create some form of debug output for the
   -- branch state
   sem debugBranchState : all a. SolverGlobal a -> SolverBranch a -> ()
@@ -372,24 +378,9 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   -- particular (top-)solution
   sem debugSolution : all a. SolverGlobal a -> [SolverSolution a] -> ()
 
-  -- NOTE(vipa, 2023-11-04): Produce all solutions available for a
-  -- given op, for error messages when `allSolutions` fails to produce
-  -- anything.
-  sem availableSolutions : all a. SolverGlobal a -> SolverBranch a -> Name -> (SolverBranch a, [{token : a, ty : Type}])
-
-  -- NOTE(vipa, 2023-07-06): This is the only time the surrounding
-  -- system will ask for a solution from a solution set. Every other
-  -- solution will be acquired through concretizeSolution.
-  sem allSolutions : all a. Bool -> SolverGlobal a -> SolverBranch a -> Name -> Type -> (SolverBranch a, SolverSolutionSet a)
-
-  -- NOTE(vipa, 2023-10-25): Solve the top-level, where we just get a
-  -- sequence of solutions that are available for each opUse, and
-  -- we're to find the cheapest solution (i.e., pick one
-  -- `SolverSolution` per element in the input list).
-  sem topSolve : all a. SolverGlobal a -> [(OpCost, SolverSolutionSet a)] -> [SolverSolution a]
-
-  -- NOTE(vipa, 2023-11-29): Check if a solution set is empty
-  sem solSetIsEmpty : all a. SolverGlobal a -> SolverBranch a -> SolverSolutionSet a -> Bool
+  -- NOTE(vipa, 2023-10-25): Solve the top-level, i.e., find a
+  -- `SolverSolution` per previous call to `addOpUse`.
+  sem topSolve : all a. SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`. The returned `ImplId` should be
@@ -638,14 +629,14 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     -- in the collection phase
     let initState =
       { branch = initSolverBranch global
-      , opUses = []
+      , topQuery = initSolverTopQuery global
       , nextId = 0
       , options = options
       } in
     let preCollect = wallTimeMs () in
     match collectForReprSolve global initState tm with (state, tm) in
     let postCollect = wallTimeMs () in
-    let pickedSolutions = topSolve global state.opUses in
+    let pickedSolutions = topSolve global state.topQuery in
     let postTopSolve = wallTimeMs () in
     (if options.debugFinalSolution then debugSolution global pickedSolutions else ());
     -- NOTE(vipa, 2023-10-25): The concretization phase *does* handle
@@ -676,7 +667,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   -- Collecting and solving sub-problems --
   type CollectState =
     { branch : SolverBranch Expr
-    , opUses : [(OpCost, SolverSolutionSet Expr)]
+    , topQuery : SolverTopQuery Expr
     , nextId : Int
     , options : ReprSolverOptions
     }
@@ -689,21 +680,8 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   sem collectForReprSolve global state =
   | tm -> smapAccumL_Expr_Expr (collectForReprSolve global) state tm
   | tm & TmOpVar x ->
-    match allSolutions state.options.debugSolveProcess global state.branch x.ident x.ty with (branch, sols) in
-    (if state.options.debugBranchState then debugBranchState global branch else ());
-    if solSetIsEmpty global state.branch sols then
-      let env = pprintEnvEmpty in
-      recursive let unwrapAll = lam ty. unwrapType (smap_Type_Type unwrapAll ty) in
-      match getTypeStringCode 0 env (unwrapAll x.ty) with (env, reqTy) in
-      let errs = [(x.info, concat "Required type: " reqTy)] in
-      match availableSolutions global state.branch x.ident with (_branch, options) in
-      let optionToError = lam env. lam opt.
-        match getTypeStringCode 0 env (unwrapAll opt.ty) with (env, ty) in
-        (env, (infoTm opt.token, ty)) in
-      match mapAccumL optionToError env options with (env, opts) in
-      errorMulti (cons (x.info, concat "Required type: " reqTy) opts) "There were no valid implementations here."
-    else
-      ({state with branch = branch, opUses = snoc state.opUses (x.scaling, sols)}, tm)
+    match addOpUse state.options.debugSolveProcess global state.branch state.topQuery x with (branch, topQuery) in
+    ({state with branch = branch, topQuery = topQuery}, tm)
   | TmOpImpl x ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
@@ -875,10 +853,10 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
   syn SolverGlobal a = | SGContent ()
   syn SolverBranch a = | SBContent (SBContent a)
   syn SolverSolution a = | SSContent (SolContent a)
-  syn SolverSolutionSet a = | SSSContent (LStream (SolContentRec a))
+  syn SolverTopQuery a = | STQContent [Choices a]
 
   sem initSolverGlobal = | _ -> SGContent ()
-  sem initSolverBranch = | global -> SBContent
+  sem initSolverBranch = | _ -> SBContent
     { implsPerOp = mapEmpty nameCmp
     , memo = mapEmpty cmpOpPair
     , nameless =
@@ -887,9 +865,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       , reprs = []
       }
     }
-
-  sem solSetIsEmpty global branch =
-  | SSSContent stream -> optionIsNone (lazyStreamUncons stream)
+  sem initSolverTopQuery = | _ -> STQContent []
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
@@ -961,14 +937,8 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       for_ x.subSols (lam x. work (concat indent "  ") x.sol)
     in (iter (lam x. match x with SSContent x in work "" x) solutions)
 
-  sem topSolve global = | choices ->
-    let prepChoice = lam idx. lam choice.
-      match choice with (scaling, SSSContent stream) in
-      { idxes = setInsert idx (setEmpty subi)
-      , scaling = scaling
-      , sols = stream
-      } in
-    let sols = exploreSolutions 0.0 (emptyUnification ()) (mapi prepChoice choices) in
+  sem topSolve global = | STQContent choices ->
+    let sols = exploreSolutions 0.0 (emptyUnification ()) choices in
     match lazyStreamUncons sols with Some (sol, _) then
       let sols = foldl
         (lam acc. lam sub.
@@ -978,13 +948,12 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       mapValues sols
     else errorSingle [] "Could not pick implementations for all operations."
 
-  sem allSolutions debug global branch op = | ty ->
+  sem addOpUse debug global branch query = | opUse ->
     match branch with SBContent branch in
-    match solutionsFor branch op ty with (branch, stream) in
-    (SBContent branch, SSSContent stream)
-
-  sem availableSolutions global branch = | op ->
-    error "availableSolutions"
+    match query with STQContent query in
+    match solutionsFor branch opUse.ident opUse.ty with (branch, stream) in
+    let query = snoc query {idxes = setInsert (length query) (setEmpty subi), scaling = opUse.scaling, sols = stream} in
+    (SBContent branch, STQContent query)
 
   sem solutionsFor : all a. SBContent a -> Name -> Type -> (SBContent a, LStream (SolContentRec a))
   sem solutionsFor branch op = | ty ->
@@ -1261,7 +1230,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
   syn SolverGlobal a = | SGContent ()
   syn SolverBranch a = | SBContent (SBContent a)
   syn SolverSolution a = | SSContent (SolContent a)
-  syn SolverSolutionSet a = | SSSContent ([SolContent a])
+  syn SolverTopQuery a = | STQContent [(OpCost, [SolContent a])]
 
   sem initSolverGlobal = | _ -> SGContent ()
   sem initSolverBranch = | global -> SBContent
@@ -1273,10 +1242,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       , reprs = []
       }
     }
-
-  sem solSetIsEmpty global branch =
-  | SSSContent [] -> true
-  | SSSContent _ -> false
+  sem initSolverTopQuery = | _ -> STQContent []
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
@@ -1400,7 +1366,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       } in
     SBContent branch
 
-  sem topSolve global = | opUses ->
+  sem topSolve global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some
@@ -1410,7 +1376,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
         }
       else None () in
     let mapF = lam opUse.
-      match opUse with (scaling, SSSContent sols) in
+      match opUse with (scaling, sols) in
       let mapF = lam sol.
         match sol with SolContent x in
         { sol = SSContent sol, uni = x.uni, cost = mulf x.cost scaling } in
@@ -1423,22 +1389,17 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       (foldl (lam sol. lam sol2. if ltf sol2.cost sol.cost then sol2 else sol) sol sols).sols
     else errorSingle [] "Could not pick implementations for all operations."
 
-  sem allSolutions debug global branch op = | ty ->
+  sem addOpUse debug global branch query = | opUse ->
     (if debug then
       printLn "\n# Solving process:"
      else ());
     match branch with SBContent branch in
-    match solutionsFor (if debug then Some "" else None ()) branch op ty with (branch, sols) in
+    match query with STQContent query in
+    match solutionsFor (if debug then Some "" else None ()) branch opUse.ident opUse.ty with (branch, sols) in
     (if debug then
       printLn (join ["=> ", int2string (length sols), " solutions"])
      else ());
-    (SBContent branch, SSSContent sols)
-
-  sem availableSolutions global branch = | op ->
-    match branch with SBContent branch in
-    match solutionsFor (None ()) branch op (newmonovar 0 (NoInfo ())) with (branch, sols) in
-    let sols = map (lam sol. match sol with SolContent x in {token = x.token, ty = pureApplyUniToType x.uni x.ty}) sols in
-    (SBContent branch, sols)
+    (SBContent branch, STQContent (snoc query (opUse.scaling, sols)))
 
   -- NOTE(vipa, 2023-11-07): Wrapper function that handles memoization and termination
   sem solutionsFor : all a. Option String -> SBContent a -> Name -> Type -> (SBContent a, [SolContent a])
@@ -1642,6 +1603,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
   syn SolverGlobal a = | SGContent ()
   syn SolverBranch a = | SBContent (SBContent a)
   syn SolverSolution a = | SSContent (SBContent a, SolId)
+  syn SolverTopQuery a = | STQContent [[{sol : SolverSolution a, uni : Unification, cost : OpCost}]]
 
   sem initSolverGlobal = | _ -> SGContent ()
   sem initSolverBranch = | global -> SBContent
@@ -1650,8 +1612,9 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     , solsById = mapEmpty subi
     , solsByOp = mapEmpty nameCmp
     }
+  sem initSolverTopQuery = | _ -> STQContent []
 
-  sem topSolve global = | opUses ->
+  sem topSolve global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some
@@ -1667,27 +1630,20 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
       (foldl (lam sol. lam sol2. if ltf sol2.cost sol.cost then sol2 else sol) sol sols).sols
     else errorSingle [] "Could not pick implementations for all operations."
 
-  sem allSolutions global branch name = | ty ->
+  sem addOpUse debug global branch query = | opUse ->
     match branch with SBContent branch in
-    let solIds = mapLookupOr (setEmpty subi) name branch.solsByOp in
+    match query with STQContent query in
+    let solIds = mapLookupOr (setEmpty subi) opUse.ident branch.solsByOp in
     let checkAndAddSolution = lam acc. lam solId.
       let content = mapFindExn solId branch.solsById in
-      match unifyPure content.uni ty (inst (NoInfo ()) 0 (removeReprSubsts content.specType))
+      match unifyPure content.uni opUse.ty (inst (NoInfo ()) 0 (removeReprSubsts content.specType))
       with Some uni then snoc acc
         { sol = SSContent (branch, solId)
         , cost = content.cost
         , uni = uni
         }
       else acc in
-    (SBContent branch, setFold checkAndAddSolution [] solIds)
-
-  sem availableSolutions global branch = | name ->
-    match branch with SBContent branch in
-    let solIds = mapLookupOr (setEmpty subi) name branch.solsByOp in
-    let convSol = lam acc. lam solId.
-      let content = mapFindExn solId branch.solsById in
-      snoc acc {token = content.token, ty = content.specType} in
-    (SBContent branch, setFold convSol [] solIds)
+    (SBContent branch, STQContent (snoc query (setFold checkAndAddSolution [] solIds)))
 
   sem concretizeSolution global =
   | SSContent (branch, solId) ->
@@ -1843,9 +1799,9 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
         let oldSol = mapFindExn solId branch.solsById in
         let debugStuff =
           let env = pprintEnvEmpty in
-          match unificationToDebug env oldSol.uni with (env, oldUni) in
+          match unificationToDebug "" env oldSol.uni with (env, oldUni) in
           match getTypeStringCode 2 env oldSol.specType with (env, oldType) in
-          match unificationToDebug env sol.uni with (env, newUni) in
+          match unificationToDebug "" env sol.uni with (env, newUni) in
           match getTypeStringCode 2 env sol.specType with (env, newType) in
           printLn (join
             [ "addSol.check, old cost: ", float2string oldSol.cost
@@ -2253,8 +2209,9 @@ end
 --     CPSolution (minOrElse (lam. errorSingle [] "Couldn't put together a complete program, see earlier warnings about possible reasons.") (lam a. lam b. cmpfApprox 1.0 a.cost b.cost) forced)
 -- end
 
-lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + LazyTopDownSolver + MExprUnify
-end
+lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + LazyTopDownSolver + MExprUnify end
+-- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + MemoedTopDownSolver + MExprUnify end
+-- lang RepTypesComposedSolver = RepTypesSolveAndReconstruct + EagerRepSolver + MExprUnify end
 
 lang DumpRepTypesProblem = RepTypesFragments
   sem dumpRepTypesProblem : String -> Expr -> ()
