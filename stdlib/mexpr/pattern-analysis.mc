@@ -25,6 +25,11 @@ lang NormPat = Ast
   sem simpleConComplement : SimpleCon -> SNPat
   sem simpleConToPat : SimpleCon -> Pat
 
+  sem snpatCmp : (SNPat, SNPat) -> Int
+  sem snpatCmp =
+  | (lhs, rhs) ->
+    subi (constructorTag lhs) (constructorTag rhs)
+
   sem snpatToSimpleCon : SNPat -> Option SimpleCon
   sem snpatToSimpleCon =
   | _ -> None ()
@@ -36,6 +41,14 @@ lang NormPat = Ast
   | _ -> []
 
   sem snpatToPat : SNPat -> Pat
+
+  sem npatCmp  : NPat -> NPat -> Int
+  sem npatCmp np1 = | np2 -> npatCmpH (np1, np2)
+
+  sem npatCmpH : (NPat, NPat) -> Int
+  sem npatCmpH =
+  | (lhs, rhs) ->
+    subi (constructorTag lhs) (constructorTag rhs)
 
   sem npatComplement : NPat -> NormPat
   sem npatIntersect  : (NPat, NPat) -> NormPat
@@ -51,6 +64,12 @@ lang NPatImpl = NormPat
   syn NPat =
   | SNPat SNPat
   | NPatNot (Set SimpleCon)
+
+  sem npatCmpH =
+  | (SNPat a, SNPat b) ->
+    snpatCmp (a, b)
+  | (NPatNot a, NPatNot b) ->
+    setCmp a b
 
   sem npatComplement =
   | SNPat snp    -> snpatComplement snp
@@ -139,6 +158,9 @@ lang IntNormPat = NPatImpl + IntPat
   sem simpleConToPat =
   | IntCon a -> pint_ a
 
+  sem snpatCmp =
+  | (NPatInt a, NPatInt b) -> subi a b
+
   sem snpatToSimpleCon =
   | NPatInt a -> Some (IntCon a)
 
@@ -175,6 +197,9 @@ lang CharNormPat = NPatImpl + CharPat
 
   sem simpleConToPat =
   | CharCon a -> pchar_ a
+
+  sem snpatCmp =
+  | (NPatChar a, NPatChar b) -> subi (char2int a) (char2int b)
 
   sem snpatToSimpleCon =
   | NPatChar a -> Some (CharCon a)
@@ -214,6 +239,10 @@ lang BoolNormPat = NPatImpl + BoolPat
   sem simpleConToPat =
   | BoolCon a -> pbool_ a
 
+  sem snpatCmp =
+  | (NPatBool a, NPatBool b) ->
+    subi (if a then 1 else 0) (if b then 1 else 0)
+
   sem snpatToSimpleCon =
   | NPatBool a -> Some (BoolCon a)
 
@@ -252,6 +281,12 @@ lang ConNormPat = NPatImpl + DataPat
   sem simpleConToPat =
   | ConCon a -> npcon_ a pvarw_
 
+  sem snpatCmp =
+  | (NPatCon a, NPatCon b) ->
+    let nameRes = nameCmp a.ident b.ident in
+    if eqi 0 nameRes then npatCmp a.subpat b.subpat
+    else nameRes
+
   sem snpatToSimpleCon =
   | NPatCon a -> Some (ConCon a.ident)
 
@@ -287,6 +322,10 @@ end
 lang RecordNormPat = NPatImpl + RecordPat
   syn SNPat =
   | NPatRecord (Map SID NPat)
+
+  sem snpatCmp =
+  | (NPatRecord a, NPatRecord b) ->
+    mapCmp npatCmp a b
 
   sem snpatComplement =
   | NPatRecord pats ->
@@ -332,6 +371,17 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
   syn SNPat =
   | NPatSeqTot [NPat]
   | NPatSeqEdge { prefix : [NPat], disallowed : Set Int, postfix : [NPat] }
+
+  sem snpatCmp =
+  | (NPatSeqTot a, NPatSeqTot b) ->
+    seqCmp npatCmp a b
+  | (NPatSeqEdge a, NPatSeqEdge b) ->
+    let preRes = seqCmp npatCmp a.prefix b.prefix in
+    if eqi 0 preRes then
+      let midRes = setCmp a.disallowed b.disallowed in
+      if eqi 0 midRes then seqCmp npatCmp a.postfix b.postfix
+      else midRes
+    else preRes
 
   sem snpatComplement =
   | NPatSeqTot pats ->
