@@ -1479,10 +1479,11 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
   sem typeCheckPat env patEnv =
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some (_, ty) then
-      match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} in
-      match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
-      unify env [infoPat subpat] from (tyPat subpat);
-      (patEnv, PatCon {t with subpat = subpat, ty = to})
+      match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} then
+        match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
+        unify env [infoPat subpat] from (tyPat subpat);
+        (patEnv, PatCon {t with subpat = subpat, ty = to})
+      else error "Invalid constructor type in typeCheckPat!"
     else
       let msg = join [
         "* Encountered an unbound constructor: ",
@@ -1496,9 +1497,11 @@ lang ConPatIsEmpty = IsEmpty + ConNormPat + FunTypeAst + Generalize
   sem snpatIsEmpty env =
   | (ty, NPatCon {ident = c, subpat = p}) ->
     match mapLookup c env.conEnv with Some (_, tycon) then
-      match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} in
-      unify env [infoTy ty] ty to;
-      npatIsEmpty env (from, p)
+      match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} then
+        unify env [infoTy ty] ty to;
+        npatIsEmpty env (from, p)
+      else
+        error "Invalid constructor type in snpatIsEmpty!"
     else
       error "Unknown constructor in snpatIsEmpty!"
 end

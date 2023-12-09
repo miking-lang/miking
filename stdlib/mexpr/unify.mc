@@ -304,18 +304,20 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
       case [ (env, meta, ty) ] ++ rest then
         switch unwrapType meta
         case TyMetaVar t then
-          match deref t.contents with Unbound r in
-          let isEqual =
-            match unwrapType ty with TyMetaVar t2 then
-              match deref t2.contents with Unbound r2 in nameEq r.ident r2.ident
-            else false
-          in
-          if isEqual then work acc rest else
-            if mapMem r.ident acc then work acc rest else
-              let subst = mapInsert r.ident ty (mapEmpty nameCmp) in
-              let f = substituteMetaVars subst in
-              let g = lam x. (x.0, f x.1, f x.2) in
-              work (mapUnion (mapMap f acc) subst) (map g rest)
+          match deref t.contents with Unbound r then
+            let isEqual =
+              match unwrapType ty with TyMetaVar t2 then
+                match deref t2.contents with Unbound r2 then nameEq r.ident r2.ident
+                else error "Unwrapped MetaVar not unbound in unifyPure!"
+              else false
+            in
+            if isEqual then work acc rest else
+              if mapMem r.ident acc then work acc rest else
+                let subst = mapInsert r.ident ty (mapEmpty nameCmp) in
+                let f = substituteMetaVars subst in
+                let g = lam x. (x.0, f x.1, f x.2) in
+                work (mapUnion (mapMap f acc) subst) (map g rest)
+          else error "Unwrapped MetaVar not unbound in unifyPure!"
         case other then
           result.bind (unifyTypes u env (other, ty))
             (lam newUnifier. work acc (concat newUnifier rest))
