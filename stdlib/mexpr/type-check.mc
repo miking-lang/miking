@@ -777,6 +777,23 @@ lang IsEmpty =
           mapUnionWith (mapUnionWith setIntersect) m1 m2
         end
 
+  -- Add two assigments to upper bound constructor sets by taking
+  -- the union of all possible pairs and intersecting overlapping
+  -- sets.  Also prunes empty assignments to avoid inferring empty
+  -- types.
+  sem intersectBounds
+    :  [Map Type (Map Name (Set Name))]
+    -> [Map Type (Map Name (Set Name))]
+    -> [Map Type (Map Name (Set Name))]
+  sem intersectBounds m1 =
+  | m2 ->
+    joinMap (lam a.
+      (joinMap (lam b.
+        let m = mapUnionWith (mapUnionWith setIntersect) a b in
+        if mapAll (mapAll (lam ks. not (setIsEmpty ks))) m then [m] else [])
+         m2))
+      m1
+
   -- Perform an emptiness check for the given pattern and type.
   -- Returns a list of mappings from meta variables of Data kind to
   -- upper bound constructor sets, where each element represents a way
@@ -787,9 +804,7 @@ lang IsEmpty =
   sem normpatIsEmpty env =
   | (ty, np) ->
     foldl
-      (lam ms. lam p.
-        seqLiftA2 (mapUnionWith (mapUnionWith setIntersect)) ms
-          (npatIsEmpty env (ty, p)))
+      (lam ms. lam p. intersectBounds ms (npatIsEmpty env (ty, p)))
       [mapEmpty cmpType]
       np
 
@@ -816,8 +831,8 @@ lang IsEmpty =
   -- returning a map from variable names to patterns indicating a possible assignment
   -- of values through which this program point could be reached, or nothing if no such
   -- assignment could be found.
-  sem matchesPossible : TCEnv -> Option (Map Name NormPat)
-  sem matchesPossible =
+  sem matchesPossible : [Info] -> TCEnv -> Option (Map Name NormPat)
+  sem matchesPossible info =
   | env ->
     recursive let work = lam f. lam a. lam bs.
       match bs with [b] ++ bs then
@@ -828,7 +843,7 @@ lang IsEmpty =
     let possible =
       work
         (lam acc. lam m.
-          seqLiftA2 (mapUnionWith (mapUnionWith setIntersect)) acc
+          intersectBounds acc
             (mapFoldWithKey
                (lam acc. lam n. lam p.
                  match mapLookup n env.varEnv with Some ty then
@@ -843,16 +858,20 @@ lang IsEmpty =
     switch possible
     case Left m then Some m
     case Right ms then
-      iter
-        (lam x.
-          let data =
-            Data { types =
-                   mapMap (lam ks. { lower = setEmpty nameCmp
-                                   , upper = Some ks }) x.1 } in
-          unify env [infoTy x.0]
-            (newmetavar data env.currentLvl (infoTy x.0)) x.0)
-        (mapBindings (foldl1 mergeBounds ms));
-      None ()
+      let m = foldl1 mergeBounds ms in
+      if mapAll (mapAll (lam ks. not (setIsEmpty ks))) m then
+        iter
+          (lam x.
+            let data =
+              Data { types =
+                       mapMap (lam ks. { lower = setEmpty nameCmp
+                                       , upper = Some ks }) x.1 } in
+            unify env info
+              (newmetavar data env.currentLvl (infoTy x.0)) x.0)
+          (mapBindings m);
+        None ()
+      else
+        Some (mapEmpty nameCmp)
     end
 end
 
@@ -1179,10 +1198,12 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
     let np = patToNormpat pat in
     let mkMatches = lam p.
-      filter (mapAll (lam np. not (null np)))
-        (seqLiftA2 (mapUnionWith normpatIntersect)
-           (matchNormpat (t.target, p))
-           env.matches)
+      joinMap (lam a.
+        (joinMap (lam b.
+          let m = mapUnionWith normpatIntersect a b in
+          if mapAll (lam np. not (null np)) m then [m] else [])
+           env.matches))
+        (matchNormpat (t.target, p))
     in
     let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv,
                            matches = mkMatches np} in
@@ -1359,7 +1380,7 @@ end
 lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
   sem typeCheckExpr env =
   | TmNever t ->
-    switch matchesPossible env
+    switch matchesPossible [t.info] env
     case None () then
       TmNever {t with ty = newpolyvar env.currentLvl t.info}
     case Some m then
