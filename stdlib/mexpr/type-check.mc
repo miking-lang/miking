@@ -248,6 +248,7 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + PrettyPrint + Cmp + RepTy
               sfold_Kind_Type collectAliasesAndKinds acc u.kind
             case Link ty then
               collectAliasesAndKinds acc ty
+            case _ then error "foo"
             end
           case _ then sfold_Type_Type collectAliasesAndKinds acc ty
           end
@@ -388,22 +389,24 @@ lang MetaVarTypeTCUnify =
 
   sem unifyCheckBase env info boundVars tv =
   | TyMetaVar t ->
-    match deref t.contents with Unbound r in
-    if nameEq r.ident tv.ident then
-      let msg = join [
-        "* Encountered a type occurring within itself.\n",
-        "* Recursive types are only permitted using data constructors.\n",
-        "* When type checking the expression\n"
-      ] in
-      errorSingle info msg
+    match deref t.contents with Unbound r then
+      if nameEq r.ident tv.ident then
+        let msg = join [
+          "* Encountered a type occurring within itself.\n",
+          "* Recursive types are only permitted using data constructors.\n",
+          "* When type checking the expression\n"
+        ] in
+        errorSingle info msg
+      else
+        let kind =
+          match (tv.kind, r.kind) with (Mono _, Poly _) then Mono ()
+          else unifyCheckKind env info boundVars tv r.kind; r.kind
+        in
+        let updated = Unbound {r with level = mini r.level tv.level,
+                                      kind  = kind} in
+        modref t.contents updated
     else
-      let kind =
-        match (tv.kind, r.kind) with (Mono _, Poly _) then Mono ()
-        else unifyCheckKind env info boundVars tv r.kind; r.kind
-      in
-      let updated = Unbound {r with level = mini r.level tv.level,
-                                    kind  = kind} in
-      modref t.contents updated
+      error "Non-unbound MetaVar in unifyCheckBase!"
 end
 
 lang AllTypeTCUnify = TCUnify + AllTypeAst + MonoKindAst
@@ -713,20 +716,23 @@ lang PatTypeCheck = TCUnify
 end
 
 lang IsEmpty =
-  TCUnify + ConNormPat + ConTypeAst + DataTypeAst + DataKindAst +
-  AppTypeUtils + Generalize + GetKind
+  TCUnify + ConNormPat + BoolNormPat + ConTypeAst + BoolTypeAst + DataTypeAst +
+  DataKindAst + AppTypeUtils + Generalize + GetKind
+
+  type Bounds = Map Type (Map Name (Set Name))
+
+  syn Open a =
+  | LOpen a
+  | ROpen a
+  | Neither a
 
   -- Merge two assignments of meta variables to upper bound constructor sets.
-  -- In particular, if either assignment is more open than the other, that one
-  -- is returned, and otherwise the union is taken.
-  -- When taking the union of the two assignments, if either one is
-  -- more open than the other on the set of overlapping keys, that one
-  -- is preferred whenever overlap is encountered.  Otherwise, we
-  -- intersect the constructor sets of overlapping keys.
-  sem mergeBounds
-    :  Map Type (Map Name (Set Name))
-    -> Map Type (Map Name (Set Name))
-    -> Map Type (Map Name (Set Name))
+  -- If either assignment is more open than the other, that one
+  -- is returned.  If either one is more open than the other on the
+  -- set of overlapping keys, we take the union and prefer that one
+  -- whenever overlap is encountered.  Otherwise, we return both
+  -- mappings unchanged.
+  sem mergeBounds :  Bounds -> Bounds -> Open Bounds
   sem mergeBounds m1 =
   | m2 ->
     let dataMoreOpen = lam d1. lam d2.
@@ -738,10 +744,6 @@ lang IsEmpty =
         d1
     in
 
-    type Ord in
-    con LOpen : () -> Ord in
-    con ROpen : () -> Ord in
-    con Neither : () -> Ord in
     let combine = lam e1. lam e2.
         switch (e1, e2)
         case (Neither _ | LOpen _, LOpen _) then Some (LOpen ())
@@ -750,8 +752,8 @@ lang IsEmpty =
         end
     in
 
-    if mapIsEmpty m1 then m1 else
-      if mapIsEmpty m2 then m2 else
+    if mapIsEmpty m1 then LOpen m1 else
+      if mapIsEmpty m2 then ROpen m2 else
 
         let middle =
           mapFoldlOption
@@ -768,51 +770,48 @@ lang IsEmpty =
 
         switch middle
         case Some (LOpen ()) then
-          if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then m1
-          else mapUnionWith (lam x. lam. x) m1 m2
+          LOpen
+            (if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then m1
+             else mapUnionWith (lam x. lam. x) m1 m2)
         case Some (ROpen ()) then
-          if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then m2
-          else mapUnionWith (lam x. lam. x) m2 m1
+          ROpen
+            (if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then m2
+             else mapUnionWith (lam x. lam. x) m2 m1)
         case _ then
-          mapUnionWith (mapUnionWith setIntersect) m1 m2
+          Neither (mapUnionWith (mapUnionWith setUnion) m1 m2)
         end
 
-  -- Add two assigments to upper bound constructor sets by taking
-  -- the union of all possible pairs and intersecting overlapping
-  -- sets.  Also prunes empty assignments to avoid inferring empty
-  -- types.
-  sem intersectBounds
-    :  [Map Type (Map Name (Set Name))]
-    -> [Map Type (Map Name (Set Name))]
-    -> [Map Type (Map Name (Set Name))]
-  sem intersectBounds m1 =
-  | m2 ->
-    joinMap (lam a.
-      (joinMap (lam b.
-        let m = mapUnionWith (mapUnionWith setIntersect) a b in
-        if mapAll (mapAll (lam ks. not (setIsEmpty ks))) m then [m] else [])
-         m2))
-      m1
+  sem addBounds : [Bounds] -> [Bounds] -> [Bounds]
+  sem addBounds b1 =
+  | b2 ->
+    joinMap (lam m1.
+      (joinMap (lam m2.
+        let compatible =
+          mapAll (mapAll (lam x. x))
+            (mapIntersectWith (mapIntersectWith setEq) m1 m2) in
+        if compatible then [mapUnionWith mapUnion m1 m2] else [])
+         b2))
+      b1
 
   -- Perform an emptiness check for the given pattern and type.
   -- Returns a list of mappings from meta variables of Data kind to
   -- upper bound constructor sets, where each element represents a way
   -- of closing the types that makes the pattern empty. If the list is
   -- empty, then the pattern is not empty.
-  sem normpatIsEmpty
-    : TCEnv -> (Type, NormPat) -> [Map Type (Map Name (Set Name))]
+  sem normpatIsEmpty : TCEnv -> (Type, NormPat) -> [Bounds]
   sem normpatIsEmpty env =
   | (ty, np) ->
     foldl
-      (lam ms. lam p. intersectBounds ms (npatIsEmpty env (ty, p)))
+      (lam ms. lam p. addBounds ms (npatIsEmpty env (ty, p)))
       [mapEmpty cmpType]
       np
 
-  sem npatIsEmpty : TCEnv -> (Type, NPat) -> [Map Type (Map Name (Set Name))]
+  sem npatIsEmpty : TCEnv -> (Type, NPat) -> [Bounds]
   sem npatIsEmpty env =
   | (ty, SNPat p) -> snpatIsEmpty env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
-    match getTypeArgs ty with (TyCon t, _) then
+    switch getTypeArgs ty
+    case (TyCon t, _) then
       let cons =
         setFold
           (lam ks. lam k.
@@ -821,9 +820,15 @@ lang IsEmpty =
           (setEmpty nameCmp) cons
       in
       [mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])]]
-    else []
+    case (TyBool _, _) then
+      if forAll (lam b. setMem (BoolCon b) cons) [true, false] then
+        [mapEmpty cmpType]
+      else []
+    case _ then []
+    end
+  | _ -> error "hello"
 
-  sem snpatIsEmpty : TCEnv -> (Type, SNPat) -> [Map Type (Map Name (Set Name))]
+  sem snpatIsEmpty : TCEnv -> (Type, SNPat) -> [Bounds]
   sem snpatIsEmpty env =
   | _ -> []
 
@@ -843,7 +848,7 @@ lang IsEmpty =
     let possible =
       work
         (lam acc. lam m.
-          intersectBounds acc
+          addBounds acc
             (mapFoldWithKey
                (lam acc. lam n. lam p.
                  match mapLookup n env.varEnv with Some ty then
@@ -858,14 +863,27 @@ lang IsEmpty =
     switch possible
     case Left m then Some m
     case Right ms then
-      let m = foldl1 mergeBounds ms in
-      if mapAll (mapAll (lam ks. not (setIsEmpty ks))) m then
+      let merge = lam acc. lam m.
+        switch acc
+        case Left a then
+          switch mergeBounds m a
+          case LOpen res then Right res
+          case ROpen res | Neither res then Left res
+          end
+        case Right a then
+          switch mergeBounds m a
+          case LOpen res | ROpen res then Right res
+          case Neither res then Left res
+          end
+        end
+      in
+      match foldl merge (Right (head ms)) (tail ms) with Right m then
         iter
           (lam x.
             let data =
               Data { types =
-                       mapMap (lam ks. { lower = setEmpty nameCmp
-                                       , upper = Some ks }) x.1 } in
+                     mapMap (lam ks. { lower = setEmpty nameCmp
+                                     , upper = Some ks }) x.1 } in
             unify env info
               (newmetavar data env.currentLvl (infoTy x.0)) x.0)
           (mapBindings m);
@@ -1368,6 +1386,7 @@ lang UtestTypeCheck = TypeCheck + UtestAst
          (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (None _, None _) then
        unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
+     case _ then error "foo"
      end);
     TmUtest {t with test = test
             , expected = expected
@@ -2068,20 +2087,17 @@ let tests = [
    tm = bindall_ [
      type_ "Tree" [] (tyvariant_ []),
      condef_ "Branch" (tyarrow_ (tytuple_ [tycon_ "Tree", tycon_ "Tree"])
-                                (tycon_ "Tree")),
+                         (tycon_ "Tree")),
      condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tycon_ "Tree")),
-     ulet_ "t" (conapp_ "Branch" (utuple_ [
-       conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
-       conapp_ "Branch" (utuple_ [
-         conapp_ "Leaf" (seq_ [int_ 2]),
-         conapp_ "Leaf" (seq_ [])])])),
-     (match_ (var_ "t")
-             (pcon_ "Branch" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]))
-             (match_ (var_ "lhs")
-                     (pcon_ "Leaf" (pvar_ "n"))
-                     (var_ "n")
-                     never_)
-             never_)
+     match_
+       (conapp_ "Branch" (utuple_ [
+         conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
+         conapp_ "Branch" (utuple_ [
+           conapp_ "Leaf" (seq_ [int_ 2]),
+           conapp_ "Leaf" (seq_ [])])]))
+       (pcon_ "Branch" (ptuple_ [pcon_ "Leaf" (pvar_ "n"), pvar_ "rhs"]))
+       (var_ "n")
+       never_
    ],
    ty = tyseq_ tyint_,
    env = []},
@@ -2106,8 +2122,8 @@ let tests = [
    env = []},
 
   {name = "Never1",
-   tm = never_,
-   ty = fa,
+   tm = match_ true_ pfalse_ never_ (int_ 0),
+   ty = tyint_,
    env = []},
 
   {name = "Unknown1",
