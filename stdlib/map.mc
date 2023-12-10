@@ -11,7 +11,7 @@ include "string.mc"
 -- NOTE(larshum, 2023-03-05): Below follows the implementation of the (as of
 -- writing) intrinsic functions of the map data type, making use of the native
 -- AVL tree implementation.
-type Map k v = use AVLTreeImpl in {cmp : k -> k -> Int, root : AVL{!} k v}
+type Map k v = use AVLTreeImpl in {cmp : k -> k -> Int, root : AVL k v}
 
 let mapEmpty : all k. all v. (k -> k -> Int) -> Map k v = lam cmp.
   use AVLTreeImpl in

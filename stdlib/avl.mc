@@ -259,7 +259,7 @@ lang AVLTreeImpl = AVLTreeBase
   -- data structure, we compare the key-value pairs of the trees in a
   -- left-to-right order.
   syn AuxTree k v =
-  | Cont {key : k, value : v, r : AVL{!} k v, next : AuxTree k v}
+  | Cont {key : k, value : v, r : AVL k v, next : AuxTree k v}
   | End ()
 
   sem avlToAux : all k. all v. AuxTree k v -> AVL k v -> AuxTree k v

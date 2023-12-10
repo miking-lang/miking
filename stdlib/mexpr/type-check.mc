@@ -726,12 +726,12 @@ lang IsEmpty =
   | ROpen a
   | Neither a
 
-  -- Merge two assignments of meta variables to upper bound constructor sets.
-  -- If either assignment is more open than the other, that one
-  -- is returned.  If either one is more open than the other on the
+  -- Merge two assignments of meta variables to upper bound
+  -- constructor sets.  If either assignment is more open than the
+  -- other, that one is returned.  If either one is more open on the
   -- set of overlapping keys, we take the union and prefer that one
-  -- whenever overlap is encountered.  Otherwise, we return both
-  -- mappings unchanged.
+  -- whenever overlap is encountered.  Otherwise, we indicate that
+  -- neither is more open and take the union on overlapping keys.
   sem mergeBounds :  Bounds -> Bounds -> Open Bounds
   sem mergeBounds m1 =
   | m2 ->
@@ -777,7 +777,10 @@ lang IsEmpty =
           ROpen
             (if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then m2
              else mapUnionWith (lam x. lam. x) m2 m1)
-        case _ then
+        case Some (Neither ()) then
+          -- The two have no overlap, so we can assign either one as more open.
+          LOpen (mapUnion m1 m2)
+        case None () then
           Neither (mapUnionWith (mapUnionWith setUnion) m1 m2)
         end
 
