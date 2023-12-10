@@ -550,7 +550,8 @@ lang NormPatMatch = NPatImpl + VarAst
   | (!TmVar _ & e, NPatNot cons) ->
     if optionMapOr false (lam x. setMem x cons) (exprToSimpleCon e) then None ()
     else Some (mapEmpty nameCmp)
-  | _ -> error "hello"
+  | _ ->
+    error "Impossible match in matchNPat!"
 
   sem matchSNPat : (Expr, SNPat) -> Option (Map Name NormPat)
   sem matchSNPat =

@@ -248,7 +248,6 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + PrettyPrint + Cmp + RepTy
               sfold_Kind_Type collectAliasesAndKinds acc u.kind
             case Link ty then
               collectAliasesAndKinds acc ty
-            case _ then error "foo"
             end
           case _ then sfold_Type_Type collectAliasesAndKinds acc ty
           end
@@ -815,21 +814,22 @@ lang IsEmpty =
   | (ty, NPatNot cons) ->
     switch getTypeArgs ty
     case (TyCon t, _) then
-      let cons =
-        setFold
-          (lam ks. lam k.
-            match k with ConCon k then setInsert k ks
-            else ks)
-          (setEmpty nameCmp) cons
-      in
-      [mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])]]
+      if setIsEmpty cons then []
+      else
+        let cons =
+          setFold
+            (lam ks. lam k.
+              match k with ConCon k then setInsert k ks
+              else ks)
+            (setEmpty nameCmp) cons
+        in
+        [mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])]]
     case (TyBool _, _) then
       if forAll (lam b. setMem (BoolCon b) cons) [true, false] then
         [mapEmpty cmpType]
       else []
     case _ then []
     end
-  | _ -> error "hello"
 
   sem snpatIsEmpty : TCEnv -> (Type, SNPat) -> [Bounds]
   sem snpatIsEmpty env =
@@ -1389,7 +1389,6 @@ lang UtestTypeCheck = TypeCheck + UtestAst
          (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
      case (None _, None _) then
        unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
-     case _ then error "foo"
      end);
     TmUtest {t with test = test
             , expected = expected
