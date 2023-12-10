@@ -357,7 +357,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
             let pat =
               PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty}
             in snoc acc (pat, generate env t.thn)
-          else never) t
+          else
+            error "Invalid pattern in generate!") t
     with (arms, defaultCase) in
 		_omatch_ (objMagic (generate env t.target))
 			(snoc arms (pvarw_, generate env defaultCase))
@@ -449,7 +450,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
               ident = id,
               args = [TmRecord {t with bindings = bindings}]
             }
-          else never
+          else error "Field type lookup failed in generate!"
         else errorSingle [infoTy ty] "env.constrs lookup failed"
       else errorSingle [infoTy ty] "expected TyCon"
   | TmRecordUpdate t & upd->
