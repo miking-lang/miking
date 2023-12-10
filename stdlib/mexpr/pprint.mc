@@ -1147,12 +1147,17 @@ end
 lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyData t ->
-    let consstr =
+    match
       mapFoldWithKey
-        (lam strs. lam. lam ks.
-          if setIsEmpty ks then strs
-          else snoc strs (strJoin ", " (map nameGetStr (setToSeq ks))))
-        [] (computeData t) in
+        (lam acc. lam. lam ks.
+          if setIsEmpty ks then acc
+          else
+            match mapAccumL pprintConName acc.0 (setToSeq ks)
+            with (env, kstr) in
+            (env, snoc acc.1 (strJoin ", " kstr)))
+        (env, [])
+        (computeData t)
+    with (env, consstr) in
     (env, join ["{", strJoin ", " consstr, "}"])
 end
 
@@ -1317,15 +1322,22 @@ end
 lang DataKindPrettyPrint = PrettyPrint + DataKindAst
   sem getKindStringCode (indent : Int) (env : PprintEnv) =
   | Data r ->
-    let consstr =
-      let cons2str = lam cons.
-        if setIsEmpty cons then None ()
-        else Some (strJoin " " (map nameGetStr (setToSeq cons)))
-      in
+    let cons2str = lam env. lam cons.
+      if setIsEmpty cons then (env, None ())
+      else
+        match mapAccumL pprintConName env (setToSeq cons)
+        with (env, kstr) in
+        (env, Some (strJoin " " kstr))
+    in
+    match
       mapFoldWithKey
-        (lam strs. lam t. lam ks.
-          let lower = cons2str ks.lower in
-          let upper = optionBind ks.upper cons2str in
+        (lam acc. lam t. lam ks.
+          match pprintTypeName acc.0 t with (env, tstr) in
+          match cons2str env ks.lower with (env, lower) in
+          match
+            match ks.upper with Some u then cons2str env u
+            else (env, None ())
+          with (env, upper) in
           let prefix =
             if optionIsSome upper then "< " else
               if optionMapOr false setIsEmpty ks.upper then "| " else
@@ -1334,12 +1346,13 @@ lang DataKindPrettyPrint = PrettyPrint + DataKindAst
           let consstr =
             optionCombine (lam x. lam y. Some (join [x, " | ", y])) upper lower
           in
-          snoc strs (join [ nameGetStr t, "["
-                          , prefix
-                          , optionGetOr "" consstr
-                          , "]"]))
-        [] r.types
-    in
+          (env, snoc acc.1 (join [ tstr, "["
+                                 , prefix
+                                 , optionGetOr "" consstr
+                                 , "]"])))
+        (env, [])
+        r.types
+    with (env, consstr) in
     (env, join ["{", strJoin ", " consstr, "}"])
 end
 
