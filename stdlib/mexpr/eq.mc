@@ -245,6 +245,11 @@ lang ConstEq = Eq + ConstAst
     else None ()
 end
 
+lang TypeEq = Eq + TypeAst
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmType _ -> error "eqExpr not implemented for TmType!"
+end
+
 lang DataEq = Eq + DataAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmConDef {ident = i2, inexpr = ie2, ty = ty2} ->
@@ -723,7 +728,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
+  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
