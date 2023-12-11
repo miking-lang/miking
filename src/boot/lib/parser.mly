@@ -114,6 +114,8 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> GREATER       /* ">"   */
+%token <unit Ast.tokendata> LESS          /* "<"   */
 
 %start main
 %start main_mexpr
@@ -580,9 +582,9 @@ ty:
   | ALL var_ident DOT ty
       { let fi = mkinfo $1.i (ty_info $4) in
         TyAll(fi, $2.v, None, $4) }
-  | ALL var_ident DCOLON LBRACKET con_list RBRACKET DOT ty
-      { let fi = mkinfo $1.i (ty_info $8) in
-        TyAll(fi, $2.v, Some $5, $8) }
+  | ALL var_ident DCOLON data_kind DOT ty
+      { let fi = mkinfo $1.i (ty_info $6) in
+        TyAll(fi, $2.v, Some $4, $6) }
   | USE ident IN ty
       { let fi = mkinfo $1.i $3.i in
         TyUse(fi, $2.v, $4) }
@@ -660,10 +662,24 @@ ty_list:
   | ty
     { [$1] }
 
+data_kind:
+  | LBRACKET separated_list(COMMA, type_with_cons) RBRACKET
+    { $2 }
+
+type_with_cons:
+  | type_ident LSQUARE GREATER con_list RSQUARE
+    { ($1.v, $4, None) }
+  | type_ident LSQUARE BAR con_list RSQUARE
+    { ($1.v, $4, Some []) }
+  | type_ident LSQUARE LESS con_list RSQUARE
+    { ($1.v, [], Some $4) }
+  | type_ident LSQUARE LESS con_list BAR con_list RSQUARE
+    { ($1.v, $6, Some $4) }
+
 con_list:
-  | type_ident COMMA con_list
-    { $1.v :: $3 }
-  | type_ident
+  | con_ident con_list
+    { $1.v :: $2 }
+  | con_ident
     { [$1.v] }
 
 label_tys:

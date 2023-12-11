@@ -379,7 +379,11 @@ and ty =
   (* Function type *)
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
-  | TyAll of info * ustring * ustring list option * ty
+  | TyAll of
+      info
+      * ustring
+      * (ustring * ustring list * ustring list option) list option
+      * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)

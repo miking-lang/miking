@@ -222,9 +222,26 @@ let getData = function
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   | PTreeTy (TyAll (fi, var, None, ty)) ->
       (idTyAll, [fi], [], [ty], [], [var], [0], [], [], [])
-  | PTreeTy (TyAll (fi, var, Some cons, ty)) ->
-      let len = List.length cons + 1 in
-      (idTyAll, [fi], [len], [ty], [], var :: cons, [1], [], [], [])
+  | PTreeTy (TyAll (fi, var, Some data, ty)) ->
+      let dlen = List.length data in
+      let klens =
+        List.concat_map
+          (fun (_, lower, upper) ->
+            let llen = List.length lower in
+            Option.fold ~none:[llen; -1]
+              ~some:(fun u ->
+                let ulen = List.length u in
+                [llen + ulen; llen] )
+              upper )
+          data
+      in
+      let ks =
+        List.concat_map
+          (fun (t, lower, upper) ->
+            t :: (lower @ Option.value ~default:[] upper) )
+          data
+      in
+      (idTyAll, [fi], dlen :: klens, [ty], [], var :: ks, [1], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
@@ -239,11 +256,14 @@ let getData = function
   | PTreeTy (TyCon (fi, x, None)) ->
       (idTyCon, [fi], [], [], [], [x], [0], [], [], [])
   | PTreeTy (TyCon (fi, x, Some cons)) ->
-      let (typ, strs) =
+      let typ, strs =
         match cons with
-        | DCons cs -> (1, cs)
-        | DNCons cs -> (2, cs)
-        | DVar v -> (3, [v])
+        | DCons cs ->
+            (1, cs)
+        | DNCons cs ->
+            (2, cs)
+        | DVar v ->
+            (3, [v])
       in
       let len = List.length strs + 1 in
       (idTyCon, [fi], [len], [], [], x :: strs, [typ], [], [], [])
