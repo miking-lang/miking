@@ -835,65 +835,58 @@ lang IsEmpty =
   sem snpatIsEmpty env =
   | _ -> []
 
-  -- Perform an analysis on the matches performed so far in the program execution,
-  -- returning a map from variable names to patterns indicating a possible assignment
-  -- of values through which this program point could be reached, or nothing if no such
-  -- assignment could be found.
-  sem matchesPossible : [Info] -> TCEnv -> Option (Map Name NormPat)
-  sem matchesPossible info =
+  -- Perform an analysis on the matches performed so far in the
+  -- program execution.  Returns `Right m` if there is an assignment
+  -- `m` from variable names to patterns through which this program
+  -- point could be reached.  Returns `Left ms` if this program point
+  -- can be made unreachable by closing some variables' types as
+  -- indicated by the alternatives in `ms`.
+  sem matchesPossible : TCEnv -> Either [Bounds] (Map Name NormPat)
+  sem matchesPossible =
   | env ->
     recursive let work = lam f. lam a. lam bs.
       match bs with [b] ++ bs then
         match f a b with a & ![] then work f a bs
-        else Left b
-      else Right a
+        else Right b
+      else Left a
     in
-    let possible =
-      work
-        (lam acc. lam m.
-          addBounds acc
-            (mapFoldWithKey
-               (lam acc. lam n. lam p.
-                 match mapLookup n env.varEnv with Some ty then
-                   let ty = inst (infoTy ty) env.currentLvl ty in
-                   concat acc (normpatIsEmpty env (ty, p))
-                 else
-                   error "Unknown variable in matchesPossible!")
-               [] m))
-        [mapEmpty cmpType]
-        env.matches
-    in
-    switch possible
-    case Left m then Some m
-    case Right ms then
-      let merge = lam acc. lam m.
-        switch acc
-        case Left a then
-          switch mergeBounds m a
-          case LOpen res then Right res
-          case ROpen res | Neither res then Left res
-          end
-        case Right a then
-          switch mergeBounds m a
-          case LOpen res | ROpen res then Right res
-          case Neither res then Left res
-          end
+    work
+      (lam acc. lam m.
+        addBounds acc
+          (mapFoldWithKey
+             (lam acc. lam n. lam p.
+               match mapLookup n env.varEnv with Some ty then
+                 let ty = inst (infoTy ty) env.currentLvl ty in
+                 concat acc (normpatIsEmpty env (ty, p))
+               else
+                 error "Unknown variable in matchesPossible!")
+             [] m))
+      [mapEmpty cmpType]
+      env.matches
+
+  -- Take a (non-empty) sequence of closing assignments and attempt to
+  -- merge them into a single most open one by iterating mergeBounds.
+  sem mergeBoundsSeq : [Bounds] -> Option Bounds
+  sem mergeBoundsSeq =
+  | ms ->
+    let merge = lam acc. lam m.
+      switch acc
+      case Left a then
+        switch mergeBounds m a
+        case LOpen res then Right res
+        case ROpen res | Neither res then Left res
         end
-      in
-      match foldl merge (Right (head ms)) (tail ms) with Right m then
-        iter
-          (lam x.
-            let data =
-              Data { types =
-                     mapMap (lam ks. { lower = setEmpty nameCmp
-                                     , upper = Some ks }) x.1 } in
-            unify env info
-              (newmetavar data env.currentLvl (infoTy x.0)) x.0)
-          (mapBindings m);
-        None ()
-      else
-        Some (mapEmpty nameCmp)
-    end
+      case Right a then
+        switch mergeBounds m a
+        case LOpen res | ROpen res then Right res
+        case Neither res then Left res
+        end
+      end
+    in
+    match foldl merge (Right (head ms)) (tail ms) with Right m then
+      Some m
+    else
+      None ()
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -1401,18 +1394,59 @@ end
 lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
   sem typeCheckExpr env =
   | TmNever t ->
-    switch matchesPossible [t.info] env
-    case None () then
-      TmNever {t with ty = newpolyvar env.currentLvl t.info}
-    case Some m then
+    switch matchesPossible env
+    case Left ms then
+      match mergeBoundsSeq ms with Some m then
+        iter
+          (lam x.
+            let data =
+              Data { types =
+                       mapMap (lam ks. { lower = setEmpty nameCmp
+                                       , upper = Some ks }) x.1 } in
+            unify env [t.info]
+              (newmetavar data env.currentLvl (infoTy x.0)) x.0)
+          (mapBindings m);
+        TmNever {t with ty = newpolyvar env.currentLvl t.info}
+      else
+        let altstr =
+          strJoin "* ----\n"
+            (foldl
+               (lam acc. lam m.
+                 match
+                   mapFoldWithKey
+                     (lam acc. lam ty. lam m.
+                       match getTypeStringCode 0 acc.0 ty with (env, tystr) in
+                       match
+                         mapFoldWithKey
+                           (lam acc. lam t. lam ks.
+                             match pprintTypeName acc.0 t with (env, tstr) in
+                             match mapAccumL pprintConName env (setToSeq ks) with (env, ks) in
+                             (env, snoc acc.1 (join [tstr, "[< ", strJoin " " ks, "]"])))
+                           (env, []) m
+                       with (env, consstr) in
+                       (env, join [ acc.1, "*   ", tystr, " :: {", strJoin ", " consstr, "}\n" ]))
+                     (acc.0, "") m
+                 with (env, mstr) in
+                 (env, snoc acc.1 mstr))
+               (pprintEnvEmpty, [])
+               ms).1
+        in
+        let msg = join [
+          "* Encountered a live never term.\n",
+          "* Could not determine how to make this term unreachable.\n",
+          "* The following assignments of constructor sets were inferred as alternatives:\n",
+          altstr,
+          "* When type checking the expression\n"
+        ] in
+        errorSingle [t.info] msg
+    case Right m then
       let matchstr =
-        if mapIsEmpty m then
-          "* An expression is not exhaustively matched on.\n"
+        if mapIsEmpty m then ""
         else
           join [
             "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
-            " are not exhaustively matched on.\n",
-            "* An assignment not being matched is:\n",
+            " appear in enclosing matches.\n",
+            "* An assignment leading to this never term is:\n",
             mapFoldWithKey
               (lam str. lam n. lam p.
                 join [ str
@@ -1423,6 +1457,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
       in
       let msg = join [
         "* Encountered a live never term.\n",
+        "* Could not find an expression being exhaustively matched.\n",
         matchstr,
         "* When type checking the expression\n"
       ] in
