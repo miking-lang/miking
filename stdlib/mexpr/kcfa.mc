@@ -492,6 +492,9 @@ lang KBaseConstraint = KCFA
     if isDirect av then
       addData graph (directTransition graph rhs av) rhs
     else graph
+
+  sem propagateConstraintConst
+  : (IName,Ctx) -> [(IName,Ctx)] -> CFAGraph -> Const -> CFAGraph
 end
 
 -----------
@@ -723,9 +726,6 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
         (ctxEnvAdd ident ctx env, cstrs)
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-
-  sem propagateConstraintConst
-  : (IName,Ctx) -> [(IName,Ctx)] -> CFAGraph -> Const -> CFAGraph
 end
 
 lang RecordKCFA = KCFA + KBaseConstraint + RecordAst

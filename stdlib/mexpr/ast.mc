@@ -852,7 +852,7 @@ lang CmpSymbAst = SymbAst + BoolAst
   | CEqsym {}
 end
 
-lang SeqOpAst = SeqAst
+lang SeqOpAst = SeqAst + ConstAst
   syn Const =
   | CSet {}
   | CGet {}
@@ -1420,7 +1420,7 @@ lang VarTypeAst = Ast
   | TyVar t -> t.info
 end
 
-lang KindAst
+lang KindAst = Ast
   syn Kind =
   | Poly ()
   | Mono ()

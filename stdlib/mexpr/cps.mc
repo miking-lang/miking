@@ -206,9 +206,7 @@ let wrapDirect = use MExprAst in
         i (nulam_ v.1 (i (nulam_ v.0 (app_ (i (nvar_ v.1)) acc))))
       ) inner varNames
 
-lang ConstCPS = CPS + ConstAst + MExprArity
-  sem tyConst: Const -> Type
-
+lang ConstCPS = CPS + ConstAst + MExprArity + TyConst
   sem exprCps env k =
   | TmLet ({ ident = ident, body = TmConst { val = c } & body} & t) ->
     if not (transform env ident) then

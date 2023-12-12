@@ -42,14 +42,14 @@ let varPatString : VarPattern -> String = lam pat.
   else never
 
 type AtomicPattern
-con AppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
+con AppPattern : use Ast in {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
 con UnknownOpPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
 con BranchPattern : {id : Int, cond : VarPattern, thn : [AtomicPattern],
                         els : [AtomicPattern]} -> AtomicPattern
 con RecursionPattern : {id : Int, binds : [(Name, VarPattern)]} -> AtomicPattern
 con ReturnPattern : {id : Int, var : VarPattern} -> AtomicPattern
 
-type Pattern = {
+type Pattern = use Ast in {
   atomicPatternMap : Map Int AtomicPattern,
   activePatterns : [Int],
   dependencies : Map Int (Set Int),
@@ -126,7 +126,7 @@ let getPatternDependencies : [AtomicPattern] -> ([Int], Map Int (Set Int)) =
 -- Add the dependencies to the ParallelPattern structure. We add them to the
 -- structure to avoid having to recompute them every time an atomic pattern is
 -- checked.
-let withDependencies :
+let withDependencies : use Ast in
      {atomicPatterns : [AtomicPattern],
       replacement : Info -> Map VarPattern (Name, Expr) -> Expr} -> Pattern = lam pat.
   recursive let work = lam acc. lam pat.
@@ -144,7 +144,7 @@ let withDependencies :
   , dependencies = dependencies
   , replacement = pat.replacement }
 
-let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
+let getMatch : use Ast in String -> VarPattern -> Map VarPattern (Name, Expr)
             -> (Name, Expr) =
   lam parallelPattern. lam varPat. lam matches.
   match mapLookup varPat matches with Some (id, expr) then
@@ -154,7 +154,7 @@ let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
       "Pattern replacement function for ", parallelPattern,
       " referenced unmatched variable pattern ", varPatString varPat])
 
-let eliminateUnusedLetExpressions : Expr -> Expr =
+let eliminateUnusedLetExpressions : use Ast in Expr -> Expr =
   use PMExprAst in
   lam e.
   recursive let collectVariables = lam acc. lam expr.

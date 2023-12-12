@@ -24,7 +24,7 @@ lang IsValue = Ast
       if v then isValue (Val ()) tm else false) true t
 end
 
-lang VarIsValue = VarAst
+lang VarIsValue = IsValue + VarAst
   sem isValue (guarded : Guarded) =
   | TmVar t ->
     switch guarded
@@ -33,41 +33,41 @@ lang VarIsValue = VarAst
     end
 end
 
-lang AppIsValue = AppAst
+lang AppIsValue = IsValue + AppAst
   sem isValue (guarded : Guarded) =
   | TmApp t -> false
 end
 
-lang LamIsValue = LamAst
+lang LamIsValue = IsValue + LamAst
   sem isValue (guarded : Guarded) =
   | TmLam t -> true
 end
 
-lang LetIsValue = LetAst
+lang LetIsValue = IsValue + LetAst
   sem isValue (guarded : Guarded) =
   | TmLet t ->
     if isValue (Val ()) t.body then isValue guarded t.inexpr
     else false
 end
 
-lang RecLetsIsValue = RecLetsAst
+lang RecLetsIsValue = IsValue + RecLetsAst
   sem isValue (guarded : Guarded) =
   | TmRecLets t ->
     if forAll (lam b. isValue (Val ()) b.body) t.bindings then isValue guarded t.inexpr
     else false
 end
 
-lang TypeIsValue = TypeAst
+lang TypeIsValue = IsValue + TypeAst
   sem isValue (guarded : Guarded) =
   | TmType t -> isValue guarded t.inexpr
 end
 
-lang DataIsValue = DataAst
+lang DataIsValue = IsValue + DataAst
   sem isValue (guarded : Guarded) =
   | TmConDef t -> isValue guarded t.inexpr
 end
 
-lang MatchIsValue = MatchAst
+lang MatchIsValue = IsValue + MatchAst
   sem isValue (guarded : Guarded) =
   | TmMatch t ->
     if isValue (Val ()) t.target then
@@ -76,12 +76,12 @@ lang MatchIsValue = MatchAst
     else false
 end
 
-lang UtestIsValue = UtestAst
+lang UtestIsValue = IsValue + UtestAst
   sem isValue (guarded : Guarded) =
   | TmUtest t -> isValue guarded t.next
 end
 
-lang ExtIsValue = ExtAst
+lang ExtIsValue = IsValue + ExtAst
   sem isValue (guarded : Guarded) =
   | TmExt t -> isValue guarded t.inexpr
 end

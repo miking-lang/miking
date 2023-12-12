@@ -158,7 +158,8 @@ lang FutharkTypePrettyPrint = FutharkAst
 end
 
 lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
-                              FutharkPatPrettyPrint + FutharkTypePrettyPrint
+                              FutharkPatPrettyPrint + FutharkTypePrettyPrint +
+                              PrettyPrint
   sem isAtomic =
   | FEVar _ -> true
   | FEVarExt _ -> true

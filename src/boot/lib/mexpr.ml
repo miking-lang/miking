@@ -1049,7 +1049,7 @@ let rec parseMCoreFile
       PTreeTm
         ( filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
         |> Utils.normalize_path |> Parserutils.parse_mcore_file
-        |> Mlang.flatten |> Mlang.desugar_post_flatten
+        |> Mlang.translate_program
         |> Parserutils.raise_parse_error_on_non_unique_external_id
         |> Symbolize.symbolize name2sym
         |> Parserutils.raise_parse_error_on_partially_applied_external

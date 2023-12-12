@@ -18,11 +18,19 @@ include "cuda/intrinsics/tensor-slice.mc"
 include "cuda/intrinsics/tensor-sub.mc"
 include "pmexpr/extract.mc"
 
+lang CudaTranslate
+  sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
+                           -> ([CuTop], CStmt)
+
+  sem generateIntrinsicExprNoRet : CompileCEnv -> [CuTop] -> CExpr
+                                -> ([CuTop], CStmt)
+end
+
 -- Translates non-kernel intrinsics, which could run either in CPU or GPU code,
 -- to looping constructs.
 lang CudaCpuTranslate =
-  CudaFoldlIntrinsic + CudaTensorSliceIntrinsic + CudaTensorSubIntrinsic +
-  CudaLoopIntrinsic + CudaLoopAccIntrinsic
+  CudaTranslate + CudaFoldlIntrinsic + CudaTensorSliceIntrinsic +
+  CudaTensorSubIntrinsic + CudaLoopIntrinsic + CudaLoopAccIntrinsic
 
   sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
                            -> ([CuTop], CStmt)
@@ -39,7 +47,7 @@ end
 
 -- Translates kernel expressions to GPU kernel calls.
 lang CudaGpuTranslate =
-  CudaLoopKernelIntrinsic
+  CudaTranslate + CudaLoopKernelIntrinsic
 
   -- NOTE(larshum, 2022-03-22): At the moment, no kernels returning a value are
   -- supported.

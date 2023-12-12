@@ -416,16 +416,16 @@ let filepathWithoutExtension = lam filename.
 
 -- Compile a Miking AST to a JavaScript program AST.
 -- Walk the AST and convert it to a JavaScript AST.
-let javascriptCompile : CompileJSOptions -> Expr -> JSProg =
-  lam opts : CompileJSOptions. lam ast : Expr.
+let javascriptCompile : use MExprJSCompile in CompileJSOptions -> Expr -> JSProg =
+  lam opts : CompileJSOptions. lam ast : use Ast in Expr.
   use MExprJSCompile in
   let ctx = { compileJSCtxEmpty with options = opts } in
   compileProg ctx ast
 
 
-let javascriptCompileFile : CompileJSOptions -> Expr -> String -> String =
+let javascriptCompileFile : use Ast in CompileJSOptions -> Expr -> String -> String =
   lam opts : CompileJSOptions.
-  lam ast : Expr.
+  lam ast : use Ast in Expr.
   lam sourcePath: String.
   use JSProgPrettyPrint in
   let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in

@@ -168,14 +168,21 @@ changed.
 
 -/
 
-type Constructor =
+lang CarriedTypeBase
+  syn CarriedType =
+
+  sem carriedRepr : CarriedType -> Type
+  sem carriedSMapAccumL : (Expr -> Expr -> Expr) -> Type -> CarriedType -> Option (Name -> Name -> Expr)
+end
+
+type Constructor = use CarriedTypeBase in
   { name : Name
   , fragment : Name
   , synType : Name
   , carried : CarriedType
   }
 
-type SFuncRequest =
+type SFuncRequest = use Ast in
   { synName : Name
   , target : Type
   , names :
@@ -185,7 +192,7 @@ type SFuncRequest =
     }
   }
 
-type FieldAccessorRequest =
+type FieldAccessorRequest = use Ast in
   { synName : Name
   , field : String
   , resTy : Type
@@ -204,13 +211,6 @@ type GenInput =
   , sfunctions : [SFuncRequest]
   , fieldAccessors : [FieldAccessorRequest]
   }
-
-lang CarriedTypeBase
-  syn CarriedType =
-
-  sem carriedRepr : CarriedType -> Type
-  sem carriedSMapAccumL : (Expr -> Expr -> Expr) -> Type -> CarriedType -> Option (Name -> Name -> Expr)
-end
 
 let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
   { ident = n
@@ -366,7 +366,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
 end
 
 let _mkFieldStubs
-  : FieldAccessorRequest -> [Decl]
+  : use DeclAst in FieldAccessorRequest -> [Decl]
   = lam request.
     use SemDeclAst in
     let synTy = ntycon_ request.synName in
@@ -440,7 +440,7 @@ let _mkFieldStubs
       } in
     [getf, setf, mapAccumf, mapf]
 
-lang CarriedTarget = CarriedTypeBase + Eq
+lang CarriedTarget = CarriedTypeBase + Eq + Ast
   syn CarriedType =
   | TargetType {targetable : Bool, ty : Type}
 
@@ -555,32 +555,32 @@ lang CarriedRecord = CarriedTypeBase
 end
 
 let targetableType
-  : Type
-  -> CarriedType
+  : use Ast in Type
+  -> use CarriedTypeBase in CarriedType
   = lam ty. use CarriedTarget in TargetType {targetable = true, ty = ty}
 
 let untargetableType
-  : Type
-  -> CarriedType
+  : use Ast in Type
+  -> use CarriedTypeBase in CarriedType
   = lam ty. use CarriedTarget in TargetType {targetable = false, ty = ty}
 
 let seqType
-  : CarriedType
+  : use CarriedTypeBase in CarriedType
   -> CarriedType
   = lam ty. use CarriedSeq in SeqType ty
 
 let optionType
-  : CarriedType
+  : use CarriedTypeBase in CarriedType
   -> CarriedType
   = lam ty. use CarriedOption in OptionType ty
 
 let recordType
-  : [(String, CarriedType)]
+  : use CarriedTypeBase in [(String, CarriedType)]
   -> CarriedType
   = lam fields. use CarriedRecord in RecordType fields
 
 let tupleType
-  : [CarriedType]
+  : use CarriedTypeBase in  [CarriedType]
   -> CarriedType
   = lam fields. recordType (mapi (lam i. lam field. (int2string i, field)) fields)
 

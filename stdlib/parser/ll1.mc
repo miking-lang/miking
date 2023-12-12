@@ -169,7 +169,7 @@ let _iterateUntilFixpoint : all a. (a -> a -> Bool) -> (a -> a) -> a -> a =
       if eq a next then a else work next
     in work
 
-type GenError prodLabel state = Map Name (Map (SpecSymbol Token TokenRepr state prodLabel) [prodLabel])
+type GenError prodLabel state = use Lexer in Map Name (Map (SpecSymbol Token TokenRepr state prodLabel) [prodLabel])
 
 lang ParserGeneration = ParserSpec + ParserConcrete
   -- NOTE(vipa, 2022-03-02): The type signature is a bit weird here,

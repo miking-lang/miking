@@ -4,7 +4,15 @@ include "char.mc"
 include "seq.mc"
 include "string.mc"
 
-lang FormatInteger
+lang Format
+  syn Fmt =
+
+  sem toString =
+
+  sem toFormat fmtstr =
+end
+
+lang FormatInteger = Format
   syn Fmt =
   | FmtInt (Int)
 
@@ -19,7 +27,7 @@ lang FormatInteger
       error (concat "FormatInteger: toFormat: Unrecognized format: " fmtstr)
 end
 
-lang FormatFloat
+lang FormatFloat = Format
   syn Fmt =
   | FmtFloat (Float)
 
@@ -34,7 +42,7 @@ lang FormatFloat
       error (concat "FormatFloat: toFormat: Unrecognized format: " fmtstr)
 end
 
-lang FormatString
+lang FormatString = Format
   syn Fmt =
   | FmtStr (String)
 
@@ -53,7 +61,7 @@ lang FormatString
       error (concat "FormatString: toFormat: Unrecognized format: " fmtstr)
 end
 
-lang FormatChar
+lang FormatChar = Format
   syn Fmt =
   | FmtChar (Char)
 
@@ -68,7 +76,7 @@ lang FormatChar
       error (concat "FormatChar: toFormat: Unrecognized format: " fmtstr)
 end
 
-lang StrFormatBase
+lang StrFormatBase = Format
   syn Fmt =
   -- Intentionally left blank
 

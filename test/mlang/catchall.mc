@@ -1,7 +1,7 @@
 lang Nat
   syn Nat =
   | Z ()
-  | S Dyn
+  | S Nat
 
   sem is_zero =
   | Z _ -> true
@@ -11,7 +11,7 @@ lang Nat
   | Z _ -> Z ()
   | S n -> n
 
-  sem plus (n2 : Dyn) =
+  sem plus (n2 : Nat) =
   | Z _ -> n2
   | S n1 -> S (plus n1 n2)
 end

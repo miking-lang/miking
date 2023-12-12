@@ -5,9 +5,9 @@ include "pmexpr/rules.mc"
 include "pmexpr/tailrecursion.mc"
 include "pmexpr/utils.mc"
 
-type Argument = (Name, Type, Info)
+type Argument = use Ast in (Name, Type, Info)
 
-type PatternMatchState = {
+type PatternMatchState = use Ast in {
   -- A sequence of indices of the active patterns. These are patterns whose
   -- dependencies have been matched with expressions, but which have not been
   -- matched themselves.
@@ -53,13 +53,13 @@ let isFinalState : PatternMatchState -> Bool = lam state.
 -- This function extracts the name of a TmVar and returns an option containing
 -- the name, assuming that the given expression is always a variable. If this
 -- assumption does not hold, it returns None.
-let getVariableIdentifier : Expr -> Option Name =
+let getVariableIdentifier : use Ast in Expr -> Option Name =
   use PMExprAst in
   lam varExpr.
   match varExpr with TmVar {ident = ident} then Some ident
   else None ()
 
-let findVariableDependencies : PatternMatchState -> Expr -> Set VarPattern =
+let findVariableDependencies : use Ast in PatternMatchState -> Expr -> Set VarPattern =
   use PMExprAst in
   lam state. lam expr.
   recursive let work : Set VarPattern -> Expr -> Set VarPattern = lam acc. lam expr.
@@ -71,7 +71,7 @@ let findVariableDependencies : PatternMatchState -> Expr -> Set VarPattern =
     else sfold_Expr_Expr work acc expr
   in work (setEmpty cmpVarPattern) expr
 
-let updateVariableDependencies : PatternMatchState -> Name -> Expr
+let updateVariableDependencies : use Ast in PatternMatchState -> Name -> Expr
                               -> Option Int -> PatternMatchState =
   lam state. lam ident. lam body. lam optPatIdx.
   let bodyDependencies =
@@ -83,7 +83,7 @@ let updateVariableDependencies : PatternMatchState -> Name -> Expr
   {state with variableDependencies =
     mapInsert ident bodyDependencies state.variableDependencies}
 
-let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState =
+let applyPattern : use Ast in PatternMatchState -> Name -> Expr -> Int -> PatternMatchState =
   use PMExprAst in
   lam state. lam boundVar. lam expr. lam patIndex.
   match mapLookup patIndex state.pattern.atomicPatternMap with Some pat then
@@ -135,7 +135,7 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
     error (concat "Found reference to undefined pattern with index "
                   (int2string patIndex))
 
-let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
+let matchVariablePattern : use Ast in Expr -> PatternMatchState -> VarPattern
                         -> Option PatternMatchState =
   use PMExprAst in
   lam expr. lam state. lam varPat.
@@ -161,7 +161,7 @@ let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
   else None ()
 
 recursive
-  let matchAtomicPattern : Name -> [(Name, Type, Info)] -> Expr
+  let matchAtomicPattern : use Ast in Name -> [(Name, Type, Info)] -> Expr
                         -> PatternMatchState -> Int -> Option PatternMatchState =
     use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state. lam patIdx.
@@ -182,7 +182,7 @@ recursive
         work state 0
       else None ()
     in
-    let matchArgsWithParams : [Expr] -> PatternMatchState -> VarPattern
+    let matchArgsWithParams : use Ast in [Expr] -> PatternMatchState -> VarPattern
                            -> Option Name -> Option PatternMatchState =
       lam args. lam state. lam bindingVar. lam bindingName.
       let n = length args in
@@ -308,7 +308,7 @@ recursive
     else
       error (concat "Could not find pattern with index " (int2string patIdx))
 
-  let matchAtomicPatterns : Name -> [(Name, Type, Info)] -> Expr
+  let matchAtomicPatterns : use Ast in Name -> [(Name, Type, Info)] -> Expr
                          -> PatternMatchState -> Option PatternMatchState =
     use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state.
@@ -342,7 +342,7 @@ recursive
     else None ()
 end
 
-let constructLookup : PatternMatchState -> Map VarPattern (Name, Expr) =
+let constructLookup : use Ast in PatternMatchState -> Map VarPattern (Name, Expr) =
   use MExprAst in
   lam state.
   let lookup =

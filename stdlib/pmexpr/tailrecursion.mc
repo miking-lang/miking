@@ -17,7 +17,7 @@ include "pmexpr/ast.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/utils.mc"
 
-type TailRecursiveEnv = {
+type TailRecursiveEnv = use Ast in {
   binop : Expr,
   ne : Expr,
   leftArgRecursion : Bool
@@ -53,7 +53,7 @@ let compatibleSide : Option Side -> Option Side -> Option Side =
 
 -- Determines whether a given expression is a recursive call to a function with
 -- the given identifier.
-let isRecursiveCall : Expr -> Name -> Bool =
+let isRecursiveCall : use Ast in Expr -> Name -> Bool =
   use MExprAst in
   lam expr. lam ident.
   match collectAppArguments expr with (TmVar {ident = functionId}, _) then
@@ -65,8 +65,8 @@ let isRecursiveCall : Expr -> Name -> Bool =
 -- If no such binary operator is found, None is returned. If no recursive call
 -- takes place within either of the arguments of the binary operator, then the
 -- result is None.
-type TailPosInfo = {binop : Expr, side : Option Side}
-let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
+type TailPosInfo = use Ast in {binop : Expr, side : Option Side}
+let tailPositionExpressionInfo : use Ast in Name -> Expr -> Option TailPosInfo =
   lam ident. lam expr.
   use MExprAst in
   match expr with TmApp {lhs = TmApp {lhs = binop, rhs = arg1}, rhs = arg2} then

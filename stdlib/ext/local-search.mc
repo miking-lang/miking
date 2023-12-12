@@ -19,8 +19,11 @@ include "string.mc"
 include "digraph.mc"
 include "iterator.mc"
 
--- TODO(Linnea, 2022-04-22): These type declarations should be put inside the
--- language fragment, but gives a type error right now.
+----------------------------
+-- Base language fragment --
+----------------------------
+
+lang LocalSearchBase
 
   -- A local search solution: an assignment with a cost.
   type Solution = {assignment : Assignment, cost : Cost}
@@ -31,17 +34,11 @@ include "iterator.mc"
     inc : Solution,                               -- incumbent (best solution thus far)
     iter : Int,                                   -- number of iterations thus far
     stuck : Bool,                                 -- whether the search is stuck
-                                                  -- (no local moves possible)
+    -- (no local moves possible)
     cost : Option Solution -> Assignment -> Cost, -- cost of an assignment
     cmp : Cost -> Cost -> Int,                    -- comparison of costs
     data : Option LSData                          -- any custom data
   }
-
-----------------------------
--- Base language fragment --
-----------------------------
-
-lang LocalSearchBase
 
   -- Maintains meta-information between search iterations.
   syn MetaState =
@@ -389,6 +386,9 @@ lang _testTspTabuSearch = _testTsp
 end
 
 mexpr
+
+type SearchState = use LocalSearchBase in SearchState in
+type MetaState = use LocalSearchBase in MetaState in
 
 let debug = false in
 

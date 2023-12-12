@@ -1,10 +1,11 @@
 include "map.mc"
 include "ocaml/ast.mc"
 
-let implWithLibs = lam arg : { expr : String, ty : Type, libraries : [String] }.
-  { expr = arg.expr, ty = arg.ty, libraries = arg.libraries, cLibraries = [] }
+let implWithLibs =
+  lam arg : { expr : String, ty : use Ast in Type, libraries : [String] }.
+    { expr = arg.expr, ty = arg.ty, libraries = arg.libraries, cLibraries = [] }
 
-let impl = lam arg : { expr : String, ty : Type }.
+let impl = lam arg : { expr : String, ty : use Ast in Type }.
   implWithLibs { expr = arg.expr, ty = arg.ty, libraries = [] }
 
 let myrecty1 = otyrecordext_

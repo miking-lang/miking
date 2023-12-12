@@ -123,12 +123,12 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatIndex = Index + NamedPat
+lang NamedPatIndex = MatchIndex + NamedPat
   sem patIndexAdd (acc: IndexAcc) =
   | PatNamed { ident = PName name } -> addKey name acc
 end
 
-lang SeqEdgePatIndex = Index + SeqEdgePat
+lang SeqEdgePatIndex = MatchIndex + SeqEdgePat
   sem patIndexAdd (acc: IndexAcc) =
   | PatSeqEdge { middle = PName name } & p ->
     sfold_Pat_Pat patIndexAdd (addKey name acc) p

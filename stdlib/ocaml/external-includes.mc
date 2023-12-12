@@ -23,7 +23,7 @@ include "ipopt/ipopt.ext-ocaml.mc"
 
 type ExternalImpl = {
   expr : String,
-  ty : Type,
+  ty : use Ast in Type,
   libraries : [String],
   cLibraries : [String]
 }

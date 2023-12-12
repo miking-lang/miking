@@ -5,6 +5,11 @@ include "cuda/ast.mc"
 include "cuda/compile.mc"
 
 lang CudaIntrinsic = CudaAst + CudaCompile
+  sem generateCudaIntrinsicFunction : CompileCEnv -> CExpr -> (Name, CuTop)
+
+  sem generateCudaIntrinsicCall : CompileCEnv -> [CuTop] -> CExpr -> CExpr
+                               -> ([CuTop], CStmt)
+
   sem _getSequenceElemType (env : CompileCEnv) =
   | ty ->
     -- TODO(larshum, 2022-02-08): Assumes 1d sequence

@@ -14,11 +14,11 @@ lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
 end
 
 -- Evaluate an expression into a value expression
-let evalExpr : Expr -> Expr =
+let evalExpr : use MExpr in Expr -> Expr =
   use MExpr in lam t. eval (evalCtxEmpty ()) (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
-let evalStr : String -> Expr =
+let evalStr : use MExpr in String -> Expr =
   lam str. use MExpr in evalExpr (parseExpr (initPos "") str)
 
 -- Parse a string and then evaluate into a value, and pretty print

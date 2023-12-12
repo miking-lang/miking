@@ -8,10 +8,10 @@ include "ocaml/pprint.mc"
 include "sys.mc"
 
 type Hooks a =
-  { debugTypeAnnot : Expr -> ()
+  { debugTypeAnnot : use Ast in Expr -> ()
   , debugGenerate : String -> ()
   , exitBefore : () -> ()
-  , postprocessOcamlTops : [Top] -> [Top]
+  , postprocessOcamlTops : [use OCamlTopAst in Top] -> [use OCamlTopAst in Top]
   , compileOcaml : [String] -> [String] -> String -> a
   }
 

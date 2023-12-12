@@ -10,13 +10,13 @@ let _lookupExit : all a. Info -> String -> Map String a -> a =
   lam info : Info. lam s : String. lam m : Map String a.
     mapLookupOrElse (lam. errorSingle [info] (concat s " not found")) s m
 
-let _expectConstInt : Info -> String -> Expr -> Int =
+let _expectConstInt : use Ast in Info -> String -> Expr -> Int =
   lam info : Info. lam s. lam i.
     use IntAst in
     match i with TmConst {val = CInt {val = i}} then i
     else errorSingle [info] (concat "Expected a constant integer: " s)
 
-lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck
+lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
   syn Hole =
 
   syn Expr =
@@ -335,7 +335,7 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
 end
 
-let holeBool_ : Bool -> Int -> Expr =
+let holeBool_ : use Ast in Bool -> Int -> Expr =
   use HoleBoolAst in
   lam default. lam depth.
   TmHole { default = bool_ default
@@ -344,7 +344,7 @@ let holeBool_ : Bool -> Int -> Expr =
          , info = NoInfo ()
          , inner = BoolHole {}}
 
-let holeIntRange_ : Int -> Int -> Int -> Int -> Expr =
+let holeIntRange_ : use Ast in Int -> Int -> Int -> Int -> Expr =
   use HoleIntRangeAst in
   lam default. lam depth. lam min. lam max.
   TmHole { default = int_ default

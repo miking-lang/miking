@@ -3,7 +3,13 @@
 --
 -- Type-aliases defined within language fragments.
 
-lang L1
+lang Base
+  syn T1 =
+
+  syn T2 =
+end
+
+lang L1 = Base
   syn T1 =
 
   type A1 = {a1 : T1, a2 : T2}
@@ -13,7 +19,7 @@ lang L1
   | X ()
 end
 
-lang L2
+lang L2 = Base
   syn T2 =
   | Y ()
 
