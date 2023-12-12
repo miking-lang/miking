@@ -1154,11 +1154,11 @@ lang DataTypePrettyPrint = PrettyPrint + DataTypeAst
           else
             match mapAccumL pprintConName acc.0 (setToSeq ks)
             with (env, kstr) in
-            (env, snoc acc.1 (strJoin ", " kstr)))
+            (env, snoc acc.1 (strJoin " " kstr)))
         (env, [])
         (computeData t)
     with (env, consstr) in
-    (env, join ["{", strJoin ", " consstr, "}"])
+    (env, join ["{", strJoin " " consstr, "}"])
 end
 
 lang VarTypePrettyPrint = PrettyPrint + VarTypeAst

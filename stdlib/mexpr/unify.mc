@@ -228,12 +228,20 @@ lang RecordKindUnify = UnifyRecords + RecordKindAst
     (unifier, Record {r1 with fields = fields})
 end
 
-lang DataKindUnify = Unify + DataKindAst
+lang DataKindUnify = Unify + DataKindAst + PolyKindAst + MonoKindAst
+  sem hasNoBounds : {lower : Set Name, upper : Option (Set Name)} -> Bool
+  sem hasNoBounds =
+  | ks -> if setIsEmpty ks.lower then optionIsNone ks.upper else false
+
   sem unifyKinds u env =
+  | ((Mono _ | Poly _) & k, Data r) ->
+    if mapAll hasNoBounds r.types then u.empty
+    else u.err (Kinds (k, Data r))
   | (Data r1, Data r2) ->
     if mapAllWithKey
          (lam t. lam ks2.
-           optionMapOr false
+           optionMapOrElse
+             (lam. hasNoBounds ks2)
              (lam ks1.
                if setSubset ks2.lower ks1.lower then
                  match ks2.upper with Some m2 then
