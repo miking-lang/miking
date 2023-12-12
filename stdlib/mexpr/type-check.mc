@@ -814,16 +814,33 @@ lang IsEmpty =
   | (ty, NPatNot cons) ->
     switch getTypeArgs ty
     case (TyCon t, _) then
-      if setIsEmpty cons then []
-      else
-        let cons =
-          setFold
-            (lam ks. lam k.
-              match k with ConCon k then setInsert k ks
-              else ks)
-            (setEmpty nameCmp) cons
-        in
-        [mapFromSeq cmpType [(t.data, mapFromSeq nameCmp [(t.ident, cons)])]]
+      let cons =
+        setFold
+          (lam ks. lam k.
+            match k with ConCon k then setInsert k ks else ks)
+          (setEmpty nameCmp) cons
+      in
+      switch unwrapType t.data
+      case (TyVar _ | TyData _) & dty then
+        match getKind env dty with Data {types = types} then
+          match mapLookup t.ident types with Some ks then
+            match ks.upper with Some upper then
+              if and (setSubset ks.lower cons) (setSubset upper cons)
+              then [mapEmpty cmpType] else []
+            else []
+          else error "Invalid data in npatIsEmpty!"
+        else []
+      case TyMetaVar _ & dty then
+        if setIsEmpty cons then [] else
+          let mkBounds = lam.
+            mapFromSeq cmpType [(dty, mapFromSeq nameCmp [(t.ident, cons)])]
+          in
+          match getKind env dty with Data {types = types} then
+            match mapLookup t.ident types with Some ks then
+              if setSubset ks.lower cons then [mkBounds ()] else []
+            else error "Invalid data in npatIsEmpty!"
+          else [mkBounds ()]
+      end
     case (TyBool _, _) then
       if forAll (lam b. setMem (BoolCon b) cons) [true, false] then
         [mapEmpty cmpType]
