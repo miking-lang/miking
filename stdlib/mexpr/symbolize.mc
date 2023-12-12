@@ -135,8 +135,8 @@ lang Sym = Ast + SymLookup
     let t = symbolizeExpr env t in
     addTopNames env t
 
-  sem symbolizeKind : SymEnv -> Kind -> Kind
-  sem symbolizeKind env =
+  sem symbolizeKind : Info -> SymEnv -> Kind -> Kind
+  sem symbolizeKind info env =
   | t -> smap_Kind_Type (symbolizeType env) t
 
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
@@ -424,7 +424,7 @@ end
 lang AllTypeSym = Sym + AllTypeAst
   sem symbolizeType env =
   | TyAll t ->
-    let kind = symbolizeKind env t.kind in
+    let kind = symbolizeKind t.info env t.kind in
     match setSymbol env.tyVarEnv t.ident with (tyVarEnv, ident) in
     TyAll {t with ident = ident,
                   ty = symbolizeType {env with tyVarEnv = tyVarEnv} t.ty,
@@ -432,15 +432,14 @@ lang AllTypeSym = Sym + AllTypeAst
 end
 
 lang DataKindSym = Sym + DataKindAst
-  sem symbolizeKind : SymEnv -> Kind -> Kind
-  sem symbolizeKind env =
+  sem symbolizeKind info env =
   | Data t ->
     let symbolizeCons = lam cons.
       setFold
         (lam ks. lam k.
           setInsert
             (getSymbol {kind = "constructor",
-                        info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
+                        info = [info],
                         allowFree = env.allowFree}
                env.conEnv k) ks)
         (setEmpty nameCmp)
@@ -451,7 +450,7 @@ lang DataKindSym = Sym + DataKindAst
         (lam m. lam b.
           match b with (t, r) in
           let t = getSymbol {kind = "type constructor",
-                             info = [], -- TODO(aathn, 2023-11-26): Add info to kinds
+                             info = [info],
                              allowFree = env.allowFree}
                     env.tyConEnv t
           in
