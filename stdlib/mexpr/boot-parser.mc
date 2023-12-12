@@ -341,9 +341,31 @@ lang BootParser = MExprAst + ConstTransformer
       switch gint t 0
       case 0 then Poly ()
       case 1 then
-        let cons = setOfSeq nameCmp (map (gname t) (range 2 (glistlen t 0) 1)) in
-        Data {types = mapFromSeq nameCmp [(gname t 1, {lower = cons, upper = None ()})]}
-      case _ then error "BootParser.matchTerm: Invalid data specifier for TyAll"
+        let dlen = glistlen t 0 in
+        let data =
+          unfoldr
+            (lam idx.
+              if lti idx.0 dlen then
+                let tname = gname t idx.1 in
+                let totlen = glistlen t idx.0 in
+                let upperidx = glistlen t (addi 1 idx.0) in
+                let minidx = addi 1 idx.1 in
+                let maxidx = addi totlen minidx in
+                let cons = map (gname t) (range minidx maxidx 1) in
+                let ks =
+                  if eqi upperidx (negi 1) then
+                    {lower = setOfSeq nameCmp cons, upper = None ()}
+                  else
+                    match splitAt cons upperidx with (lower, upper) in
+                    {lower = setOfSeq nameCmp lower,
+                     upper = Some (setOfSeq nameCmp upper)}
+                in
+                Some ((tname, ks), (addi 2 idx.0, maxidx))
+              else None ())
+            (1, 1)
+        in
+        Data {types = mapFromSeq nameCmp data}
+      case _ then error "BootParser.matchTerm: Invalid data specifier for TyAll!"
       end
     in
     TyAll {info = ginfo t 0,

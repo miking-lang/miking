@@ -223,7 +223,6 @@ let getData = function
   | PTreeTy (TyAll (fi, var, None, ty)) ->
       (idTyAll, [fi], [], [ty], [], [var], [0], [], [], [])
   | PTreeTy (TyAll (fi, var, Some data, ty)) ->
-      let dlen = List.length data in
       let klens =
         List.concat_map
           (fun (_, lower, upper) ->
@@ -241,6 +240,7 @@ let getData = function
             t :: (lower @ Option.value ~default:[] upper) )
           data
       in
+      let dlen = List.length klens + 1 in
       (idTyAll, [fi], dlen :: klens, [ty], [], var :: ks, [1], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])

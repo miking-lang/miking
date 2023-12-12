@@ -649,12 +649,10 @@ ty_ish_atom:
 %inline ty_data:
   | LBRACKET var_ident RBRACKET
     { (mkinfo $1.i $3.i, DVar $2.v) }
-  | LBRACKET con_list RBRACKET
-    { (mkinfo $1.i $3.i, DCons $2) }
+  | LBRACKET con_ident con_list RBRACKET
+    { (mkinfo $1.i $4.i, DCons ($2.v :: $3)) }
   | LBRACKET NOT con_list RBRACKET
     { (mkinfo $1.i $4.i, DNCons $3) }
-  | LBRACKET NOT RBRACKET
-    { (mkinfo $1.i $3.i, DNCons []) }
 
 ty_list:
   | ty COMMA ty_list
@@ -679,8 +677,8 @@ type_with_cons:
 con_list:
   | con_ident con_list
     { $1.v :: $2 }
-  | con_ident
-    { [$1.v] }
+  |
+    { [] }
 
 label_tys:
   | label_ident COLON ty
